@@ -59,6 +59,18 @@ function ToastDescription({
 	);
 }
 
+function ToastAction({ className, ...props }: React.ComponentProps<typeof ToastPrimitive.Action>) {
+	return (
+		<ToastPrimitive.Action
+			className={cn(
+				"shrink-0 rounded-[var(--radius-sm)] px-4 py-2 tr-text-action text-primary outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary",
+				className,
+			)}
+			{...props}
+		/>
+	);
+}
+
 function ToastClose({ className, ...props }: React.ComponentProps<typeof ToastPrimitive.Close>) {
 	return (
 		<ToastPrimitive.Close
@@ -76,6 +88,7 @@ function ToastClose({ className, ...props }: React.ComponentProps<typeof ToastPr
 
 export {
 	Toast,
+	ToastAction,
 	ToastClose,
 	ToastDescription,
 	ToastProvider,

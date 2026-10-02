@@ -256,7 +256,7 @@ The allowlist is deliberately tiny, and each entry is enforced by name in
 | `panels/monacoSetup.ts` | Monaco takes `fontFamily` / `fontSize` / `lineHeight` as JS options — it reads `--tr-font-family-code`, `--tr-font-size-s11`, `--tr-line-height-default`, so it cannot drift from a code block |
 | `panels/TerminalInstance.tsx` | xterm, same reason — it reads `--tr-font-family-code` + `--tr-font-size-s13` (the primitives behind `code.text`), and owns row height through its own `lineHeight` option rather than a CSS line-height |
 | `chat/tools/visualize/mermaid.ts` | mermaid's theme config takes a family string (`--tr-font-family-code`) |
-| `index.css`, `styles/tokens.css`, `styles/global.css` | the mapping layers themselves |
+| `index.css`, `styles/tokens.css`, `styles/global.css` | the mapping layers themselves; `.pierre-code-surface` passes the code family, `s11`, and default line-height into Pierre's Shadow DOM |
 
 The OTP code is **not** an exception any more: it is the named `code.otp` style (`.tr-code-otp`).
 

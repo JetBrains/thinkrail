@@ -1,5 +1,13 @@
 import { afterAll, beforeAll, expect, jest, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -25,6 +33,7 @@ import type {
 } from "@thinkrail/contracts";
 import { isAskUserAnswersMessage } from "@thinkrail/contracts";
 import { defaultSessionDirFor, writeFixtureSession } from "../history/testFixtures";
+import { setTrashImplementationForTests } from "../trash";
 import {
 	abortSession,
 	acknowledgeCompletion,
@@ -70,7 +79,6 @@ import {
 } from "./agentSessionManager";
 import { ASK_STOPPED_ERROR, assessAnswerability } from "./askUserQuestion";
 import { configurePiRuntime } from "./piRuntime";
-import { setTrashImplementationForTests } from "./trash";
 import { setExtUiPublisher } from "./webUiContext";
 
 function modelDef(id: string) {
@@ -502,6 +510,91 @@ test("agent_settled carries the final attempt's terminal metadata", async () => 
 		completionUnread: false,
 	});
 });
+
+async function withFreshDataDir(run: (dataDir: string) => Promise<void>): Promise<void> {
+	const previousDataDir = process.env.THINKRAIL_DATA_DIR;
+	const dataDir = tmpCwd("trpi-fresh-data-");
+	process.env.THINKRAIL_DATA_DIR = dataDir;
+	try {
+		await run(dataDir);
+	} finally {
+		if (previousDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
+		else process.env.THINKRAIL_DATA_DIR = previousDataDir;
+	}
+}
+
+function writeFinishedDiskSession(cwd: string): { id: string; dir: string } {
+	const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+	const { id } = writeFixtureSession(dir, {
+		cwd,
+		messages: [
+			{ role: "user", text: "hi", timestamp: 1_000 },
+			{ role: "assistant", text: "done", stopReason: "stop", timestamp: 1_001 },
+		],
+	});
+	return { id, dir };
+}
+
+for (const corrupt of ["session-receipts.json", "session-lifecycle.json"]) {
+	test(`an unreadable ${corrupt} is set aside and existing history re-baselines as read`, () =>
+		withFreshDataDir(async (dataDir) => {
+			const cwd = tmpCwd("trpi-corrupt-metadata-ws-");
+			const { id } = writeFinishedDiskSession(cwd);
+			writeFileSync(
+				join(dataDir, "session-lifecycle.json"),
+				JSON.stringify({ version: 1, completionBySession: {}, cancelledRunBySession: {} }),
+			);
+			writeFileSync(
+				join(dataDir, "session-receipts.json"),
+				JSON.stringify({ version: 1, baselineComplete: true, handledCompletionBySession: {} }),
+			);
+			writeFileSync(join(dataDir, corrupt), "");
+			const workspace = { id: "ws-corrupt-metadata", projectId: "p-corrupt-metadata", cwd };
+
+			await initializeSessionStates([workspace]);
+
+			expect(await listSessionStates([workspace])).toEqual([
+				expect.objectContaining({
+					sessionId: id,
+					state: expect.objectContaining({
+						completion: expect.objectContaining({ outcome: "succeeded" }),
+						completionUnread: false,
+					}),
+				}),
+			]);
+			const setAside = readdirSync(dataDir).filter((name) =>
+				name.startsWith(`${corrupt}.corrupt-`),
+			);
+			expect(setAside).toHaveLength(1);
+			for (const file of ["session-lifecycle.json", "session-receipts.json"]) {
+				expect(() => JSON.parse(readFileSync(join(dataDir, file), "utf8"))).not.toThrow();
+			}
+		}));
+}
+
+test("the startup baseline skips an unreadable transcript instead of failing", () =>
+	withFreshDataDir(async (dataDir) => {
+		const cwd = tmpCwd("trpi-baseline-broken-ws-");
+		const { id, dir } = writeFinishedDiskSession(cwd);
+		const broken = join(dir, "0_broken.jsonl");
+		writeFileSync(broken, "");
+		const workspace = { id: "ws-baseline-broken", projectId: "p-baseline-broken", cwd };
+
+		await initializeSessionStates([workspace]);
+
+		expect(JSON.parse(readFileSync(join(dataDir, "session-receipts.json"), "utf8"))).toMatchObject({
+			baselineComplete: true,
+			handledCompletionBySession: { [id]: expect.stringMatching(/^completion:/) },
+		});
+		await expect(listSessionStates([workspace])).rejects.toThrow("unreadable or malformed");
+		rmSync(broken);
+		expect(await listSessionStates([workspace])).toEqual([
+			expect.objectContaining({
+				sessionId: id,
+				state: expect.objectContaining({ completionUnread: false }),
+			}),
+		]);
+	}));
 
 test("a length-truncated questionnaire is terminal and cannot be answered", async () => {
 	let releaseContinuation = (): void => {};

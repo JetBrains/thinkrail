@@ -102,7 +102,50 @@
 	app-region: no-drag;
 }
 
-/* Review Monaco surfaces (panels/reviewGutter.ts + reviewWidgets.ts): commented-line decorations, the
+.pierre-code-surface {
+	color-scheme: inherit;
+	--diffs-font-family: var(--tr-font-family-code);
+	--diffs-header-font-family: var(--tr-font-family-code);
+	--diffs-font-size: var(--tr-font-size-s11);
+	--diffs-line-height: var(--tr-line-height-default);
+	--diffs-foreground: var(--code-foreground);
+	--diffs-fg: var(--code-foreground);
+	--diffs-fg-number-override: var(--text-muted);
+	--diffs-token-comment: var(--code-comment);
+	--diffs-token-constant: var(--code-constant);
+	--diffs-token-keyword: var(--code-keyword);
+	--diffs-token-parameter: var(--code-variable);
+	--diffs-token-function: var(--code-function);
+	--diffs-token-string: var(--code-string);
+	--diffs-token-string-expression: var(--code-string);
+	--diffs-token-punctuation: var(--code-punctuation);
+	--diffs-token-link: var(--primary);
+	--diffs-token-inserted: var(--code-inserted);
+	--diffs-token-deleted: var(--code-deleted);
+	--diffs-token-changed: var(--code-changed);
+	--diffs-addition-color-override: var(--feedback-success);
+	--diffs-deletion-color-override: var(--feedback-error);
+	--diffs-modified-color-override: var(--primary);
+	--diffs-fg-number-addition-override: var(--feedback-success);
+	--diffs-fg-number-deletion-override: var(--feedback-error);
+	--diffs-bg-context-override: var(--container-content-bg);
+	--diffs-bg-context-gutter-override: var(--container-header-bg);
+	--diffs-bg-separator-override: var(--container-header-bg);
+	--diffs-bg-hover-override: var(--control-bg-hovered);
+	--diffs-bg-selection-override: var(--editor-selection-bg);
+	--diffs-decoration-bar-color: var(--text-subtle);
+}
+.pierre-diff-surface {
+	--diffs-background: var(--container-content-bg);
+	--diffs-bg: var(--container-content-bg);
+}
+.pierre-file-surface {
+	--diffs-background: var(--container-workspace-bg);
+	--diffs-bg: var(--container-workspace-bg);
+	--diffs-bg-context-override: var(--container-workspace-bg);
+}
+
+/* Review Monaco surfaces (panels/reviewWidgets.ts): commented-line decorations, the
    floating comment icon, and the inline composer. Plain-DOM widgets inside Monaco's layers — styled
    here from the live theme tokens, so every theme wears them. */
 /* Commented lines: just a lighter wash of the editor's own background (the app's hover shade) — no
@@ -184,8 +227,15 @@
 }
 /* The composer wears the CHAT INPUT's skin (see chat/Composer.tsx's textarea): same input surface,
    border, radius and focus treatment — only the buttons differ. No accent chrome of its own. */
+.media-backdrop {
+	background-color: var(--container-content-bg);
+	background-image: repeating-conic-gradient(var(--media-checker-tile) 0% 25%, transparent 0% 50%);
+	background-size: var(--space-16) var(--space-16);
+}
+
 .review-composer {
 	pointer-events: auto;
+	max-width: var(--review-card-max-width, 832px);
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
@@ -271,7 +321,7 @@
 	gap: var(--space-8);
 	margin: var(--space-4) 0 var(--space-4) var(--space-12);
 	/* Keep in sync with reviewWidgets.ts' CARD_MAX_WIDTH (the Monaco view-zone clamp). */
-	max-width: 832px;
+	max-width: var(--review-card-max-width, 832px);
 	padding: var(--space-8);
 	border: 1px solid var(--border-default);
 	border-radius: var(--radius-md);

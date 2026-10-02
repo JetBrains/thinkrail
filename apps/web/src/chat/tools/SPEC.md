@@ -194,7 +194,10 @@ registration runs once when the chat module mounts. Unregistered tools fall back
   SVG via the **lazy-loaded** `mermaid`, source fallback on parse error) and `ComparisonCard` (option
   cards with pros/cons + `recommended` highlight); shared `MermaidView` re-renders on `[data-theme]`
   change, offers a full-screen pan/zoom Dialog, and takes an optional `fallback` node shown while the
-  SVG is pending (default: a "Rendering…" line). It is also consumed by the **parent `Markdown`
+  SVG is pending (default: a "Rendering…" line). Its full-screen canvas owns both modifier-wheel zoom
+  and WebKit's `gesture*` pinch lifecycle; the latter applies absolute scale from the local gesture-start
+  baseline and prevents the desktop shell's browser-style page zoom from claiming that same pinch. It is
+  also consumed by the **parent `Markdown`
   primitive** for fenced ```mermaid blocks — the `mermaid` *package* import stays lazy and confined to
   `visualize/mermaid.ts`. Registered **primary + `defaultExpanded`** — a
   visualization is output *for the user*, not plumbing: it escapes the activity fold and renders open on

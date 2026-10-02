@@ -57,11 +57,14 @@ import {
 	dataDir,
 	loadSessionLifecycle,
 	loadSessionReceipts,
+	SESSION_LIFECYCLE_VERSION,
 	type SessionLifecycle,
+	type SessionMetadataLoad,
 	type SessionReceipts,
 	saveSessionLifecycle,
 	saveSessionReceipts,
 } from "../persistence";
+import { trashFile } from "../trash";
 import {
 	ANSWERABILITY_ERRORS,
 	ASK_USER_QUESTION_TOOL_NAME,
@@ -86,7 +89,6 @@ import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
 import { deriveSessionState } from "./sessionState";
 import type { SkillAdmissionContext } from "./skillAdmission";
-import { trashFile } from "./trash";
 import {
 	cancelExtUiForSession,
 	createWebUiContext,
@@ -181,12 +183,29 @@ let sessionMetadataRoot: string | null = null;
 let sessionLifecycle: SessionLifecycle | null = null;
 let sessionReceipts: SessionReceipts | null | undefined;
 
+function loadedSessionMetadata<T>(load: SessionMetadataLoad<T>): T | null {
+	if (load.kind === "loaded") return load.value;
+	if (load.kind === "set-aside") {
+		log.warn(
+			`${load.file} was unreadable; ${load.setAsidePath ? `moved it to ${load.setAsidePath}` : "could not move it aside"} and rebuilding session state`,
+			load.error,
+		);
+	}
+	return null;
+}
+
 function ensureSessionMetadata(): void {
 	const root = dataDir();
 	if (sessionMetadataRoot === root && sessionLifecycle) return;
+	const loadedLifecycle = loadedSessionMetadata(loadSessionLifecycle());
+	const loadedReceipts = loadedSessionMetadata(loadSessionReceipts());
 	sessionMetadataRoot = root;
-	sessionLifecycle = loadSessionLifecycle();
-	sessionReceipts = loadSessionReceipts();
+	sessionLifecycle = loadedLifecycle ?? {
+		version: SESSION_LIFECYCLE_VERSION,
+		completionBySession: {},
+		cancelledRunBySession: {},
+	};
+	sessionReceipts = loadedLifecycle ? loadedReceipts : null;
 }
 
 function lifecycle(): SessionLifecycle {
@@ -1176,9 +1195,18 @@ export interface SessionStateWorkspace {
 	cwd: string;
 }
 
+async function listBaselineSessionInfos(cwd: string): Promise<SessionInfo[]> {
+	try {
+		return await listSessionInfosStrict(cwd);
+	} catch (error) {
+		log.warn(`session baseline is skipping unreadable transcripts for ${cwd}`, error);
+		return SessionManager.list(cwd);
+	}
+}
+
 async function collectSessionStates(
 	workspaces: readonly SessionStateWorkspace[],
-	legacy: boolean,
+	baseline: boolean,
 ): Promise<SessionStateRecord[]> {
 	const records: SessionStateRecord[] = [];
 	const liveIds = new Set<string>();
@@ -1195,7 +1223,9 @@ async function collectSessionStates(
 		liveIds.add(sessionId);
 	}
 	for (const workspace of workspaces) {
-		const infos = await listSessionInfosStrict(workspace.cwd);
+		const infos = baseline
+			? await listBaselineSessionInfos(workspace.cwd)
+			: await listSessionInfosStrict(workspace.cwd);
 		for (const info of infos) {
 			if (
 				info.cwd !== workspace.cwd ||
@@ -1209,7 +1239,7 @@ async function collectSessionStates(
 				sessionId: info.id,
 				workspaceId: workspace.id,
 				projectId: workspace.projectId,
-				state: stateFromDisk(info.id, SessionManager.open(info.path), legacy),
+				state: stateFromDisk(info.id, SessionManager.open(info.path), baseline),
 			});
 		}
 	}

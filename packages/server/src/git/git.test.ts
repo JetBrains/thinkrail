@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
 import { changedFileArgs, diffBaseRef, resolveDiffRange } from "./diffScope";
 import {
@@ -15,9 +15,13 @@ import {
 	listCommits,
 	listCommitsSince,
 	prefetchBranch,
+	readBlobBytesAtAsync,
+	readBlobStreamAtAsync,
 	tryCurrentBranch,
 } from "./git";
 import { isSafeRef } from "./refs";
+
+const posix = test.skipIf(process.platform === "win32");
 
 let dataDir: string;
 let repo: string;
@@ -75,6 +79,20 @@ function failGitSubcommand(subcommand: string): void {
 	installGitWrapper(subcommand);
 }
 
+function stallGitSubcommand(subcommand: string): void {
+	const executable = Bun.which("git");
+	if (!executable) throw new Error("git not found");
+	const bin = join(dataDir, "bin");
+	mkdirSync(bin);
+	const wrapper = join(bin, "git");
+	writeFileSync(
+		wrapper,
+		`#!/bin/sh\ncase " $* " in *" ${subcommand} "*) sleep 30;; esac\nexec ${JSON.stringify(executable)} "$@"\n`,
+	);
+	chmodSync(wrapper, 0o755);
+	process.env.PATH = `${bin}${delimiter}${savedPath ?? ""}`;
+}
+
 function seedWorkspace(extra: Partial<Workspace> = {}): void {
 	writeFileSync(
 		join(dataDir, "workspaces.json"),
@@ -105,9 +123,10 @@ function commitOnFeature(file: string, content: string, message: string): string
 test("gitDiffFile returns both sides: base content vs worktree content (trailing newline intact)", async () => {
 	seedWorkspace();
 	writeFileSync(join(repo, "README.md"), "# repo\n\nedited\n");
-	const { original, modified } = await gitDiffFile("w1", "README.md");
+	const { original, modified, originalOid } = await gitDiffFile("w1", "README.md");
 	expect(original).toBe("# repo\n");
 	expect(modified).toBe("# repo\n\nedited\n");
+	expect(originalOid).toBe(gitHeadSha("w1"));
 });
 
 test("gitDiffFile: untracked → empty original; deleted → empty modified", async () => {
@@ -163,9 +182,10 @@ test("gitStatus attaches per-file +/- counts, incl. untracked line counts", asyn
 	expect(untracked).toMatchObject({ status: "untracked", added: 2, removed: 0 });
 });
 
-test("gitStatus omits counts for untracked binary or oversized files (matches tracked binaries)", async () => {
+test("gitStatus uses ResourceMeta text classification for untracked counts", async () => {
 	seedWorkspace();
 	writeFileSync(join(repo, "blob.bin"), Buffer.from([0x00, 0x01, 0x02, 0x0a, 0x0a]));
+	writeFileSync(join(repo, "invalid.txt"), Buffer.from([0x66, 0x80, 0x0a]));
 	writeFileSync(join(repo, "big.txt"), `${"x".repeat(2 * 1024 * 1024 + 1)}\n`);
 	writeFileSync(join(repo, "small.txt"), "one\ntwo\n");
 
@@ -173,8 +193,35 @@ test("gitStatus omits counts for untracked binary or oversized files (matches tr
 	const bin = changes.find((c) => c.path === "blob.bin");
 	expect(bin).toMatchObject({ status: "untracked" });
 	expect(bin?.added).toBeUndefined();
+	expect(changes.find((c) => c.path === "invalid.txt")?.added).toBeUndefined();
 	expect(changes.find((c) => c.path === "big.txt")?.added).toBeUndefined();
 	expect(changes.find((c) => c.path === "small.txt")).toMatchObject({ added: 2 });
+
+	const invalid = await gitDiffFile("w1", "invalid.txt", { kind: "uncommitted" });
+	expect(invalid.meta.modified.text).toBe(false);
+	expect(invalid.modified).toBe("");
+});
+
+test("gitDiffFile stamps both sides with their byte identity and never decodes a binary side", async () => {
+	seedWorkspace();
+	const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01]);
+	writeFileSync(join(repo, "shot.png"), png);
+	git(repo, "add", "-A");
+	git(repo, "commit", "-m", "add image");
+	writeFileSync(join(repo, "shot.png"), new Uint8Array([...png, 0x02]));
+
+	const image = await gitDiffFile("w1", "shot.png", { kind: "uncommitted" });
+	expect(image.original).toBe("");
+	expect(image.modified).toBe("");
+	expect(image.meta.original).toMatchObject({ text: false, mime: "image/png", byteLength: 10 });
+	expect(image.meta.modified).toMatchObject({ text: false, byteLength: 11 });
+	expect(image.meta.original.hash).not.toBe(image.meta.modified.hash);
+
+	writeFileSync(join(repo, "notes.md"), "# notes\n");
+	const added = await gitDiffFile("w1", "notes.md", { kind: "uncommitted" });
+	expect(added.modified).toBe("# notes\n");
+	expect(added.meta.original).toEqual({ hash: null, byteLength: null, text: true });
+	expect(added.meta.modified).toMatchObject({ text: true, mime: "text/markdown", byteLength: 8 });
 });
 
 test("gitDiffFile refuses a path escaping the worktree", async () => {
@@ -469,13 +516,24 @@ test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)
 		"--",
 	]);
 	expect(uncommitted).toMatchObject({ untracked: true, originalRef: "HEAD", modifiedRef: null });
+	expect(uncommitted.resolvedOriginalOid).toBe(
+		new TextDecoder()
+			.decode(Bun.spawnSync(["git", "-C", repo, "rev-parse", "HEAD"], { stdout: "pipe" }).stdout)
+			.trim(),
+	);
+	expect(branch.resolvedOriginalOid).toBe(forkPoint);
 
 	const sha = commitOnFeature("second.txt", "second\n", "second");
 	const commit = await resolveDiffRange(ws, { kind: "commit", sha });
 	const parent = commit.originalRef ?? "";
 	expect(parent).toMatch(/^[0-9a-f]{40,}$/);
 	expect(parent).not.toBe(sha);
-	expect(commit).toMatchObject({ untracked: false, modifiedRef: sha, listRevs: [parent, sha] });
+	expect(commit).toMatchObject({
+		untracked: false,
+		modifiedRef: sha,
+		listRevs: [parent, sha],
+		resolvedOriginalOid: parent,
+	});
 	expect(await resolveDiffRange(ws, { kind: "commit", sha: sha.slice(0, 8) })).toEqual(commit);
 
 	const pinned = await resolveDiffRange(ws, { kind: "pinned", baseRef: sha });
@@ -484,6 +542,7 @@ test("resolveDiffRange: one definition per scope (branch / uncommitted / commit)
 		originalRef: sha,
 		modifiedRef: null,
 		listRevs: [sha],
+		resolvedOriginalOid: sha,
 	});
 	expect(await resolveDiffRange(ws, { kind: "pinned", baseRef: sha.slice(0, 8) })).toEqual(pinned);
 	await expect(resolveDiffRange(ws, { kind: "pinned", baseRef: "--output=x" })).rejects.toThrow(
@@ -504,7 +563,12 @@ test("resolveDiffRange degrades a root commit to an add-style diff (no parent to
 		)
 		.trim();
 	const range = await resolveDiffRange(ws, { kind: "commit", sha: root });
-	expect(range).toMatchObject({ untracked: false, originalRef: null, modifiedRef: root });
+	expect(range).toMatchObject({
+		untracked: false,
+		originalRef: null,
+		modifiedRef: root,
+		resolvedOriginalOid: null,
+	});
 	expect(changedFileArgs(range, "--name-status")).toEqual([
 		"show",
 		"--format=",
@@ -517,6 +581,10 @@ test("resolveDiffRange degrades a root commit to an add-style diff (no parent to
 		stdout: "pipe",
 	});
 	expect(new TextDecoder().decode(listed.stdout)).toContain("README.md");
+	seedWorkspace();
+	expect((await gitDiffFile("w1", "README.md", { kind: "commit", sha: root })).originalOid).toBe(
+		null,
+	);
 });
 
 test("resolveDiffRange rejects a non-oid sha before it reaches git, and an unknown commit", async () => {
@@ -557,7 +625,10 @@ test("branch scope measures from the merge-base: upstream commits on the base ar
 
 	expect(await (await gitStatus("w1")).changes.map((c) => c.path)).toEqual(["feature.txt"]);
 	expect(await (await listCommits("w1")).commits.map((c) => c.subject)).toEqual(["feature work"]);
-	expect(await gitDiffFile("w1", "feature.txt")).toEqual({ original: "", modified: "feature\n" });
+	expect(await gitDiffFile("w1", "feature.txt")).toMatchObject({
+		original: "",
+		modified: "feature\n",
+	});
 });
 
 test("gitStatus/gitDiffFile for a commit scope read only that commit, from history", async () => {
@@ -573,10 +644,16 @@ test("gitStatus/gitDiffFile for a commit scope read only that commit, from histo
 	expect(changes.map((c) => c.path)).toEqual(["script.ts"]);
 	expect(changes[0]).toMatchObject({ status: "modified", added: 1, removed: 1 });
 
-	expect(await gitDiffFile("w1", "script.ts", scope)).toEqual({
+	const diff = await gitDiffFile("w1", "script.ts", scope);
+	expect(diff).toMatchObject({
 		original: "export const one = 1;\n",
 		modified: "export const two = 2;\n",
 	});
+	expect(diff.originalOid).toBe(
+		new TextDecoder()
+			.decode(Bun.spawnSync(["git", "-C", repo, "rev-parse", `${sha}^`], { stdout: "pipe" }).stdout)
+			.trim(),
+	);
 });
 
 test("gitStatus/listCommits measure against the re-pointed diffBase, not the creation base", async () => {
@@ -755,9 +832,74 @@ test("a failed blob read is never reported as an empty side", async () => {
 	git(repo, "switch", "-c", "feature");
 	writeFileSync(join(repo, "README.md"), "changed\n");
 	seedWorkspace({ branch: "feature" });
-	failGitSubcommand("show");
+	failGitSubcommand("cat-file");
 
-	await expect(gitDiffFile("w1", "README.md")).rejects.toThrow(/forced show failure/);
+	await expect(gitDiffFile("w1", "README.md")).rejects.toThrow(/forced cat-file failure/);
+});
+
+posix("a bounded blob-read timeout throws instead of becoming an absent side", async () => {
+	seedWorkspace();
+	const head = gitHeadSha("w1");
+	if (!head) throw new Error("no head");
+	stallGitSubcommand("cat-file");
+
+	await expect(readBlobBytesAtAsync(repo, head, "README.md", { timeoutMs: 200 })).rejects.toThrow(
+		/timed out after.*git did not exit/,
+	);
+});
+
+test("a streamed blob read yields its sniff head and full body, null when absent, and throws on failure", async () => {
+	seedWorkspace();
+	const head = gitHeadSha("w1");
+	if (!head) throw new Error("no head");
+	const big = new Uint8Array(200 * 1024);
+	for (let index = 0; index < big.byteLength; index++) big[index] = index & 0xff;
+	writeFileSync(join(repo, "big.bin"), big);
+	git(repo, "add", "big.bin");
+	git(repo, "commit", "-m", "big");
+	const commit = gitHeadSha("w1");
+	if (!commit) throw new Error("no commit");
+
+	const streamed = await readBlobStreamAtAsync(repo, commit, "big.bin");
+	if (!streamed) throw new Error("expected a blob");
+	expect(streamed.head.byteLength).toBe(8 * 1024);
+	expect(streamed.head).toEqual(big.subarray(0, 8 * 1024));
+	expect(new Uint8Array(await new Response(streamed.body).arrayBuffer())).toEqual(big);
+
+	expect(await readBlobStreamAtAsync(repo, head, "big.bin")).toBeNull();
+	expect(await readBlobStreamAtAsync(repo, head, "missing.txt")).toBeNull();
+
+	failGitSubcommand("cat-file");
+	await expect(readBlobStreamAtAsync(repo, head, "README.md")).rejects.toThrow(
+		/forced cat-file failure/,
+	);
+});
+
+posix(
+	"a client abort before the first blob byte stops the streamed read instead of waiting out its deadline",
+	async () => {
+		seedWorkspace();
+		const head = gitHeadSha("w1");
+		if (!head) throw new Error("no head");
+		stallGitSubcommand("cat-file");
+		const controller = new AbortController();
+		const startedAt = performance.now();
+		const pending = readBlobStreamAtAsync(repo, head, "README.md", {
+			timeoutMs: 60_000,
+			signal: controller.signal,
+		});
+		setTimeout(() => controller.abort(), 150);
+		await expect(pending).rejects.toThrow(/aborted/);
+		expect(performance.now() - startedAt).toBeLessThan(5_000);
+	},
+);
+
+test("a failed worktree read is never reported as an absent side", async () => {
+	seedWorkspace();
+	rmSync(join(repo, "README.md"));
+	mkdirSync(join(repo, "README.md"));
+
+	await expect(gitDiffFile("w1", "README.md")).rejects.toThrow();
 });
 
 test("scope resolution never turns a git launch failure into a semantic outcome", async () => {

@@ -111,17 +111,28 @@ batches high-frequency Pi events without allowing later wire messages to overtak
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
-  `supportsPlanSummaryGeneration`. `runHostUpdate` is the typed empty host action and `supportsHostUpdateRun`
-  lets `Shell` inject it only for protocol v70+; `supportsPlanReview` is exported because a sibling panel
-  (`PlanPane`) gates the plan-review UI on it — an older host serves no `todo.startReview`/`reviewAll`, so the
-  client must not offer them; `supportsPlanSummaryGeneration` (v69) is exported because `chat/useChatTodos`
-  gates the auto-summary `todo.generateSummary` request on it — an older host has no such method.
+  `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`. `runHostUpdate` is the typed empty host action
+  and `supportsHostUpdateRun` lets `Shell` inject it only for protocol v70+; `supportsPlanReview` is exported
+  because a sibling panel (`PlanPane`) gates the plan-review UI on it — an older host serves no
+  `todo.startReview`/`reviewAll`, so the client must not offer them; `supportsPlanSummaryGeneration` (v69) is
+  exported because `chat/useChatTodos` gates the auto-summary `todo.generateSummary` request on it — an older
+  host has no such method; `supportsChangeMutations` is exported because `DiffPane` must withhold every
+  `change.*` affordance before that protocol lands; `supportsRichAnchors` (`REVIEW_RICH_ANCHORS_PROTOCOL_VERSION`)
+  is exported because `panels/useReviewCommenting` refuses to send a `region`/`structural` draft to a host
+  that predates them — such a host stores the selector unvalidated and re-anchors it as if it were text, so
+  the comment would survive but mean something else; the refusal is a plain error toast at the one place
+  drafts become `review.commentAdd` requests, and line/whole-file drafts are unaffected. The byte-only
+  resource shape needs no gate: a host older than `RESOURCE_META_PROTOCOL_VERSION` answers `fs.readFile`
+  and `git.diffFile` without `meta`, which the panes read as "text" — exactly the surface that host's own
+  client showed — and `/blob` is only ever addressed for a side the host itself reported as byte-only.
 - **Allowed deps:** `contracts` (method maps, `WS_CHANNELS`, `Project` for welcome + `project.updated`, `SessionEventPayload`
   for `pi.event`, `ExtUiRequest` for `pi.extensionUi`, `Workspace` for `workspace.created`/`updated`,
   `WorkspaceRemoved` for `workspace.removed`, `SessionCreatedPayload` for `session.created`,
   `SessionDeletedPayload` for `session.deleted`,
   `HOST_UPDATE_RUN_PROTOCOL_VERSION` + `Ack` + the typed `host.update` method for the CLI-host update action,
-  `PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION` for the `supportsPlanReview` gate, `provider.changed`, the empty
+  `PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION` for the `supportsPlanReview` gate,
+  `CHANGE_MUTATIONS_PROTOCOL_VERSION` for the diff-mutation gate, `REVIEW_RICH_ANCHORS_PROTOCOL_VERSION`
+  for the rich-anchor authoring gate, `provider.changed`, the empty
   addressed `feedback.interview` invitation, `HostUpdateNotice` for `server.welcome` +
   `host.updateAvailable`,
   `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for `server.welcome`'s config +

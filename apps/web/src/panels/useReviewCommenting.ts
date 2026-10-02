@@ -1,26 +1,14 @@
 import type { GitDiffScope, ReviewAnchor } from "@thinkrail/contracts";
 import { useMemo } from "react";
+import type { AnchorDraft, ReviewThread, ReviewThreadActions, SurfaceReview } from "@/resources";
 import { toast, useAppStore } from "../store";
-import { errorText, getTransport } from "../transport";
-import type { LineSelection } from "./reviewGutter";
+import { errorText, getTransport, supportsRichAnchors } from "../transport";
 import { fileThreads } from "./reviewModel";
 import { sendReviewComment } from "./reviewSend";
-import type {
-	ReviewCommentingCallbacks,
-	ReviewThreadActions,
-	ReviewThreadData,
-} from "./reviewWidgets";
 
-export interface SideReview {
-	threads: ReviewThreadData[];
-	commenting: ReviewCommentingCallbacks;
-	focus: { id: string; line: number } | null;
-}
-
-export interface EditorReview extends SideReview {
-	actions: ReviewThreadActions;
-	onFocusHandled: () => void;
-	base: SideReview;
+export interface FileReview {
+	worktree: SurfaceReview;
+	base: SurfaceReview;
 }
 
 export function useFileReview(
@@ -28,17 +16,19 @@ export function useFileReview(
 	path: string,
 	kind: "inline" | "diff",
 	scope?: GitDiffScope,
-): EditorReview {
-	const comments = useAppStore((s) => s.reviewsByWorkspace[workspaceId]?.comments);
-	const threads = useMemo(() => fileThreads(comments, path, "worktree"), [comments, path]);
+): FileReview {
+	const comments = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.comments);
+	const worktreeThreads = useMemo(() => fileThreads(comments, path, "worktree"), [comments, path]);
 	const baseThreads = useMemo(() => fileThreads(comments, path, "base"), [comments, path]);
-	const focusRequest = useAppStore((s) => s.reviewFocusRequest);
+	const focusRequest = useAppStore((state) => state.reviewFocusRequest);
 	const focusId =
 		focusRequest && focusRequest.workspaceId === workspaceId ? focusRequest.commentId : null;
-	const focus = useMemo(() => resolveFocus(threads, focusId), [threads, focusId]);
+	const worktreeFocus = useMemo(
+		() => resolveFocus(worktreeThreads, focusId),
+		[worktreeThreads, focusId],
+	);
 	const baseFocus = useMemo(() => resolveFocus(baseThreads, focusId), [baseThreads, focusId]);
-
-	const commenting = useMemo(
+	const worktreeCommenting = useMemo(
 		() => sideCommenting(workspaceId, path, kind, "worktree", scope),
 		[workspaceId, path, kind, scope],
 	);
@@ -46,50 +36,91 @@ export function useFileReview(
 		() => sideCommenting(workspaceId, path, kind, "base", scope),
 		[workspaceId, path, kind, scope],
 	);
-
 	const actions = useMemo<ReviewThreadActions>(
 		() => ({
 			onSendComment: (id) => sendReviewComment(workspaceId, id),
 			onDeleteComment: async (id) => {
 				try {
 					await getTransport().request("review.commentDelete", { workspaceId, id });
-				} catch (err) {
-					toast.error(errorText(err), "Couldn't delete the draft");
-					throw err;
+				} catch (error) {
+					toast.error(errorText(error), "Couldn't delete the draft");
+					throw error;
 				}
 			},
 			onUpdateComment: async (id, body) => {
 				try {
 					await getTransport().request("review.commentUpdate", { workspaceId, id, body });
-				} catch (err) {
-					toast.error(errorText(err), "Couldn't update the comment");
-					throw err;
+				} catch (error) {
+					toast.error(errorText(error), "Couldn't update the comment");
+					throw error;
 				}
 			},
 		}),
 		[workspaceId],
 	);
+	const onFocusHandled = useMemo(
+		() => () => useAppStore.getState().clearReviewFocus(focusId ?? undefined),
+		[focusId],
+	);
 
 	return useMemo(
 		() => ({
-			threads,
-			commenting,
-			actions,
-			focus,
-			onFocusHandled: () => useAppStore.getState().clearReviewFocus(focusId ?? undefined),
-			base: { threads: baseThreads, commenting: baseCommenting, focus: baseFocus },
+			worktree: {
+				threads: worktreeThreads,
+				commenting: worktreeCommenting,
+				actions,
+				focus: worktreeFocus,
+				onFocusHandled,
+			},
+			base: {
+				threads: baseThreads,
+				commenting: baseCommenting,
+				actions,
+				focus: baseFocus,
+				onFocusHandled,
+			},
 		}),
-		[threads, commenting, actions, focus, focusId, baseThreads, baseCommenting, baseFocus],
+		[
+			worktreeThreads,
+			worktreeCommenting,
+			actions,
+			worktreeFocus,
+			onFocusHandled,
+			baseThreads,
+			baseCommenting,
+			baseFocus,
+		],
 	);
 }
 
 function resolveFocus(
-	threads: ReviewThreadData[],
+	threads: ReviewThread[],
 	focusId: string | null,
-): { id: string; line: number } | null {
+): { id: string; anchor: ReviewAnchor } | null {
 	if (!focusId) return null;
-	const thread = threads.find((t) => t.id === focusId);
-	return thread ? { id: thread.id, line: thread.startLine } : null;
+	const thread = threads.find((candidate) => candidate.id === focusId);
+	return thread ? { id: thread.id, anchor: thread.anchor } : null;
+}
+
+export function commentKindForDraft(
+	kind: "inline" | "diff",
+	draft: AnchorDraft,
+): "file" | "inline" | "diff" {
+	return draft.selectors.some(
+		(selector) =>
+			selector.kind === "lineRange" || selector.kind === "structural" || selector.kind === "region",
+	)
+		? kind
+		: "file";
+}
+
+export const RICH_ANCHOR_HOST_TOO_OLD =
+	"This host is older than the review surface: it would not keep a region or cell comment. Update the host, or comment on the source instead.";
+
+export function draftNeedsRichAnchors(draft: AnchorDraft): boolean {
+	return draft.selectors.some(
+		(selector) => selector.kind === "region" || selector.kind === "structural",
+	);
 }
 
 function sideCommenting(
@@ -98,35 +129,38 @@ function sideCommenting(
 	kind: "inline" | "diff",
 	side: ReviewAnchor["side"],
 	scope: GitDiffScope | undefined,
-): ReviewCommentingCallbacks {
-	const add = (selection: LineSelection | null, body: string) =>
-		getTransport().request("review.commentAdd", {
+): SurfaceReview["commenting"] {
+	const add = (draft: AnchorDraft, body: string) => {
+		if (
+			draftNeedsRichAnchors(draft) &&
+			!supportsRichAnchors(useAppStore.getState().protocolVersion)
+		) {
+			return Promise.reject(new Error(RICH_ANCHOR_HOST_TOO_OLD));
+		}
+		return getTransport().request("review.commentAdd", {
 			workspaceId,
-			kind: selection ? kind : "file",
-			anchor: {
-				path,
-				side,
-				selectors: selection ? [{ kind: "lineRange", ...selection }] : [],
-			},
+			kind: commentKindForDraft(kind, draft),
+			anchor: { path, side, selectors: draft.selectors },
 			body,
 			...(scope ? { scope } : {}),
 		});
+	};
 	return {
-		onSave: async (selection, text) => {
+		onSave: async (draft, text) => {
 			try {
-				await add(selection, text);
-			} catch (err) {
-				toast.error(errorText(err), "Couldn't save the comment");
-				throw err;
+				await add(draft, text);
+			} catch (error) {
+				toast.error(errorText(error), "Couldn't save the comment");
+				throw error;
 			}
 		},
-		onSend: async (selection, text) => {
+		onSend: async (draft, text) => {
 			let comment: Awaited<ReturnType<typeof add>>;
 			try {
-				comment = await add(selection, text);
-			} catch (err) {
-				toast.error(errorText(err), "Couldn't save the comment");
-				throw err;
+				comment = await add(draft, text);
+			} catch (error) {
+				toast.error(errorText(error), "Couldn't save the comment");
+				throw error;
 			}
 			await sendReviewComment(workspaceId, comment.id);
 		},

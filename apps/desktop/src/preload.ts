@@ -5,7 +5,7 @@ import type {
 	NativeWindowState,
 } from "@thinkrail/contracts";
 import Electrobun, { Electroview } from "electrobun/view";
-import { handlePageZoomShortcut } from "./pageZoom";
+import { handlePageZoomShortcut, installPageZoomGestures } from "./pageZoom";
 import {
 	INITIAL_DESKTOP_PREFERENCES_GLOBAL,
 	isDesktopPreferenceKey,
@@ -59,6 +59,9 @@ window.addEventListener("keydown", (event) =>
 		electroview.rpc?.send.pageZoomRequested({ action });
 	}),
 );
+installPageZoomGestures(window, navigator.platform, (gesture) => {
+	electroview.rpc?.send.pageZoomGestureRequested(gesture);
+});
 const globals = globalThis as typeof globalThis & Record<string, unknown>;
 const updateBridge: NativeUpdateBridge = Object.freeze({
 	getState: () => rpc.request.getUpdateState(),

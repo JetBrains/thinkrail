@@ -15,7 +15,10 @@ const noop = () => undefined;
 
 export type FoldAnchorResolver = () => HTMLElement | null;
 type FoldChangeCompletion = () => void;
-type PrepareFoldChange = (resolveAnchor: FoldAnchorResolver) => FoldChangeCompletion;
+type PrepareFoldChange = (
+	resolveAnchor: FoldAnchorResolver,
+	provenance?: "user" | "automatic",
+) => FoldChangeCompletion;
 type FoldAnchorRef = (element: HTMLElement | null) => void;
 type FoldToggle = (event?: ReactMouseEvent<HTMLElement>) => void;
 
@@ -78,7 +81,7 @@ export function useFold(id: string, fallback = false): [boolean, FoldToggle, Fol
 		complete();
 	}, [expanded]);
 	const toggle: FoldToggle = (event) => {
-		if (event) completeChange.current = prepareChange(resolveAnchor);
+		if (event) completeChange.current = prepareChange(resolveAnchor, "user");
 		const next = !expanded;
 		foldState.set(id, next);
 		setOverride(next);
@@ -102,7 +105,7 @@ export function useSelection(
 	const select = (key: string, event?: ReactMouseEvent<HTMLElement>) => {
 		if (event) {
 			const anchor = event.currentTarget;
-			completeChange.current = prepareChange(() => anchor);
+			completeChange.current = prepareChange(() => anchor, "user");
 		}
 		const next = selected === key ? null : key;
 		selectionState.set(id, next);

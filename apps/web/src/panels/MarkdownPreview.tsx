@@ -1,17 +1,14 @@
 import { useMemo } from "react";
 import { stripFrontmatter } from "@/lib/utils";
-import { Markdown, type MarkdownRehypePlugins } from "../chat/Markdown";
+import type { ResourceViewProps } from "@/resources";
+import { Markdown } from "../chat/Markdown";
 import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
+import { documentRehypePlugins } from "./markdownHtml";
 import { documentComponents, remarkHeadingIds } from "./markdownLinks";
 import { type ComposerInsert, PreviewCommenting } from "./PreviewCommenting";
 import { ReviewThreadCard } from "./ReviewThreadCard";
-import {
-	frontmatterOffset,
-	indivisibleSpans,
-	snapSplitLine,
-	sourceLineRehype,
-} from "./sourceLines";
-import type { EditorReview } from "./useReviewCommenting";
+import { frontmatterOffset, indivisibleSpans, snapSplitLine } from "./sourceLines";
+import { useScrollViewState } from "./useScrollViewState";
 
 const DOCUMENT_PROSE = [
 	"tr-prose-doc max-w-none break-words text-pretty text-text-default",
@@ -52,6 +49,7 @@ export function MarkdownDocument({
 			text={stripFrontmatter(content)}
 			className={DOCUMENT_PROSE}
 			remarkPlugins={[remarkGithubAlerts, remarkHeadingIds]}
+			rehypePlugins={documentRehypePlugins()}
 			components={{ ...alertComponents, ...components }}
 		/>
 	);
@@ -106,45 +104,56 @@ function splicedSegments(
 }
 
 export default function MarkdownPreview({
+	resource,
 	content,
-	workspaceId,
-	path,
 	review,
-}: {
-	content: string;
-	workspaceId: string;
-	path: string;
-	review?: EditorReview;
-}) {
+	viewState,
+	onViewState,
+}: ResourceViewProps) {
+	const { workspaceId, path } = resource;
+	const text = content.kind === "text" ? content.text : "";
 	const components = useMemo(() => documentComponents({ workspaceId, path }), [path, workspaceId]);
+	const { attach: attachScroller } = useScrollViewState<HTMLDivElement>(viewState, onViewState);
 	if (!review) {
 		return (
 			<div
+				ref={attachScroller}
 				data-testid="markdown-preview"
-				className="h-full overflow-auto bg-container-workspace-bg"
+				className="h-full overflow-auto bg-container-workspace-bg motion-safe:animate-reveal"
 			>
 				<article className="mx-auto max-w-[78ch] px-24 py-16">
-					<MarkdownDocument content={content} workspaceId={workspaceId} path={path} />
+					<MarkdownDocument content={text} workspaceId={workspaceId} path={path} />
 				</article>
 			</div>
 		);
 	}
 
-	const stripped = stripFrontmatter(content);
-	const rawOffset = frontmatterOffset(content, stripped);
+	const stripped = stripFrontmatter(text);
+	const rawOffset = frontmatterOffset(text, stripped);
 	const mdProps = (stampOffset: number) => ({
 		className: DOCUMENT_PROSE,
 		remarkPlugins: [remarkGithubAlerts, remarkHeadingIds],
-		rehypePlugins: [[sourceLineRehype, { offset: stampOffset }]] as MarkdownRehypePlugins,
+		rehypePlugins: documentRehypePlugins(stampOffset),
 		components: { ...alertComponents, ...components },
 	});
-	const threadInserts: FlowInsert[] = review.threads.map((thread) => ({
-		key: thread.id,
-		line: thread.endLine,
-		node: <ReviewThreadCard key={thread.id} thread={thread} actions={review.actions} />,
-	}));
+	const threadInserts: FlowInsert[] = review.threads.flatMap((thread) => {
+		const range = thread.anchor.selectors.find((selector) => selector.kind === "lineRange");
+		return range?.kind === "lineRange"
+			? [
+					{
+						key: thread.id,
+						line: range.endLine,
+						node: <ReviewThreadCard key={thread.id} thread={thread} actions={review.actions} />,
+					},
+				]
+			: [];
+	});
 	return (
-		<PreviewCommenting source={content} review={review}>
+		<PreviewCommenting
+			source={text}
+			review={review}
+			{...(onViewState ? { viewState, onViewState } : {})}
+		>
 			{(composer: ComposerInsert | null) => {
 				const inserts = composer
 					? [...threadInserts, { key: "composer", line: composer.line, node: composer.node }]

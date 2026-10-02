@@ -86,10 +86,6 @@ export function userText(content: UserMessage["content"]): string {
 		.join("");
 }
 
-export function isMarkdownPath(path: string): boolean {
-	return /\.(md|markdown)$/i.test(path);
-}
-
 export function normalizePath(path: string): string {
 	return path.replaceAll("\\", "/").replace(/^\.\/+/, "");
 }
@@ -174,13 +170,40 @@ function canvasNormalize(color: string): string {
 	return first === colorCanvas.fillStyle ? first : "";
 }
 
+function srgbColorToHex(color: string): string {
+	const component = "([+-]?(?:\\d*\\.)?\\d+(?:e[+-]?\\d+)?%?)";
+	const match = new RegExp(
+		`^color\\(srgb\\s+${component}\\s+${component}\\s+${component}(?:\\s*\\/\\s*${component})?\\)$`,
+		"i",
+	).exec(color);
+	if (!match) return "";
+	const fraction = (value: string | undefined, fallback: number): number => {
+		if (value === undefined) return fallback;
+		return value.endsWith("%") ? Number.parseFloat(value) / 100 : Number(value);
+	};
+	const values = [
+		fraction(match[1], 0),
+		fraction(match[2], 0),
+		fraction(match[3], 0),
+		fraction(match[4], 1),
+	];
+	if (values.some((value) => !Number.isFinite(value))) return "";
+	const channels = values.map((value) => Math.round(Math.min(1, Math.max(0, value)) * 255));
+	if (match[4] === undefined) channels.pop();
+	return `#${channels.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+}
+
 export function cssColorToHex(color: string): string {
 	const value = color.trim();
 	const short = /^#([0-9a-f]{3,4})$/i.exec(value)?.[1];
 	if (short) return `#${[...short].map((c) => c + c).join("")}`;
 	if (/^#([0-9a-f]{6}|[0-9a-f]{8})$/i.test(value)) return value;
+	const directSrgb = srgbColorToHex(value);
+	if (directSrgb) return directSrgb;
 	const parsed = canvasNormalize(value);
 	if (parsed.startsWith("#")) return parsed;
+	const parsedSrgb = srgbColorToHex(parsed);
+	if (parsedSrgb) return parsedSrgb;
 	const [, r, g, b, a] = /^rgba\((\d+), (\d+), (\d+), ([\d.]+)\)$/.exec(parsed) ?? [];
 	const channels = [Number(r), Number(g), Number(b), Math.round(Number(a) * 255)];
 	if (channels.some((c) => !Number.isFinite(c))) return "";

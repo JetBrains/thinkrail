@@ -1,4 +1,4 @@
-import { type ComponentProps, type ReactNode, useEffect, useState } from "react";
+import { type ComponentProps, memo, type ReactNode, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { highlightCode } from "@/lib/highlighter";
@@ -9,7 +9,7 @@ const CHAT_PROSE =
 
 export type MarkdownRehypePlugins = ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
 
-export function Markdown({
+export const Markdown = memo(function Markdown({
 	text,
 	className = CHAT_PROSE,
 	remarkPlugins,
@@ -36,7 +36,7 @@ export function Markdown({
 			</ReactMarkdown>
 		</div>
 	);
-}
+});
 
 function Table({ children }: { children?: ReactNode }) {
 	return (
@@ -124,7 +124,6 @@ function ShikiBlock({ code, lang }: { code: string; lang: string }) {
 	return (
 		<div
 			className="overflow-auto rounded-[var(--radius-sm)] [&_pre]:!m-0 [&_pre]:!bg-container-elevated-bg [&_pre]:p-8"
-			// biome-ignore lint/security/noDangerouslySetInnerHtml: shiki output is escaped, themed markup
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>
 	);

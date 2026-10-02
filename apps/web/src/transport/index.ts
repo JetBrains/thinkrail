@@ -11,7 +11,9 @@ export {
 	getTransport,
 	initTransport,
 	runHostUpdate,
+	supportsChangeMutations,
 	supportsHostUpdateRun,
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,
+	supportsRichAnchors,
 } from "./wireTransport";

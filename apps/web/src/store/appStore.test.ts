@@ -3575,7 +3575,7 @@ test("dismissToast for an unknown id is a no-op (same array ref, no churn)", () 
 	expect(useAppStore.getState().toasts).toBe(before);
 });
 
-test("pushToast coalesces an identical live toast (same variant/title/message) into the existing id", () => {
+test("pushToast coalesces an identical live actionless toast", () => {
 	const store = useAppStore.getState();
 	const id1 = store.pushToast({ variant: "error", message: "boom", title: "Failed" });
 	const twin = store.pushToast({ variant: "error", message: "boom", title: "Failed" });
@@ -3592,7 +3592,49 @@ test("pushToast coalesces an identical live toast (same variant/title/message) i
 	expect(useAppStore.getState().toasts).toHaveLength(3);
 });
 
-test("pushToast caps the queue, dropping the oldest", () => {
+test("actionable toasts retain their inverse and never coalesce", () => {
+	const store = useAppStore.getState();
+	let calls = 0;
+	const first = store.pushToast({
+		variant: "success",
+		message: "Reverted hunk",
+		durationMs: 8000,
+		action: { label: "Undo", onClick: () => calls++ },
+	});
+	const second = store.pushToast({
+		variant: "success",
+		message: "Reverted hunk",
+		durationMs: 8000,
+		action: { label: "Undo", onClick: () => calls++ },
+	});
+	expect(second).not.toBe(first);
+	expect(useAppStore.getState().toasts).toHaveLength(2);
+	useAppStore.getState().toasts[0]?.action?.onClick();
+	expect(calls).toBe(1);
+});
+
+test("six revert receipts keep all Undo actions and cap a seventh actionless toast", () => {
+	const store = useAppStore.getState();
+	for (let index = 0; index < 6; index++) {
+		store.pushToast({
+			variant: "success",
+			message: `Reverted hunk ${index}`,
+			durationMs: 8000,
+			action: { label: "Undo", onClick: () => {} },
+		});
+	}
+	expect(useAppStore.getState().toasts).toHaveLength(6);
+	expect(
+		useAppStore.getState().toasts.every((candidate) => candidate.action?.label === "Undo"),
+	).toBe(true);
+
+	store.pushToast({ variant: "info", message: "Actionless" });
+	const toasts = useAppStore.getState().toasts;
+	expect(toasts).toHaveLength(6);
+	expect(toasts.some((candidate) => candidate.message === "Actionless")).toBe(false);
+});
+
+test("pushToast caps actionless notifications, dropping the oldest", () => {
 	const store = useAppStore.getState();
 	const first = store.pushToast({ variant: "error", message: "toast 0" });
 	for (let i = 1; i <= 5; i++) store.pushToast({ variant: "error", message: `toast ${i}` });
@@ -3739,7 +3781,7 @@ test("chat presentation preferences are client-local and cannot be overwritten b
 	expect(useAppStore.getState().streamingResponseMovement).toEqual({ settle: 60, trigger: 90 });
 });
 
-test("diff tabs: openTab dedupes by id + activates; view + contents update in place", () => {
+test("diff tabs: openTab dedupes by id + activates; renderer, view state, and contents update in place", () => {
 	const s = () => useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });
 	const tab = {
@@ -3760,22 +3802,40 @@ test("diff tabs: openTab dedupes by id + activates; view + contents update in pl
 	expect(s().activeTabByWorkspace.ws1).toBe(tab.id);
 
 	s().setDiffTabView(tab.id, "inline");
+	s().setTabViewState("ws1", tab.id, { scrollTop: 1 });
+	s().setTabRenderer("ws1", tab.id, "thinkrail/code");
+	expect(s().tabsByWorkspace.ws1?.[0]).not.toHaveProperty("viewState");
+	s().setTabViewState("ws1", tab.id, { scrollTop: 42 });
 	const afterView = s().tabsByWorkspace.ws1?.[0];
 	expect(afterView?.kind === "diff" && afterView.view).toBe("inline");
-	s().setFileTabView(tab.id, "source");
-	const guarded = s().tabsByWorkspace.ws1?.[0];
-	expect(guarded?.kind === "diff" && guarded.view).toBe("inline");
+	expect(afterView?.kind === "diff" && afterView.rendererId).toBe("thinkrail/code");
+	expect(afterView?.kind === "diff" && afterView.viewState).toEqual({ scrollTop: 42 });
 
 	s().setDiffTabIgnoreWhitespace(tab.id, true);
 	const afterWs = s().tabsByWorkspace.ws1?.[0];
 	expect(afterWs?.kind === "diff" && afterWs.ignoreWhitespace).toBe(true);
 
-	s().updateDiffTabContent("ws1", tab.id, "old2", "new2", 5, "origin/release");
+	const meta = {
+		original: { hash: "old-hash", byteLength: 4, text: true },
+		modified: { hash: "new-hash", byteLength: 4, text: true },
+	};
+	s().updateDiffTabContent(
+		"ws1",
+		tab.id,
+		"old2",
+		"new2",
+		meta,
+		"original-oid",
+		5,
+		"origin/release",
+	);
 	const updated = s().tabsByWorkspace.ws1?.[0];
 	expect(updated?.kind).toBe("diff");
 	if (updated?.kind === "diff") {
 		expect(updated.original).toBe("old2");
 		expect(updated.modified).toBe("new2");
+		expect(updated.meta).toEqual(meta);
+		expect(updated.originalOid).toBe("original-oid");
 		expect(updated.loadedTick).toBe(5);
 		expect(updated.loadedTarget).toBe("origin/release");
 	}
@@ -3806,9 +3866,45 @@ test("live content updates are scoped when two workspaces reuse an opaque cache 
 			],
 		},
 	});
-	useAppStore.getState().updateFileTabContent("ws2", "legacy-placement", "fresh", 4);
+	useAppStore.getState().updateFileTabContent("ws2", "legacy-placement", "fresh", undefined, 4);
+	useAppStore.setState({ activeWorkspaceId: "ws2" });
+	useAppStore.getState().setTabRenderer("ws2", "legacy-placement", "thinkrail/code");
+	useAppStore.getState().setTabViewState("ws2", "legacy-placement", { scrollTop: 7 });
 	expect(useAppStore.getState().tabsByWorkspace.ws1?.[0]?.content).toBe("one");
-	expect(useAppStore.getState().tabsByWorkspace.ws2?.[0]?.content).toBe("fresh");
+	const updated = useAppStore.getState().tabsByWorkspace.ws2?.[0];
+	expect(updated?.kind === "file" && updated.content).toBe("fresh");
+	expect(updated?.kind === "file" && updated.rendererId).toBe("thinkrail/code");
+	expect(updated?.kind === "file" && updated.viewState).toEqual({ scrollTop: 7 });
+});
+
+test("resource renderer state persists to its owning workspace after the active workspace switches", () => {
+	const fileTab = (workspaceId: string, content: string): FileTab => ({
+		kind: "file",
+		id: "shared-placement",
+		workspaceId,
+		name: `${workspaceId}.txt`,
+		path: `${workspaceId}.txt`,
+		content,
+	});
+	useAppStore.setState({
+		activeWorkspaceId: "ws1",
+		tabsByWorkspace: {
+			ws1: [fileTab("ws1", "one")],
+			ws2: [fileTab("ws2", "two")],
+		},
+	});
+	const { setTabRenderer, setTabViewState } = useAppStore.getState();
+
+	useAppStore.setState({ activeWorkspaceId: "ws2" });
+	setTabRenderer("ws1", "shared-placement", "thinkrail/code");
+	setTabViewState("ws1", "shared-placement", { scrollTop: 37 });
+
+	expect(useAppStore.getState().tabsByWorkspace.ws1?.[0]).toMatchObject({
+		rendererId: "thinkrail/code",
+		viewState: { scrollTop: 37 },
+	});
+	expect(useAppStore.getState().tabsByWorkspace.ws2?.[0]).not.toHaveProperty("rendererId");
+	expect(useAppStore.getState().tabsByWorkspace.ws2?.[0]).not.toHaveProperty("viewState");
 });
 
 test("the diff scope is per workspace, defaults to the branch, and is dropped with the workspace", () => {

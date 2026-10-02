@@ -41,9 +41,12 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   level, because a send is ONE MESSAGE PER FILE (`review.sendBatch` groups by file and fires each
   group as its own message), so a file row would always hold exactly one entry the summary already
   names. Each row is one comment (`▸ L2 · the remark…`, one line), unfolding to its full text plus
-  the quoted `<fragment>` verbatim (monospace, height-capped). Everything is parsed from the MESSAGE
-  itself — never the review snapshot, which the next review replaces — so any transcript answers
-  "what was sent" forever, on any client; the comment-row folds ride the shared fold cache (keyed
+  the quoted `<fragment>` verbatim — or the comment's `<locator>` line(s) when the position has no
+  source text — in monospace, height-capped. Attribute and locator values are read back through the
+  renderer's own escaping, so a path or node ref carrying `" < > &` or a newline round-trips exactly.
+  Everything is parsed from the MESSAGE itself — never the review snapshot, which the next review
+  replaces — so any transcript answers "what was sent" forever, on any client; the comment-row folds
+  ride the shared fold cache (keyed
   `rowId:<content-key>`), surviving virtualization. A **plain** user bubble (not a skill/review card)
   whose text exceeds **500 characters** collapses to a `line-clamp` preview + a `Show more`/`Show less`
   toggle **inside the card** (within its padding, directly below the message body, so line-clamp truncates
@@ -249,7 +252,8 @@ may inject the same narrow string-storage adapter under its stable backend-profi
 dynamic loopback port cannot erase the preference on restart. It never enters `AppConfig`, so choosing
 newest-first cannot change another browser, device, host, or native window. The same persistence seam owns
 **Streaming response movement**, one `{ settle, trigger }` client-local preference rather than a second
-adapter/subscription path: both values use 5-point steps, Settle is 25–90, Trigger is 35–100, the gap is at
+adapter/subscription path (Trigger is where the response edge triggers a step; Settle is where each step
+places it): both values use 5-point steps, Settle is 25–90, Trigger is 35–100, the gap is at
 least 10 points, and the default is `{ settle: 75, trigger: 100 }`. Invalid storage falls back atomically to
 the default pair. It likewise never enters `AppConfig` or crosses the wire.
 
@@ -415,12 +419,16 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   person took over.
 - **Reader intent and exact-edge rearm** — wheel, trackpad, touch, scrollbar, and navigation-key input
   detaches only when it can cause or has caused real viewport movement; pushing outward against the current
-  physical edge is a no-op. Potential native input pauses competing controller motion without changing
-  alignment. An interrupted return remains logically moving while awaiting a wheel or navigation-key default
-  action; an explicit pointer hold is stationary. If no movement follows, alignment resumes after the bounded
-  input-intent window rather than on the next frame, because an embedded webview may apply default wheel
-  scrolling after that frame. Movement into history detaches once; native movement that interrupts an active
-  alignment also detaches even when directed toward latest, unless that movement itself reaches the exact edge.
+  physical edge is a no-op for a following reader, while a detached reader already exactly at that edge
+  (reader-preserving room can leave nothing to scroll) rearms on the same push. Potential native input
+  pauses competing controller motion, and blocks new automatic motion until it resolves, without changing
+  alignment (continuous following writes nearly every frame, so a write landing between the reader's
+  gesture and its scroll would otherwise swallow it). An interrupted return remains logically moving while
+  awaiting a wheel or navigation-key default action; an explicit pointer hold is stationary. If no movement
+  follows, alignment resumes after the bounded input-intent window rather than on the next frame, because an
+  embedded webview may apply default wheel scrolling after that frame. Movement into history detaches once;
+  native movement that interrupts an active alignment also detaches even when directed toward latest, unless
+  that movement itself reaches the exact edge.
   Explicit text selection and user-invoked message/history, breadcrumb, or tool-page navigation also detach.
   Pointer provenance survives release long enough for native scrollbar-track animation, keyboard
   provenance covers focus-induced scrolling from interactive transcript controls, and both expire on
@@ -432,22 +440,89 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   destination while following, and leaves a detached reader's visible anchor fixed. An own Send deliberately
   reattaches and places its user row at 10% of transcript height clamped to 48–80px; a queued/background
   continuation preserves a detached reader when it starts.
-- **Streaming response movement exists only during work** — while following, the active response grows to
-  Trigger (default 100%), then the sole motion owner places it at Settle (default 75%); each later crossing
-  repeats the same sparse advance. Immediately before a move the controller adds only the scroll-range
-  deficit needed to reach Settle, then removes that room one-for-one as real response growth fills it.
-  Oldest-first therefore needs at most the lower `100% - Settle` band; newest-first uses older projected
-  content where available, keeps any synthetic remainder after the oldest group, and measures consumption
-  from the latest group's stable trailing edge. Synthetic room never splits a reversed request/answer group.
-  **Follow response** reconstructs the needed room, moves to Settle, and rearms the cycle.
-- **Settlement always returns to physical latest** — every `agent_settled`, never `agent_end`, ends response
-  movement, removes remaining synthetic room, reattaches even a manually detached reader, and makes one
-  smooth move to the order's physical latest edge. The store exposes a monotonic per-session settlement
-  tick alongside `isStreaming`, so a start and settlement coalesced into one React render cannot strand an
-  optimistic turn inset or runway. Delayed virtual measurements retarget that same bounded return rather
-  than creating a hard-pin loop. If reader input intersects settlement, either idle reattach path carries
-  the partial room-to-zero leg forward instead of leaking hidden runway. A rejected immediate prompt likewise
-  cancels its locally armed turn state.
+- **Streaming response movement exists only during work, and it moves in window steps** — while following, the
+  view stands still while the active response fills the window below its prompt. Each time the response edge
+  passes Trigger (default 100%), the sole motion owner makes one eased ~220 ms step that places the edge at
+  Settle (default 75%), then stands still again until the edge passes Trigger once more. Reading text that
+  stands still is the point: a continuous follow (the edge held at Settle with per-frame smoothing) was tried
+  and rejected because the line being read never stopped creeping. The step destination is recomputed from live
+  geometry on each frame of the step, so growth during the step is included and the step never overshoots.
+  Steps never move backward. Synthetic room is **derived, never accumulated**: during a step it is exactly the
+  part of the Settle destination beyond the natural scroll range; between steps it is the reader-preserving
+  remainder, recomputed before paint on every content change, so response growth consumes it one-for-one while
+  neither the visible content nor the scroll range moves. The old step implementation consumed room one frame
+  late, which flapped the scroll range and wobbled each step; that defect, not the step model, made it feel
+  jumpy. Oldest-first therefore needs at most the lower `100% - Settle` band; newest-first uses older projected
+  content where available and keeps any synthetic remainder after the oldest group. Synthetic room never splits
+  a reversed request/answer group. **Follow response** and an exact-edge return make one step to Settle and
+  rearm the cycle. Reader takeover never moves the reader: room shrinks only as far as the reader's current
+  position allows (the document may end exactly at their viewport bottom), and later growth or upward reading
+  consumes the rest. A reveal that releases room (tool attention, jump-to-message, breadcrumb) suspends
+  stepping while its target is still the newest row, because it is about to place the viewport itself; the
+  first new latest row after it (for example the answer that follows a resolved question) ends the suspension.
+  Suspending for the rest of the response froze following after every question card and then flew 2–2.6k px at
+  settlement. A settlement that lands while native input is still pending defers its return until that input
+  resolves, and drops the return if the input detached.
+- **A tall arrival shows its start** — in oldest-first the controller remembers the last response edge the
+  reader actually had on screen. When the follow destination would carry that edge above the turn inset —
+  content taller than the reading space (the Settle line minus the turn inset) arrived below it, typically a
+  diagram or card that renders at once, possibly in several quick layout steps — the destination is capped so
+  that point lands at the turn inset, the same place an own prompt lands. Growth within 300 ms of the cap
+  engaging belongs to the arrival; each later growth releases the cap by twice its own height until it reaches
+  Settle, and the view still moves only in window steps: a step happens once the capped destination is at least
+  one window (`Trigger − Settle`) ahead, so the block advances at twice reading pace instead of flying by (one
+  mermaid card measured a 1.5k px glide in under a second, and judging each layout step alone missed cards that
+  land in two steps). A second tall arrival never pushes an active cap further. The cap is evaluated wherever
+  the follow destination is, so it also bounds a step already in flight. Positions are kept relative to the
+  topmost visible row rather than document coordinates, and each evaluation re-expresses them relative to the
+  current one, so height changes above the viewport (Virtuoso replacing an estimate, a code block highlighting)
+  neither trigger nor misplace the cap, rows may unmount, and a block that grows above rows that already follow
+  it (WebKit renders a diagram after the next turn's row exists) still counts. Anchoring to the last row
+  instead missed exactly that case. A width reflow, a reader's own disclosure toggle, and a fresh mount re-take
+  the seen edge instead of counting as an arrival; an automatic expansion (a card opening when it completes)
+  still can. A Markdown mermaid fence replaces its own source in place, so its rendered top sits above the old
+  edge by the source height and the cap shows the diagram from that point. Newest-first prepends its latest
+  rows, so edge growth there is not appended content and the cap does not apply. **Follow response**, an
+  exact-edge return, a new turn, reader takeover, and a room-releasing reveal clear it. Settlement ends the cap
+  like any other following settlement: content still unseen below gets the one forward move to the end.
+  Detaching the reader there instead surfaced **Latest** without anyone taking over and stranded plain text
+  answers whose deltas arrived in large bursts.
+- **Following keeps what is on screen still** — while a following reader watches an oldest-first stream,
+  the topmost visible row is the view's anchor: only the controller's own writes and reader input may move
+  it. After every layout that changes the item list (before paint) and on any scroll the hook did not cause,
+  an anchor that moved is restored in the same frame, adding synthetic room when the scroll range shrank.
+  A scroll that lands exactly on the shrunken range's end is a clamp and is left to the before-paint path,
+  which runs after Virtuoso's own size compensation; restoring it from the scroll event made Virtuoso read
+  the clamp as upward reading and compensate the restore away (an 844 px jump in Chromium).
+  Two measured causes motivate this, and both also appeared without virtualization: an answered question
+  card collapsing by 400–800 px (the browser clamps the range, then Virtuoso's size compensation scrolls the
+  rest), and WebKit resetting `scrollTop` (627 → 0) when a tool row appears beside a re-rendered text row,
+  with no script write, focus, or scroll-anchoring involved. The guard is idle while the reader is detached,
+  while native input is pending, during reveal, fold-anchor, and settlement motions, and for 1.3 s after a
+  turn anchor hands placement to Virtuoso (its `scrollToIndex` retries while sizes keep changing; later
+  retries target the same turn position), so it never fights a placement someone asked for. The synthetic
+  room is always mounted (zero height when unused) so the guard can grow it synchronously; room left behind
+  is reader-preserving and later growth consumes it. Changes that announce themselves avoid the clamp
+  entirely: the fold seam (disclosures, and the question card's own submit, which swaps the card for a small
+  "Answer sent" state) reserves room for the changing row's whole height before the DOM changes while a
+  following reader watches a stream, then trims it to what the reader's position needs. That trim counts
+  content shorter than the viewport, because the true natural scroll range is then negative; clamping it at
+  zero under-reserved by the shortfall and let a short transcript slide 280 px down after an answer.
+- **Settlement never moves a reader who took over, and never moves content backward** — every
+  `agent_settled`, never `agent_end`, ends response movement. In oldest-first a following reader whose
+  content already ends inside the viewport stays exactly where it is: the remaining synthetic room becomes
+  reader-preserving room that disappears as the reader scrolls up or the next turn starts, never by sliding
+  what is on screen. Removing it at settlement slid every finished answer down by up to the `100% − Settle`
+  band (≈100 px measured) and, after an absorbed card collapse, by several hundred px. Only when unseen
+  content remains below does a following reader make one smooth forward move to the physical latest edge;
+  newest-first keeps its one smooth return to its top latest edge. A detached reader's visible content
+  stays exactly where it is and only the affordance changes from **Follow response** to **Latest**. Returning
+  detached readers at settlement was the largest measured yank (tens of thousands of px) and contradicted
+  reader-wins. The store exposes a monotonic per-session settlement tick alongside `isStreaming`, so a start
+  and settlement coalesced into one React render cannot strand an optimistic turn inset or runway. Delayed
+  virtual measurements retarget that same bounded return rather than creating a hard-pin loop. If reader input
+  intersects settlement, either idle reattach path carries the partial room-to-zero leg forward instead of
+  leaking hidden runway. A rejected immediate prompt likewise cancels its locally armed turn state.
 - **Stable work-status geometry** — one fixed-size slot always occupies the logical latest transcript edge:
   after rows in oldest-first and before rows in newest-first. While work is active it always contains one
   polite live phase — **Working…**, **Thinking…**, **Running `<tool>`…**, **Writing…**, or
@@ -465,13 +540,24 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   cancellation or compete with settlement. Size-aware `nearest` keeps a
   tall target's useful leading edge visible.
 - **One cancellable, retargetable motion owner** — renderers and projections never scroll themselves.
-  New-turn placement, Trigger→Settle advances, contextual-button returns, settlement, and explicit reveals
+  New-turn placement, window steps, contextual-button returns, settlement, and explicit reveals
   share one non-overlapping channel whose destination can retarget as Virtuoso measurements, status geometry,
   or runway changes land. Corrections continue the current motion instead of launching overlapping eases or
   alternating hard writes. The first real reader movement cancels it synchronously and native physics win.
   Newest-first header deltas preserve a detached historical anchor; viewport resize reevaluates the live
   percentages without moving a below-Trigger response. Initial/order placement is direct, and reduced motion
   makes every programmatic destination immediate while preserving identical state and final geometry.
+- **No hidden motion owners** — nothing but the controller and the reader may move the viewport. The
+  transcript scroller opts out of browser scroll anchoring (`overflow-anchor: none`): Virtuoso excludes its
+  items, but Chromium otherwise anchors to the header/footer and counter-scrolls a reader while the response
+  grows below them. The oldest-first top inset is constant rather than toggling with synthetic room; toggling
+  shifted a reader's content by the 48–80px inset on detach where no anchoring compensates (WebKit).
+  Synthetic room reconciles before paint in the same frame as an item-list resize, so the scroll range and
+  scrollbar never flap between frames. Virtuoso's resize handling runs without its animation-frame deferral,
+  so above-viewport measurement corrections land before paint. The wheel listener stays non-passive: a
+  passive one lets Chromium apply the scroll before the wheel event reaches the hook, so the movement arrives
+  without reader intent and neither detach nor exact-edge rearm fires. Scrolling stays responsive because a
+  streaming delta re-renders only the rows whose content changed, keeping the main thread free.
 - **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in

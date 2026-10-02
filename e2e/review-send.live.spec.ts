@@ -1,11 +1,11 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
+import { selectPierreLine } from "./fixtures/pierre";
 
 const worktree = () => join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
-const addIcon = (page: Page) => page.locator('[data-testid="review-add-icon"]:visible');
 
 test("a review send reads back from the chat: summary → file → comment + fragment, disk reopen included", {
 	tag: "@agent",
@@ -28,10 +28,7 @@ test("a review send reads back from the chat: summary → file → comment + fra
 		if (await staleNotification.isVisible()) await staleNotification.click();
 		await changeItem.click({ timeout: 2_000 });
 	}).toPass({ timeout: 30_000 });
-	await page.getByTestId("diff-pane").getByText("two = 2").last().click();
-	await page.keyboard.press("Home");
-	await page.keyboard.press("Shift+End");
-	await addIcon(page).click();
+	await selectPierreLine(page.getByTestId("diff-view"), "two = 2");
 	await page.getByTestId("review-composer-input").fill("Please rename `two` to `pair`.");
 	await page.getByTestId("review-composer-send").click();
 

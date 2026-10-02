@@ -25,7 +25,14 @@ of the host.
   `subagent.getTranscript`'s **permanent** miss, the
   signal that stops the transcript dialog's polling. A known child whose first transcript file is not
   written yet instead returns empty messages with its current status, so a live run remains pollable;
-  transport blips stay plain-`error` transients worth retrying), so a client can react to one specific failure
+  transport blips stay plain-`error` transients worth retrying — and the four `change.*` outcomes a
+  reviewer's UI must distinguish:
+  **`STALE_VIEW`** (an `expect` hash no longer matches what the host reads → re-read the diff and
+  re-offer), **`SCOPE_IMMUTABLE`** (the scope's modified side is a commit, so nothing in the worktree is
+  being described), **`RANGE_INVALID`** (a span lies outside the side it names, or a range revert was
+  asked of a byte-only resource), **`RECEIPT_UNKNOWN`** (an undo of a receipt the host no longer
+  holds — the ring is 20 deep and dies with the process), and **`UNSUPPORTED_CHANGE`** (the selected
+  change is a symlink or mode-only mutation that this byte-oriented write path deliberately refuses)), so a client can react to one specific failure
   instead of pattern-matching an error message. A failure earns a code only when a client behaves differently
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
@@ -86,6 +93,13 @@ of the host.
     `queue_update` / `compaction_*` / `auto_retry_*` / `summarization_retry_*` /
     `session_info_changed` / `thinking_level_changed` members, plus `bash_execution_update` — mirrored
     for union fidelity only; the host never calls `executeBash`, so the UI never receives it).
+    Every message an event carries (`message_*`, `turn_end`, `agent_end.messages`) is typed as
+    **`WireAgentMessage`** — `TranscriptMessage` plus the `WireBranchSummary` / `WireBashExecution`
+    mirrors — never pi-agent-core's `AgentMessage`. That type is `Message` plus whatever
+    `CustomAgentMessages` augmentation the compilation happens to include: pi-coding-agent adds the
+    custom roles only in Node builds, and pi-agent-core itself no longer adds them, so the same
+    `PiEvent` would otherwise mean two different unions on the server and in the browser (where the
+    custom-message guards narrowed to `never`).
     `agent_settled` is a host projection carrying the final attempt's reported terminal metadata
     (`stopReason` + optional `errorMessage`): `agent_end.willRetry` covers provider auto-retry only and
     is not an automatic-work terminal when compaction or a queued continuation follows.
@@ -195,7 +209,24 @@ of the host.
   **`OpenBranchReview`** (the optional open review reference for the active branch: PR vs MR + number; no status/actions),
   **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
   `detached` row the chooser disables),
-  `FileNode` (file-tree node), `Git*`/diff types — incl. **`GitDiffScope`** (what the Changes
+  `FileNode` (file-tree node),
+  **`ResourceMeta`** (what a resource's bytes *are*, host-decided and pinned by
+  `RESOURCE_META_PROTOCOL_VERSION` = v75: sha-256 `hash` + `byteLength`, both `null` when the resource is
+  absent; `text` = valid UTF-8, BOM-aware, and not claimed by a recognized binary magic number (an ASCII
+  PDF is a byte-only document; an SVG is text); optional `mime`, sniffed from magic bytes first and the
+  filename second. It rides `fs.readFile` and both sides of `git.diffFile`, whose `content` is `""`
+  whenever `text` is false and whose `originalOid` is the resolved range start used to address the immutable
+  `/blob` side — the host refuses to send a decoded binary, so a client renders byte-only resources from the
+  `/files` + `/blob` HTTP routes and uses `hash` as the identity a comment anchor or a revert expectation names),
+  the **change-mutation types** — **`LineSpan`** (1-based inclusive; `count: 0` names an insertion point
+  *before* `start`), **`RevertTarget`** (`file` = the path's whole change in the scope, or `range` = one
+  hunk as **line spans on both sides**, never a patch or a `@@` header: two client diff engines split
+  hunks differently, and the client must never dictate bytes) and **`ChangeReceipt`** (the answer to a
+  `change.*` call *and* its undo token: `kind` revert/undo, the `before`/`after` hash+length+mode identity with
+  `null` meaning absent, and optional `trashed` — the absolute same-directory temporary claim path the
+  trash helper received for a whole-file removal; the file consequently has that temporary name in the
+  OS trash),
+  `Git*`/diff types — incl. **`GitDiffScope`** (what the Changes
   panel is diffing: `branch` → the workspace's work since diverging from its diff base (the range starts at
   their merge-base, never the base's tip) / `uncommitted` → worktree vs `HEAD` /
   `commit` → one commit, `sha^` vs `sha`; omitted on the wire = `branch`, so an older client is unchanged),
@@ -374,8 +405,16 @@ of the host.
   inline/diff/file/review; `status` draft/sent/resolved/
   dismissed — orthogonal to **`anchorState`** anchored/moved/outdated; per-comment `sessionId` — the
   chat it was sent into), **`ReviewAnchor`** (`path` + `side` + `contentHash` + an ordered **`ReviewSelector`**
-  fallback chain: `lineRange` / `textQuote` / `diffHunk` / `structural` — the last two are reserved
-  slots no author populates; a `side: "base"` anchor additionally carries **`baseRef`**, the ref
+  fallback chain: `lineRange` / `textQuote` / `diffHunk` / `structural` / `region` — `structural` is the
+  typed-by-scheme slot for document models with stable identities (`json-pointer`, `ipynb-cell`,
+  `table-cell`, `md-heading`, plus whatever scheme a renderer mints: unknown schemes cross the wire
+  verbatim, only the shape is checked) and `region` is normalized `0..1` geometry with an optional
+  1-based `page` for paged media, so a comment can name an image region or a notebook cell instead of a
+  line; Ask-agent hunk comments populate `diffHunk` with the exact displayed hunk header, and `contentHash` is sha-256 over the
+  resource's BYTES (byte-identical to the former text hash for valid UTF-8).
+  **`REVIEW_RICH_ANCHORS_PROTOCOL_VERSION`** pins the additive `region` member and the now-populated
+  `structural` slot to v74, so a renderer-rich client tells a host that preserves them from one that
+  predates them instead of having a region anchor silently dropped; a `side: "base"` anchor additionally carries **`baseRef`**, the ref
   its lines and fragment were captured against, since the two diff sides are two line spaces, plus the
   **`scope`** it was captured in — the diff identity that reopens the one surface rendering that blob),
   **`ReviewSnapshot`** (`{ review, comments }` — the `review.get`
@@ -410,7 +449,8 @@ of the host.
   never eagerly for every project) / `workspace.*` — notably **`workspace.list { projectId,
   includeDiffStats? }`**, where omitted/true preserves the existing full rows with computed aggregates and
   `false` returns the same authoritative membership/order without the synchronous per-workspace diff-stat
-  fan-out used nowhere by navigation restoration / `fs.*` / `git.*` / **`spec.graph`**
+  fan-out used nowhere by navigation restoration / `fs.*` (**`fs.readFile`** answers
+  `{ content, meta: ResourceMeta }`) / `git.*` / **`spec.graph`**
   (the Specs-viewer whole-graph read, per workspace) / **`todo.*`** — **`list`**/**`add`**/**`update`**/
   **`remove`**, the chat's per-session TODO plan (keyed by `workspaceId` + `sessionId`; `add` tags the
   item `origin:"user"`), plus the review ops **`review`** (approve: record `reviewed` + the sha
@@ -472,11 +512,23 @@ of the host.
   the client's conservative fallback when the event push was lost or startup failed; an optional
   `prewarm: true` marks the started watcher as prewarm-only — the host keeps those in a globally bounded,
   evictable pool and any real preflight/read promotes them out of it, see the server `watch` SPEC) / **`git.status`** +
-  **`git.diffFile`**, both
+  **`git.diffFile`** (whose two sides ride with `ResourceMeta` and whose `originalOid` freezes the range's
+  original side for `/blob`), both
   taking an optional **`scope: GitDiffScope`** (an unresolvable scope — a commit a rebase removed — is
   *rejected*, which the panel reads as "reset the scope" instead of staying wedged on a dead sha) /
   **`git.listCommits`** (the workspace branch's own commits, `<diff base>..HEAD`, newest first, capped
-  host-side — the scope menu's lazily-fetched list) / **`git.prefetch`** (best-effort background fetch of a
+  host-side — the scope menu's lazily-fetched list) / the **`change.*` write path**
+  (`CHANGE_MUTATIONS_PROTOCOL_VERSION` = v75) — **`change.revert`** (`{ workspaceId, path, scope,
+  target, expect: { originalHash, modifiedHash } }` → `{ receipt }`: the client names *what it saw*, the
+  host re-derives the change from its own reads under a per-workspace lock, and either side's hash
+  mismatching is `STALE_VIEW` with nothing written — the agent keeps working during review, so
+  compare-and-swap is the whole protection; symlink and mode-only inputs are `UNSUPPORTED_CHANGE`) and **`change.undo`** (`{ workspaceId, receiptId, expect:
+  { modifiedHash } }` → `{ receipt }`: receipts are the inverse, which is why the UI offers *Undo*
+  instead of a confirmation on every hunk; the `undo` receipt it answers with is itself undoable once, so
+  redo needs no third method). Receipts live in host memory only (per workspace: at most 20, at most
+  64 MiB of held bytes, oldest evicted first, the newest always kept; dropped with the workspace): git
+  and the OS trash already back recovery, so a data-dir format would buy nothing — hence
+  `RECEIPT_UNKNOWN` rather than a wire promise of durability / **`git.prefetch`** (best-effort background fetch of a
   remote base — the New-Workspace dialog's freshness warm-up; always acks `{ ok }`, and when the fetch
   actually moved the local remote-tracking ref the host follows up with pathless `workspace.fsChanged`
   frames to the workspaces whose diff base that ref is, so their git-derived reads re-converge) / **`skills.state`** (`SkillCatalogEntry[]` — full catalog +

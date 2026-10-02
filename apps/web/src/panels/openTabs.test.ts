@@ -4,6 +4,15 @@ import { diffTabId } from "./changesModel";
 
 let pending: { resolve: (value: unknown) => void } | null = null;
 const requests: { method: string; params: unknown }[] = [];
+const diffResult = (original: string, modified: string) => ({
+	original,
+	modified,
+	originalOid: "0123456789abcdef0123456789abcdef01234567",
+	meta: {
+		original: { hash: "original", byteLength: original.length, text: true },
+		modified: { hash: "modified", byteLength: modified.length, text: true },
+	},
+});
 const actualTransport = await import("../transport");
 mock.module("../transport", () => ({
 	...actualTransport,
@@ -72,7 +81,7 @@ test("a diff tab is stamped with the target and tick captured BEFORE its read, n
 		skillChange: "none",
 	});
 
-	pending?.resolve({ original: "old", modified: "new" });
+	pending?.resolve(diffResult("old", "new"));
 	await open;
 
 	const tab = openedDiffTab();
@@ -82,7 +91,7 @@ test("a diff tab is stamped with the target and tick captured BEFORE its read, n
 
 test("a fast leading click upgraded by dblclick publishes only the final keep intent", async () => {
 	const preview = openDiffInTab("w1", { kind: "branch" }, "README.md", "preview");
-	pending?.resolve({ original: "old", modified: "new" });
+	pending?.resolve(diffResult("old", "new"));
 	await Promise.resolve();
 	const keep = openDiffInTab("w1", { kind: "branch" }, "README.md", "keep");
 	await Promise.all([preview, keep]);
@@ -115,7 +124,18 @@ test("a cached double click also publishes only one final keep intent", async ()
 
 	const preview = openDiffInTab("w1", { kind: "branch" }, "README.md", "preview");
 	const cached = openedDiffTab();
-	useAppStore.getState().updateDiffTabContent("w1", cached.id, "fresh old", "fresh new", 1, "main");
+	useAppStore
+		.getState()
+		.updateDiffTabContent(
+			"w1",
+			cached.id,
+			"fresh old",
+			"fresh new",
+			undefined,
+			undefined,
+			1,
+			"main",
+		);
 	const keep = openDiffInTab("w1", { kind: "branch" }, "README.md", "keep");
 	await Promise.all([preview, keep]);
 
@@ -149,9 +169,9 @@ test("an overtaken double click keeps its tab without claiming a newer preview s
 	const firstKeep = openDiffInTab("w1", { kind: "branch" }, "README.md", "keep");
 	const newerPreview = openDiffInTab("w1", { kind: "branch" }, "notes.txt", "preview");
 	const resolveNewer = pending?.resolve;
-	resolveNewer?.({ original: "old notes", modified: "new notes" });
+	resolveNewer?.(diffResult("old notes", "new notes"));
 	await newerPreview;
-	resolveFirst?.({ original: "old readme", modified: "new readme" });
+	resolveFirst?.(diffResult("old readme", "new readme"));
 	await Promise.all([firstPreview, firstKeep]);
 
 	const opens = useAppStore
@@ -256,7 +276,7 @@ test("a cache-id collision mints an alias instead of focusing an unrelated resou
 		},
 	});
 	const open = openDiffInTab("w1", { kind: "branch" }, "README.md", "keep");
-	pending?.resolve({ original: "old", modified: "new" });
+	pending?.resolve(diffResult("old", "new"));
 	await open;
 
 	const tabs = useAppStore.getState().tabsByWorkspace.w1 ?? [];
@@ -284,7 +304,7 @@ test("a read settling after another cache install keeps the newer semantic cache
 		"keep",
 		false,
 	);
-	pending?.resolve({ original: "stale old", modified: "stale new" });
+	pending?.resolve(diffResult("stale old", "stale new"));
 	await open;
 
 	const diff = openedDiffTab();
@@ -314,7 +334,7 @@ test("an undisturbed open stamps the state it actually read against", async () =
 		skillChange: "none",
 	});
 	const open = openDiffInTab("w1", { kind: "branch" }, "README.md", "preview");
-	pending?.resolve({ original: "old", modified: "new" });
+	pending?.resolve(diffResult("old", "new"));
 	await open;
 
 	const tab = openedDiffTab();

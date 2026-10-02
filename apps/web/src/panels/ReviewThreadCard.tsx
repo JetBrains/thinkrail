@@ -1,8 +1,8 @@
 import { RiSendPlaneLine as Send, RiDeleteBin6Line as Trash2 } from "@remixicon/react";
 import { useEffect, useRef, useState } from "react";
 import { IconTooltip } from "../components/ui/tooltip";
-import { threadLabel } from "./reviewModel";
-import type { ReviewThreadActions, ReviewThreadData } from "./reviewWidgets";
+import type { ReviewThread, ReviewThreadActions } from "../resources";
+import { outdatedReason, threadLabel } from "./reviewModel";
 
 function grow(el: HTMLTextAreaElement): void {
 	el.style.height = "auto";
@@ -12,9 +12,11 @@ function grow(el: HTMLTextAreaElement): void {
 export function ReviewThreadCard({
 	thread,
 	actions,
+	onActivate,
 }: {
-	thread: ReviewThreadData;
+	thread: ReviewThread;
 	actions: ReviewThreadActions;
+	onActivate?: (() => void) | undefined;
 }) {
 	const [busy, setBusy] = useState(false);
 	const [draftText, setDraftText] = useState(thread.body);
@@ -24,6 +26,7 @@ export function ReviewThreadCard({
 		if (draftText === syncedBody) setDraftText(thread.body);
 	}
 	const editRef = useRef<HTMLTextAreaElement>(null);
+	const cancelledRef = useRef(false);
 	const run = (action: (id: string) => Promise<void>) => {
 		setBusy(true);
 		action(thread.id).catch(() => setBusy(false));
@@ -33,6 +36,10 @@ export function ReviewThreadCard({
 		if (el && el.value === draftText) grow(el);
 	}, [draftText]);
 	const saveEdit = () => {
+		if (cancelledRef.current) {
+			cancelledRef.current = false;
+			return;
+		}
 		const next = draftText.trim();
 		if (!next || next === thread.body) {
 			setDraftText(thread.body);
@@ -42,7 +49,7 @@ export function ReviewThreadCard({
 	};
 	return (
 		<div
-			data-testid="review-thread"
+			data-testid="review-thread-card"
 			data-comment-id={thread.id}
 			data-status={thread.status}
 			className="review-thread"
@@ -51,11 +58,24 @@ export function ReviewThreadCard({
 				<span
 					className={`review-thread-dot rounded-full review-thread-dot-${thread.status === "sent" ? "sent" : "draft"}`}
 				/>
-				<span
-					className={`review-thread-label tr-text-eyebrow${thread.stale ? " text-feedback-warning" : ""}`}
-				>
-					{threadLabel(thread)}
-				</span>
+				{onActivate ? (
+					<button
+						type="button"
+						data-testid="review-thread-anchor"
+						className={`review-thread-label rounded-[var(--radius-sm)] tr-text-eyebrow outline-none focus-visible:ring-2 focus-visible:ring-primary${thread.stale ? " text-feedback-warning" : ""}`}
+						onClick={onActivate}
+						{...(thread.anchorState === "outdated" ? { title: outdatedReason(thread.anchor) } : {})}
+					>
+						{threadLabel(thread)}
+					</button>
+				) : (
+					<span
+						className={`review-thread-label tr-text-eyebrow${thread.stale ? " text-feedback-warning" : ""}`}
+						{...(thread.anchorState === "outdated" ? { title: outdatedReason(thread.anchor) } : {})}
+					>
+						{threadLabel(thread)}
+					</span>
+				)}
 				{thread.status === "draft" && (
 					<span className="review-thread-actions">
 						<IconTooltip label="Send this comment to the file's review chat" wrapTrigger>
@@ -100,7 +120,9 @@ export function ReviewThreadCard({
 					}}
 					onBlur={saveEdit}
 					onKeyDown={(e) => {
+						e.stopPropagation();
 						if (e.key === "Escape") {
+							cancelledRef.current = true;
 							setDraftText(thread.body);
 							editRef.current?.blur();
 						}

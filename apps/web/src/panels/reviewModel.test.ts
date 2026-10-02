@@ -8,6 +8,7 @@ import {
 	fileThreads,
 	groupComments,
 	lineRef,
+	outdatedReason,
 	reviewFileSurface,
 	reviewFlags,
 	statusLabel,
@@ -72,8 +73,19 @@ test("groupComments: review-level first, then files alphabetically, creation ord
 	expect(groups[2]?.comments.map((c) => c.id)).toEqual(["c1", "c4"]);
 });
 
-test("lineRef: the compact line reference; empty for review-level", () => {
+test("lineRef uses the shared anchor labels and stays empty for review-level comments", () => {
 	expect(lineRef(comment({}))).toBe("L3–5");
+	expect(
+		lineRef(
+			comment({
+				anchor: {
+					path: "data.json",
+					side: "worktree",
+					selectors: [{ kind: "structural", scheme: "json-pointer", ref: "/name" }],
+				},
+			}),
+		),
+	).toBe("/name");
 	expect(lineRef(comment({ kind: "review", anchor: null }))).toBe("");
 });
 
@@ -112,9 +124,26 @@ test("fileThreads keeps the two diff sides apart — each editor renders only it
 			},
 		}),
 	];
-	expect(fileThreads(comments, "src/a.ts", "worktree").map((t) => t.id)).toEqual(["w1"]);
-	expect(fileThreads(comments, "src/a.ts", "base").map((t) => [t.id, t.startLine])).toEqual([
-		["b1", 9],
+	expect(fileThreads(comments, "src/a.ts", "worktree").map((thread) => thread.id)).toEqual(["w1"]);
+	expect(
+		fileThreads(comments, "src/a.ts", "base").map((thread) => [
+			thread.id,
+			thread.anchor.selectors[0],
+		]),
+	).toEqual([["b1", { kind: "lineRange", startLine: 9, endLine: 9 }]]);
+});
+
+test("fileThreads retains positioned selectors a Monaco renderer cannot place", () => {
+	const structural = comment({
+		id: "structural",
+		anchor: {
+			path: "src/a.ts",
+			side: "worktree",
+			selectors: [{ kind: "structural", scheme: "json-pointer", ref: "/name" }],
+		},
+	});
+	expect(fileThreads([structural], "src/a.ts", "worktree")).toEqual([
+		expect.objectContaining({ id: "structural", anchor: structural.anchor }),
 	]);
 });
 
@@ -177,4 +206,32 @@ test("fileSummaries: a fully-resolved file stays listed until marked done; a new
 	const overall = comment({ id: "rc_3", kind: "review", anchor: null, status: "resolved" });
 	expect(fileSummaries([overall], [""])).toEqual([]);
 	expect(fileSummaries([overall])).toEqual([{ path: null, total: 0, drafts: 0, resolved: 1 }]);
+});
+
+test("an outdated anchor explains itself by what it could have re-found", () => {
+	const anchor = (
+		selectors: ReviewComment["anchor"] extends infer A
+			? A extends { selectors: infer S }
+				? S
+				: never
+			: never,
+	) => ({
+		path: "a.png",
+		side: "modified" as const,
+		contentHash: "h",
+		selectors,
+	});
+	expect(
+		outdatedReason(
+			anchor([
+				{ kind: "textQuote", exact: "x" },
+				{ kind: "lineRange", startLine: 1, endLine: 1 },
+			]),
+		),
+	).toMatch(/changed or is gone.*text was not found again/);
+	expect(outdatedReason(anchor([{ kind: "region", x: 0, y: 0, width: 1, height: 1 }]))).toMatch(
+		/bytes changed or it is gone.*cannot be re-verified/,
+	);
+	expect(outdatedReason(anchor([]))).toMatch(/is gone/);
+	expect(outdatedReason(null)).toMatch(/is gone/);
 });

@@ -4,7 +4,7 @@ import {
 	RiArrowGoBackLine as RotateCcw,
 } from "@remixicon/react";
 import type * as React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 5;
@@ -13,10 +13,48 @@ function clamp(scale: number): number {
 	return Math.min(MAX_SCALE, Math.max(MIN_SCALE, scale));
 }
 
+export function installPanZoomGestures(
+	target: EventTarget,
+	port: { getScale(): number; setScale(scale: number): void },
+): () => void {
+	let start: number | null = null;
+	const onStart = (event: Event) => {
+		if (event.defaultPrevented) return;
+		start = port.getScale();
+		event.preventDefault();
+	};
+	const onChange = (event: Event) => {
+		if (start === null || event.defaultPrevented) return;
+		event.preventDefault();
+		const scale: unknown = Reflect.get(event, "scale");
+		if (typeof scale !== "number" || !Number.isFinite(scale) || scale <= 0) return;
+		port.setScale(clamp(start * scale));
+	};
+	const onEnd = (event: Event) => {
+		if (start === null) return;
+		start = null;
+		event.preventDefault();
+	};
+	target.addEventListener("gesturestart", onStart, { passive: false });
+	target.addEventListener("gesturechange", onChange, { passive: false });
+	target.addEventListener("gestureend", onEnd, { passive: false });
+	return () => {
+		target.removeEventListener("gesturestart", onStart);
+		target.removeEventListener("gesturechange", onChange);
+		target.removeEventListener("gestureend", onEnd);
+	};
+}
+
 export function PanZoomView({ svg }: { svg: string }) {
 	const [scale, setScale] = useState(1);
+	const scaleRef = useRef(1);
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+	const setZoom = useCallback((next: number) => {
+		const bounded = clamp(next);
+		scaleRef.current = bounded;
+		setScale(bounded);
+	}, []);
 
 	useEffect(() => {
 		const el = scrollRef.current;
@@ -24,11 +62,18 @@ export function PanZoomView({ svg }: { svg: string }) {
 		const onWheel = (e: WheelEvent) => {
 			if (!e.ctrlKey && !e.metaKey) return;
 			e.preventDefault();
-			setScale((s) => clamp(s * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+			setZoom(scaleRef.current * (e.deltaY < 0 ? 1.1 : 1 / 1.1));
 		};
+		const removeGestures = installPanZoomGestures(el, {
+			getScale: () => scaleRef.current,
+			setScale: setZoom,
+		});
 		el.addEventListener("wheel", onWheel, { passive: false });
-		return () => el.removeEventListener("wheel", onWheel);
-	}, []);
+		return () => {
+			removeGestures();
+			el.removeEventListener("wheel", onWheel);
+		};
+	}, [setZoom]);
 
 	const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
 		if (e.pointerType !== "mouse") return;
@@ -51,7 +96,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 	};
 
 	const reset = () => {
-		setScale(1);
+		setZoom(1);
 		if (scrollRef.current) {
 			scrollRef.current.scrollLeft = 0;
 			scrollRef.current.scrollTop = 0;
@@ -72,7 +117,6 @@ export function PanZoomView({ svg }: { svg: string }) {
 				onPointerMove={onPointerMove}
 				onPointerUp={endDrag}
 				onPointerCancel={endDrag}
-				// biome-ignore lint/security/noDangerouslySetInnerHtml: mermaid renders agent-provided source with securityLevel "strict"
 				dangerouslySetInnerHTML={{ __html: svg }}
 			/>
 			<div className="absolute right-8 bottom-8 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-4 tr-text-metadata shadow-[var(--shadow-lg)]">
@@ -80,7 +124,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 					type="button"
 					aria-label="Zoom out"
 					data-testid="mermaid-zoom-out"
-					onClick={() => setScale((s) => clamp(s / 1.25))}
+					onClick={() => setZoom(scaleRef.current / 1.25)}
 					className={btn}
 				>
 					<Minus className="size-16" />
@@ -95,7 +139,7 @@ export function PanZoomView({ svg }: { svg: string }) {
 					type="button"
 					aria-label="Zoom in"
 					data-testid="mermaid-zoom-in"
-					onClick={() => setScale((s) => clamp(s * 1.25))}
+					onClick={() => setZoom(scaleRef.current * 1.25)}
 					className={btn}
 				>
 					<Plus className="size-16" />

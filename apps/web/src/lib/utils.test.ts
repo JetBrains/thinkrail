@@ -3,7 +3,6 @@ import {
 	cssColorToHex,
 	hasPlatformModifier,
 	isAbsolutePath,
-	isMarkdownPath,
 	isShellInert,
 	layoutResourceIdentity,
 	normalizePath,
@@ -52,16 +51,6 @@ test("isShellInert accepts only names that stay literal in POSIX, PowerShell, an
 	}
 });
 
-test("isMarkdownPath matches .md/.markdown case-insensitively, nothing else", () => {
-	expect(isMarkdownPath("README.md")).toBe(true);
-	expect(isMarkdownPath("docs/GUIDE.MARKDOWN")).toBe(true);
-	expect(isMarkdownPath("a/b/notes.Md")).toBe(true);
-	expect(isMarkdownPath("index.ts")).toBe(false);
-	expect(isMarkdownPath("notes.txt")).toBe(false);
-	expect(isMarkdownPath("mdfile")).toBe(false);
-	expect(isMarkdownPath("weird.md.ts")).toBe(false);
-});
-
 test("stripFrontmatter drops a leading YAML block, keeping the body", () => {
 	const doc = "---\nid: x\ntitle: X\n---\n\n# Heading\n\nbody\n";
 	expect(stripFrontmatter(doc)).toBe("\n# Heading\n\nbody\n");
@@ -84,6 +73,11 @@ test("cssColorToHex expands short hex and passes full hex through", () => {
 	expect(cssColorToHex("#ffffff")).toBe("#ffffff");
 	expect(cssColorToHex("#a9b7c6")).toBe("#a9b7c6");
 	expect(cssColorToHex(" #2b2b2b ")).toBe("#2b2b2b");
+});
+
+test("cssColorToHex canonicalizes serialized sRGB colors", () => {
+	expect(cssColorToHex("color(srgb 1 0.5 0 / 20%)")).toBe("#ff800033");
+	expect(cssColorToHex("color(srgb 0.2 0.4 0.6)")).toBe("#336699");
 });
 
 test("cssColorToHex reads unparseable values as unset", () => {

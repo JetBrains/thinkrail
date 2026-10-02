@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { type Browser, expect, type Page, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
+import { pierreDeletionsSide, selectPierreLine } from "./fixtures/pierre";
 
 const worktree = () => join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
 
@@ -18,7 +19,9 @@ async function openDiff(page: Page): Promise<void> {
 	);
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
-	await expect(page.getByTestId("diff-pane")).toContainText("three = 3");
+	await expect(
+		page.getByTestId("diff-view").getByText("three = 3", { exact: false }).last(),
+	).toBeVisible();
 }
 
 async function openReviewClient(browser: Browser): Promise<Page> {
@@ -33,14 +36,11 @@ async function openReviewClient(browser: Browser): Promise<Page> {
 }
 
 async function selectLine(page: Page, text: string): Promise<void> {
-	await page.getByTestId("diff-pane").getByText(text).last().click();
-	await page.keyboard.press("Home");
-	await page.keyboard.press("Shift+End");
+	await selectPierreLine(page.getByTestId("diff-view"), text);
 }
 
 async function composeComment(page: Page, line: string, body: string): Promise<void> {
 	await selectLine(page, line);
-	await addIcon(page).click();
 	await expect(page.getByTestId("review-composer")).toBeVisible();
 	await page.getByTestId("review-composer-input").fill(body);
 }
@@ -129,7 +129,7 @@ test("selection → icon → inline composer → draft; the tab wears the violet
 	await page.getByTestId("review-composer-save").click();
 	await expect(page.getByTestId("review-composer")).toHaveCount(0);
 
-	const thread = page.getByTestId("review-thread");
+	const thread = page.getByTestId("review-thread-card");
 	await expect(thread).toHaveCount(1);
 	await expect(thread.getByTestId("review-thread-edit")).toHaveValue("Rename `two` — unclear.");
 	await expect(thread).toHaveAttribute("data-status", "draft");
@@ -177,10 +177,10 @@ test("selection → icon → inline composer → draft; the tab wears the violet
 	await expect(rows).toHaveCount(0);
 	await expect(page.getByTestId("review-tab-flag")).toHaveCount(0);
 	await expect(page.getByTestId("send-review-button")).toHaveCount(0);
-	await expect(page.getByTestId("review-thread")).toHaveCount(0);
+	await expect(page.getByTestId("review-thread-card")).toHaveCount(0);
 });
 
-test("a Monaco draft card keeps its mid-edit textarea across a sibling review push (zone reconcile)", async ({
+test("a Pierre annotation keeps its draft card identity across a sibling review push", async ({
 	page,
 }) => {
 	await openDiff(page);
@@ -190,7 +190,7 @@ test("a Monaco draft card keeps its mid-edit textarea across a sibling review pu
 	await composeComment(page, "three = 3", "Second remark.");
 	await page.getByTestId("review-composer-save").click();
 	await expect(page.getByTestId("review-composer")).toHaveCount(0);
-	await expect(page.getByTestId("review-thread")).toHaveCount(2);
+	await expect(page.getByTestId("review-thread-card")).toHaveCount(2);
 
 	const firstEdit = page.getByTestId("review-thread-edit").nth(0);
 	await expect(firstEdit).toHaveValue("First remark.");
@@ -272,31 +272,43 @@ test("sidebar: an accordion — the active reviewed file's section auto-unfolds;
 	await expect(page.getByTestId("send-review-button")).toContainText("Send review (2)");
 });
 
-test("the editor context menu carries Comment on selection — the «+»'s twin, one composer", async ({
+test("a selection spanning both sides of a unified diff is blocked instead of re-pointed", async ({
 	page,
 }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	writeFileSync(join(worktree(), "README.md"), "# renamed\n");
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
+	await page.getByTestId("view-toggle-code").click();
+	await page.getByTestId("diff-toggle-inline").click();
+	const diff = page.getByTestId("diff-view");
+	await expect(diff.getByText("renamed", { exact: false }).last()).toBeVisible();
+
+	await selectPierreLine(diff, "sample-project", "first");
+	await expect(page.getByTestId("review-composer")).toContainText("Line 1");
+	await selectPierreLine(diff, "renamed", "last", ["Shift"]);
+	const blocked = page.getByTestId("review-selection-blocked");
+	await expect(blocked).toContainText("one side of the diff");
+	await expect(page.getByTestId("review-composer")).toHaveCount(0);
+	await page.getByTestId("review-selection-blocked-close").click();
+	await expect(blocked).toHaveCount(0);
+
+	await selectPierreLine(diff, "renamed");
+	await expect(page.getByTestId("review-composer")).toContainText("Line 1");
+	await page.getByTestId("review-composer-input").fill("On the new text only.");
+	await page.getByTestId("review-composer-save").click();
+	const [comment] = await persistedComments(page);
+	expect(comment?.anchor?.side).toBe("worktree");
+});
+
+test("Pierre line selection opens one inline composer", async ({ page }) => {
 	await openDiff(page);
 	await selectLine(page, "two = 2");
-	await expect(async () => {
-		await page.getByTestId("diff-pane").getByText("two = 2").last().click({ button: "right" });
-		const item = page.locator(".monaco-menu .action-menu-item", {
-			hasText: "Comment on selection",
-		});
-		await expect(item).toBeVisible({ timeout: 2000 });
-		await expect(item.locator(".editor-menu-icon svg")).toBeVisible({ timeout: 2000 });
-		await expect(
-			page
-				.locator(".monaco-menu .action-menu-item", { hasText: "Copy" })
-				.first()
-				.locator(".editor-menu-icon svg"),
-		).toBeVisible({ timeout: 2000 });
-		await page.waitForTimeout(200);
-		await item.click({ timeout: 1000 });
-		await expect(page.getByTestId("review-composer")).toBeVisible({ timeout: 2000 });
-	}).toPass({ timeout: 20_000 });
 	const composer = page.getByTestId("review-composer");
+	await expect(composer).toBeVisible();
 	await expect(composer).toContainText("Line 2");
-	await page.getByTestId("review-composer-input").fill("Via the context menu.");
+	await page.getByTestId("review-composer-input").fill("Via Pierre line selection.");
 	await page.getByTestId("review-composer-save").click();
 	await expect(composer).toHaveCount(0);
 	await expect(page.getByTestId("review-pending-badge")).toHaveText("1");
@@ -384,7 +396,7 @@ test("preview mode: selecting rendered text comments on the mapped source lines"
 	await page.getByTestId("review-composer-save").click();
 	await expect(composer).toHaveCount(0);
 
-	const card = page.getByTestId("review-thread");
+	const card = page.getByTestId("review-thread-card");
 	await expect(card).toHaveCount(1);
 	await expect(card).toContainText("Tighten this paragraph.");
 	await expect(page.getByTestId("markdown-preview").locator(".review-region")).toHaveCount(1);
@@ -411,7 +423,7 @@ test("preview mode: selecting rendered text comments on the mapped source lines"
 const zonesReserveCards = (page: Page) =>
 	page.evaluate(() => {
 		const cards = Array.from(
-			document.querySelectorAll<HTMLElement>('[data-testid="review-thread"]'),
+			document.querySelectorAll<HTMLElement>('[data-testid="review-thread-card"]'),
 		).filter((card) => card.offsetHeight > 0);
 		return (
 			cards.length > 0 &&
@@ -453,15 +465,17 @@ test("cards drawn in the preview reserve their height in the source view — and
 		await page.getByTestId("review-composer-save").click();
 		await expect(page.getByTestId("review-composer")).toHaveCount(0);
 	}
-	await expect(preview.getByTestId("review-thread")).toHaveCount(2);
+	await expect(preview.getByTestId("review-thread-card")).toHaveCount(2);
 
-	await page.getByTestId("md-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	await scrollCardsIntoView(page);
 	await expect.poll(() => zonesReserveCards(page), { timeout: 5000 }).toBe(true);
 
-	await page.getByTestId("md-toggle-preview").click();
-	await expect(page.getByTestId("markdown-preview").getByTestId("review-thread")).toHaveCount(2);
-	await page.getByTestId("md-toggle-source").click();
+	await page.getByTestId("view-toggle-markdown").click();
+	await expect(page.getByTestId("markdown-preview").getByTestId("review-thread-card")).toHaveCount(
+		2,
+	);
+	await page.getByTestId("view-toggle-code").click();
 	await scrollCardsIntoView(page);
 	await expect.poll(() => zonesReserveCards(page), { timeout: 5000 }).toBe(true);
 });
@@ -475,7 +489,7 @@ async function scrollCardsIntoView(page: Page): Promise<void> {
 	for (let i = 0; i < 30; i++) {
 		await page.mouse.wheel(0, 800);
 		await page.waitForTimeout(50);
-		if (await page.getByTestId("review-thread").first().isVisible()) return;
+		if (await page.getByTestId("review-thread-card").first().isVisible()) return;
 	}
 	throw new Error("No review card scrolled into view");
 }
@@ -557,7 +571,7 @@ test("an in-flow card never halves a code fence — the rest of the document sta
 	await page.getByTestId("tab-files").click();
 	await page.getByTestId("file-node").filter({ hasText: "FENCE.md" }).click();
 
-	await page.getByTestId("md-toggle-source").click();
+	await page.getByTestId("view-toggle-code").click();
 	await page.getByTestId("editor-pane").getByText("const two = 2;").last().click();
 	await page.keyboard.press("Home");
 	await page.keyboard.press("Shift+End");
@@ -566,9 +580,9 @@ test("an in-flow card never halves a code fence — the rest of the document sta
 	await page.getByTestId("review-composer-save").click();
 	await expect(page.getByTestId("review-composer")).toHaveCount(0);
 
-	await page.getByTestId("md-toggle-preview").click();
+	await page.getByTestId("view-toggle-markdown").click();
 	const preview = page.getByTestId("markdown-preview");
-	await expect(preview.getByTestId("review-thread")).toHaveCount(1);
+	await expect(preview.getByTestId("review-thread-card")).toHaveCount(1);
 	const code = preview.locator("pre[data-md-line-start]");
 	await expect(code).toHaveCount(1);
 	await expect(code).toHaveAttribute("data-md-line-end", "6");
@@ -587,7 +601,7 @@ test("a draft card edits in place; a sent comment can't be edited", async ({ pag
 	const edit = page.getByTestId("review-thread-edit");
 	await edit.click();
 	await edit.fill("Better wording, typed right in the card.");
-	await page.getByTestId("diff-pane").getByText("three = 3").last().click();
+	await page.getByTestId("diff-view").getByText("three = 3").last().click();
 	await page.getByTestId("tab-review").click();
 	await expect(page.getByTestId("review-comment")).toContainText(
 		"Better wording, typed right in the card.",
@@ -607,23 +621,24 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 	writeFileSync(join(worktree(), "README.md"), "# sample-project — renamed\n\nA new intro line.\n");
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
-	await expect(page.getByTestId("diff-pane")).toContainText("renamed");
-	// Markdown diffs render by default; this test anchors on the Monaco source split.
-	await page.getByTestId("diff-toggle-source").click();
-	await expect(page.getByTestId("diff-toggle-source")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("rendered-diff")).toContainText("renamed");
+	await page.getByTestId("view-toggle-code").click();
+	await expect(page.getByTestId("view-toggle-code")).toHaveAttribute("data-active", "true");
 
-	const original = page.locator(".editor.original");
-	await original.getByText("sample-project").first().click();
-	await page.keyboard.press("Home");
-	await page.keyboard.press("Shift+End");
-	await addIcon(page).click();
+	const diff = page.getByTestId("diff-view");
+	await expect(diff.getByText("renamed", { exact: false }).last()).toBeVisible();
+	await selectPierreLine(pierreDeletionsSide(diff), "sample-project", "first");
 	await expect(page.getByTestId("review-composer")).toBeVisible();
 	await page.getByTestId("review-composer-input").fill("Left-side remark.");
 	await page.getByTestId("review-composer-save").click();
 	await expect(page.getByTestId("review-composer")).toHaveCount(0);
 
-	await expect(page.locator(".editor.original").getByTestId("review-thread")).toHaveCount(1);
-	await expect(page.locator(".editor.modified").getByTestId("review-thread")).toHaveCount(0);
+	await expect(
+		diff.locator('[slot^="annotation-deletions-"]').getByTestId("review-thread-card"),
+	).toHaveCount(1);
+	await expect(
+		diff.locator('[slot^="annotation-additions-"]').getByTestId("review-thread-card"),
+	).toHaveCount(0);
 	await expect(page.getByTestId("review-pending-badge")).toHaveText("1");
 
 	const [comment] = await persistedComments(page);
@@ -665,8 +680,13 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 	await expect(
 		page.locator('[data-testid="editor-tab"][data-active="true"][data-kind="diff"]'),
 	).toContainText("README.md");
-	await page.getByTestId("diff-toggle-source").click();
-	await expect(page.locator(".editor.original").getByTestId("review-thread")).toHaveCount(1);
+	await page.getByTestId("view-toggle-code").click();
+	await expect(
+		page
+			.getByTestId("diff-view")
+			.locator('[slot^="annotation-deletions-"]')
+			.getByTestId("review-thread-card"),
+	).toHaveCount(1);
 
 	execSync(`git -C "${worktree()}" commit -am "land the rename"`, { stdio: "ignore" });
 	await overWire(page, [{ method: "workspace.setDiffBase", params: { ref: "HEAD" } }]);
@@ -680,10 +700,17 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 	await expect(
 		page.locator('[data-testid="editor-tab"][data-active="true"][data-kind="diff"]'),
 	).toContainText("README.md");
-	await page.getByTestId("diff-toggle-source").click();
-	await expect(page.locator(".editor.original")).toContainText("# sample-project");
-	await expect(page.locator(".editor.original")).not.toContainText("renamed");
-	await expect(page.locator(".editor.original").getByTestId("review-thread")).toHaveCount(1);
+	await page.getByTestId("view-toggle-code").click();
+	const pinnedDiff = page.getByTestId("diff-view");
+	await expect(
+		pierreDeletionsSide(pinnedDiff).getByText("# sample-project", { exact: false }).last(),
+	).toBeVisible();
+	await expect(pierreDeletionsSide(pinnedDiff).getByText("renamed", { exact: false })).toHaveCount(
+		0,
+	);
+	await expect(
+		pinnedDiff.locator('[slot^="annotation-deletions-"]').getByTestId("review-thread-card"),
+	).toHaveCount(1);
 });
 
 test("resolved comments sink into a muted Resolved section (TODO Done style)", async ({ page }) => {
@@ -713,7 +740,7 @@ test("resolved comments sink into a muted Resolved section (TODO Done style)", a
 	await expect(resolvedRow).toHaveCount(1);
 	await expect(resolvedRow).toContainText("This one gets resolved.");
 	await expect(page.getByTestId("review-comment")).toHaveCount(1);
-	await expect(page.getByTestId("review-thread")).toHaveCount(1);
+	await expect(page.getByTestId("review-thread-card")).toHaveCount(1);
 	await expect(page.getByTestId("review-pending-badge")).toHaveCount(0);
 	await expect(page.getByTestId("review-tab-flag")).toHaveAttribute("data-flag", "sent");
 	await expect(page.getByTestId("send-review-button")).toHaveCount(0);

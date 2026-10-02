@@ -38,7 +38,8 @@ into an existing role rather than minting a new step.
 `spacing.json` is the authored source; no other authored source restates a canonical rhythm length. The
 generated output necessarily materializes those values as `--space-<n>` custom properties. They are read
 directly by the few hand-written CSS surfaces that cannot use a utility (the Monaco review widgets in
-`index.css`); component call sites use the `p-<n>` / `m-<n>` / `gap-<n>` utilities. Editing
+`index.css`) and by strict numeric third-party options (Monaco's file-viewer top inset); component call sites
+use the `p-<n>` / `m-<n>` / `gap-<n>` utilities. Editing
 the generated file fails `bun run spacing:check`, which runs in pre-commit and in `apps/web`'s build.
 
 ## Number = px (and why sizing shares it)

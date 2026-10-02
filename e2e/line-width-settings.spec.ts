@@ -9,6 +9,7 @@ import {
 	PHONE_VIEWPORT,
 } from "./fixtures/app";
 import { installChannelHold } from "./fixtures/channelHold";
+import { pierreDeletionsSide } from "./fixtures/pierre";
 import { LONG_LINE } from "./fixtures/repo";
 
 function widthControls(page: Page) {
@@ -143,17 +144,23 @@ test("the file width wraps source and updates an already-mounted editor", async 
 	}
 });
 
-test("the default file width wraps both sides of a long-line diff", async ({ page }) => {
+test("Pierre renders both sides of a long-line diff", async ({ page }) => {
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
 	writeFileSync(join(workspace.worktreePath, "LONG_LINE.txt"), `changed ${LONG_LINE}`);
 
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("change-item").filter({ hasText: "LONG_LINE.txt" }).click();
-	const viewLineGroups = page.getByTestId("diff-pane").locator(".view-lines");
-	await expect(viewLineGroups).toHaveCount(2);
-	await expectWrapped(viewLineGroups.nth(0));
-	await expectWrapped(viewLineGroups.nth(1));
+	const diff = page.getByTestId("diff-view");
+	await expect(
+		pierreDeletionsSide(diff).getByText(LONG_LINE.trim(), { exact: false }).last(),
+	).toBeVisible();
+	await expect(
+		diff
+			.locator("[data-additions]")
+			.getByText(`changed ${LONG_LINE}`.trim(), { exact: false })
+			.last(),
+	).toBeVisible();
 });
 
 test("chat uses the selected measure and optionally exceeds a narrow pane", async ({ page }) => {

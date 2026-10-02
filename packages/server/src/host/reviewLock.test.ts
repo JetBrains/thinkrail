@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { withReviewLock } from "./reviewLock";
+import { withChangeLock, withReviewLock } from "./reviewLock";
 
 function deferred<T>(): {
 	promise: Promise<T>;
@@ -78,4 +78,12 @@ test("a failed operation rejects to its own caller and still releases the queue"
 	});
 	await expect(failing).rejects.toThrow("no drafts");
 	expect(await withReviewLock("ws1", async () => "next")).toBe("next");
+});
+
+test("changes and reviews are independent resources: one chain never waits on the other", async () => {
+	const parked = deferred<string>();
+	const review = withReviewLock("ws1", () => parked.promise);
+	expect(await withChangeLock("ws1", async () => "reverted")).toBe("reverted");
+	parked.resolve("sent");
+	expect(await review).toBe("sent");
 });

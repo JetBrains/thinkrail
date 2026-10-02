@@ -1,1 +1,10 @@
-export { type BoundedRun, type BoundedRunOptions, runBounded } from "./runBounded";
+export {
+	type BoundedBytesRun,
+	type BoundedBytesRunOptions,
+	type BoundedRun,
+	type BoundedRunOptions,
+	type BoundedStream,
+	type BoundedStreamOptions,
+	runBounded,
+	streamBounded,
+} from "./runBounded";

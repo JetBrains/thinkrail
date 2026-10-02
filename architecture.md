@@ -80,7 +80,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
    desktop, or mobile client points it at the selected host's Tailscale MagicDNS name. Native resume state
    is keyed by backend profile so ids from one host are never interpreted against another.
 5. **UI = panels + shell.** Layout-agnostic, store-driven panels (project→workspace nav, file tree,
-   Monaco editor, changes/diff, workspace-local review, terminal, chat, composer) never know their
+   the code renderer, changes/diff, workspace-local review, terminal, chat, composer) never know their
    arrangement. Each desktop frontend window owns one locally persisted, resource-free workbench frame: a
    recursively split center plus auxiliary groups in vertical left/right stacks and a horizontally grouped
    bottom region. The frame's topology, singleton-tool placement, visibility, folds, geometry, and alignment
@@ -292,6 +292,21 @@ dependency. This keeps test process drivers outside both launchers and the serve
     retained subagent completion delivery across extension reload; scoped reads, controls, and
     invalidations are composed through the agent barrel. Detailed integration belongs to
     [[submodule-server-agent]], and command lifetime/retention to [[module-pi-background-commands]].
+
+19. **The review surface is engine-neutral; renderers are registered, not hard-wired.** A resource (a
+    file or one side-pair of a diff) is shown by the renderer the web's `resources` registry selects by
+    match, rank and capabilities for the current intent and viewport class; review comments anchor
+    through `contracts`' `ReviewSelector` set (`lineRange`/`textQuote` for text, `structural` schemes
+    such as `json-pointer`/`table-cell`/`ipynb-cell`, `region` geometry), which every renderer maps onto
+    its own geometry and reports back as placed or unplaced — the host's anchors are the only authority.
+    `@pierre/diffs` renders every source diff and every phone-class code surface; rich formats render
+    through their own renderers' diffs. Monaco renders files on
+    desktop and never loads on a phone. Write-paths are host-derived and compare-and-swap guarded
+    (`change.revert`/`change.undo`, [[submodule-server-changes]]); the client never sends bytes to
+    write. ThinkRail hosts no VS Code extensions: language intelligence (TextMate grammars, Shiki) is
+    imported as libraries. Active content (HTML, SVG, notebook outputs) renders only inside sandboxed,
+    network-denying frames. Detail: [[submodule-web-resources]], [[submodule-web-panels]],
+    [[submodule-server-reviews]].
 
 ## Invariants
 

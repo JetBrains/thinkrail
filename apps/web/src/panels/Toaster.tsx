@@ -1,5 +1,6 @@
 import {
 	Toast,
+	ToastAction,
 	ToastClose,
 	ToastDescription,
 	ToastProvider,
@@ -19,7 +20,9 @@ export function Toaster() {
 				<Toast
 					key={t.id}
 					variant={t.variant}
-					duration={t.variant === "error" ? Number.POSITIVE_INFINITY : AUTO_DISMISS_MS}
+					duration={
+						t.durationMs ?? (t.variant === "error" ? Number.POSITIVE_INFINITY : AUTO_DISMISS_MS)
+					}
 					onOpenChange={(open) => {
 						if (!open) dismissToast(t.id);
 					}}
@@ -30,6 +33,15 @@ export function Toaster() {
 						{t.title ? <ToastTitle>{t.title}</ToastTitle> : null}
 						<ToastDescription>{t.message}</ToastDescription>
 					</div>
+					{t.action ? (
+						<ToastAction
+							altText={t.action.label}
+							data-testid="toast-action"
+							onClick={t.action.onClick}
+						>
+							— {t.action.label}
+						</ToastAction>
+					) : null}
 					<ToastClose />
 				</Toast>
 			))}

@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { useAppStore } from "../store";
+import { useCallback, useEffect, useRef } from "react";
+import { selectWorkspaceTick, useAppStore } from "../store";
 import { createLatestOperation, type LatestOperation } from "./latestOperation";
 
 export function useLiveTabContent<T>(
@@ -14,8 +14,11 @@ export function useLiveTabContent<T>(
 ) {
 	const change = useAppStore((s) => s.fsChangesByWorkspace[tab.workspaceId]);
 	const opsRef = useRef(ops);
+	const tabRef = useRef(tab);
 	opsRef.current = ops;
+	tabRef.current = tab;
 	const sequencerRef = useRef<ReadSequencer | null>(null);
+	const mountedRef = useRef(true);
 	sequencerRef.current ??= createReadSequencer();
 	const sequencer = sequencerRef.current;
 
@@ -59,6 +62,30 @@ export function useLiveTabContent<T>(
 			cancelled = true;
 		};
 	}, [reloadKey, tab.loadedTick, sequencer]);
+
+	const reload = useCallback(() => {
+		if (!mountedRef.current) return;
+		const current = tabRef.current;
+		const { read, applyFresh } = opsRef.current;
+		const isCurrent = sequencer.begin();
+		void read()
+			.then((fresh) => {
+				if (mountedRef.current && isCurrent()) {
+					applyFresh(fresh, selectWorkspaceTick(useAppStore.getState(), current.workspaceId));
+				}
+			})
+			.catch(() => {});
+	}, [sequencer]);
+
+	useEffect(() => {
+		mountedRef.current = true;
+		return () => {
+			mountedRef.current = false;
+			sequencer.begin();
+		};
+	}, [sequencer]);
+
+	return { reload };
 }
 
 export type ReadSequencer = LatestOperation;

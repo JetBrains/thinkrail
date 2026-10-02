@@ -321,9 +321,10 @@ test("closing an unknown tab is not an error and not busy", () => {
 test("a shell with something running refuses to close until forced", async () => {
 	const attached = attachTerminal(WS, "tab-a", "client-1");
 	expect(attached.created).toBe(true);
-	await Bun.sleep(600);
-	writeTerminal(attached.id, `${BUSY_LOOP_COMMAND}\r`, "client-1");
-	await Bun.sleep(800);
+	await waitForTerminalOutput(attached.id);
+	writeTerminal(attached.id, `echo TR_BUSY && ${BUSY_LOOP_COMMAND}\r`, "client-1");
+	await waitForTerminalOutput(attached.id, "TR_BUSY");
+	await Bun.sleep(300);
 
 	const refused = closeTerminalTab(WS, "tab-a");
 	expect(refused).toEqual({ closed: false, busy: true });

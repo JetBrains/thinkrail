@@ -15,6 +15,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
 import specGraphExtension from "pi-spec-graph";
+import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
 import {
 	type AskUserQuestionWaiters,
 	askUserQuestionExtension,
@@ -30,7 +31,6 @@ import {
 	discoverCompatibilitySkillSources,
 } from "./skillSources";
 import { setTitleExtension } from "./titleTool";
-import { type BundledTrashHelpers, setBundledTrashHelpers } from "./trash";
 
 export type BundledExtensionFactory = ExtensionFactory;
 

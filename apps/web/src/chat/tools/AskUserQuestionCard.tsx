@@ -12,10 +12,20 @@ import type {
 	AskUserQuestionItem,
 	AskUserQuestionResult,
 } from "@thinkrail/contracts";
-import { Fragment, type KeyboardEvent, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+	Fragment,
+	type KeyboardEvent,
+	useEffect,
+	useId,
+	useLayoutEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { cn } from "@/lib";
 import { readAskResult, useAskFocusScope, useAskState } from "../askState";
 import { useChatActions } from "../ChatActions";
+import { useFoldGeometry } from "../foldState";
 import { Markdown } from "../Markdown";
 import type { ToolRenderProps } from "../toolRegistry";
 import { resultText } from "./toolHelpers";
@@ -355,6 +365,15 @@ export function AskUserQuestionCard({
 	const nudgeSeq = useRef(0);
 	const previousTab = useRef(tab);
 	const reclaimFocusAfterFailedSend = useRef(false);
+	const prepareGeometryChange = useFoldGeometry();
+	const completeSubmitChange = useRef<() => void>(() => undefined);
+
+	useLayoutEffect(() => {
+		if (!submitted) return;
+		const complete = completeSubmitChange.current;
+		completeSubmitChange.current = () => undefined;
+		complete();
+	}, [submitted]);
 
 	useEffect(() => {
 		if (awaiting) cardStateCache.set(toolCallId, { states, tab, submitted });
@@ -453,6 +472,7 @@ export function AskUserQuestionCard({
 		const held = document.activeElement;
 		const handedOff = !!held && !!cardRef.current?.contains(held) && held.matches(":focus-visible");
 		if (handedOff) actions.focusComposer();
+		completeSubmitChange.current = prepareGeometryChange(() => cardRef.current, "user");
 		setSubmitted(true);
 		actions.answerQuestion(toolCallId, r).catch(() => {
 			reclaimFocusAfterFailedSend.current = handedOff;

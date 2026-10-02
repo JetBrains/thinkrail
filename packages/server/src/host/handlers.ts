@@ -85,6 +85,13 @@ import {
 	updateJbcentral,
 } from "../auth";
 import { findOpenBranchReview } from "../branch-review";
+import {
+	forgetWorkspaceChanges,
+	type RevertChangeParams,
+	revertChange,
+	type UndoChangeParams,
+	undoChange,
+} from "../changes";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
 import { recordAcceptedMessage, respondToInterview } from "../feedback";
@@ -197,7 +204,7 @@ import {
 	providerAvailability,
 } from "./productAnalytics";
 import { startPlanReview } from "./requestReview";
-import { withReviewLock } from "./reviewLock";
+import { withChangeLock, withReviewLock } from "./reviewLock";
 import { runObservation } from "./runAnalytics";
 import { taskObservation } from "./taskAnalytics";
 import {
@@ -456,6 +463,7 @@ const handlers: Record<string, Handler> = {
 		if (ws) {
 			evictSpecIndex(ws.id);
 			removeWorkspaceReviews(ws.id);
+			forgetWorkspaceChanges(ws.id);
 			stopWatch(ws.id);
 			closeWorkspaceTerminals(ws.id);
 			void archiveTeardown(ws);
@@ -647,6 +655,16 @@ const handlers: Record<string, Handler> = {
 		return gitDiffFile(p.workspaceId, p.path, p.scope);
 	},
 	"git.listCommits": (params) => listCommits((params as { workspaceId: string }).workspaceId),
+	"change.revert": (params) => {
+		const p = params as RevertChangeParams;
+		void ensureWatch(p.workspaceId);
+		return withChangeLock(p.workspaceId, async () => ({ receipt: await revertChange(p) }));
+	},
+	"change.undo": (params) => {
+		const p = params as UndoChangeParams;
+		void ensureWatch(p.workspaceId);
+		return withChangeLock(p.workspaceId, async () => ({ receipt: await undoChange(p) }));
+	},
 	"terminal.reserve": (params) => {
 		const p = params as { workspaceId: string; tabKey: string; title: string };
 		getWorkspace(p.workspaceId);

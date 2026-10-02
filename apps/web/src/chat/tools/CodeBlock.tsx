@@ -28,7 +28,6 @@ export function CodeBlock({ code, lang }: { code: string; lang: string }) {
 	return (
 		<div
 			className="overflow-auto rounded-[var(--radius-sm)] tr-code-text [&_pre]:!m-0 [&_pre]:!bg-container-header-bg [&_pre]:p-8"
-			// biome-ignore lint/security/noDangerouslySetInnerHtml: shiki output is escaped, themed markup
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>
 	);

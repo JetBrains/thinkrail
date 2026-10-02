@@ -1,4 +1,4 @@
-import type { LineSelection } from "./reviewGutter";
+import type { SourceLineRange } from "./sourceLines";
 
 export function normalizeFragment(text: string): string {
 	return text
@@ -27,7 +27,7 @@ function findByPhrase(
 	return -1;
 }
 
-export function mapPreviewSelection(source: string, selected: string): LineSelection | null {
+export function mapPreviewSelection(source: string, selected: string): SourceLineRange | null {
 	const fragment = normalizeFragment(selected);
 	if (!fragment) return null;
 	const words = fragment.split(" ");

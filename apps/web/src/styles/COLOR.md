@@ -58,13 +58,15 @@ equals `border-default` is not a second weight, it is a second name).
 | family | tokens | notes |
 | --- | --- | --- |
 | Text | `text-default` · `text-muted` · `text-subtle` · `text-disabled` · `text-on-primary` | `text-subtle` (from the `hint` palette key) is the secondary-metadata tier (branch lines, spec role labels); `text-disabled` (the default `text` colour @ 60% — a disabled element inherits its enabled semantic colour, dimmed at the token level) is reserved for genuinely disabled UI text (e.g. the Settings "Soon" item) |
-| Container | `container-workspace-bg` · `container-sidebar-bg` · `container-terminal-bg` · `container-header-bg` · `container-content-bg` · `container-elevated-bg` | **The opened-document canvas is `workspace`, not `content`**: the Monaco file editor and the markdown/spec preview sit on the same surface as the chat column and the tab strip, so a document reads as part of the workspace. `content` is the **recessed diff canvas** — the Changes diff, rendered diffs, Shiki code blocks, and the Center Workbench backdrop behind them — which is why Monaco defines two themes (`EDITOR_THEME` = workspace, `THEME` = content). `terminal` is a terminal body + xterm canvas (currently sourced from the same palette key as `sidebar`); `elevated` is every raised surface |
+| Container | `container-workspace-bg` · `container-sidebar-bg` · `container-terminal-bg` · `container-header-bg` · `container-content-bg` · `container-elevated-bg` | **The opened-document canvas is `workspace`, not `content`**: the Monaco desktop file editor, Pierre phone file, and markdown/spec preview sit on the same surface as the chat column and tab strip, so a document reads as part of the workspace. `content` is the **recessed diff canvas** — Pierre source diffs, rendered diffs, Shiki code blocks, and the Center Workbench backdrop behind them. `terminal` is a terminal body + xterm canvas (currently sourced from the same palette key as `sidebar`); `elevated` is every raised surface |
 | Control | `control-bg` · `control-bg-hovered` · `control-bg-selected` · `control-primary-bg` · `control-primary-bg-hovered` · `control-primary-text` · `control-border-default` · `control-border-active` · `control-disabled-bg` · `control-disabled-text` · `control-disabled-border` · `control-primary-disabled-bg` · `control-primary-disabled-text` | The three `control-primary-*` tokens are the primary button/control, and they are **per-theme derivations like every other role** — `control-primary-bg` (from `accent`) fill, `control-primary-bg-hovered` (from `accentHover`) hover fill, `control-primary-text` (from `onAccent`) label. `accentHover` is the accent's **hover step**, its own manifest key so a theme owns that step: a primary button hovers to `control-primary-bg-hovered` (a colour token), never `hover:opacity-*`. Because the fill comes from `accent`, `bg-control-primary-bg` and `bg-primary` are the same colour by construction — a primary button can never drift from the theme's accent. `control-bg-hovered` is pointer hover only; `control-bg-selected` is the persistent selected/open/active/highlight fill (currently the same palette source). `control-border-default` is the resting form-control border; `control-border-active` (from `borderStrong`) is the **stronger neutral** border of an *active* control — pressed/`active:` buttons, an open selector (`data-[open=true]`), and a focused text input/textarea. It is the border only: the accent focus **ring** stays as the focus indicator (so accent = focus, neutral-strong = active). Never on inactive/default controls, nor on selected nav rows, tabs, or static surfaces. **Disabled is a first-class control state**, not an opacity utility: **a disabled element inherits the same semantic colour it uses when enabled, resolved at the `strong` (60%) alpha step** — derived at the token level so background, text, icon and border keep explicit ownership and nested content is never dimmed. So the disabled roles are the enabled ones @ 60%: `control-disabled-bg` (from `input`, i.e. `control-bg`), `control-disabled-text` (from `text`, i.e. `text-default`), `control-disabled-border` (from `border`, i.e. `control-border-default`), and the primary pair `control-primary-disabled-bg` (from `accent`, i.e. `control-primary-bg`) + `control-primary-disabled-text` (from `onAccent`, i.e. `control-primary-text`). There are **no** dedicated `disabled` / `primaryDisabled` / `onPrimaryDisabled` palette keys — a disabled state never carries a colour of its own. Text/icon-only controls take just `control-disabled-text`; non-control disabled text stays on `text-disabled`. Do **not** use `disabled:opacity-*` on a component (it dims nested content and bypasses token ownership) |
 | Border | `border-default` · `border-muted` | |
 | Primary | `primary` + `primary-subtle` · `-soft` · `-muted`, `on-primary-soft` | |
 | Feedback | `feedback-{info,success,warning,error}` + the `-subtle` / `-muted` steps in use | a solid border is the solid colour, so there is no `-border` tier |
 | Chat bubble | `bubble-user-bg` · `bubble-user-border` | tinted from the manifest's own `bubbleAccent`, which every bundled theme currently ships **equal to its `accent`** — the user bubble wears the brand colour. The separate key is the knob (per `themes/SPEC.md`): a theme that wants the bubble to read as "you" rather than "the product" re-points it without touching a component |
 | Effects | `overlay` · `sunken` | written per light/dark by the theme engine |
+| Strict-consumer editor roles | `editor-selection-bg` · `editor-selection-text` · `editor-selection-highlight-bg` · `editor-find-match-bg` · `widget-shadow` | `publish: false`; Monaco/xterm read them directly and no Tailwind utility is emitted |
+| Media | `media-checker-tile` | `publish: false`; the transparency checkerboard tile that `index.css`'s `.media-backdrop` paints behind every image and vector preview, derived from `text` at the `soft` (20%) step so it is light-on-dark in a dark theme and the conventional `#ccc`-on-white in a light one — a dark logo on a transparent PNG must never read as "no image" |
 
 There is no `text-strong` and no `text-link` utility: they duplicate other tokens, and `--text-link`
 exists as a variable for `global.css`'s bare-anchor fallback alone. That fallback lives in the CSS base
@@ -88,23 +90,30 @@ the scale, never a new number in a class name.
 
 ## Non-CSS consumers
 
-Monaco, xterm, mermaid and Shiki cannot wear a class; they read the tokens through `getComputedStyle`
-and rebuild after the `[data-theme]` swap. They name the same semantic tokens everything else does
-(`--container-workspace-bg`, `--container-content-bg`, `--text-muted`, `--editor-selection-bg`), so there
-is one name per value. Monaco reads *both* container roles, because which canvas it is painting depends on
-the tab: `EDITOR_THEME` (workspace) for a file editor, `THEME` (content) for the Changes diff.
+Monaco, Pierre, xterm, mermaid and Shiki cannot wear a class for their painted internals. Monaco, xterm,
+and mermaid read tokens through `getComputedStyle` and rebuild after the `[data-theme]` swap; Monaco now
+has only `EDITOR_THEME` and paints desktop files on `container-workspace-bg`. Pierre's open Shadow DOM
+inherits one `.pierre-code-surface` custom-property bridge: its CSS-variable Shiki theme maps
+`--diffs-token-*` to the existing `--code-*` syntax roles, while `--diffs-bg*`, number foregrounds, and
+addition/deletion bases map to the workspace/content canvas, muted text, and feedback success/error roles.
+Those values remain live variable references, so Pierre needs neither a per-theme registration nor a
+re-highlight after a swap. Monaco and chat share the single `THINKRAIL_SHIKI_THEME` TextMate definition;
+chat keeps its live CSS-variable form, while Monaco resolves the same variables to hex for its strict theme
+API. All consumers therefore name the same semantic tokens everything else does, with one name per value.
 The roles these consumers *share* with components (`--container-*-bg`, `--text-muted`) stay published and
-mapped in `@theme inline`; the ones **only** they read (`--editor-selection-bg` / `-text`) are
-`publish: false` and unmapped — a utility nothing can use is dead weight. Values reach them canonicalised
-to hex via `cssColorToHex` (`lib/utils.ts`), because the built CSS is minified and Monaco/xterm accept
-hex only.
+mapped in `@theme inline`; the ones **only** they read (`--editor-selection-*`,
+`--editor-find-match-bg`, `--widget-shadow`, and the stylesheet-only `--media-checker-tile`) are
+`publish: false` and unmapped — a utility nothing can use is dead weight. Values that strict JS consumers
+need reach them canonicalised to hex via `cssColorToHex` (`lib/utils.ts`), because the built CSS is minified
+and Monaco/xterm accept hex only.
 
 **What they do NOT cover, deliberately.** Each of these libraries paints far more than we hand it, and
 the remainder comes from its own built-in palette:
 
 | consumer | we set | the rest comes from |
 | --- | --- | --- |
-| Monaco | editor background/foreground, line numbers, cursor, both selection colours, scrollbar slider colours, and every syntax rule | `vs` / `vs-dark` / `hc-black` / `hc-light` via `inherit: true` — find/suggest/hover widgets, bracket match, indent guides, overview ruler |
+| Monaco | desktop file canvas/foreground/gutter; active + inactive line numbers; cursor + both selection colours; current-line fill/border; indent guides; bracket match + six bracket-pair colours; word/selection/find highlights; sticky-scroll canvas/shadow; fold/whitespace paint; editor + hover widgets; menu, quick-input and input surfaces/states; focus border; widget/scrollbar shadows + slider states; every TextMate syntax rule | `vs` / `vs-dark` / `hc-black` / `hc-light` via `inherit: true` — suggest/peek/debug, minimap and other unlisted specialist surfaces |
+| Pierre | file/diff canvas and gutter, foreground/line numbers/selection, syntax variables, success additions, error deletions, separator/annotation surfaces, code family/size | Pierre core layout/effects for properties not bridged; no `@pierre/theme` preset is applied |
 | xterm | background, foreground, cursor, both selection colours, all 16 ANSI | xterm defaults for `cursorAccent` and `selectionInactiveBackground` |
 | mermaid | the `themeVariables` map in `chat/tools/visualize/mermaid.ts` | mermaid's `base` theme for anything absent from that map |
 

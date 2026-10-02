@@ -96,8 +96,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     would hand `model.list` (whose contract is to answer without touching the network), `model.default` and
     every inbound model-ref check an unbounded wait, and would escape the refresh deadline one line after
     applying it. The snapshot is what pi's last *settled* pass concluded (written at `create()`, after every
-    `refresh()`, and on login/logout), and being the one read makes the picker, default, and model resolution
-    agree within a generation.
+    `refresh()`, and on login/logout), plus a provisional entry pi writes the moment a provider with a stored
+    credential or configured key is registered — config and native (`registerNativeProvider`) registrations
+    alike, so a Central or delegation-mirrored provider is readable before its availability pass lands. Being
+    the one read makes the picker, default, and model resolution agree within a generation.
   - `agentSessionManager` — sessions keyed by `session.sessionId` (each `Entry` also tracks its
     `workspaceId`), `createSession({ cwd, workspaceId, model?, thinkingLevel? })` → `createAgentSession(...)`
     with a per-session `SessionManager` **and a `buildSessionSettings(cwd)` settings manager** (the user's
@@ -162,8 +164,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     State ids come from Pi's active session-entry chain: run/interruption from the latest user entry,
     completion from the decisive assistant entry, questions/dialogs from their interaction ids. Disk state
     is reconstructed from the complete active branch; a file read/parse failure fails the all-workspace
-    snapshot rather than omitting a row. The first receipt initialization marks existing completion ids
-    handled but never suppresses unresolved input. Receipt writes are serialized and atomic.
+    snapshot rather than omitting a row. Receipt initialization runs unless both metadata files load (first
+    install, or a file persistence set aside as unreadable, which is logged): it marks existing completion
+    ids handled but never suppresses unresolved input. Because it runs before serving, it is the one
+    best-effort reader: an unreadable transcript or session directory is logged and left unbaselined
+    instead of blocking host startup, while the later snapshot keeps failing until the file is repaired.
+    Receipt writes are serialized and atomic.
     Sessions publish full state records on semantic change. Pending extension dialogs retain their
     full request so reconnecting clients can render and answer the exact blocker rather than seeing an
     unusable needs-input marker.
@@ -632,13 +638,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       modules or the AWS SDK. Registration
       lands in the same `pi-ai` instance pi consults at login time because the catalog pins one exact
       `pi-ai` version repo-wide (one store entry → one bundled module instance). Chat trash has two
-      artifact seams behind the same registration: the wrapper statically installs `@stroncium/procfs`'s
-      `processMountinfo` parser because `trash`'s Linux path reaches it through a binary-opaque
-      template-literal CommonJS `require`; and the launcher stages `trash`'s `macos-trash` /
-      `windows-trash.exe` helpers to real executable paths and injects them as `trashHelpers`, because the
-      package's internal `new URL(…, import.meta.url)` points inside `/$bunfs/` after compilation. The
-      wrapper executes an injected helper on macOS/Windows and otherwise delegates to `trash`; source mode stays on
-      `trash` entirely. No platform degrades to permanent unlink.
+      artifact seams behind the same registration, both owned by the `trash` module: the procfs parser it
+      statically installs, and the `trashHelpers` the launcher stages and `registerBundledRuntime` injects
+      through `setBundledTrashHelpers` (rationale: [[submodule-server-trash]]). No platform degrades to
+      permanent unlink.
     The desktop server/factory bundle is built with pi's `PI_BUNDLED_NODE=true` compile-time define. That
     is pi's own switch for bundled-but-not-compiled distributions: it selects the embedded-modules extension
     loader (jiti's static entry with Babel bundled in, plus pi's virtual modules). Without it pi treats the
@@ -698,14 +701,15 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `pi-thinkrail-workflow` + `pi-todos` (the bundled extension set — parent sessions load the set through
   resource-loader paths or launcher factories; delegated children value-import `pi-spec-graph` and receive
   the named `pi-web-access` factory through the bundled runtime seam, with source-mode Bun `require` as the
-  dev equivalent); `typebox` (the `ask_user_question` parameter schema); `trash` (the cross-platform OS
-  recycle-bin implementation; called with globbing disabled and allowed to throw — never degraded to
-  `unlink`); `@stroncium/procfs` (directly pinned solely for the compiled Linux trash parser inclusion seam);
+  dev equivalent); `typebox` (the `ask_user_question` parameter schema); `trash` (reached only through the
+  sibling **`trash` module** — see [[submodule-server-trash]]: one path, globbing disabled, allowed to
+  throw, never degraded to `unlink`; the launcher's staged-helper and procfs-parser seams live there too,
+  because `changes`' whole-file revert needs the same primitive);
   `contracts` (`PiEvent`/`Model`/`ThinkingLevel`/`ImageContent`/`SessionStats`/`SessionSummary`/
   `Session*Payload`/`SlashCommandInfo`/`ExtUi*`/`AskUserQuestion*`/`ProviderStatus*`); `log` (diagnostics +
   session-lifecycle debug traces); `persistence` (`dataDir` for delegation plus the narrow session
-  receipt stores); Node.
-- **Forbidden:** `host`; sibling features other than `log` and those narrow persistence surfaces (session
+  receipt stores); `trash` (the recoverable-delete primitive); Node.
+- **Forbidden:** `host`; sibling features other than `log`, `trash` and those narrow persistence surfaces (session
   worktree `cwd` remains an input, never a workspace-registry lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
 

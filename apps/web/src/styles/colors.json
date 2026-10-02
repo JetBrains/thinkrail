@@ -4,7 +4,6 @@
 		"version": "1.1.0",
 		"note": "The semantic colour layer. Palettes live in themes/bundled/*.theme.json; this file says what each palette entry is FOR, and is the only place a derivation is written. A role's `from` names a theme manifest key; the CSS variable that key writes to is derived (kebab-case), not tabulated. See COLOR.md."
 	},
-
 	"scale": {
 		"subtle": 10,
 		"wash": 12,
@@ -12,46 +11,73 @@
 		"muted": 40,
 		"strong": 60
 	},
-
 	"roles": {
-		"text-default": { "from": "text", "publish": true },
-		"text-muted": { "from": "muted", "publish": true },
-		"text-subtle": { "from": "hint", "publish": true },
+		"text-default": {
+			"from": "text",
+			"publish": true
+		},
+		"text-muted": {
+			"from": "muted",
+			"publish": true
+		},
+		"text-subtle": {
+			"from": "hint",
+			"publish": true
+		},
 		"text-disabled": {
 			"from": "text",
 			"alpha": "strong",
 			"publish": true,
 			"note": "disabled non-control text = the default text colour at the `strong` (60%) alpha step — a disabled element inherits its enabled semantic colour, dimmed at the token level, never a dedicated disabled palette value"
 		},
-		"text-on-primary": { "from": "onAccent", "publish": true },
+		"text-on-primary": {
+			"from": "onAccent",
+			"publish": true
+		},
 		"text-link": {
 			"from": "info",
 			"publish": false,
 			"note": "global.css `a {}` is the only consumer; no component styles a bare link"
 		},
-
 		"container-workspace-bg": {
 			"from": "background",
 			"publish": true,
 			"note": "the app surface, and with it the opened-document canvas — a document reads as part of the workspace (Monaco's EDITOR_THEME, the markdown/spec preview, the chat column, the tab strip)"
 		},
-		"container-sidebar-bg": { "from": "sidebar", "publish": true },
-		"container-terminal-bg": { "from": "sidebar", "publish": true },
-		"container-header-bg": { "from": "header", "publish": true },
+		"container-sidebar-bg": {
+			"from": "sidebar",
+			"publish": true
+		},
+		"container-terminal-bg": {
+			"from": "sidebar",
+			"publish": true
+		},
+		"container-header-bg": {
+			"from": "header",
+			"publish": true
+		},
 		"container-content-bg": {
 			"from": "content",
 			"publish": true,
-			"note": "the recessed read-a-diff/read-code canvas, NOT the document canvas (that is workspace): the Changes diff (Monaco THEME), rendered diffs, Shiki code blocks, and the center-column backdrop behind them"
+			"note": "the recessed read-a-diff/read-code canvas, NOT the document canvas (that is workspace): Pierre source diffs, rendered diffs, Shiki code blocks, and the center-column backdrop behind them"
 		},
 		"container-elevated-bg": {
 			"from": "elevated",
 			"publish": true,
 			"note": "every raised surface: dialogs, popovers, menus, toasts, cards, code blocks"
 		},
-
-		"control-bg": { "from": "input", "publish": true },
-		"control-bg-hovered": { "from": "hover", "publish": true },
-		"control-bg-selected": { "from": "hover", "publish": true },
+		"control-bg": {
+			"from": "input",
+			"publish": true
+		},
+		"control-bg-hovered": {
+			"from": "hover",
+			"publish": true
+		},
+		"control-bg-selected": {
+			"from": "hover",
+			"publish": true
+		},
 		"control-primary-bg": {
 			"from": "accentSolid",
 			"publish": true,
@@ -62,9 +88,18 @@
 			"publish": true,
 			"note": "the primary button's hover fill — its own manifest key so a theme owns the hover step instead of the button fading with an opacity utility"
 		},
-		"control-primary-text": { "from": "onAccent", "publish": true },
-		"control-border-default": { "from": "border", "publish": true },
-		"control-border-active": { "from": "borderStrong", "publish": true },
+		"control-primary-text": {
+			"from": "onAccent",
+			"publish": true
+		},
+		"control-border-default": {
+			"from": "border",
+			"publish": true
+		},
+		"control-border-active": {
+			"from": "borderStrong",
+			"publish": true
+		},
 		"control-disabled-bg": {
 			"from": "input",
 			"alpha": "strong",
@@ -95,31 +130,94 @@
 			"publish": true,
 			"note": "disabled primary button label/icon = the normal primary text (`onAccent`, i.e. control-primary-text) at the `strong` (60%) alpha step"
 		},
-
-		"border-default": { "from": "borderStrong", "publish": true },
-		"border-muted": { "from": "border", "publish": true },
-
-		"primary": { "from": "accent", "publish": true },
-		"primary-subtle": { "from": "accent", "alpha": "subtle", "publish": true },
-		"primary-soft": { "from": "accent", "alpha": "soft", "publish": true },
-		"primary-muted": { "from": "accent", "alpha": "muted", "publish": true },
-
-		"on-primary-soft": { "from": "onAccent", "alpha": "soft", "publish": true },
-
-		"feedback-info": { "from": "info", "publish": true },
-		"feedback-info-subtle": { "from": "info", "alpha": "wash", "publish": true },
-		"feedback-success": { "from": "success", "publish": true },
-		"feedback-success-subtle": { "from": "success", "alpha": "wash", "publish": true },
-		"feedback-success-muted": { "from": "success", "alpha": "muted", "publish": true },
-		"feedback-error": { "from": "danger", "publish": true },
-		"feedback-error-subtle": { "from": "danger", "alpha": "wash", "publish": true },
-		"feedback-error-muted": { "from": "danger", "alpha": "muted", "publish": true },
-		"feedback-warning": { "from": "warning", "publish": true },
-		"feedback-warning-subtle": { "from": "warning", "alpha": "wash", "publish": true },
-
-		"bubble-user-bg": { "from": "bubbleAccent", "alpha": "subtle", "publish": true },
-		"bubble-user-border": { "from": "bubbleAccent", "alpha": "muted", "publish": true },
-
+		"border-default": {
+			"from": "borderStrong",
+			"publish": true
+		},
+		"border-muted": {
+			"from": "border",
+			"publish": true
+		},
+		"primary": {
+			"from": "accent",
+			"publish": true
+		},
+		"primary-subtle": {
+			"from": "accent",
+			"alpha": "subtle",
+			"publish": true
+		},
+		"primary-soft": {
+			"from": "accent",
+			"alpha": "soft",
+			"publish": true
+		},
+		"primary-muted": {
+			"from": "accent",
+			"alpha": "muted",
+			"publish": true
+		},
+		"on-primary-soft": {
+			"from": "onAccent",
+			"alpha": "soft",
+			"publish": true
+		},
+		"feedback-info": {
+			"from": "info",
+			"publish": true
+		},
+		"feedback-info-subtle": {
+			"from": "info",
+			"alpha": "wash",
+			"publish": true
+		},
+		"feedback-success": {
+			"from": "success",
+			"publish": true
+		},
+		"feedback-success-subtle": {
+			"from": "success",
+			"alpha": "wash",
+			"publish": true
+		},
+		"feedback-success-muted": {
+			"from": "success",
+			"alpha": "muted",
+			"publish": true
+		},
+		"feedback-error": {
+			"from": "danger",
+			"publish": true
+		},
+		"feedback-error-subtle": {
+			"from": "danger",
+			"alpha": "wash",
+			"publish": true
+		},
+		"feedback-error-muted": {
+			"from": "danger",
+			"alpha": "muted",
+			"publish": true
+		},
+		"feedback-warning": {
+			"from": "warning",
+			"publish": true
+		},
+		"feedback-warning-subtle": {
+			"from": "warning",
+			"alpha": "wash",
+			"publish": true
+		},
+		"bubble-user-bg": {
+			"from": "bubbleAccent",
+			"alpha": "subtle",
+			"publish": true
+		},
+		"bubble-user-border": {
+			"from": "bubbleAccent",
+			"alpha": "muted",
+			"publish": true
+		},
 		"selection-text": {
 			"from": "selectionForeground",
 			"fallback": "inherit",
@@ -137,15 +235,40 @@
 			"publish": false,
 			"note": "the content canvas's ::selection (markdown preview): translucent, so the unselected remainder of a line box reads as a soft edge, not a black hole punched in an opaque wash"
 		},
-
-		"editor-selection-bg": { "from": "editorSelection", "publish": false },
+		"editor-selection-bg": {
+			"from": "editorSelection",
+			"publish": false
+		},
 		"editor-selection-text": {
 			"from": "editorSelectionForeground",
 			"publish": false,
 			"note": "read by Monaco and xterm through getComputedStyle; a utility would be dead weight"
+		},
+		"editor-selection-highlight-bg": {
+			"from": "editorSelection",
+			"alpha": "soft",
+			"publish": false,
+			"note": "Monaco's secondary matches of the active selection"
+		},
+		"editor-find-match-bg": {
+			"from": "warning",
+			"alpha": "muted",
+			"publish": false,
+			"note": "Monaco's active find match"
+		},
+		"widget-shadow": {
+			"from": "text",
+			"alpha": "soft",
+			"publish": false,
+			"note": "Monaco widget, sticky-scroll, and scrollbar shadows"
+		},
+		"media-checker-tile": {
+			"from": "text",
+			"alpha": "soft",
+			"publish": false,
+			"note": "the transparency checkerboard tile behind images and vector previews: the text colour at the soft (20%) step — the contrast of the conventional #ccc-on-white checkerboard — over the content canvas, so a dark logo on a transparent PNG stays visible on a dark theme and a light one on a light theme; index.css's `.media-backdrop` is the only consumer"
 		}
 	},
-
 	"effects": {
 		"sunken": {
 			"note": "a recessed row or track",

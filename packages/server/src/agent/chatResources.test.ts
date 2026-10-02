@@ -19,6 +19,7 @@ import {
 import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { AskUserQuestionResult, SessionResources } from "@thinkrail/contracts";
 import type { ChildHandle } from "pi-delegation";
+import { setTrashImplementationForTests } from "../trash";
 import {
 	abortSession,
 	answerQuestion,
@@ -47,7 +48,6 @@ import {
 } from "./chatResources";
 import { delegationServiceFor, readChildTranscript } from "./delegation";
 import { configurePiRuntime } from "./piRuntime";
-import { setTrashImplementationForTests } from "./trash";
 
 const model = {
 	id: "resources",

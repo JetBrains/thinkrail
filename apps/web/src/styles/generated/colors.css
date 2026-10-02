@@ -17,7 +17,7 @@
 	--container-sidebar-bg: var(--sidebar);
 	--container-terminal-bg: var(--sidebar);
 	--container-header-bg: var(--header);
-	--container-content-bg: var(--content); /* the recessed read-a-diff/read-code canvas, NOT the document canvas (that is workspace): the Changes diff (Monaco THEME), rendered diffs, Shiki code blocks, and the center-column backdrop behind them */
+	--container-content-bg: var(--content); /* the recessed read-a-diff/read-code canvas, NOT the document canvas (that is workspace): Pierre source diffs, rendered diffs, Shiki code blocks, and the center-column backdrop behind them */
 	--container-elevated-bg: var(--elevated); /* every raised surface: dialogs, popovers, menus, toasts, cards, code blocks */
 	--control-bg: var(--input);
 	--control-bg-hovered: var(--hover);
@@ -56,6 +56,10 @@
 	--selection-bg-muted: color-mix(in srgb, var(--selection) 40%, transparent); /* the content canvas's ::selection (markdown preview): translucent, so the unselected remainder of a line box reads as a soft edge, not a black hole punched in an opaque wash */
 	--editor-selection-bg: var(--editor-selection);
 	--editor-selection-text: var(--editor-selection-foreground); /* read by Monaco and xterm through getComputedStyle; a utility would be dead weight */
+	--editor-selection-highlight-bg: color-mix(in srgb, var(--editor-selection) 20%, transparent); /* Monaco's secondary matches of the active selection */
+	--editor-find-match-bg: color-mix(in srgb, var(--warning) 40%, transparent); /* Monaco's active find match */
+	--widget-shadow: color-mix(in srgb, var(--text) 20%, transparent); /* Monaco widget, sticky-scroll, and scrollbar shadows */
+	--media-checker-tile: color-mix(in srgb, var(--text) 20%, transparent); /* the transparency checkerboard tile behind images and vector previews: the text colour at the soft (20%) step — the contrast of the conventional #ccc-on-white checkerboard — over the content canvas, so a dark logo on a transparent PNG stays visible on a dark theme and a light one on a light theme; index.css's `.media-backdrop` is the only consumer */
 }
 
 /* Appearance-level effects. The theme engine stamps `data-theme-appearance` before React mounts, so

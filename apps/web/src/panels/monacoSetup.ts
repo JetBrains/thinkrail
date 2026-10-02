@@ -1,13 +1,29 @@
-import { loader, type Monaco } from "@monaco-editor/react";
-import type { Environment } from "monaco-editor";
-import * as monaco from "monaco-editor";
+import { loader } from "@monaco-editor/react";
+import { shikiToMonaco, textmateThemeToMonacoTheme } from "@shikijs/monaco";
+import { createHighlighterCore, type HighlighterCore, type ThemeRegistration } from "shiki/core";
+import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import "monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon.css";
+import "monaco-editor/esm/vs/base/browser/ui/codicons/codicon/codicon-modifiers.css";
+import "monaco-editor/esm/vs/editor/browser/coreCommands.js";
+import "monaco-editor/esm/vs/editor/contrib/bracketMatching/browser/bracketMatching.js";
+import "monaco-editor/esm/vs/editor/contrib/clipboard/browser/clipboard.js";
+import "monaco-editor/esm/vs/editor/contrib/contextmenu/browser/contextmenu.js";
+import "monaco-editor/esm/vs/editor/contrib/find/browser/findController.js";
+import "monaco-editor/esm/vs/editor/contrib/folding/browser/folding.js";
+import "monaco-editor/esm/vs/editor/contrib/hover/browser/hoverContribution.js";
+import "monaco-editor/esm/vs/editor/contrib/links/browser/links.js";
+import "monaco-editor/esm/vs/editor/contrib/readOnlyMessage/browser/contribution.js";
+import "monaco-editor/esm/vs/editor/contrib/stickyScroll/browser/stickyScrollContribution.js";
+import "monaco-editor/esm/vs/editor/contrib/unicodeHighlighter/browser/unicodeHighlighter.js";
+import "monaco-editor/esm/vs/editor/contrib/wordHighlighter/browser/wordHighlighter.js";
+import "monaco-editor/esm/vs/editor/standalone/browser/quickAccess/standaloneCommandsQuickAccess.js";
+import "monaco-editor/esm/vs/editor/standalone/browser/quickAccess/standaloneGotoLineQuickAccess.js";
+import type { Environment, editor } from "monaco-editor/esm/vs/editor/editor.api.js";
+import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
-import cssWorker from "monaco-editor/esm/vs/language/css/css.worker?worker";
-import htmlWorker from "monaco-editor/esm/vs/language/html/html.worker?worker";
-import jsonWorker from "monaco-editor/esm/vs/language/json/json.worker?worker";
-import tsWorker from "monaco-editor/esm/vs/language/typescript/ts.worker?worker";
 import { cssColorToHex } from "@/lib";
-import { onThemeSwap } from "../themes";
+import { SHIKI_FILE_LANGUAGES } from "@/lib/highlighter";
+import { onThemeSwap, resolveThinkrailShikiTheme } from "../themes";
 import { editorWrappingOptions } from "./editorWrapping";
 
 declare global {
@@ -17,19 +33,39 @@ declare global {
 }
 
 window.MonacoEnvironment = {
-	getWorker(_workerId, label) {
-		if (label === "json") return new jsonWorker();
-		if (label === "css" || label === "scss" || label === "less") return new cssWorker();
-		if (label === "html" || label === "handlebars" || label === "razor") return new htmlWorker();
-		if (label === "typescript" || label === "javascript") return new tsWorker();
+	getWorker() {
 		return new editorWorker();
 	},
 };
 
 loader.config({ monaco });
 
-export const THEME = "thinkrail";
 export const EDITOR_THEME = "thinkrail-editor";
+
+const BRACKETS: [string, string][] = [
+	["(", ")"],
+	["[", "]"],
+	["{", "}"],
+];
+
+function registerShikiLanguages(): void {
+	const registered = new Set(monaco.languages.getLanguages().map((language) => language.id));
+	for (const language of SHIKI_FILE_LANGUAGES) {
+		if (!registered.has(language.id)) {
+			monaco.languages.register({
+				id: language.id,
+				extensions: [...language.extensions],
+				aliases: [...language.aliases],
+				...(language.filenames ? { filenames: [...language.filenames] } : {}),
+			});
+			registered.add(language.id);
+		}
+		monaco.languages.setLanguageConfiguration(language.id, {
+			brackets: BRACKETS,
+			colorizedBracketPairs: BRACKETS,
+		});
+	}
+}
 
 const languageByPath = new Map<string, string>();
 
@@ -49,11 +85,20 @@ function cssVar(name: string): string | undefined {
 	return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || undefined;
 }
 
-export function sharedEditorOptions(lineWidth: number, bounded: boolean) {
+export function fileEditorOptions(lineWidth: number, bounded: boolean, path: string) {
 	const fontSize = Number.parseFloat(cssVar("--tr-font-size-s11") ?? "") || 11;
 	const lineHeight = Number.parseFloat(cssVar("--tr-line-height-default") ?? "") || undefined;
-	return {
+	const paddingTop = Number.parseFloat(cssVar("--space-8") ?? "");
+	const options: editor.IStandaloneEditorConstructionOptions = {
 		readOnly: true,
+		readOnlyMessage: { value: "Files open read-only here — ask the agent to change them." },
+		ariaLabel: path,
+		unicodeHighlight: { ambiguousCharacters: false },
+		lineNumbersMinChars: 3,
+		renderLineHighlight: "all",
+		smoothScrolling: true,
+		guides: { bracketPairs: "active", indentation: true },
+		occurrencesHighlight: "singleFile",
 		...editorWrappingOptions(lineWidth, bounded),
 		minimap: { enabled: false },
 		scrollBeyondLastLine: false,
@@ -71,55 +116,15 @@ export function sharedEditorOptions(lineWidth: number, bounded: boolean) {
 		overviewRulerLanes: 0,
 		overviewRulerBorder: false,
 		hideCursorInOverviewRuler: true,
-	} as const;
-}
-
-function token(name: string): string {
-	return cssColorToHex(getComputedStyle(document.documentElement).getPropertyValue(name).trim());
-}
-
-const SYNTAX_TOKENS: readonly [string, string][] = [
-	["keyword", "--code-keyword"],
-	["string", "--code-string"],
-	["comment", "--code-comment"],
-	["comment.doc", "--code-comment-doc"],
-	["number", "--code-number"],
-	["regexp", "--code-regexp"],
-	["annotation", "--code-annotation"],
-	["tag", "--code-tag"],
-	["metatag", "--code-tag"],
-	["attribute.name", "--code-attribute-name"],
-	["attribute.value", "--code-attribute-value"],
-	["string.key.json", "--code-property"],
-	["property", "--code-property"],
-	["function", "--code-function"],
-	["type.identifier", "--code-type"],
-	["identifier", "--code-variable"],
-	["constant", "--code-constant"],
-	["operator", "--code-operator"],
-	["delimiter", "--code-punctuation"],
-];
-
-export function defineThinkrailTheme(m: Monaco): void {
-	const colors: Record<string, string> = {};
-	const set = (key: string, value: string) => {
-		if (value) colors[key] = value;
 	};
-	set("editor.foreground", token("--code-foreground"));
-	set("editorLineNumber.foreground", token("--text-muted"));
-	set("editorCursor.foreground", token("--primary"));
-	set("editor.selectionBackground", token("--editor-selection-bg"));
-	set("editor.selectionForeground", token("--editor-selection-text"));
-	set("scrollbarSlider.background", token("--border-default"));
-	set("scrollbarSlider.hoverBackground", token("--text-muted"));
-	set("scrollbarSlider.activeBackground", token("--text-muted"));
-	const rules = SYNTAX_TOKENS.flatMap(([monacoToken, name]) => {
-		const color = token(name);
-		return color ? [{ token: monacoToken, foreground: color.replace("#", "") }] : [];
-	});
+	options.padding = { top: Number.isFinite(paddingTop) ? paddingTop : 0 };
+	return options;
+}
+
+function currentTheme(): { registration: ThemeRegistration; base: editor.BuiltinTheme } {
 	const root = document.documentElement;
-	const colorScheme = getComputedStyle(root).colorScheme;
-	const light = colorScheme.split(/\s+/).includes("light");
+	const styles = getComputedStyle(root);
+	const light = styles.colorScheme.split(/\s+/).includes("light");
 	const base =
 		root.dataset.themeContrast === "high"
 			? light
@@ -128,27 +133,64 @@ export function defineThinkrailTheme(m: Monaco): void {
 			: light
 				? "vs"
 				: "vs-dark";
-	const withBackground = (bg: string): Record<string, string> =>
-		bg ? { ...colors, "editor.background": bg } : colors;
-	const contentBg = token("--container-content-bg");
-	const workspaceBg = token("--container-workspace-bg");
+	return {
+		base,
+		registration: resolveThinkrailShikiTheme({
+			name: EDITOR_THEME,
+			type: light ? "light" : "dark",
+			readVariable: (name) => styles.getPropertyValue(name).trim(),
+			toHex: cssColorToHex,
+		}),
+	};
+}
+
+function defineTheme(highlighter: HighlighterCore, base: editor.BuiltinTheme): void {
+	const converted = textmateThemeToMonacoTheme(
+		highlighter.getTheme(EDITOR_THEME),
+	) as editor.IStandaloneThemeData;
 	try {
-		m.editor.defineTheme(THEME, { base, inherit: true, rules, colors: withBackground(contentBg) });
-		m.editor.defineTheme(EDITOR_THEME, {
+		monaco.editor.defineTheme(EDITOR_THEME, {
 			base,
 			inherit: true,
-			rules,
-			colors: withBackground(workspaceBg),
+			rules: converted.rules,
+			colors: converted.colors,
 		});
 	} catch {
-		m.editor.defineTheme(THEME, { base, inherit: true, rules: [], colors: {} });
-		m.editor.defineTheme(EDITOR_THEME, { base, inherit: true, rules: [], colors: {} });
+		monaco.editor.defineTheme(EDITOR_THEME, { base, inherit: true, rules: [], colors: {} });
 	}
 }
 
-export function watchThemeSwap(m: Monaco, themeName: string = THEME): () => void {
+let highlighter: HighlighterCore | null = null;
+let shikiAdapterInstalled = false;
+
+async function initializeMonaco(): Promise<void> {
+	registerShikiLanguages();
+	const { registration, base } = currentTheme();
+	highlighter = await createHighlighterCore({
+		themes: [registration],
+		langs: SHIKI_FILE_LANGUAGES.map((language) => language.load()),
+		engine: createJavaScriptRegexEngine(),
+	});
+	if (!shikiAdapterInstalled) {
+		shikiToMonaco(highlighter, monaco);
+		shikiAdapterInstalled = true;
+	}
+	defineTheme(highlighter, base);
+	monaco.editor.setTheme(EDITOR_THEME);
+}
+
+export const monacoSetup = initializeMonaco();
+
+async function refreshTheme(): Promise<void> {
+	if (!highlighter) return;
+	const { registration, base } = currentTheme();
+	await highlighter.loadTheme(registration);
+	defineTheme(highlighter, base);
+	monaco.editor.setTheme(EDITOR_THEME);
+}
+
+export function watchThemeSwap(): () => void {
 	return onThemeSwap(() => {
-		defineThinkrailTheme(m);
-		m.editor.setTheme(themeName);
+		void refreshTheme().catch(() => monaco.editor.setTheme(EDITOR_THEME));
 	});
 }

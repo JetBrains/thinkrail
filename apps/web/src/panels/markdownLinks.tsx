@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
-import { getTransport } from "../transport";
+import { DOCUMENT_ID_PREFIX } from "./markdownHtml";
 import { openFileInTab } from "./openTabs";
+import { resourceBytesUrl } from "./resourcePane";
 
 export type HrefKind = "empty" | "anchor" | "external" | "relative";
 
@@ -45,10 +46,6 @@ function relativePathname(href: string): string {
 	return i < 0 ? href : href.slice(0, i);
 }
 
-function encodePath(path: string): string {
-	return path.split("/").map(encodeURIComponent).join("/");
-}
-
 interface MdNode {
 	type: string;
 	value?: string;
@@ -82,12 +79,49 @@ function walk(node: MdNode, visit: (n: MdNode) => void): void {
 }
 
 function scrollToAnchor(id: string): void {
-	document
-		.getElementById(decodeURIComponent(id))
-		?.scrollIntoView({ behavior: "smooth", block: "start" });
+	const slug = decodeURIComponent(id);
+	(
+		document.getElementById(`${DOCUMENT_ID_PREFIX}${slug}`) ?? document.getElementById(slug)
+	)?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-export function documentComponents(ctx: { workspaceId: string; path: string }): Components {
+const WEB_URL = /^(?:https?:)?\/\//i;
+
+export function srcsetCandidates(srcSet: string): { url: string; descriptor: string }[] {
+	const candidates: { url: string; descriptor: string }[] = [];
+	let index = 0;
+	while (index < srcSet.length) {
+		while (index < srcSet.length && /[\s,]/.test(srcSet[index] ?? "")) index += 1;
+		if (index >= srcSet.length) break;
+		let end = index;
+		while (end < srcSet.length && !/\s/.test(srcSet[end] ?? "")) end += 1;
+		let url = srcSet.slice(index, end);
+		index = end;
+		let descriptor = "";
+		if (url.endsWith(",")) {
+			url = url.replace(/,+$/, "");
+		} else {
+			let depth = 0;
+			let stop = index;
+			while (stop < srcSet.length) {
+				const char = srcSet[stop] ?? "";
+				if (char === "(") depth += 1;
+				else if (char === ")") depth = Math.max(0, depth - 1);
+				else if (char === "," && depth === 0) break;
+				stop += 1;
+			}
+			descriptor = srcSet.slice(index, stop).trim();
+			index = stop + 1;
+		}
+		if (url) candidates.push({ url, descriptor });
+	}
+	return candidates;
+}
+
+export function documentComponents(
+	ctx: { workspaceId: string; path: string },
+	bytesUrl: (workspaceId: string, path: string) => string = resourceBytesUrl,
+): Components {
 	function DocumentLink({ href, children }: { href?: string; children?: ReactNode }) {
 		const kind = classifyHref(href);
 		if (kind === "anchor" && href) {
@@ -127,16 +161,63 @@ export function documentComponents(ctx: { workspaceId: string; path: string }): 
 		);
 	}
 
-	function DocumentImage({ src, alt, title }: { src?: string; alt?: string; title?: string }) {
-		const isRelative = classifyHref(src) === "relative" && src !== undefined;
-		const target = isRelative ? resolveRelativePath(ctx.path, relativePathname(src)) : null;
-		const resolved = isRelative
-			? target
-				? `${getTransport().httpBase()}/files/${encodeURIComponent(ctx.workspaceId)}/${encodePath(target)}`
-				: undefined
-			: src;
-		return <img src={resolved} alt={alt ?? ""} title={title} />;
+	const resolveSource = (src: string | undefined): string | undefined => {
+		if (src === undefined) return undefined;
+		if (classifyHref(src) !== "relative") return WEB_URL.test(src) ? src : undefined;
+		const target = resolveRelativePath(ctx.path, relativePathname(src));
+		return target ? bytesUrl(ctx.workspaceId, target) : undefined;
+	};
+	const resolveSourceSet = (srcSet: string | undefined): string | undefined => {
+		if (srcSet === undefined) return undefined;
+		const resolved = srcsetCandidates(srcSet).flatMap(({ url, descriptor }) => {
+			const source = resolveSource(url);
+			return source ? [descriptor ? `${source} ${descriptor}` : source] : [];
+		});
+		return resolved.length > 0 ? resolved.join(", ") : undefined;
+	};
+
+	function DocumentImage({
+		src,
+		alt,
+		title,
+		width,
+		height,
+		align,
+	}: {
+		src?: string;
+		alt?: string;
+		title?: string;
+		width?: string | number;
+		height?: string | number;
+		align?: string;
+	}) {
+		const floated =
+			align === "right" ? "float-right ml-8" : align === "left" ? "float-left mr-8" : undefined;
+		return (
+			<img
+				src={resolveSource(src)}
+				alt={alt ?? ""}
+				title={title}
+				width={width}
+				height={height}
+				className={floated}
+			/>
+		);
 	}
 
-	return { a: DocumentLink, img: DocumentImage } as Components;
+	function DocumentSource({
+		srcSet,
+		media,
+		type,
+		sizes,
+	}: {
+		srcSet?: string;
+		media?: string;
+		type?: string;
+		sizes?: string;
+	}) {
+		return <source srcSet={resolveSourceSet(srcSet)} media={media} type={type} sizes={sizes} />;
+	}
+
+	return { a: DocumentLink, img: DocumentImage, source: DocumentSource } as Components;
 }

@@ -1,16 +1,29 @@
-export type BoundedRun = {
+type BoundedRunBase = {
 	ok: boolean;
-	out: string;
 	err: string;
 	timedOut: boolean;
 	launchFailed: boolean;
 	waitedMs: number;
 };
 
+export type BoundedRun = BoundedRunBase & { out: string };
+export type BoundedBytesRun = BoundedRunBase & { out: Uint8Array };
+
 export type BoundedRunOptions = {
 	timeoutMs: number;
 	cwd?: string;
 	env?: Record<string, string | undefined>;
+	stdout?: "text";
+};
+
+export type BoundedBytesRunOptions = Omit<BoundedRunOptions, "stdout"> & {
+	stdout: "bytes";
+};
+
+export type BoundedStreamOptions = Omit<BoundedRunOptions, "stdout">;
+export type BoundedStream = {
+	stdout: ReadableStream<Uint8Array>;
+	exited: Promise<BoundedRunBase>;
 };
 
 export const DRAIN_GRACE_MS = 250;
@@ -22,25 +35,57 @@ function boundedTimeout(ms: number): number {
 	return Math.min(Math.max(Math.trunc(ms), 0), MAX_TIMEOUT_MS);
 }
 
-type Sink = { text: () => string; done: Promise<void>; cancel: () => void };
+type Drain = { done: Promise<void>; cancel: () => void };
+type TextSink = Drain & { kind: "text"; value: () => string };
+type BytesSink = Drain & { kind: "bytes"; value: () => Uint8Array };
 
-function sink(stream: ReadableStream<Uint8Array>): Sink {
+function drain(stream: ReadableStream<Uint8Array>, chunk: (value: Uint8Array) => void): Drain {
 	const reader = stream.getReader();
-	const decoder = new TextDecoder();
-	let text = "";
 	const done = (async () => {
 		while (true) {
 			const { done: finished, value } = await reader.read();
 			if (finished) return;
-			if (value) text += decoder.decode(value, { stream: true });
+			if (value) chunk(value);
 		}
 	})().catch(() => {});
 	return {
-		text: () => text,
 		done,
 		cancel: () => {
 			void reader.cancel().catch(() => {});
 		},
+	};
+}
+
+function textSink(stream: ReadableStream<Uint8Array>): TextSink {
+	const decoder = new TextDecoder();
+	let text = "";
+	return {
+		kind: "text",
+		value: () => text,
+		...drain(stream, (chunk) => {
+			text += decoder.decode(chunk, { stream: true });
+		}),
+	};
+}
+
+function bytesSink(stream: ReadableStream<Uint8Array>): BytesSink {
+	const chunks: Uint8Array[] = [];
+	let length = 0;
+	return {
+		kind: "bytes",
+		value: () => {
+			const bytes = new Uint8Array(length);
+			let offset = 0;
+			for (const chunk of chunks) {
+				bytes.set(chunk, offset);
+				offset += chunk.byteLength;
+			}
+			return bytes;
+		},
+		...drain(stream, (chunk) => {
+			chunks.push(chunk.slice());
+			length += chunk.byteLength;
+		}),
 	};
 }
 
@@ -66,28 +111,142 @@ function killTree(proc: Bun.Subprocess): void {
 	proc.kill("SIGKILL");
 }
 
-export async function runBounded(argv: string[], opts: BoundedRunOptions): Promise<BoundedRun> {
+function spawnOptions(opts: { cwd?: string; env?: Record<string, string | undefined> }) {
+	return {
+		cwd: opts.cwd ?? process.cwd(),
+		env: opts.env ?? process.env,
+		stdin: "ignore",
+		stdout: "pipe",
+		stderr: "pipe",
+		detached: process.platform !== "win32",
+		windowsHide: process.platform === "win32",
+	} as const;
+}
+
+function launchFailure(cause: unknown, waitedMs: number): BoundedRunBase {
+	return {
+		ok: false,
+		err: cause instanceof Error ? cause.message : String(cause),
+		timedOut: false,
+		launchFailed: true,
+		waitedMs,
+	};
+}
+
+export function streamBounded(argv: string[], opts: BoundedStreamOptions): BoundedStream {
 	const startedAt = performance.now();
 	const waitedMs = () => performance.now() - startedAt;
 
 	let proc: Bun.Subprocess<"ignore", "pipe", "pipe">;
 	try {
-		proc = Bun.spawn(argv, {
-			cwd: opts.cwd ?? process.cwd(),
-			env: opts.env ?? process.env,
-			stdin: "ignore",
-			stdout: "pipe",
-			stderr: "pipe",
-			detached: process.platform !== "win32",
-			windowsHide: process.platform === "win32",
-		});
+		proc = Bun.spawn(argv, spawnOptions(opts));
 	} catch (cause) {
-		const err = cause instanceof Error ? cause.message : String(cause);
-		return { ok: false, out: "", err, timedOut: false, launchFailed: true, waitedMs: waitedMs() };
+		const failed = launchFailure(cause, waitedMs());
+		return {
+			stdout: new ReadableStream<Uint8Array>({
+				start(controller) {
+					controller.error(new Error(failed.err));
+				},
+			}),
+			exited: Promise.resolve(failed),
+		};
 	}
 
-	const out = sink(proc.stdout);
-	const err = sink(proc.stderr);
+	const err = textSink(proc.stderr);
+	const deadline = delay(boundedTimeout(opts.timeoutMs));
+	const state: { exit: BoundedRunBase | null; wake: (() => void) | null } = {
+		exit: null,
+		wake: null,
+	};
+	const exited = (async (): Promise<BoundedRunBase> => {
+		const outcome = await Promise.race([
+			proc.exited.then(() => "exited" as const),
+			deadline.promise.then(() => "timed-out" as const),
+		]);
+		deadline.cancel();
+		if (outcome === "timed-out") killTree(proc);
+		const grace = delay(DRAIN_GRACE_MS);
+		await Promise.race([err.done, grace.promise]);
+		grace.cancel();
+		err.cancel();
+		state.exit = {
+			ok: outcome === "exited" && proc.exitCode === 0,
+			err: err.value(),
+			timedOut: outcome === "timed-out",
+			launchFailed: false,
+			waitedMs: waitedMs(),
+		};
+		state.wake?.();
+		return state.exit;
+	})();
+
+	const reader = proc.stdout.getReader();
+	const nextChunk = async () => {
+		const read = reader.read();
+		const outcome = await Promise.race([
+			read.then(() => "read" as const),
+			new Promise<"exited">((resolve) => {
+				if (state.exit) resolve("exited");
+				else state.wake = () => resolve("exited");
+			}),
+		]);
+		state.wake = null;
+		if (outcome === "exited") {
+			const grace = delay(DRAIN_GRACE_MS);
+			const late = await Promise.race([
+				read.then(() => "read" as const),
+				grace.promise.then(() => "grace" as const),
+			]);
+			grace.cancel();
+			if (late === "grace") void reader.cancel().catch(() => {});
+		}
+		return read;
+	};
+	const stdout = new ReadableStream<Uint8Array>({
+		async pull(controller) {
+			const next = await nextChunk();
+			if (!next.done) {
+				controller.enqueue(next.value);
+				return;
+			}
+			const result = await exited;
+			if (result.ok) controller.close();
+			else
+				controller.error(
+					new Error(
+						result.timedOut
+							? `timed out after ${Math.round(result.waitedMs)}ms`
+							: result.err || `exited with status ${proc.exitCode}`,
+					),
+				);
+		},
+		cancel() {
+			void reader.cancel().catch(() => {});
+			killTree(proc);
+		},
+	});
+	return { stdout, exited };
+}
+
+export function runBounded(argv: string[], opts: BoundedBytesRunOptions): Promise<BoundedBytesRun>;
+export function runBounded(argv: string[], opts: BoundedRunOptions): Promise<BoundedRun>;
+export async function runBounded(
+	argv: string[],
+	opts: BoundedRunOptions | BoundedBytesRunOptions,
+): Promise<BoundedRun | BoundedBytesRun> {
+	const startedAt = performance.now();
+	const waitedMs = () => performance.now() - startedAt;
+
+	let proc: Bun.Subprocess<"ignore", "pipe", "pipe">;
+	try {
+		proc = Bun.spawn(argv, spawnOptions(opts));
+	} catch (cause) {
+		const failed = launchFailure(cause, waitedMs());
+		return opts.stdout === "bytes" ? { ...failed, out: new Uint8Array() } : { ...failed, out: "" };
+	}
+
+	const out = opts.stdout === "bytes" ? bytesSink(proc.stdout) : textSink(proc.stdout);
+	const err = textSink(proc.stderr);
 	const drained = Promise.all([out.done, err.done]);
 	const deadline = delay(boundedTimeout(opts.timeoutMs));
 
@@ -103,12 +262,12 @@ export async function runBounded(argv: string[], opts: BoundedRunOptions): Promi
 	out.cancel();
 	err.cancel();
 
-	return {
+	const result = {
 		ok: outcome === "exited" && proc.exitCode === 0,
-		out: out.text(),
-		err: err.text(),
+		err: err.value(),
 		timedOut: outcome === "timed-out",
 		launchFailed: false,
 		waitedMs: waitedMs(),
 	};
+	return out.kind === "bytes" ? { ...result, out: out.value() } : { ...result, out: out.value() };
 }

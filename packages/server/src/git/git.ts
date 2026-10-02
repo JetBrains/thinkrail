@@ -1,5 +1,5 @@
 import { readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import type {
 	BranchList,
 	GitCommit,
@@ -8,8 +8,16 @@ import type {
 	GitFileStatus,
 	GitStatus,
 	RemoteBranchGroup,
+	ResourceMeta,
 	Workspace,
 } from "@thinkrail/contracts";
+import {
+	CONTENT_SNIFF_BYTES,
+	classifyBytes,
+	decodeText,
+	resolveWorktreeFile,
+	resourceMeta,
+} from "../fs";
 import { logger } from "../log";
 import { loadProjects, loadWorkspaces } from "../persistence";
 import {
@@ -19,7 +27,14 @@ import {
 	resolveCommitOid,
 	resolveDiffRange,
 } from "./diffScope";
-import { git, gitAsync, nonInteractiveGitEnv } from "./gitExec";
+import {
+	git,
+	gitAsync,
+	gitAsyncBytes,
+	gitAsyncStream,
+	gitBytes,
+	nonInteractiveGitEnv,
+} from "./gitExec";
 import { isSafeRef, remoteNameOf } from "./refs";
 
 const log = logger("git");
@@ -269,15 +284,14 @@ function lineCount(content: string): number {
 }
 
 const UNTRACKED_COUNT_MAX_BYTES = 2 * 1024 * 1024;
-const BINARY_SNIFF_BYTES = 8192;
 
 function untrackedAdded(worktreePath: string, path: string): number | undefined {
 	try {
 		const abs = resolve(worktreePath, path);
 		if (statSync(abs).size > UNTRACKED_COUNT_MAX_BYTES) return undefined;
-		const buf = readFileSync(abs);
-		if (buf.subarray(0, BINARY_SNIFF_BYTES).includes(0)) return undefined;
-		return lineCount(buf.toString("utf8"));
+		const bytes = readFileSync(abs);
+		if (!classifyBytes(bytes).text) return undefined;
+		return lineCount(decodeText(bytes));
 	} catch {
 		return undefined;
 	}
@@ -357,54 +371,214 @@ export async function gitStatus(workspaceId: string, scope?: GitDiffScope): Prom
 	return { branch, changes };
 }
 
+function blobArgs(ref: string, path: string): string[] {
+	return ["cat-file", "blob", "--", `${ref}:${path}`];
+}
+
 export function readBlobAt(worktreePath: string, ref: string, path: string): string | null {
-	return blobFrom(git(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], { raw: true }));
+	return blobFrom(git(worktreePath, blobArgs(ref, path), { raw: true }));
+}
+
+export function readBlobBytesAt(
+	worktreePath: string,
+	ref: string,
+	path: string,
+): Uint8Array | null {
+	return strictBlobFrom(
+		gitBytes(worktreePath, blobArgs(ref, path), {
+			env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
+		}),
+	);
+}
+
+export async function readBlobBytesAtAsync(
+	worktreePath: string,
+	ref: string,
+	path: string,
+	opts: { timeoutMs?: number } = {},
+): Promise<Uint8Array | null> {
+	return strictBlobFrom(
+		await gitAsyncBytes(worktreePath, blobArgs(ref, path), {
+			env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
+			...(opts.timeoutMs === undefined ? {} : { timeoutMs: opts.timeoutMs }),
+		}),
+	);
+}
+
+export interface BlobStream {
+	head: Uint8Array;
+	body: ReadableStream<Uint8Array>;
+}
+
+export async function readBlobStreamAtAsync(
+	worktreePath: string,
+	ref: string,
+	path: string,
+	opts: { timeoutMs?: number; signal?: AbortSignal } = {},
+): Promise<BlobStream | null> {
+	if (opts.signal?.aborted) throw new Error("Blob read aborted before it started");
+	const run = gitAsyncStream(worktreePath, blobArgs(ref, path), {
+		env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
+		...(opts.timeoutMs === undefined ? {} : { timeoutMs: opts.timeoutMs }),
+	});
+	const reader = run.stdout.getReader();
+	const abort = () => {
+		void reader.cancel(new Error("Blob read aborted by the client")).catch(() => {});
+	};
+	opts.signal?.addEventListener("abort", abort, { once: true });
+	const chunks: Uint8Array[] = [];
+	let length = 0;
+	while (length < CONTENT_SNIFF_BYTES) {
+		let next: Awaited<ReturnType<typeof reader.read>>;
+		try {
+			next = await reader.read();
+		} catch {
+			opts.signal?.removeEventListener("abort", abort);
+			const exit = await run.exited;
+			return strictBlobFrom({
+				ok: false,
+				out: null,
+				err: exit.err,
+				...(exit.timedOut ? { failure: "timeout" as const } : {}),
+			});
+		}
+		if (opts.signal?.aborted) {
+			opts.signal.removeEventListener("abort", abort);
+			await run.exited;
+			throw new Error("Blob read aborted by the client");
+		}
+		if (next.done || next.value === undefined) break;
+		chunks.push(next.value);
+		length += next.value.byteLength;
+	}
+	const head = new Uint8Array(Math.min(length, CONTENT_SNIFF_BYTES));
+	let offset = 0;
+	for (const chunk of chunks) {
+		const part = chunk.subarray(0, head.byteLength - offset);
+		head.set(part, offset);
+		offset += part.byteLength;
+		if (offset >= head.byteLength) break;
+	}
+	const body = new ReadableStream<Uint8Array>({
+		start(controller) {
+			for (const chunk of chunks) controller.enqueue(chunk);
+		},
+		async pull(controller) {
+			const next = await reader.read();
+			if (next.done) {
+				opts.signal?.removeEventListener("abort", abort);
+				controller.close();
+			} else controller.enqueue(next.value);
+		},
+		cancel(reason) {
+			opts.signal?.removeEventListener("abort", abort);
+			void reader.cancel(reason).catch(() => {});
+		},
+	});
+	return { head, body };
+}
+
+export async function readBlobSizeAtAsync(
+	worktreePath: string,
+	ref: string,
+	path: string,
+): Promise<number | null> {
+	const output = strictBlobFrom(
+		await gitAsync(worktreePath, ["cat-file", "-s", "--", `${ref}:${path}`], {
+			env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
+		}),
+	);
+	if (output === null) return null;
+	if (!/^\d+$/.test(output)) throw new Error("Could not read the file size: invalid git output");
+	const size = Number(output);
+	if (!Number.isSafeInteger(size))
+		throw new Error("Could not read the file size: invalid git output");
+	return size;
+}
+
+export async function readPathModeAtAsync(
+	worktreePath: string,
+	ref: string,
+	path: string,
+): Promise<number | null> {
+	const shown = await gitAsync(worktreePath, ["ls-tree", "-z", ref, "--", path], {
+		raw: true,
+		env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
+	});
+	if (!shown.ok) throw new Error(`Could not read the file mode: ${shown.err || "git failed"}`);
+	if (shown.out === "") return null;
+	const match = /^([0-7]{6}) /.exec(shown.out);
+	if (!match?.[1]) throw new Error("Could not read the file mode: invalid git output");
+	return Number.parseInt(match[1], 8);
 }
 
 function blobIsMissing(stderr: string): boolean {
-	return /does not exist in|exists on disk, but not in/.test(stderr);
+	return /^fatal: path .+ (?:does not exist in|exists on disk, but not in) .+$/s.test(stderr);
 }
 
-function blobFrom(shown: { ok: boolean; out: string; err: string }): string | null {
+function blobFrom<T>(shown: { ok: boolean; out: T; err: string }): T | null {
 	if (shown.ok) return shown.out;
 	if (!blobIsMissing(shown.err)) log.warn("git blob read failed");
 	return null;
 }
 
-async function showBlob(worktreePath: string, ref: string, path: string): Promise<string> {
-	const shown = await gitAsync(worktreePath, ["show", "--end-of-options", `${ref}:${path}`], {
-		raw: true,
-		env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
-	});
+function strictBlobFrom<T>(shown: {
+	ok: boolean;
+	out: T;
+	err: string;
+	failure?: "timeout" | "launch";
+}): T | null {
 	if (shown.ok) return shown.out;
-	if (shown.failure) throw new Error(`Could not read the file diff: ${shown.err || "git failed"}`);
-	if (blobIsMissing(shown.err)) return "";
+	if (!shown.failure && blobIsMissing(shown.err)) return null;
 	throw new Error(`Could not read the file diff: ${shown.err || "git failed"}`);
+}
+
+function worktreeBytes(abs: string): Uint8Array | null {
+	try {
+		return readFileSync(abs);
+	} catch (error) {
+		const code =
+			typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+		if (code === "ENOENT") return null;
+		throw error;
+	}
+}
+
+function diffSide(bytes: Uint8Array | null, path: string): { text: string; meta: ResourceMeta } {
+	const meta = resourceMeta(bytes, path);
+	return { text: bytes !== null && meta.text ? decodeText(bytes) : "", meta };
 }
 
 export async function gitDiffFile(
 	workspaceId: string,
 	path: string,
 	scope?: GitDiffScope,
-): Promise<{ original: string; modified: string }> {
+): Promise<{
+	original: string;
+	modified: string;
+	originalOid: string | null;
+	meta: { original: ResourceMeta; modified: ResourceMeta };
+}> {
 	const ws = workspace(workspaceId);
 	const range = await resolveDiffRange(ws, scope);
 
-	const abs = resolve(ws.worktreePath, path);
-	const rel = relative(ws.worktreePath, abs);
-	if (rel.startsWith("..") || isAbsolute(rel)) throw new Error("Path escapes the worktree");
-
-	const original = range.originalRef
-		? await showBlob(ws.worktreePath, range.originalRef, path)
-		: "";
-
-	if (range.modifiedRef)
-		return { original, modified: await showBlob(ws.worktreePath, range.modifiedRef, path) };
-	let modified = "";
-	try {
-		modified = readFileSync(abs, "utf8");
-	} catch {}
-	return { original, modified };
+	const abs = resolveWorktreeFile(workspaceId, path);
+	const worktreeModified = range.modifiedRef === null ? worktreeBytes(abs) : null;
+	const originalRef = range.resolvedOriginalOid ?? range.originalRef;
+	const [originalBytes, modifiedBytes] = await Promise.all([
+		originalRef ? readBlobBytesAtAsync(ws.worktreePath, originalRef, path) : null,
+		range.modifiedRef
+			? readBlobBytesAtAsync(ws.worktreePath, range.modifiedRef, path)
+			: worktreeModified,
+	]);
+	const original = diffSide(originalBytes, path);
+	const modified = diffSide(modifiedBytes, path);
+	return {
+		original: original.text,
+		modified: modified.text,
+		originalOid: range.resolvedOriginalOid,
+		meta: { original: original.meta, modified: modified.meta },
+	};
 }
 
 const COMMIT_LIST_MAX = 200;

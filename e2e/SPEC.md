@@ -258,7 +258,14 @@ Windows lane into the real profile (see `module-shared`).
   isolation and port-allocation rules, report orchestration, and the public `e2e*` package commands.
   `e2e/fixtures/git.ts` is the one place specs shell out to `git` (`git`, `gitQuiet`, `gitText`, `gitAs`,
   `commitFile`); `gitAs`/`commitFile` pin a throwaway e2e identity so a seeded commit's authorship never
-  depends on the developer machine's real git config.
+  depends on the developer machine's real git config. `e2e/fixtures/pierre.ts` is the one place specs
+  touch `@pierre/diffs`' DOM (`pierreLines`, `pierreLineNumber`, `selectPierreLine`,
+  `pierreCollapsedContext`, `pierreDeletionsSide`): a Pierre release that renames `data-line`,
+  `data-column-number`, `data-unmodified-lines` or `data-deletions` is a one-file repair, and no spec
+  encodes how a line is selected. `e2e/phone-review.spec.ts` is the phone-class gate for the review
+  surface — Pierre file rendering, unified-only diffs, tap-to-comment and inline placement at
+  `PHONE_VIEWPORT` — reached the way the desktop shell reaches a phone today: open at desktop width, then
+  resize and hide the auxiliary stacks.
 - **Consumes:** the built web artifact, the host's public boot/wire behavior, sanctioned server test-fixture
   exports, CLI binary, the locator from [[module-artifact-tests]], shared retrying teardown helper, git,
   Chromium, and Playwright. Standalone native/installer smoke and shared artifact probes are owned by

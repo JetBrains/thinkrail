@@ -10,11 +10,27 @@ export interface SpawnSyncCaptured {
 	stderr: string;
 }
 
-export function spawnSyncCaptured(
-	argv: readonly string[],
-	options: SpawnEnvironment & { timeoutMs?: number; maxBuffer?: number } = {},
-): SpawnSyncCaptured {
-	if (argv.length === 0) return { launched: false, exitCode: null, stdout: "", stderr: "" };
+export interface SpawnSyncCapturedBytes {
+	launched: boolean;
+	exitCode: number | null;
+	stdout: Uint8Array;
+	stderr: string;
+}
+
+export type SpawnSyncOptions = SpawnEnvironment & { timeoutMs?: number; maxBuffer?: number };
+
+interface SpawnSyncRaw {
+	launched: boolean;
+	exitCode: number | null;
+	stdout: Uint8Array;
+	stderr: Uint8Array;
+}
+
+const NO_OUTPUT = new Uint8Array(0);
+
+function spawnSyncRaw(argv: readonly string[], options: SpawnSyncOptions): SpawnSyncRaw {
+	if (argv.length === 0)
+		return { launched: false, exitCode: null, stdout: NO_OUTPUT, stderr: NO_OUTPUT };
 	try {
 		const result = Bun.spawnSync([...argv], {
 			...(options.cwd !== undefined ? { cwd: options.cwd } : {}),
@@ -28,12 +44,38 @@ export function spawnSyncCaptured(
 		return {
 			launched: true,
 			exitCode: result.exitCode,
-			stdout: new TextDecoder().decode(result.stdout),
-			stderr: new TextDecoder().decode(result.stderr),
+			stdout: result.stdout,
+			stderr: result.stderr,
 		};
 	} catch {
-		return { launched: false, exitCode: null, stdout: "", stderr: "" };
+		return { launched: false, exitCode: null, stdout: NO_OUTPUT, stderr: NO_OUTPUT };
 	}
+}
+
+export function spawnSyncCaptured(
+	argv: readonly string[],
+	options: SpawnSyncOptions = {},
+): SpawnSyncCaptured {
+	const result = spawnSyncRaw(argv, options);
+	return {
+		launched: result.launched,
+		exitCode: result.exitCode,
+		stdout: new TextDecoder().decode(result.stdout),
+		stderr: new TextDecoder().decode(result.stderr),
+	};
+}
+
+export function spawnSyncCapturedBytes(
+	argv: readonly string[],
+	options: SpawnSyncOptions = {},
+): SpawnSyncCapturedBytes {
+	const result = spawnSyncRaw(argv, options);
+	return {
+		launched: result.launched,
+		exitCode: result.exitCode,
+		stdout: result.stdout,
+		stderr: new TextDecoder().decode(result.stderr),
+	};
 }
 
 export function spawnDetached(argv: readonly string[], options: SpawnEnvironment = {}): boolean {

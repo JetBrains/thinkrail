@@ -75,7 +75,9 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `github` | read-only local `gh` auth status (shell-out) for the New-Workspace surface | [github/SPEC.md](src/github/SPEC.md) |
 | `branch-review` | best-effort open GitHub PR / GitLab MR number for a workspace branch | [branch-review/SPEC.md](src/branch-review/SPEC.md) |
 | `pr` | `pr.open`: push the workspace branch + open/update its GitHub PR, body rendered from the plan | [pr/SPEC.md](src/pr/SPEC.md) |
-| `fs` | read dirs/files inside a worktree (path-contained) | [fs/SPEC.md](src/fs/SPEC.md) |
+| `fs` | read dirs/files inside a worktree (path-contained) + the one byte classification (text/mime/sha-256) | [fs/SPEC.md](src/fs/SPEC.md) |
+| `changes` | host-owned revert of a hunk or a file's whole change in the worktree, with undo receipts | [changes/SPEC.md](src/changes/SPEC.md) |
+| `trash` | move a path to the OS trash through the bundled helpers (never `unlink`) | [trash/SPEC.md](src/trash/SPEC.md) |
 | `spec` | the worktree's spec-graph snapshot (`spec.graph`) + project-level `projectHasSpecs`, via `pi-spec-graph/core` | [spec/SPEC.md](src/spec/SPEC.md) |
 | `todos` | a chat's per-session TODO plan read/write (`todo.*`), via `pi-todos/core` | [todos/SPEC.md](src/todos/SPEC.md) |
 | `reviews` | draft review comments on files/diffs: store + anchoring + context-package render | [reviews/SPEC.md](src/reviews/SPEC.md) |
@@ -99,12 +101,13 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `history`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`
 - `pr` → `workspaces`, `git`, `todos`, `branch-review` (provider detection + gh-output parsing + the shared CLI runner), `github` (`ghSetupProblem` — the named compare-fallback reason)
 - `projects` → `git` (shared runner), `persistence`
-- `git` → `subprocess` (every child that talks to a network or another CLI)
+- `git` → `subprocess` (every child that talks to a network or another CLI), `fs` (`resourceMeta`/`decodeText` — a diff side's content classification is the same one `fs.readFile` reports)
+- `changes` → `git` (the scope→range resolver + the original side's blob at its resolved oid), `fs` (path containment + byte identity), `persistence` (workspace lookup), `trash` (a revert that removes a file)
 - `github` → `subprocess` (both `gh auth status` probes run under the same bounded runner as `git`/`branch-review`)
 - `git`, `fs`, `spec`, `watch`, `terminal`, `settings`, `analytics`, `feedback` → `persistence` (`spec` also → `pi-spec-graph/core`, external; `analytics` also → the pi-ai built-in provider/model catalog + `posthog-node`, external—the identity-bucketing vocabulary and delivery SDK)
 - `log` → `persistence` (`dataDir`) — and **any feature module (+ `host`) may → `log`**: it is the one
@@ -113,7 +116,8 @@ the host from env via `bootHost` for dev/e2e.
   `log` (would cycle); `initLogging` is called only from `host`'s `bootHost`
 - `todos` → `workspaces` (worktree path lookup) + `pi-todos/core` (external, value-imported, pi-free)
 - `reviews` → `workspaces` (worktree path lookup), `persistence` (data dir), `git` (the review's baseSha
-  resolve, plus the diff range + blob read behind a base-side anchor). The `review.send*` flows are
+  resolve, plus the diff range + blob read behind a base-side anchor), `fs` (the shared byte
+  classification + sha-256 an anchor's `contentHash` is). The `review.send*` flows are
   **composed in `host`'s handlers** (reviews builds the package, `agent` runs the session — no
   `reviews`→`agent` edge; `host` serializes sends *and* review mutations per workspace via
   `reviewLock`, and re-attaches the review's persisted chat via `agent.ensureSessionAttached`), and the
@@ -121,9 +125,10 @@ the host from env via `bootHost` for dev/e2e.
   `host` installs (`agent.setReviewCommentHandler` → `reviews.resolveCommentFromAgent`)
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (the current runtime/auth facade plus candidate prepare/activate; one-way, `agent` never imports `auth`)
-- `agent` → `log`, `persistence` (`dataDir` for delegation plus session lifecycle/receipt load-save operations)
-  — otherwise the pi runtime alone; auth passes desired opaque Central paths through its public generation seam
-- `persistence`, `dialog`, `history`, `templates`, `subprocess` → (leaves)
+- `agent` → `log`, `persistence` (`dataDir` for delegation plus session lifecycle/receipt load-save operations),
+  `trash` (a chat delete's recoverable transcript move) — otherwise the pi runtime alone; auth passes desired
+  opaque Central paths through its public generation seam
+- `persistence`, `dialog`, `history`, `templates`, `subprocess`, `trash` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.
 `agent`'s WS surface (`session.*` + `pi.event` forwarding) attaches to `host`. Features that push on their

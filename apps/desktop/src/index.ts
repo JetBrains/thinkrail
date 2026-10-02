@@ -14,7 +14,7 @@ import { installDesktopApplicationMenu } from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
 import { installExternalNavigation } from "./externalNavigation";
 import { preferNativeHostBridge, usesNativeHostBridge } from "./hostTransport";
-import { nextPageZoom } from "./pageZoom";
+import { createPageZoomGestureHandler, nextPageZoom } from "./pageZoom";
 import {
 	injectInitialDesktopPreferences,
 	readDesktopPreferenceRemove,
@@ -150,6 +150,10 @@ async function start(): Promise<void> {
 		writeReady(windowControlsProbePath, windowControlsProbe);
 	};
 	let mainWindow: BrowserWindow;
+	const handlePageZoomGesture = createPageZoomGestureHandler({
+		getPageZoom: () => mainWindow.getPageZoom(),
+		setPageZoom: (zoom) => mainWindow.setPageZoom(zoom),
+	});
 	const updateController = await createElectrobunUpdateController({
 		isPackaged: Electrobun.app.isPackaged,
 		version,
@@ -202,6 +206,7 @@ async function start(): Promise<void> {
 				pageZoomRequested: ({ action }) => {
 					mainWindow.setPageZoom(nextPageZoom(mainWindow.getPageZoom(), action));
 				},
+				pageZoomGestureRequested: handlePageZoomGesture,
 				routeChanged: ({ hash }) => {
 					if (!neutral) routes.write(BACKEND_PROFILE_ID, WINDOW_ID, hash);
 				},

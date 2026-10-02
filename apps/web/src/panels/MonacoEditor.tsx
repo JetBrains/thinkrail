@@ -1,30 +1,43 @@
-import MonacoReact, { type BeforeMount, type OnMount } from "@monaco-editor/react";
-import type { editor } from "monaco-editor";
-import { useCallback, useEffect, useRef } from "react";
+import MonacoReact, { type OnMount } from "@monaco-editor/react";
+import type { editor } from "monaco-editor/esm/vs/editor/editor.api.js";
+import { use, useCallback, useEffect, useRef, useState } from "react";
+import type { ResourceViewProps, SurfaceReview } from "@/resources";
 import { LoadingRegion } from "../components/Skeleton";
 import { useAppStore } from "../store";
+import { MonacoReviewZones } from "./MonacoReviewZones";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
 import {
-	defineThinkrailTheme,
 	EDITOR_THEME,
-	sharedEditorOptions,
+	fileEditorOptions,
+	languageForPath,
+	monacoSetup,
 	watchThemeSwap,
 } from "./monacoSetup";
-import { applyReviewDecorations } from "./reviewGutter";
-import { attachReviewCommenting, attachReviewThreads } from "./reviewWidgets";
-import type { EditorReview } from "./useReviewCommenting";
+import {
+	applyReviewDecorations,
+	attachReviewCommenting,
+	attachReviewThreads,
+	type MonacoReviewZoneState,
+} from "./reviewWidgets";
 
-const beforeMount: BeforeMount = (m) => defineThinkrailTheme(m);
+function focusLine(review: SurfaceReview): number | null {
+	const range = review.focus?.anchor.selectors.find((selector) => selector.kind === "lineRange");
+	return range?.kind === "lineRange" ? range.startLine : null;
+}
+
+function isEditorViewState(value: unknown): value is editor.ICodeEditorViewState {
+	if (typeof value !== "object" || value === null) return false;
+	return Array.isArray(Reflect.get(value, "cursorState")) && Reflect.has(value, "viewState");
+}
 
 export default function MonacoEditor({
-	path,
+	resource,
 	content,
 	review,
-}: {
-	path: string;
-	content: string;
-	review?: EditorReview;
-}) {
+	viewState,
+	onViewState,
+}: ResourceViewProps) {
+	use(monacoSetup);
 	const fileLineWidth = useAppStore((state) => state.fileLineWidth);
 	const fileLineWidthBounded = useAppStore((state) => state.fileLineWidthBounded);
 	const stopThemeWatchRef = useRef<(() => void) | null>(null);
@@ -33,10 +46,16 @@ export default function MonacoEditor({
 	const threadsRef = useRef<ReturnType<typeof attachReviewThreads> | null>(null);
 	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 	const decorationsRef = useRef<string[]>([]);
-	const reviewRef = useRef(review);
-	reviewRef.current = review;
+	const [reviewZones, setReviewZones] = useState<MonacoReviewZoneState>({
+		threads: [],
+		composer: null,
+	});
+	const onViewStateRef = useRef(onViewState);
+	onViewStateRef.current = onViewState;
 
-	const syncThreads = useCallback((target: EditorReview) => {
+	const closeComposer = useCallback(() => threadsRef.current?.closeComposer(), []);
+	const layoutReviewZones = useCallback(() => threadsRef.current?.layout(), []);
+	const syncThreads = useCallback((target: SurfaceReview) => {
 		if (!editorRef.current) return;
 		threadsRef.current?.setThreads(target.threads);
 		decorationsRef.current = applyReviewDecorations(
@@ -46,27 +65,19 @@ export default function MonacoEditor({
 		);
 	}, []);
 
-	const onMount: OnMount = (codeEditor, m) => {
-		stopThemeWatchRef.current = watchThemeSwap(m, EDITOR_THEME);
+	const onMount: OnMount = (codeEditor) => {
+		stopThemeWatchRef.current = watchThemeSwap();
 		editorRef.current = codeEditor;
 		menuIconsRef.current = decorateEditorContextMenus(codeEditor);
+		if (isEditorViewState(viewState)) codeEditor.restoreViewState(viewState);
 		if (review) {
-			detachRef.current = attachReviewCommenting(codeEditor, {
-				onSave: (s, t) => reviewRef.current?.commenting.onSave(s, t) ?? Promise.resolve(),
-				onSend: (s, t) => reviewRef.current?.commenting.onSend(s, t) ?? Promise.resolve(),
-			});
-			threadsRef.current = attachReviewThreads(codeEditor, {
-				onSendComment: (id) => reviewRef.current?.actions.onSendComment(id) ?? Promise.resolve(),
-				onDeleteComment: (id) =>
-					reviewRef.current?.actions.onDeleteComment(id) ?? Promise.resolve(),
-				onUpdateComment: (id, body) =>
-					reviewRef.current?.actions.onUpdateComment(id, body) ?? Promise.resolve(),
-			});
+			threadsRef.current = attachReviewThreads(codeEditor, setReviewZones);
+			detachRef.current = attachReviewCommenting(codeEditor, threadsRef.current);
 			syncThreads(review);
-			const focus = reviewRef.current?.focus;
-			if (focus) {
-				codeEditor.revealLineInCenter(focus.line);
-				reviewRef.current?.onFocusHandled();
+			const line = focusLine(review);
+			if (line !== null) {
+				codeEditor.revealLineInCenter(line);
+				review.onFocusHandled();
 			}
 		}
 	};
@@ -76,13 +87,17 @@ export default function MonacoEditor({
 	}, [review, syncThreads]);
 
 	useEffect(() => {
-		if (!review?.focus || !editorRef.current) return;
-		editorRef.current.revealLineInCenter(review.focus.line);
+		if (!review || !editorRef.current) return;
+		const line = focusLine(review);
+		if (line === null) return;
+		editorRef.current.revealLineInCenter(line);
 		review.onFocusHandled();
 	}, [review]);
 
 	useEffect(
 		() => () => {
+			const saved = editorRef.current?.saveViewState();
+			if (saved) onViewStateRef.current?.(saved);
 			stopThemeWatchRef.current?.();
 			menuIconsRef.current?.dispose();
 			detachRef.current?.();
@@ -91,16 +106,25 @@ export default function MonacoEditor({
 		[],
 	);
 
+	const text = content.kind === "text" ? content.text : "";
 	return (
-		<MonacoReact
-			height="100%"
-			path={path}
-			value={content}
-			theme={EDITOR_THEME}
-			beforeMount={beforeMount}
-			onMount={onMount}
-			loading={<LoadingRegion rows={12} className="h-full w-full p-12" />}
-			options={sharedEditorOptions(fileLineWidth, fileLineWidthBounded)}
-		/>
+		<>
+			<MonacoReact
+				height="100%"
+				path={resource.path}
+				value={text}
+				language={languageForPath(resource.path)}
+				theme={EDITOR_THEME}
+				onMount={onMount}
+				loading={<LoadingRegion rows={12} className="h-full w-full p-12" />}
+				options={fileEditorOptions(fileLineWidth, fileLineWidthBounded, resource.path)}
+			/>
+			<MonacoReviewZones
+				zones={reviewZones}
+				review={review}
+				onCloseComposer={closeComposer}
+				onRendered={layoutReviewZones}
+			/>
+		</>
 	);
 }

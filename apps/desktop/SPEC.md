@@ -106,7 +106,12 @@ page handlers and yields any chord a handler already claimed with `preventDefaul
 chords end on these keys), then sends a typed one-way request to the main process. A handler that only stops
 propagation also keeps the chord, so zoom is inert while such an input has focus. The main process steps from
 the webview's current native zoom to the adjacent bounded browser-style factor, so zoom changed outside the
-shortcuts (WebView2's Ctrl+wheel) cannot desync it; the web app owns no duplicate shortcut or zoom state.
+shortcuts (WebView2's Ctrl+wheel) cannot desync it.
+
+On macOS, WebKit's two-finger pinch lifecycle drives that same native page zoom continuously. The preload
+yields gestures claimed by page content and forwards validated scales; the main process captures native zoom
+at gesture start and applies each absolute scale against that baseline, bounded to 50%–200%, so updates never
+compound or introduce a second zoom owner. The web app owns no duplicate shortcut, gesture, or zoom state.
 
 ## Native window chrome
 
