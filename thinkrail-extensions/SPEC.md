@@ -102,5 +102,5 @@ the default tool renderer until step 2 — never visualize, whose renderer exist
 
 | extension | pi capability | notes |
 | --- | --- | --- |
-| `visualize` | `@thinkrail/pi-visualize` | `./server` injects the **strict** mermaid validator (`mermaid` at the web renderer's catalog version, initialised through `linkedom` — required: DOMPurify needs a real `document` for flowchart/class/state/gantt/mindmap, verified under Bun). `./web` carries the diagram/comparison cards and exports `MermaidView`. The guarantee is syntax parsing, not SVG/layout success; the browser renderer keeps its fallback. |
+| `visualize` | `@thinkrail.ai/pi-visualize` | `./server` injects the **strict** mermaid validator (`mermaid` at the web renderer's catalog version, initialised through `linkedom` — required: DOMPurify needs a real `document` for flowchart/class/state/gantt/mindmap, verified under Bun). `./web` carries the diagram/comparison cards and exports `MermaidView`. The guarantee is syntax parsing, not SVG/layout success; the browser renderer keeps its fallback. |
 | `web-access` | third-party `pi-web-access` | planned next: wraps the npm package with the existing renderers and `headlessSearchPolicy`, removing the last packager special case. |

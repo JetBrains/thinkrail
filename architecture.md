@@ -48,7 +48,7 @@ packages/pi-subagents          portable pure-pi extension: Agent + get_subagent_
                     pi-delegation (bundled into every ThinkRail parent session by packages/server)
 packages/pi-thinkrail-workflow pi extension: the workflow skill system + its always-on routing rule
                     (bundled into every session; workspace-internal, not portable)
-pi-extensions/*     portable pi packages published to npm as @thinkrail/pi-<name>; work in vanilla pi
+pi-extensions/*     portable pi packages published to npm as @thinkrail.ai/pi-<name>; work in vanilla pi
                     (decided, Decision 20; the pi-* packages above move here per publish wave)
 thinkrail-extensions/*  ThinkRail extensions: a pi capability + ./server and ./web halves, composed by one
                     registry file per side (decided, Decision 21) ── depends on ─▶ pi-extensions/*,
@@ -316,8 +316,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
     [[submodule-server-reviews]].
 
 20. **Portable pi packages are published, scoped, and held to a vanilla-parity bar.** Capabilities the
-    agent can use anywhere live under `pi-extensions/*` and ship to npm as `@thinkrail/pi-<name>` (raw
-    TypeScript, `pi` manifest, `pi-package` keyword; unscoped `pi-*` names collide with third parties).
+    agent can use anywhere live under `pi-extensions/*` and ship to npm as `@thinkrail.ai/pi-<name>` (the npm
+    org is `thinkrail.ai`; private workspace packages stay `@thinkrail/*`; raw TypeScript, `pi` manifest,
+    `pi-package` keyword; unscoped `pi-*` names collide with third parties).
     "Works in vanilla pi" is defined, not assumed: install from the packed tarball into an isolated
     fixture, load through pi's own loader under **Node** (vanilla pi's runtime — ThinkRail runs the same
     code under Bun, so shipped code is dual-runtime), register and execute tools, render in a real
