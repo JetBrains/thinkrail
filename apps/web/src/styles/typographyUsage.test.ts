@@ -29,7 +29,6 @@ const PRIMITIVE_ALLOWLIST = new Set([
 	"panels/monacoSetup.ts",
 	"panels/TerminalInstance.tsx",
 	"thinkrail-extensions/visualize/web/mermaid.ts",
-	"chat/tools/visualize/mermaid.ts",
 ]);
 
 const componentFiles = () => FILES.filter((p) => !PRIMITIVE_ALLOWLIST.has(rel(p)));

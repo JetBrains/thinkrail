@@ -273,7 +273,7 @@ Row / message renderers (all in `chat/turns.tsx` unless noted):
 - **Responsibility:** render one tool call; "card" chrome uses `ToolCard`, "bare" chrome owns its own
   frame.
 
-Built-in tool renderers (in `chat/tools/`):
+Built-in tool renderers (in `chat/tools/` unless noted):
 
 | Canonical name | Implementation | Prominence | Responsibility |
 |---|---|---|---|
@@ -282,7 +282,7 @@ Built-in tool renderers (in `chat/tools/`):
 | Write Card | `ReadCard.tsx` → `WriteCard` | routine | File write |
 | Edit Card | `EditCard.tsx` → `EditCard` | routine | Edit (removed/added line diff) |
 | Ask-User-Question Card | `AskUserQuestionCard.tsx` → `AskUserQuestionCard` | primary, "bare" | Inline questionnaire |
-| Visualization Card | `tools/visualize/` → `VisualizationCard` | primary, expanded | Mermaid diagram / comparison cards |
+| Visualization Card | `thinkrail-extensions/visualize/web/` → `VisualizationCard` | primary, expanded | Mermaid diagram / comparison cards |
 | Web Card(s) | `tools/web/` | routine | Search/fetch renderers |
 | Default Tool Renderer | `DefaultToolRenderer` | routine | Fallback for unregistered tools |
 
@@ -425,21 +425,21 @@ are the Top Bar's Connection Status and the Chat Header's Session Stats Bar.
 
 # Shared UI Primitives
 
-The reusable building blocks (shadcn/ui, Radix), owned under `apps/web/src/components/ui/` and themed with
-ThinkRail tokens. Imported per-file (no barrel).
+The reusable building blocks (shadcn/ui, Radix), owned under `packages/ui/` and themed with
+ThinkRail tokens. Imported per-file as `@thinkrail/ui/<primitive>` (no barrel).
 
 | Canonical name | Implementation | Notes |
 |---|---|---|
-| Button | `components/ui/button.tsx` | `default` / `destructive` / `outline` / `ghost` |
-| Dialog (Modal) | `components/ui/dialog.tsx` | The **Modal** primitive; optional `hideClose` |
-| Dropdown Menu | `components/ui/dropdown-menu.tsx` | Height-bounded, scrollable menu; submenu via `DropdownMenuSub*` |
-| Context Menu | `components/ui/context-menu.tsx` | Right-click menu; shares `menu-styles.ts` with Dropdown Menu |
-| Popover | `components/ui/popover.tsx` | Optional `container` portal target |
-| Command | `components/ui/command.tsx` | cmdk combobox body |
-| Textarea | `components/ui/textarea.tsx` | |
-| Tooltip | `components/ui/tooltip.tsx` | |
-| Resizable | `components/ui/resizable.tsx` | `ResizablePanelGroup` / `ResizablePanel` / `ResizableHandle` |
-| Toast | `components/ui/toast.tsx` | Presentational; the store owns the queue |
+| Button | `packages/ui/button.tsx` | `default` / `destructive` / `outline` / `ghost` |
+| Dialog (Modal) | `packages/ui/dialog.tsx` | The **Modal** primitive; optional `hideClose` |
+| Dropdown Menu | `packages/ui/dropdown-menu.tsx` | Height-bounded, scrollable menu; submenu via `DropdownMenuSub*` |
+| Context Menu | `packages/ui/context-menu.tsx` | Right-click menu; shares `menu-styles.ts` with Dropdown Menu |
+| Popover | `packages/ui/popover.tsx` | Optional `container` portal target |
+| Command | `packages/ui/command.tsx` | cmdk combobox body |
+| Textarea | `packages/ui/textarea.tsx` | |
+| Tooltip | `packages/ui/tooltip.tsx` | |
+| Resizable | `packages/ui/resizable.tsx` | `ResizablePanelGroup` / `ResizablePanel` / `ResizableHandle` |
+| Toast | `packages/ui/toast.tsx` | Presentational; the store owns the queue |
 | Error Boundary | `components/ErrorBoundary.tsx` → `ErrorBoundary` | Per-region crash containment |
 
 App-level dialog/popover instances built on those primitives:
@@ -459,10 +459,10 @@ App-level dialog/popover instances built on those primitives:
 
 - **Modal** = the **Dialog** primitive. There is no separate `Modal` component; "Modal" is the generic
   term, "Dialog" is the implementation.
-- **Context Menu** — two shapes co-exist. The **Context Menu** primitive (`components/ui/context-menu.tsx`,
+- **Context Menu** — two shapes co-exist. The **Context Menu** primitive (`packages/ui/context-menu.tsx`,
   Radix) backs the Project Row's right-click menu; older right-click surfaces (the Change-Row Actions menu)
   are still the **Dropdown Menu** primitive plus a shared right-click handler — call that one the
-  "Row Actions Menu". Both wear the same look via `components/ui/menu-styles.ts`.
+  "Row Actions Menu". Both wear the same look via `packages/ui/menu-styles.ts`.
 - **Drawer** — there is **no drawer** primitive or component. The mobile single-view shell is designed
   but not built; do not use "Drawer" for any current region. The **Resources Inspector** is an in-place
   non-modal **Dialog** (`DialogPanel`), not a drawer.

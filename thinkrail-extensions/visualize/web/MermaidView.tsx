@@ -2,7 +2,6 @@ import { RiFullscreenLine as Maximize2 } from "@remixicon/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { onThemeSwap } from "@thinkrail/ui/theme";
 import { type ReactNode, useEffect, useState } from "react";
-import { CodeBlock } from "../CodeBlock";
 import { renderMermaid } from "./mermaid";
 import { PanZoomView } from "./PanZoomView";
 
@@ -48,7 +47,9 @@ export function MermaidView({
 				<span className="text-feedback-error tr-text-metadata">
 					Diagram failed to render: {error}
 				</span>
-				<CodeBlock code={source} lang="" />
+				<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-header-bg p-8 tr-code-text text-text-default">
+					{source}
+				</pre>
 			</div>
 		);
 	}

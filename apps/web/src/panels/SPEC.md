@@ -151,7 +151,7 @@ treatment.
   last-intent generation shared by both mounted `useOpenProject` instances. The flow rechecks that generation
   after each picker, open, inspect, init, and adoption await, so a manual path or recent selection from either
   surface supersedes any older flow before it can select a project or raise a stale dialog.
-  These are modals on `components/ui/dialog` (the init offer has no on-screen anchor, unlike the Remove
+  These are modals on `@thinkrail/ui/dialog` (the init offer has no on-screen anchor, unlike the Remove
   popover); `NoticeDialog` remains the single-button
   surface for failures with no recovery inside that notice. The hook returns a `dialogs` node each consumer
   renders. **Selecting a
@@ -940,7 +940,7 @@ own section. The kebab menu (`plan-menu`, a
   fetches + hydrates a disk-only one — the reopen flow's two cases above, plus a third case for an
   already-open tab — leaving `ChatView` to consume the request for the scroll + flash (`chat/SPEC.md`'s
   Jump-to-message bullet). **`Toaster`** is the app-wide toast host the shell mounts once: it subscribes to `store.toasts` and
-  renders each via the `components/ui/toast` primitives, letting Radix own the auto-timeout + swipe/hover-pause
+  renders each via the `@thinkrail/ui/toast` primitives, letting Radix own the auto-timeout + swipe/hover-pause
   and routing every close back through `store.dismissToast` (so the store stays the single source of truth).
   Errors persist until dismissed; success/info time out. The **integration piece** — the primitives stay
   presentational.
@@ -949,7 +949,7 @@ own section. The kebab menu (`plan-menu`, a
   Monaco/shiki/xterm stay lazy. Tab strips, group headers, side stacks, and center topology are not panel
   surfaces; the shell layout module wraps these renderers.
 - **Allowed deps:** `store`, `transport`, `components` (`SkeletonRows` — every async panel's pending
-  state renders content-shaped skeleton rows, never a bare "Loading…" line), `components/ui` (incl. `popover`/`command`/`textarea` for the
+  state renders content-shaped skeleton rows, never a bare "Loading…" line), `@thinkrail/ui/*` (incl. `popover`/`command`/`textarea` for the
   dialog), `chat` (`ModelEffortPicker` + the `useModelCatalog`/`useModelPreferences` hooks that feed it,
   reused by `NewWorkspaceDialog`; `ModelSelector`/`ThinkingSelector`, still mounted by
   `ReviewSettings`/`ModelsSettings`; `modelPicker`'s `AUTH_KIND_LABEL`, the one connection-kind vocabulary
@@ -1400,8 +1400,9 @@ own section. The kebab menu (`plan-menu`, a
   percent-encoded `data:image/svg+xml` URL; SVG source never enters the document's HTML stream. The frame
   has no script or same-origin capability and a CSP of `default-src 'none'; img-src data:; style-src
   'unsafe-inline'`, so SVG scripts and external references remain inert. The document receives only
-  resolved workspace/content background and foreground semantic token values and is rebuilt after
-  `themes.onThemeSwap`. Transparent in-process region overlays continue to place existing region threads.
+  resolved workspace/content background and foreground semantic token values and is rebuilt via
+  `onThemeSwap` from `@thinkrail/ui/theme`. Transparent in-process region overlays continue to place
+  existing region threads.
   SVG element source spans are not mapped yet, so authoring refuses positional geometry and offers a
   clearly labelled whole-file draft (`selectors: []`, label `file`) rather than attaching a whole-document
   line range. Its diff uses the same four visual modes and two anchor spaces as raster images; each side's
@@ -1562,7 +1563,7 @@ own section. The kebab menu (`plan-menu`, a
   nothing else: the panel is **read-only** — no discard-file/-folder/-all — and no “Open in ‹external app›”,
   which a host-side `open` would make silently wrong for every remote/phone client (Copy path is the portable
   escape hatch). **Folder rows get no menu** — nothing in that list applies to a folder. Built on the existing
-  `components/ui/dropdown-menu` (no new `context-menu` primitive); the right-click handler is handed back
+  `@thinkrail/ui/dropdown-menu` (no new `context-menu` primitive); the right-click handler is handed back
   through a render prop so it lands on the row's real interactive element rather than a bare div, and the `⌄`
   trigger is a *sibling* of the row's button (a button inside a button is invalid).
   Three layout rules make that wrapper invisible rather than a seam — each pinned by a geometric e2e

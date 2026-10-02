@@ -22,7 +22,7 @@ geometry, and submit actions; this module makes those inputs behave the same onc
   the template-pick controller that refuses to overwrite a draft changed after selection.
 - **Public surface:** `index.ts` is the only import path and re-exports the command-completion, template-text,
   template-pick, template-slot, and caret/selection-restoration (`usePendingSelection`) APIs.
-- **Allowed deps:** `contracts` types, React, and `lib` presentation helpers.
+- **Allowed deps:** `contracts` types, React, and `@thinkrail/ui/utils` (`cn`).
 - **Forbidden:** store or transport access; workspace/session/project lookup; deciding which commands exist in a
   lifecycle; sending a prompt; importing `chat` or `panels`.
 

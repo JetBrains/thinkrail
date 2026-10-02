@@ -234,8 +234,6 @@ function allowedEdge(rule: ModuleRule, target: string): boolean {
 	return target === rule.root || rule.allowed.includes(target);
 }
 
-// Public entry names and source files/directories share the same half identity.
-// The SDK uses src/web.ts + src/server.ts; extensions use web/** + server/**.
 function sourceHalf(subpath: string): "web" | "server" | undefined {
 	const match = /^(web|server)(?:\/|$|\.[cm]?[jt]sx?$)/.exec(subpath);
 	return match?.[1] as "web" | "server" | undefined;

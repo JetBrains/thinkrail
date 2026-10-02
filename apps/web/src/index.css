@@ -7,7 +7,7 @@
 @import "./styles/global.css";
 
 @source "../../../packages/ui";
-@source "../../../thinkrail-extensions/*/web";
+@source "../../../thinkrail-extensions/*/web/**/*.{ts,tsx}";
 
 /*
  * Map the ThinkRail design tokens (tokens.css) onto Tailwind's theme namespaces. `inline` makes the

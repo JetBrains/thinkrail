@@ -32,7 +32,7 @@ not here — `auth` stays presentational + types, so nothing here imports `store
     **"Connect"**, not "Sign in" — one dialog serves OAuth and API-key entry alike. Themed with token
     utilities only; `@remixicon/react` icons; shadcn `Dialog`/`Button`.
 - **Public surface (barrel `index.ts`):** `LoginDialog`; `LoginState`/`LoginInput*` (types).
-- **Allowed deps:** `components/ui` (`Dialog`/`Button`). (The state types need no imports.)
+- **Allowed deps:** `@thinkrail/ui/dialog` and `@thinkrail/ui/button`. (The state types need no imports.)
 - **Forbidden:** importing `store`/`transport` (the dialog stays presentational — the **panel** is the
   integration piece, exactly as `chat/ChatView` is for the chat renderers); any `pi`/`server` import.
 

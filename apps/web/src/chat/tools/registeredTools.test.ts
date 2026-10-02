@@ -2,9 +2,12 @@ import { describe, expect, it } from "bun:test";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { registerWebExtensions } from "@/extensions";
 import { DefaultToolRenderer, getToolRenderer, getToolSummary } from "../toolRegistry";
 import "./register";
 import { specToolPaths, splitKnownPathReferences } from "./SpecToolCard";
+
+registerWebExtensions();
 
 const INTENTIONAL_TOOLS = [
 	"read",

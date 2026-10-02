@@ -113,7 +113,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   anchor activation cannot escape into the SPA fallback. That override keeps a stable component identity
   while its workspace inputs are unchanged: workbench focus can rerender a chat row between pointer-down and
   click, and replacing the control in that interval cancels activation. A fenced
-  ```mermaid block renders as a themed diagram via `tools/visualize`'s `MermaidView` (fullscreen
+  ```mermaid block renders as a themed diagram via `@thinkrail/ext-visualize/web`'s `MermaidView` (fullscreen
   pan-zoom, error → source fallback) — uniform across every `Markdown` surface (chat, file/specs
   preview); until mounted it renders as highlighted source, so static contexts (`RenderedDiff`'s
   `renderToStaticMarkup`) degrade to code exactly like shiki blocks do.
@@ -777,7 +777,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   list instead of beside it (list first in source order, so a column flex stack already places it
   there), each pane independently scrollable within its own height budget. The **scope badge**
   (`data-testid="history-scope"`, unchanged `<scope> ⌃R` label + `data-scope`) is now also a
-  `components/ui/dropdown-menu` trigger: its content lists all four scopes in cycle order
+  `@thinkrail/ui/dropdown-menu` trigger: its content lists all four scopes in cycle order
   (`data-testid="history-scope-option"` + `data-scope`, fuller labels than the badge itself — "This
   chat" / "Workspace" / "Project" / "Everywhere" — with the current one check-marked). Picking one
   calls `useHistorySearch.ts`'s new `setScope(kind)`, which resets the results selection exactly like
@@ -1293,9 +1293,10 @@ Unknown custom messages retain their existing behavior.
   pass still answers — with a list to render, not a verdict), and dropped by the next `model.list` install
   from *any* consumer. `model.list` answers from *before* the
   detached refresh it triggers, so it is never a basis for concluding a model is gone);
-  `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid`
-  (**lazy, `tools/visualize` only** — `Markdown` consumes the `MermaidView` *component*, never the
-  package); `react-virtuoso`; `@remixicon/react`; `components/ui`; `components/useNow`; `lib`.
+  `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `@thinkrail/ext-visualize/web`
+  (`Markdown` consumes `MermaidView`; `mermaid` stays lazy inside the extension);
+  `@thinkrail/extension-api/web`; `react-virtuoso`; `@remixicon/react`; `@thinkrail/ui/*`;
+  `components/useNow`; `lib`.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
   `store`/`transport` (only the app-integration files enumerated above may — keep the renderers reusable).
 - **`ChatView`** is the primary app-integration file: wires this session's runtime

@@ -335,7 +335,15 @@ browser-local persistence, and cross-browser isolation without involving a provi
 coverage seeds one canonical giant Markdown block and drives real coarse wheel input so initial virtual
 geometry cannot clamp before the row mounts. Chat-title coverage uses persisted Pi transcripts to prove the
 native `/name` path, open-tab and closed-history inline rename paths, keyboard focus recovery, bounded
-long-history scrolling, and reload durability without involving a provider. Questionnaire paging uses
+long-history scrolling, and reload durability without involving a provider. Visualize coverage
+(`visualize.spec.ts`) independently seeds short historical tool-call/result transcripts through the
+sanctioned session fixture before workspace entry. It pins completed/default-expanded diagrams,
+fullscreen SVG growth, pan/reset/Escape and claimed WebKit pinch gestures, exact comparison pros/cons
+and recommendation, and assistant mermaid fences alongside tool diagrams re-rendering to the host's
+`--container-elevated-bg` after selecting a discovered opposite appearance in real settings. Malformed
+source is seeded as a successful historical tool result (`isError: false`) so both tool and chat exercise
+the renderer's plain-source fallback, not the tool-error branch. These regressions need no provider,
+prompt submission, route mock, or screenshot. Questionnaire paging uses
 canonical persisted tool-call/ack fixtures to pin six-question rounds beyond four, tall-page reveal,
 fresh-chat restored-page reveal, visible review focus, and coarse-pointer focus
 without provider variability; desktop package tests separately pin the stable

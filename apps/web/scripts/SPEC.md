@@ -37,8 +37,11 @@ they are *generators*: they use `node:fs` and `node:path`, which must never reac
 
 `designSources.ts` owns the shared adoption-guard scan: app source, `packages/ui`, and every
 `thinkrail-extensions/*/web` source tree, excluding tests, generated output, and installed dependencies.
-The same SDK/extension roots are explicit Tailwind `@source` directives in the app stylesheet. Each
-token `*:check` command checks generated output and its corresponding adoption guard, so moving a primitive
+The same SDK/extension roots are explicit Tailwind `@source` directives in the app stylesheet. Extension
+sources name recursive file globs: a wildcard directory ending in `*/web` alone does not discover the
+nested files, silently dropping extension-only classes such as fullscreen zoom. The browser zoom probe
+checks rendered dimensions, not just the zoom label, to pin actual CSS generation. Each token `*:check`
+command checks generated output and its corresponding adoption guard, so moving a primitive
 out of the app cannot hide token misuse or make a live token look unused.
 
 Public surface: the `typography.ts`, `colors.ts`, `spacing.ts`, `providerGlyphs.ts`, `generatedFiles.ts` and `designSources.ts` exports. There is no `index.ts` barrel — the CLIs are entry points

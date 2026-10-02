@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { registerWebExtensions } from "@/extensions";
 import "./tools/register";
 import {
 	estimateChatRowHeight,
@@ -6,6 +7,8 @@ import {
 	estimateMarkdownHeight,
 } from "./rowHeightEstimates";
 import { type ChatRow, projectRows } from "./rows";
+
+registerWebExtensions();
 
 const paragraph =
 	"A realistic assistant response explains the decision in complete sentences, connects each detail to the next, and leaves enough prose to wrap across several lines in the chat transcript.";

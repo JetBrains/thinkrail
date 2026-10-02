@@ -9,7 +9,6 @@ import { RequestReviewCard, requestReviewSummary } from "./RequestReviewCard";
 import { ResolveCommentCard } from "./ResolveCommentCard";
 import { SpecToolCard, specToolSummary } from "./SpecToolCard";
 import "./subagent/register";
-import "./visualize/register";
 import "./web/register";
 import { WriteCard } from "./WriteCard";
 

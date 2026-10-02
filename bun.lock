@@ -68,6 +68,7 @@
         "@shikijs/langs": "4.2.0",
         "@shikijs/monaco": "4.2.0",
         "@thinkrail/contracts": "workspace:*",
+        "@thinkrail/ext-visualize": "workspace:*",
         "@thinkrail/extension-api": "workspace:*",
         "@thinkrail/ui": "workspace:*",
         "@xterm/addon-clipboard": "0.2.0",
@@ -77,7 +78,6 @@
         "@xterm/xterm": "6.0.0",
         "diff": "8.0.4",
         "jsondiffpatch": "0.7.3",
-        "mermaid": "catalog:",
         "monaco-editor": "0.55.1",
         "node-htmldiff": "0.9.4",
         "pdfjs-dist": "5.4.449",
@@ -416,6 +416,22 @@
         "@earendil-works/pi-coding-agent": "*",
         "@earendil-works/pi-tui": "*",
         "typebox": "*",
+      },
+    },
+    "thinkrail-extensions/visualize": {
+      "name": "@thinkrail/ext-visualize",
+      "version": "0.0.0",
+      "dependencies": {
+        "@remixicon/react": "catalog:",
+        "@thinkrail/extension-api": "workspace:*",
+        "@thinkrail/ui": "workspace:*",
+        "mermaid": "catalog:",
+        "react": "catalog:",
+      },
+      "devDependencies": {
+        "@types/bun": "catalog:",
+        "@types/react": "catalog:",
+        "typescript": "catalog:",
       },
     },
   },
@@ -1140,6 +1156,8 @@
     "@thinkrail/contracts": ["@thinkrail/contracts@workspace:packages/contracts"],
 
     "@thinkrail/desktop": ["@thinkrail/desktop@workspace:apps/desktop"],
+
+    "@thinkrail/ext-visualize": ["@thinkrail/ext-visualize@workspace:thinkrail-extensions/visualize"],
 
     "@thinkrail/extension-api": ["@thinkrail/extension-api@workspace:packages/extension-api"],
 

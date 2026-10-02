@@ -29,6 +29,7 @@ import {
 } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useNow } from "@/components/useNow";
+import { registerWebExtensions } from "@/extensions";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
 	EMPTY_RUNTIME,
@@ -89,6 +90,8 @@ import { useChatTodos } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
 import { useTranscriptSync } from "./useTranscriptSync";
 import { advanceVirtualRows, initialVirtualRows } from "./virtualRows";
+
+registerWebExtensions();
 
 const TRY_AGAIN_PROMPT = "Try again.";
 const CHAT_VIEWPORT_INCREASE = 800;
