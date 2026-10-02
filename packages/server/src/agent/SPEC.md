@@ -164,7 +164,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     is reconstructed from the complete active branch; a file read/parse failure fails the all-workspace
     snapshot rather than omitting a row. Receipt initialization runs unless both metadata files load (first
     install, or a file persistence set aside as unreadable, which is logged): it marks existing completion
-    ids handled but never suppresses unresolved input. Receipt writes are serialized and atomic.
+    ids handled but never suppresses unresolved input. Because it runs before serving, it is the one
+    best-effort reader: an unreadable transcript or session directory is logged and left unbaselined
+    instead of blocking host startup, while the later snapshot keeps failing until the file is repaired.
+    Receipt writes are serialized and atomic.
     Sessions publish full state records on semantic change. Pending extension dialogs retain their
     full request so reconnecting clients can render and answer the exact blocker rather than seeing an
     unusable needs-input marker.
