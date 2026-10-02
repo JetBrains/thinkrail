@@ -19,4 +19,7 @@ mkdirSync(destination, { recursive: true });
 const tarball = relative(repoRoot, packPiPackage(pkg, destination));
 console.log(`packed ${pkg.name}@${pkg.version} → ${tarball}`);
 console.log("\nbootstrap publish (needs npm login with 2FA as an owner of the npm org):");
-console.log(`  npm publish ${tarball} --access public`);
+console.log(`  npm publish ${tarball} --access public --provenance=false`);
+console.log(
+	"(--provenance=false overrides the manifest's publishConfig for this one manual publish; CI keeps provenance via OIDC)",
+);

@@ -71,16 +71,16 @@ export function run(command: string, args: string[], cwd: string): string {
 	return result.stdout;
 }
 
+export function tarballName(pkg: PiPackage): string {
+	return `${pkg.name.replace(/^@/, "").replace("/", "-")}-${pkg.version}.tgz`;
+}
+
 export function packPiPackage(pkg: PiPackage, destination: string): string {
-	const before = new Set(existsSync(destination) ? readdirSync(destination) : []);
-	run("bun", ["pm", "pack", "--destination", destination], pkg.dir);
-	const created = readdirSync(destination).filter(
-		(name) => name.endsWith(".tgz") && !before.has(name),
-	);
-	if (created.length !== 1) {
-		throw new Error(`expected one tarball from ${pkg.name}, got ${created.join(", ") || "none"}`);
-	}
-	return join(destination, created[0] as string);
+	const tarball = join(destination, tarballName(pkg));
+	run("bun", ["pm", "pack", "--filename", tarball], pkg.dir);
+	if (!existsSync(tarball))
+		throw new Error(`bun pm pack did not produce ${tarball} for ${pkg.name}`);
+	return tarball;
 }
 
 export function publishedVersions(name: string): Set<string> {

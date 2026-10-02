@@ -78,12 +78,15 @@ early while any changeset is still pending (versions not bumped yet) and otherwi
 **dependencies before dependents**, each package whose version is not yet on npm: `bun pm pack`
 (rewrites `workspace:*`/`catalog:` to exact versions, satisfying Decision 10) → `npm publish <tgz>
 --provenance --access public` under npm Trusted Publishing (Bun has no OIDC auth; npm ≥ 11.5.1) →
-`changeset tag` + push only when at least one package was actually published (the script reports
-`published=true|false` to the workflow, so an early exit never tags the placeholder `0.0.0`).
+`changeset tag` + push only when the script reports `readyToTag=true`: no pending changesets, not a dry
+run, and every current public version is on npm (published now or earlier, e.g. by the manual
+bootstrap). An early exit therefore never tags the placeholder `0.0.0`, and `changeset tag`'s skip of
+existing tags makes a retry after a failed tag push safe.
 
 Trusted Publishing is configured per *existing* package, so each new package gets one manual bootstrap
-publish first: `bun run release:pack <dir>` packs it and prints the `npm publish` command for an npm-org
-owner.
+publish first: `bun run release:pack <dir>` packs it and prints the `npm publish … --provenance=false`
+command for an npm-org owner (the manifest's `publishConfig.provenance` would otherwise make a local
+publish fail; only CI can attest).
 
 Order: visualize → delegation + subagents → background-commands → spec-graph → todos. Not published:
 `pi-thinkrail-workflow` (workspace-internal), `pi-dag` (until it has a consumer).

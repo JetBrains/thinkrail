@@ -15,9 +15,12 @@ import {
 const dryRun = process.argv.includes("--dry-run");
 const outputFile = process.argv[process.argv.indexOf("--github-output") + 1];
 
-function report(published: number): void {
+function report(published: number, readyToTag: boolean): void {
 	if (process.argv.includes("--github-output") && outputFile) {
-		appendFileSync(outputFile, `published=${!dryRun && published > 0}\n`);
+		appendFileSync(
+			outputFile,
+			`published=${!dryRun && published > 0}\nreadyToTag=${!dryRun && readyToTag}\n`,
+		);
 	}
 }
 
@@ -34,16 +37,18 @@ if (pendingChangesets.length > 0) {
 const packages = dependenciesFirst(publishablePiPackages());
 if (packages.length === 0) {
 	console.log("publish-pi-packages: nothing to publish");
-	report(0);
+	report(0, false);
 	process.exit(0);
 }
 
 const scratch = mkdtempSync(join(tmpdir(), "thinkrail-pi-publish-"));
 let published = 0;
+let onNpm = 0;
 try {
 	for (const pkg of packages) {
 		if (publishedVersions(pkg.name).has(pkg.version)) {
 			console.log(`  = ${pkg.name}@${pkg.version} already on npm`);
+			onNpm += 1;
 			continue;
 		}
 		const tarball = packPiPackage(pkg, scratch);
@@ -58,5 +63,5 @@ try {
 } finally {
 	rmSync(scratch, { recursive: true, force: true });
 }
-report(published);
+report(published, onNpm + published === packages.length);
 console.log(`publish-pi-packages: ${published} package(s) ${dryRun ? "would be " : ""}published`);

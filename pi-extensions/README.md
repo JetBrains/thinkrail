@@ -53,14 +53,18 @@ checklist.
    are bumped automatically when their dependency releases.
 2. **To cut the release**, a maintainer on a fresh branch runs
    ```bash
-   bun run release:version  # changeset version + bun install (lockfile)
+   GITHUB_TOKEN="$(gh auth token)" bun run release:version  # changeset version + bun install (lockfile)
    ```
+   (the GitHub changelog generator needs a token to look up PR/author links; it does not read `gh`'s
+   credentials by itself)
    and opens an ordinary PR `chore(release): version pi packages`. It carries the version bumps and
    `CHANGELOG.md` entries and consumes the changeset files. Normal CI runs on it.
 3. **On merge to `main`**, `.github/workflows/release-pi-packages.yml` re-runs the parity gate, publishes
-   every package whose version is not on npm yet (dependencies first), and pushes `name@version` tags.
-   The job runs in the `npm-release` GitHub environment with OIDC — there are no npm tokens anywhere.
-   While any changeset is still pending the job exits early with "nothing to publish".
+   every package whose version is not on npm yet (dependencies first), and pushes `name@version` tags
+   once every current version is on npm — including versions that were published manually (bootstrap)
+   and tags missed by an earlier failed push. The job runs in the `npm-release` GitHub environment with
+   OIDC — there are no npm tokens anywhere. While any changeset is still pending the job exits early
+   with "nothing to publish" and tags nothing.
 
 `bun run release:publish -- --dry-run` shows locally what the workflow would publish.
 
@@ -72,8 +76,11 @@ version is published by a human who owns the `thinkrail.ai` npm org:
 ```bash
 bun run release:pack <dir>                      # e.g. visualize → dist/pi-packages/<name>-<version>.tgz
 npm login                                       # org owner, 2FA
-npm publish dist/pi-packages/<tarball> --access public
+npm publish dist/pi-packages/<tarball> --access public --provenance=false
 ```
+
+`--provenance=false` is required for this one manual publish: the manifest's `publishConfig` asks for
+provenance, which only a CI provider can generate. The automated release keeps provenance.
 
 Then, on npmjs.com → the package → **Settings → Trusted Publisher → GitHub Actions**:
 
