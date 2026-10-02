@@ -22,9 +22,14 @@ Durable host state—projects, workspaces, cross-frontend app config, terminal c
 
 Session metadata writes are complete-copy temp-file replacements. Lifecycle persists only facts a transcript
 cannot prove—`agent_settled` outcome and explicit Stop—keyed to the active run/completion ids; stale records
-never apply to a newer turn. A missing receipt file receives one pre-serving baseline of existing completion
-ids so history does not light up; unresolved input is never baselined. Corruption/failure is conservative:
-it may resurface or retain completion attention but never silently records unseen work as read.
+never apply to a newer turn. Loads report each file as loaded, missing, or set aside. Unless both files
+load, the owner runs one pre-serving baseline of existing completion ids so history does not light up;
+unresolved input is never baselined. An unreadable file (I/O, parse, or schema failure) never blocks host
+startup: it is renamed to `<file>.corrupt-<epoch-ms>` for diagnosis (best effort) and treated as missing, so
+the re-baseline marks existing completions read. Trading possibly-unseen attention for a bootable host is
+deliberate: a v0.2.0-nightly.16 host refused to start on a bad `session-receipts.json` until the user deleted
+it. Write failures stay conservative: they may resurface or retain attention but never record unseen work as
+read.
 
 Analytics config preserves a saved boolean preference and a valid `analyticsConsentConfirmed` boolean
 independently; absent/malformed values default false. A preference-only write never implies completion.
