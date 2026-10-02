@@ -4,7 +4,14 @@ import {
 	type Theme,
 	type ToolRenderResultOptions,
 } from "@earendil-works/pi-coding-agent";
-import { type Component, Markdown, Text, visibleWidth } from "@earendil-works/pi-tui";
+import {
+	type Component,
+	Markdown,
+	Text,
+	TruncatedText,
+	truncateToWidth,
+	visibleWidth,
+} from "@earendil-works/pi-tui";
 import { mermaidFence } from "./markdown.ts";
 import { renderBoxDrawing } from "./probe.ts";
 import type { VisualizeParams } from "./schema.ts";
@@ -19,7 +26,7 @@ export function callSummary(args: Partial<VisualizeParams> | undefined): string 
 }
 
 export function renderVisualizeCall(args: VisualizeParams, theme: Theme): Component {
-	return new Text(
+	return new TruncatedText(
 		theme.fg("toolTitle", theme.bold("visualize ")) + theme.fg("accent", callSummary(args)),
 		0,
 		0,
@@ -79,7 +86,10 @@ export class DiagramComponent implements Component {
 		if (this.cachedLines && this.cachedWidth === width) return this.cachedLines;
 		const lines: string[] = [];
 		if (this.title) {
-			lines.push(this.theme.fg("toolTitle", this.theme.bold(this.title)), "");
+			lines.push(
+				truncateToWidth(this.theme.fg("toolTitle", this.theme.bold(this.title)), width),
+				"",
+			);
 		}
 		const drawing = this.boxDrawing();
 		const fence = markdown(mermaidFence(undefined, this.source));

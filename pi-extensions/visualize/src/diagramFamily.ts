@@ -9,17 +9,20 @@ const HEADERS: ReadonlyArray<readonly [RegExp, DiagramFamily]> = [
 	[/^xychart(?:-beta)?\b/i, "xychart"],
 ];
 
-function headerLine(source: string): string {
-	for (const raw of source.split("\n")) {
-		const line = raw.trim();
-		if (line === "" || line.startsWith("%%")) continue;
-		return line;
-	}
-	return "";
+function isPreamble(line: string): boolean {
+	const trimmed = line.trim();
+	return trimmed === "" || trimmed.startsWith("%%");
+}
+
+export function withoutPreamble(source: string): string {
+	const lines = source.split("\n");
+	let start = 0;
+	while (start < lines.length && isPreamble(lines[start] as string)) start += 1;
+	return lines.slice(start).join("\n");
 }
 
 export function diagramFamily(source: string): DiagramFamily | undefined {
-	const header = headerLine(source);
+	const header = withoutPreamble(source).split("\n")[0]?.trim() ?? "";
 	for (const [pattern, family] of HEADERS) {
 		if (pattern.test(header)) return family;
 	}

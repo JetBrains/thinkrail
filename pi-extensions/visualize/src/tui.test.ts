@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { initTheme, type Theme } from "@earendil-works/pi-coding-agent";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
-import { diagramFamily } from "./diagramFamily.ts";
+import { diagramFamily, withoutPreamble } from "./diagramFamily.ts";
 import { renderBoxDrawing } from "./probe.ts";
 import {
 	callSummary,
@@ -35,6 +35,15 @@ describe("diagramFamily", () => {
 		expect(diagramFamily("xychart-beta\n x-axis [a]")).toBe("xychart");
 	});
 
+	test("strips leading blank and %% comment lines for the render copy only", () => {
+		expect(withoutPreamble("\n%% a\n  %% b\nflowchart LR\n A --> B")).toBe(
+			"flowchart LR\n A --> B",
+		);
+		expect(withoutPreamble("flowchart LR\n %% inner\n A --> B")).toBe(
+			"flowchart LR\n %% inner\n A --> B",
+		);
+	});
+
 	test("returns undefined for families the renderer does not know", () => {
 		for (const header of ["gantt", "pie", "mindmap", "gitGraph", "timeline", "nonsense"]) {
 			expect(diagramFamily(`${header}\n x`)).toBeUndefined();
@@ -43,6 +52,20 @@ describe("diagramFamily", () => {
 });
 
 describe("renderBoxDrawing", () => {
+	test("draws every supported family even behind a leading %% comment", () => {
+		const sources = [
+			"flowchart LR\n A --> B",
+			"stateDiagram-v2\n [*] --> A",
+			"sequenceDiagram\n A->>B: hi",
+			"classDiagram\n A <|-- B",
+			"erDiagram\n A ||--o{ B : has",
+			"xychart-beta\n x-axis [a, b]\n y-axis 0 --> 10\n bar [3, 7]",
+		];
+		for (const source of sources) {
+			expect(renderBoxDrawing(`%% note\n\n${source}`)).toBeDefined();
+		}
+	});
+
 	test("renders a flowchart as box-drawing and returns undefined for unknown families", () => {
 		const drawing = renderBoxDrawing(FLOW);
 		expect(drawing).toContain("┌");
@@ -99,6 +122,18 @@ describe("DiagramComponent", () => {
 		expect(gantt.some((line) => line.includes("gantt"))).toBe(true);
 	});
 
+	test("never emits a row wider than the viewport, including long titles and long source lines", () => {
+		const longTitle = "A very long descriptive title that certainly does not fit a narrow terminal";
+		const longSource = `flowchart LR\n  A[${"x".repeat(60)}] --> B[${"y".repeat(60)}]`;
+		for (const width of [20, 40, 80]) {
+			for (const expanded of [false, true]) {
+				const lines = new DiagramComponent(longSource, longTitle, expanded, theme).render(width);
+				for (const line of lines)
+					expect(visibleWidth(stripTerminalSequences(line))).toBeLessThanOrEqual(width);
+			}
+		}
+	});
+
 	test("caches per width and recomputes after invalidate", () => {
 		const component = new DiagramComponent(FLOW, undefined, false, theme);
 		const wide = component.render(120);
@@ -119,6 +154,16 @@ describe("renderVisualizeCall / renderVisualizeResult", () => {
 		expect(callSummary({ type: "diagram" })).toBe("diagram");
 		const call = plain(renderVisualizeCall({ type: "diagram", mermaid: FLOW }, theme).render(80));
 		expect(call[0]).toBe("*visualize *diagram");
+		const narrow = renderVisualizeCall(
+			{
+				type: "diagram",
+				mermaid: FLOW,
+				title: "A very long title that does not fit in twenty columns",
+			},
+			theme,
+		).render(20);
+		expect(narrow).toHaveLength(1);
+		expect(visibleWidth(stripTerminalSequences(narrow[0] as string))).toBeLessThanOrEqual(20);
 	});
 
 	test("renders partial, error, diagram and comparison results", () => {

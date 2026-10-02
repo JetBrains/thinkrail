@@ -1,9 +1,9 @@
 import { renderMermaidASCII } from "beautiful-mermaid";
-import { diagramFamily } from "./diagramFamily.ts";
+import { diagramFamily, withoutPreamble } from "./diagramFamily.ts";
 
 export function renderBoxDrawing(source: string): string | undefined {
 	if (diagramFamily(source) === undefined) return undefined;
-	const drawing = renderMermaidASCII(source, { colorMode: "none" });
+	const drawing = renderMermaidASCII(withoutPreamble(source), { colorMode: "none" });
 	return drawing.trim() === "" ? undefined : drawing;
 }
 
