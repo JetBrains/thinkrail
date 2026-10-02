@@ -22,8 +22,8 @@ None edit prose.
 - **Public surface:** the `index.ts` **barrel** exporting `registerSpecTools(pi)`; the extension entry
   (`../index.ts`) is the only caller.
 - **Allowed deps:** `core/` (via its barrel), `@earendil-works/pi-coding-agent` (types + `registerTool`),
-  `@earendil-works/pi-ai` (`StringEnum`, from the package root), `typebox`, Node built-ins (`node:fs`/`node:path`, write
-  tools only).
+  `@earendil-works/pi-ai` (`StringEnum`, from the package root), `typebox`, Node built-ins
+  (`node:fs`/`node:path`, write tools only).
 - **Forbidden:** reaching into `core/` leaf files (import only the barrel); any `@thinkrail/*` package.
 
 ## Leaves
