@@ -409,7 +409,6 @@ export default function ChatView({
 		setCommandDetail(null);
 		resourceDetailOpening.current = false;
 		if (resourceTranscript.current) {
-			resourceTranscript.current = false;
 			setTranscriptChildId(null);
 		}
 	}, [resources.knownUnsupported, setTranscriptChildId]);

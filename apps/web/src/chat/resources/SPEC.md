@@ -66,10 +66,11 @@ Closing the popover, log dialog or chat placement never stops work. Keyboard foc
 header trigger after details close, since the invoking row unmounts with the popover; if a known older
 host removes that trigger, focus returns to the composer instead. A supported-to-known-unsupported
 welcome retires the popover, command log, Stop-all confirmation, and only a transcript opened from
-Resources; ordinary card-opened transcripts remain independent. A transient reconnect with unknown
-protocol support preserves the stale detail instead of misclassifying the host. Use existing Radix
-primitives, token-only styling and visible text alongside status icons; color and animation are not the
-sole status signals.
+Resources; ordinary card-opened transcripts remain independent. The Resources-origin marker survives
+retirement until the dialog's close autofocus consumes it, so removing the trigger cannot bypass the
+composer fallback. A transient reconnect with unknown protocol support preserves the stale detail
+instead of misclassifying the host. Use existing Radix primitives, token-only styling and visible text
+alongside status icons; color and animation are not the sole status signals.
 
 ## Verification obligations
 

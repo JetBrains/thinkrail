@@ -89,7 +89,10 @@ Historical fixtures are seeded before entering their workspace, so discovery doe
 placement's persistence during browser reload. It never seeds a running resource or turns transcript
 text into execution authority. The empty-catalog UI probes cover keyboard focus, narrow layouts,
 welcome/reconnect hydration and old-host capability hiding using real responses; the old-host probe
-changes only the advertised protocol version. Tagged provider-backed probes launch real commands and
+changes only the advertised protocol version. The transcript-retirement focus probe supplies a completed
+child and persisted-form transcript at the wire seam, then downgrades the next welcome; the UI, reconnect,
+capability retirement and Radix focus teardown remain real. This terminal-only fixture is not evidence of
+agent resource execution. Tagged provider-backed probes launch real commands and
 children through agent tools, inspect bounded plain-text logs/transcripts, verify chat isolation,
 reload and closed-popover completion, and exercise individual Stop and confirmed Stop all. They never
 select a model or seed a running-resource catalog. SDK faux-provider unit tests are not evidence of
