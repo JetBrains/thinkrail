@@ -14,6 +14,7 @@ const modules = {
 	"packages/pi-background-commands": "pi-background-commands",
 	"packages/pi-subagents": "pi-subagents",
 	"packages/pi-dag": "pi-dag",
+	"pi-extensions/visualize": "@thinkrail.ai/pi-visualize",
 	"packages/server": "@thinkrail/server",
 	"apps/web": "@thinkrail/web",
 	"apps/cli": "@thinkrail/cli",
@@ -126,6 +127,29 @@ test("keeps background commands portable and out of browser imports", () => {
 		'apps/web/src/commandLeak.ts: import "pi-background-commands" creates forbidden apps/web -> packages/pi-background-commands edge',
 		'packages/pi-background-commands/src/delegation.ts: import "pi-delegation" creates forbidden packages/pi-background-commands -> packages/pi-delegation edge',
 		'packages/pi-background-commands/src/leak.ts: import "@thinkrail/server" creates forbidden packages/pi-background-commands -> packages/server edge',
+	]);
+});
+
+test("keeps published pi packages free of host imports and unwired from the host until their wiring PR", () => {
+	const root = fixture();
+	write(root, "pi-extensions/visualize/index.ts", 'import { Type } from "typebox";');
+	expect(moduleBoundaryViolations(root)).toEqual([]);
+	write(
+		root,
+		"pi-extensions/visualize/src/leak.ts",
+		'import "@thinkrail/server"; import "pi-delegation";',
+	);
+	write(root, "packages/server/src/early.ts", 'import "@thinkrail.ai/pi-visualize";');
+	write(
+		root,
+		"apps/web/src/early.ts",
+		'import type { VisualizeParams } from "@thinkrail.ai/pi-visualize";',
+	);
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'apps/web/src/early.ts: import "@thinkrail.ai/pi-visualize" creates forbidden apps/web -> pi-extensions/visualize edge',
+		'packages/server/src/early.ts: import "@thinkrail.ai/pi-visualize" creates forbidden packages/server -> pi-extensions/visualize edge',
+		'pi-extensions/visualize/src/leak.ts: import "@thinkrail/server" creates forbidden pi-extensions/visualize -> packages/server edge',
+		'pi-extensions/visualize/src/leak.ts: import "pi-delegation" creates forbidden pi-extensions/visualize -> packages/pi-delegation edge',
 	]);
 });
 

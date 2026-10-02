@@ -5,13 +5,17 @@
 	"workspaces": {
 		"packages": [
 			"apps/*",
-			"packages/*"
+			"packages/*",
+			"pi-extensions/*"
 		],
 		"catalog": {
 			"@astrojs/check": "0.9.10",
+			"@changesets/changelog-github": "1.0.1",
+			"@changesets/cli": "3.0.3",
 			"@earendil-works/pi-agent-core": "1.0.0",
 			"@earendil-works/pi-ai": "1.0.0",
 			"@earendil-works/pi-coding-agent": "1.0.0",
+			"@earendil-works/pi-tui": "1.0.0",
 			"@fontsource-variable/geist": "5.3.0",
 			"@fontsource-variable/jetbrains-mono": "5.3.0",
 			"@fontsource-variable/orbitron": "5.3.0",
@@ -69,6 +73,11 @@
 		"check:boundaries": "bun test scripts/checkModuleBoundaries.test.ts && bun scripts/check-module-boundaries.ts",
 		"check:seams": "bun scripts/check-binary-seams.ts",
 		"check:spec-surface": "bun scripts/check-spec-surface.ts",
+		"check:pi-packages": "bun scripts/check-pi-packages.ts",
+		"changeset": "changeset",
+		"release:version": "changeset version && bun install --no-frozen-lockfile",
+		"release:pack": "bun scripts/pack-pi-package.ts",
+		"release:publish": "bun scripts/publish-pi-packages.ts",
 		"typography:generate": "bun --filter @thinkrail/web typography:generate",
 		"typography:validate": "bun --filter @thinkrail/web typography:validate",
 		"typography:check": "bun --filter @thinkrail/web typography:check",
@@ -78,6 +87,8 @@
 		"spacing:check": "bun --filter @thinkrail/web spacing:check"
 	},
 	"devDependencies": {
+		"@changesets/changelog-github": "catalog:",
+		"@changesets/cli": "catalog:",
 		"@biomejs/biome": "2.5.0",
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@thinkrail/artifact-tests": "workspace:*",
