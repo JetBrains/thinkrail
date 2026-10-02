@@ -78,7 +78,8 @@ early while any changeset is still pending (versions not bumped yet) and otherwi
 **dependencies before dependents**, each package whose version is not yet on npm: `bun pm pack`
 (rewrites `workspace:*`/`catalog:` to exact versions, satisfying Decision 10) → `npm publish <tgz>
 --provenance --access public` under npm Trusted Publishing (Bun has no OIDC auth; npm ≥ 11.5.1) →
-`changeset tag` + push only after success.
+`changeset tag` + push only when at least one package was actually published (the script reports
+`published=true|false` to the workflow, so an early exit never tags the placeholder `0.0.0`).
 
 Trusted Publishing is configured per *existing* package, so each new package gets one manual bootstrap
 publish first: `bun run release:pack <dir>` packs it and prints the `npm publish` command for an npm-org

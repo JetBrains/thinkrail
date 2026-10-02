@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 // CI publish step for pi-extensions/*; see pi-extensions/SPEC.md → Release. `--dry-run` packs only.
-import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { appendFileSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -13,6 +13,14 @@ import {
 } from "./pi-packages.ts";
 
 const dryRun = process.argv.includes("--dry-run");
+const outputFile = process.argv[process.argv.indexOf("--github-output") + 1];
+
+function report(published: number): void {
+	if (process.argv.includes("--github-output") && outputFile) {
+		appendFileSync(outputFile, `published=${!dryRun && published > 0}\n`);
+	}
+}
+
 const pendingChangesets = readdirSync(join(repoRoot, ".changeset")).filter(
 	(name) => name.endsWith(".md") && name !== "README.md",
 );
@@ -20,11 +28,13 @@ if (pendingChangesets.length > 0) {
 	console.log(
 		`publish-pi-packages: ${pendingChangesets.length} pending changeset(s) — versions not bumped yet, nothing to publish (run \`bun run release:version\` in a PR first)`,
 	);
+	report(0);
 	process.exit(0);
 }
 const packages = dependenciesFirst(publishablePiPackages());
 if (packages.length === 0) {
 	console.log("publish-pi-packages: nothing to publish");
+	report(0);
 	process.exit(0);
 }
 
@@ -48,4 +58,5 @@ try {
 } finally {
 	rmSync(scratch, { recursive: true, force: true });
 }
+report(published);
 console.log(`publish-pi-packages: ${published} package(s) ${dryRun ? "would be " : ""}published`);

@@ -46,8 +46,12 @@ jobs:
       - run: npm install -g npm@latest
       - run: bun install --frozen-lockfile
       - run: bun run check:pi-packages
-      - run: bun run release:publish
+      - id: publish
+        run: bun run release:publish -- --github-output "$GITHUB_OUTPUT"
+      # Tag only what was actually published: an early exit (pending changesets, nothing new) must not
+      # stamp the current manifest versions as releases.
       - name: Tag released versions
+        if: steps.publish.outputs.published == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
