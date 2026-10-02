@@ -4,7 +4,7 @@ import {
 	RiRestartLine as Restart,
 } from "@remixicon/react";
 import type { HostUpdateNotice, NativeUpdateState } from "@thinkrail/contracts";
-import { Button } from "../components/ui/button";
+import { Button } from "@thinkrail/ui/button";
 import type { NativeUpdateAction, UpdatesController } from "./useUpdates";
 
 interface UpdateSettingsProps {

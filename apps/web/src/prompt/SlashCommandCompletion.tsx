@@ -1,6 +1,6 @@
 import type { SlashCommandInfo, TemplateInfo } from "@thinkrail/contracts";
+import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useState } from "react";
-import { cn } from "@/lib";
 
 export type SlashCommandItem = Omit<SlashCommandInfo, "source"> & {
 	source: SlashCommandInfo["source"] | "builtin";

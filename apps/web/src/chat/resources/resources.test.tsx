@@ -1,9 +1,9 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
+import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import * as resources from "./index";
 import { elapsedLabel, formatElapsed, resourceState, sortLive } from "./resourceRow";
 
@@ -63,7 +63,7 @@ test("resource primitives keep their props-only import boundary", () => {
 		const source = readFileSync(`${import.meta.dir}/${file}`, "utf8");
 		for (const [, dependency] of source.matchAll(/from\s+["']([^"']+)["']/g)) {
 			expect(dependency).toMatch(
-				/^(?:@thinkrail\/contracts|react|@remixicon\/react|@\/components\/ui\/|@\/lib$|\.\/)/,
+				/^(?:@thinkrail\/contracts|react|@remixicon\/react|@thinkrail\/ui\/|@\/lib$|\.\/)/,
 			);
 		}
 		expect(source).not.toMatch(/store|transport|xterm|dangerouslySetInnerHTML|Markdown/);

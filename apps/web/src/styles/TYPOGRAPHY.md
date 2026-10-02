@@ -26,10 +26,11 @@ styles/generated/typography.css   GENERATED, committed, never edited by hand
 |---|---|
 | `bun run typography:generate` | regenerate `styles/generated/typography.css` |
 | `bun run typography:validate` | validate the JSON (shape, references, policies) |
-| `bun run typography:check` | fail if the committed CSS is stale — pre-commit + `apps/web build` |
+| `bun run typography:check` | fail if the committed CSS is stale or adoption violates the token contract — pre-commit + `apps/web build` |
 
-`bun test` adds the guard rails: `styles/typography.test.ts` (source + generated output) and
-`styles/typographyUsage.test.ts` (adoption). `e2e/typography.spec.ts` asserts *computed* styles on the
+`bun test` also runs the guard rails: `styles/typography.test.ts` (source + generated output) and
+`styles/typographyUsage.test.ts` (adoption across app source, `packages/ui`, and every extension web
+half, using the shared source scanner). `e2e/typography.spec.ts` asserts *computed* styles on the
 real surfaces (hero, dialog/card titles, entity rows, branch metadata, eyebrow, Monaco, xterm,
 both markdown surfaces, the `<body>` base).
 
@@ -255,7 +256,7 @@ The allowlist is deliberately tiny, and each entry is enforced by name in
 |---|---|
 | `panels/monacoSetup.ts` | Monaco takes `fontFamily` / `fontSize` / `lineHeight` as JS options — it reads `--tr-font-family-code`, `--tr-font-size-s11`, `--tr-line-height-default`, so it cannot drift from a code block |
 | `panels/TerminalInstance.tsx` | xterm, same reason — it reads `--tr-font-family-code` + `--tr-font-size-s13` (the primitives behind `code.text`), and owns row height through its own `lineHeight` option rather than a CSS line-height |
-| `chat/tools/visualize/mermaid.ts` | mermaid's theme config takes a family string (`--tr-font-family-code`) |
+| `thinkrail-extensions/visualize/web/mermaid.ts` | mermaid's theme config takes a family string (`--tr-font-family-code`) |
 | `index.css`, `styles/tokens.css`, `styles/global.css` | the mapping layers themselves; `.pierre-code-surface` passes the code family, `s11`, and default line-height into Pierre's Shadow DOM |
 
 The OTP code is **not** an exception any more: it is the named `code.otp` style (`.tr-code-otp`).

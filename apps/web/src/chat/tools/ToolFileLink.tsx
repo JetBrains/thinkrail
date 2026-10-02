@@ -1,4 +1,5 @@
-import { cn, isAbsolutePath, projectRelativePath } from "@/lib";
+import { cn } from "@thinkrail/ui/utils";
+import { isAbsolutePath, projectRelativePath } from "@/lib";
 import { hasUriScheme, workspaceFileTarget } from "../fileTargets";
 
 export function ToolFileLink({

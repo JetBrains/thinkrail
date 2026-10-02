@@ -1,13 +1,13 @@
 import { RiFullscreenLine as Maximize2 } from "@remixicon/react";
 import type { ImageContent } from "@thinkrail/contracts";
-import { useState } from "react";
 import {
 	Dialog,
 	DialogContent,
 	DialogHeader,
 	DialogTitle,
 	DialogTrigger,
-} from "@/components/ui/dialog";
+} from "@thinkrail/ui/dialog";
+import { useState } from "react";
 
 function ToolResultImage({ image, label }: { image: ImageContent; label: string }) {
 	const [open, setOpen] = useState(false);

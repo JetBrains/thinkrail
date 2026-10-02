@@ -2,8 +2,8 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 } from "@remixicon/react";
+import { Button } from "@thinkrail/ui/button";
 import { type ReactNode, useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import type { ReviewThread } from "@/resources";
 import type { JsonDiffMark } from "./jsonDiff";
 import { type JsonNode, jsonPrimitiveLabel } from "./jsonScanner";

@@ -1,8 +1,8 @@
 import { RiAddLine as Plus } from "@remixicon/react";
 import type { TerminalTabsPush } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { IconTooltip } from "../components/ui/tooltip";
 import type { TerminalTab } from "../store";
 import { isConnectedGeneration, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";

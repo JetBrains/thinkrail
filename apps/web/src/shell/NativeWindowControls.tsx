@@ -5,7 +5,7 @@ import {
 	RiSubtractLine,
 } from "@remixicon/react";
 import type { NativeWindowState } from "@thinkrail/contracts";
-import { cn } from "@/lib/utils";
+import { cn } from "@thinkrail/ui/utils";
 
 const BUTTON_CLASS =
 	"flex h-topbar-row w-46 items-center justify-center text-text-muted outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";

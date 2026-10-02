@@ -1,7 +1,7 @@
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu";
 import type * as React from "react";
-import { cn } from "@/lib";
 import { menuContentClass, menuItemClass, menuSeparatorClass } from "./menu-styles";
+import { cn } from "./utils";
 
 const ContextMenu = ContextMenuPrimitive.Root;
 const ContextMenuTrigger = ContextMenuPrimitive.Trigger;

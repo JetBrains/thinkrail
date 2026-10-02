@@ -5,12 +5,13 @@ import {
 	RiArrowGoBackLine as RotateCcw,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
+import { menuItemClass } from "@thinkrail/ui/menu-styles";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
-import { menuItemClass } from "../components/ui/menu-styles";
-import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
-import { IconTooltip } from "../components/ui/tooltip";
 import { useNow } from "../components/useNow";
-import { cn, relativeTime } from "../lib";
+import { relativeTime } from "../lib";
 import { openChatInTab } from "../panels/openChat";
 import { type ClosedChat, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";

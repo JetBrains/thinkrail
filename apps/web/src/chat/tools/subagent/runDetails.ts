@@ -1,8 +1,7 @@
 import type { DelegationRunDetails, DelegationRunStatus } from "@thinkrail/contracts";
 import { isDelegationRunDetails } from "@thinkrail/contracts";
+import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { formatCost, formatElapsed, formatTokens } from "../../SessionStatsBar";
-import type { ToolRenderProps } from "../../toolRegistry";
-import { strArg } from "../toolHelpers";
 
 export function readRunDetails(value: unknown): DelegationRunDetails | undefined {
 	if (!value || typeof value !== "object" || !("details" in value)) return undefined;

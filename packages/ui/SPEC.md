@@ -28,14 +28,31 @@ The app's Tailwind sources and adoption guards include this package and extensio
 
 ## Primitive invariants
 
+The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-menu`, `menu-styles`,
+`popover`, `command` (cmdk combobox body), `textarea`, `tooltip`, `resizable`, and `toast`, alongside
+`utils` and `theme`. `menu-styles` is shared by the menu primitives and custom app menu rows.
+
+- Button variants are `default`/`destructive`/`outline`/`ghost`; destructive confirms irreversible
+  actions. Switch exposes native disabled behavior and `role="switch"`/`aria-checked`, not visible On/Off
+  text. Dialog accepts `hideClose` for chromeless surfaces. `DialogPanel` renders Radix content in place
+  without a portal or overlay for caller-positioned, non-modal dialogs; title/role semantics, Escape
+  dismissal, and focus return remain Radix-owned while surrounding UI stays interactive.
 - React 19 refs pass through controls; dialog/popover portals preserve accessible focus and scroll
   behavior. Popover accepts a host Dialog container for scroll-lock compatibility.
-- Icon-only controls use `IconTooltip` with `aria-label`, not native `title`. `wrapTrigger` supplies the
-  interactive span for a disabled control or another Radix trigger, isolating their `data-state` values;
-  callers do not hand-roll that wrapper. App and extension call-site tests enforce this convention.
-- Context and dropdown menus share private menu geometry and token classes. Dropdowns are vertically
-  bounded and scrollable with horizontal overflow hidden so long rows truncate rather than scroll.
-- Toast severity is a presentational accent; queue ownership and notification lifetimes stay in the app.
+- Icon-only controls use `IconTooltip` with `aria-label`, not native `title`; one root `TooltipProvider`
+  sets the delay. Native `title` remains only for non-control truncation fallbacks or surfaces outside
+  the provider (the app's review widgets). `wrapTrigger` supplies the interactive flex span for a disabled
+  control or another Radix trigger, isolating their `data-state` values; callers do not hand-roll that
+  wrapper. App, SDK, and extension web call-site tests enforce this convention.
+- Context and dropdown menus share menu geometry and token classes: content surface, radius/shadow,
+  item/icon spacing, separators, semantic action colors, focus rows, and viewport collision behavior.
+  Context menus add pointer-position right-click/touch long-press anchoring; features own enabled gestures
+  and actions. Dropdowns are vertically bounded by the smaller of 60vh and Radix's available height,
+  scrollable with horizontal overflow hidden so long rows truncate rather than scroll.
+- Toast exposes `ToastProvider`/`Toast`/`ToastViewport`/`ToastTitle`/`ToastDescription`/`ToastAction`/
+  `ToastClose` and `toastVariants` (`error`/`success`/`info`). Severity is a presentational left accent;
+  queue ownership and notification lifetimes stay in the app (`panels/Toaster` composes the primitives).
+- Primitives use only the host's token utilities, never shadcn's default oklch palette.
 
 Code highlighting is deliberately absent: `CodeBlock` and shiki depend on the app's theme registration
 and remain app-local until a second extension requires that seam.

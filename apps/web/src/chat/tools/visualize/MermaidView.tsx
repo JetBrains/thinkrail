@@ -1,7 +1,7 @@
 import { RiFullscreenLine as Maximize2 } from "@remixicon/react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
+import { onThemeSwap } from "@thinkrail/ui/theme";
 import { type ReactNode, useEffect, useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { onThemeSwap } from "@/themes";
 import { CodeBlock } from "../CodeBlock";
 import { renderMermaid } from "./mermaid";
 import { PanZoomView } from "./PanZoomView";

@@ -6,12 +6,12 @@ import {
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
+import { Button } from "@thinkrail/ui/button";
+import { PopoverTrigger } from "@thinkrail/ui/popover";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useState } from "react";
 import { TemplateEditorDialog } from "@/chat/TemplateEditorDialog";
 import { SkeletonRows } from "@/components/Skeleton";
-import { Button } from "@/components/ui/button";
-import { PopoverTrigger } from "@/components/ui/popover";
-import { IconTooltip } from "@/components/ui/tooltip";
 import { assembleTemplate } from "@/prompt";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";

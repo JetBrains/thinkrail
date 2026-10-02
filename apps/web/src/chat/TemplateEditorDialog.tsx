@@ -1,16 +1,16 @@
 import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
-import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
 	DialogContent,
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib";
+} from "@thinkrail/ui/dialog";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { cn } from "@thinkrail/ui/utils";
+import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { assembleTemplate, stripFrontmatter } from "@/prompt";
 import { useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";

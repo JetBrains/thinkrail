@@ -1,12 +1,8 @@
 import { describe, expect, it } from "bun:test";
+import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import {
-	DefaultToolRenderer,
-	getToolRenderer,
-	getToolSummary,
-	type ToolRenderProps,
-} from "../toolRegistry";
+import { DefaultToolRenderer, getToolRenderer, getToolSummary } from "../toolRegistry";
 import "./register";
 import { specToolPaths, splitKnownPathReferences } from "./SpecToolCard";
 

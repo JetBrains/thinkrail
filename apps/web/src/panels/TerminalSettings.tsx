@@ -1,7 +1,7 @@
 import { RiCheckLine as Check } from "@remixicon/react";
 import type { HostPlatform, TerminalWindowsShell } from "@thinkrail/contracts";
 import { TERMINAL_REPLAY_KB, WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION } from "@thinkrail/contracts";
-import { cn } from "@/lib";
+import { cn } from "@thinkrail/ui/utils";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";

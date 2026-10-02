@@ -8,6 +8,16 @@ import {
 	type TemplateInfo,
 	type ThinkingLevel,
 } from "@thinkrail/contracts";
+import { Button } from "@thinkrail/ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogTitle,
+} from "@thinkrail/ui/dialog";
+import { Popover, PopoverAnchor, PopoverTrigger } from "@thinkrail/ui/popover";
+import { cn } from "@thinkrail/ui/utils";
 import {
 	type RefCallback,
 	useCallback,
@@ -18,17 +28,7 @@ import {
 	useState,
 } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { Button } from "@/components/ui/button";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogTitle,
-} from "@/components/ui/dialog";
-import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
 import { useNow } from "@/components/useNow";
-import { cn } from "@/lib";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
 	EMPTY_RUNTIME,

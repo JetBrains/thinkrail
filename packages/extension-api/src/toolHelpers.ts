@@ -1,4 +1,4 @@
-import { parseToolResultContent } from "../toolResultContent";
+import { parseToolResultContent } from "./toolResultContent";
 
 export function resultText(result: unknown): string {
 	return parseToolResultContent(result).text;

@@ -1,33 +1,20 @@
 import { describe, expect, it } from "bun:test";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadColors, paletteVar, renderCss, themeColorKeys, validate } from "../../scripts/colors";
+import { designSourceFiles, designSourceLabel } from "../../scripts/designSources";
 import { normalizeEol } from "../../scripts/generatedFiles";
 
 const SRC = new URL("..", import.meta.url).pathname;
 const read = (path: string) => normalizeEol(readFileSync(path, "utf8"));
-const rel = (path: string) => path.slice(SRC.length);
+const rel = designSourceLabel;
 const code = (path: string) =>
 	read(path)
 		.replace(/\/\*[\s\S]*?\*\//g, "")
 		.replace(/^[ \t]*\/\/.*$/gm, "");
 
-function sourceFiles(dir = SRC, exts = /\.(tsx?|css)$/): string[] {
-	const out: string[] = [];
-	for (const entry of readdirSync(dir)) {
-		const path = join(dir, entry);
-		if (statSync(path).isDirectory()) {
-			if (entry === "generated") continue;
-			out.push(...sourceFiles(path, exts));
-			continue;
-		}
-		if (exts.test(entry) && !/\.test\.tsx?$/.test(entry)) out.push(path);
-	}
-	return out;
-}
-
 const COLORS = loadColors();
-const FILES = sourceFiles();
+const FILES = designSourceFiles();
 const TS_FILES = FILES.filter((f) => /\.tsx?$/.test(f));
 const CSS_FILES = FILES.filter((f) => f.endsWith(".css"));
 

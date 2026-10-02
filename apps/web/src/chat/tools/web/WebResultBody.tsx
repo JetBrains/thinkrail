@@ -1,5 +1,5 @@
+import type { ToolStatus } from "@thinkrail/extension-api/web";
 import { Markdown } from "../../Markdown";
-import type { ToolStatus } from "../../types";
 import { Collapsible, countLines } from "../Collapsible";
 
 export function WebResultBody({

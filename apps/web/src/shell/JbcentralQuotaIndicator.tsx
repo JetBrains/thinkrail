@@ -1,6 +1,6 @@
 import { RiCoinsLine as Coins, RiLoader4Line as Loader } from "@remixicon/react";
 import type { JbcentralQuotaSnapshot } from "@thinkrail/contracts";
-import { IconTooltip } from "@/components/ui/tooltip";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { formatJbcentralQuota } from "./jbcentralQuota";
 
 export type JbcentralQuotaViewSnapshot = JbcentralQuotaSnapshot | { state: "loading" };

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Popover, PopoverTrigger } from "./popover";
 import { IconTooltip, TooltipProvider } from "./tooltip";
@@ -32,11 +33,21 @@ describe("IconTooltip over another Radix trigger", () => {
 	});
 });
 
-const SRC = new URL("../..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("../../", import.meta.url));
+const EXTENSIONS = join(ROOT, "thinkrail-extensions");
+const SOURCE_ROOTS = [
+	join(ROOT, "apps/web/src"),
+	join(ROOT, "packages/ui"),
+	...readdirSync(EXTENSIONS, { withFileTypes: true })
+		.filter((entry) => entry.isDirectory())
+		.map((entry) => join(EXTENSIONS, entry.name, "web"))
+		.filter((path) => existsSync(path)),
+];
 
 function sourceFiles(dir: string): string[] {
 	const out: string[] = [];
 	for (const entry of readdirSync(dir)) {
+		if (entry === "node_modules") continue;
 		const path = join(dir, entry);
 		if (statSync(path).isDirectory()) {
 			out.push(...sourceFiles(path));
@@ -48,8 +59,8 @@ function sourceFiles(dir: string): string[] {
 }
 
 test("no call site hand-rolls the wrapper span", () => {
-	const offenders = sourceFiles(SRC).filter((path) =>
+	const offenders = SOURCE_ROOTS.flatMap(sourceFiles).filter((path) =>
 		/<IconTooltip[^>]*>\s*<span className="flex">/.test(readFileSync(path, "utf8")),
 	);
-	expect(offenders.map((path) => path.slice(SRC.length))).toEqual([]);
+	expect(offenders.map((path) => relative(ROOT, path))).toEqual([]);
 });

@@ -43,6 +43,37 @@ import {
 	RiCloseLine as X,
 } from "@remixicon/react";
 import {
+	Command,
+	CommandEmpty,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@thinkrail/ui/command";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSeparator,
+	ContextMenuTrigger,
+} from "@thinkrail/ui/context-menu";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import {
+	type ImperativePanelGroupHandle,
+	ResizableHandle,
+	ResizablePanel,
+	ResizablePanelGroup,
+} from "@thinkrail/ui/resizable";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
+import {
 	Fragment,
 	type ReactNode,
 	useCallback,
@@ -53,37 +84,6 @@ import {
 	useState,
 } from "react";
 import { CustomIcon } from "../../components/CustomIcon";
-import {
-	Command,
-	CommandEmpty,
-	CommandInput,
-	CommandItem,
-	CommandList,
-} from "../../components/ui/command";
-import {
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuSeparator,
-	ContextMenuTrigger,
-} from "../../components/ui/context-menu";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuRadioGroup,
-	DropdownMenuRadioItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "../../components/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
-import {
-	type ImperativePanelGroupHandle,
-	ResizableHandle,
-	ResizablePanel,
-	ResizablePanelGroup,
-} from "../../components/ui/resizable";
-import { IconTooltip } from "../../components/ui/tooltip";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
 	type LayoutAttention,

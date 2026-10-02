@@ -9,6 +9,8 @@ import {
 	RiStopFill as StopFill,
 } from "@remixicon/react";
 import type { ComposerGrowthLimit, ThinkingLevel, WireModel } from "@thinkrail/contracts";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { cn } from "@thinkrail/ui/utils";
 import {
 	forwardRef,
 	type KeyboardEvent,
@@ -20,9 +22,7 @@ import {
 	useState,
 } from "react";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { IconTooltip } from "@/components/ui/tooltip";
-import { cn } from "@/lib";
 import {
 	applyTemplateSlotEdit,
 	beginTemplateSlotSession,

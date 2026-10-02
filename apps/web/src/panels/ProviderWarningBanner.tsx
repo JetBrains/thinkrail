@@ -1,6 +1,6 @@
 import { RiAlertLine as TriangleAlert } from "@remixicon/react";
+import { Button } from "@thinkrail/ui/button";
 import { useCallback, useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 

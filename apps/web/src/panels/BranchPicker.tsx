@@ -5,7 +5,6 @@ import {
 	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
 import type { BranchList } from "@thinkrail/contracts";
-import { type ReactNode, useState } from "react";
 import {
 	Command,
 	CommandEmpty,
@@ -13,8 +12,9 @@ import {
 	CommandInput,
 	CommandItem,
 	CommandList,
-} from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { type ReactNode, useState } from "react";
 import { remoteBranchPresentation } from "./branchGroups";
 
 export function BranchPicker({

@@ -12,16 +12,16 @@ import {
 	type ThemeId,
 	type ThemeMode,
 } from "@thinkrail/contracts";
-import { useState, useSyncExternalStore } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuRadioGroup,
 	DropdownMenuRadioItem,
 	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib";
+} from "@thinkrail/ui/dropdown-menu";
+import { cn } from "@thinkrail/ui/utils";
+import { useState, useSyncExternalStore } from "react";
 import { toast, useAppStore } from "@/store";
 import {
 	deriveSystemThemePair,

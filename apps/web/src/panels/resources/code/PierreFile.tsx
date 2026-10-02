@@ -1,8 +1,8 @@
 import type { LineAnnotation, SelectedLineRange } from "@pierre/diffs";
 import { File } from "@pierre/diffs/react";
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { IconTooltip } from "@/components/ui/tooltip";
 import type { AnchorDraft, ResourceViewProps } from "@/resources";
 import { ReviewComposer } from "../../ReviewComposer";
 import { ReviewThreadCard } from "../../ReviewThreadCard";

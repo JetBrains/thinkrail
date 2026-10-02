@@ -6,7 +6,7 @@ import {
 	ToastProvider,
 	ToastTitle,
 	ToastViewport,
-} from "@/components/ui/toast";
+} from "@thinkrail/ui/toast";
 import { useAppStore } from "@/store";
 
 const AUTO_DISMISS_MS = 5000;

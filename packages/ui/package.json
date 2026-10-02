@@ -1,0 +1,48 @@
+{
+	"name": "@thinkrail/ui",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./button": "./button.tsx",
+		"./command": "./command.tsx",
+		"./context-menu": "./context-menu.tsx",
+		"./dialog": "./dialog.tsx",
+		"./dropdown-menu": "./dropdown-menu.tsx",
+		"./menu-styles": "./menu-styles.ts",
+		"./popover": "./popover.tsx",
+		"./resizable": "./resizable.tsx",
+		"./switch": "./switch.tsx",
+		"./textarea": "./textarea.tsx",
+		"./toast": "./toast.tsx",
+		"./tooltip": "./tooltip.tsx",
+		"./utils": "./utils.ts",
+		"./theme": "./theme.ts"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"@radix-ui/react-context-menu": "2.3.7",
+		"@radix-ui/react-dialog": "1.1.17",
+		"@radix-ui/react-dropdown-menu": "2.1.18",
+		"@radix-ui/react-popover": "1.1.17",
+		"@radix-ui/react-toast": "1.2.19",
+		"@radix-ui/react-tooltip": "1.2.10",
+		"@remixicon/react": "catalog:",
+		"class-variance-authority": "0.7.1",
+		"clsx": "2.1.1",
+		"cmdk": "1.1.1",
+		"react": "catalog:",
+		"react-dom": "catalog:",
+		"react-resizable-panels": "2.1.9",
+		"tailwind-merge": "3.6.0"
+	},
+	"devDependencies": {
+		"@types/bun": "catalog:",
+		"@types/react": "catalog:",
+		"@types/react-dom": "catalog:",
+		"typescript": "catalog:"
+	}
+}

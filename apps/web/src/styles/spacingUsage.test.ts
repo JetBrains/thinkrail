@@ -1,31 +1,18 @@
 import { describe, expect, it } from "bun:test";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { designSourceFiles, designSourceLabel } from "../../scripts/designSources";
 import { normalizeEol } from "../../scripts/generatedFiles";
 
 const SRC = new URL("..", import.meta.url).pathname;
 const read = (p: string) => normalizeEol(readFileSync(p, "utf8"));
-const rel = (p: string) => p.slice(SRC.length);
+const rel = designSourceLabel;
 const sourceWithoutComments = (p: string) =>
 	read(p)
 		.replace(/\/\*[\s\S]*?\*\//g, "")
 		.replace(/^[ \t]*\/\/.*$/gm, "");
 
-function sourceFiles(dir = SRC): string[] {
-	const out: string[] = [];
-	for (const entry of readdirSync(dir)) {
-		const path = join(dir, entry);
-		if (statSync(path).isDirectory()) {
-			if (entry === "generated") continue;
-			out.push(...sourceFiles(path));
-			continue;
-		}
-		if (/\.(tsx?|css)$/.test(entry) && !/\.test\.tsx?$/.test(entry)) out.push(path);
-	}
-	return out;
-}
-
-const FILES = sourceFiles();
+const FILES = designSourceFiles();
 const TS_FILES = FILES.filter((f) => /\.tsx?$/.test(f));
 const TOKENS = join(SRC, "styles/tokens.css");
 const SPACING_JSON = join(SRC, "styles/spacing.json");

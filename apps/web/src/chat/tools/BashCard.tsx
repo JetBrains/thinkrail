@@ -1,5 +1,4 @@
-import type { ToolRenderProps } from "../toolRegistry";
-import { resultText, strArg } from "./toolHelpers";
+import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 
 export function BashCard({ args, result, status }: ToolRenderProps) {
 	const command = strArg(args, "command");

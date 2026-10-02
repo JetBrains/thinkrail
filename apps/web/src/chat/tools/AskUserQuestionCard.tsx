@@ -12,6 +12,8 @@ import type {
 	AskUserQuestionItem,
 	AskUserQuestionResult,
 } from "@thinkrail/contracts";
+import { resultText, type ToolRenderProps } from "@thinkrail/extension-api/web";
+import { cn } from "@thinkrail/ui/utils";
 import {
 	Fragment,
 	type KeyboardEvent,
@@ -22,13 +24,10 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { cn } from "@/lib";
 import { readAskResult, useAskFocusScope, useAskState } from "../askState";
 import { useChatActions } from "../ChatActions";
 import { useFoldGeometry } from "../foldState";
 import { Markdown } from "../Markdown";
-import type { ToolRenderProps } from "../toolRegistry";
-import { resultText } from "./toolHelpers";
 
 export { readAskResult } from "../askState";
 

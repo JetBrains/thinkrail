@@ -1,5 +1,4 @@
-import type { ToolRenderProps } from "../../toolRegistry";
-import { resultText, strArg } from "../toolHelpers";
+import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { ComparisonCard } from "./ComparisonCard";
 import { DiagramCard } from "./DiagramCard";
 

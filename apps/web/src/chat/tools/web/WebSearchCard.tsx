@@ -1,6 +1,5 @@
 import { RiSearchLine as Search } from "@remixicon/react";
-import type { ToolRenderProps } from "../../toolRegistry";
-import { resultText, strArg } from "../toolHelpers";
+import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { WebResultBody } from "./WebResultBody";
 
 function firstQuery(args: Record<string, unknown>): string {

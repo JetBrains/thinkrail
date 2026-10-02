@@ -1,5 +1,4 @@
-import type { ToolRenderProps } from "../../toolRegistry";
-import { strArg } from "../toolHelpers";
+import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { MermaidView } from "./MermaidView";
 
 export function DiagramCard({ args, status }: ToolRenderProps) {

@@ -1,5 +1,5 @@
+import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useRef, useState } from "react";
-import { cn } from "@/lib";
 import type { AnchorDraft, SurfaceReview } from "@/resources";
 
 function grow(el: HTMLTextAreaElement): void {

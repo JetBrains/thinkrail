@@ -1,6 +1,5 @@
 import { RiCheckLine as Check, RiCloseLine as X } from "@remixicon/react";
-import type { ToolRenderProps } from "../../toolRegistry";
-import { strArg } from "../toolHelpers";
+import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { parseComparisonOptions } from "./args";
 import { MermaidView } from "./MermaidView";
 

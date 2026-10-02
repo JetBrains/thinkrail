@@ -1,5 +1,5 @@
+import { cn } from "@thinkrail/ui/utils";
 import { useId } from "react";
-import { cn } from "@/lib";
 import { BRAND_MARK_PATH, BRAND_MARK_SIZE } from "../constants/branding";
 
 const MARK_SCALE = 22.5 / Math.hypot(BRAND_MARK_SIZE.width / 2, BRAND_MARK_SIZE.height / 2);

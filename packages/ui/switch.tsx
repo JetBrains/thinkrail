@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { cn } from "@/lib";
+import { cn } from "./utils";
 
 export interface SwitchProps
 	extends Omit<

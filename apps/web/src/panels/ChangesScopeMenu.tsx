@@ -5,8 +5,6 @@ import {
 	RiGitPullRequestLine as GitCompare,
 } from "@remixicon/react";
 import type { GitCommit, GitDiffScope } from "@thinkrail/contracts";
-import { useRef, useState } from "react";
-import { LoadingRegion } from "@/components/Skeleton";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -14,7 +12,9 @@ import {
 	DropdownMenuLabel,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@thinkrail/ui/dropdown-menu";
+import { useRef, useState } from "react";
+import { LoadingRegion } from "@/components/Skeleton";
 import { useNow } from "@/components/useNow";
 import { relativeTime } from "@/lib";
 import { getTransport } from "../transport";

@@ -5,6 +5,7 @@ import {
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
 import type { ChangeReceipt, ResourceMeta } from "@thinkrail/contracts";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
 import {
 	type ComponentType,
 	type LazyExoticComponent,
@@ -14,7 +15,6 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import { IconTooltip } from "@/components/ui/tooltip";
 import { copyText, isPhoneViewport, usePhoneViewport } from "@/lib";
 import {
 	describeResource,

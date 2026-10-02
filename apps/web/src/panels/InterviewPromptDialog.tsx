@@ -1,7 +1,6 @@
 import { RiExternalLinkLine as ExternalLink } from "@remixicon/react";
 import type { InterviewResponse } from "@thinkrail/contracts";
-import { type MouseEvent, useRef, useState } from "react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@thinkrail/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -9,8 +8,9 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
-import { cn } from "@/lib";
+} from "@thinkrail/ui/dialog";
+import { cn } from "@thinkrail/ui/utils";
+import { type MouseEvent, useRef, useState } from "react";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { INTERVIEW_BOOKING_URL, INTERVIEW_INVITATION_COPY } from "./interview";

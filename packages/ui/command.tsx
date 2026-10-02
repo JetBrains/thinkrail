@@ -1,7 +1,7 @@
 import { RiSearchLine as Search } from "@remixicon/react";
 import { Command as CommandPrimitive } from "cmdk";
 import type * as React from "react";
-import { cn } from "@/lib";
+import { cn } from "./utils";
 
 function Command({ className, ...props }: React.ComponentProps<typeof CommandPrimitive>) {
 	return (

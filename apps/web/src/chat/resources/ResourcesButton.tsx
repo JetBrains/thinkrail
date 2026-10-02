@@ -1,8 +1,8 @@
 import { RiStackFill, RiStackLine } from "@remixicon/react";
+import { Button } from "@thinkrail/ui/button";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { cn } from "@thinkrail/ui/utils";
 import type { ComponentProps } from "react";
-import { Button } from "@/components/ui/button";
-import { IconTooltip } from "@/components/ui/tooltip";
-import { cn } from "@/lib";
 
 export function ResourcesButton({
 	activeCount,

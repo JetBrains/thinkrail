@@ -12,8 +12,7 @@ tags: [ui, resilience]
 The app's dependency-light shared React primitives: the error boundary that keeps one failed region from
 unmounting the root, project-custom icons, the binary attention dot and working-icon treatment used by
 feature panels (currently the Projects rail), the quiet-scroll frame, and the shared loading-skeleton
-primitive. Also houses the
-`ui/` sub-module (shadcn primitives), which has its own spec.
+primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`), not this module.
 
 ## Boundary
 
@@ -73,9 +72,8 @@ primitive. Also houses the
   `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the
   `QuietScrollEdges` type via `@/components/QuietScrollArea`; `useNow()` via `@/components/useNow` (the
   wall clock as a `useSyncExternalStore` value on a shared 30 s ticker, so a render never calls `Date.now`
-  itself). The `ui/` primitives are their own sub-module
-  ([components/ui/SPEC.md](ui/SPEC.md)).
-- **Allowed deps:** React, `@remixicon/react`, `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
+  itself).
+- **Allowed deps:** React, `@remixicon/react`, `@thinkrail/ui/utils` (`cn`), `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
   rather than re-stated), `constants` (`BRAND_MARK_PATH` — the monogram `RunningIcon` draws, shared with the
   shell logo rather than copied). Kept dependency-light on purpose, and both are leaves, so *any* region
   (shell, panels, `main.tsx`) can still wrap in it without creating a cycle.

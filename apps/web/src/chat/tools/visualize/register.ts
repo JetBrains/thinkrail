@@ -1,5 +1,5 @@
+import { strArg } from "@thinkrail/extension-api/web";
 import { registerToolRenderer } from "../../toolRegistry";
-import { strArg } from "../toolHelpers";
 import { VisualizationCard } from "./VisualizationCard";
 
 registerToolRenderer("visualize", VisualizationCard, {
