@@ -31,7 +31,7 @@ if (pendingChangesets.length > 0) {
 	console.log(
 		`publish-pi-packages: ${pendingChangesets.length} pending changeset(s) — versions not bumped yet, nothing to publish (run \`bun run release:version\` in a PR first)`,
 	);
-	report(0);
+	report(0, false);
 	process.exit(0);
 }
 const packages = dependenciesFirst(publishablePiPackages());
