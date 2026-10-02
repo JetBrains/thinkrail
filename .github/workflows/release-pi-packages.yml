@@ -1,0 +1,55 @@
+name: Release pi packages
+
+# Publishes the pi packages under pi-extensions/* (see pi-extensions/SPEC.md → Release).
+# Versioning is a human step: `bun run release:version` in an ordinary PR consumes the pending changesets
+# and bumps versions/changelogs. When that PR reaches main with no changesets left, this workflow packs
+# with bun and publishes with npm through Trusted Publishing (OIDC) — no npm tokens. Each new package
+# needs one manual bootstrap publish first.
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".changeset/**"
+      - "pi-extensions/**"
+      - ".github/workflows/release-pi-packages.yml"
+      - "scripts/pi-packages.ts"
+      - "scripts/publish-pi-packages.ts"
+  workflow_dispatch:
+
+concurrency:
+  group: release-pi-packages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    environment: npm-release
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      # Trusted Publishing needs npm ≥ 11.5.1; the Node 22 image ships an older npm.
+      - run: npm install -g npm@latest
+      - run: bun install --frozen-lockfile
+      - run: bun run check:pi-packages
+      - run: bun run release:publish
+      - name: Tag released versions
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          bun x changeset tag
+          git push --tags
