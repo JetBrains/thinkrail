@@ -107,17 +107,21 @@ these conventions:
   singleton. It arrives through `useSyncExternalStore` or state: `AppearanceSettings` subscribes with
   `onSystemAppearanceChange`, and relative-time labels take `now` from `components/useNow`.
 
-Known bailouts. Two sit on hot paths: `useVirtualRows` runs on every `ChatView` render (each streamed delta)
-and `PlanComposer` on every plan-pane keystroke. The rest are off the per-keystroke and per-delta paths.
+Known bailouts include two hot paths: `useVirtualRows` runs on every `ChatView` render (each streamed delta)
+and `PlanComposer` on every plan-pane keystroke. Shared hooks and resource surfaces also have bailouts;
+compilation of the chat/shell hot paths does not imply coverage of every file/diff renderer.
 
-- Ref read in render: `useVirtualRows` (reads the visible-anchor ref while adjusting state during render;
+- Ref access in render: `useVirtualRows` (reads the visible-anchor ref while adjusting state during render;
   state would cost a render per scroll), `useWorkspaceRead`, `useChatTodos`, `useOpenBranchReview`,
-  `useBranchList`, `useTemplateCommandPicker`, `usePendingSelection`, `MonacoEditor`, `MonacoDiff`,
-  `AskUserQuestionCard`.
+  `useBranchList`, `useTemplateCommandPicker`, `usePendingSelection`, `MonacoEditor`, `AskUserQuestionCard`,
+  `useScrollViewState`, Pierre diff/file's `useThreadAnnotations`, `PierreDiffSurface`, `PierreFileSurface`,
+  image diff's `ImageContent`, `ImageView`, `PdfView`, `usePdfDocument`.
 - try/finally: `PlanPane` (also a throw inside try), `PlanComposer`, `ReviewPanel`, `SendButtonBase`,
   `NewWorkspaceDialog`, `SkillsDialog`, `TemplateEditorDialog`, `JetBrainsAiCard`, `ProvidersSettings`,
   `ModelsSettings`, `GithubSettings`, `LayoutSettings`, `ProjectSkillsNotice`, `StarterTemplatesOffer`.
 - try without catch: `usePromptImages`, `LineWidthControl`.
+- Throw inside try: `DiffPane`.
+- Manual memo dependencies cannot be preserved: `CsvDiff`, `JsonDiff`, `NotebookDiffSurface`, `PdfDiff`.
 - Other: `useLiveTabContent` (`??=`), `useAnalyticsConsent` (a callback that calls itself), `TemplateRow`
   (a conditional inside try/catch), `HistoryOverlay`'s `Highlight` (mutates a closure counter).
 
