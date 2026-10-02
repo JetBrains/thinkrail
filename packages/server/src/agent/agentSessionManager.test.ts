@@ -1,5 +1,13 @@
 import { afterAll, beforeAll, expect, jest, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -502,6 +510,59 @@ test("agent_settled carries the final attempt's terminal metadata", async () => 
 		completionUnread: false,
 	});
 });
+
+for (const corrupt of ["session-receipts.json", "session-lifecycle.json"]) {
+	test(`an unreadable ${corrupt} is set aside and existing history re-baselines as read`, async () => {
+		const previousDataDir = process.env.THINKRAIL_DATA_DIR;
+		const dataDir = tmpCwd("trpi-corrupt-metadata-");
+		process.env.THINKRAIL_DATA_DIR = dataDir;
+		try {
+			const cwd = tmpCwd("trpi-corrupt-metadata-ws-");
+			const { id } = writeFixtureSession(
+				defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd),
+				{
+					cwd,
+					messages: [
+						{ role: "user", text: "hi", timestamp: 1_000 },
+						{ role: "assistant", text: "done", stopReason: "stop", timestamp: 1_001 },
+					],
+				},
+			);
+			writeFileSync(
+				join(dataDir, "session-lifecycle.json"),
+				JSON.stringify({ version: 1, completionBySession: {}, cancelledRunBySession: {} }),
+			);
+			writeFileSync(
+				join(dataDir, "session-receipts.json"),
+				JSON.stringify({ version: 1, baselineComplete: true, handledCompletionBySession: {} }),
+			);
+			writeFileSync(join(dataDir, corrupt), "");
+			const workspace = { id: "ws-corrupt-metadata", projectId: "p-corrupt-metadata", cwd };
+
+			await initializeSessionStates([workspace]);
+
+			expect(await listSessionStates([workspace])).toEqual([
+				expect.objectContaining({
+					sessionId: id,
+					state: expect.objectContaining({
+						completion: expect.objectContaining({ outcome: "succeeded" }),
+						completionUnread: false,
+					}),
+				}),
+			]);
+			const setAside = readdirSync(dataDir).filter((name) =>
+				name.startsWith(`${corrupt}.corrupt-`),
+			);
+			expect(setAside).toHaveLength(1);
+			for (const file of ["session-lifecycle.json", "session-receipts.json"]) {
+				expect(() => JSON.parse(readFileSync(join(dataDir, file), "utf8"))).not.toThrow();
+			}
+		} finally {
+			if (previousDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
+			else process.env.THINKRAIL_DATA_DIR = previousDataDir;
+		}
+	});
+}
 
 test("a length-truncated questionnaire is terminal and cannot be answered", async () => {
 	let releaseContinuation = (): void => {};

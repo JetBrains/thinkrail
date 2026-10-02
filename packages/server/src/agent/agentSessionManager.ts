@@ -57,7 +57,9 @@ import {
 	dataDir,
 	loadSessionLifecycle,
 	loadSessionReceipts,
+	SESSION_LIFECYCLE_VERSION,
 	type SessionLifecycle,
+	type SessionMetadataLoad,
 	type SessionReceipts,
 	saveSessionLifecycle,
 	saveSessionReceipts,
@@ -181,12 +183,29 @@ let sessionMetadataRoot: string | null = null;
 let sessionLifecycle: SessionLifecycle | null = null;
 let sessionReceipts: SessionReceipts | null | undefined;
 
+function loadedSessionMetadata<T>(load: SessionMetadataLoad<T>): T | null {
+	if (load.kind === "loaded") return load.value;
+	if (load.kind === "set-aside") {
+		log.warn(
+			`${load.file} was unreadable; ${load.setAsidePath ? `moved it to ${load.setAsidePath}` : "could not move it aside"} and rebuilding session state`,
+			load.error,
+		);
+	}
+	return null;
+}
+
 function ensureSessionMetadata(): void {
 	const root = dataDir();
 	if (sessionMetadataRoot === root && sessionLifecycle) return;
+	const loadedLifecycle = loadedSessionMetadata(loadSessionLifecycle());
+	const loadedReceipts = loadedSessionMetadata(loadSessionReceipts());
 	sessionMetadataRoot = root;
-	sessionLifecycle = loadSessionLifecycle();
-	sessionReceipts = loadSessionReceipts();
+	sessionLifecycle = loadedLifecycle ?? {
+		version: SESSION_LIFECYCLE_VERSION,
+		completionBySession: {},
+		cancelledRunBySession: {},
+	};
+	sessionReceipts = loadedLifecycle ? loadedReceipts : null;
 }
 
 function lifecycle(): SessionLifecycle {

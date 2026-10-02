@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
@@ -20,7 +20,7 @@ import {
 	replaceAcquisitionWithTerminalMarkerIn,
 	saveAcquisitionIn,
 } from "./attribution";
-import type { AcquisitionRecord } from "./attributionProtocol";
+import { type AcquisitionRecord, isRecord } from "./attributionProtocol";
 import { claimAppInstalledIn, ensureInstallationIn, type InstallationRecord } from "./installation";
 
 export {
@@ -73,6 +73,34 @@ function stringRecord(value: unknown): Record<string, string> | null {
 	return entries.every(([, item]) => typeof item === "string") ? Object.fromEntries(entries) : null;
 }
 
+export type SessionMetadataLoad<T> =
+	| { kind: "loaded"; value: T }
+	| { kind: "missing" }
+	| { kind: "set-aside"; file: string; error: unknown; setAsidePath: string | null };
+
+function loadSessionMetadata<T>(
+	file: string,
+	parse: (raw: unknown) => T | null,
+): SessionMetadataLoad<T> {
+	const path = join(dataDir(), file);
+	let error: unknown;
+	try {
+		const value = parse(JSON.parse(readFileSync(path, "utf8")));
+		if (value !== null) return { kind: "loaded", value };
+		error = new Error(`Invalid ${file}`);
+	} catch (caught) {
+		if ((caught as NodeJS.ErrnoException).code === "ENOENT") return { kind: "missing" };
+		error = caught;
+	}
+	const setAsidePath = `${path}.corrupt-${Date.now()}`;
+	try {
+		renameSync(path, setAsidePath);
+		return { kind: "set-aside", file, error, setAsidePath };
+	} catch {
+		return { kind: "set-aside", file, error, setAsidePath: null };
+	}
+}
+
 export const SESSION_RECEIPTS_VERSION = 1;
 
 export interface SessionReceipts {
@@ -81,23 +109,25 @@ export interface SessionReceipts {
 	handledCompletionBySession: Record<string, string>;
 }
 
-export function loadSessionReceipts(): SessionReceipts | null {
-	const path = join(dataDir(), "session-receipts.json");
-	if (!existsSync(path)) return null;
-	const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+function parseSessionReceipts(raw: unknown): SessionReceipts | null {
+	if (!isRecord(raw)) return null;
 	const handledCompletionBySession = stringRecord(raw.handledCompletionBySession);
 	if (
 		raw.version !== SESSION_RECEIPTS_VERSION ||
 		typeof raw.baselineComplete !== "boolean" ||
 		handledCompletionBySession === null
 	) {
-		throw new Error("Invalid session receipts");
+		return null;
 	}
 	return {
 		version: SESSION_RECEIPTS_VERSION,
 		baselineComplete: raw.baselineComplete,
 		handledCompletionBySession,
 	};
+}
+
+export function loadSessionReceipts(): SessionMetadataLoad<SessionReceipts> {
+	return loadSessionMetadata("session-receipts.json", parseSessionReceipts);
 }
 
 export function saveSessionReceipts(receipts: SessionReceipts): void {
@@ -133,31 +163,21 @@ function sessionCompletion(value: unknown): PersistedSessionCompletion | null {
 	return { runId, completion: { completionId, outcome } };
 }
 
-export function loadSessionLifecycle(): SessionLifecycle {
-	const path = join(dataDir(), "session-lifecycle.json");
-	if (!existsSync(path)) {
-		return {
-			version: SESSION_LIFECYCLE_VERSION,
-			completionBySession: {},
-			cancelledRunBySession: {},
-		};
-	}
-	const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+function parseSessionLifecycle(raw: unknown): SessionLifecycle | null {
+	if (!isRecord(raw)) return null;
 	const cancelledRunBySession = stringRecord(raw.cancelledRunBySession);
-	const rawCompletions = Reflect.get(raw, "completionBySession");
+	const rawCompletions = raw.completionBySession;
 	if (
 		raw.version !== SESSION_LIFECYCLE_VERSION ||
-		!rawCompletions ||
-		typeof rawCompletions !== "object" ||
-		Array.isArray(rawCompletions) ||
+		!isRecord(rawCompletions) ||
 		cancelledRunBySession === null
 	) {
-		throw new Error("Invalid session lifecycle metadata");
+		return null;
 	}
 	const completionBySession: Record<string, PersistedSessionCompletion> = {};
 	for (const [sessionId, value] of Object.entries(rawCompletions)) {
 		const parsed = sessionCompletion(value);
-		if (!parsed) throw new Error("Invalid session lifecycle metadata");
+		if (!parsed) return null;
 		completionBySession[sessionId] = parsed;
 	}
 	return {
@@ -165,6 +185,10 @@ export function loadSessionLifecycle(): SessionLifecycle {
 		completionBySession,
 		cancelledRunBySession,
 	};
+}
+
+export function loadSessionLifecycle(): SessionMetadataLoad<SessionLifecycle> {
+	return loadSessionMetadata("session-lifecycle.json", parseSessionLifecycle);
 }
 
 export function saveSessionLifecycle(lifecycle: SessionLifecycle): void {
