@@ -12,9 +12,19 @@ import {
 	truncateToWidth,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
+import type { MermaidArt, Span } from "lovely-mermaid";
 import { mermaidFence } from "./markdown.ts";
-import { renderBoxDrawing } from "./probe.ts";
+import { renderArt } from "./probe.ts";
 import type { VisualizeParams } from "./schema.ts";
+
+type ThemeColor = Parameters<Theme["fg"]>[0];
+
+const ROLE_COLORS = {
+	border: "borderMuted",
+	text: "text",
+	edge: "accent",
+	edgeLabel: "muted",
+} as const satisfies Record<string, ThemeColor>;
 
 export function callSummary(args: Partial<VisualizeParams> | undefined): string {
 	if (args?.title) return args.title;
@@ -51,16 +61,19 @@ function markdown(text: string): Markdown {
 }
 
 export function fitsWidth(lines: readonly string[], width: number): boolean {
-	return lines.every((line) => {
-		const cells = visibleWidth(line);
-		return cells <= width && cells === line.length;
-	});
+	return lines.every((line) => visibleWidth(line) <= width);
+}
+
+function paint(span: Span, theme: Theme): string {
+	if (span.role === "none") return span.text;
+	if (span.role === "title") return theme.fg("accent", theme.bold(span.text));
+	return theme.fg(ROLE_COLORS[span.role], span.text);
 }
 
 export class DiagramComponent implements Component {
 	private cachedWidth: number | undefined;
 	private cachedLines: string[] | undefined;
-	private drawing: string[] | undefined | null = null;
+	private art: MermaidArt | undefined | null = null;
 
 	constructor(
 		private readonly source: string,
@@ -69,17 +82,12 @@ export class DiagramComponent implements Component {
 		private readonly theme: Theme,
 	) {}
 
-	private boxDrawing(): string[] | undefined {
-		if (this.drawing === null) {
-			let rendered: string | undefined;
-			try {
-				rendered = renderBoxDrawing(this.source);
-			} catch {
-				rendered = undefined;
-			}
-			this.drawing = rendered?.split("\n").map((line) => line.trimEnd());
+	private completeArt(): MermaidArt | undefined {
+		if (this.art === null) {
+			const art = renderArt(this.source);
+			this.art = art && art.warnings.length === 0 ? art : undefined;
 		}
-		return this.drawing;
+		return this.art;
 	}
 
 	render(width: number): string[] {
@@ -91,10 +99,10 @@ export class DiagramComponent implements Component {
 				"",
 			);
 		}
-		const drawing = this.boxDrawing();
+		const art = this.completeArt();
 		const fence = markdown(mermaidFence(undefined, this.source));
-		if (drawing && fitsWidth(drawing, width)) {
-			lines.push(...drawing.map((line) => this.theme.fg("toolOutput", line)));
+		if (art && fitsWidth(art.plain, width)) {
+			lines.push(...art.styled.map((row) => row.map((span) => paint(span, this.theme)).join("")));
 			if (this.expanded) lines.push("", ...fence.render(width));
 		} else {
 			lines.push(...fence.render(width));

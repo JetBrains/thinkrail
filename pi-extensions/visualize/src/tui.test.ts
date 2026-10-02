@@ -1,8 +1,6 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import { initTheme, type Theme } from "@earendil-works/pi-coding-agent";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
-import { diagramFamily, withoutPreamble } from "./diagramFamily.ts";
-import { renderBoxDrawing } from "./probe.ts";
 import {
 	callSummary,
 	DiagramComponent,
@@ -17,6 +15,7 @@ const theme = {
 } as unknown as Theme;
 
 const FLOW = "flowchart LR\n  A[Start] --> B{Ok?}\n  B -->|yes| C[Done]";
+const OVER_SIZE_CAP = `flowchart LR\n${Array.from({ length: 140 }, (_, i) => `  N${i} --> N${i + 1}`).join("\n")}`;
 
 beforeAll(() => initTheme("dark", false));
 
@@ -24,70 +23,74 @@ function plain(lines: string[]): string[] {
 	return lines.map((line) => stripTerminalSequences(line).trimEnd());
 }
 
-describe("diagramFamily", () => {
-	test("detects the renderable families and skips comments", () => {
-		expect(diagramFamily("%% note\nflowchart TD\n A")).toBe("flowchart");
-		expect(diagramFamily("graph LR\n A")).toBe("flowchart");
-		expect(diagramFamily("stateDiagram-v2\n [*] --> A")).toBe("state");
-		expect(diagramFamily("sequenceDiagram\n A->>B: hi")).toBe("sequence");
-		expect(diagramFamily("classDiagram\n A <|-- B")).toBe("class");
-		expect(diagramFamily("erDiagram\n A ||--o{ B : has")).toBe("er");
-		expect(diagramFamily("xychart-beta\n x-axis [a]")).toBe("xychart");
-	});
+function drawn(source: string, width = 200): string[] | undefined {
+	const lines = plain(new DiagramComponent(source, undefined, false, theme).render(width));
+	return lines.some((line) => line.includes("```")) ? undefined : lines;
+}
 
-	test("strips leading blank and %% comment lines for the render copy only", () => {
-		expect(withoutPreamble("\n%% a\n  %% b\nflowchart LR\n A --> B")).toBe(
-			"flowchart LR\n A --> B",
-		);
-		expect(withoutPreamble("flowchart LR\n %% inner\n A --> B")).toBe(
-			"flowchart LR\n %% inner\n A --> B",
-		);
-	});
-
-	test("returns undefined for families the renderer does not know", () => {
-		for (const header of ["gantt", "pie", "mindmap", "gitGraph", "timeline", "nonsense"]) {
-			expect(diagramFamily(`${header}\n x`)).toBeUndefined();
-		}
+describe("fitsWidth", () => {
+	test("accepts rows within the width, measured in terminal cells", () => {
+		expect(fitsWidth(["┌───┐", "│ A │"], 5)).toBe(true);
+		expect(fitsWidth(["┌───┐", "│ A │"], 4)).toBe(false);
+		expect(fitsWidth(["│ 数据库 │"], 10)).toBe(true);
+		expect(fitsWidth(["│ 数据库 │"], 9)).toBe(false);
 	});
 });
 
-describe("renderBoxDrawing", () => {
-	test("draws every supported family even behind a leading %% comment", () => {
+describe("DiagramComponent", () => {
+	test("draws every family the renderer knows, also behind frontmatter, directives and comments", () => {
 		const sources = [
 			"flowchart LR\n A --> B",
 			"stateDiagram-v2\n [*] --> A",
 			"sequenceDiagram\n A->>B: hi",
 			"classDiagram\n A <|-- B",
 			"erDiagram\n A ||--o{ B : has",
-			"xychart-beta\n x-axis [a, b]\n y-axis 0 --> 10\n bar [3, 7]",
+			'pie\n "a": 1\n "b": 3',
+			"mindmap\n root\n  a",
+			"timeline\n 2020 : a",
+			"gitGraph\n commit\n branch dev\n commit",
 		];
 		for (const source of sources) {
-			expect(renderBoxDrawing(`%% note\n\n${source}`)).toBeDefined();
+			for (const prefix of ["", "%% note\n\n", "%%{init: {}}%%\n", "---\ntitle: T\n---\n"]) {
+				expect(drawn(`${prefix}${source}`)).toBeDefined();
+			}
 		}
 	});
 
-	test("renders a flowchart as box-drawing and returns undefined for unknown families", () => {
-		const drawing = renderBoxDrawing(FLOW);
-		expect(drawing).toContain("┌");
-		expect(drawing).toContain("Start");
-		expect(renderBoxDrawing("gantt\n title X")).toBeUndefined();
+	test("keeps every label of back-and-forth and parallel edges between the same nodes", () => {
+		const cases: Array<[string, string[]]> = [
+			[
+				"flowchart LR\n  U[User] -->|1. Click login| A[App]\n  A -->|8. Logged in| U",
+				["1. Click login", "8. Logged in"],
+			],
+			["flowchart LR\n  A -->|one| B\n  A -->|two| B", ["one", "two"]],
+			["stateDiagram-v2\n  Idle --> Running: start\n  Running --> Idle: stop", ["start", "stop"]],
+			["classDiagram\n  A --> B : uses\n  B --> A : owns", ["uses", "owns"]],
+			["erDiagram\n  A ||--o{ B : has\n  B }o--|| A : belongs", ["has", "belongs"]],
+		];
+		for (const [source, labels] of cases) {
+			const text = drawn(source)?.join("\n");
+			for (const label of labels) expect(text).toContain(label);
+		}
 	});
-});
 
-describe("fitsWidth", () => {
-	test("accepts rows within width whose cells equal their length", () => {
-		expect(fitsWidth(["┌───┐", "│ A │"], 5)).toBe(true);
-		expect(fitsWidth(["┌───┐", "│ A │"], 4)).toBe(false);
+	test("draws wide-character labels within the viewport", () => {
+		const lines = drawn("flowchart LR\n A[数据库] --> B[End]", 40);
+		expect(lines?.some((line) => line.includes("数据库"))).toBe(true);
+		for (const line of lines ?? []) expect(visibleWidth(line)).toBeLessThanOrEqual(40);
 	});
 
-	test("rejects rows with wide characters the renderer cannot place", () => {
-		const row = "│ 数据库 │";
-		expect(visibleWidth(row)).toBeGreaterThan(row.length);
-		expect(fitsWidth([row], 80)).toBe(false);
+	test("paints span roles with the pi theme colours", () => {
+		const tagging = {
+			fg: (color: string, text: string) => `<${color}>${text}`,
+			bold: (text: string) => text,
+		} as unknown as Theme;
+		const text = new DiagramComponent(FLOW, undefined, false, tagging).render(120).join("\n");
+		for (const color of ["borderMuted", "text", "accent", "muted"]) {
+			expect(text).toContain(`<${color}>`);
+		}
 	});
-});
 
-describe("DiagramComponent", () => {
 	test("shows the diagram when it fits and only the diagram when collapsed", () => {
 		const lines = plain(new DiagramComponent(FLOW, undefined, false, theme).render(120));
 		expect(lines.some((line) => line.includes("Start"))).toBe(true);
@@ -108,18 +111,17 @@ describe("DiagramComponent", () => {
 		for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(20);
 	});
 
-	test("falls back to the source fence for wide-character labels and unknown families", () => {
-		const cjk = plain(
-			new DiagramComponent("flowchart LR\n A[数据库] --> B[End]", undefined, false, theme).render(
-				120,
-			),
-		);
-		expect(cjk.some((line) => line.includes("┌"))).toBe(false);
-		expect(cjk.some((line) => line.includes("数据库"))).toBe(true);
-		const gantt = plain(
-			new DiagramComponent("gantt\n title X", undefined, false, theme).render(120),
-		);
-		expect(gantt.some((line) => line.includes("gantt"))).toBe(true);
+	test("falls back to the source fence for an incomplete drawing and unknown families", () => {
+		for (const source of [
+			OVER_SIZE_CAP,
+			"flowchart LR\n  A --> B\n  C -->",
+			"gantt\n title X",
+			"xychart-beta\n x-axis [a, b]\n bar [3, 7]",
+		]) {
+			const lines = plain(new DiagramComponent(source, undefined, false, theme).render(200));
+			expect(lines.some((line) => line.includes("```"))).toBe(true);
+			expect(lines.some((line) => line.includes(source.split("\n")[0] as string))).toBe(true);
+		}
 	});
 
 	test("never emits a row wider than the viewport, including long titles and long source lines", () => {

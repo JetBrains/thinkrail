@@ -46,11 +46,13 @@ describe("visualize extension", () => {
 	});
 
 	test("execute passes families the probe cannot render through unvalidated", async () => {
-		const res = await loadTool().execute("id", {
-			type: "diagram",
-			mermaid: "gantt\n title X\n section S\n task :a1, 2024-01-01, 3d",
-		});
-		expect(res.content[0]?.text).toContain("gantt");
+		for (const mermaid of [
+			"gantt\n title X\n section S\n task :a1, 2024-01-01, 3d",
+			"xychart-beta\n x-axis [a, b]\n bar [3, 7] ]]",
+		]) {
+			const res = await loadTool().execute("id", { type: "diagram", mermaid });
+			expect(res.content[0]?.text).toContain(mermaid.split("\n")[0] as string);
+		}
 	});
 
 	test("execute renders a comparison with pros and a recommended marker", async () => {
@@ -71,24 +73,42 @@ describe("visualize extension", () => {
 		).rejects.toThrow(/visualize: invalid Mermaid syntax in `options\[0\]\.mermaid`/);
 	});
 
-	test("the default probe rejects a bad direction header and an empty render, with the location", async () => {
+	test("the default probe rejects a bad direction and an unreadable diagram, with the location", async () => {
 		await expect(
-			loadTool().execute("id", { type: "diagram", mermaid: "flowchart XX\n A --> B" }),
-		).rejects.toThrow(/invalid Mermaid syntax in `mermaid`: Invalid mermaid header/);
+			loadTool().execute("id", { type: "diagram", mermaid: "%% c\nflowchart XX\n A --> B" }),
+		).rejects.toThrow(/invalid Mermaid syntax in `mermaid`: unknown flowchart direction "XX"/);
 		await expect(
 			loadTool().execute("id", {
 				type: "comparison",
 				options: [{ name: "Broken", mermaid: "sequenceDiagram\n this is not a message" }],
 			}),
 		).rejects.toThrow(
-			/visualize: invalid Mermaid syntax in `options\[0\]\.mermaid`: the diagram renders empty[\s\S]*correct the syntax and call `visualize` again/i,
+			/visualize: invalid Mermaid syntax in `options\[0\]\.mermaid`: no statement of this sequence diagram could be read[\s\S]*correct the syntax and call `visualize` again/i,
 		);
 	});
 
-	test("the default probe is best-effort: a dangling edge renders a partial diagram without error", async () => {
+	test("the default probe rejects a fragment the parser had to drop and names it", async () => {
 		await expect(
-			loadTool().execute("id", { type: "diagram", mermaid: "flowchart LR\n A -->" }),
-		).resolves.toBeDefined();
+			loadTool().execute("id", { type: "diagram", mermaid: "flowchart LR\n A --> B\n C -->" }),
+		).rejects.toThrow(
+			/part of the diagram could not be read \u2014 dropped, link has no target: "C -->"/,
+		);
+		await expect(
+			loadTool().execute("id", { type: "diagram", mermaid: "graph TD\n A[Start --> B" }),
+		).rejects.toThrow(/label is missing its closing/);
+	});
+
+	test("the default probe accepts valid headers, preambles and diagrams over the renderer's size cap", async () => {
+		const overCap = `flowchart LR\n${Array.from({ length: 140 }, (_, i) => ` N${i} --> N${i + 1}`).join("\n")}`;
+		for (const mermaid of [
+			"graph TD;A-->B",
+			"flowchart\n A --> B",
+			"%%{init: {}}%%\nflowchart RL\n A --> B",
+			"---\ntitle: T\n---\nflowchart LR\n A --> B",
+			overCap,
+		]) {
+			await expect(loadTool().execute("id", { type: "diagram", mermaid })).resolves.toBeDefined();
+		}
 	});
 
 	test("an injected validator replaces the default probe and is wrapped with the location", async () => {

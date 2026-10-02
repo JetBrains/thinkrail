@@ -54,7 +54,9 @@ package through [[module-thinkrail-extensions]] and deletes it.
   dropped fragment there is a real defect worth a retry. Accepted cost: the grammar is lenient (an
   unclosed class body passes) and has rare false positives (`accTitle`/`accDescr`); a host with a
   strict parser replaces the probe through the seam. Other families (gantt, xychart, …) **pass through
-  unvalidated** rather than risk rejecting a diagram type the renderer merely does not know.
+  unvalidated** rather than risk rejecting a diagram type the renderer merely does not know. Probe and
+  TUI share one render call that strips leading blank and `%%` lines first: `lovely-mermaid` 0.3.3
+  returns `null` for a mindmap behind a comment or `%%{init}%%` directive (other kinds are unaffected).
 - **Terminal rendering tiers.** `renderCall` is a one-line summary (`visualize <title | diagram |
   comparison — N options>`). `renderResult` returns a width-aware component: in `render(width)` a
   diagram is drawn only when the art is **complete** (no warnings) and every row fits the width by
@@ -82,5 +84,5 @@ package through [[module-thinkrail-extensions]] and deletes it.
 
 `index.ts` (exports + default), `src/extension.ts` (factory, tool registration, validator wrapping),
 `src/schema.ts`, `src/validate.ts` (shape + source enumeration), `src/markdown.ts` (tier-1 fallbacks),
-`src/probe.ts` (default validator), `src/tui.ts` (renderers + `DiagramComponent`). `bun test` covers each; the vanilla-parity gate in
+`src/probe.ts` (the shared render call + default validator), `src/tui.ts` (renderers + `DiagramComponent`). `bun test` covers each; the vanilla-parity gate in
 [[module-pi-extensions]] exercises the packed artifact.

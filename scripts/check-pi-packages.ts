@@ -72,19 +72,28 @@ const EXPECTATIONS: Record<string, Expectation> = {
 			},
 			{
 				tool: "visualize",
-				name: "bad-header-rejected",
-				args: { type: "diagram", mermaid: "flowchart XX\n  A --> B" },
-				expectError: "invalid Mermaid syntax in `mermaid`",
+				name: "back-and-forth-labels",
+				args: {
+					type: "diagram",
+					mermaid: "flowchart LR\n  U[User] -->|request| A[App]\n  A -->|response| U",
+				},
+				expectRender: { width: 100, contains: ["request", "response"] },
 			},
 			{
 				tool: "visualize",
-				name: "empty-render-rejected",
+				name: "bad-direction-rejected",
+				args: { type: "diagram", mermaid: "flowchart XX\n  A --> B" },
+				expectError: "invalid Mermaid syntax in `mermaid`: unknown flowchart direction",
+			},
+			{
+				tool: "visualize",
+				name: "dropped-fragment-rejected",
 				args: {
 					type: "comparison",
-					options: [{ name: "Broken", mermaid: "sequenceDiagram\n  nonsense" }],
+					options: [{ name: "Broken", mermaid: "flowchart LR\n  A --> B\n  C -->" }],
 				},
 				expectError:
-					"invalid Mermaid syntax in `options\\[0\\]\\.mermaid`: the diagram renders empty",
+					"invalid Mermaid syntax in `options\\[0\\]\\.mermaid`: part of the diagram could not be read",
 			},
 			{
 				tool: "visualize",
