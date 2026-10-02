@@ -346,7 +346,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     settings and runtime-loaded third-party extensions are explicit deferrals. Rejected: runtime-loaded
     bundles now (React singleton, versioned UI API, security story first), a logical extension inside
     the apps (three physical homes, no boundary), generated factory lists derived from descriptors
-    (functions yield no import specifiers). Pilot: visualize — `beautiful-mermaid` for TUI rendering and
+    (functions yield no import specifiers). Pilot: visualize — `lovely-mermaid` for TUI rendering and
     best-effort validation in the portable package, strict `mermaid`+`linkedom` validation injected by
     the ThinkRail server half through `createVisualizeExtension({ validateMermaid })`. Detail:
     [[module-thinkrail-extensions]].

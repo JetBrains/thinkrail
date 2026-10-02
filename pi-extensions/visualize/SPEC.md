@@ -31,24 +31,38 @@ package through [[module-thinkrail-extensions]] and deletes it.
 
 ## Decisions
 
-- **Dependency-light for vanilla users.** The package depends on `beautiful-mermaid` only (zero-DOM,
-  synchronous). `mermaid` (~83 MB with its tree) and the `linkedom` DOM shim it needs under Node/Bun
-  were rejected here: they buy strict parsing but no terminal rendering, and a host that renders with
-  mermaid can inject that parser through the seam.
-- **Default validation is a renderability probe, not syntax validation.** For the families
-  `beautiful-mermaid` draws (flowchart/graph, state, sequence, class, ER, xychart — detected by header,
-  comments skipped) the probe renders the source and rejects a bad header or an **empty drawing**. It
-  cannot catch partial damage: the renderer silently drops malformed fragments (`A -->` keeps only `A`).
-  Other families (gantt, pie, mindmap, gitGraph, …) and unknown headers **pass through unvalidated**
-  rather than risk rejecting a diagram type the renderer merely does not know. All of this is stated in
-  the README; the TUI always keeps the source reachable.
+- **Dependency-light for vanilla users: `lovely-mermaid`.** The package depends on `lovely-mermaid` only
+  (zero dependencies, ~1 MB, synchronous, Apache-2.0). It is the maintained successor of `grok-mermaid`,
+  the engine pi itself uses to draw ```` ```mermaid ```` fences in chat messages — pi never applies that
+  to tool results, hence this package's own renderer — so a `visualize` diagram looks like one the
+  model writes inline. `mermaid` (~83 MB with its tree) and the `linkedom` DOM shim it needs under
+  Node/Bun were rejected here: they buy strict parsing but no terminal rendering, and a host that
+  renders with mermaid can inject that parser through the seam.
+- **Post-mortem: `beautiful-mermaid` was replaced.** Its ASCII engine (shared by the `@vercel` and
+  `@ktrysmt` forks) routes every edge between one pair of nodes along a single path, so a
+  back-and-forth or parallel pair — the common request/response or `Idle ⇄ Running` shape — overprinted
+  labels, dropped one, or lost which way each went, and the collapsed TUI showed that drawing with no
+  hint. Found in a live vanilla-pi check on an OAuth flow; it also cost ~10 MB with `elkjs`.
+- **Default validation is the renderer's own parse, best-effort.** For the kinds `lovely-mermaid`
+  draws (flowchart/graph, state, sequence, class, ER, pie, mindmap, timeline, gitGraph — its
+  `diagramKind`, which skips frontmatter, directives and comments) the probe rejects an unknown
+  flowchart direction (`lovely-mermaid` silently accepts `flowchart XX`; mermaid does not), a source
+  in which nothing parsed (`render` → `null`), and any fragment the parse **dropped** (`warnings`:
+  dangling links, unclosed labels, unreadable statements). The size-cap warning (`diagram truncated`)
+  is a renderer limit, not a source error, and is never a rejection. The library advises against
+  gating *rendering* on warnings because streamed sources warn mid-edit; a tool call is complete, so a
+  dropped fragment there is a real defect worth a retry. Accepted cost: the grammar is lenient (an
+  unclosed class body passes) and has rare false positives (`accTitle`/`accDescr`); a host with a
+  strict parser replaces the probe through the seam. Other families (gantt, xychart, …) **pass through
+  unvalidated** rather than risk rejecting a diagram type the renderer merely does not know.
 - **Terminal rendering tiers.** `renderCall` is a one-line summary (`visualize <title | diagram |
   comparison — N options>`). `renderResult` returns a width-aware component: in `render(width)` a
-  diagram is drawn as box-drawing (`colorMode: "none"`, pi theme styling) only when every row fits the
-  width **and** its terminal-cell width equals its string length — the renderer positions labels by
-  `.length`, so wide (CJK) or combining characters would misalign borders; otherwise, for unknown
-  families, or when rendering throws, the pi-tui `Markdown` fence of the source is shown. A diagram is
-  never word-wrapped. Collapsed = drawing only; expanded = drawing + source fence. Diagrams render from
+  diagram is drawn only when the art is **complete** (no warnings) and every row fits the width by
+  pi-tui's `visibleWidth` (which agrees with the renderer's grapheme-correct widths, so CJK and emoji
+  labels draw); otherwise, and for kinds the renderer does not draw, the pi-tui `Markdown` fence of the
+  source is shown. Span roles map to pi's theme exactly as pi's native renderer does (`border` →
+  `borderMuted`, `text` → `text`, `edge` → `accent`, `edgeLabel` → `muted`). A diagram is never
+  word-wrapped. Collapsed = drawing only; expanded = drawing + source fence. Diagrams render from
   defensively checked `result.details`; comparisons, errors (`context.isError`) and missing details
   render from `result.content`; partial results show a placeholder. Image-tier rendering
   (Kitty/iTerm2) is deferred: it needs SVG rasterisation without a browser and degrades under tmux/SSH.
@@ -59,7 +73,7 @@ package through [[module-thinkrail-extensions]] and deletes it.
 
 ## Boundary
 
-- **Allowed deps:** `beautiful-mermaid` (exact pin); peers `@earendil-works/pi-ai` (`StringEnum`),
+- **Allowed deps:** `lovely-mermaid` (exact pin); peers `@earendil-works/pi-ai` (`StringEnum`),
   `@earendil-works/pi-coding-agent`, `@earendil-works/pi-tui`, `typebox`.
 - **Forbidden:** anything from ThinkRail (`@thinkrail/*`, `apps/*`, `packages/server`), `mermaid`,
   `linkedom`, Bun-specific APIs.
@@ -68,6 +82,5 @@ package through [[module-thinkrail-extensions]] and deletes it.
 
 `index.ts` (exports + default), `src/extension.ts` (factory, tool registration, validator wrapping),
 `src/schema.ts`, `src/validate.ts` (shape + source enumeration), `src/markdown.ts` (tier-1 fallbacks),
-`src/diagramFamily.ts` (header detection), `src/probe.ts` (box-drawing render + default validator),
-`src/tui.ts` (renderers + `DiagramComponent`). `bun test` covers each; the vanilla-parity gate in
+`src/probe.ts` (default validator), `src/tui.ts` (renderers + `DiagramComponent`). `bun test` covers each; the vanilla-parity gate in
 [[module-pi-extensions]] exercises the packed artifact.

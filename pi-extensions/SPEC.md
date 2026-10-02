@@ -102,4 +102,4 @@ Order: visualize → delegation + subagents → background-commands → spec-gra
 
 | package | shape | notes |
 | --- | --- | --- |
-| `visualize` | extension | `visualize` tool; `beautiful-mermaid` for TUI box-drawing and the best-effort vanilla validation; exports `createVisualizeExtension({ validateMermaid })` so an embedder can inject a strict validator. Detail: [[module-pi-visualize]]. |
+| `visualize` | extension | `visualize` tool; `lovely-mermaid` for TUI box-drawing and the best-effort vanilla validation; exports `createVisualizeExtension({ validateMermaid })` so an embedder can inject a strict validator. Detail: [[module-pi-visualize]]. |

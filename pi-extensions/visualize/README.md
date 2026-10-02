@@ -12,12 +12,13 @@ pi install npm:@thinkrail.ai/pi-visualize
 
 - **`visualize` tool** — `type: "diagram"` with raw Mermaid source, or `type: "comparison"` with options
   (name, description, pros, cons, `recommended`, optional inline Mermaid), plus an optional `title`.
-- **Terminal rendering.** Flowcharts, state, sequence, class, ER diagrams and XY charts are drawn as
-  Unicode box-drawing right in the pi TUI (via [`beautiful-mermaid`](https://github.com/lukilabs/beautiful-mermaid)).
-  When a diagram is wider than your terminal, uses wide characters (CJK), or is a family the renderer
-  does not know (gantt, pie, mindmap, …), the tool shows the Mermaid source in a code fence instead —
-  it never wraps a diagram. Expand the tool result to see the source under the drawing. Comparisons
-  render as markdown.
+- **Terminal rendering.** Flowcharts, state, sequence, class and ER diagrams, pies, mindmaps,
+  timelines and git graphs are drawn as Unicode box-drawing right in the pi TUI, in your pi theme's
+  colours (via [`lovely-mermaid`](https://github.com/xl0/lovely-mermaid), the same engine family pi uses
+  for Mermaid in chat messages). When a diagram is wider than your terminal, could only be drawn in
+  part, or is a family the renderer does not know (gantt, xychart, …), the tool shows the Mermaid
+  source in a code fence instead — it never wraps a diagram. Expand the tool result to see the source
+  under the drawing. Comparisons render as markdown.
 - **Readable everywhere.** The tool's text result is markdown — a ```mermaid fence or a sectioned
   comparison — so it also reads fine in `pi -p`, JSON/RPC mode, or any host without a renderer.
 
@@ -26,11 +27,14 @@ pi install npm:@thinkrail.ai/pi-visualize
 The tool rejects empty sources and shape errors (a diagram without `mermaid`, a comparison without
 `options`) with a message that tells the model how to fix the call.
 
-Mermaid syntax is checked **best-effort**: for the families it can draw, the tool renders the diagram
-and rejects a bad header or a source that produces an empty drawing. It does **not** run the real
-Mermaid parser, so a partially malformed diagram (for example a dangling `A -->`) may pass and render
-with the broken fragment left out; other families (gantt, pie, …) pass through unchecked and render as
-source. The source is always one keypress away in the TUI, so nothing is hidden.
+Mermaid syntax is checked **best-effort** with the renderer's own parser: for the families it can draw,
+the tool rejects an unknown flowchart direction (`flowchart XX`), a source in which nothing parses, and
+any fragment the parser had to drop (a dangling `A -->`, an unclosed `[label`, an unreadable line),
+naming what was dropped. Diagrams too big for the terminal renderer (over 128 nodes) are not rejected —
+they render as source. It does **not** run the real Mermaid parser: the grammar is lenient, so some
+malformed input still passes, and `accTitle`/`accDescr` lines are rejected although Mermaid accepts
+them. Other families (gantt, xychart, …) pass through unchecked and render as source. The source is
+always one keypress away in the TUI, so nothing is hidden.
 
 Hosts that render Mermaid themselves can plug in a strict validator:
 
