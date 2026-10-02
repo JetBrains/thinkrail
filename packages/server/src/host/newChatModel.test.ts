@@ -44,19 +44,20 @@ test("new-chat model resolution uses a saved available model and clamps its save
 	expect(clampCalls).toEqual([{ provider: "limited", id: "saved", level: "high" }]);
 });
 
-test("new-chat model resolution falls back to the first model when the saved model is unavailable", async () => {
+test("new-chat model resolution leaves the model to pi when the saved model is unavailable", async () => {
 	const { resolve } = resolver(
 		{ defaultModel: wireModel("missing", "gone"), defaultEffort: "low" },
 		[first, second],
 	);
 
-	expect(await resolve()).toEqual({ model: first, thinkingLevel: "low" });
+	expect(await resolve()).toEqual({ model: null, thinkingLevel: "low" });
 });
 
-test("new-chat model resolution falls back to the first model when no default is saved", async () => {
-	const { resolve } = resolver({}, [first, second]);
+test("new-chat model resolution leaves the model to pi when no default is saved", async () => {
+	const { resolve, clampCalls } = resolver({}, [first, second]);
 
-	expect(await resolve()).toEqual({ model: first, thinkingLevel: "medium" });
+	expect(await resolve()).toEqual({ model: null, thinkingLevel: "medium" });
+	expect(clampCalls).toEqual([]);
 });
 
 test("new-chat model resolution omits the model when the available catalog is empty", async () => {

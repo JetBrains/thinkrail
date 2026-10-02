@@ -65,8 +65,8 @@ export function ModelsSettings() {
 			<div className="flex flex-col gap-4">
 				<h3 className="tr-title-section text-text-default">Default model</h3>
 				<p className="text-text-muted tr-text-metadata">
-					The model and effort new chats start with. If it's unavailable, new chats use the first
-					available model.
+					The model and effort new chats start with. If it's unset or unavailable, new chats use
+					pi's default model.
 				</p>
 			</div>
 			{loadFailed ? (
@@ -86,7 +86,7 @@ export function ModelsSettings() {
 						onSelect={(selected) =>
 							void saveConfig({ defaultModel: selected }, "Couldn't save the default model")
 						}
-						placeholder="First available model"
+						placeholder="Pi's default model"
 						disabled={saving || reading}
 					/>
 					<ThinkingSelector

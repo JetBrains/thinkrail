@@ -205,12 +205,15 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     entry) / `getSessionStats` (+ contextUsage) / `getSessionCommands` /
     `listAvailableModels` / `listSettledModels` (the same snapshot without starting a refresh) / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
     pair — `model.clampThinking`; the host uses it so defaults and live-session effort changes follow Pi).
-    Earlier, #394 showed ThinkRail's `available[0]` differed from Pi's pick and hit a proxy 400. ThinkRail
-    now resolves defaults host-side from `AppConfig`, falling back to the first available model; it always
-    passes the chosen model explicitly so the UI and session agree. Accepted risk: the first available model
-    may not be the provider default; users can set one in Settings → Models. Plan review uses this same
-    `resolveNewChatModel({})` for unset reviewer overrides: AppConfig `defaultModel`/`defaultEffort`, with
-    the first available model and `medium` effort as fallbacks.
+    ThinkRail resolves defaults host-side from `AppConfig`: a saved `defaultModel` that is available is
+    passed explicitly so the UI and session agree; otherwise the host passes **no model** and pi's own
+    resolver (settings pin → provider default → first available) picks inside `createAgentSession`. The host
+    never substitutes `available[0]` — that second resolver disagrees with pi's pick and twice (#394, then
+    #575) landed new chats on `anthropic/claude-fable-5`, whose `compat.allowedFallbackModels` makes pi send
+    a `fallbacks` field that an Anthropic proxy without the server-side-fallback beta rejects with a 400.
+    Plan review uses this same `resolveNewChatModel({})` for unset reviewer overrides: AppConfig
+    `defaultModel`/`defaultEffort`, else no model (the child inherits the worker's model, as before #575)
+    and `medium` effort.
 
     **Models cross the wire as `WireModel` (never pi's raw `Model`):** `toWireModel` projects a
     `Model` onto the wire's **allowlist** (see `WireModel`) — so `baseUrl`, `headers`, extension/provider

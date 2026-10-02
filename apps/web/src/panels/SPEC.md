@@ -319,9 +319,9 @@ and branch from the request. The rest stays compact: the base-branch combobox (`
 degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filtered so no stray `origin`),
 a project picker, the prompt hero, and the reused
   `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected from the host's
-  `model.default` result, which is the saved default when available or the first available model. Values
-  are held in dialog state and applied at create time. Only when no model is available does the host return
-  `model: null`; the effort control is disabled and create omits the model. The dialog does not choose a
+  `model.default` result, which is the saved default when available. Values are held in dialog state and
+  applied at create time. With no available saved default the host returns `model: null` and pi picks the
+  session's model; the effort control is disabled and create omits the model. The dialog does not choose a
   competing default: its display and newly-created session share the host resolver (see `submodule-server-agent`).
   The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
   lock). Their catalog is the shared one — `chat/useModelCatalog`, so the dialog and the chat composer
@@ -334,7 +334,7 @@ a project picker, the prompt hero, and the reused
   current-but-unsettled list, which is no basis for a verdict), dropped by the next `model.list` install from any consumer (whose
   handler answers from before the detached refresh it starts) *and* dropped up front by any consumer
   activating. On a fresh catalog it returns **`"unavailable"`** — a verdict, not a replacement: the dialog
-  then asks **`model.default`** (the host's saved default or first-available fallback, plus its consistent
+  then asks **`model.default`** (the host's saved default or `null` for pi's own pick, plus its consistent
   effort) exactly as it does for the preselect, through **one** `applyHostDefault` — so no client-side copy
   of the host's default policy exists here. Asked at most once per opening, so a still-missing model can't spin the effect. Effort is a separate concern: one effect keeps the held level
   runnable by the held model by asking the host for pi's clamp (**`model.clampThinking`**) rather than
@@ -555,8 +555,8 @@ a project picker, the prompt hero, and the reused
   host resolves the saved model and its effort levels against its settled catalog, so a vanished or changed
   model never offers stale levels; only the latest read applies, and a failed read replaces the controls
   with a retry — and writes `defaultModel` / `defaultEffort` through `settings.update`, with an error toast
-  if persistence fails. The host's `model.default` result is the displayed effective choice, including the
-  first-available fallback when a saved model is missing; supported effort levels and the displayed effort
+  if persistence fails. The host's `model.default` result is the displayed effective choice, shown as the
+  "Pi's default model" placeholder when no saved model is available; supported effort levels and the displayed effort
   come from that same resolved, Pi-clamped model. Both triggers are disabled, and choices in an already-open
   picker are ignored, while a save or re-read is in flight.
   **`ReviewSettings`** is the

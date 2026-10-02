@@ -595,7 +595,7 @@ export interface AppConfig extends ThemePreference {
 	chatLineWidthBounded: boolean;
 	fileLineWidthBounded: boolean;
 	customLayoutPresets: LayoutPreset[];
-	/** The model new chats start with; unset uses the first available model. */
+	/** The model new chats start with; unset (or unavailable) lets pi pick its own default. */
 	defaultModel?: WireModel;
 	/** New-chat effort; unset defaults to medium. */
 	defaultEffort?: ThinkingLevel;

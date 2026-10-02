@@ -20,8 +20,7 @@ export async function resolveNewChatModel(
 		requested.model ??
 		availableModels.find(
 			(candidate) => candidate.provider === savedModel?.provider && candidate.id === savedModel?.id,
-		) ??
-		availableModels[0];
+		);
 	const level = requested.thinkingLevel ?? config.defaultEffort ?? "medium";
 	if (!model) return { model: null, thinkingLevel: level };
 	return {

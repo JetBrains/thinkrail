@@ -73,7 +73,7 @@ test("Models settings save host defaults and apply them to a fresh chat", async 
 		const section = page.getByTestId("settings-models");
 		await expect(section).toContainText("Default model");
 		await expect(section).toContainText(
-			"If it's unavailable, new chats use the first available model.",
+			"If it's unset or unavailable, new chats use pi's default model.",
 		);
 
 		const modelSelector = section.getByTestId("model-selector");
@@ -127,7 +127,7 @@ test("Models settings save host defaults and apply them to a fresh chat", async 
 	}
 });
 
-test("without saved defaults, Settings and a fresh chat use the first available model and clamped medium effort", async ({
+test("without saved defaults, the host leaves the model to pi and a fresh chat starts on pi's pick", async ({
 	page,
 }) => {
 	await openWorkspaceChat(page);
@@ -144,20 +144,19 @@ test("without saved defaults, Settings and a fresh chat use the first available 
 			expect(config).not.toHaveProperty("defaultEffort");
 			return wire.request("model.default", {});
 		});
-		expect(resolved.model).not.toBeNull();
-		const modelName = resolved.model?.name ?? "";
-		const effortLevel = resolved.thinkingLevel;
+		expect(resolved).toEqual({ model: null, thinkingLevel: "medium" });
 
 		await openProviders(page);
 		await page.getByTestId("settings-nav-models").click();
 		const section = page.getByTestId("settings-models");
-		await expect(section.getByTestId("model-selector")).toContainText(modelName);
-		await expect(section.getByTestId("thinking-selector")).toContainText(effortLevel);
+		await expect(section.getByTestId("model-selector")).toContainText("Pi's default model");
 
 		await page.keyboard.press("Escape");
 		await openFreshChat(page);
-		await expect(page.getByTestId("model-selector").last()).toContainText(modelName);
-		await expect(page.getByTestId("thinking-selector").last()).toContainText(effortLevel);
+		const freshChatModel = page.getByTestId("model-selector").last();
+		await expect(freshChatModel).toBeVisible();
+		await expect(freshChatModel).not.toContainText("Pi's default model");
+		await expect(freshChatModel).not.toHaveText("");
 
 		await disconnectFixtureProvider(page);
 	} finally {

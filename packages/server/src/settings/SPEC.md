@@ -14,7 +14,7 @@ pair, additional-analytics preference and first-run dialog completion marker, ho
 effort defaults, terminal replay budget and Windows shell preference, chat composer growth preset, chat/file
 visual line widths plus independent pane bounds, bounded custom layout-preset catalog, JetBrains quota
 display/cadence, the host-wide subagent default, and plan-review policy. `defaultModel` / `defaultEffort`
-select the defaults every new chat receives (unset model means first available; unset effort means medium);
+select the defaults every new chat receives (unset or unavailable model means pi picks its own default; unset effort means medium);
 `reviewModel` / `reviewEffort`
 select the reviewer runtime (unset means that same new-chat default); `reviewAutoFix: false` records a `request_changes`
 verdict and waits instead of auto-sending a fix.
