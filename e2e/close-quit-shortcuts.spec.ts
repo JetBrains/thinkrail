@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import type { NativeCommand, NativeQuitHint } from "@thinkrail/contracts";
+import type { NativeCommand, NativeQuitHint, NativeShortcutsBridge } from "@thinkrail/contracts";
 import {
 	createWorkspaceViaDialog,
 	openAppFresh,
@@ -40,24 +40,21 @@ function installNativeShortcuts(page: Page, platform: string) {
 			rejectQuit: false,
 		};
 		window.__e2eShortcuts = stub;
-		Reflect.set(
-			window,
-			"__THINKRAIL_NATIVE_SHORTCUTS__",
-			Object.freeze({
-				subscribeQuitHint: (listener: (hint: NativeQuitHint) => void) => {
-					hintListeners.add(listener);
-					return () => hintListeners.delete(listener);
-				},
-				subscribeCommand: (listener: (command: NativeCommand) => void) => {
-					commandListeners.add(listener);
-					return () => commandListeners.delete(listener);
-				},
-				quit: async () => {
-					stub.quits += 1;
-					if (stub.rejectQuit) throw new Error("quit refused");
-				},
-			}),
-		);
+		const bridge: NativeShortcutsBridge = Object.freeze({
+			subscribeQuitHint: (listener: (hint: NativeQuitHint) => void) => {
+				hintListeners.add(listener);
+				return () => hintListeners.delete(listener);
+			},
+			subscribeCommand: (listener: (command: NativeCommand) => void) => {
+				commandListeners.add(listener);
+				return () => commandListeners.delete(listener);
+			},
+			quit: async () => {
+				stub.quits += 1;
+				if (stub.rejectQuit) throw new Error("quit refused");
+			},
+		});
+		Reflect.set(window, "__THINKRAIL_NATIVE_SHORTCUTS__", bridge);
 	}, platform);
 }
 

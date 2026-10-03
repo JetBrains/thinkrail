@@ -29,15 +29,27 @@ function openCoreGraphics() {
 	});
 }
 
-type CoreGraphics = ReturnType<typeof openCoreGraphics>["symbols"];
+export interface KeySample {
+	isKeyDown(keycode: number): boolean;
+	flags: bigint;
+	sinceMouseUp: number;
+	sinceKeyDown: number;
+	sinceFlagsChanged: number;
+}
 
-function nonModifierKeysDown(cg: CoreGraphics) {
-	const down: number[] = [];
+export function decodeKeyState(sample: KeySample): KeyState {
+	const downKeys: number[] = [];
 	for (let keycode = 0; keycode <= LAST_KEYCODE; keycode += 1) {
 		if (keycode >= FIRST_MODIFIER_KEYCODE && keycode <= LAST_MODIFIER_KEYCODE) continue;
-		if (cg.CGEventSourceKeyState(HID_SYSTEM_STATE, keycode)) down.push(keycode);
+		if (sample.isKeyDown(keycode)) downKeys.push(keycode);
 	}
-	return down;
+	return {
+		keyDown: downKeys.length > 0,
+		downKeys,
+		cmdDown: (sample.flags & COMMAND_FLAG) !== 0n,
+		mouseAfterKey: sample.sinceMouseUp < sample.sinceKeyDown,
+		keyAfterModifiers: sample.sinceKeyDown < sample.sinceFlagsChanged,
+	};
 }
 
 export function createKeyStateReader(platform: NodeJS.Platform) {
@@ -48,27 +60,19 @@ export function createKeyStateReader(platform: NodeJS.Platform) {
 		try {
 			library ??= openCoreGraphics();
 			const cg = library.symbols;
-			const flags = BigInt(cg.CGEventSourceFlagsState(HID_SYSTEM_STATE));
-			const sinceMouseUp = cg.CGEventSourceSecondsSinceLastEventType(
-				HID_SYSTEM_STATE,
-				LEFT_MOUSE_UP_EVENT,
-			);
-			const sinceKeyDown = cg.CGEventSourceSecondsSinceLastEventType(
-				HID_SYSTEM_STATE,
-				KEY_DOWN_EVENT,
-			);
-			const sinceFlagsChanged = cg.CGEventSourceSecondsSinceLastEventType(
-				HID_SYSTEM_STATE,
-				FLAGS_CHANGED_EVENT,
-			);
-			const downKeys = nonModifierKeysDown(cg);
-			return {
-				keyDown: downKeys.length > 0,
-				downKeys,
-				cmdDown: (flags & COMMAND_FLAG) !== 0n,
-				mouseAfterKey: sinceMouseUp < sinceKeyDown,
-				keyAfterModifiers: sinceKeyDown < sinceFlagsChanged,
-			};
+			return decodeKeyState({
+				isKeyDown: (keycode) => cg.CGEventSourceKeyState(HID_SYSTEM_STATE, keycode),
+				flags: BigInt(cg.CGEventSourceFlagsState(HID_SYSTEM_STATE)),
+				sinceMouseUp: cg.CGEventSourceSecondsSinceLastEventType(
+					HID_SYSTEM_STATE,
+					LEFT_MOUSE_UP_EVENT,
+				),
+				sinceKeyDown: cg.CGEventSourceSecondsSinceLastEventType(HID_SYSTEM_STATE, KEY_DOWN_EVENT),
+				sinceFlagsChanged: cg.CGEventSourceSecondsSinceLastEventType(
+					HID_SYSTEM_STATE,
+					FLAGS_CHANGED_EVENT,
+				),
+			});
 		} catch (error) {
 			unavailable = true;
 			console.error("[desktop] could not read keyboard state", error);
