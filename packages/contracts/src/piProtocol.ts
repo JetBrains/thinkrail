@@ -32,7 +32,19 @@ export type WireModel = Pick<
 	"id" | "name" | "provider" | "contextWindow" | "reasoning"
 > & {
 	thinkingLevels: ThinkingLevel[];
+	/** Per-million-token list prices; absent from hosts older than the picker-metadata protocol. */
+	cost?: { input: number; output: number };
+	/** Accepted input modalities; absent from hosts older than the picker-metadata protocol. */
+	input?: Model<string>["input"];
 };
+
+/** `WireModel` identity is `{provider, id}`; every other field is a catalog snapshot that may lag. */
+export function sameModel(
+	a: Pick<WireModel, "provider" | "id"> | null | undefined,
+	b: Pick<WireModel, "provider" | "id"> | null | undefined,
+): boolean {
+	return !!a && !!b && a.provider === b.provider && a.id === b.id;
+}
 
 export interface RefreshedModels {
 	models: WireModel[];

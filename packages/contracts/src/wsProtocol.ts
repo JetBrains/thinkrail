@@ -102,7 +102,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 76;
+export const PROTOCOL_VERSION = 77;
+export const MODEL_PICKER_PROTOCOL_VERSION = 77;
 export const CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION = 76;
 export const CHANGE_MUTATIONS_PROTOCOL_VERSION = 75;
 export const RESOURCE_META_PROTOCOL_VERSION = 75;

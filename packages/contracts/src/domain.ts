@@ -603,6 +603,10 @@ export interface AppConfig extends ThemePreference {
 	reviewModel?: WireModel;
 	/** Reviewer thinking level; unset uses the host's new-chat effort default, never the worker's inherited effort. */
 	reviewEffort?: ThinkingLevel;
+	/** Models the user starred in the picker, in display order; identity is `{provider, id}`. */
+	favoriteModels: WireModel[];
+	/** Models most recently chosen for a chat, newest first; host-maintained, never client-written. */
+	recentModels: WireModel[];
 	/** When false, a `request_changes` verdict records findings and waits — no automated fix cycle. */
 	reviewAutoFix: boolean;
 	/** When false, the worker's in-session `request_review` tool is withheld; the Review button still works. */
@@ -614,9 +618,15 @@ export interface AppConfig extends ThemePreference {
 	terminalWindowsShell: TerminalWindowsShell;
 }
 
+/** How many recently chosen models the host remembers. */
+export const RECENT_MODELS_LIMIT = 5;
+
 /** The `settings.update` payload: `null` clears an optional override back to unset (⇒ the default). */
 export type AppConfigUpdate = Partial<
-	Omit<AppConfig, "defaultModel" | "defaultEffort" | "reviewModel" | "reviewEffort">
+	Omit<
+		AppConfig,
+		"defaultModel" | "defaultEffort" | "reviewModel" | "reviewEffort" | "recentModels"
+	>
 > & {
 	defaultModel?: WireModel | null;
 	defaultEffort?: ThinkingLevel | null;
@@ -659,6 +669,8 @@ export const DEFAULT_CONFIG: AppConfig = {
 	chatLineWidthBounded: true,
 	fileLineWidthBounded: true,
 	customLayoutPresets: [],
+	favoriteModels: [],
+	recentModels: [],
 	reviewAutoFix: false,
 	agentReviewEnabled: false,
 	subagentsEnabled: true,

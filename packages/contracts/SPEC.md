@@ -79,13 +79,18 @@ of the host.
     `AssistantMessageEvent`, `Usage`, `StopReason`;
   - **`WireModel`** = `Pick<Model<string>, "id"|"name"|"provider"|"contextWindow"|"reasoning">` **+ the one
     computed field `thinkingLevels`** (pi-ai `getSupportedThinkingLevels`, mapped host-side in `toWireModel`;
-    client→host params carry it inert) — the shape a model takes **on the wire**
+    client→host params carry it inert) **+ two optional picker-metadata projections** — `cost`
+    (`{input, output}` list prices per Mtok, a subset of pi's `ModelCost`) and `input` (accepted modalities)
+    — optional because a host older than **`MODEL_PICKER_PROTOCOL_VERSION`** (v77) omits them; the shape a
+    model takes **on the wire**
     (`model.list`/`model.refresh`/`model.default`, the `session.create` result + params,
     `session.setModel` params, `SessionSummary.model`). An **allowlist** of exactly what the UI renders, *not*
     an `Omit`: extension/provider `Model.baseUrl` and `headers` can carry routing credentials, and an allowlist
     **fails closed** — a future `Model` field (secret
     or not) is excluded by default. The host re-resolves the real `Model` from `{provider,id}` — so a client
-    can neither read the secret nor inject a `baseUrl` for the agent to call (see the `agent` module SPEC);
+    can neither read the secret nor inject a `baseUrl` for the agent to call (see the `agent` module SPEC).
+    **`sameModel(a, b)`** is the one identity test — `{provider, id}` — every ring uses; no other field is
+    identity, since name, context, prices and levels are catalog snapshots that may lag a refresh;
   - `@earendil-works/pi-agent-core`: `AgentEvent`, `AgentMessage`, `ThinkingLevel` (the
     `off`-inclusive one);
   - the local render union **`PiEvent`** — the real superset `AgentSessionEvent` lives in the Node-only
@@ -304,11 +309,20 @@ of the host.
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
-  reviewAutoFix, agentReviewEnabled, subagentsEnabled, jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag; the line-width fields join
+  favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, jbcentralQuotaEnabled,
+  jbcentralQuotaRefreshSeconds }` — an extensible bag; the line-width fields join
   the wire at protocol v61 and `terminalWindowsShell` at v62. **`DEFAULT_MODEL_PROTOCOL_VERSION`** pins
   v72's AppConfig `defaultModel`/`defaultEffort` and host-side default resolution; the Settings controls are
   hidden against older hosts. `defaultModel` is a full allowlisted `WireModel`, `defaultEffort` is an optional
-  `ThinkingLevel`, and `settings.update` accepts `null` to clear either optional value. `terminalWindowsShell`
+  `ThinkingLevel`, and `settings.update` accepts `null` to clear either optional value.
+  **`MODEL_PICKER_PROTOCOL_VERSION`** (v77) pins the picker's host-kept lists: **`favoriteModels`** (full
+  `WireModel`s in the user's display order — the client writes the whole list through `settings.update`,
+  identity by `sameModel`) and **`recentModels`** (newest-first, at most **`RECENT_MODELS_LIMIT`** = 5,
+  **host-maintained**: it is excluded from `AppConfigUpdate`, and the host appends on every explicit model
+  choice — a `session.create` that names a model and every `session.setModel`). Both default to `[]`, so a
+  client gates only on the version, never on field presence. Snapshots in either list are re-pointed to the
+  live catalog by the client before rendering; a model that left the catalog is simply not offered.
+  `terminalWindowsShell`
   (`"auto" | "pwsh" | "powershell" | "cmd"`, default `"auto"`) is read only by `server/terminal` on
   Windows and ignored elsewhere — see
   `submodule-server-terminal`'s shell-selection decision for what each value spawns.
