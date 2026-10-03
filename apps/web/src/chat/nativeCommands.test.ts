@@ -2,8 +2,10 @@ import { describe, expect, it } from "bun:test";
 import type { SlashCommandInfo } from "@thinkrail/contracts";
 import {
 	compactSubmissionError,
+	isModelCommand,
 	mergeNativeChatCommands,
 	NATIVE_CHAT_COMMANDS,
+	parseModelCommand,
 	parseNativeChatCommand,
 	prepareNameChatCommand,
 } from "./nativeCommands";
@@ -98,6 +100,7 @@ describe("native chat command catalog", () => {
 		expect(merged.map(({ name }) => name)).toEqual([
 			"compact",
 			"name",
+			"model",
 			"review",
 			"skill:compact",
 			"skill:name",
@@ -108,7 +111,18 @@ describe("native chat command catalog", () => {
 		expect(merged[1]?.source).toBe("builtin");
 		expect(mergeNativeChatCommands([command("name")], false).map(({ name }) => name)).toEqual([
 			"compact",
+			"model",
 			"name",
 		]);
+	});
+
+	it("recognizes only the built-in /model and hands its search text to the picker", () => {
+		expect(isModelCommand(command("model"))).toBe(false);
+		expect(isModelCommand({ name: "model", source: "builtin" })).toBe(true);
+		expect(parseModelCommand("/model")).toBe("");
+		expect(parseModelCommand("/model opus high ")).toBe("opus high");
+		expect(parseModelCommand("/models")).toBeNull();
+		expect(parseModelCommand("/model\topus")).toBeNull();
+		expect(parseModelCommand("hello /model")).toBeNull();
 	});
 });

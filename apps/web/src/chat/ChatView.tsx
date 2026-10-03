@@ -1,12 +1,12 @@
 import { RiArrowDownLine as ArrowDown, RiArrowUpLine as ArrowUp } from "@remixicon/react";
-import type {
-	AskUserQuestionResult,
-	PromptHit,
-	QueueLane,
-	SessionQueueContent,
-	TemplateInfo,
-	ThinkingLevel,
-	WireModel,
+import {
+	type AskUserQuestionResult,
+	type PromptHit,
+	type QueueLane,
+	type SessionQueueContent,
+	sameModel,
+	type TemplateInfo,
+	type ThinkingLevel,
 } from "@thinkrail/contracts";
 import {
 	type RefCallback,
@@ -59,6 +59,7 @@ import type { ChatMessageOrder } from "./chatPreferences";
 import { ExtUiDialog } from "./ExtUiDialog";
 import { FoldGeometryProvider } from "./foldState";
 import { HistoryOverlay } from "./HistoryOverlay";
+import type { ModelSelection } from "./ModelEffortPicker";
 import { deriveMessageActions } from "./messageActions";
 import {
 	compactSubmissionError,
@@ -77,6 +78,7 @@ import { SubagentTranscriptDialog } from "./SubagentTranscriptDialog";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { useChatResources, useCommandLog } from "./useChatResources";
 import { useModelCatalog } from "./useModelCatalog";
+import { useModelPreferences } from "./useModelPreferences";
 import { useSessionStats } from "./useSessionStats";
 import "./tools/register";
 import { ChatTurnView } from "./turns";
@@ -229,6 +231,7 @@ export default function ChatView({
 	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);
 	const streamingResponseMovement = useAppStore((state) => state.streamingResponseMovement);
 	const { models, refreshing: modelsRefreshing, refresh: onRefreshModels } = useModelCatalog();
+	const modelPreferences = useModelPreferences(models);
 	const projectId = useAppStore(
 		(s) =>
 			Object.values(s.workspaces)
@@ -588,18 +591,29 @@ export default function ChatView({
 
 	const onMentionQuery = useCallback((q: string | null) => setMentionQuery(q), []);
 
-	const onSelectModel = (model: WireModel) => {
-		useAppStore.getState().setCurrentModel(sessionId, model);
-		getTransport()
-			.request("session.setModel", { sessionId, model })
-			.then(() => refreshStats())
-			.catch(() => {});
-	};
-
 	const onSelectThinking = (level: ThinkingLevel) => {
+		if (level === thinkingLevel) return;
 		useAppStore.getState().setThinkingLevel(sessionId, level);
 		getTransport()
 			.request("session.setThinkingLevel", { sessionId, level })
+			.catch(() => {});
+	};
+
+	const onSelectModel = ({ model, level }: ModelSelection) => {
+		if (sameModel(model, currentModel)) {
+			if (level) onSelectThinking(level);
+			return;
+		}
+		useAppStore.getState().setCurrentModel(sessionId, model);
+		if (level) useAppStore.getState().setThinkingLevel(sessionId, level);
+		getTransport()
+			.request("session.setModel", { sessionId, model })
+			.then(() =>
+				level
+					? getTransport().request("session.setThinkingLevel", { sessionId, level })
+					: undefined,
+			)
+			.then(() => refreshStats())
 			.catch(() => {});
 	};
 
@@ -1199,6 +1213,7 @@ export default function ChatView({
 							onRefreshModels={onRefreshModels}
 							currentModel={currentModel}
 							thinkingLevel={thinkingLevel}
+							modelPreferences={modelPreferences}
 							onMentionQuery={onMentionQuery}
 							onSlashActive={setSlashActive}
 							onSelectModel={onSelectModel}

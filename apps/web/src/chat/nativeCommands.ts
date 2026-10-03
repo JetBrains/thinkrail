@@ -4,6 +4,7 @@ import { type PreparedChatTitle, prepareChatTitle } from "./chatTitle";
 
 const COMPACT_NAME = "compact";
 const NAME_NAME = "name";
+const MODEL_NAME = "model";
 
 export const COMPACT_IMAGE_ERROR = "Remove images to use /compact";
 export const COMPACT_QUEUED_IMAGE_ERROR =
@@ -40,7 +41,28 @@ export const NATIVE_CHAT_COMMANDS: readonly SlashCommandItem[] = [
 			origin: "top-level",
 		},
 	},
+	{
+		name: MODEL_NAME,
+		description: "Choose model and effort · optional search, e.g. /model opus high",
+		source: "builtin",
+		sourceInfo: {
+			path: "<builtin:model>",
+			source: "pi",
+			scope: "temporary",
+			origin: "top-level",
+		},
+	},
 ];
+
+export function isModelCommand(command: Pick<SlashCommandItem, "name" | "source">): boolean {
+	return command.source === "builtin" && command.name === MODEL_NAME;
+}
+
+/** `/model [query]` → the picker search to open with; `null` for anything else. */
+export function parseModelCommand(text: string): string | null {
+	if (text === `/${MODEL_NAME}`) return "";
+	return text.startsWith(`/${MODEL_NAME} `) ? text.slice(MODEL_NAME.length + 2).trim() : null;
+}
 
 export interface CompactChatCommand {
 	kind: "compact";

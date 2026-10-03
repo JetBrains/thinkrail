@@ -40,10 +40,15 @@ import {
 	useSlashCommandCompletion,
 } from "@/prompt";
 import { FileChip } from "./FileChip";
-import { ModelSelector } from "./ModelSelector";
+import {
+	ModelEffortPicker,
+	type ModelEffortPickerHandle,
+	type ModelSelection,
+} from "./ModelEffortPicker";
+import { isModelCommand, parseModelCommand } from "./nativeCommands";
 import { imagePasteDropHandlers, PromptImageChips, usePromptImages } from "./promptImages";
-import { ThinkingSelector } from "./ThinkingSelector";
 import type { ChatAttachment } from "./types";
+import type { ModelPreferences } from "./useModelPreferences";
 
 export type SubmitBehavior = "send" | "steer" | "followUp" | "interrupt";
 
@@ -132,9 +137,10 @@ interface ComposerProps {
 	onRefreshModels: (force: boolean) => void;
 	currentModel: WireModel | null;
 	thinkingLevel: ThinkingLevel;
+	modelPreferences: ModelPreferences;
 	onMentionQuery: (query: string | null) => void;
 	onSlashActive: (active: boolean) => void;
-	onSelectModel: (model: WireModel) => void;
+	onSelectModel: (selection: ModelSelection) => void;
 	onSelectThinking: (level: ThinkingLevel) => void;
 	onSubmit: (
 		text: string,
@@ -172,6 +178,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 		onRefreshModels,
 		currentModel,
 		thinkingLevel,
+		modelPreferences,
 		onMentionQuery,
 		onSlashActive,
 		onSelectModel,
@@ -186,6 +193,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	handleRef,
 ) {
 	const ref = useRef<HTMLTextAreaElement>(null);
+	const pickerRef = useRef<ModelEffortPickerHandle>(null);
 	const [caret, setCaret] = useState(0);
 	const attachedImages = usePromptImages();
 	const { images } = attachedImages;
@@ -272,9 +280,19 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const canSubmit = (raw: string) =>
 		!templatePending && pendingImages === 0 && (!!raw.trim() || images.length > 0);
 
+	const openModelPicker = (query: string) => {
+		replaceDraft("");
+		pickerRef.current?.open(query);
+	};
+
 	const submitText = (raw: string, behavior: SubmitBehavior) => {
 		if (!canSubmit(raw)) return;
 		const text = raw.trim();
+		const modelQuery = parseModelCommand(text);
+		if (modelQuery !== null) {
+			openModelPicker(modelQuery);
+			return;
+		}
 		const disposition = onSubmit(
 			text,
 			images.map(({ name, content }) => ({ name, content })),
@@ -305,10 +323,11 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	const slashCompletion = useSlashCommandCompletion({
 		value,
 		commands,
-		onSelect: (command) =>
-			command.source === "prompt" && onPickTemplate
-				? onPickTemplate(command.name)
-				: replaceDraft(selectedSlashCommandValue(command)),
+		onSelect: (command) => {
+			if (isModelCommand(command)) openModelPicker("");
+			else if (command.source === "prompt" && onPickTemplate) onPickTemplate(command.name);
+			else replaceDraft(selectedSlashCommandValue(command));
+		},
 	});
 
 	const menuOpen = mentionOpen || slashCompletion.open;
@@ -529,21 +548,18 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						expanded && growthLimit === "half-chat" && "max-h-[50cqh]",
 					)}
 				>
-					<div className="col-start-1 row-start-2 flex min-w-0 items-center gap-4 self-end sm:gap-8">
-						<ModelSelector
+					<div className="col-start-1 row-start-2 flex min-w-0 items-center self-end">
+						<ModelEffortPicker
+							ref={pickerRef}
 							models={models}
 							current={currentModel}
+							level={thinkingLevel}
 							refreshing={modelsRefreshing}
 							onRefresh={onRefreshModels}
 							onSelect={onSelectModel}
-							className="max-w-80 gap-4 px-4 sm:max-w-144"
-						/>
-						<ThinkingSelector
-							level={thinkingLevel}
-							levels={currentModel?.thinkingLevels ?? []}
-							onSelect={onSelectThinking}
-							showLabel={false}
-							className="gap-4 px-4"
+							onSelectLevel={onSelectThinking}
+							preferences={modelPreferences}
+							className="max-w-[60vw] px-4 sm:max-w-[320px]"
 						/>
 					</div>
 					<div

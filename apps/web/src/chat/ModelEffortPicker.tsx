@@ -67,11 +67,18 @@ export interface DefaultPairOption {
 	onSelect: () => void;
 }
 
+/** A model choice, carrying a level only when the user picked both at once (`opus high`, or a level on a previewed model). */
+export interface ModelSelection {
+	model: WireModel;
+	level?: ThinkingLevel;
+}
+
 export interface ModelEffortPickerProps {
 	models: WireModel[];
 	current: WireModel | null;
 	level: ThinkingLevel;
-	onSelectModel: (model: WireModel) => void;
+	onSelect: (selection: ModelSelection) => void;
+	/** A level change for the current model alone. */
 	onSelectLevel: (level: ThinkingLevel) => void;
 	refreshing: boolean;
 	onRefresh: (force: boolean) => void;
@@ -124,7 +131,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 			models,
 			current,
 			level,
-			onSelectModel,
+			onSelect,
 			onSelectLevel,
 			refreshing,
 			onRefresh,
@@ -170,14 +177,14 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 
 		const pickModel = (model: WireModel) => {
 			const typedLevel = trailingLevel(query, model);
-			onSelectModel(model);
-			if (typedLevel) onSelectLevel(typedLevel);
+			onSelect(typedLevel ? { model, level: typedLevel } : { model });
 			close();
 		};
 
 		const pickLevel = (next: ThinkingLevel) => {
-			if (effortModel && !sameModel(effortModel, current)) onSelectModel(effortModel);
-			onSelectLevel(next);
+			if (effortModel && !sameModel(effortModel, current))
+				onSelect({ model: effortModel, level: next });
+			else onSelectLevel(next);
 			close();
 		};
 
@@ -371,8 +378,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 									<span className="text-text-subtle">· applies with the model</span>
 								) : null}
 							</div>
-							<div
-								role="group"
+							<fieldset
 								aria-label={`Effort for ${effortModel.name}`}
 								className="flex gap-2 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg p-2"
 							>
@@ -403,7 +409,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 										</button>
 									);
 								})}
-							</div>
+							</fieldset>
 							<div className="truncate text-text-subtle tr-text-metadata">
 								{LEVEL_HINT[pendingLevel ?? (previewing ? (effortLevels[0] ?? level) : level)] ??
 									"\u00a0"}
