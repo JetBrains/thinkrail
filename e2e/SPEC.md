@@ -196,7 +196,7 @@ identity icon without changing its colour. The rail must not substitute question
 spinner. Running alone has no attention dot; queued, hidden/background, and explicitly stopped sessions stay
 quiet; a live blocked question keeps its dot while its orthogonal running pulse may coexist. Reconnect/restart
 snapshots, direct-versus-passive activation, owner-global clearing, and snapshot
-retry are covered; live-agent coverage pins `data-running`/`running-icon` pulse behavior and coexistence with
+retry are covered; live-agent coverage pins `data-running`/`running-icon` breathing behavior and coexistence with
 `data-attention`/`attention-dot`. These are stable visual hooks rather than alternate state models. The retired `session.activityList → []` compatibility method
 remains a focused handler test.
 

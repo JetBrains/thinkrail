@@ -80,7 +80,7 @@ treatment.
 
   Workspace/project session presentation comes only from normalized host state. The rail has exactly two
   visual treatments: a static green/accent **attention dot** for either a concrete needs-input blocker or an
-  owner-globally unread result, and a soft pulse on the existing workspace/project identity icon while a
+  owner-globally unread result, and a breathing animation on the existing workspace/project identity icon while a
   top-level session is genuinely working. Attention is binary: needs-input and unread-result states use the
   same dot, with the accessible label **“Needs attention”** and no question/check/result glyph, spinner,
   count, or status-specific tooltip. Working keeps the icon's existing active/inactive colour and exposes
