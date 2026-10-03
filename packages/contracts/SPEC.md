@@ -11,10 +11,10 @@ tags: [wire]
 
 ## Responsibility
 
-The browser↔host wire spine: the single source of truth for the protocol. Types-only, with the only
-runtime exports being the WS method/channel constants, protocol/feature versions, the small config default,
-narrow cross-ring guards, and the one dependency-free quit-confirmation rule both clients drive. The one package `apps/web` may depend on—which is what lets the UI ship independently
-of the host.
+The browser↔host wire spine: the single source of truth for the protocol. Types plus a small
+dependency-free runtime: the WS method/channel constants, protocol/feature versions, the small config
+default, narrow cross-ring guards, and the quit-confirmation rule both clients drive. The one package
+`apps/web` may depend on—which is what lets the UI ship independently of the host.
 
 ## Boundary
 

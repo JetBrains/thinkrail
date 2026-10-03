@@ -74,8 +74,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
    adapter. Physical runtime requirements are declared once through the server-owned build-support manifest,
    then transformed by each packager. The same behavior and artifact suites run through every launcher, so
    reuse is enforced by boundaries and conformance rather than parallel implementations.
-3. **The wire is versioned.** `contracts` is types plus WS constants and versions, narrow guards, and one dependency-free shared rule (`createQuitConfirmation`, injected clock and timer); `server.welcome` carries a protocol version so
-   an independently-shipped UI can detect host-version drift.
+3. **The wire is versioned.** `contracts` is types plus a small dependency-free runtime (wire constants,
+   versions, guards, pure rules shared across rings); its spec lists them. `server.welcome` carries a
+   protocol version so an independently-shipped UI can detect host-version drift.
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
    desktop, or mobile client points it at the selected host's Tailscale MagicDNS name. Native resume state
    is keyed by backend profile so ids from one host are never interpreted against another.
