@@ -48,9 +48,7 @@ test("a live rendered-diff refresh preserves the reader's scroll position", asyn
 
 	writeFileSync(path, longMarkdown("second refresh"));
 	await fsExpect(diff).toContainText("second refresh paragraph 299");
-	await expect
-		.poll(() => diff.evaluate((node) => node.scrollTop))
-		.toBeGreaterThan(diffTop * 0.8);
+	await expect.poll(() => diff.evaluate((node) => node.scrollTop)).toBeGreaterThan(diffTop * 0.8);
 });
 
 test("worktree changes on disk appear live in Specs, Files, Changes, and an open file tab", async ({

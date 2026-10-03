@@ -11,25 +11,19 @@ export function useScrollViewState<T extends HTMLElement>(
 	onViewState: ((state: unknown) => void) | undefined,
 ): { elementRef: RefObject<T | null>; attach: RefCallback<T> } {
 	const elementRef = useRef<T>(null);
-	const lastElementRef = useRef<T>(null);
-	const initialStateRef = useRef(viewState);
-	const restoredRef = useRef(false);
+	const savedTopRef = useRef(scrollTop(viewState));
 	const onViewStateRef = useRef(onViewState);
 	onViewStateRef.current = onViewState;
 	const attach = useCallback<RefCallback<T>>((node) => {
+		const previous = elementRef.current;
+		if (previous && previous !== node) savedTopRef.current = previous.scrollTop;
 		elementRef.current = node;
-		if (!node) return;
-		lastElementRef.current = node;
-		if (restoredRef.current) return;
-		restoredRef.current = true;
-		const top = scrollTop(initialStateRef.current);
-		if (top !== null) node.scrollTop = top;
+		if (node && savedTopRef.current !== null) node.scrollTop = savedTopRef.current;
 	}, []);
 	useEffect(
 		() => () => {
-			if (lastElementRef.current) {
-				onViewStateRef.current?.({ scrollTop: lastElementRef.current.scrollTop });
-			}
+			const top = elementRef.current?.scrollTop ?? savedTopRef.current;
+			if (top !== null) onViewStateRef.current?.({ scrollTop: top });
 		},
 		[],
 	);
