@@ -32,6 +32,62 @@ bun run dev
 no application updater: update a checkout with Git and rebuild it. On-disk app state lives under
 `~/.thinkrail`.
 
+To run the launchers:
+
+```bash
+bun run --filter @thinkrail/cli dev  # browser launcher
+bun run build:binary                 # standalone CLI artifact
+bun run desktop:dev                  # package and open the Electrobun app
+bun run desktop:build                # package without opening it
+```
+
+Desktop commands use the standard Electrobun CLI/configuration. Its pre-build hook
+builds the shared UI and stages ThinkRail's PI/native resources; Electrobun owns
+preload bundling and installer creation. Create host-native installers with
+`bun run desktop:package:stable` or `bun run desktop:package:canary`;
+`canary` is Electrobun's internal name for the public **nightly** channel.
+Native/installer smoke and shared CLI/desktop probes live in
+`packages/artifact-tests`, outside the application packages. Run
+`bun run smoke:desktop` after a dev build; installer smoke takes an artifact path and
+channel via `bun run smoke:desktop:installer <path> <stable|canary>`.
+
+## Artifact signing
+
+JetBrains signs the Windows CLI and desktop setup executable. The macOS CLI is signed
+but not yet notarized; Linux artifacts are unsigned. Signed and notarized desktop
+DMGs require the coordinated JetBrains service pipeline, which consumes Electrobun's
+expanded app archive for signing and SRE DMG finalization — that intermediate archive
+is not a public download, and the macOS signing limitation stands until the pipeline
+update is deployed. Local installer smoke is not notarization verification.
+Electrobun 2.0.1 provides no macOS Intel desktop build.
+
+## Architecture (three rings)
+
+- **Engine host** — `packages/server` (+ `packages/shared`), launched by `apps/cli` or
+  `apps/desktop`. `createServer()` is a `Bun.serve` HTTP+WS host with an
+  `AgentSessionManager` (one in-process `pi` `AgentSession` per tab).
+- **The wire** — `packages/contracts`: the typed, versioned protocol (types-only).
+- **UI client** — `apps/web`: mobile-first React 19 + Zustand + Tailwind v4, ships
+  independently and dials a host over the wire.
+
+The engine is **`pi` only, run in-process** via `@earendil-works/pi-coding-agent`.
+`apps/web` depends on `packages/contracts` only — never on the server — which is what
+makes the UI shippable on its own.
+
+```
+apps/
+  cli/        browser launcher: boot host + open browser
+  web/        mobile-first UI client
+  desktop/    Electrobun local-host launcher + native packaging
+  website/    public landing + blog + vibecoding site (Cloudflare Pages)
+packages/
+  artifact-tests/ source-only CLI/desktop artifact and installer tests
+  server/     createServer(): Bun.serve + AgentSessionManager
+  contracts/  the wire (types-only)
+  shared/     server-side helpers (shellEnv, freePort)
+  spec-graph/ portable pi extension: spec_* tools + skill
+```
+
 ## Testing and linting
 
 Run the fast gates before opening a PR (they also run as the husky pre-commit hook):
