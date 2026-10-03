@@ -4,8 +4,10 @@ import {
 	createWorkspaceViaDialog,
 	openAppFresh,
 	openFixtureProject,
+	pressPlatformShortcut,
 	runInTerminal,
 	visibleTerminal,
+	visibleTerminalScreen,
 	waitTerminalReady,
 } from "./fixtures/app";
 
@@ -101,7 +103,7 @@ test("native close-item closes the top layer first, then the focused tab", async
 
 	await chatTab.getByRole("tab").click();
 	const dialog = page.getByTestId("new-workspace-dialog");
-	await page.keyboard.press("Meta+n");
+	await pressPlatformShortcut(page, "n");
 	await expect(dialog).toBeVisible();
 	await closeItem(page);
 	await expect(dialog).toBeHidden();
@@ -114,8 +116,8 @@ test("native close-item closes the top layer first, then the focused tab", async
 	await expect(editorTabs(page).filter({ hasText: "README.md" })).toHaveCount(0);
 
 	await waitTerminalReady(page);
-	await runInTerminal(page, "sleep 45");
-	await page.waitForTimeout(1500);
+	await runInTerminal(page, "sh -c 'echo TR_$((40+2)); exec sleep 45'");
+	await expect(visibleTerminalScreen(page)).toContainText("TR_42");
 	await closeItem(page);
 	await expect(page.getByTestId("confirm-dialog")).toBeVisible();
 	await closeItem(page);
@@ -144,8 +146,11 @@ test("Windows Ctrl+W and Ctrl+F4 close the focused tab; a terminal keeps Ctrl+W"
 	const terminalInput = visibleTerminal(page).locator(".xterm-helper-textarea");
 	await terminalInput.focus();
 	await expect(terminalInput).toBeFocused();
+	await page.keyboard.type("echo TR_$((40+2)) drop");
 	await page.keyboard.press("Control+w");
-	await page.waitForTimeout(300);
+	await page.keyboard.press("Enter");
+	await expect(visibleTerminalScreen(page)).toContainText("TR_42");
+	await expect(visibleTerminalScreen(page)).not.toContainText("drop");
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
 	await expect(terminalInput).toBeFocused();
 	await page.keyboard.press("Control+F4");
