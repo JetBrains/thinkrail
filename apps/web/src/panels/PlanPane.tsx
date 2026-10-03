@@ -1526,7 +1526,6 @@ export default function PlanPane({
 							pushToast({ variant: "error", title: "Couldn't send", message: errorText(err) });
 							throw err;
 						}
-						void openChatInTab(workspaceId, sessionId);
 					}}
 					renderGroup={renderGroup}
 					renderItem={renderItem}

@@ -650,7 +650,13 @@ a project picker, the prompt hero, and the reused
   and not awaited — `session.prompt` resolves only when the run ends — so a rejection surfaces as an
   `appendErrorTurn` in that chat and nothing is lost. A **steer** is not recorded (it arrives with the
   delivered message), so it is awaited: a failed hydration or a rejected steer toasts and rethrows, and the
-  draft stays in the plan. Only a delivered/recorded send opens the chat (`openChatInTab`). `PlanComposer` ignores a submit while the previous one is in flight,
+  draft stays in the plan. **A send from the plan stays on the plan** — it never auto-switches to the
+  chat tab (an earlier version did via `openChatInTab` on the success path; dropped because the plan is
+  itself a working surface and the agent's reply streams into the live `plan-agent-message` block right
+  below). To jump to the chat you click the Session status chip (`Working…` / `Question`) or the
+  explicit Open-chat affordances — those are the only `openChatInTab` call sites in the plan now.
+  `PlanComposer`
+  ignores a submit while the previous one is in flight,
   so a repeated Enter can't add or send the same draft twice. So a completed
   plan (no open steps) turns its Session into a chat entry point rather than a dead "all steps done" line,
   and a running plan gets an in-place steering field. The one exception is a **truly empty** plan (no items,
