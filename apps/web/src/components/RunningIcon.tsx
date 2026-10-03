@@ -15,7 +15,7 @@ export function RunningIcon({
 			role="img"
 			aria-label="Agent working"
 			className={cn(
-				"inline-flex items-center justify-center motion-safe:animate-pulse motion-reduce:rounded-[var(--radius-sm)] motion-reduce:ring-1 motion-reduce:ring-current",
+				"inline-flex items-center justify-center motion-safe:animate-working motion-reduce:rounded-[var(--radius-sm)] motion-reduce:ring-1 motion-reduce:ring-current",
 				className,
 			)}
 		>

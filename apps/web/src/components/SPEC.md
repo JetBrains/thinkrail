@@ -50,7 +50,10 @@ primitive. Also houses the
   attention.” It carries no reason, count, tooltip, motion, or clearing behavior; callers decide only whether
   it is present. It is the one marker for both needs-input and unread-result attention.
 - **`RunningIcon.tsx`** — a store-free wrapper for an identity icon whose existing colour must not change.
-  While active it applies the shared soft pulse and the accessible label “Agent working”; reduced motion
+  While active it applies the shared `animate-working` breathing (opacity dips to ~22% while the glyph
+  shrinks to 80%, 1.3s cycle) and the accessible label “Agent working”. The stock 2s fade to 50% was
+  too faint on a 14px muted glyph to read peripherally; motion plus a deep dip is what makes it
+  noticeable without changing hue or adding a marker. Reduced motion
   removes animation and uses the same-hue static treatment. It never renders a dot, spinner, count, or
   tooltip. Feature callers decide whether normalized host state says a top-level session is running.
 - **Also owns:** `Skeleton.tsx` — `SkeletonRows`, the one pulsing-rows placeholder every loading surface
