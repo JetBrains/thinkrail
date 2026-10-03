@@ -11,6 +11,7 @@ import {
 import { validateCustomLayoutPresets } from "./layoutPresets";
 import {
 	getConfig,
+	noteRecentModel,
 	resetConfigCache,
 	type SettingsPublisher,
 	setSettingsPublisher,
@@ -607,4 +608,61 @@ test("stored custom presets keep only complete current-schema entries", () => {
 	);
 	resetConfigCache();
 	expect(getConfig().customLayoutPresets).toEqual([preset("valid")]);
+});
+
+const wireModel = (id: string, provider = "p") => ({
+	id,
+	name: id.toUpperCase(),
+	provider,
+	contextWindow: 1,
+	reasoning: false,
+	thinkingLevels: [],
+});
+
+test("favoriteModels persist as a whole list, deduped by provider/id", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const next = updateConfig({
+		favoriteModels: [wireModel("a"), wireModel("b"), { ...wireModel("a"), name: "stale" }],
+	});
+	expect(next.favoriteModels.map((m) => m.id)).toEqual(["a", "b"]);
+	resetConfigCache();
+	expect(getConfig().favoriteModels.map((m) => m.id)).toEqual(["a", "b"]);
+	expect(published).toHaveLength(1);
+});
+
+test("a malformed favoriteModels list rejects the whole update before persisting", () => {
+	expect(() => updateConfig({ favoriteModels: [{ id: "x" }] as never })).toThrow(
+		"favoriteModels must be a list of models",
+	);
+	expect(() => updateConfig({ favoriteModels: "nope" as never })).toThrow();
+	expect(getConfig().favoriteModels).toEqual([]);
+});
+
+test("recentModels is host-owned: client writes are ignored, noteRecentModel caps and dedupes", () => {
+	updateConfig({ recentModels: [wireModel("client")] } as AppConfigUpdate);
+	expect(getConfig().recentModels).toEqual([]);
+	for (const id of ["a", "b", "c", "d", "e", "f"]) noteRecentModel(wireModel(id));
+	expect(getConfig().recentModels.map((m) => m.id)).toEqual(["f", "e", "d", "c", "b"]);
+	noteRecentModel(wireModel("d"));
+	expect(getConfig().recentModels.map((m) => m.id)).toEqual(["d", "f", "e", "c", "b"]);
+	noteRecentModel(wireModel("d", "other"));
+	expect(getConfig().recentModels.map((m) => `${m.provider}/${m.id}`)[0]).toBe("other/d");
+	resetConfigCache();
+	expect(getConfig().recentModels).toHaveLength(5);
+});
+
+test("stored favorites and recents survive reload while malformed ones fall back to empty", () => {
+	updateConfig({ favoriteModels: [wireModel("a")] });
+	noteRecentModel(wireModel("b"));
+	resetConfigCache();
+	expect(getConfig().favoriteModels.map((m) => m.id)).toEqual(["a"]);
+	expect(getConfig().recentModels.map((m) => m.id)).toEqual(["b"]);
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ ...DEFAULT_CONFIG, favoriteModels: "x", recentModels: 3 }),
+	);
+	resetConfigCache();
+	expect(getConfig().favoriteModels).toEqual([]);
+	expect(getConfig().recentModels).toEqual([]);
 });

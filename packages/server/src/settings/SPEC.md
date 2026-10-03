@@ -17,7 +17,12 @@ display/cadence, the host-wide subagent default, and plan-review policy. `defaul
 select the defaults every new chat receives (unset model means first available; unset effort means medium);
 `reviewModel` / `reviewEffort`
 select the reviewer runtime (unset means that same new-chat default); `reviewAutoFix: false` records a `request_changes`
-verdict and waits instead of auto-sending a fix.
+verdict and waits instead of auto-sending a fix. **`favoriteModels`** is the picker's starred list in display
+order — a whole-list client write, validated as model-shaped entries and deduped by `sameModel`;
+**`recentModels`** is host-owned: `noteRecentModel(model)` (called by `host` on an explicit `session.create`
+model and every `session.setModel`) puts the model first, dedupes, caps at `RECENT_MODELS_LIMIT`, persists and
+publishes, while a client-supplied `recentModels` in `settings.update` is dropped before validation so no
+client can rewrite the host's record of what was chosen.
 The module reads, normalizes, persists, caches, and broadcasts values that intentionally follow the owner
 across frontends.
 
@@ -32,7 +37,7 @@ interval (`1–3600`, default 30), because those values govern host process cade
 ## Boundary
 
 - **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (merge → validate known fields → persist → publish the merged `AppConfig` and successful applied `AppConfigUpdate`); line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
-- **Public surface (barrel):** `getConfig`, `updateConfig`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
+- **Public surface (barrel):** `getConfig`, `updateConfig`, `noteRecentModel`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
 - **Allowed deps:** `persistence` (`loadConfig`/`saveConfig`); `contracts` (`AppConfig`, `LayoutPreset`,
   `isTerminalWindowsShell`).
 - **Forbidden:** host or another feature sibling; current-layout document/snapshot types; workspace ids/resources; current frame validation; owning WS channels; or importing web preset definitions.
@@ -57,3 +62,4 @@ interval (`1–3600`, default 30), because those values govern host process cade
   preference is rejected, and changing a confirmed decision writes both fields. The delivery gate belongs to
   [[submodule-server-analytics]]; the dialog lifecycle belongs to [[submodule-web-panels]].
 - `null` clears optional `defaultModel`/`defaultEffort` and `reviewModel`/`reviewEffort` overrides; it is a wire-only sentinel and never persists.
+- Stored `favoriteModels` / `recentModels` that are not arrays fall back to `[]` on load without discarding valid siblings; a wire `favoriteModels` with any non-model member rejects the whole update.

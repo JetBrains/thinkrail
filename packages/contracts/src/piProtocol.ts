@@ -16,6 +16,7 @@ export type {
 
 import type { AgentEvent, AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { ImageContent, Message, Model, StopReason, TextContent } from "@earendil-works/pi-ai";
+import type { ProviderAuthKind } from "./domain";
 
 const NON_EXECUTABLE_TOOL_CALL_STOP_REASONS: ReadonlySet<string> = new Set([
 	"error",
@@ -36,7 +37,15 @@ export type WireModel = Pick<
 	cost?: { input: number; output: number };
 	/** Accepted input modalities; absent from hosts older than the picker-metadata protocol. */
 	input?: Model<string>["input"];
+	/** How the model's provider is connected — decides whether `cost` is what the user pays. */
+	auth?: WireModelAuth;
 };
+
+export interface WireModelAuth {
+	kind: ProviderAuthKind;
+	/** Account, plan, or variable name behind the connection (e.g. `ANTHROPIC_API_KEY`), when pi knows it. */
+	detail?: string;
+}
 
 /** `WireModel` identity is `{provider, id}`; every other field is a catalog snapshot that may lag. */
 export function sameModel(

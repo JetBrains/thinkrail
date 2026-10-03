@@ -285,6 +285,12 @@ export function loadConfig(): AppConfig {
 		customLayoutPresets: Array.isArray(value.customLayoutPresets)
 			? value.customLayoutPresets
 			: DEFAULT_CONFIG.customLayoutPresets,
+		favoriteModels: Array.isArray(value.favoriteModels)
+			? value.favoriteModels
+			: DEFAULT_CONFIG.favoriteModels,
+		recentModels: Array.isArray(value.recentModels)
+			? value.recentModels
+			: DEFAULT_CONFIG.recentModels,
 		terminalWindowsShell: isTerminalWindowsShell(value.terminalWindowsShell)
 			? value.terminalWindowsShell
 			: DEFAULT_CONFIG.terminalWindowsShell,

@@ -79,10 +79,12 @@ of the host.
     `AssistantMessageEvent`, `Usage`, `StopReason`;
   - **`WireModel`** = `Pick<Model<string>, "id"|"name"|"provider"|"contextWindow"|"reasoning">` **+ the one
     computed field `thinkingLevels`** (pi-ai `getSupportedThinkingLevels`, mapped host-side in `toWireModel`;
-    client→host params carry it inert) **+ two optional picker-metadata projections** — `cost`
-    (`{input, output}` list prices per Mtok, a subset of pi's `ModelCost`) and `input` (accepted modalities)
-    — optional because a host older than **`MODEL_PICKER_PROTOCOL_VERSION`** (v77) omits them; the shape a
-    model takes **on the wire**
+    client→host params carry it inert) **+ three optional picker-metadata projections** — `cost`
+    (`{input, output}` list prices per Mtok, a subset of pi's `ModelCost`), `input` (accepted modalities) and
+    **`auth`** (`WireModelAuth`: the provider's `ProviderAuthKind` plus pi's `detail` label — the same
+    vocabulary `provider.status` reports, projected per model so a picker can say "plan" instead of a
+    per-token price without the heavyweight status call) — optional because a host older than
+    **`MODEL_PICKER_PROTOCOL_VERSION`** (v77) omits them; the shape a model takes **on the wire**
     (`model.list`/`model.refresh`/`model.default`, the `session.create` result + params,
     `session.setModel` params, `SessionSummary.model`). An **allowlist** of exactly what the UI renders, *not*
     an `Omit`: extension/provider `Model.baseUrl` and `headers` can carry routing credentials, and an allowlist

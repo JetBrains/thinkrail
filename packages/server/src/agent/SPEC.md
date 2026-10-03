@@ -846,11 +846,19 @@ settings or workspaces edge. The owning parent graph records this package depend
   one `readAvailableWireModels` read so the projection can't be bypassed by adding a caller; every inbound
   model ref (`session.create` /
   `session.setModel`) is **re-resolved** host-side by `{provider,id}` (`resolveWireModel`), never trusted.
-  The wire type `WireModel = Pick<Model, id|name|provider|contextWindow|reasoning> + thinkingLevels` is an
+  The wire type `WireModel = Pick<Model, id|name|provider|contextWindow|reasoning> + thinkingLevels +
+  cost{input,output} + input + auth` is an
   **allowlist** — it fails closed, so a future `Model` field can't leak by default (a unit test pins the
-  exact key set). `thinkingLevels` is the one computed field: pi-ai's `getSupportedThinkingLevels(model)`
+  exact key set). `thinkingLevels` is a computed field: pi-ai's `getSupportedThinkingLevels(model)`
   mapped at the same choke point, so the effort picker renders pi's per-model support truth without the
-  client re-deriving it.
+  client re-deriving it. `cost` keeps only the two list prices (pi's `ModelCost` tiers and cache rates stay
+  host-side) and `input` the modality list. **`auth`** is the per-provider connection kind projected onto
+  each model (`providerAuth.ts` → `catalogProviderAuth`, from pi's synchronous `isUsingOAuth` /
+  `getProviderAuthStatus` plus the generation's opaque Central ids) so the picker can say *plan* / *API key*
+  / *env* / *JetBrains AI* without the `provider.status` refresh; `describeProviderAuth` is the one
+  kind/detail mapping and `auth/providerStatus` reuses it, so the picker and Settings → Providers cannot
+  disagree. `toWireModel(model, generation)` takes the generation for that projection — the session result
+  and summary paths pass theirs, the catalog paths the active one.
 - A live slash-command list is derived from the **same three sources Pi's rpc mode uses**
   (`extensionRunner.getRegisteredCommands()` + `promptTemplates` + `resourceLoader.getSkills()`). The
   pre-session catalog maps only `resourceLoader.getSkills()` through the same skill→command helper and
