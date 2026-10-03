@@ -5,6 +5,7 @@ export interface KeyState {
 	downKeys: number[];
 	cmdDown: boolean;
 	mouseAfterKey: boolean;
+	keyAfterModifiers: boolean;
 }
 
 const HID_SYSTEM_STATE = 1;
@@ -13,6 +14,7 @@ const FIRST_MODIFIER_KEYCODE = 54;
 const LAST_MODIFIER_KEYCODE = 63;
 const KEY_DOWN_EVENT = 10;
 const LEFT_MOUSE_UP_EVENT = 2;
+const FLAGS_CHANGED_EVENT = 12;
 const COMMAND_FLAG = 0x100000n;
 const CORE_GRAPHICS = "/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics";
 
@@ -55,12 +57,17 @@ export function createKeyStateReader(platform: NodeJS.Platform) {
 				HID_SYSTEM_STATE,
 				KEY_DOWN_EVENT,
 			);
+			const sinceFlagsChanged = cg.CGEventSourceSecondsSinceLastEventType(
+				HID_SYSTEM_STATE,
+				FLAGS_CHANGED_EVENT,
+			);
 			const downKeys = nonModifierKeysDown(cg);
 			return {
 				keyDown: downKeys.length > 0,
 				downKeys,
 				cmdDown: (flags & COMMAND_FLAG) !== 0n,
 				mouseAfterKey: sinceMouseUp < sinceKeyDown,
+				keyAfterModifiers: sinceKeyDown < sinceFlagsChanged,
 			};
 		} catch (error) {
 			unavailable = true;

@@ -25,9 +25,14 @@ export function createQuitShortcut({ readKeys, ...dependencies }: QuitShortcutDe
 		pressKeys = stillDown.length > 0 ? stillDown : keys.downKeys;
 	}
 
+	function menuPick(keys: KeyState) {
+		if (keys.cmdDown) return false;
+		return keys.mouseAfterKey ? !keys.keyDown : keys.keyAfterModifiers;
+	}
+
 	function press() {
 		const keys = readKeys();
-		if (!keys || (!keys.keyDown && !keys.cmdDown && keys.mouseAfterKey)) {
+		if (!keys || menuPick(keys)) {
 			confirmation.quitNow();
 			return;
 		}

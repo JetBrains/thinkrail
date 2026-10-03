@@ -112,7 +112,11 @@ used by the web shell for Linux Ctrl+Q) and feeds it key state from CoreGraphics
 no extra permission) and polls it while engaged. The hold counts only the non-modifier keys down when
 the action fires, because the menu matches Q by character and its physical key differs per layout (AZERTY,
 Dvorak); a key-repeat press keeps that set and never adds to it, so a key pressed later never counts as the hold. A menu click arrives as the same action with no key down and a left mouse-up newer than the
-last key-down, so it quits directly; a late-handled tap with no key down arms instead. Key state unreadable
+last key-down, so it quits directly. A keyboard or VoiceOver menu pick (Ctrl+F2, Enter; VO+Space) arrives
+with Command up and its last key-down newer than the last modifier change, so it quits directly too. A
+late-handled tap arms instead: its Command release is a modifier change newer than Q's key-down. A
+late-handled press where Command is released but Q stays down can pass as a menu pick; handling takes
+milliseconds, so this is accepted. Key state unreadable
 at press quits directly; unreadable while armed cancels, unless release was already reached. With no visible hint (window minimized, or host boot before the window and RPC exist), a press skips
 confirmation and quits on release. The menu listener is attached right after the menu, so quit works
 during boot; commands drop until the window exists. Every

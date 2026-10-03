@@ -14,11 +14,22 @@ const AZERTY_Q_KEYCODE = 0;
 const W_KEYCODE = 13;
 
 function held(downKeys: number[], cmdDown = true): KeyState {
-	return { keyDown: downKeys.length > 0, downKeys, cmdDown, mouseAfterKey: false };
+	return {
+		keyDown: downKeys.length > 0,
+		downKeys,
+		cmdDown,
+		mouseAfterKey: false,
+		keyAfterModifiers: false,
+	};
 }
 
-function keys(keyDown: boolean, cmdDown: boolean, mouseAfterKey = false): KeyState {
-	return { ...held(keyDown ? [Q_KEYCODE] : [], cmdDown), mouseAfterKey };
+function keys(
+	keyDown: boolean,
+	cmdDown: boolean,
+	mouseAfterKey = false,
+	keyAfterModifiers = false,
+): KeyState {
+	return { ...held(keyDown ? [Q_KEYCODE] : [], cmdDown), mouseAfterKey, keyAfterModifiers };
 }
 
 const up = keys(false, false);
@@ -73,6 +84,22 @@ test("a menu click with no keys down quits directly", () => {
 	expect(h.hints).toEqual(["quitting"]);
 	expect(h.quits()).toBe(1);
 	expect(h.polling()).toBe(false);
+});
+
+test("a keyboard or VoiceOver menu pick quits directly", () => {
+	for (const keyDown of [true, false]) {
+		const h = harness(keys(keyDown, false, false, true));
+		h.shortcut.press();
+		expect(h.hints).toEqual(["quitting"]);
+		expect(h.quits()).toBe(1);
+	}
+});
+
+test("Command still held after its last key-down arms instead of quitting", () => {
+	const h = harness(keys(true, true, false, true));
+	h.shortcut.press();
+	expect(h.hints).toEqual(["armed"]);
+	expect(h.quits()).toBe(0);
 });
 
 test("falls back to a direct quit when key state is unavailable", () => {
