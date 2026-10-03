@@ -109,9 +109,9 @@ keyboard quit never fires while the chord is held, so key-repeat cannot leak Com
 Electrobun fires the menu action on every press and every OS key-repeat with no repeat flag, so
 `quitShortcut` drives the shared contracts `createQuitConfirmation` rule (the one copy of the gesture, also
 used by the web shell for Linux Ctrl+Q) and feeds it key state from CoreGraphics (`keyState.ts`, Bun FFI, HID system state,
-no extra permission) and polls it while engaged. "Key down" means any non-modifier key, because the menu
-matches Q by character and its physical key differs per layout (AZERTY, Dvorak); a stray held key can only
-delay a quit. A menu click arrives as the same action with no key down and a left mouse-up newer than the
+no extra permission) and polls it while engaged. The hold counts only the non-modifier keys down when
+the action fires, because the menu matches Q by character and its physical key differs per layout (AZERTY,
+Dvorak); a key-repeat press keeps that set and never adds to it, so a key pressed later never counts as the hold. A menu click arrives as the same action with no key down and a left mouse-up newer than the
 last key-down, so it quits directly; a late-handled tap with no key down arms instead. Key state unreadable
 at press quits directly; unreadable while armed cancels, unless release was already reached. With no visible hint (window minimized, or host boot before the window and RPC exist), a press skips
 confirmation and quits on release. The menu listener is attached right after the menu, so quit works

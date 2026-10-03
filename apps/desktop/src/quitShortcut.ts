@@ -5,11 +5,13 @@ export interface QuitShortcutDependencies extends Omit<QuitConfirmationDependenc
 	readKeys(): KeyState | null;
 }
 
-function chordHeld(keys: KeyState) {
-	return keys.keyDown && keys.cmdDown;
-}
-
 export function createQuitShortcut({ readKeys, ...dependencies }: QuitShortcutDependencies) {
+	let pressKeys: number[] = [];
+
+	function chordHeld(keys: KeyState) {
+		return keys.cmdDown && pressKeys.some((keycode) => keys.downKeys.includes(keycode));
+	}
+
 	const confirmation = createQuitConfirmation({
 		...dependencies,
 		readHeld: () => {
@@ -18,10 +20,19 @@ export function createQuitShortcut({ readKeys, ...dependencies }: QuitShortcutDe
 		},
 	});
 
+	function snapshot(keys: KeyState) {
+		const stillDown = pressKeys.filter((keycode) => keys.downKeys.includes(keycode));
+		pressKeys = stillDown.length > 0 ? stillDown : keys.downKeys;
+	}
+
 	function press() {
 		const keys = readKeys();
-		if (!keys || (!keys.keyDown && !keys.cmdDown && keys.mouseAfterKey)) confirmation.quitNow();
-		else confirmation.press(chordHeld(keys));
+		if (!keys || (!keys.keyDown && !keys.cmdDown && keys.mouseAfterKey)) {
+			confirmation.quitNow();
+			return;
+		}
+		snapshot(keys);
+		confirmation.press(chordHeld(keys));
 	}
 
 	return { press };

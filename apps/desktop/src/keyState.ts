@@ -2,6 +2,7 @@ import { dlopen, FFIType } from "bun:ffi";
 
 export interface KeyState {
 	keyDown: boolean;
+	downKeys: number[];
 	cmdDown: boolean;
 	mouseAfterKey: boolean;
 }
@@ -28,12 +29,13 @@ function openCoreGraphics() {
 
 type CoreGraphics = ReturnType<typeof openCoreGraphics>["symbols"];
 
-function anyNonModifierKeyDown(cg: CoreGraphics) {
+function nonModifierKeysDown(cg: CoreGraphics) {
+	const down: number[] = [];
 	for (let keycode = 0; keycode <= LAST_KEYCODE; keycode += 1) {
 		if (keycode >= FIRST_MODIFIER_KEYCODE && keycode <= LAST_MODIFIER_KEYCODE) continue;
-		if (cg.CGEventSourceKeyState(HID_SYSTEM_STATE, keycode)) return true;
+		if (cg.CGEventSourceKeyState(HID_SYSTEM_STATE, keycode)) down.push(keycode);
 	}
-	return false;
+	return down;
 }
 
 export function createKeyStateReader(platform: NodeJS.Platform) {
@@ -53,8 +55,10 @@ export function createKeyStateReader(platform: NodeJS.Platform) {
 				HID_SYSTEM_STATE,
 				KEY_DOWN_EVENT,
 			);
+			const downKeys = nonModifierKeysDown(cg);
 			return {
-				keyDown: anyNonModifierKeyDown(cg),
+				keyDown: downKeys.length > 0,
+				downKeys,
 				cmdDown: (flags & COMMAND_FLAG) !== 0n,
 				mouseAfterKey: sinceMouseUp < sinceKeyDown,
 			};

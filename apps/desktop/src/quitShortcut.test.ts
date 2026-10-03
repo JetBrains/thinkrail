@@ -9,12 +9,16 @@ const {
 	pollMs: QUIT_POLL_MS,
 } = QUIT_CONFIRMATION;
 
+const Q_KEYCODE = 12;
+const AZERTY_Q_KEYCODE = 0;
+const W_KEYCODE = 13;
+
+function held(downKeys: number[], cmdDown = true): KeyState {
+	return { keyDown: downKeys.length > 0, downKeys, cmdDown, mouseAfterKey: false };
+}
+
 function keys(keyDown: boolean, cmdDown: boolean, mouseAfterKey = false): KeyState {
-	return {
-		keyDown,
-		cmdDown,
-		mouseAfterKey,
-	};
+	return { ...held(keyDown ? [Q_KEYCODE] : [], cmdDown), mouseAfterKey };
 }
 
 const up = keys(false, false);
@@ -93,4 +97,61 @@ test("a tap handled after both keys are up arms instead of quitting", () => {
 	expect(h.quits()).toBe(0);
 	h.advance(QUIT_DOUBLE_PRESS_MS + QUIT_POLL_MS);
 	expect(h.hints).toEqual(["armed", "hidden"]);
+});
+
+test("a key pressed after Command-Q never completes the hold", () => {
+	const h = harness();
+	h.shortcut.press();
+	h.setKeys(held([Q_KEYCODE, W_KEYCODE]));
+	h.advance(QUIT_POLL_MS);
+	h.setKeys(held([W_KEYCODE]));
+	h.advance(QUIT_HOLD_MS + QUIT_DOUBLE_PRESS_MS + QUIT_POLL_MS * 2);
+	h.setKeys(up);
+	h.advance(QUIT_POLL_MS);
+	expect(h.hints).toEqual(["armed", "hidden"]);
+	expect(h.quits()).toBe(0);
+});
+
+test("a stray key held after release is reached does not block the quit", () => {
+	const h = harness();
+	h.shortcut.press();
+	h.advance(QUIT_HOLD_MS + QUIT_POLL_MS);
+	expect(h.hints).toEqual(["armed", "release"]);
+	h.setKeys(held([W_KEYCODE]));
+	h.advance(QUIT_POLL_MS);
+	expect(h.quits()).toBe(1);
+});
+
+test("the hold follows whichever physical key fired the quit", () => {
+	const h = harness(held([AZERTY_Q_KEYCODE]));
+	h.shortcut.press();
+	h.advance(QUIT_HOLD_MS + QUIT_POLL_MS);
+	expect(h.hints).toEqual(["armed", "release"]);
+	h.setKeys(up);
+	h.advance(QUIT_POLL_MS);
+	expect(h.quits()).toBe(1);
+});
+
+test("a key-repeat press never widens the held keys", () => {
+	const h = harness();
+	h.shortcut.press();
+	h.setKeys(held([Q_KEYCODE, W_KEYCODE]));
+	h.shortcut.press();
+	h.setKeys(held([W_KEYCODE]));
+	h.advance(QUIT_HOLD_MS + QUIT_DOUBLE_PRESS_MS + QUIT_POLL_MS * 2);
+	expect(h.hints).toEqual(["armed", "hidden"]);
+	expect(h.quits()).toBe(0);
+});
+
+test("a second press with a new key confirms the quit", () => {
+	const h = harness(held([Q_KEYCODE]));
+	h.shortcut.press();
+	h.setKeys(up);
+	h.advance(QUIT_POLL_MS);
+	h.setKeys(held([AZERTY_Q_KEYCODE]));
+	h.shortcut.press();
+	expect(h.hints).toEqual(["armed", "release"]);
+	h.setKeys(up);
+	h.advance(QUIT_POLL_MS);
+	expect(h.quits()).toBe(1);
 });
