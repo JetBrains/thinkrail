@@ -717,7 +717,9 @@ function PlanSessionLive({
 			<MessageSquare className="mt-2 size-14 shrink-0 text-text-muted" />
 			<div className="min-w-0 flex-1">
 				<div className="tr-text-eyebrow text-text-muted">Agent</div>
-				<Markdown text={message} className={`line-clamp-4 tr-text-metadata ${SUMMARY_PROSE}`} />
+				<div className="max-h-[12rem] overflow-y-auto">
+					<Markdown text={message} className={`tr-text-metadata ${SUMMARY_PROSE}`} />
+				</div>
 			</div>
 		</div>
 	);

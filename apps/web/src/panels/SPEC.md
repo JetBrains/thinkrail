@@ -635,8 +635,9 @@ a project picker, the prompt hero, and the reused
   `session.answerQuestion`; the chat-only actions — reveal/focus/subagent — are no-ops) plus a derived
   `AskStatesContext`, so an answer submitted from the plan flows through the identical path as the chat.
   When there's no pending question AND no step is in progress, the same slot instead shows the **agent's
-  latest message** (`plan-agent-message`, `planView.lastAgentText` rendered Markdown, clamped, live while
-  it streams) — so the plan stays transparent about what the agent is doing when it isn't asking or on a
+  latest message** (`plan-agent-message`, `planView.lastAgentText` rendered Markdown inside a bounded
+  scroll area — `max-h-[12rem] overflow-y-auto` so the full message stays readable without pushing
+  the plan items down — live while it streams) — so the plan stays transparent about what the agent is doing when it isn't asking or on a
   step; it renders nothing when a step is in progress or there's no message. Below the items the Session ends in a **chat/steer
   composer** (`plan-session-chat`, a `PlanComposer` textarea that works like the chat composer — Enter
   sends, Shift+Enter newlines) whose send adapts to the run: while the agent is streaming it **steers**
