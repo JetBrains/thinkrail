@@ -1,40 +1,87 @@
 import { MermaidView } from "@thinkrail/ext-visualize/web";
-import { type ComponentProps, memo, type ReactNode, useEffect, useState } from "react";
+import { type ComponentProps, memo, type ReactNode, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { highlightCode } from "@/lib/highlighter";
+import { createMarkdownSplitter } from "./markdownBlocks";
 
 const CHAT_PROSE =
 	"tr-prose-chat max-w-none break-words [&_a]:text-primary [&_a]:underline [&_li]:my-2 [&_ol]:my-8 [&_ol]:list-decimal [&_ol]:pl-16 [&_p]:my-8 [&_table]:border-collapse [&_td]:border [&_td]:border-border-muted [&_td]:px-8 [&_td]:py-4 [&_th]:border [&_th]:border-border-muted [&_th]:px-8 [&_th]:py-4 [&_th]:text-left [&_ul]:my-8 [&_ul]:list-disc [&_ul]:pl-16";
 
-export type MarkdownRehypePlugins = ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
+type ReactMarkdownProps = ComponentProps<typeof ReactMarkdown>;
+export type MarkdownRehypePlugins = ReactMarkdownProps["rehypePlugins"];
+
+interface MarkdownProps {
+	text: string;
+	className?: string;
+	remarkPlugins?: ReactMarkdownProps["remarkPlugins"];
+	rehypePlugins?: ReactMarkdownProps["rehypePlugins"];
+	urlTransform?: ReactMarkdownProps["urlTransform"];
+	components?: ReactMarkdownProps["components"];
+}
+
+interface MarkdownBlockProps extends Omit<MarkdownProps, "text" | "className"> {
+	raw: string;
+	separated: boolean;
+}
 
 export const Markdown = memo(function Markdown({
 	text,
 	className = CHAT_PROSE,
 	remarkPlugins,
-	rehypePlugins,
-	urlTransform,
 	components,
-}: {
-	text: string;
-	className?: string;
-	remarkPlugins?: ComponentProps<typeof ReactMarkdown>["remarkPlugins"];
-	rehypePlugins?: ComponentProps<typeof ReactMarkdown>["rehypePlugins"];
-	urlTransform?: ComponentProps<typeof ReactMarkdown>["urlTransform"];
-	components?: ComponentProps<typeof ReactMarkdown>["components"];
-}) {
+	...rest
+}: MarkdownProps) {
 	return (
 		<div className={className}>
 			<ReactMarkdown
-				remarkPlugins={remarkPlugins ? [remarkGfm, ...remarkPlugins] : [remarkGfm]}
-				rehypePlugins={rehypePlugins}
-				urlTransform={urlTransform}
-				components={{ code: CodeBlock, a: Anchor, table: Table, ...components }}
+				remarkPlugins={withDefaultPlugins(remarkPlugins)}
+				components={withDefaultComponents(components)}
+				{...rest}
 			>
 				{text}
 			</ReactMarkdown>
 		</div>
+	);
+});
+
+export const BlockMarkdown = memo(function BlockMarkdown({
+	text,
+	className = CHAT_PROSE,
+	remarkPlugins,
+	components,
+	...rest
+}: MarkdownProps) {
+	const [split] = useState(createMarkdownSplitter);
+	const { blocks } = useMemo(() => split(text), [split, text]);
+	const plugins = useMemo(() => withDefaultPlugins(remarkPlugins), [remarkPlugins]);
+	const merged = useMemo(() => withDefaultComponents(components), [components]);
+	return (
+		<div className={className}>
+			{blocks.map((block) => (
+				<MarkdownBlock
+					key={block.start}
+					raw={block.raw}
+					separated={block.start > 0}
+					remarkPlugins={plugins}
+					components={merged}
+					{...rest}
+				/>
+			))}
+		</div>
+	);
+});
+
+const MarkdownBlock = memo(function MarkdownBlock({
+	raw,
+	separated,
+	...props
+}: MarkdownBlockProps) {
+	return (
+		<>
+			{separated && "\n"}
+			<ReactMarkdown {...props}>{raw}</ReactMarkdown>
+		</>
 	);
 });
 
@@ -127,4 +174,19 @@ function ShikiBlock({ code, lang }: { code: string; lang: string }) {
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>
 	);
+}
+
+const DEFAULT_REMARK_PLUGINS: ReactMarkdownProps["remarkPlugins"] = [remarkGfm];
+const DEFAULT_COMPONENTS: ReactMarkdownProps["components"] = {
+	code: CodeBlock,
+	a: Anchor,
+	table: Table,
+};
+
+function withDefaultPlugins(plugins: ReactMarkdownProps["remarkPlugins"]) {
+	return plugins ? [remarkGfm, ...plugins] : DEFAULT_REMARK_PLUGINS;
+}
+
+function withDefaultComponents(components: ReactMarkdownProps["components"]) {
+	return components ? { ...DEFAULT_COMPONENTS, ...components } : DEFAULT_COMPONENTS;
 }

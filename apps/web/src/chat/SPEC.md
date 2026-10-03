@@ -117,6 +117,24 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   pan-zoom, error → source fallback) — uniform across every `Markdown` surface (chat, file/specs
   preview); until mounted it renders as highlighted source, so static contexts (`RenderedDiff`'s
   `renderToStaticMarkup`) degrade to code exactly like shiki blocks do.
+  Assistant text renders per top-level block (`BlockMarkdown`): `markdownBlocks` splits it with the `marked`
+  block lexer, and each block is a memoized react-markdown render, so a streamed delta re-parses only the
+  tail. Blocks are direct children of the prose `div`, separated by the same `"\n"` the whole-document
+  render emits. The splitter is per instance and incremental: it re-lexes from the last closed block that
+  has two blocks after it. A block is closed when it ends in a blank line or in a heading, a rule, or a
+  fence that CommonMark also closes, unless raw HTML or an open fence may still continue it. Invariants:
+  incremental split equals fresh split; block render equals whole-document render; a link or footnote
+  definition (also inside a list item) renders the message whole for the rest of the stream; fallbacks
+  (open HTML, lazy lines, indented code, a fence only `marked` closes, lexer output that is not lossless)
+  only merge blocks, never split them. `marked` over a micromark split: its block lex is several times
+  faster than a micromark parse, and the split runs on top of the per-block micromark render; the cost is
+  about 12 KB gzip in the eager bundle. The `BlockMarkdown` memo needs stable `components`, so callers memoize
+  them. Known gaps: raw HTML lines (comments) lazily continuing a list can still render differently from the
+  whole document; one construct with no closed block, such as a list whose items run on through lazy lines,
+  re-lexes from the start on every delta; when blocks merge or the message turns whole, the moved blocks
+  remount, so a code block shows plain text until Shiki answers again, a Mermaid diagram redraws, and focus
+  or a selection inside them is lost; kept blocks hold substrings of older stream texts, about 1 MB for a
+  110k-char message, until the row unmounts.
 - **Configurable transcript measure** — the host-synchronized `chatLineWidth` (40–240, default 120)
   is an approximate CSS `ch` text measure because chat retains its proportional reading font. `ChatView`,
   the store-aware integration boundary, applies it to one centered outer column shared by every transcript
@@ -1295,7 +1313,8 @@ Unknown custom messages retain their existing behavior.
   pass still answers — with a list to render, not a verdict), and dropped by the next `model.list` install
   from *any* consumer. `model.list` answers from *before* the
   detached refresh it triggers, so it is never a basis for concluding a model is gone);
-  `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `@thinkrail/ext-visualize/web`
+  `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `marked` (block lexer for
+  `markdownBlocks` splitting only, never for rendering); `@thinkrail/ext-visualize/web`
   (`Markdown` consumes `MermaidView`; `mermaid` stays lazy inside the extension);
   `@thinkrail/extension-api/web`; `react-virtuoso`; `@remixicon/react`; `@thinkrail/ui/*`;
   `components/useNow`; `lib`.
