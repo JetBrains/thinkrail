@@ -110,7 +110,8 @@ button; a pointer left at a removed overlay is not evidence of a gesture deliver
 
 ## Render profiling harness
 
-`bun run perf:render [--runs N] [--out file] [playwright args]` is an opt-in measurement run, never a
+`bun run perf:render [--runs N] [--out file] [--cpu N] [--scenario a,b] [playwright args]` is an opt-in
+measurement run, never a
 gate. It builds `apps/web/dist-profile` (see [[module-web]]), boots the ordinary isolated host on it through
 `playwright.perf.config.ts`, and runs `e2e/perf/*.perf.ts` — a pattern the default config does not match.
 It shares the worktree's serial lane state, so it never overlaps another E2E run in the same worktree.
@@ -131,6 +132,20 @@ Defaults: 5 runs, output `$TMPDIR/thinkrail-render-profile.json`.
   wire seam with fixed pacing; this measures client rendering only and is not evidence of agent behavior.
   Live file edits rewrite a worktree file under an open file tab. Large diff opens a 3,000-line Pierre diff
   and wheel-scrolls it. Runs interleave scenarios; the runner reports medians and run-to-run spread.
+- **Heavy scenarios** (only with `--scenario`; the default set is the three above). `long-stream` replays one
+  ~26k-char seeded markdown answer (headings, nested lists, ts/py/bash/json fences, a GFM table, mermaid) in
+  10–60-char deltas every 15 ms. `parallel-agents` opens 20 persisted chats as tabs in one workspace and
+  interleaves 20 replays; `background-agents` streams the 19 hidden tabs while the visible chat stays idle,
+  so every commit it records is cost the visible UI pays for background work. Both then open a hidden tab
+  and assert its streamed text arrived.
+- **Weak machine.** `--cpu N` applies CDP `Emulation.setCPUThrottlingRate` for the measured window only.
+- **Extra metrics.** Per run: long tasks (count, total, max), rAF frame gaps (p50/p95/max, dropped 60 Hz
+  frames), CDP main-thread task/script/layout/style ms and heap delta, scenario counters (deltas, mounted
+  chats), and Markdown renders and self ms per delta. Main-thread time includes Playwright's
+  `routeWebSocket` relay, so compare it only across variants of the same scenario.
+- **Variants.** Run the command from a worktree root to measure that worktree; the output records
+  `rootDir`, `gitHead`, `dirty` and `dirtyTreeHash` (sha256 of `git status --porcelain` plus `git diff HEAD`;
+  untracked file contents are not hashed).
 
 ## Desktop-backed mode
 

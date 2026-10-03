@@ -35,7 +35,14 @@ interface ReplayStep {
 	frames: string[];
 }
 
-function seededRandom(seed: number): () => number {
+type DeltaRange = readonly [min: number, max: number];
+
+interface StreamShape {
+	deltaChars: DeltaRange;
+	deltasPerStep: number;
+}
+
+export function seededRandom(seed: number): () => number {
 	let state = seed >>> 0;
 	return () => {
 		state = (state + 0x6d2b79f5) >>> 0;
@@ -69,11 +76,11 @@ function prose(random: () => number, paragraphs: number): string {
 	return blocks.join("\n\n");
 }
 
-function chunks(text: string, random: () => number): string[] {
+function chunks(text: string, random: () => number, [min, max]: DeltaRange): string[] {
 	const out: string[] = [];
 	let at = 0;
 	while (at < text.length) {
-		const size = 3 + Math.floor(random() * 6);
+		const size = min + Math.floor(random() * (max - min + 1));
 		out.push(text.slice(at, at + size));
 		at += size;
 	}
@@ -143,6 +150,7 @@ function toolResultContent(text: string) {
 export interface ChatReplay {
 	steps: ReplayStep[];
 	finalText: string;
+	deltaCount: number;
 }
 
 export function buildChatReplay(sessionId: string, seed = 7): ChatReplay {
@@ -152,6 +160,22 @@ export function buildChatReplay(sessionId: string, seed = 7): ChatReplay {
 		{ text: prose(random, 4), tools: toolPlans(2, random) },
 		{ text: prose(random, 7), tools: [] },
 	];
+	return replayPlans(sessionId, plans, random, { deltaChars: [3, 8], deltasPerStep: 3 });
+}
+
+export function buildTextReplay(sessionId: string, text: string, seed = 13): ChatReplay {
+	return replayPlans(sessionId, [{ text, tools: [] }], seededRandom(seed), {
+		deltaChars: [10, 60],
+		deltasPerStep: 1,
+	});
+}
+
+function replayPlans(
+	sessionId: string,
+	plans: MessagePlan[],
+	random: () => number,
+	shape: StreamShape,
+): ChatReplay {
 	const push = (event: PiEvent) => {
 		const payload: SessionEventPayload = { sessionId, event };
 		const frame: WsPush = { channel: "pi.event", data: payload };
@@ -159,6 +183,7 @@ export function buildChatReplay(sessionId: string, seed = 7): ChatReplay {
 	};
 	const steps: ReplayStep[] = [{ frames: [push({ type: "agent_start" })] }];
 	let timestamp = 1_701_000_000_000;
+	let deltaCount = 0;
 
 	for (const plan of plans) {
 		timestamp += 1_000;
@@ -175,11 +200,12 @@ export function buildChatReplay(sessionId: string, seed = 7): ChatReplay {
 			],
 		});
 		let text = "";
-		const pieces = chunks(plan.text, random);
-		for (let index = 0; index < pieces.length; index += 3) {
+		const pieces = chunks(plan.text, random, shape.deltaChars);
+		for (let index = 0; index < pieces.length; index += shape.deltasPerStep) {
 			const frames: string[] = [];
-			for (const piece of pieces.slice(index, index + 3)) {
+			for (const piece of pieces.slice(index, index + shape.deltasPerStep)) {
 				text += piece;
+				deltaCount += 1;
 				const partial: AssistantMessage = { ...message, content: [{ type: "text", text }] };
 				frames.push(
 					push({
@@ -290,6 +316,7 @@ export function buildChatReplay(sessionId: string, seed = 7): ChatReplay {
 	return {
 		steps,
 		finalText: last ? last.text.slice(-40) : "",
+		deltaCount,
 	};
 }
 

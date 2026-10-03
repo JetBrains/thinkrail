@@ -9,11 +9,27 @@ export interface ComponentCost {
 	inclusiveMaxMs: number;
 }
 
+export interface LongTaskStats {
+	count: number;
+	totalMs: number;
+	maxMs: number;
+}
+
+export interface FrameStats {
+	frames: number;
+	p50GapMs: number;
+	p95GapMs: number;
+	maxGapMs: number;
+	droppedFrames: number;
+}
+
 export interface RenderProfile {
 	commits: number;
 	totalMs: number;
 	maxCommitMs: number;
 	components: Record<string, ComponentCost>;
+	longTasks: LongTaskStats;
+	frames: FrameStats;
 }
 
 interface RenderProfilerHandle {
@@ -53,10 +69,44 @@ function installRenderProfiler(): void {
 	const SIMPLE_MEMO_COMPONENT = 15;
 	const PERFORMED_WORK = 1;
 
+	const FRAME_MS = 1000 / 60;
+
 	let commits = 0;
 	let totalMs = 0;
 	let maxCommitMs = 0;
 	let components: Record<string, ComponentCost> = {};
+	let longTasks: number[] = [];
+	let frameGaps: number[] = [];
+	let lastFrameAt = 0;
+
+	new PerformanceObserver((list) => {
+		for (const entry of list.getEntries()) longTasks.push(entry.duration);
+	}).observe({ type: "longtask" });
+
+	function onFrame(now: number): void {
+		if (lastFrameAt > 0) frameGaps.push(now - lastFrameAt);
+		lastFrameAt = now;
+		requestAnimationFrame(onFrame);
+	}
+	requestAnimationFrame(onFrame);
+
+	function percentile(sorted: number[], fraction: number): number {
+		return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))] ?? 0;
+	}
+
+	function frameStats(): FrameStats {
+		const sorted = [...frameGaps].sort((a, b) => a - b);
+		return {
+			frames: frameGaps.length,
+			p50GapMs: percentile(sorted, 0.5),
+			p95GapMs: percentile(sorted, 0.95),
+			maxGapMs: sorted.at(-1) ?? 0,
+			droppedFrames: frameGaps.reduce(
+				(dropped, gap) => dropped + Math.max(0, Math.round(gap / FRAME_MS) - 1),
+				0,
+			),
+		};
+	}
 
 	function componentName(fiber: Fiber): string | null {
 		const type = fiber.type as
@@ -150,8 +200,23 @@ function installRenderProfiler(): void {
 			totalMs = 0;
 			maxCommitMs = 0;
 			components = {};
+			longTasks = [];
+			frameGaps = [];
+			lastFrameAt = 0;
 		},
-		snapshot: () => structuredClone({ commits, totalMs, maxCommitMs, components }),
+		snapshot: () =>
+			structuredClone({
+				commits,
+				totalMs,
+				maxCommitMs,
+				components,
+				longTasks: {
+					count: longTasks.length,
+					totalMs: longTasks.reduce((sum, ms) => sum + ms, 0),
+					maxMs: Math.max(0, ...longTasks),
+				},
+				frames: frameStats(),
+			}),
 	};
 }
 
@@ -181,6 +246,45 @@ export async function attachRenderProfiler(page: Page, origin: string): Promise<
 
 export async function detachRenderProfiler(page: Page): Promise<void> {
 	await page.unrouteAll({ behavior: "ignoreErrors" });
+}
+
+export interface MainThreadCost {
+	taskMs: number;
+	scriptMs: number;
+	layoutMs: number;
+	styleMs: number;
+	heapDeltaMb: number;
+}
+
+const MAIN_THREAD_METRICS = {
+	taskMs: "TaskDuration",
+	scriptMs: "ScriptDuration",
+	layoutMs: "LayoutDuration",
+	styleMs: "RecalcStyleDuration",
+} as const;
+
+export async function startMainThreadProbe(page: Page, cpuRate: number) {
+	const session = await page.context().newCDPSession(page);
+	await session.send("Performance.enable");
+	if (cpuRate !== 1) await session.send("Emulation.setCPUThrottlingRate", { rate: cpuRate });
+	const sample = async () => {
+		const { metrics } = await session.send("Performance.getMetrics");
+		return new Map(metrics.map((metric) => [metric.name, metric.value]));
+	};
+	const before = await sample();
+	return async (): Promise<MainThreadCost> => {
+		const after = await sample();
+		if (cpuRate !== 1) await session.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+		await session.detach();
+		const delta = (name: string) => (after.get(name) ?? 0) - (before.get(name) ?? 0);
+		return {
+			taskMs: delta(MAIN_THREAD_METRICS.taskMs) * 1000,
+			scriptMs: delta(MAIN_THREAD_METRICS.scriptMs) * 1000,
+			layoutMs: delta(MAIN_THREAD_METRICS.layoutMs) * 1000,
+			styleMs: delta(MAIN_THREAD_METRICS.styleMs) * 1000,
+			heapDeltaMb: delta("JSHeapUsedSize") / 1024 / 1024,
+		};
+	};
 }
 
 export async function resetRenderProfile(page: Page): Promise<void> {
