@@ -19,6 +19,9 @@ import {
 	createAskUserQuestionWaiters,
 	hasQuestionAck,
 	isolateAskUserQuestionBatch,
+	MAX_HEADER_LENGTH,
+	MAX_LABEL_LENGTH,
+	MAX_RECOMMENDED_REASON_LENGTH,
 	validateQuestionnaire,
 } from "./askUserQuestion";
 
@@ -106,6 +109,28 @@ const userMessage = (text = "actually, let me explain") =>
 
 test("validateQuestionnaire accepts a well-formed questionnaire", () => {
 	expect(validateQuestionnaire(args()).ok).toBe(true);
+});
+
+test("length guidance is advisory: overlong header, label, and reason still validate", () => {
+	const long: AskUserQuestionArgs = {
+		questions: [
+			{
+				question: "Which stack?",
+				header: "x".repeat(MAX_HEADER_LENGTH + 1),
+				options: [
+					{
+						label: "x".repeat(MAX_LABEL_LENGTH + 1),
+						description: "Long label.",
+						recommendedReason: "x".repeat(MAX_RECOMMENDED_REASON_LENGTH + 1),
+					},
+					{ label: "Short", description: "Short label." },
+				],
+			},
+		],
+	};
+
+	expect(Value.Check(AskUserQuestionSchema, long)).toBe(true);
+	expect(validateQuestionnaire(long).ok).toBe(true);
 });
 
 test("the schema and runtime validation accept more than four questions", async () => {

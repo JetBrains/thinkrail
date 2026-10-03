@@ -29,7 +29,6 @@ export const RESERVED_LABELS = ["Other", "Type something.", "Chat about this", "
 
 const OptionSchema = Type.Object({
 	label: Type.String({
-		maxLength: MAX_LABEL_LENGTH,
 		description: `MAX ${MAX_LABEL_LENGTH} CHARACTERS. The concise (1-5 word) text the user sees and selects.`,
 	}),
 	description: Type.String({
@@ -43,7 +42,6 @@ const OptionSchema = Type.Object({
 	),
 	recommendedReason: Type.Optional(
 		Type.String({
-			maxLength: MAX_RECOMMENDED_REASON_LENGTH,
 			description: `MAX ${MAX_RECOMMENDED_REASON_LENGTH} CHARACTERS. Why you recommend this option — one short sentence, rendered inline as a 'Why:' line under the option. Set only on the option whose label carries '(Recommended)'.`,
 		}),
 	),
@@ -55,7 +53,6 @@ const QuestionSchema = Type.Object({
 			'The complete question, ending with a question mark. E.g. "Which library should we use for date formatting?"',
 	}),
 	header: Type.String({
-		maxLength: MAX_HEADER_LENGTH,
 		description: `MAX ${MAX_HEADER_LENGTH} CHARACTERS. Very short chip/tag next to the question, e.g. "Auth method".`,
 	}),
 	options: Type.Array(OptionSchema, {
