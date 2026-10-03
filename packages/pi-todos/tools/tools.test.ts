@@ -284,7 +284,7 @@ test("todo_list renders group-first with derived status + progress, and nudges w
 	}
 });
 
-test("todo_add refuses an `after` anchor pointing at a loose item (promote, don\'t grow siblings)", async () => {
+test("todo_add refuses an `after` anchor pointing at a loose item (promote, don’t grow siblings)", async () => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
 	try {
 		const mine = new TodoStore(cwd, "sess-test").add({ title: "user ask", origin: "user" });
