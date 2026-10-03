@@ -225,6 +225,13 @@ function isApplePlatform(platform: string): boolean {
 	return APPLE_PLATFORM.test(platform);
 }
 
+export function platformFamily(platform = browserPlatform()) {
+	if (isApplePlatform(platform)) return "apple";
+	if (/^Win/.test(platform)) return "windows";
+	if (/Linux/.test(platform)) return "linux";
+	return "other";
+}
+
 export function hasPlatformModifier(
 	event: Pick<KeyboardEvent, "ctrlKey" | "metaKey">,
 	platform = browserPlatform(),

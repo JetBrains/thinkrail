@@ -14,6 +14,7 @@ import {
 } from "./preferenceAdapter";
 import { takePreloadGlobal } from "./preloadGlobals";
 import type { DesktopRpc } from "./rpc";
+import { createShortcutsBridge } from "./shortcutsBridge";
 import { installTitleBarDoubleClick } from "./titleBarDoubleClick";
 import {
 	createWindowChromeStyleWriter,
@@ -37,6 +38,7 @@ windowChromeStyle.update(initialWindowChrome);
 
 const updateListeners = new Set<(state: NativeUpdateState) => void>();
 const windowStateListeners = new Set<(state: NativeWindowState) => void>();
+const shortcuts = createShortcutsBridge(() => rpc.request.quitApp());
 const rpc = Electroview.defineRPC<DesktopRpc>({
 	maxRequestTime: 5000,
 	handlers: {
@@ -49,6 +51,8 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 			windowStateChanged: (state) => {
 				for (const listener of windowStateListeners) listener(state);
 			},
+			quitHintChanged: ({ hint }) => shortcuts.emitQuitHint(hint),
+			nativeCommand: ({ command }) => shortcuts.emitCommand(command),
 		},
 	},
 });
@@ -75,6 +79,12 @@ const updateBridge: NativeUpdateBridge = Object.freeze({
 });
 Object.defineProperty(globals, "__THINKRAIL_NATIVE_UPDATES__", {
 	value: updateBridge,
+	writable: false,
+	configurable: false,
+	enumerable: false,
+});
+Object.defineProperty(globals, "__THINKRAIL_NATIVE_SHORTCUTS__", {
+	value: shortcuts.bridge,
 	writable: false,
 	configurable: false,
 	enumerable: false,

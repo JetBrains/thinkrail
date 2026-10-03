@@ -2,7 +2,7 @@
 id: module-contracts
 type: module-design
 status: active
-title: Wire contracts (types-only)
+title: Wire contracts
 parent: architecture
 depends-on: []
 references: [central-integration, module-pi-background-commands]
@@ -11,10 +11,10 @@ tags: [wire]
 
 ## Responsibility
 
-The browser↔host wire spine: the single source of truth for the protocol. Types-only, with the only
-runtime exports being the WS method/channel constants, protocol/feature versions, the small config default,
-and narrow cross-ring guards. The one package `apps/web` may depend on—which is what lets the UI ship independently
-of the host.
+The browser↔host wire spine: the single source of truth for the protocol. Types plus a small
+dependency-free runtime: the WS method/channel constants, protocol/feature versions, the small config
+default, narrow cross-ring guards, and the quit-confirmation rule both clients drive. The one package
+`apps/web` may depend on—which is what lets the UI ship independently of the host.
 
 ## Boundary
 
@@ -37,8 +37,10 @@ of the host.
   for it; everything else stays a plain `error` string. Expected method-specific outcomes remain typed method
   results rather than generic WS failures; no current-layout protocol exists.
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
-  (`NativeUpdateState` / `NativeUpdateBridge` and `NativeWindowState` / `NativeWindowControlsBridge`, the
-  optional shell-local desktop capabilities); the value re-exports
+  (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`, and
+  `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, the optional shell-local desktop capabilities);
+  `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`; the value
+  re-exports
   `DEFAULT_CONFIG`, `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
   `SESSION_RENAME_PROTOCOL_VERSION`, `SESSION_TITLE_MAX_LENGTH`, `normalizeSessionTitle`,
@@ -61,7 +63,9 @@ of the host.
   Separate type-only native client capabilities describe an optional shell-local bridge, not host WS
   methods: `NativeUpdateState` and `NativeUpdateBridge` carry update presentation and explicit local
   actions; `NativeWindowState` and `NativeWindowControlsBridge` carry the maximized/fullscreen snapshot and
-  the minimize / toggle-maximize / close actions a frameless native window delegates to HTML controls. The
+  the minimize / toggle-maximize / close actions a frameless native window delegates to HTML controls;
+  `NativeQuitHint`, `NativeCommand`, and `NativeShortcutsBridge` push the confirmed-quit hint and forwarded
+  native menu commands, and offer `quit()` for a client that confirms the quit gesture itself. The
   same web bundle discovers these capabilities without importing a native SDK. An optional
   `HostUpdateNotice` carries a closed CLI-host update lifecycle; protocol-gated `host.update` is an empty
   request that can start only the launcher's pre-bound updater. The browser never supplies a command, path,
@@ -435,8 +439,19 @@ of the host.
   update bridge exposes a monotonic state snapshot, prompt check/download/install actions, failed-operation
   identity, and state subscription without exposing feed selection. Available, byte-transfer, preparation,
   ready, and installing are distinct states. The window-controls bridge exposes the same
-  snapshot/action/subscription shape for window state; a browser connection has neither bridge and renders
-  neither affordance.
+  snapshot/action/subscription shape for window state. The shortcuts bridge pushes quit-hint changes
+  (`hidden` / `armed` / `release` / `quitting`) and `NativeCommand` ids (today `close-item`, close the
+  focused in-app item), and its one action `quit()` asks the host for an ordinary coordinated quit. A browser
+  connection has none of these bridges and renders none of their affordances.
+- **quitConfirmation.ts** — the single home of the quit-confirmation gesture shared by the desktop main
+  process (macOS Cmd+Q, key state polled through CoreGraphics) and the web shell (Linux Ctrl+Q, key state
+  from keydown/keyup). `QUIT_CONFIRMATION` holds the 1200 ms hold, 500 ms double-press window (measured from
+  the first release), and 40 ms poll. `createQuitConfirmation` is the state machine over injected
+  `readHeld` / `canShowHint` / `now` / `every` / `onHint` / `quit`: `press(held)`, `sync()` (re-read held
+  now), `cancel()` (a confirmed gesture quits, an unconfirmed one hides), idempotent `quitNow()`, and `reset()` (back to idle, hint hidden; for a client whose quit request failed). A
+  quit fires only once the chord is released. It lives here, not in `shared`, because `apps/web` may import
+  only contracts and two copies of the gesture would drift; it is framework-free and touches no global,
+  so it stays within the no-runtime-deps rule. Each client keeps only a thin key-state adapter.
 - **`HostUpdateNotice`** — the optional host-wire CLI lifecycle: current version, newer available version,
   channel, and an optional closed `available | running | succeeded | failed` status (absent means the legacy
   v64 advisory). `host.updateAvailable` publishes full replacements. Protocol v70 adds parameterless
@@ -725,5 +740,5 @@ so an already-loaded old client clears retired markers after reconnect. No activ
 
 ## Consumed by
 
-`web` (types + WS constants) and `server` (same, + mapping `session.*` to `AgentSession` methods). The
+`web` (types + the runtime exports listed above) and `server` (same, + mapping `session.*` to `AgentSession` methods). The
 shell panels need `domain` + `wsProtocol`; the `pi` types + `PiEvent` are the wire for the agent session.

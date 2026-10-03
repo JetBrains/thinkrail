@@ -40,3 +40,13 @@ export interface NativeWindowControlsBridge {
 	close(): Promise<void>;
 	subscribe(listener: (state: NativeWindowState) => void): () => void;
 }
+
+export type NativeQuitHint = "hidden" | "armed" | "release" | "quitting";
+
+export type NativeCommand = "close-item";
+
+export interface NativeShortcutsBridge {
+	subscribeQuitHint(listener: (hint: NativeQuitHint) => void): () => void;
+	subscribeCommand(listener: (command: NativeCommand) => void): () => void;
+	quit(): Promise<void>;
+}
