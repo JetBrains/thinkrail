@@ -1,0 +1,66 @@
+{
+	"name": "@thinkrail.ai/pi-visualize",
+	"version": "0.0.0",
+	"description": "A pi extension adding a `visualize` tool: mermaid diagrams and option comparisons, rendered as box-drawing in the terminal and as rich cards in hosts that have a renderer.",
+	"license": "Apache-2.0",
+	"type": "module",
+	"keywords": [
+		"pi-package",
+		"pi",
+		"pi-coding-agent",
+		"extension",
+		"mermaid",
+		"diagram",
+		"visualize"
+	],
+	"homepage": "https://thinkrail.ai",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/JetBrains/thinkrail.git",
+		"directory": "pi-extensions/visualize"
+	},
+	"bugs": "https://github.com/JetBrains/thinkrail/issues",
+	"author": "ThinkRail",
+	"files": [
+		"index.ts",
+		"src/**/*.ts",
+		"!src/**/*.test.ts",
+		"README.md",
+		"LICENSE"
+	],
+	"exports": {
+		".": "./index.ts",
+		"./index.ts": "./index.ts",
+		"./package.json": "./package.json"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"pi": {
+		"extensions": [
+			"./index.ts"
+		]
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "bun test"
+	},
+	"dependencies": {
+		"lovely-mermaid": "0.3.3"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-ai": "*",
+		"@earendil-works/pi-coding-agent": "*",
+		"@earendil-works/pi-tui": "*",
+		"typebox": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-ai": "catalog:",
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"@earendil-works/pi-tui": "catalog:",
+		"@types/bun": "catalog:",
+		"typebox": "catalog:",
+		"typescript": "catalog:"
+	}
+}
