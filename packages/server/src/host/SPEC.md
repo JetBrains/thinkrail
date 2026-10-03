@@ -171,11 +171,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
   display label, persists, and publishes it, so the handler never mutates Git, emits, or patches a client
   separately. The host's `resolveNewChatModel` composes AppConfig settings with the agent's settled available
   model list and Pi thinking clamp; `model.default`, `session.create`, and newly-created review chats share
-  that resolver, and creation passes its model and effort explicitly. `model.contextSettings` and
-  `model.setContextWindow` delegate to agent's `modelContext` adapter and return its
-  `ModelContextSetting[]`; the mutation names a provider/model target or all eligible pairs, never
-  arbitrary model metadata, and successful saves reuse `provider.changed` to invalidate catalogs across
-  clients. Existing review chats and plan-review
+  that resolver, and creation passes its model and effort explicitly. A `session.create` that **named** a
+  model and every `session.setModel` also record the resolved model as recent through `settings`'
+  `noteRecentModel` — a default-resolved creation is the host's choice, not the user's, and is not
+  recorded. `model.contextSettings` and `model.setContextWindow` delegate to agent's `modelContext`
+  adapter and return its `ModelContextSetting[]`; the mutation names a provider/model target or all
+  eligible pairs, never arbitrary model metadata, and successful saves reuse `provider.changed` to
+  invalidate catalogs across clients. Existing review chats and plan-review
   subagents keep their own policies — and
   the **Skills-manager set**: `skill.list` / `skills.state` / `project.skills` build
   the admission context from `projects` (+ the

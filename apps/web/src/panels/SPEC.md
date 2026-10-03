@@ -318,12 +318,17 @@ empty by default); while the prompt is non-empty (worktree mode), a secondary hi
 and branch from the request. The rest stays compact: the base-branch combobox (`git.listBranches`,
 degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filtered so no stray `origin`),
 a project picker, the prompt hero, and the reused
-  `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected from the host's
-  `model.default` result, which is the saved default when available or the first available model. Values
-  are held in dialog state and applied at create time. Only when no model is available does the host return
-  `model: null`; the effort control is disabled and create omits the model. The dialog does not choose a
-  competing default: its display and newly-created session share the host resolver (see `submodule-server-agent`).
-  The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
+  `chat/ModelEffortPicker` in **pre-session** mode. It opens **following the host default**: the pill reads
+  `Default · ‹model› · ‹level›` from the host's `model.default` result (the saved default when available or
+  the first available model) and the popover's Default row is checked. Any explicit pick (model, level, or
+  both) flips the dialog to an **explicit pair**; the Default row — and the unavailable-model reconcile below
+  — return it to following. Create sends `{model, thinkingLevel}` only for an explicit pair and **omits both
+  while following**, so the host resolver decides at creation time and the display can never snapshot a
+  default that Settings changed in between. When no model is available the host returns `model: null` and
+  the pill shows a bare Default. The dialog does not choose a competing default: its display and
+  newly-created session share the host resolver (see `submodule-server-agent`). Favorites/recents arrive
+  through `chat/useModelPreferences`, the same seam the composer uses.
+  The picker's popover portals into the dialog node (so its list scrolls under the Dialog scroll
   lock). Their catalog is the shared one — `chat/useModelCatalog`, so the dialog and the chat composer
   cannot drift — which means it is **live**: the picker's Refresh row can replace the list underneath a
   held selection. The dialog therefore reconciles the held model against it on every change via the pure
@@ -941,8 +946,9 @@ own section. The kebab menu (`plan-menu`, a
   surfaces; the shell layout module wraps these renderers.
 - **Allowed deps:** `store`, `transport`, `components` (`SkeletonRows` — every async panel's pending
   state renders content-shaped skeleton rows, never a bare "Loading…" line), `components/ui` (incl. `popover`/`command`/`textarea` for the
-  dialog), `chat` (`ModelSelector`/`ThinkingSelector` + the `useModelCatalog` hook that feeds them,
-  reused by `NewWorkspaceDialog`; `Markdown`,
+  dialog), `chat` (`ModelEffortPicker` + the `useModelCatalog`/`useModelPreferences` hooks that feed it,
+  reused by `NewWorkspaceDialog`; `ModelSelector`/`ThinkingSelector`, still mounted by
+  `ReviewSettings`/`ModelsSettings`; `Markdown`,
   reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `resources`, `lib`, `themes` (catalog + generic application contract),
   `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
