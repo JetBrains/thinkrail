@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
-import type { AppConfig } from "@thinkrail/contracts";
+import type { AppConfig, ThinkingLevel } from "@thinkrail/contracts";
 import { openWorkspaceChat } from "./fixtures/app";
 import { connectCentral, openProviders, waitForCentralState } from "./fixtures/jbcentral";
 import { shot } from "./fixtures/screenshots";
@@ -27,6 +27,14 @@ async function openFreshChat(page: Page): Promise<void> {
 	await expect(chatTabs).toHaveCount(previousChatCount + 1);
 }
 
+/** The Central chat's level as the host holds it — optimistic pill text may run ahead of pi's echo. */
+async function hostLevel(page: Page, workspaceId: string): Promise<ThinkingLevel | undefined> {
+	const sessions = await withHostWire(page, (wire) =>
+		wire.request("session.list", { workspaceId }),
+	);
+	return sessions.find((session) => session.model?.id === "e2e-central-model")?.thinkingLevel;
+}
+
 async function connectFixtureProvider(page: Page): Promise<void> {
 	await openProviders(page);
 	await waitForCentralState(page, "supported");
@@ -45,7 +53,7 @@ async function disconnectFixtureProvider(page: Page): Promise<void> {
 test("the composer pill stars a favorite, records it as recent, and saves the pair as default", async ({
 	page,
 }) => {
-	await openWorkspaceChat(page);
+	const workspace = await openWorkspaceChat(page);
 	const before = await readConfig(page);
 
 	try {
@@ -85,9 +93,12 @@ test("the composer pill stars a favorite, records it as recent, and saves the pa
 		await high.click();
 		await expect(high).toHaveAttribute("aria-pressed", "true");
 		await expect(page.getByTestId("thinking-selector").last()).toContainText("high");
+		await expect.poll(() => hostLevel(page, workspace.id)).toBe("high");
 		await page.getByTestId("thinking-step-prev").click();
 		await expect(page.getByTestId("thinking-selector").last()).toContainText("medium");
+		await expect.poll(() => hostLevel(page, workspace.id)).toBe("medium");
 		await high.click();
+		await expect.poll(() => hostLevel(page, workspace.id)).toBe("high");
 		await shot(
 			page.locator("[data-radix-popper-content-wrapper]").first(),
 			"model-picker",

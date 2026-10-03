@@ -609,14 +609,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   disabled-effort state cannot exist. The flow is **click model → step effort**: picking a model applies
   it at once and keeps the popover open (hover never changes anything — an earlier hover-preview made the
   effort row jump as the pointer moved); the effort control is a **stepper** (‹ › arrows, bars + level
-  word + a one-line hint, one dot per level with the host default ringed) whose every step applies at once
+  word + a one-line hint, one dot per level — ringed only when it is the user's saved `defaultEffort`; the
+  web never guesses the host's fallback level) whose every step applies at once
   and also keeps the popover open, since stepping is several clicks; Escape, an outside click, or clicking
   the already-current model closes. `onSelect({model, level?})` is the model callback (level present only
   when a typed `opus high` chose both at once), `onSelectLevel` the level-only one, and the caller — never
   the picker — talks to the host (`ChatView` chains `session.setModel` → `session.setThinkingLevel`).
   Rows are **two lines**: the name, then `provider · [kind glyph] what it draws on · price · context`. The list reads **Default
   row** (pre-session callers only, `defaultOption`: what the host would pick, checked while the caller
-  follows it) → **Favorites** → **Recent** (≤ 3, not starred) → provider groups, folded behind one
+  follows it) → **Favorites** → **Recent** (the host's list minus starred models) → provider groups, folded behind one
   "All models" row while a shortlist exists and expanded by search; a trailing query word that names a
   level the highlighted model supports (`opus high`) pre-selects it — pi's `model:level` idiom typed
   with a space — and `/model [query]` in the composer opens the picker prefilled instead of sending

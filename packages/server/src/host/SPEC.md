@@ -316,7 +316,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   here the same way: `createServer` wires `setSubagentsEnabledResolver` to map an explicit
   `Workspace.subagentsOverride` when present and otherwise use `AppConfig.subagentsEnabled` (unknown
   workspace fails closed), the settings
-  publisher asks `refreshSubagentTools()` to reevaluate all live sessions after any global update, and
+  publisher asks `refreshSubagentTools()` to reevaluate all live sessions after a global update that
+  carries `subagentsEnabled` (likewise `refreshAgentReviewTool()` for `agentReviewEnabled`) — not after
+  every publish, since `recentModels` now publishes on each model switch and a tool-set rebuild per idle
+  session would be pure churn — and
   `workspace.setSubagentsOverride` persists through `workspaces` then refreshes only that workspace. The
   two authoritative publishers remain the clients' convergence path; the host-to-agent refresh changes
   runtime capability, not frontend state;

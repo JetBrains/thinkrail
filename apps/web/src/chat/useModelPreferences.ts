@@ -27,6 +27,9 @@ export function resolveAgainstCatalog(
 	});
 }
 
+/** Favorites are a whole-list write, so toggles queue behind one another and each reads the list the previous one produced. */
+let favoritesWrite: Promise<void> = Promise.resolve();
+
 export function useModelPreferences(models: readonly WireModel[]): ModelPreferences {
 	const supported = useAppStore(selectSupportsModelPicker);
 	const favoriteModels = useAppStore((s) => s.favoriteModels);
@@ -54,13 +57,20 @@ export function useModelPreferences(models: readonly WireModel[]): ModelPreferen
 	);
 
 	const toggleFavorite = useCallback((model: WireModel) => {
-		const current = useAppStore.getState().favoriteModels;
-		const next = current.some((f) => sameModel(f, model))
-			? current.filter((f) => !sameModel(f, model))
-			: [...current, model];
-		getTransport()
-			.request("settings.update", { config: { favoriteModels: next } })
-			.catch(() => toast.error("Couldn't update favorite models"));
+		favoritesWrite = favoritesWrite.then(async () => {
+			const current = useAppStore.getState().favoriteModels;
+			const next = current.some((f) => sameModel(f, model))
+				? current.filter((f) => !sameModel(f, model))
+				: [...current, model];
+			try {
+				const config = await getTransport().request("settings.update", {
+					config: { favoriteModels: next },
+				});
+				useAppStore.getState().applyConfig(config);
+			} catch {
+				toast.error("Couldn't update favorite models");
+			}
+		});
 	}, []);
 
 	const isDefault = useCallback(

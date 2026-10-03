@@ -16,13 +16,17 @@ export function billsPerToken(kind: ProviderAuthKind | undefined): boolean {
 	return kind === "api-key" || kind === "env";
 }
 
-const AUTH_KIND_LABEL: Record<ProviderAuthKind, string> = {
+/** The one vocabulary for how a provider is connected, shared with Settings → Providers. */
+export const AUTH_KIND_LABEL: Record<ProviderAuthKind, string> = {
 	oauth: "subscription",
 	"api-key": "API key",
 	env: "environment key",
 	central: "JetBrains AI",
 	other: "configured",
 };
+
+/** The tag models routed through JetBrains AI (the Central proxy) wear where other kinds show a glyph. */
+export const CENTRAL_KIND_TAG = "JCP";
 
 /** `$in / $out` list prices per Mtok when the provider bills per token (or the kind is unknown). */
 export function costLabel(model: WireModel): string | null {
@@ -66,14 +70,15 @@ export const LEVEL_HINT: Partial<Record<ThinkingLevel, string>> = {
 	max: "Maximum — uses your limits faster",
 };
 
-export const EFFORT_BARS = 4;
+/** The effort bars, shortest first; their count is the scale `litBars` maps a level onto. */
+export const EFFORT_BAR_HEIGHTS = ["h-4", "h-6", "h-8", "h-12"] as const;
 
-/** How many of the effort bars light up: none for `off`, otherwise the level's rank among the model's reasoning levels scaled to the bar count (never zero). */
+/** How many effort bars light up: none for `off`, otherwise the level's rank among the model's reasoning levels scaled onto the bars (never zero). */
 export function litBars(level: ThinkingLevel, levels: readonly ThinkingLevel[]): number {
 	const reasoning: readonly ThinkingLevel[] = levels.filter((candidate) => candidate !== "off");
 	const rank = reasoning.indexOf(level);
 	if (rank < 0) return 0;
-	return Math.max(1, Math.round(((rank + 1) / reasoning.length) * EFFORT_BARS));
+	return Math.max(1, Math.round(((rank + 1) / reasoning.length) * EFFORT_BAR_HEIGHTS.length));
 }
 
 export interface ProviderGroup {

@@ -857,8 +857,9 @@ settings or workspaces edge. The owning parent graph records this package depend
   `getProviderAuthStatus` plus the generation's opaque Central ids) so the picker can say *plan* / *API key*
   / *env* / *JetBrains AI* without the `provider.status` refresh; `describeProviderAuth` is the one
   kind/detail mapping and `auth/providerStatus` reuses it, so the picker and Settings → Providers cannot
-  disagree. `toWireModel(model, generation)` takes the generation for that projection — the session result
-  and summary paths pass theirs, the catalog paths the active one.
+  disagree. `toWireModel(model, auth?)` takes the projection as a value: the catalog read computes it once
+  per provider (`readAvailableWireModels`), the session result, summary and `setSessionModel` paths derive
+  it from their own generation (`sessionWireModel`).
 - A live slash-command list is derived from the **same three sources Pi's rpc mode uses**
   (`extensionRunner.getRegisteredCommands()` + `promptTemplates` + `resourceLoader.getSkills()`). The
   pre-session catalog maps only `resourceLoader.getSkills()` through the same skill→command helper and

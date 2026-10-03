@@ -7,10 +7,7 @@ export function ProviderGlyph({ provider, className }: { provider: string; class
 	if (!paths) {
 		return (
 			<span
-				aria-hidden
-				data-testid="provider-glyph"
-				data-provider={provider}
-				data-fallback="monogram"
+				aria-hidden="true"
 				className={cn(
 					"flex size-16 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-bg-selected tr-code-text-small uppercase leading-none",
 					className,
@@ -22,16 +19,12 @@ export function ProviderGlyph({ provider, className }: { provider: string; class
 	}
 	return (
 		<svg
-			role="img"
-			aria-label={provider}
-			data-testid="provider-glyph"
-			data-provider={provider}
+			aria-hidden="true"
 			viewBox="0 0 24 24"
 			fill="currentColor"
 			fillRule="evenodd"
 			className={cn("size-16 shrink-0", className)}
 		>
-			<title>{provider}</title>
 			{paths.map((path) => (
 				<path key={path.d} d={path.d} fillOpacity={path.opacity} />
 			))}

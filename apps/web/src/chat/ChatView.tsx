@@ -591,16 +591,22 @@ export default function ChatView({
 
 	const onMentionQuery = useCallback((q: string | null) => setMentionQuery(q), []);
 
-	const onSelectThinking = (level: ThinkingLevel) => {
-		if (level === thinkingLevel) return;
-		const previous = thinkingLevel;
-		useAppStore.getState().setThinkingLevel(sessionId, level);
+	const liveRuntime = () => useAppStore.getState().sessions[sessionId];
+
+	const requestLevel = (level: ThinkingLevel, previous: ThinkingLevel) =>
 		getTransport()
 			.request("session.setThinkingLevel", { sessionId, level })
 			.catch((error: unknown) => {
-				useAppStore.getState().setThinkingLevel(sessionId, previous);
+				if (liveRuntime()?.thinkingLevel === level) {
+					useAppStore.getState().setThinkingLevel(sessionId, previous);
+				}
 				toast.error(errorText(error), "Couldn't change the effort level");
 			});
+
+	const onSelectThinking = (level: ThinkingLevel) => {
+		if (level === thinkingLevel) return;
+		useAppStore.getState().setThinkingLevel(sessionId, level);
+		void requestLevel(level, thinkingLevel);
 	};
 
 	const onSelectModel = ({ model, level }: ModelSelection) => {
@@ -613,17 +619,17 @@ export default function ChatView({
 		if (level) useAppStore.getState().setThinkingLevel(sessionId, level);
 		getTransport()
 			.request("session.setModel", { sessionId, model })
-			.then(() =>
-				level
-					? getTransport().request("session.setThinkingLevel", { sessionId, level })
-					: undefined,
+			.then(
+				() => (level ? requestLevel(level, previous.level) : undefined),
+				(error: unknown) => {
+					if (sameModel(liveRuntime()?.model, model)) {
+						if (previous.model) useAppStore.getState().setCurrentModel(sessionId, previous.model);
+						if (level) useAppStore.getState().setThinkingLevel(sessionId, previous.level);
+					}
+					toast.error(errorText(error), `Couldn't switch to ${model.name}`);
+				},
 			)
-			.then(() => refreshStats())
-			.catch((error: unknown) => {
-				if (previous.model) useAppStore.getState().setCurrentModel(sessionId, previous.model);
-				useAppStore.getState().setThinkingLevel(sessionId, previous.level);
-				toast.error(errorText(error), `Couldn't switch to ${model.name}`);
-			});
+			.then(() => refreshStats());
 	};
 
 	const restoreTextToDraft = (text: string) => {

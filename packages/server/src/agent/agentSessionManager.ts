@@ -37,6 +37,7 @@ import type {
 	ThinkingLevel,
 	TranscriptMessage,
 	WireModel,
+	WireModelAuth,
 } from "@thinkrail/contracts";
 import {
 	assistantToolCallsAreExecutable,
@@ -654,10 +655,7 @@ export interface CreateSessionResult {
 	thinkingLevel: ThinkingLevel;
 }
 
-export function toWireModel(
-	model: Model<string>,
-	generation?: Pick<PiRuntimeGeneration, "runtime" | "opaqueProviderIds">,
-): WireModel {
+export function toWireModel(model: Model<string>, auth?: WireModelAuth): WireModel {
 	return {
 		id: model.id,
 		name: model.name,
@@ -667,8 +665,15 @@ export function toWireModel(
 		thinkingLevels: getSupportedThinkingLevels(model),
 		cost: { input: model.cost.input, output: model.cost.output },
 		input: [...model.input],
-		...(generation ? { auth: catalogProviderAuth(generation, model.provider) } : {}),
+		...(auth ? { auth } : {}),
 	};
+}
+
+function sessionWireModel(
+	model: Model<string>,
+	generation: Pick<PiRuntimeGeneration, "runtime" | "opaqueProviderIds">,
+): WireModel {
+	return toWireModel(model, catalogProviderAuth(generation, model.provider));
 }
 
 function resolveWireModel(
@@ -841,7 +846,7 @@ async function prepareSessionEntry(
 		result: {
 			sessionId,
 			model: session.model
-				? toWireModel(session.model as unknown as Model<string>, generation)
+				? sessionWireModel(session.model as unknown as Model<string>, generation)
 				: null,
 			thinkingLevel: session.thinkingLevel,
 		},
@@ -1053,7 +1058,7 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		workspaceId: entry.workspaceId,
 		title: session.sessionName ?? "Chat",
 		model: session.model
-			? toWireModel(session.model as unknown as Model<string>, entry.generation)
+			? sessionWireModel(session.model as unknown as Model<string>, entry.generation)
 			: null,
 		thinkingLevel: session.thinkingLevel,
 		isStreaming: session.isStreaming,
@@ -1820,7 +1825,7 @@ export async function setSessionModel(sessionId: string, model: WireModel): Prom
 	const entry = mustGetEntry(sessionId);
 	const resolved = resolveWireModel(entry.generation.runtime, model);
 	await entry.session.setModel(resolved);
-	return toWireModel(resolved, entry.generation);
+	return sessionWireModel(resolved, entry.generation);
 }
 
 export function setSessionThinkingLevel(sessionId: string, level: ThinkingLevel): void {
@@ -1881,9 +1886,16 @@ export async function refreshAvailableModels(force = false): Promise<RefreshedMo
 }
 
 function readAvailableWireModels(generation: PiRuntimeGeneration): WireModel[] {
-	return settledAvailableModels(generation.runtime).map((m) =>
-		toWireModel(m as unknown as Model<string>, generation),
-	);
+	const authByProvider = new Map<string, WireModelAuth>();
+	return settledAvailableModels(generation.runtime).map((m) => {
+		const model = m as unknown as Model<string>;
+		let auth = authByProvider.get(model.provider);
+		if (!auth) {
+			auth = catalogProviderAuth(generation, model.provider);
+			authByProvider.set(model.provider, auth);
+		}
+		return toWireModel(model, auth);
+	});
 }
 
 export async function clampThinkingForModel(

@@ -12,7 +12,12 @@ import {
 	RiStarFill as StarFill,
 	RiStarLine as StarLine,
 } from "@remixicon/react";
-import { sameModel, type ThinkingLevel, type WireModel } from "@thinkrail/contracts";
+import {
+	type ModelDefault,
+	sameModel,
+	type ThinkingLevel,
+	type WireModel,
+} from "@thinkrail/contracts";
 import { forwardRef, useImperativeHandle, useMemo, useState } from "react";
 import {
 	Command,
@@ -26,9 +31,10 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { IconTooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib";
 import {
+	CENTRAL_KIND_TAG,
 	costLabel,
 	describeAuth,
-	EFFORT_BARS,
+	EFFORT_BAR_HEIGHTS,
 	formatContext,
 	groupByProvider,
 	kindLabel,
@@ -47,8 +53,8 @@ export interface ModelEffortPickerHandle {
 
 /** The pre-session "Default" row: what the host would pick when the caller sends no explicit pair. */
 export interface DefaultPairOption {
-	model: WireModel | null;
-	level: ThinkingLevel;
+	/** The host's `model.default` answer, or `null` while it is still being asked. */
+	resolved: ModelDefault | null;
 	/** True while the held pair is the default rather than an explicit choice. */
 	active: boolean;
 	onSelect: () => void;
@@ -75,6 +81,10 @@ export interface ModelEffortPickerProps {
 	className?: string;
 }
 
+function hasKindGlyph(model: WireModel): boolean {
+	return model.auth !== undefined && model.auth.kind !== "other";
+}
+
 /** The connection-kind mark: key = API key, ∞ = subscription, { } = environment key, JCP = JetBrains AI. */
 function KindGlyph({ model, className }: { model: WireModel; className?: string }) {
 	switch (model.auth?.kind) {
@@ -92,7 +102,7 @@ function KindGlyph({ model, className }: { model: WireModel; className?: string 
 						className,
 					)}
 				>
-					JCP
+					{CENTRAL_KIND_TAG}
 				</span>
 			);
 		default:
@@ -112,16 +122,13 @@ function EffortBars({
 	const lit = litBars(level, levels);
 	return (
 		<span aria-hidden className={cn("inline-flex h-12 shrink-0 items-end gap-2", className)}>
-			{Array.from({ length: EFFORT_BARS }, (_, index) => (
+			{EFFORT_BAR_HEIGHTS.map((height, index) => (
 				<span
-					key={index}
+					key={height}
 					className={cn(
 						"w-2 rounded-[var(--radius-xs)] bg-current",
+						height,
 						index >= lit && "opacity-30",
-						index === 0 && "h-4",
-						index === 1 && "h-6",
-						index === 2 && "h-8",
-						index === 3 && "h-12",
 					)}
 				/>
 			))}
@@ -198,7 +205,6 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 		const groups = useMemo(() => groupByProvider(models), [models]);
 		const shortlist = preferences.favorites.length > 0 || preferences.recents.length > 0;
 		const folded = shortlist && !showAll && query.trim() === "";
-		const pendingLevel = trailingLevel(query, current);
 
 		const pickModel = (model: WireModel) => {
 			const typedLevel = trailingLevel(query, model);
@@ -267,9 +273,9 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 		const effortLevels = current?.thinkingLevels ?? [];
 		const levelIndex = effortLevels.indexOf(level);
 		const isDefaultPair = current !== null && preferences.isDefault(current, level);
-		const pillModel = defaultOption?.active ? (defaultOption.model ?? current) : current;
-		const pillLevel = defaultOption?.active ? defaultOption.level : level;
-		const hint = LEVEL_HINT[pendingLevel ?? level];
+		const following = defaultOption?.active ? defaultOption.resolved : null;
+		const pillModel = defaultOption?.active ? (following?.model ?? null) : current;
+		const pillLevel = following?.thinkingLevel ?? level;
 
 		return (
 			<Popover open={open} onOpenChange={(next) => (next ? openWith("") : close())}>
@@ -286,7 +292,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					) : pillModel ? (
 						<ProviderGlyph provider={pillModel.provider} className="size-14 text-text-muted" />
 					) : null}
-					<span data-testid="model-selector-model" className="truncate">
+					<span className="truncate">
 						{defaultOption?.active ? "Default" : (pillModel?.name ?? "Select model")}
 					</span>
 					{pillModel ? (
@@ -306,7 +312,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 								/>
 								{pillLevel}
 							</span>
-							{pillModel.auth ? (
+							{hasKindGlyph(pillModel) ? (
 								<IconTooltip label={describeAuth(pillModel)} wrapTrigger>
 									<KindGlyph model={pillModel} className="text-text-muted" />
 								</IconTooltip>
@@ -348,8 +354,8 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 										<span className="flex min-w-0 flex-1 flex-col">
 											<span>Default</span>
 											<span className="truncate text-text-muted tr-text-metadata">
-												{defaultOption.model
-													? `Follows Settings → Models · ${defaultOption.model.name} · ${defaultOption.level}`
+												{defaultOption.resolved?.model
+													? `Follows Settings → Models · ${defaultOption.resolved.model.name} · ${defaultOption.resolved.thinkingLevel}`
 													: "Follows Settings → Models"}
 											</span>
 										</span>
@@ -366,7 +372,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							) : null}
 							{preferences.recents.length > 0 ? (
 								<CommandGroup heading="Recent">
-									{preferences.recents.slice(0, 3).map((m) => renderModel(m, "recent"))}
+									{preferences.recents.map((m) => renderModel(m, "recent"))}
 								</CommandGroup>
 							) : null}
 							{folded ? (
@@ -435,12 +441,12 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 										{level}
 									</span>
 									<span className="truncate text-text-subtle tr-text-metadata">
-										{hint ?? "\u00a0"}
+										{LEVEL_HINT[level] ?? "\u00a0"}
 									</span>
 									<span className="flex items-center gap-2">
 										{effortLevels.map((candidate) => {
 											const active = candidate === level;
-											const isHostDefault = candidate === (preferences.defaultEffort ?? "medium");
+											const isHostDefault = candidate === preferences.defaultEffort;
 											return (
 												<button
 													key={candidate}
@@ -457,7 +463,6 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 															"size-6 rounded-full",
 															active ? "bg-primary" : "bg-control-border-active",
 															isHostDefault && !active && "ring-1 ring-primary-muted",
-															pendingLevel === candidate && "ring-1 ring-primary",
 														)}
 													/>
 												</button>

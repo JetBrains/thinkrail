@@ -2,10 +2,14 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
-export const GENERATED_GLYPHS_PATH = new URL(
-	"../src/chat/generated/providerGlyphs.ts",
-	import.meta.url,
-).pathname;
+export const GENERATED_GLYPHS_PATH = join(
+	import.meta.dir,
+	"..",
+	"src",
+	"chat",
+	"generated",
+	"providerGlyphs.ts",
+);
 
 /**
  * pi provider id → icon slug in `@lobehub/icons-static-svg`. The only place that mapping is written.

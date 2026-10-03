@@ -15,12 +15,7 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib";
-
-function formatContext(tokens: number): string {
-	if (tokens >= 1_000_000) return `${Math.round(tokens / 100_000) / 10}M`.replace(".0", "");
-	if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}K`;
-	return String(tokens);
-}
+import { formatContext } from "./modelPicker";
 
 function subLine(model: WireModel): string {
 	const parts = [`${formatContext(model.contextWindow)} context`];

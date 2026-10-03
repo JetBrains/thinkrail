@@ -12,6 +12,7 @@ import {
 	normalizeThemePreference,
 	type Project,
 	type SessionCompletion,
+	type WireModel,
 	type Workspace,
 } from "@thinkrail/contracts";
 import {
@@ -227,6 +228,18 @@ export function saveTerminalSessions(sessions: PersistedTerminalSessions): void 
 	writeJson("terminals.json", sessions);
 }
 
+/** A persisted model list keeps only entries that still identify a model; anything else is dropped, not repaired. */
+function storedModels(value: unknown): WireModel[] {
+	if (!Array.isArray(value)) return [];
+	return value.filter(
+		(entry): entry is WireModel =>
+			typeof entry === "object" &&
+			entry !== null &&
+			typeof (entry as WireModel).provider === "string" &&
+			typeof (entry as WireModel).id === "string",
+	);
+}
+
 export function loadConfig(): AppConfig {
 	const raw = readJson<unknown>("config.json", {});
 	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return structuredClone(DEFAULT_CONFIG);
@@ -285,12 +298,8 @@ export function loadConfig(): AppConfig {
 		customLayoutPresets: Array.isArray(value.customLayoutPresets)
 			? value.customLayoutPresets
 			: DEFAULT_CONFIG.customLayoutPresets,
-		favoriteModels: Array.isArray(value.favoriteModels)
-			? value.favoriteModels
-			: DEFAULT_CONFIG.favoriteModels,
-		recentModels: Array.isArray(value.recentModels)
-			? value.recentModels
-			: DEFAULT_CONFIG.recentModels,
+		favoriteModels: storedModels(value.favoriteModels),
+		recentModels: storedModels(value.recentModels),
 		terminalWindowsShell: isTerminalWindowsShell(value.terminalWindowsShell)
 			? value.terminalWindowsShell
 			: DEFAULT_CONFIG.terminalWindowsShell,

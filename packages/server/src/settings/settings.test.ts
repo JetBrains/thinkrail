@@ -665,4 +665,13 @@ test("stored favorites and recents survive reload while malformed ones fall back
 	resetConfigCache();
 	expect(getConfig().favoriteModels).toEqual([]);
 	expect(getConfig().recentModels).toEqual([]);
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({
+			...DEFAULT_CONFIG,
+			favoriteModels: [wireModel("ok"), { id: 7 }, null, "junk", { provider: "p" }],
+		}),
+	);
+	resetConfigCache();
+	expect(getConfig().favoriteModels.map((m) => m.id)).toEqual(["ok"]);
 });

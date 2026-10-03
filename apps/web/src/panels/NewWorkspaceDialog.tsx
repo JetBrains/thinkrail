@@ -122,6 +122,12 @@ export function NewWorkspaceDialog({
 	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
 	const [hostDefault, setHostDefault] = useState<ModelDefault | null>(null);
 	const [explicitPair, setExplicitPair] = useState(false);
+	const pendingDefault = useRef<(() => void) | null>(null);
+	const pickExplicitly = useCallback(() => {
+		pendingDefault.current?.();
+		pendingDefault.current = null;
+		setExplicitPair(true);
+	}, []);
 	const attachedImages = usePromptImages();
 	const [creating, setCreating] = useState(false);
 	const [trusting, setTrusting] = useState(false);
@@ -264,24 +270,27 @@ export function NewWorkspaceDialog({
 
 	const applyHostDefault = useCallback(() => {
 		let cancelled = false;
+		const cancel = () => {
+			cancelled = true;
+		};
+		pendingDefault.current?.();
+		pendingDefault.current = cancel;
 		getTransport()
 			.request("model.default", {})
 			.then((d) => {
-				if (cancelled) return;
 				setHostDefault(d);
+				if (cancelled) return;
+				pendingDefault.current = null;
 				setModel(d.model);
 				setThinkingLevel(d.thinkingLevel);
 				setExplicitPair(false);
 			})
 			.catch(() => {});
-		return () => {
-			cancelled = true;
-		};
+		return cancel;
 	}, []);
 
 	const defaultOption: DefaultPairOption = {
-		model: hostDefault?.model ?? null,
-		level: hostDefault?.thinkingLevel ?? "medium",
+		resolved: hostDefault,
 		active: !explicitPair,
 		onSelect: () => {
 			applyHostDefault();
@@ -635,12 +644,12 @@ export function NewWorkspaceDialog({
 							refreshing={modelsRefreshing}
 							onRefresh={onRefreshModels}
 							onSelect={({ model: next, level }) => {
-								setExplicitPair(true);
+								pickExplicitly();
 								setModel(next);
 								if (level) setThinkingLevel(level);
 							}}
 							onSelectLevel={(level) => {
-								setExplicitPair(true);
+								pickExplicitly();
 								setThinkingLevel(level);
 							}}
 							preferences={modelPreferences}
