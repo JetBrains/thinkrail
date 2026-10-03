@@ -40,7 +40,16 @@ export function shortcutPlatform(hasNativeBridge: boolean, platform?: string): S
 	return family === "other" ? "browser" : family;
 }
 
-type ChordEvent = Pick<KeyboardEvent, "code" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey">;
+type ChordEvent = Pick<
+	KeyboardEvent,
+	"code" | "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey"
+>;
+
+function chordMatches(chord: ShortcutChord, event: ChordEvent) {
+	const letter = /^Key([A-Z])$/.exec(chord.code)?.[1];
+	if (letter && /^[a-z]$/i.test(event.key)) return event.key.toUpperCase() === letter;
+	return chord.code === event.code;
+}
 
 export function matchShortcut(
 	event: ChordEvent,
@@ -49,7 +58,7 @@ export function matchShortcut(
 ): ShortcutCommandId | null {
 	if (!event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return null;
 	for (const command of SHORTCUT_COMMANDS) {
-		const chord = command.chords[platform]?.find((candidate) => candidate.code === event.code);
+		const chord = command.chords[platform]?.find((candidate) => chordMatches(candidate, event));
 		if (chord && (chord.inTerminal || !inTerminal())) return command.id;
 	}
 	return null;
@@ -67,9 +76,9 @@ export interface WebShortcutsOptions extends Pick<QuitConfirmationDependencies, 
 }
 
 export function createWebShortcuts(options: WebShortcutsOptions) {
-	let quitHeld = false;
+	let quitHeldCode: string | null = null;
 	const quitConfirmation = createQuitConfirmation({
-		readHeld: () => quitHeld,
+		readHeld: () => quitHeldCode !== null,
 		canShowHint: () => true,
 		quit: options.quit,
 		onHint: options.onQuitHint,
@@ -78,10 +87,7 @@ export function createWebShortcuts(options: WebShortcutsOptions) {
 	});
 	const handlers: Record<ShortcutCommandId, () => void> = {
 		"close-item": options.closeItem,
-		quit: () => {
-			quitHeld = true;
-			quitConfirmation.press(true);
-		},
+		quit: () => quitConfirmation.press(true),
 	};
 
 	function keydown(event: ShortcutKeyEvent) {
@@ -89,22 +95,24 @@ export function createWebShortcuts(options: WebShortcutsOptions) {
 		if (!id) return;
 		event.preventDefault();
 		event.stopPropagation();
-		if (!event.repeat) handlers[id]();
+		if (event.repeat) return;
+		if (id === "quit") quitHeldCode = event.code;
+		handlers[id]();
 	}
 
 	function keyup(event: Pick<KeyboardEvent, "code" | "key">) {
-		if (!quitHeld || (event.code !== "KeyQ" && event.key !== "Control")) return;
-		quitHeld = false;
+		if (quitHeldCode === null || (event.code !== quitHeldCode && event.key !== "Control")) return;
+		quitHeldCode = null;
 		quitConfirmation.sync();
 	}
 
 	function cancel() {
-		quitHeld = false;
+		quitHeldCode = null;
 		quitConfirmation.cancel();
 	}
 
 	function resetQuit() {
-		quitHeld = false;
+		quitHeldCode = null;
 		quitConfirmation.reset();
 	}
 

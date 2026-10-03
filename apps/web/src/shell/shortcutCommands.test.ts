@@ -123,6 +123,20 @@ describe("chord matching", () => {
 		expect(matchShortcut(chord("F4"), "windows", () => true)).toBe("close-item");
 		expect(matchShortcut(chord("KeyQ"), "linux", () => true)).toBe("quit");
 	});
+
+	test("letter chords follow the typed letter; non-Latin layouts fall back to code", () => {
+		const azertyUndo = chord("KeyW", { key: "z" });
+		const azertySelectAll = chord("KeyQ", { key: "a" });
+		expect(matchShortcut(azertyUndo, "windows", () => false)).toBeNull();
+		expect(matchShortcut(azertyUndo, "linux", () => false)).toBeNull();
+		expect(matchShortcut(azertySelectAll, "linux", () => false)).toBeNull();
+		expect(matchShortcut(azertySelectAll, "linux", () => true)).toBeNull();
+		expect(matchShortcut(chord("KeyZ", { key: "w" }), "windows", () => false)).toBe("close-item");
+		expect(matchShortcut(chord("KeyA", { key: "q" }), "linux", () => true)).toBe("quit");
+		expect(matchShortcut(chord("KeyW", { key: "W" }), "linux", () => false)).toBe("close-item");
+		expect(matchShortcut(chord("KeyW", { key: "ц" }), "linux", () => false)).toBe("close-item");
+		expect(matchShortcut(chord("F4", { key: "F4" }), "windows", () => false)).toBe("close-item");
+	});
 });
 
 test("only windows and linux bind web chords", () => {
@@ -179,6 +193,17 @@ describe("linux quit confirmation", () => {
 		expect(h.hints).toEqual(["armed", "release"]);
 		expect(h.log).toEqual([]);
 		h.keyup("ControlLeft", "Control");
+		expect(h.hints).toEqual(["armed", "release", "quitting"]);
+		expect(h.log).toEqual(["quit"]);
+	});
+
+	test("an AZERTY hold releases only on the key it started with", () => {
+		const h = harness();
+		h.keydown("KeyA", { key: "q" });
+		h.keyup("KeyQ", "a");
+		h.advance(holdMs + pollMs);
+		expect(h.hints).toEqual(["armed", "release"]);
+		h.keyup("KeyA", "q");
 		expect(h.hints).toEqual(["armed", "release", "quitting"]);
 		expect(h.log).toEqual(["quit"]);
 	});
