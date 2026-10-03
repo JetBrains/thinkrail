@@ -16,6 +16,7 @@ import {
 	assertProfilingReady,
 	attachRenderProfiler,
 	detachRenderProfiler,
+	MARKDOWN_SUBTREE,
 	type MainThreadCost,
 	type RenderProfile,
 	readRenderProfile,
@@ -35,6 +36,13 @@ const HEAVY_TIMEOUT_MS = 600_000;
 const DEFAULT_SCENARIOS = "chat-streaming,live-file-edits,large-diff";
 const SELECTED = new Set((process.env.THINKRAIL_PERF_SCENARIOS ?? DEFAULT_SCENARIOS).split(","));
 const CPU_RATE = Number(process.env.THINKRAIL_PERF_CPU ?? 1);
+const LONG_STREAM_CHARS = 25_000;
+const LONG_STREAM_XL_CHARS = 100_000;
+const SUBTREE_ROOTS = {
+	[MARKDOWN_SUBTREE]: (
+		process.env.THINKRAIL_PERF_MARKDOWN_ROOTS ?? "AssistantMarkdown,Markdown"
+	).split(","),
+};
 
 function pause(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -149,31 +157,33 @@ async function chatStreaming(page: Page, run: number): Promise<void> {
 	});
 }
 
-async function longStream(page: Page, run: number): Promise<void> {
-	const wire = await interceptWire(page);
-	await openFixtureProject(page);
-	await assertProfilingReady(page);
-	const title = `Long stream replay ${run}`;
-	const seeded = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
-		name: title,
-		messages: chatHistory(1_700_900_000_000, 4),
-	});
-	await enterDefaultWorkspace(page);
-	await openPersistedChat(page, title);
-	const chat = page.getByTestId("chat-scroll");
-	await expect(chat).toBeVisible();
+function longStream(scenario: string, targetChars: number) {
+	return async (page: Page, run: number): Promise<void> => {
+		const wire = await interceptWire(page);
+		await openFixtureProject(page);
+		await assertProfilingReady(page);
+		const title = `Long stream replay ${run}`;
+		const seeded = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+			name: title,
+			messages: chatHistory(1_700_900_000_000, 4),
+		});
+		await enterDefaultWorkspace(page);
+		await openPersistedChat(page, title);
+		const chat = page.getByTestId("chat-scroll");
+		await expect(chat).toBeVisible();
 
-	const replay = buildTextReplay(seeded.id, longMarkdown());
-	await measure(page, "long-stream", run, async () => {
-		const socket = wire();
-		for (const step of replay.steps) {
-			for (const frame of step.frames) socket.send(frame);
-			await pause(LONG_STREAM_GAP_MS);
-		}
-		await expect(chat).toContainText(replay.finalText, { timeout: 120_000 });
-		await expect(chat).toHaveAttribute("data-streaming", "false");
-		return { deltas: replay.deltaCount };
-	});
+		const replay = buildTextReplay(seeded.id, longMarkdown(targetChars));
+		await measure(page, scenario, run, async () => {
+			const socket = wire();
+			for (const step of replay.steps) {
+				for (const frame of step.frames) socket.send(frame);
+				await pause(LONG_STREAM_GAP_MS);
+			}
+			await expect(chat).toContainText(replay.finalText, { timeout: 120_000 });
+			await expect(chat).toHaveAttribute("data-streaming", "false");
+			return { deltas: replay.deltaCount };
+		});
+	};
 }
 
 interface AgentChat {
@@ -325,15 +335,16 @@ const SCENARIOS = [
 	["chat-streaming", chatStreaming],
 	["live-file-edits", liveFileEdits],
 	["large-diff", largeDiff],
-	["long-stream", longStream],
+	["long-stream", longStream("long-stream", LONG_STREAM_CHARS)],
+	["long-stream-xl", longStream("long-stream-xl", LONG_STREAM_XL_CHARS)],
 	["parallel-agents", parallelAgents(true)],
 	["background-agents", parallelAgents(false)],
 ] as const;
-const HEAVY = new Set(["long-stream", "parallel-agents", "background-agents"]);
+const HEAVY = new Set(["long-stream", "long-stream-xl", "parallel-agents", "background-agents"]);
 
 test.beforeEach(async ({ page, baseURL }) => {
 	if (!baseURL) throw new Error("perf runs need a baseURL");
-	await attachRenderProfiler(page, baseURL);
+	await attachRenderProfiler(page, baseURL, SUBTREE_ROOTS);
 });
 
 test.afterEach(async ({ page }) => {

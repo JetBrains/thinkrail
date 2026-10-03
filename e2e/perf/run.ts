@@ -10,13 +10,12 @@ import {
 	signalExitCode,
 } from "../processRunner";
 import type { ScenarioRun } from "./render.perf";
-import type { ComponentCost } from "./renderProfiler";
+import { type ComponentCost, MARKDOWN_SUBTREE } from "./renderProfiler";
 
 const bun = process.execPath;
 const DEFAULT_RUNS = 5;
 const DEFAULT_OUT = join(tmpdir(), "thinkrail-render-profile.json");
 const TABLE_ROWS = 15;
-const MARKDOWN_COMPONENT = /^Markdown/;
 
 interface RunnerArgs {
 	runs: number;
@@ -79,15 +78,15 @@ const EMPTY_COST: ComponentCost = {
 };
 
 function markdownCost(run: ScenarioRun) {
-	const costs = Object.entries(run.profile.components)
-		.filter(([name]) => MARKDOWN_COMPONENT.test(name))
-		.map(([, cost]) => cost);
+	const tree = run.profile.subtrees[MARKDOWN_SUBTREE];
 	const deltas = run.counters.deltas ?? 0;
-	const renders = Math.max(0, ...costs.map((cost) => cost.renders));
-	const selfMs = costs.reduce((sum, cost) => sum + cost.selfTotalMs, 0);
+	const renders = tree?.rootRenders ?? 0;
+	const selfMs = tree?.selfTotalMs ?? 0;
 	return {
 		renders,
+		componentRenders: tree?.renders ?? 0,
 		selfMs,
+		selfMaxMs: tree?.selfMaxMs ?? 0,
 		rendersPerDelta: deltas > 0 ? renders / deltas : 0,
 		selfMsPerDelta: deltas > 0 ? selfMs / deltas : 0,
 	};
@@ -147,7 +146,9 @@ function summarize(runs: ScenarioRun[]) {
 		},
 		markdown: {
 			medianRenders: medianOf(ordered, (run) => markdownCost(run).renders),
+			medianComponentRenders: medianOf(ordered, (run) => markdownCost(run).componentRenders),
 			medianSelfMs: medianOf(ordered, (run) => markdownCost(run).selfMs),
+			medianSelfMaxMs: medianOf(ordered, (run) => markdownCost(run).selfMaxMs),
 			medianRendersPerDelta: medianOf(ordered, (run) => markdownCost(run).rendersPerDelta),
 			medianSelfMsPerDelta: medianOf(ordered, (run) => markdownCost(run).selfMsPerDelta),
 		},
@@ -172,7 +173,7 @@ function printSummary(name: string, summary: ReturnType<typeof summarize>): void
 		`\n${name}: ${summary.runs} runs, median ${summary.medianTotalMs} ms render over ${summary.medianCommits} commits, spread ${summary.totalSpreadPct}%`,
 	);
 	console.log(
-		`  main thread task ${summary.mainThread.medianTaskMs} ms (script ${summary.mainThread.medianScriptMs}, layout ${summary.mainThread.medianLayoutMs}, style ${summary.mainThread.medianStyleMs}), long tasks ${summary.longTasks.medianCount} / ${summary.longTasks.medianTotalMs} ms, frame gap p95 ${summary.frames.medianP95GapMs} ms max ${summary.frames.medianMaxGapMs} ms, dropped ${summary.frames.medianDroppedFrames}, Markdown ${summary.markdown.medianRenders} renders ${summary.markdown.medianSelfMsPerDelta} ms/delta, counters ${JSON.stringify(summary.counters)}`,
+		`  main thread task ${summary.mainThread.medianTaskMs} ms (script ${summary.mainThread.medianScriptMs}, layout ${summary.mainThread.medianLayoutMs}, style ${summary.mainThread.medianStyleMs}), long tasks ${summary.longTasks.medianCount} / ${summary.longTasks.medianTotalMs} ms, frame gap p95 ${summary.frames.medianP95GapMs} ms max ${summary.frames.medianMaxGapMs} ms, dropped ${summary.frames.medianDroppedFrames}, markdown subtree ${summary.markdown.medianRenders} root renders ${summary.markdown.medianSelfMs} ms self (${summary.markdown.medianSelfMsPerDelta} ms/delta, max commit ${summary.markdown.medianSelfMaxMs} ms), counters ${JSON.stringify(summary.counters)}`,
 	);
 	console.table(
 		summary.components.slice(0, TABLE_ROWS).map((row) => ({

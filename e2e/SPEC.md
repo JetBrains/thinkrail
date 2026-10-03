@@ -121,7 +121,9 @@ Defaults: 5 runs, output `$TMPDIR/thinkrail-render-profile.json`.
   which puts the root in profile mode. Each commit walks the fiber tree DevTools-style (descend only into
   re-rendered subtrees) and records, per component name, commits, self time (`selfBaseDuration`) and
   inclusive time (`actualDuration`, not double-counted for nested same-name instances). Unnamed components
-  are labelled by their nearest named owner. Hooks report under their host component.
+  are labelled by their nearest named owner. Hooks report under their host component. A named subtree
+  (`markdown`: roots `AssistantMarkdown,Markdown`, override with `THINKRAIL_PERF_MARKDOWN_ROOTS`) sums the
+  self time and renders of every component under its outermost root, so any markdown engine is counted.
 - **Timer precision.** The harness adds COOP/COEP headers to documents and scripts through `page.route` so
   the page is cross-origin isolated (5 µs timers, not 100 µs); the measurement browser disables Chromium's
   local-network-access check, which otherwise blocks the WS from a fulfilled document. A run fails if the
@@ -134,14 +136,14 @@ Defaults: 5 runs, output `$TMPDIR/thinkrail-render-profile.json`.
   and wheel-scrolls it. Runs interleave scenarios; the runner reports medians and run-to-run spread.
 - **Heavy scenarios** (only with `--scenario`; the default set is the three above). `long-stream` replays one
   ~26k-char seeded markdown answer (headings, nested lists, ts/py/bash/json fences, a GFM table, mermaid) in
-  10–60-char deltas every 15 ms. `parallel-agents` opens 20 persisted chats as tabs in one workspace and
+  10–60-char deltas every 15 ms; `long-stream-xl` is the same at ~100k chars. `parallel-agents` opens 20 persisted chats as tabs in one workspace and
   interleaves 20 replays; `background-agents` streams the 19 hidden tabs while the visible chat stays idle,
   so every commit it records is cost the visible UI pays for background work. Both then open a hidden tab
   and assert its streamed text arrived.
 - **Weak machine.** `--cpu N` applies CDP `Emulation.setCPUThrottlingRate` for the measured window only.
 - **Extra metrics.** Per run: long tasks (count, total, max), rAF frame gaps (p50/p95/max, dropped 60 Hz
   frames), CDP main-thread task/script/layout/style ms and heap delta, scenario counters (deltas, mounted
-  chats), and Markdown renders and self ms per delta. Main-thread time includes Playwright's
+  chats), and markdown subtree root renders, self ms, and self ms per delta. Main-thread time includes Playwright's
   `routeWebSocket` relay, so compare it only across variants of the same scenario.
 - **Variants.** Run the command from a worktree root to measure that worktree; the output records
   `rootDir`, `gitHead`, `dirty` and `dirtyTreeHash` (sha256 of `git status --porcelain` plus `git diff HEAD`;
