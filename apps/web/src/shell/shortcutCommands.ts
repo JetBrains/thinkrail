@@ -30,6 +30,10 @@ export const SHORTCUT_COMMANDS: readonly ShortcutCommand[] = [
 	{ id: "quit", chords: { linux: [{ code: "KeyQ", inTerminal: true }] } },
 ];
 
+export function hasWebShortcuts(platform: ShortcutPlatform) {
+	return SHORTCUT_COMMANDS.some((command) => (command.chords[platform]?.length ?? 0) > 0);
+}
+
 export function shortcutPlatform(hasNativeBridge: boolean, platform?: string): ShortcutPlatform {
 	if (!hasNativeBridge) return "browser";
 	const family = platformFamily(platform);
@@ -41,12 +45,12 @@ type ChordEvent = Pick<KeyboardEvent, "code" | "ctrlKey" | "metaKey" | "altKey" 
 export function matchShortcut(
 	event: ChordEvent,
 	platform: ShortcutPlatform,
-	inTerminal: boolean,
+	inTerminal: () => boolean,
 ): ShortcutCommandId | null {
 	if (!event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return null;
 	for (const command of SHORTCUT_COMMANDS) {
 		const chord = command.chords[platform]?.find((candidate) => candidate.code === event.code);
-		if (chord && (chord.inTerminal || !inTerminal)) return command.id;
+		if (chord && (chord.inTerminal || !inTerminal())) return command.id;
 	}
 	return null;
 }
@@ -81,7 +85,7 @@ export function createWebShortcuts(options: WebShortcutsOptions) {
 	};
 
 	function keydown(event: ShortcutKeyEvent) {
-		const id = matchShortcut(event, options.platform, options.isInTerminal(event.target));
+		const id = matchShortcut(event, options.platform, () => options.isInTerminal(event.target));
 		if (!id) return;
 		event.preventDefault();
 		event.stopPropagation();

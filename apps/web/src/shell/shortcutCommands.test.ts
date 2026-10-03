@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { type NativeQuitHint, QUIT_CONFIRMATION } from "@thinkrail/contracts";
 import {
 	createWebShortcuts,
+	hasWebShortcuts,
 	matchShortcut,
 	SHORTCUT_COMMANDS,
 	type ShortcutPlatform,
@@ -94,27 +95,41 @@ describe("chord matching", () => {
 		} as const;
 		for (const [platform, codes] of Object.entries(table)) {
 			for (const [code, command] of Object.entries(codes)) {
-				expect(matchShortcut(chord(code), platform as ShortcutPlatform, false)).toBe(command);
+				expect(matchShortcut(chord(code), platform as ShortcutPlatform, () => false)).toBe(command);
 				expect(
 					matchShortcut(
 						chord(code, { ctrlKey: false, metaKey: true }),
 						platform as ShortcutPlatform,
-						false,
+						() => false,
 					),
 				).toBeNull();
 			}
 		}
 		for (const modifier of ["metaKey", "altKey", "shiftKey"] as const) {
-			expect(matchShortcut(chord("KeyW", { [modifier]: true }), "linux", false)).toBeNull();
+			expect(matchShortcut(chord("KeyW", { [modifier]: true }), "linux", () => false)).toBeNull();
 		}
-		expect(matchShortcut(chord("KeyW", { ctrlKey: false }), "linux", false)).toBeNull();
+		expect(matchShortcut(chord("KeyW", { ctrlKey: false }), "linux", () => false)).toBeNull();
+		const terminalCheckSkipped = () => {
+			throw new Error("terminal check must run only after a chord matches");
+		};
+		expect(
+			matchShortcut(chord("KeyQ", { ctrlKey: false }), "linux", terminalCheckSkipped),
+		).toBeNull();
+		expect(matchShortcut(chord("KeyA"), "linux", terminalCheckSkipped)).toBeNull();
 	});
 
 	test("inside a terminal Ctrl+W goes to the shell; Ctrl+F4 and Ctrl+Q stay app-owned", () => {
-		expect(matchShortcut(chord("KeyW"), "linux", true)).toBeNull();
-		expect(matchShortcut(chord("F4"), "windows", true)).toBe("close-item");
-		expect(matchShortcut(chord("KeyQ"), "linux", true)).toBe("quit");
+		expect(matchShortcut(chord("KeyW"), "linux", () => true)).toBeNull();
+		expect(matchShortcut(chord("F4"), "windows", () => true)).toBe("close-item");
+		expect(matchShortcut(chord("KeyQ"), "linux", () => true)).toBe("quit");
 	});
+});
+
+test("only windows and linux bind web chords", () => {
+	expect(hasWebShortcuts("apple")).toBe(false);
+	expect(hasWebShortcuts("browser")).toBe(false);
+	expect(hasWebShortcuts("windows")).toBe(true);
+	expect(hasWebShortcuts("linux")).toBe(true);
 });
 
 test("no table chord is also a global hotkey", () => {

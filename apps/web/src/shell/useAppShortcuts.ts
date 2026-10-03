@@ -1,7 +1,7 @@
 import type { NativeCommand, NativeQuitHint, NativeShortcutsBridge } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
 import { requestClose } from "./closeRequestChannel";
-import { createWebShortcuts, shortcutPlatform } from "./shortcutCommands";
+import { createWebShortcuts, hasWebShortcuts, shortcutPlatform } from "./shortcutCommands";
 import { hasDismissibleLayer, isInTerminal } from "./shortcutLayers";
 
 const NATIVE_SHORTCUTS_GLOBAL = "__THINKRAIL_NATIVE_SHORTCUTS__";
@@ -78,8 +78,10 @@ export function useAppShortcuts() {
 	useEffect(() => {
 		if (!bridge) return undefined;
 		const intervals = intervalScope();
+		const platform = shortcutPlatform(true);
+		const listensForKeys = hasWebShortcuts(platform);
 		const shortcuts = createWebShortcuts({
-			platform: shortcutPlatform(true),
+			platform,
 			closeItem: () => {
 				if (!dismissTopLayer()) requestClose();
 			},
@@ -99,14 +101,18 @@ export function useAppShortcuts() {
 		function onVisibilityChange() {
 			if (doc.visibilityState === "hidden") shortcuts.cancel();
 		}
-		window.addEventListener("keydown", shortcuts.keydown, true);
-		window.addEventListener("keyup", shortcuts.keyup, true);
+		if (listensForKeys) {
+			window.addEventListener("keydown", shortcuts.keydown, true);
+			window.addEventListener("keyup", shortcuts.keyup, true);
+		}
 		window.addEventListener("blur", shortcuts.cancel);
 		doc.addEventListener("visibilitychange", onVisibilityChange);
 		return () => {
 			unsubscribe();
-			window.removeEventListener("keydown", shortcuts.keydown, true);
-			window.removeEventListener("keyup", shortcuts.keyup, true);
+			if (listensForKeys) {
+				window.removeEventListener("keydown", shortcuts.keydown, true);
+				window.removeEventListener("keyup", shortcuts.keyup, true);
+			}
 			window.removeEventListener("blur", shortcuts.cancel);
 			doc.removeEventListener("visibilitychange", onVisibilityChange);
 			intervals.dispose();
