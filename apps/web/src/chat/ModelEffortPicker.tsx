@@ -324,15 +324,15 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 				<PopoverContent
 					align="start"
 					container={container}
-					className="w-[min(360px,calc(100vw-16px))] p-0"
+					className="flex max-h-[var(--radix-popover-content-available-height)] w-[min(360px,calc(100vw-16px))] flex-col p-0"
 				>
-					<Command className="bg-transparent">
+					<Command className="min-h-0 flex-1 bg-transparent">
 						<CommandInput
 							placeholder="Search models… (append a level: opus high)"
 							value={query}
 							onValueChange={setQuery}
 						/>
-						<CommandList className="max-h-[min(340px,50vh)]">
+						<CommandList className="max-h-[340px] min-h-0 flex-1">
 							<CommandEmpty>No models found.</CommandEmpty>
 							{defaultOption ? (
 								<CommandGroup>
@@ -414,7 +414,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					{current && effortLevels.length > 0 ? (
 						<div
 							data-testid="thinking-section"
-							className="flex flex-col gap-4 border-border-default border-t px-8 py-8"
+							className="flex shrink-0 flex-col gap-4 border-border-default border-t px-8 py-8"
 						>
 							<div className="flex items-center gap-4 px-4 text-text-muted tr-text-metadata">
 								<span>Effort</span>
@@ -486,7 +486,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							</div>
 						</div>
 					) : null}
-					<div className="flex items-center gap-8 border-border-default border-t px-8 py-4">
+					<div className="flex shrink-0 items-center gap-8 border-border-default border-t px-8 py-4">
 						{preferences.supported && current ? (
 							<button
 								type="button"
