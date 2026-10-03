@@ -45,6 +45,23 @@ function harness(hintVisible = true) {
 	};
 }
 
+test("timings match the documented values", () => {
+	expect(QUIT_CONFIRMATION).toEqual({ holdMs: 1200, doublePressMs: 500, pollMs: 40 });
+});
+
+test("a hold shorter than the threshold does not quit", () => {
+	const h = harness();
+	h.confirmation.press(true);
+	h.advance(holdMs - pollMs);
+	expect(h.hints).toEqual(["armed"]);
+	h.setHeld(false);
+	h.confirmation.sync();
+	h.advance(doublePressMs + pollMs);
+	expect(h.hints).toEqual(["armed", "hidden"]);
+	expect(h.quits()).toBe(0);
+	expect(h.polling()).toBe(false);
+});
+
 test("a tap expires, a double press quits on release", () => {
 	const tap = harness();
 	tap.confirmation.press(true);
