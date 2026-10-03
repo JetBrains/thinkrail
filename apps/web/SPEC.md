@@ -17,7 +17,7 @@ event stream as a chat-centric, multi-session IDE shell.
 
 - **Owns:** the browser UI — client-local navigation and workbench state, transport client, store, panels, the responsive shell, branding tokens.
 - **Public surface:** the built static bundle (`dist/`) — a deployable artifact that dials a host.
-- **Allowed deps:** `@thinkrail/contracts` (types + WS constants) ONLY; React / Zustand / Vite / etc.
+- **Allowed deps:** `@thinkrail/contracts` (types plus its small pure runtime: WS constants, versions, guards, `createQuitConfirmation`; see [[module-contracts]]) ONLY; React / Zustand / Vite / etc.
 - **Deployment obligation:** one built client serves every launcher and future deployment. Endpoint selection
   belongs to the transport bootstrap; panels, stores, and feature flows never branch on `cli`, `desktop`, or
   a deployment name.

@@ -28,7 +28,7 @@ engine architecture.
   exported by the application package.
 - **Allowed deps:** `server` for the embedded host and build-support manifest; `shared`
   for release identity; `contracts` for
-  compatibility/native-bridge types; the completed built web
+  compatibility/native-bridge types and the shared `createQuitConfirmation` rule; the completed built web
   artifact; Electrobun `2.0.1` and its generated SDK; build-only `pe-library`/`resedit` for the
   Electrobun 2.0.1 Windows-uninstaller icon gap; build-only `@resvg/resvg-js` to rasterize the icon
   source (below); Bun/Node.

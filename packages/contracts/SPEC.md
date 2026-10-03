@@ -740,5 +740,5 @@ so an already-loaded old client clears retired markers after reconnect. No activ
 
 ## Consumed by
 
-`web` (types + WS constants) and `server` (same, + mapping `session.*` to `AgentSession` methods). The
+`web` (types + the runtime exports listed above) and `server` (same, + mapping `session.*` to `AgentSession` methods). The
 shell panels need `domain` + `wsProtocol`; the `pi` types + `PiEvent` are the wire for the agent session.
