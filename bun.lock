@@ -105,6 +105,7 @@
         "@lobehub/icons-static-svg": "1.95.1",
         "@rolldown/plugin-babel": "0.2.4",
         "@tailwindcss/vite": "catalog:",
+        "@types/babel__core": "7.20.5",
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",

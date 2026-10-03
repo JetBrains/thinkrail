@@ -101,6 +101,29 @@ browser agent execution.
 Native wheel probes target the actual transcript viewport again after clicking a floating Latest
 button; a pointer left at a removed overlay is not evidence of a gesture delivered to the scroller.
 
+## Render profiling harness
+
+`bun run perf:render [--runs N] [--out file] [playwright args]` is an opt-in measurement run, never a
+gate. It builds `apps/web/dist-profile` (see [[module-web]]), boots the ordinary isolated host on it through
+`playwright.perf.config.ts`, and runs `e2e/perf/*.perf.ts` — a pattern the default config does not match.
+It shares the worktree's serial lane state, so it never overlaps another E2E run in the same worktree.
+Defaults: 5 runs, output `$TMPDIR/thinkrail-render-profile.json`.
+
+- **Collection.** An init script installs a minimal `__REACT_DEVTOOLS_GLOBAL_HOOK__` before React loads,
+  which puts the root in profile mode. Each commit walks the fiber tree DevTools-style (descend only into
+  re-rendered subtrees) and records, per component name, commits, self time (`selfBaseDuration`) and
+  inclusive time (`actualDuration`, not double-counted for nested same-name instances). Unnamed components
+  are labelled by their nearest named owner. Hooks report under their host component.
+- **Timer precision.** The harness adds COOP/COEP headers to documents and scripts through `page.route` so
+  the page is cross-origin isolated (5 µs timers, not 100 µs); the measurement browser disables Chromium's
+  local-network-access check, which otherwise blocks the WS from a fulfilled document. A run fails if the
+  page is not isolated.
+- **Scenarios.** Chat streaming seeds a persisted transcript and replays a deterministic Pi event stream
+  (`text_delta` chunks, tool calls, `partialResult` updates, `agent_settled`) into the browser at the
+  wire seam with fixed pacing; this measures client rendering only and is not evidence of agent behavior.
+  Live file edits rewrite a worktree file under an open file tab. Large diff opens a 3,000-line Pierre diff
+  and wheel-scrolls it. Runs interleave scenarios; the runner reports medians and run-to-run spread.
+
 ## Desktop-backed mode
 
 `bun run e2e:desktop` runs the complete no-agent suite against the host embedded in the packaged

@@ -1,5 +1,6 @@
 node_modules/
 dist/
+apps/web/dist-profile/
 .turbo/
 *.tsbuildinfo
 .DS_Store
