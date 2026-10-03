@@ -262,10 +262,7 @@ export function Shell() {
 			</header>
 			{hasActiveWorkspace && activeWorkspaceId ? (
 				<div data-testid="workspace-shell-layout" className="h-full min-h-0 min-w-0">
-					<WorkspaceWorkbench
-						workspaceId={activeWorkspaceId}
-						closeRequestKey={nativeShortcuts.closeRequestKey}
-					/>
+					<WorkspaceWorkbench workspaceId={activeWorkspaceId} />
 				</div>
 			) : (
 				<div

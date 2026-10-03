@@ -59,6 +59,7 @@ import {
 	useDeletedChatPlacementReconciliation,
 	useWorkspaceChatCatalogReconciliation,
 } from "./chatReconciliation";
+import { subscribeCloseRequest } from "./closeRequestChannel";
 import {
 	collectAllGroups,
 	findPlacedResource,
@@ -216,13 +217,7 @@ function useTerminalReservation(workspaceId: string): void {
 	}, [connectionGeneration, pendingIntent, status, workspaceId]);
 }
 
-export function WorkspaceWorkbench({
-	workspaceId,
-	closeRequestKey,
-}: {
-	workspaceId: string;
-	closeRequestKey: number;
-}) {
+export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const canRenameChat = useAppStore(selectCanRenameChat);
@@ -619,7 +614,7 @@ export function WorkspaceWorkbench({
 				maxBottomGroups={layoutPreferences.maxBottomGroups}
 				projectionEpoch={projectionEpoch}
 				{...(focusRequest ? { focusRequest } : {})}
-				closeRequestKey={closeRequestKey}
+				subscribeCloseRequest={subscribeCloseRequest}
 				renderTabBody={renderTabBody}
 				renderTabAdornment={(tab) => {
 					if (tab.kind === "tool" && tab.tool === "review" && reviewDraftCount > 0) {

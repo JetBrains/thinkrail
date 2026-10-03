@@ -1,5 +1,6 @@
 import type { NativeCommand, NativeQuitHint, NativeShortcutsBridge } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
+import { requestClose } from "./closeRequestChannel";
 import { createWebShortcuts, shortcutPlatform } from "./shortcutCommands";
 import { hasDismissibleLayer, isInTerminal } from "./shortcutLayers";
 
@@ -73,7 +74,6 @@ export function useAppShortcuts() {
 		getNativeShortcutsBridge(Reflect.get(globalThis, NATIVE_SHORTCUTS_GLOBAL)),
 	);
 	const [quitHint, setQuitHint] = useState<NativeQuitHint>("hidden");
-	const [closeRequestKey, setCloseRequestKey] = useState(0);
 
 	useEffect(() => {
 		if (!bridge) return undefined;
@@ -81,7 +81,7 @@ export function useAppShortcuts() {
 		const shortcuts = createWebShortcuts({
 			platform: shortcutPlatform(true),
 			closeItem: () => {
-				if (!dismissTopLayer()) setCloseRequestKey((key) => key + 1);
+				if (!dismissTopLayer()) requestClose();
 			},
 			quit: () => {
 				bridge.quit().catch((error: unknown) => {
@@ -113,5 +113,5 @@ export function useAppShortcuts() {
 		};
 	}, [bridge]);
 
-	return { quitHint: bridge ? quitHint : null, closeRequestKey };
+	return { quitHint: bridge ? quitHint : null };
 }

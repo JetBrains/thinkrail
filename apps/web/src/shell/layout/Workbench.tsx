@@ -169,7 +169,7 @@ export interface WorkbenchProps {
 	maxBottomGroups: number;
 	projectionEpoch: number;
 	focusRequest?: LayoutTabFocusRequest;
-	closeRequestKey?: number;
+	subscribeCloseRequest?: (listener: () => void) => () => void;
 	renderTabBody: (tab: LayoutCenterTab | Extract<LayoutSideTab, { kind: "terminal" }>) => ReactNode;
 	renderTabAdornment: (tab: LayoutTab) => ReactNode;
 	renderToolBody: (tool: LayoutToolId) => ReactNode;
@@ -2565,7 +2565,7 @@ export function Workbench({
 	maxBottomGroups,
 	projectionEpoch,
 	focusRequest,
-	closeRequestKey,
+	subscribeCloseRequest,
 	renderTabBody,
 	renderTabAdornment,
 	renderToolBody,
@@ -2777,15 +2777,17 @@ export function Workbench({
 		[onAttentionChange, onRequestClose, onUserNavigation, readNavigationTick],
 	);
 
-	const handledCloseRequestKey = useRef(closeRequestKey);
-	useEffect(() => {
-		if (closeRequestKey === handledCloseRequestKey.current) return;
-		handledCloseRequestKey.current = closeRequestKey;
-		const focusedGroupId =
-			globalThis.document.activeElement?.closest<HTMLElement>("[data-group-id]")?.dataset.groupId;
-		const tab = closeRequestTarget(documentRef.current, attentionRef.current, focusedGroupId);
-		if (tab) close(tab);
-	}, [close, closeRequestKey]);
+	useEffect(
+		() =>
+			subscribeCloseRequest?.(() => {
+				const focusedGroupId =
+					globalThis.document.activeElement?.closest<HTMLElement>("[data-group-id]")?.dataset
+						.groupId;
+				const tab = closeRequestTarget(documentRef.current, attentionRef.current, focusedGroupId);
+				if (tab) close(tab);
+			}),
+		[close, subscribeCloseRequest],
+	);
 
 	useEffect(() => {
 		const pending = focusAfterClose;
