@@ -1,11 +1,57 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, type Locator, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { commitFile } from "./fixtures/git";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const fsExpect = expect.configure({ timeout: 10_000 });
+
+const longMarkdown = (version: string) =>
+	`${Array.from(
+		{ length: 300 },
+		(_, index) => `## Section ${index}\n\n${version} paragraph ${index} with enough text to wrap.`,
+	).join("\n\n")}\n`;
+
+async function scrollDown(element: Locator) {
+	return element.evaluate((node) => {
+		node.scrollTop = (node.scrollHeight - node.clientHeight) * 0.6;
+		node.dispatchEvent(new Event("scroll"));
+		return node.scrollTop;
+	});
+}
+
+test("a live rendered-diff refresh preserves the reader's scroll position", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const path = join(workspace.worktreePath, "scroll-refresh.md");
+	commitFile(
+		workspace.worktreePath,
+		"scroll-refresh.md",
+		longMarkdown("base"),
+		"add scroll refresh fixture",
+	);
+	writeFileSync(path, longMarkdown("first refresh"));
+
+	await page.getByTestId("tab-changes").click();
+	const change = page.getByTestId("change-item").filter({ hasText: "scroll-refresh.md" });
+	await fsExpect(change).toBeVisible();
+	await change.click();
+	const diff = page.getByTestId("rendered-diff");
+	await fsExpect(diff).toContainText("first refresh paragraph 299");
+	await expect
+		.poll(() => diff.evaluate((node) => node.scrollHeight - node.clientHeight))
+		.toBeGreaterThan(1_000);
+	const diffTop = await scrollDown(diff);
+	expect(diffTop).toBeGreaterThan(1_000);
+
+	writeFileSync(path, longMarkdown("second refresh"));
+	await fsExpect(diff).toContainText("second refresh paragraph 299");
+	await expect
+		.poll(() => diff.evaluate((node) => node.scrollTop))
+		.toBeGreaterThan(diffTop * 0.8);
+});
 
 test("worktree changes on disk appear live in Specs, Files, Changes, and an open file tab", async ({
 	page,
