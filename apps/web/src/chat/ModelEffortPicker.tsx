@@ -142,7 +142,6 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 	) {
 		const [open, setOpen] = useState(false);
 		const [query, setQuery] = useState("");
-		const [highlightValue, setHighlightValue] = useState("");
 		const [showAll, setShowAll] = useState(false);
 
 		const openWith = (next: string) => {
@@ -156,7 +155,6 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 		const close = () => {
 			setOpen(false);
 			setQuery("");
-			setHighlightValue("");
 			setShowAll(false);
 		};
 
@@ -164,23 +162,25 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 		const shortlist = preferences.favorites.length > 0 || preferences.recents.length > 0;
 		const folded = shortlist && !showAll && query.trim() === "";
 
-		const highlighted = useMemo(() => {
-			const key = highlightValue.replace(/^[a-z]+:/, "");
-			return models.find((m) => modelKey(m) === key) ?? null;
-		}, [highlightValue, models]);
-		const effortModel = highlighted ?? current;
-		const pendingLevel = trailingLevel(query, effortModel);
+		const pendingLevel = trailingLevel(query, current);
 
 		const pickModel = (model: WireModel) => {
 			const typedLevel = trailingLevel(query, model);
-			onSelect(typedLevel ? { model, level: typedLevel } : { model });
-			close();
+			if (typedLevel) {
+				onSelect({ model, level: typedLevel });
+				close();
+				return;
+			}
+			if (sameModel(model, current) && !defaultOption?.active) {
+				close();
+				return;
+			}
+			onSelect({ model });
+			setQuery("");
 		};
 
 		const pickLevel = (next: ThinkingLevel) => {
-			if (effortModel && !sameModel(effortModel, current))
-				onSelect({ model: effortModel, level: next });
-			else onSelectLevel(next);
+			onSelectLevel(next);
 			close();
 		};
 
@@ -230,8 +230,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 			);
 		};
 
-		const effortLevels = effortModel?.thinkingLevels ?? [];
-		const previewing = effortModel !== null && !sameModel(effortModel, current);
+		const effortLevels = current?.thinkingLevels ?? [];
 		const isDefaultPair = current !== null && preferences.isDefault(current, level);
 		const pillModel = defaultOption?.active ? (defaultOption.model ?? current) : current;
 		const pillLevel = defaultOption?.active ? defaultOption.level : level;
@@ -281,11 +280,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					container={container}
 					className="w-[min(420px,calc(100vw-16px))] p-0"
 				>
-					<Command
-						value={highlightValue}
-						onValueChange={setHighlightValue}
-						className="bg-transparent"
-					>
+					<Command className="bg-transparent">
 						<CommandInput
 							placeholder="Search models… (append a level: opus high)"
 							value={query}
@@ -361,24 +356,21 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							)}
 						</CommandList>
 					</Command>
-					{effortModel && effortLevels.length > 0 ? (
+					{current && effortLevels.length > 0 ? (
 						<div
 							data-testid="thinking-section"
 							className="flex flex-col gap-8 border-border-default border-t bg-container-sidebar-bg px-12 py-8"
 						>
 							<div className="flex items-center gap-4 text-text-muted tr-text-metadata">
 								<span>Effort for</span>
-								<span className="truncate text-text-default">{effortModel.name}</span>
-								{previewing ? (
-									<span className="text-text-subtle">· applies with the model</span>
-								) : null}
+								<span className="truncate text-text-default">{current.name}</span>
 							</div>
 							<fieldset
-								aria-label={`Effort for ${effortModel.name}`}
+								aria-label={`Effort for ${current.name}`}
 								className="flex gap-2 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg p-2"
 							>
 								{effortLevels.map((candidate) => {
-									const active = !previewing && candidate === level;
+									const active = candidate === level;
 									const pending = pendingLevel === candidate;
 									const isHostDefault = candidate === (preferences.defaultEffort ?? "medium");
 									return (
@@ -406,8 +398,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 								})}
 							</fieldset>
 							<div className="truncate text-text-subtle tr-text-metadata">
-								{LEVEL_HINT[pendingLevel ?? (previewing ? (effortLevels[0] ?? level) : level)] ??
-									"\u00a0"}
+								{LEVEL_HINT[pendingLevel ?? level] ?? "\u00a0"}
 							</div>
 						</div>
 					) : null}

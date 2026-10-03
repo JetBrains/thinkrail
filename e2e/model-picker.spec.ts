@@ -72,16 +72,18 @@ test("the composer pill stars a favorite, records it as recent, and saves the pa
 		await expect(page.getByTestId("model-show-all")).toBeVisible();
 
 		await option.click();
-		await expect(page.getByTestId("model-option")).toHaveCount(0);
+		await expect(page.getByTestId("thinking-section")).toContainText(
+			"Synthetic JetBrains AI model",
+		);
 		await expect(pill).toContainText("Synthetic JetBrains AI model");
 		await expect
 			.poll(async () => (await readConfig(page)).recentModels.map((m) => m.id))
 			.toEqual(["e2e-central-model"]);
 
-		await pill.click();
 		const high = page.locator('[data-testid="thinking-option"][data-level="high"]');
 		await expect(high).toBeVisible();
 		await high.click();
+		await expect(page.getByTestId("model-option")).toHaveCount(0);
 		await expect(page.getByTestId("thinking-selector").last()).toContainText("high");
 
 		await pill.click();
@@ -155,8 +157,8 @@ test("the new-workspace dialog follows the host default until a model is picked 
 		await page.locator(CENTRAL_OPTION).first().click();
 		await expect(pill).not.toContainText("Default");
 		await expect(pill).toContainText("Synthetic JetBrains AI model");
+		await expect(page.getByTestId("thinking-section")).toBeVisible();
 
-		await pill.click();
 		await page.getByTestId("model-option-default").click();
 		await expect(pill).toContainText("Default");
 		await page.keyboard.press("Escape");

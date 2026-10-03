@@ -604,11 +604,14 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `ThinkingSelector` pair — the named survivors until they migrate). Decision: a chat's model and effort
   are **one fact with two parts**, shown by one trigger (`[provider mark] name · level · connection
   glyph ▾`) and chosen in one popover where the **effort control sits under the model list and follows
-  the highlighted model** — so the levels on offer are always *that model's* `thinkingLevels` and a
-  disabled-effort state cannot exist. Clicking a level on a previewed (not current) model applies model
-  and level together; `onSelect({model, level?})` is the model callback (level present only when both
-  were chosen at once), `onSelectLevel` the level-only one, and the caller — never the picker — talks to
-  the host (`ChatView` chains `session.setModel` → `session.setThinkingLevel`). The list reads **Default
+  the chosen model** — so the levels on offer are always *that model's* `thinkingLevels` and a
+  disabled-effort state cannot exist. The flow is **click model → click effort**: picking a model applies
+  it at once and keeps the popover open (hover never changes anything — an earlier hover-preview made the
+  effort row jump as the pointer moved), picking a level applies it and closes, clicking the
+  already-current model or pressing Escape just closes. `onSelect({model, level?})` is the model callback
+  (level present only when a typed `opus high` chose both at once), `onSelectLevel` the level-only one,
+  and the caller — never the picker — talks to the host (`ChatView` chains `session.setModel` →
+  `session.setThinkingLevel`). The list reads **Default
   row** (pre-session callers only, `defaultOption`: what the host would pick, checked while the caller
   follows it) → **Favorites** → **Recent** (≤ 3, not starred) → provider groups, folded behind one
   "All models" row while a shortlist exists and expanded by search; a trailing query word that names a
