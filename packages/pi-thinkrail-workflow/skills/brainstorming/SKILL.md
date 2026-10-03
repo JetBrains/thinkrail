@@ -22,10 +22,11 @@ description: "Use before implementation when a request requires choosing product
 3. **Open a task-spec.** Once the decision to make is understood, `spec_create` a `task-spec` at
    **`.thinkrail/context/TASK-<slug>.md`** (id, title, status: draft, parent: the nearest relevant
    module). This gitignored file is the one temporary design artifact; update it as decisions land.
-4. **Clarify only real decisions.** Ask via `ask_user_question` only when the answer changes observable
-   behavior or scope and cannot be inferred safely. Compose a round per the **asking-user-questions**
-   concept skill. Skipped questions or a host with no UI are not blockers: record the best assumption
-   as unconfirmed and continue.
+4. **Interview the open decisions.** Ask via `ask_user_question` about every decision whose answer
+   changes observable behavior or scope and that the request or specs have not already settled; look
+   facts up instead of asking them. Interview in rounds per the **asking-user-questions** concept skill
+   until no such decision is left assumed. Skipped questions or a host with no UI are not blockers:
+   record the best assumption as unconfirmed and continue.
 5. **Draft the design.** Record the request, recommended design, trade-offs that matter, and explicit
    deferrals. Compare alternatives only when more than one viable approach remains; do not invent
    options after the constraints already select one.

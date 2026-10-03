@@ -17,7 +17,7 @@ short / honest / on-rails rules and the goal-doc shape every section you save mu
 1. **Build on what's already said.** Never re-ask what the request already told you.
 2. **Infer, then confirm** — propose a concrete draft and let the user correct it; a suggestion beats an
    open question. Compose `ask_user_question` rounds per the **asking-user-questions** concept skill
-   (read it before the first round — it carries the option, confirmation, and degradation norms).
+   (read it before the first round — it carries the round, option, confirmation, and degradation norms).
 3. **Smallest useful first build.** It is smaller than the user expects; every capability in it must
    justify itself. Ideas cut from it are handed back to the user, not saved (see writing-specs).
 4. **Save incrementally.** Create the file as soon as the first section is settled, then add each
