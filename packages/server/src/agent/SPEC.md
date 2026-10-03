@@ -416,7 +416,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     makes the first ask the response's sole tool call (non-tool content stays; sibling calls are dropped for
     the model to re-issue after the answer), avoiding Pi's sequential-abort hole where unexecuted siblings
     receive no result. The question array has **no tool-level maximum**: one round carries every question
-    needed for the current decision, while each question retains the 2–4 option bound.
+    answerable now, while each question retains the 2–4 option bound. Questions that depend on an open
+    answer wait for a later round; the multi-round interview norm itself lives in the workflow family's
+    `asking-user-questions` concept skill ([[submodule-workflow-skills]]).
 
     The registry tracks `expected` (eligible call observed), `waiting`, `answer-accepted-uncommitted`, and
     `stopped` through `turn_end`. This includes Pi's real asynchronous gap from `tool_execution_start` through
