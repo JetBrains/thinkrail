@@ -3,6 +3,7 @@ import {
 	type BackgroundCommandSummary,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	type GitDiffScope,
+	MODEL_PICKER_PROTOCOL_VERSION,
 	type Project,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
@@ -11,6 +12,7 @@ import {
 	type SessionStateRecord,
 	type SpecGraphNode,
 	type SubagentResourceSummary,
+	sameModel,
 	type WireModel,
 	type Workspace,
 } from "@thinkrail/contracts";
@@ -80,6 +82,11 @@ export function selectCanRenameChat(state: ProtocolState): boolean {
 
 export function supportsChatResources(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= CHAT_RESOURCES_PROTOCOL_VERSION;
+}
+
+/** Whether the host keeps picker favorites/recents and projects picker metadata onto the catalog. */
+export function selectSupportsModelPicker(state: ProtocolState): boolean {
+	return state.protocolVersion !== null && state.protocolVersion >= MODEL_PICKER_PROTOCOL_VERSION;
 }
 
 export function isChatResourceScopeAlive(
@@ -558,7 +565,7 @@ export function selectCatalogModel(
 	ref: Pick<WireModel, "provider" | "id"> | null,
 ): WireModel | null {
 	if (!ref) return null;
-	return models.find((m) => m.provider === ref.provider && m.id === ref.id) ?? null;
+	return models.find((m) => sameModel(m, ref)) ?? null;
 }
 
 export const BRANCH_SCOPE: GitDiffScope = { kind: "branch" };
