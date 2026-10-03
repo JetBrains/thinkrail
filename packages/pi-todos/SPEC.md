@@ -19,8 +19,9 @@ plan UX ([[submodule-web-chat]]'s "Chat TODO plan"), modeled on [[module-spec-gr
   rule. The rule is deliberately **short and byte-stable** — awareness that a shared list + `todo_*` tools
   exist, plus the threshold for loading the todos skill: an explicit user request or at least three
   substantive execution steps, once the task is understood enough to plan. That threshold governs
-  creating a plan, not honoring one: a pending user-origin item already in the shared list is always
-  progressed through its exact item regardless of size. The lever is *understanding*, not prompt volume:
+  creating a plan, not honoring one — a loose item (either side can author one, see below) is
+  promoted into a proper group when the agent takes it into work, not progressed in place. The lever is
+  *understanding*, not prompt volume:
   **how to work with the list lives in the skill; each tool's invariants live in its own description.**
   (We tried injecting the live list into every prompt and pulled it back — the tools + skill carry it
   instead.) The rule rides as the `pi-todos` entry of pi's `systemPromptOptions.sections`, mutated in place
@@ -33,9 +34,9 @@ plan UX ([[submodule-web-chat]]'s "Chat TODO plan"), modeled on [[module-spec-gr
 - **`skills/todos/SKILL.md`** — the bundled skill: the chat-plan discipline — group = task (one user
   ask, outcome-titled; ordinarily 3–7 substantive, verifiable steps), work tasks strictly in order with one
   step `in_progress` (blocked task = note why, tell the user, move on), and reconcile the user's live edits
-  before choosing each next item, after user input, and before completion. A pending user-origin loose item
-  is progressed in place regardless of size; the no-plan rule for smaller tasks applies only to ordinary
-  chat asks that are not already represented in the shared list.
+  before choosing each next item, after user input, and before completion. A loose item taken into
+  work is promoted (fresh group with a proper outcome title + decomposed steps, raw loose item removed);
+  the no-plan rule for smaller tasks applies only to ordinary chat asks that never entered the queue.
 
 ## The tools
 
