@@ -63,6 +63,7 @@ import {
 	openProject,
 	setProjectPublisher,
 } from "../projects";
+import { forgetOpenBranchReview } from "../branch-review";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
 import { getConfig, setSettingsPublisher } from "../settings";
 import {
@@ -562,6 +563,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	setRepoMetaPublisher((workspaceId) => {
 		refreshUserOwnedWorkspace(workspaceId);
+		// A `.git` nudge means refs likely moved — a push, fetch, PR create, or local commit. Drop
+		// cached open-review answers so the next read (or the fsChanged-driven refresh on the client)
+		// re-asks the provider instead of serving the pre-nudge snapshot for up to 60 s.
+		try {
+			const ws = getWorkspace(workspaceId);
+			forgetOpenBranchReview(ws.worktreePath);
+		} catch {}
 		publishFsChanged({ workspaceId, paths: [], truncated: false, skillChange: "none" });
 	});
 
