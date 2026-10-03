@@ -9,6 +9,7 @@ import {
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
 import {
+	type ModelDefault,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	type SlashCommandInfo,
 	type TemplateInfo,
@@ -18,7 +19,7 @@ import {
 	type Workspace,
 } from "@thinkrail/contracts";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { ModelSelector } from "@/chat/ModelSelector";
+import { type DefaultPairOption, ModelEffortPicker } from "@/chat/ModelEffortPicker";
 import {
 	imagePasteDropHandlers,
 	PROMPT_IMAGE_CHIPS_PADDING,
@@ -27,8 +28,8 @@ import {
 } from "@/chat/promptImages";
 import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
-import { ThinkingSelector } from "@/chat/ThinkingSelector";
 import { useModelCatalog } from "@/chat/useModelCatalog";
+import { useModelPreferences } from "@/chat/useModelPreferences";
 import { Button } from "@/components/ui/button";
 import {
 	Command,
@@ -119,6 +120,8 @@ export function NewWorkspaceDialog({
 	const [aliasSkills, setAliasSkills] = useState<string[]>([]);
 	const [model, setModel] = useState<WireModel | null>(null);
 	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
+	const [hostDefault, setHostDefault] = useState<ModelDefault | null>(null);
+	const [explicitPair, setExplicitPair] = useState(false);
 	const attachedImages = usePromptImages();
 	const [creating, setCreating] = useState(false);
 	const [trusting, setTrusting] = useState(false);
@@ -192,6 +195,7 @@ export function NewWorkspaceDialog({
 		setCreating(false);
 		attachedImages.reset();
 		hostDefaultAsked.current = false;
+		setExplicitPair(false);
 	}, [open, projectId, initialPrompt, updatePromptDraft, attachedImages.reset]);
 
 	useEffect(() => {
@@ -256,6 +260,7 @@ export function NewWorkspaceDialog({
 		refresh: onRefreshModels,
 		fresh: catalogFresh,
 	} = useModelCatalog(open);
+	const modelPreferences = useModelPreferences(models);
 
 	const applyHostDefault = useCallback(() => {
 		let cancelled = false;
@@ -263,14 +268,25 @@ export function NewWorkspaceDialog({
 			.request("model.default", {})
 			.then((d) => {
 				if (cancelled) return;
+				setHostDefault(d);
 				setModel(d.model);
 				setThinkingLevel(d.thinkingLevel);
+				setExplicitPair(false);
 			})
 			.catch(() => {});
 		return () => {
 			cancelled = true;
 		};
 	}, []);
+
+	const defaultOption: DefaultPairOption = {
+		model: hostDefault?.model ?? null,
+		level: hostDefault?.thinkingLevel ?? "medium",
+		active: !explicitPair,
+		onSelect: () => {
+			applyHostDefault();
+		},
+	};
 
 	useEffect(() => {
 		if (!open) return;
@@ -371,7 +387,7 @@ export function NewWorkspaceDialog({
 		try {
 			const { result: session, syncedTick } = await createSessionWithSkillBaseline({
 				workspaceId: workspace.id,
-				...(model ? { model, thinkingLevel } : {}),
+				...(model && explicitPair ? { model, thinkingLevel } : {}),
 			});
 			store.openChatSession(
 				workspace.id,
@@ -612,22 +628,26 @@ export function NewWorkspaceDialog({
 
 				<div className="flex flex-wrap items-center gap-8">
 					<div className="flex min-w-0 flex-1 flex-wrap items-center gap-8">
-						<ModelSelector
+						<ModelEffortPicker
 							models={models}
 							current={model}
+							level={thinkingLevel}
 							refreshing={modelsRefreshing}
 							onRefresh={onRefreshModels}
+							onSelect={({ model: next, level }) => {
+								setExplicitPair(true);
+								setModel(next);
+								if (level) setThinkingLevel(level);
+							}}
+							onSelectLevel={(level) => {
+								setExplicitPair(true);
+								setThinkingLevel(level);
+							}}
+							preferences={modelPreferences}
+							defaultOption={defaultOption}
 							container={dialogEl}
 							placeholder="Default model"
-							onSelect={(m) => {
-								setModel(m);
-							}}
-						/>
-						<ThinkingSelector
-							level={thinkingLevel}
-							levels={model?.thinkingLevels ?? []}
-							container={dialogEl}
-							onSelect={setThinkingLevel}
+							className="max-w-full"
 						/>
 					</div>
 					<button
