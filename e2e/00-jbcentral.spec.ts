@@ -56,7 +56,17 @@ test("connects and follows external add, replacement, and remove without a host 
 		.replaceAll("e2e-central-model", "e2e-central-model-v2")
 		.replace("Synthetic JetBrains AI model", "Synthetic JetBrains AI model v2");
 	writeFileSync(E2E_CENTRAL_ARTIFACT, replacement);
-	await waitForCentralState(page, "configuring");
+	await waitForCentralState(page, "configured");
+	await page.getByTestId("settings-nav-models").click();
+	await page.getByTestId("settings-models").getByTestId("model-selector").click();
+	await expect(
+		page.locator('[data-testid="model-option"][data-model-id="e2e-central-model-v2"]'),
+	).toBeVisible();
+	await expect(
+		page.locator('[data-testid="model-option"][data-model-id="e2e-central-model"]'),
+	).toHaveCount(0);
+	await page.keyboard.press("Escape");
+	await page.getByTestId("settings-nav-providers").click();
 	await waitForCentralState(page, "configured");
 
 	await page.getByTestId("jetbrains-disconnect").click();

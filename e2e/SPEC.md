@@ -129,9 +129,12 @@ absent/outdated/malformed probes plus an above-minimum version staying ready, up
 add/remove, synchronous-action
 serialization, watched external add/change/remove, successful current-generation cutover for new chats, old
 live-chat coexistence after Disconnect, and boot/runtime retention after a closed synthetic-extension load
-failure. Unit coverage owns action single-flight, watcher debounce/coalescing, stale-candidate rejection, boot
-with and without the opaque extension, and exact-model no-fallback for new or reattached chats after Central
-is removed. There is no legacy migration, busy-turn drain, reattachment of live chats, compensation,
+failure. External replacement waits for the settled configured verdict and verifies that the replacement
+model is visible while the old model is gone. A fast candidate may finish before a browser poll observes
+`configuring`; that pending-work state is checked with a held candidate in the server unit fixture, not a
+minimum-visible-duration assumption in the browser. Unit coverage owns action single-flight, watcher
+debounce/coalescing, stale-candidate rejection, boot with and without the opaque extension, and exact-model
+no-fallback for new or reattached chats after Central is removed. There is no legacy migration, busy-turn drain, reattachment of live chats, compensation,
 affected-chat blocking, or recovery seal to test. Sentinel values in synthetic child output, extension
 diagnostics, and provider routing fields
 are asserted absent from the closed results and rendered settings surface; structural DTO allowlists and

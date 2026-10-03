@@ -454,6 +454,7 @@ describe("watched native Central runtime", () => {
 		mkdirSync(join(home, ".pi", "agent", "extensions"), { recursive: true });
 		writeFileSync(artifactPath, syntheticExtension("stale"));
 		await firstStarted;
+		expect((await getJbcentralStatus()).state).toBe("configuring");
 		writeFileSync(artifactPath, syntheticExtension("newest"));
 		releaseFirst?.();
 		await waitFor(() => usePiRuntime((runtime) => runtime === newest));
