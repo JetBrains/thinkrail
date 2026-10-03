@@ -1,5 +1,6 @@
 import type { OpenBranchReview, Workspace } from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
+import { useAppStore } from "../store";
 import { type ConnectionStatus, getTransport } from "../transport";
 import { type OpenBranchReviewStateStore, openBranchReviewState } from "./openBranchReviewState";
 
@@ -122,6 +123,25 @@ export function useOpenBranchReview(
 	useEffect(() => {
 		sync.current?.setConnected(connected);
 	}, [connected]);
+
+	// A `.git` meta nudge from the server bumps this workspace's fsChanged tick (the server already
+	// invalidates its 60 s open-review cache in the same step). Re-ask the provider so a PR opened,
+	// pushed, or closed through a workspace terminal shows up on the Plan page without waiting for
+	// window focus or the TTL.
+	const fsTick = useAppStore((s) =>
+		workspaceId ? (s.fsChangesByWorkspace[workspaceId]?.tick ?? 0) : 0,
+	);
+	const lastFsTick = useRef<{ key: string | null; tick: number }>({ key: null, tick: 0 });
+	useEffect(() => {
+		if (!workspaceId || !key) return;
+		if (lastFsTick.current.key !== key) {
+			lastFsTick.current = { key, tick: fsTick };
+			return;
+		}
+		if (fsTick === lastFsTick.current.tick) return;
+		lastFsTick.current = { key, tick: fsTick };
+		sync.current?.refresh();
+	}, [fsTick, key, workspaceId]);
 
 	const noteOpenReview = useCallback(
 		(review: OpenBranchReview, url?: string) => {

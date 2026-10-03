@@ -53,6 +53,7 @@ import {
 	setLoginPublisher,
 	stopJbcentralRuntime,
 } from "../auth";
+import { forgetOpenBranchReview } from "../branch-review";
 import { redeliverInterview, releaseInterview, setFeedbackPublisher } from "../feedback";
 import { logger } from "../log";
 import { loadWorkspaces } from "../persistence";
@@ -63,7 +64,6 @@ import {
 	openProject,
 	setProjectPublisher,
 } from "../projects";
-import { forgetOpenBranchReview } from "../branch-review";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
 import { getConfig, setSettingsPublisher } from "../settings";
 import {
