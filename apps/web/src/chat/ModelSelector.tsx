@@ -3,7 +3,7 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
-import type { WireModel } from "@thinkrail/contracts";
+import { sameModel, type WireModel } from "@thinkrail/contracts";
 import { useState } from "react";
 import {
 	Command,
@@ -110,7 +110,7 @@ export function ModelSelector({
 								{models
 									.filter((m) => m.provider === provider)
 									.map((m) => {
-										const isCurrent = current?.provider === m.provider && current?.id === m.id;
+										const isCurrent = sameModel(current, m);
 										return (
 											<CommandItem
 												key={`${m.provider}:${m.id}`}

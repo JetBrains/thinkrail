@@ -86,8 +86,6 @@ export interface ModelEffortPickerProps {
 	defaultOption?: DefaultPairOption;
 	container?: HTMLElement | null;
 	className?: string;
-	placeholder?: string;
-	disabled?: boolean;
 }
 
 function ProviderMark({ provider }: { provider: string }) {
@@ -139,8 +137,6 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 			defaultOption,
 			container,
 			className,
-			placeholder,
-			disabled = false,
 		},
 		handleRef,
 	) {
@@ -245,9 +241,8 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 				<PopoverTrigger
 					data-testid="model-selector"
 					data-open={open}
-					disabled={disabled}
 					className={cn(
-						"flex h-32 min-w-0 items-center gap-4 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected",
+						"flex h-32 min-w-0 items-center gap-4 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected",
 						className,
 					)}
 				>
@@ -257,7 +252,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 						<ProviderMark provider={pillModel.provider} />
 					) : null}
 					<span data-testid="model-selector-model" className="truncate">
-						{defaultOption?.active ? "Default" : (pillModel?.name ?? placeholder ?? "Select model")}
+						{defaultOption?.active ? "Default" : (pillModel?.name ?? "Select model")}
 					</span>
 					{pillModel ? (
 						<>

@@ -16,7 +16,7 @@ export function billsPerToken(kind: ProviderAuthKind | undefined): boolean {
 	return kind === "api-key" || kind === "env";
 }
 
-export const AUTH_KIND_LABEL: Record<ProviderAuthKind, string> = {
+const AUTH_KIND_LABEL: Record<ProviderAuthKind, string> = {
 	oauth: "subscription",
 	"api-key": "API key",
 	env: "environment key",
@@ -68,10 +68,7 @@ export function groupByProvider(models: readonly WireModel[]): ProviderGroup[] {
 	}));
 }
 
-/**
- * A query's trailing word names an effort level when the highlighted model supports it — pi's
- * `model:level` idiom typed with a space, so `opus high` picks the model and the level in one go.
- */
+/** The query's trailing word, when it names a level the highlighted model supports (`opus high`). */
 export function trailingLevel(query: string, model: WireModel | null): ThinkingLevel | null {
 	if (!model) return null;
 	const tokens = query.trim().toLowerCase().split(/\s+/);

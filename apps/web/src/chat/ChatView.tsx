@@ -593,10 +593,14 @@ export default function ChatView({
 
 	const onSelectThinking = (level: ThinkingLevel) => {
 		if (level === thinkingLevel) return;
+		const previous = thinkingLevel;
 		useAppStore.getState().setThinkingLevel(sessionId, level);
 		getTransport()
 			.request("session.setThinkingLevel", { sessionId, level })
-			.catch(() => {});
+			.catch((error: unknown) => {
+				useAppStore.getState().setThinkingLevel(sessionId, previous);
+				toast.error(errorText(error), "Couldn't change the effort level");
+			});
 	};
 
 	const onSelectModel = ({ model, level }: ModelSelection) => {
@@ -604,6 +608,7 @@ export default function ChatView({
 			if (level) onSelectThinking(level);
 			return;
 		}
+		const previous = { model: sessionModel, level: thinkingLevel };
 		useAppStore.getState().setCurrentModel(sessionId, model);
 		if (level) useAppStore.getState().setThinkingLevel(sessionId, level);
 		getTransport()
@@ -614,7 +619,11 @@ export default function ChatView({
 					: undefined,
 			)
 			.then(() => refreshStats())
-			.catch(() => {});
+			.catch((error: unknown) => {
+				if (previous.model) useAppStore.getState().setCurrentModel(sessionId, previous.model);
+				useAppStore.getState().setThinkingLevel(sessionId, previous.level);
+				toast.error(errorText(error), `Couldn't switch to ${model.name}`);
+			});
 	};
 
 	const restoreTextToDraft = (text: string) => {

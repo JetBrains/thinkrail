@@ -10,7 +10,6 @@ export interface ModelPreferences {
 	favorites: WireModel[];
 	/** Recently chosen models not already starred, newest first, re-pointed to the live catalog. */
 	recents: WireModel[];
-	defaultModel: WireModel | null;
 	defaultEffort: ThinkingLevel | undefined;
 	isFavorite: (model: Pick<WireModel, "provider" | "id">) => boolean;
 	toggleFavorite: (model: WireModel) => void;
@@ -49,11 +48,6 @@ export function useModelPreferences(models: readonly WireModel[]): ModelPreferen
 				: [],
 		[supported, models, recentModels, favoriteModels],
 	);
-	const defaultModel = useMemo(
-		() => selectCatalogModel(models, defaultModelRef ?? null),
-		[models, defaultModelRef],
-	);
-
 	const isFavorite = useCallback(
 		(model: Pick<WireModel, "provider" | "id">) => favoriteModels.some((f) => sameModel(f, model)),
 		[favoriteModels],
@@ -85,7 +79,6 @@ export function useModelPreferences(models: readonly WireModel[]): ModelPreferen
 		supported,
 		favorites,
 		recents,
-		defaultModel,
 		defaultEffort,
 		isFavorite,
 		toggleFavorite,

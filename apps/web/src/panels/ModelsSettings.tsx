@@ -4,7 +4,7 @@ import { ModelSelector } from "@/chat/ModelSelector";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
 import { useModelCatalog } from "@/chat/useModelCatalog";
 import { Button } from "@/components/ui/button";
-import { toast, useAppStore } from "@/store";
+import { selectCatalogModel, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { ModelContextSettings } from "./ModelContextSettings";
 
@@ -53,11 +53,7 @@ export function ModelsSettings() {
 		}
 	};
 
-	const configuredModel = defaultModel
-		? (models.find(
-				(model) => model.provider === defaultModel.provider && model.id === defaultModel.id,
-			) ?? null)
-		: null;
+	const configuredModel = selectCatalogModel(models, defaultModel ?? null);
 	const model = resolvedDefault ? resolvedDefault.model : configuredModel;
 	const level = resolvedDefault?.thinkingLevel ?? defaultEffort ?? "medium";
 

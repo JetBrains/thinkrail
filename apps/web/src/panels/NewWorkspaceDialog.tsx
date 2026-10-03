@@ -646,7 +646,6 @@ export function NewWorkspaceDialog({
 							preferences={modelPreferences}
 							defaultOption={defaultOption}
 							container={dialogEl}
-							placeholder="Default model"
 							className="max-w-full"
 						/>
 					</div>
