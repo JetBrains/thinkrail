@@ -24,14 +24,32 @@ const AUTH_KIND_LABEL: Record<ProviderAuthKind, string> = {
 	other: "configured",
 };
 
-export function describeCost(model: WireModel): string | null {
-	const kind = model.auth?.kind;
-	if (kind === "oauth") return "plan";
-	if (kind === "central") return "quota";
+/** `$in / $out` list prices per Mtok when the provider bills per token (or the kind is unknown). */
+export function costLabel(model: WireModel): string | null {
 	if (!model.cost) return null;
+	if (model.auth && !billsPerToken(model.auth.kind)) return null;
 	return `${formatPrice(model.cost.input)} / ${formatPrice(model.cost.output)}`;
 }
 
+/** The short word that sits beside the connection glyph in a row: what this model draws on. */
+export function kindLabel(model: WireModel): string | null {
+	const auth = model.auth;
+	if (!auth) return null;
+	switch (auth.kind) {
+		case "oauth":
+			return auth.detail ?? "plan";
+		case "central":
+			return "quota";
+		case "env":
+			return auth.detail ?? "env";
+		case "api-key":
+			return auth.detail ?? "API key";
+		default:
+			return null;
+	}
+}
+
+/** The full sentence for tooltips and group headings: kind word plus pi's detail. */
 export function describeAuth(model: WireModel): string | null {
 	if (!model.auth) return null;
 	const label = AUTH_KIND_LABEL[model.auth.kind];
@@ -41,12 +59,22 @@ export function describeAuth(model: WireModel): string | null {
 export const LEVEL_HINT: Partial<Record<ThinkingLevel, string>> = {
 	off: "No reasoning — fastest, cheapest",
 	minimal: "Briefest reasoning",
-	low: "Light reasoning",
+	low: "Light reasoning — fastest",
 	medium: "Balanced reasoning",
 	high: "Deep reasoning",
-	xhigh: "Extra-deep reasoning — slower, costlier",
-	max: "Maximum reasoning — slowest, costliest",
+	xhigh: "Extra-deep — slower",
+	max: "Maximum — uses your limits faster",
 };
+
+export const EFFORT_BARS = 4;
+
+/** How many of the effort bars light up: none for `off`, otherwise the level's rank among the model's reasoning levels scaled to the bar count (never zero). */
+export function litBars(level: ThinkingLevel, levels: readonly ThinkingLevel[]): number {
+	const reasoning: readonly ThinkingLevel[] = levels.filter((candidate) => candidate !== "off");
+	const rank = reasoning.indexOf(level);
+	if (rank < 0) return 0;
+	return Math.max(1, Math.round(((rank + 1) / reasoning.length) * EFFORT_BARS));
+}
 
 export interface ProviderGroup {
 	provider: string;
@@ -68,7 +96,7 @@ export function groupByProvider(models: readonly WireModel[]): ProviderGroup[] {
 	}));
 }
 
-/** The query's trailing word, when it names a level the highlighted model supports (`opus high`). */
+/** The query's trailing word, when it names a level the given model supports (`opus high`). */
 export function trailingLevel(query: string, model: WireModel | null): ThinkingLevel | null {
 	if (!model) return null;
 	const tokens = query.trim().toLowerCase().split(/\s+/);

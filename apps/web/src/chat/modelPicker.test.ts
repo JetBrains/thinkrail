@@ -2,11 +2,13 @@ import { describe, expect, test } from "bun:test";
 import type { WireModel } from "@thinkrail/contracts";
 import {
 	billsPerToken,
+	costLabel,
 	describeAuth,
-	describeCost,
 	formatContext,
 	formatPrice,
 	groupByProvider,
+	kindLabel,
+	litBars,
 	trailingLevel,
 } from "./modelPicker";
 
@@ -35,17 +37,39 @@ describe("formatting", () => {
 	});
 });
 
-describe("describeCost", () => {
+describe("costLabel / kindLabel", () => {
 	test("quotes list prices only where the provider bills per token", () => {
 		const cost = { input: 5, output: 25 };
-		expect(describeCost(model({ id: "m", cost, auth: { kind: "api-key" } }))).toBe("$5 / $25");
-		expect(describeCost(model({ id: "m", cost, auth: { kind: "env" } }))).toBe("$5 / $25");
-		expect(describeCost(model({ id: "m", cost, auth: { kind: "oauth" } }))).toBe("plan");
-		expect(describeCost(model({ id: "m", cost, auth: { kind: "central" } }))).toBe("quota");
-		expect(describeCost(model({ id: "m", cost }))).toBe("$5 / $25");
-		expect(describeCost(model({ id: "m" }))).toBeNull();
+		expect(costLabel(model({ id: "m", cost, auth: { kind: "api-key" } }))).toBe("$5 / $25");
+		expect(costLabel(model({ id: "m", cost, auth: { kind: "env" } }))).toBe("$5 / $25");
+		expect(costLabel(model({ id: "m", cost, auth: { kind: "oauth" } }))).toBeNull();
+		expect(costLabel(model({ id: "m", cost, auth: { kind: "central" } }))).toBeNull();
+		expect(costLabel(model({ id: "m", cost }))).toBe("$5 / $25");
+		expect(costLabel(model({ id: "m" }))).toBeNull();
 		expect(billsPerToken("oauth")).toBe(false);
 		expect(billsPerToken(undefined)).toBe(false);
+	});
+
+	test("names what the model draws on: plan, quota, the env variable, or the key", () => {
+		expect(kindLabel(model({ id: "m", auth: { kind: "oauth" } }))).toBe("plan");
+		expect(kindLabel(model({ id: "m", auth: { kind: "oauth", detail: "Pro/Max" } }))).toBe(
+			"Pro/Max",
+		);
+		expect(kindLabel(model({ id: "m", auth: { kind: "central" } }))).toBe("quota");
+		expect(kindLabel(model({ id: "m", auth: { kind: "env", detail: "X_KEY" } }))).toBe("X_KEY");
+		expect(kindLabel(model({ id: "m", auth: { kind: "api-key" } }))).toBe("API key");
+		expect(kindLabel(model({ id: "m", auth: { kind: "other" } }))).toBeNull();
+		expect(kindLabel(model({ id: "m" }))).toBeNull();
+	});
+});
+
+describe("litBars", () => {
+	test("scales the level's rank among reasoning levels onto the bars, with off dark", () => {
+		const six = ["off", "low", "medium", "high", "xhigh", "max"] as const;
+		expect(six.map((l) => litBars(l, six))).toEqual([0, 1, 2, 2, 3, 4]);
+		const three = ["low", "high", "max"] as const;
+		expect(three.map((l) => litBars(l, three))).toEqual([1, 3, 4]);
+		expect(litBars("high", ["off"])).toBe(0);
 	});
 });
 

@@ -83,8 +83,18 @@ test("the composer pill stars a favorite, records it as recent, and saves the pa
 		const high = page.locator('[data-testid="thinking-option"][data-level="high"]');
 		await expect(high).toBeVisible();
 		await high.click();
-		await expect(page.getByTestId("model-option")).toHaveCount(0);
+		await expect(high).toHaveAttribute("aria-pressed", "true");
 		await expect(page.getByTestId("thinking-selector").last()).toContainText("high");
+		await page.getByTestId("thinking-step-prev").click();
+		await expect(page.getByTestId("thinking-selector").last()).toContainText("medium");
+		await high.click();
+		await shot(
+			page.locator("[data-radix-popper-content-wrapper]").first(),
+			"model-picker",
+			"popover-after",
+		);
+		await page.keyboard.press("Escape");
+		await expect(page.getByTestId("model-option")).toHaveCount(0);
 
 		await pill.click();
 		await page.getByTestId("model-set-default").click();
@@ -145,9 +155,8 @@ test("the new-workspace dialog follows the host default until a model is picked 
 		await expect(pill).toContainText("Default");
 		const resolved = await withHostWire(page, (wire) => wire.request("model.default", {}));
 		if (!resolved.model) throw new Error("The fixture host resolved no default model");
-		await expect(dialog.getByTestId("thinking-selector")).toContainText(
-			`${resolved.model.name} · ${resolved.thinkingLevel}`,
-		);
+		await expect(pill).toContainText(resolved.model.name);
+		await expect(dialog.getByTestId("thinking-selector")).toContainText(resolved.thinkingLevel);
 
 		await pill.click();
 		const defaultRow = page.getByTestId("model-option-default");

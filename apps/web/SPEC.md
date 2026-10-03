@@ -54,7 +54,8 @@ design-system SOURCES (`typography.json`, `colors.json`, `spacing.json`), their 
 structural token contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
 [TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md), [COLOR.md](src/styles/COLOR.md) and [SPACING.md](src/styles/SPACING.md).
 Outside `src/`, **[`scripts/`](scripts/SPEC.md)** is the build-time generator module — it runs under Bun,
-never ships, and turns those three JSON sources into `styles/generated/`.
+never ships, and turns those three JSON sources into `styles/generated/` (plus the vendored provider
+marks into `chat/generated/`).
 `index.html` names the product and links the local, symbol-only SVG favicon derived from the same
 ThinkRail artwork as the shell logo (compact enough for browser-tab sizes and light/dark browser chrome).
 `main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, resolves and

@@ -84,7 +84,8 @@
 		"colors:generate": "bun --filter @thinkrail/web colors:generate",
 		"colors:check": "bun --filter @thinkrail/web colors:check",
 		"spacing:generate": "bun --filter @thinkrail/web spacing:generate",
-		"spacing:check": "bun --filter @thinkrail/web spacing:check"
+		"spacing:check": "bun --filter @thinkrail/web spacing:check",
+		"provider-glyphs:check": "bun --filter @thinkrail/web provider-glyphs:check"
 	},
 	"devDependencies": {
 		"@changesets/changelog-github": "catalog:",

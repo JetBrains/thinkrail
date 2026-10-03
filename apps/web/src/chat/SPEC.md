@@ -602,25 +602,34 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **`ModelEffortPicker`** (the one **model · effort pill**, also mounted by `NewWorkspaceDialog` in
   pre-session mode; `ReviewSettings`/`ModelsSettings` still mount the older `ModelSelector` +
   `ThinkingSelector` pair — the named survivors until they migrate). Decision: a chat's model and effort
-  are **one fact with two parts**, shown by one trigger (`[provider mark] name · level · connection
-  glyph ▾`) and chosen in one popover where the **effort control sits under the model list and follows
+  are **one fact with two parts**, shown by one borderless trigger (`[vendor glyph] name ▂▄▆ level
+  [connection glyph] ▾` — the effort bars light the level's rank among the model's reasoning levels,
+  `litBars`) and chosen in one popover where the **effort control sits under the model list and follows
   the chosen model** — so the levels on offer are always *that model's* `thinkingLevels` and a
-  disabled-effort state cannot exist. The flow is **click model → click effort**: picking a model applies
+  disabled-effort state cannot exist. The flow is **click model → step effort**: picking a model applies
   it at once and keeps the popover open (hover never changes anything — an earlier hover-preview made the
-  effort row jump as the pointer moved), picking a level applies it and closes, clicking the
-  already-current model or pressing Escape just closes. `onSelect({model, level?})` is the model callback
-  (level present only when a typed `opus high` chose both at once), `onSelectLevel` the level-only one,
-  and the caller — never the picker — talks to the host (`ChatView` chains `session.setModel` →
-  `session.setThinkingLevel`). The list reads **Default
+  effort row jump as the pointer moved); the effort control is a **stepper** (‹ › arrows, bars + level
+  word + a one-line hint, one dot per level with the host default ringed) whose every step applies at once
+  and also keeps the popover open, since stepping is several clicks; Escape, an outside click, or clicking
+  the already-current model closes. `onSelect({model, level?})` is the model callback (level present only
+  when a typed `opus high` chose both at once), `onSelectLevel` the level-only one, and the caller — never
+  the picker — talks to the host (`ChatView` chains `session.setModel` → `session.setThinkingLevel`).
+  Rows are **two lines**: the name, then `provider · [kind glyph] what it draws on · price · context`. The list reads **Default
   row** (pre-session callers only, `defaultOption`: what the host would pick, checked while the caller
   follows it) → **Favorites** → **Recent** (≤ 3, not starred) → provider groups, folded behind one
   "All models" row while a shortlist exists and expanded by search; a trailing query word that names a
   level the highlighted model supports (`opus high`) pre-selects it — pi's `model:level` idiom typed
   with a space — and `/model [query]` in the composer opens the picker prefilled instead of sending
-  text. Rows carry provider mark, name, image-input glyph, context size and the **cost column, which says
-  what the user actually pays**: glyph + `$in / $out` per Mtok only where the provider bills per token
-  (`auth.kind` api-key / env), "plan" for a subscription, "quota" for JetBrains AI; group headings add the
-  provider's connection detail. Favorites/recents/default come in through
+  text. The second row line **says what the user actually pays** (`kindLabel` / `costLabel`): the
+  connection glyph — **key** = API key, **∞** = subscription, **{ }** = environment key, a **JCP** tag =
+  JetBrains AI (Central proxy) — then the plan/variable/key word and, only where the provider bills per
+  token (`auth.kind` api-key / env), `$in / $out per M`; group headings add the provider's connection
+  detail. The **vendor glyph** (`ProviderGlyph`) is a monochrome `currentColor` mark from
+  `generated/providerGlyphs.ts`, which `scripts/generate-provider-glyphs.ts` extracts at build time from
+  the dev-only `@lobehub/icons-static-svg` set (`provider-glyphs:check` guards drift, like the colour
+  pipeline); the pi-provider-id → mark mapping lives once in `scripts/providerGlyphs.ts`, vendors reached
+  through several pi providers share a mark, and an unmapped provider renders a monogram. Marks are never
+  tinted with brand colours — the colour system owns colour. Favorites/recents/default come in through
   **`useModelPreferences(models)`** (the one store+transport seam both callers share: lists re-pointed to
   the live catalog with vanished models dropped, `toggleFavorite` as a whole-list `settings.update`,
   `setDefault` writing model + effort together, all gated on `MODEL_PICKER_PROTOCOL_VERSION` so an older

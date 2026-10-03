@@ -1,26 +1,18 @@
 import {
+	RiBracesLine as Braces,
 	RiCheckLine as Check,
 	RiArrowDownSLine as ChevronDown,
+	RiArrowLeftSLine as ChevronLeft,
 	RiArrowRightSLine as ChevronRight,
-	RiCloudLine as Cloud,
-	RiImageLine as Image,
+	RiInfinityLine as InfinityMark,
 	RiKey2Line as Key,
 	RiPushpin2Line as Pin,
-	RiQuestionLine as Question,
 	RiRefreshLine as RefreshCw,
-	type RemixiconComponentType,
 	RiSparkling2Line as Sparkles,
 	RiStarFill as StarFill,
 	RiStarLine as StarLine,
-	RiTerminalBoxLine as Terminal,
-	RiTicket2Line as Ticket,
 } from "@remixicon/react";
-import {
-	type ProviderAuthKind,
-	sameModel,
-	type ThinkingLevel,
-	type WireModel,
-} from "@thinkrail/contracts";
+import { sameModel, type ThinkingLevel, type WireModel } from "@thinkrail/contracts";
 import { forwardRef, useImperativeHandle, useMemo, useState } from "react";
 import {
 	Command,
@@ -34,24 +26,19 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { IconTooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib";
 import {
-	billsPerToken,
+	costLabel,
 	describeAuth,
-	describeCost,
+	EFFORT_BARS,
 	formatContext,
 	groupByProvider,
+	kindLabel,
 	LEVEL_HINT,
+	litBars,
 	modelKey,
 	trailingLevel,
 } from "./modelPicker";
+import { ProviderGlyph } from "./ProviderGlyph";
 import type { ModelPreferences } from "./useModelPreferences";
-
-const AUTH_ICON: Record<ProviderAuthKind, RemixiconComponentType> = {
-	oauth: Ticket,
-	"api-key": Key,
-	env: Terminal,
-	central: Cloud,
-	other: Question,
-};
 
 export interface ModelEffortPickerHandle {
 	/** Opens the popover with the search prefilled — the `/model` slash command's entry. */
@@ -67,7 +54,7 @@ export interface DefaultPairOption {
 	onSelect: () => void;
 }
 
-/** A model choice, carrying a level only when the user picked both at once (`opus high`, or a level on a previewed model). */
+/** A model choice, carrying a level only when the user picked both at once (`opus high`). */
 export interface ModelSelection {
 	model: WireModel;
 	level?: ThinkingLevel;
@@ -88,40 +75,90 @@ export interface ModelEffortPickerProps {
 	className?: string;
 }
 
-function ProviderMark({ provider }: { provider: string }) {
-	return (
-		<span
-			aria-hidden
-			className="flex size-16 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-bg-selected text-text-muted tr-code-text-small uppercase leading-none"
-		>
-			{provider.slice(0, 1)}
-		</span>
-	);
-}
-
-function AuthGlyph({ model, className }: { model: WireModel; className?: string }) {
-	if (!model.auth) return null;
-	const Icon = AUTH_ICON[model.auth.kind];
-	return <Icon className={cn("size-12 shrink-0", className)} />;
-}
-
-function CostMeta({ model }: { model: WireModel }) {
-	const cost = describeCost(model);
-	return (
-		<span className="ml-auto flex shrink-0 items-center gap-8 text-text-muted tr-text-metadata">
-			{model.input?.includes("image") ? <Image className="size-12" /> : null}
-			<span>{formatContext(model.contextWindow)}</span>
-			{cost ? (
-				<span className="flex items-center gap-4">
-					<AuthGlyph model={model} />
-					<span className={cn(billsPerToken(model.auth?.kind) && "tr-code-text-small")}>
-						{cost}
-					</span>
+/** The connection-kind mark: key = API key, ∞ = subscription, { } = environment key, JCP = JetBrains AI. */
+function KindGlyph({ model, className }: { model: WireModel; className?: string }) {
+	switch (model.auth?.kind) {
+		case "api-key":
+			return <Key className={cn("size-12 shrink-0", className)} />;
+		case "oauth":
+			return <InfinityMark className={cn("size-12 shrink-0", className)} />;
+		case "env":
+			return <Braces className={cn("size-12 shrink-0", className)} />;
+		case "central":
+			return (
+				<span
+					className={cn(
+						"inline-flex h-14 shrink-0 items-center rounded-[var(--radius-sm)] border border-control-border-active px-2 tr-code-text-small leading-none",
+						className,
+					)}
+				>
+					JCP
 				</span>
-			) : null}
+			);
+		default:
+			return null;
+	}
+}
+
+function EffortBars({
+	level,
+	levels,
+	className,
+}: {
+	level: ThinkingLevel;
+	levels: readonly ThinkingLevel[];
+	className?: string;
+}) {
+	const lit = litBars(level, levels);
+	return (
+		<span aria-hidden className={cn("inline-flex h-12 shrink-0 items-end gap-2", className)}>
+			{Array.from({ length: EFFORT_BARS }, (_, index) => (
+				<span
+					key={index}
+					className={cn(
+						"w-2 rounded-[var(--radius-xs)] bg-current",
+						index >= lit && "opacity-30",
+						index === 0 && "h-4",
+						index === 1 && "h-6",
+						index === 2 && "h-8",
+						index === 3 && "h-12",
+					)}
+				/>
+			))}
 		</span>
 	);
 }
+
+function RowMeta({ model, withProvider }: { model: WireModel; withProvider: boolean }) {
+	const kind = kindLabel(model);
+	const cost = costLabel(model);
+	return (
+		<span className="flex min-w-0 items-center gap-4 truncate text-text-muted tr-text-metadata">
+			{withProvider ? <span className="shrink-0">{model.provider}</span> : null}
+			{kind ? (
+				<>
+					{withProvider ? <span aria-hidden>·</span> : null}
+					<KindGlyph model={model} />
+					<span className="truncate">{kind}</span>
+				</>
+			) : null}
+			{cost ? (
+				<>
+					{withProvider || kind ? <span aria-hidden>·</span> : null}
+					<span className="shrink-0">{cost} per M</span>
+				</>
+			) : null}
+			{withProvider || kind || cost ? <span aria-hidden>·</span> : null}
+			<span className="shrink-0">{formatContext(model.contextWindow)}</span>
+		</span>
+	);
+}
+
+const FOOTER_LINK =
+	"flex items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default disabled:text-text-subtle disabled:hover:bg-transparent";
+
+const STEP_BUTTON =
+	"flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-control-border-default text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:text-control-disabled-text disabled:hover:bg-transparent";
 
 export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffortPickerProps>(
 	function ModelEffortPicker(
@@ -161,7 +198,6 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 		const groups = useMemo(() => groupByProvider(models), [models]);
 		const shortlist = preferences.favorites.length > 0 || preferences.recents.length > 0;
 		const folded = shortlist && !showAll && query.trim() === "";
-
 		const pendingLevel = trailingLevel(query, current);
 
 		const pickModel = (model: WireModel) => {
@@ -179,11 +215,6 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 			setQuery("");
 		};
 
-		const pickLevel = (next: ThinkingLevel) => {
-			onSelectLevel(next);
-			close();
-		};
-
 		const renderModel = (model: WireModel, section: string) => {
 			const favorite = preferences.isFavorite(model);
 			const isCurrent = !defaultOption?.active && sameModel(model, current);
@@ -197,14 +228,17 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					data-provider={model.provider}
 					title={describeAuth(model) ?? undefined}
 					onSelect={() => pickModel(model)}
-					className="group/row"
+					className={cn(
+						"group/row items-start gap-8 py-4",
+						isCurrent && "bg-primary-subtle data-[selected=true]:bg-primary-subtle",
+					)}
 				>
-					<span className="flex w-14 shrink-0 justify-center">
-						{isCurrent ? <Check className="size-14 text-primary" /> : null}
+					<ProviderGlyph provider={model.provider} className="mt-2 text-text-muted" />
+					<span className="flex min-w-0 flex-1 flex-col">
+						<span className="truncate">{model.name}</span>
+						<RowMeta model={model} withProvider={section !== "all"} />
 					</span>
-					<ProviderMark provider={model.provider} />
-					<span className="truncate">{model.name}</span>
-					<CostMeta model={model} />
+					{isCurrent ? <Check className="mt-2 size-14 shrink-0 text-primary" /> : null}
 					{preferences.supported ? (
 						<button
 							type="button"
@@ -217,7 +251,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 								preferences.toggleFavorite(model);
 							}}
 							className={cn(
-								"flex size-16 shrink-0 items-center justify-center rounded-[var(--radius-sm)] outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary",
+								"mt-2 flex size-16 shrink-0 items-center justify-center rounded-[var(--radius-sm)] outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary",
 								favorite
 									? "text-feedback-warning"
 									: "text-text-subtle opacity-0 group-hover/row:opacity-100 group-data-[selected=true]/row:opacity-100 focus-visible:opacity-100",
@@ -231,9 +265,11 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 		};
 
 		const effortLevels = current?.thinkingLevels ?? [];
+		const levelIndex = effortLevels.indexOf(level);
 		const isDefaultPair = current !== null && preferences.isDefault(current, level);
 		const pillModel = defaultOption?.active ? (defaultOption.model ?? current) : current;
 		const pillLevel = defaultOption?.active ? defaultOption.level : level;
+		const hint = LEVEL_HINT[pendingLevel ?? level];
 
 		return (
 			<Popover open={open} onOpenChange={(next) => (next ? openWith("") : close())}>
@@ -241,44 +277,48 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					data-testid="model-selector"
 					data-open={open}
 					className={cn(
-						"flex h-32 min-w-0 items-center gap-4 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected",
+						"flex h-32 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected",
 						className,
 					)}
 				>
 					{defaultOption?.active ? (
-						<Sparkles className="size-12 shrink-0 text-text-muted" />
+						<Sparkles className="size-14 shrink-0 text-text-muted" />
 					) : pillModel ? (
-						<ProviderMark provider={pillModel.provider} />
+						<ProviderGlyph provider={pillModel.provider} className="size-14 text-text-muted" />
 					) : null}
 					<span data-testid="model-selector-model" className="truncate">
 						{defaultOption?.active ? "Default" : (pillModel?.name ?? "Select model")}
 					</span>
 					{pillModel ? (
 						<>
-							<span aria-hidden className="h-14 w-px shrink-0 bg-control-border-active" />
+							{defaultOption?.active ? (
+								<span className="truncate text-text-muted tr-text-metadata">{pillModel.name}</span>
+							) : null}
 							<span
 								data-testid="thinking-selector"
 								data-level={pillLevel}
-								className="shrink-0 text-text-muted tr-text-metadata capitalize"
+								className="flex shrink-0 items-center gap-4 text-text-muted tr-text-metadata capitalize"
 							>
-								{defaultOption?.active ? `${pillModel.name} · ${pillLevel}` : pillLevel}
+								<EffortBars
+									level={pillLevel}
+									levels={pillModel.thinkingLevels}
+									className="text-primary"
+								/>
+								{pillLevel}
 							</span>
 							{pillModel.auth ? (
-								<>
-									<span aria-hidden className="h-14 w-px shrink-0 bg-control-border-active" />
-									<IconTooltip label={describeAuth(pillModel)} wrapTrigger>
-										<AuthGlyph model={pillModel} className="text-text-muted" />
-									</IconTooltip>
-								</>
+								<IconTooltip label={describeAuth(pillModel)} wrapTrigger>
+									<KindGlyph model={pillModel} className="text-text-muted" />
+								</IconTooltip>
 							) : null}
 						</>
 					) : null}
-					<ChevronDown className="size-16 shrink-0 text-text-muted" />
+					<ChevronDown className="size-14 shrink-0 text-text-muted" />
 				</PopoverTrigger>
 				<PopoverContent
 					align="start"
 					container={container}
-					className="w-[min(420px,calc(100vw-16px))] p-0"
+					className="w-[min(360px,calc(100vw-16px))] p-0"
 				>
 					<Command className="bg-transparent">
 						<CommandInput
@@ -286,7 +326,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							value={query}
 							onValueChange={setQuery}
 						/>
-						<CommandList className="max-h-[min(320px,50vh)]">
+						<CommandList className="max-h-[min(340px,50vh)]">
 							<CommandEmpty>No models found.</CommandEmpty>
 							{defaultOption ? (
 								<CommandGroup>
@@ -298,12 +338,14 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 											defaultOption.onSelect();
 											close();
 										}}
+										className={cn(
+											"items-start gap-8 py-4",
+											defaultOption.active &&
+												"bg-primary-subtle data-[selected=true]:bg-primary-subtle",
+										)}
 									>
-										<span className="flex w-14 shrink-0 justify-center">
-											{defaultOption.active ? <Check className="size-14 text-primary" /> : null}
-										</span>
-										<Sparkles className="size-14 shrink-0 text-text-muted" />
-										<span className="flex min-w-0 flex-col">
+										<Sparkles className="mt-2 size-16 shrink-0 text-text-muted" />
+										<span className="flex min-w-0 flex-1 flex-col">
 											<span>Default</span>
 											<span className="truncate text-text-muted tr-text-metadata">
 												{defaultOption.model
@@ -311,6 +353,9 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 													: "Follows Settings → Models"}
 											</span>
 										</span>
+										{defaultOption.active ? (
+											<Check className="mt-2 size-14 shrink-0 text-primary" />
+										) : null}
 									</CommandItem>
 								</CommandGroup>
 							) : null}
@@ -330,11 +375,15 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 										value="all:models"
 										data-testid="model-show-all"
 										onSelect={() => setShowAll(true)}
-										className="text-text-muted"
+										className="items-start gap-8 py-4 text-text-muted"
 									>
-										<ChevronRight className="size-14 shrink-0" />
-										<span>All models · {groups.map((g) => g.provider).join(" · ")}</span>
-										<span className="ml-auto shrink-0 tr-text-metadata">{models.length}</span>
+										<ChevronRight className="mt-2 size-16 shrink-0" />
+										<span className="flex min-w-0 flex-1 flex-col">
+											<span>All models</span>
+											<span className="truncate tr-text-metadata">
+												{groups.map((g) => g.provider).join(" · ")} · {models.length}
+											</span>
+										</span>
 									</CommandItem>
 								</CommandGroup>
 							) : (
@@ -359,50 +408,80 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					{current && effortLevels.length > 0 ? (
 						<div
 							data-testid="thinking-section"
-							className="flex flex-col gap-8 border-border-default border-t bg-container-sidebar-bg px-12 py-8"
+							className="flex flex-col gap-4 border-border-default border-t px-8 py-8"
 						>
-							<div className="flex items-center gap-4 text-text-muted tr-text-metadata">
-								<span>Effort for</span>
-								<span className="truncate text-text-default">{current.name}</span>
+							<div className="flex items-center gap-4 px-4 text-text-muted tr-text-metadata">
+								<span>Effort</span>
+								<span aria-hidden>·</span>
+								<span className="truncate">{current.name}</span>
 							</div>
-							<fieldset
-								aria-label={`Effort for ${current.name}`}
-								className="flex gap-2 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg p-2"
-							>
-								{effortLevels.map((candidate) => {
-									const active = candidate === level;
-									const pending = pendingLevel === candidate;
-									const isHostDefault = candidate === (preferences.defaultEffort ?? "medium");
-									return (
-										<button
-											key={candidate}
-											type="button"
-											aria-pressed={active}
-											data-testid="thinking-option"
-											data-level={candidate}
-											onClick={() => pickLevel(candidate)}
-											className={cn(
-												"flex h-24 min-w-0 flex-1 items-center justify-center gap-2 rounded-[var(--radius-sm)] px-4 tr-text-metadata capitalize outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary",
-												active || pending
-													? "bg-control-bg-selected text-text-default"
-													: "text-text-muted",
-												pending && "ring-1 ring-primary",
-											)}
-										>
-											<span className="truncate">{candidate}</span>
-											{isHostDefault ? (
-												<span aria-hidden className="size-4 shrink-0 rounded-full bg-primary" />
-											) : null}
-										</button>
-									);
-								})}
-							</fieldset>
-							<div className="truncate text-text-subtle tr-text-metadata">
-								{LEVEL_HINT[pendingLevel ?? level] ?? "\u00a0"}
+							<div className="flex items-center gap-8">
+								<button
+									type="button"
+									data-testid="thinking-step-prev"
+									aria-label="Lower effort"
+									disabled={levelIndex <= 0}
+									onClick={() => {
+										const previous = effortLevels[levelIndex - 1];
+										if (previous) onSelectLevel(previous);
+									}}
+									className={STEP_BUTTON}
+								>
+									<ChevronLeft className="size-14" />
+								</button>
+								<div className="flex min-w-0 flex-1 flex-col items-center gap-2">
+									<span className="flex items-center gap-8 tr-text-ui text-text-default capitalize">
+										<EffortBars level={level} levels={effortLevels} className="text-primary" />
+										{level}
+									</span>
+									<span className="truncate text-text-subtle tr-text-metadata">
+										{hint ?? "\u00a0"}
+									</span>
+									<span className="flex items-center gap-2">
+										{effortLevels.map((candidate) => {
+											const active = candidate === level;
+											const isHostDefault = candidate === (preferences.defaultEffort ?? "medium");
+											return (
+												<button
+													key={candidate}
+													type="button"
+													data-testid="thinking-option"
+													data-level={candidate}
+													aria-label={`${candidate} effort`}
+													aria-pressed={active}
+													onClick={() => onSelectLevel(candidate)}
+													className="flex size-16 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary"
+												>
+													<span
+														className={cn(
+															"size-6 rounded-full",
+															active ? "bg-primary" : "bg-control-border-active",
+															isHostDefault && !active && "ring-1 ring-primary-muted",
+															pendingLevel === candidate && "ring-1 ring-primary",
+														)}
+													/>
+												</button>
+											);
+										})}
+									</span>
+								</div>
+								<button
+									type="button"
+									data-testid="thinking-step-next"
+									aria-label="Raise effort"
+									disabled={levelIndex < 0 || levelIndex >= effortLevels.length - 1}
+									onClick={() => {
+										const next = effortLevels[levelIndex + 1];
+										if (next) onSelectLevel(next);
+									}}
+									className={STEP_BUTTON}
+								>
+									<ChevronRight className="size-14" />
+								</button>
 							</div>
 						</div>
 					) : null}
-					<div className="flex items-center gap-8 border-border-default border-t px-8 py-4 tr-text-metadata text-text-muted">
+					<div className="flex items-center gap-8 border-border-default border-t px-8 py-4">
 						{preferences.supported && current ? (
 							<button
 								type="button"
@@ -410,7 +489,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 								data-default={isDefaultPair}
 								disabled={isDefaultPair}
 								onClick={() => preferences.setDefault(current, level)}
-								className="flex items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default disabled:text-text-subtle disabled:hover:bg-transparent"
+								className={FOOTER_LINK}
 							>
 								{isDefaultPair ? (
 									<Check className="size-12 shrink-0 text-primary" />
@@ -427,7 +506,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							data-refreshing={refreshing}
 							disabled={refreshing}
 							onClick={() => onRefresh(true)}
-							className="flex items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-text-muted"
+							className={FOOTER_LINK}
 						>
 							<RefreshCw className={cn("size-12 shrink-0", refreshing && "animate-spin")} />
 							{refreshing ? "Updating…" : "Refresh"}

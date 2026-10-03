@@ -12,7 +12,7 @@ Build-time tooling for `apps/web`. **Nothing here ships**: these modules run und
 machine or in CI, never in the browser bundle. They read files from `src/`, write generated files back
 into `src/`, and exit with a status code.
 
-The directory holds three pipelines — typography, colour and spacing — built the same way. They live here rather than in `src/` because
+The directory holds four pipelines — typography, colour, spacing and provider glyphs — built the same way. They live here rather than in `src/` because
 they are *generators*: they use `node:fs` and `node:path`, which must never reach browser-bundled code.
 
 ## What it owns
@@ -27,30 +27,33 @@ they are *generators*: they use `node:fs` and `node:path`, which must never reac
 | `spacing.ts` | the library: load → validate → render. It enforces step identity and is the only place the generated spacing-CSS shape and `--spacing: 1px` (number = px) base are derived; the step lengths live only in `spacing.json`. |
 | `spacing.test.ts` | Pins the spacing source validator's closed root/metadata shapes and value types against the schema. |
 | `generate-spacing.ts` | CLI. Writes `src/styles/generated/spacing.css` — the `--space-<n>` tokens + the Tailwind base; `--check` fails when it is stale. |
+| `providerGlyphs.ts` | the library: the **only** pi-provider-id → vendor-mark mapping, plus the reader that accepts a vendored SVG only when it is a 24×24, path-only, `currentColor` glyph (layered marks keep their per-path opacity) and the renderer that shares one constant per mark. Source set: the dev-only `@lobehub/icons-static-svg` (MIT; the marks stay their owners' trademarks). |
+| `generate-provider-glyphs.ts` | CLI. Writes `src/chat/generated/providerGlyphs.ts`; `--check` fails when it is stale. The generated module is Biome-ignored like `styles/generated`. |
+| `providerGlyphs.test.ts` | pins that every mapped mark exists in the vendored set and that coloured, oddly sized or non-path SVGs are rejected rather than flattened. |
 | `generatedFiles.ts` | what every generate CLI does with a rendered file: `--check` reports drift, otherwise write. The **only** definition of "stale", so the three pipelines and the tests cannot disagree. |
 | `generatedFiles.test.ts` | pins that definition — content drift and a missing file are stale, a CRLF working tree is not. |
 
-Public surface: the `typography.ts`, `colors.ts`, `spacing.ts` and `generatedFiles.ts` exports. There is no `index.ts` barrel — the CLIs are entry points
+Public surface: the `typography.ts`, `colors.ts`, `spacing.ts`, `providerGlyphs.ts` and `generatedFiles.ts` exports. There is no `index.ts` barrel — the CLIs are entry points
 invoked by name from `package.json`, and the one importer outside this directory
 (`src/styles/*.test.ts`) imports the library directly, which keeps the tests and the generator provably
 in agreement about the same functions.
 
 ## Boundary
 
-- **Allowed deps:** `node:fs`, `node:path`, the three JSON sources + their schemas, and two further reads
+- **Allowed deps:** `node:fs`, `node:path`, `node:module` (resolving the vendored glyph set), the three JSON sources + their schemas, the dev-only `@lobehub/icons-static-svg` files read as *data*, and two further reads
   taken as *data*, never as imports: `src/themes/schema.ts` (for `colors.ts`, so the roles and
   `THEME_COLOR_KEYS` cannot drift) and `apps/web/package.json` (for `typography.ts`, so a `selfHosted`
   entry and the installed font packages cannot drift).
 - **Forbidden:** React, Tailwind, anything under `src/` other than the three JSON files, any
-  `@thinkrail/*` package, and any network or shell access. A generator that needed one of those would be
+  `@thinkrail/*` package, any runtime (non-dev) dependency, and any network or shell access. A generator that needed one of those would be
   the wrong shape.
 - **Imported by:** `apps/web/package.json` scripts (`typography:generate` / `:validate` / `:check`,
-  `colors:generate` / `:check`, `spacing:generate` / `:check`, re-exported from the root `package.json`), and
+  `colors:generate` / `:check`, `spacing:generate` / `:check`, `provider-glyphs:generate` / `:check`, re-exported from the root `package.json`), and
   `src/styles/typography.test.ts` + `src/styles/typographyUsage.test.ts` +
   `src/styles/colorUsage.test.ts` + `src/styles/spacingUsage.test.ts`. Nothing in the shipped app may import from here — the generated
   CSS is the interface.
-- **Writes:** `src/styles/generated/` only. That directory is committed (so every typography, colour or spacing
-  change is reviewable as a diff) and excluded from biome in `biome.json`.
+- **Writes:** `src/styles/generated/` and `src/chat/generated/` only. Both directories are committed (so every typography, colour, spacing
+  or glyph change is reviewable as a diff) and excluded from biome in `biome.json`.
 
 ## Invariants
 
