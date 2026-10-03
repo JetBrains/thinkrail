@@ -113,5 +113,5 @@ export function useAppShortcuts() {
 		};
 	}, [bridge]);
 
-	return { quitHint: bridge ? quitHint : null };
+	return bridge ? quitHint : null;
 }
