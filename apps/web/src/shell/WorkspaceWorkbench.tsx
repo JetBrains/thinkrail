@@ -216,7 +216,13 @@ function useTerminalReservation(workspaceId: string): void {
 	}, [connectionGeneration, pendingIntent, status, workspaceId]);
 }
 
-export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
+export function WorkspaceWorkbench({
+	workspaceId,
+	closeRequestKey,
+}: {
+	workspaceId: string;
+	closeRequestKey: number;
+}) {
 	const status = useAppStore((state) => state.status);
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const canRenameChat = useAppStore(selectCanRenameChat);
@@ -613,6 +619,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				maxBottomGroups={layoutPreferences.maxBottomGroups}
 				projectionEpoch={projectionEpoch}
 				{...(focusRequest ? { focusRequest } : {})}
+				closeRequestKey={closeRequestKey}
 				renderTabBody={renderTabBody}
 				renderTabAdornment={(tab) => {
 					if (tab.kind === "tool" && tab.tool === "review" && reviewDraftCount > 0) {

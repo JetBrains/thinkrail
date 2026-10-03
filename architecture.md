@@ -33,7 +33,7 @@ apps/desktop    Electrobun local-host launcher                     ── depend
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
 packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared, packages/pi-background-commands, packages/pi-delegation, packages/pi-subagents
-packages/contracts  the wire (types-only)
+packages/contracts  the wire (types plus tiny pure runtime)
 packages/shared     shellEnv (server-side only)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
                     its pi-free core/ read model also backs the host's spec.graph read method)
@@ -74,7 +74,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
    adapter. Physical runtime requirements are declared once through the server-owned build-support manifest,
    then transformed by each packager. The same behavior and artifact suites run through every launcher, so
    reuse is enforced by boundaries and conformance rather than parallel implementations.
-3. **The wire is versioned.** `contracts` is types-only; `server.welcome` carries a protocol version so
+3. **The wire is versioned.** `contracts` is types plus WS constants and versions, narrow guards, and one dependency-free shared rule (`createQuitConfirmation`, injected clock and timer); `server.welcome` carries a protocol version so
    an independently-shipped UI can detect host-version drift.
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
    desktop, or mobile client points it at the selected host's Tailscale MagicDNS name. Native resume state

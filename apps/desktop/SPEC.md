@@ -95,9 +95,48 @@ webview surfaces without competing with their local key handling.
 
 macOS receives the conventional application, Edit, and Window role menus. Windows receives the supported
 Edit role menu. Linux skips registration because Electrobun 2.0.1 does not support application menus
-there; WebKitGTK keeps its renderer-native editing behavior. The policy is platform-pure and the packaged
+there; WebKitGTK keeps its renderer-native editing behavior. macOS Command-H, Option-Command-H, and Command-M carry explicit
+accelerators because role items get no default shortcut. Quit and Close are custom-action items, not
+roles; see Confirmed quit and close. The policy is platform-pure and the packaged
 ready seam reports whether registration ran, so unit tests pin menu composition while expanded-app smoke
 pins production wiring.
+
+### Confirmed quit and close
+
+Command-Q (`quit-shortcut`) must be confirmed: hold it for 1200 ms, then release Q or Command; or press
+it again within 500 ms of releasing the first press, then release. A single tap expires silently. A
+keyboard quit never fires while the chord is held, so key-repeat cannot leak Command-Q into the next app.
+Electrobun fires the menu action on every press and every OS key-repeat with no repeat flag, so
+`quitShortcut` drives the shared contracts `createQuitConfirmation` rule (the one copy of the gesture, also
+used by the web shell for Linux Ctrl+Q) and feeds it key state from CoreGraphics (`keyState.ts`, Bun FFI, HID system state,
+no extra permission) and polls it while engaged. "Key down" means any non-modifier key, because the menu
+matches Q by character and its physical key differs per layout (AZERTY, Dvorak); a stray held key can only
+delay a quit. A menu click arrives as the same action with no key down and a left mouse-up newer than the
+last key-down, so it quits directly; a late-handled tap with no key down arms instead. Key state unreadable
+at press quits directly; unreadable while armed cancels, unless release was already reached. With no visible hint (window minimized, or host boot before the window and RPC exist), a press skips
+confirmation and quits on release. The menu listener is attached right after the menu, so quit works
+during boot; commands drop until the window exists. Every
+confirmed quit goes through the quit coordinator. Dock Quit, Apple Event quit, and update restart bypass
+the menu and stay direct. Hints travel as the `quitHintChanged` message. Quit stays outside the command
+channel: main owns it, it needs key state, and it must work while the webview hangs.
+
+On Linux no app menu exists, so the web shell owns Ctrl+Q: it confirms the same gesture from
+keydown/keyup and calls `NativeShortcutsBridge.quit()`, the `quitApp` RPC request, which starts the same
+quit coordinator without awaiting shutdown. Windows binds no quit chord; Alt+F4 stays the OS window close
+and its ordinary shutdown.
+
+Other menu shortcuts are forwarded `NativeCommand`s: the menu action is the command id (an exhaustive `Record<NativeCommand, true>` gates it) and main sends
+`nativeCommand`. A shared `repeatGate` makes them edge-triggered: after a forward with a key down, further
+actions drop until no non-modifier key is down, so key-repeat never fires a command twice. A click with no
+key down, or unreadable key state, always forwards. Command-W (`close-item`) asks the web client to close
+its focused item or do nothing; it never closes the native window. The preload exposes hints and commands
+as the frozen non-enumerable `__THINKRAIL_NATIVE_SHORTCUTS__` `NativeShortcutsBridge` (built by
+`shortcutsBridge.ts`) on every desktop platform; only the macOS menu sends events today. On Windows and
+Linux the web shell owns Ctrl+W / Ctrl+F4 (close item) through its command table.
+
+Each chord has exactly one owner: a native menu accelerator (forwarded as a `NativeCommand`) or web
+keydown, never both, because the webview still receives keydown for accelerator chords. Native owns chords
+the OS or browser reserves (Command-Q/W/H/M); web owns Ctrl+Q/W/F4 where no native menu claims them.
 
 ## Native page zoom
 

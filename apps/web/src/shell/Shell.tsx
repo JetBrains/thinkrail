@@ -39,6 +39,8 @@ import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
 import { NativeWindowControls } from "./NativeWindowControls";
+import { QuitHintOverlay } from "./QuitHintOverlay";
+import { useAppShortcuts } from "./useAppShortcuts";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { useNativeWindowControls } from "./useNativeWindowControls";
@@ -69,6 +71,7 @@ export function Shell() {
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const updates = useUpdates(supportsHostUpdateRun(protocolVersion) ? runHostUpdate : null);
 	const windowControls = useNativeWindowControls();
+	const nativeShortcuts = useAppShortcuts();
 	const [newWorkspaceProjectId, setNewWorkspaceProjectId] = useState<string | null>(null);
 
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
@@ -259,7 +262,10 @@ export function Shell() {
 			</header>
 			{hasActiveWorkspace && activeWorkspaceId ? (
 				<div data-testid="workspace-shell-layout" className="h-full min-h-0 min-w-0">
-					<WorkspaceWorkbench workspaceId={activeWorkspaceId} />
+					<WorkspaceWorkbench
+						workspaceId={activeWorkspaceId}
+						closeRequestKey={nativeShortcuts.closeRequestKey}
+					/>
 				</div>
 			) : (
 				<div
@@ -327,6 +333,7 @@ export function Shell() {
 			)}
 			{analyticsConsentOpen ? <AnalyticsConsentDialog /> : <InterviewPromptDialog />}
 			<Toaster />
+			{nativeShortcuts.quitHint ? <QuitHintOverlay hint={nativeShortcuts.quitHint} /> : null}
 		</div>
 	);
 }

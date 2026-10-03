@@ -1,8 +1,7 @@
 import { useEffect, useInsertionEffect, useRef } from "react";
 import { hasPlatformModifier } from "../lib";
 import { selectHistoryTarget, useAppStore } from "../store";
-
-const TERMINAL_ROOT_SELECTOR = ".xterm";
+import { hasLayer, isInTerminal, MODAL_LAYER_SELECTOR } from "./shortcutLayers";
 
 type GlobalHotkeyActions = {
 	onProjects: () => void;
@@ -41,14 +40,7 @@ export function globalHotkeyCommand(
 }
 
 function hasOpenModal(): boolean {
-	return (
-		globalThis.document.querySelector('[aria-modal="true"], [role="dialog"][data-state="open"]') !==
-		null
-	);
-}
-
-function isInTerminal(target: EventTarget | null): boolean {
-	return target instanceof Element && target.closest(TERMINAL_ROOT_SELECTOR) !== null;
+	return hasLayer(globalThis.document, MODAL_LAYER_SELECTOR);
 }
 
 export function useGlobalHotkeys(actions: GlobalHotkeyActions): void {

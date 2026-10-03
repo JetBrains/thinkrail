@@ -1,4 +1,9 @@
+import type { NativeCommand } from "@thinkrail/contracts";
 import type { ApplicationMenuItemConfig } from "electrobun/main";
+
+export const QUIT_SHORTCUT_ACTION = "quit-shortcut";
+const CLOSE_ITEM_COMMAND: NativeCommand = "close-item";
+const NATIVE_COMMANDS = { "close-item": true } satisfies Record<NativeCommand, true>;
 
 type ApplicationMenuApi = {
 	setApplicationMenu(menu: ApplicationMenuItemConfig[]): void;
@@ -31,20 +36,24 @@ export function desktopApplicationMenu(
 			submenu: [
 				{ role: "about" },
 				{ type: "separator" },
-				{ role: "hide" },
-				{ role: "hideOthers" },
+				{ role: "hide", accelerator: "CommandOrControl+H" },
+				{ role: "hideOthers", accelerator: "CommandOrControl+Alt+H" },
 				{ role: "showAll" },
 				{ type: "separator" },
-				{ role: "quit" },
+				{
+					label: "Quit ThinkRail",
+					action: QUIT_SHORTCUT_ACTION,
+					accelerator: "CommandOrControl+Q",
+				},
 			],
 		},
 		editMenu(),
 		{
 			label: "Window",
 			submenu: [
-				{ role: "minimize" },
+				{ role: "minimize", accelerator: "CommandOrControl+M" },
 				{ role: "zoom" },
-				{ role: "close" },
+				{ label: "Close", action: CLOSE_ITEM_COMMAND, accelerator: "CommandOrControl+W" },
 				{ type: "separator" },
 				{ role: "bringAllToFront" },
 			],
@@ -60,4 +69,16 @@ export function installDesktopApplicationMenu(
 	if (!menu) return false;
 	applicationMenu.setApplicationMenu(menu);
 	return true;
+}
+
+export function isNativeCommand(action: string | null): action is NativeCommand {
+	return action !== null && Object.hasOwn(NATIVE_COMMANDS, action);
+}
+
+export function readMenuAction(event: unknown) {
+	if (typeof event !== "object" || event === null) return null;
+	const data: unknown = Reflect.get(event, "data");
+	if (typeof data !== "object" || data === null) return null;
+	const action: unknown = Reflect.get(data, "action");
+	return typeof action === "string" ? action : null;
 }

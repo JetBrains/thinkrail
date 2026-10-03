@@ -108,6 +108,8 @@ act: overflow search only while clipped, and fold only while a side has multiple
 Singleton tool tabs have no inline close glyph; Close/Hide stays in their menu and on Delete, while terminals
 and center resources retain their direct control.
 
+An external close request arrives as a changing `closeRequestKey` prop; the key present at mount is ignored, so a stale request never closes a tab. Internal pure `closeRequestTarget` picks the selected (else first) tab of the DOM-focused group, else of the last-focused center group; a tool tab, folded group, or hidden region yields no target, with no further fallback. The workbench routes it through its normal close path.
+
 Each auxiliary strip trails an add-to-this-group menu. It offers shell-injected actions plus unplaced tools valid for that region; two rails never offer the same singleton. Center tab menus offer no singleton tools. A terminal created from an auxiliary group lands in that workspace's matching group; a vanished target reroutes through the current local focus rule.
 
 ## Presets and local persistence
