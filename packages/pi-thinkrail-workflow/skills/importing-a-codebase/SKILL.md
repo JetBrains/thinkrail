@@ -54,9 +54,9 @@ re-deriving from code.
 ## 3. Interview only the gaps
 
 Ask **only** what the files can't answer and that would change a spec — typically: the primary job / who
-it's for, explicit non-goals, and the *why* behind a non-obvious decision. Batch them per the
-**asking-user-questions** concept skill; infer a concrete answer and let the user correct it rather
-than asking open-ended.
+it's for, explicit non-goals, and the *why* behind a non-obvious decision. Interview them in rounds
+per the **asking-user-questions** concept skill; infer a concrete answer and let the user correct it
+rather than asking open-ended.
 
 If adoption candidates exist, add one question to the same round: a multiSelect listing them (grouped
 when many — an `adr/` set is one option) — which should become spec-graph nodes? A contradiction
