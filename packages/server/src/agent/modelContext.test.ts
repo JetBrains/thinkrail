@@ -324,6 +324,19 @@ test("writes follow a symlinked models.json and leave no temporary files", async
 	expect(temporaryFiles()).toEqual([]);
 });
 
+test("a dangling models.json symlink is kept and its missing target is created", async () => {
+	const target = join(directory, "dotfiles", "pi", "models.json");
+	symlinkSync(target, path);
+	await runtime();
+	await setModelContextWindow(ref, 1_000_000);
+	expect(lstatSync(path).isSymbolicLink()).toBe(true);
+	expect(JSON.parse(readFileSync(target, "utf8"))).toEqual({
+		providers: { openai: { modelOverrides: { "gpt-5.5": { contextWindow: 1_000_000 } } } },
+	});
+	expect(statSync(target).mode & 0o777).toBe(0o600);
+	expect(temporaryFiles()).toEqual([]);
+});
+
 test("concurrent saves serialize so neither edit is lost", async () => {
 	await runtime([
 		["openai", "openai-responses"],

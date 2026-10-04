@@ -3,13 +3,15 @@ import {
 	constants,
 	mkdirSync,
 	readFileSync,
+	readlinkSync,
 	realpathSync,
 	renameSync,
 	rmSync,
+	type Stats,
 	statSync,
 	writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import {
 	isModelContextWindow,
@@ -33,6 +35,8 @@ const OPENAI_RESPONSES_APIS = new Set(["openai-responses", "openai-codex-respons
 const PARSE = { allowTrailingComma: true };
 const FORMATTING = { formattingOptions: { insertSpaces: true, tabSize: 2, eol: "\n" } };
 const EMPTY_CONFIG = '{\n  "providers": {}\n}\n';
+const SAVE_FAILURE =
+	"Couldn't save pi's models.json. Check the file and its permissions, then retry.";
 
 let publishContextChange: (() => void) | null = null;
 
@@ -102,22 +106,39 @@ function patch(source: string, path: string[], contextWindow: number | null): st
 	return source;
 }
 
-function writeModelsFile(path: string, source: string): void {
-	let target: string | undefined;
+function resolveModelsFile(path: string): string {
 	try {
-		target = realpathSync(path);
-	} catch {
-		mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+		return realpathSync(path);
+	} catch {}
+	const seen = new Set<string>();
+	let current = path;
+	while (!seen.has(current)) {
+		seen.add(current);
+		try {
+			current = resolve(dirname(current), readlinkSync(current));
+		} catch {
+			return current;
+		}
 	}
-	const mode = target === undefined ? 0o600 : statSync(target).mode & 0o777;
-	const temp = join(dirname(target ?? path), `.models.json.${process.pid}.tmp`);
+	throw new Error(SAVE_FAILURE);
+}
+
+function writeModelsFile(path: string, source: string): void {
+	const target = resolveModelsFile(path);
+	let existing: Stats | undefined;
 	try {
-		if (target !== undefined) accessSync(target, constants.W_OK);
-		writeFileSync(temp, source, { mode });
-		renameSync(temp, target ?? path);
+		existing = statSync(target);
+	} catch {
+		mkdirSync(dirname(target), { recursive: true, mode: 0o700 });
+	}
+	const temp = join(dirname(target), `.models.json.${process.pid}.tmp`);
+	try {
+		if (existing) accessSync(target, constants.W_OK);
+		writeFileSync(temp, source, { mode: existing ? existing.mode & 0o777 : 0o600 });
+		renameSync(temp, target);
 	} catch {
 		rmSync(temp, { force: true });
-		throw new Error("Couldn't save pi's models.json. Check file permissions and retry.");
+		throw new Error(SAVE_FAILURE);
 	}
 }
 

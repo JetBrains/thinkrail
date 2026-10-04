@@ -114,7 +114,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     configuration survive, prunes override objects it empties (never `providers`), refuses invalid JSON
     or a read-only file rather than patching it, then writes a temp file beside the resolved target with
     the original's mode (`0o600` for a new file) and renames it into place — following a symlinked
-    `models.json` to its target. Saves are serialized in-process; a changed file is followed by one
+    `models.json` to its target, and creating a dangling link's target rather than replacing the link. Saves are serialized in-process; a changed file is followed by one
     network-disabled `runtime.refresh` on the current generation and the host's `provider.changed`
     signal; a no-op save does neither. Every read also refreshes locally first so external pi CLI edits
     appear. Live sessions keep the model they were created with; new chats resolve the updated metadata.
