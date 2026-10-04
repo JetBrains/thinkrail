@@ -41,4 +41,17 @@ export const MARKDOWN_EDGE_FIXTURES: Readonly<Record<string, string>> = {
 	footnoteInOrderedList: "Claim[^1].\n\nx\n\ny\n\n1. [^1]: note\n\nz",
 	escapedFootnoteLabel: "Claim[^a\\]b].\n\nx\n\ny\n\n[^a\\]b]: two words\n\nz",
 	surrogatePairs: "emoji 😀 here\n\n😀😀 **bold 🎉**\n\n- 🍕 item\n\n`🚀`",
+	setextMisreadRule: "Text\n***\n-\n- b",
+	setextMisreadRuleLazy: "Text\n***\n-\n   more",
+	detailsChain:
+		"<details>\n<summary>A</summary>\n\nbody a\n\n</details>\n\n<details>\n<summary>B</summary>\n\nbody b\n\n</details>\n\nPara one.\n\nPara two.\n\nPara three.",
+	closedDiv: "<div>\n\nx\n\n</div>\n\nPara\n\nmore",
+	unclosedComment: "<!-- note\n\nstill\n\nmore\n\nend",
+	processingAfterParagraph: "Text\n<?php echo 1;\n\nmore\n\nend",
+	declarationAfterParagraph: "Text\n<!DOCTYPE x\n\nmore\n\nend",
+	cdataAfterParagraph: "Text\n<![CDATA[ x\n\nmore\n\nend",
+	fenceTab: "```ts\ncode\n```\t\nafter\n```\nmore",
+	openFenceInOrderedList: "1. Run:\n   ```bash\n   cmd\n\nDone.",
+	openFenceInList: "- step\n  ```ts\n  const a = 1;\n\n  const b = 2;\n\nNext para",
+	definitionInProse: "Intro paragraph.\n\n[Warning]: The build fails on Windows.\n\nNext.\n\nMore.",
 };

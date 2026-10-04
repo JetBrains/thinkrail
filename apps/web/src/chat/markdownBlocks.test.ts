@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { seededRandom } from "../../../../e2e/perf/chatReplay";
 import { longMarkdown } from "../../../../e2e/perf/longMarkdown";
+import { seededRandom } from "../../../../e2e/perf/seededRandom";
 import { createMarkdownSplitter, type MarkdownSplit, splitMarkdown } from "./markdownBlocks";
 import { MARKDOWN_EDGE_FIXTURES } from "./markdownFixtures.test";
 
@@ -155,6 +155,21 @@ describe("splitMarkdown", () => {
 		const raws = splitMarkdown(text).blocks.map((block) => block.raw);
 		expect(raws[0]).toStartWith("<div>\n\n<div>\n\na\n\n</div>\n\nb\n\n</div>\n\n");
 		expect(raws.at(-1)).toBe("more");
+	});
+
+	test("closed HTML blocks in a row still split", () => {
+		const split = splitMarkdown(MARKDOWN_EDGE_FIXTURES.detailsChain ?? "");
+		expect(split.blocks.length).toBeGreaterThan(3);
+		expect(split.blocks.at(-1)?.raw).toBe("Para three.");
+	});
+
+	test("a definition that is still streaming its line does not stay whole", () => {
+		const text = `${MARKDOWN_EDGE_FIXTURES.definitionInProse}${"\n\nParagraph.".repeat(20)}`;
+		const split = createMarkdownSplitter();
+		let last = split("");
+		for (let end = 1; end <= text.length; end += 1) last = split(text.slice(0, end));
+		expect(last.whole).toBe(false);
+		expect(last).toEqual(splitMarkdown(text));
 	});
 
 	test("an empty footnote definition already renders whole", () => {

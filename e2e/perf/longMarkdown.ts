@@ -1,4 +1,4 @@
-import { seededRandom } from "./chatReplay";
+import { seededRandom } from "./seededRandom";
 
 const VOCABULARY = [
 	"the",

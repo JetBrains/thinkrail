@@ -121,16 +121,23 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   block lexer, and each block is a memoized react-markdown render, so a streamed delta re-parses only the
   tail. Blocks are direct children of the prose `div`, separated by the same `"\n"` the whole-document
   render emits. The splitter is per instance and incremental: it re-lexes from the last closed block that
-  has two blocks after it. A block is closed when it ends in a blank line or in a heading, a rule, or a
-  fence that CommonMark also closes, unless raw HTML or an open fence may still continue it. Invariants:
-  incremental split equals fresh split; block render equals whole-document render; a link or footnote
-  definition (also inside a list item) renders the message whole for the rest of the stream; fallbacks
-  (open HTML, lazy lines, indented code, a fence only `marked` closes, lexer output that is not lossless)
-  only merge blocks, never split them. `marked` over a micromark split: its block lex is several times
+  has two blocks after it. A block is closed when it ends in a blank line or in an ATX heading, a rule, or a
+  fence that CommonMark also closes, unless raw HTML (an open tag, or an unended `<!--`, `<?`, `<!X`,
+  `<![CDATA[` on any line) or an open fence (also inside a list item or quote) may still continue it.
+  Each token's blank-line check looks only at the previous token's trailing whitespace, so one long block
+  costs linear time. Invariants: incremental split equals fresh split; block render equals whole-document
+  render, except for the known gaps below; a link or footnote definition (also inside a list item)
+  renders the message whole for the rest of the stream once its line has ended (a half-streamed
+  `[Label]: x` line re-checks on the next delta); fallbacks (open HTML, lazy lines, indented code, a
+  fence only `marked` closes, lexer output that is not lossless) only merge blocks, never split them. `marked` over a micromark split: its block lex is several times
   faster than a micromark parse, and the split runs on top of the per-block micromark render; the cost is
   about 12 KB gzip in the eager bundle. The `BlockMarkdown` memo needs stable `components`, so callers memoize
-  them. Known gaps: raw HTML lines (comments) lazily continuing a list can still render differently from the
-  whole document; one construct with no closed block, such as a list whose items run on through lazy lines,
+  them. Known gaps, where `marked` and micromark read the structure differently and a block can render
+  differently from the whole document: raw HTML lines (comments) lazily continuing a list; a lazy line that
+  `marked` ends a block on and micromark continues; an HTML block that `marked` lets swallow a link
+  definition; a blockquote and indented code that `marked` folds into a list, splitting off a later
+  non-1 ordered list that micromark reads as a paragraph; an empty list item with a trailing space before
+  a table; an unclosed fence in a list item followed by 2+ blank lines and a dedent; one construct with no closed block, such as a list whose items run on through lazy lines,
   re-lexes from the start on every delta; when blocks merge or the message turns whole, the moved blocks
   remount, so a code block shows plain text until Shiki answers again, a Mermaid diagram redraws, and focus
   or a selection inside them is lost; kept blocks hold substrings of older stream texts, about 1 MB for a
