@@ -275,6 +275,7 @@ export function NewWorkspaceDialog({
 		};
 		pendingDefault.current?.();
 		pendingDefault.current = cancel;
+		setExplicitPair(false);
 		getTransport()
 			.request("model.default", {})
 			.then((d) => {
@@ -283,7 +284,6 @@ export function NewWorkspaceDialog({
 				pendingDefault.current = null;
 				setModel(d.model);
 				setThinkingLevel(d.thinkingLevel);
-				setExplicitPair(false);
 			})
 			.catch(() => {});
 		return cancel;

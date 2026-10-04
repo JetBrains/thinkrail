@@ -322,9 +322,10 @@ a project picker, the prompt hero, and the reused
   `Default · ‹model› · ‹level›` from the host's `model.default` result (the saved default when available or
   the first available model) and the popover's Default row is checked. Any explicit pick (model, level, or
   both) flips the dialog to an **explicit pair**; the Default row — and the unavailable-model reconcile below
-  — return it to following. Every `model.default` read in flight is cancelled by an explicit pick, so a
-  reply that lands after the user chose never overwrites the choice (it still refreshes what the Default
-  row displays). Create sends `{model, thinkingLevel}` only for an explicit pair and **omits both
+  — return it to following **synchronously**, so a Create pressed right after choosing Default already
+  omits the pair; the `model.default` read that follows only refreshes the displayed pair. Every such
+  read in flight is cancelled by an explicit pick, so a reply that lands after the user chose never
+  overwrites the choice (it still refreshes what the Default row displays). Create sends `{model, thinkingLevel}` only for an explicit pair and **omits both
   while following**, so the host resolver decides at creation time and the display can never snapshot a
   default that Settings changed in between. When no model is available the host returns `model: null` and
   the pill shows a bare Default. The dialog does not choose a competing default: its display and

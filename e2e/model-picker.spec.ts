@@ -181,7 +181,12 @@ test("the new-workspace dialog follows the host default until a model is picked 
 
 		await page.getByTestId("model-option-default").click();
 		await expect(pill).toContainText("Default");
-		await page.keyboard.press("Escape");
+		await dialog.getByTestId("ws-target-default").click();
+		await page.getByTestId("create-workspace").click();
+		await expect(dialog).toBeHidden();
+		const chatPill = page.getByTestId("model-selector").last();
+		await expect(chatPill).toContainText(resolved.model.name);
+		await expect(chatPill).not.toContainText("Synthetic JetBrains AI model");
 		await disconnectFixtureProvider(page);
 	} finally {
 		await withHostWire(page, (wire) =>

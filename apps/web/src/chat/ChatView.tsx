@@ -592,6 +592,7 @@ export default function ChatView({
 	const onMentionQuery = useCallback((q: string | null) => setMentionQuery(q), []);
 
 	const liveRuntime = () => useAppStore.getState().sessions[sessionId];
+	const modelSelection = useRef(0);
 
 	const requestLevel = (level: ThinkingLevel, previous: ThinkingLevel) =>
 		getTransport()
@@ -615,12 +616,16 @@ export default function ChatView({
 			return;
 		}
 		const previous = { model: sessionModel, level: thinkingLevel };
+		const selection = ++modelSelection.current;
 		useAppStore.getState().setCurrentModel(sessionId, model);
 		if (level) useAppStore.getState().setThinkingLevel(sessionId, level);
 		getTransport()
 			.request("session.setModel", { sessionId, model })
 			.then(
-				() => (level ? requestLevel(level, previous.level) : undefined),
+				() =>
+					level && selection === modelSelection.current
+						? requestLevel(level, previous.level)
+						: undefined,
 				(error: unknown) => {
 					if (sameModel(liveRuntime()?.model, model)) {
 						if (previous.model) useAppStore.getState().setCurrentModel(sessionId, previous.model);
