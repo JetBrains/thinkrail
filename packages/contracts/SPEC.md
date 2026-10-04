@@ -478,8 +478,10 @@ of the host.
   `{target: "available" | {provider,id}, contextWindow: number | null}`: `null` removes the override;
   a number must satisfy **`isModelContextWindow`** within **`MODEL_CONTEXT_WINDOW_LIMITS`**
   (272,000–1,000,000), the app's editing policy rather than a verified provider capacity, enforced on
-  both sides. External values outside it are read, never rewritten. Saves emit the existing
-  `provider.changed` invalidation; no AppConfig state or raw configuration crosses the wire) /
+  both sides. External values outside it are read without clamping, and the `available` target covers
+  only settings **`isSharedModelContextTarget`** accepts (no override, or one inside the range): an
+  override the app could not have written is changed only by naming its `{provider,id}`. Saves emit the
+  existing `provider.changed` invalidation; no AppConfig state or raw configuration crosses the wire) /
   **`model.clampThinking`** (pi's
   `clampThinkingLevel` for a `{model, level}` pair — the pre-session picker's effort adjustment, so no
   client re-derives pi's policy) / **`provider.status`**

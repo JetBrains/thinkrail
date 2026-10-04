@@ -181,6 +181,48 @@ test("shared changes reach every provider row and uniform row changes flow back 
 	await expectOverrides(750_000);
 });
 
+test("shared saves leave an override set outside the app range alone until its own row changes it", async ({
+	page,
+}) => {
+	writeFileSync(
+		modelsPath,
+		JSON.stringify({
+			providers: {
+				"context-proxy": { modelOverrides: { [modelId]: { contextWindow: 1_050_000 } } },
+			},
+		}),
+	);
+	await page.reload();
+	await openModels(page);
+	const shared = page.getByTestId("context-limit-all");
+	await expect(shared).toContainText("2 available models \u00b7 1 kept at a limit set outside");
+	await expect(shared.getByTestId("context-limit-all-default").getByRole("radio")).toBeChecked();
+
+	await choose(page, "all", "1m");
+	for (const provider of ["openai", "openai-codex"]) {
+		await expect.poll(async () => (await setting(provider))?.override).toBe(1_000_000);
+	}
+	expect((await setting("context-proxy"))?.override).toBe(1_050_000);
+	await choose(page, "all", "default");
+	for (const provider of ["openai", "openai-codex"]) {
+		await expect.poll(async () => (await setting(provider))?.override).toBeNull();
+	}
+	expect((await setting("context-proxy"))?.override).toBe(1_050_000);
+
+	await page.getByTestId("model-context-customize").click();
+	const row = `context-proxy-${modelId}`;
+	await expect(page.getByTestId(`context-limit-${row}-input`)).toHaveValue("1050000");
+	await expect(page.getByTestId(`context-limit-${row}-input`)).toHaveAttribute(
+		"aria-invalid",
+		"true",
+	);
+	await expect(page.getByTestId(`context-limit-${row}-apply`)).toBeDisabled();
+	await choose(page, row, "default");
+	await expect.poll(async () => (await setting("context-proxy"))?.override).toBeNull();
+	await expect(shared).toContainText("3 available models");
+	await expect(shared).not.toContainText("kept at a limit");
+});
+
 test("expanded customization isolates the same model on different providers", async ({ page }) => {
 	await choose(page, "all", "1m");
 	await page.getByTestId("model-context-customize").click();

@@ -69,15 +69,6 @@ test("non-preset overrides expose an editable Custom field within the app range"
 	expect(html).toContain('max="1000000"');
 });
 
-test("external overrides outside the app range remain visible but invalid", () => {
-	const html = render({
-		settings: [{ ...setting, override: 1_050_000, contextWindow: 1_050_000 }],
-	});
-	expect(html).toContain('value="1050000"');
-	expect(html).toContain('aria-invalid="true"');
-	expect(html).toContain("272,000–1,000,000");
-});
-
 test("different overrides show Customized instead of claiming a uniform preset", () => {
 	const html = render({
 		settings: [
@@ -88,6 +79,22 @@ test("different overrides show Customized instead of claiming a uniform preset",
 	expect(html).toContain("Customized by model");
 	expect(html).toContain('data-context-override="mixed"');
 	expect(html).not.toContain('checked=""');
+});
+
+test("the shared control summarizes only rows it governs and names the external ones it leaves alone", () => {
+	const html = render({
+		settings: [
+			{ ...setting, override: 1_000_000, contextWindow: 1_000_000 },
+			{ ...setting, provider: "openai-codex", override: 1_050_000, contextWindow: 1_050_000 },
+		],
+	});
+	expect(html).toMatch(/context-limit-all-1m[^>]*><input[^>]*checked=""/);
+	expect(html).toContain(
+		"1 available model \u00b7 1 kept at a limit set outside the 272,000\u20131,000,000 range",
+	);
+	expect(
+		render({ settings: [{ ...setting, override: 1_050_000, contextWindow: 1_050_000 }] }),
+	).not.toContain('data-testid="context-limit-all"');
 });
 
 test("failed reads replace stale controls with an actionable retry", () => {

@@ -562,9 +562,10 @@ a project picker, the prompt hero, and the reused
   one Default / 1M / Custom selector over every eligible GPT model the host returns as
   `ModelContextSetting[]`; Customize reveals one selector per provider/model pair, so the same model on
   different providers stays independently editable. Selection is keyed on the explicit `override`
-  (Default = `null`, the catalog value pi reports), the shared control shows "Customized by model" when
-  overrides differ, and choosing a shared preset replaces every individual override in one
-  `model.setContextWindow` call. Custom reveals a whole-number field bounded by the contracts' 272K–1M
+  (Default = `null`, the catalog value pi reports). The shared control summarizes only the rows the
+  contracts' `isSharedModelContextTarget` admits — it shows "Customized by model" when their overrides
+  differ, counts the external rows it leaves alone, and is omitted when it would govern none — and
+  choosing a shared preset replaces those rows' overrides in one `model.setContextWindow` call. Custom reveals a whole-number field bounded by the contracts' 272K–1M
   range with explicit Apply; the copy labels it an app policy, not a verified provider limit, and
   external values outside it stay visible but cannot be re-applied. Drafts are UI-local and are dropped
   when their authoritative override changes; inputs are not remounted, and after a disabled save focus

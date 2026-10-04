@@ -108,7 +108,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     file's explicit `override` (`null` = pi default). Eligibility is derived from pi's catalog, never
     from a model-id list, so catalog defaults above 1M stay untouched by a bulk save. A save validates
     the contracts' 272K–1M range first, patches `providers.<p>.modelOverrides.<id>.contextWindow` for the
-    target (or every currently eligible pair) with `jsonc-parser` so comments, BOM and unrelated
+    target — or, for `available`, every eligible pair the contracts' `isSharedModelContextTarget` admits, so
+    a shared save never rewrites an override outside the range that only a targeted save can touch — with
+    `jsonc-parser` so comments, BOM and unrelated
     configuration survive, prunes override objects it empties (never `providers`), refuses invalid JSON
     or a read-only file rather than patching it, then writes a temp file beside the resolved target with
     the original's mode (`0o600` for a new file) and renames it into place — following a symlinked

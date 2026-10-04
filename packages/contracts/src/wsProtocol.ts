@@ -466,6 +466,12 @@ export interface ModelContextSetting
 	override: number | null;
 }
 
+export function isSharedModelContextTarget(
+	setting: Pick<ModelContextSetting, "override">,
+): boolean {
+	return setting.override === null || isModelContextWindow(setting.override);
+}
+
 export interface WsMethodMap {
 	"project.open": { params: { path: string }; result: Project };
 	"project.list": { params: Record<string, never>; result: Project[] };

@@ -2,6 +2,7 @@ import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
 import {
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	isModelContextWindow,
+	isSharedModelContextTarget,
 	MODEL_CONTEXT_WINDOW_LIMITS,
 	type ModelContextSetting,
 	type ModelContextTarget,
@@ -19,6 +20,7 @@ const PRESETS = [
 ] as const;
 
 const tokens = (value: number) => value.toLocaleString("en-US");
+const RANGE = `${tokens(MODEL_CONTEXT_WINDOW_LIMITS.min)}–${tokens(MODEL_CONTEXT_WINDOW_LIMITS.max)}`;
 
 function supported(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION;
@@ -151,8 +153,7 @@ function ContextLimitControl({
 					</div>
 					{!valid && (
 						<p id={`${id}-error`} className="tr-text-metadata text-feedback-error">
-							Enter a whole number within {tokens(MODEL_CONTEXT_WINDOW_LIMITS.min)}–
-							{tokens(MODEL_CONTEXT_WINDOW_LIMITS.max)} tokens.
+							Enter a whole number within {RANGE} tokens.
 						</p>
 					)}
 				</form>
@@ -179,11 +180,19 @@ export function ModelContextControls({
 	const [expanded, setExpanded] = useState(false);
 	const rowsId = useId();
 	if (!supported(protocolVersion)) return null;
-	const first = settings?.[0]?.override;
-	const sharedOverride = settings?.every((model) => model.override === first) ? first : undefined;
+	const shared = settings?.filter(isSharedModelContextTarget) ?? [];
+	const external = (settings?.length ?? 0) - shared.length;
+	const first = shared[0]?.override;
+	const sharedOverride = shared.every((model) => model.override === first) ? first : undefined;
 	const revision = JSON.stringify(
 		settings?.map((model) => [model.provider, model.id, model.override]),
 	);
+	const sharedDescription = [
+		sharedOverride === undefined
+			? "Customized by model"
+			: `${shared.length} available model${shared.length === 1 ? "" : "s"}`,
+		...(external > 0 ? [`${external} kept at a limit set outside the ${RANGE} range`] : []),
+	].join(" · ");
 
 	return (
 		<div data-testid="settings-model-context" className="flex flex-col gap-12">
@@ -205,19 +214,17 @@ export function ModelContextControls({
 				</p>
 			) : (
 				<>
-					<ContextLimitControl
-						revision={revision}
-						label="All supported GPT models"
-						description={
-							sharedOverride === undefined
-								? "Customized by model"
-								: `${settings.length} available model${settings.length === 1 ? "" : "s"}`
-						}
-						override={sharedOverride}
-						disabled={pending}
-						testId="context-limit-all"
-						onChange={(override) => onChange("available", override)}
-					/>
+					{shared.length > 0 && (
+						<ContextLimitControl
+							revision={revision}
+							label="All supported GPT models"
+							description={sharedDescription}
+							override={sharedOverride}
+							disabled={pending}
+							testId="context-limit-all"
+							onChange={(override) => onChange("available", override)}
+						/>
+					)}
 					<Button
 						variant="ghost"
 						size="sm"
@@ -257,9 +264,8 @@ export function ModelContextControls({
 			)}
 			<div className="flex flex-col gap-4 tr-text-metadata text-text-muted">
 				<p>
-					Default keeps pi's catalog limit. Custom accepts {tokens(MODEL_CONTEXT_WINDOW_LIMITS.min)}
-					–{tokens(MODEL_CONTEXT_WINDOW_LIMITS.max)} tokens; your provider and account must support
-					the selected limit, and larger contexts may increase cost or quota usage.
+					Default keeps pi's catalog limit. Custom accepts {RANGE} tokens; your provider and account
+					must support the selected limit, and larger contexts may increase cost or quota usage.
 				</p>
 				<p>
 					Shared with pi CLI through models.json. New chats use this limit; restart the host to

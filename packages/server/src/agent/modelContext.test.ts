@@ -254,6 +254,29 @@ test("a bulk save from a mixed state replaces every override and bulk Default cl
 	expect(config()).toEqual({ providers: {} });
 });
 
+test("shared saves skip overrides outside the app range; only a targeted save changes them", async () => {
+	writeFileSync(
+		path,
+		JSON.stringify({
+			providers: { openai: { modelOverrides: { "gpt-5.5": { contextWindow: 1_050_000 } } } },
+		}),
+	);
+	const pi = await runtime([
+		["openai", "openai-responses"],
+		["openai-codex", "openai-codex-responses"],
+	]);
+	const overrides = (settings: { override: number | null }[]) =>
+		settings.map((entry) => entry.override);
+	expect(overrides(await listModelContextSettings())).toEqual([1_050_000, null]);
+	expect(overrides(await setModelContextWindow("available", 1_000_000))).toEqual([
+		1_050_000, 1_000_000,
+	]);
+	expect(overrides(await setModelContextWindow("available", null))).toEqual([1_050_000, null]);
+	expect(pi.getModel("openai", ref.id)?.contextWindow).toBe(1_050_000);
+	expect(overrides(await setModelContextWindow(ref, null))).toEqual([null, null]);
+	expect(pi.getModel("openai", ref.id)?.contextWindow).toBe(272_000);
+});
+
 test("budgets outside 272K–1M and unknown targets are refused before touching the file", async () => {
 	await runtime();
 	for (const value of [271_999, 1_000_001, 500_000.5, Number.NaN]) {

@@ -13,6 +13,7 @@ import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import {
 	isModelContextWindow,
+	isSharedModelContextTarget,
 	MODEL_CONTEXT_WINDOW_LIMITS,
 	type ModelContextSetting,
 	type ModelContextTarget,
@@ -156,7 +157,7 @@ function save(
 		const settings = listSettings(runtime, parseConfig(source));
 		const targets =
 			target === "available"
-				? settings
+				? settings.filter(isSharedModelContextTarget)
 				: settings.filter((model) => model.provider === target.provider && model.id === target.id);
 		if (targets.length === 0) throw new Error("Unknown, unavailable or ineligible context target");
 		const bom = source?.startsWith("\uFEFF") ? "\uFEFF" : "";
