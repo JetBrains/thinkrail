@@ -604,15 +604,23 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `ThinkingSelector` pair — the named survivors until they migrate). Decision: a chat's model and effort
   are **one fact with two parts**, shown by one borderless trigger (`[vendor glyph] name ▂▄▆ level
   [connection glyph] ▾` — the effort bars light the level's rank among the model's reasoning levels,
-  `litBars`) and chosen in one popover where the **effort control sits under the model list and follows
-  the chosen model** — so the levels on offer are always *that model's* `thinkingLevels` and a
-  disabled-effort state cannot exist. The flow is **click model → step effort**: picking a model applies
+  `litBars`, in the level's **tone** — cool blue for off/minimal/low, accent for medium/high, warning
+  amber for the costly tiers, so cost reads before the word does) and chosen in one popover where the
+  **effort control sits under the model list and follows the chosen model** — so the levels on offer are
+  always *that model's* `thinkingLevels` and a
+  disabled-effort state cannot exist. The flow is **click model → slide effort**: picking a model applies
   it at once and keeps the popover open (hover never changes anything — an earlier hover-preview made the
-  effort row jump as the pointer moved); the effort control is a **stepper** (‹ › arrows, bars + level
-  word + a one-line hint, one dot per level — ringed only when it is the user's saved `defaultEffort`; the
-  web never guesses the host's fallback level) whose every step applies at once
-  and also keeps the popover open, since stepping is several clicks; Escape, an outside click, or clicking
-  the already-current model closes. `onSelect({model, level?})` is the model callback (level present only
+  effort row jump as the pointer moved); the effort control is a **slider**: a thick rail hiding a
+  cool→warm gradient (`feedback-info` → `primary` → `feedback-warning`) that the handle uncovers as it
+  moves, the level word and its glyph riding on the handle, one clickable label per level beneath (the
+  user's saved `defaultEffort` dotted — the web never guesses the host's fallback level), a one-line
+  hint, and a warning caption on the costly tiers (`COSTLY_LEVELS`: xhigh, max). A native `<input
+  type="range">` drives it — drag, click-to-snap, touch and ←/→ for free — and every change applies at
+  once while the popover stays open; the footer offers "reset to ‹default›" while the level differs from a
+  saved default. The handle's position is the one inline style (a `--effort` custom property, the
+  normalized-geometry exception), colour stays in tokens, and `motion-reduce` flattens the spring.
+  Escape, an outside click, or clicking the already-current model closes. `onSelect({model, level?})`
+  is the model callback (level present only
   when a typed `opus high` chose both at once), `onSelectLevel` the level-only one, and the caller — never
   the picker — talks to the host (`ChatView` chains `session.setModel` → `session.setThinkingLevel`,
   sending the level only if no newer model pick superseded the pair while the model request was in

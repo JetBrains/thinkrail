@@ -2,12 +2,15 @@ import { describe, expect, test } from "bun:test";
 import type { WireModel } from "@thinkrail/contracts";
 import {
 	billsPerToken,
+	COSTLY_LEVELS,
 	costLabel,
 	describeAuth,
 	formatContext,
 	formatPrice,
 	groupByProvider,
 	kindLabel,
+	levelPosition,
+	levelTone,
 	litBars,
 	trailingLevel,
 } from "./modelPicker";
@@ -60,6 +63,25 @@ describe("costLabel / kindLabel", () => {
 		expect(kindLabel(model({ id: "m", auth: { kind: "api-key" } }))).toBe("API key");
 		expect(kindLabel(model({ id: "m", auth: { kind: "other" } }))).toBeNull();
 		expect(kindLabel(model({ id: "m" }))).toBeNull();
+	});
+});
+
+describe("level tone and position", () => {
+	test("tones by cost tier, not by rank: the costly tiers are hot everywhere", () => {
+		expect(levelTone("off")).toBe("cool");
+		expect(levelTone("low")).toBe("cool");
+		expect(levelTone("medium")).toBe("accent");
+		expect(levelTone("high")).toBe("accent");
+		expect(levelTone("xhigh")).toBe("hot");
+		expect(levelTone("max")).toBe("hot");
+		expect([...COSTLY_LEVELS]).toEqual(["xhigh", "max"]);
+	});
+
+	test("positions a level along the model's own scale", () => {
+		const five = ["low", "medium", "high", "xhigh", "max"] as const;
+		expect(five.map((l) => levelPosition(l, five))).toEqual([0, 25, 50, 75, 100]);
+		expect(levelPosition("high", ["high"])).toBe(0);
+		expect(levelPosition("max", ["low", "high"])).toBe(0);
 	});
 });
 

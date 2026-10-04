@@ -2,15 +2,21 @@ import {
 	RiBracesLine as Braces,
 	RiCheckLine as Check,
 	RiArrowDownSLine as ChevronDown,
-	RiArrowLeftSLine as ChevronLeft,
 	RiArrowRightSLine as ChevronRight,
+	RiFireLine as Fire,
+	RiFlashlightLine as Flash,
+	RiContrastDrop2Line as HalfDrop,
 	RiInfinityLine as InfinityMark,
 	RiKey2Line as Key,
+	RiLeafLine as Leaf,
 	RiPushpin2Line as Pin,
 	RiRefreshLine as RefreshCw,
+	type RemixiconComponentType,
+	RiSparklingLine as Sparkle,
 	RiSparkling2Line as Sparkles,
 	RiStarFill as StarFill,
 	RiStarLine as StarLine,
+	RiZzzLine as Zzz,
 } from "@remixicon/react";
 import {
 	type ModelDefault,
@@ -18,7 +24,7 @@ import {
 	type ThinkingLevel,
 	type WireModel,
 } from "@thinkrail/contracts";
-import { forwardRef, useImperativeHandle, useMemo, useState } from "react";
+import { type CSSProperties, forwardRef, useImperativeHandle, useMemo, useState } from "react";
 import {
 	Command,
 	CommandEmpty,
@@ -32,6 +38,7 @@ import { IconTooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib";
 import {
 	CENTRAL_KIND_TAG,
+	COSTLY_LEVELS,
 	costLabel,
 	describeAuth,
 	EFFORT_BAR_HEIGHTS,
@@ -39,6 +46,9 @@ import {
 	groupByProvider,
 	kindLabel,
 	LEVEL_HINT,
+	type LevelTone,
+	levelPosition,
+	levelTone,
 	litBars,
 	modelKey,
 	trailingLevel,
@@ -136,6 +146,151 @@ function EffortBars({
 	);
 }
 
+const TONE_TEXT: Record<LevelTone, string> = {
+	cool: "text-feedback-info",
+	accent: "text-primary",
+	hot: "text-feedback-warning",
+};
+
+/**
+ * The rail between two adjacent levels: solid within a tone, a blend where the tone changes. Tones
+ * only ever warm up along a model's levels, so the cooling pairs just stay solid.
+ */
+const TONE_SEGMENT: Record<`${LevelTone}>${LevelTone}`, string> = {
+	"cool>cool": "bg-feedback-info",
+	"cool>accent": "bg-[linear-gradient(90deg,var(--feedback-info),var(--primary))]",
+	"cool>hot": "bg-[linear-gradient(90deg,var(--feedback-info),var(--feedback-warning))]",
+	"accent>cool": "bg-primary",
+	"accent>accent": "bg-primary",
+	"accent>hot": "bg-[linear-gradient(90deg,var(--primary),var(--feedback-warning))]",
+	"hot>cool": "bg-feedback-warning",
+	"hot>accent": "bg-feedback-warning",
+	"hot>hot": "bg-feedback-warning",
+};
+
+const LEVEL_GLYPH: Record<ThinkingLevel, RemixiconComponentType> = {
+	off: Zzz,
+	minimal: Leaf,
+	low: Flash,
+	medium: HalfDrop,
+	high: Sparkles,
+	xhigh: Sparkle,
+	max: Fire,
+};
+
+/**
+ * The effort slider: a thick rail hiding a cool→warm gradient that the handle uncovers as it moves,
+ * with the level word riding on the handle. A native range input does the dragging, keyboard and
+ * touch; the labels beneath are the same levels as buttons.
+ */
+function EffortSlider({
+	model,
+	level,
+	defaultLevel,
+	onSelectLevel,
+}: {
+	model: WireModel;
+	level: ThinkingLevel;
+	defaultLevel: ThinkingLevel | undefined;
+	onSelectLevel: (level: ThinkingLevel) => void;
+}) {
+	const levels = model.thinkingLevels;
+	const index = levels.indexOf(level);
+	const Glyph = LEVEL_GLYPH[level];
+	return (
+		<div
+			data-testid="thinking-section"
+			className="flex shrink-0 flex-col gap-4 border-border-default border-t px-12 pt-8 pb-4"
+		>
+			<div className="flex items-center gap-4 text-text-muted tr-text-metadata">
+				<span>Effort</span>
+				<span aria-hidden>·</span>
+				<span className="truncate">{model.name}</span>
+			</div>
+			<div
+				className="relative h-32"
+				style={{ "--effort": `${levelPosition(level, levels)}%` } as CSSProperties}
+			>
+				<div
+					aria-hidden
+					className="pointer-events-none absolute inset-x-0 top-8 h-14 overflow-hidden rounded-full border border-control-border-default bg-control-bg"
+				>
+					<div className="absolute inset-0 flex transition-[clip-path] duration-500 ease-[cubic-bezier(0.34,1.3,0.64,1)] [clip-path:inset(0_calc(100%-var(--effort))_0_0_round_999px)] motion-reduce:transition-none">
+						{levels.map((next, i) => {
+							const from = levels[i - 1];
+							return from ? (
+								<span
+									key={next}
+									className={cn("flex-1", TONE_SEGMENT[`${levelTone(from)}>${levelTone(next)}`])}
+								/>
+							) : null;
+						})}
+					</div>
+				</div>
+				<input
+					type="range"
+					min={0}
+					max={levels.length - 1}
+					step={1}
+					value={Math.max(0, index)}
+					aria-label={`Effort for ${model.name}`}
+					aria-valuetext={level}
+					data-testid="thinking-slider"
+					onChange={(event) => {
+						const next = levels[Number(event.target.value)];
+						if (next && next !== level) onSelectLevel(next);
+					}}
+					className="peer absolute inset-0 m-0 size-full cursor-pointer opacity-0"
+				/>
+				<div
+					aria-hidden
+					className="pointer-events-none absolute top-2 left-[clamp(32px,var(--effort),calc(100%-32px))] flex h-24 min-w-64 -translate-x-1/2 items-center justify-center gap-4 rounded-full border border-control-border-active bg-container-elevated-bg px-8 text-text-default tr-text-label-pill capitalize shadow-[var(--shadow-sm)] transition-[left] duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] peer-focus-visible:ring-2 peer-focus-visible:ring-primary motion-reduce:transition-none"
+				>
+					<Glyph className={cn("size-12 shrink-0", TONE_TEXT[levelTone(level)])} />
+					{level}
+				</div>
+			</div>
+			<div className="flex justify-between px-2">
+				{levels.map((candidate) => {
+					const active = candidate === level;
+					return (
+						<span key={candidate} className="flex w-0 justify-center">
+							<button
+								type="button"
+								data-testid="thinking-option"
+								data-level={candidate}
+								aria-pressed={active}
+								onClick={() => onSelectLevel(candidate)}
+								className={cn(
+									"relative rounded-[var(--radius-sm)] px-4 py-2 tr-text-metadata capitalize outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+									active ? "text-text-default" : "text-text-subtle hover:text-text-muted",
+								)}
+							>
+								{candidate}
+								{candidate === defaultLevel ? (
+									<span
+										aria-hidden
+										className="-bottom-2 -translate-x-1/2 absolute left-1/2 size-4 rounded-full bg-primary-muted"
+									/>
+								) : null}
+							</button>
+						</span>
+					);
+				})}
+			</div>
+			<div className="flex items-center gap-8 text-text-subtle tr-text-metadata">
+				<span className="truncate">{LEVEL_HINT[level]}</span>
+				{COSTLY_LEVELS.has(level) ? (
+					<span className="flex shrink-0 items-center gap-4 text-feedback-warning">
+						<Flash className="size-12" />
+						uses your limits faster
+					</span>
+				) : null}
+			</div>
+		</div>
+	);
+}
+
 function RowMeta({ model, withProvider }: { model: WireModel; withProvider: boolean }) {
 	const kind = kindLabel(model);
 	const cost = costLabel(model);
@@ -163,9 +318,6 @@ function RowMeta({ model, withProvider }: { model: WireModel; withProvider: bool
 
 const FOOTER_LINK =
 	"flex items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default disabled:text-text-subtle disabled:hover:bg-transparent";
-
-const STEP_BUTTON =
-	"flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-control-border-default text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:text-control-disabled-text disabled:hover:bg-transparent";
 
 export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffortPickerProps>(
 	function ModelEffortPicker(
@@ -271,8 +423,13 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 		};
 
 		const effortLevels = current?.thinkingLevels ?? [];
-		const levelIndex = effortLevels.indexOf(level);
 		const isDefaultPair = current !== null && preferences.isDefault(current, level);
+		const resetLevel =
+			preferences.defaultEffort !== undefined &&
+			preferences.defaultEffort !== level &&
+			effortLevels.includes(preferences.defaultEffort)
+				? preferences.defaultEffort
+				: null;
 		const following = defaultOption?.active ? defaultOption.resolved : null;
 		const pillModel = defaultOption?.active ? (following?.model ?? null) : current;
 		const pillLevel = following?.thinkingLevel ?? level;
@@ -308,7 +465,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 								<EffortBars
 									level={pillLevel}
 									levels={pillModel.thinkingLevels}
-									className="text-primary"
+									className={TONE_TEXT[levelTone(pillLevel)]}
 								/>
 								{pillLevel}
 							</span>
@@ -412,79 +569,12 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 						</CommandList>
 					</Command>
 					{current && effortLevels.length > 0 ? (
-						<div
-							data-testid="thinking-section"
-							className="flex shrink-0 flex-col gap-4 border-border-default border-t px-8 py-8"
-						>
-							<div className="flex items-center gap-4 px-4 text-text-muted tr-text-metadata">
-								<span>Effort</span>
-								<span aria-hidden>·</span>
-								<span className="truncate">{current.name}</span>
-							</div>
-							<div className="flex items-center gap-8">
-								<button
-									type="button"
-									data-testid="thinking-step-prev"
-									aria-label="Lower effort"
-									disabled={levelIndex <= 0}
-									onClick={() => {
-										const previous = effortLevels[levelIndex - 1];
-										if (previous) onSelectLevel(previous);
-									}}
-									className={STEP_BUTTON}
-								>
-									<ChevronLeft className="size-14" />
-								</button>
-								<div className="flex min-w-0 flex-1 flex-col items-center gap-2">
-									<span className="flex items-center gap-8 tr-text-ui text-text-default capitalize">
-										<EffortBars level={level} levels={effortLevels} className="text-primary" />
-										{level}
-									</span>
-									<span className="truncate text-text-subtle tr-text-metadata">
-										{LEVEL_HINT[level] ?? "\u00a0"}
-									</span>
-									<span className="flex items-center gap-2">
-										{effortLevels.map((candidate) => {
-											const active = candidate === level;
-											const isHostDefault = candidate === preferences.defaultEffort;
-											return (
-												<button
-													key={candidate}
-													type="button"
-													data-testid="thinking-option"
-													data-level={candidate}
-													aria-label={`${candidate} effort`}
-													aria-pressed={active}
-													onClick={() => onSelectLevel(candidate)}
-													className="flex size-16 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-primary"
-												>
-													<span
-														className={cn(
-															"size-6 rounded-full",
-															active ? "bg-primary" : "bg-control-border-active",
-															isHostDefault && !active && "ring-1 ring-primary-muted",
-														)}
-													/>
-												</button>
-											);
-										})}
-									</span>
-								</div>
-								<button
-									type="button"
-									data-testid="thinking-step-next"
-									aria-label="Raise effort"
-									disabled={levelIndex < 0 || levelIndex >= effortLevels.length - 1}
-									onClick={() => {
-										const next = effortLevels[levelIndex + 1];
-										if (next) onSelectLevel(next);
-									}}
-									className={STEP_BUTTON}
-								>
-									<ChevronRight className="size-14" />
-								</button>
-							</div>
-						</div>
+						<EffortSlider
+							model={current}
+							level={level}
+							defaultLevel={preferences.defaultEffort}
+							onSelectLevel={onSelectLevel}
+						/>
 					) : null}
 					<div className="flex shrink-0 items-center gap-8 border-border-default border-t px-8 py-4">
 						{preferences.supported && current ? (
@@ -502,6 +592,17 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 									<Pin className="size-12 shrink-0" />
 								)}
 								{isDefaultPair ? "Default for new chats" : "Set as default"}
+							</button>
+						) : null}
+						{resetLevel ? (
+							<button
+								type="button"
+								data-testid="thinking-reset"
+								onClick={() => onSelectLevel(resetLevel)}
+								className={FOOTER_LINK}
+							>
+								<RefreshCw className="size-12 shrink-0" />
+								reset to {resetLevel}
 							</button>
 						) : null}
 						<span className="flex-1" />

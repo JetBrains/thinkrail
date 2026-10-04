@@ -94,9 +94,17 @@ test("the composer pill stars a favorite, records it as recent, and saves the pa
 		await expect(high).toHaveAttribute("aria-pressed", "true");
 		await expect(page.getByTestId("thinking-selector").last()).toContainText("high");
 		await expect.poll(() => hostLevel(page, workspace.id)).toBe("high");
-		await page.getByTestId("thinking-step-prev").click();
+		const slider = page.getByTestId("thinking-slider");
+		await slider.focus();
+		await page.keyboard.press("ArrowLeft");
 		await expect(page.getByTestId("thinking-selector").last()).toContainText("medium");
 		await expect.poll(() => hostLevel(page, workspace.id)).toBe("medium");
+		await expect(slider).toHaveAttribute("aria-valuetext", "medium");
+		const reset = page.getByTestId("thinking-reset");
+		await expect(reset).toContainText(`reset to ${before.defaultEffort}`);
+		await reset.click();
+		await expect.poll(() => hostLevel(page, workspace.id)).toBe(before.defaultEffort);
+		await expect(reset).toHaveCount(0);
 		await high.click();
 		await expect.poll(() => hostLevel(page, workspace.id)).toBe("high");
 		await shot(

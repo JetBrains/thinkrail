@@ -60,15 +60,33 @@ export function describeAuth(model: WireModel): string | null {
 	return model.auth.detail ? `${label} · ${model.auth.detail}` : label;
 }
 
-export const LEVEL_HINT: Partial<Record<ThinkingLevel, string>> = {
+export const LEVEL_HINT: Record<ThinkingLevel, string> = {
 	off: "No reasoning — fastest, cheapest",
 	minimal: "Briefest reasoning",
 	low: "Light reasoning — fastest",
 	medium: "Balanced reasoning",
 	high: "Deep reasoning",
-	xhigh: "Extra-deep — slower",
-	max: "Maximum — uses your limits faster",
+	xhigh: "Extra-deep reasoning",
+	max: "Maximum reasoning",
 };
+
+/** Levels whose cost deserves a warning beside the hint (what Codex and Claude.ai flag). */
+export const COSTLY_LEVELS: ReadonlySet<ThinkingLevel> = new Set<ThinkingLevel>(["xhigh", "max"]);
+
+export type LevelTone = "cool" | "accent" | "hot";
+
+/** The colour temperature a level reads at: cool for the no/low-reasoning end, hot for the costly tiers. */
+export function levelTone(level: ThinkingLevel): LevelTone {
+	if (COSTLY_LEVELS.has(level)) return "hot";
+	return level === "off" || level === "minimal" || level === "low" ? "cool" : "accent";
+}
+
+/** Where `level` sits on the model's own scale, 0 → 100; the slider handle's position. */
+export function levelPosition(level: ThinkingLevel, levels: readonly ThinkingLevel[]): number {
+	const index = levels.indexOf(level);
+	if (index < 0 || levels.length < 2) return 0;
+	return (index / (levels.length - 1)) * 100;
+}
 
 /** The effort bars, shortest first; their count is the scale `litBars` maps a level onto. */
 export const EFFORT_BAR_HEIGHTS = ["h-4", "h-6", "h-8", "h-12"] as const;

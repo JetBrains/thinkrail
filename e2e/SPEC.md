@@ -173,8 +173,8 @@ Connect is withheld while the verdict says signed out, every connect-driven scen
 button appears instead of assuming it — a verdict left behind by an earlier scenario would otherwise hide it,
 exactly as it would for someone returning to the panel inside the window. Each state is also captured as a
 review PNG under `e2e/screenshots/<group>/`
-(gitignored, stable path, one element shot per state, retina). Screenshots are evidence, never the
-assertion — a state that only a picture would catch is a missing `data-testid`. Identical files across
+(gitignored, stable path, one element shot per state, retina, CSS animations fast-forwarded so a
+spring mid-flight never ends up in the picture). Screenshots are evidence, never the assertion — a state that only a picture would catch is a missing `data-testid`. Identical files across
 scenarios are a finding, not a defect: they are how the suite shows two distinct host situations rendering
 one indistinguishable card.
 
