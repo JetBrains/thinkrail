@@ -30,6 +30,7 @@ import {
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useNow } from "@/components/useNow";
 import { registerWebExtensions } from "@/extensions";
+import { shallowEqualArrays } from "@/lib";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
 	EMPTY_RUNTIME,
@@ -355,13 +356,15 @@ export default function ChatView({
 		[turns, isStreaming, currentAssistantId],
 	);
 
-	const recentPrompts = useMemo(() => {
+	const nextRecentPrompts = useMemo(() => {
 		const texts = turns
 			.filter((t) => t.kind === "user")
 			.map((t) => turnAnchorText(t))
 			.filter(Boolean);
 		return [...new Set(texts.reverse())];
 	}, [turns]);
+	const [recentPrompts, setRecentPrompts] = useState(nextRecentPrompts);
+	if (!shallowEqualArrays(recentPrompts, nextRecentPrompts)) setRecentPrompts(nextRecentPrompts);
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);

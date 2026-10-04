@@ -6,7 +6,7 @@ import type {
 	TodoPlan,
 } from "@thinkrail/contracts";
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useInsertionEffect, useRef, useState } from "react";
 import { tupleKey } from "../lib";
 import {
 	isConnectedGeneration,
@@ -59,7 +59,9 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	const currentIdentity = useRef(identity);
 	const readGeneration = useRef(0);
 	const initializedIdentity = useRef<string | null>(null);
-	currentIdentity.current = identity;
+	useInsertionEffect(() => {
+		currentIdentity.current = identity;
+	}, [identity]);
 	const live = useCallback(
 		(expectedIdentity: string) => {
 			const state = useAppStore.getState();
@@ -195,23 +197,22 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		const requestConnectionGeneration =
 			requestState.status === "connected" ? requestState.connectionGeneration : null;
 		const mine = ++readGeneration.current;
-		try {
-			const plan = await getTransport().request("todo.list", { workspaceId, sessionId });
-			const current = useAppStore.getState();
-			if (
-				requestConnectionGeneration !== null &&
-				current.connectionGeneration !== requestConnectionGeneration &&
-				readGeneration.current === mine &&
-				live(requestIdentity)
-			) {
-				return reloadPlan();
-			}
-			if (readGeneration.current !== mine || !live(requestIdentity)) return false;
-			setData(plan);
-			return true;
-		} catch {
-			return false;
+		const plan = await getTransport()
+			.request("todo.list", { workspaceId, sessionId })
+			.catch(() => null);
+		if (!plan) return false;
+		const current = useAppStore.getState();
+		if (
+			requestConnectionGeneration !== null &&
+			current.connectionGeneration !== requestConnectionGeneration &&
+			readGeneration.current === mine &&
+			live(requestIdentity)
+		) {
+			return reloadPlan();
 		}
+		if (readGeneration.current !== mine || !live(requestIdentity)) return false;
+		setData(plan);
+		return true;
 	};
 
 	const remove = async (id: string) => {
