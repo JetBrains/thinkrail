@@ -625,7 +625,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   the picker — talks to the host (`ChatView` chains `session.setModel` → `session.setThinkingLevel`
   behind one selection counter that every model *or* effort pick advances, so the chained level is sent
   — and on failure rolled back — only while that pick is still the newest: A·high then B·low can never
-  land A's level on B, and B·high then a slide to medium can never let B's response re-send high).
+  land A's level on B, and B·high then a slide to medium can never let B's response re-send high). When a
+  catalog refresh leaves a session on a level its model no longer offers, `ChatView` asks the host's
+  `model.clampThinking` and applies the answer — the reconcile `NewWorkspaceDialog` already runs for its
+  pair, and the same clamp pi applies at request time — so the pill and slider show the level pi will
+  actually use rather than a stop the rail does not have.
   Rows are **two lines**: the name, then `provider · [kind glyph] what it draws on · price · context`. The list reads **Default
   row** (pre-session callers only, `defaultOption`: what the host would pick, checked while the caller
   follows it) → **Favorites** → **Recent** (the host's list minus starred models) → provider groups, folded behind one

@@ -594,15 +594,39 @@ export default function ChatView({
 	const liveRuntime = () => useAppStore.getState().sessions[sessionId];
 	const pairSelection = useRef(0);
 
-	const requestLevel = (level: ThinkingLevel, previous: ThinkingLevel) =>
+	const requestLevel = useCallback(
+		(level: ThinkingLevel, previous: ThinkingLevel) =>
+			getTransport()
+				.request("session.setThinkingLevel", { sessionId, level })
+				.catch((error: unknown) => {
+					if (useAppStore.getState().sessions[sessionId]?.thinkingLevel === level) {
+						useAppStore.getState().setThinkingLevel(sessionId, previous);
+					}
+					toast.error(errorText(error), "Couldn't change the effort level");
+				}),
+		[sessionId],
+	);
+
+	useEffect(() => {
+		if (!currentModel || currentModel.thinkingLevels.includes(thinkingLevel)) return;
+		let cancelled = false;
 		getTransport()
-			.request("session.setThinkingLevel", { sessionId, level })
-			.catch((error: unknown) => {
-				if (liveRuntime()?.thinkingLevel === level) {
-					useAppStore.getState().setThinkingLevel(sessionId, previous);
-				}
-				toast.error(errorText(error), "Couldn't change the effort level");
-			});
+			.request("model.clampThinking", {
+				provider: currentModel.provider,
+				id: currentModel.id,
+				level: thinkingLevel,
+			})
+			.then((clamped) => {
+				if (cancelled || clamped.level === thinkingLevel) return;
+				pairSelection.current += 1;
+				useAppStore.getState().setThinkingLevel(sessionId, clamped.level);
+				return requestLevel(clamped.level, thinkingLevel);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [currentModel, thinkingLevel, sessionId, requestLevel]);
 
 	const onSelectThinking = (level: ThinkingLevel) => {
 		if (level === thinkingLevel) return;
