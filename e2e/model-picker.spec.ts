@@ -100,11 +100,6 @@ test("the composer pill stars a favorite, records it as recent, and saves the pa
 		await expect(page.getByTestId("thinking-selector").last()).toContainText("medium");
 		await expect.poll(() => hostLevel(page, workspace.id)).toBe("medium");
 		await expect(slider).toHaveAttribute("aria-valuetext", "medium");
-		const reset = page.getByTestId("thinking-reset");
-		await expect(reset).toContainText(`reset to ${before.defaultEffort}`);
-		await reset.click();
-		await expect.poll(() => hostLevel(page, workspace.id)).toBe(before.defaultEffort);
-		await expect(reset).toHaveCount(0);
 		await high.click();
 		await expect.poll(() => hostLevel(page, workspace.id)).toBe("high");
 		await shot(
@@ -124,6 +119,15 @@ test("the composer pill stars a favorite, records it as recent, and saves the pa
 				defaultEffort: "high",
 			});
 		await expect(page.getByTestId("model-set-default")).toHaveAttribute("data-default", "true");
+		const reset = page.getByTestId("thinking-reset");
+		await expect(reset).toHaveCount(0);
+		await slider.focus();
+		await page.keyboard.press("ArrowLeft");
+		await expect.poll(() => hostLevel(page, workspace.id)).toBe("medium");
+		await expect(reset).toContainText("reset to high");
+		await reset.click();
+		await expect.poll(() => hostLevel(page, workspace.id)).toBe("high");
+		await expect(reset).toHaveCount(0);
 		await page.keyboard.press("Escape");
 
 		await pill.click();
