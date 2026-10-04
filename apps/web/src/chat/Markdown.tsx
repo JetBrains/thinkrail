@@ -2,7 +2,7 @@ import { MermaidView } from "@thinkrail/ext-visualize/web";
 import { type ComponentProps, memo, type ReactNode, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { highlightCode } from "@/lib/highlighter";
+import { useHighlightedCode } from "@/lib/highlightCode";
 import { createMarkdownSplitter } from "./markdownBlocks";
 
 const CHAT_PROSE =
@@ -145,21 +145,7 @@ function MermaidBlock({ code }: { code: string }) {
 }
 
 function ShikiBlock({ code, lang }: { code: string; lang: string }) {
-	const [html, setHtml] = useState<string | null>(null);
-
-	useEffect(() => {
-		let cancelled = false;
-		highlightCode(code, lang)
-			.then((h) => {
-				if (!cancelled) setHtml(h);
-			})
-			.catch(() => {
-				if (!cancelled) setHtml(null);
-			});
-		return () => {
-			cancelled = true;
-		};
-	}, [code, lang]);
+	const html = useHighlightedCode(code, lang);
 
 	if (html === null) {
 		return (

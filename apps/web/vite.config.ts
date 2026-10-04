@@ -28,6 +28,7 @@ export default defineConfig(({ mode }) => {
 				"/blob": { target: `http://localhost:${hostPort}` },
 			},
 		},
+		worker: { format: "es" },
 		build: profile ? { outDir: "dist-profile", minify: false } : { outDir: "dist" },
 	};
 });

@@ -1,22 +1,7 @@
-import { useEffect, useState } from "react";
-import { highlightCode } from "@/lib/highlighter";
+import { useHighlightedCode } from "@/lib/highlightCode";
 
 export function CodeBlock({ code, lang }: { code: string; lang: string }) {
-	const [html, setHtml] = useState<string | null>(null);
-
-	useEffect(() => {
-		if (!lang) {
-			setHtml(null);
-			return;
-		}
-		let cancelled = false;
-		highlightCode(code, lang)
-			.then((h) => !cancelled && setHtml(h))
-			.catch(() => !cancelled && setHtml(null));
-		return () => {
-			cancelled = true;
-		};
-	}, [code, lang]);
+	const html = useHighlightedCode(code, lang);
 
 	if (html === null) {
 		return (
