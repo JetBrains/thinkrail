@@ -251,10 +251,20 @@ function EffortSlider({
 				</div>
 			</div>
 			<div className="flex justify-between px-2">
-				{levels.map((candidate) => {
+				{levels.map((candidate, i) => {
 					const active = candidate === level;
 					return (
-						<span key={candidate} className="flex w-0 justify-center">
+						<span
+							key={candidate}
+							className={cn(
+								"flex w-0",
+								i === 0
+									? "justify-start"
+									: i === levels.length - 1
+										? "justify-end"
+										: "justify-center",
+							)}
+						>
 							<button
 								type="button"
 								data-testid="thinking-option"
