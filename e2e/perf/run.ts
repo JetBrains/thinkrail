@@ -11,6 +11,7 @@ import {
 } from "../processRunner";
 import type { ScenarioRun } from "./render.perf";
 import { type ComponentCost, MARKDOWN_SUBTREE } from "./renderProfiler";
+import { isScenarioName, SCENARIO_NAMES } from "./scenarios";
 
 const bun = process.execPath;
 const DEFAULT_RUNS = 5;
@@ -44,6 +45,12 @@ function parseArgs(argv: string[]): RunnerArgs {
 		} else if (arg === "--scenario") {
 			scenarios = argv[++index] ?? null;
 			if (!scenarios) throw new Error("--scenario needs a comma-separated list");
+			const unknown = scenarios.split(",").filter((name) => !isScenarioName(name));
+			if (unknown.length > 0) {
+				throw new Error(
+					`unknown scenario: ${unknown.join(", ")} (known: ${SCENARIO_NAMES.join(", ")})`,
+				);
+			}
 		} else if (arg !== undefined) {
 			playwrightArgs.push(arg);
 		}
@@ -237,6 +244,11 @@ async function main(): Promise<number> {
 	for (const file of readdirSync(runDir).filter((name) => name.endsWith(".json"))) {
 		const run = JSON.parse(readFileSync(join(runDir, file), "utf8")) as ScenarioRun;
 		runsByScenario.set(run.scenario, [...(runsByScenario.get(run.scenario) ?? []), run]);
+	}
+	if (result.exitCode !== 0 || runsByScenario.size === 0) {
+		rmSync(runDir, { recursive: true, force: true });
+		console.error(`perf: no output written (playwright exit ${result.exitCode})`);
+		return result.exitCode === 0 ? 1 : result.exitCode;
 	}
 	const scenarios = Object.fromEntries(
 		[...runsByScenario].map(([name, scenarioRuns]) => [name, summarize(scenarioRuns)]),

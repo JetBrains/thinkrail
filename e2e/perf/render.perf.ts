@@ -23,6 +23,7 @@ import {
 	resetRenderProfile,
 	startMainThreadProbe,
 } from "./renderProfiler";
+import { DEFAULT_SCENARIOS, SCENARIO_NAMES, type ScenarioName } from "./scenarios";
 
 const RUNS = Number(process.env.THINKRAIL_PERF_RUNS ?? 5);
 const OUT_DIR = process.env.THINKRAIL_PERF_OUT ?? join(process.cwd(), "test-results", "perf-runs");
@@ -33,8 +34,7 @@ const SCROLL_STEPS = 40;
 const LONG_STREAM_GAP_MS = 15;
 const PARALLEL_AGENTS = 20;
 const HEAVY_TIMEOUT_MS = 600_000;
-const DEFAULT_SCENARIOS = "chat-streaming,live-file-edits,large-diff";
-const SELECTED = new Set((process.env.THINKRAIL_PERF_SCENARIOS ?? DEFAULT_SCENARIOS).split(","));
+const SELECTED = new Set(process.env.THINKRAIL_PERF_SCENARIOS?.split(",") ?? DEFAULT_SCENARIOS);
 const CPU_RATE = Number(process.env.THINKRAIL_PERF_CPU ?? 1);
 const LONG_STREAM_CHARS = 25_000;
 const LONG_STREAM_XL_CHARS = 100_000;
@@ -331,16 +331,21 @@ async function largeDiff(page: Page, run: number): Promise<void> {
 	});
 }
 
-const SCENARIOS = [
-	["chat-streaming", chatStreaming],
-	["live-file-edits", liveFileEdits],
-	["large-diff", largeDiff],
-	["long-stream", longStream("long-stream", LONG_STREAM_CHARS)],
-	["long-stream-xl", longStream("long-stream-xl", LONG_STREAM_XL_CHARS)],
-	["parallel-agents", parallelAgents(true)],
-	["background-agents", parallelAgents(false)],
-] as const;
-const HEAVY = new Set(["long-stream", "long-stream-xl", "parallel-agents", "background-agents"]);
+const SCENARIOS: Record<ScenarioName, (page: Page, run: number) => Promise<void>> = {
+	"chat-streaming": chatStreaming,
+	"live-file-edits": liveFileEdits,
+	"large-diff": largeDiff,
+	"long-stream": longStream("long-stream", LONG_STREAM_CHARS),
+	"long-stream-xl": longStream("long-stream-xl", LONG_STREAM_XL_CHARS),
+	"parallel-agents": parallelAgents(true),
+	"background-agents": parallelAgents(false),
+};
+const HEAVY = new Set<ScenarioName>([
+	"long-stream",
+	"long-stream-xl",
+	"parallel-agents",
+	"background-agents",
+]);
 
 test.beforeEach(async ({ page, baseURL }) => {
 	if (!baseURL) throw new Error("perf runs need a baseURL");
@@ -352,8 +357,9 @@ test.afterEach(async ({ page }) => {
 });
 
 for (let run = 1; run <= RUNS; run += 1) {
-	for (const [name, scenario] of SCENARIOS) {
+	for (const name of SCENARIO_NAMES) {
 		if (!SELECTED.has(name)) continue;
+		const scenario = SCENARIOS[name];
 		test(`${name} run ${run}`, async ({ page }) => {
 			if (HEAVY.has(name)) test.setTimeout(HEAVY_TIMEOUT_MS);
 			await scenario(page, run);
