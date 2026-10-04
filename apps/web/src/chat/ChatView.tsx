@@ -592,7 +592,7 @@ export default function ChatView({
 	const onMentionQuery = useCallback((q: string | null) => setMentionQuery(q), []);
 
 	const liveRuntime = () => useAppStore.getState().sessions[sessionId];
-	const modelSelection = useRef(0);
+	const pairSelection = useRef(0);
 
 	const requestLevel = (level: ThinkingLevel, previous: ThinkingLevel) =>
 		getTransport()
@@ -606,6 +606,7 @@ export default function ChatView({
 
 	const onSelectThinking = (level: ThinkingLevel) => {
 		if (level === thinkingLevel) return;
+		pairSelection.current += 1;
 		useAppStore.getState().setThinkingLevel(sessionId, level);
 		void requestLevel(level, thinkingLevel);
 	};
@@ -616,20 +617,20 @@ export default function ChatView({
 			return;
 		}
 		const previous = { model: sessionModel, level: thinkingLevel };
-		const selection = ++modelSelection.current;
+		const selection = ++pairSelection.current;
+		const superseded = () => selection !== pairSelection.current;
 		useAppStore.getState().setCurrentModel(sessionId, model);
 		if (level) useAppStore.getState().setThinkingLevel(sessionId, level);
 		getTransport()
 			.request("session.setModel", { sessionId, model })
 			.then(
-				() =>
-					level && selection === modelSelection.current
-						? requestLevel(level, previous.level)
-						: undefined,
+				() => (level && !superseded() ? requestLevel(level, previous.level) : undefined),
 				(error: unknown) => {
 					if (sameModel(liveRuntime()?.model, model)) {
 						if (previous.model) useAppStore.getState().setCurrentModel(sessionId, previous.model);
-						if (level) useAppStore.getState().setThinkingLevel(sessionId, previous.level);
+						if (level && !superseded()) {
+							useAppStore.getState().setThinkingLevel(sessionId, previous.level);
+						}
 					}
 					toast.error(errorText(error), `Couldn't switch to ${model.name}`);
 				},

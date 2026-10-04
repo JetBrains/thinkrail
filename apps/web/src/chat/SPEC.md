@@ -622,9 +622,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   Escape, an outside click, or clicking the already-current model closes. `onSelect({model, level?})`
   is the model callback (level present only
   when a typed `opus high` chose both at once), `onSelectLevel` the level-only one, and the caller — never
-  the picker — talks to the host (`ChatView` chains `session.setModel` → `session.setThinkingLevel`,
-  sending the level only if no newer model pick superseded the pair while the model request was in
-  flight, so A·high then B·low can never land A's level on B).
+  the picker — talks to the host (`ChatView` chains `session.setModel` → `session.setThinkingLevel`
+  behind one selection counter that every model *or* effort pick advances, so the chained level is sent
+  — and on failure rolled back — only while that pick is still the newest: A·high then B·low can never
+  land A's level on B, and B·high then a slide to medium can never let B's response re-send high).
   Rows are **two lines**: the name, then `provider · [kind glyph] what it draws on · price · context`. The list reads **Default
   row** (pre-session callers only, `defaultOption`: what the host would pick, checked while the caller
   follows it) → **Favorites** → **Recent** (the host's list minus starred models) → provider groups, folded behind one
