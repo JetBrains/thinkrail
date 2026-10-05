@@ -54,15 +54,25 @@ function parseRoot(html: string): Element {
 	return (body.children.length === 1 ? body.firstElementChild : null) ?? body;
 }
 
-function renderedUnits(root: Element): Set<string> {
-	const units = new Set<string>();
+function* units(root: Element): Generator<Element> {
 	for (const block of root.children) {
-		units.add(block.outerHTML);
-		if (LIST_TAGS.has(block.localName)) {
-			for (const item of block.children) units.add(item.outerHTML);
-		}
+		yield block;
+		if (LIST_TAGS.has(block.localName)) yield* block.children;
 	}
-	return units;
+}
+
+function changedUnits(merged: Element, before: Element): Set<Element> {
+	const counterparts = new Map<string, number>();
+	for (const unit of units(before)) {
+		counterparts.set(unit.outerHTML, (counterparts.get(unit.outerHTML) ?? 0) + 1);
+	}
+	const changed = new Set<Element>();
+	for (const unit of units(merged)) {
+		const remaining = hasMark(unit) ? 0 : (counterparts.get(unit.outerHTML) ?? 0);
+		if (remaining > 0) counterparts.set(unit.outerHTML, remaining - 1);
+		else changed.add(unit);
+	}
+	return changed;
 }
 
 function listOrdinals(list: Element): Ordinal {
@@ -244,8 +254,8 @@ export default function RenderedDiff({
 	const view = useMemo(() => {
 		if (merge.state !== "done") return null;
 		const root = parseRoot(merge.html);
-		const unchanged = renderedUnits(parseRoot(merge.before));
-		const changed: Changed = (element) => hasMark(element) || !unchanged.has(element.outerHTML);
+		const changedSet = changedUnits(root, parseRoot(merge.before));
+		const changed: Changed = (element) => changedSet.has(element);
 		return { root, changed, empty: !Array.from(root.children).some(changed) };
 	}, [merge]);
 	const { attach: attachScroller } = useScrollViewState<HTMLDivElement>(viewState, onViewState);

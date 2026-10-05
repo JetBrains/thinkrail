@@ -284,6 +284,35 @@ test("Rendered markdown diff keeps attribute-only changes visible: a ticked task
 	await expect(renderedDiff.locator("li", { hasText: "eleven" })).toHaveAttribute("value", "11");
 });
 
+test("Rendered markdown diff does not let an identical twin block vouch for an attribute-only change", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const twin = (open: boolean) =>
+		[
+			`<details${open ? " open" : ""}><summary>Twin</summary>`,
+			"",
+			"Twin body.",
+			"",
+			"</details>",
+		].join("\n");
+	const doc = (edited: boolean) =>
+		`# Twins\n\n${twin(true)}\n\n${twin(edited)}\n\nTail paragraph.\n`;
+	commitFile(workspace.worktreePath, "TWINS.md", doc(false), "add twins fixture");
+	writeFileSync(join(workspace.worktreePath, "TWINS.md"), doc(true));
+
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	await page.getByTestId("change-item").filter({ hasText: "TWINS.md" }).click();
+	const renderedDiff = page.getByTestId("rendered-diff");
+	await expect(renderedDiff.locator("details[open]")).toHaveCount(2);
+	await expect(page.getByTestId("rendered-diff-empty")).toHaveCount(0);
+	await expect(renderedDiff.getByTestId("rendered-diff-collapsed")).toHaveCount(0);
+	await expect(renderedDiff).toContainText("Tail paragraph.");
+});
+
 test("Changes has a List|Tree toggle; Tree groups files into folders with +/- counts", async ({
 	page,
 }) => {
