@@ -138,6 +138,9 @@ const focusMarkdown = (edited: boolean) => {
 			"",
 			`Paragraph ${index} ${edited && index === 3 ? "revised" : "original"} wording.`,
 			"",
+			...(index === 3
+				? ["<details open><summary>More</summary>", "", "Folded body.", "", "</details>", ""]
+				: []),
 			`Second paragraph ${index}.`,
 		].join("\n"),
 	);
@@ -168,17 +171,18 @@ test("Rendered markdown diff collapses unchanged blocks and list items around th
 	await expect(collapsed).toHaveCount(4);
 	await expect(collapsed.nth(0)).toContainText("10 unchanged blocks");
 	await expect(collapsed.nth(0)).toContainText("§ Section 2");
-	await expect(collapsed.nth(1)).toContainText("10 unchanged blocks");
+	await expect(collapsed.nth(1)).toContainText("11 unchanged blocks");
 	await expect(collapsed.nth(1)).toContainText("§ Section 7");
 	await expect(collapsed.nth(2)).toContainText("4 unchanged items");
 	await expect(collapsed.nth(3)).toContainText("3 unchanged items");
 
 	await expect(renderedDiff).toContainText("Second paragraph 2.");
 	await expect(renderedDiff.locator("h2", { hasText: "Section 3" })).toBeVisible();
-	await expect(renderedDiff.locator("h2", { hasText: "Section 4" })).toBeVisible();
+	await expect(renderedDiff.locator("details[open]")).toContainText("Folded body.");
+	await expect(renderedDiff).toContainText("Second paragraph 3.");
 	await expect(renderedDiff).not.toContainText("Focus doc");
 	await expect(renderedDiff).not.toContainText("Paragraph 0 ");
-	await expect(renderedDiff).not.toContainText("Section 5");
+	await expect(renderedDiff).not.toContainText("Section 4");
 	await expect(renderedDiff.locator("li", { hasText: "bullet 4" })).toBeVisible();
 	await expect(renderedDiff.locator("li", { hasText: "bullet 8" })).toBeVisible();
 	await expect(renderedDiff).not.toContainText("bullet 0");

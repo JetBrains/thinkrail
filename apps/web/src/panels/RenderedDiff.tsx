@@ -14,7 +14,7 @@ const DIFF_MARKS = [
 const CHANGE_SELECTOR = "ins, del, [data-diff-node]";
 const LIST_TAGS = new Set(["ul", "ol"]);
 const HEADING_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
-const BOOLEAN_ATTRIBUTES = new Set(["open", "reversed", "hidden", "checked", "disabled"]);
+const BOOLEAN_ATTRIBUTES = new Set(["open", "hidden", "reversed"]);
 
 type MergeState = { state: "pending" } | { state: "failed" } | { state: "done"; html: string };
 const PENDING: MergeState = { state: "pending" };
