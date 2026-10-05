@@ -21,6 +21,7 @@ import type {
 	TodoStatus,
 	WireModel,
 	Workspace,
+	WsMethodMap,
 } from "@thinkrail/contracts";
 import { isControlMessage } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
@@ -44,6 +45,7 @@ import {
 	isHostResourceId,
 	isPiSessionId,
 	listAvailableModels,
+	listModelContextSettings,
 	listProjectAliasSkillNames,
 	listSessionStates,
 	listSessions,
@@ -63,6 +65,7 @@ import {
 	renameSession,
 	resolveExtUi,
 	sendReviewFixToSession,
+	setModelContextWindow,
 	setSessionModel,
 	setSessionThinkingLevel,
 	steerSession,
@@ -136,7 +139,7 @@ import {
 	sendableComments,
 	updateComment,
 } from "../reviews";
-import { getConfig, updateConfig } from "../settings";
+import { getConfig, noteRecentModel, updateConfig } from "../settings";
 import { evictSpecIndex, projectHasSpecs, specGraph } from "../spec";
 import {
 	deleteTemplate,
@@ -788,6 +791,7 @@ const handlers: Record<string, Handler> = {
 			...(defaults.model ? { model: defaults.model } : {}),
 			thinkingLevel: defaults.thinkingLevel,
 		});
+		if (p.model && created.model) noteRecentModel(created.model);
 		trackChatStarted(created);
 		return created;
 	},
@@ -858,7 +862,7 @@ const handlers: Record<string, Handler> = {
 	},
 	"session.setModel": async (params) => {
 		const p = params as { sessionId: string; model: WireModel };
-		await setSessionModel(p.sessionId, p.model);
+		noteRecentModel(await setSessionModel(p.sessionId, p.model));
 		return { ok: true } as const;
 	},
 	"session.setThinkingLevel": (params) => {
@@ -1003,6 +1007,11 @@ const handlers: Record<string, Handler> = {
 				model_available: result.models.length > 0 ? "yes" : result.complete ? "no" : "unknown",
 			}),
 		);
+	},
+	"model.contextSettings": () => listModelContextSettings(),
+	"model.setContextWindow": (params) => {
+		const p = params as WsMethodMap["model.setContextWindow"]["params"];
+		return setModelContextWindow(p.target, p.contextWindow);
 	},
 	"model.default": () =>
 		observeSetupRead(

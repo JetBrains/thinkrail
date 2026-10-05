@@ -599,27 +599,63 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   store deletion fold; success closes the overlay, failure toasts; `session.deleted` also drives that fold
   in every connected client), and a
   **zoomed-stage preview pane** + **scope picker** — see the next bullet),
-  `ModelSelector` + `ThinkingSelector` (also shared with `NewWorkspaceDialog`;
-  optional `container` prop portals their popovers into a host Dialog; optional
-  `defaultOption`/`onSelectDefault` render an explicit use-the-default row above the provider groups
-  (checked when `current` is null) for callers whose selection is an *override* — `ReviewSettings` —
-  since a plain model list can only ever narrow, never restore the unset state; `ModelSelector` takes
-  `refreshing`/`onRefresh(force)` — a footer “Refresh catalog” row that passes **`force: true`** (the
-  user asked, so bypass pi's freshness throttle) and spins while that awaited refresh runs, plus an
-  **unforced** auto-fire on each open, which `useModelCatalog` serves from the host snapshot
-  (`model.list`) rather than the network: an open is incidental, and awaiting a real refresh there would
-  spin the row for as long as the slowest configured provider takes, up to the host's 15s abort, every
-  time. Its trigger stays openable with an **empty** catalog — that is exactly when the Refresh row is
-  the thing to reach for. `ThinkingSelector` takes
-  **`levels`** — `WireModel.thinkingLevels` verbatim, the host-computed support truth, already in pi's
-  escalation order — and its rows **are** that list. The web keeps no enumeration of the level
-  vocabulary: pi owns it, the host projects the per-model slice, and an empty list (no model resolved
-  yet) disables the trigger. It holds **no effort policy of its own**: when a held level isn't one the
-  held model can run, the consumer asks the host for pi's `clampThinkingLevel` answer
-  (`model.clampThinking`) — `model.default` clamps the same way, and a live session gets pi's answer
-  directly via `thinking_level_changed`. Its rows follow the **live catalog** — `ChatView` resolves the
-  session's model through `store`'s `selectCatalogModel` before passing it down, rather than reading the
-  session's own snapshot, so a `model.refresh` that changes what a model supports changes the offered
+  **`ModelEffortPicker`** (the one **model · effort pill**, also mounted by `NewWorkspaceDialog` in
+  pre-session mode; `ReviewSettings`/`ModelsSettings` still mount the older `ModelSelector` +
+  `ThinkingSelector` pair — the named survivors until they migrate). Decision: a chat's model and effort
+  are **one fact with two parts**, shown by one borderless trigger (`[vendor glyph] name ▂▄▆ level
+  [connection glyph] ▾` — the effort bars light the level's rank among the model's reasoning levels,
+  `litBars`, in the level's **tone** — cool blue for off/minimal/low, accent for medium/high, warning
+  amber for the costly tiers, so cost reads before the word does) and chosen in one popover where the
+  **effort control sits under the model list and follows the chosen model** — so the levels on offer are
+  always *that model's* `thinkingLevels` and a
+  disabled-effort state cannot exist. The flow is **click model → slide effort**: picking a model applies
+  it at once and keeps the popover open (hover never changes anything — an earlier hover-preview made the
+  effort row jump as the pointer moved); the effort control is a **slider**: a thick rail hiding a
+  cool→warm gradient (`feedback-info` → `primary` → `feedback-warning`) that the handle uncovers as it
+  moves, the level word and its glyph riding on the handle, one clickable label per level beneath (the
+  user's saved `defaultEffort` dotted — the web never guesses the host's fallback level), a one-line
+  hint, and a warning caption on the costly tiers (`COSTLY_LEVELS`: xhigh, max). A native `<input
+  type="range">` drives it — drag, click-to-snap, touch and ←/→ for free — and every change applies at
+  once while the popover stays open; the footer offers "reset to ‹default›" while the level differs from a
+  saved default. The handle's position is the one inline style (a `--effort` custom property, the
+  normalized-geometry exception), colour stays in tokens, and `motion-reduce` flattens the spring.
+  Escape, an outside click, or clicking the already-current model closes. `onSelect({model, level?})`
+  is the model callback (level present only
+  when a typed `opus high` chose both at once), `onSelectLevel` the level-only one, and the caller — never
+  the picker — talks to the host (`ChatView` chains `session.setModel` → `session.setThinkingLevel`
+  behind one selection counter that every model *or* effort pick advances, so the chained level is sent
+  — and on failure rolled back — only while that pick is still the newest: A·high then B·low can never
+  land A's level on B, and B·high then a slide to medium can never let B's response re-send high). When a
+  catalog refresh leaves a session on a level its model no longer offers, `ChatView` asks the host's
+  `model.clampThinking` and applies the answer — the reconcile `NewWorkspaceDialog` already runs for its
+  pair, and the same clamp pi applies at request time — so the pill and slider show the level pi will
+  actually use rather than a stop the rail does not have.
+  Rows are **two lines**: the name, then `provider · [kind glyph] what it draws on · price · context`. The list reads **Default
+  row** (pre-session callers only, `defaultOption`: what the host would pick, checked while the caller
+  follows it) → **Favorites** → **Recent** (the host's list minus starred models) → provider groups, folded behind one
+  "All models" row while a shortlist exists and expanded by search; a trailing query word that names a
+  level the highlighted model supports (`opus high`) pre-selects it — pi's `model:level` idiom typed
+  with a space — and `/model [query]` in the composer opens the picker prefilled instead of sending
+  text. The second row line **says what the user actually pays** (`kindLabel` / `costLabel`): the
+  connection glyph — **key** = API key, **∞** = subscription, **{ }** = environment key, a **JCP** tag =
+  JetBrains AI (Central proxy) — then the plan/variable/key word and, only where the provider bills per
+  token (`auth.kind` api-key / env), `$in / $out per M`; group headings add the provider's connection
+  detail. The **vendor glyph** (`ProviderGlyph`) is a monochrome `currentColor` mark from
+  `generated/providerGlyphs.ts`, which `scripts/generate-provider-glyphs.ts` extracts at build time from
+  the dev-only `@lobehub/icons-static-svg` set (`provider-glyphs:check` guards drift, like the colour
+  pipeline); the pi-provider-id → mark mapping lives once in `scripts/providerGlyphs.ts`, vendors reached
+  through several pi providers share a mark, and an unmapped provider renders a monogram. Marks are never
+  tinted with brand colours — the colour system owns colour. Favorites/recents/default come in through
+  **`useModelPreferences(models)`** (the one store+transport seam both callers share: lists re-pointed to
+  the live catalog with vanished models dropped, `toggleFavorite` as a whole-list `settings.update`,
+  `setDefault` writing model + effort together, all gated on `MODEL_PICKER_PROTOCOL_VERSION` so an older
+  host shows neither stars nor sections). The footer holds **Set as default** (reads "Default for new
+  chats" once the pair matches) and the **Refresh** row (`force: true`, spins while the awaited refresh
+  runs; opening fires an unforced read served from the host snapshot). The web still keeps **no
+  enumeration of the level vocabulary**: rows are `WireModel.thinkingLevels` verbatim, the host clamps,
+  and `LEVEL_HINT` is a partial record of qualitative copy a level may simply lack. Rows follow the
+  **live catalog** — `ChatView` resolves the session's model through `store`'s `selectCatalogModel`
+  before passing it down, so a `model.refresh` that changes what a model supports changes the offered
   levels with it), `SessionStatsBar`, `ChatHeader` (the fixed, single-line **panel-header row** —
   `h-panel-header-row` (`--panel-header-row-height`, currently 32px), the shared structural geometry with
   workbench Group Headers and the Changes toolbar, not a value pinned here; it never scrolls,
@@ -647,9 +683,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   is ignored. Text deltas do not trigger reads because Pi itself cannot finalize new usage until the message
   boundary; transient read failure keeps the last good snapshot rather than replacing it with guessed state.
 - **Adaptive composer geometry** (`Composer`) — an idle draft that fits one visual line renders as a
-  shared two-tier shell: a full-width, one-visual-line message row above a stable action footer. Model and
-  effort share a compact visual group on the footer's left while remaining two independently
-  focusable/clickable picker triggers; History and Send remain explicit on the right. A wrap, explicit
+  shared two-tier shell: a full-width, one-visual-line message row above a stable action footer. The
+  model · effort pill is the footer's one left-hand trigger; History and Send remain explicit on the right. A wrap, explicit
   newline, or width change that makes the draft exceed one visual line grows the message row without moving
   the footer; fitting one line again shrinks only the message row. This is one persistent textarea, never
   conditional twins — the transition cannot lose focus, caret/selection, recall, draft, or a template-slot
@@ -660,6 +695,19 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   overflow then scrolls inside the textarea. Attachment chips, completion menus, slot hints, and QueueStrip
   keep their existing separate chrome. The slot-highlight backdrop must follow every dynamic textarea box
   change with the exact box-model and scroll-sync invariants under Template slots below.
+- **Composer trailing controls** (`Composer`) — the footer's right-hand cluster is **one solid object and
+  ghosts**, no borders: History is a ghost 28px circle (`Button variant="ghost" size="icon"` under an
+  `IconTooltip`), Stop a ghost pill (`■ Stop`, muted text lifting on a hover wash), and the send a single
+  `rounded-full` accent pill (`chat-send-pill`, `data-armed`) whose main segment (`chat-send`) carries the
+  verb plus an `↩` keycap and whose chevron segment (`send-menu`, streaming only) is a second hit area
+  with its own hover — spacing, not a divider, separates them. The earlier cluster was four equal bordered
+  32px squares, which gave a utility (history) the same weight as the primary action and read as
+  form-era chrome. **Inert send**: with nothing to send the pill rests on `control-bg-selected` +
+  `control-disabled-text` rather than the 60% primary pair — a dark accent block pulls the eye to a control
+  that cannot act, and the switch to the accent fill is the "ready" signal (the exception is recorded in
+  `styles/COLOR.md`). **Compact mode**: below the chat column's `@md` container width (phones, narrow
+  splits) labels and keycap hide and the pills collapse to 28px icons, so the model pill keeps its room.
+  Labels use `ui.action`.
 - **Queued messages: the pending strip** (`QueueStrip.tsx`, props-driven: `queue` + `onEdit`/`onRemove`)
   — the web mirror of pi's interactive-mode pending-messages area. A **streaming send never renders an
   optimistic transcript bubble** (see the store SPEC's echo contract): `ChatView.onSubmit` skips
@@ -684,10 +732,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   design (steer = injected at the next turn boundary, after the current assistant message + its tool
   calls; queue = runs after the agent settles; only abort halts an in-flight response) and proved
   illegible from key-name hints alone. While streaming the composer therefore self-documents: the
-  placeholder states meanings ("Enter steers at the next step · Cmd/Ctrl+Enter queues for when it
-  finishes") and a **send-options menu** (`send-menu` trigger beside the send button; rows
-  `send-mode-steer` / `send-mode-queue` / `send-mode-interrupt`) names each mode with a one-line
-  meaning + shortcut. Menu rows are **actions** (send the current draft with that mode), never a
+  primary pill reads **Steer ↩** instead of Send, the placeholder states *when* a steer lands ("Steer the
+  agent at its next step…"), and a **send-options menu** (`send-menu` — the chevron segment of that
+  pill; rows `send-mode-steer` / `send-mode-queue` / `send-mode-interrupt`) names each mode with a one-line
+  meaning + shortcut. The chevron stays enabled with an empty draft so the shortcuts remain discoverable;
+  only the rows disable. Menu rows are **actions** (send the current draft with that mode), never a
   sticky mode switch — a persistent mode would make the next plain Enter silently obey hidden state.
   `Composer` yields every keydown to an active IME before slot, menu, recall, or send handling. It uses
   `KeyboardEvent.isComposing` plus the legacy `keyCode` 229 sentinel because `compositionend` may precede
@@ -931,8 +980,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   entry points that never talk to each other: the Settings → Templates panel (list + New/Edit/Delete, see
   `panels/SPEC.md`) and the history overlay's save-as-template action below. **Why this lives in `chat/`,
   not `panels/`** (a deliberate boundary exception, alongside `ChatView.tsx`/`useHistorySearch.ts` above):
-  `panels/` is allowed to import from `chat/` (already does, for `ModelSelector`/`ThinkingSelector`/
-  `Markdown`) but never the reverse, and `HistoryOverlay` — which needs this same dialog — lives in
+  `panels/` is allowed to import from `chat/` (already does, for `ModelEffortPicker`/`ModelSelector`/
+  `ThinkingSelector`/`Markdown`) but never the reverse, and `HistoryOverlay` — which needs this same dialog — lives in
   `chat/`, so the one shared implementation has to live where both sides can reach it. `TemplateEditorDialog`
   is therefore promoted to a **third** sanctioned store/transport-touching integration piece (see Boundary
   below), even though it isn't `ChatView` itself.
@@ -1038,8 +1087,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   the live index and **overwrote what the user had just typed** (the loss `replaceDraft` guards against on
   the insert paths, arriving through the keyboard path instead). A ref reads at its last written value, so
   commit ordering cannot enter into it. Handlers take **one snapshot per event** — the ref cannot change
-  inside a synchronous handler, and one read stays narrowable where repeated `.current` reads do not. A `History`-icon button (`data-testid="history-open"`, `aria-label="Search history"`,
-  always rendered next to send) calls the same `openHistory` the global `Ctrl+R` reaches — the tap path
+  inside a synchronous handler, and one read stays narrowable where repeated `.current` reads do not. A `History`-icon ghost button (`data-testid="history-open"`, `aria-label="Search history"`,
+  tooltip of the same name, always rendered next to send) calls the same `openHistory` the global `Ctrl+R` reaches — the tap path
   on mobile, a discoverability affordance on desktop.
 - **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
   [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
@@ -1218,7 +1267,8 @@ Unknown custom messages retain their existing behavior.
   **`useSessionStats.ts`** (generation/revision-fenced authoritative telemetry reads),
   **`useTranscriptSync.ts`** (successful-compaction + connection-generation canonical transcript
   reconciliation), `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`,
-  `SubagentTranscriptDialog.tsx`. `useModelCatalog` is the shared
+  `SubagentTranscriptDialog.tsx`, and **`useModelPreferences.ts`** (favorites / recents / default pair:
+  the store read plus the `settings.update` writes every picker mount shares). `useModelCatalog` is the shared
   models-catalog seam `panels/NewWorkspaceDialog` also imports per-file, so the two pickers cannot
   drift; on activation it **drops catalog authority synchronously** (a flag an earlier consumer set says
   nothing about the list this one inherited) and reads `model.list` only when the shared list is **empty** —

@@ -195,7 +195,7 @@ flowchart LR
 | `setting-up-a-project` | router (sub) — dispatcher: detect the workspace's state (specs present / empty / code-only) and route | `choosing-a-workflow` (root) + self-trigger + the app's `/skill:setting-up-a-project` seed | active; empty → starting and code → importing were observed green; the revised specced → review/extend offer is unverified by use |
 | `starting-a-new-project` | worker — inception interview (empty repo → goal-and-requirements) | `setting-up-a-project` + narrow self-trigger | active; route-in observed by the routing suite; the interview itself and its living-doc template (2026-09) unverified by use (rule 14 suspended — a slice-3 candidate via the user simulator) |
 | `importing-a-codebase` | worker — existing codebase → first spec graph (derive + adopt existing docs + minimal interview) | `setting-up-a-project` + narrow self-trigger | active; covered by a tagged `@agent` e2e; route-in also observed by the routing suite; the doc-adoption offer observed green by the harness's importing suite (2026-07: adoption + no-candidates regression scenarios; the pre-change skill run red against the same scenario as the before/after control) |
-| `asking-user-questions` | concept — `ask_user_question` rounds, options, inference confirmation, degradation | — (reached by name, rule 4) | active; observed by use (2026-07 manual: loaded through brainstorming's reference, a round composed + resolved) |
+| `asking-user-questions` | concept — multi-round interviews (design tree / frontier), question quality, options, inference confirmation, degradation | — (reached by name, rule 4) | active; the multi-round interview model unverified by use; the earlier single-round norm was observed (2026-07 manual: loaded through brainstorming's reference, a round composed + resolved) |
 | `writing-specs` | concept — the spec quality bar (short / honest / on-rails) for every spec-producing flow | — (reached by name, rule 4) | active; observed by use (2026-07 manual: self-triggered for a spec revision and applied) |
 | `choosing-a-workflow` | router (root) — classification + routing for workflow-eligible work | — (conditional pointer from the always-on rule, rule 4) | active; revised narrow-entry behavior unverified by use; previous onboarding, PR/change, and direct-work classifications were observed |
 | `writing-workflow-skills` | worker — authoring checklist for adding workflows | — (self-trigger only, rule 4) | active |
@@ -208,6 +208,13 @@ task-spec when they earn their place. The concept role has two instances: `askin
 extracted per rules 3/7 when brainstorming and the setup trio carried drifting copies of the tool
 norms, and `writing-specs`, extracted the same way when the setup trio carried three drifting copies
 of the spec quality bar.
+`asking-user-questions` interviews in **multi-round frontiers**, adapted from mattpocock/skills'
+`grilling`: the old norm ("a new round only when answers raise a genuinely new question") plus the
+tool prompt's "every question in one call" read as one-and-done, so agents under-asked. Adopted:
+the design tree / frontier, an uncapped round, facts looked up rather than asked, a question-quality
+bar. Rejected by user decision: a separate opt-in "grill me" skill (depth lives in the shared norm,
+so every workflow gets it) and grilling's "confirm shared understanding" gate (an empty frontier
+proceeds; each workflow's own gates still apply).
 Meta-rule 4's entry model is in effect: at the start of new work the parent module's
 `before_agent_start` rule points workflow-eligible work at `choosing-a-workflow`, which routes to today's
 family; already-routed work resumes, and direct work bypasses the router. `writing-workflow-skills` (self-trigger only) and the concept skills (reached by name) sit outside
@@ -256,7 +263,8 @@ follows is only the rationale the skill bodies don't state:
   the request already count as approval, and alternatives are compared only when more than one viable
   approach remains. There is deliberately no separate plan artifact; the spec is the plan. Before
   promotion the workflow loads `writing-specs`, closing the earlier observed quality-bar gap.
-  Clarification is batched through `asking-user-questions` only when a real user decision remains.
+  Open user decisions are interviewed in rounds through `asking-user-questions` until none is left
+  assumed; work with none gets no questions.
 - **the setting-up-a-project trio** arrived with the Welcome-screen work (as `project-setup` /
   `project-new` / `project-import`; renamed under rule 15) and was adapted to this system in place.
   `setting-up-a-project` is a **sub-router** (dispatcher): it inspects the workspace to classify

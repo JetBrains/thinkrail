@@ -24,7 +24,7 @@ test("queueing: pending strip + canonical order; per-row edit/remove; interrupt 
 
 	await input.fill(COUNT_PROMPT);
 	await page.getByTestId("chat-send").click();
-	await expect(input).toHaveAttribute("placeholder", /Enter steers at the next step/, {
+	await expect(input).toHaveAttribute("placeholder", /Steer the agent at its next step/, {
 		timeout: 60_000,
 	});
 
@@ -58,7 +58,7 @@ test("queueing: pending strip + canonical order; per-row edit/remove; interrupt 
 		"Count from 1 to 200, one number per line. No other text, no tools, just the numbers.",
 	);
 	await input.press("Enter");
-	await expect(input).toHaveAttribute("placeholder", /Enter steers at the next step/, {
+	await expect(input).toHaveAttribute("placeholder", /Steer the agent at its next step/, {
 		timeout: 60_000,
 	});
 

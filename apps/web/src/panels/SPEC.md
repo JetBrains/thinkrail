@@ -80,7 +80,7 @@ treatment.
 
   Workspace/project session presentation comes only from normalized host state. The rail has exactly two
   visual treatments: a static green/accent **attention dot** for either a concrete needs-input blocker or an
-  owner-globally unread result, and a soft pulse on the existing workspace/project identity icon while a
+  owner-globally unread result, and a breathing animation on the existing workspace/project identity icon while a
   top-level session is genuinely working. Attention is binary: needs-input and unread-result states use the
   same dot, with the accessible label **“Needs attention”** and no question/check/result glyph, spinner,
   count, or status-specific tooltip. Working keeps the icon's existing active/inactive colour and exposes
@@ -318,12 +318,20 @@ empty by default); while the prompt is non-empty (worktree mode), a secondary hi
 and branch from the request. The rest stays compact: the base-branch combobox (`git.listBranches`,
 degrading to local branches offline; a Refresh re-lists; `origin/HEAD` is filtered so no stray `origin`),
 a project picker, the prompt hero, and the reused
-  `chat/ModelSelector`+`ThinkingSelector` in **pre-session** mode — preselected from the host's
-  `model.default` result, which is the saved default when available or the first available model. Values
-  are held in dialog state and applied at create time. Only when no model is available does the host return
-  `model: null`; the effort control is disabled and create omits the model. The dialog does not choose a
-  competing default: its display and newly-created session share the host resolver (see `submodule-server-agent`).
-  The pickers' popovers portal into the dialog node (so their lists scroll under the Dialog scroll
+  `chat/ModelEffortPicker` in **pre-session** mode. It opens **following the host default**: the pill reads
+  `Default · ‹model› · ‹level›` from the host's `model.default` result (the saved default when available or
+  the first available model) and the popover's Default row is checked. Any explicit pick (model, level, or
+  both) flips the dialog to an **explicit pair**; the Default row — and the unavailable-model reconcile below
+  — return it to following **synchronously**, so a Create pressed right after choosing Default already
+  omits the pair; the `model.default` read that follows only refreshes the displayed pair. Every such
+  read in flight is cancelled by an explicit pick, so a reply that lands after the user chose never
+  overwrites the choice (it still refreshes what the Default row displays). Create sends `{model, thinkingLevel}` only for an explicit pair and **omits both
+  while following**, so the host resolver decides at creation time and the display can never snapshot a
+  default that Settings changed in between. When no model is available the host returns `model: null` and
+  the pill shows a bare Default. The dialog does not choose a competing default: its display and
+  newly-created session share the host resolver (see `submodule-server-agent`). Favorites/recents arrive
+  through `chat/useModelPreferences`, the same seam the composer uses.
+  The picker's popover portals into the dialog node (so its list scrolls under the Dialog scroll
   lock). Their catalog is the shared one — `chat/useModelCatalog`, so the dialog and the chat composer
   cannot drift — which means it is **live**: the picker's Refresh row can replace the list underneath a
   held selection. The dialog therefore reconciles the held model against it on every change via the pure
@@ -558,7 +566,21 @@ a project picker, the prompt hero, and the reused
   if persistence fails. The host's `model.default` result is the displayed effective choice, including the
   first-available fallback when a saved model is missing; supported effort levels and the displayed effort
   come from that same resolved, Pi-clamped model. Both triggers are disabled, and choices in an already-open
-  picker are ignored, while a save or re-read is in flight.
+  picker are ignored, while a save or re-read is in flight. At v76, **`ModelContextSettings`** adds
+  one Default / 1M / Custom selector over every eligible GPT model the host returns as
+  `ModelContextSetting[]`; Customize reveals one selector per provider/model pair, so the same model on
+  different providers stays independently editable. Selection is keyed on the explicit `override`
+  (Default = `null`, the catalog value pi reports). The shared control summarizes only the rows the
+  contracts' `isSharedModelContextTarget` admits — it shows "Customized by model" when their overrides
+  differ, counts the external rows it leaves alone, and is omitted when it would govern none — and
+  choosing a shared preset replaces those rows' overrides in one `model.setContextWindow` call. Custom reveals a whole-number field bounded by the contracts' 272K–1M
+  range with explicit Apply; the copy labels it an app policy, not a verified provider limit, and
+  external values outside it stay visible but cannot be re-applied. Drafts are UI-local and are dropped
+  when their authoritative override changes; inputs are not remounted, and after a disabled save focus
+  returns only to the control that initiated it. Pi's shared configuration is authoritative — there is
+  no optimistic value or AppConfig field; reads follow catalog/provider invalidation, fence stale
+  replies, disable controls while pending, and replace controls with Retry on failure. The props-driven
+  `ModelContextControls` owns presentation; older hosts get neither the block nor its requests.
   **`ReviewSettings`** is the
   **plan-review policy** section: the reviewer **model + effort** (`ModelSelector`/`ThinkingSelector` over
   `useModelCatalog`, written as `settings.update { reviewModel | reviewEffort }`; unset ⇒ default). The
@@ -927,8 +949,10 @@ own section. The kebab menu (`plan-menu`, a
   surfaces; the shell layout module wraps these renderers.
 - **Allowed deps:** `store`, `transport`, `components` (`SkeletonRows` — every async panel's pending
   state renders content-shaped skeleton rows, never a bare "Loading…" line), `components/ui` (incl. `popover`/`command`/`textarea` for the
-  dialog), `chat` (`ModelSelector`/`ThinkingSelector` + the `useModelCatalog` hook that feeds them,
-  reused by `NewWorkspaceDialog`; `Markdown`,
+  dialog), `chat` (`ModelEffortPicker` + the `useModelCatalog`/`useModelPreferences` hooks that feed it,
+  reused by `NewWorkspaceDialog`; `ModelSelector`/`ThinkingSelector`, still mounted by
+  `ReviewSettings`/`ModelsSettings`; `modelPicker`'s `AUTH_KIND_LABEL`, the one connection-kind vocabulary
+  `ProvidersSettings` shares with the picker; `Markdown`,
   reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `resources`, `lib`, `themes` (catalog + generic application contract),
   `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
@@ -1319,6 +1343,42 @@ own section. The kebab menu (`plan-menu`, a
   pane's unplaced strip, **Show in Source** selects the code renderer, and diff authoring is available only
   in Source. It is selected by registry match rather than a path branch in the pane. Scopes whose modified
   side is historical receive no review surface or mutation actions.
+
+  **The rendered diff focuses on its changes the way Pierre does.** The merged document is parsed once
+  and a prose-root block is *changed* when it is or contains `ins`, `del`, or a `[data-diff-node]`
+  element, **or** when its exact rendered HTML differs from the before unit it aligns with
+  (`changedUnits`). Alignment is positional: the before and merged unit sequences (blocks, then each
+  list's items) are matched one-to-one by an LCS over their attribute-stripped HTML (`shapeKey`), so an
+  identical twin elsewhere in the document cannot vouch for a block, swapping `open` between two
+  otherwise identical `<details>` flags both, and a unit with no aligned counterpart stays visible. The
+  second clause exists because htmldiff keys ordinary tags by tag name alone and emits the *after*
+  tokens for equal runs: a ticked task checkbox, `<details>` → `<details open>`, a list's `start`, or
+  an image's `alt` never earn a mark, so without it they would collapse as "unchanged" and the empty
+  notice would claim an identical preview. Such a block is kept visible in its after state (unmarked,
+  since the merge has nothing to highlight). Runs of unchanged
+  blocks collapse with git hunk semantics (`renderedDiffFocus.focusSegments`):
+  `FOCUS_CONTEXT_BLOCKS` (2) blocks stay visible on each side of a change, a leading or trailing run keeps
+  context only on the side that touches one, and a run of a single block is never hidden, because an
+  expander that replaces one paragraph saves nothing and costs a click. The same rule applies one level
+  down to the items of a changed `ul`/`ol` when at least one item changed — a markdown spec routinely
+  carries a thirty-bullet list with one edited bullet — while a list whose only difference is its own
+  attributes, and tables, quotes, and nested lists, render whole; ordered items keep their number
+  (`start` and an explicit `value` are read with HTML's integer-parsing rules, so the invalid values
+  React leaves in the DOM — `start=""`, `value=""` — fall back to `1` / the running count exactly as
+  the browser does; a `value` wins, the rest count on) so hiding items never renumbers the rest.
+  Each hidden run is one `rendered-diff-collapsed` button naming the count and, for block runs, the last
+  heading it hides (the section the visible content below it belongs to — the analogue of Pierre's
+  line-info separators).
+  Clicking expands the run in place, one-way; expansion is component-local and positional, so a live
+  refresh keeps an expansion whose run still starts at the same position and resets the rest. Nothing
+  offers the whole merged document at once: Source and the file preview already do. A merge in which no
+  block changed — front matter is stripped before rendering, and whitespace or HTML comments don't
+  render — shows the `rendered-diff-empty` notice pointing at Source and collapses the document to a
+  single expander rather than presenting an unmarked full document as a diff. Visible blocks are
+  re-created from the parsed elements (tag, attributes, `innerHTML`), never wrapped, so the DOM the
+  prose styles target is unchanged; the boolean attributes the sanitizer lets through (`details[open]`, a
+  standalone checkbox's `checked`/`disabled`) are mapped to `true` because React drops an empty-string
+  boolean.
 
   `thinkrail/image` renders host-backed byte URLs with fit, natural-size, button/wheel zoom, intrinsic
   dimensions, and byte size, always on the `.media-backdrop` transparency checkerboard (the view's image

@@ -70,6 +70,20 @@
 		}
 	}
 
+	/* The rail's "agent working" identity-icon breathing (`components/RunningIcon`). */
+	--animate-working: working 1.3s ease-in-out infinite;
+	@keyframes working {
+		0%,
+		100% {
+			opacity: 1;
+			transform: none;
+		}
+		50% {
+			opacity: 0.22;
+			transform: scale(0.8);
+		}
+	}
+
 	/* Toasts slide up in / down out of the bottom viewport (referenced by `components/ui/toast`). */
 	@keyframes toast-in {
 		from {

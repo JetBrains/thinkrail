@@ -1,4 +1,9 @@
-import type { AppConfig, ThinkingLevel, WireModel } from "@thinkrail/contracts";
+import {
+	type AppConfig,
+	sameModel,
+	type ThinkingLevel,
+	type WireModel,
+} from "@thinkrail/contracts";
 import { clampThinkingForModel, listSettledModels } from "../agent";
 import { getConfig } from "../settings";
 
@@ -18,9 +23,7 @@ export async function resolveNewChatModel(
 	const savedModel = config.defaultModel;
 	const model =
 		requested.model ??
-		availableModels.find(
-			(candidate) => candidate.provider === savedModel?.provider && candidate.id === savedModel?.id,
-		) ??
+		availableModels.find((candidate) => sameModel(candidate, savedModel)) ??
 		availableModels[0];
 	const level = requested.thinkingLevel ?? config.defaultEffort ?? "medium";
 	if (!model) return { model: null, thinkingLevel: level };

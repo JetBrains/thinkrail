@@ -1,0 +1,23 @@
+export default function contextFixture(pi) {
+	for (const [provider, api] of [
+		["openai", "openai-responses"],
+		["openai-codex", "openai-codex-responses"],
+		["context-proxy", "openai-responses"],
+	]) {
+		pi.registerProvider(provider, {
+			api,
+			apiKey: "CONTEXT_PRIVATE_KEY_SENTINEL",
+			baseUrl: "https://CONTEXT_PRIVATE_ROUTE_SENTINEL.invalid",
+			models: [{
+				id: "gpt-5.5",
+				name: "GPT-5.5 fixture",
+				api,
+				reasoning: true,
+				input: ["text"],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 272000,
+				maxTokens: 4096,
+			}],
+		});
+	}
+}

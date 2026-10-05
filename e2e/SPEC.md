@@ -173,8 +173,8 @@ Connect is withheld while the verdict says signed out, every connect-driven scen
 button appears instead of assuming it — a verdict left behind by an earlier scenario would otherwise hide it,
 exactly as it would for someone returning to the panel inside the window. Each state is also captured as a
 review PNG under `e2e/screenshots/<group>/`
-(gitignored, stable path, one element shot per state, retina). Screenshots are evidence, never the
-assertion — a state that only a picture would catch is a missing `data-testid`. Identical files across
+(gitignored, stable path, one element shot per state, retina, CSS animations fast-forwarded so a
+spring mid-flight never ends up in the picture). Screenshots are evidence, never the assertion — a state that only a picture would catch is a missing `data-testid`. Identical files across
 scenarios are a finding, not a defect: they are how the suite shows two distinct host situations rendering
 one indistinguishable card.
 
@@ -196,7 +196,7 @@ identity icon without changing its colour. The rail must not substitute question
 spinner. Running alone has no attention dot; queued, hidden/background, and explicitly stopped sessions stay
 quiet; a live blocked question keeps its dot while its orthogonal running pulse may coexist. Reconnect/restart
 snapshots, direct-versus-passive activation, owner-global clearing, and snapshot
-retry are covered; live-agent coverage pins `data-running`/`running-icon` pulse behavior and coexistence with
+retry are covered; live-agent coverage pins `data-running`/`running-icon` breathing behavior and coexistence with
 `data-attention`/`attention-dot`. These are stable visual hooks rather than alternate state models. The retired `session.activityList → []` compatibility method
 remains a focused handler test.
 
@@ -222,6 +222,14 @@ reservation. Terminal creation now exercises the host pending-marker handshake p
 placement, not a layout revision or peer geometry synchronization.
 
 ## Isolation contract
+
+The no-agent setup seeds a test-owned empty `models.json` and never reads or copies developer
+`auth.json` or `models.json`; provider scenarios use synthetic fixtures, and the separately authorized
+real-Central mode keeps its opaque-artifact-only credential contract above. Model-context coverage
+exercises the Default / 1M / Custom selector through the real host: shared and per-provider saves,
+retained live-chat limits versus new-chat metadata, Custom validation and Apply focus, cross-client
+convergence with draft invalidation, sanitized read/write failures with Retry, mobile keyboard use,
+and pre-v76 hiding.
 
 General and private-restart fixtures seed additional analytics off with consent already confirmed, so
 unrelated scenarios stay unblocked. They also seed the automatic interview invitation as permanently

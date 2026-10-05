@@ -102,7 +102,9 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 75;
+export const PROTOCOL_VERSION = 77;
+export const MODEL_PICKER_PROTOCOL_VERSION = 77;
+export const CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION = 76;
 export const CHANGE_MUTATIONS_PROTOCOL_VERSION = 75;
 export const RESOURCE_META_PROTOCOL_VERSION = 75;
 export const REVIEW_RICH_ANCHORS_PROTOCOL_VERSION = 74;
@@ -257,6 +259,8 @@ export const WS_METHODS = {
 	modelList: "model.list",
 	modelRefresh: "model.refresh",
 	modelDefault: "model.default",
+	modelContextSettings: "model.contextSettings",
+	modelSetContextWindow: "model.setContextWindow",
 	modelClampThinking: "model.clampThinking",
 	providerStatus: "provider.status",
 	providerLoginStart: "provider.loginStart",
@@ -443,6 +447,30 @@ export interface WorkspaceWatchReadyResult {
 export interface ModelDefault {
 	model: WireModel | null;
 	thinkingLevel: ThinkingLevel;
+}
+
+export const MODEL_CONTEXT_WINDOW_LIMITS = { min: 272_000, max: 1_000_000 } as const;
+
+export function isModelContextWindow(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isSafeInteger(value) &&
+		value >= MODEL_CONTEXT_WINDOW_LIMITS.min &&
+		value <= MODEL_CONTEXT_WINDOW_LIMITS.max
+	);
+}
+
+export type ModelContextTarget = "available" | Pick<WireModel, "provider" | "id">;
+
+export interface ModelContextSetting
+	extends Pick<WireModel, "provider" | "id" | "name" | "contextWindow"> {
+	override: number | null;
+}
+
+export function isSharedModelContextTarget(
+	setting: Pick<ModelContextSetting, "override">,
+): boolean {
+	return setting.override === null || isModelContextWindow(setting.override);
 }
 
 export interface WsMethodMap {
@@ -702,6 +730,11 @@ export interface WsMethodMap {
 	};
 	"model.refresh": { params: { force?: boolean }; result: RefreshedModels };
 	"model.default": { params: Record<string, never>; result: ModelDefault };
+	"model.contextSettings": { params: Record<string, never>; result: ModelContextSetting[] };
+	"model.setContextWindow": {
+		params: { target: ModelContextTarget; contextWindow: number | null };
+		result: ModelContextSetting[];
+	};
 	"provider.status": { params: Record<string, never>; result: ProviderStatusReport };
 	"provider.loginStart": {
 		params: { providerId: string; type?: "oauth" | "api_key" };

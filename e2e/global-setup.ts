@@ -1,5 +1,4 @@
-import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { chmodSync, copyFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FullConfig } from "@playwright/test";
 import { removeTree } from "@thinkrail/shared/removeTree";
@@ -43,14 +42,9 @@ function centralSetupFailure(error: unknown): Error {
 
 function seedLocalAgentConfiguration(): void {
 	mkdirSync(E2E_PI_AGENT_DIR, { recursive: true });
-	const userAgentDir = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
-	for (const file of ["auth.json", "models.json"]) {
-		const src = join(userAgentDir, file);
-		if (existsSync(src)) copyFileSync(src, join(E2E_PI_AGENT_DIR, file));
-	}
-	const modelsSeedSrc = join(userAgentDir, "models.json");
-	if (existsSync(modelsSeedSrc)) copyFileSync(modelsSeedSrc, E2E_PI_MODELS_SEED);
-	else rmSync(E2E_PI_MODELS_SEED, { force: true });
+	const seed = JSON.stringify({ providers: {} });
+	writeFileSync(join(E2E_PI_AGENT_DIR, "models.json"), seed);
+	writeFileSync(E2E_PI_MODELS_SEED, seed);
 	writeE2eAgentSettings();
 }
 

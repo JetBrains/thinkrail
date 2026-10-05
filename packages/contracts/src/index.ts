@@ -22,6 +22,7 @@ export {
 	MAX_HISTORY_QUERY_LENGTH,
 	normalizeThemePreference,
 	PLAN_REVIEW_VERDICTS,
+	RECENT_MODELS_LIMIT,
 	REQUEST_IMAGE_BASE64_BUDGET,
 	TERMINAL_REPLAY_KB,
 	TERMINAL_WINDOWS_SHELLS,
@@ -30,7 +31,7 @@ export {
 } from "./domain";
 export type * from "./nativeClient";
 export type * from "./piProtocol";
-export { assistantToolCallsAreExecutable, isTranscriptMessageRole } from "./piProtocol";
+export { assistantToolCallsAreExecutable, isTranscriptMessageRole, sameModel } from "./piProtocol";
 export type { QuitConfirmationDependencies } from "./quitConfirmation";
 export { createQuitConfirmation, QUIT_CONFIRMATION } from "./quitConfirmation";
 export * from "./wsProtocol";

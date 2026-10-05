@@ -14,7 +14,6 @@ test("idle composer keeps one message line above a stable controls row", async (
 	const shell = page.getByTestId("chat-composer-shell");
 	const input = page.getByTestId("chat-input");
 	const model = page.getByTestId("model-selector");
-	const effort = page.getByTestId("thinking-selector");
 	const history = page.getByTestId("history-open");
 	const send = page.getByTestId("chat-send");
 
@@ -34,7 +33,7 @@ test("idle composer keeps one message line above a stable controls row", async (
 	expect(Math.abs(compactWrapMeasure.width - compactInput.width)).toBeLessThanOrEqual(0.5);
 
 	const compactFooterBottom = compactModel.y + compactModel.height;
-	for (const control of [model, effort, history, send]) {
+	for (const control of [model, history, send]) {
 		const controlBox = await box(control);
 		expect(controlBox.y).toBeGreaterThanOrEqual(compactInput.y + compactInput.height);
 		expect(Math.abs(controlBox.y + controlBox.height - compactFooterBottom)).toBeLessThanOrEqual(4);
@@ -164,7 +163,6 @@ test("compact phone controls remain inside the chat viewport", async ({ page }) 
 	expect(shellBox.x + shellBox.width).toBeLessThanOrEqual(PHONE_VIEWPORT.width);
 	for (const control of [
 		page.getByTestId("model-selector"),
-		page.getByTestId("thinking-selector"),
 		page.getByTestId("history-open"),
 		page.getByTestId("chat-send"),
 	]) {

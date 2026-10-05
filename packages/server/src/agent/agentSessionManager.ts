@@ -37,11 +37,13 @@ import type {
 	ThinkingLevel,
 	TranscriptMessage,
 	WireModel,
+	WireModelAuth,
 } from "@thinkrail/contracts";
 import {
 	assistantToolCallsAreExecutable,
 	isTranscriptMessageRole,
 	normalizeSessionTitle,
+	sameModel,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
@@ -78,12 +80,12 @@ import { publishSessionResourcesChanged } from "./chatResources";
 import { disposeSessionChildren, removeWorkspaceDelegation, subagentsFor } from "./delegation";
 import { buildResourceLoader, toSkillCommands } from "./extensions";
 import {
-	getPiRuntime,
 	getPiRuntimeGeneration,
 	type PiRuntimeGeneration,
 	refreshCatalogs,
 	settledAvailableModels,
 } from "./piRuntime";
+import { catalogProviderAuth } from "./providerAuth";
 import { REQUEST_REVIEW_TOOL_NAME } from "./requestReviewTool";
 import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
@@ -653,7 +655,7 @@ export interface CreateSessionResult {
 	thinkingLevel: ThinkingLevel;
 }
 
-export function toWireModel(model: Model<string>): WireModel {
+export function toWireModel(model: Model<string>, auth?: WireModelAuth): WireModel {
 	return {
 		id: model.id,
 		name: model.name,
@@ -661,7 +663,17 @@ export function toWireModel(model: Model<string>): WireModel {
 		contextWindow: model.contextWindow,
 		reasoning: model.reasoning,
 		thinkingLevels: getSupportedThinkingLevels(model),
+		cost: { input: model.cost.input, output: model.cost.output },
+		input: [...model.input],
+		...(auth ? { auth } : {}),
 	};
+}
+
+function sessionWireModel(
+	model: Model<string>,
+	generation: Pick<PiRuntimeGeneration, "runtime" | "opaqueProviderIds">,
+): WireModel {
+	return toWireModel(model, catalogProviderAuth(generation, model.provider));
 }
 
 function resolveWireModel(
@@ -669,7 +681,7 @@ function resolveWireModel(
 	ref: Pick<WireModel, "provider" | "id">,
 ): Model<string> {
 	const available = settledAvailableModels(runtime);
-	const match = available.find((model) => model.provider === ref.provider && model.id === ref.id);
+	const match = available.find((model) => sameModel(model, ref));
 	if (!match) throw new Error(`Unknown or unavailable model: ${ref.provider}/${ref.id}`);
 	return match as unknown as Model<string>;
 }
@@ -833,7 +845,9 @@ async function prepareSessionEntry(
 		entry,
 		result: {
 			sessionId,
-			model: session.model ? toWireModel(session.model as unknown as Model<string>) : null,
+			model: session.model
+				? sessionWireModel(session.model as unknown as Model<string>, generation)
+				: null,
 			thinkingLevel: session.thinkingLevel,
 		},
 	};
@@ -1043,7 +1057,9 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 		sessionId,
 		workspaceId: entry.workspaceId,
 		title: session.sessionName ?? "Chat",
-		model: session.model ? toWireModel(session.model as unknown as Model<string>) : null,
+		model: session.model
+			? sessionWireModel(session.model as unknown as Model<string>, entry.generation)
+			: null,
 		thinkingLevel: session.thinkingLevel,
 		isStreaming: session.isStreaming,
 		messageCount: session.messages.length,
@@ -1805,9 +1821,11 @@ async function abortEntry(
 	return restoredQueue;
 }
 
-export async function setSessionModel(sessionId: string, model: WireModel): Promise<void> {
+export async function setSessionModel(sessionId: string, model: WireModel): Promise<WireModel> {
 	const entry = mustGetEntry(sessionId);
-	await entry.session.setModel(resolveWireModel(entry.generation.runtime, model));
+	const resolved = resolveWireModel(entry.generation.runtime, model);
+	await entry.session.setModel(resolved);
+	return sessionWireModel(resolved, entry.generation);
 }
 
 export function setSessionThinkingLevel(sessionId: string, level: ThinkingLevel): void {
@@ -1852,23 +1870,32 @@ export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
 }
 
 export async function listAvailableModels(): Promise<WireModel[]> {
-	const runtime = await getPiRuntime();
-	void refreshCatalogs(runtime);
-	return readAvailableWireModels(runtime);
+	const generation = await getPiRuntimeGeneration();
+	void refreshCatalogs(generation.runtime);
+	return readAvailableWireModels(generation);
 }
 
 export async function listSettledModels(): Promise<WireModel[]> {
-	return readAvailableWireModels(await getPiRuntime());
+	return readAvailableWireModels(await getPiRuntimeGeneration());
 }
 
 export async function refreshAvailableModels(force = false): Promise<RefreshedModels> {
-	const runtime = await getPiRuntime();
-	const { completed } = await refreshCatalogs(runtime, { force });
-	return { models: readAvailableWireModels(runtime), complete: completed };
+	const generation = await getPiRuntimeGeneration();
+	const { completed } = await refreshCatalogs(generation.runtime, { force });
+	return { models: readAvailableWireModels(generation), complete: completed };
 }
 
-function readAvailableWireModels(runtime: Awaited<ReturnType<typeof getPiRuntime>>): WireModel[] {
-	return settledAvailableModels(runtime).map((m) => toWireModel(m as unknown as Model<string>));
+function readAvailableWireModels(generation: PiRuntimeGeneration): WireModel[] {
+	const authByProvider = new Map<string, WireModelAuth>();
+	return settledAvailableModels(generation.runtime).map((m) => {
+		const model = m as unknown as Model<string>;
+		let auth = authByProvider.get(model.provider);
+		if (!auth) {
+			auth = catalogProviderAuth(generation, model.provider);
+			authByProvider.set(model.provider, auth);
+		}
+		return toWireModel(model, auth);
+	});
 }
 
 export async function clampThinkingForModel(

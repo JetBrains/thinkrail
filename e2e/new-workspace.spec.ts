@@ -102,15 +102,15 @@ test("the dialog lists local branches (no stray origin) and creates a worktree",
 	await expect(mainOption).toBeVisible();
 	await page.keyboard.press("Escape");
 
+	const pill = dialog.getByTestId("model-selector");
+	await expect(pill).toContainText("Default");
 	const effort = dialog.getByTestId("thinking-selector");
-	await expect(effort).toBeVisible();
-	const modelResolved = !(await dialog.getByTestId("model-selector").textContent())?.includes(
-		"Default model",
-	);
-	if (modelResolved) await expect(effort).toBeEnabled();
-	else await expect(effort).toBeDisabled();
+	if ((await effort.count()) > 0) {
+		await expect(effort).toContainText(/off|minimal|low|medium|high|xhigh|max/);
+	}
 
-	await dialog.getByTestId("model-selector").click();
+	await pill.click();
+	await expect(page.getByTestId("model-option-default")).toBeVisible();
 	const refresh = page.getByTestId("model-refresh");
 	await expect(refresh).toBeVisible();
 	await refresh.evaluate((el) => {

@@ -10,25 +10,17 @@ import {
 import {
 	type AppConfigUpdate,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
-	type ProviderAuthKind,
 	type ProviderStatus,
 	type ProviderStatusReport,
 } from "@thinkrail/contracts";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { LoginDialog } from "@/auth";
+import { AUTH_KIND_LABEL } from "@/chat/modelPicker";
 import { SkeletonRows } from "@/components/Skeleton";
 import { Button } from "@/components/ui/button";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { JetBrainsAiCard } from "./JetBrainsAiCard";
-
-const KIND_LABEL: Record<ProviderAuthKind, string> = {
-	oauth: "OAuth subscription",
-	"api-key": "API key",
-	env: "environment",
-	central: "JetBrains AI",
-	other: "configured",
-};
 
 const API_KEY_VISIBLE = 6;
 const MAX_REST_NAMES = 5;
@@ -299,7 +291,7 @@ function ConnectedCard({
 	busy: boolean;
 	onSignOut: () => void;
 }) {
-	const label = provider.kind ? KIND_LABEL[provider.kind] : "configured";
+	const label = provider.kind ? AUTH_KIND_LABEL[provider.kind] : "configured";
 	const managedTitle =
 		provider.kind === "central"
 			? "Connected through JetBrains AI"

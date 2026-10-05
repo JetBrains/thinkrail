@@ -25,6 +25,7 @@ import {
 	refreshSubagentTools,
 	setAgentReviewEnabledResolver,
 	setExtUiPublisher,
+	setModelContextPublisher,
 	setReviewCommentHandler,
 	setSessionCreatedPublisher,
 	setSessionDeletedPublisher,
@@ -604,8 +605,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		) {
 			startAttributionClaim();
 		}
-		refreshSubagentTools();
-		refreshAgentReviewTool();
+		if (appliedUpdate.subagentsEnabled !== undefined) refreshSubagentTools();
+		if (appliedUpdate.agentReviewEnabled !== undefined) refreshAgentReviewTool();
 	});
 
 	setSessionCreatedPublisher((payload: SessionCreatedPayload) => {
@@ -679,12 +680,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			params: { provider: "jbcentral", method: "central", auth_method: "central" },
 		});
 	});
-	setJbcentralChangedPublisher(() => {
+	const publishProviderChanged = () => {
 		server.publish(
 			WS_CHANNELS.providerChanged,
 			JSON.stringify({ channel: WS_CHANNELS.providerChanged, data: {} }),
 		);
-	});
+	};
+	setJbcentralChangedPublisher(publishProviderChanged);
+	setModelContextPublisher(publishProviderChanged);
 
 	const initialConfig = getConfig();
 	initializeAnalytics({
@@ -726,6 +729,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		closeAllTerminals();
 		setFeedbackPublisher(null);
 		setSettingsPublisher(null);
+		setModelContextPublisher(null);
 		setJbcentralAppliedPublisher(() => {});
 		setJbcentralChangedPublisher(() => {});
 		server.stop(true);

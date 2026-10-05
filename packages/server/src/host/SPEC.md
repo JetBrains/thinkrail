@@ -171,7 +171,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
   display label, persists, and publishes it, so the handler never mutates Git, emits, or patches a client
   separately. The host's `resolveNewChatModel` composes AppConfig settings with the agent's settled available
   model list and Pi thinking clamp; `model.default`, `session.create`, and newly-created review chats share
-  that resolver, and creation passes its model and effort explicitly. Existing review chats and plan-review
+  that resolver, and creation passes its model and effort explicitly. A `session.create` that **named** a
+  model and every `session.setModel` also record the resolved model as recent through `settings`'
+  `noteRecentModel` — a default-resolved creation is the host's choice, not the user's, and is not
+  recorded. `model.contextSettings` and `model.setContextWindow` delegate to agent's `modelContext`
+  adapter and return its `ModelContextSetting[]`; the mutation names a provider/model target or all
+  eligible pairs, never arbitrary model metadata, and successful saves reuse `provider.changed` to
+  invalidate catalogs across clients. Existing review chats and plan-review
   subagents keep their own policies — and
   the **Skills-manager set**: `skill.list` / `skills.state` / `project.skills` build
   the admission context from `projects` (+ the
@@ -310,7 +316,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   here the same way: `createServer` wires `setSubagentsEnabledResolver` to map an explicit
   `Workspace.subagentsOverride` when present and otherwise use `AppConfig.subagentsEnabled` (unknown
   workspace fails closed), the settings
-  publisher asks `refreshSubagentTools()` to reevaluate all live sessions after any global update, and
+  publisher asks `refreshSubagentTools()` to reevaluate all live sessions after a global update that
+  carries `subagentsEnabled` (likewise `refreshAgentReviewTool()` for `agentReviewEnabled`) — not after
+  every publish, since `recentModels` now publishes on each model switch and a tool-set rebuild per idle
+  session would be pure churn — and
   `workspace.setSubagentsOverride` persists through `workspaces` then refreshes only that workspace. The
   two authoritative publishers remain the clients' convergence path; the host-to-agent refresh changes
   runtime capability, not frontend state;

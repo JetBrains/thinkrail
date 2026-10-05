@@ -56,11 +56,9 @@ test("command logs and Stop stay scoped through parent Stop, view closure, reloa
 	const trigger = page.getByTestId("resources-trigger");
 	await expect(trigger).toHaveAttribute("data-active-count", "1", { timeout: 180_000 });
 	await expect(trigger).toHaveAccessibleName("Resources, 1 active");
-	await expect(page.locator('[data-testid="activity-step"][data-tool="bash"]')).toHaveAttribute(
-		"data-status",
-		"running",
-		{ timeout: 120_000 },
-	);
+	await expect(
+		page.locator('[data-testid="stream-indicator"][data-phase="running-tool"]'),
+	).toHaveText("Running bash…", { timeout: 120_000 });
 	const parentId = await currentParentId(page);
 	await openResources(page);
 	const row = page.locator(commandRows).filter({ hasText: "resource-watch" });

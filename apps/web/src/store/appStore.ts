@@ -907,6 +907,8 @@ interface AppState {
 	defaultEffort: ThinkingLevel | undefined;
 	reviewModel: WireModel | undefined;
 	reviewEffort: ThinkingLevel | undefined;
+	favoriteModels: WireModel[];
+	recentModels: WireModel[];
 	reviewAutoFix: boolean;
 	agentReviewEnabled: boolean;
 	customLayoutPresets: LayoutPreset[];
@@ -1161,6 +1163,8 @@ function configPatch(config: AppConfig) {
 		defaultEffort: config.defaultEffort,
 		reviewModel: config.reviewModel,
 		reviewEffort: config.reviewEffort,
+		favoriteModels: config.favoriteModels ?? DEFAULT_CONFIG.favoriteModels,
+		recentModels: config.recentModels ?? DEFAULT_CONFIG.recentModels,
 		reviewAutoFix: config.reviewAutoFix ?? DEFAULT_CONFIG.reviewAutoFix,
 		agentReviewEnabled: config.agentReviewEnabled ?? DEFAULT_CONFIG.agentReviewEnabled,
 	};
@@ -1924,6 +1928,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	defaultEffort: DEFAULT_CONFIG.defaultEffort,
 	reviewModel: DEFAULT_CONFIG.reviewModel,
 	reviewEffort: DEFAULT_CONFIG.reviewEffort,
+	favoriteModels: DEFAULT_CONFIG.favoriteModels,
+	recentModels: DEFAULT_CONFIG.recentModels,
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	toasts: [],

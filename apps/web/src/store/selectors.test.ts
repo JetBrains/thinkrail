@@ -1,5 +1,11 @@
-import { expect, test } from "bun:test";
-import type { Project, SessionStateRecord, WireModel, Workspace } from "@thinkrail/contracts";
+import { describe, expect, test } from "bun:test";
+import {
+	MODEL_PICKER_PROTOCOL_VERSION,
+	type Project,
+	type SessionStateRecord,
+	type WireModel,
+	type Workspace,
+} from "@thinkrail/contracts";
 import type { WorkspaceLayoutDocument } from "../shell/layout";
 import { type EditorTab, EMPTY_RUNTIME } from "./appStore";
 import {
@@ -27,6 +33,7 @@ import {
 	selectProjectNeedsAttention,
 	selectReadyCompletionActivation,
 	selectSkillsStale,
+	selectSupportsModelPicker,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
 	specPathMatcher,
@@ -559,4 +566,16 @@ test("selectAgentReviewCommentCount counts only OPEN agent-authored comments", (
 	expect(selectAgentReviewCommentCount(state, "w1")).toBe(2);
 	expect(selectAgentReviewCommentCount(state, "missing")).toBe(0);
 	expect(selectAgentReviewCommentCount(state, null)).toBe(0);
+});
+
+describe("selectSupportsModelPicker", () => {
+	test("requires a connected host at or above the picker protocol", () => {
+		expect(selectSupportsModelPicker({ protocolVersion: null })).toBe(false);
+		expect(selectSupportsModelPicker({ protocolVersion: MODEL_PICKER_PROTOCOL_VERSION - 1 })).toBe(
+			false,
+		);
+		expect(selectSupportsModelPicker({ protocolVersion: MODEL_PICKER_PROTOCOL_VERSION })).toBe(
+			true,
+		);
+	});
 });

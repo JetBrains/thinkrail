@@ -42,9 +42,13 @@ test("the dialog shows the exact default model and its picker scrolls inside the
 
 	await model.click();
 	const list = page.locator("[cmdk-list]");
-	const exactOption = page.getByTestId("model-option").filter({ hasText: selected.model.id });
-	await expect(exactOption).toHaveCount(1);
-	await expect(exactOption).toBeVisible();
+	const showAll = page.getByTestId("model-show-all");
+	if ((await showAll.count()) > 0) await showAll.click();
+	const exactOption = page.locator(
+		`[data-testid="model-option"][data-provider="${selected.model.provider}"][data-model-id="${selected.model.id}"]`,
+	);
+	expect(await exactOption.count()).toBeGreaterThanOrEqual(1);
+	await expect(exactOption.first()).toBeVisible();
 	await expect(list).toHaveJSProperty("scrollTop", 0);
 	await list.hover();
 	await page.mouse.wheel(0, 600);

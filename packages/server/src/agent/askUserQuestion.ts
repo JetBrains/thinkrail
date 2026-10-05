@@ -29,7 +29,6 @@ export const RESERVED_LABELS = ["Other", "Type something.", "Chat about this", "
 
 const OptionSchema = Type.Object({
 	label: Type.String({
-		maxLength: MAX_LABEL_LENGTH,
 		description: `MAX ${MAX_LABEL_LENGTH} CHARACTERS. The concise (1-5 word) text the user sees and selects.`,
 	}),
 	description: Type.String({
@@ -43,7 +42,6 @@ const OptionSchema = Type.Object({
 	),
 	recommendedReason: Type.Optional(
 		Type.String({
-			maxLength: MAX_RECOMMENDED_REASON_LENGTH,
 			description: `MAX ${MAX_RECOMMENDED_REASON_LENGTH} CHARACTERS. Why you recommend this option — one short sentence, rendered inline as a 'Why:' line under the option. Set only on the option whose label carries '(Recommended)'.`,
 		}),
 	),
@@ -55,7 +53,6 @@ const QuestionSchema = Type.Object({
 			'The complete question, ending with a question mark. E.g. "Which library should we use for date formatting?"',
 	}),
 	header: Type.String({
-		maxLength: MAX_HEADER_LENGTH,
 		description: `MAX ${MAX_HEADER_LENGTH} CHARACTERS. Very short chip/tag next to the question, e.g. "Auth method".`,
 	}),
 	options: Type.Array(OptionSchema, {
@@ -91,12 +88,12 @@ Calling this tool PAUSES EXECUTION until the user answers: the questions render 
 - Set multiSelect: true when several answers are valid; the user may combine checked options with their own typed answer.
 - If you recommend one option, make it FIRST, append "(Recommended)" to its label, and set its recommendedReason to one short sentence on why you recommend it over the alternatives (shown inline under the option).
 - Use options[].preview (markdown) for concrete artifacts to compare side-by-side (code, ASCII mockups, configs). Single-select only.
-- Group all clarifying questions into ONE call — do not chain calls back-to-back.
+- One call = one round: ask every question you can ask now in a single call — never split independent questions across back-to-back calls. A question that depends on another question's answer waits for a later round; ask follow-up rounds until no decision is left assumed.
 - Call ask_user_question as the only tool in the assistant response; other tool calls in that response are discarded and can be re-issued after the answer.
 - The user may answer only some questions; unanswered ones are reported as declined.`;
 
 const PROMPT_GUIDELINES = [
-	`Call ask_user_question whenever the request is ambiguous and a concrete decision is needed — include every question needed in one call, with ${MIN_OPTIONS}-${MAX_OPTIONS} options each. The call blocks until its result contains the user's answers.`,
+	`Call ask_user_question whenever the request is ambiguous and a concrete decision is needed — one call is one round holding every question answerable now (dependent questions wait for the next round), with ${MIN_OPTIONS}-${MAX_OPTIONS} options each. The call blocks until its result contains the user's answers.`,
 	"Every option needs a concise label (1-5 words) and a description of what it means / its trade-off.",
 	'Recommend by putting the option first with "(Recommended)" appended and setting its recommendedReason to one short sentence (shown inline under the option) on why you recommend it over the alternatives; the user can always type a custom answer or skip the questionnaire.',
 	"Call ask_user_question as the only tool in the assistant response; continue with other tools after the answer.",

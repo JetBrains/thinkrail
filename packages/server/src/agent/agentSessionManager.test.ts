@@ -1059,14 +1059,19 @@ test("wire models expose only the allowlisted fields (no baseUrl/headers/other M
 	expect(models.length).toBeGreaterThan(0);
 	for (const m of models) {
 		expect(Object.keys(m).sort()).toEqual([
+			"auth",
 			"contextWindow",
+			"cost",
 			"id",
+			"input",
 			"name",
 			"provider",
 			"reasoning",
 			"thinkingLevels",
 		]);
 		expect(m.thinkingLevels).toEqual(["off"]);
+		expect(Object.keys(m.cost ?? {}).sort()).toEqual(["input", "output"]);
+		expect(m.auth?.kind).toBeDefined();
 	}
 });
 

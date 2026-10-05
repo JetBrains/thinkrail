@@ -1,12 +1,16 @@
 import type {
 	JbcentralInstall,
 	JbcentralStatus,
-	ProviderAuthKind,
 	ProviderStatus,
 	ProviderStatusReport,
 } from "@thinkrail/contracts";
 import { jbcentralInstall } from "@thinkrail/shared/jbcentral";
-import { settledAvailableModels, usePiRuntime } from "../agent";
+import {
+	describeProviderAuth,
+	type ProviderAuthFacts,
+	settledAvailableModels,
+	usePiRuntime,
+} from "../agent";
 import { getJbcentralStatus } from "./jbcentral";
 
 export interface ProviderStatusSources {
@@ -16,37 +20,12 @@ export interface ProviderStatusSources {
 	credentialProviders: string[];
 	oauthProviders: { id: string; name: string }[];
 	credentialType: (id: string) => "oauth" | "api_key" | undefined;
-	providerAuth: (id: string) => { source?: string; label?: string };
+	providerAuth: (id: string) => Pick<ProviderAuthFacts, "source" | "label">;
 	apiKeyLogin: (id: string) => boolean;
 	displayName: (id: string) => string;
 	hasAuth: (id: string) => boolean;
 	jbcentral: JbcentralStatus;
 	jbcentralInstall: JbcentralInstall;
-}
-
-function resolveKind(
-	credentialType: "oauth" | "api_key" | undefined,
-	source: string | undefined,
-): ProviderAuthKind {
-	if (credentialType === "oauth") return "oauth";
-	if (credentialType === "api_key") return "api-key";
-	switch (source) {
-		case "environment":
-			return "env";
-		case "models_json_key":
-		case "models_json_command":
-		case "runtime":
-			return "api-key";
-		default:
-			return "other";
-	}
-}
-
-function resolveDetail(source?: string, label?: string): string | undefined {
-	if (label) return label;
-	if (source === "models_json_key") return "models.json";
-	if (source === "models_json_command") return "models.json (command)";
-	return undefined;
 }
 
 export function buildProviderReport(sources: ProviderStatusSources): ProviderStatusReport {
@@ -72,20 +51,16 @@ export function buildProviderReport(sources: ProviderStatusSources): ProviderSta
 			sources.availableProviders.has(id) ||
 			(!sources.modelProviderIds.has(id) && sources.hasAuth(id));
 		if (!configured) return { id, name, configured: false, ...login };
-		if (sources.centralProviders.has(id)) {
-			return { id, name, configured: true, kind: "central", ...login };
-		}
 		const { source, label } = sources.providerAuth(id);
-		const kind = resolveKind(sources.credentialType(id), source);
-		const detail = resolveDetail(source, label);
-		return {
-			id,
-			name,
-			configured: true,
-			kind,
-			...(detail !== undefined ? { detail } : {}),
-			...login,
-		};
+		const credentialType = sources.credentialType(id);
+		const auth = describeProviderAuth({
+			central: sources.centralProviders.has(id),
+			oauth: credentialType === "oauth",
+			apiKeyCredential: credentialType === "api_key",
+			...(source === undefined ? {} : { source }),
+			...(label === undefined ? {} : { label }),
+		});
+		return { id, name, configured: true, ...auth, ...login };
 	});
 
 	providers.sort((a, b) => {

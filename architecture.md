@@ -4,7 +4,7 @@ type: architecture-design
 status: active
 title: ThinkRail — top-level architecture
 parent: goal-and-requirements
-covers: [client-host-split, cli-entrypoint, wire-contract, transport-endpoint, ui-shell-panels, git-worktrees, remote-tailscale, hydrate-then-stream, domain-vs-view-state, frontend-local-workbench-frame, client-local-navigation, central-integration]
+covers: [client-host-split, cli-entrypoint, wire-contract, transport-endpoint, ui-shell-panels, git-worktrees, remote-tailscale, hydrate-then-stream, domain-vs-view-state, frontend-local-workbench-frame, client-local-navigation, central-integration, portable-pi-packages, thinkrail-extensions]
 tags: [architecture]
 ---
 
@@ -48,6 +48,13 @@ packages/pi-subagents          portable pure-pi extension: Agent + get_subagent_
                     pi-delegation (bundled into every ThinkRail parent session by packages/server)
 packages/pi-thinkrail-workflow pi extension: the workflow skill system + its always-on routing rule
                     (bundled into every session; workspace-internal, not portable)
+pi-extensions/*     portable pi packages published to npm as @thinkrail.ai/pi-<name>; work in vanilla pi
+                    (decided, Decision 20; the pi-* packages above move here per publish wave)
+thinkrail-extensions/*  ThinkRail extensions: a pi capability + ./server and ./web halves, composed by one
+                    registry file per side (decided, Decision 21) ── depends on ─▶ pi-extensions/*,
+                    packages/extension-api, packages/ui
+packages/extension-api  types + define* helpers for extension halves (decided, Decision 21) ── depends on ─▶ packages/contracts
+packages/ui         owned shadcn/Radix primitives + cn + onThemeSwap, extracted from apps/web (decided, Decision 21)
 ```
 
 Artifact verification is a separate source-only workspace, [[module-artifact-tests]]. It depends on
@@ -308,6 +315,42 @@ dependency. This keeps test process drivers outside both launchers and the serve
     imported as libraries. Active content (HTML, SVG, notebook outputs) renders only inside sandboxed,
     network-denying frames. Detail: [[submodule-web-resources]], [[submodule-web-panels]],
     [[submodule-server-reviews]].
+
+20. **Portable pi packages are published, scoped, and held to a vanilla-parity bar.** Capabilities the
+    agent can use anywhere live under `pi-extensions/*` and ship to npm as `@thinkrail.ai/pi-<name>` (the npm
+    org is `thinkrail.ai`; private workspace packages stay `@thinkrail/*`; raw TypeScript, `pi` manifest,
+    `pi-package` keyword; unscoped `pi-*` names collide with third parties).
+    "Works in vanilla pi" is defined, not assumed: install from the packed tarball into an isolated
+    fixture, load through pi's own loader under **Node** (vanilla pi's runtime — ThinkRail runs the same
+    code under Bun, so shipped code is dual-runtime), register and execute tools, render in a real
+    terminal. Releases go through Changesets and npm Trusted Publishing with provenance; the host keeps
+    consuming the packages through `workspace:*`. A portable *library* (delegation) is published without a
+    manifest and is never given a fake factory. Detail and the gate: [[module-pi-extensions]].
+
+21. **ThinkRail extensions are separate packages over a small host UI SDK, composed from registry files.**
+    `thinkrail-extensions/<name>` composes a pi capability with a `./server` half (what the host bundles,
+    as named inline factories; skill packages named by specifier and resolved from the extension, not the
+    host) and a `./web` half (tool renderers keyed by tool name, plus named exports the host uses
+    directly). The halves never import each other or host internals; host-owned scoped state reaches an
+    extension only through explicit seams — the one property fixed now so later extensions (wire
+    methods, panels) extend the `define*` objects instead of replacing them. Composition is static: a
+    server registry (`packages/server/src/extensions/registry.ts`) whose static imports carry factories
+    into every launcher without generated factory lists, and a web registry
+    (`apps/web/src/extensions/registry.ts`). The SDK is `packages/extension-api` (types + `define*`) and
+    `packages/ui` (owned primitives, `cn`, `onThemeSwap`); the highlighted `CodeBlock` stays app-local
+    until a second consumer exists. **Invariant transition:** Decision 1's rule "`apps/web` depends on
+    `packages/contracts` only" holds until the SDK extraction lands, then becomes "`apps/web` depends on
+    `contracts`, `ui`, `extension-api`, and `thinkrail-extensions/*/web` only", enforced with source-half
+    and public-subpath rules. **Delivery rule:** every extension arrives as three independently shippable
+    PRs — new pi package beside the old, web half moved, server half + wiring with the old package
+    deleted — none of which changes anything a user can observe. Install UX, marketplace, per-extension
+    settings and runtime-loaded third-party extensions are explicit deferrals. Rejected: runtime-loaded
+    bundles now (React singleton, versioned UI API, security story first), a logical extension inside
+    the apps (three physical homes, no boundary), generated factory lists derived from descriptors
+    (functions yield no import specifiers). Pilot: visualize — `lovely-mermaid` for TUI rendering and
+    best-effort validation in the portable package, strict `mermaid`+`linkedom` validation injected by
+    the ThinkRail server half through `createVisualizeExtension({ validateMermaid })`. Detail:
+    [[module-thinkrail-extensions]].
 
 ## Invariants
 
