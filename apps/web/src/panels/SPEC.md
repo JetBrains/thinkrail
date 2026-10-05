@@ -542,9 +542,12 @@ a project picker, the prompt hero, and the reused
   project**'s empty state is unchanged (still the bare text) — the offer is Global-only, since it only
   ever seeds global files. No server change. **`NotificationsSettings`** is the single master on/off control
   for out-of-app attention notifications (default on), persisting `{ notificationsEnabled }` through
-  `settings.update` and, on enable, requesting browser permission immediately via the
-  [[submodule-web-notifications]] barrel (the toggle click is the user gesture); the notification pipeline,
-  suppression, and permission preface live in [[submodule-web-notifications]].
+  `settings.update`. While enabled it also surfaces the live browser permission via the
+  [[submodule-web-notifications]] barrel: an **Allow in browser** button when permission is still `default`
+  (the click is the user gesture that calls `requestNotificationPermission`), a blocked hint on `denied`, and
+  a granted/unsupported line otherwise — the visible, in-app acquisition path that does not depend on an
+  out-of-focus event. The notification pipeline, suppression, and away-path permission preface live in
+  [[submodule-web-notifications]].
   **`PrivacySettings`** manages the additional-data preference and
   confirmation together; the event contract belongs to [[submodule-server-analytics]].
   **`AnalyticsConsentDialog`** mounts once through shell after a capable host's unconfirmed config hydrates.

@@ -47,9 +47,11 @@ the dot regardless of which workspace/chat is open, so no per-chat visibility ch
 
 ## Permission
 
-Permission is requested at the clearest user gesture: **turning the Settings toggle on** calls
-`Notification.requestPermission()` directly (`panels/NotificationsSettings`). For a client that is already
-enabled (the toggle defaults on), the in-app preface (`NotificationPermissionPrompt`) is the fallback — shown
+Permission is requested at the clearest user gesture. The primary, visible path is the Settings panel
+(`panels/NotificationsSettings`): turning the toggle on, or clicking **Allow in browser** when permission is
+still `default`, calls `Notification.requestPermission()` directly — present-user acquisition that does not
+depend on an out-of-focus event (the panel also shows blocked/granted/unsupported status). For a client
+that is already enabled, the in-app preface (`NotificationPermissionPrompt`) is the away-path fallback — shown
 before the system request only on the first batch that would actually notify (passed suppression and the
 toggle), lowering hard-deny risk. "Enable" calls `Notification.requestPermission()`; "Not now" snoozes for 7
 days (`notificationPrompt`, browser-local in `localStorage`); a `denied` state never auto-prompts again and
