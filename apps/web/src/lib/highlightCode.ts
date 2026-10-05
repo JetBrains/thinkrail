@@ -3,7 +3,7 @@ import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
 import { chatShikiLanguageId, createChatHighlighter } from "./highlighter";
 import type { HighlightReply, HighlightRequest } from "./highlighter.worker";
 
-export interface HighlightWorker {
+interface HighlightWorker {
 	postMessage(request: HighlightRequest): void;
 	terminate(): void;
 }
@@ -13,7 +13,7 @@ export interface HighlightWorkerEvents {
 	fail(): void;
 }
 
-export interface HighlightClientDeps {
+interface HighlightClientDeps {
 	spawn(events: HighlightWorkerEvents): HighlightWorker | null;
 	inThread(code: string, lang: string): Promise<string | null>;
 }
