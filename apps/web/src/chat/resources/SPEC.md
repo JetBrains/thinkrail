@@ -39,7 +39,8 @@ appearing on hover and focus in place of the state text so rows never change hei
 state collapses the wire statuses into one in-flight presentation and three settled ones:
 
 - *running* commands and *running* subagents → **Working** (primary, breathing dot); *queued* →
-  **Queued**; *stopping* → **Stopping…** — all live, all sorted before settled rows, oldest start first;
+  **Queued**; *stopping* → **Stopping…** — all live, all sorted before settled rows, **oldest start
+  first regardless of live state**, so a row never jumps when it starts or begins stopping;
 - *completed* with exit 0 / *completed* subagents → **Done** (success); nonzero exit, *error* → **Failed**
   (error, auto-visible); *stopped* / *aborted* → **Stopped** (neutral: a user stop is not a failure).
 
@@ -58,9 +59,9 @@ trigger toggles the inspector and carries `aria-expanded`.
 
 **Dock.** The dock lists live rows only — never finished work — directly above the composer, and
 renders nothing when there is none. Past four rows it collapses to one summary line (live count,
-per-kind counts) that the user can expand; the collapsed/expanded choice is local to the dock. A row's
-Stop requests cancellation for that row; clicking the row or its Inspect action opens the inspector at
-that row. The dock is **hidden while the inspector is open** so the live roster is never rendered twice.
+per-kind counts) that the user can expand; the collapsed/expanded choice is local to the dock. A dock
+row has exactly two controls: its name and activity together are one Inspect control that opens the
+inspector at that row, and Stop requests cancellation for that row. The dock is **hidden while the inspector is open** so the live roster is never rendered twice.
 It reserves its rows rather than animating height on every change, so the composer does not jitter.
 
 **Inspector.** A non-modal in-place dialog over the transcript region with the chat header and

@@ -57,15 +57,6 @@ export function isLiveState(state: ResourceState): boolean {
 	return state === "working" || state === "queued" || state === "stopping";
 }
 
-const STATE_ORDER: Record<ResourceState, number> = {
-	working: 0,
-	stopping: 1,
-	queued: 2,
-	done: 3,
-	failed: 3,
-	stopped: 3,
-};
-
 export function startedAt(resource: Resource): number {
 	return resource.kind === "command"
 		? resource.summary.startedAt
@@ -86,14 +77,9 @@ export function toResources(
 	];
 }
 
+/** Oldest start first, regardless of live state, so a row never jumps when it starts or stops. */
 export function sortLive(resources: readonly Resource[]): Resource[] {
-	return resources
-		.slice()
-		.sort(
-			(a, b) =>
-				STATE_ORDER[resourceState(a)] - STATE_ORDER[resourceState(b)] ||
-				startedAt(a) - startedAt(b),
-		);
+	return resources.slice().sort((a, b) => startedAt(a) - startedAt(b));
 }
 
 export function sortSettled(resources: readonly Resource[]): Resource[] {
@@ -339,8 +325,8 @@ export function ResourceRow({
 		<>
 			<KindGlyph resource={resource} state={state} />
 			<span className="flex min-w-0 flex-col">
-				<span className="flex min-w-0 items-baseline gap-8">
-					{selectable ? (
+				{selectable ? (
+					<span className="flex min-w-0 items-baseline gap-8">
 						<span
 							className={cn(
 								"min-w-0 truncate",
@@ -351,32 +337,44 @@ export function ResourceRow({
 						>
 							{name}
 						</span>
-					) : (
-						<button
-							type="button"
-							data-testid="resource-inspect"
-							title={`Inspect ${name}`}
-							onClick={onSelect}
+						{compact ? null : (
+							<span
+								className={cn(
+									"min-w-0 flex-1 truncate text-text-muted tr-text-metadata",
+									resource.kind === "command" && "tr-code-text-small",
+								)}
+								title={activity}
+							>
+								{activity}
+							</span>
+						)}
+					</span>
+				) : (
+					<button
+						type="button"
+						data-testid="resource-inspect"
+						title={`Inspect ${name}`}
+						onClick={onSelect}
+						className="flex min-w-0 items-baseline gap-8 rounded-[var(--radius-xs)] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+					>
+						<span
 							className={cn(
-								"min-w-0 max-w-[60%] shrink-0 truncate rounded-[var(--radius-xs)] text-left outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary",
+								"min-w-0 max-w-[60%] shrink-0 truncate",
 								live ? "tr-title-compact text-text-default" : "text-text-muted tr-text-metadata",
 							)}
 						>
 							{name}
-						</button>
-					)}
-					{compact ? null : (
+						</span>
 						<span
 							className={cn(
 								"min-w-0 flex-1 truncate text-text-muted tr-text-metadata",
 								resource.kind === "command" && "tr-code-text-small",
 							)}
-							title={activity}
 						>
 							{activity}
 						</span>
-					)}
-				</span>
+					</button>
+				)}
 				{action?.error ? (
 					<span role="alert" className="break-words text-feedback-error tr-text-metadata">
 						{action.error}

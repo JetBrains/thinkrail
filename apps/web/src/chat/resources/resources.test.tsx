@@ -70,7 +70,7 @@ test("resource primitives keep their props-only import boundary", () => {
 	}
 });
 
-test("the row vocabulary collapses wire statuses into one live and three settled states", () => {
+test("the row vocabulary collapses wire statuses into one live and three settled states and sorts live rows oldest-first", () => {
 	const state = (overrides: Partial<BackgroundCommandSummary>) =>
 		resourceState({ kind: "command", summary: { ...command, ...overrides } });
 	expect(state({})).toBe("working");
@@ -92,10 +92,13 @@ test("the row vocabulary collapses wire statuses into one live and three settled
 	const order = sortLive([
 		{ kind: "subagent", summary: child },
 		{ kind: "command", summary: { ...command, id: "late", startedAt: NOW - 1000 } },
-		{ kind: "command", summary: { ...command, id: "stopping", status: "stopping" } },
+		{
+			kind: "command",
+			summary: { ...command, id: "stopping", status: "stopping", startedAt: NOW - 3 * 60_000 },
+		},
 		{ kind: "command", summary: command },
 	]).map((resource) => (resource.kind === "command" ? resource.summary.id : "child"));
-	expect(order).toEqual(["build", "late", "stopping", "child"]);
+	expect(order).toEqual(["build", "stopping", "child", "late"]);
 });
 
 test("resource trigger distinguishes an authoritative count from an unknown count and breathes only while live", () => {
@@ -133,24 +136,30 @@ test("ChatView mounts the trigger, dock and inspector and retires resource-only 
 	expect(source).toContain("resources.visible && !inspectorOpen ? (");
 });
 
-test("the dock lists live rows in state order with escaped text, inspect and stop, and collapses past four", () => {
+test("the dock lists live rows oldest-first with escaped text, one inspect control and stop, and collapses past four", () => {
 	const empty = renderToStaticMarkup(<resources.ResourcesDock {...dockProps} />);
 	expect(empty).toBe("");
 
 	const html = renderToStaticMarkup(
 		<resources.ResourcesDock
 			{...dockProps}
-			commands={[{ ...command, id: "stopping", status: "stopping" }, command]}
+			commands={[
+				{ ...command, id: "stopping", status: "stopping", startedAt: NOW - 6 * 60_000 },
+				command,
+			]}
 			subagents={[child]}
 		/>,
 	);
 	expect(html).toContain('data-testid="resources-dock"');
 	expect(html).not.toContain("data-collapsed");
-	expect(html.indexOf('data-resource-id="build"')).toBeLessThan(
-		html.indexOf('data-resource-id="stopping"'),
-	);
 	expect(html.indexOf('data-resource-id="stopping"')).toBeLessThan(
+		html.indexOf('data-resource-id="build"'),
+	);
+	expect(html.indexOf('data-resource-id="build"')).toBeLessThan(
 		html.indexOf('data-resource-id="child"'),
+	);
+	expect(html).toMatch(
+		/data-testid="resource-inspect"[^>]*>[\s\S]*?Build &lt;script&gt;[\s\S]*?echo/,
 	);
 	expect(html).toContain('data-status="running"');
 	expect(html).toContain('data-state="working"');
