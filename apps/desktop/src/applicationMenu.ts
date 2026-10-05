@@ -3,7 +3,11 @@ import type { ApplicationMenuItemConfig } from "electrobun/main";
 
 export const QUIT_SHORTCUT_ACTION = "quit-shortcut";
 const CLOSE_ITEM_COMMAND: NativeCommand = "close-item";
-const NATIVE_COMMANDS = { "close-item": true } satisfies Record<NativeCommand, true>;
+const OPEN_SETTINGS_COMMAND: NativeCommand = "open-settings";
+const NATIVE_COMMANDS = { "close-item": true, "open-settings": true } satisfies Record<
+	NativeCommand,
+	true
+>;
 
 type ApplicationMenuApi = {
 	setApplicationMenu(menu: ApplicationMenuItemConfig[]): void;
@@ -35,6 +39,12 @@ export function desktopApplicationMenu(
 		{
 			submenu: [
 				{ role: "about" },
+				{ type: "separator" },
+				{
+					label: "Settings…",
+					action: OPEN_SETTINGS_COMMAND,
+					accelerator: "CommandOrControl+,",
+				},
 				{ type: "separator" },
 				{ role: "hide", accelerator: "CommandOrControl+H" },
 				{ role: "hideOthers", accelerator: "CommandOrControl+Alt+H" },

@@ -29,6 +29,8 @@ test("builds the native macOS application, edit, and window menus", () => {
 			submenu: [
 				{ role: "about" },
 				{ type: "separator" },
+				{ label: "Settings…", action: "open-settings", accelerator: "CommandOrControl+," },
+				{ type: "separator" },
 				{ role: "hide", accelerator: "CommandOrControl+H" },
 				{ role: "hideOthers", accelerator: "CommandOrControl+Alt+H" },
 				{ role: "showAll" },
@@ -87,6 +89,7 @@ test("reads the action from an application-menu-clicked event", () => {
 
 test("recognizes forwarded native commands only", () => {
 	expect(isNativeCommand("close-item")).toBe(true);
+	expect(isNativeCommand("open-settings")).toBe(true);
 	expect(isNativeCommand(QUIT_SHORTCUT_ACTION)).toBe(false);
 	expect(isNativeCommand(null)).toBe(false);
 	expect(isNativeCommand("toString")).toBe(false);

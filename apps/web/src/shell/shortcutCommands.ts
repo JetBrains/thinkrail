@@ -70,6 +70,7 @@ type ShortcutKeyEvent = ChordEvent &
 export interface WebShortcutsOptions extends Pick<QuitConfirmationDependencies, "now" | "every"> {
 	platform: ShortcutPlatform;
 	closeItem(): void;
+	openSettings(): void;
 	quit(): void;
 	onQuitHint(hint: NativeQuitHint): void;
 	isInTerminal(target: EventTarget | null): boolean;
@@ -87,6 +88,7 @@ export function createWebShortcuts(options: WebShortcutsOptions) {
 	});
 	const handlers: Record<ShortcutCommandId, () => void> = {
 		"close-item": options.closeItem,
+		"open-settings": options.openSettings,
 		quit: () => quitConfirmation.press(true),
 	};
 

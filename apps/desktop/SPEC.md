@@ -133,14 +133,15 @@ Other menu shortcuts are forwarded `NativeCommand`s: the menu action is the comm
 `nativeCommand`. A shared `repeatGate` makes them edge-triggered: after a forward with a key down, further
 actions drop until no non-modifier key is down, so key-repeat never fires a command twice. A click with no
 key down, or unreadable key state, always forwards. Command-W (`close-item`) asks the web client to close
-its focused item or do nothing; it never closes the native window. The preload exposes hints and commands
+its focused item or do nothing; it never closes the native window. Command-, (`open-settings`, the macOS
+app menu's "Settings…" item) restores a minimized window, then asks the web client to open Settings. The preload exposes hints and commands
 as the frozen non-enumerable `__THINKRAIL_NATIVE_SHORTCUTS__` `NativeShortcutsBridge` (built by
 `shortcutsBridge.ts`) on every desktop platform; only the macOS menu sends events today. On Windows and
 Linux the web shell owns Ctrl+W / Ctrl+F4 (close item) through its command table.
 
 Each chord has exactly one owner: a native menu accelerator (forwarded as a `NativeCommand`) or web
 keydown, never both, because the webview still receives keydown for accelerator chords. Native owns chords
-the OS or browser reserves (Command-Q/W/H/M); web owns Ctrl+Q/W/F4 where no native menu claims them.
+the OS or browser reserves (Command-Q/W/H/M and Command-,); web owns Ctrl+Q/W/F4 where no native menu claims them.
 
 ## Native page zoom
 

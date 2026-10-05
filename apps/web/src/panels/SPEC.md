@@ -389,7 +389,7 @@ a project picker, the prompt hero, and the reused
   `store.toast.error` instead: a failed **`workspace.create`** (keeps the dialog open to retry) and a failed
   **`session.create`** (the dialog has already closed, the workspace exists — the toast is the only place left
   to report the dropped kick-off). (`gh` status lives in `SettingsDialog`, not the
-  create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — a
+  create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear (and ⌘, on macOS) opens — a
   **store-driven two-pane shell** (left section rail + scrollable content pane; mobile collapses the rail to
   a horizontal segmented strip): `settingsOpen`/`settingsSection` live in the store so the gear AND the
   Welcome banner can open it deep-linked to a section. Live sections: **`ProvidersSettings`** (the in-app

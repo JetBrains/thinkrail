@@ -1,8 +1,10 @@
 import type { NativeCommand, NativeQuitHint, NativeShortcutsBridge } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
+import { platformFamily } from "../lib";
+import { useAppStore } from "../store";
 import { requestClose } from "./closeRequestChannel";
 import { createWebShortcuts, hasWebShortcuts, shortcutPlatform } from "./shortcutCommands";
-import { hasDismissibleLayer, isInTerminal } from "./shortcutLayers";
+import { hasDismissibleLayer, hasModalOrMenu, isInTerminal } from "./shortcutLayers";
 
 const NATIVE_SHORTCUTS_GLOBAL = "__THINKRAIL_NATIVE_SHORTCUTS__";
 
@@ -18,6 +20,16 @@ export function getNativeShortcutsBridge(value: unknown): NativeShortcutsBridge 
 		return null;
 	}
 }
+
+export const readNativeShortcutsBridge = () =>
+	getNativeShortcutsBridge(Reflect.get(globalThis, NATIVE_SHORTCUTS_GLOBAL));
+
+export const settingsShortcutOwner = () =>
+	platformFamily() !== "apple" ? null : readNativeShortcutsBridge() ? "native" : "web";
+
+export const openSettingsUnlessLayered = () => {
+	if (!hasModalOrMenu(globalThis.document)) useAppStore.getState().openSettings();
+};
 
 function dismissTopLayer() {
 	const doc = globalThis.document;
@@ -70,9 +82,7 @@ function intervalScope() {
 }
 
 export function useAppShortcuts() {
-	const [bridge] = useState(() =>
-		getNativeShortcutsBridge(Reflect.get(globalThis, NATIVE_SHORTCUTS_GLOBAL)),
-	);
+	const [bridge] = useState(readNativeShortcutsBridge);
 	const [quitHint, setQuitHint] = useState<NativeQuitHint>("hidden");
 
 	useEffect(() => {
@@ -85,6 +95,7 @@ export function useAppShortcuts() {
 			closeItem: () => {
 				if (!dismissTopLayer()) requestClose();
 			},
+			openSettings: openSettingsUnlessLayered,
 			quit: () => {
 				bridge.quit().catch((error: unknown) => {
 					console.error("[shortcuts] quit failed", error);

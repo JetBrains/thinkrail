@@ -27,8 +27,12 @@ function hasGroupLayer(doc: LayerDocument) {
 	);
 }
 
+export function hasModalOrMenu(doc: Pick<Document, "querySelector">) {
+	return hasLayer(doc, DISMISSIBLE_LAYER_SELECTOR);
+}
+
 export function hasDismissibleLayer(doc: LayerDocument) {
-	return hasLayer(doc, DISMISSIBLE_LAYER_SELECTOR) || hasGroupLayer(doc);
+	return hasModalOrMenu(doc) || hasGroupLayer(doc);
 }
 
 const TERMINAL_ROOT_SELECTOR = ".xterm";

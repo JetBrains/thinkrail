@@ -456,8 +456,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   identity, and state subscription without exposing feed selection. Available, byte-transfer, preparation,
   ready, and installing are distinct states. The window-controls bridge exposes the same
   snapshot/action/subscription shape for window state. The shortcuts bridge pushes quit-hint changes
-  (`hidden` / `armed` / `release` / `quitting`) and `NativeCommand` ids (today `close-item`, close the
-  focused in-app item), and its one action `quit()` asks the host for an ordinary coordinated quit. A browser
+  (`hidden` / `armed` / `release` / `quitting`) and `NativeCommand` ids (`close-item`, close the
+  focused in-app item; `open-settings`, open the Settings dialog), and its one action `quit()` asks the host for an ordinary coordinated quit. A browser
   connection has none of these bridges and renders none of their affordances.
 - **quitConfirmation.ts** — the single home of the quit-confirmation gesture shared by the desktop main
   process (macOS Cmd+Q, key state polled through CoreGraphics) and the web shell (Linux Ctrl+Q, key state

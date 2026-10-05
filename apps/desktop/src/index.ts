@@ -362,7 +362,13 @@ async function start(): Promise<void> {
 	menuTarget = {
 		hintVisible: () => !mainWindow.isMinimized(),
 		showHint: (hint) => rpc.send.quitHintChanged({ hint }),
-		command: (command) => rpc.send.nativeCommand({ command }),
+		command: (command) => {
+			if (command === "open-settings" && mainWindow.isMinimized()) {
+				mainWindow.unminimize();
+				mainWindow.activate();
+			}
+			rpc.send.nativeCommand({ command });
+		},
 	};
 
 	let ready = false;
