@@ -1,6 +1,12 @@
 import { expect, test } from "bun:test";
 import type { ApplicationMenuItemConfig } from "electrobun/main";
-import { desktopApplicationMenu, installDesktopApplicationMenu } from "./applicationMenu";
+import {
+	desktopApplicationMenu,
+	installDesktopApplicationMenu,
+	isNativeCommand,
+	QUIT_SHORTCUT_ACTION,
+	readMenuAction,
+} from "./applicationMenu";
 
 const editMenu: ApplicationMenuItemConfig = {
 	label: "Edit",
@@ -23,20 +29,26 @@ test("builds the native macOS application, edit, and window menus", () => {
 			submenu: [
 				{ role: "about" },
 				{ type: "separator" },
-				{ role: "hide" },
-				{ role: "hideOthers" },
+				{ label: "Settings…", action: "open-settings", accelerator: "CommandOrControl+," },
+				{ type: "separator" },
+				{ role: "hide", accelerator: "CommandOrControl+H" },
+				{ role: "hideOthers", accelerator: "CommandOrControl+Alt+H" },
 				{ role: "showAll" },
 				{ type: "separator" },
-				{ role: "quit" },
+				{
+					label: "Quit ThinkRail",
+					action: QUIT_SHORTCUT_ACTION,
+					accelerator: "CommandOrControl+Q",
+				},
 			],
 		},
 		editMenu,
 		{
 			label: "Window",
 			submenu: [
-				{ role: "minimize" },
+				{ role: "minimize", accelerator: "CommandOrControl+M" },
 				{ role: "zoom" },
-				{ role: "close" },
+				{ label: "Close", action: "close-item", accelerator: "CommandOrControl+W" },
 				{ type: "separator" },
 				{ role: "bringAllToFront" },
 			],
@@ -64,4 +76,21 @@ test("registers the menu exactly once on supported platforms", () => {
 	calls.length = 0;
 	expect(installDesktopApplicationMenu(applicationMenu, "linux")).toBe(false);
 	expect(calls).toEqual([]);
+});
+
+test("reads the action from an application-menu-clicked event", () => {
+	expect(readMenuAction({ data: { id: 3, action: QUIT_SHORTCUT_ACTION } })).toBe(
+		QUIT_SHORTCUT_ACTION,
+	);
+	expect(readMenuAction({ data: { action: 7 } })).toBeNull();
+	expect(readMenuAction({ data: null })).toBeNull();
+	expect(readMenuAction(undefined)).toBeNull();
+});
+
+test("recognizes forwarded native commands only", () => {
+	expect(isNativeCommand("close-item")).toBe(true);
+	expect(isNativeCommand("open-settings")).toBe(true);
+	expect(isNativeCommand(QUIT_SHORTCUT_ACTION)).toBe(false);
+	expect(isNativeCommand(null)).toBe(false);
+	expect(isNativeCommand("toString")).toBe(false);
 });

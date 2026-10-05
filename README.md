@@ -148,7 +148,7 @@ On-disk app state (projects, workspaces, worktrees) lives under `~/.thinkrail`.
 - **Engine host** — `packages/server` (+ `packages/shared`), launched by `apps/cli` or
   `apps/desktop`. `createServer()` is a `Bun.serve` HTTP+WS host with an `AgentSessionManager` (one
   in-process `pi` `AgentSession` per tab).
-- **The wire** — `packages/contracts`: the typed, versioned protocol (types-only).
+- **The wire** — `packages/contracts`: the typed, versioned protocol (types plus tiny pure runtime).
 - **UI client** — `apps/web`: mobile-first React 19 + Zustand + Tailwind v4, ships independently and
   dials a host over the wire.
 
@@ -169,7 +169,7 @@ apps/
 packages/
   artifact-tests/ source-only CLI/desktop artifact and installer tests
   server/     createServer(): Bun.serve + AgentSessionManager
-  contracts/  the wire (types-only)
+  contracts/  the wire (types plus tiny pure runtime)
   shared/     server-side helpers (shellEnv, freePort)
   spec-graph/ portable pi extension: spec_* tools + skill
 ```

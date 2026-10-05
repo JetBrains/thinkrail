@@ -32,7 +32,8 @@ Tiny UI helpers shared across components.
   — shared by chat history, the tab strip's closed chats, and the Changes scope menu's commit rows; it lives
   here because `chat/` may not import from `panels/`, which is what let three private twins of it
   accumulate), **`platformShortcutLabel()`** +
-  **`hasPlatformModifier()`** (one Apple-vs-other definition for shortcut chrome and global handlers; both
+  **`hasPlatformModifier()`** + **`platformFamily()`** (one Apple-vs-other definition for shortcut chrome and
+  global handlers, plus the `apple` / `windows` / `linux` / `other` family for per-OS shortcut tables; all
   default to the browser-reported platform but accept an explicit platform string so non-browser callers and
   tests never inherit a host runtime's synthetic `navigator` accidentally; the label optionally renders the
   Alt variant — `⌥⌘N` / `Ctrl+Alt+N` — so shortcut chrome never composes modifier glyphs itself), and
@@ -60,7 +61,7 @@ Tiny UI helpers shared across components.
   drive-rooted containment compares path/root case-insensitively while preserving the candidate's casing),
   `shallowEqualArrays`, `userText`, `isShellInert` (a value made only of characters that stay literal in POSIX, PowerShell,
   and cmd, so it may be interpolated into a command a human copies and runs), `parseSkillInvocation`, `matchesSkillInvocationCommand`,
-  `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `copyText`, `randomId`,
+  `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
   `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
   `readLayoutSelection`, `readLayoutNavigationClock`, and the `LayoutAttention` type.
 - **Allowed deps:** `clsx`, `tailwind-merge`; React (the viewport subscription hook only);

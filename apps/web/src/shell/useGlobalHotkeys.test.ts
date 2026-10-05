@@ -4,6 +4,7 @@ import { globalHotkeyCommand } from "./useGlobalHotkeys";
 const key = (
 	code: string,
 	overrides: Partial<{
+		key: string;
 		ctrlKey: boolean;
 		metaKey: boolean;
 		altKey: boolean;
@@ -11,6 +12,7 @@ const key = (
 	}> = {},
 ) => ({
 	code,
+	key: "",
 	ctrlKey: true,
 	metaKey: false,
 	altKey: false,
@@ -18,7 +20,16 @@ const key = (
 	...overrides,
 });
 
-const all = { projects: true, workspace: true, bottom: true, newWorkspace: true } as const;
+const all = {
+	projects: true,
+	workspace: true,
+	bottom: true,
+	newWorkspace: true,
+	settings: true,
+} as const;
+
+const cmd = (code: string, overrides: Parameters<typeof key>[1] = {}) =>
+	key(code, { key: ",", ctrlKey: false, metaKey: true, ...overrides });
 
 describe("global hotkey routing", () => {
 	test("keeps the existing physical-key chords and adds Mod+Shift+J for bottom", () => {
@@ -67,7 +78,7 @@ describe("global hotkey routing", () => {
 		expect(
 			globalHotkeyCommand(
 				key("KeyJ", { shiftKey: true }),
-				{ projects: true, workspace: false, bottom: false, newWorkspace: false },
+				{ projects: true, workspace: false, bottom: false, newWorkspace: false, settings: false },
 				false,
 				"Linux",
 			),
@@ -75,5 +86,30 @@ describe("global hotkey routing", () => {
 		expect(globalHotkeyCommand(key("KeyB"), all, true, "Linux")).toBeNull();
 		expect(globalHotkeyCommand(key("KeyJ"), all, true, "Linux")).toBeNull();
 		expect(globalHotkeyCommand(key("KeyJ", { shiftKey: true }), all, true, "Linux")).toBeNull();
+	});
+
+	test("routes Cmd+, to settings when available, with no other modifier", () => {
+		expect(globalHotkeyCommand(cmd("Comma"), all, false, "MacIntel")).toBe("settings");
+		for (const modifier of ["shiftKey", "altKey", "ctrlKey"] as const) {
+			expect(
+				globalHotkeyCommand(cmd("Comma", { [modifier]: true }), all, false, "MacIntel"),
+			).toBeNull();
+		}
+		expect(
+			globalHotkeyCommand(cmd("Comma"), { ...all, settings: false }, false, "MacIntel"),
+		).toBeNull();
+	});
+
+	test("Cmd+, follows the typed comma; non-ASCII layouts fall back to code", () => {
+		expect(globalHotkeyCommand(cmd("KeyM"), all, false, "MacIntel")).toBe("settings");
+		expect(globalHotkeyCommand(cmd("Comma", { key: ";" }), all, false, "MacIntel")).toBeNull();
+		expect(globalHotkeyCommand(cmd("Comma", { key: "б" }), all, false, "MacIntel")).toBe(
+			"settings",
+		);
+		expect(globalHotkeyCommand(cmd("Period", { key: "ю" }), all, false, "MacIntel")).toBeNull();
+	});
+
+	test("Cmd+, is still claimed behind a modal so the browser chord stays swallowed", () => {
+		expect(globalHotkeyCommand(cmd("Comma"), all, true, "MacIntel")).toBe("settings");
 	});
 });

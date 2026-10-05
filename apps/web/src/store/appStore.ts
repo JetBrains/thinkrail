@@ -3569,8 +3569,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 			return { activeLogin: rest };
 		}),
 	clearLogin: () => set({ activeLogin: null }),
-	openSettings: (section = SettingsSection.Providers) =>
-		set({ settingsOpen: true, settingsSection: section }),
+	openSettings: (section) =>
+		set(
+			section === undefined
+				? { settingsOpen: true }
+				: { settingsOpen: true, settingsSection: section },
+		),
 	closeSettings: () => set({ settingsOpen: false }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
 	showInterviewPrompt: () =>

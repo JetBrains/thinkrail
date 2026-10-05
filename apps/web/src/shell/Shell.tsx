@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
 import { IconTooltip } from "../components/ui/tooltip";
+import { platformShortcutLabel } from "../lib";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
@@ -33,16 +34,23 @@ import {
 } from "../themes";
 import { type ConnectionStatus, runHostUpdate, supportsHostUpdateRun } from "../transport";
 import { UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
+import { AppShortcuts } from "./AppShortcuts";
 import { BrandLogo } from "./BrandLogo";
 import { CollapsedPanelRail } from "./CollapsedPanelRail";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
 import { NativeWindowControls } from "./NativeWindowControls";
+import { settingsShortcutOwner } from "./useAppShortcuts";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { useNativeWindowControls } from "./useNativeWindowControls";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
+
+const SETTINGS_SHORTCUT = settingsShortcutOwner() !== null;
+const SETTINGS_TOOLTIP = SETTINGS_SHORTCUT
+	? `Settings (${platformShortcutLabel(",")})`
+	: "Settings";
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
 	connected: "Connected",
@@ -218,11 +226,12 @@ export function Shell() {
 							{STATUS_LABEL[status]}
 						</span>
 					</span>
-					<IconTooltip label="Settings">
+					<IconTooltip label={SETTINGS_TOOLTIP}>
 						<button
 							type="button"
 							data-testid="open-settings"
 							aria-label="Settings"
+							aria-keyshortcuts={SETTINGS_SHORTCUT ? "Meta+," : undefined}
 							onClick={() => useAppStore.getState().openSettings()}
 							className="flex size-28 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 						>
@@ -327,6 +336,7 @@ export function Shell() {
 			)}
 			{analyticsConsentOpen ? <AnalyticsConsentDialog /> : <InterviewPromptDialog />}
 			<Toaster />
+			<AppShortcuts />
 		</div>
 	);
 }

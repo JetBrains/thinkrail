@@ -1,4 +1,9 @@
-import type { NativeUpdateState, NativeWindowState } from "@thinkrail/contracts";
+import type {
+	NativeCommand,
+	NativeQuitHint,
+	NativeUpdateState,
+	NativeWindowState,
+} from "@thinkrail/contracts";
 import type { PageZoomAction, PageZoomGesture } from "./pageZoom";
 import type { WindowChromeGeometry } from "./windowChrome";
 
@@ -10,6 +15,7 @@ export type DesktopRpc = {
 			minimizeWindow: { params: undefined; response: undefined };
 			toggleMaximizeWindow: { params: undefined; response: undefined };
 			closeWindow: { params: undefined; response: undefined };
+			quitApp: { params: undefined; response: undefined };
 			checkForUpdates: { params: undefined; response: undefined };
 			downloadUpdate: { params: undefined; response: undefined };
 			restartToUpdate: { params: undefined; response: undefined };
@@ -29,6 +35,8 @@ export type DesktopRpc = {
 			updateStateChanged: NativeUpdateState;
 			windowChromeChanged: WindowChromeGeometry;
 			windowStateChanged: NativeWindowState;
+			quitHintChanged: { hint: NativeQuitHint };
+			nativeCommand: { command: NativeCommand };
 		};
 	};
 };

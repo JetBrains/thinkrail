@@ -7,6 +7,7 @@ import {
 	layoutResourceIdentity,
 	normalizePath,
 	parseTupleKey,
+	platformFamily,
 	platformShortcutLabel,
 	projectRelativePath,
 	relativeTime,
@@ -14,6 +15,13 @@ import {
 	stripFrontmatter,
 	tupleKey,
 } from "./utils";
+
+test("platformFamily classifies the browser-reported platform", () => {
+	expect(platformFamily("MacIntel")).toBe("apple");
+	expect(platformFamily("Win32")).toBe("windows");
+	expect(platformFamily("Linux x86_64")).toBe("linux");
+	expect(platformFamily("")).toBe("other");
+});
 
 test("platform shortcuts use Ctrl on non-Apple platforms", () => {
 	const platform = "Linux x86_64";

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { NativeWindowState } from "@thinkrail/contracts";
+import type { NativeCommand, NativeQuitHint, NativeWindowState } from "@thinkrail/contracts";
 import { channel, version } from "@thinkrail/shared/version";
 import Electrobun, {
 	ApplicationMenu,
@@ -10,10 +10,16 @@ import Electrobun, {
 	PATHS,
 	Utils,
 } from "electrobun/main";
-import { installDesktopApplicationMenu } from "./applicationMenu";
+import {
+	installDesktopApplicationMenu,
+	isNativeCommand,
+	QUIT_SHORTCUT_ACTION,
+	readMenuAction,
+} from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
 import { installExternalNavigation } from "./externalNavigation";
 import { preferNativeHostBridge, usesNativeHostBridge } from "./hostTransport";
+import { createKeyStateReader } from "./keyState";
 import { createPageZoomGestureHandler, nextPageZoom } from "./pageZoom";
 import {
 	injectInitialDesktopPreferences,
@@ -21,6 +27,8 @@ import {
 	readDesktopPreferenceWrite,
 } from "./preferenceAdapter";
 import { PreferenceStore } from "./preferenceStore";
+import { createQuitShortcut } from "./quitShortcut";
+import { createRepeatGate } from "./repeatGate";
 import { RouteStore } from "./routeStore";
 import type { DesktopRpc } from "./rpc";
 import { ptyLibraryName, runtimeTarget } from "./runtimeTarget";
@@ -99,6 +107,34 @@ function writeReady(path: string, payload: unknown): void {
 
 async function start(): Promise<void> {
 	const applicationMenuInstalled = installDesktopApplicationMenu(ApplicationMenu, process.platform);
+	let menuTarget: {
+		hintVisible(): boolean;
+		showHint(hint: NativeQuitHint): void;
+		command(command: NativeCommand): void;
+	} | null = null;
+	const readKeys = createKeyStateReader(process.platform);
+	function every(callback: () => void, ms: number) {
+		const timer = setInterval(callback, ms);
+		return () => clearInterval(timer);
+	}
+	const quitShortcut = createQuitShortcut({
+		readKeys,
+		canShowHint: () => menuTarget?.hintVisible() ?? false,
+		quit: () => {
+			if (startupQuitCoordinator) void startupQuitCoordinator.quit();
+			else Utils.quit();
+		},
+		onHint: (hint) => menuTarget?.showHint(hint),
+		now: () => performance.now(),
+		every,
+	});
+	const commandGate = createRepeatGate({ isKeyDown: () => readKeys()?.keyDown ?? null, every });
+	ApplicationMenu.on("application-menu-clicked", (event) => {
+		const action = readMenuAction(event);
+		const target = menuTarget;
+		if (action === QUIT_SHORTCUT_ACTION) quitShortcut.press();
+		else if (target && isNativeCommand(action)) commandGate(() => target.command(action));
+	});
 	const runtimeDir = join(PATHS.RESOURCES_FOLDER, "app", "runtime");
 	process.env.BUN_PTY_LIB = join(
 		runtimeDir,
@@ -181,6 +217,9 @@ async function start(): Promise<void> {
 				closeWindow: (): undefined => {
 					recordWindowControlsProbe({ request: "close" });
 					mainWindow.requestClose();
+				},
+				quitApp: (): undefined => {
+					void quitCoordinator.quit();
 				},
 				checkForUpdates: async () => {
 					await updateController.checkForUpdates();
@@ -320,6 +359,17 @@ async function start(): Promise<void> {
 	);
 	mainWindow.on("close", removeNavigationListeners);
 	updateController.subscribe((state) => rpc.send.updateStateChanged(state));
+	menuTarget = {
+		hintVisible: () => !mainWindow.isMinimized(),
+		showHint: (hint) => rpc.send.quitHintChanged({ hint }),
+		command: (command) => {
+			if (command === "open-settings" && mainWindow.isMinimized()) {
+				mainWindow.unminimize();
+				mainWindow.activate();
+			}
+			rpc.send.nativeCommand({ command });
+		},
+	};
 
 	let ready = false;
 	const startAttributionClaim = attributionClaimOnFirstReadiness(() =>

@@ -3494,21 +3494,24 @@ test("clearLoginInput drops the live input; success is terminal; clearLogin dism
 	expect(useAppStore.getState().activeLogin).toBeNull();
 });
 
-test("openSettings deep-links to a section (default providers); closeSettings hides it", () => {
+test("openSettings reopens the last section (initially providers) or deep-links to a given one", () => {
 	const s = useAppStore.getState();
 	s.openSettings();
 	expect(useAppStore.getState().settingsOpen).toBe(true);
 	expect(useAppStore.getState().settingsSection).toBe("providers");
 
-	s.openSettings("github");
-	expect(useAppStore.getState().settingsSection).toBe("github");
-
-	s.setSettingsSection("providers");
-	expect(useAppStore.getState().settingsSection).toBe("providers");
-
+	s.setSettingsSection("templates");
 	s.closeSettings();
 	expect(useAppStore.getState().settingsOpen).toBe(false);
-	expect(useAppStore.getState().settingsSection).toBe("providers");
+	expect(useAppStore.getState().settingsSection).toBe("templates");
+
+	s.openSettings();
+	expect(useAppStore.getState().settingsOpen).toBe(true);
+	expect(useAppStore.getState().settingsSection).toBe("templates");
+
+	s.closeSettings();
+	s.openSettings("github");
+	expect(useAppStore.getState().settingsSection).toBe("github");
 });
 
 test("the interview prompt show action is idempotent and hide clears it", () => {

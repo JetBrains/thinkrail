@@ -24,6 +24,7 @@ const REVIEWED_ARGV = [
 
 export async function openProviders(page: Page): Promise<Locator> {
 	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-providers").click();
 	await expect(page.getByTestId("settings-providers")).toBeVisible();
 	return page.getByTestId("jetbrains-ai-card");
 }
