@@ -424,9 +424,7 @@ function ProjectRow({
 				className="flex min-w-0 flex-1 items-center gap-4 text-left"
 			>
 				{isRunning ? (
-					<RunningIcon className={isSelected ? "text-primary" : "text-text-muted"}>
-						<Folder className="size-14 shrink-0" />
-					</RunningIcon>
+					<RunningIcon className={`size-14 ${isSelected ? "text-primary" : "text-text-muted"}`} />
 				) : (
 					<Folder
 						className={`size-14 shrink-0 ${isSelected ? "text-primary" : "text-text-muted"}`}
@@ -649,9 +647,9 @@ function WorkspaceRow({
 
 	const identityClass = `flex min-w-0 flex-1 gap-4 text-left ${isTwoLine ? "items-start" : "items-center"}`;
 	const identityIcon = isRunning ? (
-		<RunningIcon className={cn(isTwoLine && "mt-2", isActive ? "text-primary" : "text-text-muted")}>
-			<Icon className="size-14 shrink-0" />
-		</RunningIcon>
+		<RunningIcon
+			className={cn("size-14", isTwoLine && "mt-2", isActive ? "text-primary" : "text-text-muted")}
+		/>
 	) : (
 		<Icon
 			className={`${isTwoLine ? "mt-2 " : ""}size-14 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`}

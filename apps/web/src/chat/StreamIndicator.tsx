@@ -1,3 +1,4 @@
+import { RunningIcon } from "@/components/RunningIcon";
 import type { ChatTurn } from "./types";
 
 export const CHAT_STATUS_SLOT_HEIGHT = 40;
@@ -42,16 +43,6 @@ export function phaseLabel({ phase, toolName }: StreamStatus): string {
 	}
 }
 
-function TypingDots() {
-	return (
-		<span className="flex shrink-0 items-center gap-2" aria-hidden="true">
-			<span className="size-6 animate-pulse rounded-full bg-current" />
-			<span className="size-6 animate-pulse rounded-full bg-current [animation-delay:200ms]" />
-			<span className="size-6 animate-pulse rounded-full bg-current [animation-delay:400ms]" />
-		</span>
-	);
-}
-
 export function StreamIndicator({ status }: { status: StreamStatus }) {
 	return (
 		<div
@@ -61,7 +52,9 @@ export function StreamIndicator({ status }: { status: StreamStatus }) {
 			aria-live="polite"
 			className="flex min-w-0 items-center gap-8 overflow-hidden py-4 text-text-muted tr-text-metadata"
 		>
-			<TypingDots />
+			<span aria-hidden="true" className="flex shrink-0">
+				<RunningIcon className="size-16 text-primary" />
+			</span>
 			<span className="min-w-0 truncate">{phaseLabel(status)}</span>
 		</div>
 	);
