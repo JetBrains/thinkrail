@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ThinkRail · Resources redesign — G across the workbench</title>
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<div class="page">
+	<nav class="page-nav">
+		<h1>Resources <small>· across the workbench</small></h1>
+		<div class="controls">
+			<div class="group-label tr-text-metadata">Theme</div>
+			<div class="seg" role="group" aria-label="Theme">
+				<button data-theme-pick="dark" aria-pressed="true">Dark</button>
+				<button data-theme-pick="light" aria-pressed="false">Light</button>
+				<button data-theme-pick="hc-dark" aria-pressed="false">HC dark</button>
+				<button data-theme-pick="hc-light" aria-pressed="false">HC light</button>
+			</div>
+			<div class="group-label tr-text-metadata" style="margin-top:8px">Active chat's resources</div>
+			<div class="seg" role="group" aria-label="Scenario" style="flex-wrap:wrap">
+				<button data-scenario-pick="busy" aria-pressed="true">Busy</button>
+				<button data-scenario-pick="needs" aria-pressed="false">Needs you</button>
+				<button data-scenario-pick="many" aria-pressed="false">Fan-out</button>
+				<button data-scenario-pick="idle" aria-pressed="false">Idle</button>
+				<button data-scenario-pick="stale" aria-pressed="false">Stale</button>
+			</div>
+			<p class="tr-text-metadata" style="color:var(--text-subtle);margin:4px 0 0" data-scenario-blurb></p>
+		</div>
+		<div class="group">
+			<div class="group-label tr-text-metadata">On this page</div>
+			<a class="nav tr-text-ui" href="#w1"><span class="k">1</span> Workbench at rest</a>
+			<a class="nav tr-text-ui" href="#legend"><span class="k">≡</span> One status vocabulary</a>
+			<a class="nav tr-text-ui" href="#w2"><span class="k">2</span> Closed chats keep running</a>
+			<a class="nav tr-text-ui" href="#w3"><span class="k">3</span> Workspace-scoped inspector</a>
+			<a class="nav tr-text-ui" href="#map">Surface map</a>
+		</div>
+		<div class="group">
+			<div class="group-label tr-text-metadata">Elsewhere</div>
+			<a class="nav tr-text-ui" href="./index.html#dir-g"><span class="k rec">G</span> The chat-column mockups ↗</a>
+			<a class="nav tr-text-ui" href="./COMPETITIVE-ANALYSIS.md">Competitive analysis ↗</a>
+		</div>
+	</nav>
+
+	<main class="page-main">
+		<div class="intro">
+			<h2 class="tr-heading-lg" style="margin:0 0 8px">Where G lands across the workbench</h2>
+			<p>G was designed inside one chat. ThinkRail already has the same three facts at the <em>chat</em> level on the wire — <code>SessionState.execution</code>, <code>needsInput</code> (question or dialog) and <code>completionUnread</code> — with workspace and project rollups in the store, but it renders them in exactly one place: the Projects-rail rows. These frames show the whole shell with one status vocabulary applied everywhere the facts already exist, plus the two places G itself reaches beyond the popover: the composer tray and a workspace-scoped inspector.</p>
+			<p>Everything is live: hover rows, click the history button, the trigger, dock rows, the scope pill; switch theme and the active chat's scenario in the sidebar. Marks are <em>word + glyph + colour</em> everywhere; colour alone is never the signal.</p>
+			<div class="pill-row"><span>whole shell</span><span>rail · tabs · trigger · tray · inspector</span><span>one vocabulary</span><span>4 themes</span></div>
+		</div>
+
+		<!-- ============================================================ W1 -->
+		<section class="direction" id="w1" style="grid-template-columns:1fr">
+			<header>
+				<h2><span class="k">1</span> Workbench at rest <span class="tag">chat tabs · rail rows · trigger · composer tray</span><span class="tag">no wire change</span></h2>
+				<p class="lede">Four chats are open: the active one is working with G's dock below the transcript; <em>Changes toolbar</em> is working too; <em>Spec import</em> is blocked on a question (amber); <em>Flaky e2e</em> finished while you were away (green, static). The rail row for this workspace rolls those up as counts and names what it is waiting on; the collapsed <em>pi-visualize</em> project rolls up the same way. The composer tray is one strip: your queued steering / follow-up first, the agent's live work after.</p>
+			</header>
+			<div class="frame-wrap">
+				<div data-mount="W1"></div>
+				<div class="frame-caption"><b>Try:</b> <span>hover chat tabs → status in the tooltip</span><span>hover tray rows → edit / remove on queue rows, Inspect / Stop on live rows</span><span>click the trigger or a live row → inspector over the transcript</span><span>Scenario “Needs you” → the active chat's own amber row pins in the tray and on the trigger</span></div>
+				<div class="wb-caption-grid">
+					<aside class="notes"><div><h3>Chat tabs</h3><ul>
+						<li class="ok">Working = the chat glyph breathes (<code>RunningIcon</code>, as the rail does today).</li>
+						<li class="ok">Needs you = amber dot after the title; unread result = static green dot. Tooltip carries the word.</li>
+						<li class="need">Source: <code>selectSessionState</code>, rendered through <code>renderTabAdornment</code> in <code>WorkspaceWorkbench</code> — today that hook only paints review flags.</li>
+					</ul></div></aside>
+					<aside class="notes"><div><h3>Rail rows</h3><ul>
+						<li class="ok">Keeps today's breathing identity glyph; adds right-aligned counts <em>working · needs you · unread</em> from the existing rollup selectors.</li>
+						<li class="ok">Second line names the blocker (“waiting: question in …”) — <code>SessionInputState.kind</code> already distinguishes question vs dialog.</li>
+						<li class="need"><em>Proposed:</em> a “jump to next chat that needs you” action (⌥⇧N) in the rail header; Conductor and Claude Desktop both ship one.</li>
+					</ul></div></aside>
+					<aside class="notes"><div><h3>Composer tray</h3><ul>
+						<li class="ok">Merges <code>QueueStrip</code> and G's dock into one tray above the composer — two strips never stack.</li>
+						<li class="ok">Queue rows are yours (edit / remove, “next step” vs “after turn”); live rows are the agent's (Inspect / Stop). Same grammar, different glyphs.</li>
+						<li class="warn">Review badge turns amber: it is a needs-you signal, so it should wear the needs-you colour.</li>
+					</ul></div></aside>
+				</div>
+			</div>
+		</section>
+
+		<!-- ============================================================ legend -->
+		<section class="direction" id="legend" style="grid-template-columns:1fr">
+			<header>
+				<h2><span class="k">≡</span> One status vocabulary <span class="tag">precondition for everything else</span></h2>
+				<p class="lede">Today <code>AttentionDot</code> is <em>green</em> and means “needs input <em>or</em> unread result”; G uses amber for needs-you. The proposal keeps both existing components and changes one thing: needs-input moves to the warning colour, so <em>blocked</em> and <em>done, unread</em> stop sharing a mark. Applied to rail rows, chat tabs, the trigger, the tray and the inspector.</p>
+			</header>
+			<div class="frame-wrap"><div data-mount="legend"></div></div>
+		</section>
+
+		<!-- ============================================================ W2 -->
+		<section class="direction" id="w2" style="grid-template-columns:1fr">
+			<header>
+				<h2><span class="k">2</span> Closed chats keep running <span class="tag">history menu</span><span class="tag">no wire change</span></h2>
+				<p class="lede">Closing a chat tab keeps its runtime and host session alive (<code>closeChatToHistory</code>) — so a closed chat's dev server and subagents keep going, and today nothing but the workspace rollup hints at it. The history menu gets the same marks: <em>Theme audit</em> is still working with a storybook server running, <em>Pierre diff review</em> finished unread. The history button itself carries a dot when anything closed is live.</p>
+			</header>
+			<div class="frame-wrap">
+				<div data-mount="W2"></div>
+				<div class="frame-caption"><b>Try:</b> <span>hover a closed row → Inspect its resources / Reopen / Delete</span><span>Inspect on “Theme audit” → the inspector opens in workspace scope at its storybook server</span><span><kbd>Esc</kbd> closes the menu</span></div>
+				<div class="wb-caption-grid">
+					<aside class="notes"><div><h3>What changes</h3><ul>
+						<li class="ok"><code>WorkspaceChatHistory</code> rows gain glyph + mark + a one-line status (“still working · 1 resource running”, “needs you · question”, “finished · result unread”).</li>
+						<li class="ok">The button shows a dot while any closed chat is working or blocked — otherwise the only trace is the rail rollup.</li>
+					</ul></div></aside>
+					<aside class="notes"><div><h3>Why it matters</h3><ul>
+						<li class="warn">“I closed the tab; is the dev server still running?” has no answer in the UI today. Several competitor bug threads are exactly this confusion (Cursor's zombie rows, Codex's archived-yet-spinning threads).</li>
+					</ul></div></aside>
+					<aside class="notes"><div><h3>Contracts</h3><ul>
+						<li class="ok">Chat status: <code>sessionStateByWorkspace</code> already covers closed sessions.</li>
+						<li class="need">“1 resource running” on a closed chat needs that chat's resources — the workspace-level read from frame 3.</li>
+					</ul></div></aside>
+				</div>
+			</div>
+		</section>
+
+		<!-- ============================================================ W3 -->
+		<section class="direction" id="w3" style="grid-template-columns:1fr">
+			<header>
+				<h2><span class="k">3</span> Workspace-scoped inspector <span class="tag">G's inspector + direction C's scope switch</span><span class="tag">needs one wire read</span></h2>
+				<p class="lede">The same inspector, with the scope pill switched to <em>Workspace</em>: this chat's rows first, then other open chats' background work, then closed chats' — grouped by chat, same row grammar, same detail pane. It answers “what is running anywhere in this worktree?” without a new pane, and it is where the history menu's <em>Inspect</em> lands.</p>
+			</header>
+			<div class="frame-wrap">
+				<div data-mount="W3"></div>
+				<div class="frame-caption"><b>Try:</b> <span>scope pill → back to “This chat”</span><span>click rows across chats, <kbd>↑</kbd> <kbd>↓</kbd> walks the whole list</span><span>Stop on a closed chat's server → it stops; closing the chat never did</span></div>
+				<div class="wb-caption-grid">
+					<aside class="notes"><div><h3>Scope rules</h3><ul>
+						<li class="ok">Default scope is <em>This chat</em> — the inspector stays chat-first; Workspace is one click and remembered per workspace.</li>
+						<li class="ok">Groups: this chat · open chats · closed chats (with “closed N ago”). Needs-you rows still sort first inside each group.</li>
+						<li class="ok">Stop-all stays scoped to the current chat's subagents; no cross-chat mass stop.</li>
+					</ul></div></aside>
+					<aside class="notes"><div><h3>Contracts</h3><ul>
+						<li class="need">One new read: <code>workspace.resources({ workspaceId })</code> (or <code>session.resources</code> accepting a list), plus <code>session.resourcesChanged</code> fan-out per workspace. Output/transcript reads stay per selected row.</li>
+						<li class="ok">Everything else — row model, detail polling, authority rules — is unchanged from G.</li>
+					</ul></div></aside>
+					<aside class="notes"><div><h3>Not in scope</h3><ul>
+						<li class="warn">User-owned terminals stay out (spec rule); project- or app-wide scope is a fleet view and belongs to the rail, not the inspector.</li>
+					</ul></div></aside>
+				</div>
+			</div>
+		</section>
+
+		<!-- ============================================================ map -->
+		<section class="direction" id="map" style="grid-template-columns:1fr">
+			<header>
+				<h2>Surface map <span class="tag">what each piece of G touches</span></h2>
+			</header>
+			<div class="frame-wrap">
+				<table class="legend">
+					<thead><tr><th>Surface</th><th>Today</th><th>With G's vocabulary</th><th>Wire</th><th>Tier</th></tr></thead>
+					<tbody>
+						<tr><td>Chat Resources</td><td class="today">header popover · 3-line rows · log dialog · transcript dialog</td><td>trigger + dock + inspector (G)</td><td>none</td><td>1</td></tr>
+						<tr><td>Composer</td><td class="today"><code>QueueStrip</code> above the composer</td><td>one tray: queue rows + live rows</td><td>none</td><td>1</td></tr>
+						<tr><td>Transcript receipts</td><td class="today">Agent / completion cards with <em>Transcript</em>; divider chips for specs & files</td><td><em>Inspect</em> deep-links; “N still running” chip</td><td>none</td><td>1</td></tr>
+						<tr><td>Center chat tabs</td><td class="today">no status</td><td>breathing glyph · amber needs-you · green unread</td><td>none</td><td>2</td></tr>
+						<tr><td>Projects rail rows</td><td class="today">breathing glyph + green dot</td><td>+ counts, blocker name, jump-to-next</td><td>none</td><td>2</td></tr>
+						<tr><td>Closed-chat menu</td><td class="today">names only</td><td>status marks + one-line state</td><td>none (counts need tier 3)</td><td>2</td></tr>
+						<tr><td>Review tool badge</td><td class="today">green count</td><td>amber count (needs-you)</td><td>none</td><td>2</td></tr>
+						<tr><td>Workspace-scoped inspector</td><td class="today">—</td><td>scope pill: this chat / workspace, grouped by chat</td><td>workspace-level resources read</td><td>3</td></tr>
+						<tr><td>Top bar fleet count</td><td class="today">—</td><td>“N working · N need you” across the project (shown faintly in the frames)</td><td>none</td><td>3 · optional</td></tr>
+						<tr><td>Desktop notifications / badge</td><td class="today">—</td><td>needs-you and unread across chats</td><td>none</td><td>3 · later</td></tr>
+						<tr><td>Terminals</td><td class="today">busy-process close confirm</td><td>unchanged — user-owned, stays out of Resources</td><td>—</td><td>—</td></tr>
+					</tbody>
+				</table>
+			</div>
+		</section>
+	</main>
+</div>
+<script src="./icons.js"></script>
+<script src="./mock.js"></script>
+<script src="./workbench.js"></script>
+</body>
+</html>

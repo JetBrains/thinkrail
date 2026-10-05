@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ThinkRail · Resources redesign — mockups</title>
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+<div class="page">
+	<nav class="page-nav">
+		<h1>Resources <small>· redesign</small></h1>
+		<div class="controls">
+			<div class="group-label tr-text-metadata">Theme</div>
+			<div class="seg" role="group" aria-label="Theme">
+				<button data-theme-pick="dark" aria-pressed="true">Dark</button>
+				<button data-theme-pick="light" aria-pressed="false">Light</button>
+				<button data-theme-pick="hc-dark" aria-pressed="false">HC dark</button>
+				<button data-theme-pick="hc-light" aria-pressed="false">HC light</button>
+			</div>
+			<div class="group-label tr-text-metadata" style="margin-top:8px">Scenario</div>
+			<div class="seg" role="group" aria-label="Scenario" style="flex-wrap:wrap">
+				<button data-scenario-pick="busy" aria-pressed="true">Busy</button>
+				<button data-scenario-pick="needs" aria-pressed="false">Needs you</button>
+				<button data-scenario-pick="many" aria-pressed="false">Fan-out</button>
+				<button data-scenario-pick="idle" aria-pressed="false">Idle</button>
+				<button data-scenario-pick="stale" aria-pressed="false">Stale</button>
+			</div>
+			<p class="tr-text-metadata" style="color:var(--text-subtle);margin:4px 0 0" data-scenario-blurb></p>
+		</div>
+		<div class="group">
+			<div class="group-label tr-text-metadata">Directions</div>
+			<a class="nav tr-text-ui" href="#baseline"><span class="k">0</span> Baseline (today)</a>
+			<a class="nav tr-text-ui" href="#dir-g"><span class="k rec">G</span> Combined (A + B + F)</a>
+			<a class="nav tr-text-ui" href="#dir-a"><span class="k">A</span> Roster popover</a>
+			<a class="nav tr-text-ui" href="#dir-b"><span class="k">B</span> Composer dock</a>
+			<a class="nav tr-text-ui" href="#dir-c"><span class="k">C</span> Activity side tool</a>
+			<a class="nav tr-text-ui" href="#dir-d"><span class="k">D</span> Inline receipts</a>
+			<a class="nav tr-text-ui" href="#dir-e"><span class="k">E</span> Pill bar</a>
+			<a class="nav tr-text-ui" href="#dir-f"><span class="k">F</span> Inspector sheet</a>
+		</div>
+		<div class="group">
+			<div class="group-label tr-text-metadata">Shared pieces</div>
+			<a class="nav tr-text-ui" href="#triggers">Header trigger states</a>
+			<a class="nav tr-text-ui" href="#vocab">Row vocabulary</a>
+			<a class="nav tr-text-ui" href="#references">Competitor references</a>
+			<a class="nav tr-text-ui" href="./COMPETITIVE-ANALYSIS.md">Competitive analysis ↗</a>
+		</div>
+		<div class="group">
+			<div class="group-label tr-text-metadata">Beyond the chat</div>
+			<a class="nav tr-text-ui" href="./workbench.html"><span class="k">W</span> G across the workbench ↗</a>
+		</div>
+	</nav>
+
+	<main class="page-main">
+		<div class="intro">
+			<h2 class="tr-heading-lg" style="margin:0 0 8px">How should background work look in a ThinkRail chat?</h2>
+			<p>“Resources” are the things an agent starts that outlive a tool call: background commands and subagents. Today they live in a header popover with three-line rows and lowercase status words. These mockups explore six placements for the same data, each rendered with the real ThinkRail palette, type scale and spacing — switch theme and scenario in the sidebar; everything below is live (hover rows for actions, click triggers, stop things).</p>
+			<p>Each direction lists what it borrows from competitors, its trade-offs, and whether it fits the current contracts (<code>SessionResources</code>, <code>backgroundCommand.output</code>, <code>subagent.getTranscript</code>) or needs a wire change. Fields marked <em>proposed</em> — live activity, needs-input, model/usage, nesting — do not exist on the wire yet.</p>
+			<p><b style="color:var(--text-default);font-weight:500">Where this landed:</b> after review, the header trigger and row grammar of <a href="#dir-a">A</a>, the composer dock of <a href="#dir-b">B</a> and the inspector of <a href="#dir-f">F</a> were combined into <a href="#dir-g"><b style="color:var(--primary);font-weight:500">G</b></a>, shown first. A–F stay below as the explored alternatives and as the component sources. A second page, <a href="./workbench.html"><b style="color:var(--text-default);font-weight:500">G across the workbench</b></a>, applies the same vocabulary to chat tabs, rail rows, the composer tray, the closed-chat menu and a workspace-scoped inspector.</p>
+			<div class="pill-row"><span>real tokens</span><span>4 themes</span><span>5 scenarios</span><span>live timers</span><span>keyboard: Esc closes</span></div>
+		</div>
+
+		<!-- ============================================================ 0 baseline -->
+		<section class="direction" id="baseline">
+			<header>
+				<h2><span class="k">0</span> Baseline — what ships today <span class="tag">header popover</span></h2>
+				<p class="lede">Captured from the running app with a populated snapshot (dark theme). Functional and honest about authority, but every row is a three-line stack with a lowercase status word, no elapsed time, no activity, and ghost text buttons that read as content.</p>
+			</header>
+			<div class="frame-wrap">
+				<div class="baseline-shots">
+					<figure><img src="./baseline/page-popover-dark.png" alt="Current Resources popover open over the chat" /><figcaption>Popover over the chat tab · <code>Resources 4</code> trigger</figcaption></figure>
+					<figure><img src="./baseline/popover-finished-dark.png" alt="Current popover with Finished expanded" style="max-height:420px;width:auto;margin:0 auto" /><figcaption>Finished expanded · status is a word, exit code is text</figcaption></figure>
+				</div>
+			</div>
+			<aside class="notes">
+				<div><h3>Keep</h3><ul>
+					<li class="ok"><b>Authority discipline</b> — unknown count renders as “—”, stale snapshots disable controls, Stop means “requested”. Several competitors' worst bugs are exactly here (Cursor's stuck “Starting up”, Codex's eternal spinners).</li>
+					<li class="ok"><b>Finished stays reachable</b> (contracts retain 20) and never stops work on close.</li>
+					<li class="ok"><b>Header placement</b> — zero footprint when idle.</li>
+				</ul></div>
+				<div><h3>Fix</h3><ul>
+					<li class="warn">Status is a lowercase word with no glyph/colour; “running” and “queued” look identical at a glance.</li>
+					<li class="warn">No time: no elapsed, no duration, no “since when”.</li>
+					<li class="warn">Raw command / full task as a headline; actions as a third line of text buttons → 90 px per row.</li>
+					<li class="warn">“Stop all subagents” competes with the section title; no confirmation affordance visible.</li>
+					<li class="warn">Logs open a modal that covers the chat; no way to glance at a tail.</li>
+				</ul></div>
+			</aside>
+		</section>
+
+		<!-- ============================================================ G (combined) -->
+		<section class="direction" id="dir-g">
+			<header>
+				<h2><span class="k rec">G</span> Combined — trigger · dock · inspector <span class="tag">recommended</span><span class="tag">A + B + F</span><span class="tag">fits current contracts</span></h2>
+				<p class="lede">Three surfaces, one roster, one row grammar. The <b>header trigger</b> (A) is the always-present control: count, breathing dot while anything is live, amber marker when a child needs you. The <b>composer dock</b> (B) is the ambient view — live rows only, Stop on hover, Claude Code's footer panel in spirit. The <b>inspector</b> (F) is the detail view: it slides over the message list (the composer stays usable) with the full roster on the left and the selected item's log tail or transcript on the right. Every way in — trigger, dock row, the <em>“N still running”</em> chip, <em>Inspect</em> on an Agent or background-command card — opens the same inspector at that item; while it is open the dock yields so the live list never renders twice.</p>
+			</header>
+			<div class="frame-wrap">
+				<div class="frame-stack">
+					<div class="sub"><span class="k2">1</span> At rest — trigger + dock + chip; tool cards carry <em>Inspect</em></div>
+					<div data-mount="G1"></div>
+					<div class="frame-caption"><b>Try:</b> <span>click the trigger, a dock row, the “N still running” chip, or <em>Inspect</em> on a card → inspector opens at that item</span><span>hover a dock row → Stop</span><span>Scenario “Needs you” → the amber row stays pinned even when the dock is collapsed</span><span>Scenario “Idle” → trigger reads 0, chip gone; only the dismissible failed row is left in the dock — × it and the dock disappears</span></div>
+					<div class="sub"><span class="k2">2</span> Inspector open — opened from the dock on “scout”</div>
+					<div data-mount="G2"></div>
+					<div class="frame-caption"><b>Try:</b> <span>click rows on the left or press <kbd>↑</kbd> <kbd>↓</kbd></span><span>Stop on the detail header; Stop-all (■) in the list header → confirmation names the count</span><span>× / scrim / <kbd>Esc</kbd> → back to the chat, the dock returns</span><span>Scenario “Stale” → — on the trigger, controls disabled, banner in the list</span></div>
+				</div>
+			</div>
+			<aside class="notes">
+				<div><h3>How the pieces fit</h3>
+					<dl class="flow">
+						<dt>Trigger</dt><dd>Only always-present control. Count = authoritative live rows; dot breathes while live; amber marker when a child needs you; <code>—</code> while the snapshot is unauthoritative. Toggles the inspector.</dd>
+						<dt>Dock</dt><dd>Live rows + the most recent failure until dismissed. Row = glyph·dot · name · activity · state · elapsed; hover → Inspect / Stop; click → inspector at that row. Collapses past five rows but pins needs-you rows; disappears when idle; hidden while the inspector is open.</dd>
+						<dt>Chat</dt><dd>No inline roster. The turn-divider chip (“N still running”) and tool cards are receipts that deep-link into the inspector. Cards keep their own expand/collapse.</dd>
+						<dt>Inspector</dt><dd>Roster (Needs you / Active / Finished) + detail in one surface: metadata, live log tail or read-only transcript preview, Stop, open full transcript. Replaces the popover, the log dialog and the transcript peek. ↑↓ switch, Esc closes, focus returns to the opener.</dd>
+					</dl>
+				</div>
+				<div><h3>Rules it keeps</h3><ul>
+					<li class="ok"><b>One live roster at a time</b> — dock <em>or</em> inspector list (T3's lesson).</li>
+					<li class="ok"><b>Same row grammar everywhere</b>; one in-flight colour; failure loud, success quiet, stopped neutral (Kiro).</li>
+					<li class="ok"><b>Authority discipline unchanged</b> — unknown count is <code>—</code>, stale snapshot disables controls, Stop means “requested”.</li>
+					<li class="ok"><b>No composer jitter</b> — the dock reserves its rows and animates once; the inspector never pushes layout (Codex #10962).</li>
+					<li class="warn">The inspector covers most of the transcript while open — that is the trade for not stacking a popover on a dialog. Phones get a full-height two-step sheet (list → detail).</li>
+				</ul></div>
+				<div><h3>Contracts</h3><ul>
+					<li class="ok">Dock and inspector list render today's <code>SessionResources</code>; the detail polls <code>backgroundCommand.output</code> / <code>subagent.getTranscript</code> for the selected row only — the same rule as today's open detail.</li>
+					<li class="need"><em>Proposed:</em> subagent live activity + <code>needsInput</code>; model/usage; <code>parentId</code> for nesting. The design degrades gracefully without them (activity falls back to the task).</li>
+					<li class="need"><em>Spec impact:</em> <code>resources/SPEC.md</code> moves from “header popover” to “trigger + dock + inspector”; the chat spec's “no new shell pane” holds — everything lives inside the chat column.</li>
+				</ul></div>
+			</aside>
+		</section>
+
+		<!-- ============================================================ A -->
+		<section class="direction" id="dir-a">
+			<header>
+				<h2><span class="k">A</span> Roster popover <span class="tag">trigger + row grammar → reused in G</span><span class="tag">fits current contracts</span></h2>
+				<p class="lede">Same placement, new content: one unified list sorted by urgency (Needs you → Working → Stopping → Queued), each row a single sentence <em>glyph · name · activity · elapsed</em>, actions on hover/focus, Finished folded with a count. The trigger breathes while anything is live and carries an amber marker when a child needs you.</p>
+			</header>
+			<div class="frame-wrap">
+				<div data-mount="A"></div>
+				<div class="frame-caption"><b>Try:</b> <span>hover a row → Logs/Transcript + Stop</span><span>click Stop on “scout” → Stopped (neutral)</span><span>Stop all → confirmation names the count</span><span>Finished ▸ toggle</span><span>Scenario “Stale” → controls disabled, trigger shows —</span></div>
+			</div>
+			<aside class="notes">
+				<div><h3>Borrowed from</h3><ul>
+					<li>Claude Code <code>/tasks</code>: running sorted first, one dialog for shells <em>and</em> agents, Enter = output + Stop.</li>
+					<li>T3 Code: one in-flight colour (“Working”), only settled states differ; failures loud, success quiet.</li>
+					<li>Kiro Crew: stopped is neutral, not a failure; Stop-all behind a confirmation with the count.</li>
+					<li>OpenCode: finished list kept short and folded.</li>
+				</ul></div>
+				<div><h3>Trade-offs</h3><ul>
+					<li class="ok">Zero footprint when idle; keeps the existing a11y contract (name = state word + glyph + colour).</li>
+					<li class="ok">Row height 32 px vs ~90 px today → 2.5× more rows per popover.</li>
+					<li class="warn">Still blind while closed; the trigger's dot/marker is the only live signal.</li>
+					<li class="warn">Unified list drops the Commands/Subagents section split; the glyph has to carry the kind. (Alternative: keep two sections, same rows.)</li>
+				</ul></div>
+				<div><h3>Contracts</h3><ul>
+					<li class="ok">Everything shown exists today: name/command, task/role, status, startedAt/finishedAt/exitCode, errorMessage/abortReason.</li>
+					<li class="need"><em>Proposed:</em> subagent live activity line and <code>needsInput</code>; model/usage per child.</li>
+				</ul></div>
+			</aside>
+		</section>
+
+		<!-- ============================================================ B -->
+		<section class="direction" id="dir-b">
+			<header>
+				<h2><span class="k">B</span> Composer dock <span class="tag">dock → reused in G</span><span class="tag">fits current contracts</span></h2>
+				<p class="lede">A borderless strip docked above the composer lists only <em>live</em> work (plus a recently-failed row until dismissed). It auto-collapses to one summary line past four rows and vanishes when idle. The header trigger still opens the full roster with Finished — the dock is the live view, the popover is the history.</p>
+			</header>
+			<div class="frame-wrap">
+				<div data-mount="B"></div>
+				<div class="frame-caption"><b>Try:</b> <span>hover a dock row → Stop</span><span>“hide” collapses to the summary line</span><span>× dismisses the failed row</span><span>Scenario “Fan-out” → auto-collapsed summary</span><span>Scenario “Idle” → only a dismissible failed row remains; × it and the dock is gone</span></div>
+			</div>
+			<aside class="notes">
+				<div><h3>Borrowed from</h3><ul>
+					<li>Claude Code's subagent panel below the prompt (↑↓ · Enter · x · Esc) and Qwen Code's <code>LiveAgentPanel</code>: “status · name · activity · elapsed, borderless so it sits lightly above the composer”.</li>
+					<li>Cursor “N Working” panel: count header, Stop All, children indented.</li>
+					<li>Codex #10962: one canonical summary string, never a row that jitters the composer.</li>
+					<li>OpenCode: active list collapses past one row and remembers it.</li>
+				</ul></div>
+				<div><h3>Trade-offs</h3><ul>
+					<li class="ok">You see work the moment it starts, where you type; stop is one hover away.</li>
+					<li class="ok">Keyboard-reachable from the composer (↑ into the dock).</li>
+					<li class="warn">Costs 26–130 px of vertical space in a column that already hosts the plan strip; must animate once and reserve height.</li>
+					<li class="warn">Two surfaces (dock + popover) risk the “roster rendered twice” problem T3 hit — rule: live rows only ever appear in the dock.</li>
+				</ul></div>
+				<div><h3>Contracts</h3><ul><li class="ok">No new reads; the dock renders the same snapshot.</li></ul></div>
+			</aside>
+		</section>
+
+		<!-- ============================================================ C -->
+		<section class="direction" id="dir-c">
+			<header>
+				<h2><span class="k">C</span> Activity side tool <span class="tag">workbench pane</span><span class="tag">needs new wire reads</span></h2>
+				<p class="lede">Resources become a singleton side tool next to Specs/Files (movable like every other tool). Room for a second line per row (task · model · usage), a two-line output tail under live commands (Codex <code>/ps</code>), and a scope switch from “This chat” to “Workspace” that groups other chats' work. The chat header keeps a small “Activity · N” jump button.</p>
+			</header>
+			<div class="frame-wrap">
+				<div data-mount="C"></div>
+				<div class="frame-caption"><b>Try:</b> <span>scope pill → Workspace groups another chat's work</span><span>hover rows → actions</span><span>Finished ▸</span></div>
+			</div>
+			<aside class="notes">
+				<div><h3>Borrowed from</h3><ul>
+					<li>Claude Code Desktop “tasks pane” (subagents + shells + workflows, click → output in the subagent pane).</li>
+					<li>T3 Code Agents panel; Kiro Crew Activity panel (task · elapsed · status · Stop/Stop all/Retry).</li>
+					<li>Codex <code>/ps</code>: command plus up to three recent non-empty output lines.</li>
+					<li>Antigravity <code>/agents</code>: subagents grouped by triggering prompt; <kbd>K</kbd> kills row + children.</li>
+				</ul></div>
+				<div><h3>Trade-offs</h3><ul>
+					<li class="ok">The only direction with room for tails, usage and nesting without a modal.</li>
+					<li class="ok">Natural home for a workspace-wide view (“what is running anywhere here?”).</li>
+					<li class="warn">Another tool tab that is empty most of the time; competes with Changes/Review for side real estate.</li>
+					<li class="warn">Breaks the current spec's “no new shell pane” decision and the chat-scoped contract.</li>
+				</ul></div>
+				<div><h3>Contracts</h3><ul>
+					<li class="need">Tail preview needs <code>backgroundCommand.output</code> polling outside an open detail (today limited to the open dialog) or a tail field on <code>session.resourcesChanged</code>.</li>
+					<li class="need">Workspace scope needs a workspace-level resources read.</li>
+				</ul></div>
+			</aside>
+		</section>
+
+		<!-- ============================================================ D -->
+		<section class="direction" id="dir-d">
+			<header>
+				<h2><span class="k">D</span> Inline receipts <span class="tag">the transcript is the roster</span></h2>
+				<p class="lede">No separate list while reading: a spawn batch gets one anchored row at its spawn point (“Kicked off N subagents · 1 working · Σ tokens — Open resources”) with the live children beneath it; a background command becomes a card with a live tail. A floating “N working” pill keeps the count visible when those rows scroll away; the popover holds Finished.</p>
+			</header>
+			<div class="frame-wrap">
+				<div data-mount="D"></div>
+				<div class="frame-caption"><b>Try:</b> <span>hover inline rows → Stop</span><span>floating pill / “Open resources” → history popover</span></div>
+			</div>
+			<aside class="notes">
+				<div><h3>Borrowed from</h3><ul>
+					<li>T3 Code's spawn CTA row (exempt from turn folding, frozen to past tense on settle).</li>
+					<li>Amp: subagents as inline rows with outcome stats; Zed: Stop on the terminal tool card.</li>
+					<li>ThinkRail's own <code>AgentCard</code> / completion-card convention.</li>
+				</ul></div>
+				<div><h3>Trade-offs</h3><ul>
+					<li class="ok">Context at the point of delegation; receipts and live state in one place.</li>
+					<li class="warn">Scrolls away — hence the floating pill. Virtualised transcript rows re-render under live timers.</li>
+					<li class="warn">Duplicates the existing Agent/background_command tool cards unless those are replaced; the roster must never render twice.</li>
+					<li class="warn">Commands started in earlier turns are far up the transcript.</li>
+				</ul></div>
+				<div><h3>Contracts</h3><ul><li class="ok">Spawn rows derive from existing tool calls; live tails need the same output read as C.</li></ul></div>
+			</aside>
+		</section>
+
+		<!-- ============================================================ E -->
+		<section class="direction" id="dir-e">
+			<header>
+				<h2><span class="k">E</span> Pill bar <span class="tag">switch into a child in place</span></h2>
+				<p class="lede">Under the chat header, one pill per live resource next to a <em>main</em> pill. Clicking a pill swaps the chat body for that child's log or transcript in place (Stop + Back to chat); the bar shows at most five and folds the rest. Finished lives behind a trailing pill.</p>
+			</header>
+			<div class="frame-wrap">
+				<div data-mount="E"></div>
+				<div class="frame-caption"><b>Try:</b> <span>click “vite dev server” or “scout” pills</span><span>“main” returns to the chat</span><span>Scenario “Fan-out” → +N more</span></div>
+			</div>
+			<aside class="notes">
+				<div><h3>Borrowed from</h3><ul>
+					<li>Warp's orchestration pill bar (parent left, one pill per child with live badge, click to swap the pane).</li>
+					<li>Codex app's child threads nested under the parent.</li>
+				</ul></div>
+				<div><h3>Trade-offs</h3><ul>
+					<li class="ok">Fast glance + fast drill-in; no modal for logs.</li>
+					<li class="warn">Breaks down past ~5 items (Fan-out scenario); pills truncate names.</li>
+					<li class="warn">Implies children are peers of the conversation; subagent transcripts here are read-only, which the UI must say.</li>
+					<li class="warn">Permanent 36 px row even when idle unless it hides itself.</li>
+				</ul></div>
+				<div><h3>Contracts</h3><ul><li class="ok">Existing output/transcript reads, but polled for the selected pill while open.</li></ul></div>
+			</aside>
+		</section>
+
+		<!-- ============================================================ F -->
+		<section class="direction" id="dir-f">
+			<header>
+				<h2><span class="k">F</span> Inspector sheet <span class="tag">inspector → reused in G</span><span class="tag">fits current contracts</span></h2>
+				<p class="lede">The trigger opens a sheet inside the chat column instead of a popover: the roster on the left (Needs you / Active / Finished), the selected item's detail on the right — metadata, live log tail or transcript preview, Stop. Logs and transcripts stop being separate dialogs; ↑↓ moves between items, Esc closes.</p>
+			</header>
+			<div class="frame-wrap">
+				<div data-mount="F"></div>
+				<div class="frame-caption"><b>Try:</b> <span>click rows on the left</span><span>Stop on the detail header</span><span>× or Esc closes</span></div>
+			</div>
+			<aside class="notes">
+				<div><h3>Borrowed from</h3><ul>
+					<li>Claude Code agent view: list + <kbd>Space</kbd> peek pane; Claude Desktop tasks pane → subagent pane.</li>
+					<li>Antigravity Subagent Detail View; Gemini CLI <kbd>Ctrl+B</kbd> toggling the current shell's output.</li>
+				</ul></div>
+				<div><h3>Trade-offs</h3><ul>
+					<li class="ok">One surface replaces popover + log dialog + (for a peek) the transcript dialog; detail polling reuses the existing single-flight loop.</li>
+					<li class="ok">Keyboard model is simple and matches the existing focus-return rules.</li>
+					<li class="warn">Covers most of the chat while open; needs a min width (~520 px) so phones fall back to a full-screen sheet.</li>
+					<li class="warn">Heavier than a glance; pair with the trigger dot (or B's dock) for ambient awareness.</li>
+				</ul></div>
+				<div><h3>Contracts</h3><ul><li class="ok">Uses <code>backgroundCommand.output</code> / <code>subagent.getTranscript</code> for the selected row only — same rule as today's open detail.</li></ul></div>
+			</aside>
+		</section>
+
+		<!-- ============================================================ shared: triggers -->
+		<section class="direction" id="triggers">
+			<header>
+				<h2>Header trigger states <span class="tag">shared by A · B · D · F</span></h2>
+				<p class="lede">The trigger is the only ambient signal in the popover-based directions, so it has to carry three facts honestly: how many things are live, whether any needs you, and whether the number can be trusted.</p>
+			</header>
+			<div class="frame-wrap" style="grid-column:1 / -1"><div data-mount="triggers"></div></div>
+		</section>
+
+		<!-- ============================================================ shared: vocabulary -->
+		<section class="direction" id="vocab">
+			<header>
+				<h2>Row vocabulary <span class="tag">one grammar for every direction</span></h2>
+				<p class="lede">A resource row reads as a sentence. The kind glyph carries a status dot; the state is always glyph + colour + word; time is right-aligned and tabular; actions appear on hover/focus and replace the state text so the row never grows.</p>
+			</header>
+			<div class="frame-wrap" style="grid-column:1 / -1">
+				<div class="trigger-grid wide">
+					<div class="trigger-card"><div class="lbl">Live command</div><div style="background:var(--container-elevated-bg);border:1px solid var(--border-muted);border-radius:6px;padding:4px" id="v1"></div></div>
+					<div class="trigger-card"><div class="lbl">Stopping</div><div style="background:var(--container-elevated-bg);border:1px solid var(--border-muted);border-radius:6px;padding:4px" id="v2"></div></div>
+					<div class="trigger-card"><div class="lbl">Subagent working (proposed activity line)</div><div style="background:var(--container-elevated-bg);border:1px solid var(--border-muted);border-radius:6px;padding:4px" id="v3"></div></div>
+					<div class="trigger-card"><div class="lbl">Subagent queued</div><div style="background:var(--container-elevated-bg);border:1px solid var(--border-muted);border-radius:6px;padding:4px" id="v4"></div></div>
+					<div class="trigger-card"><div class="lbl">Needs you (proposed)</div><div style="background:var(--container-elevated-bg);border:1px solid var(--border-muted);border-radius:6px;padding:4px" id="v5"></div></div>
+					<div class="trigger-card"><div class="lbl">Finished · exit 0</div><div style="background:var(--container-elevated-bg);border:1px solid var(--border-muted);border-radius:6px;padding:4px" id="v6"></div></div>
+					<div class="trigger-card"><div class="lbl">Failed · exit 1</div><div style="background:var(--container-elevated-bg);border:1px solid var(--border-muted);border-radius:6px;padding:4px" id="v7"></div></div>
+					<div class="trigger-card"><div class="lbl">Stopped by user (neutral)</div><div style="background:var(--container-elevated-bg);border:1px solid var(--border-muted);border-radius:6px;padding:4px" id="v8"></div></div>
+					<div class="trigger-card"><div class="lbl">Nested child (proposed parentId)</div><div style="background:var(--container-elevated-bg);border:1px solid var(--border-muted);border-radius:6px;padding:4px" id="v9"></div></div>
+				</div>
+			</div>
+		</section>
+
+		<!-- ============================================================ references -->
+		<section class="direction" id="references">
+			<header>
+				<h2>Competitor references <span class="tag">screenshots</span></h2>
+				<p class="lede">Three shapes worth keeping in view while deciding (linked to their sources — the screenshots are theirs, not ours). Full notes in <a href="./COMPETITIVE-ANALYSIS.md">COMPETITIVE-ANALYSIS.md</a>.</p>
+			</header>
+			<div class="frame-wrap" style="grid-column:1 / -1">
+				<ul class="tr-text-ui" style="margin:0;padding-left:18px;color:var(--text-muted);display:flex;flex-direction:column;gap:6px">
+					<li><b style="color:var(--text-default);font-weight:500">Cursor</b> — the “9 Working” panel above the composer (glyph · title · inline summary, Stop All, nested child): <a href="https://forum.cursor.com/t/subagent-panel-stuck-on-starting-up-stop-all-does-nothing/166041/7">forum report with screenshot</a>.</li>
+					<li><b style="color:var(--text-default);font-weight:500">Amp</b> — subagents as inline transcript rows with outcome stats (+/−/~): <a href="https://ampcode.com/notes/agents-for-the-agent">“Agents for the Agent”</a>.</li>
+					<li><b style="color:var(--text-default);font-weight:500">Antigravity CLI</b> — the <code>/agents</code> panel (grouped subagents, <kbd>K</kbd> kills, <kbd>Enter</kbd> opens detail): <a href="https://www.antigravity.google/docs/cli/commands/agents">docs</a>.</li>
+				</ul>
+			</div>
+		</section>
+	</main>
+</div>
+<script src="./icons.js"></script>
+<script src="./mock.js"></script>
+<script>
+	// Row vocabulary samples (static, from the busy scenario).
+	(function () {
+		const d = SCENARIOS.many.build();
+		const by = (id) => [...d.commands, ...d.subagents].find((r) => r.id === id);
+		const stopped = { ...by("c3"), id: "vs", status: "stopped", exitCode: 130, name: "lint (watch)", command: "biome check --watch .", finishedAt: Date.now() - 90_000 };
+		const put = (id, r, opts) => { const el = document.getElementById(id); if (el) el.innerHTML = rowHTML(r, opts); };
+		put("v1", by("c1")); put("v2", by("c2")); put("v3", by("a1")); put("v4", by("a2"));
+		put("v5", { ...by("a1"), id: "vn", needsInput: true, activity: "Asking: “Keep the Logs action on finished rows?”" });
+		put("v6", by("c3")); put("v7", by("c4")); put("v8", stopped); put("v9", by("a5"), { nest: true });
+	})();
+</script>
+</body>
+</html>
