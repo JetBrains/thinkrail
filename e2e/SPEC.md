@@ -29,6 +29,10 @@ is one or many.
 The automatic count is half the available CPU parallelism, clamped to 1–8. Developers may explicitly
 select 1–16 lanes; `e2e:serial` is the stable debugging fallback. A focused invocation carrying Playwright
 arguments defaults to one lane unless its shard count is explicit, so an iteration on one spec stays cheap.
+CI splits the suite across machines with `THINKRAIL_E2E_JOB_SHARD=k/N`: the invocation runs slice `k` of
+`N`, and its local lanes subdivide that slice into global Playwright shards `(k-1)·L+i` of `N·L`, so the
+union of all jobs is exactly the suite. The runner owns `--shard`; combining the variable with an explicit
+`--shard` argument is rejected.
 Every public browser E2E runner owns one process-lifetime idle-sleep assertion on macOS before setup or
 build work begins; source, agent, full, binary, and desktop modes all receive it. The assertion uses the
 system `caffeinate` executable with idle-system-sleep scope and the owning runner pid, so display sleep stays
@@ -74,8 +78,10 @@ web-identity/config source making another provider available. A drift canary der
 environment literal from pi-ai's pinned credential-discovery distribution and requires it in the denylist;
 defensive cloud-source extras remain even when that distribution does not currently name them. No host may
 discover a real `central`, `pi`, or editor executable. The compiled-binary and
-packaged-desktop suites remain distinct artifact gates. Each has an unsharded, non-overlapping namespace;
-any artifact run and `e2e:serial` still run sequentially in the same worktree. A future launcher or
+packaged-desktop suites remain distinct artifact gates. Each has one lane-free, non-overlapping namespace
+per machine; any artifact run and `e2e:serial` still run sequentially in the same worktree. Artifact
+configs distribute individual tests, so a passed-through Playwright `--shard=k/N` splits them evenly
+across CI machines, each booting its own artifact host. A future launcher or
 deployment adds another host adapter for this same suite, never copied feature specs; shared behavior is
 therefore proven through every composition root.
 

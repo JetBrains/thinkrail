@@ -37,6 +37,12 @@ against the compiled binary. Desktop PR coverage builds the Linux target, runs n
 artifact probes under Xvfb with test-only software-rendering flags, and runs desktop-backed browser tests.
 Real-provider tests remain explicitly authorized and separate.
 
+The three browser suites dominate wall time, so each runs as a matrix of Playwright shards on separate
+runners ([[module-browser-e2e]] owns the slicing). The ruleset's required check names "E2E (no-agent)",
+"Binary smoke & e2e" and "Desktop smoke & e2e" belong to aggregate gate jobs that succeed only when every
+shard of their matrix succeeded; renaming a gate without updating the ruleset blocks the merge queue.
+Shard counts trade runner minutes for wall time and are tuned against observed per-job durations.
+
 A platform's native behavior is proven only on that platform. Windows remains a PR gate because its
 executable, environment, path, and trash behavior differs materially from POSIX hosts. Its subprocess
 unit gate also exercises native descendant-console behavior, which the Linux unit run cannot prove, and
