@@ -19,19 +19,13 @@ function isPermanentTranscriptError(error: unknown): boolean {
 	return wsErrorCode(error) === "SUBAGENT_TRANSCRIPT_NOT_FOUND";
 }
 
-export function SubagentTranscriptDialog({
-	workspaceId,
-	parentSessionId,
-	childSessionId,
-	onOpenChange,
-	onCloseAutoFocus,
-}: {
+interface TranscriptScope {
 	workspaceId: string;
 	parentSessionId: string;
 	childSessionId: string;
-	onOpenChange: (open: boolean) => void;
-	onCloseAutoFocus?: (event: Event) => void;
-}) {
+}
+
+function useSubagentTranscript({ workspaceId, parentSessionId, childSessionId }: TranscriptScope) {
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const status = useAppStore((state) => state.status);
 	const [messages, setMessages] = useState<TranscriptMessage[] | null>(null);
@@ -85,7 +79,55 @@ export function SubagentTranscriptDialog({
 		}),
 		[runtime],
 	);
+	return { messages, live, error, rows, messageActions, askContext };
+}
 
+export function SubagentTranscriptPane(scope: TranscriptScope) {
+	const { messages, live, error, rows, messageActions, askContext } = useSubagentTranscript(scope);
+	return (
+		<ChatActionsContext.Provider value={null}>
+			<AskStatesContext.Provider value={askContext}>
+				<div
+					data-testid="subagent-transcript"
+					data-live={live || undefined}
+					className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto"
+				>
+					{error ? (
+						<span role="alert" className="text-feedback-error tr-text-ui">
+							{error}
+						</span>
+					) : messages === null ? (
+						<span className="text-text-muted tr-text-metadata">Loading…</span>
+					) : rows.length === 0 ? (
+						<span className="text-text-muted tr-text-metadata italic">
+							Nothing in the transcript yet.
+						</span>
+					) : (
+						rows.map((row) => (
+							<div key={row.id}>
+								<ChatTurnView
+									row={row}
+									agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
+									isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
+								/>
+							</div>
+						))
+					)}
+				</div>
+			</AskStatesContext.Provider>
+		</ChatActionsContext.Provider>
+	);
+}
+
+export function SubagentTranscriptDialog({
+	onOpenChange,
+	onCloseAutoFocus,
+	...scope
+}: TranscriptScope & {
+	onOpenChange: (open: boolean) => void;
+	onCloseAutoFocus?: (event: Event) => void;
+}) {
+	const status = useAppStore((state) => state.status);
 	return (
 		<Dialog open onOpenChange={onOpenChange}>
 			<DialogContent
@@ -98,40 +140,11 @@ export function SubagentTranscriptDialog({
 						Subagent transcript
 					</DialogTitle>
 					<span className="min-w-0 truncate text-text-muted tr-text-metadata">
-						{childSessionId}
-						{status !== "connected" ? " · stale" : live ? " · live" : ""}
+						{scope.childSessionId}
+						{status !== "connected" ? " · stale" : ""}
 					</span>
 				</div>
-				<ChatActionsContext.Provider value={null}>
-					<AskStatesContext.Provider value={askContext}>
-						<div
-							data-testid="subagent-transcript"
-							className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto"
-						>
-							{error ? (
-								<span role="alert" className="text-feedback-error tr-text-ui">
-									{error}
-								</span>
-							) : messages === null ? (
-								<span className="text-text-muted tr-text-metadata">Loading…</span>
-							) : rows.length === 0 ? (
-								<span className="text-text-muted tr-text-metadata italic">
-									Nothing in the transcript yet.
-								</span>
-							) : (
-								rows.map((row) => (
-									<div key={row.id}>
-										<ChatTurnView
-											row={row}
-											agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
-											isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
-										/>
-									</div>
-								))
-							)}
-						</div>
-					</AskStatesContext.Provider>
-				</ChatActionsContext.Provider>
+				<SubagentTranscriptPane key={scope.childSessionId} {...scope} />
 			</DialogContent>
 		</Dialog>
 	);
