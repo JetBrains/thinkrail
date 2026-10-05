@@ -1,9 +1,7 @@
 export const FOCUS_CONTEXT_BLOCKS = 2;
 const MIN_HIDDEN_BLOCKS = 2;
 
-export type FocusSegment<T> =
-	| { kind: "visible"; items: T[] }
-	| { kind: "hidden"; items: T[] };
+export type FocusSegment<T> = { kind: "visible"; items: T[] } | { kind: "hidden"; items: T[] };
 
 export function focusSegments<T>(
 	items: readonly T[],

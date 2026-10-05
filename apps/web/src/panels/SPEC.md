@@ -1344,6 +1344,27 @@ own section. The kebab menu (`plan-menu`, a
   in Source. It is selected by registry match rather than a path branch in the pane. Scopes whose modified
   side is historical receive no review surface or mutation actions.
 
+  **The rendered diff focuses on its changes the way Pierre does.** The merged document is parsed once
+  (`DOMParser`) and the prose root's blocks are *changed* when they are or contain `ins`, `del`, or a
+  `[data-diff-node]` element. Runs of unchanged blocks collapse with git hunk semantics
+  (`renderedDiffFocus.focusSegments`): `FOCUS_CONTEXT_BLOCKS` (2) blocks stay visible on each side of a
+  change, a leading or trailing run keeps context only on the side that touches one, and a run of a single
+  block is never hidden, because an expander that replaces one paragraph saves nothing and costs a click.
+  The same rule applies one level down to the items of a changed `ul`/`ol` — a markdown spec routinely
+  carries a thirty-bullet list with one edited bullet — while tables, quotes, and nested lists render
+  whole; ordered items carry their original ordinal (`value`) so hiding items never renumbers the rest.
+  Each hidden run is one `rendered-diff-collapsed` button naming the count and, for block runs, the last
+  heading it hides (the section the visible content below it belongs to — the analogue of Pierre's
+  line-info separators). Clicking expands the run in place, one-way; expansion is component-local and
+  positional, so a live refresh keeps an expansion whose run still starts at the same position and
+  resets the rest. Nothing offers the whole merged document at once: Source and the file preview already
+  do. A merge in which no block changed — front matter is stripped before rendering, and whitespace or
+  HTML comments don't render — shows the `rendered-diff-empty` notice pointing at Source and collapses
+  the document to a single expander, rather than presenting an unmarked full document as a diff. Blocks
+  are re-created from the parsed elements (tag, attributes, `innerHTML`), never re-serialized through a
+  wrapper, so the DOM the prose styles target is unchanged; boolean attributes (`details[open]`) are
+  mapped explicitly because React drops an empty-string boolean.
+
   `thinkrail/image` renders host-backed byte URLs with fit, natural-size, button/wheel zoom, intrinsic
   dimensions, and byte size, always on the `.media-backdrop` transparency checkerboard (the view's image
   and both diff frames; the difference blend keeps a flat canvas so the checker cannot leak into the
