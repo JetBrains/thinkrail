@@ -551,13 +551,13 @@ a project picker, the prompt hero, and the reused
   product-usage copy and shared switch; Settings adds the optional outcomes, report dimensions, and
   excluded content. Older hosts retain their legacy privacy control without the new consent dialog.
   **`FeedbackSettings`** is the final
-  live section after Privacy: the same interview copy as the automatic prompt, stating that joining a user
-  interview to discuss the participant's ThinkRail experience earns 100 bonus credits in Central
-  (JetBrains AI), plus a real external anchor to the fixed Google Calendar booking page, opened in a new
-  tab with `noopener noreferrer`. ThinkRail communicates the incentive only; attendance verification,
-  eligibility, and credit fulfillment stay outside the app. This proactive Settings link is always
-  available and deliberately does not call `feedback.respond`, alter automatic-popup state, or claim that
-  booking alone earns credits.
+  live section after Privacy: the same interview copy as the automatic prompt, stating that completing a
+  user interview about the participant's ThinkRail experience earns 100 bonus credits in Central
+  (JetBrains AI) — credits, never a currency amount — plus a real external anchor to the fixed Google
+  Calendar booking page, opened in a new tab with `noopener noreferrer`. ThinkRail communicates the
+  incentive only; attendance verification, eligibility, and credit fulfillment stay outside the app. This
+  proactive Settings link is always available and deliberately does not call `feedback.respond`, alter
+  automatic-popup state, or claim that booking alone earns credits.
   **`ModelsSettings`** is the **Default model** section, visible only at protocol v72 or newer. It re-reads
   `model.default` on open, whenever the live catalog changes (empty included), and after every save — the
   host resolves the saved model and its effort levels against its settled catalog, so a vanished or changed
