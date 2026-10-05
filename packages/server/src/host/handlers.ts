@@ -201,6 +201,7 @@ import {
 	additionalCapture,
 	captureAdditional,
 	centralConnectOutcome,
+	directoryPickOutcome,
 	observePrAction,
 	observeSetupAction,
 	observeSetupRead,
@@ -362,7 +363,10 @@ async function sendToFileChat(
 		...(defaults.model ? { model: defaults.model } : {}),
 		thinkingLevel: defaults.thinkingLevel,
 	});
-	trackChatStarted(created);
+	trackChatStarted({
+		sessionId: created.sessionId,
+		model: defaults.model ? created.model : null,
+	});
 	await markCommentsSent(workspaceId, ids, created.sessionId);
 	fireReviewPrompt(workspaceId, ids, created.sessionId, pkg);
 	return { ...created, reused: false };
@@ -508,7 +512,8 @@ const handlers: Record<string, Handler> = {
 				},
 			),
 		),
-	"dialog.selectDirectory": () => selectDirectory(),
+	"dialog.selectDirectory": () =>
+		observeSetupAction("directory_pick", selectDirectory, directoryPickOutcome),
 	"fs.readDir": (params) => {
 		const p = params as { workspaceId: string; path: string };
 		void ensureWatch(p.workspaceId);
@@ -792,7 +797,10 @@ const handlers: Record<string, Handler> = {
 			thinkingLevel: defaults.thinkingLevel,
 		});
 		if (p.model && created.model) noteRecentModel(created.model);
-		trackChatStarted(created);
+		trackChatStarted({
+			sessionId: created.sessionId,
+			model: defaults.model ? created.model : null,
+		});
 		return created;
 	},
 	"session.prompt": (params, ctx) => {

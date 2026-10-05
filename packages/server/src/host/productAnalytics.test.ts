@@ -24,6 +24,7 @@ import {
 	applyAdditionalAnalyticsSettings,
 	captureAdditional,
 	centralConnectOutcome,
+	directoryPickOutcome,
 	failureReason,
 	initialAdditionalAnalyticsEnabled,
 	observeCurrentSetup,
@@ -347,6 +348,48 @@ test("observational sink and projection failures cannot change a successful feat
 	});
 	expect(await observePrAction(async () => result)).toBe(result);
 	expect(failureReason(new Error("PUSH_AUTH_FAILED secret"))).toBe("unknown");
+});
+
+test("project opening names its typed failures; the folder picker reports selection, cancellation and failure without paths", async () => {
+	const ctx = { clientKey: "private-client" };
+	const plain = join(dataDir, "plain-folder");
+	mkdirSync(plain);
+	await expect(handleRequest("project.open", { path: plain }, ctx)).rejects.toMatchObject({
+		code: "NOT_GIT",
+	});
+	expect(failureReason(new CodedError("ALREADY_OPEN", "/private/worktree"))).toBe("already_open");
+	const savedPick = process.env.THINKRAIL_PICK_DIR;
+	try {
+		process.env.THINKRAIL_PICK_DIR = "/private/picked";
+		expect(await handleRequest("dialog.selectDirectory", {}, ctx)).toEqual({
+			path: "/private/picked",
+		});
+		const directive = join(dataDir, "picker-directive");
+		writeFileSync(directive, "error: private picker failure");
+		process.env.THINKRAIL_PICK_DIR = directive;
+		await expect(handleRequest("dialog.selectDirectory", {}, ctx)).rejects.toThrow(
+			"private picker failure",
+		);
+	} finally {
+		if (savedPick === undefined) delete process.env.THINKRAIL_PICK_DIR;
+		else process.env.THINKRAIL_PICK_DIR = savedPick;
+	}
+	await observeSetupAction("directory_pick", () => ({ path: null }), directoryPickOutcome);
+	const events = await captured("setup_action_finished");
+	expect(
+		events.map((event) => [
+			event.properties.action,
+			event.properties.outcome,
+			event.properties.reason,
+		]),
+	).toEqual([
+		["project_open", "failed", "not_git"],
+		["directory_pick", "succeeded", "none"],
+		["directory_pick", "failed", "unknown"],
+		["directory_pick", "cancelled", "none"],
+	]);
+	expect(JSON.stringify(sent)).not.toContain("private");
+	expect(JSON.stringify(sent)).not.toContain("plain-folder");
 });
 
 function git(root: string, ...args: string[]): void {

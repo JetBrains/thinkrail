@@ -3,6 +3,7 @@ import { rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import type { Project, ProjectPathStatus } from "@thinkrail/contracts";
+import { CodedError } from "@thinkrail/shared/codedError";
 import { canonicalPath, git } from "../git";
 import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 
@@ -71,7 +72,7 @@ export function getProjects(): Project[] {
 export function openProject(inputPath: string): Project {
 	const path = resolveProjectPath(inputPath);
 	const root = gitToplevel(path);
-	if (!root) throw new Error(`Not a git repository: ${path}`);
+	if (!root) throw new CodedError("NOT_GIT", `Not a git repository: ${path}`);
 
 	const projects = getProjects();
 	const existing = projects.find((p) => p.path === root);
@@ -85,7 +86,10 @@ export function openProject(inputPath: string): Project {
 
 	const wanted = canonicalPath(root);
 	if (loadWorkspaces().some((ws) => canonicalPath(ws.worktreePath) === wanted))
-		throw new Error(`This folder is already open in ThinkRail as a workspace: ${root}`);
+		throw new CodedError(
+			"ALREADY_OPEN",
+			`This folder is already open in ThinkRail as a workspace: ${root}`,
+		);
 
 	const taken = new Set(projects.map((p) => p.slug));
 	const project: Project = {

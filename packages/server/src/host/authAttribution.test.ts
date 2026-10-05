@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createProvider, envApiKeyAuth, InMemoryCredentialStore } from "@earendil-works/pi-ai";
@@ -253,6 +253,56 @@ test("unmodified builtin providers report preconfigured stored keys without an i
 		{ provider: "anthropic", auth_method: "api_key" },
 	]);
 	expect(properties("message_sent")).toEqual([]);
+});
+
+test("a chat created without any usable model still counts, bucketed as none", async () => {
+	const bare = await ModelRuntime.create({
+		credentials: new InMemoryCredentialStore(),
+		modelsPath: null,
+		allowModelNetwork: false,
+		refreshOnCreate: false,
+	});
+	configurePiRuntime(bare);
+	const created = (await handleRequest(
+		"session.create",
+		{ workspaceId },
+		context,
+	)) as WsResult<"session.create">;
+	sessionIds.push(created.sessionId);
+	await shutdownAnalytics();
+	expect(properties("chat_started")).toMatchObject([
+		{ provider: "none", model: "none", auth_method: "unknown" },
+	]);
+});
+
+test("a startup extension that switches the model is reported as the model the chat actually got", async () => {
+	const alternate = await addFauxProvider(runtime, credentials, `${PRIVATE}-provider`, "oauth");
+	const extensionPath = join(directory, "pi", "extensions", "switch-on-start.ts");
+	mkdirSync(join(directory, "pi", "extensions"), { recursive: true });
+	writeFileSync(
+		extensionPath,
+		[
+			'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";',
+			"export default function (pi: ExtensionAPI) {",
+			'\tpi.on("session_start", async (_event, ctx) => {',
+			`\t\tconst model = ctx.modelRegistry.find(${JSON.stringify(`${PRIVATE}-provider`)}, ${JSON.stringify(`${PRIVATE}-model`)});`,
+			"\t\tif (model) await pi.setModel(model);",
+			"\t});",
+			"}",
+			"",
+		].join("\n"),
+	);
+	const created = (await handleRequest(
+		"session.create",
+		{ workspaceId, model: toWireModel(faux.getModel()) },
+		context,
+	)) as WsResult<"session.create">;
+	sessionIds.push(created.sessionId);
+	expect(created.model?.provider).toBe(alternate.getModel().provider);
+	await shutdownAnalytics();
+	expect(properties("chat_started")).toMatchObject([
+		{ provider: "custom", model: "custom", auth_method: "oauth" },
+	]);
 });
 
 test("model changes affect later sends but not provider/auth captured before a delayed acknowledgement", async () => {

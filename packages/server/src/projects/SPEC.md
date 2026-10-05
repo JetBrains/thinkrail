@@ -20,7 +20,8 @@ bootstrap it into one so it can be opened.
   or mutating it: host-absolute paths pass, exact `~` and `~/…` expand against the host account, and every
   other relative path is rejected rather than interpreted against the host process cwd. The same resolved
   path feeds `openProject`, `inspectProjectPath`, and `initProject`, so their classifications and actions
-  cannot disagree. It then validates a path is a repo (`git rev-parse --show-toplevel`), dedupes by root,
+  cannot disagree. It then validates a path is a repo (`git rev-parse --show-toplevel`; a non-repo rejects
+  with the named `NOT_GIT` code), dedupes by root,
   and assigns a stable unique readable `slug`; `getProjects` returns all known records with slug backfill,
   `listProjects` returns open records by `lastOpened`, and `listRecentProjects` returns open + closed records
   by `lastOpened`. A persisted
@@ -28,7 +29,7 @@ bootstrap it into one so it can be opened.
   records migrate as open. **`openProject`** finds a known root even when closed, clears `closed`, bumps
   `lastOpened`, preserves its id, persists, and publishes the full snapshot; **`closeProject`** marks that
   same record closed and publishes it without deleting the project, repository, workspace records, or
-  live runtimes. **One cwd, one ThinkRail identity:** `openProject` rejects a root already held as some
+  live runtimes. **One cwd, one ThinkRail identity:** `openProject` rejects (named `ALREADY_OPEN`) a root already held as some
   workspace's `worktreePath` — pi keys chat transcripts by *directory*, so a second identity on an owned
   folder would serve that workspace's chats as its own and have them purged when either side is archived.
   Compared **canonically** (a managed worktree's stored path is composed, `--show-toplevel` answers
@@ -53,6 +54,7 @@ bootstrap it into one so it can be opened.
   `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`, `setProjectTrust`,
   `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`.
 - **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, which now owns the
-  environment its children spawn under — this module passes none); `contracts` (`Project`, `ProjectPathStatus`); Node/Bun.
+  environment its children spawn under — this module passes none); `contracts` (`Project`, `ProjectPathStatus`);
+  `shared/codedError` (the two named open failures); Node/Bun.
 - **Forbidden:** `host`; sibling features other than `git` (`workspaces` depends on `projects`, never the
   reverse).

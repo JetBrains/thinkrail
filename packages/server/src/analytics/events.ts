@@ -32,11 +32,13 @@ export type AnalyticsFailureReason =
 	| "network"
 	| "permission"
 	| "not_git"
+	| "already_open"
 	| "unsupported"
 	| "unknown"
 	| "none";
 export type SetupAction =
 	| "provider_connect"
+	| "directory_pick"
 	| "project_open"
 	| "project_init"
 	| "worktree_create"
@@ -168,6 +170,7 @@ export function bucketCount(count: number): AnalyticsCountBucket {
 }
 
 export const CUSTOM_BUCKET = "custom";
+export const NONE_BUCKET = "none";
 
 let catalog: Map<string, ReadonlySet<string>> | null = null;
 

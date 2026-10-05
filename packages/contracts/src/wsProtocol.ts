@@ -841,6 +841,8 @@ export type WsClientMessage = WsRequest | WsAck | WsResume;
 export type WsErrorCode =
 	| "UNKNOWN_COMMIT"
 	| "PUSH_AUTH_FAILED"
+	| "NOT_GIT"
+	| "ALREADY_OPEN"
 	| "SUBAGENT_TRANSCRIPT_NOT_FOUND"
 	| "RESOURCE_UNAVAILABLE"
 	| "STALE_VIEW"

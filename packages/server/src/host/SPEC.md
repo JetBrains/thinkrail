@@ -115,7 +115,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   reconstruct pre-consent work; campaign-only enrichment is inactive while off and restored from its strict
   server record when on without retrying a consumed claim.
   `shutdownAnalytics()` remains a best-effort drain in `stop()` and awaited by graceful shutdown;
-  every capture site lives here, including the existing basic events: `chat_started` in `session.create`, `message_sent` (via the
+  every capture site lives here, including the existing basic events: `chat_started` in `session.create` (the host's new-chat
+  resolution decides `none` for a chat created with no usable model instead of pi's placeholder; otherwise
+  the created session's actual model is reported), `message_sent` (via the
   local `trackSend(mode, text)`) after an **accepted** `session.prompt`/`session.steer`/`session.followUp`
   (`prompt`/`steer`/`follow_up`; skipped when contracts' `isControlMessage(text)` — the client's TODO
   wake-nudge rides the same methods and is not a user message; `session.answerQuestion` is a tool reply,
@@ -133,7 +135,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   [[submodule-server-analytics]], with transient consent-scoped correlation and task-artifact reconciliation.
   Host alone mediates these events; analytics initialization emits the packaged-install lifecycle event,
   while no provider-change capture exists.
-  Setup observes existing read results, never triggers provider work; only explicit setup mutations count.
+  Setup observes existing read results, never triggers provider work; only explicit setup mutations count
+  (`dialog.selectDirectory` is one: `directory_pick` with a null path as `cancelled`; `project.open` maps the
+  projects module's `NOT_GIT` / `ALREADY_OPEN` coded errors to the closed reasons, everything else `unknown`).
   Run timing starts at canonical `agent_start`, with local send intent recorded before calling pi (not
   after `ackSend`); unproven provenance stays unknown and retries remain one cycle until `agent_settled`.
   Accepted queued origins survive send resolution until canonical cycle observation; rejected sends do not
