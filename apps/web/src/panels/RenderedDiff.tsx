@@ -1,4 +1,5 @@
 import { RiExpandUpDownLine as Expand } from "@remixicon/react";
+import { diffArrays } from "diff";
 import { createElement, type ReactNode, useEffect, useMemo, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ResourceDiffProps } from "@/resources";
@@ -14,7 +15,7 @@ const DIFF_MARKS = [
 const CHANGE_SELECTOR = "ins, del, [data-diff-node]";
 const LIST_TAGS = new Set(["ul", "ol"]);
 const HEADING_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
-const BOOLEAN_ATTRIBUTES = new Set(["open", "hidden", "reversed"]);
+const BOOLEAN_ATTRIBUTES = new Set(["open", "checked", "disabled"]);
 
 type MergeState =
 	| { state: "pending" }
@@ -61,16 +62,33 @@ function* units(root: Element): Generator<Element> {
 	}
 }
 
-function changedUnits(merged: Element, before: Element): Set<Element> {
-	const counterparts = new Map<string, number>();
-	for (const unit of units(before)) {
-		counterparts.set(unit.outerHTML, (counterparts.get(unit.outerHTML) ?? 0) + 1);
+function shapeKey(element: Element): string {
+	const clone = element.cloneNode(true) as Element;
+	for (const node of [clone, ...clone.querySelectorAll("*")]) {
+		for (const { name } of Array.from(node.attributes)) node.removeAttribute(name);
 	}
-	const changed = new Set<Element>();
-	for (const unit of units(merged)) {
-		const remaining = hasMark(unit) ? 0 : (counterparts.get(unit.outerHTML) ?? 0);
-		if (remaining > 0) counterparts.set(unit.outerHTML, remaining - 1);
-		else changed.add(unit);
+	return clone.outerHTML;
+}
+
+function changedUnits(merged: Element, before: Element): Set<Element> {
+	const beforeUnits = [...units(before)];
+	const mergedUnits = [...units(merged)];
+	const changed = new Set(mergedUnits);
+	let beforeIndex = 0;
+	let mergedIndex = 0;
+	for (const part of diffArrays(beforeUnits.map(shapeKey), mergedUnits.map(shapeKey))) {
+		const count = part.value.length;
+		if (!part.added && !part.removed) {
+			for (let offset = 0; offset < count; offset++) {
+				const unit = mergedUnits[mergedIndex + offset];
+				const counterpart = beforeUnits[beforeIndex + offset];
+				if (unit && counterpart && !hasMark(unit) && unit.outerHTML === counterpart.outerHTML) {
+					changed.delete(unit);
+				}
+			}
+		}
+		if (!part.added) beforeIndex += count;
+		if (!part.removed) mergedIndex += count;
 	}
 	return changed;
 }

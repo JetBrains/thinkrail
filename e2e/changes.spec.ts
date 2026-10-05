@@ -257,6 +257,8 @@ test("Rendered markdown diff keeps attribute-only changes visible: a ticked task
 			"",
 			"</details>",
 			"",
+			`<input type="checkbox"${edited ? " checked" : ""}>`,
+			"",
 		].join("\n");
 	commitFile(workspace.worktreePath, "ATTR.md", doc(false), "add attribute fixture");
 	writeFileSync(join(workspace.worktreePath, "ATTR.md"), doc(true));
@@ -282,9 +284,12 @@ test("Rendered markdown diff keeps attribute-only changes visible: a ticked task
 	await expect(renderedDiff.locator("details[open]")).toContainText("Folded body.");
 	await expect(renderedDiff.locator("li", { hasText: "ten" })).toHaveAttribute("value", "10");
 	await expect(renderedDiff.locator("li", { hasText: "eleven" })).toHaveAttribute("value", "11");
+	const standalone = renderedDiff.locator("details + input[type=checkbox]");
+	await expect(standalone).toBeChecked();
+	await expect(standalone).toBeDisabled();
 });
 
-test("Rendered markdown diff does not let an identical twin block vouch for an attribute-only change", async ({
+test("Rendered markdown diff aligns identical twin blocks by position, so neither a vouching twin nor a swap hides an attribute-only change", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -297,17 +302,27 @@ test("Rendered markdown diff does not let an identical twin block vouch for an a
 			"",
 			"</details>",
 		].join("\n");
-	const doc = (edited: boolean) =>
-		`# Twins\n\n${twin(true)}\n\n${twin(edited)}\n\nTail paragraph.\n`;
-	commitFile(workspace.worktreePath, "TWINS.md", doc(false), "add twins fixture");
-	writeFileSync(join(workspace.worktreePath, "TWINS.md"), doc(true));
+	const doc = (first: boolean, second: boolean) =>
+		`# Twins\n\n${twin(first)}\n\n${twin(second)}\n\nTail paragraph.\n`;
+	commitFile(workspace.worktreePath, "VOUCH.md", doc(true, false), "add vouch fixture");
+	writeFileSync(join(workspace.worktreePath, "VOUCH.md"), doc(true, true));
+	commitFile(workspace.worktreePath, "SWAP.md", doc(true, false), "add swap fixture");
+	writeFileSync(join(workspace.worktreePath, "SWAP.md"), doc(false, true));
 
 	await page.getByTestId("tab-changes").click();
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-uncommitted").click();
-	await page.getByTestId("change-item").filter({ hasText: "TWINS.md" }).click();
 	const renderedDiff = page.getByTestId("rendered-diff");
+
+	await page.getByTestId("change-item").filter({ hasText: "VOUCH.md" }).click();
 	await expect(renderedDiff.locator("details[open]")).toHaveCount(2);
+	await expect(page.getByTestId("rendered-diff-empty")).toHaveCount(0);
+	await expect(renderedDiff.getByTestId("rendered-diff-collapsed")).toHaveCount(0);
+
+	await page.getByTestId("change-item").filter({ hasText: "SWAP.md" }).click();
+	await expect(renderedDiff.locator("details")).toHaveCount(2);
+	await expect(renderedDiff.locator("details[open]")).toHaveCount(1);
+	await expect(renderedDiff.locator("details").first()).not.toHaveAttribute("open");
 	await expect(page.getByTestId("rendered-diff-empty")).toHaveCount(0);
 	await expect(renderedDiff.getByTestId("rendered-diff-collapsed")).toHaveCount(0);
 	await expect(renderedDiff).toContainText("Tail paragraph.");
