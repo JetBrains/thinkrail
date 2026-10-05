@@ -70,8 +70,9 @@ primitive. Also houses the
   itself). The `ui/` primitives are their own sub-module
   ([components/ui/SPEC.md](ui/SPEC.md)).
 - **Allowed deps:** React, `@remixicon/react`, `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
-  rather than re-stated). Kept dependency-light on purpose, and `lib` is a leaf, so *any* region (shell,
-  panels, `main.tsx`) can still wrap in it without creating a cycle.
+  rather than re-stated), `constants` (`BRAND_MARK_PATH` — the monogram `RunningIcon` draws, shared with the
+  shell logo rather than copied). Kept dependency-light on purpose, and both are leaves, so *any* region
+  (shell, panels, `main.tsx`) can still wrap in it without creating a cycle.
 - **Forbidden:** `store`/`transport`/`panels`/`shell`/`chat`/`contracts`; `server`/`shared`/`pi`; inline
   `style` objects or raw hex (fallback is themed with token utilities only).
 
