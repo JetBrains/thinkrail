@@ -392,7 +392,7 @@ a project picker, the prompt hero, and the reused
   create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear (and ⌘, on macOS) opens — a
   **store-driven two-pane shell** (left section rail + scrollable content pane; mobile collapses the rail to
   a horizontal segmented strip): `settingsOpen`/`settingsSection` live in the store so the gear AND the
-  Welcome banner can open it deep-linked to a section. Live sections: **`ProvidersSettings`** (the in-app
+  Welcome banner can open it deep-linked to a section; on open, focus lands on the active section's rail item. Live sections: **`ProvidersSettings`** (the in-app
   provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env /
   models.json auth shows a "Managed" tag instead, since the host can't unset it; a `kind: "central"` row
   is labelled "JetBrains AI" and its Managed tag points at the JetBrains AI card, which owns that

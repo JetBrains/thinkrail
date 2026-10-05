@@ -94,6 +94,15 @@ export function SettingsDialog({
 		>
 			<DialogContent
 				data-testid="settings-dialog"
+				onOpenAutoFocus={(event) => {
+					const active =
+						event.currentTarget instanceof HTMLElement &&
+						event.currentTarget.querySelector('[data-active="true"]');
+					if (active instanceof HTMLElement) {
+						event.preventDefault();
+						active.focus();
+					}
+				}}
 				onEscapeKeyDown={(event) => {
 					if (
 						document.activeElement instanceof HTMLElement &&

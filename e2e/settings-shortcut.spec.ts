@@ -42,6 +42,7 @@ test("browser Cmd+, on macOS opens Settings on the last section, like the gear",
 
 	await page.keyboard.press("Meta+Comma");
 	await expect(page.getByTestId("settings-nav-templates")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("settings-nav-templates")).toBeFocused();
 	await closeSettings(page);
 
 	await page.getByTestId("open-settings").click();
