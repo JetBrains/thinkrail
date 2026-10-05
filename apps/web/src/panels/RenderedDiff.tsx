@@ -187,7 +187,7 @@ export default function RenderedDiff({
 	const root = useMemo(() => {
 		if (merge.state !== "done") return null;
 		const body = new DOMParser().parseFromString(merge.html, "text/html").body;
-		return body.children.length === 1 ? (body.children[0] as Element) : body;
+		return (body.children.length === 1 ? body.firstElementChild : null) ?? body;
 	}, [merge]);
 	const { attach: attachScroller } = useScrollViewState<HTMLDivElement>(viewState, onViewState);
 
