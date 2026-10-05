@@ -52,15 +52,16 @@ primitive. Also houses the
 - **`RunningIcon.tsx`** — the store-free **“ThinkRail is working” badge**: the brand monogram inside a ring,
   drawn in `currentColor` so it sizes with `size-*` and colours with `text-*` like a Remix icon, with the
   accessible label “Agent working”. While motion is allowed, a train (bright head, fading tail) laps the
-  ring every 1.875s and a signal runs down each of the monogram's six rails on a 6.75s cycle, staggered by
-  ⅙; ring and monogram dim so the movers read. The monogram never rotates or distorts — motion lives on
-  the ring and *along* the rails (hand-drawn centrelines, so a pulse lights a whole stroke rather than
-  tracing both edges). The previous treatment breathed the row's own identity glyph; it was replaced
-  because a dimming folder reads as “disabled” at 14px, while a distinct brand badge is recognisable
-  peripherally and is the same mark wherever the agent is working (rail rows, chat footer). Reduced motion
-  hides the movers and shows the static full-strength badge. Callers pass only size/colour classes and
-  decide from normalized host state whether a top-level session is running; the icon renders no dot,
-  spinner, count, tooltip, or idle state.
+  dimmed ring every 1.875s, the monogram pulses once per lap (full to 25% and back, bright as the train
+  passes twelve o'clock), and three sparks trace the monogram's outline on a 6.75s lap. The pulse is what
+  reads at the rail's 14px — a sub-pixel detail cannot — while the sparks are the detail at 24px and up;
+  they ride the brand path itself, so there is no hand-drawn geometry to drift if the mark changes. The
+  monogram never rotates or distorts. The previous treatment breathed the row's own identity glyph; it was
+  replaced because a dimming folder reads as “disabled” at 14px, while a distinct brand badge is
+  recognisable peripherally and is the same mark wherever the agent is working (rail rows, chat footer).
+  Reduced motion hides the movers and shows the static full-strength badge. Callers pass only size/colour
+  classes and decide from normalized host state whether a top-level session is running; the icon renders
+  no dot, spinner, count, tooltip, or idle state.
 - **Also owns:** `Skeleton.tsx` — `SkeletonRows`, the one pulsing-rows placeholder every loading surface
   uses, and `LoadingRegion`, the sized-wrapper shape around it that most call sites actually want (a
   `className` for the region's own padding/sizing, an optional `label` threaded to `SkeletonRows`'

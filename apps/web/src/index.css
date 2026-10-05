@@ -70,21 +70,27 @@
 		}
 	}
 
-	/* The "agent working" brand badge (`components/RunningIcon`): the ring train, and the per-rail signal (a 28-unit dash on a pathLength-100 rail, staggered per rail through `--signal-delay`). */
+	/* The "agent working" brand badge (`components/RunningIcon`): the ring train, the monogram pulsing once per lap, and three sparks (90-unit dashes on the pathLength-1000 outline) tracing the monogram. */
 	--animate-working-train: working-train 1.875s linear infinite;
 	@keyframes working-train {
 		to {
 			transform: rotate(360deg);
 		}
 	}
-	--animate-working-signal: working-signal 6.75s linear var(--signal-delay, 0s) infinite;
-	@keyframes working-signal {
-		0% {
-			stroke-dashoffset: 28;
-		}
-		50%,
+	--animate-working-pulse: working-pulse 1.875s ease-in-out infinite;
+	@keyframes working-pulse {
+		0%,
 		100% {
-			stroke-dashoffset: -100;
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.25;
+		}
+	}
+	--animate-working-trace: working-trace 6.75s linear infinite;
+	@keyframes working-trace {
+		to {
+			stroke-dashoffset: -1000;
 		}
 	}
 

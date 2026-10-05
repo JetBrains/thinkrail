@@ -7,24 +7,6 @@ const MARK_X = (32 - (BRAND_MARK_SIZE.width / 2) * MARK_SCALE).toFixed(3);
 const MARK_Y = (32 - (BRAND_MARK_SIZE.height / 2) * MARK_SCALE).toFixed(3);
 const MARK_TRANSFORM = `translate(${MARK_X} ${MARK_Y}) scale(${MARK_SCALE.toFixed(5)})`;
 
-const RAILS = [
-	"M20 20H290",
-	"M360 20H400A80 80 0 0 1 480 100V195C480 235 460 270 430 286L519 431",
-	"M20 90H130V429",
-	"M200 90V429",
-	"M200 90H410V228H300C250 228 215 262 200 300",
-	"M269 429V310Q269 300 280 300H345Q352 300 356 307L434 431",
-] as const;
-
-const SIGNAL_DELAYS = [
-	"",
-	"[--signal-delay:-1.125s]",
-	"[--signal-delay:-2.25s]",
-	"[--signal-delay:-3.375s]",
-	"[--signal-delay:-4.5s]",
-	"[--signal-delay:-5.625s]",
-] as const;
-
 export function RunningIcon({ className }: { className?: string | undefined }) {
 	const tailGradient = useId();
 	return (
@@ -62,7 +44,7 @@ export function RunningIcon({ className }: { className?: string | undefined }) {
 					d={BRAND_MARK_PATH}
 					fill="currentColor"
 					transform={MARK_TRANSFORM}
-					className="motion-safe:opacity-40"
+					className="motion-safe:animate-working-pulse"
 				/>
 				<g
 					data-testid="running-icon-train"
@@ -81,25 +63,18 @@ export function RunningIcon({ className }: { className?: string | undefined }) {
 					/>
 					<circle cx="32" cy="4" r="3.8" fill="currentColor" />
 				</g>
-				<g
+				<path
+					d={BRAND_MARK_PATH}
+					pathLength="1000"
 					fill="none"
 					stroke="currentColor"
-					strokeWidth="40"
+					strokeWidth="36"
 					strokeLinecap="round"
 					strokeLinejoin="round"
-					strokeDasharray="28 200"
+					strokeDasharray="90 243.33"
 					transform={MARK_TRANSFORM}
-					className="motion-reduce:hidden"
-				>
-					{RAILS.map((d, rail) => (
-						<path
-							key={d}
-							d={d}
-							pathLength="100"
-							className={cn("motion-safe:animate-working-signal", SIGNAL_DELAYS[rail])}
-						/>
-					))}
-				</g>
+					className="motion-safe:animate-working-trace motion-reduce:hidden"
+				/>
 			</svg>
 		</span>
 	);

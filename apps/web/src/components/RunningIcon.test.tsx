@@ -10,10 +10,11 @@ test("running icon is the store-free, labeled brand badge with a reduced-motion 
 	expect(markup).toContain('data-testid="running-icon"');
 	expect(markup).toContain('data-running="true"');
 	expect(markup).toContain("size-14 text-primary");
-	expect(markup).toContain(`d="${BRAND_MARK_PATH}"`);
+	expect(markup.split(`d="${BRAND_MARK_PATH}"`)).toHaveLength(3);
 	expect(markup).toContain("motion-safe:animate-working-train");
-	expect(markup.match(/motion-safe:animate-working-signal/g)).toHaveLength(6);
-	expect(markup.match(/\[--signal-delay:-[\d.]+s\]/g)).toHaveLength(5);
+	expect(markup).toContain("motion-safe:animate-working-pulse");
+	expect(markup).toContain('pathLength="1000"');
+	expect(markup).toContain("motion-safe:animate-working-trace motion-reduce:hidden");
 	expect(markup.match(/motion-reduce:hidden/g)).toHaveLength(2);
 	expect(markup).not.toMatch(/#[0-9a-f]{3,8}\b|style="/i);
 	expect(markup).not.toContain("Needs attention");
