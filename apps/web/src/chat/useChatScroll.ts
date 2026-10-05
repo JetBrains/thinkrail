@@ -335,7 +335,7 @@ export function useChatScroll(
 			cancelFrame: (id) => cancelAnimationFrame(id),
 			onStateChange: setSnapshot,
 		},
-		{ streaming: isStreaming, latestEdge: edge, movement },
+		{ streaming: isStreaming, latestEdge: edge, movement, mountPending: true },
 	);
 
 	const guardActive = useCallback(() => {
@@ -673,7 +673,6 @@ export function useChatScroll(
 
 	useLayoutEffect(() => {
 		if (!scrollerElement || !streamEdgeElement) return;
-		if (isStreaming) controller.reconstructActiveStream();
 		controller.contentChanged();
 	}, [controller, isStreaming, scrollerElement, streamEdgeElement]);
 

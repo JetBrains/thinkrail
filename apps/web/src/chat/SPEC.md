@@ -400,13 +400,21 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   request first, while a real unmount terminates it. `ChatView` is its only terminal consumer, so an
   unresolved current request must never linger.
 - **Open at the current alignment target** — `ChatMessageOrder` chooses the physical latest edge: bottom
-  for oldest-first, top for newest-first. A freshly shown idle transcript mounts there; an already-working
-  transcript reconstructs directly at Settle with only the room its active response needs. Switching order
-  remounts at that order's current target because preserving a pixel position across total reversal has no
-  stable meaning. Newest-first mounts at the browser's native zero scroll origin rather than arming a
-  redundant delayed Virtuoso correction that could overwrite immediate reader input; oldest-first needs
-  Virtuoso's explicit final-row placement. A pending jump-to-message then overrides the mount with its
-  centered controller reveal. There is no intermediate wrong-edge paint or cross-order animation. Initial virtual geometry is
+  for oldest-first, top for newest-first. The reading band is the only mount placement owner. It places
+  once, after the first row mounts, from the work state at that moment: an idle oldest-first transcript jumps
+  to the final row without animation and holds it through measurement frames (motion kind `mount`); an idle
+  newest-first transcript stays at the native zero scroll origin; a working transcript reconstructs directly
+  at Settle with only the room its active response needs and holds Settle through the same measurement frames,
+  re-applied without animation and never backward, so row measurement cannot push the live edge off screen.
+  The mount target skips the follow step cap, so a short viewport still lands the edge at Settle.
+  Virtuoso gets no `initialTopMostItemIndex`: it hides the list until a scroll to that row sees no size
+  change, which a streaming final row never allows, so a returning or just-opened working chat stayed blank.
+  Placement stays pending while native input is pending and while a working transcript has no stream edge
+  yet. A stream that starts during the idle hold cancels the hold and re-places at Settle. Reader takeover,
+  a new turn, or any controller reveal or anchor stabilization (jump-to-message, automatic card reveal,
+  fold) cancels a pending placement; that motion then owns the position. Switching order re-arms placement
+  because preserving a pixel position across total reversal has no stable meaning. There is no
+  intermediate wrong-edge paint or cross-order animation. Initial virtual geometry is
   **row-aware**: each projected row receives a conservative estimate derived from prose wrapping, block
   breaks, and physical fenced-code lines without splitting one canonical Markdown block. Bounded pixel and
   item overscan lets nearby outliers replace estimates before coarse input exhausts a false range. Native

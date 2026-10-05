@@ -30,6 +30,7 @@ function createHarness({
 	geometryAvailable = true,
 	runwayWritable = true,
 	movement = { settle: 75, trigger: 100 },
+	mountPending = false,
 }: {
 	streaming?: boolean;
 	reducedMotion?: boolean;
@@ -38,6 +39,7 @@ function createHarness({
 	geometryAvailable?: boolean;
 	runwayWritable?: boolean;
 	movement?: { settle: number; trigger: number };
+	mountPending?: boolean;
 } = {}): Harness {
 	let geometry: ReadingBandGeometry = {
 		viewportHeight,
@@ -109,6 +111,7 @@ function createHarness({
 		streaming,
 		latestEdge,
 		movement,
+		mountPending,
 	});
 
 	return {
@@ -700,36 +703,181 @@ describe("reading-band reader intent", () => {
 		expect(harness.pendingFrames()).toBe(0);
 	});
 
-	it("reconstructs an active stream at Settle and leaves a settled mount untouched", () => {
-		const active = createHarness({ latestEdge: "top" });
-		active.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 600 });
-		active.controller.reconstructActiveStream();
-		active.controller.reconstructActiveStream();
-		expect(active.writes).toEqual([350]);
-		expect(active.controller.getSnapshot().runway).toBe(true);
+	it("places a mount only once its first row is mounted", () => {
+		const harness = createHarness({ latestEdge: "top", mountPending: true });
+		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 600 });
+		harness.controller.contentChanged();
+		expect(harness.writes).toEqual([]);
+		harness.setReferenceRow({ id: "r1", top: 0 });
+		harness.controller.contentChanged();
+		harness.controller.contentChanged();
+		expect(harness.writes.length).toBeGreaterThan(0);
+		expect(harness.writes.every((write) => write === 350)).toBe(true);
+		expect(harness.controller.getSnapshot().runway).toBe(true);
+	});
 
-		const settled = createHarness({ streaming: false });
-		settled.controller.reconstructActiveStream();
-		expect(settled.writes).toEqual([]);
-		expect(settled.controller.getSnapshot().runway).toBe(false);
+	it("holds a streaming mount at Settle through measurement without animation", () => {
+		const harness = createHarness({ mountPending: true });
+		harness.setReferenceRow({ id: "r1", top: 0 });
+		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 600 });
+		harness.controller.contentChanged();
+		expect(harness.writes).toEqual([350]);
+		expect(harness.controller.getMotionKind()).toBe("mount");
+		harness.setGeometry({ edgeBottom: 580, maxScrollTop: 1_030 });
+		harness.advance(16);
+		expect(harness.writes.at(-1)).toBe(480);
+		expect(harness.readGeometry().edgeBottom).toBe(450);
+		harness.setGeometry({ edgeBottom: 490, maxScrollTop: 1_070 });
+		harness.controller.contentChanged();
+		expect(harness.writes.at(-1)).toBe(520);
+		expect(
+			harness.writes.every((write, index) => index === 0 || write >= harness.writes[index - 1]),
+		).toBe(true);
+		advanceUntilIdle(harness);
+		expect(harness.controller.getMotionKind()).toBeNull();
+		expect(harness.readGeometry().edgeBottom).toBe(450);
+	});
+
+	it("holds a streaming mount at Settle when measurement pushes the edge below the fold", () => {
+		const harness = createHarness({ mountPending: true });
+		harness.setReferenceRow({ id: "r1", top: 0 });
+		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 600 });
+		harness.controller.contentChanged();
+		expect(harness.writes).toEqual([350]);
+		harness.setGeometry({ edgeBottom: 900, maxScrollTop: 1_400 });
+		harness.advance(16);
+		expect(harness.writes.at(-1)).toBe(800);
+		expect(harness.readGeometry().edgeBottom).toBe(450);
+	});
+
+	it("lets a controller reveal that starts first own a pending mount", () => {
+		for (const start of ["reveal", "anchor"] as const) {
+			const harness = createHarness({ streaming: false, mountPending: true });
+			harness.setReferenceRow({ id: "r1", top: 0 });
+			if (start === "reveal") harness.controller.revealTo(() => 300, true);
+			else harness.controller.stabilizeAnchor(() => 300);
+			harness.controller.contentChanged();
+			expect(harness.controller.getMotionKind()).toBe(start);
+			advanceUntilIdle(harness);
+			expect(harness.writes).not.toContain(1_000);
+		}
+	});
+
+	it("cancels the streaming mount hold on reader takeover or a new turn", () => {
+		for (const takeover of ["reader", "turn"] as const) {
+			const harness = createHarness({ mountPending: true });
+			harness.setReferenceRow({ id: "r1", top: 0 });
+			harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 600 });
+			harness.controller.contentChanged();
+			expect(harness.controller.getMotionKind()).toBe("mount");
+			if (takeover === "reader") harness.controller.readerLeft();
+			else harness.controller.armImmediateTurn();
+			expect(harness.controller.getMotionKind()).toBeNull();
+			const writes = harness.writes.length;
+			harness.setGeometry({ edgeBottom: 700, maxScrollTop: 1_100 });
+			harness.advance(16);
+			expect(harness.writes.length).toBe(writes);
+		}
+	});
+
+	it("places an idle oldest-first mount at the bottom without animation", () => {
+		const harness = createHarness({ streaming: false, mountPending: true });
+		harness.setReferenceRow({ id: "r1", top: 0 });
+		harness.controller.contentChanged();
+		expect(harness.writes).toEqual([1_000]);
+		harness.setGeometry({ maxScrollTop: 1_400 });
+		harness.advance(16);
+		expect(harness.writes.at(-1)).toBe(1_400);
+		advanceUntilIdle(harness);
+		expect(harness.controller.getSnapshot().runway).toBe(false);
+	});
+
+	it("leaves an idle newest-first mount at the native zero origin", () => {
+		const harness = createHarness({ streaming: false, latestEdge: "top", mountPending: true });
+		harness.setGeometry({ scrollTop: 0 });
+		harness.setReferenceRow({ id: "r1", top: 0 });
+		harness.controller.contentChanged();
+		expect(harness.writes).toEqual([]);
+		expect(harness.pendingFrames()).toBe(0);
+	});
+
+	it("places at Settle when the stream starts before the first row mounts", () => {
+		const harness = createHarness({ streaming: false, mountPending: true });
+		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 600 });
+		harness.controller.contentChanged();
+		harness.controller.setStreaming(true);
+		harness.setReferenceRow({ id: "r1", top: 0 });
+		harness.controller.contentChanged();
+		expect(harness.writes[0]).toBe(350);
 	});
 
 	it("does not mistake a newly started turn for an active-stream remount", () => {
-		const harness = createHarness({ streaming: false });
+		const harness = createHarness({ streaming: false, mountPending: true });
 		harness.controller.armImmediateTurn();
 		harness.controller.setStreaming(true);
 		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 600 });
-		harness.controller.reconstructActiveStream();
+		harness.setReferenceRow({ id: "r1", top: 0 });
+		harness.controller.contentChanged();
 		expect(harness.writes).toEqual([]);
 	});
 
+	it("yields a pending mount to a reader who already took over", () => {
+		const harness = createHarness({ streaming: false, mountPending: true });
+		harness.controller.readerLeft();
+		harness.setReferenceRow({ id: "r1", top: 0 });
+		harness.controller.contentChanged();
+		expect(harness.writes).toEqual([]);
+	});
+
+	it("moves a stream that starts during the idle mount hold to Settle", () => {
+		const harness = createHarness({ streaming: false, mountPending: true });
+		harness.setReferenceRow({ id: "r1", top: 0 });
+		harness.controller.contentChanged();
+		expect(harness.controller.getMotionKind()).toBe("mount");
+		harness.setGeometry({ scrollTop: 1_000, maxScrollTop: 1_000, edgeBottom: 600 });
+		harness.controller.setStreaming(true);
+		harness.controller.contentChanged();
+		expect(harness.controller.getMotionKind()).toBe("mount");
+		expect(harness.writes).toEqual([1_000, 1_150]);
+		expect(harness.readRunwayHeight()).toBe(150);
+		harness.advance(16);
+		expect(harness.writes.at(-1)).toBe(1_150);
+	});
+
+	it("defers mount placement past native input, then places without animation", () => {
+		const harness = createHarness({ streaming: false, mountPending: true });
+		harness.setReferenceRow({ id: "r1", top: 0 });
+		const resume = harness.controller.interruptForNativeInput();
+		harness.controller.contentChanged();
+		expect(harness.writes).toEqual([]);
+		resume();
+		expect(harness.writes).toEqual([1_000]);
+		advanceUntilIdle(harness);
+		expect(harness.writes.every((write) => write === 1_000)).toBe(true);
+	});
+
+	it("keeps a streaming mount pending until the stream edge exists", () => {
+		const harness = createHarness({ mountPending: true });
+		harness.setReferenceRow({ id: "r1", top: 0 });
+		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: null });
+		harness.controller.contentChanged();
+		expect(harness.writes).toEqual([]);
+		expect(harness.pendingFrames()).toBe(0);
+		harness.setGeometry({ edgeBottom: 600 });
+		harness.controller.contentChanged();
+		expect(harness.writes).toEqual([350]);
+		advanceUntilIdle(harness);
+		expect(harness.writes.every((write) => write === 350)).toBe(true);
+	});
+
 	it("reconstructs at Settle after message order switches during a stream", () => {
-		const harness = createHarness();
+		const harness = createHarness({ mountPending: true });
+		harness.setReferenceRow({ id: "r1", top: 0 });
 		harness.setGeometry({ scrollTop: 200, maxScrollTop: 900, edgeBottom: 600 });
-		harness.controller.reconstructActiveStream();
+		harness.controller.contentChanged();
 		harness.controller.setLatestEdge("top");
 		harness.setGeometry({ scrollTop: 300, maxScrollTop: 900, edgeBottom: 600 });
-		harness.controller.reconstructActiveStream();
+		harness.controller.contentChanged();
 		expect(harness.writes).toEqual([350, 450]);
 	});
 });
@@ -1537,9 +1685,17 @@ describe("reading-band reveal resumption and tall arrivals", () => {
 			edgeBottom: (capped.edgeBottom ?? 0) - 300,
 		});
 		const writeStart = harness.writes.length;
-		harness.controller.reconstructActiveStream();
-		expect(harness.writes.slice(writeStart)).toEqual([scrollTop]);
-		expect(harness.writes.slice(writeStart).every((write) => write >= scrollTop)).toBe(true);
+		harness.controller.contentChanged();
+		advanceUntilIdle(harness);
+		expect(harness.writes.slice(writeStart)).toEqual([]);
+
+		const remount = createHarness({ mountPending: true });
+		remount.setReferenceRow({ id: "r1", top: 0 });
+		remount.setGeometry({ scrollTop: 500, maxScrollTop: 900, edgeBottom: 300 });
+		remount.controller.contentChanged();
+		advanceUntilIdle(remount);
+		expect(remount.writes.length).toBeGreaterThan(0);
+		expect(remount.writes.every((write) => write === 500)).toBe(true);
 	});
 
 	it("does not push an active cap for a second tall arrival", () => {

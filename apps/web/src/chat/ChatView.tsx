@@ -93,7 +93,6 @@ import { advanceVirtualRows, initialVirtualRows } from "./virtualRows";
 const TRY_AGAIN_PROMPT = "Try again.";
 const CHAT_VIEWPORT_INCREASE = 800;
 const CHAT_MIN_OVERSCAN_ITEMS = 2;
-const CHAT_LATEST_EDGE_MARGIN = 8;
 const chatLocationRevealClaims = new WeakMap<object, object>();
 
 function turnAnchorText(turn: ChatTurn): string {
@@ -1134,15 +1133,6 @@ export default function ChatView({
 										? "w-full"
 										: "w-[var(--chat-transcript-width)] min-w-full max-w-none",
 								)}
-								{...(chatMessageOrder === "oldest-first"
-									? {
-											initialTopMostItemIndex: {
-												index: Math.max(rows.length - 1, 0),
-												align: "end" as const,
-												offset: CHAT_LATEST_EDGE_MARGIN,
-											},
-										}
-									: {})}
 								followOutput={followOutput}
 								rangeChanged={({ startIndex }) => {
 									const localIndex = startIndex - firstItemIndex;

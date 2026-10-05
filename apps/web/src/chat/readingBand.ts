@@ -48,7 +48,7 @@ export interface ReadingBandEnvironment {
 
 export interface ReadingBandController {
 	getSnapshot: () => ReadingBandSnapshot;
-	getMotionKind: () => "alignment" | "anchor" | "reveal" | "settlement" | "follow" | null;
+	getMotionKind: () => "alignment" | "mount" | "anchor" | "reveal" | "settlement" | "follow" | null;
 	isNativeInputPending: () => boolean;
 	restoreScrollTop: (desired: number) => void;
 	reserveRoom: (height: number) => void;
@@ -73,7 +73,6 @@ export interface ReadingBandController {
 	settle: () => void;
 	setStreaming: (streaming: boolean) => void;
 	setMovement: (movement: ReadingBandMovement) => void;
-	reconstructActiveStream: () => void;
 	setLatestEdge: (edge: ReadingBandLatestEdge) => void;
 	dispose: () => void;
 }
@@ -88,7 +87,7 @@ interface ReadingBandState {
 type ScrollTarget = () => number | null;
 
 interface ActiveMotion {
-	kind: "alignment" | "anchor" | "reveal" | "settlement" | "follow";
+	kind: "alignment" | "mount" | "anchor" | "reveal" | "settlement" | "follow";
 	scrollTarget: ScrollTarget | null;
 	runwayTarget: number | null;
 	requireFollowing: boolean;
@@ -146,10 +145,12 @@ export function createReadingBandController(
 		streaming,
 		latestEdge = "bottom",
 		movement: initialMovement,
+		mountPending: initialMountPending = false,
 	}: {
 		streaming: boolean;
 		latestEdge?: ReadingBandLatestEdge;
 		movement: ReadingBandMovement;
+		mountPending?: boolean;
 	},
 ): ReadingBandController {
 	let movement = initialMovement;
@@ -163,8 +164,7 @@ export function createReadingBandController(
 	let motion: ActiveMotion | null = null;
 	let motionEpoch = 0;
 	let anchorFrame: number | null = null;
-	let activeStreamMount = streaming;
-	let reconstructed = false;
+	let mountPending = initialMountPending;
 	let runwayHeight = 0;
 	let immediateTurnPending = false;
 	let pendingSettleReturn = false;
@@ -518,25 +518,34 @@ export function createReadingBandController(
 		return Math.min(settle, capped);
 	};
 
-	const stepTarget = (geometry: ReadingBandGeometry): number | null => {
-		const target = followTarget(geometry);
-		return target === null ? null : Math.max(target, geometry.scrollTop);
-	};
+	const forwardOnly =
+		(target: (geometry: ReadingBandGeometry) => number | null) =>
+		(geometry: ReadingBandGeometry) => {
+			const value = target(geometry);
+			return value === null ? null : Math.max(value, geometry.scrollTop);
+		};
+
+	const stepTarget = forwardOnly(followTarget);
+	const mountSettleTarget = forwardOnly(settleTarget);
 
 	const naturalMaxScrollTop = (geometry: ReadingBandGeometry) =>
 		geometry.maxScrollTop - runwayHeight;
 
-	const liveStepTarget: ScrollTarget = () => {
-		const geometry = environment.readGeometry();
-		return geometry ? stepTarget(geometry) : null;
+	const liveHold = (target: (geometry: ReadingBandGeometry) => number | null) => {
+		const scrollTarget: ScrollTarget = () => {
+			const geometry = environment.readGeometry();
+			return geometry ? target(geometry) : null;
+		};
+		const deriveRoom = () => {
+			const geometry = environment.readGeometry();
+			const value = geometry ? target(geometry) : null;
+			return geometry && value !== null ? Math.max(0, value - naturalMaxScrollTop(geometry)) : null;
+		};
+		return { scrollTarget, deriveRoom };
 	};
 
-	const holdRoom = () => {
-		const geometry = environment.readGeometry();
-		if (!geometry) return null;
-		const target = stepTarget(geometry);
-		return target === null ? null : Math.max(0, target - naturalMaxScrollTop(geometry));
-	};
+	const stepHold = liveHold(stepTarget);
+	const settleHold = liveHold(mountSettleTarget);
 
 	const reconcileReaderRoom = (geometry?: ReadingBandGeometry | null) => {
 		const current = geometry ?? environment.readGeometry();
@@ -553,17 +562,16 @@ export function createReadingBandController(
 			if (Math.abs(target - geometry.scrollTop) <= GEOMETRY_EPSILON) return false;
 			startMotion({
 				kind: "follow",
-				scrollTarget: liveStepTarget,
-				deriveRoom: holdRoom,
+				...stepHold,
 				requireStreaming: true,
 				requireFollowing: true,
 				reevaluate: true,
 			});
 		} else {
-			const room = holdRoom();
+			const room = stepHold.deriveRoom();
 			if (room !== null) writeRunwayHeight(room);
 			publishRunway();
-			const liveTarget = boundedScrollTarget(liveStepTarget);
+			const liveTarget = boundedScrollTarget(stepHold.scrollTarget);
 			if (liveTarget !== null) environment.writeScrollTop(liveTarget);
 		}
 		return true;
@@ -618,10 +626,40 @@ export function createReadingBandController(
 		resetFollowCap();
 	};
 
+	const placeMount = (geometry: ReadingBandGeometry) => {
+		if (nativeInputPending || environment.readReferenceRow() === null) return;
+		if (state.streaming && geometry.edgeBottom === null) return;
+		mountPending = false;
+		cancelMotion();
+		if (state.streaming) {
+			runwaySuppressed = false;
+			resetFollowCap();
+			startMotion({
+				kind: "mount",
+				...settleHold,
+				requireStreaming: true,
+				reevaluate: true,
+				stabilityFrames: EDGE_STABILITY_FRAMES,
+				instant: true,
+			});
+		} else if (latestEdge === "bottom") {
+			startMotion({
+				kind: "mount",
+				scrollTarget: latestTarget,
+				stabilityFrames: EDGE_STABILITY_FRAMES,
+				instant: true,
+			});
+		}
+	};
+
 	function contentChanged() {
 		refreshAnchor();
 		const geometry = environment.readGeometry();
 		if (!geometry || geometry.viewportHeight <= 0) return;
+		if (mountPending) {
+			placeMount(geometry);
+			return;
+		}
 		if (motion?.kind !== "follow") reconcileReaderRoom(geometry);
 		if (nativeInputPending || immediateTurnPending || !state.following) return;
 		if (state.moving) {
@@ -655,6 +693,7 @@ export function createReadingBandController(
 
 	function applyUserTurn(index: number, source: "immediate" | "queued"): boolean {
 		if (!userTurnApplies(source)) return false;
+		mountPending = false;
 		resetFollowCap();
 		runwaySuppressed = false;
 		cancelMotion();
@@ -752,6 +791,7 @@ export function createReadingBandController(
 	};
 
 	const yieldMotionToReader = () => {
+		mountPending = false;
 		releaseNativeInput();
 		cancelAnchor();
 		resetFollowCap();
@@ -782,6 +822,7 @@ export function createReadingBandController(
 			if (bounds) environment.writeScrollTop(Math.min(bounds.maxScrollTop, Math.max(0, desired)));
 		},
 		armImmediateTurn: () => {
+			mountPending = false;
 			releaseNativeInput();
 			resetFollowCap();
 			cancelMotion();
@@ -836,6 +877,7 @@ export function createReadingBandController(
 			reconcileReaderRoom();
 		},
 		revealTo: (target, stabilize) => {
+			mountPending = false;
 			cancelAnchor();
 			startMotion({
 				kind: "reveal",
@@ -846,6 +888,7 @@ export function createReadingBandController(
 			});
 		},
 		stabilizeAnchor: (target) => {
+			mountPending = false;
 			cancelAnchor();
 			startMotion({
 				kind: "anchor",
@@ -916,6 +959,10 @@ export function createReadingBandController(
 				return;
 			}
 			if (!state.streaming) resetFollowCap();
+			if (motion?.kind === "mount") {
+				cancelMotion();
+				mountPending = true;
+			}
 			immediateTurnPending = false;
 			runwaySuppressed = false;
 			publish({ streaming: true, runway: runwayHeight > GEOMETRY_EPSILON || state.following });
@@ -923,15 +970,6 @@ export function createReadingBandController(
 		setMovement: (nextMovement) => {
 			movement = nextMovement;
 			contentChanged();
-		},
-		reconstructActiveStream: () => {
-			if (!activeStreamMount || !state.streaming || reconstructed) return;
-			const geometry = environment.readGeometry();
-			if (!geometry) return;
-			reconstructed = true;
-			cancelMotion();
-			runwaySuppressed = false;
-			if (!startStep(geometry, false)) pendingSettleReturn = true;
 		},
 		setLatestEdge: (edge) => {
 			if (edge === latestEdge) return;
@@ -943,8 +981,7 @@ export function createReadingBandController(
 			immediateTurnPending = false;
 			deferredUserTurn = null;
 			deferredLatestRow = null;
-			activeStreamMount = state.streaming;
-			reconstructed = false;
+			mountPending = true;
 			pendingSettleReturn = false;
 			runwaySuppressed = false;
 			writeRunwayHeight(0);
