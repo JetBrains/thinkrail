@@ -31,7 +31,7 @@ const WORDS = [
 	"token",
 ];
 
-export interface ReplayStep {
+interface ReplayStep {
 	frames: string[];
 }
 
@@ -141,11 +141,8 @@ function toolResultContent(text: string) {
 }
 
 export interface ChatReplay {
-	sessionId: string;
 	steps: ReplayStep[];
 	finalText: string;
-	deltaCount: number;
-	toolCount: number;
 }
 
 export function buildChatReplay(sessionId: string, seed = 7): ChatReplay {
@@ -162,8 +159,6 @@ export function buildChatReplay(sessionId: string, seed = 7): ChatReplay {
 	};
 	const steps: ReplayStep[] = [{ frames: [push({ type: "agent_start" })] }];
 	let timestamp = 1_701_000_000_000;
-	let deltaCount = 0;
-	let toolCount = 0;
 
 	for (const plan of plans) {
 		timestamp += 1_000;
@@ -185,7 +180,6 @@ export function buildChatReplay(sessionId: string, seed = 7): ChatReplay {
 			const frames: string[] = [];
 			for (const piece of pieces.slice(index, index + 3)) {
 				text += piece;
-				deltaCount += 1;
 				const partial: AssistantMessage = { ...message, content: [{ type: "text", text }] };
 				frames.push(
 					push({
@@ -244,7 +238,6 @@ export function buildChatReplay(sessionId: string, seed = 7): ChatReplay {
 		});
 		const results: ToolResultMessage[] = [];
 		for (const tool of plan.tools) {
-			toolCount += 1;
 			const { id, name, arguments: args } = tool.call;
 			steps.push({
 				frames: [push({ type: "tool_execution_start", toolCallId: id, toolName: name, args })],
@@ -295,11 +288,8 @@ export function buildChatReplay(sessionId: string, seed = 7): ChatReplay {
 	});
 	const last = plans.at(-1);
 	return {
-		sessionId,
 		steps,
 		finalText: last ? last.text.slice(-40) : "",
-		deltaCount,
-		toolCount,
 	};
 }
 

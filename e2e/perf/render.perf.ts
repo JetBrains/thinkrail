@@ -12,7 +12,7 @@ import { E2E_FIXTURE_REPO } from "../fixtures/paths";
 import { seedWorkspaceSession } from "../fixtures/sessions";
 import { buildChatReplay, chatHistory } from "./chatReplay";
 import {
-	assertPreciseTimers,
+	assertProfilingReady,
 	attachRenderProfiler,
 	detachRenderProfiler,
 	type RenderProfile,
@@ -104,7 +104,7 @@ function numberedSource(lines: number, edit: (line: number) => string | null): s
 async function chatStreaming(page: Page, run: number): Promise<void> {
 	const wire = await interceptWire(page);
 	await openFixtureProject(page);
-	await assertPreciseTimers(page);
+	await assertProfilingReady(page);
 	const title = `Streaming replay ${run}`;
 	const seeded = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
 		name: title,
@@ -132,7 +132,7 @@ async function chatStreaming(page: Page, run: number): Promise<void> {
 
 async function liveFileEdits(page: Page, run: number): Promise<void> {
 	await openFixtureProject(page);
-	await assertPreciseTimers(page);
+	await assertProfilingReady(page);
 	const workspace = await createWorkspaceViaDialog(page);
 	const path = join(workspace.worktreePath, "live-edit.ts");
 	writeFileSync(
@@ -163,7 +163,7 @@ async function liveFileEdits(page: Page, run: number): Promise<void> {
 
 async function largeDiff(page: Page, run: number): Promise<void> {
 	await openFixtureProject(page);
-	await assertPreciseTimers(page);
+	await assertProfilingReady(page);
 	const workspace = await createWorkspaceViaDialog(page);
 	commitFile(
 		workspace.worktreePath,

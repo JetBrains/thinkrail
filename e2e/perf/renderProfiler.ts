@@ -183,11 +183,6 @@ export async function detachRenderProfiler(page: Page): Promise<void> {
 	await page.unrouteAll({ behavior: "ignoreErrors" });
 }
 
-export async function assertPreciseTimers(page: Page): Promise<void> {
-	if (!(await page.evaluate(() => crossOriginIsolated)))
-		throw new Error("page is not cross-origin isolated; React durations would use coarse timers");
-}
-
 export async function resetRenderProfile(page: Page): Promise<void> {
 	await page.evaluate(() => {
 		const profiler = window.__thinkrailRenderProfiler;
@@ -204,7 +199,9 @@ export async function readRenderProfile(page: Page): Promise<RenderProfile> {
 	});
 }
 
-export async function assertProfilingBuild(page: Page): Promise<void> {
+export async function assertProfilingReady(page: Page): Promise<void> {
+	if (!(await page.evaluate(() => crossOriginIsolated)))
+		throw new Error("page is not cross-origin isolated; React durations would use coarse timers");
 	const profile = await readRenderProfile(page);
 	if (profile.commits === 0 || profile.totalMs <= 0)
 		throw new Error(

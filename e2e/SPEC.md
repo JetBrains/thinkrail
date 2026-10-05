@@ -117,7 +117,8 @@ Defaults: 5 runs, output `$TMPDIR/thinkrail-render-profile.json`.
 - **Timer precision.** The harness adds COOP/COEP headers to documents and scripts through `page.route` so
   the page is cross-origin isolated (5 µs timers, not 100 µs); the measurement browser disables Chromium's
   local-network-access check, which otherwise blocks the WS from a fulfilled document. A run fails if the
-  page is not isolated.
+  page is not isolated, or if no profiled commit with nonzero duration was recorded since load, which means
+  the host serves `dist/` instead of `dist-profile/`.
 - **Scenarios.** Chat streaming seeds a persisted transcript and replays a deterministic Pi event stream
   (`text_delta` chunks, tool calls, `partialResult` updates, `agent_settled`) into the browser at the
   wire seam with fixed pacing; this measures client rendering only and is not evidence of agent behavior.
