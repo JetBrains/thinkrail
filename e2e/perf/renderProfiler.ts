@@ -9,23 +9,23 @@ export interface ComponentCost {
 	inclusiveMaxMs: number;
 }
 
-export interface SubtreeCost extends Omit<ComponentCost, "inclusiveTotalMs" | "inclusiveMaxMs"> {
+interface SubtreeCost extends Omit<ComponentCost, "inclusiveTotalMs" | "inclusiveMaxMs"> {
 	rootRenders: number;
 }
 
 export const MARKDOWN_SUBTREE = "markdown";
 
-export interface SubtreeRoots {
+interface SubtreeRoots {
 	[subtree: string]: string[];
 }
 
-export interface LongTaskStats {
+interface LongTaskStats {
 	count: number;
 	totalMs: number;
 	maxMs: number;
 }
 
-export interface FrameStats {
+interface FrameStats {
 	frames: number;
 	p50GapMs: number;
 	p95GapMs: number;

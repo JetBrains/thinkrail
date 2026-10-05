@@ -48,7 +48,7 @@ function pause(ms: number) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export interface Counters {
+interface Counters {
 	[name: string]: number;
 }
 

@@ -39,7 +39,7 @@ const VOCABULARY = [
 
 const LANGS = ["ts", "py", "bash", "json"] as const;
 
-export const LONG_STREAM_END = "the final sentence of the long stream report closes here.";
+const LONG_STREAM_END = "the final sentence of the long stream report closes here.";
 
 function sentence(random: () => number): string {
 	const words = Array.from(
