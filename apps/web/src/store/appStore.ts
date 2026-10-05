@@ -886,6 +886,7 @@ interface AppState {
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
 	interviewPromptOpen: boolean;
+	notificationPromptOpen: boolean;
 	theme: ThemeId;
 	themeMode: ThemeMode;
 	systemThemePair: SystemThemePair | undefined;
@@ -1097,6 +1098,8 @@ interface AppState {
 	setSettingsSection: (section: SettingsSection) => void;
 	showInterviewPrompt: () => void;
 	hideInterviewPrompt: () => void;
+	openNotificationPrompt: () => void;
+	closeNotificationPrompt: () => void;
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
 	setStreamingResponseMovement: (movement: StreamingResponseMovement) => void;
 	setChatPreferences: (order: ChatMessageOrder, movement: StreamingResponseMovement) => void;
@@ -1911,6 +1914,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
 	interviewPromptOpen: false,
+	notificationPromptOpen: false,
 	theme: DEFAULT_CONFIG.theme,
 	themeMode: DEFAULT_CONFIG.themeMode,
 	systemThemePair: DEFAULT_CONFIG.systemThemePair,
@@ -3579,6 +3583,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set({ settingsOpen: true, settingsSection: section }),
 	closeSettings: () => set({ settingsOpen: false }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
+	openNotificationPrompt: () =>
+		set((state) => (state.notificationPromptOpen ? state : { notificationPromptOpen: true })),
+	closeNotificationPrompt: () => set({ notificationPromptOpen: false }),
 	showInterviewPrompt: () =>
 		set((state) => (state.interviewPromptOpen ? state : { interviewPromptOpen: true })),
 	hideInterviewPrompt: () => set({ interviewPromptOpen: false }),
