@@ -72,8 +72,8 @@ test("command logs and Stop stay scoped through parent Stop, view closure, reloa
 	await expect(row).toHaveAttribute("data-status", "running");
 	const commandId = await row.getAttribute("data-resource-id");
 	expect(commandId).toBeTruthy();
-	await row.click();
-	await expect(row).toHaveAttribute("aria-selected", "true");
+	await row.getByRole("option").click();
+	await expect(row).toHaveAttribute("data-selected", "true");
 	const detail = inspector.getByTestId("resources-inspector-detail");
 	const output = detail.getByTestId("command-log-output");
 	await expect(output).toContainText("WATCH_READY");
@@ -159,7 +159,7 @@ test("natural command completion refreshes the closed inspector and survives tra
 	await openResources(page);
 	const row = inspector.locator(commandRows).filter({ hasText: "resource-finish" });
 	await expect(row).toHaveAttribute("data-status", "completed");
-	await row.click();
+	await row.getByRole("option").click();
 	await expect(inspector.getByTestId("command-log-output")).toContainText("RESOURCE_DONE");
 	await page.keyboard.press("Escape");
 	await page.reload();
@@ -189,7 +189,7 @@ test("individual subagent Stop and confirmed Stop all retain transcripts without
 	expect(turnsBeforeStop).toBeGreaterThan(0);
 	const inspector = await openResources(page);
 	const first = inspector.locator(childRows).filter({ hasText: "RESOURCE_CHILD_A" });
-	await first.click();
+	await first.getByRole("option").click();
 	const transcript = inspector.getByTestId("subagent-transcript");
 	await expect(transcript).toContainText("RESOURCE_CHILD_A", { timeout: 30_000 });
 	await shot(inspector, "chat-resources", "active-subagent-transcript");
@@ -228,6 +228,6 @@ test("individual subagent Stop and confirmed Stop all retain transcripts without
 	const reused = inspector.locator(childRows).filter({ hasText: "RESOURCE_REUSE_OK" });
 	await expect(reused).toHaveAttribute("data-status", "completed", { timeout: 180_000 });
 	await waitForAgentSettled(page, 120_000);
-	await reused.click();
+	await reused.getByRole("option").click();
 	await expect(inspector.getByTestId("subagent-transcript")).toContainText("RESOURCE_REUSE_OK");
 });

@@ -10,7 +10,7 @@ import {
 	RiTimeLine,
 } from "@remixicon/react";
 import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
-import type { KeyboardEvent, MouseEvent, ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 import { cn } from "@/lib";
 
 export type ResourceAction = { pending: boolean; error: string | null };
@@ -266,12 +266,24 @@ export interface ResourceRowProps {
 	action: ResourceAction | undefined;
 	stopAllPending?: boolean;
 	selected?: boolean;
-	/** `option`: a selectable row inside the inspector's listbox. `listitem`: a dock row whose name opens the inspector. */
+	/**
+	 * `option`: a selectable row inside the inspector's listbox — a presentational wrapper holds the
+	 * option and its Stop control as siblings, so no control nests inside the option.
+	 * `listitem`: a dock row whose name and activity are one Inspect button.
+	 */
 	role?: "option" | "listitem";
-	/** Narrow roster rows: name · state · elapsed, no activity text. */
-	compact?: boolean;
 	onSelect: () => void;
 	onStop: () => void;
+}
+
+const ACCESSIBLE_ACTIVITY_LIMIT = 80;
+
+function accessibleName(name: string, activity: string, state: string): string {
+	const trimmed =
+		activity.length > ACCESSIBLE_ACTIVITY_LIMIT
+			? `${activity.slice(0, ACCESSIBLE_ACTIVITY_LIMIT - 1)}…`
+			: activity;
+	return `${name}: ${trimmed}, ${state}`;
 }
 
 export function ResourceRow({
@@ -282,7 +294,6 @@ export function ResourceRow({
 	stopAllPending = false,
 	selected = false,
 	role = "listitem",
-	compact = false,
 	onSelect,
 	onStop,
 }: ResourceRowProps) {
@@ -291,6 +302,7 @@ export function ResourceRow({
 	const id = resourceId(resource);
 	const name = resourceName(resource);
 	const activity = resourceActivity(resource);
+	const label = stateLabel(state, resource.kind);
 	const elapsed = elapsedLabel(resource, now);
 	const exitCode = resource.kind === "command" ? resource.summary.exitCode : undefined;
 	const stopDisabled =
@@ -305,116 +317,108 @@ export function ResourceRow({
 			onSelect();
 		}
 	};
-	const onClick = (event: MouseEvent<HTMLDivElement>) => {
-		if (event.target instanceof Element && event.target.closest("button")) return;
-		onSelect();
-	};
-	const selectable = role === "option";
-	const shared = {
+	const nameClass = live
+		? "tr-title-compact text-text-default"
+		: "text-text-muted tr-text-metadata";
+	const activityClass = cn(
+		"min-w-0 truncate text-text-muted tr-text-metadata",
+		resource.kind === "command" && "tr-code-text-small",
+	);
+	const meta = (
+		<span className="flex shrink-0 items-center gap-8 text-text-subtle tr-text-metadata tabular-nums group-hover:hidden group-focus-within:hidden">
+			<StateText state={state} kind={resource.kind} />
+			{elapsed ? <span>{elapsed}</span> : null}
+			{exitCode !== undefined && exitCode !== null ? <ExitBadge exitCode={exitCode} /> : null}
+		</span>
+	);
+	const actions = (
+		<span className="hidden shrink-0 items-center gap-2 group-hover:inline-flex group-focus-within:inline-flex">
+			{live ? (
+				<RowActionButton
+					label={action?.pending ? "Stopping…" : "Stop"}
+					testId="resource-stop"
+					disabled={stopDisabled}
+					danger
+					onClick={onStop}
+				>
+					<RiStopFill className="size-14" />
+				</RowActionButton>
+			) : null}
+		</span>
+	);
+	const failure = action?.error ? (
+		<span role="alert" className="break-words text-feedback-error tr-text-metadata">
+			{action.error}
+		</span>
+	) : null;
+	const dataAttributes = {
 		"data-testid": resource.kind === "command" ? "resource-command" : "resource-subagent",
 		"data-resource-id": id,
 		"data-status": resource.summary.status,
 		"data-state": state,
-		"aria-label": `${name}, ${stateLabel(state, resource.kind)}`,
-		className: cn(
-			"group grid min-h-32 min-w-0 cursor-default grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-8 rounded-[var(--radius-sm)] px-8 py-4 outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary",
-			selected && "bg-control-bg-selected",
-		),
 	};
-	const body = (
-		<>
-			<KindGlyph resource={resource} state={state} />
-			<span className="flex min-w-0 flex-col">
-				{selectable ? (
-					<span className="flex min-w-0 items-baseline gap-8">
-						<span
-							className={cn(
-								"min-w-0 truncate",
-								compact ? "flex-1" : "max-w-[60%] shrink-0",
-								live ? "tr-title-compact text-text-default" : "text-text-muted tr-text-metadata",
-							)}
-							title={compact ? `${name} — ${activity}` : name}
-						>
-							{name}
-						</span>
-						{compact ? null : (
-							<span
-								className={cn(
-									"min-w-0 flex-1 truncate text-text-muted tr-text-metadata",
-									resource.kind === "command" && "tr-code-text-small",
-								)}
-								title={activity}
-							>
-								{activity}
+	const rowClass =
+		"group grid min-h-32 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] px-8 py-4 hover:bg-control-bg-hovered";
+
+	if (role === "option") {
+		return (
+			<div
+				role="none"
+				{...dataAttributes}
+				data-selected={selected || undefined}
+				className={cn(
+					rowClass,
+					"grid-cols-[minmax(0,1fr)_auto]",
+					selected && "bg-control-bg-selected",
+				)}
+			>
+				<div
+					role="option"
+					aria-selected={selected}
+					aria-label={accessibleName(name, activity, label)}
+					tabIndex={0}
+					onClick={onSelect}
+					onKeyDown={onKeyDown}
+					className="grid min-w-0 cursor-default grid-cols-[auto_minmax(0,1fr)] items-center gap-8 rounded-[var(--radius-sm)] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+				>
+					<KindGlyph resource={resource} state={state} />
+					<span className="flex min-w-0 flex-col">
+						<span className="flex min-w-0 items-baseline gap-8">
+							<span className={cn("min-w-0 flex-1 truncate", nameClass)} title={name}>
+								{name}
 							</span>
-						)}
-					</span>
-				) : (
-					<button
-						type="button"
-						data-testid="resource-inspect"
-						title={`Inspect ${name}`}
-						onClick={onSelect}
-						className="flex min-w-0 items-baseline gap-8 rounded-[var(--radius-xs)] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
-					>
-						<span
-							className={cn(
-								"min-w-0 max-w-[60%] shrink-0 truncate",
-								live ? "tr-title-compact text-text-default" : "text-text-muted tr-text-metadata",
-							)}
-						>
-							{name}
+							{meta}
 						</span>
-						<span
-							className={cn(
-								"min-w-0 flex-1 truncate text-text-muted tr-text-metadata",
-								resource.kind === "command" && "tr-code-text-small",
-							)}
-						>
+						<span className={activityClass} title={activity}>
 							{activity}
 						</span>
-					</button>
-				)}
-				{action?.error ? (
-					<span role="alert" className="break-words text-feedback-error tr-text-metadata">
-						{action.error}
+						{failure}
 					</span>
-				) : null}
+				</div>
+				{actions}
+			</div>
+		);
+	}
+	return (
+		<li {...dataAttributes} className={cn(rowClass, "grid-cols-[auto_minmax(0,1fr)_auto]")}>
+			<KindGlyph resource={resource} state={state} />
+			<span className="flex min-w-0 flex-col">
+				<button
+					type="button"
+					data-testid="resource-inspect"
+					title={`Inspect ${name}`}
+					onClick={onSelect}
+					className="flex min-w-0 items-baseline gap-8 rounded-[var(--radius-xs)] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+				>
+					<span className={cn("min-w-0 max-w-[60%] shrink-0 truncate", nameClass)}>{name}</span>
+					<span className={cn(activityClass, "flex-1")}>{activity}</span>
+				</button>
+				{failure}
 			</span>
-			<span className="flex shrink-0 items-center gap-8 text-text-subtle tr-text-metadata tabular-nums">
-				<span className="flex items-center gap-8 group-hover:hidden group-focus-within:hidden">
-					<StateText state={state} kind={resource.kind} />
-					{elapsed ? <span>{elapsed}</span> : null}
-					{exitCode !== undefined && exitCode !== null ? <ExitBadge exitCode={exitCode} /> : null}
-				</span>
-				<span className="hidden items-center gap-2 group-hover:inline-flex group-focus-within:inline-flex">
-					{live ? (
-						<RowActionButton
-							label={action?.pending ? "Stopping…" : "Stop"}
-							testId="resource-stop"
-							disabled={stopDisabled}
-							danger
-							onClick={onStop}
-						>
-							<RiStopFill className="size-14" />
-						</RowActionButton>
-					) : null}
-				</span>
+			<span className="flex shrink-0 items-center gap-8">
+				{meta}
+				{actions}
 			</span>
-		</>
-	);
-	return selectable ? (
-		<div
-			role="option"
-			aria-selected={selected}
-			tabIndex={0}
-			onClick={onClick}
-			onKeyDown={onKeyDown}
-			{...shared}
-		>
-			{body}
-		</div>
-	) : (
-		<li {...shared}>{body}</li>
+		</li>
 	);
 }

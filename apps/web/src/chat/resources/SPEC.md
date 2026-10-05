@@ -70,7 +70,10 @@ a detail column for the selected row. The detail header repeats the row's name a
 Stop for live rows; the detail body is the parent's slot — bounded plain-text command output for a
 command (this module's `CommandLogView`), the read-only subagent transcript pane for a subagent. The
 roster is a listbox: clicking selects, `↑`/`↓` move the selection, `Esc` or the close control dismisses,
-and clicking the composer or header does **not** dismiss. **Stop all subagents** sits in the roster
+and clicking the composer or header does **not** dismiss. Each option keeps its activity on a second
+line and in its accessible name (`name: activity, state`), so two same-role subagents stay
+distinguishable; the option contains no control — its Stop is a sibling inside a presentational row
+wrapper, which carries the row's test ids and `data-selected`. **Stop all subagents** sits in the roster
 header, guarded by the parent's confirmation that names the current active count; it never stops the
 main chat or disables future delegation. Stale/unavailable snapshots show a banner and disable
 controls; read failures stay visible with Retry.

@@ -189,7 +189,7 @@ test("the dock lists live rows oldest-first with escaped text, one inspect contr
 	expect(stale).toContain("reconnecting");
 });
 
-test("the inspector renders the roster as a listbox, selects the first live row, and fills the detail slot", () => {
+test("the inspector renders a listbox of options whose accessible names carry the activity, selects the first live row, and keeps Stop beside the option", () => {
 	const html = renderToStaticMarkup(
 		<resources.ResourcesInspector
 			{...inspectorProps}
@@ -205,8 +205,18 @@ test("the inspector renders the roster as a listbox, selects the first live row,
 	expect(html).toContain('role="listbox"');
 	expect(html).toContain('data-testid="resources-active"');
 	expect(html).toContain('data-testid="resources-finished"');
-	expect(html).toMatch(/aria-selected="true"[^>]*data-resource-id="build"/);
-	expect(html).toMatch(/aria-selected="false"[^>]*data-resource-id="child"/);
+	expect(html).toMatch(/data-resource-id="build"[^>]*data-selected="true"/);
+	expect(html).not.toMatch(/data-resource-id="child"[^>]*data-selected="true"/);
+	expect(html).toContain('aria-selected="true"');
+	expect(html).toContain(
+		'aria-label="Build &lt;script&gt;: echo &#x27;&lt;img src=x onerror=bad()&gt;&#x27;, Running"',
+	);
+	expect(html).toContain('aria-label="scout: &lt;b&gt;Inspect&lt;/b&gt; the registry, Queued"');
+	expect(html.match(/&lt;b&gt;Inspect&lt;\/b&gt; the registry/g)?.length).toBeGreaterThanOrEqual(2);
+	const options = html.match(/<div role="option"[^>]*>(?:(?!<\/div>)[\s\S])*<\/div>/g) ?? [];
+	expect(options.length).toBe(4);
+	for (const option of options) expect(option).not.toContain("resource-stop");
+	expect(html.match(/data-testid="resource-stop"/g)?.length).toBe(2);
 	expect(html).toContain('data-testid="resource-detail-stop"');
 	expect(html).toContain('data-testid="detail-slot"');
 	expect(html).toContain('aria-label="Stop all subagents"');
@@ -231,7 +241,7 @@ test("the inspector keeps the selected finished row, disables controls when stal
 			actions={{ "command:build": { pending: false, error: "Stop failed" } }}
 		/>,
 	);
-	expect(html).toMatch(/aria-selected="true"[^>]*data-resource-id="done"/);
+	expect(html).toMatch(/data-resource-id="done"[^>]*data-selected="true"/);
 	expect(html).toContain("Snapshot is stale");
 	expect(html).toContain("reconnecting");
 	expect(html).toMatch(/data-testid="resource-stop"[^>]*disabled/);

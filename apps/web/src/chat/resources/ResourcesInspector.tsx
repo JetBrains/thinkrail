@@ -191,7 +191,7 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 		const nextId = resourceId(next);
 		props.onSelect(nextId);
 		listRef.current
-			?.querySelector<HTMLElement>(`[data-resource-id="${CSS.escape(nextId)}"]`)
+			?.querySelector<HTMLElement>(`[data-resource-id="${CSS.escape(nextId)}"] [role="option"]`)
 			?.focus();
 	};
 
@@ -213,7 +213,6 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 						action={props.actions[actionKey(resource)]}
 						stopAllPending={!!props.actions.all?.pending}
 						role="option"
-						compact
 						selected={!!selected && resourceId(resource) === resourceId(selected)}
 						onSelect={() => props.onSelect(resourceId(resource))}
 						onStop={() => stopFor(resource)}

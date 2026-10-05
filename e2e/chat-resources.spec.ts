@@ -197,7 +197,9 @@ test("an older welcome retires the inspector with its transcript and returns foc
 	await expect(inspector).toBeVisible();
 	const row = inspector.getByTestId("resource-subagent");
 	await expect(row).toHaveAttribute("data-resource-id", childSessionId);
-	await expect(row).toHaveAttribute("aria-selected", "true");
+	await expect(row).toHaveAttribute("data-selected", "true");
+	await expect(row.getByRole("option")).toHaveAttribute("aria-selected", "true");
+	await expect(row.getByRole("option")).toHaveAccessibleName(/Focus fixture, Done/);
 	await expect(inspector.getByTestId("subagent-transcript")).toContainText("FOCUS_CHILD");
 	expect(wire.transcriptRequests).toEqual([
 		{
@@ -206,8 +208,8 @@ test("an older welcome retires the inspector with its transcript and returns foc
 			childSessionId,
 		},
 	]);
-	await row.focus();
-	await expect(row).toBeFocused();
+	await row.getByRole("option").focus();
+	await expect(row.getByRole("option")).toBeFocused();
 
 	const initialWelcomes = wire.welcomes;
 	wire.setProtocolVersion(CHAT_RESOURCES_PROTOCOL_VERSION - 1);
