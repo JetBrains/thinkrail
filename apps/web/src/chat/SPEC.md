@@ -314,17 +314,19 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   only while the card still holds focus. Plus `openSubagentTranscript(childSessionId)` — the subagent
   cards' transcript link (no provider → the cards hide the action).
 - **Subagent transcript view** (`SubagentTranscriptDialog.tsx` — an integration file, like
-  `SkillsDialog`): a **read-only overlay** over the chat rendering a hidden child's transcript with the
+  `SkillsDialog`): `SubagentTranscriptPane` renders a hidden child's **read-only** transcript with the
   same primitives (`messagesToRuntime` → `deriveRows` → `ChatTurnView`), fetched via
-  `subagent.getTranscript` keyed `(workspaceId, parentSessionId = this chat, childSessionId)`. Opened
-  through `ChatActions.openSubagentTranscript`; rendered under a `null` `ChatActions` provider so
-  nothing inside can talk back (and a nested transcript link cannot exist). Liveness comes from the
+  `subagent.getTranscript` keyed `(workspaceId, parentSessionId = this chat, childSessionId)`; the
+  dialog of the same file wraps the pane as an overlay for the subagent cards'
+  `ChatActions.openSubagentTranscript`, and the Resources inspector embeds the pane as its subagent
+  detail. Both render under a `null` `ChatActions` provider so nothing inside can talk back (and a
+  nested transcript link cannot exist). Liveness comes from the
   **host** with each response: `subagent.getTranscript` carries the run's current registry `status`
-  (absent once the host no longer knows the run — restart, dispose). The open dialog keeps exactly one
+  (absent once the host no longer knows the run — restart, dispose). The mounted pane keeps exactly one
   read in flight, scheduling the next ~2.5s poll only after a response while status is queued/running —
   never from this chat's own runtime, whose frozen background ack can't tell a live run from one lost to
   a restart. A terminal/absent status or the wire's permanent `SUBAGENT_TRANSCRIPT_NOT_FOUND` stops;
-  plain transport failures retry while the dialog stays open with a capped backoff. Poll snapshots
+  plain transport failures retry while the pane stays mounted with a capped backoff. Poll snapshots
   hydrate with child-scoped ids derived from each persisted message's role/timestamp/index, so an
   append-only refresh preserves row identity and manual folds instead of remounting the transcript.
   Works during the run, after completion, and after a host restart (transcripts persist on disk; only
@@ -1209,24 +1211,30 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 
 ## Chat Resources
 
-[[submodule-web-chat-resources]] owns the selected header-popover presentation. `ChatView` composes
-its barrel with a `useChatResources` integration hook and the existing `SubagentTranscriptDialog`;
-no new shell pane, workbench resource kind or terminal attachment is involved. Tool/command
+[[submodule-web-chat-resources]] owns the three presentation surfaces — header trigger, composer
+dock, transcript-region inspector — and their shared row grammar. `ChatView` composes its barrel with
+the `useChatResources` integration hook: it mounts the trigger in the header, the dock between the queue
+strip and the composer (only while the inspector is closed), and the inspector inside the transcript
+region so the header and composer stay usable; it owns the open/selected state and fills the inspector's
+detail slot — `CommandLogView` fed by `useCommandLog` for a command, `SubagentTranscriptPane` for a
+subagent. No new shell pane, workbench resource kind or terminal attachment is involved. Tool/command
 completion rendering remains in the conversation primitives, joined through tool/custom-message
-names rather than imports of the capability packages.
+names rather than imports of the capability packages; the latest turn divider carries the "still
+running" chip as a parent-supplied deep link into the inspector.
 
 The dependency edges are `ChatView`/`useChatResources` → `resources`, `store`, `transport`, and
-`ChatView` → the existing transcript dialog. The `resources` child stays props-only and imports no
-sibling tool implementation. Command logs are fetched by the integration hook and passed into its
-read-only view; the module never loads xterm.
+`ChatView` → the transcript pane. The `resources` child stays props-only and imports no sibling tool
+implementation; it receives the shared 30 s clock as a `now` prop. Command logs are fetched by the
+integration hook and passed into its read-only view; the module never loads xterm.
 
 The hook hydrates on mount/current welcome, subscribes to `session.resourcesChanged`, and coalesces
 invalidations behind one in-flight read. An invalidation during a read requires a fresh pass;
 [[submodule-web-store]] owns generation/revision-fenced snapshot installation and failure handling.
-Metadata remains current while the popover is closed; the header count is numeric only for an
+Metadata remains current while the inspector is closed; the header count is numeric only for an
 authoritative snapshot and explicitly unknown otherwise. A welcome that proves the host predates the
-capability clears resource-only detail state, while an unknown protocol during reconnect merely makes it
-stale. Command logs refresh only while that command's detail is open. The shared `detailPolling` loop handles command output and subagent transcript reads:
+capability closes the inspector and its Stop-all confirmation, while an unknown protocol during
+reconnect merely makes them stale. Command output and subagent transcripts refresh only while that row
+is the inspector's selection. The shared `detailPolling` loop handles command output and subagent transcript reads:
 single-flight replacement snapshots, stopping on terminal/permanently unavailable results, and capped
 transient backoff with visibly retryable failures. Resource controls keep pending/error state scoped
 to their action and current connection; acknowledgement and detail-close focus semantics belong to
