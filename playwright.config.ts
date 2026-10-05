@@ -37,7 +37,8 @@ const bunExecutable = resolveBunExecutable();
 const hostPath = hermeticE2ePath(E2E_FAKE_BIN_DIR);
 if (hostPath.split(delimiter).some((directory) => existsSync(join(directory, "pi"))))
 	throw new Error("e2e host PATH must not contain pi");
-const isShardLane = process.env.THINKRAIL_E2E_LANE !== undefined;
+const isShardLane =
+	process.env.THINKRAIL_E2E_LANE !== undefined || !!process.env.THINKRAIL_E2E_JOB_SHARD;
 const hostCommand =
 	process.env.THINKRAIL_E2E_SKIP_BUILD === "1"
 		? `${JSON.stringify(bunExecutable)} packages/server/src/dev.ts`

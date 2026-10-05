@@ -66,3 +66,31 @@ export function resolveShardCount(options: {
 	if (options.hasPlaywrightArgs) return 1;
 	return automaticShardCount(options.availableCpuCount);
 }
+
+export interface JobShard {
+	index: number;
+	total: number;
+}
+
+export function parseJobShard(raw: string | undefined): JobShard | undefined {
+	if (raw === undefined || raw === "") return undefined;
+	const match = /^(\d+)\/(\d+)$/.exec(raw);
+	const index = Number(match?.[1]);
+	const total = Number(match?.[2]);
+	if (!match || total < 1 || index < 1 || index > total) {
+		throw new Error(
+			`THINKRAIL_E2E_JOB_SHARD must be "k/N" with 1 <= k <= N, got ${JSON.stringify(raw)}`,
+		);
+	}
+	return { index, total };
+}
+
+export function laneShardArgs(
+	job: JobShard | undefined,
+	lane: number,
+	laneCount: number,
+): string[] {
+	const index = job ? (job.index - 1) * laneCount + lane : lane;
+	const total = (job?.total ?? 1) * laneCount;
+	return total === 1 ? [] : [`--shard=${index}/${total}`];
+}
