@@ -33,9 +33,9 @@ they are *generators*: they use `node:fs` and `node:path`, which must never reac
 | `providerGlyphs.test.ts` | pins that every mapped mark exists in the vendored set and that coloured, oddly sized or non-path SVGs are rejected rather than flattened. |
 | `generatedFiles.ts` | what every generate CLI does with a rendered file: `--check` reports drift, otherwise write. The **only** definition of "stale", so the three pipelines and the tests cannot disagree. |
 | `generatedFiles.test.ts` | pins that definition — content drift and a missing file are stale, a CRLF working tree is not. |
-| `compiler-census.ts` | CLI. Runs `babel-plugin-react-compiler` with a logger over `src/` (tests excluded) and prints every function the compiler bails out on as `file:line: [fn] category: reason`, plus totals; `--json` prints the full census. Run: `bun run --cwd apps/web compiler:census [--json]`. Read-only; not a gate. |
+| `compiler-census.ts` | CLI. Runs `babel-plugin-react-compiler` with a logger over app, shared UI, and extension web sources (tests, stories and generated data excluded) and prints every function the compiler bails out on as `file:line: [fn] category: reason`, plus totals; `--json` prints the full census. Run: `bun run --cwd apps/web compiler:census [--json]`. Read-only; not a gate. |
 
-`designSources.ts` owns the shared adoption-guard scan: app source, `packages/ui`, and every
+`designSources.ts` owns the shared adoption-guard and compiler-census source scan: app source, `packages/ui`, and every
 `thinkrail-extensions/*/web` source tree, excluding tests, generated output, and installed dependencies.
 The same SDK/extension roots are explicit Tailwind `@source` directives in the app stylesheet. Extension
 sources name recursive file globs: a wildcard directory ending in `*/web` alone does not discover the
@@ -60,7 +60,8 @@ in agreement about the same functions.
   read only their declared inputs. A generator that needed one of those would be
   the wrong shape.
 - **Census exception:** `compiler-census.ts` also uses `@babel/core` and `babel-plugin-react-compiler`
-  and reads every `src/**/*.{ts,tsx}` file as *text*. It must pass the compiler the same options as
+  and reads authored TypeScript from the shared source scan as *text*, so extracting a component into
+  the SDK or an extension does not silently remove it from the report. It must pass the compiler the same options as
   `reactCompilerPreset()` in `vite.config.ts` and mirror the preset's file filter, so its counts match
   the real build. Build-time compiler validations differ from the lint rules (for example
   `StaticComponents` is lint-only), so its counts differ from an oxlint React scan by design.

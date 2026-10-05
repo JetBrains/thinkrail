@@ -6,10 +6,10 @@ import {
 	RiStopFill,
 } from "@remixicon/react";
 import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
+import { Button } from "@thinkrail/ui/button";
+import { Dialog, DialogPanel, DialogTitle } from "@thinkrail/ui/dialog";
+import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, type ReactNode, useEffect, useRef } from "react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogPanel, DialogTitle } from "@/components/ui/dialog";
-import { cn } from "@/lib";
 import {
 	actionKey,
 	ExitBadge,

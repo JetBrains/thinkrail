@@ -10,8 +10,8 @@ import {
 	RiTimeLine,
 } from "@remixicon/react";
 import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
+import { cn } from "@thinkrail/ui/utils";
 import type { KeyboardEvent, ReactNode } from "react";
-import { cn } from "@/lib";
 
 export type ResourceAction = { pending: boolean; error: string | null };
 export type ResourceActions = Record<string, ResourceAction>;
