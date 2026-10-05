@@ -1,11 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { loadColors, paletteVar, renderCss, themeColorKeys, validate } from "../../scripts/colors";
 import { designSourceFiles, designSourceLabel } from "../../scripts/designSources";
 import { normalizeEol } from "../../scripts/generatedFiles";
 
-const SRC = new URL("..", import.meta.url).pathname;
+const SRC = fileURLToPath(new URL("..", import.meta.url));
 const read = (path: string) => normalizeEol(readFileSync(path, "utf8"));
 const rel = designSourceLabel;
 const code = (path: string) =>

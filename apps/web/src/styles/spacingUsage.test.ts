@@ -1,10 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { designSourceFiles, designSourceLabel } from "../../scripts/designSources";
 import { normalizeEol } from "../../scripts/generatedFiles";
 
-const SRC = new URL("..", import.meta.url).pathname;
+const SRC = fileURLToPath(new URL("..", import.meta.url));
 const read = (p: string) => normalizeEol(readFileSync(p, "utf8"));
 const rel = designSourceLabel;
 const sourceWithoutComments = (p: string) =>
