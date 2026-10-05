@@ -9,9 +9,11 @@ tags: [product, scope]
 
 ## Goal
 
-ThinkRail is a desktop-and-mobile client for the `pi` coding agent: a thin host that runs `pi` and
-bridges it to a rich UI, so agent work is approachable without a terminal and stays isolated,
-reviewable, and grounded in specs — building with agents without losing control.
+ThinkRail is the agentic IDE that gets better every time you use it. It is a thin host that runs `pi`
+and bridges it to a rich UI, isolates work into separate workspaces, and gives the agent durable
+project knowledge through living specs and reusable skills — so agent work is approachable without a
+terminal and stays isolated, reviewable, and grounded in specs: building with agents without losing
+control.
 
 This document describes the product as it is and why it exists, and changes with it: a capability that
 lands is added here, a decision that changes is rewritten here. It holds no versions or roadmap.

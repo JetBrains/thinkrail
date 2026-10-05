@@ -1,7 +1,8 @@
 # ThinkRail
 
-A ThinkRail-branded desktop-and-mobile client for the `pi` coding agent. The app is a thin host that
-runs `pi` and bridges it to a rich UI; `pi` owns models, skills, compaction, cost, and session state.
+The agentic IDE that gets better every time you use it, built around the `pi` coding agent. The app is
+a thin host that runs `pi` and bridges it to a rich UI; `pi` owns models, skills, compaction, cost, and
+session state.
 
 ## Read context proportionally
 

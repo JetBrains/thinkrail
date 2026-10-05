@@ -29,12 +29,12 @@ test("wide plain output pins the approved recursive host lockup", () => {
 	expect(lines).toHaveLength(20);
 	expect(lines[0]).toBe("THINKRAIL·THINKRAIL·THIN RAIL·THINK");
 	expect(lines[6]).toEndWith("THINKRAIL");
-	expect(lines[7]).toEndWith("worktree IDE for pi");
+	expect(lines[7]).toEndWith("agentic IDE for pi");
 	expect(lines[10]).toEndWith("● host ready");
 	expect(lines[11]).toEndWith("  localhost:24242");
 	expect(Math.max(...lines.map((line) => Array.from(line).length))).toBeLessThanOrEqual(80);
 	expect(createHash("sha256").update(output).digest("hex")).toBe(
-		"ddcb60ce1cbca6846bd6d4b78b701ff6f1d3c00224658722cdae3b4840bee93e",
+		"1d4b5d342b9276bec4a46e5c97cf7865be784041f893a6217bfc3d5a6438890e",
 	);
 });
 
@@ -48,7 +48,7 @@ test("medium terminals stack the identity below the complete mark", () => {
 	expect(lines[20]).toBe("");
 	expect(lines.slice(21)).toEqual([
 		"THINKRAIL",
-		"worktree IDE for pi",
+		"agentic IDE for pi",
 		"",
 		"● starting",
 		"  localhost:24269",
@@ -67,7 +67,7 @@ test("very narrow terminals use the identity without wrapping the artwork", () =
 
 	expect(lines).toEqual([
 		"THINKRAIL",
-		"worktree IDE for pi",
+		"agentic IDE for pi",
 		"",
 		"● starting",
 		"  a-very-long-host.exam…",

@@ -2,16 +2,23 @@
 
 [![JetBrains incubator project](https://jb.gg/badges/incubator-plastic.svg)](https://confluence.jetbrains.com/display/ALL/JetBrains+on+GitHub)
 
-A ThinkRail-branded desktop-and-mobile client for the [`pi`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent)
-coding agent. ThinkRail is a thin host that runs `pi` in-process and bridges it to a rich, mobile-first
-UI — `pi` owns models, skills, compaction, cost, and session state; the app owns the workspace, the
-editor, and the wire.
+ThinkRail is the agentic IDE that gets better every time you use it — learning your project through
+living specs today, and building its own capabilities tomorrow.
+
+We built a rich interface around the [`pi`](https://www.npmjs.com/package/@earendil-works/pi-coding-agent)
+coding agent, isolated work into separate workspaces, and gave the agent durable project knowledge
+through living specs and reusable skills. Next, we're adding full extension support, so ThinkRail can
+create the tools it needs based on how you actually work.
+
+Under the hood, ThinkRail is a thin host that runs `pi` in-process and bridges it to a rich,
+mobile-first UI — `pi` owns models, skills, compaction, cost, and session state; the app owns the
+workspace, the editor, and the wire.
 
 **Website:** [thinkrail.ai](https://thinkrail.ai/) — a landing page that *is* the IDE, its blog,
 and the [vibecoder-focused experience](https://thinkrail.ai/vibecoding/) (see
 [`apps/website`](apps/website)).
 
-**ThinkRail is a Worktree IDE:** open a git repo as a project, spin up workspaces as `git worktree`s (each its
+**Every workspace is a git worktree:** open a git repo as a project, spin up workspaces as `git worktree`s (each its
 own branch and cwd), and work across a tabbed Monaco editor, git Changes view, terminals, a read-only
 spec-graph viewer, and multiple concurrent `pi` chat sessions — all scoped to the active worktree.
 
