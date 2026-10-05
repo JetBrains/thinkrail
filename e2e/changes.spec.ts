@@ -227,7 +227,7 @@ test("Rendered markdown diff of a front-matter-only change says the preview is i
 	await expect(diffText(page, "active")).toBeVisible();
 });
 
-test("Rendered markdown diff keeps attribute-only changes visible: a ticked task, an opened details, a renumbered list", async ({
+test("Rendered markdown diff keeps attribute-only changes visible: a ticked task, an opened details, a list numbered by HTML's integer rules", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -245,9 +245,10 @@ test("Rendered markdown diff keeps attribute-only changes visible: a ticked task
 			"",
 			"## Numbered",
 			"",
-			"<ol>",
+			'<ol start="">',
+			"<li>one</li>",
 			'<li value="10">ten</li>',
-			"<li>eleven</li>",
+			'<li value="">eleven</li>',
 			`<li>twelve${edited ? " edited" : ""}</li>`,
 			"</ol>",
 			"",
@@ -282,8 +283,10 @@ test("Rendered markdown diff keeps attribute-only changes visible: a ticked task
 	await expect(collapsed.nth(1)).toContainText("2 unchanged items");
 
 	await expect(renderedDiff.locator("details[open]")).toContainText("Folded body.");
+	await expect(renderedDiff.locator("li", { hasText: "one" })).toHaveAttribute("value", "1");
 	await expect(renderedDiff.locator("li", { hasText: "ten" })).toHaveAttribute("value", "10");
 	await expect(renderedDiff.locator("li", { hasText: "eleven" })).toHaveAttribute("value", "11");
+	await expect(renderedDiff.locator("li", { hasText: "twelve" })).toHaveAttribute("value", "12");
 	const standalone = renderedDiff.locator("details + input[type=checkbox]");
 	await expect(standalone).toBeChecked();
 	await expect(standalone).toBeDisabled();

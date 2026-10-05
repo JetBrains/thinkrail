@@ -1363,7 +1363,9 @@ own section. The kebab menu (`plan-menu`, a
   down to the items of a changed `ul`/`ol` when at least one item changed — a markdown spec routinely
   carries a thirty-bullet list with one edited bullet — while a list whose only difference is its own
   attributes, and tables, quotes, and nested lists, render whole; ordered items keep their number
-  (an explicit `value` wins, the rest count on from `start`) so hiding items never renumbers the rest.
+  (`start` and an explicit `value` are read with HTML's integer-parsing rules, so the invalid values
+  React leaves in the DOM — `start=""`, `value=""` — fall back to `1` / the running count exactly as
+  the browser does; a `value` wins, the rest count on) so hiding items never renumbers the rest.
   Each hidden run is one `rendered-diff-collapsed` button naming the count and, for block runs, the last
   heading it hides (the section the visible content below it belongs to — the analogue of Pierre's
   line-info separators).

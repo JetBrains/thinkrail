@@ -16,6 +16,7 @@ const CHANGE_SELECTOR = "ins, del, [data-diff-node]";
 const LIST_TAGS = new Set(["ul", "ol"]);
 const HEADING_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
 const BOOLEAN_ATTRIBUTES = new Set(["open", "checked", "disabled"]);
+const HTML_INTEGER = /^[\t\n\f\r ]*([+-]?\d+)/;
 
 type MergeState =
 	| { state: "pending" }
@@ -93,12 +94,16 @@ function changedUnits(merged: Element, before: Element): Set<Element> {
 	return changed;
 }
 
+function htmlInteger(value: string | null): number | null {
+	const digits = value === null ? undefined : HTML_INTEGER.exec(value)?.[1];
+	return digits === undefined ? null : Number.parseInt(digits, 10);
+}
+
 function listOrdinals(list: Element): Ordinal {
 	if (list.localName !== "ol") return () => undefined;
-	let next = Number(list.getAttribute("start") ?? "1");
+	let next = htmlInteger(list.getAttribute("start")) ?? 1;
 	const ordinals = Array.from(list.children, (item) => {
-		const explicit = Number(item.getAttribute("value"));
-		const ordinal = item.hasAttribute("value") && Number.isInteger(explicit) ? explicit : next;
+		const ordinal = htmlInteger(item.getAttribute("value")) ?? next;
 		next = ordinal + 1;
 		return ordinal;
 	});
