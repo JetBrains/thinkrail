@@ -40,6 +40,7 @@ import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
 import { NativeWindowControls } from "./NativeWindowControls";
+import { SessionSwitcher } from "./SessionSwitcher";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { useNativeWindowControls } from "./useNativeWindowControls";
@@ -71,6 +72,7 @@ export function Shell() {
 	const updates = useUpdates(supportsHostUpdateRun(protocolVersion) ? runHostUpdate : null);
 	const windowControls = useNativeWindowControls();
 	const [newWorkspaceProjectId, setNewWorkspaceProjectId] = useState<string | null>(null);
+	const [sessionSwitcherOpen, setSessionSwitcherOpen] = useState(false);
 
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
 	const {
@@ -133,6 +135,7 @@ export function Shell() {
 		...(contextProject
 			? { onNewWorkspace: () => setNewWorkspaceProjectId(contextProject.id) }
 			: {}),
+		onSessionSwitcher: () => setSessionSwitcherOpen((prev) => !prev),
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
@@ -327,6 +330,7 @@ export function Shell() {
 				</div>
 			)}
 			{analyticsConsentOpen ? <AnalyticsConsentDialog /> : <InterviewPromptDialog />}
+			<SessionSwitcher open={sessionSwitcherOpen} onOpenChange={setSessionSwitcherOpen} />
 			<Toaster />
 			<AppShortcuts />
 		</div>
