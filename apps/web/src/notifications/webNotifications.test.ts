@@ -18,7 +18,7 @@ class MockNotification {
 	closed = false;
 	constructor(
 		public title: string,
-		public options: { body: string; tag: string },
+		public options: { body: string; tag: string; icon?: string },
 	) {
 		if (MockNotification.throwOnConstruct) throw new TypeError("unsupported");
 		MockNotification.instances.push(this);
@@ -106,7 +106,7 @@ describe("isWindowFocused", () => {
 describe("showBrowserNotification", () => {
 	const input = {
 		title: "branch",
-		body: "needs your input",
+		body: "Waiting for your input",
 		tag: "attention:s1",
 		onClick: () => {},
 	};
@@ -122,8 +122,9 @@ describe("showBrowserNotification", () => {
 		expect(MockNotification.instances).toHaveLength(1);
 		expect(MockNotification.instances[0]?.title).toBe("branch");
 		expect(MockNotification.instances[0]?.options).toEqual({
-			body: "needs your input",
+			body: "Waiting for your input",
 			tag: "attention:s1",
+			icon: "/favicon.svg",
 		});
 	});
 

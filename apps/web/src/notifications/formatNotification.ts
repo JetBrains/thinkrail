@@ -31,17 +31,19 @@ const APP_NAME = "ThinkRail";
 const AGGREGATE_TAG = "thinkrail-attention";
 
 export function reasonLabel(reason: AttentionReason): string {
-	if (reason.kind === "needs-input") return "needs your input";
+	if (reason.kind === "needs-input") return "Waiting for your input";
 	const completion = reason.completion;
 	switch (completion.outcome) {
 		case "succeeded":
-			return "finished";
+			return "The agent finished";
 		case "interrupted":
-			return "interrupted";
+			return "The run was interrupted";
 		case "cancelled":
-			return "cancelled";
+			return "The run was cancelled";
 		case "failed":
-			return completion.failure === "length" ? "stopped — context full" : "failed";
+			return completion.failure === "length"
+				? "Stopped — the context is full"
+				: "The agent run failed";
 	}
 }
 
@@ -67,7 +69,7 @@ export function formatNotification(events: readonly AttentionEvent[]): Notificat
 	}
 	return {
 		title: APP_NAME,
-		body: truncate(`${events.length} worktrees need attention`),
+		body: truncate(`${events.length} worktrees need your attention`),
 		tag: AGGREGATE_TAG,
 		target: { kind: "app" },
 	};

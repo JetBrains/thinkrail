@@ -13,31 +13,31 @@ function event(overrides: Partial<AttentionEvent> = {}): AttentionEvent {
 
 describe("reasonLabel", () => {
 	test("needs-input", () => {
-		expect(reasonLabel({ kind: "needs-input" })).toBe("needs your input");
+		expect(reasonLabel({ kind: "needs-input" })).toBe("Waiting for your input");
 	});
 
 	test("completion outcomes", () => {
 		expect(
 			reasonLabel({ kind: "completed", completion: { completionId: "c", outcome: "succeeded" } }),
-		).toBe("finished");
+		).toBe("The agent finished");
 		expect(
 			reasonLabel({ kind: "completed", completion: { completionId: "c", outcome: "interrupted" } }),
-		).toBe("interrupted");
+		).toBe("The run was interrupted");
 		expect(
 			reasonLabel({ kind: "completed", completion: { completionId: "c", outcome: "cancelled" } }),
-		).toBe("cancelled");
+		).toBe("The run was cancelled");
 		expect(
 			reasonLabel({
 				kind: "completed",
 				completion: { completionId: "c", outcome: "failed", failure: "error" },
 			}),
-		).toBe("failed");
+		).toBe("The agent run failed");
 		expect(
 			reasonLabel({
 				kind: "completed",
 				completion: { completionId: "c", outcome: "failed", failure: "length" },
 			}),
-		).toBe("stopped — context full");
+		).toBe("Stopped — the context is full");
 	});
 });
 
@@ -50,7 +50,7 @@ describe("formatNotification", () => {
 		const spec = formatNotification([event()]);
 		expect(spec).toEqual({
 			title: "feature-branch",
-			body: "needs your input",
+			body: "Waiting for your input",
 			tag: "attention:s1",
 			target: { kind: "chat", workspaceId: "w1", sessionId: "s1" },
 		});
@@ -69,7 +69,7 @@ describe("formatNotification", () => {
 		]);
 		expect(spec).toEqual({
 			title: "ThinkRail",
-			body: "3 worktrees need attention",
+			body: "3 worktrees need your attention",
 			tag: "thinkrail-attention",
 			target: { kind: "app" },
 		});
@@ -84,12 +84,12 @@ describe("formatNotification", () => {
 				},
 			}),
 		]);
-		expect(spec?.body).toBe("stopped — context full");
+		expect(spec?.body).toBe("Stopped — the context is full");
 	});
 
 	test("exactly two sessions aggregate with plural wording and a fixed tag", () => {
 		const spec = formatNotification([event({ sessionId: "s1" }), event({ sessionId: "s2" })]);
-		expect(spec?.body).toBe("2 worktrees need attention");
+		expect(spec?.body).toBe("2 worktrees need your attention");
 		expect(spec?.tag).toBe("thinkrail-attention");
 		expect(spec?.target).toEqual({ kind: "app" });
 	});

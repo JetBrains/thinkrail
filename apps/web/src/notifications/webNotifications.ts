@@ -24,6 +24,9 @@ export function isWindowFocused(): boolean {
 	return typeof document !== "undefined" && document.hasFocus();
 }
 
+/** The symbol-only ThinkRail mark, the same artwork as the browser-tab favicon and shell logo. */
+const NOTIFICATION_ICON = "/favicon.svg";
+
 export interface ShowNotificationInput {
 	title: string;
 	body: string;
@@ -40,7 +43,11 @@ export interface ShowNotificationInput {
 export function showBrowserNotification(input: ShowNotificationInput): void {
 	if (notificationPermission() !== "granted") return;
 	try {
-		const notification = new Notification(input.title, { body: input.body, tag: input.tag });
+		const notification = new Notification(input.title, {
+			body: input.body,
+			tag: input.tag,
+			icon: NOTIFICATION_ICON,
+		});
 		notification.onclick = (event) => {
 			event.preventDefault();
 			window.focus();

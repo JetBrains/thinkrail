@@ -93,7 +93,7 @@ describe("createAttentionNotificationEngine", () => {
 		engine.enqueue(event({ sessionId: "s2" }));
 		clock.run();
 		expect(emitted[0]?.target).toEqual({ kind: "app" });
-		expect(emitted[0]?.body).toBe("2 worktrees need attention");
+		expect(emitted[0]?.body).toBe("2 worktrees need your attention");
 	});
 
 	test("window focused suppresses the whole batch", () => {
