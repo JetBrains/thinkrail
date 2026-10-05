@@ -1324,8 +1324,8 @@ append a `subagentCompletion` turn (the shared contracts guard narrows both, on 
 **One live indicator, always.** pi splits a run into several assistant messages, so the reducer sweeps
 the per-message `streaming` flag on new-message start and the final `agent_settled` (at most one turn is
 ever flagged). The session remains live across attempt-level `agent_end` events. The loader
-is a **single footer** (`StreamIndicator`: typing-dots + a phase label from the pure `streamStatus`
-deriver — `working` → `thinking` → `running-tool` → `writing`, plus `compacting` while the transcript's
+is a **single footer** (`StreamIndicator`: the shared `RunningIcon` brand badge, decorative here, + a phase
+label from the pure `streamStatus` deriver — `working` → `thinking` → `running-tool` → `writing`, plus `compacting` while the transcript's
 trailing turn is a running compaction) — not a per-turn cursor — so it can't
 duplicate and it fills the post-send gap. Outside the streaming window (a manual compact, or the
 pre-prompt compaction pi runs inside `prompt()` before `agent_start`) the footer is absent by design —

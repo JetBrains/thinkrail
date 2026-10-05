@@ -102,6 +102,8 @@ Children:
 | Workspace Row | inline row in `ProjectTree` | `workspace-item` | A workspace (git worktree); two-line: name + branch |
 | — Workspace Name | inline `<span>` | `workspace-name` | Display name |
 | — Workspace Branch | inline `<span>` | `workspace-branch` | Git branch (muted, proportional metadata; hidden if it equals the name) |
+| — Working Badge | `components/RunningIcon.tsx` → `RunningIcon` | `running-icon` | The live TR brand badge shown in place of the row's identity icon while its session runs (also on project rows); label “Agent working” |
+| — Attention Dot | `components/AttentionDot.tsx` → `AttentionDot` | `attention-dot` | Static accent dot for needs-input / unread result; label “Needs attention” |
 | — Workspace Actions Menu | `MoreVertical` Dropdown Menu | `workspace-menu` / `workspace-actions` | Open in (`workspace-open-in`) / Copy path / Reveal / Remove workspace |
 | — Remove-Workspace Item | menu item in the actions menu | `workspace-remove` | Opens a Confirm Dialog; not shown on the Default workspace |
 
@@ -259,7 +261,7 @@ Row / message renderers (all in `chat/turns.tsx` unless noted):
 | Turn Divider | `TurnDivider` | `turn-divider` / `turn-divider-<id>` | `divider` | Round-end summary + artifact chips |
 | — Artifact Chip | `ArtifactChip` | `turn-divider-<id>` | — | "N specs" / "N files changed" deep-link/disclosure |
 | — Artifact List | `ArtifactList` | `<testid>-list` / `-list-item` | — | Expanded per-path list |
-| Stream Indicator | `chat/StreamIndicator.tsx` → `StreamIndicator` | — | — | Live streaming status |
+| Stream Indicator | `chat/StreamIndicator.tsx` → `StreamIndicator` | `stream-indicator` | — | Live streaming status: the Working Badge + phase label ("Thinking…", "Running bash…") |
 
 ## Tool Call
 

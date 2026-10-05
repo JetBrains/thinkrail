@@ -1,12 +1,11 @@
 import { useId } from "react";
-import { BRAND_MARK_PATH, BRAND_MARK_SIZE } from "../constants/branding";
 import { cn } from "@/lib";
+import { BRAND_MARK_PATH, BRAND_MARK_SIZE } from "../constants/branding";
 
 const MARK_SCALE = 22.5 / Math.hypot(BRAND_MARK_SIZE.width / 2, BRAND_MARK_SIZE.height / 2);
-const MARK_TRANSFORM = `translate(${(32 - (BRAND_MARK_SIZE.width / 2) * MARK_SCALE).toFixed(3)} ${(
-	32 -
-	(BRAND_MARK_SIZE.height / 2) * MARK_SCALE
-).toFixed(3)}) scale(${MARK_SCALE.toFixed(5)})`;
+const MARK_X = (32 - (BRAND_MARK_SIZE.width / 2) * MARK_SCALE).toFixed(3);
+const MARK_Y = (32 - (BRAND_MARK_SIZE.height / 2) * MARK_SCALE).toFixed(3);
+const MARK_TRANSFORM = `translate(${MARK_X} ${MARK_Y}) scale(${MARK_SCALE.toFixed(5)})`;
 
 const RAILS = [
 	"M20 20H290",
@@ -36,7 +35,7 @@ export function RunningIcon({ className }: { className?: string | undefined }) {
 			aria-label="Agent working"
 			className={cn("inline-flex shrink-0 items-center justify-center", className)}
 		>
-			<svg aria-hidden viewBox="0 0 64 64" className="size-full">
+			<svg aria-hidden="true" viewBox="0 0 64 64" className="size-full">
 				<defs>
 					<linearGradient
 						id={tailGradient}

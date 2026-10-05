@@ -80,21 +80,22 @@ treatment.
 
   Workspace/project session presentation comes only from normalized host state. The rail has exactly two
   visual treatments: a static green/accent **attention dot** for either a concrete needs-input blocker or an
-  owner-globally unread result, and a breathing animation on the existing workspace/project identity icon while a
-  top-level session is genuinely working. Attention is binary: needs-input and unread-result states use the
+  owner-globally unread result, and the shared `RunningIcon` brand badge **in place of** the workspace/project
+  identity icon while a top-level session is genuinely working. Attention is binary: needs-input and unread-result states use the
   same dot, with the accessible label **“Needs attention”** and no question/check/result glyph, spinner,
-  count, or status-specific tooltip. Working keeps the icon's existing active/inactive colour and exposes
-  **“Agent working”** accessibly; it never adds a second marker. Queued, hidden/background, stopped, and quiet
-  sessions do not pulse; a needs-input session may still pulse when its orthogonal execution fact remains
-  running, so the attention dot and working treatment can coexist. Reduced motion removes the animation while
-  retaining the same-hue icon. Collapsed project rollup uses the same selectors as
+  count, or status-specific tooltip. Working keeps the row's existing active/inactive colour (the badge wears
+  `text-primary` / `text-text-muted` exactly as the glyph it replaces) and exposes **“Agent working”**
+  accessibly; it never adds a second marker. Queued, hidden/background, stopped, and quiet sessions show
+  their identity glyph; a needs-input session may still show the badge when its orthogonal execution fact
+  remains running, so the attention dot and working treatment can coexist. Reduced motion keeps the badge
+  static. Collapsed project rollup uses the same selectors as
   workspace rows, while expanded projects show the detail on workspace rows. The components remain
   props-driven over the normalized host-state selectors.
 
   `ProjectTree` renders the shared dependency-light `AttentionDot` from normalized host-state selectors.
   It is static accent colour, carries no count or state-specific glyph/tooltip, and occupies its own flex
   column between the identity button and the hover-revealed kebab. Workspace and collapsed-project rows
-  expose `data-attention` only while positive. Separately, the shared `RunningIcon` wraps the existing
+  expose `data-attention` only while positive. Separately, the shared `RunningIcon` replaces the
   identity icon for normalized working state; workspace and collapsed-project rows expose `data-running` only
   while positive. These attributes are test hooks, not a second state model.
 

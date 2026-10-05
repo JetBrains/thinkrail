@@ -216,12 +216,13 @@ The same copy and hermetic environment seed the private restart host.
 
 **Session state** coverage seeds complete transcript states and drives normalized host blockers/runs to pin
 Projects rail presentation: both needs-input and owner-globally unread results render the same static green
-attention dot (“Needs attention”), while genuinely running sessions pulse the existing workspace/project
-identity icon without changing its colour. The rail must not substitute question/check/result glyphs or a
-spinner. Running alone has no attention dot; queued, hidden/background, and explicitly stopped sessions stay
+attention dot (“Needs attention”), while genuinely running sessions swap the workspace/project identity
+icon for the shared `RunningIcon` brand badge in the row's own colour. The rail must not substitute
+question/check/result glyphs or a generic spinner. Running alone has no attention dot; queued, hidden/background, and explicitly stopped sessions stay
 quiet; a live blocked question keeps its dot while its orthogonal running pulse may coexist. Reconnect/restart
 snapshots, direct-versus-passive activation, owner-global clearing, and snapshot
-retry are covered; live-agent coverage pins `data-running`/`running-icon` breathing behavior and coexistence with
+retry are covered; live-agent coverage pins `data-running`/`running-icon` (the badge's train animates, and stops under reduced
+motion) and coexistence with
 `data-attention`/`attention-dot`. These are stable visual hooks rather than alternate state models. The retired `session.activityList → []` compatibility method
 remains a focused handler test.
 
