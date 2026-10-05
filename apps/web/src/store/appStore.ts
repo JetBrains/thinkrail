@@ -891,6 +891,7 @@ interface AppState {
 	systemThemePair: SystemThemePair | undefined;
 	analyticsEnabled: boolean;
 	analyticsConsentConfirmed: boolean;
+	notificationsEnabled: boolean;
 	subagentsEnabled: boolean;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
@@ -1135,6 +1136,10 @@ function configPatch(config: AppConfig) {
 			typeof config.analyticsConsentConfirmed === "boolean"
 				? config.analyticsConsentConfirmed
 				: DEFAULT_CONFIG.analyticsConsentConfirmed,
+		notificationsEnabled:
+			typeof config.notificationsEnabled === "boolean"
+				? config.notificationsEnabled
+				: DEFAULT_CONFIG.notificationsEnabled,
 		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
 		jbcentralQuotaEnabled: config.jbcentralQuotaEnabled ?? DEFAULT_CONFIG.jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds:
@@ -1911,6 +1916,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	systemThemePair: DEFAULT_CONFIG.systemThemePair,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	analyticsConsentConfirmed: DEFAULT_CONFIG.analyticsConsentConfirmed,
+	notificationsEnabled: DEFAULT_CONFIG.notificationsEnabled,
 	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
 	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
