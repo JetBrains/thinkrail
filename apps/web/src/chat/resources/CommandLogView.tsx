@@ -42,12 +42,6 @@ export function CommandLogView({
 				</p>
 			) : (
 				<>
-					<p className="text-text-muted tr-text-metadata">
-						{result.command.status}
-						{result.command.exitCode !== undefined && result.command.exitCode !== null
-							? ` · Exit ${result.command.exitCode}`
-							: ""}
-					</p>
 					{result.output.truncated ? (
 						<p className="text-feedback-warning tr-text-metadata">
 							Output truncated — showing the retained tail.

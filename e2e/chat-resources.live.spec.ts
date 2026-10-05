@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import { openWorkspaceChat, waitForAgentSettled } from "./fixtures/app";
 import { shot } from "./fixtures/screenshots";
 
@@ -35,10 +35,15 @@ async function send(page: Page, prompt: string) {
 }
 
 async function openResources(page: Page) {
-	const popover = page.getByTestId("resources-popover");
-	if (!(await popover.isVisible())) await page.getByTestId("resources-trigger").click();
-	await expect(popover).toBeVisible();
-	return popover;
+	const inspector = page.getByTestId("resources-inspector");
+	if (!(await inspector.isVisible())) await page.getByTestId("resources-trigger").click();
+	await expect(inspector).toBeVisible();
+	return inspector;
+}
+
+async function stopRow(row: Locator) {
+	await row.hover();
+	await row.getByTestId("resource-stop").click();
 }
 
 test("command logs and Stop stay scoped through parent Stop, view closure, reload and another chat", {
@@ -60,22 +65,25 @@ test("command logs and Stop stay scoped through parent Stop, view closure, reloa
 		page.locator('[data-testid="stream-indicator"][data-phase="running-tool"]'),
 	).toHaveText("Running bash…", { timeout: 120_000 });
 	const parentId = await currentParentId(page);
-	await openResources(page);
-	const row = page.locator(commandRows).filter({ hasText: "resource-watch" });
+	await expect(page.getByTestId("resources-dock")).toBeVisible();
+	const inspector = await openResources(page);
+	await expect(page.getByTestId("resources-dock")).toHaveCount(0);
+	const row = inspector.locator(commandRows).filter({ hasText: "resource-watch" });
 	await expect(row).toHaveAttribute("data-status", "running");
 	const commandId = await row.getAttribute("data-resource-id");
 	expect(commandId).toBeTruthy();
-	await row.getByTestId("resource-logs").click();
-	await expect(page.getByTestId("resources-popover")).not.toBeVisible();
-	const logs = page.getByTestId("command-log-dialog");
-	const output = logs.getByTestId("command-log-output");
+	await row.click();
+	await expect(row).toHaveAttribute("aria-selected", "true");
+	const detail = inspector.getByTestId("resources-inspector-detail");
+	const output = detail.getByTestId("command-log-output");
 	await expect(output).toContainText("WATCH_READY");
 	await expect(output).toContainText("<script>RESOURCE_SAFE</script>");
 	await expect(output.locator("script")).toHaveCount(0);
-	await expect(logs).toContainText(/truncat|bounded tail/i);
-	await shot(logs, "chat-resources", "running-command-logs");
+	await expect(detail).toContainText(/truncat|bounded tail/i);
+	await shot(inspector, "chat-resources", "running-command-logs");
 	await page.keyboard.press("Escape");
 	await expect(trigger).toBeFocused();
+	await expect(page.getByTestId("resources-dock")).toBeVisible();
 
 	await page.getByTestId("chat-abort").click();
 	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "false", {
@@ -96,7 +104,9 @@ test("command logs and Stop stay scoped through parent Stop, view closure, reloa
 	await expect(parentTab).toHaveAttribute("data-active", "false");
 	await expect(trigger).toHaveAttribute("data-active-count", "0");
 	const newChatResources = await openResources(page);
-	await expect(newChatResources.getByText("No active commands.", { exact: true })).toBeVisible();
+	await expect(
+		newChatResources.getByText("Nothing is running in the background.", { exact: true }),
+	).toBeVisible();
 	await expect(page.locator(commandRows)).toHaveCount(0);
 	await page.keyboard.press("Escape");
 	await parentTab.locator("button").first().click();
@@ -105,12 +115,12 @@ test("command logs and Stop stay scoped through parent Stop, view closure, reloa
 	expect(turnsBeforeStop).toBeGreaterThan(0);
 	await openResources(page);
 	await expect(row).toHaveAttribute("data-resource-id", commandId ?? "");
-	await row.getByTestId("resource-stop").click();
+	await stopRow(row);
 	await expect(trigger).toHaveAttribute("data-active-count", "0");
-	await page.getByTestId("resources-finished-toggle").click();
 	await expect(row).toHaveAttribute("data-status", "stopped");
+	await expect(row).toHaveAttribute("data-state", "stopped");
 	await expect(row.getByTestId("resource-stop")).toHaveCount(0);
-	await shot(page.getByTestId("resources-popover"), "chat-resources", "stopped-command");
+	await shot(inspector, "chat-resources", "stopped-command");
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("background-command-completion")).toHaveAttribute(
 		"data-status",
@@ -120,7 +130,7 @@ test("command logs and Stop stay scoped through parent Stop, view closure, reloa
 	expect(starts(parentId)).toBe(turnsBeforeStop);
 });
 
-test("natural command completion refreshes the closed popover and survives transcript hydration", {
+test("natural command completion refreshes the closed inspector and survives transcript hydration", {
 	tag: "@agent",
 }, async ({ page }) => {
 	test.setTimeout(240_000);
@@ -131,10 +141,15 @@ test("natural command completion refreshes the closed popover and survives trans
 	);
 	const trigger = page.getByTestId("resources-trigger");
 	await expect(trigger).toHaveAttribute("data-active-count", "1", { timeout: 180_000 });
-	await openResources(page);
-	await expect(page.locator(commandRows)).toHaveAttribute("data-status", "running");
+	const inspector = await openResources(page);
+	await expect(inspector.locator(commandRows)).toHaveAttribute("data-status", "running");
 	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("resources-dock").locator(commandRows)).toHaveAttribute(
+		"data-status",
+		"running",
+	);
 	await expect(trigger).toHaveAttribute("data-active-count", "0", { timeout: 60_000 });
+	await expect(page.getByTestId("resources-dock")).toHaveCount(0);
 	await expect(page.getByTestId("background-command-completion")).toHaveAttribute(
 		"data-status",
 		"completed",
@@ -142,11 +157,10 @@ test("natural command completion refreshes the closed popover and survives trans
 	);
 	await waitForAgentSettled(page, 120_000);
 	await openResources(page);
-	await page.getByTestId("resources-finished-toggle").click();
-	const row = page.locator(commandRows).filter({ hasText: "resource-finish" });
+	const row = inspector.locator(commandRows).filter({ hasText: "resource-finish" });
 	await expect(row).toHaveAttribute("data-status", "completed");
-	await row.getByTestId("resource-logs").click();
-	await expect(page.getByTestId("command-log-output")).toContainText("RESOURCE_DONE");
+	await row.click();
+	await expect(inspector.getByTestId("command-log-output")).toContainText("RESOURCE_DONE");
 	await page.keyboard.press("Escape");
 	await page.reload();
 	await expect(page.getByTestId("background-command-completion")).toHaveAttribute(
@@ -173,16 +187,16 @@ test("individual subagent Stop and confirmed Stop all retain transcripts without
 	const parentId = await currentParentId(page);
 	const turnsBeforeStop = starts(parentId);
 	expect(turnsBeforeStop).toBeGreaterThan(0);
-	await openResources(page);
-	const first = page.locator(childRows).filter({ hasText: "RESOURCE_CHILD_A" });
-	await first.getByTestId("resource-transcript").click();
-	await expect(page.getByTestId("resources-popover")).not.toBeVisible();
-	const transcript = page.getByTestId("subagent-transcript-dialog");
+	const inspector = await openResources(page);
+	const first = inspector.locator(childRows).filter({ hasText: "RESOURCE_CHILD_A" });
+	await first.click();
+	const transcript = inspector.getByTestId("subagent-transcript");
 	await expect(transcript).toContainText("RESOURCE_CHILD_A", { timeout: 30_000 });
-	await shot(transcript, "chat-resources", "active-subagent-transcript");
+	await shot(inspector, "chat-resources", "active-subagent-transcript");
 	await page.keyboard.press("Escape");
 	await expect(trigger).toBeFocused();
 	await openResources(page);
+	await first.hover();
 	await expect(first.getByTestId("resource-stop")).toBeEnabled();
 	await first.getByTestId("resource-stop").click();
 	await expect(trigger).toHaveAttribute("data-active-count", "1");
@@ -198,10 +212,9 @@ test("individual subagent Stop and confirmed Stop all retain transcripts without
 	await expect(trigger).toHaveAttribute("data-active-count", "0");
 	await expect(confirm).not.toBeVisible();
 	await openResources(page);
-	await page.getByTestId("resources-finished-toggle").click();
-	await expect(page.locator(`${childRows}[data-status="aborted"]`)).toHaveCount(2);
-	await expect(page.locator(childRows).getByTestId("resource-stop")).toHaveCount(0);
-	await shot(page.getByTestId("resources-popover"), "chat-resources", "stopped-subagents");
+	await expect(inspector.locator(`${childRows}[data-status="aborted"]`)).toHaveCount(2);
+	await expect(inspector.locator(childRows).getByTestId("resource-stop")).toHaveCount(0);
+	await shot(inspector, "chat-resources", "stopped-subagents");
 	await page.keyboard.press("Escape");
 	await expect(page.getByTestId("subagent-completion")).toHaveCount(2);
 	await expect(page.getByTestId("chat-scroll")).toHaveAttribute("data-streaming", "false");
@@ -212,10 +225,9 @@ test("individual subagent Stop and confirmed Stop all retain transcripts without
 		'Call Agent once with subagent_type "echo", task "Reply with exactly RESOURCE_REUSE_OK", and run_in_background false. Then reply done.',
 	);
 	await openResources(page);
-	await page.getByTestId("resources-finished-toggle").click();
-	const reused = page.locator(childRows).filter({ hasText: "RESOURCE_REUSE_OK" });
+	const reused = inspector.locator(childRows).filter({ hasText: "RESOURCE_REUSE_OK" });
 	await expect(reused).toHaveAttribute("data-status", "completed", { timeout: 180_000 });
 	await waitForAgentSettled(page, 120_000);
-	await reused.getByTestId("resource-transcript").click();
-	await expect(page.getByTestId("subagent-transcript-dialog")).toContainText("RESOURCE_REUSE_OK");
+	await reused.click();
+	await expect(inspector.getByTestId("subagent-transcript")).toContainText("RESOURCE_REUSE_OK");
 });

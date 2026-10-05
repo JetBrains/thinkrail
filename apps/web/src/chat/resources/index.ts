@@ -1,3 +1,4 @@
 export { CommandLogView } from "./CommandLogView";
 export { ResourcesButton } from "./ResourcesButton";
-export { ResourcesContent } from "./ResourcesContent";
+export { ResourcesDock } from "./ResourcesDock";
+export { ResourcesInspector } from "./ResourcesInspector";
