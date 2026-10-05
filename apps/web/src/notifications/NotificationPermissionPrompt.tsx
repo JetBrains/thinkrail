@@ -1,4 +1,3 @@
-import { RiNotification3Line as NotificationIcon } from "@remixicon/react";
 import { useRef } from "react";
 import { Button } from "@thinkrail/ui/button";
 import {
@@ -47,17 +46,14 @@ export function NotificationPermissionPrompt() {
 		>
 			<DialogContent data-testid="notification-permission-prompt">
 				<DialogHeader>
-					<DialogTitle className="flex items-center gap-8">
-						<NotificationIcon className="size-16 text-text-muted" />
-						Get notified when a worktree needs you
-					</DialogTitle>
+					<DialogTitle>Get notified when a worktree needs you</DialogTitle>
 					<DialogDescription>
 						ThinkRail can notify you when an agent asks a question, finishes, or fails — even when
 						the app is in a background tab. Notifications only appear while this window isn't
 						focused.
 					</DialogDescription>
 				</DialogHeader>
-				<DialogFooter className="flex-col gap-8 sm:flex-row sm:justify-end">
+				<DialogFooter>
 					<Button variant="outline" data-testid="notification-not-now" onClick={dismiss}>
 						Not now
 					</Button>
