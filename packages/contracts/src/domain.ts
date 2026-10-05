@@ -291,6 +291,7 @@ export interface SubagentResourceSummary {
 	status: DelegationRunStatus;
 	createdAt: string;
 	abortReason?: string;
+	durationMs?: number;
 }
 
 export interface SessionResources {

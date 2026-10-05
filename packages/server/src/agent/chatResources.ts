@@ -58,6 +58,9 @@ function subagents(workspaceId: string, parentSessionId: string): SubagentResour
 			...(snapshot.details.abortReason !== undefined
 				? { abortReason: snapshot.details.abortReason }
 				: {}),
+			...(snapshot.status === "running" || snapshot.status === "queued"
+				? {}
+				: { durationMs: snapshot.details.durationMs }),
 		};
 		return [summary];
 	});

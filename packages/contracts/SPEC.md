@@ -670,7 +670,8 @@ without importing that package. Subagents retain their Pi child session ids and 
 - `session.resources({workspaceId, sessionId})` returns separate command and subagent summaries:
   all currently active records plus bounded recent terminal records. The snapshot echoes workspace
   and session identity. Commands mirror the owner's bounded snapshot; subagent summaries carry only
-  child/parent ids, role, task, status, creation time and optional abort reason, not usage or reports.
+  child/parent ids, role, task, status, creation time, optional abort reason and — once terminal — the
+  run duration [[module-pi-delegation]] measured (`durationMs`), not usage or reports.
   Subagent role/task summaries are capped at 200/2,000 characters, with the latest twenty terminal
   children by creation order retained in the projection. These are runtime catalogs; neither historical
   tool acknowledgements nor persisted PIDs supply live authority after restart.

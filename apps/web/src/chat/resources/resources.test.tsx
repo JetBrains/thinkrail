@@ -5,7 +5,7 @@ import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import * as resources from "./index";
-import { formatElapsed, resourceState, sortLive } from "./resourceRow";
+import { elapsedLabel, formatElapsed, resourceState, sortLive } from "./resourceRow";
 
 const NOW = 10 * 60_000;
 const command: BackgroundCommandSummary = {
@@ -70,7 +70,7 @@ test("resource primitives keep their props-only import boundary", () => {
 	}
 });
 
-test("the row vocabulary collapses wire statuses into one live and three settled states and sorts live rows oldest-first", () => {
+test("the row vocabulary collapses wire statuses into one live and three settled states, sorts live rows oldest-first and reports run time per kind", () => {
 	const state = (overrides: Partial<BackgroundCommandSummary>) =>
 		resourceState({ kind: "command", summary: { ...command, ...overrides } });
 	expect(state({})).toBe("working");
@@ -89,6 +89,23 @@ test("the row vocabulary collapses wire statuses into one live and three settled
 	expect(formatElapsed(20_000)).toBe("<1 min");
 	expect(formatElapsed(4 * 60_000 + 5_000)).toBe("4 min");
 	expect(formatElapsed(125 * 60_000)).toBe("2 h 5 min");
+	const elapsed = (resource: Parameters<typeof elapsedLabel>[0]) => elapsedLabel(resource, NOW);
+	expect(elapsed({ kind: "command", summary: command })).toBe("4 min");
+	expect(
+		elapsed({
+			kind: "command",
+			summary: { ...command, status: "completed", exitCode: 0, finishedAt: NOW - 60_000 },
+		}),
+	).toBe("3 min");
+	expect(elapsed({ kind: "subagent", summary: child })).toBeNull();
+	expect(elapsed({ kind: "subagent", summary: { ...child, status: "running" } })).toBe("<1 min");
+	expect(
+		elapsed({
+			kind: "subagent",
+			summary: { ...child, status: "completed", durationMs: 7 * 60_000 },
+		}),
+	).toBe("7 min");
+	expect(elapsed({ kind: "subagent", summary: { ...child, status: "aborted" } })).toBeNull();
 	const order = sortLive([
 		{ kind: "subagent", summary: child },
 		{ kind: "command", summary: { ...command, id: "late", startedAt: NOW - 1000 } },

@@ -46,7 +46,9 @@ state collapses the wire statuses into one in-flight presentation and three sett
 
 State is always glyph + colour + word; colour and motion are never the only signal. Elapsed time is
 coarse (minutes) because the shared clock ticks every 30 s; it is a live row's duration, or a settled
-row's run time. Exit codes render as a monospaced badge.
+row's run time — a command's finish minus start, a subagent's host-reported `durationMs` (absent from
+an older host, so that row shows no duration rather than a guess). Exit codes render as a monospaced
+badge.
 
 ## Presentation
 

@@ -124,13 +124,21 @@ export function formatElapsed(ms: number): string {
 	return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
 }
 
-export function elapsedLabel(resource: Resource, now: number): string | null {
+function runMs(resource: Resource, now: number): number | null {
 	const state = resourceState(resource);
 	if (state === "queued") return null;
-	const start = startedAt(resource);
-	if (!Number.isFinite(start)) return null;
-	const end = isLiveState(state) ? now : (finishedAt(resource) ?? null);
-	return end === null ? null : formatElapsed(end - start);
+	if (isLiveState(state)) {
+		const start = startedAt(resource);
+		return Number.isFinite(start) ? now - start : null;
+	}
+	if (resource.kind === "subagent") return resource.summary.durationMs ?? null;
+	const { startedAt: start, finishedAt: end } = resource.summary;
+	return end === undefined ? null : end - start;
+}
+
+export function elapsedLabel(resource: Resource, now: number): string | null {
+	const ms = runMs(resource, now);
+	return ms === null ? null : formatElapsed(ms);
 }
 
 const STATE_TEXT: Record<ResourceState, string> = {
