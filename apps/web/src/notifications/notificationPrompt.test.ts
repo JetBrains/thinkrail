@@ -45,4 +45,20 @@ describe("notification prompt snooze", () => {
 		clearPromptSnooze(storage);
 		expect(isPromptSnoozed(now + day, storage)).toBe(false);
 	});
+
+	test("a malformed stored value is treated as not snoozed", () => {
+		storage.setItem("thinkrail.notifications.snoozeUntil", "not-a-number");
+		expect(isPromptSnoozed(now, storage)).toBe(false);
+	});
+
+	test("an expired boundary value (exactly now) is not snoozed", () => {
+		storage.setItem("thinkrail.notifications.snoozeUntil", String(now));
+		expect(isPromptSnoozed(now, storage)).toBe(false);
+	});
+
+	test("a null storage degrades to never-snoozed without throwing", () => {
+		expect(isPromptSnoozed(now, null)).toBe(false);
+		expect(() => snoozePrompt(now, null)).not.toThrow();
+		expect(() => clearPromptSnooze(null)).not.toThrow();
+	});
 });

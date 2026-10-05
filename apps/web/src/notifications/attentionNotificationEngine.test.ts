@@ -141,4 +141,53 @@ describe("createAttentionNotificationEngine", () => {
 		clock.run();
 		expect(emitted).toHaveLength(0);
 	});
+
+	test("enqueue after dispose is ignored", () => {
+		engine.dispose();
+		engine.enqueue(event());
+		expect(clock.size).toBe(0);
+		clock.run();
+		expect(emitted).toHaveLength(0);
+	});
+
+	test("a second burst after a flush arms a fresh window and emits again", () => {
+		engine.enqueue(event({ sessionId: "s1" }));
+		clock.run();
+		expect(emitted).toHaveLength(1);
+		engine.enqueue(event({ sessionId: "s2" }));
+		expect(clock.size).toBe(1);
+		clock.run();
+		expect(emitted).toHaveLength(2);
+		expect(emitted[1]?.target).toEqual({ kind: "chat", workspaceId: "w1", sessionId: "s2" });
+	});
+
+	test("the latest event per session within a window wins", () => {
+		engine.enqueue(event({ sessionId: "s1", worktreeName: "old" }));
+		engine.enqueue(event({ sessionId: "s1", worktreeName: "new" }));
+		clock.run();
+		expect(emitted).toHaveLength(1);
+		expect(emitted[0]?.title).toBe("new");
+	});
+
+	test("flushNow with nothing pending emits nothing", () => {
+		engine.flushNow();
+		expect(emitted).toHaveLength(0);
+		expect(permissionNeeded).toBe(0);
+	});
+
+	test("focused and disabled batches never ask for permission", () => {
+		permission = "default";
+		focused = true;
+		engine.enqueue(event());
+		clock.run();
+		expect(permissionNeeded).toBe(0);
+	});
+
+	test("denied permission still routes to the permission callback", () => {
+		permission = "denied";
+		engine.enqueue(event());
+		clock.run();
+		expect(emitted).toHaveLength(0);
+		expect(permissionNeeded).toBe(1);
+	});
 });

@@ -1,9 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-	type AttentionEvent,
-	formatNotification,
-	reasonLabel,
-} from "./formatNotification";
+import { type AttentionEvent, formatNotification, reasonLabel } from "./formatNotification";
 
 function event(overrides: Partial<AttentionEvent> = {}): AttentionEvent {
 	return {
@@ -77,6 +73,25 @@ describe("formatNotification", () => {
 			tag: "thinkrail-attention",
 			target: { kind: "app" },
 		});
+	});
+
+	test("single body reflects a completion outcome", () => {
+		const spec = formatNotification([
+			event({
+				reason: {
+					kind: "completed",
+					completion: { completionId: "c", outcome: "failed", failure: "length" },
+				},
+			}),
+		]);
+		expect(spec?.body).toBe("stopped — context full");
+	});
+
+	test("exactly two sessions aggregate with plural wording and a fixed tag", () => {
+		const spec = formatNotification([event({ sessionId: "s1" }), event({ sessionId: "s2" })]);
+		expect(spec?.body).toBe("2 worktrees need attention");
+		expect(spec?.tag).toBe("thinkrail-attention");
+		expect(spec?.target).toEqual({ kind: "app" });
 	});
 
 	test("body is truncated to ~100 chars", () => {

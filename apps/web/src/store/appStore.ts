@@ -298,6 +298,7 @@ export const SettingsSection = {
 	Terminal: "terminal",
 	Templates: "templates",
 	Review: "review",
+	Notifications: "notifications",
 	Privacy: "privacy",
 	Feedback: "feedback",
 } as const;

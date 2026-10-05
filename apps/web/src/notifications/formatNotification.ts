@@ -54,9 +54,9 @@ function truncate(text: string): string {
  * its chat on click, several focus the app. Returns null when nothing passed.
  */
 export function formatNotification(events: readonly AttentionEvent[]): NotificationSpec | null {
-	if (events.length === 0) return null;
+	const [event] = events;
+	if (!event) return null;
 	if (events.length === 1) {
-		const event = events[0]!;
 		const name = event.worktreeName.trim() || APP_NAME;
 		return {
 			title: name,

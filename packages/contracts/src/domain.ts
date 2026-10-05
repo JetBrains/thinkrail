@@ -664,7 +664,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	themeMode: "fixed",
 	analyticsEnabled: false,
 	analyticsConsentConfirmed: false,
-	notificationsEnabled: false,
+	notificationsEnabled: true,
 	terminalReplayKb: TERMINAL_REPLAY_KB.default,
 	terminalWindowsShell: "auto",
 	composerGrowthLimit: "half-chat",

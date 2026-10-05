@@ -9,6 +9,7 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useRef, useState } from "react";
 import { QuietScrollArea } from "../components/QuietScrollArea";
+import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
@@ -60,6 +61,7 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 
 export function Shell() {
 	useLocalLayoutState();
+	useAttentionNotifications();
 	const status = useAppStore((s) => s.status);
 	const analyticsConsentOpen = useAppStore(selectAnalyticsConsentPromptOpen);
 	const StatusDot = status === "connected" ? RiCircleFill : Circle;
@@ -331,6 +333,7 @@ export function Shell() {
 			)}
 			{analyticsConsentOpen ? <AnalyticsConsentDialog /> : <InterviewPromptDialog />}
 			<SessionSwitcher open={sessionSwitcherOpen} onOpenChange={setSessionSwitcherOpen} />
+			<NotificationPermissionPrompt />
 			<Toaster />
 			<AppShortcuts />
 		</div>

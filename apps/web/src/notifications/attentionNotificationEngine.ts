@@ -1,4 +1,8 @@
-import { type AttentionEvent, formatNotification, type NotificationSpec } from "./formatNotification";
+import {
+	type AttentionEvent,
+	formatNotification,
+	type NotificationSpec,
+} from "./formatNotification";
 import type { NotificationPermissionState } from "./webNotifications";
 
 export type TimerHandle = ReturnType<typeof setTimeout> | number;

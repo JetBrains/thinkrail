@@ -540,7 +540,12 @@ a project picker, the prompt hero, and the reused
   carries the discoverability half (`chat/SPEC.md`: a `slash-templates-empty` footer nudge deep-linking
   here when no template exists anywhere), since this offer is otherwise two clicks deep in a dialog. **This
   project**'s empty state is unchanged (still the bare text) — the offer is Global-only, since it only
-  ever seeds global files. No server change. **`PrivacySettings`** manages the additional-data preference and
+  ever seeds global files. No server change. **`NotificationsSettings`** is the single master on/off control
+  for out-of-app attention notifications (default on), persisting `{ notificationsEnabled }` through
+  `settings.update` and, on enable, requesting browser permission immediately via the
+  [[submodule-web-notifications]] barrel (the toggle click is the user gesture); the notification pipeline,
+  suppression, and permission preface live in [[submodule-web-notifications]].
+  **`PrivacySettings`** manages the additional-data preference and
   confirmation together; the event contract belongs to [[submodule-server-analytics]].
   **`AnalyticsConsentDialog`** mounts once through shell after a capable host's unconfirmed config hydrates.
   It initializes the draft switch on and immediately persists `{ analyticsEnabled: true }`; persistence and
