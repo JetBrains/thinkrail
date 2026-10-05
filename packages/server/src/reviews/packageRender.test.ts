@@ -141,6 +141,7 @@ test("a byte-only region anchor renders a locator line instead of a fragment or 
 	);
 	expect(text).not.toContain("<fragment>");
 	expect(text).not.toContain("<context");
+	expect(text).toContain("for an SVG, map the fractions onto its viewBox");
 });
 
 test("a region anchor with no captured hash says so instead of implying one", () => {

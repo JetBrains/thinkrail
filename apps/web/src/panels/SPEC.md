@@ -1401,11 +1401,15 @@ own section. The kebab menu (`plan-menu`, a
   has no script or same-origin capability and a CSP of `default-src 'none'; img-src data:; style-src
   'unsafe-inline'`, so SVG scripts and external references remain inert. The document receives only
   resolved workspace/content background and foreground semantic token values and is rebuilt via
-  `onThemeSwap` from `@thinkrail/ui/theme`. Transparent in-process region overlays continue to place
-  existing region threads.
-  SVG element source spans are not mapped yet, so authoring refuses positional geometry and offers a
-  clearly labelled whole-file draft (`selectors: []`, label `file`) rather than attaching a whole-document
-  line range. Its diff uses the same four visual modes and two anchor spaces as raster images; each side's
+  `onThemeSwap` from `@thinkrail/ui/theme`. A drag over the frame authors the same normalized `region`
+  selector a raster image does, measured against the intrinsic size parsed from the root's
+  `width`/`height`/`viewBox` (the frame is sized to that aspect, so the contained rectangle is the frame).
+  It never degrades to a whole-file draft: an earlier revision did (`selectors: []`, label `file`, pending
+  a source-span mapping), and a dragged rectangle that reached the agent as "the whole file" read as lost
+  coordinates. SVG element source spans are still not mapped, so the anchor is geometry, not a line range;
+  the fractions are of the SVG's root viewport, and the send package tells the agent to invert the
+  viewport-to-viewBox transform (viewBox origin plus `preserveAspectRatio`) to find the elements under
+  them. Its diff uses the same four visual modes and two anchor spaces as raster images; each side's
   overlays project through its own object-contain rectangle, and only measured aspect bounds plus
   swipe/divider/opacity overlay geometry use inline values.
 

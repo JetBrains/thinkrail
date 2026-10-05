@@ -8,7 +8,6 @@ import {
 	type SvgThemeTokens,
 	svgByteLength,
 	svgDiffViewState,
-	svgFileDraft,
 	svgIntrinsicSize,
 } from "./svgDocument";
 import { useSvgTheme } from "./useSvgTheme";
@@ -60,7 +59,6 @@ export default function SvgDiff({
 		caption: caption("Old", originalText),
 		intrinsicSize: originalSize,
 		review: review?.base,
-		draftForRegion: originalText === null ? undefined : svgFileDraft,
 	};
 	const modifiedSide: VisualDiffSide = {
 		present: modifiedText !== null,
@@ -71,13 +69,12 @@ export default function SvgDiff({
 		caption: caption("New", modifiedText),
 		intrinsicSize: modifiedSize,
 		review: review?.worktree,
-		draftForRegion: modifiedText === null ? undefined : svgFileDraft,
 	};
 	return (
 		<VisualDiff
 			prefix="svg"
 			noun="vector"
-			regionLabel="file"
+			regionLabel="image region"
 			original={originalSide}
 			modified={modifiedSide}
 			contentStamp={diffContentStamp(original, modified)}

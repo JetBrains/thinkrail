@@ -141,8 +141,9 @@ per-side capture exists to prevent.
 
 `review.sendComment` / `review.sendBatch` are **composed in `host`'s handlers** (this module never
 imports `agent`): reanchor → render the package (one structured user message with stable comment ids,
-fragment + surrounding context per comment — or, for a position with no source text, a `<locator>` line
-naming the region geometry or the `<scheme> <ref>` node, since there is nothing to quote; every comment
+fragment + surrounding context per comment — or, for a position named by geometry or document node rather
+than by lines (a raster or SVG region, a notebook cell), a `<locator>` line naming the region geometry or
+the `<scheme> <ref>` node, since there is no line span to quote; every comment
 carries `anchor-kind` (`region`/`structural`/`line`/`file`) so the agent reads geometry as geometry —
 never the full diff. **Every dynamic attribute and locator value is entity-escaped** (`& < > "`, CR/LF
 as numeric references), because a repo path or a renderer's node ref is untrusted text that could
