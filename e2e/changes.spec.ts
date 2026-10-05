@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
-import { gitQuiet } from "./fixtures/git";
+import { commitFile, gitQuiet } from "./fixtures/git";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { pierreCollapsedContext, pierreLines } from "./fixtures/pierre";
 import { largeRepetitiveMarkdownEdited } from "./fixtures/repo";
@@ -129,6 +129,206 @@ test("Rendered markdown diff follows live edits on disk (stale merge cancelled, 
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nsecond edit by e2e\n");
 	await expect(renderedDiff.locator("ins").filter({ hasText: "second edit by e2e" })).toBeVisible();
 	await expect(renderedDiff).not.toContainText("first edit by e2e");
+});
+
+const focusMarkdown = (edited: boolean) => {
+	const sections = Array.from({ length: 8 }, (_, index) =>
+		[
+			`## Section ${index}`,
+			"",
+			`Paragraph ${index} ${edited && index === 3 ? "revised" : "original"} wording.`,
+			"",
+			...(index === 3
+				? ["<details open><summary>More</summary>", "", "Folded body.", "", "</details>", ""]
+				: []),
+			`Second paragraph ${index}.`,
+		].join("\n"),
+	);
+	const bullets = Array.from(
+		{ length: 12 },
+		(_, index) => `- bullet ${index}${edited && index === 6 ? " edited" : ""}`,
+	);
+	return `# Focus doc\n\nIntro paragraph.\n\n${sections.join("\n\n")}\n\n## Checklist\n\n${bullets.join("\n")}\n`;
+};
+
+test("Rendered markdown diff collapses unchanged blocks and list items around the changes", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	commitFile(workspace.worktreePath, "FOCUS.md", focusMarkdown(false), "add focus fixture");
+	writeFileSync(join(workspace.worktreePath, "FOCUS.md"), focusMarkdown(true));
+
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	await page.getByTestId("change-item").filter({ hasText: "FOCUS.md" }).click();
+	const renderedDiff = page.getByTestId("rendered-diff");
+	await expect(renderedDiff.locator("ins").filter({ hasText: "revised" })).toBeVisible();
+	await expect(page.getByTestId("rendered-diff-empty")).toHaveCount(0);
+
+	const collapsed = renderedDiff.getByTestId("rendered-diff-collapsed");
+	await expect(collapsed).toHaveCount(4);
+	await expect(collapsed.nth(0)).toContainText("10 unchanged blocks");
+	await expect(collapsed.nth(0)).toContainText("§ Section 2");
+	await expect(collapsed.nth(1)).toContainText("11 unchanged blocks");
+	await expect(collapsed.nth(1)).toContainText("§ Section 7");
+	await expect(collapsed.nth(2)).toContainText("4 unchanged items");
+	await expect(collapsed.nth(3)).toContainText("3 unchanged items");
+
+	await expect(renderedDiff).toContainText("Second paragraph 2.");
+	await expect(renderedDiff.locator("h2", { hasText: "Section 3" })).toBeVisible();
+	await expect(renderedDiff.locator("details[open]")).toContainText("Folded body.");
+	await expect(renderedDiff).toContainText("Second paragraph 3.");
+	await expect(renderedDiff).not.toContainText("Focus doc");
+	await expect(renderedDiff).not.toContainText("Paragraph 0 ");
+	await expect(renderedDiff).not.toContainText("Section 4");
+	await expect(renderedDiff.locator("li", { hasText: "bullet 4" })).toBeVisible();
+	await expect(renderedDiff.locator("li", { hasText: "bullet 8" })).toBeVisible();
+	await expect(renderedDiff).not.toContainText("bullet 0");
+	await expect(renderedDiff).not.toContainText("bullet 11");
+
+	await collapsed.nth(0).click();
+	await expect(renderedDiff.locator("h1")).toHaveText("Focus doc");
+	await expect(renderedDiff).toContainText("Paragraph 0 original wording.");
+	await expect(collapsed).toHaveCount(3);
+
+	await collapsed.filter({ hasText: "3 unchanged items" }).click();
+	await expect(renderedDiff.locator("li", { hasText: "bullet 11" })).toBeVisible();
+	await expect(collapsed).toHaveCount(2);
+});
+
+test("Rendered markdown diff of a front-matter-only change says the preview is identical", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const doc = (status: string) =>
+		`---\nstatus: ${status}\n---\n\n# Front matter doc\n\nBody paragraph.\n`;
+	commitFile(workspace.worktreePath, "META.md", doc("draft"), "add front matter fixture");
+	writeFileSync(join(workspace.worktreePath, "META.md"), doc("active"));
+
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	await page.getByTestId("change-item").filter({ hasText: "META.md" }).click();
+	const renderedDiff = page.getByTestId("rendered-diff");
+	await expect(page.getByTestId("rendered-diff-empty")).toContainText("Source");
+	const collapsed = renderedDiff.getByTestId("rendered-diff-collapsed");
+	await expect(collapsed).toHaveCount(1);
+	await expect(collapsed).toContainText("2 unchanged blocks");
+	await expect(renderedDiff).not.toContainText("Body paragraph.");
+
+	await collapsed.click();
+	await expect(renderedDiff).toContainText("Body paragraph.");
+	await expect(renderedDiff.locator("ins, del")).toHaveCount(0);
+
+	await page.getByTestId("view-toggle-code").click();
+	await expect(diffText(page, "active")).toBeVisible();
+});
+
+test("Rendered markdown diff keeps attribute-only changes visible: a ticked task, an opened details, a list numbered by HTML's integer rules", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const doc = (edited: boolean) =>
+		[
+			"# Attribute doc",
+			"",
+			"## Tasks",
+			"",
+			...Array.from(
+				{ length: 10 },
+				(_, index) => `- [${edited && index === 5 ? "x" : " "}] task ${index}`,
+			),
+			"",
+			"## Numbered",
+			"",
+			'<ol start="">',
+			"<li>one</li>",
+			'<li value="10">ten</li>',
+			'<li value="">eleven</li>',
+			`<li>twelve${edited ? " edited" : ""}</li>`,
+			"</ol>",
+			"",
+			`<details${edited ? " open" : ""}><summary>More</summary>`,
+			"",
+			"Folded body.",
+			"",
+			"</details>",
+			"",
+			`<input type="checkbox"${edited ? " checked" : ""}>`,
+			"",
+		].join("\n");
+	commitFile(workspace.worktreePath, "ATTR.md", doc(false), "add attribute fixture");
+	writeFileSync(join(workspace.worktreePath, "ATTR.md"), doc(true));
+
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	await page.getByTestId("change-item").filter({ hasText: "ATTR.md" }).click();
+	const renderedDiff = page.getByTestId("rendered-diff");
+	await expect(renderedDiff.locator("ins").filter({ hasText: "edited" })).toBeVisible();
+	await expect(page.getByTestId("rendered-diff-empty")).toHaveCount(0);
+
+	const ticked = renderedDiff.locator("li", { hasText: "task 5" });
+	await expect(ticked.locator("input[type=checkbox]")).toBeChecked();
+	await expect(renderedDiff.locator("li", { hasText: "task 3" })).toBeVisible();
+	await expect(renderedDiff).not.toContainText("task 0");
+	await expect(renderedDiff).not.toContainText("task 9");
+	const collapsed = renderedDiff.getByTestId("rendered-diff-collapsed");
+	await expect(collapsed).toHaveCount(2);
+	await expect(collapsed.nth(0)).toContainText("3 unchanged items");
+	await expect(collapsed.nth(1)).toContainText("2 unchanged items");
+
+	await expect(renderedDiff.locator("details[open]")).toContainText("Folded body.");
+	await expect(renderedDiff.locator("li", { hasText: "one" })).toHaveAttribute("value", "1");
+	await expect(renderedDiff.locator("li", { hasText: "ten" })).toHaveAttribute("value", "10");
+	await expect(renderedDiff.locator("li", { hasText: "eleven" })).toHaveAttribute("value", "11");
+	await expect(renderedDiff.locator("li", { hasText: "twelve" })).toHaveAttribute("value", "12");
+	const standalone = renderedDiff.locator("details + input[type=checkbox]");
+	await expect(standalone).toBeChecked();
+	await expect(standalone).toBeDisabled();
+});
+
+test("Rendered markdown diff aligns identical twin blocks by position, so neither a vouching twin nor a swap hides an attribute-only change", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const twin = (open: boolean) =>
+		[
+			`<details${open ? " open" : ""}><summary>Twin</summary>`,
+			"",
+			"Twin body.",
+			"",
+			"</details>",
+		].join("\n");
+	const doc = (first: boolean, second: boolean) =>
+		`# Twins\n\n${twin(first)}\n\n${twin(second)}\n\nTail paragraph.\n`;
+	commitFile(workspace.worktreePath, "VOUCH.md", doc(true, false), "add vouch fixture");
+	writeFileSync(join(workspace.worktreePath, "VOUCH.md"), doc(true, true));
+	commitFile(workspace.worktreePath, "SWAP.md", doc(true, false), "add swap fixture");
+	writeFileSync(join(workspace.worktreePath, "SWAP.md"), doc(false, true));
+
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	const renderedDiff = page.getByTestId("rendered-diff");
+
+	await page.getByTestId("change-item").filter({ hasText: "VOUCH.md" }).click();
+	await expect(renderedDiff.locator("details[open]")).toHaveCount(2);
+	await expect(page.getByTestId("rendered-diff-empty")).toHaveCount(0);
+	await expect(renderedDiff.getByTestId("rendered-diff-collapsed")).toHaveCount(0);
+
+	await page.getByTestId("change-item").filter({ hasText: "SWAP.md" }).click();
+	await expect(renderedDiff.locator("details")).toHaveCount(2);
+	await expect(renderedDiff.locator("details[open]")).toHaveCount(1);
+	await expect(renderedDiff.locator("details").first()).not.toHaveAttribute("open");
+	await expect(page.getByTestId("rendered-diff-empty")).toHaveCount(0);
+	await expect(renderedDiff.getByTestId("rendered-diff-collapsed")).toHaveCount(0);
+	await expect(renderedDiff).toContainText("Tail paragraph.");
 });
 
 test("Changes has a List|Tree toggle; Tree groups files into folders with +/- counts", async ({

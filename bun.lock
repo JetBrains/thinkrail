@@ -361,7 +361,7 @@
     },
     "pi-extensions/visualize": {
       "name": "@thinkrail.ai/pi-visualize",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "lovely-mermaid": "0.3.3",
       },

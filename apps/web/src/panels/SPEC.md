@@ -1344,6 +1344,42 @@ own section. The kebab menu (`plan-menu`, a
   in Source. It is selected by registry match rather than a path branch in the pane. Scopes whose modified
   side is historical receive no review surface or mutation actions.
 
+  **The rendered diff focuses on its changes the way Pierre does.** The merged document is parsed once
+  and a prose-root block is *changed* when it is or contains `ins`, `del`, or a `[data-diff-node]`
+  element, **or** when its exact rendered HTML differs from the before unit it aligns with
+  (`changedUnits`). Alignment is positional: the before and merged unit sequences (blocks, then each
+  list's items) are matched one-to-one by an LCS over their attribute-stripped HTML (`shapeKey`), so an
+  identical twin elsewhere in the document cannot vouch for a block, swapping `open` between two
+  otherwise identical `<details>` flags both, and a unit with no aligned counterpart stays visible. The
+  second clause exists because htmldiff keys ordinary tags by tag name alone and emits the *after*
+  tokens for equal runs: a ticked task checkbox, `<details>` → `<details open>`, a list's `start`, or
+  an image's `alt` never earn a mark, so without it they would collapse as "unchanged" and the empty
+  notice would claim an identical preview. Such a block is kept visible in its after state (unmarked,
+  since the merge has nothing to highlight). Runs of unchanged
+  blocks collapse with git hunk semantics (`renderedDiffFocus.focusSegments`):
+  `FOCUS_CONTEXT_BLOCKS` (2) blocks stay visible on each side of a change, a leading or trailing run keeps
+  context only on the side that touches one, and a run of a single block is never hidden, because an
+  expander that replaces one paragraph saves nothing and costs a click. The same rule applies one level
+  down to the items of a changed `ul`/`ol` when at least one item changed — a markdown spec routinely
+  carries a thirty-bullet list with one edited bullet — while a list whose only difference is its own
+  attributes, and tables, quotes, and nested lists, render whole; ordered items keep their number
+  (`start` and an explicit `value` are read with HTML's integer-parsing rules, so the invalid values
+  React leaves in the DOM — `start=""`, `value=""` — fall back to `1` / the running count exactly as
+  the browser does; a `value` wins, the rest count on) so hiding items never renumbers the rest.
+  Each hidden run is one `rendered-diff-collapsed` button naming the count and, for block runs, the last
+  heading it hides (the section the visible content below it belongs to — the analogue of Pierre's
+  line-info separators).
+  Clicking expands the run in place, one-way; expansion is component-local and positional, so a live
+  refresh keeps an expansion whose run still starts at the same position and resets the rest. Nothing
+  offers the whole merged document at once: Source and the file preview already do. A merge in which no
+  block changed — front matter is stripped before rendering, and whitespace or HTML comments don't
+  render — shows the `rendered-diff-empty` notice pointing at Source and collapses the document to a
+  single expander rather than presenting an unmarked full document as a diff. Visible blocks are
+  re-created from the parsed elements (tag, attributes, `innerHTML`), never wrapped, so the DOM the
+  prose styles target is unchanged; the boolean attributes the sanitizer lets through (`details[open]`, a
+  standalone checkbox's `checked`/`disabled`) are mapped to `true` because React drops an empty-string
+  boolean.
+
   `thinkrail/image` renders host-backed byte URLs with fit, natural-size, button/wheel zoom, intrinsic
   dimensions, and byte size, always on the `.media-backdrop` transparency checkerboard (the view's image
   and both diff frames; the difference blend keeps a flat canvas so the checker cannot leak into the
