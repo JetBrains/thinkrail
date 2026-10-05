@@ -65,7 +65,7 @@ export function RunningIcon({ className }: { className?: string | undefined }) {
 					className="motion-safe:opacity-40"
 				/>
 				<g
-					data-part="train"
+					data-testid="running-icon-train"
 					className="origin-[32px_32px] [transform-box:view-box] motion-safe:animate-working-train motion-reduce:hidden"
 				>
 					<circle

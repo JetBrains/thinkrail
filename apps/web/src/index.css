@@ -70,11 +70,7 @@
 		}
 	}
 
-	/*
-	 * The "agent working" brand badge (`components/RunningIcon`): a train laps the ring while a signal runs
-	 * down each rail of the monogram. Rails are `pathLength="100"` with a 28-unit dash, so the signal enters
-	 * at offset 28 and has left at -100; each rail picks its own `--signal-delay` to stagger the six.
-	 */
+	/* The "agent working" brand badge (`components/RunningIcon`): the ring train, and the per-rail signal (a 28-unit dash on a pathLength-100 rail, staggered per rail through `--signal-delay`). */
 	--animate-working-train: working-train 1.875s linear infinite;
 	@keyframes working-train {
 		to {

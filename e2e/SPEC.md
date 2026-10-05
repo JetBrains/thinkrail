@@ -221,8 +221,8 @@ icon for the shared `RunningIcon` brand badge in the row's own colour. The rail 
 question/check/result glyphs or a generic spinner. Running alone has no attention dot; queued, hidden/background, and explicitly stopped sessions stay
 quiet; a live blocked question keeps its dot while its orthogonal running pulse may coexist. Reconnect/restart
 snapshots, direct-versus-passive activation, owner-global clearing, and snapshot
-retry are covered; live-agent coverage pins `data-running`/`running-icon` (the badge's train animates, and stops under reduced
-motion) and coexistence with
+retry are covered; live-agent coverage pins `data-running`/`running-icon` (its `running-icon-train` animates, and is hidden under
+reduced motion) and coexistence with
 `data-attention`/`attention-dot`. These are stable visual hooks rather than alternate state models. The retired `session.activityList → []` compatibility method
 remains a focused handler test.
 
