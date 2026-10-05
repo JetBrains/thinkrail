@@ -1,6 +1,6 @@
 {
 	"name": "@thinkrail.ai/pi-visualize",
-	"version": "0.0.0",
+	"version": "0.1.0",
 	"description": "A pi extension adding a `visualize` tool: mermaid diagrams and option comparisons, rendered as box-drawing in the terminal and as rich cards in hosts that have a renderer.",
 	"license": "Apache-2.0",
 	"type": "module",
