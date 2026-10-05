@@ -227,6 +227,63 @@ test("Rendered markdown diff of a front-matter-only change says the preview is i
 	await expect(diffText(page, "active")).toBeVisible();
 });
 
+test("Rendered markdown diff keeps attribute-only changes visible: a ticked task, an opened details, a renumbered list", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const doc = (edited: boolean) =>
+		[
+			"# Attribute doc",
+			"",
+			"## Tasks",
+			"",
+			...Array.from(
+				{ length: 10 },
+				(_, index) => `- [${edited && index === 5 ? "x" : " "}] task ${index}`,
+			),
+			"",
+			"## Numbered",
+			"",
+			"<ol>",
+			'<li value="10">ten</li>',
+			"<li>eleven</li>",
+			`<li>twelve${edited ? " edited" : ""}</li>`,
+			"</ol>",
+			"",
+			`<details${edited ? " open" : ""}><summary>More</summary>`,
+			"",
+			"Folded body.",
+			"",
+			"</details>",
+			"",
+		].join("\n");
+	commitFile(workspace.worktreePath, "ATTR.md", doc(false), "add attribute fixture");
+	writeFileSync(join(workspace.worktreePath, "ATTR.md"), doc(true));
+
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	await page.getByTestId("change-item").filter({ hasText: "ATTR.md" }).click();
+	const renderedDiff = page.getByTestId("rendered-diff");
+	await expect(renderedDiff.locator("ins").filter({ hasText: "edited" })).toBeVisible();
+	await expect(page.getByTestId("rendered-diff-empty")).toHaveCount(0);
+
+	const ticked = renderedDiff.locator("li", { hasText: "task 5" });
+	await expect(ticked.locator("input[type=checkbox]")).toBeChecked();
+	await expect(renderedDiff.locator("li", { hasText: "task 3" })).toBeVisible();
+	await expect(renderedDiff).not.toContainText("task 0");
+	await expect(renderedDiff).not.toContainText("task 9");
+	const collapsed = renderedDiff.getByTestId("rendered-diff-collapsed");
+	await expect(collapsed).toHaveCount(2);
+	await expect(collapsed.nth(0)).toContainText("3 unchanged items");
+	await expect(collapsed.nth(1)).toContainText("2 unchanged items");
+
+	await expect(renderedDiff.locator("details[open]")).toContainText("Folded body.");
+	await expect(renderedDiff.locator("li", { hasText: "ten" })).toHaveAttribute("value", "10");
+	await expect(renderedDiff.locator("li", { hasText: "eleven" })).toHaveAttribute("value", "11");
+});
+
 test("Changes has a List|Tree toggle; Tree groups files into folders with +/- counts", async ({
 	page,
 }) => {

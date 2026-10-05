@@ -1346,15 +1346,23 @@ own section. The kebab menu (`plan-menu`, a
 
   **The rendered diff focuses on its changes the way Pierre does.** The merged document is parsed once
   and a prose-root block is *changed* when it is or contains `ins`, `del`, or a `[data-diff-node]`
-  element. Runs of unchanged blocks collapse with git hunk semantics (`renderedDiffFocus.focusSegments`):
+  element, **or** when its exact rendered HTML has no identical counterpart among the before
+  rendering's blocks and list items. The second clause exists because htmldiff keys ordinary tags by
+  tag name alone and emits the *after* tokens for equal runs: a ticked task checkbox, `<details>` →
+  `<details open>`, a list's `start`, or an image's `alt` never earn a mark, so without it they would
+  collapse as "unchanged" and the empty notice would claim an identical preview. Such a block is kept
+  visible in its after state (unmarked, since the merge has nothing to highlight). Runs of unchanged
+  blocks collapse with git hunk semantics (`renderedDiffFocus.focusSegments`):
   `FOCUS_CONTEXT_BLOCKS` (2) blocks stay visible on each side of a change, a leading or trailing run keeps
   context only on the side that touches one, and a run of a single block is never hidden, because an
   expander that replaces one paragraph saves nothing and costs a click. The same rule applies one level
-  down to the items of a changed `ul`/`ol` — a markdown spec routinely carries a thirty-bullet list with
-  one edited bullet — while tables, quotes, and nested lists render whole; ordered items keep their
-  original number (`value`) so hiding items never renumbers the rest. Each hidden run is one
-  `rendered-diff-collapsed` button naming the count and, for block runs, the last heading it hides (the
-  section the visible content below it belongs to — the analogue of Pierre's line-info separators).
+  down to the items of a changed `ul`/`ol` when at least one item changed — a markdown spec routinely
+  carries a thirty-bullet list with one edited bullet — while a list whose only difference is its own
+  attributes, and tables, quotes, and nested lists, render whole; ordered items keep their number
+  (an explicit `value` wins, the rest count on from `start`) so hiding items never renumbers the rest.
+  Each hidden run is one `rendered-diff-collapsed` button naming the count and, for block runs, the last
+  heading it hides (the section the visible content below it belongs to — the analogue of Pierre's
+  line-info separators).
   Clicking expands the run in place, one-way; expansion is component-local and positional, so a live
   refresh keeps an expansion whose run still starts at the same position and resets the rest. Nothing
   offers the whole merged document at once: Source and the file preview already do. A merge in which no
