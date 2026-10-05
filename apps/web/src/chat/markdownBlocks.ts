@@ -1,6 +1,6 @@
 import { Lexer, type Token } from "marked";
 
-export interface MarkdownBlock {
+interface MarkdownBlock {
 	start: number;
 	raw: string;
 	closed: boolean;
