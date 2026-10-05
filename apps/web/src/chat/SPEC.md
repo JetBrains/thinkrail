@@ -695,6 +695,19 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   overflow then scrolls inside the textarea. Attachment chips, completion menus, slot hints, and QueueStrip
   keep their existing separate chrome. The slot-highlight backdrop must follow every dynamic textarea box
   change with the exact box-model and scroll-sync invariants under Template slots below.
+- **Composer trailing controls** (`Composer`) — the footer's right-hand cluster is **one solid object and
+  ghosts**, no borders: History is a ghost 28px circle (`Button variant="ghost" size="icon"` under an
+  `IconTooltip`), Stop a ghost pill (`■ Stop`, muted text lifting on a hover wash), and the send a single
+  `rounded-full` accent pill (`chat-send-pill`, `data-armed`) whose main segment (`chat-send`) carries the
+  verb plus an `↩` keycap and whose chevron segment (`send-menu`, streaming only) is a second hit area
+  with its own hover — spacing, not a divider, separates them. The earlier cluster was four equal bordered
+  32px squares, which gave a utility (history) the same weight as the primary action and read as
+  form-era chrome. **Inert send**: with nothing to send the pill rests on `control-bg-selected` +
+  `control-disabled-text` rather than the 60% primary pair — a dark accent block pulls the eye to a control
+  that cannot act, and the switch to the accent fill is the "ready" signal (the exception is recorded in
+  `styles/COLOR.md`). **Compact mode**: below the chat column's `@md` container width (phones, narrow
+  splits) labels and keycap hide and the pills collapse to 28px icons, so the model pill keeps its room.
+  Labels use `ui.action`.
 - **Queued messages: the pending strip** (`QueueStrip.tsx`, props-driven: `queue` + `onEdit`/`onRemove`)
   — the web mirror of pi's interactive-mode pending-messages area. A **streaming send never renders an
   optimistic transcript bubble** (see the store SPEC's echo contract): `ChatView.onSubmit` skips
@@ -719,10 +732,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   design (steer = injected at the next turn boundary, after the current assistant message + its tool
   calls; queue = runs after the agent settles; only abort halts an in-flight response) and proved
   illegible from key-name hints alone. While streaming the composer therefore self-documents: the
-  placeholder states meanings ("Enter steers at the next step · Cmd/Ctrl+Enter queues for when it
-  finishes") and a **send-options menu** (`send-menu` trigger beside the send button; rows
-  `send-mode-steer` / `send-mode-queue` / `send-mode-interrupt`) names each mode with a one-line
-  meaning + shortcut. Menu rows are **actions** (send the current draft with that mode), never a
+  primary pill reads **Steer ↩** instead of Send, the placeholder states *when* a steer lands ("Steer the
+  agent at its next step…"), and a **send-options menu** (`send-menu` — the chevron segment of that
+  pill; rows `send-mode-steer` / `send-mode-queue` / `send-mode-interrupt`) names each mode with a one-line
+  meaning + shortcut. The chevron stays enabled with an empty draft so the shortcuts remain discoverable;
+  only the rows disable. Menu rows are **actions** (send the current draft with that mode), never a
   sticky mode switch — a persistent mode would make the next plain Enter silently obey hidden state.
   `Composer` yields every keydown to an active IME before slot, menu, recall, or send handling. It uses
   `KeyboardEvent.isComposing` plus the legacy `keyCode` 229 sentinel because `compositionend` may precede
@@ -1073,8 +1087,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   the live index and **overwrote what the user had just typed** (the loss `replaceDraft` guards against on
   the insert paths, arriving through the keyboard path instead). A ref reads at its last written value, so
   commit ordering cannot enter into it. Handlers take **one snapshot per event** — the ref cannot change
-  inside a synchronous handler, and one read stays narrowable where repeated `.current` reads do not. A `History`-icon button (`data-testid="history-open"`, `aria-label="Search history"`,
-  always rendered next to send) calls the same `openHistory` the global `Ctrl+R` reaches — the tap path
+  inside a synchronous handler, and one read stays narrowable where repeated `.current` reads do not. A `History`-icon ghost button (`data-testid="history-open"`, `aria-label="Search history"`,
+  tooltip of the same name, always rendered next to send) calls the same `openHistory` the global `Ctrl+R` reaches — the tap path
   on mobile, a discoverability affordance on desktop.
 - **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
   [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):

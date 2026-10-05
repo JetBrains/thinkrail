@@ -64,7 +64,6 @@ const COMPOSER_EDITOR_LIMIT_CLASS = {
 		"max-h-[calc(50cqh-var(--space-16)-var(--space-16)-var(--space-4)-var(--space-4)-var(--space-4)-var(--space-4))]",
 } satisfies Record<ComposerGrowthLimit, string>;
 
-// Labels and keycaps leave the trailing pills below the chat column's `@md` width; icons stay.
 const WIDE_ONLY = "@max-md:hidden";
 const COMPACT_ONLY = "@md:hidden";
 
