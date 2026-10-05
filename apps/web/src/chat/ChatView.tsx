@@ -26,7 +26,8 @@ import {
 	DialogFooter,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Popover, PopoverAnchor, PopoverTrigger } from "@/components/ui/popover";
+import { useNow } from "@/components/useNow";
 import { cn } from "@/lib";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
@@ -69,12 +70,12 @@ import {
 } from "./nativeCommands";
 import { hostSessionGlance, planGlance } from "./planView";
 import { QueueStrip } from "./QueueStrip";
-import { CommandLogView, ResourcesButton, ResourcesContent } from "./resources";
+import { CommandLogView, ResourcesButton, ResourcesDock, ResourcesInspector } from "./resources";
 import { estimateChatRowHeights } from "./rowHeightEstimates";
 import { type ChatRow, deriveRows, projectRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
 import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
-import { SubagentTranscriptDialog } from "./SubagentTranscriptDialog";
+import { SubagentTranscriptDialog, SubagentTranscriptPane } from "./SubagentTranscriptDialog";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { useChatResources, useCommandLog } from "./useChatResources";
 import { useModelCatalog } from "./useModelCatalog";
@@ -384,39 +385,90 @@ export default function ChatView({
 	const composerRef = useRef<ComposerHandle>(null);
 	const resources = useChatResources(workspaceId, sessionId);
 	const resourcesTrigger = useRef<HTMLButtonElement>(null);
-	const resourceDetailOpening = useRef(false);
-	const resourceTranscript = useRef(false);
-	const [resourcesOpen, setResourcesOpen] = useState(false);
 	const [stopAllOpen, setStopAllOpen] = useState(false);
-	const [commandDetail, setCommandDetail] = useState<{
+	const [inspector, setInspector] = useState<{
 		workspaceId: string;
 		sessionId: string;
-		id: string;
-		name: string;
+		open: boolean;
+		selectedId: string | null;
 	} | null>(null);
-	const selectedCommand =
-		commandDetail?.workspaceId === workspaceId && commandDetail.sessionId === sessionId
-			? commandDetail
+	const inspectorOpen =
+		inspector?.workspaceId === workspaceId && inspector.sessionId === sessionId && inspector.open;
+	const inspectorSelectedId =
+		inspector?.workspaceId === workspaceId && inspector.sessionId === sessionId
+			? inspector.selectedId
 			: null;
-	const commandLog = useCommandLog(workspaceId, sessionId, selectedCommand?.id ?? null);
+	const openInspector = useCallback(
+		(selectedId?: string) =>
+			setInspector((previous) => ({
+				workspaceId,
+				sessionId,
+				open: true,
+				selectedId:
+					selectedId ??
+					(previous?.workspaceId === workspaceId && previous.sessionId === sessionId
+						? previous.selectedId
+						: null),
+			})),
+		[workspaceId, sessionId],
+	);
+	const setInspectorOpen = useCallback(
+		(open: boolean) => {
+			if (open) openInspector();
+			else setInspector((previous) => (previous ? { ...previous, open: false } : previous));
+		},
+		[openInspector],
+	);
+	const selectResource = useCallback(
+		(selectedId: string) =>
+			setInspector((previous) =>
+				previous?.workspaceId === workspaceId && previous.sessionId === sessionId
+					? { ...previous, selectedId }
+					: { workspaceId, sessionId, open: true, selectedId },
+			),
+		[workspaceId, sessionId],
+	);
+	const selectedCommandId =
+		inspectorOpen &&
+		inspectorSelectedId &&
+		[...resources.groups.commands, ...resources.groups.finishedCommands].some(
+			(command) => command.id === inspectorSelectedId,
+		)
+			? inspectorSelectedId
+			: null;
+	const selectedSubagentId =
+		inspectorOpen &&
+		inspectorSelectedId &&
+		[...resources.groups.subagents, ...resources.groups.finishedSubagents].some(
+			(child) => child.childSessionId === inspectorSelectedId,
+		)
+			? inspectorSelectedId
+			: null;
+	const commandLog = useCommandLog(workspaceId, sessionId, selectedCommandId);
+	const now = useNow();
 	const returnToResources = (event: Event) => {
 		event.preventDefault();
-		resourceDetailOpening.current = false;
 		if (resourcesTrigger.current) resourcesTrigger.current.focus();
 		else composerRef.current?.refocus();
 	};
 	useEffect(() => {
 		if (!resources.knownUnsupported) return;
-		setResourcesOpen(false);
+		setInspector(null);
 		setStopAllOpen(false);
-		setCommandDetail(null);
-		resourceDetailOpening.current = false;
-		if (resourceTranscript.current) {
-			setTranscriptChildId(null);
-		}
-	}, [resources.knownUnsupported, setTranscriptChildId]);
+	}, [resources.knownUnsupported]);
 
 	const virtuosoRef = useRef<VirtuosoHandle>(null);
+	const latestDividerRowId = useMemo(
+		() => chronologicalRows.findLast((candidate) => candidate.kind === "divider")?.id ?? null,
+		[chronologicalRows],
+	);
+	const stillRunning = useMemo(
+		() =>
+			resources.visible && resources.authoritative && resources.groups.activeCount > 0
+				? { count: resources.groups.activeCount, onOpen: () => openInspector() }
+				: undefined,
+		[resources.visible, resources.authoritative, resources.groups.activeCount, openInspector],
+	);
 	const latestUserRow = useMemo(() => {
 		const row = chronologicalRows.findLast((candidate) => candidate.kind === "user");
 		if (!row) return null;
@@ -1013,59 +1065,12 @@ export default function ChatView({
 								<ChatHeader
 									resources={
 										resources.visible ? (
-											<Popover open={resourcesOpen} onOpenChange={setResourcesOpen}>
-												<PopoverTrigger asChild>
-													<ResourcesButton
-														ref={resourcesTrigger}
-														activeCount={
-															resources.authoritative ? resources.groups.activeCount : null
-														}
-														open={resourcesOpen}
-													/>
-												</PopoverTrigger>
-												<PopoverContent
-													data-testid="resources-popover"
-													aria-label="Resources"
-													align="end"
-													className="max-h-[min(70vh,var(--radix-popover-content-available-height))] w-[360px] max-w-[calc(100vw-24px)] overflow-y-auto"
-													onCloseAutoFocus={(event) => {
-														if (resourceDetailOpening.current) event.preventDefault();
-													}}
-												>
-													<ResourcesContent
-														{...resources.groups}
-														authoritative={resources.authoritative}
-														loading={resources.loading}
-														stale={resources.stale}
-														error={resources.projection?.error ?? null}
-														actions={resources.actions}
-														onRetry={resources.retry}
-														onStopCommand={resources.stopCommand}
-														onStopSubagent={resources.stopSubagent}
-														onLogs={(command) => {
-															resourceDetailOpening.current = true;
-															setResourcesOpen(false);
-															setCommandDetail({
-																workspaceId,
-																sessionId,
-																id: command.id,
-																name: command.name,
-															});
-														}}
-														onTranscript={(childId) => {
-															resourceDetailOpening.current = true;
-															resourceTranscript.current = true;
-															setResourcesOpen(false);
-															setTranscriptChildId(childId);
-														}}
-														onStopAll={() => {
-															resourceDetailOpening.current = true;
-															setResourcesOpen(false);
-															setStopAllOpen(true);
-														}}
-													/>
-												</PopoverContent>
-											</Popover>
+											<ResourcesButton
+												ref={resourcesTrigger}
+												activeCount={resources.authoritative ? resources.groups.activeCount : null}
+												open={inspectorOpen}
+												onClick={() => setInspectorOpen(!inspectorOpen)}
+											/>
 										) : null
 									}
 									stats={stats}
@@ -1178,6 +1183,7 @@ export default function ChatView({
 												onOpenChange={onOpenChange}
 												onReveal={onReveal}
 												onTryAgain={() => performSend(TRY_AGAIN_PROMPT, [], "send")}
+												stillRunning={row.id === latestDividerRowId ? stillRunning : undefined}
 											/>
 										</FoldGeometryProvider>
 										{chatMessageOrder === "newest-first" &&
@@ -1219,6 +1225,38 @@ export default function ChatView({
 								{scrollButtonLabel}
 							</button>
 						) : null}
+						{resources.visible ? (
+							<ResourcesInspector
+								open={inspectorOpen}
+								onOpenChange={setInspectorOpen}
+								onCloseAutoFocus={returnToResources}
+								{...resources.groups}
+								now={now}
+								authoritative={resources.authoritative}
+								loading={resources.loading}
+								stale={resources.stale}
+								error={resources.projection?.error ?? null}
+								actions={resources.actions}
+								selectedId={inspectorSelectedId}
+								onSelect={selectResource}
+								onRetry={resources.retry}
+								onStopCommand={resources.stopCommand}
+								onStopSubagent={resources.stopSubagent}
+								onStopAll={() => setStopAllOpen(true)}
+								detail={
+									selectedCommandId ? (
+										<CommandLogView {...commandLog} onRetry={commandLog.retry} />
+									) : selectedSubagentId ? (
+										<SubagentTranscriptPane
+											key={selectedSubagentId}
+											workspaceId={workspaceId}
+											parentSessionId={sessionId}
+											childSessionId={selectedSubagentId}
+										/>
+									) : null
+								}
+							/>
+						) : null}
 					</div>
 					{widgetEntries.length > 0 ? (
 						<div className="shrink-0 border-border-default border-t bg-container-elevated-bg px-12 py-4 text-text-muted tr-text-metadata">
@@ -1228,6 +1266,18 @@ export default function ChatView({
 						</div>
 					) : null}
 					<QueueStrip queue={queue} onEdit={onEditQueued} onRemove={onRemoveQueued} />
+					{resources.visible && !inspectorOpen ? (
+						<ResourcesDock
+							commands={resources.groups.commands}
+							subagents={resources.groups.subagents}
+							now={now}
+							authoritative={resources.authoritative}
+							actions={resources.actions}
+							onInspect={openInspector}
+							onStopCommand={resources.stopCommand}
+							onStopSubagent={resources.stopSubagent}
+						/>
+					) : null}
 					<div className="relative shrink-0">
 						<HistoryOverlay
 							state={historyState}
@@ -1282,31 +1332,6 @@ export default function ChatView({
 					{pendingExtUi ? (
 						<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
 					) : null}
-					{selectedCommand ? (
-						<Dialog
-							open
-							onOpenChange={(open) => {
-								if (!open) setCommandDetail(null);
-							}}
-						>
-							<DialogContent
-								data-testid="command-log-dialog"
-								className="h-[75vh] max-h-[720px] max-w-3xl"
-								onCloseAutoFocus={returnToResources}
-							>
-								<DialogTitle
-									className="min-w-0 max-w-full truncate pr-24"
-									title={`${selectedCommand.name} — Logs`}
-								>
-									{selectedCommand.name} — Logs
-								</DialogTitle>
-								<DialogDescription>
-									Read-only command output. Closing this view does not stop the command.
-								</DialogDescription>
-								<CommandLogView {...commandLog} onRetry={commandLog.retry} />
-							</DialogContent>
-						</Dialog>
-					) : null}
 					<Dialog open={stopAllOpen} onOpenChange={setStopAllOpen}>
 						<DialogContent onCloseAutoFocus={returnToResources}>
 							<DialogTitle>Stop all subagents?</DialogTitle>
@@ -1328,7 +1353,6 @@ export default function ChatView({
 									onClick={() => {
 										resources.stopAll();
 										setStopAllOpen(false);
-										setResourcesOpen(true);
 									}}
 								>
 									Stop {resources.groups.subagents.length} subagents
@@ -1342,11 +1366,6 @@ export default function ChatView({
 							workspaceId={workspaceId}
 							parentSessionId={sessionId}
 							childSessionId={transcriptChildId}
-							onCloseAutoFocus={(event) => {
-								if (!resourceTranscript.current) return;
-								returnToResources(event);
-								resourceTranscript.current = false;
-							}}
 							onOpenChange={(open) => {
 								if (!open) setTranscriptChildId(null);
 							}}

@@ -128,6 +128,14 @@ compilation of the chat/shell hot paths does not imply coverage of every file/di
 
 A new bailout is a regression unless it joins this list.
 
+**Render cost is measured on a separate profiling build, never the shipped one.** `bun run --cwd apps/web
+build:profile` (`vite build --mode profile`) emits `dist-profile/`: the same compiled production code with
+`react-dom/client` aliased to `react-dom/profiling` and minification off, so component names survive for
+attribution. Source carries no `<Profiler>` wrappers, flags, or collectors: per-component cost is read by a
+harness-installed React DevTools hook (`e2e/perf`, see [[module-browser-e2e]]). Wrappers would need a
+build flag in product code and give area totals only; the hook sees every component with zero source
+change. `dist/` therefore has no profiler timers (`actualStartTime` is absent from `dist/assets`).
+
 ### Dependency graph
 
 - `navigation` → `store`, `transport`, `contracts` (type-only); neither dependency imports it, and `main.tsx` initializes the integration

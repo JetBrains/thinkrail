@@ -7,6 +7,7 @@ import {
 	RiFileTextLine as FileText,
 	RiContractUpDownLine as FoldVertical,
 	RiLoopRightLine as RotateCw,
+	RiStackLine as Stack,
 	RiAlertLine as TriangleAlert,
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
@@ -49,6 +50,7 @@ export function ChatTurnView({
 	onOpenChange,
 	onReveal,
 	onTryAgain,
+	stillRunning,
 }: {
 	row: ChatRow;
 	workspaceRoot?: string | undefined;
@@ -59,6 +61,8 @@ export function ChatTurnView({
 	onOpenChange?: ((path: string) => void) | undefined;
 	onReveal?: ((tab: "specs" | "changes") => void) | undefined;
 	onTryAgain?: (() => void) | undefined;
+	/** Live-resource deep link for this chat's latest turn divider only. */
+	stillRunning?: StillRunning | undefined;
 }) {
 	switch (row.kind) {
 		case "user":
@@ -151,6 +155,7 @@ export function ChatTurnView({
 					onOpenSpec={onOpenSpec ?? (() => {})}
 					onOpenChange={onOpenChange ?? (() => {})}
 					onReveal={onReveal ?? (() => {})}
+					stillRunning={stillRunning}
 				/>
 			);
 		default:
@@ -750,6 +755,11 @@ function ArtifactList({
 	);
 }
 
+export interface StillRunning {
+	count: number;
+	onOpen: () => void;
+}
+
 export function TurnDivider({
 	id,
 	data,
@@ -757,6 +767,7 @@ export function TurnDivider({
 	onOpenSpec,
 	onOpenChange,
 	onReveal,
+	stillRunning,
 }: {
 	id: string;
 	data: TurnDividerData;
@@ -764,6 +775,7 @@ export function TurnDivider({
 	onOpenSpec: (path: string) => void;
 	onOpenChange: (path: string) => void;
 	onReveal: (tab: "specs" | "changes") => void;
+	stillRunning?: StillRunning | undefined;
 }) {
 	const { elapsedMs, toolCount, specs, changedFiles } = data;
 	const [selected, select] = useSelection(`${id}:artifacts`);
@@ -788,8 +800,14 @@ export function TurnDivider({
 		},
 	];
 	const groups = allGroups.filter((group) => group.paths.length > 0);
+	const running = stillRunning && stillRunning.count > 0 ? stillRunning : null;
 
-	if (toolCount === 0 && groups.length === 0 && (elapsedMs == null || elapsedMs < 1000)) {
+	if (
+		toolCount === 0 &&
+		groups.length === 0 &&
+		!running &&
+		(elapsedMs == null || elapsedMs < 1000)
+	) {
 		return <div data-testid="turn-divider" className="my-8 h-px bg-border-muted" />;
 	}
 	return (
@@ -819,6 +837,17 @@ export function TurnDivider({
 						<Clock className="size-12 shrink-0" />
 						{formatElapsed(elapsedMs)}
 					</span>
+				) : null}
+				{running ? (
+					<button
+						type="button"
+						data-testid="turn-divider-running"
+						onClick={running.onOpen}
+						className="flex items-center gap-4 rounded-full border border-primary-muted bg-primary-subtle px-8 text-primary hover:bg-primary-soft"
+					>
+						<Stack className="size-12 shrink-0 motion-safe:animate-working" />
+						{running.count} still running
+					</button>
 				) : null}
 				<span className="h-px flex-1 bg-border-muted" />
 			</div>

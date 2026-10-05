@@ -1,35 +1,59 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
-import type { BackgroundCommandSummary } from "@thinkrail/contracts";
+import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
 import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import * as resources from "./index";
+import { elapsedLabel, formatElapsed, resourceState, sortLive } from "./resourceRow";
 
+const NOW = 10 * 60_000;
 const command: BackgroundCommandSummary = {
 	id: "build",
 	sessionId: "chat",
 	name: "Build <script>",
 	command: "echo '<img src=x onerror=bad()>'",
 	status: "running",
-	startedAt: 1,
+	startedAt: NOW - 4 * 60_000,
 };
-const props: ComponentProps<typeof resources.ResourcesContent> = {
+const child: SubagentResourceSummary = {
+	childSessionId: "child",
+	parentSessionId: "chat",
+	roleName: "scout",
+	task: "<b>Inspect</b> the registry",
+	status: "queued",
+	createdAt: new Date(NOW - 30_000).toISOString(),
+};
+const inspectorProps: ComponentProps<typeof resources.ResourcesInspector> = {
+	open: true,
+	onOpenChange: () => {},
 	commands: [],
 	subagents: [],
 	finishedCommands: [],
 	finishedSubagents: [],
+	now: NOW,
 	authoritative: true,
 	loading: false,
 	stale: false,
 	error: null,
 	actions: {},
+	selectedId: null,
+	onSelect: () => {},
 	onRetry: () => {},
-	onLogs: () => {},
-	onTranscript: () => {},
 	onStopCommand: () => {},
 	onStopSubagent: () => {},
 	onStopAll: () => {},
+	detail: <div data-testid="detail-slot">slot</div>,
+};
+const dockProps: ComponentProps<typeof resources.ResourcesDock> = {
+	commands: [],
+	subagents: [],
+	now: NOW,
+	authoritative: true,
+	actions: {},
+	onInspect: () => {},
+	onStopCommand: () => {},
+	onStopSubagent: () => {},
 };
 
 test("resource primitives keep their props-only import boundary", () => {
@@ -46,83 +70,205 @@ test("resource primitives keep their props-only import boundary", () => {
 	}
 });
 
-test("resource trigger distinguishes an authoritative count from an unknown count", () => {
-	const current = renderToStaticMarkup(
-		<TooltipProvider>
-			<resources.ResourcesButton activeCount={3} open={false} />
-		</TooltipProvider>,
-	);
+test("the row vocabulary collapses wire statuses into one live and three settled states, sorts live rows oldest-first and reports run time per kind", () => {
+	const state = (overrides: Partial<BackgroundCommandSummary>) =>
+		resourceState({ kind: "command", summary: { ...command, ...overrides } });
+	expect(state({})).toBe("working");
+	expect(state({ status: "stopping" })).toBe("stopping");
+	expect(state({ status: "completed", exitCode: 0 })).toBe("done");
+	expect(state({ status: "completed", exitCode: 2 })).toBe("failed");
+	expect(state({ status: "error", exitCode: 1 })).toBe("failed");
+	expect(state({ status: "stopped", exitCode: 130 })).toBe("stopped");
+	const childState = (status: SubagentResourceSummary["status"]) =>
+		resourceState({ kind: "subagent", summary: { ...child, status } });
+	expect(childState("queued")).toBe("queued");
+	expect(childState("running")).toBe("working");
+	expect(childState("completed")).toBe("done");
+	expect(childState("error")).toBe("failed");
+	expect(childState("aborted")).toBe("stopped");
+	expect(formatElapsed(20_000)).toBe("<1 min");
+	expect(formatElapsed(4 * 60_000 + 5_000)).toBe("4 min");
+	expect(formatElapsed(125 * 60_000)).toBe("2 h 5 min");
+	const elapsed = (resource: Parameters<typeof elapsedLabel>[0]) => elapsedLabel(resource, NOW);
+	expect(elapsed({ kind: "command", summary: command })).toBe("4 min");
+	expect(
+		elapsed({
+			kind: "command",
+			summary: { ...command, status: "completed", exitCode: 0, finishedAt: NOW - 60_000 },
+		}),
+	).toBe("3 min");
+	expect(elapsed({ kind: "subagent", summary: child })).toBeNull();
+	expect(elapsed({ kind: "subagent", summary: { ...child, status: "running" } })).toBe("<1 min");
+	expect(
+		elapsed({
+			kind: "subagent",
+			summary: { ...child, status: "completed", durationMs: 7 * 60_000 },
+		}),
+	).toBe("7 min");
+	expect(elapsed({ kind: "subagent", summary: { ...child, status: "aborted" } })).toBeNull();
+	const order = sortLive([
+		{ kind: "subagent", summary: child },
+		{ kind: "command", summary: { ...command, id: "late", startedAt: NOW - 1000 } },
+		{
+			kind: "command",
+			summary: { ...command, id: "stopping", status: "stopping", startedAt: NOW - 3 * 60_000 },
+		},
+		{ kind: "command", summary: command },
+	]).map((resource) => (resource.kind === "command" ? resource.summary.id : "child"));
+	expect(order).toEqual(["build", "stopping", "child", "late"]);
+});
+
+test("resource trigger distinguishes an authoritative count from an unknown count and breathes only while live", () => {
+	const render = (activeCount: number | null, open = false) =>
+		renderToStaticMarkup(
+			<TooltipProvider>
+				<resources.ResourcesButton activeCount={activeCount} open={open} />
+			</TooltipProvider>,
+		);
+	const current = render(3, true);
 	expect(current).toContain('data-active-count="3"');
 	expect(current).toContain('aria-label="Resources, 3 active"');
+	expect(current).toContain('aria-expanded="true"');
+	expect(current).toContain('data-live="true"');
+	expect(current).toContain("animate-working");
 	expect(current).toContain(">3</span>");
 
-	const unknown = renderToStaticMarkup(
-		<TooltipProvider>
-			<resources.ResourcesButton activeCount={null} open={false} />
-		</TooltipProvider>,
-	);
+	const idle = render(0);
+	expect(idle).not.toContain("data-live");
+	expect(idle).not.toContain("animate-working");
+
+	const unknown = render(null);
 	expect(unknown).toContain('data-active-count="unknown"');
 	expect(unknown).toContain('aria-label="Resources, active count unavailable"');
 	expect(unknown).toContain(">—</span>");
 	expect(unknown).not.toContain("null active");
+	expect(unknown).not.toContain("animate-working");
 });
 
-test("ChatView labels and retires resource-only layers", () => {
+test("ChatView mounts the trigger, dock and inspector and retires resource-only layers", () => {
 	const source = readFileSync(`${import.meta.dir}/../ChatView.tsx`, "utf8");
-	expect(source).toContain('aria-label="Resources"');
+	expect(source).toContain("<ResourcesDock");
+	expect(source).toContain("<ResourcesInspector");
 	expect(source).toContain("if (!resources.knownUnsupported) return;");
-	expect(source).toContain("setCommandDetail(null);");
-	expect(source).toContain("min-w-0 max-w-full truncate");
+	expect(source).toContain("resources.visible && !inspectorOpen ? (");
 });
 
-test("active rows preserve native statuses, action hooks and escaped source text; finished rows start collapsed", () => {
+test("the dock lists live rows oldest-first with escaped text, one inspect control and stop, and collapses past four", () => {
+	const empty = renderToStaticMarkup(<resources.ResourcesDock {...dockProps} />);
+	expect(empty).toBe("");
+
 	const html = renderToStaticMarkup(
-		<resources.ResourcesContent
-			{...props}
-			commands={[command, { ...command, id: "stopping", status: "stopping" }]}
-			subagents={[
-				{
-					childSessionId: "child",
-					parentSessionId: "chat",
-					task: "<b>Inspect</b>",
-					status: "queued",
-					createdAt: "now",
-				},
+		<resources.ResourcesDock
+			{...dockProps}
+			commands={[
+				{ ...command, id: "stopping", status: "stopping", startedAt: NOW - 6 * 60_000 },
+				command,
 			]}
-			finishedCommands={[{ ...command, id: "finished", status: "completed" }]}
+			subagents={[child]}
 		/>,
 	);
+	expect(html).toContain('data-testid="resources-dock"');
+	expect(html).not.toContain("data-collapsed");
+	expect(html.indexOf('data-resource-id="stopping"')).toBeLessThan(
+		html.indexOf('data-resource-id="build"'),
+	);
+	expect(html.indexOf('data-resource-id="build"')).toBeLessThan(
+		html.indexOf('data-resource-id="child"'),
+	);
+	expect(html).toMatch(
+		/data-testid="resource-inspect"[^>]*>[\s\S]*?Build &lt;script&gt;[\s\S]*?echo/,
+	);
 	expect(html).toContain('data-status="running"');
-	expect(html).toContain('data-status="stopping"');
-	expect(html).toContain('data-status="queued"');
-	expect(html).toContain('data-resource-id="child"');
-	expect(html).toContain('data-testid="resource-logs"');
-	expect(html).toContain('data-testid="resource-transcript"');
-	expect(html).toContain("Stop all subagents");
-	expect(html).toContain("Finished · 1");
-	expect(html).not.toContain('data-resource-id="finished"');
+	expect(html).toContain('data-state="working"');
+	expect(html).toContain("4 min");
+	expect(html).toContain('data-testid="resource-inspect"');
+	expect(html).toMatch(/data-testid="resource-stop"[^>]*disabled/);
+	expect(html).toContain("3 active");
 	expect(html).not.toContain("<img");
 	expect(html).not.toContain("<b>");
 	expect(html).toContain("&lt;script&gt;");
+
+	const many = renderToStaticMarkup(
+		<resources.ResourcesDock
+			{...dockProps}
+			commands={[1, 2, 3, 4, 5].map((n) => ({ ...command, id: `c${n}` }))}
+		/>,
+	);
+	expect(many).toContain('data-collapsed="true"');
+	expect(many).not.toContain('data-resource-id="c1"');
+	expect(many).toContain("5 active");
+	expect(many).toContain('aria-expanded="false"');
+
+	const stale = renderToStaticMarkup(
+		<resources.ResourcesDock {...dockProps} commands={[command]} authoritative={false} />,
+	);
+	expect(stale).toMatch(/data-testid="resource-stop"[^>]*disabled/);
+	expect(stale).toContain("reconnecting");
 });
 
-test("stale snapshots disable control authority and failures remain by their action with role alert", () => {
+test("the inspector renders a listbox of options whose accessible names carry the activity, selects the first live row, and keeps Stop beside the option", () => {
 	const html = renderToStaticMarkup(
-		<resources.ResourcesContent
-			{...props}
+		<resources.ResourcesInspector
+			{...inspectorProps}
 			commands={[command]}
+			subagents={[child]}
+			finishedCommands={[
+				{ ...command, id: "finished", status: "completed", finishedAt: NOW - 60_000, exitCode: 1 },
+			]}
+			finishedSubagents={[{ ...child, status: "aborted", abortReason: "Stopped by user" }]}
+		/>,
+	);
+	expect(html).toContain('data-testid="resources-inspector"');
+	expect(html).toContain('role="listbox"');
+	expect(html).toContain('data-testid="resources-active"');
+	expect(html).toContain('data-testid="resources-finished"');
+	expect(html).toMatch(/data-resource-id="build"[^>]*data-selected="true"/);
+	expect(html).not.toMatch(/data-resource-id="child"[^>]*data-selected="true"/);
+	expect(html).toContain('aria-selected="true"');
+	expect(html).toContain(
+		'aria-label="Build &lt;script&gt;: echo &#x27;&lt;img src=x onerror=bad()&gt;&#x27;, Running"',
+	);
+	expect(html).toContain('aria-label="scout: &lt;b&gt;Inspect&lt;/b&gt; the registry, Queued"');
+	expect(html.match(/&lt;b&gt;Inspect&lt;\/b&gt; the registry/g)?.length).toBeGreaterThanOrEqual(2);
+	const options = html.match(/<div role="option"[^>]*>(?:(?!<\/div>)[\s\S])*<\/div>/g) ?? [];
+	expect(options.length).toBe(4);
+	for (const option of options) expect(option).not.toContain("resource-stop");
+	expect(html.match(/data-testid="resource-stop"/g)?.length).toBe(2);
+	expect(html).toContain('data-testid="resource-detail-stop"');
+	expect(html).toContain('data-testid="detail-slot"');
+	expect(html).toContain('aria-label="Stop all subagents"');
+	expect(html).toContain("exit 1");
+	expect(html).toContain('data-state="failed"');
+	expect(html).toContain('data-state="stopped"');
+	expect(html).toContain("2 active");
+	expect(html).not.toContain("<img");
+	expect(html).not.toContain("<b>");
+});
+
+test("the inspector keeps the selected finished row, disables controls when stale, and surfaces failures with retry", () => {
+	const html = renderToStaticMarkup(
+		<resources.ResourcesInspector
+			{...inspectorProps}
+			commands={[command]}
+			finishedCommands={[{ ...command, id: "done", status: "completed", exitCode: 0 }]}
+			selectedId="done"
 			authoritative={false}
 			stale
 			error="Read failed"
 			actions={{ "command:build": { pending: false, error: "Stop failed" } }}
 		/>,
 	);
-	expect(html).toContain("Resources are stale.");
-	expect(html).toMatch(/data-testid="resource-stop" disabled/);
+	expect(html).toMatch(/data-resource-id="done"[^>]*data-selected="true"/);
+	expect(html).toContain("Snapshot is stale");
+	expect(html).toContain("reconnecting");
+	expect(html).toMatch(/data-testid="resource-stop"[^>]*disabled/);
+	expect(html).not.toContain('data-testid="resource-detail-stop"');
 	expect(html).toContain("Stop failed");
 	expect(html).toContain("Read failed");
 	expect(html).toContain('role="alert"');
 	expect(html).toContain('data-testid="resources-retry"');
+	expect(html).not.toContain('data-testid="resources-stop-all"');
+	expect(html).toContain("Done");
 });
 
 test("command logs distinguish loading, empty, retry, permanent unavailability, stale and truncated plain text", () => {

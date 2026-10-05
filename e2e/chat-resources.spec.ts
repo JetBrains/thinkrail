@@ -52,6 +52,7 @@ async function observeResourceWire(
 								task: "Focus fixture",
 								status: "completed",
 								createdAt: "2026-01-01T00:00:00.000Z",
+								durationMs: 7 * 60_000,
 							},
 						],
 					};
@@ -111,38 +112,46 @@ async function observeResourceWire(
 	};
 }
 
-test("empty Resources popover preserves keyboard focus and stays usable at phone width", async ({
+test("an empty Resources inspector keeps focus discipline, hides the dock and stays usable at phone width", async ({
 	page,
 }) => {
 	await openResourceChat(page);
 	const trigger = page.getByTestId("resources-trigger");
 	await expect(trigger).toHaveAttribute("data-active-count", "0");
 	await expect(trigger).toHaveAccessibleName("Resources, 0 active");
+	await expect(trigger).toHaveAttribute("aria-expanded", "false");
+	await expect(trigger).not.toHaveAttribute("data-live");
+	await expect(page.getByTestId("resources-dock")).toHaveCount(0);
 	await shot(page.getByTestId("chat-toolbar"), "chat-resources", "after-header");
 	await trigger.focus();
 	await page.keyboard.press("Enter");
-	const popover = page.getByTestId("resources-popover");
-	await expect(popover).toBeVisible();
-	await expect(popover.getByTestId("resources-commands")).toBeVisible();
-	await expect(popover.getByTestId("resources-subagents")).toBeVisible();
-	await expect(popover.getByText("No active commands.", { exact: true })).toBeVisible();
-	await expect(popover.getByText("No active subagents.", { exact: true })).toBeVisible();
-	const finished = popover.getByTestId("resources-finished-toggle");
-	await expect(finished).toHaveText("Finished · 0");
-	await expect(finished).toHaveAttribute("aria-expanded", "false");
-	await expect(popover.getByTestId("resource-stop")).toHaveCount(0);
-	await expect(popover.getByTestId("resources-stop-all")).toHaveCount(0);
-	await shot(popover, "chat-resources", "empty-popover");
+	const inspector = page.getByTestId("resources-inspector");
+	await expect(inspector).toBeVisible();
+	await expect(trigger).toHaveAttribute("aria-expanded", "true");
+	await expect(inspector.getByTestId("resources-active")).toBeVisible();
+	await expect(inspector.getByTestId("resources-finished")).toBeVisible();
+	await expect(
+		inspector.getByText("Nothing is running in the background.", { exact: true }),
+	).toBeVisible();
+	await expect(inspector.getByText("No finished resources yet.", { exact: true })).toBeVisible();
+	await expect(inspector.getByText("Nothing to inspect yet.", { exact: true })).toBeVisible();
+	await expect(inspector.getByTestId("resource-stop")).toHaveCount(0);
+	await expect(inspector.getByTestId("resources-stop-all")).toHaveCount(0);
+	await expect(page.getByTestId("chat-input")).toBeVisible();
+	await shot(inspector, "chat-resources", "empty-inspector");
+	await page.getByTestId("chat-input").click();
+	await expect(inspector).toBeVisible();
 	await page.keyboard.press("Escape");
-	await expect(popover).not.toBeVisible();
+	await expect(inspector).toHaveCount(0);
 	await expect(trigger).toBeFocused();
 
 	await page.setViewportSize({ width: 390, height: 844 });
 	await expect(trigger).toBeInViewport({ ratio: 1 });
 	await trigger.click();
-	await expect(popover).toBeInViewport({ ratio: 1 });
-	await shot(page, "chat-resources", "mobile-popover");
-	await page.keyboard.press("Escape");
+	await expect(inspector).toBeInViewport({ ratio: 1 });
+	await shot(page, "chat-resources", "mobile-inspector");
+	await inspector.getByTestId("resources-inspector-close").click();
+	await expect(inspector).toHaveCount(0);
 	await expect(trigger).toBeFocused();
 });
 
@@ -177,7 +186,7 @@ test("an older host hides Resources without issuing unsupported resource reads",
 	expect(wire.reads).toBe(0);
 });
 
-test("an older welcome retires a Resources transcript and returns focus to the composer", async ({
+test("an older welcome retires the inspector with its transcript and returns focus to the composer", async ({
 	page,
 }) => {
 	const childSessionId = "resource-focus-child";
@@ -185,14 +194,16 @@ test("an older welcome retires a Resources transcript and returns focus to the c
 	await openResourceChat(page);
 	const trigger = page.getByTestId("resources-trigger");
 	await trigger.click();
-	const popover = page.getByTestId("resources-popover");
-	await popover.getByTestId("resources-finished-toggle").click();
-	const transcriptLink = popover.getByTestId("resource-transcript");
-	await transcriptLink.focus();
-	await page.keyboard.press("Enter");
-	await expect(popover).not.toBeVisible();
-	const dialog = page.getByTestId("subagent-transcript-dialog");
-	await expect(dialog).toContainText("FOCUS_CHILD");
+	const inspector = page.getByTestId("resources-inspector");
+	await expect(inspector).toBeVisible();
+	const row = inspector.getByTestId("resource-subagent");
+	await expect(row).toHaveAttribute("data-resource-id", childSessionId);
+	await expect(row).toHaveAttribute("data-selected", "true");
+	await expect(row.getByRole("option")).toHaveAttribute("aria-selected", "true");
+	await expect(row.getByRole("option")).toHaveAccessibleName(/Focus fixture, Done/);
+	await expect(row.getByRole("option")).toContainText("7 min");
+	await expect(inspector.getByTestId("resources-inspector-detail")).toContainText("Duration7 min");
+	await expect(inspector.getByTestId("subagent-transcript")).toContainText("FOCUS_CHILD");
 	expect(wire.transcriptRequests).toEqual([
 		{
 			workspaceId: wire.resourceScope?.workspaceId,
@@ -200,9 +211,8 @@ test("an older welcome retires a Resources transcript and returns focus to the c
 			childSessionId,
 		},
 	]);
-	const close = dialog.getByRole("button", { name: "Close", exact: true });
-	await close.focus();
-	await expect(close).toBeFocused();
+	await row.getByRole("option").focus();
+	await expect(row.getByRole("option")).toBeFocused();
 
 	const initialWelcomes = wire.welcomes;
 	wire.setProtocolVersion(CHAT_RESOURCES_PROTOCOL_VERSION - 1);
@@ -210,6 +220,6 @@ test("an older welcome retires a Resources transcript and returns focus to the c
 	await expect.poll(() => wire.welcomes).toBeGreaterThan(initialWelcomes);
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await expect(trigger).toHaveCount(0);
-	await expect(dialog).toHaveCount(0);
+	await expect(inspector).toHaveCount(0);
 	await expect(page.getByTestId("chat-input")).toBeFocused();
 });

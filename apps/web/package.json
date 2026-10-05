@@ -6,6 +6,7 @@
 	"scripts": {
 		"dev": "vite",
 		"build": "bun run typography:check && bun run colors:check && bun run spacing:check && bun run provider-glyphs:check && tsc --noEmit && vite build",
+		"build:profile": "vite build --mode profile",
 		"typecheck": "tsc --noEmit",
 		"test": "bun test",
 		"preview": "vite preview",
@@ -17,7 +18,8 @@
 		"spacing:generate": "bun scripts/generate-spacing.ts",
 		"spacing:check": "bun scripts/generate-spacing.ts --check",
 		"provider-glyphs:generate": "bun scripts/generate-provider-glyphs.ts",
-		"provider-glyphs:check": "bun scripts/generate-provider-glyphs.ts --check"
+		"provider-glyphs:check": "bun scripts/generate-provider-glyphs.ts --check",
+		"compiler:census": "bun scripts/compiler-census.ts"
 	},
 	"dependencies": {
 		"@dnd-kit/core": "6.3.1",
@@ -67,6 +69,7 @@
 		"@lobehub/icons-static-svg": "1.95.1",
 		"@rolldown/plugin-babel": "0.2.4",
 		"@tailwindcss/vite": "catalog:",
+		"@types/babel__core": "7.20.5",
 		"@types/bun": "catalog:",
 		"@types/react": "catalog:",
 		"@types/react-dom": "catalog:",

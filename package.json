@@ -69,6 +69,7 @@
 		"e2e:agent:headed": "bun --preload ./e2e/idleSleepPreload.ts e2e/run-agent.ts --headed",
 		"e2e:headed": "bun --preload ./e2e/idleSleepPreload.ts e2e/run.ts --headed",
 		"e2e:ui": "bun --preload ./e2e/idleSleepPreload.ts e2e/run.ts --ui",
+		"perf:render": "bun --preload ./e2e/idleSleepPreload.ts e2e/perf/run.ts",
 		"check:deps": "bun scripts/check-catalog.ts",
 		"check:boundaries": "bun test scripts/checkModuleBoundaries.test.ts && bun scripts/check-module-boundaries.ts",
 		"check:seams": "bun scripts/check-binary-seams.ts",

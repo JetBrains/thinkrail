@@ -208,8 +208,27 @@ The agent conversation, rendered inside a Chat tab in the Center Tabbed Area.
     slot; opens the **Plan Popover** (`ChatPlanContent`) over the chat.
   - **Status Entries** — inline muted `statusEntries` text (extension status).
   - **Session Stats Bar** — `chat/SessionStatsBar.tsx` → `SessionStatsBar` (token/cost stats).
+  - **Resources Trigger** — `chat/resources/ResourcesButton.tsx` → `ResourcesButton`
+    (`data-testid="resources-trigger"`); the live-resource count (or `—` while the count is not
+    authoritative), breathing while anything is live; toggles the **Resources Inspector**.
   - **Skills Button** — `chat/SkillsButton.tsx` → `SkillsButton` (`data-testid="open-skills"`); opens the
     **Skills Dialog** (`chat/SkillsDialog.tsx` → `SkillsDialog`).
+
+## Resources
+
+The current chat's background commands and subagents, rendered through one row grammar on three
+surfaces owned by `chat/resources/`.
+
+| Canonical name | Implementation | `data-testid` | Responsibility |
+|---|---|---|---|
+| Resources Trigger | `resources/ResourcesButton.tsx` → `ResourcesButton` | `resources-trigger` (`data-active-count`) | Header toggle for the inspector; live count |
+| Resources Dock | `resources/ResourcesDock.tsx` → `ResourcesDock` | `resources-dock` (`resources-dock-toggle`) | Live rows above the Composer; hidden while the inspector is open; collapses past four rows |
+| Resources Inspector | `resources/ResourcesInspector.tsx` → `ResourcesInspector` | `resources-inspector` | Non-modal in-place dialog over the Message List: roster (Active / Finished) + detail of the selected row |
+| Resource Row | shared row inside dock and inspector | `resource-command` / `resource-subagent` (`data-resource-id`, `data-status`, `data-state`) | One command or subagent: glyph · name · activity · state · elapsed. In the dock the name and activity are one Inspect button (`resource-inspect`); in the inspector the row wrapper (`data-selected`) holds a listbox option (name · state · elapsed over a truncated activity line; accessible name `name: activity, state`) and its sibling Stop. Stop appears on hover and focus (`resource-stop`) |
+| Command Log View | `resources/CommandLogView.tsx` → `CommandLogView` | `command-log-output` / `command-log-unavailable` | Bounded plain-text output; the inspector's detail body for a command |
+| Subagent Transcript Pane | `chat/SubagentTranscriptDialog.tsx` → `SubagentTranscriptPane` | `subagent-transcript` | Read-only child transcript; the inspector's detail body for a subagent (and the body of the Subagent Transcript Dialog) |
+| Stop-All Action | roster header in the inspector | `resources-stop-all` → `resources-stop-all-confirm` | Stops this chat's active subagents after a confirmation naming the count |
+| Still-Running Chip | `TurnDivider` in `chat/turns.tsx` | `turn-divider-running` | "N still running" on the latest turn divider; opens the inspector |
 
 ## Message List
 
@@ -443,7 +462,8 @@ App-level dialog/popover instances built on those primitives:
   are still the **Dropdown Menu** primitive plus a shared right-click handler — call that one the
   "Row Actions Menu". Both wear the same look via `components/ui/menu-styles.ts`.
 - **Drawer** — there is **no drawer** primitive or component. The mobile single-view shell is designed
-  but not built; do not use "Drawer" for any current region.
+  but not built; do not use "Drawer" for any current region. The **Resources Inspector** is an in-place
+  non-modal **Dialog** (`DialogPanel`), not a drawer.
 - **Toolbar** — there is no `Toolbar` component; the slim per-panel control rows (Changes Header, the
   Diff Pane header, the view toggles) are inline. Use **Panel Header** / **Panel Toolbar** descriptively,
   not as component names.
@@ -495,7 +515,9 @@ its alternatives in parentheses.
 **Chat**
 
 - **Chat View** — the whole conversation surface.
-- **Chat Header** — its top bar. **Plan Strip**, **Session Stats Bar**, **Skills Button**.
+- **Chat Header** — its top bar. **Plan Strip**, **Session Stats Bar**, **Resources Trigger**, **Skills Button**.
+- **Resources** — **Resources Trigger**, **Resources Dock**, **Resources Inspector**, **Resource Row**,
+  **Command Log View**, **Subagent Transcript Pane**, **Stop-All Action**, **Still-Running Chip**.
 - **Message List** (alt: Transcript). Units: **Turn** (pi message), **Row** (derived render unit).
 - Row renderers: **User Message**, **Assistant Markdown**, **System Notice**, **Error Turn**,
   **Retry Indicator**, **Tool Card**, **Activity Group**, **Turn Divider** (with **Artifact Chip** /

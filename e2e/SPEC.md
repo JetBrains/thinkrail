@@ -87,19 +87,44 @@ Its wire connection uses the launched page's port, not the source host's fixed p
 packaged-desktop adapters launch different endpoints for the same test.
 Historical fixtures are seeded before entering their workspace, so discovery does not race a just-created
 placement's persistence during browser reload. It never seeds a running resource or turns transcript
-text into execution authority. The empty-catalog UI probes cover keyboard focus, narrow layouts,
-welcome/reconnect hydration and old-host capability hiding using real responses; the old-host probe
-changes only the advertised protocol version. The transcript-retirement focus probe supplies a completed
-child and persisted-form transcript at the wire seam, then downgrades the next welcome; the UI, reconnect,
-capability retirement and Radix focus teardown remain real. This terminal-only fixture is not evidence of
+text into execution authority. The empty-catalog UI probes cover the inspector's keyboard focus and
+focus return, the absent dock, narrow layouts, welcome/reconnect hydration and old-host capability hiding
+using real responses; the old-host probe changes only the advertised protocol version. The
+retirement focus probe supplies a completed child and persisted-form transcript at the wire seam, selects
+it in the inspector, then downgrades the next welcome; the UI, reconnect, capability retirement and Radix
+focus teardown remain real. This terminal-only fixture is not evidence of
 agent resource execution. Tagged provider-backed probes launch real commands and
-children through agent tools, inspect bounded plain-text logs/transcripts, verify chat isolation,
-reload and closed-popover completion, and exercise individual Stop and confirmed Stop all. They never
+children through agent tools, inspect bounded plain-text logs/transcripts in the inspector, verify chat
+isolation, reload and closed-inspector completion, and exercise individual Stop and confirmed Stop all. They never
 select a model or seed a running-resource catalog. SDK faux-provider unit tests are not evidence of
 browser agent execution.
 
 Native wheel probes target the actual transcript viewport again after clicking a floating Latest
 button; a pointer left at a removed overlay is not evidence of a gesture delivered to the scroller.
+
+## Render profiling harness
+
+`bun run perf:render [--runs N] [--out file] [playwright args]` is an opt-in measurement run, never a
+gate. It builds `apps/web/dist-profile` (see [[module-web]]), boots the ordinary isolated host on it through
+`playwright.perf.config.ts`, and runs `e2e/perf/*.perf.ts` — a pattern the default config does not match.
+It shares the worktree's serial lane state, so it never overlaps another E2E run in the same worktree.
+Defaults: 5 runs, output `$TMPDIR/thinkrail-render-profile.json`.
+
+- **Collection.** An init script installs a minimal `__REACT_DEVTOOLS_GLOBAL_HOOK__` before React loads,
+  which puts the root in profile mode. Each commit walks the fiber tree DevTools-style (descend only into
+  re-rendered subtrees) and records, per component name, commits, self time (`selfBaseDuration`) and
+  inclusive time (`actualDuration`, not double-counted for nested same-name instances). Unnamed components
+  are labelled by their nearest named owner. Hooks report under their host component.
+- **Timer precision.** The harness adds COOP/COEP headers to documents and scripts through `page.route` so
+  the page is cross-origin isolated (5 µs timers, not 100 µs); the measurement browser disables Chromium's
+  local-network-access check, which otherwise blocks the WS from a fulfilled document. A run fails if the
+  page is not isolated, or if no profiled commit with nonzero duration was recorded since load, which means
+  the host serves `dist/` instead of `dist-profile/`.
+- **Scenarios.** Chat streaming seeds a persisted transcript and replays a deterministic Pi event stream
+  (`text_delta` chunks, tool calls, `partialResult` updates, `agent_settled`) into the browser at the
+  wire seam with fixed pacing; this measures client rendering only and is not evidence of agent behavior.
+  Live file edits rewrite a worktree file under an open file tab. Large diff opens a 3,000-line Pierre diff
+  and wheel-scrolls it. Runs interleave scenarios; the runner reports medians and run-to-run spread.
 
 ## Desktop-backed mode
 

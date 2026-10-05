@@ -48,6 +48,21 @@ function DialogContent({
 	);
 }
 
+function DialogPanel({
+	className,
+	...props
+}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+	return (
+		<DialogPrimitive.Content
+			className={cn(
+				"flex flex-col border-border-default bg-container-elevated-bg text-text-default outline-none",
+				className,
+			)}
+			{...props}
+		/>
+	);
+}
+
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
 	return <div className={cn("flex flex-col gap-4", className)} {...props} />;
 }
@@ -89,6 +104,7 @@ export {
 	DialogDescription,
 	DialogFooter,
 	DialogHeader,
+	DialogPanel,
 	DialogTitle,
 	DialogTrigger,
 };

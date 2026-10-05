@@ -670,6 +670,7 @@ test("user stop of a detached Agent child does not wake its idle parent", async 
 		await promptSession(p.sessionId, "Delegate in the background.");
 		const child = (await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents[0];
 		if (!child) throw new Error("missing child");
+		expect(child).not.toHaveProperty("durationMs");
 		const stopping = stopSubagent(p.workspaceId, p.sessionId, child.childSessionId, p.cwd);
 		let acknowledged = false;
 		void stopping.then(() => {
@@ -687,7 +688,7 @@ test("user stop of a detached Agent child does not wake its idle parent", async 
 		expect(starts).toBe(1);
 		expect(
 			(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents[0],
-		).toMatchObject({ status: "aborted", abortReason: "user" });
+		).toMatchObject({ status: "aborted", abortReason: "user", durationMs: expect.any(Number) });
 	} finally {
 		gate.resolve();
 		setSessionPublisher(() => {});
@@ -1112,7 +1113,7 @@ test.each([
 		expect(await subagentCompletions(p)).toHaveLength(1);
 		expect(job.completionTurns()).toBe(1);
 		expect((await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents).toMatchObject([
-			{ childSessionId: job.child.sessionId, status: "completed" },
+			{ childSessionId: job.child.sessionId, status: "completed", durationMs: expect.any(Number) },
 		]);
 	} finally {
 		resume.resolve();

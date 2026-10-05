@@ -16,7 +16,9 @@ The shadcn/ui primitives (Radix), copied in and owned here, themed with our desi
 - **Owns:** `button` (React-19 ref pass-through; `default`/`destructive`/`outline`/`ghost` variants —
   `destructive` is the red confirm for irreversible actions), `switch` (native-disabled track/thumb control;
   state is exposed by `role="switch"` + `aria-checked`, never visible On/Off text), `dialog` (with an optional `hideClose` for
-  chromeless dialogs), `dropdown-menu`, `context-menu` (sharing private `menu-styles` geometry/token
+  chromeless dialogs, plus `DialogPanel`: the same Radix content rendered **in place** — no portal, no
+  overlay, meant for a non-modal `Dialog` whose caller positions it inside a region; it keeps Radix's
+  title/role semantics, `Esc` and focus return while the surrounding UI stays interactive), `dropdown-menu`, `context-menu` (sharing private `menu-styles` geometry/token
   classes), `popover` (with an optional `container` portal target — pass the host Dialog node so a popover
   inside a
   Dialog stays wheel-scrollable under its scroll lock), `command` (cmdk combobox body), `textarea`,
