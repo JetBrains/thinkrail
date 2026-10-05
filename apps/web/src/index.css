@@ -97,7 +97,7 @@
 		}
 	}
 
-	/* Toasts slide up in / down out of the bottom viewport (referenced by `components/ui/toast`). */
+	/* Toasts slide up in / down out of the bottom viewport (referenced by `@thinkrail/ui/toast`). */
 	@keyframes toast-in {
 		from {
 			opacity: 0;

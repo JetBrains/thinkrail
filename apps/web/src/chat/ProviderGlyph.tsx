@@ -1,4 +1,4 @@
-import { cn } from "@/lib";
+import { cn } from "@thinkrail/ui/utils";
 import { PROVIDER_GLYPHS } from "./generated/providerGlyphs";
 
 /** A vendor mark for a pi provider id; providers without a known mark get a monogram. */

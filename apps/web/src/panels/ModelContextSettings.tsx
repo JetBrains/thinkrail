@@ -8,8 +8,8 @@ import {
 	type ModelContextTarget,
 	type WsMethodMap,
 } from "@thinkrail/contracts";
+import { Button } from "@thinkrail/ui/button";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 
