@@ -17,6 +17,7 @@ import {
 	type Workspace,
 } from "@thinkrail/contracts";
 import {
+	compactAge,
 	isAbsolutePath,
 	type LayoutAttention,
 	layoutResourceIdentity,
@@ -230,6 +231,29 @@ export type SettledReason =
 	| { kind: "override" }
 	| { kind: "review"; state: "merged" | "closed" }
 	| { kind: "idle"; since: number };
+
+/** The chip text — short enough for a 230px rail; `settledReasonTitle` carries the long form. */
+export function settledReasonLabel(reason: SettledReason, now: number): string {
+	switch (reason.kind) {
+		case "override":
+			return "by you";
+		case "review":
+			return reason.state;
+		case "idle":
+			return `idle ${compactAge(reason.since, now)}`;
+	}
+}
+
+export function settledReasonTitle(reason: SettledReason, now: number): string {
+	switch (reason.kind) {
+		case "override":
+			return "Settled by you";
+		case "review":
+			return reason.state === "merged" ? "Pull request merged" : "Pull request closed";
+		case "idle":
+			return `Idle for ${compactAge(reason.since, now)}`;
+	}
+}
 
 export interface SettledRow {
 	workspace: Workspace;

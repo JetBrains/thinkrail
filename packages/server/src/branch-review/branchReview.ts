@@ -70,8 +70,11 @@ function remoteHost(remoteUrl: string): string | null {
 	return /^(?:[^@/:\s]+@)?([^/:\s]+):/.exec(remoteUrl)?.[1]?.toLowerCase() ?? null;
 }
 
+/** `reliable` = the provider answered (a `null` then truly means "no review"); unreliable nulls are failures. */
+export type BranchReviewOutcome = { value: OpenBranchReview | null; reliable: boolean };
+
 const cached = new Map<string, { at: number; value: OpenBranchReview | null }>();
-const inFlight = new Map<string, Promise<OpenBranchReview | null>>();
+const inFlight = new Map<string, Promise<BranchReviewOutcome>>();
 
 const cacheKey = (cwd: string, branch: string) => `${cwd}\u0000${branch}`;
 
@@ -81,6 +84,14 @@ export function findOpenBranchReview(
 	options: { fresh?: boolean } = {},
 ): Promise<OpenBranchReview | null> {
 	return findOpenBranchReviewWithRunner(cwd, branch, runProviderCommand, options);
+}
+
+export function findBranchReviewOutcome(
+	cwd: string,
+	branch: string,
+	options: { fresh?: boolean } = {},
+): Promise<BranchReviewOutcome> {
+	return findBranchReviewOutcomeWithRunner(cwd, branch, runProviderCommand, options);
 }
 
 export function forgetOpenBranchReview(cwd: string): void {
@@ -102,6 +113,17 @@ export function findOpenBranchReviewWithRunner(
 	run: CommandRunner,
 	options: LookupOptions = {},
 ): Promise<OpenBranchReview | null> {
+	return findBranchReviewOutcomeWithRunner(cwd, branch, run, options).then(
+		(outcome) => outcome.value,
+	);
+}
+
+export function findBranchReviewOutcomeWithRunner(
+	cwd: string,
+	branch: string,
+	run: CommandRunner,
+	options: LookupOptions = {},
+): Promise<BranchReviewOutcome> {
 	const now = options.now ?? Date.now;
 	const key = cacheKey(cwd, branch);
 	pruneCached(now());
@@ -109,19 +131,19 @@ export function findOpenBranchReviewWithRunner(
 	if (running) return running;
 	if (!options.fresh) {
 		const hit = cached.get(key);
-		if (hit) return Promise.resolve(hit.value);
+		if (hit) return Promise.resolve({ value: hit.value, reliable: true });
 	} else {
 		cached.delete(key);
 	}
-	const lookup: Promise<OpenBranchReview | null> = lookupOpenBranchReview(cwd, branch, run).then(
+	const lookup: Promise<BranchReviewOutcome> = lookupOpenBranchReview(cwd, branch, run).then(
 		(result) => {
 			if (inFlight.get(key) !== lookup) {
-				return findOpenBranchReviewWithRunner(cwd, branch, run, { now });
+				return findBranchReviewOutcomeWithRunner(cwd, branch, run, { now });
 			}
 			inFlight.delete(key);
 			if (result.cacheable) cached.set(key, { at: now(), value: result.value });
 			else cached.delete(key);
-			return result.value;
+			return { value: result.value, reliable: result.cacheable };
 		},
 	);
 	inFlight.set(key, lookup);

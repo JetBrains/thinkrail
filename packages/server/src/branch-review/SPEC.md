@@ -28,7 +28,10 @@ contracts spec pins `state` to `WORKSPACE_SETTLE_PROTOCOL_VERSION`.
   `PR #N` chip is a link only when a url is known, and before this the url existed ONLY in the session that
   had just run `pr.open` — every reload, second window, and reconnect rendered the number as dead text. A
   row whose url is absent or not `https:` yields a review with no url rather than a bad link.
-- **Public surface:** `findOpenBranchReview(cwd, branch, { fresh? })`, `forgetOpenBranchReview(cwd)`; plus the read primitives the `pr` action module reuses — `providerFromRemoteUrl`, `reviewNumber`, and `runProviderCommand` (the bounded prompt-disabled CLI runner).
+- **Public surface:** `findOpenBranchReview(cwd, branch, { fresh? })`, its sibling
+  `findBranchReviewOutcome` (the same lookup returning `{ value, reliable }` — `reliable` is the cacheable
+  bit surfaced, so a host that *persists* the answer can tell "the provider says there is no review" from
+  "the provider did not answer" and keep its last-known snapshot through a `gh` outage), `forgetOpenBranchReview(cwd)`; plus the read primitives the `pr` action module reuses — `providerFromRemoteUrl`, `reviewNumber`, and `runProviderCommand` (the bounded prompt-disabled CLI runner).
 - **Successful answers are cached per `(worktree, branch)` for 60 seconds from settlement and lookups are
   single-flighted.** A syntactically valid empty provider response is a successful `null` and is cached —
   "no PR" is the common case and the expensive one to re-derive. A provider-CLI failure, failed mandatory

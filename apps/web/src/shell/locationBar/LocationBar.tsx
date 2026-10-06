@@ -14,6 +14,7 @@ export function LocationBar({
 	review: OpenBranchReview | null;
 	onNewWorkspace: () => void;
 }) {
+	const shownReview = review ?? workspace?.review ?? null;
 	return (
 		<div
 			data-testid="scope-context"
@@ -22,8 +23,8 @@ export function LocationBar({
 		>
 			<ProjectSegment project={project} atHome={workspace === null} />
 			<WorkspaceSegment project={project} workspace={workspace} onNewWorkspace={onNewWorkspace} />
-			{workspace ? <BranchSegment workspace={workspace} review={review} /> : null}
-			{workspace && review ? <ReviewSegment review={review} /> : null}
+			{workspace ? <BranchSegment workspace={workspace} review={shownReview} /> : null}
+			{workspace && shownReview ? <ReviewSegment review={shownReview} /> : null}
 		</div>
 	);
 }

@@ -90,5 +90,8 @@ branch. It renders what the store and `workspace.openReview` already report; it 
   **PULL REQUEST** is the `openReviewLabel` chip — success while the review is open, **info** reading
   *Merged #N* and **neutral** reading *Closed #N* once `OpenBranchReview.state` says so (a pre-v78 host
   omits `state` and the chip stays the open form) — a link when the provider reported a URL. REMOTE chips
-  render only for an open review; divergence against a merged branch is noise. There is deliberately no "Open PR…" affordance: `pr.open` is a plan-session action and
+  render only for an open review; divergence against a merged branch is noise. The strip renders the
+  fresh `workspace.openReview` answer when it has one (that is the copy carrying divergence counts) and
+  otherwise the record's host-kept `workspace.review` snapshot, so a `gh` hiccup never blanks a chip the
+  shelf is still acting on — the two surfaces read the same fact. There is deliberately no "Open PR…" affordance: `pr.open` is a plan-session action and
   stays on the plan pane.

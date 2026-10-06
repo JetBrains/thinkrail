@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	detectReviewProvider,
+	findBranchReviewOutcomeWithRunner,
 	findOpenBranchReviewWithRunner,
 	forgetOpenBranchReview,
 	OPEN_BRANCH_REVIEW_CACHE_TTL_MS,
@@ -418,4 +419,18 @@ test("a GitLab row's web_url is the same url, and a row with none stays a plain 
 		kind: "pull-request",
 		number: 7,
 	});
+});
+
+test("the outcome form tells a provider's 'no review' apart from a failed lookup", async () => {
+	const cwd = repo("git@github.com:acme/app.git");
+	const empty = await findBranchReviewOutcomeWithRunner(cwd, "feature", async () => ({
+		ok: true,
+		out: "[]",
+	}));
+	expect(empty).toEqual({ value: null, reliable: true });
+	const failed = await findBranchReviewOutcomeWithRunner(cwd, "other", async () => ({
+		ok: false,
+		out: "",
+	}));
+	expect(failed).toEqual({ value: null, reliable: false });
 });

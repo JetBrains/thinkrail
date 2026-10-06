@@ -43,17 +43,10 @@ import {
 } from "@thinkrail/ui/dropdown-menu";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
-import {
-	type MouseEvent,
-	type ReactNode,
-	useCallback,
-	useEffect,
-	useRef,
-	useState,
-} from "react";
+import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
-import { compactAge, copyText, platformShortcutLabel } from "@/lib";
+import { copyText, platformShortcutLabel } from "@/lib";
 import { LoadingRegion } from "../components/Skeleton";
 import {
 	isDefaultWorkspace,
@@ -67,6 +60,8 @@ import {
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
 	selectWorkspacePartition,
+	settledReasonLabel,
+	settledReasonTitle,
 	toast,
 	useAppStore,
 	type WorkspaceSort,
@@ -109,17 +104,6 @@ function useMinuteTick(): number {
 		return () => clearInterval(timer);
 	}, []);
 	return now;
-}
-
-export function settledReasonLabel(reason: SettledReason, now: number): string {
-	switch (reason.kind) {
-		case "override":
-			return "settled by you";
-		case "review":
-			return reason.state;
-		case "idle":
-			return `idle ${compactAge(reason.since, now)}`;
-	}
 }
 
 export function ProjectTree() {
@@ -812,6 +796,7 @@ function WorkspaceRow({
 		<span
 			data-testid="workspace-settled-reason"
 			data-reason={settled.kind}
+			title={settledReasonTitle(settled, now)}
 			className={cn(
 				"shrink-0 rounded-full border px-4 tr-text-caption",
 				settled.kind === "review" && settled.state === "merged"
@@ -863,7 +848,7 @@ function WorkspaceRow({
 				data-running={isRunning || undefined}
 				onContextMenu={openMenuFromContext}
 				className={cn(
-					"group flex min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border-0 pr-4 pl-24 transition-colors",
+					"group relative flex min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border-0 pr-4 pl-24 transition-colors",
 					isSettled ? "min-h-24 py-2" : "min-h-28 py-4",
 					isActive || menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered",
 				)}
@@ -902,94 +887,106 @@ function WorkspaceRow({
 				)}
 				{reasonChip}
 				{needsAttention ? <AttentionDot /> : null}
-				{hoverAction}
-				<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-					<DropdownMenuTrigger
-						data-testid="workspace-menu"
-						aria-label={`Actions for ${workspace.name}`}
-						className={HOVER_CONTROL_CLASS}
-					>
-						<MoreVertical className="size-14" />
-					</DropdownMenuTrigger>
-					<DropdownMenuContent
-						align="end"
-						data-testid="workspace-actions"
-						onCloseAutoFocus={onMenuCloseAutoFocus}
-					>
-						{editors.length > 0 && (
-							<DropdownMenuSub>
-								<DropdownMenuSubTrigger data-testid="workspace-open-in">
-									<ExternalLink />
-									Open in
-								</DropdownMenuSubTrigger>
-								<DropdownMenuSubContent>
-									{editors.map((editor) => (
-										<DropdownMenuItem
-											key={editor.id}
-											data-testid="workspace-open-in-editor"
-											onSelect={() => onOpenIn(editor)}
-										>
-											{editor.label}
-										</DropdownMenuItem>
-									))}
-								</DropdownMenuSubContent>
-							</DropdownMenuSub>
-						)}
-						{canRename ? (
-							<DropdownMenuItem data-testid="workspace-rename" onSelect={startRename}>
-								<Pencil />
-								Rename
-							</DropdownMenuItem>
-						) : null}
-						<DropdownMenuItem data-testid="workspace-copy-path" onSelect={onCopyPath}>
-							<Copy />
-							Copy path
-						</DropdownMenuItem>
-						<DropdownMenuItem data-testid="workspace-reveal" onSelect={onReveal}>
-							<FolderOpen />
-							Reveal in file manager
-						</DropdownMenuItem>
-						{canSettle ? (
-							<>
-								<DropdownMenuSeparator />
-								{isSettled ? (
-									<DropdownMenuItem
-										data-testid="workspace-menu-keep-active"
-										onSelect={onKeepActive}
-									>
-										<ArrowGoBack />
-										Keep active
-									</DropdownMenuItem>
-								) : (
-									<DropdownMenuItem
-										data-testid="workspace-menu-settle"
-										disabled={settleBlocked}
-										onSelect={onSettle}
-									>
-										<Check />
-										Settle
-									</DropdownMenuItem>
-								)}
-							</>
-						) : null}
-						{!isDefault && (
-							<>
-								<DropdownMenuSeparator />
-								<DropdownMenuItem
-									data-testid="workspace-remove"
-									className="text-feedback-error focus:bg-feedback-error-subtle [&_svg]:text-feedback-error"
-									onSelect={(event) => {
-										event.preventDefault();
-										setConfirmOpen(true);
-									}}
-								>
-									<Trash2 />
-									{isExternal ? "Remove from ThinkRail" : "Remove workspace"}
+				<span
+					className={cn(
+						"flex shrink-0 items-center gap-4",
+						isSettled &&
+							"[@media(hover:hover)]:absolute [@media(hover:hover)]:top-1/2 [@media(hover:hover)]:right-4 [@media(hover:hover)]:-translate-y-1/2 [@media(hover:hover)]:rounded-[var(--radius-sm)] [@media(hover:hover)]:pl-4 [@media(hover:hover)]:group-hover:bg-control-bg-hovered",
+						isSettled &&
+							(isActive || menuOpen) &&
+							"[@media(hover:hover)]:group-hover:bg-control-bg-selected",
+						isSettled && menuOpen && "[@media(hover:hover)]:bg-control-bg-selected",
+					)}
+				>
+					{hoverAction}
+					<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+						<DropdownMenuTrigger
+							data-testid="workspace-menu"
+							aria-label={`Actions for ${workspace.name}`}
+							className={HOVER_CONTROL_CLASS}
+						>
+							<MoreVertical className="size-14" />
+						</DropdownMenuTrigger>
+						<DropdownMenuContent
+							align="end"
+							data-testid="workspace-actions"
+							onCloseAutoFocus={onMenuCloseAutoFocus}
+						>
+							{editors.length > 0 && (
+								<DropdownMenuSub>
+									<DropdownMenuSubTrigger data-testid="workspace-open-in">
+										<ExternalLink />
+										Open in
+									</DropdownMenuSubTrigger>
+									<DropdownMenuSubContent>
+										{editors.map((editor) => (
+											<DropdownMenuItem
+												key={editor.id}
+												data-testid="workspace-open-in-editor"
+												onSelect={() => onOpenIn(editor)}
+											>
+												{editor.label}
+											</DropdownMenuItem>
+										))}
+									</DropdownMenuSubContent>
+								</DropdownMenuSub>
+							)}
+							{canRename ? (
+								<DropdownMenuItem data-testid="workspace-rename" onSelect={startRename}>
+									<Pencil />
+									Rename
 								</DropdownMenuItem>
-							</>
-						)}
-					</DropdownMenuContent>
-				</DropdownMenu>
+							) : null}
+							<DropdownMenuItem data-testid="workspace-copy-path" onSelect={onCopyPath}>
+								<Copy />
+								Copy path
+							</DropdownMenuItem>
+							<DropdownMenuItem data-testid="workspace-reveal" onSelect={onReveal}>
+								<FolderOpen />
+								Reveal in file manager
+							</DropdownMenuItem>
+							{canSettle ? (
+								<>
+									<DropdownMenuSeparator />
+									{isSettled ? (
+										<DropdownMenuItem
+											data-testid="workspace-menu-keep-active"
+											onSelect={onKeepActive}
+										>
+											<ArrowGoBack />
+											Keep active
+										</DropdownMenuItem>
+									) : (
+										<DropdownMenuItem
+											data-testid="workspace-menu-settle"
+											disabled={settleBlocked}
+											onSelect={onSettle}
+										>
+											<Check />
+											Settle
+										</DropdownMenuItem>
+									)}
+								</>
+							) : null}
+							{!isDefault && (
+								<>
+									<DropdownMenuSeparator />
+									<DropdownMenuItem
+										data-testid="workspace-remove"
+										className="text-feedback-error focus:bg-feedback-error-subtle [&_svg]:text-feedback-error"
+										onSelect={(event) => {
+											event.preventDefault();
+											setConfirmOpen(true);
+										}}
+									>
+										<Trash2 />
+										{isExternal ? "Remove from ThinkRail" : "Remove workspace"}
+									</DropdownMenuItem>
+								</>
+							)}
+						</DropdownMenuContent>
+					</DropdownMenu>
+				</span>
 			</fieldset>
 
 			{!isDefault && (

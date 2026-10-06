@@ -17,7 +17,14 @@ import { useBranchList } from "../../panels/branches";
 import { openReviewLabel } from "../../panels/useOpenBranchReview";
 import { isUserOwnedWorkspace, selectDiffBaseRef, toast, useAppStore } from "../../store";
 import { errorText, getTransport } from "../../transport";
-import { pluralCommits, remoteCounts } from "./locationModel";
+import {
+	pluralCommits,
+	remoteCounts,
+	reviewChipLabel,
+	reviewIsOpen,
+	reviewStateLabel,
+	reviewTone,
+} from "./locationModel";
 import { chipClass, PillChevron, pillClass, Segment } from "./Segment";
 
 function Row({
@@ -174,24 +181,26 @@ export function BranchSegment({
 				</Row>
 				{review ? (
 					<>
-						<Row label="Remote">
-							<span
-								data-testid="scope-remote-summary"
-								className={cn(
-									remote ? "text-text-default" : "text-text-muted",
-									"truncate tr-text-ui",
-								)}
-							>
-								{remote
-									? [
-											remote.unpushed > 0 ? `${pluralCommits(remote.unpushed)} to push` : null,
-											remote.behind > 0 ? `${pluralCommits(remote.behind)} behind origin` : null,
-										]
-											.filter(Boolean)
-											.join(" · ")
-									: "In sync with origin"}
-							</span>
-						</Row>
+						{reviewIsOpen(review) ? (
+							<Row label="Remote">
+								<span
+									data-testid="scope-remote-summary"
+									className={cn(
+										remote ? "text-text-default" : "text-text-muted",
+										"truncate tr-text-ui",
+									)}
+								>
+									{remote
+										? [
+												remote.unpushed > 0 ? `${pluralCommits(remote.unpushed)} to push` : null,
+												remote.behind > 0 ? `${pluralCommits(remote.behind)} behind origin` : null,
+											]
+												.filter(Boolean)
+												.join(" · ")
+										: "In sync with origin"}
+								</span>
+							</Row>
+						) : null}
 						<Row
 							label={review.kind === "pull-request" ? "Pull request" : "Merge request"}
 							action={
@@ -211,8 +220,20 @@ export function BranchSegment({
 								) : null
 							}
 						>
-							<PullRequest aria-hidden="true" className="size-14 shrink-0 text-feedback-success" />
-							<span className="truncate">{openReviewLabel(review)} · Open</span>
+							<PullRequest
+								aria-hidden="true"
+								className={cn(
+									"size-14 shrink-0",
+									reviewTone(review) === "success"
+										? "text-feedback-success"
+										: reviewTone(review) === "info"
+											? "text-feedback-info"
+											: "text-text-muted",
+								)}
+							/>
+							<span className="truncate" data-testid="scope-review-state">
+								{openReviewLabel(review)} · {reviewStateLabel(review)}
+							</span>
 						</Row>
 					</>
 				) : null}
@@ -222,7 +243,8 @@ export function BranchSegment({
 }
 
 export function ReviewSegment({ review }: { review: OpenBranchReview }) {
-	const label = openReviewLabel(review);
+	const label = reviewChipLabel(review);
+	const tone = reviewTone(review);
 	const chip = (
 		<>
 			<span aria-hidden="true" className="size-6 shrink-0 rounded-full bg-current" />
@@ -244,12 +266,18 @@ export function ReviewSegment({ review }: { review: OpenBranchReview }) {
 					target="_blank"
 					rel="noreferrer"
 					aria-label={`Open ${label}`}
-					className={chipClass("success", true)}
+					data-state-tone={tone}
+					className={chipClass(tone, true)}
 				>
 					{chip}
 				</a>
 			) : (
-				<span data-testid="scope-review" data-kind={review.kind} className={chipClass("success")}>
+				<span
+					data-testid="scope-review"
+					data-kind={review.kind}
+					data-state-tone={tone}
+					className={chipClass(tone)}
+				>
 					{chip}
 				</span>
 			)}

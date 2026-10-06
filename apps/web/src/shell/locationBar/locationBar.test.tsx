@@ -4,7 +4,13 @@ import type { OpenBranchReview, Project, Workspace } from "@thinkrail/contracts"
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { LocationBar } from "./LocationBar";
-import { pluralCommits, projectInitial, remoteCounts } from "./locationModel";
+import {
+	pluralCommits,
+	projectInitial,
+	remoteCounts,
+	reviewChipLabel,
+	reviewTone,
+} from "./locationModel";
 import { chipClass, pillClass } from "./Segment";
 
 const project: Project = { id: "p1", name: "thinkrail-copy", path: "/repo" } as Project;
@@ -157,6 +163,41 @@ test("the location bar never hard-codes typography or colour outside the token s
 		const source = readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
 		expect(source).not.toMatch(/\btext-\[|\bfont-(?:mono|sans|medium|semibold)\b|#[0-9a-f]{3,8}\b/);
 	}
+});
+
+test("a merged review turns the PULL REQUEST chip info and drops the REMOTE segment", () => {
+	const merged: OpenBranchReview = { ...review, state: "merged", changedAt: 1 };
+	const html = render(worktree, merged);
+	expect(html).toContain("Merged #648");
+	expect(html).toMatch(/data-testid="scope-review"[^>]*data-state-tone="info"/);
+	expect(testids(html)).not.toContain("scope-remote-segment");
+	expect(reviewTone({ ...review, state: "closed" })).toBe("neutral");
+	expect(reviewChipLabel({ ...review, state: "closed" })).toBe("Closed #648");
+	expect(reviewChipLabel({ kind: "merge-request", number: 7, state: "merged" })).toBe("Merged !7");
+	expect(reviewChipLabel({ kind: "merge-request", number: 7 })).toBe("MR !7");
+	expect(remoteCounts(merged)).toBeNull();
+});
+
+test("without a fresh answer the chip falls back to the record's host-kept review snapshot", () => {
+	const merged: Workspace = {
+		...worktree,
+		review: { kind: "pull-request", number: 618, state: "merged", changedAt: 1 },
+	};
+	const html = render(merged, null);
+	expect(html).toContain("Merged #618");
+	expect(testids(html)).toContain("scope-review-segment");
+	expect(testids(render(worktree, null))).not.toContain("scope-review-segment");
+});
+
+test("a settled active workspace announces itself in the WORKSPACE caption", () => {
+	const DAY = 24 * 60 * 60_000;
+	const settled: Workspace = { ...worktree, lastActiveAt: Date.now() - 10 * DAY };
+	expect(testids(render(settled))).toContain("scope-workspace-settled");
+	expect(render(settled)).toContain("· settled");
+	expect(testids(render({ ...settled, settledOverride: "active" }))).not.toContain(
+		"scope-workspace-settled",
+	);
+	expect(testids(render(worktree))).not.toContain("scope-workspace-settled");
 });
 
 test("remote counts collapse to null when nothing is ahead or behind", () => {

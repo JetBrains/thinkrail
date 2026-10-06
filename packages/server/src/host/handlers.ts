@@ -74,7 +74,7 @@ import {
 	startProxyJbcentral,
 	updateJbcentral,
 } from "../auth";
-import { findOpenBranchReview } from "../branch-review";
+import { findBranchReviewOutcome } from "../branch-review";
 import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
@@ -449,12 +449,13 @@ const handlers: WsHandlers = {
 	"workspace.openReview": async (p) => {
 		const ws = getWorkspace(p.workspaceId);
 		const fresh = shouldRefreshOpenReview(p.allowCached);
-		const [review, divergence] = await Promise.all([
-			findOpenBranchReview(ws.worktreePath, ws.branch, { fresh }),
+		const [outcome, divergence] = await Promise.all([
+			findBranchReviewOutcome(ws.worktreePath, ws.branch, { fresh }),
 			// Only pay the network fetch on a fresh lookup (focus / explicit refresh), not a cached activation.
 			countPushDivergence(ws.worktreePath, ws.branch, { fetch: fresh }),
 		]);
-		setWorkspaceReview(ws.id, review);
+		if (outcome.reliable) setWorkspaceReview(ws.id, outcome.value);
+		const review = outcome.value;
 		if (!review) return review;
 		return {
 			...review,

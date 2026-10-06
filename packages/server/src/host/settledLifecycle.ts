@@ -2,7 +2,7 @@ import { statSync } from "node:fs";
 import { join } from "node:path";
 import type { SessionStateRecord, Workspace } from "@thinkrail/contracts";
 import { listSessions } from "../agent";
-import { findOpenBranchReview } from "../branch-review";
+import { findBranchReviewOutcome } from "../branch-review";
 import { logger } from "../log";
 import { listProjects } from "../projects";
 import { getConfig } from "../settings";
@@ -69,8 +69,8 @@ async function backfillActivity(row: Workspace): Promise<void> {
 
 async function refreshReview(row: Workspace, fresh: boolean): Promise<void> {
 	try {
-		const review = await findOpenBranchReview(row.worktreePath, row.branch, { fresh });
-		setWorkspaceReview(row.id, review);
+		const outcome = await findBranchReviewOutcome(row.worktreePath, row.branch, { fresh });
+		if (outcome.reliable) setWorkspaceReview(row.id, outcome.value);
 	} catch {
 		log.warn(`review refresh failed for workspace ${row.id}`);
 	}
