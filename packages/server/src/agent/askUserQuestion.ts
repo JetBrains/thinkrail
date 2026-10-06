@@ -304,9 +304,15 @@ export const ASK_STOPPED_ERROR = "Question cancelled because the run was stopped
 
 export type AskUserQuestionWaitOutcome =
 	| { kind: "answer"; result: AskUserQuestionResult }
+	| { kind: "superseded" }
 	| { kind: "abandoned" };
 
-type LiveQuestionPhase = "expected" | "waiting" | "answer-accepted-uncommitted" | "stopped";
+type LiveQuestionPhase =
+	| "expected"
+	| "waiting"
+	| "answer-accepted-uncommitted"
+	| "superseded"
+	| "stopped";
 
 interface LiveQuestionWaiter {
 	phase: LiveQuestionPhase;
@@ -365,6 +371,7 @@ export interface AskUserQuestionWaiters {
 			isError?: boolean;
 		}[],
 	): void;
+	supersede(): boolean;
 	currentQuestion(): { interactionId: string; needsInput: boolean } | null;
 	isWaitingForAnswer(): boolean;
 	hasRecoverableCall(): boolean;
@@ -405,6 +412,7 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 			}
 			waiter.executeStarted = true;
 			if (waiter.phase === "answer-accepted-uncommitted") return waiter.answerPromise;
+			if (waiter.phase === "superseded") return Promise.resolve({ kind: "superseded" });
 			if (waiter.phase === "stopped") return Promise.reject(new Error(ASK_STOPPED_ERROR));
 			waiter.phase = "waiting";
 			if (signal?.aborted) {
@@ -426,8 +434,11 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 			const waiter = waiting.get(toolCallId);
 			if (!waiter) return { handled: false };
 			if (waiter.phase === "stopped") throw notAwaiting(toolCallId);
+			if (waiter.phase === "superseded") {
+				throw new Error(`${ANSWERABILITY_ERRORS.superseded}: ${toolCallId}`);
+			}
 			if (waiter.phase === "answer-accepted-uncommitted") {
-				throw new Error(`This questionnaire was already answered: ${toolCallId}`);
+				throw new Error(`${ANSWERABILITY_ERRORS.already_answered}: ${toolCallId}`);
 			}
 			waiter.phase = "answer-accepted-uncommitted";
 			waiter.resolveAnswer({ kind: "answer", result });
@@ -467,6 +478,16 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 				}
 			}
 		},
+		supersede() {
+			let superseded = false;
+			for (const waiter of waiting.values()) {
+				if (waiter.phase !== "expected" && waiter.phase !== "waiting") continue;
+				if (waiter.phase === "waiting") waiter.resolveAnswer({ kind: "superseded" });
+				waiter.phase = "superseded";
+				superseded = true;
+			}
+			return superseded;
+		},
 		currentQuestion() {
 			for (const [interactionId, waiter] of waiting) {
 				return {
@@ -482,7 +503,9 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 			);
 		},
 		hasRecoverableCall() {
-			return [...waiting.values()].some((waiter) => waiter.phase !== "stopped");
+			return [...waiting.values()].some(
+				(waiter) => waiter.phase !== "stopped" && waiter.phase !== "superseded",
+			);
 		},
 		prepareShutdown() {
 			shutdownPrepared = true;
@@ -528,7 +551,7 @@ export function isolateAskUserQuestionBatch(message: AgentMessage): AgentMessage
 
 export function createAskUserQuestionTool(
 	waiters: AskUserQuestionWaiters,
-): ToolDefinition<typeof AskUserQuestionSchema, AskUserQuestionResult> {
+): ToolDefinition<typeof AskUserQuestionSchema, AskUserQuestionResult | AskUserQuestionAckDetails> {
 	return {
 		name: ASK_USER_QUESTION_TOOL_NAME,
 		label: "Ask User Question",
@@ -544,6 +567,9 @@ export function createAskUserQuestionTool(
 			if (!validation.ok) return toolResult(validation.message, { answers: [], cancelled: true });
 
 			const outcome = await waiters.wait(toolCallId, signal);
+			if (outcome.kind === "superseded") {
+				return { content: [{ type: "text", text: ASK_ACK_TEXT }], details: { kind: "ack" } };
+			}
 			if (outcome.kind === "abandoned") {
 				return {
 					...toolResult(ASK_STOPPED_ERROR, { answers: [], cancelled: true }),
