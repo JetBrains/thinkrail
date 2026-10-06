@@ -205,7 +205,7 @@ export class SpecIndex {
 	private *walk(dir: string): Generator<string> {
 		let dirents: import("node:fs").Dirent[];
 		try {
-			dirents = readdirSync(dir, { withFileTypes: true }) as import("node:fs").Dirent[];
+			dirents = readdirSync(dir, { withFileTypes: true });
 		} catch {
 			return;
 		}

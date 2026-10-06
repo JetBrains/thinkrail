@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
-import { type Static, Type } from "typebox";
+import { Type } from "typebox";
 
 export const RESOLVE_COMMENT_TOOL_NAME = "resolve_comment";
 
@@ -13,8 +13,6 @@ export const ResolveCommentSchema = Type.Object({
 		}),
 	),
 });
-
-export type ResolveCommentParams = Static<typeof ResolveCommentSchema>;
 
 const DESCRIPTION = `Mark a review comment as resolved, after you have actually addressed it (by editing the file, or by answering when no change is needed). Only valid for comment ids you received in a review package in this conversation. If a comment is unclear or you disagree with it, reply in the conversation instead — do NOT resolve it.`;
 
@@ -40,7 +38,7 @@ export function createResolveCommentTool(): ToolDefinition<typeof ResolveComment
 		description: DESCRIPTION,
 		parameters: ResolveCommentSchema,
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			const { commentId, note } = params as ResolveCommentParams;
+			const { commentId, note } = params;
 			const outcome = handler(ctx.sessionManager.getSessionId(), commentId, note);
 			return {
 				content: [

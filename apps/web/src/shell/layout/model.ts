@@ -438,7 +438,7 @@ function replacePlacedCenterTab(
 			changed = true;
 			return { ...group, tabs: group.tabs.with(index, replacement) };
 		});
-		return changed ? ({ ...region, groups } as T) : region;
+		return changed ? { ...region, groups } : region;
 	};
 	const left = replaceInAuxiliary(document.left);
 	const right = replaceInAuxiliary(document.right);

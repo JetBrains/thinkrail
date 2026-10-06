@@ -107,7 +107,7 @@ export function parseVerdict(
 		return null;
 	}
 	if (typeof parsed !== "object" || parsed === null) return null;
-	const candidate = { ...(parsed as object), itemId, itemTitle };
+	const candidate = { ...parsed, itemId, itemTitle };
 	if (!isPlanReviewResult(candidate)) return null;
 	const findings: ReviewFixComment[] = candidate.findings.map((f) => ({
 		id: f.id,

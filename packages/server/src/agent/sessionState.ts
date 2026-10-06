@@ -44,7 +44,7 @@ function customMessage(entry: Extract<SessionEntry, { type: "custom_message" }>)
 		display: entry.display,
 		...(entry.details !== undefined ? { details: entry.details } : {}),
 		timestamp: Date.parse(entry.timestamp),
-	} as AgentMessage;
+	};
 }
 
 export function sessionStateMessages(entries: readonly SessionEntry[]): AgentMessage[] {
