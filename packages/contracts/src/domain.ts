@@ -868,6 +868,24 @@ export interface ReviewComment {
 	resolvedAt?: number;
 }
 
+export interface ReviewReadingStep {
+	path: string;
+	why: string;
+}
+
+/** The newest reviewer verdict's narrative for the workspace: its one-paragraph summary and the order it
+ * suggests reading the change set in. Written by the host when a plan-step verdict lands; the Changes
+ * review tab walks it. */
+export interface ReviewGuide {
+	summary: string;
+	readingOrder: ReviewReadingStep[];
+	verdict: PlanReviewVerdict;
+	todoId: string;
+	sessionId: string;
+	reviewedSha: string;
+	at: number;
+}
+
 export interface Review {
 	id: string;
 	workspaceId: string;
@@ -875,6 +893,7 @@ export interface Review {
 	baseSha: string;
 	fileSessions?: Record<string, string>;
 	doneFiles?: string[];
+	guide?: ReviewGuide;
 	createdAt: number;
 	closedAt?: number;
 }
@@ -931,6 +950,8 @@ export interface PlanReviewResult {
 	reviewedSha?: string;
 	/** The reviewer's one-paragraph rationale (shown on the card). */
 	summary?: string;
+	/** The reviewer's suggested order for reading the change set, one line of why per file. */
+	readingOrder?: ReviewReadingStep[];
 	findings: ReviewFixComment[];
 	/** Host-set on an `approve` it refused to settle: findings from an earlier round are still open, so
 	 * the step stays unreviewed until the worker resolves them. */
@@ -938,6 +959,18 @@ export interface PlanReviewResult {
 }
 
 export const PLAN_REVIEW_VERDICTS: readonly PlanReviewVerdict[] = ["approve", "request_changes"];
+export const REVIEW_READING_ORDER_LIMIT = 12;
+
+function isReadingStep(value: unknown): value is ReviewReadingStep {
+	if (!value || typeof value !== "object") return false;
+	const step = value as Partial<ReviewReadingStep>;
+	return (
+		typeof step.path === "string" &&
+		step.path.length > 0 &&
+		typeof step.why === "string" &&
+		step.why.length > 0
+	);
+}
 
 const REVIEW_COMMENT_KINDS: readonly ReviewCommentKind[] = ["inline", "diff", "file", "review"];
 
@@ -971,6 +1004,14 @@ export function isPlanReviewResult(value: unknown): value is PlanReviewResult {
 	if (typeof r.itemId !== "string" || typeof r.itemTitle !== "string") return false;
 	if (typeof r.verdict !== "string" || !PLAN_REVIEW_VERDICTS.includes(r.verdict)) return false;
 	if (r.summary !== undefined && typeof r.summary !== "string") return false;
+	if (
+		r.readingOrder !== undefined &&
+		(!Array.isArray(r.readingOrder) ||
+			r.readingOrder.length > REVIEW_READING_ORDER_LIMIT ||
+			!r.readingOrder.every(isReadingStep))
+	) {
+		return false;
+	}
 	if (r.blockedByOpenFindings !== undefined && typeof r.blockedByOpenFindings !== "number")
 		return false;
 	if (!Array.isArray(r.findings)) return false;

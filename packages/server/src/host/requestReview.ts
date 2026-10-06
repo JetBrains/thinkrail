@@ -14,6 +14,7 @@ import {
 	setRequestReviewHandler,
 } from "../agent";
 import type { AdditionalAnalyticsCapture } from "../analytics";
+import { logger } from "../log";
 import {
 	addComment,
 	anchorProblem,
@@ -24,6 +25,7 @@ import {
 	markCommentsSent,
 	publishReview,
 	rollbackSend,
+	setReviewGuide,
 } from "../reviews";
 import { getConfig } from "../settings";
 import {
@@ -55,6 +57,8 @@ import {
 import { REVIEWER_OUTPUT_CONTRACT, REVIEWER_SYSTEM_PROMPT, REVIEWER_TOOLS } from "./reviewerRole";
 import { withReviewLock } from "./reviewLock";
 import { claimItemFix, itemFixFindings, itemOpenFindings, releaseItemFix } from "./todoReview";
+
+const log = logger("review");
 
 const DEFAULT_FIX_NOTE = "Address the reviewer's findings below.";
 
@@ -116,6 +120,9 @@ export function parseVerdict(
 		itemId,
 		itemTitle,
 		...(candidate.summary !== undefined ? { summary: candidate.summary } : {}),
+		...(candidate.readingOrder !== undefined
+			? { readingOrder: candidate.readingOrder.map((step) => ({ path: step.path, why: step.why })) }
+			: {}),
 		findings,
 	};
 }
@@ -319,6 +326,21 @@ async function recordVerdict(
 	const capture = additionalCapture();
 	const decided = (verdict: "approved" | "changes_requested") =>
 		captureAdditional(capture, { name: "review_decided", params: { actor: "agent", verdict } });
+	if (result.summary || result.readingOrder?.length) {
+		try {
+			await setReviewGuide(params.workspaceId, {
+				summary: result.summary ?? "",
+				readingOrder: result.readingOrder ?? [],
+				verdict: result.verdict,
+				todoId: params.id,
+				sessionId: params.sessionId,
+				reviewedSha,
+				at: Date.now(),
+			});
+		} catch (error) {
+			log.warn(`review guide was not recorded for ${params.workspaceId}`, error as Error);
+		}
+	}
 	if (result.verdict === "approve") {
 		const open = await itemOpenFindings(params);
 		if (open.length === 0) {

@@ -446,7 +446,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   key's review chat: one chat per file, pinned on first send, the **empty key** being the anchorless
   whole-change-set bucket, pinned the same way so a second overall remark continues one discussion —
   and **`doneFiles`**, same keys: files whose review the user marked finished, so a fully-resolved
-  file leaves the list only on their say-so), **`ReviewComment`** (`kind`
+  file leaves the list only on their say-so; optional **`guide`** — a **`ReviewGuide`**: the newest
+  plan-step verdict's `summary`, its ordered `readingOrder` of `ReviewReadingStep { path, why }`, the
+  verdict and provenance, host-written so the Changes review tab can walk the reviewer's story), **`ReviewComment`** (`kind`
   inline/diff/file/review; `status` draft/sent/resolved/
   dismissed — orthogonal to **`anchorState`** anchored/moved/outdated; per-comment `sessionId` — the
   chat it was sent into), **`ReviewAnchor`** (`path` + `side` + `contentHash` + an ordered **`ReviewSelector`**

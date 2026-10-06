@@ -10,6 +10,7 @@ import {
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import type { ReviewFailedPayload, Workspace } from "@thinkrail/contracts";
+import { isPlanReviewResult } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import {
 	configurePiRuntime,
@@ -206,6 +207,45 @@ test("request_changes with auto-fix on files the findings AND delivers the fix t
 	// `sent` is the delivery proof: a rejected send rolls the finding back to `draft`.
 	expect(comments[0]?.status).toBe("sent");
 	expect(comments[0]?.body).toContain("loop bound is wrong");
+});
+
+test("a verdict's summary and reading order land on the workspace review as its guide", async () => {
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const guided = [
+		"```json",
+		'{ "verdict": "approve", "summary": "Small and coherent.",',
+		'  "readingOrder": [ { "path": "a.ts", "why": "the only change" } ], "findings": [] }',
+		"```",
+	].join("\n");
+
+	startPlanReview(WS, sessionId, id, verdictRunner(guided));
+	await settle(sessionId, id);
+
+	const guide = (await getReviewSnapshot(WS)).review.guide;
+	expect(guide).toMatchObject({
+		summary: "Small and coherent.",
+		readingOrder: [{ path: "a.ts", why: "the only change" }],
+		verdict: "approve",
+		todoId: id,
+		sessionId,
+	});
+	expect(typeof guide?.reviewedSha).toBe("string");
+
+	// a reading order past the cap, or with a malformed step, is not a verdict at all
+	const tooLong = `{ "verdict": "approve", "findings": [], "readingOrder": ${JSON.stringify(
+		Array.from({ length: 13 }, (_, index) => ({ path: `f${index}.ts`, why: "x" })),
+	)} }`;
+	expect(isPlanReviewResult({ ...JSON.parse(tooLong), itemId: id, itemTitle: "step" })).toBe(false);
+	expect(
+		isPlanReviewResult({
+			itemId: id,
+			itemTitle: "step",
+			verdict: "approve",
+			findings: [],
+			readingOrder: [{ path: "a.ts" }],
+		}),
+	).toBe(false);
 });
 
 test("request_changes with auto-fix OFF files the findings but sends nothing — the user decides", async () => {
