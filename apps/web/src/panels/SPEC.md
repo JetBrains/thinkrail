@@ -1367,7 +1367,16 @@ own section. The kebab menu (`plan-menu`, a
   changes* (the workspace's work since diverging from the target branch — measured from the merge-base,
   so upstream commits landing on the target are never phantom rows here; the default) / *Uncommitted changes* / one **commit** from the
   branch's list — and the shared **`BranchPicker`** pill for the **target branch** (`workspace.setDiffBase`;
-  the panel converges on the broadcast `workspace.updated`, never optimistically). The menu's contents load
+  the panel converges on the broadcast `workspace.updated`, never optimistically). Below the two fixed rows
+  the menu offers **Last turn · N files** — the newest host-recorded agent run (`store.turnsByWorkspace`
+  via `useWorkspaceTurns`, which fetches `workspace.turns` once per workspace and connection on hosts at
+  `TURN_CHANGES_PROTOCOL_VERSION`; disabled with "No agent turn changed files yet" until a run changed
+  something) and, when more than one run exists, an **Agent turns** list (newest first, time · files ·
+  relative settle time). Choosing one sets the `turn` scope `{ id, baseTree, headTree, startedAt }`; the
+  review tab and per-file tabs read both sides from the snapshots (`/blob` serves tree-qualified paths),
+  so the scope stays frozen while the worktree moves on, and because its modified side is historical it
+  offers no revert or keep controls. A pruned snapshot is rejected like a rewritten commit. The menu's other
+  contents load
   **lazily on each open**, never on panel mount: `git.listCommits` for the commit rows (subject +
   `shortSha · author · relative time`) and a `git.status` probe under the uncommitted scope, which is what
   lets the *Uncommitted* row say “No uncommitted changes” (disabled) instead of opening an unexplained empty

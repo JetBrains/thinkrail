@@ -76,7 +76,11 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 			},
 			onFailure: (_id, failure) => {
 				if (wsErrorCode(failure) === "UNKNOWN_COMMIT") {
-					setError("That commit is no longer in this branch.");
+					setError(
+						scope.kind === "turn"
+							? "That agent turn's snapshot is no longer in this repository."
+							: "That commit is no longer in this branch.",
+					);
 					return;
 				}
 				if (status && !warnedRef.current) {
@@ -199,10 +203,10 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	]);
 
 	useEffect(() => {
-		if (!status) return;
+		if (!status || tab.reveal) return;
 		if (tab.activePath !== null && files.some((change) => change.path === tab.activePath)) return;
 		setActivePath(workspaceId, tab.id, files[0]?.path ?? null);
-	}, [files, setActivePath, status, tab.activePath, tab.id, workspaceId]);
+	}, [files, setActivePath, status, tab.activePath, tab.id, tab.reveal, workspaceId]);
 
 	const pendingReveal = tab.reveal !== null;
 	useEffect(() => {

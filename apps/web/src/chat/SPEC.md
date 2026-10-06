@@ -244,6 +244,17 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   store's arrangement-agnostic tool-reveal intent) without surfacing any path, which is what makes the pair
   read as switching between Specs and Changes; closing is “never mind” and leaves the tool where the user
   last sent it.
+- **The host's turn receipt beats tool arguments.** `deriveRows` also takes the workspace's recorded agent
+  runs (`store.turnsByWorkspace`, loaded by the shell); `matchTurnReceipt` joins them to a round by the
+  run's start time (within 5 s of the prompt and before the round's end), and when a round has a receipt
+  the files chip lists *those* paths with per-file `+/−` counts and reads `N files changed · +a −r` —
+  tool arguments miss shell writes, formatters and renames, while the snapshot is what the agent actually
+  left behind (see the server `turns` SPEC). Spec paths still partition to the specs chip. Several runs in
+  one round (a steer, a retry) merge into one receipt spanning the first run's base tree to the last run's
+  head tree. A **Review turn** chip appears beside the files chip and calls `onReviewTurn(scope)`, which
+  `ChatView` routes to `requestChangesView(workspaceId, null, scope)`: the Changes panel adopts the turn
+  scope and opens the review tab for it. Without a receipt (older host, zero-change run, pruned snapshot)
+  the divider behaves exactly as before.
 
 Row/step ids are stable across streaming snapshots (the outer run's first atomic-step id, each thinking
 block's message-anchored index, and each tool's own id — pi appends, never reorders), so fold state survives

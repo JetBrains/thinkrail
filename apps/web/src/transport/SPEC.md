@@ -111,7 +111,7 @@ batches high-frequency Pi events without allowing later wire messages to overtak
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
-  `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`. `runHostUpdate` is the typed empty host action
+  `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`. `runHostUpdate` is the typed empty host action
   and `supportsHostUpdateRun` lets `Shell` inject it only for protocol v70+; `supportsPlanReview` is exported
   because a sibling panel (`PlanPane`) gates the plan-review UI on it — an older host serves no
   `todo.startReview`/`reviewAll`, so the client must not offer them; `supportsPlanSummaryGeneration` (v69) is
@@ -121,7 +121,11 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   is exported because `panels/useReviewCommenting` refuses to send a `region`/`structural` draft to a host
   that predates them — such a host stores the selector unvalidated and re-anchors it as if it were text, so
   the comment would survive but mean something else; the refusal is a plain error toast at the one place
-  drafts become `review.commentAdd` requests, and line/whole-file drafts are unaffected. The byte-only
+  drafts become `review.commentAdd` requests, and line/whole-file drafts are unaffected;
+  `supportsTurnChanges` (`TURN_CHANGES_PROTOCOL_VERSION`, v79) is exported because `panels/useWorkspaceTurns`
+  must not issue `workspace.turns` to a host that has no such method — without it the Changes scope menu
+  simply shows no agent turns. The transport also subscribes to `turn.changed` and folds each recorded run
+  into `store.turnsByWorkspace` through `applyTurnChanged`. The byte-only
   resource shape needs no gate: a host older than `RESOURCE_META_PROTOCOL_VERSION` answers `fs.readFile`
   and `git.diffFile` without `meta`, which the panes read as "text" — exactly the surface that host's own
   client showed — and `/blob` is only ever addressed for a side the host itself reported as byte-only.

@@ -1,8 +1,15 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	openFixtureProject,
+	openPersistedChat,
+	revealWorkbenchTool,
+} from "./fixtures/app";
+import { commitFile, gitAs } from "./fixtures/git";
 import { E2E_DATA_DIR } from "./fixtures/paths";
+import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const reviewTab = (page: Page) => page.locator('[data-testid="editor-tab"][data-kind="changes"]');
 const diffTab = (page: Page) => page.locator('[data-testid="editor-tab"][data-kind="diff"]');
@@ -196,4 +203,62 @@ test("hunk triage: Keep marks hunks, a fully kept file becomes viewed, and the b
 	await expect(page.getByTestId("diff-pane")).toBeVisible();
 	await expect(page.getByTestId("diff-pane").getByTestId("hunk-toolbar")).toBeVisible();
 	await expect(page.getByTestId("diff-pane").getByTestId("hunk-keep")).toHaveCount(0);
+});
+
+test("a round's receipt comes from the host's turn snapshot and Review turn opens the Last-turn scope", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const worktree = workspace.worktreePath;
+	const baseTree = gitAs(worktree, "rev-parse", "HEAD^{tree}");
+	commitFile(worktree, "feature.ts", "export const feature = true;\n", "agent: add the feature");
+	const headTree = gitAs(worktree, "rev-parse", "HEAD^{tree}");
+	const promptAt = 1_700_000_000_000;
+	seedWorkspaceSession(worktree, {
+		name: "Add the feature flag",
+		messages: [
+			{ role: "user", text: "add the feature flag", timestamp: promptAt },
+			{ role: "assistant", text: "Added feature.ts with the flag.", timestamp: promptAt + 4_000 },
+		],
+	});
+	writeFileSync(
+		join(E2E_DATA_DIR, "turns.json"),
+		JSON.stringify({
+			version: 1,
+			byWorkspace: {
+				[workspace.id]: [
+					{
+						id: `seeded:${promptAt + 500}`,
+						workspaceId: workspace.id,
+						sessionId: "seeded",
+						startedAt: promptAt + 500,
+						settledAt: promptAt + 3_500,
+						baseTree,
+						headTree,
+						changes: [{ path: "feature.ts", status: "added", added: 1, removed: 0 }],
+					},
+				],
+			},
+		}),
+	);
+
+	await page.reload();
+	await openPersistedChat(page, "Add the feature flag");
+	const divider = page.getByTestId("turn-divider").first();
+	await expect(divider.getByTestId("turn-divider-files")).toContainText("1 file changed · +1 −0");
+
+	await divider.getByTestId("turn-divider-review").click();
+	await expect(page.getByTestId("changes-scope-label")).toHaveText("Last turn");
+	await expect(reviewTab(page)).toHaveCount(1);
+	await expect(page.getByTestId("changes-review-scope")).toContainText("Last turn");
+	const feature = section(page, "feature.ts");
+	await expect(feature.getByTestId("diff-view").getByText("feature = true").last()).toBeVisible();
+	await expect(feature.getByTestId("changes-section-revert")).toHaveCount(0);
+	await expect(page.getByTestId("hunk-keep")).toHaveCount(0);
+	await expect(row(page, "feature.ts")).toBeVisible();
+
+	await page.getByTestId("changes-scope-trigger").click();
+	await expect(page.getByTestId("changes-scope-last-turn")).toContainText("Last turn · 1 file");
+	await expect(page.getByTestId("changes-scope-last-turn")).toHaveAttribute("data-active", "true");
 });
