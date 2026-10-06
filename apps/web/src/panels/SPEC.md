@@ -1045,8 +1045,8 @@ own section. The kebab menu (`plan-menu`, a
   phone class, so crossing the breakpoint swaps the code implementation and discards incompatible state.
   Scroll-backed view state goes through the one `useScrollViewState` hook: the offset is saved when the
   scroller detaches and re-applied when a scroller attaches. A renderer may fill its scroller only after
-  mount — the Pierre surfaces render nothing until their shared worker pool, torn down when the last
-  surface unmounts, has re-initialized — so a restore the scroller cannot yet hold stays pending until its
+  mount — the Pierre surfaces render nothing until their shared worker pool has initialized — so a
+  restore the scroller cannot yet hold stays pending until its
   content grows to fit or the user scrolls, and a pending offset is what gets saved if the tab leaves
   first. Without that hold, a tab switch back to a source diff landed at the top and then persisted 0.
   Two or more candidates become one ordered toggle whose ids are the test hooks. Threads whose selectors
@@ -1450,7 +1450,16 @@ own section. The kebab menu (`plan-menu`, a
   itself mid-review loses the reader's place. The list is a `react-virtuoso` grouped list (one group per
   file, header sticky); Pierre `CodeView` was evaluated for the container and rejected because its items
   are only `file` / `diff`, so it cannot host the rendered-markdown, image, SVG, CSV, JSON, notebook, and PDF
-  renderers that a section must dispatch exactly like `DiffPane` does. Both `DiffPane` and a section
+  renderers that a section must dispatch exactly like `DiffPane` does. **A section holds its shape
+  before it has its diff.** Each section reads `git.diffFile` lazily when its body first becomes
+  visible, through the pane's `SectionContentCache`: one in-flight read per path is shared by whoever asks,
+  and the result is stored even if the section that started it has already scrolled out, so remounting
+  never re-reads (a failed read stores nothing, so *Retry* reads again). While loading, a stacked section's
+  placeholder reserves `estimatedSectionHeight(change)` — `232 + 40 × changed lines` px, capped at
+  20 000 — which sits within about 2× of what Pierre renders for the same stats. Without that reservation
+  a skeleton a tenth the size of its diff made Virtuoso mount a dozen-plus sections at once (that many
+  concurrent reads), then re-estimate the whole list as each one grew, so a jump to a far file landed
+  tens of files away. Both `DiffPane` and a section
   render the shared **`DiffSurface`**: it describes the returned `ResourceMeta`, resolves the registry
   for `diff`, lazily mounts the selected renderer, hosts that file's review threads and hunk actions,
   and shows the unplaced strip. Byte-only
@@ -1634,11 +1643,17 @@ own section. The kebab menu (`plan-menu`, a
   and disconnects both the moment the card is revealed; it is not a standing listener, so Pierre
   re-rendering on every annotation change costs nothing once focus has settled. A diff whose
   two sides are identical (a file that left the change set after an out-of-band commit) shows an explicit
-  `diff-empty` notice above Pierre's surface instead of a blank pane. The lazy Pierre
-  file/diff modules mount `WorkerPoolContextProvider` only when their surface renders; Pierre's internal
-  module singleton keeps one pool across those providers and creates module workers from
-  `@pierre/diffs/worker/worker.js`. The phone code-file implementation is Pierre `File` with the same theme
-  and review grammar; desktop files alone load Monaco.
+  `diff-empty` notice above Pierre's surface instead of a blank pane. The lazy Pierre file/diff modules
+  mount `PierreProvider` only when their surface renders; it hands Pierre's `WorkerPoolContext` the module
+  singleton (`getOrCreateWorkerPoolSingleton`, four module workers from `@pierre/diffs/worker/worker.js`)
+  and **never terminates it**: the pool is created the first time any code surface renders and then lives
+  for the page. Pierre's own provider tears the pool down the moment its last instance unmounts, and the
+  virtualised review list reaches that moment on every jump or fast scroll into files that have not
+  loaded yet; each rebuild spawned the workers again, re-fetched the WASM, theme and grammars, dropped
+  every highlighted AST, and painted nothing until initialised — the stacked view's "loading forever".
+  Four idle workers are the price of never paying that again; the list mounts a handful of sections at a
+  time, so four keep up. The phone code-file implementation is Pierre `File` with the same theme and
+  review grammar; desktop files alone load Monaco.
 
   Mutable scopes (`branch`, `uncommitted`, `pinned`) receive `hunkActions` only after the current welcome
   advertises `CHANGE_MUTATIONS_PROTOCOL_VERSION` and the diff metadata carrying both hashes has landed.
