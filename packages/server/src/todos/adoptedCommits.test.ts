@@ -170,11 +170,12 @@ test("review resolution rejects an abbreviated commit:<short-sha> id", () => {
 
 test("review resolution rejects a commit past the newest-200 listCommits cap", () => {
 	const oldest = commitFile("first.ts", "export const f = 0;\n", "feat: first");
+	const since = Math.floor(Date.now() / 1000);
 	const stream = Array.from({ length: 200 }, (_, index) => {
 		const subject = `e${index + 1}\n`;
 		return [
 			"commit refs/heads/feature",
-			`committer test <t@thinkrail.test> ${1_700_000_000 + index} +0000`,
+			`committer test <t@thinkrail.test> ${since + index + 1} +0000`,
 			`data ${subject.length}`,
 			subject,
 			...(index === 0 ? [`from ${oldest}`] : []),
