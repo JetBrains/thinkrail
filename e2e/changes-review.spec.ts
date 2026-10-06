@@ -154,3 +154,46 @@ test("the review tab survives a reload and a large file mounts collapsed behind 
 	await expect(page.getByTestId("changes-review-summary")).toContainText("4 files");
 	await expect(sections(page).first()).toBeVisible();
 });
+
+test("hunk triage: Keep marks hunks, a fully kept file becomes viewed, and the bar walks the rest", async ({
+	page,
+}) => {
+	await seedThreeChanges(page);
+	await row(page, "notes.txt").click();
+	await expect(sections(page)).toHaveCount(3);
+
+	const bar = page.getByTestId("changes-review-triage");
+	await expect(bar).toContainText("0 of 3 reviewed");
+
+	// one hunk per file: keeping script.ts's only hunk completes that file
+	const script = section(page, "script.ts");
+	await expect(script.getByTestId("changes-section-kept")).toHaveText("0/1 kept");
+	await script.getByTestId("hunk-keep").click();
+	await expect(script.getByTestId("hunk-toolbar")).toHaveAttribute("data-kept", "true");
+	await expect(script.getByTestId("changes-section-kept")).toHaveText("1/1 kept");
+	await expect(script).toHaveAttribute("data-viewed", "true");
+	await expect(row(page, "script.ts")).toHaveAttribute("data-viewed", "true");
+	await expect(bar).toContainText("1 of 3 reviewed");
+
+	// undoing the keep leaves the file viewed — viewed is a one-way file-level decision
+	await script.getByTestId("hunk-keep").click();
+	await expect(script.getByTestId("changes-section-kept")).toHaveText("0/1 kept");
+	await expect(script).toHaveAttribute("data-viewed", "true");
+
+	// J walks to the next unreviewed file after the active one, wrapping
+	await expect(row(page, "notes.txt")).toHaveAttribute("data-active", "true");
+	await page.keyboard.press("j");
+	await expect(row(page, "README.md")).toHaveAttribute("data-active", "true");
+
+	await page.getByTestId("changes-review-mark-all").click();
+	await expect(bar).toContainText("3 of 3 reviewed");
+	await expect(page.getByTestId("changes-review-mark-all")).toBeDisabled();
+	await expect(page.getByTestId("changes-review-next-unreviewed")).toBeDisabled();
+	await expect(page.getByTestId("changes-review-viewed-count")).toHaveText("3/3 viewed");
+
+	// the per-file tab offers no triage: revert/ask-agent only
+	await row(page, "script.ts").dblclick();
+	await expect(page.getByTestId("diff-pane")).toBeVisible();
+	await expect(page.getByTestId("diff-pane").getByTestId("hunk-toolbar")).toBeVisible();
+	await expect(page.getByTestId("diff-pane").getByTestId("hunk-keep")).toHaveCount(0);
+});

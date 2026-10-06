@@ -1413,7 +1413,18 @@ own section. The kebab menu (`plan-menu`, a
   it is the same thing. The list ends in a measured tail the height of the viewport so the last file can
   be scrolled to the top and become active, as on GitHub. The scroll-spy never auto-reveals the Review
   tool: `selectActiveReviewedPath` deliberately ignores the review tab, because a reveal fired by
-  scrolling would replace the Changes navigator in its shared side group mid-read. **Scale rules**:
+  scrolling would replace the Changes navigator in its shared side group mid-read.
+  **Hunk triage is an overlay on the same tab, not a second mutation model.** In a mutable scope every
+  hunk toolbar gains **Keep** beside the existing Revert and Ask-agent actions; a kept hunk is recorded
+  on the tab (`kept[path]`) under a **content key** — a hash of the hunk's removed + added text — so
+  the decision survives the line shifts a neighbouring revert causes and lapses the moment the agent
+  changes that hunk again. A *reverted* hunk needs no state: ThinkRail's revert restores the base text,
+  the hunk leaves the diff, and the toast's Undo is the way back. The section header shows `k/n kept`
+  and a file whose hunks are all kept is marked **viewed** (one-way), so hunk and file progress are one
+  model; the stacked view's bottom bar shows `n of N reviewed`, **Next unreviewed** (`J`, wraps) and
+  **Mark all viewed**, and `V` toggles the active section. There is deliberately no *Revert all*: the
+  host has no atomic multi-file discard and a bulk destructive action on a review surface earns its
+  keystroke only once it exists server-side. The per-file `DiffTab` passes no triage and is unchanged. **Scale rules**:
   a section whose file changed more than 400 lines, or whose path is a lock/generated file, mounts
   collapsed behind *Expand* / *Open as tab*; a scope with more than 50 files shows a dismissable notice
   offering *One file*; nothing switches mode on its own, because a review surface that re-arranges
