@@ -44,7 +44,12 @@ export function startOpenBranchReviewSync(options: {
 	state: OpenBranchReviewStateStore;
 	focusTarget: EventTarget;
 	connected: boolean;
-}): { setConnected: (connected: boolean) => void; refresh: () => void; stop: () => void } {
+}): {
+	setConnected: (connected: boolean) => void;
+	refresh: () => void;
+	reload: () => void;
+	stop: () => void;
+} {
 	let connected = options.connected;
 	let freshOnReconnect = false;
 	const load = (allowCached: boolean) =>
@@ -59,6 +64,9 @@ export function startOpenBranchReviewSync(options: {
 		if (connected) load(false);
 		else freshOnReconnect = true;
 	};
+	const reload = () => {
+		if (connected) load(true);
+	};
 	const setConnected = (next: boolean) => {
 		if (connected === next) return;
 		connected = next;
@@ -70,7 +78,7 @@ export function startOpenBranchReviewSync(options: {
 
 	if (connected) load(true);
 	options.focusTarget.addEventListener("focus", refresh);
-	return { setConnected, refresh, stop };
+	return { setConnected, refresh, reload, stop };
 }
 
 const transportRequest: OpenReviewRequest = (params) =>
@@ -136,7 +144,7 @@ export function useOpenBranchReview(
 		}
 		if (fsTick === lastFsTick.current.tick) return;
 		lastFsTick.current = { key, tick: fsTick };
-		sync.current?.refresh();
+		sync.current?.reload();
 	}, [fsTick, key, workspaceId]);
 
 	const noteOpenReview = useCallback(

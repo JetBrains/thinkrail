@@ -50,3 +50,33 @@ test("activation opts into cache reuse while focus performs a fresh read", async
 	focusTarget.dispatchEvent(new Event("focus"));
 	expect(calls).toHaveLength(3);
 });
+
+test("reload re-reads cache-eligible and is dropped while disconnected", () => {
+	const calls: Array<{ workspaceId: string; allowCached?: true }> = [];
+	const controller = startOpenBranchReviewSync({
+		workspaceId: "w1",
+		key: "w1\0feature",
+		state: createOpenBranchReviewState(),
+		focusTarget: new EventTarget(),
+		connected: true,
+		request: (params) => {
+			calls.push(params);
+			return new Promise(() => {});
+		},
+	});
+
+	controller.reload();
+	expect(calls).toEqual([
+		{ workspaceId: "w1", allowCached: true },
+		{ workspaceId: "w1", allowCached: true },
+	]);
+	controller.setConnected(false);
+	controller.reload();
+	controller.setConnected(true);
+	expect(calls).toEqual([
+		{ workspaceId: "w1", allowCached: true },
+		{ workspaceId: "w1", allowCached: true },
+		{ workspaceId: "w1", allowCached: true },
+	]);
+	controller.stop();
+});

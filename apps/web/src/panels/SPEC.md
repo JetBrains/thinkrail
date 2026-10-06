@@ -861,6 +861,9 @@ own section. The kebab menu (`plan-menu`, a
   older clients, so a PR closed/merged on GitHub drops out of the chip, label, and stepper on that
   refetch instead of sticking until remount. Focus received while disconnected latches that fresh
   intent and spends it on reconnect rather than falling back to a cache-eligible activation read. The
+  workspace's `fsChanged` tick re-reads with `allowCached: true` (`reload`): the host drops its cached
+  answer on a `.git` meta nudge, so a PR opened or pushed from a terminal still surfaces, while a fresh
+  read would `git fetch`, write `.git`, nudge again, and loop. The
   URL is kept across refetches while the review number matches. A `compare` result opens the prefilled
   GitHub
   compare page (`window.open`); every outcome toasts, uncommitted files get a separate info toast.
