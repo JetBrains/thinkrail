@@ -154,6 +154,7 @@ import {
 	type TodoReviewRecord,
 	updateTodo,
 } from "../todos";
+import { forgetWorkspaceTurns, listTurns } from "../turns";
 import { ensureWatch, stopWatch } from "../watch";
 import {
 	createWorkspace,
@@ -478,6 +479,7 @@ const handlers: WsHandlers = {
 			evictSpecIndex(ws.id);
 			removeWorkspaceReviews(ws.id);
 			forgetWorkspaceChanges(ws.id);
+			forgetWorkspaceTurns(ws.id);
 			stopWatch(ws.id);
 			closeWorkspaceTerminals(ws.id);
 			void archiveTeardown(ws);
@@ -671,6 +673,7 @@ const handlers: WsHandlers = {
 		return gitDiffFile(p.workspaceId, p.path, p.scope);
 	},
 	"git.listCommits": (params) => listCommits(params.workspaceId),
+	"workspace.turns": (params) => ({ turns: listTurns(params.workspaceId) }),
 	"change.revert": (p) => {
 		void ensureWatch(p.workspaceId);
 		return withChangeLock(p.workspaceId, async () => ({ receipt: await revertChange(p) }));

@@ -47,6 +47,7 @@ import type {
 	TodoItem,
 	TodoPlan,
 	TodoStatus,
+	TurnChangeSet,
 	Workspace,
 } from "./domain";
 import { isDelegationRunDetails } from "./domain";
@@ -102,7 +103,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 79;
+export const PROTOCOL_VERSION = 80;
+export const TURN_CHANGES_PROTOCOL_VERSION = 80;
 export const SUBAGENT_CONCURRENCY_PROTOCOL_VERSION = 79;
 export const WORKSPACE_SETTLE_PROTOCOL_VERSION = 78;
 export const MODEL_PICKER_PROTOCOL_VERSION = 77;
@@ -220,6 +222,7 @@ export const WS_METHODS = {
 	gitStatus: "git.status",
 	gitDiffFile: "git.diffFile",
 	gitListCommits: "git.listCommits",
+	workspaceTurns: "workspace.turns",
 	changeRevert: "change.revert",
 	changeUndo: "change.undo",
 	terminalReserve: "terminal.reserve",
@@ -320,6 +323,7 @@ export const WS_CHANNELS = {
 	feedbackInterview: "feedback.interview",
 	reviewChanged: "review.changed",
 	reviewFailed: "review.failed",
+	turnChanged: "turn.changed",
 } as const;
 
 type SameUnion<A extends B, B extends C, C = A> = A;
@@ -623,6 +627,7 @@ export interface WsMethodMap {
 		};
 	};
 	"git.listCommits": { params: { workspaceId: string }; result: { commits: GitCommit[] } };
+	"workspace.turns": { params: { workspaceId: string }; result: { turns: TurnChangeSet[] } };
 	"change.revert": {
 		params: {
 			workspaceId: string;
