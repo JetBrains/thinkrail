@@ -124,10 +124,6 @@ export function useOpenBranchReview(
 		sync.current?.setConnected(connected);
 	}, [connected]);
 
-	// A `.git` meta nudge from the server bumps this workspace's fsChanged tick (the server already
-	// invalidates its 60 s open-review cache in the same step). Re-ask the provider so a PR opened,
-	// pushed, or closed through a workspace terminal shows up on the Plan page without waiting for
-	// window focus or the TTL.
 	const fsTick = useAppStore((s) =>
 		workspaceId ? (s.fsChangesByWorkspace[workspaceId]?.tick ?? 0) : 0,
 	);

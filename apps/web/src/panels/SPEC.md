@@ -655,8 +655,7 @@ a project picker, the prompt hero, and the reused
   itself a working surface and the agent's reply streams into the live `plan-agent-message` block right
   below). To jump to the chat you click the Session status chip (`Working…` / `Question`) or the
   explicit Open-chat affordances — those are the only `openChatInTab` call sites in the plan now.
-  `PlanComposer`
-  ignores a submit while the previous one is in flight,
+  `PlanComposer` ignores a submit while the previous one is in flight,
   so a repeated Enter can't add or send the same draft twice. So a completed
   plan (no open steps) turns its Session into a chat entry point rather than a dead "all steps done" line,
   and a running plan gets an in-place steering field. The one exception is a **truly empty** plan (no items,

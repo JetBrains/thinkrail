@@ -490,9 +490,7 @@ test("a completed plan turns the Session into a chat composer instead of an idle
 	await expect(pane.getByTestId("plan-session-chat")).toBeVisible();
 	await expect(pane.getByTestId("plan-now-idle")).toHaveCount(0);
 
-	// Sending from the plan composer stays on the plan — no auto-switch to the chat tab (that
-	// handoff was dropped intentionally; see panels/SPEC.md "A send from the plan stays on the plan").
-	// We pin the stay-on-plan + composer-reset + chat-view-not-mounted invariants.
+	// Sending from the plan composer stays on the plan (panels/SPEC.md).
 	await pane.getByTestId("plan-session-chat").fill("hello from the plan");
 	await pane.getByTestId("plan-session-chat").press("Enter");
 	await expect(pane).toBeVisible();
