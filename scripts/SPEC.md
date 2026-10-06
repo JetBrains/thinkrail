@@ -80,3 +80,5 @@ a call (direct, through a namespace import, or passed by reference to such a cal
 reaches them synchronously, default parameters included, transitively; a module-load call; and any getter
 or registered tool `summary` that reads them. Event handlers (`on*` and other non-render props), effects and
 deferred callbacks are event-time and pass. Fixture tests pin each shape, both flagged and allowed. There is no suppression mechanism; a false positive is fixed in the checker with a test.
+
+`typecheck:root` type-checks root tooling: these scripts and the root Playwright configs, plus the `e2e/` helpers those configs import, through the root `tsconfig.json`. Turbo registers it as `//#typecheck:root`, and `bun run typecheck` runs it beside every workspace `typecheck`. A nested tooling tree such as `e2e/` may extend the root config with its own `include`.

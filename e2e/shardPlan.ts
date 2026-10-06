@@ -26,17 +26,16 @@ export function parseRunnerArgs(args: readonly string[]): RunnerArgs {
 		shardOverride = count;
 	};
 
-	for (let index = 0; index < args.length; index += 1) {
-		const arg = args[index];
+	const remaining = [...args];
+	for (let arg = remaining.shift(); arg !== undefined; arg = remaining.shift()) {
 		if (arg === "--serial") {
 			setOverride(1, "--serial");
 			continue;
 		}
 		if (arg === "--shards") {
-			const value = args[index + 1];
+			const value = remaining.shift();
 			if (value === undefined) throw new Error("--shards requires a value");
 			setOverride(parseShardCount(value, "--shards"), "--shards");
-			index += 1;
 			continue;
 		}
 		if (arg.startsWith("--shards=")) {

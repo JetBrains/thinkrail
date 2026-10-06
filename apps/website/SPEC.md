@@ -63,6 +63,9 @@ binary.
   - *Lint caveat:* Biome parses only `.astro` frontmatter, so `noUnusedVariables`/`noUnusedImports`
     are disabled for `*.astro` in `biome.json` (template usage is invisible to it — every flag would
     be a false positive). `astro check` covers the templates instead.
+  - *Test typecheck:* `astro check` follows `tsconfig.json`, which excludes `*.test.ts`. The
+    `typecheck` script, not `build`, also runs `tsconfig.test.json` over the site tests, so root CI
+    checks them and `site.yml` does not.
 
 The parent owns the route-composition edges; the vibecoding leaf has no sibling dependency:
 

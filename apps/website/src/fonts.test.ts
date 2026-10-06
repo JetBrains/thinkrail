@@ -1,14 +1,19 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 
+interface AppFontFamily {
+	stack: string[];
+	selfHosted?: string[];
+}
+
 const CSS = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 const TYPOGRAPHY = JSON.parse(
 	readFileSync(new URL("../../web/src/styles/typography.json", import.meta.url), "utf8"),
 ) as {
-	fontFamilies: Record<string, { stack: string[]; selfHosted?: string[] } | { $ref: string }>;
+	fontFamilies: Record<string, AppFontFamily | { $ref: string }>;
 };
 
-function appFamily(id: string) {
+function appFamily(id: string): AppFontFamily {
 	const entry = TYPOGRAPHY.fontFamilies[id];
 	if (!entry) throw new Error(`unknown app font family '${id}'`);
 	return "$ref" in entry ? appFamily(entry.$ref) : entry;
