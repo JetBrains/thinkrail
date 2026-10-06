@@ -68,11 +68,19 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
   `className` for the region's own padding/sizing, an optional `label` threaded to `SkeletonRows`'
   `role="status"` region rather than opening a second one, and an optional `testId`). The full loading
   vocabulary and its rules are below.
+- **Also owns:** `preloadedLazy.tsx` — a split-chunk component plus `preload()`. Plain `lazy` suspends on
+  its first render even when the chunk is cached; under a sync store update React then holds the
+  fallback ~300ms. A mount that finds the chunk loaded renders it directly; a mount never swaps component
+  type. Call `preload()` when the owning screen mounts, not at boot, so other screens never fetch the
+  chunk. A failed load reaches the `ErrorBoundary` as with plain `lazy`; renders never retry it, only the
+  next `preload()` does. Known limit: on a slow link, or when the revealing data is already in the store
+  at mount, the first mount still takes the `lazy` path.
 - **Public surface:** `ErrorBoundary`, `isChunkLoadError` — imported directly via
   `@/components/ErrorBoundary` (no barrel; the placeholders come from `@thinkrail/ui/skeleton`); `AttentionDot` via
   `@/components/AttentionDot`; `RunningIcon` via `@/components/RunningIcon`; `CustomIcon`,
   `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the
-  `QuietScrollEdges` type via `@/components/QuietScrollArea`; `useNow()` via `@/components/useNow` (the
+  `QuietScrollEdges` type via `@/components/QuietScrollArea`; `preloadedLazy` via
+  `@/components/preloadedLazy`; `useNow()` via `@/components/useNow` (the
   wall clock as a `useSyncExternalStore` value on a shared 30 s ticker, so a render never calls `Date.now`
   itself).
 - **Allowed deps:** React, `@remixicon/react`, `@thinkrail/ui/utils` (`cn`), `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
