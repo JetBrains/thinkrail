@@ -671,7 +671,10 @@ const handlers: WsHandlers = {
 		return gitDiffFile(p.workspaceId, p.path, p.scope);
 	},
 	"git.listCommits": (params) => listCommits(params.workspaceId),
-	"workspace.turns": (params) => ({ turns: listTurns(params.workspaceId) }),
+	"workspace.turns": (p) => {
+		getWorkspace(p.workspaceId);
+		return { turns: listTurns(p.workspaceId) };
+	},
 	"change.revert": (p) => {
 		void ensureWatch(p.workspaceId);
 		return withChangeLock(p.workspaceId, async () => ({ receipt: await revertChange(p) }));

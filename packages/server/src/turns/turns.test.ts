@@ -122,6 +122,87 @@ test("a run that changes files is recorded once with its change set, published, 
 	expect(listTurns("w1")).toEqual([]);
 });
 
+function snapshotNow(cwd: string): string {
+	const scratch = mkdtempSync(join(tmpdir(), "trpi-turns-scratch-"));
+	try {
+		const env = { ...process.env, GIT_INDEX_FILE: join(scratch, "index") };
+		const added = Bun.spawnSync(["git", "-C", cwd, "add", "-A", "--", "."], {
+			env,
+			stderr: "ignore",
+		});
+		if (!added.success) throw new Error("git add failed");
+		const tree = Bun.spawnSync(["git", "-C", cwd, "write-tree"], { env, stdout: "pipe" });
+		if (!tree.success) throw new Error("git write-tree failed");
+		return tree.stdout.toString().trim();
+	} finally {
+		rmSync(scratch, { recursive: true, force: true });
+	}
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+	let resolve!: (value: T) => void;
+	const promise = new Promise<T>((done) => {
+		resolve = done;
+	});
+	return { promise, resolve };
+}
+
+test("the head is captured the moment the run settles, not after a slow base snapshot", async () => {
+	const base = deferred<string | null>();
+	const seen: string[] = [];
+	const tracker = new TurnTracker(resolve, Date.now, (cwd) => {
+		const tree = snapshotNow(cwd);
+		seen.push(tree);
+		return seen.length === 1 ? base.promise : Promise.resolve(tree);
+	});
+
+	const started = tracker.observe("s1", start);
+	writeFileSync(join(repo, "run-one.ts"), "export const one = 1;\n");
+	const settled = tracker.observe("s1", settle);
+	writeFileSync(join(repo, "run-two.ts"), "export const two = 2;\n");
+	base.resolve(seen[0] ?? null);
+	await Promise.all([started, settled]);
+
+	const [turn] = listTurns("w1");
+	expect(turn?.changes.map((change) => change.path)).toEqual(["run-one.ts"]);
+});
+
+test("a workspace removed while its run is settling records and publishes nothing", async () => {
+	const published: TurnChangeSet[] = [];
+	setTurnPublisher((turn) => published.push(turn));
+	let present = true;
+	const head = deferred<string | null>();
+	let calls = 0;
+	const tracker = new TurnTracker(
+		() => (present ? { workspaceId: "w1", worktreePath: repo } : null),
+		Date.now,
+		(cwd) => (++calls === 1 ? Promise.resolve(snapshotNow(cwd)) : head.promise),
+	);
+
+	await tracker.observe("s1", start);
+	writeFileSync(join(repo, "feature.ts"), "export const feature = true;\n");
+	const settled = tracker.observe("s1", settle);
+	present = false;
+	head.resolve(snapshotNow(repo));
+	await settled;
+
+	expect(listTurns("w1")).toEqual([]);
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "turns.json"))).toBe(false);
+});
+
+test("turns are kept in start order even when a later-started run settles first", async () => {
+	let clock = 1_000;
+	const tracker = new TurnTracker(resolve, () => (clock += 1));
+	await tracker.observe("early", start);
+	await tracker.observe("late", start);
+	writeFileSync(join(repo, "late.ts"), "export const late = true;\n");
+	await tracker.observe("late", settle);
+	writeFileSync(join(repo, "early.ts"), "export const early = true;\n");
+	await tracker.observe("early", settle);
+	expect(listTurns("w1").map((turn) => turn.sessionId)).toEqual(["early", "late"]);
+});
+
 test("a run that changes nothing records no turn", async () => {
 	const tracker = new TurnTracker(resolve);
 	await tracker.observe("s1", start);

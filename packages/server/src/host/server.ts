@@ -310,6 +310,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				if (hostUpdate) ws.subscribe(WS_CHANNELS.hostUpdateAvailable);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
 				ws.subscribe(WS_CHANNELS.reviewFailed);
+				ws.subscribe(WS_CHANNELS.turnChanged);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform

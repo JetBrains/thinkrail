@@ -232,6 +232,26 @@ test("a verdict's summary and reading order land on the workspace review as its 
 	});
 	expect(typeof guide?.reviewedSha).toBe("string");
 
+	// the next verdict replaces the guide even when it carries no narrative of its own
+	const second = committedItem(sessionId, "second step");
+	startPlanReview(WS, sessionId, second, verdictRunner(requestChanges));
+	await settle(sessionId, second);
+	expect((await getReviewSnapshot(WS)).review.guide).toMatchObject({
+		summary: "off-by-one",
+		readingOrder: [],
+		verdict: "request_changes",
+		todoId: second,
+	});
+	const third = committedItem(sessionId, "third step");
+	startPlanReview(WS, sessionId, third, verdictRunner(approve));
+	await settle(sessionId, third);
+	expect((await getReviewSnapshot(WS)).review.guide).toMatchObject({
+		summary: "",
+		readingOrder: [],
+		verdict: "approve",
+		todoId: third,
+	});
+
 	// a reading order past the cap, or with a malformed step, is not a verdict at all
 	const tooLong = `{ "verdict": "approve", "findings": [], "readingOrder": ${JSON.stringify(
 		Array.from({ length: 13 }, (_, index) => ({ path: `f${index}.ts`, why: "x" })),
