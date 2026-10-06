@@ -4,6 +4,7 @@ import {
 	RiArrowLeftSLine as ChevronLeft,
 	RiArrowRightSLine as ChevronRight,
 	RiArrowUpSLine as ChevronUp,
+	RiGuideLine as Guide,
 	RiParagraph as Pilcrow,
 } from "@remixicon/react";
 import type { GitFileChange, GitStatus } from "@thinkrail/contracts";
@@ -14,6 +15,7 @@ import { LoadingRegion } from "../components/Skeleton";
 import { type ChangesTab, selectDiffBaseRef, toast, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { ChangesFileSection, type SectionContentCache } from "./ChangesFileSection";
+import { ChangesReviewGuide, guideSteps } from "./ChangesReviewGuide";
 import { LARGE_SCOPE_FILES, scopeKey, scopeLabel, sectionCollapsedByDefault } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { HeaderIconButton } from "./HeaderIconButton";
@@ -63,6 +65,14 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const requestReveal = useAppStore((state) => state.requestChangesTabReveal);
 	const cache = useRef<SectionContentCache>(new Map()).current;
 	const turns = useWorkspaceTurns(workspaceId);
+	const reviewGuide = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.review.guide);
+	const reviewComments = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.comments);
+	const guideAvailable = useMemo(
+		() => reviewGuide !== undefined || guideSteps(reviewGuide, reviewComments).length > 0,
+		[reviewComments, reviewGuide],
+	);
+	const [guideHidden, setGuideHidden] = useState(false);
+	const guideOpen = guideAvailable && !guideHidden && layout === "stacked";
 	const [largeNoticeDismissed, setLargeNoticeDismissed] = useState(false);
 
 	const { reload } = useWorkspaceRead(
@@ -354,6 +364,16 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 							</HeaderIconButton>
 						</>
 					) : null}
+					{guideAvailable && layout === "stacked" ? (
+						<HeaderIconButton
+							testid="changes-review-guide-toggle"
+							label={guideOpen ? "Hide the review guide" : "Show the review guide"}
+							active={guideOpen}
+							onClick={() => setGuideHidden((hidden) => !hidden)}
+						>
+							<Guide className="size-14" />
+						</HeaderIconButton>
+					) : null}
 					<HeaderIconButton
 						testid="changes-review-toggle-whitespace"
 						label="Hide whitespace changes"
@@ -475,105 +495,116 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 					</div>
 				</>
 			) : (
-				<div className="relative min-h-0 flex-1 bg-container-content-bg">
-					{showLargeNotice ? (
-						<div
-							data-testid="changes-review-large-notice"
-							className="flex items-center gap-8 border-border-default border-b bg-feedback-info-subtle px-12 py-4 tr-text-metadata text-text-muted"
-						>
-							<span>
-								{files.length} files in this scope — reviewing one file at a time may be easier.
-							</span>
-							<button
-								type="button"
-								onClick={() => setLayout("single")}
-								className="text-text-default underline-offset-2 hover:underline"
-							>
-								Switch to One file
-							</button>
-							<button
-								type="button"
-								onClick={() => setLargeNoticeDismissed(true)}
-								className="ml-auto text-text-subtle hover:text-text-default"
-							>
-								Dismiss
-							</button>
-						</div>
+				<div className="flex min-h-0 flex-1">
+					{guideOpen ? (
+						<ChangesReviewGuide
+							workspaceId={workspaceId}
+							files={files}
+							guide={reviewGuide}
+							comments={reviewComments}
+							onReveal={(path) => requestReveal(workspaceId, tab.id, path)}
+						/>
 					) : null}
-					<Virtuoso<GitFileChange, ReviewListContext>
-						ref={virtuoso}
-						data={files}
-						computeItemKey={(_index, change) => change.path}
-						className="h-full min-h-0 [overflow-anchor:none]"
-						increaseViewportBy={{ top: 200, bottom: 600 }}
-						scrollerRef={attachScroller}
-						onScroll={spyActiveSection}
-						rangeChanged={spyActiveSection}
-						totalListHeightChanged={() => {
-							const pending = settling.current;
-							if (pending && Date.now() < pending.until) {
-								virtuoso.current?.scrollToIndex({ index: pending.index, align: "start" });
-								return;
-							}
-							spyActiveSection();
-						}}
-						itemContent={(_index, change) => (
-							<ChangesFileSection
-								tab={tab}
-								change={change}
-								mode="stacked"
-								collapsed={isCollapsed(change)}
-								collapsedByDefault={sectionCollapsedByDefault(change)}
-								viewed={viewedSet.has(change.path)}
-								cache={cache}
-								onToggleCollapsed={() => toggleCollapsed(change)}
-								onSetViewed={(next) => setPathViewed(change.path, next)}
-							/>
-						)}
-						context={{ tailHeight, fileCount: files.length }}
-						components={REVIEW_LIST_COMPONENTS}
-					/>
-					<div
-						data-testid="changes-review-triage"
-						className="absolute inset-x-0 bottom-0 flex h-32 items-center gap-8 border-border-default border-t bg-container-header-bg px-12"
-					>
-						<span className="tr-text-metadata text-text-muted">
-							{viewedCount} of {files.length} reviewed
-						</span>
-						<span
-							className="h-4 w-120 overflow-hidden rounded-[var(--radius-xs)] bg-control-bg-hovered"
-							aria-hidden="true"
+					<div className="relative min-h-0 flex-1 bg-container-content-bg">
+						{showLargeNotice ? (
+							<div
+								data-testid="changes-review-large-notice"
+								className="flex items-center gap-8 border-border-default border-b bg-feedback-info-subtle px-12 py-4 tr-text-metadata text-text-muted"
+							>
+								<span>
+									{files.length} files in this scope — reviewing one file at a time may be easier.
+								</span>
+								<button
+									type="button"
+									onClick={() => setLayout("single")}
+									className="text-text-default underline-offset-2 hover:underline"
+								>
+									Switch to One file
+								</button>
+								<button
+									type="button"
+									onClick={() => setLargeNoticeDismissed(true)}
+									className="ml-auto text-text-subtle hover:text-text-default"
+								>
+									Dismiss
+								</button>
+							</div>
+						) : null}
+						<Virtuoso<GitFileChange, ReviewListContext>
+							ref={virtuoso}
+							data={files}
+							computeItemKey={(_index, change) => change.path}
+							className="h-full min-h-0 [overflow-anchor:none]"
+							increaseViewportBy={{ top: 200, bottom: 600 }}
+							scrollerRef={attachScroller}
+							onScroll={spyActiveSection}
+							rangeChanged={spyActiveSection}
+							totalListHeightChanged={() => {
+								const pending = settling.current;
+								if (pending && Date.now() < pending.until) {
+									virtuoso.current?.scrollToIndex({ index: pending.index, align: "start" });
+									return;
+								}
+								spyActiveSection();
+							}}
+							itemContent={(_index, change) => (
+								<ChangesFileSection
+									tab={tab}
+									change={change}
+									mode="stacked"
+									collapsed={isCollapsed(change)}
+									collapsedByDefault={sectionCollapsedByDefault(change)}
+									viewed={viewedSet.has(change.path)}
+									cache={cache}
+									onToggleCollapsed={() => toggleCollapsed(change)}
+									onSetViewed={(next) => setPathViewed(change.path, next)}
+								/>
+							)}
+							context={{ tailHeight, fileCount: files.length }}
+							components={REVIEW_LIST_COMPONENTS}
+						/>
+						<div
+							data-testid="changes-review-triage"
+							className="absolute inset-x-0 bottom-0 flex h-32 items-center gap-8 overflow-hidden whitespace-nowrap border-border-default border-t bg-container-header-bg px-12"
 						>
+							<span className="shrink-0 tr-text-metadata text-text-muted">
+								{viewedCount} of {files.length} reviewed
+							</span>
 							<span
-								data-testid="changes-review-progress"
-								className="block h-full bg-primary"
-								style={{ width: `${files.length ? (viewedCount / files.length) * 100 : 0}%` }}
-							/>
-						</span>
-						<span className="ml-auto flex items-center gap-4">
-							<button
-								type="button"
-								data-testid="changes-review-next-unreviewed"
-								disabled={viewedCount >= files.length}
-								onClick={nextUnreviewed}
-								className="flex h-24 items-center gap-4 rounded-[var(--radius-sm)] border border-control-border-default px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
+								className="h-4 w-120 min-w-0 shrink overflow-hidden rounded-[var(--radius-xs)] bg-control-bg-hovered"
+								aria-hidden="true"
 							>
-								Next unreviewed
-								<kbd className="rounded-[var(--radius-xs)] border border-control-border-default px-4 tr-code-text text-text-subtle">
-									J
-								</kbd>
-							</button>
-							<button
-								type="button"
-								data-testid="changes-review-mark-all"
-								disabled={viewedCount >= files.length}
-								onClick={markAllViewed}
-								className="flex h-24 items-center gap-4 rounded-[var(--radius-sm)] border border-control-border-default px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
-							>
-								<Check className="size-14" />
-								Mark all viewed
-							</button>
-						</span>
+								<span
+									data-testid="changes-review-progress"
+									className="block h-full bg-primary"
+									style={{ width: `${files.length ? (viewedCount / files.length) * 100 : 0}%` }}
+								/>
+							</span>
+							<span className="ml-auto flex shrink-0 items-center gap-4">
+								<button
+									type="button"
+									data-testid="changes-review-next-unreviewed"
+									disabled={viewedCount >= files.length}
+									onClick={nextUnreviewed}
+									className="flex h-24 items-center gap-4 rounded-[var(--radius-sm)] border border-control-border-default px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
+								>
+									Next unreviewed
+									<kbd className="rounded-[var(--radius-xs)] border border-control-border-default px-4 tr-code-text text-text-subtle">
+										J
+									</kbd>
+								</button>
+								<button
+									type="button"
+									data-testid="changes-review-mark-all"
+									disabled={viewedCount >= files.length}
+									onClick={markAllViewed}
+									className="flex h-24 items-center gap-4 rounded-[var(--radius-sm)] border border-control-border-default px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
+								>
+									<Check className="size-14" />
+									Mark all viewed
+								</button>
+							</span>
+						</div>
 					</div>
 				</div>
 			)}
