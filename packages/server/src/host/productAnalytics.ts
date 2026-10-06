@@ -131,8 +131,11 @@ export function providerAvailability(
 export class SetupObservation {
 	private grant: AdditionalAnalyticsCapture | null = null;
 	private state: SetupState | undefined;
+	private readonly getCapture: typeof additionalCapture;
 
-	constructor(private readonly getCapture = additionalCapture) {}
+	constructor(getCapture = additionalCapture) {
+		this.getCapture = getCapture;
+	}
 
 	observe(capture: AdditionalAnalyticsCapture | null, update: Partial<SetupState>): void {
 		if (!capture || capture !== this.getCapture()) return;

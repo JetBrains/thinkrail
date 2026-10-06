@@ -88,15 +88,21 @@ export function heaviestReplayMethod(load: ReplayLoad): string | undefined {
 
 export class RequestReplayCache<T> {
 	private readonly clients = new Map<string, ClientNamespace<T>>();
+	private readonly maxRequestsPerClient: number;
+	private readonly maxWeightPerClient: number;
 
+	private readonly maxTrackedPerClient: number;
 	private readonly liveLowWater: number;
 	private readonly trackedLowWater: number;
 
 	constructor(
-		private readonly maxRequestsPerClient = 512,
-		private readonly maxWeightPerClient = 16 * 1024 * 1024,
-		private readonly maxTrackedPerClient = 2048,
+		maxRequestsPerClient = 512,
+		maxWeightPerClient = 16 * 1024 * 1024,
+		maxTrackedPerClient = 2048,
 	) {
+		this.maxRequestsPerClient = maxRequestsPerClient;
+		this.maxWeightPerClient = maxWeightPerClient;
+		this.maxTrackedPerClient = maxTrackedPerClient;
 		this.liveLowWater = Math.floor(maxRequestsPerClient * 0.9);
 		this.trackedLowWater = Math.floor(maxTrackedPerClient * 0.9);
 	}
