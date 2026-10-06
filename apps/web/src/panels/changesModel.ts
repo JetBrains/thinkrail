@@ -92,6 +92,15 @@ export function sectionCollapsedByDefault(change: GitFileChange): boolean {
 	);
 }
 
+const SECTION_CHROME_HEIGHT = 232;
+const SECTION_HEIGHT_PER_LINE = 40;
+const SECTION_HEIGHT_MAX = 20_000;
+
+export function estimatedSectionHeight(change: GitFileChange): number {
+	const lines = (change.added ?? 0) + (change.removed ?? 0);
+	return Math.min(SECTION_HEIGHT_MAX, SECTION_CHROME_HEIGHT + lines * SECTION_HEIGHT_PER_LINE);
+}
+
 export function scopeLabel(
 	scope: GitDiffScope,
 	commits: readonly GitCommit[] = [],
