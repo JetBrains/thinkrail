@@ -10,13 +10,17 @@ import {
 	RiChat2Line as MessageSquareText,
 	RiNotification3Line as NotificationBell,
 	RiPaletteLine as Palette,
+	RiGitRepositoryLine as Repository,
 	RiSearchEyeLine as ScanEye,
 	RiShieldCheckLine as ShieldCheck,
 	RiEqualizerLine as SlidersHorizontal,
 	RiTerminalBoxLine as SquareTerminal,
 	RiTextWrap as TextWrap,
 } from "@remixicon/react";
-import { DEFAULT_MODEL_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import {
+	DEFAULT_MODEL_PROTOCOL_VERSION,
+	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+} from "@thinkrail/contracts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
@@ -33,6 +37,7 @@ import { ProvidersSettings } from "./ProvidersSettings";
 import { ReviewSettings } from "./ReviewSettings";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
+import { WorkspacesSettings } from "./WorkspacesSettings";
 
 const SECTIONS: {
 	id: SettingsSection;
@@ -60,6 +65,12 @@ const SECTIONS: {
 		requiresInjectedContent: true,
 	},
 	{ id: SettingsSection.Terminal, label: "Terminal", icon: SquareTerminal },
+	{
+		id: SettingsSection.Workspaces,
+		label: "Workspaces",
+		icon: Repository,
+		requiresProtocolVersion: WORKSPACE_SETTLE_PROTOCOL_VERSION,
+	},
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
 	{ id: SettingsSection.Review, label: "Review", icon: ScanEye },
 	{ id: SettingsSection.Notifications, label: "Notifications", icon: NotificationBell },
@@ -168,6 +179,8 @@ export function SettingsDialog({
 							updateSettings
 						) : selectedSection === SettingsSection.Terminal ? (
 							<TerminalSettings />
+						) : selectedSection === SettingsSection.Workspaces ? (
+							<WorkspacesSettings />
 						) : selectedSection === SettingsSection.Templates ? (
 							<TemplatesSettings />
 						) : selectedSection === SettingsSection.Review ? (

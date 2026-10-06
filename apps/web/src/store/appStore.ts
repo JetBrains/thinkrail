@@ -300,6 +300,7 @@ export const SettingsSection = {
 	Layout: "layout",
 	Updates: "updates",
 	Terminal: "terminal",
+	Workspaces: "workspaces",
 	Templates: "templates",
 	Review: "review",
 	Notifications: "notifications",

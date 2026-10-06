@@ -522,6 +522,12 @@ a project picker, the prompt hero, and the reused
   (the Settings shell includes its row only when content is provided; `panels` neither discovers native nor
   host update capabilities. If a later welcome removes injected content while Updates is selected, Appearance
   is rendered and highlighted rather than leaving no active row);
+  **`WorkspacesSettings`** (the **Workspaces** section, listed only at
+  `protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION`) — one `SettingsRadioCards` group, **Settle idle
+  workspaces after**: 1 / 3 (default) / 7 / 14 days / Never, written as `settings.update { settleIdleDays }`
+  (`null` for Never) and converging through `settings.changed`; the copy names the three things that count
+  as activity and the three things that never settle, because the setting is only legible together with
+  those rules;
   **`TerminalSettings`** — a **Replayed output** size picker (`store.terminalReplayKb`, five presets from
   Off to 1 MB, `settings.update { terminalReplayKb }`, applies to terminals opened from now on) and, on
   Windows hosts at `protocolVersion >= WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`, a **Windows shell** picker
