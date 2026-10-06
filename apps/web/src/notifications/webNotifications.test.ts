@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
+import type { NotificationSpec } from "./formatNotification";
 import {
+	createWebNotificationChannel,
 	isWindowFocused,
 	notificationPermission,
 	notificationsSupported,
@@ -143,5 +145,38 @@ describe("showBrowserNotification", () => {
 	test("a throwing constructor (mobile) is swallowed, not propagated", () => {
 		MockNotification.throwOnConstruct = true;
 		expect(() => showBrowserNotification(input)).not.toThrow();
+	});
+});
+
+describe("web notification channel", () => {
+	function spec(overrides: Partial<NotificationSpec> = {}): NotificationSpec {
+		return {
+			title: "ThinkRail",
+			subtitle: "feature-branch",
+			body: "Waiting for your input",
+			tag: "attention:s1",
+			target: { kind: "chat", workspaceId: "w1", sessionId: "s1" },
+			...overrides,
+		};
+	}
+
+	test("folds the subtitle into the body (web has no subtitle field)", () => {
+		const channel = createWebNotificationChannel();
+		channel.show(spec(), () => {});
+		expect(MockNotification.instances[0]?.title).toBe("ThinkRail");
+		expect(MockNotification.instances[0]?.options.body).toBe(
+			"feature-branch \u00b7 Waiting for your input",
+		);
+	});
+
+	test("uses the body alone when there is no subtitle", () => {
+		const channel = createWebNotificationChannel();
+		channel.show(spec({ subtitle: undefined, body: "2 worktrees need your attention" }), () => {});
+		expect(MockNotification.instances[0]?.options.body).toBe("2 worktrees need your attention");
+	});
+
+	test("permission delegates to the browser", () => {
+		MockNotification.permission = "granted";
+		expect(createWebNotificationChannel().permission()).toBe("granted");
 	});
 });

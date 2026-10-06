@@ -1,3 +1,5 @@
+import type { NotificationChannel } from "./channel";
+
 /** Permission state, with an extra `unsupported` for environments without the Notifications API. */
 export type NotificationPermissionState = "default" | "granted" | "denied" | "unsupported";
 
@@ -32,6 +34,21 @@ export interface ShowNotificationInput {
 	body: string;
 	tag: string;
 	onClick: () => void;
+}
+
+/**
+ * The browser channel: the page Notifications API, folding the subtitle (worktree) into the body since
+ * web notifications have no subtitle field, and using the browser permission flow.
+ */
+export function createWebNotificationChannel(): NotificationChannel {
+	return {
+		permission: notificationPermission,
+		requestPermission: requestNotificationPermission,
+		show: (spec, onClick) => {
+			const body = spec.subtitle ? `${spec.subtitle} · ${spec.body}` : spec.body;
+			showBrowserNotification({ title: spec.title, body, tag: spec.tag, onClick });
+		},
+	};
 }
 
 /**

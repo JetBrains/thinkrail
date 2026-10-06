@@ -9,8 +9,8 @@ import {
 } from "@thinkrail/ui/dialog";
 import { useRef } from "react";
 import { toast, useAppStore } from "@/store";
+import { selectNotificationChannel } from "./channel";
 import { snoozePrompt } from "./notificationPrompt";
-import { requestNotificationPermission } from "./webNotifications";
 
 const DENIED_HINT =
 	"Notifications are blocked for this site. Re-enable them in your browser's site settings, then turn notifications on again.";
@@ -27,7 +27,8 @@ export function NotificationPermissionPrompt() {
 	const enable = () => {
 		if (pendingRef.current) return;
 		pendingRef.current = true;
-		void requestNotificationPermission()
+		void selectNotificationChannel()
+			.requestPermission()
 			.then((result) => {
 				if (result === "denied") toast.error(DENIED_HINT, "Notifications blocked");
 			})

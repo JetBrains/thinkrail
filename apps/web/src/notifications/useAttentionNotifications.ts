@@ -2,14 +2,11 @@ import { useEffect } from "react";
 import { selectWorkspaceById, useAppStore } from "@/store";
 import { createAttentionNotificationEngine, type TimerHandle } from "./attentionNotificationEngine";
 import { createAttentionObserver } from "./attentionObserver";
+import { selectNotificationChannel } from "./channel";
 import { type AttentionCandidate, isLit } from "./detectAttention";
 import type { NotificationSpec } from "./formatNotification";
 import { isPromptSnoozed } from "./notificationPrompt";
-import {
-	isWindowFocused,
-	notificationPermission,
-	showBrowserNotification,
-} from "./webNotifications";
+import { isWindowFocused } from "./webNotifications";
 
 /** Collection-window length: enqueued edges accumulate this long, then flush as one batch. */
 export const ATTENTION_WINDOW_MS = 1000;
@@ -55,10 +52,11 @@ function navigate(spec: NotificationSpec): void {
  */
 export function useAttentionNotifications(): void {
 	useEffect(() => {
+		const channel = selectNotificationChannel();
 		const engine = createAttentionNotificationEngine({
 			windowMs: ATTENTION_WINDOW_MS,
 			isEnabled: () => useAppStore.getState().notificationsEnabled,
-			permission: notificationPermission,
+			permission: channel.permission,
 			isWindowFocused,
 			isStillLit: (sessionId) => {
 				const state = useAppStore.getState();
@@ -68,15 +66,9 @@ export function useAttentionNotifications(): void {
 				}
 				return false;
 			},
-			emit: (spec) =>
-				showBrowserNotification({
-					title: spec.title,
-					body: spec.body,
-					tag: spec.tag,
-					onClick: () => navigate(spec),
-				}),
+			emit: (spec) => channel.show(spec, () => navigate(spec)),
 			onPermissionNeeded: () => {
-				const permission = notificationPermission();
+				const permission = channel.permission();
 				if (permission === "denied" || permission === "unsupported") return;
 				if (isPromptSnoozed()) return;
 				useAppStore.getState().openNotificationPrompt();

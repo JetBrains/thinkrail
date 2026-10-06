@@ -46,19 +46,21 @@ describe("formatNotification", () => {
 		expect(formatNotification([])).toBeNull();
 	});
 
-	test("single → ThinkRail title, worktree + reason in body, targeting the chat", () => {
+	test("single → ThinkRail title, worktree subtitle, reason body, targeting the chat", () => {
 		const spec = formatNotification([event()]);
 		expect(spec).toEqual({
 			title: "ThinkRail",
-			body: "feature-branch · Waiting for your input",
+			subtitle: "feature-branch",
+			body: "Waiting for your input",
 			tag: "attention:s1",
 			target: { kind: "chat", workspaceId: "w1", sessionId: "s1" },
 		});
 	});
 
-	test("single with a blank name drops to the reason alone", () => {
+	test("single with a blank name drops the subtitle and keeps the reason", () => {
 		const spec = formatNotification([event({ worktreeName: "   " })]);
 		expect(spec?.title).toBe("ThinkRail");
+		expect(spec?.subtitle).toBeUndefined();
 		expect(spec?.body).toBe("Waiting for your input");
 	});
 
@@ -85,7 +87,8 @@ describe("formatNotification", () => {
 				},
 			}),
 		]);
-		expect(spec?.body).toBe("feature-branch · Stopped — the context is full");
+		expect(spec?.subtitle).toBe("feature-branch");
+		expect(spec?.body).toBe("Stopped — the context is full");
 	});
 
 	test("exactly two sessions aggregate with plural wording and a fixed tag", () => {

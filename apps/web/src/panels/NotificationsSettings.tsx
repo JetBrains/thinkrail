@@ -1,10 +1,6 @@
 import { Button } from "@thinkrail/ui/button";
 import { useState } from "react";
-import {
-	type NotificationPermissionState,
-	notificationPermission,
-	requestNotificationPermission,
-} from "@/notifications";
+import { type NotificationPermissionState, selectNotificationChannel } from "@/notifications";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { SettingsSwitch } from "./SettingsSwitch";
@@ -53,19 +49,21 @@ function PermissionRow({
 export function NotificationsSettings() {
 	const enabled = useAppStore((s) => s.notificationsEnabled);
 	const [permission, setPermission] = useState<NotificationPermissionState>(() =>
-		notificationPermission(),
+		selectNotificationChannel().permission(),
 	);
 
 	const requestPermission = () => {
-		void requestNotificationPermission().then((result) => {
-			setPermission(result);
-			if (result === "denied") {
-				toast.error(
-					"Notifications are blocked for this site. Re-enable them in your browser's site settings.",
-					"Notifications blocked",
-				);
-			}
-		});
+		void selectNotificationChannel()
+			.requestPermission()
+			.then((result) => {
+				setPermission(result);
+				if (result === "denied") {
+					toast.error(
+						"Notifications are blocked for this site. Re-enable them in your browser's site settings.",
+						"Notifications blocked",
+					);
+				}
+			});
 	};
 
 	const setEnabled = (notificationsEnabled: boolean) => {

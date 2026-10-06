@@ -21,6 +21,8 @@ export type NotificationTarget =
 /** A ready-to-show notification derived from one flush of accumulated events. */
 export interface NotificationSpec {
 	title: string;
+	/** The worktree name for a single event; channels with a subtitle field use it, others fold it into the body. */
+	subtitle?: string;
 	body: string;
 	tag: string;
 	target: NotificationTarget;
@@ -60,11 +62,11 @@ export function formatNotification(events: readonly AttentionEvent[]): Notificat
 	if (!event) return null;
 	if (events.length === 1) {
 		const name = event.worktreeName.trim();
-		const reason = reasonLabel(event.reason);
-		// Title is always the bold ThinkRail mark; the worktree and reason sit in the body.
+		// Title is always the bold ThinkRail mark; the worktree is the subtitle, the reason the body.
 		return {
 			title: APP_NAME,
-			body: truncate(name ? `${name} · ${reason}` : reason),
+			...(name ? { subtitle: name } : {}),
+			body: truncate(reasonLabel(event.reason)),
 			tag: `attention:${event.sessionId}`,
 			target: { kind: "chat", workspaceId: event.workspaceId, sessionId: event.sessionId },
 		};
