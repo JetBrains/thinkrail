@@ -72,6 +72,13 @@ export interface HunkActions {
 		notice?: string;
 	};
 	agentWorking?: boolean;
+	triage?: HunkTriage;
+}
+
+export interface HunkTriage {
+	keptKeys: ReadonlySet<string>;
+	setKept(key: string, kept: boolean): void;
+	onHunkKeys(keys: readonly string[]): void;
 }
 
 export interface ResourceDiffProps {
