@@ -7,6 +7,7 @@ import {
 	changesTabName,
 	diffTabId,
 	diffTabName,
+	estimatedSectionHeight,
 	scopeKey,
 	scopeLabel,
 	scopeTitle,
@@ -169,4 +170,27 @@ test("a turn scope is keyed by its id, labelled Last turn only while it is the n
 	expect(scopeTitle(scope, [], [older, newer])).toMatch(/^Agent turn at .* · 1 file$/);
 	expect(changesTabName(scope)).toMatch(/^Changes · turn /);
 	expect(diffTabName(scope, "src/a.ts")).toMatch(/^a\.ts · turn /);
+});
+
+test("a loading section reserves a height in the order of its eventual diff", () => {
+	const chrome = estimatedSectionHeight({ path: "img.png", status: "modified" });
+	const small = estimatedSectionHeight({ path: "a.ts", status: "modified", added: 1, removed: 1 });
+	const medium = estimatedSectionHeight({
+		path: "b.ts",
+		status: "modified",
+		added: 52,
+		removed: 2,
+	});
+	const huge = estimatedSectionHeight({
+		path: "c.ts",
+		status: "modified",
+		added: 9000,
+		removed: 9000,
+	});
+	expect(chrome).toBeGreaterThan(0);
+	expect(small).toBeGreaterThan(chrome);
+	expect(medium).toBeGreaterThan(small);
+	expect(medium).toBeGreaterThan(1500);
+	expect(medium).toBeLessThan(4000);
+	expect(huge).toBe(20_000);
 });

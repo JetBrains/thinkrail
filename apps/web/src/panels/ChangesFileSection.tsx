@@ -7,7 +7,7 @@ import {
 	RiExternalLinkLine as OpenAsTab,
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
-import type { GitFileChange, ResourceMeta } from "@thinkrail/contracts";
+import type { GitFileChange } from "@thinkrail/contracts";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -26,25 +26,15 @@ import {
 	useAppStore,
 } from "../store";
 import { errorText, getTransport } from "../transport";
-import { splitPath, statusNameClass } from "./changesModel";
+import { estimatedSectionHeight, splitPath, statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { DiffSurfaceBody, useDiffSurface } from "./DiffSurface";
 import { HeaderIconButton } from "./HeaderIconButton";
 import { openDiffInTab } from "./openTabs";
 import { rendererImplementationKey, rendererTestId } from "./resourcePane";
+import type { SectionContent, SectionContentCache } from "./sectionContentCache";
 import { ToggleSegment } from "./ToggleSegment";
 import { useLiveTabContent } from "./useLiveTabContent";
-
-export interface SectionContent {
-	original: string;
-	modified: string;
-	meta: { original: ResourceMeta; modified: ResourceMeta } | undefined;
-	originalOid: string | null | undefined;
-	loadedTick: number;
-	loadedTarget: string;
-}
-
-export type SectionContentCache = Map<string, SectionContent>;
 
 const PENDING_CONTENT = {
 	original: "",
@@ -132,9 +122,9 @@ export function ChangesFileSection({
 		let cancelled = false;
 		const tick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
 		setError(null);
-		read().then(
-			(fresh) => {
-				if (!cancelled) install({ ...fresh, loadedTick: tick, loadedTarget: targetRef });
+		cache.load(path, read, tick, targetRef).then(
+			(next) => {
+				if (!cancelled) setContent(next);
 			},
 			(failure: unknown) => {
 				if (!cancelled) setError(errorText(failure));
@@ -143,7 +133,7 @@ export function ChangesFileSection({
 		return () => {
 			cancelled = true;
 		};
-	}, [bodyVisible, content, install, read, targetRef, workspaceId]);
+	}, [bodyVisible, cache, content, path, read, targetRef, workspaceId]);
 
 	const surfaceContent = useMemo(
 		() =>
@@ -367,7 +357,12 @@ export function ChangesFileSection({
 					</button>
 				</div>
 			) : !content ? (
-				<LoadingRegion rows={4} className="p-12" />
+				<div
+					data-testid="changes-section-loading"
+					style={mode === "stacked" ? { minHeight: estimatedSectionHeight(change) } : undefined}
+				>
+					<LoadingRegion rows={4} className="p-12" />
+				</div>
 			) : (
 				<DiffSurfaceBody
 					surface={surface}
