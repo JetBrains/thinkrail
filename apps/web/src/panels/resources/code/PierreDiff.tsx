@@ -7,6 +7,7 @@ import {
 import { FileDiff } from "@pierre/diffs/react";
 import {
 	RiRobot2Line as AskAgent,
+	RiCheckLine as Check,
 	RiChatNewLine as MessageSquarePlus,
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
@@ -23,7 +24,12 @@ import { ReviewComposer } from "../../ReviewComposer";
 import { ReviewThreadCard } from "../../ReviewThreadCard";
 import { useScrollViewState } from "../../useScrollViewState";
 import { type AnnotationSlot, reconcileAnnotationSlots } from "./annotationSlots";
-import { type ChangeBlock, changeBlockId, computeActionBlocks } from "./changeBlocks";
+import {
+	type ChangeBlock,
+	changeBlockContentKey,
+	changeBlockId,
+	computeActionBlocks,
+} from "./changeBlocks";
 import PierreProvider from "./PierreProvider";
 import {
 	type BlockedSelection,
@@ -112,10 +118,12 @@ function useThreadAnnotations(
 
 function HunkToolbar({
 	block,
+	contentKey,
 	actions,
 	onAskAgent,
 }: {
 	block: ChangeBlock;
+	contentKey: string;
 	actions: NonNullable<ResourceDiffProps["hunkActions"]>;
 	onAskAgent: (block: ChangeBlock) => void;
 }) {
@@ -127,12 +135,34 @@ function HunkToolbar({
 			() => setReverting(false),
 		);
 	};
+	const triage = actions.triage;
+	const kept = triage?.keptKeys.has(contentKey) ?? false;
 	return (
 		<div
 			data-testid="hunk-toolbar"
-			className="mx-12 my-2 flex min-h-24 items-center gap-4 rounded-[var(--radius-sm)] border border-border-muted bg-container-header-bg px-4 text-text-muted"
+			data-kept={kept ? true : undefined}
+			className={`mx-12 my-2 flex min-h-24 items-center gap-4 rounded-[var(--radius-sm)] border bg-container-header-bg px-4 text-text-muted ${
+				kept ? "border-feedback-success-muted" : "border-border-muted"
+			}`}
 			onPointerDown={(event) => event.stopPropagation()}
 		>
+			{triage ? (
+				<IconTooltip label={kept ? "Kept — click to undo" : "Keep this hunk"}>
+					<button
+						type="button"
+						data-testid="hunk-keep"
+						aria-label={kept ? "Undo keep" : "Keep hunk"}
+						aria-pressed={kept}
+						onClick={() => triage.setKept(contentKey, !kept)}
+						className={`flex h-24 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+							kept ? "text-feedback-success" : "hover:bg-control-bg-hovered hover:text-text-default"
+						}`}
+					>
+						<Check className="size-14" />
+						{kept ? "Kept" : "Keep"}
+					</button>
+				</IconTooltip>
+			) : null}
 			<IconTooltip label="Revert hunk">
 				<button
 					type="button"
@@ -224,6 +254,20 @@ function PierreDiffSurface({
 		() => new Map(blocks.map((block) => [changeBlockId(block), block])),
 		[blocks],
 	);
+	const contentKeyById = useMemo(
+		() =>
+			new Map(
+				blocks.map((block) => [
+					changeBlockId(block),
+					changeBlockContentKey(block, originalText ?? "", modifiedText ?? ""),
+				]),
+			),
+		[blocks, modifiedText, originalText],
+	);
+	const onHunkKeys = hunkActions?.triage?.onHunkKeys;
+	useEffect(() => {
+		onHunkKeys?.([...contentKeyById.values()]);
+	}, [contentKeyById, onHunkKeys]);
 	const placedThreadIds = useMemo(
 		() => diffPlacedThreadIds(fileDiff, review),
 		[fileDiff, review?.base.threads, review?.worktree.threads],
@@ -395,6 +439,7 @@ function PierreDiffSurface({
 							<HunkToolbar
 								key={metadata.id}
 								block={block}
+								contentKey={contentKeyById.get(metadata.id) ?? metadata.id}
 								actions={hunkActions}
 								onAskAgent={openAskAgent}
 							/>

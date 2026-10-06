@@ -16,6 +16,7 @@ import {
 } from "@thinkrail/ui/dropdown-menu";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { copyText, isPhoneViewport } from "@/lib";
+import type { HunkTriage } from "@/resources";
 import { statusLetter } from "../chat/planView";
 import { LoadingRegion } from "../components/Skeleton";
 import {
@@ -61,7 +62,7 @@ export function ChangesFileSection({
 	viewed,
 	cache,
 	onToggleCollapsed,
-	onToggleViewed,
+	onSetViewed,
 }: {
 	tab: ChangesTab;
 	change: GitFileChange;
@@ -71,8 +72,9 @@ export function ChangesFileSection({
 	viewed: boolean;
 	cache: SectionContentCache;
 	onToggleCollapsed: () => void;
-	onToggleViewed: () => void;
+	onSetViewed: (viewed: boolean) => void;
 }) {
+	const onToggleViewed = () => onSetViewed(!viewed);
 	const { workspaceId, scope } = tab;
 	const path = change.path;
 	const [content, setContent] = useState<SectionContent | null>(() => cache.get(path) ?? null);
@@ -81,7 +83,24 @@ export function ChangesFileSection({
 	const targetRef = useAppStore((state) => selectDiffTabTargetRef(state, { workspaceId, scope }));
 	const setSectionRenderer = useAppStore((state) => state.setChangesTabSectionRenderer);
 	const setSectionViewState = useAppStore((state) => state.setChangesTabSectionViewState);
+	const setHunkKept = useAppStore((state) => state.setChangesTabHunkKept);
 	const section = tab.sections[path];
+	const keptList = tab.kept[path];
+	const keptKeys = useMemo(() => new Set(keptList ?? []), [keptList]);
+	const [hunkKeys, setHunkKeys] = useState<readonly string[]>([]);
+	const triage = useMemo<HunkTriage>(
+		() => ({
+			keptKeys,
+			setKept: (key, kept) => setHunkKept(workspaceId, tab.id, path, key, kept),
+			onHunkKeys: setHunkKeys,
+		}),
+		[keptKeys, path, setHunkKept, tab.id, workspaceId],
+	);
+	const keptCount = hunkKeys.filter((key) => keptKeys.has(key)).length;
+	const allKept = hunkKeys.length > 0 && keptCount === hunkKeys.length;
+	useEffect(() => {
+		if (allKept && !viewed) onSetViewed(true);
+	}, [allKept, onSetViewed, viewed]);
 
 	const read = useCallback(
 		() => getTransport().request("git.diffFile", { workspaceId, path, scope }),
@@ -145,6 +164,7 @@ export function ChangesFileSection({
 		content: surfaceContent,
 		rendererId: section?.rendererId,
 		reload,
+		triage,
 	});
 	const { renderer, candidates, implementationKey, mobile, hunkActions } = surface;
 	const view = mobile ? "inline" : (tab.view ?? "split");
@@ -215,6 +235,14 @@ export function ChangesFileSection({
 					</span>
 				</span>
 				<DiffStatBadge added={change.added ?? 0} removed={change.removed ?? 0} />
+				{hunkActions && hunkKeys.length > 0 && bodyVisible ? (
+					<span
+						data-testid="changes-section-kept"
+						className={`shrink-0 tr-text-metadata tabular-nums ${allKept ? "text-feedback-success" : "text-text-subtle"}`}
+					>
+						{keptCount}/{hunkKeys.length} kept
+					</span>
+				) : null}
 				<span className="ml-auto flex shrink-0 items-center gap-4">
 					{content && candidates.length >= 2
 						? candidates.map((candidate) => (
