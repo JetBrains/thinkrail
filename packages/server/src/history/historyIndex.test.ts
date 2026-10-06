@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, setSystemTime, test } from "bun:test";
 import { appendFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,6 +19,7 @@ describe("HistoryIndex.search", () => {
 	});
 
 	afterEach(() => {
+		setSystemTime();
 		rmSync(dir, { recursive: true, force: true });
 	});
 
@@ -220,7 +221,7 @@ describe("HistoryIndex.search", () => {
 			})}\n`,
 		);
 
-		await Bun.sleep(2100);
+		setSystemTime(Date.now() + 2100);
 
 		const second = await index.search({ query: "prompt", filter: allowAll, labels: noLabels });
 		expect(second.prompts.map((p) => p.text)).toEqual(["original prompt one"]);

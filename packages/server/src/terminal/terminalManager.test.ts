@@ -385,27 +385,18 @@ test("persisting writes nothing for a workspace whose tabs were all closed", () 
 
 test("only the attached client may drive a terminal", async () => {
 	const attached = attachTerminal(WS, "tab-a", "client-1");
-	await Bun.sleep(500);
+	await waitForTerminalOutput(attached.id);
 
 	attachTerminal(WS, "tab-a", "client-2");
-	writeTerminal(attached.id, "echo TR_FROM_DISPLACED\r", "client-1");
+	writeTerminal(attached.id, "printf 'TR_%s\\n' FROM_DISPLACED\r", "client-1");
 	resizeTerminal(attached.id, 5, 2, "client-1");
-	await Bun.sleep(500);
-
-	const seen = pushed
-		.filter((frame) => frame.channel === "terminal.data")
-		.map((frame) => (frame.data as { data: string }).data)
-		.join("");
-	expect(seen).not.toContain("TR_FROM_DISPLACED");
+	writeTerminal(attached.id, "printf 'TR_%s\\n' SYNC\r", "client-2");
+	await waitForTerminalOutput(attached.id, "TR_SYNC");
+	expect(terminalOutput(attached.id)).not.toContain("FROM_DISPLACED");
 
 	attachTerminal(WS, "tab-a", "client-1");
-	writeTerminal(attached.id, "echo TR_RECLAIMED\r", "client-1");
-	await Bun.sleep(800);
-	const afterReclaim = pushed
-		.filter((frame) => frame.channel === "terminal.data")
-		.map((frame) => (frame.data as { data: string }).data)
-		.join("");
-	expect(afterReclaim).toContain("TR_RECLAIMED");
+	writeTerminal(attached.id, "printf 'TR_%s\\n' RECLAIMED\r", "client-1");
+	await waitForTerminalOutput(attached.id, "TR_RECLAIMED");
 });
 
 test("opening and closing a tab broadcasts the new list", () => {
@@ -422,7 +413,7 @@ test("opening and closing a tab broadcasts the new list", () => {
 
 test("a displaced client that tries to type is told it is displaced", async () => {
 	const attached = attachTerminal(WS, "tab-a", "client-1");
-	await Bun.sleep(400);
+	await waitForTerminalOutput(attached.id);
 	attachTerminal(WS, "tab-a", "client-2");
 	pushed = [];
 
@@ -436,7 +427,7 @@ test("a displaced client that tries to type is told it is displaced", async () =
 
 test("the attached client is not told it is displaced", async () => {
 	const attached = attachTerminal(WS, "tab-a", "client-1");
-	await Bun.sleep(400);
+	await waitForTerminalOutput(attached.id);
 	pushed = [];
 
 	writeTerminal(attached.id, "echo TR_FINE\r", "client-1");

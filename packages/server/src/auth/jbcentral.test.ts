@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import {
 	chmodSync,
 	existsSync,
@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import { JBCENTRAL_STATUS_TTL_MS } from "@thinkrail/shared/jbcentral";
 import {
 	configurePiRuntime,
 	configurePiRuntimeFactory,
@@ -324,25 +325,34 @@ describe("watched native Central runtime", () => {
 	});
 
 	test("signed-out and stopped-proxy states hide quota without invoking it", async () => {
-		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
-		control("signed-out", true);
-		await waitFor(async () => {
-			const status = await getJbcentralStatus();
-			return status.state === "configured" && status.signedOut;
-		});
-		const beforeSignedOut = commandLog().filter((line) => line === "quota --json").length;
-		expect(await getJbcentralQuota({ maxAgeMs: 0, force: true })).toEqual({ state: "hidden" });
-		expect(commandLog().filter((line) => line === "quota --json")).toHaveLength(beforeSignedOut);
+		const realNow = Date.now;
+		let skew = 0;
+		const clock = spyOn(Date, "now").mockImplementation(() => realNow() + skew);
+		try {
+			expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+			control("signed-out", true);
+			skew += JBCENTRAL_STATUS_TTL_MS;
+			await waitFor(async () => {
+				const status = await getJbcentralStatus();
+				return status.state === "configured" && status.signedOut;
+			});
+			const beforeSignedOut = commandLog().filter((line) => line === "quota --json").length;
+			expect(await getJbcentralQuota({ maxAgeMs: 0, force: true })).toEqual({ state: "hidden" });
+			expect(commandLog().filter((line) => line === "quota --json")).toHaveLength(beforeSignedOut);
 
-		control("signed-out", false);
-		control("proxy-stopped", true);
-		await waitFor(async () => {
-			const status = await getJbcentralStatus();
-			return status.state === "configured" && status.proxyStopped;
-		});
-		const beforeStopped = commandLog().filter((line) => line === "quota --json").length;
-		expect(await getJbcentralQuota({ maxAgeMs: 0, force: true })).toEqual({ state: "hidden" });
-		expect(commandLog().filter((line) => line === "quota --json")).toHaveLength(beforeStopped);
+			control("signed-out", false);
+			control("proxy-stopped", true);
+			skew += JBCENTRAL_STATUS_TTL_MS;
+			await waitFor(async () => {
+				const status = await getJbcentralStatus();
+				return status.state === "configured" && status.proxyStopped;
+			});
+			const beforeStopped = commandLog().filter((line) => line === "quota --json").length;
+			expect(await getJbcentralQuota({ maxAgeMs: 0, force: true })).toEqual({ state: "hidden" });
+			expect(commandLog().filter((line) => line === "quota --json")).toHaveLength(beforeStopped);
+		} finally {
+			clock.mockRestore();
+		}
 	});
 
 	test("disconnect invalidates quota freshness before a later reconnect", async () => {

@@ -18,6 +18,7 @@ export interface PostHogSinkOptions {
 	apiKey: string;
 	host?: string;
 	fetchImpl?: typeof fetch;
+	retryDelayMs?: number;
 }
 
 export const POSTHOG_EU_HOST = "https://eu.i.posthog.com";
@@ -37,6 +38,7 @@ export function createPostHogSink(options: PostHogSinkOptions): AnalyticsSink {
 		disableGeoip: true,
 		disableCompression: true,
 		fetch: gatedFetch,
+		...(options.retryDelayMs === undefined ? {} : { fetchRetryDelay: options.retryDelayMs }),
 	});
 	client.on("error", (error) => debugLog(error));
 	return {
