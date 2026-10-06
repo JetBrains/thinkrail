@@ -565,7 +565,20 @@ prior opaque state, and each implementation rejects state it cannot interpret. D
 `view` split|inline via
 `setDiffTabView` (split by default) and `ignoreWhitespace` via `setDiffTabIgnoreWhitespace`. Legacy persisted
 `view` on file documents and `rendered` on diff documents are outside the accepted cache shape and are
-ignored on read; no migration state exists. Opened by `ChangesPanel`.
+ignored on read; no migration state exists. Opened by `ChangesPanel` at the `keep` intent (double click /
+*Open as tab*); a single click opens the **`ChangesTab`** instead. **`ChangesTab`** (`kind: "changes"`, id
+`${workspaceId}:changes:${scopeKey}` computed by `changesTabId` — one per *(workspace, scope)*) is the review surface over
+**every** changed file of one scope. Like a `DiffTab` its scope is part of its identity and the target ref
+is not; unlike a `DiffTab` it carries **no content** — the pane reads `git.status` and each section its own
+`git.diffFile`, so the persisted layout tab is just kind + id + name + scope and reload hydration rebuilds the
+tab without a request. What the tab *does* own is review progress: `viewed` paths, `activePath` (the section
+at the top of the viewport, or the file shown in One-file mode; `ChangesPanel` highlights from it), per-path
+collapse overrides over the scale defaults, a one-shot `reveal` (`{ path, tick }`, written by
+`openChangesTab` and consumed by the pane), `view` split|inline + `ignoreWhitespace` for all sections, and
+per-path `rendererId` / opaque `viewState` written through the workspace-explicit `setChangesTabSection*`
+actions. The stacked-vs-one-file mode is **not** on the tab: `changesLayout` (`"stacked"` default |
+`"single"`) is app-wide like `changesView`, a reading preference rather than a property of one review.
+The tab is preview-eligible like `FileTab` and `DiffTab`.
 **`diffScopeByWorkspace`** + **`setDiffScope(workspaceId, scope)`** hold *what* each workspace's Changes
 panel is diffing (read through **`selectDiffScope`**, which defaults to the shared, referentially stable
 `BRANCH_SCOPE`); keyed **per workspace**, not app-wide like `changesView`, because a scope belongs to that
@@ -591,7 +604,7 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   by placement-only minting) still selects semantically. That selection deliberately does not focus the tab,
   because the mounted history query owns focus. The shell updates the group's local attention so the target
   body mounts and consumes the request without publishing a structural snapshot. The `EditorTab` (`FileTab`
-  | `ChatTab` | `DocTab` | `DiffTab` | `PlanTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types.
+  | `ChatTab` | `DocTab` | `DiffTab` | `ChangesTab` | `PlanTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types.
   (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
   project from those canonical ids and collections; derived active-project state is never stored separately.

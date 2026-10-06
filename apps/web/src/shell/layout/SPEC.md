@@ -24,7 +24,9 @@ The shell-owned, headless workbench engine: the normalized frontend-local frame 
 One `WorkbenchFrame` belongs to a frontend surface, not a workspace. It carries stable group/split ids, center topology, left/right/bottom groups and geometry, auxiliary visibility/folds, bottom alignment, singleton-tool placement/order, and restore targets. It carries no workspace resource identity, preview, selected tab, navigation clock, pointer draft, or viewport compression.
 
 A `WorkspaceViewState` is keyed by workspace and references frame group ids. It carries
-file/diff/chat/document/terminal membership and order plus center preview identity. The separate
+file/diff/changes/chat/document/terminal membership and order plus center preview identity (a `changes`
+tab is the per-scope review surface defined in the store spec; its layout record is kind + id + name +
+scope, nothing cached, and it is preview-eligible like file and diff tabs). The separate
 `LayoutAttention` overlay carries selection per group, last focus for center/each auxiliary region, and
 per-group navigation clocks. Attention is keyed per workspace, but a selected singleton tool is shared
 across the window's views (a resource selection is not); the pure adoption rule lives here and its
