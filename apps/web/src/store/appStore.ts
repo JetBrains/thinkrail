@@ -30,6 +30,7 @@ import type {
 	ThemeId,
 	ThemeMode,
 	ThinkingLevel,
+	TurnChangeSet,
 	UserMessage,
 	WireModel,
 	Workspace,
@@ -162,6 +163,7 @@ export interface DiffTab {
 	loadedTick?: number;
 }
 export type ChangesLayout = "stacked" | "single";
+const TURNS_PER_WORKSPACE = 30;
 export interface ChangesTabReveal {
 	path: string;
 	tick: number;
@@ -1084,6 +1086,9 @@ interface AppState {
 	diffScopeByWorkspace: Record<string, GitDiffScope>;
 	setDiffScope: (workspaceId: string, scope: GitDiffScope) => void;
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
+	turnsByWorkspace: Record<string, TurnChangeSet[]>;
+	setWorkspaceTurns: (workspaceId: string, turns: TurnChangeSet[]) => void;
+	applyTurnChanged: (turn: TurnChangeSet) => void;
 	markSkillsSynced: (sessionId: string, syncedTick: number) => void;
 	updateFileTabContent: (
 		workspaceId: string,
@@ -2064,6 +2069,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	chatLocationRequest: null,
 	historyOpenRequest: null,
 	fsChangesByWorkspace: {},
+	turnsByWorkspace: {},
 	skillChangeTickByWorkspace: {},
 	skillsSyncedTickBySession: {},
 	activeLogin: null,
@@ -2307,6 +2313,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						? null
 						: state.pendingWorkspaceChatActivation,
 				fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
+				turnsByWorkspace: omitKey(state.turnsByWorkspace, workspaceId),
 				resourceSnapshots: omitKey(state.resourceSnapshots, workspaceId),
 				sessionStateByWorkspace: omitKey(state.sessionStateByWorkspace, workspaceId),
 				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
@@ -2814,6 +2821,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 				? {}
 				: { diffScopeByWorkspace: { ...s.diffScopeByWorkspace, [workspaceId]: scope } },
 		),
+	setWorkspaceTurns: (workspaceId, turns) =>
+		set((s) =>
+			s.removedWorkspaceIds[workspaceId]
+				? {}
+				: { turnsByWorkspace: { ...s.turnsByWorkspace, [workspaceId]: turns } },
+		),
+	applyTurnChanged: (turn) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[turn.workspaceId]) return {};
+			const current = s.turnsByWorkspace[turn.workspaceId];
+			if (!current) return {};
+			const next = [...current.filter((t) => t.id !== turn.id), turn]
+				.sort((a, b) => a.startedAt - b.startedAt)
+				.slice(-TURNS_PER_WORKSPACE);
+			return { turnsByWorkspace: { ...s.turnsByWorkspace, [turn.workspaceId]: next } };
+		}),
 	noteFsChanged: (payload) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[payload.workspaceId]) return {};

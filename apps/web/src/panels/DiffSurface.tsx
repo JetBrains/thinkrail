@@ -173,7 +173,8 @@ export function useDiffSurface({
 		content.meta?.original,
 		content.originalOid ? resourceBytesUrl(workspaceId, path, content.originalOid) : null,
 	);
-	const modifiedOid = scope.kind === "commit" ? scope.sha : null;
+	const modifiedOid =
+		scope.kind === "commit" ? scope.sha : scope.kind === "turn" ? scope.headTree : null;
 	const modified = sideContent(
 		content.modified,
 		content.meta?.modified,

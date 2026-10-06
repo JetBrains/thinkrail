@@ -9,7 +9,8 @@ export function tupleKey(namespace: string, ...parts: string[]): string {
 type LayoutDiffScopeInput =
 	| { kind: "branch" | "uncommitted" }
 	| { kind: "commit"; sha: string }
-	| { kind: "pinned"; baseRef: string };
+	| { kind: "pinned"; baseRef: string }
+	| { kind: "turn"; id: string };
 
 type LayoutResourceIdentityInput =
 	| { kind: "file"; path: string }
@@ -21,7 +22,16 @@ type LayoutResourceIdentityInput =
 	| { kind: "tool"; tool: string };
 
 function layoutScopeReference(scope: LayoutDiffScopeInput): string {
-	return scope.kind === "commit" ? scope.sha : scope.kind === "pinned" ? scope.baseRef : "";
+	switch (scope.kind) {
+		case "commit":
+			return scope.sha;
+		case "pinned":
+			return scope.baseRef;
+		case "turn":
+			return scope.id;
+		default:
+			return "";
+	}
 }
 
 export function isPreviewCompatibleTabKind(kind: string): boolean {
