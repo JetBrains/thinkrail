@@ -300,3 +300,29 @@ export async function copyText(text: string): Promise<boolean> {
 		return false;
 	}
 }
+
+export const MODAL_LAYER_SELECTOR = [
+	'[aria-modal="true"]',
+	'[role="dialog"][data-state="open"]',
+	'[role="alertdialog"][data-state="open"]',
+].join(", ");
+
+export function hasLayer(root: Pick<Document, "querySelector">, selector: string): boolean {
+	return root.querySelector(selector) !== null;
+}
+
+const TEXT_ENTRY_ROOT_SELECTOR = ".monaco-editor, .xterm";
+
+export function isTextEntryTarget(target: EventTarget | null): boolean {
+	const element = target as {
+		isContentEditable?: boolean;
+		tagName?: string;
+		closest?: (selector: string) => Element | null;
+	} | null;
+	return (
+		element !== null &&
+		(element.isContentEditable === true ||
+			/^(INPUT|TEXTAREA|SELECT)$/.test(element.tagName ?? "") ||
+			(typeof element.closest === "function" && element.closest(TEXT_ENTRY_ROOT_SELECTOR) !== null))
+	);
+}

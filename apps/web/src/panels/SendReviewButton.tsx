@@ -25,13 +25,21 @@ export function SendReviewButton({
 	);
 }
 
-export function SendAllReviewsButton({ workspaceId }: { workspaceId: string }) {
+export function SendAllReviewsButton({
+	workspaceId,
+	testid = "review-send-all",
+	verb = "Send all",
+}: {
+	workspaceId: string;
+	testid?: string;
+	verb?: string;
+}) {
 	const comments = useAppStore((s) => s.reviewsByWorkspace[workspaceId]?.comments);
 	const count = useMemo(() => allDraftIds(comments).length, [comments]);
 	return (
 		<SendButtonBase
-			testid="review-send-all"
-			label={`Send all (${count})`}
+			testid={testid}
+			label={`${verb} (${count})`}
 			count={count}
 			send={() => sendReviewBatch(workspaceId)}
 		/>

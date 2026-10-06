@@ -218,7 +218,8 @@ treatment.
   and the chat header, not a value pinned here — that says **what** is being diffed via the
   **`ChangesScopeMenu`** scope pill + the shared **`BranchPicker`** target-branch pill, plus the
   **List | Tree** toggle (`store.changesView`, app-wide) switching a flat list and a folder
-  **`ChangesTree`**; clicking a file in either opens/focuses its **center resource diff tab**, and every file
+  **`ChangesTree`**; a single click on a file in either opens/reveals it in the scope's **Changes review
+  tab** (double-click or *Open as tab*: its own diff tab — the two-presentation rule below), and every file
   row carries the shared **`ChangeRowActions`** menu. The row wrapper paints the complete hover/selected
   band, including the trailing menu slot; its inner open-file button remains transparent so that band
   cannot look clipped before the menu),
@@ -1336,8 +1337,9 @@ own section. The kebab menu (`plan-menu`, a
   only reveals a tool therefore needs no fabricated path or fixed-right-panel assumption.
   `ChangesPanel` watches `changesRequest` (set by a chat turn-divider's "files changed" chip),
   **highlights** the requested file's row (resolved with `matchesWorktreePath` against `git.status`) **and
-  opens its diff tab** in the destination center group's **preview slot** — the chip/list-row click *is* the
-  user's explicit ask to see
+  opens the review tab at that file** in the destination center group's **preview slot** (a request with
+  `path: null` opens the tab without a reveal; a request carrying a scope opens that scope's tab) — the
+  chip/list-row click *is* the user's explicit ask to see
   that change, so stopping at a highlight read as broken, and following a chip is browsing, same as clicking
   the row it points at, so it reuses the slot rather than accumulating a kept tab per chip. A path no longer
   in the current diff (a round from days ago) degrades to highlight-only: there is no diff to show. **So does
@@ -1369,7 +1371,7 @@ own section. The kebab menu (`plan-menu`, a
   branch's list — and the shared **`BranchPicker`** pill for the **target branch** (`workspace.setDiffBase`;
   the panel converges on the broadcast `workspace.updated`, never optimistically). Below the two fixed rows
   the menu offers **Last turn · N files** — the newest host-recorded agent run (`store.turnsByWorkspace`
-  via `useWorkspaceTurns`, which fetches `workspace.turns` once per workspace and connection on hosts at
+  read through `useWorkspaceTurns`; the shell loads it per connection on hosts at
   `TURN_CHANGES_PROTOCOL_VERSION`; disabled with "No agent turn changed files yet" until a run changed
   something) and, when more than one run exists, an **Agent turns** list (newest first, time · files ·
   relative settle time). Choosing one sets the `turn` scope `{ id, baseTree, headTree, startedAt }`; the
@@ -1418,19 +1420,24 @@ own section. The kebab menu (`plan-menu`, a
   **The Changes sidebar is the review tab's navigator**: its row highlight follows the tab's
   `activePath` (the section whose header has crossed the toolbar's midline, or the single file shown),
   viewed files carry a check glyph, and clicking a row reveals that section (and expands it if it was
-  collapsed); `changesView` defaults to **Tree**, and a file row is `change-item` in both views because
-  it is the same thing. The list ends in a measured tail the height of the viewport so the last file can
+  collapsed) — the reveal re-targets `scrollToIndex` while sections above it are still measuring
+  (`REVEAL_SETTLE_MS`), but the first wheel, touch or pointer on the list ends that window, because a
+  reader who has started scrolling must never be snapped back; `changesView` defaults to **Tree**, and a
+  file row is `change-item` in both views because it is the same thing. When the shown file leaves the
+  scope (reverted, or the agent removed its change), One-file mode stays at that position rather than
+  jumping back to the first file. The list ends in a measured tail the height of the viewport so the last file can
   be scrolled to the top and become active, as on GitHub. The scroll-spy never auto-reveals the Review
   tool: `selectActiveReviewedPath` deliberately ignores the review tab, because a reveal fired by
   scrolling would replace the Changes navigator in its shared side group mid-read.
   **Hunk triage is an overlay on the same tab, not a second mutation model.** In a mutable scope every
   hunk toolbar gains **Keep** beside the existing Revert and Ask-agent actions; a kept hunk is recorded
-  on the tab (`kept[path]`) under a **content key** — a hash of the hunk's removed + added text — so
-  the decision survives the line shifts a neighbouring revert causes and lapses the moment the agent
-  changes that hunk again. A *reverted* hunk needs no state: ThinkRail's revert restores the base text,
-  the hunk leaves the diff, and the toast's Undo is the way back. The section header shows `k/n kept`
-  and a file whose hunks are all kept is marked **viewed** (one-way), so hunk and file progress are one
-  model; the stacked view's bottom bar shows `n of N reviewed`, **Next unreviewed** (`J`, wraps) and
+  on the tab (`kept[path]`) under a **content key** — a hash of the hunk's removed + added text, with an
+  ordinal suffix for the second and later hunks of identical content, so twin hunks are kept one at a
+  time — so the decision survives the line shifts a neighbouring revert causes and lapses the moment the
+  agent changes that hunk again. A *reverted* hunk needs no state: ThinkRail's revert restores the base
+  text, the hunk leaves the diff, and the toast's Undo is the way back. The section header shows `k/n
+  kept` and the moment a file's last hunk is kept it is marked **viewed** — an edge, not a standing rule,
+  so the reader can still un-view a fully kept file — and hunk and file progress are one model; the stacked view's bottom bar shows `n of N reviewed`, **Next unreviewed** (`J`, wraps) and
   **Mark all viewed**, and `V` toggles the active section. There is deliberately no *Revert all*: the
   host has no atomic multi-file discard and a bulk destructive action on a review surface earns its
   keystroke only once it exists server-side. The per-file `DiffTab` passes no triage and is unchanged.
@@ -1440,15 +1447,24 @@ own section. The kebab menu (`plan-menu`, a
   toolbar, never shown in One-file mode): verdict badge + summary, the numbered reading order (steps for
   files outside the scope are disabled rather than hidden, so the order stays legible), and the findings.
   `guideSteps` is the one derivation — reading steps first, then open agent findings by path — and
-  **Start / Next / Restart** (`N`, `P` back) walk it: a step reveals its section through the tab's one-shot
-  reveal, a finding step also fires the store's `reviewFocusRequest`, so the thread card is scrolled to by
-  the same path the Review panel uses. *Fix this one* and *Apply fixes* are the Review panel's send paths
-  (`sendReviewComment`, `sendReviewBatch` over the open finding ids), not new mutations. **Scale rules**:
+  **Start / Next / Restart** (`N`, `P` back) walk it, skipping steps whose file is not in this scope
+  (`nextGuideStep`; a disabled step is shown for context, never landed on): a step reveals its section
+  through the tab's one-shot reveal, a finding step also fires the store's `reviewFocusRequest`, so the
+  thread card is scrolled to by the same path the Review panel uses. *Fix this one* and *Apply fixes* are
+  the Review panel's send paths (`sendReviewComment`, `sendReviewBatch` over the open finding ids) behind
+  one busy flag, not new mutations. The cursor is the step's identity (path or finding id), so a
+  finding resolved from under it yields to its successor instead of skipping one. The rail never renders
+  on phone-class viewports — 280px of a 390px
+  screen would leave no diff to guide through. Plain-letter shortcuts (`V`, `J`, `N`, `P`) belong to the
+  review tab the center is looking at (`ownsReviewShortcut`: the attention group's selected tab, no
+  modal layer open, no text-entry target), so two review scopes split side by side cannot both answer
+  one keystroke. **Scale rules**:
   a section whose file changed more than 400 lines, or whose path is a lock/generated file, mounts
   collapsed behind *Expand* / *Open as tab*; a scope with more than 50 files shows a dismissable notice
   offering *One file*; nothing switches mode on its own, because a review surface that re-arranges
-  itself mid-review loses the reader's place. The list is a `react-virtuoso` grouped list (one group per
-  file, header sticky); Pierre `CodeView` was evaluated for the container and rejected because its items
+  itself mid-review loses the reader's place. The list is a flat `react-virtuoso` list, one item per file
+  with the header sticky inside its item (no `GroupedVirtuoso`: a group header that outlives its item's
+  content could not host the per-file controls); Pierre `CodeView` was evaluated for the container and rejected because its items
   are only `file` / `diff`, so it cannot host the rendered-markdown, image, SVG, CSV, JSON, notebook, and PDF
   renderers that a section must dispatch exactly like `DiffPane` does. **A section holds its shape
   before it has its diff.** Each section reads `git.diffFile` lazily when its body first becomes

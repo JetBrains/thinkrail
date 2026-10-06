@@ -601,17 +601,33 @@ test("several runs inside one round merge into one receipt spanning first base t
 	const receipt = matchTurnReceipt(
 		[agentTurn("r1", 1_000, ["a.ts"]), agentTurn("r2", 4_000, ["a.ts", "b.ts"], "c")],
 		800,
-		9_000,
+		null,
 	);
 	expect(receipt?.changes.map((change) => change.path)).toEqual(["a.ts", "b.ts"]);
+	// a merged range is its own scope: it must not share a tab with the last run on its own
 	expect(receipt?.scope).toMatchObject({
-		id: "r2",
+		id: "r1..r2",
 		baseTree: "a".repeat(40),
 		headTree: "c".repeat(40),
 		startedAt: 1_000,
 	});
 	expect(matchTurnReceipt([agentTurn("r1", 1_000, ["a.ts"])], 20_000, 30_000)).toBeNull();
 	expect(matchTurnReceipt([agentTurn("r1", 1_000, ["a.ts"])], null, 30_000)).toBeNull();
+});
+
+test("each run belongs to the round whose prompt started it, even across a quick follow-up", () => {
+	const turns: ChatTurn[] = [
+		user("u1", 10_000),
+		done("s1", 11_500),
+		user("u2", 12_000),
+		done("s2", 25_000),
+	];
+	const records = [agentTurn("r1", 10_200, ["x.ts"]), agentTurn("r2", 12_100, ["y.ts"], "c")];
+	expect(turnDivider(turns, 1, () => false, records)?.receipt?.scope.id).toBe("r1");
+	expect(turnDivider(turns, 3, () => false, records)?.receipt?.scope.id).toBe("r2");
+	// a round that failed before any assistant message still ends at the next prompt
+	const failed: ChatTurn[] = [user("u1", 10_000), user("u2", 12_000), done("s2", 25_000)];
+	expect(turnDivider(failed, 2, () => false, records)?.receipt?.scope.id).toBe("r2");
 });
 
 test("receipt paths the spec matcher claims land on the specs side", () => {

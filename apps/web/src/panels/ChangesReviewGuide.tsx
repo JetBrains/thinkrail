@@ -5,9 +5,10 @@ import {
 } from "@remixicon/react";
 import type { GitFileChange, ReviewComment, ReviewGuide } from "@thinkrail/contracts";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { useAppStore } from "../store";
+import { type ChangesTab, useAppStore } from "../store";
 import { splitPath } from "./changesModel";
 import { sendReviewBatch, sendReviewComment } from "./reviewSend";
+import { ownsReviewShortcut } from "./reviewShortcuts";
 
 export type GuideStep =
 	| { kind: "read"; path: string; why: string }
@@ -34,21 +35,50 @@ export function guideSteps(
 	return steps;
 }
 
+export function guideStepKey(step: GuideStep): string {
+	return step.kind === "read" ? `read:${step.path}` : `finding:${step.comment.id}`;
+}
+
+export function guideCursorIndex(
+	steps: readonly GuideStep[],
+	cursor: { key: string; index: number } | null,
+): number {
+	if (!cursor) return -1;
+	const found = steps.findIndex((step) => guideStepKey(step) === cursor.key);
+	return found >= 0 ? found : Math.min(cursor.index, steps.length) - 1;
+}
+
+export function nextGuideStep(
+	steps: readonly GuideStep[],
+	inScope: ReadonlySet<string>,
+	from: number,
+	delta: 1 | -1,
+): number | null {
+	for (let hop = 1; hop <= steps.length; hop += 1) {
+		const index = (from + delta * hop + steps.length) % steps.length;
+		const step = steps[index];
+		if (step && (step.path === null || inScope.has(step.path))) return index;
+	}
+	return null;
+}
+
 export function ChangesReviewGuide({
-	workspaceId,
+	tab,
 	files,
 	guide,
 	comments,
 	onReveal,
 }: {
-	workspaceId: string;
+	tab: ChangesTab;
 	files: readonly GitFileChange[];
 	guide: ReviewGuide | undefined;
 	comments: readonly ReviewComment[] | undefined;
 	onReveal: (path: string) => void;
 }) {
+	const { workspaceId } = tab;
 	const steps = useMemo(() => guideSteps(guide, comments), [guide, comments]);
-	const [cursor, setCursor] = useState(-1);
+	const [cursorAt, setCursorAt] = useState<{ key: string; index: number } | null>(null);
+	const cursor = guideCursorIndex(steps, cursorAt);
 	const inScope = useMemo(() => new Set(files.map((change) => change.path)), [files]);
 	const findings = steps.filter(
 		(step): step is Extract<GuideStep, { kind: "finding" }> => step.kind === "finding",
@@ -57,28 +87,38 @@ export function ChangesReviewGuide({
 		.filter((step) => step.comment.status === "draft")
 		.map((step) => step.comment.id);
 
+	const [sending, setSending] = useState(false);
+	const send = async (operation: () => Promise<void>) => {
+		if (sending) return;
+		setSending(true);
+		try {
+			await operation();
+		} catch {
+		} finally {
+			setSending(false);
+		}
+	};
+
 	const go = (index: number) => {
 		const step = steps[index];
 		if (!step) return;
-		setCursor(index);
+		setCursorAt({ key: guideStepKey(step), index });
 		if (step.path) onReveal(step.path);
 		if (step.kind === "finding") {
 			useAppStore.getState().requestReviewFocus(workspaceId, step.comment.id);
 		}
 	};
-	const next = () => go(cursor + 1 < steps.length ? cursor + 1 : 0);
-	const previous = () => go(cursor - 1 >= 0 ? cursor - 1 : steps.length - 1);
+	const stepFrom = (from: number, delta: 1 | -1) => {
+		const index = nextGuideStep(steps, inScope, from, delta);
+		if (index !== null) go(index);
+	};
+	const next = () => stepFrom(cursor, 1);
+	const previous = () => stepFrom(cursor < 0 ? 0 : cursor, -1);
 
 	useEffect(() => {
 		if (steps.length === 0) return;
 		const onKey = (event: KeyboardEvent) => {
-			const target = event.target as HTMLElement | null;
-			if (
-				target &&
-				(target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
-			) {
-				return;
-			}
+			if (!ownsReviewShortcut(event, tab)) return;
 			if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
 			if (event.key === "n") {
 				event.preventDefault();
@@ -200,7 +240,10 @@ export function ChangesReviewGuide({
 											<button
 												type="button"
 												data-testid="changes-review-guide-fix"
-												onClick={() => void sendReviewComment(workspaceId, step.comment.id)}
+												disabled={sending}
+												onClick={() =>
+													void send(() => sendReviewComment(workspaceId, step.comment.id))
+												}
 												className="mt-8 rounded-[var(--radius-sm)] bg-primary px-8 py-2 tr-text-metadata text-text-on-primary hover:bg-control-primary-bg-hovered"
 											>
 												Fix this one
@@ -243,8 +286,8 @@ export function ChangesReviewGuide({
 				<button
 					type="button"
 					data-testid="changes-review-guide-apply"
-					disabled={openFindingIds.length === 0}
-					onClick={() => void sendReviewBatch(workspaceId, openFindingIds)}
+					disabled={sending || openFindingIds.length === 0}
+					onClick={() => void send(() => sendReviewBatch(workspaceId, openFindingIds))}
 					title="Send every open finding to the agent"
 					className="flex h-24 items-center gap-4 rounded-[var(--radius-sm)] border border-control-border-default px-8 tr-text-metadata text-text-muted hover:bg-control-bg-hovered disabled:text-control-disabled-text"
 				>

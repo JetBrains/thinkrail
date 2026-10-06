@@ -46,3 +46,19 @@ test("a failed read leaves nothing behind so the next attempt reads again", asyn
 	await expect(cache.load("src/c.ts", read, 1, "main")).rejects.toThrow("boom");
 	expect(reads).toBe(2);
 });
+
+test("a read against a different diff base is never shared with the one in flight", async () => {
+	const cache = createSectionContentCache();
+	let reads = 0;
+	const read = () => {
+		reads++;
+		return Promise.resolve(fresh);
+	};
+	const [old, next] = await Promise.all([
+		cache.load("src/a.ts", read, 1, "main"),
+		cache.load("src/a.ts", read, 1, "release"),
+	]);
+	expect(reads).toBe(2);
+	expect(old.loadedTarget).toBe("main");
+	expect(next.loadedTarget).toBe("release");
+});

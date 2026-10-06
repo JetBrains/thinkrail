@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { commentKindForDraft } from "../../useReviewCommenting";
 import {
-	changeBlockContentKey,
+	type ChangeBlock,
+	changeBlockContentKeys,
+	changeBlockId,
 	computeActionBlocks,
 	computeChangeBlocks,
 	createAskAgentRequest,
@@ -76,7 +78,13 @@ describe("computeChangeBlocks", () => {
 	});
 });
 
-describe("changeBlockContentKey", () => {
+function changeBlockContentKey(block: ChangeBlock, original: string, modified: string): string {
+	const key = changeBlockContentKeys([block], original, modified).get(changeBlockId(block));
+	if (!key) throw new Error("expected a key for the block");
+	return key;
+}
+
+describe("changeBlockContentKeys", () => {
 	test("keys a hunk by what it removes and adds, not by where it sits", () => {
 		const original = "a\nb\nc\nd\n";
 		const shifted = "x\ny\na\nb\nc\nd\n";

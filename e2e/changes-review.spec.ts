@@ -9,6 +9,7 @@ import {
 } from "./fixtures/app";
 import { commitFile, gitAs } from "./fixtures/git";
 import { E2E_DATA_DIR } from "./fixtures/paths";
+import { selectPierreLine } from "./fixtures/pierre";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const reviewTab = (page: Page) => page.locator('[data-testid="editor-tab"][data-kind="changes"]');
@@ -215,7 +216,7 @@ test("a round's receipt comes from the host's turn snapshot and Review turn open
 	commitFile(worktree, "feature.ts", "export const feature = true;\n", "agent: add the feature");
 	const headTree = gitAs(worktree, "rev-parse", "HEAD^{tree}");
 	const promptAt = 1_700_000_000_000;
-	seedWorkspaceSession(worktree, {
+	const seeded = seedWorkspaceSession(worktree, {
 		name: "Add the feature flag",
 		messages: [
 			{ role: "user", text: "add the feature flag", timestamp: promptAt },
@@ -229,9 +230,9 @@ test("a round's receipt comes from the host's turn snapshot and Review turn open
 			byWorkspace: {
 				[workspace.id]: [
 					{
-						id: `seeded:${promptAt + 500}`,
+						id: `${seeded.id}:${promptAt + 500}`,
 						workspaceId: workspace.id,
-						sessionId: "seeded",
+						sessionId: seeded.id,
 						startedAt: promptAt + 500,
 						settledAt: promptAt + 3_500,
 						baseTree,
@@ -347,4 +348,28 @@ test("the review guide walks the reviewer's reading order and findings with N", 
 	await expect(guide).toHaveCount(0);
 	await page.getByTestId("changes-review-guide-toggle").click();
 	await expect(page.getByTestId("changes-review-guide")).toBeVisible();
+});
+
+test("a draft written inside a section counts toward the tab's Send review, and review progress keeps the preview tab", async ({
+	page,
+}) => {
+	await seedThreeChanges(page);
+	await row(page, "script.ts").click();
+	await expect(reviewTab(page)).toHaveAttribute("data-preview", "true");
+	await expect(page.getByTestId("changes-review-send")).toHaveCount(0);
+
+	await selectPierreLine(section(page, "script.ts").getByTestId("diff-view"), "edited = true");
+	await expect(page.getByTestId("review-composer")).toBeVisible();
+	await page.getByTestId("review-composer-input").fill("Name this flag after what it gates.");
+	await page.getByTestId("review-composer-save").click();
+	await expect(page.getByTestId("changes-review-send")).toContainText("Send review (1)");
+
+	// marking a file viewed is review progress: the tab stops being a disposable preview, so a
+	// later single-click preview opens beside it instead of replacing it
+	await section(page, "notes.txt").getByTestId("changes-section-viewed").click();
+	await expect(reviewTab(page)).not.toHaveAttribute("data-preview", "true");
+	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).click();
+	await expect(reviewTab(page)).toHaveCount(1);
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="file"]')).toHaveCount(1);
 });

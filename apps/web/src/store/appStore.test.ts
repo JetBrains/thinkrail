@@ -3804,6 +3804,14 @@ test("changes tabs: one per scope, preview-eligible, and review progress survive
 	expect(s().activeTabByWorkspace.ws1).toBe(tab.id);
 
 	s().setChangesTabViewed("ws1", tab.id, "src/a.ts", true);
+	// the first piece of review progress keeps the tab: a later single-click preview must not evict it
+	expect(s().previewTabByWorkspace.ws1).toBeUndefined();
+	expect(s().layoutIntents.at(-1)).toMatchObject({
+		kind: "select",
+		tabId: tab.id,
+		keep: true,
+		focus: false,
+	});
 	s().setChangesTabViewed("ws1", tab.id, "src/a.ts", true);
 	s().setChangesTabViewed("ws1", tab.id, "src/b.ts", true);
 	s().setChangesTabViewed("ws1", tab.id, "src/b.ts", false);
@@ -3830,6 +3838,12 @@ test("changes tabs: one per scope, preview-eligible, and review progress survive
 	expect(after.sections["README.md"]).toEqual({
 		rendererId: "thinkrail/markdown",
 		viewState: { scrollTop: 7 },
+	});
+	// a renderer switch drops the view state saved for the previous renderer, like setTabRenderer
+	s().setChangesTabSectionRenderer("ws1", tab.id, "README.md", "thinkrail/code");
+	const switched = s().tabsByWorkspace.ws1?.[0];
+	expect(switched?.kind === "changes" && switched.sections["README.md"]).toEqual({
+		rendererId: "thinkrail/code",
 	});
 	expect(after.view).toBe("inline");
 	expect(after.ignoreWhitespace).toBe(true);

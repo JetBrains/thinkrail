@@ -1481,6 +1481,28 @@ function patchChangesTab(
 	return { tabsByWorkspace: { ...state.tabsByWorkspace, [workspaceId]: tabs.with(index, next) } };
 }
 
+function recordChangesTabProgress(
+	state: Pick<AppState, "tabsByWorkspace" | "previewTabByWorkspace" | "layoutIntents">,
+	workspaceId: string,
+	id: string,
+	patch: (tab: ChangesTab) => ChangesTab,
+): Partial<AppState> {
+	const patched = patchChangesTab(state, workspaceId, id, patch);
+	if (!patched.tabsByWorkspace || state.previewTabByWorkspace[workspaceId] !== id) return patched;
+	return {
+		...patched,
+		previewTabByWorkspace: omitKey(state.previewTabByWorkspace, workspaceId),
+		layoutIntents: appendLayoutIntent(state.layoutIntents, {
+			kind: "select",
+			workspaceId,
+			tabId: id,
+			keep: true,
+			focus: false,
+			countNavigation: false,
+		}),
+	};
+}
+
 function sameSpecNode(a: SpecGraphNode, b: SpecGraphNode): boolean {
 	return (
 		a.id === b.id &&
@@ -2753,7 +2775,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => patchChangesTab(s, workspaceId, id, (tab) => ({ ...tab, ignoreWhitespace }))),
 	setChangesTabViewed: (workspaceId, id, path, viewed) =>
 		set((s) =>
-			patchChangesTab(s, workspaceId, id, (tab) => {
+			recordChangesTabProgress(s, workspaceId, id, (tab) => {
 				const has = tab.viewed.includes(path);
 				if (has === viewed) return tab;
 				return {
@@ -2794,7 +2816,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) =>
 			patchChangesTab(s, workspaceId, id, (tab) => ({
 				...tab,
-				sections: { ...tab.sections, [path]: { ...tab.sections[path], rendererId } },
+				sections: { ...tab.sections, [path]: { rendererId } },
 			})),
 		),
 	setChangesTabSectionViewState: (workspaceId, id, path, viewState) =>
@@ -2806,7 +2828,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		),
 	setChangesTabHunkKept: (workspaceId, id, path, key, kept) =>
 		set((s) =>
-			patchChangesTab(s, workspaceId, id, (tab) => {
+			recordChangesTabProgress(s, workspaceId, id, (tab) => {
 				const current = tab.kept[path] ?? [];
 				if (current.includes(key) === kept) return tab;
 				const next = kept ? [...current, key] : current.filter((k) => k !== key);

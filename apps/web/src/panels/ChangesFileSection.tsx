@@ -14,7 +14,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { copyText, isPhoneViewport } from "@/lib";
 import type { HunkTriage } from "@/resources";
 import { statusLetter } from "../chat/planView";
@@ -88,9 +88,11 @@ export function ChangesFileSection({
 	);
 	const keptCount = hunkKeys.filter((key) => keptKeys.has(key)).length;
 	const allKept = hunkKeys.length > 0 && keptCount === hunkKeys.length;
+	const wasAllKept = useRef(allKept);
 	useEffect(() => {
-		if (allKept && !viewed) onSetViewed(true);
-	}, [allKept, onSetViewed, viewed]);
+		if (allKept && !wasAllKept.current) onSetViewed(true);
+		wasAllKept.current = allKept;
+	}, [allKept, onSetViewed]);
 
 	const read = useCallback(
 		() => getTransport().request("git.diffFile", { workspaceId, path, scope }),
@@ -100,6 +102,7 @@ export function ChangesFileSection({
 		(next: SectionContent) => {
 			cache.set(path, next);
 			setContent(next);
+			setError(null);
 		},
 		[cache, path],
 	);
@@ -118,10 +121,9 @@ export function ChangesFileSection({
 	);
 	const bodyVisible = mode === "single" || !collapsed;
 	useEffect(() => {
-		if (content || !bodyVisible) return;
+		if (content || error || !bodyVisible) return;
 		let cancelled = false;
 		const tick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
-		setError(null);
 		cache.load(path, read, tick, targetRef).then(
 			(next) => {
 				if (!cancelled) setContent(next);
@@ -133,7 +135,7 @@ export function ChangesFileSection({
 		return () => {
 			cancelled = true;
 		};
-	}, [bodyVisible, cache, content, path, read, targetRef, workspaceId]);
+	}, [bodyVisible, cache, content, error, path, read, targetRef, workspaceId]);
 
 	const surfaceContent = useMemo(
 		() =>
@@ -350,7 +352,8 @@ export function ChangesFileSection({
 					<span>Could not read this diff: {error}</span>
 					<button
 						type="button"
-						onClick={() => setContent(null)}
+						data-testid="changes-section-retry"
+						onClick={() => setError(null)}
 						className="text-text-muted underline-offset-2 hover:text-text-default hover:underline"
 					>
 						Retry

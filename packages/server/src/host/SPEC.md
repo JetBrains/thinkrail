@@ -22,7 +22,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   after classifying only its bounded 8 KiB head (via `fs`'s `resolveWorktreeFile` — path-contained; bad
   id/escape/miss → 404; `Cache-Control: no-store`, because the worktree moves under the URL) so the
   markdown viewer's relative `<img>`s resolve, the sibling
-  **`GET /blob/<workspaceId>/<oid>/<relpath>`** route serving that path's bytes **at one commit**
+  **`GET /blob/<workspaceId>/<oid>/<relpath>`** route serving that path's bytes **at one commit or tree**
   (`git.readBlobStreamAtAsync` behind a 40/64-hex `oid` — a diff range's `resolvedOriginalOid`, so the URL
   names immutable content and answers `Cache-Control: public, max-age=31536000, immutable`; the Git
   primitive requires a blob, so trees/commits/gitlinks are 404 alongside a bad id/oid/escape/absent
