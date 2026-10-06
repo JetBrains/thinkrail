@@ -67,7 +67,27 @@ treatment.
   `workspaceActions.ts` so the shell's topbar workspace menu ([[submodule-web-shell-location-bar]]) offers
   the same actions — including the capability-aware pending rename — without a second implementation. The
   controller dispatches to the workspace captured when the edit started and resets when the hook's
-  workspace identity changes, so a consumer that is not keyed per workspace cannot misdirect a pending name.
+  workspace identity changes, so a consumer that is not keyed per workspace cannot misdirect a pending
+  name. **Settle** / **Keep active** (`workspace.settle` / `workspace.unsettle`, gated on
+  `WORKSPACE_SETTLE_PROTOCOL_VERSION`) ride the same file.
+  **The Settled shelf.** An expanded project renders a **sort row** (`↕` + a native select: Recent activity
+  · Created · Name, the store's `workspaceSort`) above its rows, then the **live** rows from
+  `selectWorkspacePartition`, then a **`Settled · N`** disclosure header (collapsed by default, store-held
+  per browser) whose body lists the settled rows **slim** — single line, name only, a small **reason chip**
+  (`merged` / `closed` / `idle 2w` / `by you`, long form in its tooltip), a hover **↩ Keep active** beside the kebab — ten at
+  a time with a *Show 25 more* row. Live rows gain a hover **✓ Settle** beside the kebab (also in the menu
+  and on right-click); it is disabled while the row's agent works or a result is unread, absent on Default.
+  The partition re-evaluates on a one-minute tick so idle rows cross the window without a click, and
+  selecting a settled row expands the shelf and pages far enough to show it. The shelf header's own kebab
+  offers **Remove all settled…**, a `RemoveSettledDialog` that first calls
+  `workspace.settledRemovalPreview` and names how many settled worktrees hold uncommitted changes or
+  unpushed commits — those are **excluded unless the user ticks *Include them***, the confirm button
+  carries the final count, and confirming issues the ordinary `workspace.remove` per id (branches kept, as
+  the single-row confirm already promises). Nothing about settling touches disk: the shelf is a list state,
+  and *Remove* stays the only teardown. Why this shape (recorded once): an explicit-archive-only rail left
+  the housekeeping to the user (48 rows on the author's machine), a pure recency fold had no way to say
+  "done", and a hidden Archived tier made rows disappear without a visible home — the shelf keeps every
+  automatic move one disclosure away, with the reason spelled out.
   Rename replaces the row's name span in place with a chrome-less single-line input carrying the same
   typography, colour, and geometry; it is prefilled, focused, and selected. Enter or blur commits, Escape
   cancels, and blank or text unchanged from the edit-start label exits without a request, so an incoming
@@ -124,7 +144,8 @@ treatment.
   (`store.expandedProjectIds`), not component state: it survives the Project-Home/workspace remount
   boundary and, via the `projectExpansion` persistence module (localStorage under a host-qualified key,
   hydrated at boot from `main.tsx`, best-effort writes, untrusted reads), a page reload — the rail
-  looks the same after reloading. Rows whose persisted expansion outlives this client's fetched lists
+  looks the same after reloading; the sibling `workspaceSort` module persists the sort row's choice the
+  same way (the shelf's disclosure is deliberately not persisted — collapsed is the right default). Rows whose persisted expansion outlives this client's fetched lists
   (a fresh reload) fetch their missing `workspace.list` lazily; an already-fetched list is refreshed on
   an explicit expand gesture and by transport after a new welcome/reconnect generation, never refetched in
   a loop. The active workspace must

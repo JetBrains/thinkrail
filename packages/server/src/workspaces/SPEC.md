@@ -177,6 +177,27 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `kind: "default"` — forget would hand the archive teardown's `rm -rf` fallback the project folder,
   rename would `git branch -m` the user's real branch; the record carries `renamed: true` so
   `set_title` stays away as belt-and-suspenders.
+- **Settled lifecycle facts (host-owned, never the partition itself).** The record carries `lastActiveAt`,
+  `settledOverride` / `settledAt`, and the `review` snapshot described in [[module-contracts]]; which rows
+  are live and which sit on the shelf is a *client* derivation over these facts plus session state, so
+  this module never stores a "settled" boolean that could disagree with the rules. Writers:
+  `recordWorkspaceActivity(id, at = now)` — stamps `lastActiveAt`, **clears any `settledOverride`** (an
+  explicit park or pin is a statement about a quiet workspace; real work in it supersedes both), and
+  **coalesces** writes to at most one per minute per workspace so a streaming agent does not rewrite
+  `workspaces.json` per token (the clearing of an override is never coalesced away — it always saves and
+  emits); `backfillWorkspaceActivity(id, at)` — sets the stamp only when the record has none and touches
+  no override (the upgrade path for records that predate the field); `recordWorkspaceHead(id)` — reads the
+  worktree's `HEAD` sha and calls `recordWorkspaceActivity` when it differs from the last sha observed in
+  this host lifetime (the first observation only seeds — a HEAD move is the commit/pull/checkout proxy;
+  the raw git-dir watcher fires on index refreshes too, which is why the sha, not the event, is the
+  signal); `settleWorkspace(id)` / `unsettleWorkspace(id)` — set `"settled"` / `"active"` with `settledAt`,
+  **throw on `kind: "default"`** (the project folder is never shelved); `setWorkspaceReview(id, review |
+  null)` — persists the snapshot and emits `updated` only when it actually changed, so the periodic
+  provider refresh is silent while nothing moves. Every writer emits the full-snapshot `updated`.
+  `createWorkspace` and `openExistingWorktree` stamp `lastActiveAt` at creation so a brand-new row is
+  live by construction. **Migration:** the host backfills records without a stamp from the newest chat's
+  file time, else the worktree's `.git` gitfile mtime (≈ `worktree add` time), else now — so after the
+  upgrade a dormant backlog settles itself while anything with recent chats or an open PR stays live.
 - **Initial-terminal provisioning is a durable host handshake.** Every workspace record first persisted by
   `createWorkspace`, `openExistingWorktree`, or Default ensure carries optional literal
   `initialTerminalPending: true`. `host` idempotently reserves the deterministic process-free terminal tab,
@@ -211,7 +232,14 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,
-  `setWorkspaceSubagentsOverride`.
+  `setWorkspaceSubagentsOverride`, `recordWorkspaceActivity`, `backfillWorkspaceActivity`,
+  `recordWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`,
+  `settledRemovalPreview`.
+- `settledRemovalPreview(ids)` (**async**) — per worktree the dirty-file count (`gitStatus`) and the
+  commits its branch has that its upstream lacks (`countPushDivergence`), both through the `git` barrel;
+  unreadable worktrees report `null` counts rather than a false clean. It is the preview behind the rail's
+  bulk *Remove all settled…*, which excludes flagged rows unless the user opts them in; the removal itself
+  is the unchanged per-id `removeWorkspace`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
   `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

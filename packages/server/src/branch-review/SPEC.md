@@ -11,7 +11,14 @@ tags: [github, gitlab, pull-request]
 
 ## Responsibility
 
-Best-effort lookup of the open code review associated with a workspace branch: GitHub.com PR via the local `gh` CLI or GitLab.com MR via `glab`.
+Best-effort lookup of the code review associated with a workspace branch — open, merged, or closed —
+GitHub.com PR via the local `gh` CLI or GitLab.com MR via `glab`. The lookup asks for **every state**
+(`gh pr list --state all`, `glab mr list --all`, a handful of rows) and picks **an open review first,
+otherwise the most recently merged/closed one**, carrying `state` and `changedAt` (merge or close time) on
+the `OpenBranchReview`: one lookup serves the topbar chip (open = success, merged = info, closed =
+neutral) and the Settled shelf's "PR merged/closed" rule, instead of two polls disagreeing. A pre-v78
+consumer that only understood open reviews reads a merged/closed row as a live PR, which is why the
+contracts spec pins `state` to `WORKSPACE_SETTLE_PROTOCOL_VERSION`.
 
 ## Boundary
 

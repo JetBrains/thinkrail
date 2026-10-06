@@ -68,7 +68,25 @@ selected-log state belong to chat integration, not domain persistence. See
   expansion to the open rail (a closed project's entry drops; identity-stable when unchanged).
   **`hydrateExpandedProjects(projectIds)`** seeds the set at boot from the `panels/projectExpansion`
   persistence module — the store itself still touches no storage: that module owns the localStorage
-  mirror (host-qualified key, best-effort writes, untrusted reads) and subscribes to changes. Validated route restoration uses
+  mirror (host-qualified key, best-effort writes, untrusted reads) and subscribes to changes.
+  **Settled shelf.** `selectors.ts` owns **`selectWorkspacePartition(state, projectId, now)`** — the one
+  derivation of a project's rows into `live` and `settled` (each settled row carrying its reason:
+  `override`, `review merged|closed`, or `idle since`), consumed by the rail, the topbar's *Switch to*
+  menu, and the shelf alike so the three can never disagree. Rules, in order: a row with an agent
+  working or needing attention, the Default workspace, or the active workspace while
+  **`activeWorkspaceLiveLatch`** holds is live; `settledOverride: "settled"` settles, `"active"` keeps live;
+  a `review.state` of `merged`/`closed` with no `lastActiveAt` newer than its `changedAt` settles; an open
+  review keeps live; otherwise idle longer than **`settleIdleDays`** (mirrored from `AppConfig`, `null` =
+  never) settles. Both lists share **`workspaceSort`** (`"recent"` — newest `lastActiveAt` first, the
+  default — `"created"` newest first, or `"name"`), a per-browser view preference persisted by
+  `panels/workspaceSort` exactly like expansion; the Default row stays pinned first outside the sort. The
+  latch is the "selection never moves a row" rule made state: `workspaceActivationPatch` sets it to whether
+  the destination was live at that moment (so a settled workspace you open stays on the shelf, force-
+  revealed), and a `workspace.updated` push that advances the active row's `lastActiveAt` re-arms it (real
+  work in the open workspace keeps it live). **`settledShelfExpanded`** / **`settledShelfShown`** (per
+  project, this browser only, not persisted — a collapsed shelf is the default on every load) hold the
+  shelf's disclosure and paging. The partition takes `now` as an argument, so callers decide the tick and
+  the selector stays pure. Validated route restoration uses
   **`activateWorkspaceFromRoute(workspace, sessionId?)`**: it applies the same scope ids, advances the
   compatibility workspace navigation tick plus the current destination-group clock, and either installs a
   transient **`routeChatTarget`** stamped with both clocks or clears an older exact target. A workspace-only

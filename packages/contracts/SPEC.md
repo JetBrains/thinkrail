@@ -222,8 +222,21 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   worktree workspace; optional literal **`initialTerminalPending: true`** is the host-owned provisioning
   marker carried only while a workspace still needs host reservation: the host reserves the deterministic
   terminal then clears it; absence means no provisioning work remains—explicit wire fields, never id
-  conventions),
-  **`OpenBranchReview`** (the optional open review reference for the active branch: PR vs MR + number; no status/actions),
+  conventions; the **settled lifecycle** rides four more host-owned optional fields — **`lastActiveAt`** (ms —
+  the newest *real* activity the host saw: a chat/agent turn, terminal input, or the worktree's HEAD moving;
+  selecting or viewing a workspace is deliberately **not** activity), **`settledOverride`** (`"settled"` = the
+  user parked it, `"active"` = the user pinned it live; the host clears either on real activity so an
+  override never goes stale) with its **`settledAt`** stamp, and **`review`** (the host's last-known
+  `OpenBranchReview` for the branch, refreshed host-side so every client sees one PR state without each
+  fetching it) — the *partition* into live rows and the Settled shelf is a client selector over these facts
+  plus session state, never a wire field; **`WORKSPACE_SETTLE_PROTOCOL_VERSION`** (v78) pins the fields
+  together with **`workspace.settle`** / **`workspace.unsettle`** (`{ id }` — Default rejected server-side;
+  the response is the updated record and the `workspace.updated` push converges every client) and
+  **`workspace.settledRemovalPreview`** (`{ ids }` → per worktree `dirty` file count + `unpushed` commit
+  count, so a bulk Remove can name and exclude work that would be lost)),
+  **`OpenBranchReview`** (the review reference for the active branch: PR vs MR + number, plus an optional
+  **`state`** — `"open" | "merged" | "closed"`, absent on a pre-v78 host and read as open — and
+  **`changedAt`**, the ms time the provider merged or closed it; no actions),
   **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
   `detached` row the chooser disables),
   `FileNode` (file-tree node),
@@ -343,7 +356,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   without sending host paths; older hosts retain a global-only fallback. `themeMode` defaults to `"fixed"`
   and no pair, preserving both legacy configs
   and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
-  behavior), overridden only by `Workspace.subagentsOverride`; `agentReviewEnabled` (default `false`, on the
+  behavior), overridden only by `Workspace.subagentsOverride`; **`settleIdleDays`** (default `3`, `null` = never; on the wire
+  from `WORKSPACE_SETTLE_PROTOCOL_VERSION` = v78) is the idle window after which a quiet workspace settles
+  into its project's shelf — a host-wide number because "how long is quiet" is a habit, not a project fact; `agentReviewEnabled` (default `false`, on the
   wire from `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` = v68) gates the worker's in-session `request_review`
   tool and applies live to open sessions — the Review button is independent (see [[submodule-server-host-plan-review]]); `customLayoutPresets` is the bounded
   resource-free catalog and is the **only** layout value synchronized by the host; current/default preset

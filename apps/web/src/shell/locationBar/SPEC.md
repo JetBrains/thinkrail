@@ -58,10 +58,16 @@ branch. It renders what the store and `workspace.openReview` already report; it 
 - **PROJECT** lists every open project (check on the current one), *Project home* (disabled while there),
   and *Add project…* (the shared `useOpenProject` picker + its dialogs). Choosing a project selects it with
   `reveal` and loads its workspace list, i.e. the same transition as the Projects tree.
-- **WORKSPACE** shows the active workspace's actions (Open in, Rename, Copy path, Reveal, Remove — the
-  latter through the shared confirm dialog; Default is non-removable) above *Switch to* (siblings with
-  `RunningIcon` while an agent works, loading the list on first open when the tree has not) and *New
-  workspace* with the `Mod+N` label, which opens the shell-owned dialog. Rename replaces the pill with the
+- **WORKSPACE** shows the active workspace's actions (Open in, Rename, Copy path, Reveal, **Settle** or
+  **Keep active** — whichever applies, through the shared `workspaceActions` — and Remove through the
+  shared confirm dialog; Default is non-removable and never settles) above *Switch to* (the project's
+  **live** siblings in the rail's sort order with `RunningIcon` while an agent works, then a
+  **`Settled · N ›`** submenu listing the shelf rows with their reason chips — the same
+  `selectWorkspacePartition` the rail renders, so the menu and the rail never disagree; the list loads on
+  first open when the tree has not) and *New workspace* with the `Mod+N` label, which opens the shell-owned
+  dialog. While the active workspace is settled the caption reads **`WORKSPACE · settled`** (the caption-
+  fragment grammar `BRANCH · from base` already uses, in the warning tone), so a parked workspace you opened
+  announces itself without a banner. Rename replaces the pill with the
   chrome-less inline input used elsewhere and runs on the tree's shared `useWorkspaceRename` controller:
   Enter/blur commit, Escape cancels, unchanged or blank never requests, and a commit made while the socket's
   rename capability is unknown stays pending in the editor until a capable welcome restores it. The dispatch
@@ -79,8 +85,10 @@ branch. It renders what the store and `workspace.openReview` already report; it 
   review — *Remote* (`n commits to push · n commits behind origin` or "In sync with origin") and the
   PR/MR row with its link.
 - **REMOTE** renders only while `unpushedCommits` (warning chip) or `behindCommits` (info chip) is non-zero
-  and opens the same card. Both counts arrive on `OpenBranchReview`, which the host only produces for a
-  branch with an open PR/MR, so REMOTE (and the card's *Remote* row) can appear only alongside a review — a
-  branch without one shows no remote state, not "in sync". **PULL REQUEST** is the `openReviewLabel` success
-  chip, a link when the provider reported a URL. There is deliberately no "Open PR…" affordance: `pr.open` is
-  a plan-session action and stays on the plan pane.
+  and opens the same card. Both counts arrive on `OpenBranchReview`, so REMOTE (and the card's *Remote*
+  row) can appear only alongside a review — a branch without one shows no remote state, not "in sync".
+  **PULL REQUEST** is the `openReviewLabel` chip — success while the review is open, **info** reading
+  *Merged #N* and **neutral** reading *Closed #N* once `OpenBranchReview.state` says so (a pre-v78 host
+  omits `state` and the chip stays the open form) — a link when the provider reported a URL. REMOTE chips
+  render only for an open review; divergence against a merged branch is noise. There is deliberately no "Open PR…" affordance: `pr.open` is a plan-session action and
+  stays on the plan pane.
