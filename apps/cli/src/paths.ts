@@ -44,7 +44,7 @@ export function installMetaFile(home: string): string {
 export function readInstallMeta(home: string): InstallMeta {
 	try {
 		const parsed: unknown = JSON.parse(readFileSync(installMetaFile(home), "utf8"));
-		return typeof parsed === "object" && parsed !== null ? (parsed as InstallMeta) : {};
+		return typeof parsed === "object" && parsed !== null ? parsed : {};
 	} catch {
 		return {};
 	}
