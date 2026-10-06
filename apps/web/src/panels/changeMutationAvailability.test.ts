@@ -4,6 +4,13 @@ import { canOfferChangeMutations } from "./changeMutationAvailability";
 
 test("change mutations require a mutable scope, host capability, and loaded metadata", () => {
 	expect(
+		canOfferChangeMutations(
+			{ kind: "turn", id: "t", baseTree: "a", headTree: "b", startedAt: 1 },
+			CHANGE_MUTATIONS_PROTOCOL_VERSION,
+			true,
+		),
+	).toBe(false);
+	expect(
 		canOfferChangeMutations({ kind: "uncommitted" }, CHANGE_MUTATIONS_PROTOCOL_VERSION, true),
 	).toBe(true);
 	expect(

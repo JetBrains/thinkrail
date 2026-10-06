@@ -68,7 +68,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 			onFailure: (_id, failure) => {
 				if (wsErrorCode(failure) === "UNKNOWN_COMMIT") {
 					setDiffScope(workspaceId, { kind: "branch" });
-					toast.info("That commit is no longer in this branch — showing all changes.");
+					toast.info("That scope is no longer available here — showing all changes.");
 					return;
 				}
 				if (status && !warnedRef.current) {

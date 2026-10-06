@@ -1,4 +1,10 @@
-import type { GitCommit, GitDiffScope, GitFileChange, GitFileStatus } from "@thinkrail/contracts";
+import type {
+	GitCommit,
+	GitDiffScope,
+	GitFileChange,
+	GitFileStatus,
+	TurnChangeSet,
+} from "@thinkrail/contracts";
 import { tupleKey } from "../lib";
 import { extendFolderChain, startFolderChain } from "./folderChains";
 
@@ -19,7 +25,40 @@ export function statusNameClass(status: GitFileStatus): string {
 export function scopeKey(scope: GitDiffScope): string {
 	if (scope.kind === "commit") return `commit:${scope.sha}`;
 	if (scope.kind === "pinned") return `pinned:${scope.baseRef}`;
+	if (scope.kind === "turn") return `turn:${scope.id}`;
 	return scope.kind;
+}
+
+function scopeSuffix(scope: GitDiffScope): string {
+	switch (scope.kind) {
+		case "branch":
+			return "";
+		case "uncommitted":
+			return "uncommitted";
+		case "pinned":
+			return scope.baseRef.slice(0, 7);
+		case "commit":
+			return scope.sha.slice(0, 7);
+		case "turn":
+			return `turn ${turnTimeLabel(scope.startedAt)}`;
+	}
+}
+
+export function turnScope(turn: TurnChangeSet): Extract<GitDiffScope, { kind: "turn" }> {
+	return {
+		kind: "turn",
+		id: turn.id,
+		baseTree: turn.baseTree,
+		headTree: turn.headTree,
+		startedAt: turn.startedAt,
+	};
+}
+
+export function turnTimeLabel(startedAt: number): string {
+	return new Date(startedAt).toLocaleTimeString(undefined, {
+		hour: "2-digit",
+		minute: "2-digit",
+	});
 }
 
 export function diffTabId(workspaceId: string, scope: GitDiffScope, path: string): string {
@@ -28,9 +67,8 @@ export function diffTabId(workspaceId: string, scope: GitDiffScope, path: string
 
 export function diffTabName(scope: GitDiffScope, path: string): string {
 	const { base } = splitPath(path);
-	if (scope.kind === "branch") return base;
-	if (scope.kind === "uncommitted") return `${base} · uncommitted`;
-	return `${base} · ${(scope.kind === "pinned" ? scope.baseRef : scope.sha).slice(0, 7)}`;
+	const suffix = scopeSuffix(scope);
+	return suffix ? `${base} · ${suffix}` : base;
 }
 
 export function changesTabId(workspaceId: string, scope: GitDiffScope): string {
@@ -38,9 +76,8 @@ export function changesTabId(workspaceId: string, scope: GitDiffScope): string {
 }
 
 export function changesTabName(scope: GitDiffScope): string {
-	if (scope.kind === "branch") return "Changes";
-	if (scope.kind === "uncommitted") return "Changes · uncommitted";
-	return `Changes · ${(scope.kind === "pinned" ? scope.baseRef : scope.sha).slice(0, 7)}`;
+	const suffix = scopeSuffix(scope);
+	return suffix ? `Changes · ${suffix}` : "Changes";
 }
 
 const GENERATED_PATH =
@@ -55,15 +92,33 @@ export function sectionCollapsedByDefault(change: GitFileChange): boolean {
 	);
 }
 
-export function scopeLabel(scope: GitDiffScope, commits: readonly GitCommit[] = []): string {
+export function scopeLabel(
+	scope: GitDiffScope,
+	commits: readonly GitCommit[] = [],
+	turns: readonly TurnChangeSet[] = [],
+): string {
 	if (scope.kind === "branch") return "All changes";
 	if (scope.kind === "uncommitted") return "Uncommitted";
 	if (scope.kind === "pinned") return scope.baseRef.slice(0, 7);
+	if (scope.kind === "turn") {
+		const latest = turns.at(-1);
+		return latest && latest.id === scope.id
+			? "Last turn"
+			: `Turn ${turnTimeLabel(scope.startedAt)}`;
+	}
 	const known = commits.find((c) => c.sha === scope.sha);
 	return known?.shortSha ?? scope.sha.slice(0, 7);
 }
 
-export function scopeTitle(scope: GitDiffScope, commits: readonly GitCommit[] = []): string {
+export function scopeTitle(
+	scope: GitDiffScope,
+	commits: readonly GitCommit[] = [],
+	turns: readonly TurnChangeSet[] = [],
+): string {
+	if (scope.kind === "turn") {
+		const files = turns.find((turn) => turn.id === scope.id)?.changes.length;
+		return `Agent turn at ${turnTimeLabel(scope.startedAt)}${files === undefined ? "" : ` · ${files} ${files === 1 ? "file" : "files"}`}`;
+	}
 	if (scope.kind !== "commit") return `Diff scope: ${scopeLabel(scope)}`;
 	const known = commits.find((c) => c.sha === scope.sha);
 	return known?.subject ? `${known.shortSha} · ${known.subject}` : scopeLabel(scope, commits);

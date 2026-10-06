@@ -20,9 +20,11 @@ import { HeaderIconButton } from "./HeaderIconButton";
 import { SendReviewButton } from "./SendReviewButton";
 import { ToggleSegment } from "./ToggleSegment";
 import { useWorkspaceRead } from "./useWorkspaceRead";
+import { useWorkspaceTurns } from "./useWorkspaceTurns";
 
 const SECTION_HEADER_HEIGHT = 32;
 const END_NOTE_HEIGHT = 48;
+const REVEAL_SETTLE_MS = 1_200;
 
 interface ReviewListContext {
 	tailHeight: number;
@@ -60,6 +62,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const clearReveal = useAppStore((state) => state.clearChangesTabReveal);
 	const requestReveal = useAppStore((state) => state.requestChangesTabReveal);
 	const cache = useRef<SectionContentCache>(new Map()).current;
+	const turns = useWorkspaceTurns(workspaceId);
 	const [largeNoticeDismissed, setLargeNoticeDismissed] = useState(false);
 
 	const { reload } = useWorkspaceRead(
@@ -140,8 +143,17 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	activePathRef.current = tab.activePath;
 	const spyFrame = useRef(0);
 	const restoredStacked = useRef(false);
+	const settling = useRef<{ index: number; until: number } | null>(null);
+	const scrollToSection = useCallback((index: number) => {
+		settling.current = { index, until: Date.now() + REVEAL_SETTLE_MS };
+		virtuoso.current?.scrollToIndex({ index, align: "start" });
+	}, []);
 	const spyActiveSection = useCallback(() => {
 		if (!restoredStacked.current) return;
+		if (settling.current) {
+			if (Date.now() < settling.current.until) return;
+			settling.current = null;
+		}
 		cancelAnimationFrame(spyFrame.current);
 		spyFrame.current = requestAnimationFrame(() => {
 			const scroller = scrollerRef.current;
@@ -169,9 +181,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 			if (tab.collapsed[revealPath] !== false) {
 				setCollapsed(workspaceId, tab.id, { [revealPath]: false });
 			}
-			if (layout === "stacked") {
-				virtuoso.current?.scrollToIndex({ index, align: "start" });
-			}
+			if (layout === "stacked") scrollToSection(index);
 		}
 		clearReveal(workspaceId, tab.id);
 	}, [
@@ -204,11 +214,9 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		restoredStacked.current = true;
 		const index = files.findIndex((change) => change.path === activePathRef.current);
 		if (index <= 0) return;
-		const frame = requestAnimationFrame(() =>
-			virtuoso.current?.scrollToIndex({ index, align: "start" }),
-		);
+		const frame = requestAnimationFrame(() => scrollToSection(index));
 		return () => cancelAnimationFrame(frame);
-	}, [files, layout, pendingReveal, status]);
+	}, [files, layout, pendingReveal, scrollToSection, status]);
 
 	const setPathViewed = useCallback(
 		(path: string, next: boolean) => setViewed(workspaceId, tab.id, path, next),
@@ -271,7 +279,13 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	});
 
 	const targetLabel =
-		scope.kind === "branch" ? `vs ${baseRef}` : scope.kind === "uncommitted" ? "worktree" : null;
+		scope.kind === "branch"
+			? `vs ${baseRef}`
+			: scope.kind === "uncommitted"
+				? "worktree"
+				: scope.kind === "turn"
+					? "agent snapshot"
+					: null;
 	const showLargeNotice =
 		layout === "stacked" && files.length > LARGE_SCOPE_FILES && !largeNoticeDismissed;
 
@@ -287,7 +301,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 					data-testid="changes-review-scope"
 					className="flex min-w-0 shrink items-baseline gap-4 truncate tr-text-metadata"
 				>
-					<span className="text-text-default">{scopeLabel(scope)}</span>
+					<span className="text-text-default">{scopeLabel(scope, [], turns)}</span>
 					{targetLabel ? <span className="truncate text-text-muted">{targetLabel}</span> : null}
 				</span>
 				{status ? (
@@ -491,7 +505,14 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 						scrollerRef={attachScroller}
 						onScroll={spyActiveSection}
 						rangeChanged={spyActiveSection}
-						totalListHeightChanged={spyActiveSection}
+						totalListHeightChanged={() => {
+							const pending = settling.current;
+							if (pending && Date.now() < pending.until) {
+								virtuoso.current?.scrollToIndex({ index: pending.index, align: "start" });
+								return;
+							}
+							spyActiveSection();
+						}}
 						itemContent={(_index, change) => (
 							<ChangesFileSection
 								tab={tab}
