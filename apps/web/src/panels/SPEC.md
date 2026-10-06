@@ -65,7 +65,9 @@ treatment.
   `editor.list`, the project workspace-list load, the remove confirm (`RemoveWorkspaceDialog`), and the
   inline-rename controller below (`createRenameController` / `useWorkspaceRename`) live once in
   `workspaceActions.ts` so the shell's topbar workspace menu ([[submodule-web-shell-location-bar]]) offers
-  the same actions — including the capability-aware pending rename — without a second implementation.
+  the same actions — including the capability-aware pending rename — without a second implementation. The
+  controller dispatches to the workspace captured when the edit started and resets when the hook's
+  workspace identity changes, so a consumer that is not keyed per workspace cannot misdirect a pending name.
   Rename replaces the row's name span in place with a chrome-less single-line input carrying the same
   typography, colour, and geometry; it is prefilled, focused, and selected. Enter or blur commits, Escape
   cancels, and blank or text unchanged from the edit-start label exits without a request, so an incoming

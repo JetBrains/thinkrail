@@ -62,8 +62,11 @@ branch. It renders what the store and `workspace.openReview` already report; it 
   workspace* with the `Mod+N` label, which opens the shell-owned dialog. Rename replaces the pill with the
   chrome-less inline input used elsewhere and runs on the tree's shared `useWorkspaceRename` controller:
   Enter/blur commit, Escape cancels, unchanged or blank never requests, and a commit made while the socket's
-  rename capability is unknown stays pending in the editor until a capable welcome restores it. At Project
-  home the pill reads "Project home" and offers only the switcher and creation.
+  rename capability is unknown stays pending in the editor until a capable welcome restores it. The dispatch
+  is bound to the workspace the edit started on, and because this segment is one persistent instance (the
+  tree's rows are keyed per workspace), activating another workspace while the editor is open abandons the
+  edit — pending offline commit included — rather than letting a later welcome rename the newly active
+  workspace. At Project home the pill reads "Project home" and offers only the switcher and creation.
 - **BRANCH · from base** opens the git card, moving focus onto the card itself (not its first button, which
   would pop the copy tooltip) so one Tab reaches the actions: branch (copy → success toast), *Based on* (hidden for
   user-owned workspaces, whose caption is plain "BRANCH"), *Compare to* (the Changes panel's `BranchPicker`

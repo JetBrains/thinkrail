@@ -195,3 +195,53 @@ test("an inline rename opened from the topbar stays pending across a reconnect",
 		"Renamed while offline",
 	);
 });
+
+test("navigating away abandons a pending topbar rename instead of renaming the next workspace", async ({
+	page,
+}) => {
+	let firstSocket: WebSocketRoute | undefined;
+	let socketsOpened = 0;
+	let releaseReconnect: () => void = () => {};
+	const reconnectAllowed = new Promise<void>((resolve) => {
+		releaseReconnect = resolve;
+	});
+	await page.routeWebSocket(/\/ws(\?|$)/, async (socket) => {
+		socketsOpened += 1;
+		if (socketsOpened > 1) await reconnectAllowed;
+		firstSocket ??= socket;
+		socket.connectToServer();
+	});
+
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await createWorkspaceViaDialog(page);
+	await expect(page.getByTestId("scope-name")).toHaveText("workspace-2");
+	await page.getByTestId("scope-workspace").click();
+	await page.getByTestId("scope-workspace-menu").getByTestId("scope-workspace-rename").click();
+	const input = page.locator('[data-testid="scope-name"][data-editing]');
+	await expect(input).toBeFocused();
+
+	await firstSocket?.close();
+	await expect(page.getByTestId("connection-status")).not.toHaveAttribute(
+		"data-status",
+		"connected",
+	);
+	await input.fill("Meant for workspace-2");
+	await input.press("Enter");
+	await expect(input).toHaveValue("Meant for workspace-2");
+
+	// Activate another renamable workspace from the tree while the offline commit is still pending.
+	const rows = worktreeRows(page);
+	await rows.nth(0).getByRole("button").first().click();
+	await expect(rows.nth(0)).toHaveAttribute("data-active", "true");
+	await expect(input).toHaveCount(0);
+	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
+
+	releaseReconnect();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect.poll(() => socketsOpened).toBeGreaterThan(1);
+	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
+	await expect(rows.nth(0).getByTestId("workspace-name")).toHaveText("workspace-1");
+	await expect(rows.nth(1).getByTestId("workspace-name")).toHaveText("workspace-2");
+	await expect(page.getByText("Meant for workspace-2")).toHaveCount(0);
+});

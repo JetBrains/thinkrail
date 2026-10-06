@@ -67,13 +67,7 @@ export function WorkspaceSegment({
 	const isDefault = workspace !== null && isDefaultWorkspace(workspace);
 	const isExternal = workspace !== null && isExternalWorkspace(workspace);
 	const name = workspace?.name ?? "Project home";
-	const rename = useWorkspaceRename({
-		workspace,
-		canRename,
-		onRename: (next) => {
-			if (workspace) renameWorkspace(workspace, next);
-		},
-	});
+	const rename = useWorkspaceRename({ workspace, canRename, onRename: renameWorkspace });
 
 	const switchTargets = (siblings ?? []).filter((candidate) => candidate.id !== workspace?.id);
 

@@ -545,7 +545,11 @@ function WorkspaceRow({
 		setMenuOpen(true);
 	};
 	const [confirmOpen, setConfirmOpen] = useState(false);
-	const rename = useWorkspaceRename({ workspace, canRename, onRename });
+	const rename = useWorkspaceRename({
+		workspace,
+		canRename,
+		onRename: (_target, name) => onRename(name),
+	});
 
 	const identityClass = `flex min-w-0 flex-1 gap-4 text-left ${isTwoLine ? "items-start" : "items-center"}`;
 	const identityIcon = isRunning ? (

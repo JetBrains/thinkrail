@@ -43,20 +43,22 @@ export function workspaceRenameValue(currentName: string, input: string): string
 	return name && name !== currentName ? name : null;
 }
 
-export interface RenameController {
-	start(currentName: string): void;
+export interface RenameController<T> {
+	start(target: T, currentName: string): void;
 	commit(input: string): void;
 	cancel(): void;
+	reset(): void;
 	setCanRename(canRename: boolean): void;
 }
 
-export function createRenameController(options: {
+export function createRenameController<T>(options: {
 	canRename: boolean;
-	onRename: (name: string) => void;
+	onRename: (target: T, name: string) => void;
 	onEditingChange: (editing: boolean) => void;
-}): RenameController {
+}): RenameController<T> {
 	let canRename = options.canRename;
 	let editing = false;
+	let target: T | null = null;
 	let startName = "";
 	let pending: string | null = null;
 	let cancelNext = false;
@@ -65,13 +67,19 @@ export function createRenameController(options: {
 		editing = next;
 		options.onEditingChange(next);
 	};
-	const dispatch = (name: string) => {
+	const close = () => {
 		pending = null;
+		cancelNext = false;
 		setEditing(false);
-		options.onRename(name);
+	};
+	const dispatch = (name: string) => {
+		const renamed = target;
+		close();
+		if (renamed !== null) options.onRename(renamed, name);
 	};
 	return {
-		start(currentName) {
+		start(nextTarget, currentName) {
+			target = nextTarget;
 			startName = currentName;
 			pending = null;
 			cancelNext = false;
@@ -80,15 +88,12 @@ export function createRenameController(options: {
 		commit(input) {
 			if (!editing) return;
 			if (cancelNext) {
-				cancelNext = false;
-				pending = null;
-				setEditing(false);
+				close();
 				return;
 			}
 			const name = workspaceRenameValue(startName, input);
 			if (!name) {
-				pending = null;
-				setEditing(false);
+				close();
 				return;
 			}
 			if (!canRename) {
@@ -100,6 +105,7 @@ export function createRenameController(options: {
 		cancel() {
 			cancelNext = true;
 		},
+		reset: close,
 		setCanRename(next) {
 			canRename = next;
 			if (canRename && editing && pending) dispatch(pending);
@@ -121,7 +127,7 @@ export interface WorkspaceRename {
 export function useWorkspaceRename(options: {
 	workspace: Workspace | null;
 	canRename: boolean;
-	onRename: (name: string) => void;
+	onRename: (workspace: Workspace, name: string) => void;
 }): WorkspaceRename {
 	const [editing, setEditing] = useState(false);
 	const nameRef = useRef<HTMLInputElement>(null);
@@ -130,13 +136,18 @@ export function useWorkspaceRename(options: {
 	latest.current = options;
 	const controller = useMemo(
 		() =>
-			createRenameController({
+			createRenameController<Workspace>({
 				canRename: latest.current.canRename,
-				onRename: (name) => latest.current.onRename(name),
+				onRename: (target, name) => latest.current.onRename(target, name),
 				onEditingChange: setEditing,
 			}),
 		[],
 	);
+
+	const workspaceId = options.workspace?.id ?? null;
+	useEffect(() => {
+		controller.reset();
+	}, [controller, workspaceId]);
 
 	useEffect(() => {
 		controller.setCanRename(options.canRename);
@@ -158,7 +169,7 @@ export function useWorkspaceRename(options: {
 			const workspace = latest.current.workspace;
 			if (!workspace) return;
 			enterRenameRef.current = true;
-			controller.start(workspace.name);
+			controller.start(workspace, workspace.name);
 		},
 		inputProps: {
 			onBlur: (event) => controller.commit(event.currentTarget.value),
