@@ -1,0 +1,36 @@
+{
+	"name": "@thinkrail/extension-api",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts",
+		"./web": "./src/web.ts",
+		"./server": "./src/server.ts"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@thinkrail/contracts": "workspace:*"
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"react": "catalog:"
+	},
+	"peerDependenciesMeta": {
+		"@earendil-works/pi-coding-agent": {
+			"optional": true
+		},
+		"react": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "catalog:",
+		"@types/bun": "catalog:",
+		"@types/react": "catalog:",
+		"typescript": "catalog:"
+	}
+}

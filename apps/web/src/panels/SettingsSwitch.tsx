@@ -1,4 +1,4 @@
-import { cn } from "@/lib";
+import { cn } from "@thinkrail/ui/utils";
 
 export function SettingsSwitch({
 	checked,

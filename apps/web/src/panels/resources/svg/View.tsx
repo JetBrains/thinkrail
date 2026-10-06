@@ -4,7 +4,7 @@ import { RegionReviewSurface } from "../RegionReviewSurface";
 import { placedRegionThreadIds } from "../regionReview";
 import { contentStamp } from "../reviewComposerState";
 import { SvgFrame } from "./SvgFrame";
-import { buildSvgDocument, svgByteLength, svgFileDraft, svgIntrinsicSize } from "./svgDocument";
+import { buildSvgDocument, svgByteLength, svgIntrinsicSize } from "./svgDocument";
 import { useSvgTheme } from "./useSvgTheme";
 
 const NO_THREADS: ReadonlySet<string> = new Set();
@@ -43,10 +43,9 @@ export default function SvgView({
 					review={review}
 					intrinsicSize={size}
 					contentStamp={stamp}
+					testid="svg-region-surface"
 					className={`${aspect ? "mx-auto w-full" : "h-[min(72vh,760px)] w-full"} min-h-40 max-w-[960px] border border-border-muted bg-container-workspace-bg`}
 					{...(aspect ? { style: { aspectRatio: aspect } } : {})}
-					label="file"
-					draftForRegion={svgFileDraft}
 				>
 					<SvgFrame title={`Vector preview of ${resource.path}`} document={document} />
 				</RegionReviewSurface>

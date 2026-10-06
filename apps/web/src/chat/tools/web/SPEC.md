@@ -22,8 +22,8 @@ that capability by **tool name**: `WebSearchCard` (`web_search`), `WebFetchCard`
   full content), their shared folded Markdown result body, and registration.
 - **Public surface:** none beyond the side-effect `register` (no barrel — chat pulls shiki; per-file like
   its siblings).
-- **Allowed deps:** sibling/parent chat primitives (`toolRegistry`, `toolHelpers`, `ToolFileLink`,
-  `Collapsible`, `Markdown`); `@remixicon/react`.
+- **Allowed deps:** sibling/parent chat primitives (`toolRegistry`, `ToolFileLink`, `Collapsible`,
+  `Markdown`); `@thinkrail/extension-api/web` (`ToolRenderProps`/`ToolStatus` + pure helpers); `@remixicon/react`.
 - **Forbidden:** value-importing any `pi` package or `pi-web-access`; `store`/`transport` (renderers stay
   presentational — extraction-ready into `packages/chat-ui`).
 

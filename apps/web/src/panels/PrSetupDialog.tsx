@@ -6,8 +6,7 @@ import {
 	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
 import type { GhSetupProblem, HostPlatform } from "@thinkrail/contracts";
-import { useState } from "react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@thinkrail/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -15,7 +14,8 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
+} from "@thinkrail/ui/dialog";
+import { useState } from "react";
 import { copyText } from "@/lib";
 
 export type PrSetupState =

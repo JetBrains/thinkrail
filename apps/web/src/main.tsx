@@ -1,9 +1,9 @@
 import "./index.css";
+import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { initChatPreferencesPersistence } from "./chat/chatPreferences";
 import { ErrorBoundary } from "./components/ErrorBoundary";
-import { TooltipProvider } from "./components/ui/tooltip";
 import { initNavigation } from "./navigation";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
 import { Shell } from "./shell/Shell";

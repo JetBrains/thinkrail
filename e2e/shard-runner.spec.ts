@@ -4,7 +4,9 @@ import { E2E_IDLE_SLEEP_OWNER_ENV, holdE2eIdleSleep } from "./idleSleep";
 import {
 	AUTO_E2E_SHARD_CAP,
 	automaticShardCount,
+	laneShardArgs,
 	MAX_E2E_SHARDS,
+	parseJobShard,
 	parseRunnerArgs,
 	resolveShardCount,
 } from "./shardPlan";
@@ -125,6 +127,23 @@ test("runner flags are consumed without changing Playwright arguments", () => {
 		shardOverride: 4,
 		playwrightArgs: ["--last-failed"],
 	});
+});
+
+test("job slices subdivide into disjoint global shards that cover the suite", () => {
+	expect(parseJobShard(undefined)).toBeUndefined();
+	expect(parseJobShard("")).toBeUndefined();
+	expect(parseJobShard("2/3")).toEqual({ index: 2, total: 3 });
+	for (const raw of ["0/2", "3/2", "1/0", "2", "a/b", "1/2/3"]) {
+		expect(() => parseJobShard(raw)).toThrow(/THINKRAIL_E2E_JOB_SHARD/);
+	}
+
+	expect(laneShardArgs(undefined, 1, 1)).toEqual([]);
+	expect(laneShardArgs(undefined, 2, 3)).toEqual(["--shard=2/3"]);
+	expect(laneShardArgs({ index: 2, total: 3 }, 1, 1)).toEqual(["--shard=2/3"]);
+	const shards = [1, 2].flatMap((index) =>
+		[1, 2].flatMap((lane) => laneShardArgs({ index, total: 2 }, lane, 2)),
+	);
+	expect(shards).toEqual(["--shard=1/4", "--shard=2/4", "--shard=3/4", "--shard=4/4"]);
 });
 
 test("invalid or conflicting shard overrides fail loudly", () => {

@@ -50,7 +50,7 @@ export function artifactPlaywrightConfig(
 		testDir: "./e2e",
 		testIgnore: "workflows/**",
 		grepInvert: /@agent|@dev-seam/,
-		fullyParallel: false,
+		fullyParallel: true,
 		workers: 1,
 		forbidOnly: !!process.env.CI,
 		retries: process.env.CI ? 1 : 0,

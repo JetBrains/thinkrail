@@ -12,17 +12,13 @@ import {
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
 import type { ImageContent, ReviewFixDetails, UserMessage } from "@thinkrail/contracts";
+import type { ToolRenderProps } from "@thinkrail/extension-api/web";
+import { Button } from "@thinkrail/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
+import { cn } from "@thinkrail/ui/utils";
 import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useState } from "react";
 import { CustomIcon } from "@/components/CustomIcon";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import {
-	cn,
-	parseSkillInvocation,
-	projectRelativePath,
-	type SkillInvocation,
-	userText,
-} from "@/lib";
+import { parseSkillInvocation, projectRelativePath, type SkillInvocation, userText } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
 import { AssistantMarkdown } from "./assistantLinks";
 import { BackgroundCommandCompletion } from "./BackgroundCommandCompletion";
@@ -36,7 +32,7 @@ import { type ChatRow, LARGE_USER_MESSAGE, type TurnDividerData } from "./rows";
 import { formatElapsed, formatTokens } from "./SessionStatsBar";
 import { ToolCard } from "./ToolCard";
 import { ToolRendererBody } from "./ToolRendererBody";
-import { getToolChrome, getToolSummary, type ToolRenderProps } from "./toolRegistry";
+import { getToolChrome, getToolSummary } from "./toolRegistry";
 import { SubagentCompletionCard } from "./tools/subagent/SubagentCompletionCard";
 import type { CompactionState } from "./types";
 

@@ -80,21 +80,22 @@ treatment.
 
   Workspace/project session presentation comes only from normalized host state. The rail has exactly two
   visual treatments: a static green/accent **attention dot** for either a concrete needs-input blocker or an
-  owner-globally unread result, and a breathing animation on the existing workspace/project identity icon while a
-  top-level session is genuinely working. Attention is binary: needs-input and unread-result states use the
+  owner-globally unread result, and the shared `RunningIcon` brand badge **in place of** the workspace/project
+  identity icon while a top-level session is genuinely working. Attention is binary: needs-input and unread-result states use the
   same dot, with the accessible label **“Needs attention”** and no question/check/result glyph, spinner,
-  count, or status-specific tooltip. Working keeps the icon's existing active/inactive colour and exposes
-  **“Agent working”** accessibly; it never adds a second marker. Queued, hidden/background, stopped, and quiet
-  sessions do not pulse; a needs-input session may still pulse when its orthogonal execution fact remains
-  running, so the attention dot and working treatment can coexist. Reduced motion removes the animation while
-  retaining the same-hue icon. Collapsed project rollup uses the same selectors as
+  count, or status-specific tooltip. Working keeps the row's existing active/inactive colour (the badge wears
+  `text-primary` / `text-text-muted` exactly as the glyph it replaces) and exposes **“Agent working”**
+  accessibly; it never adds a second marker. Queued, hidden/background, stopped, and quiet sessions show
+  their identity glyph; a needs-input session may still show the badge when its orthogonal execution fact
+  remains running, so the attention dot and working treatment can coexist. Reduced motion keeps the badge
+  static. Collapsed project rollup uses the same selectors as
   workspace rows, while expanded projects show the detail on workspace rows. The components remain
   props-driven over the normalized host-state selectors.
 
   `ProjectTree` renders the shared dependency-light `AttentionDot` from normalized host-state selectors.
   It is static accent colour, carries no count or state-specific glyph/tooltip, and occupies its own flex
   column between the identity button and the hover-revealed kebab. Workspace and collapsed-project rows
-  expose `data-attention` only while positive. Separately, the shared `RunningIcon` wraps the existing
+  expose `data-attention` only while positive. Separately, the shared `RunningIcon` replaces the
   identity icon for normalized working state; workspace and collapsed-project rows expose `data-running` only
   while positive. These attributes are test hooks, not a second state model.
 
@@ -150,7 +151,7 @@ treatment.
   last-intent generation shared by both mounted `useOpenProject` instances. The flow rechecks that generation
   after each picker, open, inspect, init, and adoption await, so a manual path or recent selection from either
   surface supersedes any older flow before it can select a project or raise a stale dialog.
-  These are modals on `components/ui/dialog` (the init offer has no on-screen anchor, unlike the Remove
+  These are modals on `@thinkrail/ui/dialog` (the init offer has no on-screen anchor, unlike the Remove
   popover); `NoticeDialog` remains the single-button
   surface for failures with no recovery inside that notice. The hook returns a `dialogs` node each consumer
   renders. **Selecting a
@@ -551,13 +552,13 @@ a project picker, the prompt hero, and the reused
   product-usage copy and shared switch; Settings adds the optional outcomes, report dimensions, and
   excluded content. Older hosts retain their legacy privacy control without the new consent dialog.
   **`FeedbackSettings`** is the final
-  live section after Privacy: the same interview copy as the automatic prompt, stating that joining a user
-  interview to discuss the participant's ThinkRail experience earns 100 bonus credits in Central
-  (JetBrains AI), plus a real external anchor to the fixed Google Calendar booking page, opened in a new
-  tab with `noopener noreferrer`. ThinkRail communicates the incentive only; attendance verification,
-  eligibility, and credit fulfillment stay outside the app. This proactive Settings link is always
-  available and deliberately does not call `feedback.respond`, alter automatic-popup state, or claim that
-  booking alone earns credits.
+  live section after Privacy: the same interview copy as the automatic prompt, stating that completing a
+  user interview about the participant's ThinkRail experience earns 100 bonus credits in Central
+  (JetBrains AI) — credits, never a currency amount — plus a real external anchor to the fixed Google
+  Calendar booking page, opened in a new tab with `noopener noreferrer`. ThinkRail communicates the
+  incentive only; attendance verification, eligibility, and credit fulfillment stay outside the app. This
+  proactive Settings link is always available and deliberately does not call `feedback.respond`, alter
+  automatic-popup state, or claim that booking alone earns credits.
   **`ModelsSettings`** is the **Default model** section, visible only at protocol v72 or newer. It re-reads
   `model.default` on open, whenever the live catalog changes (empty included), and after every save — the
   host resolves the saved model and its effort levels against its settled catalog, so a vanished or changed
@@ -939,7 +940,7 @@ own section. The kebab menu (`plan-menu`, a
   fetches + hydrates a disk-only one — the reopen flow's two cases above, plus a third case for an
   already-open tab — leaving `ChatView` to consume the request for the scroll + flash (`chat/SPEC.md`'s
   Jump-to-message bullet). **`Toaster`** is the app-wide toast host the shell mounts once: it subscribes to `store.toasts` and
-  renders each via the `components/ui/toast` primitives, letting Radix own the auto-timeout + swipe/hover-pause
+  renders each via the `@thinkrail/ui/toast` primitives, letting Radix own the auto-timeout + swipe/hover-pause
   and routing every close back through `store.dismissToast` (so the store stays the single source of truth).
   Errors persist until dismissed; success/info time out. The **integration piece** — the primitives stay
   presentational.
@@ -948,7 +949,7 @@ own section. The kebab menu (`plan-menu`, a
   Monaco/shiki/xterm stay lazy. Tab strips, group headers, side stacks, and center topology are not panel
   surfaces; the shell layout module wraps these renderers.
 - **Allowed deps:** `store`, `transport`, `components` (`SkeletonRows` — every async panel's pending
-  state renders content-shaped skeleton rows, never a bare "Loading…" line), `components/ui` (incl. `popover`/`command`/`textarea` for the
+  state renders content-shaped skeleton rows, never a bare "Loading…" line), `@thinkrail/ui/*` (incl. `popover`/`command`/`textarea` for the
   dialog), `chat` (`ModelEffortPicker` + the `useModelCatalog`/`useModelPreferences` hooks that feed it,
   reused by `NewWorkspaceDialog`; `ModelSelector`/`ThinkingSelector`, still mounted by
   `ReviewSettings`/`ModelsSettings`; `modelPicker`'s `AUTH_KIND_LABEL`, the one connection-kind vocabulary
@@ -1399,11 +1400,16 @@ own section. The kebab menu (`plan-menu`, a
   percent-encoded `data:image/svg+xml` URL; SVG source never enters the document's HTML stream. The frame
   has no script or same-origin capability and a CSP of `default-src 'none'; img-src data:; style-src
   'unsafe-inline'`, so SVG scripts and external references remain inert. The document receives only
-  resolved workspace/content background and foreground semantic token values and is rebuilt after
-  `themes.onThemeSwap`. Transparent in-process region overlays continue to place existing region threads.
-  SVG element source spans are not mapped yet, so authoring refuses positional geometry and offers a
-  clearly labelled whole-file draft (`selectors: []`, label `file`) rather than attaching a whole-document
-  line range. Its diff uses the same four visual modes and two anchor spaces as raster images; each side's
+  resolved workspace/content background and foreground semantic token values and is rebuilt via
+  `onThemeSwap` from `@thinkrail/ui/theme`. A drag over the frame authors the same normalized `region`
+  selector a raster image does, measured against the intrinsic size parsed from the root's
+  `width`/`height`/`viewBox` (the frame is sized to that aspect, so the contained rectangle is the frame).
+  It never degrades to a whole-file draft: an earlier revision did (`selectors: []`, label `file`, pending
+  a source-span mapping), and a dragged rectangle that reached the agent as "the whole file" read as lost
+  coordinates. SVG element source spans are still not mapped, so the anchor is geometry, not a line range;
+  the fractions are of the SVG's root viewport, and the send package tells the agent to invert the
+  viewport-to-viewBox transform (viewBox origin plus `preserveAspectRatio`) to find the elements under
+  them. Its diff uses the same four visual modes and two anchor spaces as raster images; each side's
   overlays project through its own object-contain rectangle, and only measured aspect bounds plus
   swipe/divider/opacity overlay geometry use inline values.
 
@@ -1561,7 +1567,7 @@ own section. The kebab menu (`plan-menu`, a
   nothing else: the panel is **read-only** — no discard-file/-folder/-all — and no “Open in ‹external app›”,
   which a host-side `open` would make silently wrong for every remote/phone client (Copy path is the portable
   escape hatch). **Folder rows get no menu** — nothing in that list applies to a folder. Built on the existing
-  `components/ui/dropdown-menu` (no new `context-menu` primitive); the right-click handler is handed back
+  `@thinkrail/ui/dropdown-menu` (no new `context-menu` primitive); the right-click handler is handed back
   through a render prop so it lands on the row's real interactive element rather than a bare div, and the `⌄`
   trigger is a *sibling* of the row's button (a button inside a button is invalid).
   Three layout rules make that wrapper invisible rather than a seam — each pinned by a geometric e2e

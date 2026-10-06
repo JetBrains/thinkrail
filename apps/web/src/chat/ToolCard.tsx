@@ -4,7 +4,7 @@ import {
 	RiLoader4Line as Loader2,
 	RiCloseLine as X,
 } from "@remixicon/react";
-import { cn } from "@/lib";
+import { cn } from "@thinkrail/ui/utils";
 import { useFold } from "./foldState";
 import { ToolRendererBody } from "./ToolRendererBody";
 import { getToolSummary, resolveProminence } from "./toolRegistry";

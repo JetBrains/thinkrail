@@ -5,6 +5,7 @@ import {
 	bucketProvider,
 	bucketProviderModel,
 	type LoginMethod,
+	NONE_BUCKET,
 	type ProviderAnalyticsProperties,
 	track,
 } from "../analytics";
@@ -118,10 +119,10 @@ export function trackChatStarted(created: {
 	sessionId: string;
 	model: Pick<WireModel, "provider" | "id"> | null;
 }): void {
-	if (created.model) {
-		track({
-			name: "chat_started",
-			params: sessionProviderAnalytics(created.sessionId, created.model),
-		});
-	}
+	track({
+		name: "chat_started",
+		params: created.model
+			? sessionProviderAnalytics(created.sessionId, created.model)
+			: { provider: NONE_BUCKET, model: NONE_BUCKET, auth_method: "unknown" },
+	});
 }

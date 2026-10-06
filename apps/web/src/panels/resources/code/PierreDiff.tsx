@@ -10,8 +10,8 @@ import {
 	RiChatNewLine as MessageSquarePlus,
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { IconTooltip } from "@/components/ui/tooltip";
 import type {
 	ResourceContent,
 	ResourceDiffProps,

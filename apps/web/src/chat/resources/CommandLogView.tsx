@@ -1,5 +1,5 @@
 import type { BackgroundCommandOutputResult } from "@thinkrail/contracts";
-import { Button } from "@/components/ui/button";
+import { Button } from "@thinkrail/ui/button";
 
 export function CommandLogView({
 	result,

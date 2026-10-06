@@ -1,5 +1,5 @@
+import { onThemeSwap } from "@thinkrail/ui/theme";
 import { useEffect, useState } from "react";
-import { onThemeSwap } from "@/themes";
 import type { SvgThemeTokens } from "./svgDocument";
 
 function token(name: string): string {

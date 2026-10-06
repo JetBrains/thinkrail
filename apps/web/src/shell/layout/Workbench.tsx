@@ -43,6 +43,37 @@ import {
 	RiCloseLine as X,
 } from "@remixicon/react";
 import {
+	Command,
+	CommandEmpty,
+	CommandInput,
+	CommandItem,
+	CommandList,
+} from "@thinkrail/ui/command";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSeparator,
+	ContextMenuTrigger,
+} from "@thinkrail/ui/context-menu";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import {
+	type ImperativePanelGroupHandle,
+	ResizableHandle,
+	ResizablePanel,
+	ResizablePanelGroup,
+} from "@thinkrail/ui/resizable";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
+import {
 	Fragment,
 	type ReactNode,
 	useCallback,
@@ -54,43 +85,13 @@ import {
 } from "react";
 import { CustomIcon } from "../../components/CustomIcon";
 import {
-	Command,
-	CommandEmpty,
-	CommandInput,
-	CommandItem,
-	CommandList,
-} from "../../components/ui/command";
-import {
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuSeparator,
-	ContextMenuTrigger,
-} from "../../components/ui/context-menu";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuRadioGroup,
-	DropdownMenuRadioItem,
-	DropdownMenuSeparator,
-	DropdownMenuTrigger,
-} from "../../components/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "../../components/ui/popover";
-import {
-	type ImperativePanelGroupHandle,
-	ResizableHandle,
-	ResizablePanel,
-	ResizablePanelGroup,
-} from "../../components/ui/resizable";
-import { IconTooltip } from "../../components/ui/tooltip";
-import {
 	DOUBLE_CLICK_SETTLE_MS,
 	type LayoutAttention,
 	readLayoutNavigationClock,
 	readLayoutSelection,
 	tupleKey,
 } from "../../lib";
+import { closeRequestTarget } from "./closeRequest";
 import {
 	type CenterSplitDirection,
 	canCreateAuxiliaryGroup,
@@ -168,6 +169,7 @@ export interface WorkbenchProps {
 	maxBottomGroups: number;
 	projectionEpoch: number;
 	focusRequest?: LayoutTabFocusRequest;
+	subscribeCloseRequest?: (listener: () => void) => () => void;
 	renderTabBody: (tab: LayoutCenterTab | Extract<LayoutSideTab, { kind: "terminal" }>) => ReactNode;
 	renderTabAdornment: (tab: LayoutTab) => ReactNode;
 	renderToolBody: (tool: LayoutToolId) => ReactNode;
@@ -2563,6 +2565,7 @@ export function Workbench({
 	maxBottomGroups,
 	projectionEpoch,
 	focusRequest,
+	subscribeCloseRequest,
 	renderTabBody,
 	renderTabAdornment,
 	renderToolBody,
@@ -2772,6 +2775,18 @@ export function Workbench({
 			});
 		},
 		[onAttentionChange, onRequestClose, onUserNavigation, readNavigationTick],
+	);
+
+	useEffect(
+		() =>
+			subscribeCloseRequest?.(() => {
+				const focusedGroupId =
+					globalThis.document.activeElement?.closest<HTMLElement>("[data-group-id]")?.dataset
+						.groupId;
+				const tab = closeRequestTarget(documentRef.current, attentionRef.current, focusedGroupId);
+				if (tab) close(tab);
+			}),
+		[close, subscribeCloseRequest],
 	);
 
 	useEffect(() => {

@@ -3,10 +3,10 @@ import {
 	RiErrorWarningFill as ChangesIcon,
 } from "@remixicon/react";
 import { isPlanReviewResult, type PlanReviewResult } from "@thinkrail/contracts";
+import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import type { ReactNode } from "react";
 import { ReviewPackageComments } from "../ReviewPackageComments";
 import { reviewFixCommentsToItems } from "../reviewPackage";
-import type { ToolRenderProps } from "../toolRegistry";
 
 export function readPlanReview(raw: unknown): PlanReviewResult | null {
 	if (

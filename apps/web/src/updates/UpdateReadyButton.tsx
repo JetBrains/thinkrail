@@ -1,5 +1,5 @@
 import { RiDownloadCloud2Line as DownloadCloud } from "@remixicon/react";
-import { Button } from "../components/ui/button";
+import { Button } from "@thinkrail/ui/button";
 import type { UpdatesController } from "./useUpdates";
 
 export function UpdateReadyButton({

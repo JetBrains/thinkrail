@@ -1,6 +1,7 @@
 import { RiCheckLine as Check, RiFileCopyLine as Copy } from "@remixicon/react";
+import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useRef, useState } from "react";
-import { cn, copyText } from "@/lib";
+import { copyText } from "@/lib";
 
 export function CopyButton({
 	getText,

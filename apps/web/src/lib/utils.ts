@@ -1,10 +1,4 @@
 import type { UserMessage } from "@thinkrail/contracts";
-import { type ClassValue, clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
-
-export function cn(...inputs: ClassValue[]): string {
-	return twMerge(clsx(inputs));
-}
 
 export const DOUBLE_CLICK_SETTLE_MS = 250;
 
@@ -223,6 +217,13 @@ function browserPlatform(): string {
 
 function isApplePlatform(platform: string): boolean {
 	return APPLE_PLATFORM.test(platform);
+}
+
+export function platformFamily(platform = browserPlatform()) {
+	if (isApplePlatform(platform)) return "apple";
+	if (/^Win/.test(platform)) return "windows";
+	if (/Linux/.test(platform)) return "linux";
+	return "other";
 }
 
 export function hasPlatformModifier(

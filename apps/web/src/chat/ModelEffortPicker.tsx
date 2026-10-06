@@ -24,7 +24,6 @@ import {
 	type ThinkingLevel,
 	type WireModel,
 } from "@thinkrail/contracts";
-import { type CSSProperties, forwardRef, useImperativeHandle, useMemo, useState } from "react";
 import {
 	Command,
 	CommandEmpty,
@@ -32,10 +31,11 @@ import {
 	CommandInput,
 	CommandItem,
 	CommandList,
-} from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { IconTooltip } from "@/components/ui/tooltip";
-import { cn } from "@/lib";
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { cn } from "@thinkrail/ui/utils";
+import { type CSSProperties, forwardRef, useImperativeHandle, useMemo, useState } from "react";
 import {
 	CENTRAL_KIND_TAG,
 	COSTLY_LEVELS,

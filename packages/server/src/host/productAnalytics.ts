@@ -58,8 +58,16 @@ export function captureAdditional(
 }
 
 export function failureReason(error: unknown): FailureReason {
-	if (errorCodeOf(error) === "PUSH_AUTH_FAILED") return "auth";
-	return "unknown";
+	switch (errorCodeOf(error)) {
+		case "PUSH_AUTH_FAILED":
+			return "auth";
+		case "NOT_GIT":
+			return "not_git";
+		case "ALREADY_OPEN":
+			return "already_open";
+		default:
+			return "unknown";
+	}
 }
 
 export function providerAvailability(
@@ -200,6 +208,12 @@ export function centralConnectOutcome(
 				? "unsupported"
 				: "unknown",
 	};
+}
+
+export function directoryPickOutcome(selected: {
+	path: string | null;
+}): Pick<SetupResult, "outcome" | "reason"> {
+	return { outcome: selected.path === null ? "cancelled" : "succeeded", reason: "none" };
 }
 
 export async function observePrAction(

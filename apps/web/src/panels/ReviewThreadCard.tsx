@@ -1,6 +1,6 @@
 import { RiSendPlaneLine as Send, RiDeleteBin6Line as Trash2 } from "@remixicon/react";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useRef, useState } from "react";
-import { IconTooltip } from "../components/ui/tooltip";
 import type { ReviewThread, ReviewThreadActions } from "../resources";
 import { outdatedReason, threadLabel } from "./reviewModel";
 

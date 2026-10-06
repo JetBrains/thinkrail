@@ -1,5 +1,5 @@
+import type { ImperativePanelHandle } from "@thinkrail/ui/resizable";
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { ImperativePanelHandle } from "../components/ui/resizable";
 import { STORAGE_PREFIX } from "../constants/branding";
 
 const FOCUSABLE_SELECTOR = [

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { ToolRenderProps } from "../toolRegistry";
 import { EditCard } from "./EditCard";
 import { ReadCard } from "./ReadCard";
 import { WriteCard } from "./WriteCard";

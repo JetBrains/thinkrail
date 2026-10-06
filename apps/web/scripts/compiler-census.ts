@@ -7,13 +7,13 @@ import {
 	type PluginOptions,
 	parsePluginOptions,
 } from "babel-plugin-react-compiler";
+import { designSourceFiles } from "./designSources";
 
 // Must match `reactCompilerPreset()` in vite.config.ts.
 const COMPILER_OPTIONS: PluginOptions = {};
 const PRESET_FILTER = /\b[A-Z]|\buse/;
 
 const WEB_ROOT = resolve(import.meta.dir, "..");
-const SRC_ROOT = resolve(WEB_ROOT, "src");
 const EXCLUDED = /\.(test|spec|stories)\.[tj]sx?$/;
 
 interface Bailout {
@@ -148,13 +148,8 @@ function bailedFunctionKey(b: Bailout) {
 
 function runCensus() {
 	const { target, compilationMode, panicThreshold } = parsePluginOptions(COMPILER_OPTIONS);
-	const files = [...new Bun.Glob("**/*.{ts,tsx}").scanSync({ cwd: SRC_ROOT })]
-		.filter((f) => !EXCLUDED.test(f))
-		.sort();
-	const results = files.map((f) => {
-		const absPath = resolve(SRC_ROOT, f);
-		return censusFile(absPath, readFileSync(absPath, "utf8"));
-	});
+	const files = designSourceFiles().filter((file) => /\.tsx?$/.test(file) && !EXCLUDED.test(file));
+	const results = files.map((file) => censusFile(file, readFileSync(file, "utf8")));
 	const bailouts = results.flatMap((r) => r.bailouts);
 	const bailedFunctions = new Set(bailouts.map(bailedFunctionKey)).size;
 	return {

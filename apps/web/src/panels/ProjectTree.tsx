@@ -19,6 +19,26 @@ import {
 	RiCloseLine as X,
 } from "@remixicon/react";
 import type { EditorInfo, Project, Workspace } from "@thinkrail/contracts";
+import { Button } from "@thinkrail/ui/button";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuSeparator,
+	ContextMenuTrigger,
+} from "@thinkrail/ui/context-menu";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuSub,
+	DropdownMenuSubContent,
+	DropdownMenuSubTrigger,
+	DropdownMenuTrigger,
+} from "@thinkrail/ui/dropdown-menu";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { cn } from "@thinkrail/ui/utils";
 import {
 	type KeyboardEvent,
 	type MouseEvent,
@@ -29,26 +49,7 @@ import {
 } from "react";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
-import { Button } from "@/components/ui/button";
-import {
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuSeparator,
-	ContextMenuTrigger,
-} from "@/components/ui/context-menu";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuSeparator,
-	DropdownMenuSub,
-	DropdownMenuSubContent,
-	DropdownMenuSubTrigger,
-	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { IconTooltip } from "@/components/ui/tooltip";
-import { cn, copyText, platformShortcutLabel } from "@/lib";
+import { copyText, platformShortcutLabel } from "@/lib";
 import { LoadingRegion } from "../components/Skeleton";
 import {
 	isDefaultWorkspace,
@@ -424,9 +425,7 @@ function ProjectRow({
 				className="flex min-w-0 flex-1 items-center gap-4 text-left"
 			>
 				{isRunning ? (
-					<RunningIcon className={isSelected ? "text-primary" : "text-text-muted"}>
-						<Folder className="size-14 shrink-0" />
-					</RunningIcon>
+					<RunningIcon className={`size-14 ${isSelected ? "text-primary" : "text-text-muted"}`} />
 				) : (
 					<Folder
 						className={`size-14 shrink-0 ${isSelected ? "text-primary" : "text-text-muted"}`}
@@ -649,9 +648,9 @@ function WorkspaceRow({
 
 	const identityClass = `flex min-w-0 flex-1 gap-4 text-left ${isTwoLine ? "items-start" : "items-center"}`;
 	const identityIcon = isRunning ? (
-		<RunningIcon className={cn(isTwoLine && "mt-2", isActive ? "text-primary" : "text-text-muted")}>
-			<Icon className="size-14 shrink-0" />
-		</RunningIcon>
+		<RunningIcon
+			className={cn("size-14", isTwoLine && "mt-2", isActive ? "text-primary" : "text-text-muted")}
+		/>
 	) : (
 		<Icon
 			className={`${isTwoLine ? "mt-2 " : ""}size-14 shrink-0 ${isActive ? "text-primary" : "text-text-muted"}`}

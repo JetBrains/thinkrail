@@ -51,7 +51,7 @@ const INSTRUCTIONS = `Address each review comment above.
 - After you have addressed a comment (by an edit, or by an answer when no change is needed), call resolve_comment with its id and a one-line note of what you did.
 - If a comment is unclear or you disagree, reply in the conversation instead of editing, and do NOT resolve it.
 - A comment marked outdated includes the fragment as it was when the comment was written — verify against the current file first.
-- A comment with a locator instead of a fragment names a position that has no source text (an image region in normalized 0..1 coordinates of the rendered size, or a document node such as a notebook cell): open the file with your own tools to see it.
+- A comment with a locator instead of a fragment names a position by geometry or document node rather than by lines (an image region in normalized 0..1 coordinates of the rendered size — for an SVG that is its root viewport, so invert the viewport-to-viewBox transform, viewBox origin and preserveAspectRatio included (the default xMidYMid meet letterboxes a viewBox whose aspect differs from width/height), to find the elements under it — or a document node such as a notebook cell): open the file with your own tools to see it.
 - A comment with side="base" points at the PRE-change version of the file: its lines and fragment index base-ref, not the worktree. It is a remark about what the change removed or replaced — find the corresponding place in the current file before editing.`;
 
 function contextBlock(content: string, startLine: number, endLine: number): string {

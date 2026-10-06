@@ -1,8 +1,8 @@
+import { MermaidView } from "@thinkrail/ext-visualize/web";
 import { type ComponentProps, memo, type ReactNode, useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { highlightCode } from "@/lib/highlighter";
-import { MermaidView } from "./tools/visualize/MermaidView";
 
 const CHAT_PROSE =
 	"tr-prose-chat max-w-none break-words [&_a]:text-primary [&_a]:underline [&_li]:my-2 [&_ol]:my-8 [&_ol]:list-decimal [&_ol]:pl-16 [&_p]:my-8 [&_table]:border-collapse [&_td]:border [&_td]:border-border-muted [&_td]:px-8 [&_td]:py-4 [&_th]:border [&_th]:border-border-muted [&_th]:px-8 [&_th]:py-4 [&_th]:text-left [&_ul]:my-8 [&_ul]:list-disc [&_ul]:pl-16";

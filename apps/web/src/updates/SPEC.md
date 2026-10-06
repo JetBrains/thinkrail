@@ -18,7 +18,7 @@ and one durable status affordance without teaching the UI which launcher is runn
 
 - **Public surface (`index.ts`):** `useUpdates`, `UpdateSettings`, and `UpdateReadyButton`.
 - **External deps:** React, Remix Icon, `@thinkrail/contracts` types, the sibling store barrel, and
-  `components/ui`.
+  `@thinkrail/ui/button`.
 - **Forbidden:** Electron/Electrobun imports; server/shared/transport imports; launcher-name checks;
   renderer-selected feed URLs; update check/download/install logic; browser-supplied shell commands, paths,
   channels, versions, or URLs; draft saving, input protection, renderer preparation, or any second native

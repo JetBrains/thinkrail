@@ -4,6 +4,8 @@ import {
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
+import { DropdownMenuItem } from "@thinkrail/ui/dropdown-menu";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
 import {
 	Fragment,
 	lazy,
@@ -18,8 +20,6 @@ import { prepareChatTitle } from "../chat/chatTitle";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { LoadingRegion } from "../components/Skeleton";
-import { DropdownMenuItem } from "../components/ui/dropdown-menu";
-import { IconTooltip } from "../components/ui/tooltip";
 import { type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
 import { DiffPane } from "../panels/DiffPane";
@@ -59,6 +59,7 @@ import {
 	useDeletedChatPlacementReconciliation,
 	useWorkspaceChatCatalogReconciliation,
 } from "./chatReconciliation";
+import { subscribeCloseRequest } from "./closeRequestChannel";
 import {
 	collectAllGroups,
 	findPlacedResource,
@@ -613,6 +614,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				maxBottomGroups={layoutPreferences.maxBottomGroups}
 				projectionEpoch={projectionEpoch}
 				{...(focusRequest ? { focusRequest } : {})}
+				subscribeCloseRequest={subscribeCloseRequest}
 				renderTabBody={renderTabBody}
 				renderTabAdornment={(tab) => {
 					if (tab.kind === "tool" && tab.tool === "review" && reviewDraftCount > 0) {

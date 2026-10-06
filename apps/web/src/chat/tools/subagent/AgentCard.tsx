@@ -5,12 +5,11 @@ import {
 	RiLoader4Line as Loader2,
 	RiFileList3Line as ScrollText,
 } from "@remixicon/react";
+import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useChatActions } from "../../ChatActions";
 import { useFold } from "../../foldState";
 import { Markdown } from "../../Markdown";
-import type { ToolRenderProps } from "../../toolRegistry";
 import { Collapsible, countLines } from "../Collapsible";
-import { resultText, strArg } from "../toolHelpers";
 import { isTerminalRunStatus, readRunDetails, runCounters } from "./runDetails";
 
 export function AgentCard({ toolCallId, args, result, status }: ToolRenderProps) {

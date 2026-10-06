@@ -1,7 +1,6 @@
 import { RiLinksLine as LinkIcon } from "@remixicon/react";
-import type { ToolRenderProps } from "../../toolRegistry";
+import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { ToolFileLink } from "../ToolFileLink";
-import { resultText, strArg } from "../toolHelpers";
 import { WebResultBody } from "./WebResultBody";
 
 function httpUrl(value: string): URL | null {

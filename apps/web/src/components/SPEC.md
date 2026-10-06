@@ -12,8 +12,7 @@ tags: [ui, resilience]
 The app's dependency-light shared React primitives: the error boundary that keeps one failed region from
 unmounting the root, project-custom icons, the binary attention dot and working-icon treatment used by
 feature panels (currently the Projects rail), the quiet-scroll frame, and the shared loading-skeleton
-primitive. Also houses the
-`ui/` sub-module (shadcn primitives), which has its own spec.
+primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`), not this module.
 
 ## Boundary
 
@@ -49,13 +48,19 @@ primitive. Also houses the
 - **`AttentionDot.tsx`** — the store-free, static green/accent dot whose sole accessible label is “Needs
   attention.” It carries no reason, count, tooltip, motion, or clearing behavior; callers decide only whether
   it is present. It is the one marker for both needs-input and unread-result attention.
-- **`RunningIcon.tsx`** — a store-free wrapper for an identity icon whose existing colour must not change.
-  While active it applies the shared `animate-working` breathing (opacity dips to ~22% while the glyph
-  shrinks to 80%, 1.3s cycle) and the accessible label “Agent working”. The stock 2s fade to 50% was
-  too faint on a 14px muted glyph to read peripherally; motion plus a deep dip is what makes it
-  noticeable without changing hue or adding a marker. Reduced motion
-  removes animation and uses the same-hue static treatment. It never renders a dot, spinner, count, or
-  tooltip. Feature callers decide whether normalized host state says a top-level session is running.
+- **`RunningIcon.tsx`** — the store-free **“ThinkRail is working” badge**: the brand monogram inside a ring,
+  drawn in `currentColor` so it sizes with `size-*` and colours with `text-*` like a Remix icon, with the
+  accessible label “Agent working”. While motion is allowed, a train (bright head, fading tail) laps the
+  dimmed ring every 1.875s, the monogram pulses once per lap (full to 25% and back, bright as the train
+  passes twelve o'clock), and three sparks trace the monogram's outline on a 6.75s lap. The pulse is what
+  reads at the rail's 14px — a sub-pixel detail cannot — while the sparks are the detail at 24px and up;
+  they ride the brand path itself, so there is no hand-drawn geometry to drift if the mark changes. The
+  monogram never rotates or distorts. The previous treatment breathed the row's own identity glyph; it was
+  replaced because a dimming folder reads as “disabled” at 14px, while a distinct brand badge is
+  recognisable peripherally and is the same mark wherever the agent is working (rail rows, chat footer).
+  Reduced motion hides the movers and shows the static full-strength badge. Callers pass only size/colour
+  classes and decide from normalized host state whether a top-level session is running; the icon renders
+  no dot, spinner, count, tooltip, or idle state.
 - **Also owns:** `Skeleton.tsx` — `SkeletonRows`, the one pulsing-rows placeholder every loading surface
   uses, and `LoadingRegion`, the sized-wrapper shape around it that most call sites actually want (a
   `className` for the region's own padding/sizing, an optional `label` threaded to `SkeletonRows`'
@@ -67,11 +72,11 @@ primitive. Also houses the
   `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the
   `QuietScrollEdges` type via `@/components/QuietScrollArea`; `useNow()` via `@/components/useNow` (the
   wall clock as a `useSyncExternalStore` value on a shared 30 s ticker, so a render never calls `Date.now`
-  itself). The `ui/` primitives are their own sub-module
-  ([components/ui/SPEC.md](ui/SPEC.md)).
-- **Allowed deps:** React, `@remixicon/react`, `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
-  rather than re-stated). Kept dependency-light on purpose, and `lib` is a leaf, so *any* region (shell,
-  panels, `main.tsx`) can still wrap in it without creating a cycle.
+  itself).
+- **Allowed deps:** React, `@remixicon/react`, `@thinkrail/ui/utils` (`cn`), `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
+  rather than re-stated), `constants` (`BRAND_MARK_PATH` — the monogram `RunningIcon` draws, shared with the
+  shell logo rather than copied). Kept dependency-light on purpose, and both are leaves, so *any* region
+  (shell, panels, `main.tsx`) can still wrap in it without creating a cycle.
 - **Forbidden:** `store`/`transport`/`panels`/`shell`/`chat`/`contracts`; `server`/`shared`/`pi`; inline
   `style` objects or raw hex (fallback is themed with token utilities only).
 

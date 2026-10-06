@@ -28,12 +28,12 @@ dials it over the network; a phone reaches the selected host over Tailscale.
 
 ```
 apps/cli        browser host launcher: boot server + open browser ── depends on ─▶ packages/server
-apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/contracts
+apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/contracts, packages/ui, packages/extension-api/web, thinkrail-extensions/*/web
 apps/desktop    Electrobun local-host launcher                     ── depends on ─▶ packages/server, packages/contracts, packages/shared
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
 packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared, packages/pi-background-commands, packages/pi-delegation, packages/pi-subagents
-packages/contracts  the wire (types-only)
+packages/contracts  the wire (types plus tiny pure runtime)
 packages/shared     shellEnv (server-side only)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
                     its pi-free core/ read model also backs the host's spec.graph read method)
@@ -53,8 +53,8 @@ pi-extensions/*     portable pi packages published to npm as @thinkrail.ai/pi-<n
 thinkrail-extensions/*  ThinkRail extensions: a pi capability + ./server and ./web halves, composed by one
                     registry file per side (decided, Decision 21) ── depends on ─▶ pi-extensions/*,
                     packages/extension-api, packages/ui
-packages/extension-api  types + define* helpers for extension halves (decided, Decision 21) ── depends on ─▶ packages/contracts
-packages/ui         owned shadcn/Radix primitives + cn + onThemeSwap, extracted from apps/web (decided, Decision 21)
+packages/extension-api  types + define* helpers for extension halves ── depends on ─▶ packages/contracts
+packages/ui         owned shadcn/Radix primitives + cn + onThemeSwap ── may depend on ─▶ packages/contracts
 ```
 
 Artifact verification is a separate source-only workspace, [[module-artifact-tests]]. It depends on
@@ -65,8 +65,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
 ## Decisions
 
 1. **Client/host split.** Engine host owns `pi` and state; the UI is a portable client; the wire is the
-   only coupling. **Rule: `apps/web` depends on `packages/contracts` only** — never on `server` or
-   `shared`. That single edge is what makes the UI shippable without the host.
+   only coupling. **Rule: `apps/web` depends on `contracts`, `ui`, `extension-api/web`, and
+   `thinkrail-extensions/*/web` only** — never on `server` or `shared`. All added edges are browser-safe
+   presentation packages; the UI remains shippable without the host.
 2. **Launchers are thin; the host is a library.** `apps/cli` and `apps/desktop` both embed the shared
    boot path in-process. CLI opens a browser; desktop opens a native system webview on a fresh one-origin
    loopback host. Neither owns engine logic or spawns the other. The CLI remains a complete independent
@@ -81,8 +82,10 @@ dependency. This keeps test process drivers outside both launchers and the serve
    adapter. Physical runtime requirements are declared once through the server-owned build-support manifest,
    then transformed by each packager. The same behavior and artifact suites run through every launcher, so
    reuse is enforced by boundaries and conformance rather than parallel implementations.
-3. **The wire is versioned.** `contracts` is types-only; `server.welcome` carries a protocol version so
-   an independently-shipped UI can detect host-version drift.
+3. **The wire is versioned.** `contracts` is types plus a small dependency-free runtime: wire constants,
+   versions, the config default, and guards. Any other runtime is a named exception in its spec, today
+   only the quit-confirmation rule; adding one updates this decision. `server.welcome` carries a
+   protocol version so an independently-shipped UI can detect host-version drift.
 4. **Transport endpoint is a parameter.** Defaults to same-origin (`location.host`); a remote browser,
    desktop, or mobile client points it at the selected host's Tailscale MagicDNS name. Native resume state
    is keyed by backend profile so ids from one host are never interpreted against another.
@@ -337,10 +340,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
     into every launcher without generated factory lists, and a web registry
     (`apps/web/src/extensions/registry.ts`). The SDK is `packages/extension-api` (types + `define*`) and
     `packages/ui` (owned primitives, `cn`, `onThemeSwap`); the highlighted `CodeBlock` stays app-local
-    until a second consumer exists. **Invariant transition:** Decision 1's rule "`apps/web` depends on
-    `packages/contracts` only" holds until the SDK extraction lands, then becomes "`apps/web` depends on
-    `contracts`, `ui`, `extension-api`, and `thinkrail-extensions/*/web` only", enforced with source-half
-    and public-subpath rules. **Delivery rule:** every extension arrives as three independently shippable
+    until a second consumer exists. Decision 1's browser-only dependency rule is enforced with
+    source-half and public-subpath checks, including the SDK's separate `./web` and `./server` contracts. **Delivery rule:** every extension arrives as three independently shippable
     PRs — new pi package beside the old, web half moved, server half + wiring with the old package
     deleted — none of which changes anything a user can observe. Install UX, marketplace, per-extension
     settings and runtime-loaded third-party extensions are explicit deferrals. Rejected: runtime-loaded

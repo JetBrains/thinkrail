@@ -1,7 +1,7 @@
 import { RiShieldCheckLine as ShieldCheck, RiAlertLine as TriangleAlert } from "@remixicon/react";
 import type { Project } from "@thinkrail/contracts";
+import { Button } from "@thinkrail/ui/button";
 import { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 

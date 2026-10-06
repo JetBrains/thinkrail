@@ -5,9 +5,9 @@ import {
 	type ReviewFixDetails,
 	type UserMessage,
 } from "@thinkrail/contracts";
+import { strArg } from "@thinkrail/extension-api/web";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { resolveProminence } from "./toolRegistry";
-import { strArg } from "./tools/toolHelpers";
 import type { ChatTurn, CompactionState, FailureRecovery, ToolResultState } from "./types";
 
 // User-message collapse threshold (PlainUserTurn); also read by row height estimation.

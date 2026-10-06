@@ -4,7 +4,6 @@ import {
 	RiGlobalLine as Globe,
 } from "@remixicon/react";
 import type { Project } from "@thinkrail/contracts";
-import type { ReactNode } from "react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -13,7 +12,8 @@ import {
 	DropdownMenuLabel,
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@thinkrail/ui/dropdown-menu";
+import type { ReactNode } from "react";
 
 export function AddProjectMenu({
 	recentProjects,

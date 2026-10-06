@@ -17,7 +17,7 @@ message / content-block model**, a **tool-renderer registry** (the extension poi
 event→render *reference* we learn from but do **not** adopt (architecture + framework mismatch with our
 host-runs-pi / typed-WS / React+shadcn model). Built so others can reuse/contribute (extraction-ready as
 a future `packages/chat-ui`). Built-in tool renderers live in the child
-[tools/SPEC.md](tools/SPEC.md).
+[tools/SPEC.md](tools/SPEC.md); extracted extension renderers live in [[module-thinkrail-extensions]].
 
 ## Rendering model — rows and progressive disclosure
 
@@ -113,7 +113,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   anchor activation cannot escape into the SPA fallback. That override keeps a stable component identity
   while its workspace inputs are unchanged: workbench focus can rerender a chat row between pointer-down and
   click, and replacing the control in that interval cancels activation. A fenced
-  ```mermaid block renders as a themed diagram via `tools/visualize`'s `MermaidView` (fullscreen
+  ```mermaid block renders as a themed diagram via `@thinkrail/ext-visualize/web`'s `MermaidView` (fullscreen
   pan-zoom, error → source fallback) — uniform across every `Markdown` surface (chat, file/specs
   preview); until mounted it renders as highlighted source, so static contexts (`RenderedDiff`'s
   `renderToStaticMarkup`) degrade to code exactly like shiki blocks do.
@@ -273,7 +273,13 @@ entry/exit obeys reduced motion.
 
 `toolRegistry.tsx` is **THE extension point**; a tool has two decoupled sides joined by **tool name**:
 the **capability** registers with the pi session server-side (custom tool or pi extension/skill), the
-**presentation** registers here. A registration is:
+**presentation** registers here. The registry `Map` and fallback renderer stay app-local;
+`extensions/registerWebExtensions()` feeds the ordered descriptors from `extensions/registry.ts`
+into it when `ChatView` loads. Built-in app renderers retain their local side-effect registrations.
+Render contracts (`ToolRenderProps`, `ToolStatus`, registration metadata) and pure argument/result
+helpers come from `@thinkrail/extension-api/web`, not chat internals. `Markdown` imports the named
+`MermaidView` from `@thinkrail/ext-visualize/web` for fenced mermaid; shiki and highlighted `CodeBlock`
+remain app-local. A registration is:
 
 - a **renderer** (the specialized card body; `ToolRenderProps` carries `toolCallId`/`args`/`result`/
   `status`/`workspaceRoot`/`streaming` plus an optional shell-injected `onOpenFile` callback — enough to
@@ -779,7 +785,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   list instead of beside it (list first in source order, so a column flex stack already places it
   there), each pane independently scrollable within its own height budget. The **scope badge**
   (`data-testid="history-scope"`, unchanged `<scope> ⌃R` label + `data-scope`) is now also a
-  `components/ui/dropdown-menu` trigger: its content lists all four scopes in cycle order
+  `@thinkrail/ui/dropdown-menu` trigger: its content lists all four scopes in cycle order
   (`data-testid="history-scope-option"` + `data-scope`, fuller labels than the badge itself — "This
   chat" / "Workspace" / "Project" / "Everywhere" — with the current one check-marked). Picking one
   calls `useHistorySearch.ts`'s new `setScope(kind)`, which resets the results selection exactly like
@@ -1295,9 +1301,10 @@ Unknown custom messages retain their existing behavior.
   pass still answers — with a list to render, not a verdict), and dropped by the next `model.list` install
   from *any* consumer. `model.list` answers from *before* the
   detached refresh it triggers, so it is never a basis for concluding a model is gone);
-  `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `mermaid`
-  (**lazy, `tools/visualize` only** — `Markdown` consumes the `MermaidView` *component*, never the
-  package); `react-virtuoso`; `@remixicon/react`; `components/ui`; `components/useNow`; `lib`.
+  `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter`); `@thinkrail/ext-visualize/web`
+  (`Markdown` consumes `MermaidView`; `mermaid` stays lazy inside the extension);
+  `@thinkrail/extension-api/web`; `react-virtuoso`; `@remixicon/react`; `@thinkrail/ui/*`;
+  `components/useNow`; `lib`.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
   `store`/`transport` (only the app-integration files enumerated above may — keep the renderers reusable).
 - **`ChatView`** is the primary app-integration file: wires this session's runtime
@@ -1332,8 +1339,8 @@ append a `subagentCompletion` turn (the shared contracts guard narrows both, on 
 **One live indicator, always.** pi splits a run into several assistant messages, so the reducer sweeps
 the per-message `streaming` flag on new-message start and the final `agent_settled` (at most one turn is
 ever flagged). The session remains live across attempt-level `agent_end` events. The loader
-is a **single footer** (`StreamIndicator`: typing-dots + a phase label from the pure `streamStatus`
-deriver — `working` → `thinking` → `running-tool` → `writing`, plus `compacting` while the transcript's
+is a **single footer** (`StreamIndicator`: the shared `RunningIcon` brand badge, decorative here, + a phase
+label from the pure `streamStatus` deriver — `working` → `thinking` → `running-tool` → `writing`, plus `compacting` while the transcript's
 trailing turn is a running compaction) — not a per-turn cursor — so it can't
 duplicate and it fills the post-send gap. Outside the streaming window (a manual compact, or the
 pre-prompt compaction pi runs inside `prompt()` before `agent_start`) the footer is absent by design —

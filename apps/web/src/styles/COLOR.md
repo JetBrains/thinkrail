@@ -115,7 +115,7 @@ the remainder comes from its own built-in palette:
 | Monaco | desktop file canvas/foreground/gutter; active + inactive line numbers; cursor + both selection colours; current-line fill/border; indent guides; bracket match + six bracket-pair colours; word/selection/find highlights; sticky-scroll canvas/shadow; fold/whitespace paint; editor + hover widgets; menu, quick-input and input surfaces/states; focus border; widget/scrollbar shadows + slider states; every TextMate syntax rule | `vs` / `vs-dark` / `hc-black` / `hc-light` via `inherit: true` — suggest/peek/debug, minimap and other unlisted specialist surfaces |
 | Pierre | file/diff canvas and gutter, foreground/line numbers/selection, syntax variables, success additions, error deletions, separator/annotation surfaces, code family/size | Pierre core layout/effects for properties not bridged; no `@pierre/theme` preset is applied |
 | xterm | background, foreground, cursor, both selection colours, all 16 ANSI | xterm defaults for `cursorAccent` and `selectionInactiveBackground` |
-| mermaid | the `themeVariables` map in `chat/tools/visualize/mermaid.ts` | mermaid's `base` theme for anything absent from that map |
+| mermaid | the `themeVariables` map in `thinkrail-extensions/visualize/web/mermaid.ts` | mermaid's `base` theme for anything absent from that map |
 
 This is a bounded, accepted gap, not an oversight. Monaco alone exposes ~200 colour keys; enumerating
 them would be a large and brittle surface, and the base is chosen from the manifest's appearance and
@@ -142,7 +142,8 @@ escape hatch, or a second name for a value that already has one.
 
 ## What is pinned by tests
 
-`styles/colorUsage.test.ts` fails when:
+`styles/colorUsage.test.ts` scans app source, `packages/ui`, and every
+`thinkrail-extensions/*/web` tree through the shared build-time source scanner. It fails when:
 
 - a colour utility names a token that `@theme inline` does not publish (the silent-drop bug);
 - a component contains a raw hex, `rgb()` or `hsl()`;
@@ -180,7 +181,7 @@ hover-on-content at 1.165).
 `themes/runtime.test.ts` pins application; `themes/shiki.test.ts` pins the syntax-variable map. See [`themes/SPEC.md`](../themes/SPEC.md) for the manifest itself and
 [TYPOGRAPHY.md](./TYPOGRAPHY.md) for the parallel type system.
 
-## Scope: this app only
+## Scope: the app and its UI SDK/extensions
 
 `apps/website` — the public landing page — has its own stylesheet with its own hardcoded colours and
 fonts, and shares nothing with this system. That is deliberate: it is a static marketing page on GitHub

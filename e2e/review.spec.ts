@@ -72,7 +72,14 @@ interface PersistedComment {
 		path: string;
 		side: string;
 		baseRef?: string;
-		selectors: { kind: string; exact?: string }[];
+		selectors: {
+			kind: string;
+			exact?: string;
+			x?: number;
+			y?: number;
+			width?: number;
+			height?: number;
+		}[];
 	} | null;
 }
 
@@ -178,6 +185,42 @@ test("selection → icon → inline composer → draft; the tab wears the violet
 	await expect(page.getByTestId("review-tab-flag")).toHaveCount(0);
 	await expect(page.getByTestId("send-review-button")).toHaveCount(0);
 	await expect(page.getByTestId("review-thread-card")).toHaveCount(0);
+});
+
+test("a region dragged on an SVG is stored as normalized geometry, like a raster image", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await page.getByTestId("tab-files").click();
+	await page.getByTestId("file-node").filter({ hasText: "RENDERERS.svg" }).dblclick();
+	await expect(page.getByTestId("view-toggle-svg")).toHaveAttribute("data-active", "true");
+	const surface = page.getByTestId("svg-region-surface");
+	await expect(surface).toBeVisible();
+	const box = await surface.boundingBox();
+	if (!box) throw new Error("No SVG surface geometry");
+
+	await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.25);
+	await page.mouse.down();
+	await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.75, { steps: 6 });
+	await page.mouse.up();
+	await expect(page.getByTestId("region-selection")).toBeVisible();
+	await addIcon(page).click();
+	await expect(page.getByTestId("review-composer")).toContainText("region");
+	await page.getByTestId("review-composer-input").fill("Nudge this shape left.");
+	await page.getByTestId("review-composer-save").click();
+	await expect(page.getByTestId("review-composer")).toHaveCount(0);
+
+	await expect(page.getByTestId("review-thread-card")).toHaveCount(1);
+	await expect(page.getByTestId("region-comment-marker")).toHaveCount(1);
+	const [comment] = await persistedComments(page);
+	expect(comment?.anchor?.path).toBe("RENDERERS.svg");
+	const region = comment?.anchor?.selectors.find((selector) => selector.kind === "region");
+	if (!region) throw new Error("The SVG comment lost its region selector");
+	expect(region.x).toBeCloseTo(0.25, 1);
+	expect(region.y).toBeCloseTo(0.25, 1);
+	expect(region.width).toBeCloseTo(0.5, 1);
+	expect(region.height).toBeCloseTo(0.5, 1);
 });
 
 test("a Pierre annotation keeps its draft card identity across a sibling review push", async ({

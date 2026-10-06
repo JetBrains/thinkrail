@@ -23,6 +23,7 @@ export {
 	bucketDuration,
 	bucketProvider,
 	bucketProviderModel,
+	NONE_BUCKET,
 } from "./events";
 export {
 	type AnalyticsOptions,

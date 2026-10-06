@@ -5,10 +5,10 @@ import {
 	RiCircleFill,
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useRef, useState } from "react";
 import { QuietScrollArea } from "../components/QuietScrollArea";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "../components/ui/resizable";
-import { IconTooltip } from "../components/ui/tooltip";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
@@ -33,6 +33,7 @@ import {
 } from "../themes";
 import { type ConnectionStatus, runHostUpdate, supportsHostUpdateRun } from "../transport";
 import { UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
+import { AppShortcuts } from "./AppShortcuts";
 import { BrandLogo } from "./BrandLogo";
 import { CollapsedPanelRail } from "./CollapsedPanelRail";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
@@ -327,6 +328,7 @@ export function Shell() {
 			)}
 			{analyticsConsentOpen ? <AnalyticsConsentDialog /> : <InterviewPromptDialog />}
 			<Toaster />
+			<AppShortcuts />
 		</div>
 	);
 }

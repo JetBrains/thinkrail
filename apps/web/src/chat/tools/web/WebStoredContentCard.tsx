@@ -1,6 +1,5 @@
 import { RiLinksLine as LinkIcon } from "@remixicon/react";
-import type { ToolRenderProps } from "../../toolRegistry";
-import { numArg, resultText, strArg } from "../toolHelpers";
+import { numArg, resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { WebResultBody } from "./WebResultBody";
 
 function detailString(result: unknown, key: string): string {

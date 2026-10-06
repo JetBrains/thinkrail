@@ -1,7 +1,8 @@
 # ThinkRail
 
-A ThinkRail-branded desktop-and-mobile client for the `pi` coding agent. The app is a thin host that
-runs `pi` and bridges it to a rich UI; `pi` owns models, skills, compaction, cost, and session state.
+The agentic IDE that gets better every time you use it, built around the `pi` coding agent. The app is
+a thin host that runs `pi` and bridges it to a rich UI; `pi` owns models, skills, compaction, cost, and
+session state.
 
 ## Read context proportionally
 
@@ -19,7 +20,7 @@ Clear, fractal module boundaries are a top-priority requirement:
   public surface, allowed dependencies, and forbidden reaches.
 - A sub-module exposes an `index.ts` barrel as its only public surface; siblings import through the
   barrel, never internals. Per-file imports remain only where a barrel would defeat code-splitting or a
-  library convention, such as `apps/web/src/panels` and `components/ui`.
+  library convention, such as `apps/web/src/panels` and `packages/ui`.
 - Dependency edges between sibling sub-modules live in the parent module's `SPEC.md`, not each leaf.
 - A change that moves or blurs a boundary updates the owning spec first. Cover public surfaces and
   boundary rules with tests where practical, but do not manufacture coverage for a localized change.
@@ -36,7 +37,8 @@ Clear, fractal module boundaries are a top-priority requirement:
 
 ## Repo-wide invariants
 
-- `apps/web` depends on `packages/contracts` only, never `server` or `shared`.
+- `apps/web` depends on `contracts`, `ui`, `extension-api/web`, and `thinkrail-extensions/*/web` only,
+  never `server` or `shared`.
 - Never value-import `pi` into browser-bundled code. Import types only from the `pi-ai` /
   `pi-agent-core` package roots; `@earendil-works/pi-coding-agent` is server-only.
 - One id model: UI tab id versus `session.sessionId`; there is no separate pi UUID.
@@ -57,8 +59,8 @@ For web UI work, read `apps/web/SPEC.md` and the owning sub-module spec. Styling
 utilities mapped to generated semantic CSS-var tokens: never inline style objects, raw hex, internal
 palette names, or unknown token utilities. Read `apps/web/src/styles/COLOR.md` for color work and
 `apps/web/src/styles/SPACING.md` for spacing work. Use `@remixicon/react` icons (Line by default, Fill
-when active) and owned shadcn/Radix primitives from `apps/web/src/components/ui/`; `cn()` lives in
-`apps/web/src/lib/utils.ts`.
+when active) and owned shadcn/Radix primitives from `@thinkrail/ui/<primitive>`; `cn()` lives in
+`@thinkrail/ui/utils`. These rules also apply to `packages/ui` and extension web halves.
 
 For conversation rendering or tool presentation, read `apps/web/src/chat/SPEC.md`. Presentational
 renderers remain props-driven; only `ChatView` integrates store and transport. A server capability and

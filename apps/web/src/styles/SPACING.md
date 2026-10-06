@@ -69,7 +69,8 @@ moves layout. `tokens.css` (structure) holds no spacing scale; `spacing.json` is
 ## The gate
 
 `styles/spacingUsage.test.ts` enforces the vocabulary at `p`/`m`/`gap` call sites (and on the rhythm
-properties of handwritten CSS), reading the allowed steps from `spacing.json` so the two cannot drift:
+properties of handwritten CSS), reading the allowed steps from `spacing.json` so the two cannot drift.
+The shared source scanner covers app source, `packages/ui`, and every `thinkrail-extensions/*/web` tree:
 
 - a spacing utility names a **canonical step** — `p-8`, `gap-4`; the retired t-shirt aliases (`p-xs`),
   unknown alphabetic suffixes (`p-bananas`) and any off-scale number (`p-6`, `py-1`, `gap-0.5`) are
@@ -85,7 +86,7 @@ properties of handwritten CSS), reading the allowed steps from `spacing.json` so
   one is a design decision recorded here, not a silent escape from the scale;
 - the scale is a defined primitive set, so a step is **not** required to have a consumer — the gate has no
   orphan/reachability check that could reject a reserved primitive (`32`/`40`/`64`);
-- handwritten CSS declarations anywhere under `src/` are covered, including multiline declarations and
+- handwritten CSS declarations throughout those source roots are covered, including multiline declarations and
   CSS string literals in TypeScript: `gap` / `padding` / `margin` (and longhands) must use a declared
   `--space-*` token (or `0` / `auto`), never a raw length or an unrelated/unknown custom property. Sizing,
   coordinates and box-shadow/border offsets are geometry, not rhythm, and are not scanned; a documented

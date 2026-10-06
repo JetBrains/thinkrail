@@ -1,0 +1,54 @@
+import { RiDraggable as GripVertical } from "@remixicon/react";
+import type { ComponentProps } from "react";
+import {
+	type ImperativePanelGroupHandle,
+	type ImperativePanelHandle,
+	Panel,
+	PanelGroup,
+	PanelResizeHandle,
+} from "react-resizable-panels";
+import { cn } from "./utils";
+
+export function ResizablePanelGroup({ className, ...props }: ComponentProps<typeof PanelGroup>) {
+	return (
+		<PanelGroup
+			className={cn("flex h-full w-full data-[panel-group-direction=vertical]:flex-col", className)}
+			{...props}
+		/>
+	);
+}
+
+export type { ImperativePanelGroupHandle, ImperativePanelHandle };
+export const ResizablePanel = Panel;
+
+export function ResizableHandle({
+	direction = "horizontal",
+	withHandle = false,
+	className,
+	...props
+}: ComponentProps<typeof PanelResizeHandle> & {
+	direction?: "horizontal" | "vertical";
+	withHandle?: boolean;
+}) {
+	const isVertical = direction === "vertical";
+	return (
+		<PanelResizeHandle
+			aria-orientation={isVertical ? "horizontal" : "vertical"}
+			className={cn(
+				"relative flex shrink-0 items-center justify-center bg-border-default transition-colors",
+				"data-[resize-handle-state=hover]:bg-primary data-[resize-handle-state=drag]:bg-primary",
+				isVertical
+					? "h-px w-full cursor-row-resize after:absolute after:inset-x-0 after:top-1/2 after:h-8 after:-translate-y-1/2 after:content-['']"
+					: "w-px cursor-col-resize after:absolute after:inset-y-0 after:left-1/2 after:w-8 after:-translate-x-1/2 after:content-['']",
+				className,
+			)}
+			{...props}
+		>
+			{withHandle && (
+				<div className="z-10 flex items-center justify-center rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-px py-2">
+					<GripVertical className={cn("size-10 text-text-muted", isVertical && "rotate-90")} />
+				</div>
+			)}
+		</PanelResizeHandle>
+	);
+}

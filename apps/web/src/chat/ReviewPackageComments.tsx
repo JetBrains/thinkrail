@@ -1,6 +1,6 @@
 import { RiArrowRightSLine as ChevronRight } from "@remixicon/react";
+import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
-import { cn } from "@/lib";
 import { useFold } from "./foldState";
 import type { ReviewPackageItem } from "./reviewPackage";
 

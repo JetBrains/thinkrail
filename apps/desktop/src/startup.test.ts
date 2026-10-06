@@ -39,7 +39,7 @@ mock.module("electrobun/main", () => ({
       listeners.push(callback);
     } },
   },
-  ApplicationMenu: { setApplicationMenu() {} },
+  ApplicationMenu: { setApplicationMenu() {}, on() {} },
   BrowserView: {},
   BrowserWindow: class {},
   PATHS: { RESOURCES_FOLDER: ${JSON.stringify(root)}, VIEWS_FOLDER: ${JSON.stringify(root)} },

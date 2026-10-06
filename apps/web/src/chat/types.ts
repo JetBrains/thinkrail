@@ -7,6 +7,7 @@ import type {
 	ReviewFixDetails,
 	UserMessage,
 } from "@thinkrail/contracts";
+import type { ToolStatus } from "@thinkrail/extension-api/web";
 
 export interface ChatAttachment {
 	name: string;
@@ -46,8 +47,6 @@ export interface CompactionState {
 	tokensAfter?: number;
 	resuming?: boolean;
 }
-
-export type ToolStatus = "running" | "done" | "error";
 
 export interface ToolResultState {
 	status: ToolStatus;

@@ -8,11 +8,12 @@ parent: module-web
 
 ## Responsibility
 
-Tiny UI helpers shared across components.
+Tiny app helpers shared across components. Class merging (`cn`) belongs to `@thinkrail/ui/utils`,
+not this module; the theme-aware highlighter remains app-local.
 
 ## Boundary
 
-- **Owns:** `utils.ts` → `cn()` (merge clsx output through tailwind-merge) + `stripFrontmatter()` (drop a leading YAML `---`
+- **Owns:** `utils.ts` → `stripFrontmatter()` (drop a leading YAML `---`
   block so a rendered document doesn't show spec metadata as a heading) + `cssColorToHex()` (canonicalize
   a CSS color to hex — minified CSS serves `#fff`/`gray`-style equivalents, which strict consumers like
   Monaco and xterm reject; `""` when unparseable). Plus the primitives that more than one module needs and
@@ -32,7 +33,8 @@ Tiny UI helpers shared across components.
   — shared by chat history, the tab strip's closed chats, and the Changes scope menu's commit rows; it lives
   here because `chat/` may not import from `panels/`, which is what let three private twins of it
   accumulate), **`platformShortcutLabel()`** +
-  **`hasPlatformModifier()`** (one Apple-vs-other definition for shortcut chrome and global handlers; both
+  **`hasPlatformModifier()`** + **`platformFamily()`** (one Apple-vs-other definition for shortcut chrome and
+  global handlers, plus the `apple` / `windows` / `linux` / `other` family for per-OS shortcut tables; all
   default to the browser-reported platform but accept an explicit platform string so non-browser callers and
   tests never inherit a host runtime's synthetic `navigator` accidentally; the label optionally renders the
   Alt variant — `⌥⌘N` / `Ctrl+Alt+N` — so shortcut chrome never composes modifier glyphs itself), and
@@ -54,16 +56,16 @@ Tiny UI helpers shared across components.
   **`tupleKey()`** length-prefixes independent strings, **`parseTupleKey()`** reads only its requested
   namespace, and **`layoutResourceIdentity()`** gives every frontend-local placement/cache alias one
   semantic resource key, so delimiters and stable noncanonical placement ids cannot split or alias identities.
-- **Public surface (barrel):** `cn`, `stripFrontmatter`, `cssColorToHex`, `isPhoneViewport`,
+- **Public surface (barrel):** `stripFrontmatter`, `cssColorToHex`, `isPhoneViewport`,
   `usePhoneViewport`, `normalizePath`, `isAbsolutePath`, `projectRelativePath` (canonical worktree-relative POSIX identity;
   collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection; Windows
   drive-rooted containment compares path/root case-insensitively while preserving the candidate's casing),
   `shallowEqualArrays`, `userText`, `isShellInert` (a value made only of characters that stay literal in POSIX, PowerShell,
   and cmd, so it may be interpolated into a command a human copies and runs), `parseSkillInvocation`, `matchesSkillInvocationCommand`,
-  `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `copyText`, `randomId`,
+  `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
   `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
   `readLayoutSelection`, `readLayoutNavigationClock`, and the `LayoutAttention` type.
-- **Allowed deps:** `clsx`, `tailwind-merge`; React (the viewport subscription hook only);
+- **Allowed deps:** React (the viewport subscription hook only);
   `@thinkrail/contracts` (types only for canonical messages; the layout-resource identity input is a local structural type); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
   through the barrel).
 - **Forbidden:** every app-internal module — this is a leaf.

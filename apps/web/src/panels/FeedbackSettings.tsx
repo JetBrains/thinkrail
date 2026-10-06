@@ -1,5 +1,5 @@
 import { RiExternalLinkLine as ExternalLink } from "@remixicon/react";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@thinkrail/ui/button";
 import { INTERVIEW_BOOKING_URL, INTERVIEW_INVITATION_COPY } from "./interview";
 
 export function FeedbackSettings() {

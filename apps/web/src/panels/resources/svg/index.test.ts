@@ -11,7 +11,6 @@ import {
 	svgByteLength,
 	svgDataUrl,
 	svgDiffViewState,
-	svgFileDraft,
 	svgIntrinsicSize,
 } from "./svgDocument";
 
@@ -105,6 +104,5 @@ test("SVG documents carry token values and intrinsic geometry", () => {
 	});
 	expect(svgIntrinsicSize("<svg></svg>")).toEqual({ width: 300, height: 150 });
 	expect(svgByteLength("é")).toBe(2);
-	expect(svgFileDraft()).toEqual({ selectors: [], label: "file" });
 	expect(svgDiffViewState({ mode: "difference" })).toBe("difference");
 });

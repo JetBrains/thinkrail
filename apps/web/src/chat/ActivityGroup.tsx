@@ -6,13 +6,13 @@ import {
 	RiLoader4Line as Loader2,
 	RiCloseLine as X,
 } from "@remixicon/react";
-import { cn } from "@/lib";
+import type { ToolRenderProps, ToolStatus } from "@thinkrail/extension-api/web";
+import { cn } from "@thinkrail/ui/utils";
 import type { ActivityBreadcrumbKind } from "./activityBreadcrumbs";
 import { useFold } from "./foldState";
 import type { ActivityStep, RoutineToolStep, ThinkingStep } from "./rows";
 import { ToolRendererBody } from "./ToolRendererBody";
-import { getToolSummary, type ToolRenderProps } from "./toolRegistry";
-import type { ToolStatus } from "./types";
+import { getToolSummary } from "./toolRegistry";
 
 export function ActivityGroup({
 	id,

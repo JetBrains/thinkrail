@@ -5,7 +5,6 @@ export {
 	deriveSystemThemePair,
 	getThemes,
 	onSystemAppearanceChange,
-	onThemeSwap,
 	readSystemAppearance,
 	readThemeHint,
 	resolveTheme,

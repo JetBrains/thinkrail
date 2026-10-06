@@ -16,9 +16,9 @@ import {
 	RiTextWrap as TextWrap,
 } from "@remixicon/react";
 import { DEFAULT_MODEL_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
+import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { cn } from "@/lib";
 import { SettingsSection, useAppStore } from "@/store";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";

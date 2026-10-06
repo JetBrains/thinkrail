@@ -1,7 +1,6 @@
 import { RiCheckboxCircleLine as CheckCircle2 } from "@remixicon/react";
+import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import type { ReactNode } from "react";
-import type { ToolRenderProps } from "../toolRegistry";
-import { strArg } from "./toolHelpers";
 
 export function ResolveCommentCard({ args, status }: ToolRenderProps): ReactNode {
 	const commentId = strArg(args, "commentId");

@@ -1,32 +1,13 @@
+import {
+	parseToolResultContent,
+	type ToolChrome,
+	type ToolProminence,
+	type ToolRegistrationOptions,
+	type ToolRenderer,
+	type ToolRenderProps,
+	toolValueText,
+} from "@thinkrail/extension-api/web";
 import type { ReactNode } from "react";
-import { parseToolResultContent, toolValueText } from "./toolResultContent";
-import type { ToolStatus } from "./types";
-
-export interface ToolRenderProps {
-	toolCallId: string;
-	toolName: string;
-	args: Record<string, unknown>;
-	result: unknown;
-	status: ToolStatus;
-	workspaceRoot?: string | undefined;
-	onOpenFile?: ((path: string) => void) | undefined;
-	streaming: boolean;
-}
-
-export type ToolChrome = "card" | "bare";
-
-export type ToolProminence = "routine" | "primary";
-
-export type ToolRenderer = (props: ToolRenderProps) => ReactNode;
-
-export type ToolSummary = (props: ToolRenderProps) => string;
-
-export interface ToolRegistrationOptions {
-	summary?: ToolSummary;
-	chrome?: ToolChrome;
-	prominence?: ToolProminence;
-	defaultExpanded?: boolean;
-}
 
 interface ToolRegistration extends ToolRegistrationOptions {
 	renderer: ToolRenderer;

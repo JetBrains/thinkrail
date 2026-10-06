@@ -1,5 +1,5 @@
+import { cn } from "@thinkrail/ui/utils";
 import { type ComponentPropsWithoutRef, type ReactNode, useEffect, useState } from "react";
-import { cn } from "@/lib";
 
 type QuietScrollAxis = "vertical" | "both";
 type QuietScrollSurface = "sidebar" | "terminal";

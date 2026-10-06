@@ -4,8 +4,7 @@ import {
 	RiLoader4Line as Loader2,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
-import { useEffect, useRef } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -13,7 +12,8 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
+} from "@thinkrail/ui/dialog";
+import { useEffect, useRef } from "react";
 import type { LoginState } from "./loginState";
 
 export function LoginDialog({

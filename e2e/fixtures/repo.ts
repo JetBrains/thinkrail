@@ -162,6 +162,10 @@ export function seedFixtureRepo(): void {
 			"base64",
 		),
 	);
+	writeFileSync(
+		join(E2E_FIXTURE_REPO, "RENDERERS.svg"),
+		'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180"><rect x="80" y="45" width="160" height="90" fill="#888"/></svg>\n',
+	);
 	writeFileSync(join(E2E_FIXTURE_REPO, "RENDERERS.pdf"), asciiPdf("RENDERERS PDF FIXTURE"));
 	writeFileSync(join(E2E_FIXTURE_REPO, "LFS-ASSET.png"), lfsPointer("4d7a", 12345));
 	writeFileSync(

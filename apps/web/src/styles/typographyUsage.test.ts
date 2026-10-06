@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { designSourceFiles, designSourceLabel } from "../../scripts/designSources";
 import { normalizeEol } from "../../scripts/generatedFiles";
 import {
 	allStyles,
@@ -11,28 +13,15 @@ import {
 } from "../../scripts/typography";
 
 const typography = loadTypography();
-const SRC = new URL("..", import.meta.url).pathname;
+const SRC = fileURLToPath(new URL("..", import.meta.url));
 
-function sourceFiles(dir = SRC): string[] {
-	const out: string[] = [];
-	for (const entry of readdirSync(dir)) {
-		const path = join(dir, entry);
-		if (statSync(path).isDirectory()) {
-			if (entry === "generated") continue;
-			out.push(...sourceFiles(path));
-			continue;
-		}
-		if (/\.(tsx?|css)$/.test(entry) && !entry.endsWith(".test.ts")) out.push(path);
-	}
-	return out;
-}
-const FILES = sourceFiles();
+const FILES = designSourceFiles();
 const read = (p: string) => normalizeEol(readFileSync(p, "utf8"));
 const code = (p: string) =>
 	read(p)
 		.replace(/\/\*[\s\S]*?\*\//g, "")
 		.replace(/^[ \t]*\/\/.*$/gm, "");
-const rel = (p: string) => p.slice(p.indexOf("/src/") + 5);
+const rel = designSourceLabel;
 
 const PRIMITIVE_ALLOWLIST = new Set([
 	"index.css",
@@ -40,7 +29,7 @@ const PRIMITIVE_ALLOWLIST = new Set([
 	"styles/global.css",
 	"panels/monacoSetup.ts",
 	"panels/TerminalInstance.tsx",
-	"chat/tools/visualize/mermaid.ts",
+	"thinkrail-extensions/visualize/web/mermaid.ts",
 ]);
 
 const componentFiles = () => FILES.filter((p) => !PRIMITIVE_ALLOWLIST.has(rel(p)));

@@ -4,7 +4,6 @@ import {
 	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
 import { sameModel, type WireModel } from "@thinkrail/contracts";
-import { useState } from "react";
 import {
 	Command,
 	CommandEmpty,
@@ -12,9 +11,10 @@ import {
 	CommandInput,
 	CommandItem,
 	CommandList,
-} from "@/components/ui/command";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib";
+} from "@thinkrail/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
+import { cn } from "@thinkrail/ui/utils";
+import { useState } from "react";
 import { formatContext } from "./modelPicker";
 
 function subLine(model: WireModel): string {

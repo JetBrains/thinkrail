@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { DelegationRunDetails } from "@thinkrail/contracts";
-import type { ToolRenderProps } from "../../toolRegistry";
+import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { agentSummary, readRunDetails, runCounters } from "./runDetails";
 
 function details(overrides: Partial<DelegationRunDetails> = {}): DelegationRunDetails {

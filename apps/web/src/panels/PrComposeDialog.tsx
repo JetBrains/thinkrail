@@ -2,8 +2,7 @@ import {
 	RiGitPullRequestLine as GitPullRequestArrow,
 	RiLoader4Line as Loader2,
 } from "@remixicon/react";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -11,8 +10,9 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+} from "@thinkrail/ui/dialog";
+import { Textarea } from "@thinkrail/ui/textarea";
+import { useState } from "react";
 
 export interface PrComposeState {
 	draft: boolean;

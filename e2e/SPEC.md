@@ -29,6 +29,10 @@ is one or many.
 The automatic count is half the available CPU parallelism, clamped to 1–8. Developers may explicitly
 select 1–16 lanes; `e2e:serial` is the stable debugging fallback. A focused invocation carrying Playwright
 arguments defaults to one lane unless its shard count is explicit, so an iteration on one spec stays cheap.
+CI splits the suite across machines with `THINKRAIL_E2E_JOB_SHARD=k/N`: the invocation runs slice `k` of
+`N`, and its local lanes subdivide that slice into global Playwright shards `(k-1)·L+i` of `N·L`, so the
+union of all jobs is exactly the suite. The runner owns `--shard`; combining the variable with an explicit
+`--shard` argument is rejected.
 Every public browser E2E runner owns one process-lifetime idle-sleep assertion on macOS before setup or
 build work begins; source, agent, full, binary, and desktop modes all receive it. The assertion uses the
 system `caffeinate` executable with idle-system-sleep scope and the owning runner pid, so display sleep stays
@@ -74,8 +78,10 @@ web-identity/config source making another provider available. A drift canary der
 environment literal from pi-ai's pinned credential-discovery distribution and requires it in the denylist;
 defensive cloud-source extras remain even when that distribution does not currently name them. No host may
 discover a real `central`, `pi`, or editor executable. The compiled-binary and
-packaged-desktop suites remain distinct artifact gates. Each has an unsharded, non-overlapping namespace;
-any artifact run and `e2e:serial` still run sequentially in the same worktree. A future launcher or
+packaged-desktop suites remain distinct artifact gates. Each has one lane-free, non-overlapping namespace
+per machine; any artifact run and `e2e:serial` still run sequentially in the same worktree. Artifact
+configs distribute individual tests, so a passed-through Playwright `--shard=k/N` splits them evenly
+across CI machines, each booting its own artifact host. A future launcher or
 deployment adds another host adapter for this same suite, never copied feature specs; shared behavior is
 therefore proven through every composition root.
 
@@ -216,12 +222,13 @@ The same copy and hermetic environment seed the private restart host.
 
 **Session state** coverage seeds complete transcript states and drives normalized host blockers/runs to pin
 Projects rail presentation: both needs-input and owner-globally unread results render the same static green
-attention dot (“Needs attention”), while genuinely running sessions pulse the existing workspace/project
-identity icon without changing its colour. The rail must not substitute question/check/result glyphs or a
-spinner. Running alone has no attention dot; queued, hidden/background, and explicitly stopped sessions stay
-quiet; a live blocked question keeps its dot while its orthogonal running pulse may coexist. Reconnect/restart
+attention dot (“Needs attention”), while genuinely running sessions swap the workspace/project identity
+icon for the shared `RunningIcon` brand badge in the row's own colour. The rail must not substitute
+question/check/result glyphs or a generic spinner. Running alone has no attention dot; queued, hidden/background, and explicitly stopped sessions stay
+quiet; a live blocked question keeps its dot while its orthogonal running badge may coexist. Reconnect/restart
 snapshots, direct-versus-passive activation, owner-global clearing, and snapshot
-retry are covered; live-agent coverage pins `data-running`/`running-icon` breathing behavior and coexistence with
+retry are covered; live-agent coverage pins `data-running`/`running-icon` (its `running-icon-train` animates, and is hidden under
+reduced motion) and coexistence with
 `data-attention`/`attention-dot`. These are stable visual hooks rather than alternate state models. The retired `session.activityList → []` compatibility method
 remains a focused handler test.
 
@@ -328,7 +335,15 @@ browser-local persistence, and cross-browser isolation without involving a provi
 coverage seeds one canonical giant Markdown block and drives real coarse wheel input so initial virtual
 geometry cannot clamp before the row mounts. Chat-title coverage uses persisted Pi transcripts to prove the
 native `/name` path, open-tab and closed-history inline rename paths, keyboard focus recovery, bounded
-long-history scrolling, and reload durability without involving a provider. Questionnaire paging uses
+long-history scrolling, and reload durability without involving a provider. Visualize coverage
+(`visualize.spec.ts`) independently seeds short historical tool-call/result transcripts through the
+sanctioned session fixture before workspace entry. It pins completed/default-expanded diagrams,
+fullscreen SVG growth, pan/reset/Escape and claimed WebKit pinch gestures, exact comparison pros/cons
+and recommendation, and assistant mermaid fences alongside tool diagrams re-rendering to the host's
+`--container-elevated-bg` after selecting a discovered opposite appearance in real settings. Malformed
+source is seeded as a successful historical tool result (`isError: false`) so both tool and chat exercise
+the renderer's plain-source fallback, not the tool-error branch. These regressions need no provider,
+prompt submission, route mock, or screenshot. Questionnaire paging uses
 canonical persisted tool-call/ack fixtures to pin six-question rounds beyond four, tall-page reveal,
 fresh-chat restored-page reveal, visible review focus, and coarse-pointer focus
 without provider variability; desktop package tests separately pin the stable

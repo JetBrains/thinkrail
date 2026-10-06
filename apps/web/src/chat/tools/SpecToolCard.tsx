@@ -1,8 +1,7 @@
+import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import type { ReactNode } from "react";
-import type { ToolRenderProps } from "../toolRegistry";
 import { Collapsible, countLines } from "./Collapsible";
 import { ToolFileLink } from "./ToolFileLink";
-import { resultText, strArg } from "./toolHelpers";
 
 interface LinkedTextSegment {
 	text: string;

@@ -1,3 +1,4 @@
+import { strArg } from "@thinkrail/extension-api/web";
 import { projectRelativePath } from "@/lib";
 import { registerToolRenderer } from "../toolRegistry";
 import { AskUserQuestionCard } from "./AskUserQuestionCard";
@@ -7,9 +8,7 @@ import { ReadCard } from "./ReadCard";
 import { RequestReviewCard, requestReviewSummary } from "./RequestReviewCard";
 import { ResolveCommentCard } from "./ResolveCommentCard";
 import { SpecToolCard, specToolSummary } from "./SpecToolCard";
-import { strArg } from "./toolHelpers";
 import "./subagent/register";
-import "./visualize/register";
 import "./web/register";
 import { WriteCard } from "./WriteCard";
 

@@ -118,7 +118,7 @@ interface IdentityLines {
 function identityLines(status: StartupMarkStatus, endpoint: string): IdentityLines {
 	return {
 		product: [{ text: "THINKRAIL", tone: "brightGreen" }],
-		description: [{ text: "worktree IDE for pi", tone: "muted" }],
+		description: [{ text: "agentic IDE for pi", tone: "muted" }],
 		status: [
 			{ text: "● ", tone: "brightGreen" },
 			{ text: status, tone: "muted" },

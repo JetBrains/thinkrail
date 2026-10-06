@@ -31,8 +31,12 @@ properties and is emitted before `app_started` once when a non-CI/non-test binar
 claims the shared installation marker. Initialization constructs the basic sink before claiming; once claimed,
 the state is installed before enqueue. A sink-construction failure therefore leaves the marker available, while
 a later delivery failure does not clear or retry it. Existing `{ id }` records emit on their first eligible packaged boot. Launch means
-host boot, not UI readiness. Chats can be empty;
-sends count after `ackSend`, exclude TODO-control nudges, and do not prove successful execution. Login
+host boot, not UI readiness. Chats can be empty; a chat the host had to create without any usable model
+reports `provider` and `model` as `none` with `auth_method: unknown`; the host's own model resolution
+decides that case rather than pi's placeholder model (which would otherwise bucket as `custom`), while
+a resolved chat reports the model the created session actually holds (a startup extension may switch it).
+"Created a chat but had nothing to send with" thus stays distinguishable from a configured custom provider.
+Sends count after `ackSend`, exclude TODO-control nudges, and do not prove successful execution. Login
 requires correlated success, or the existing applied Central connection action. `auth_method` is a closed
 `api_key | subscription | oauth | central | other | unknown` category, never credentials or account/plan
 identities. It describes the observed authentication path, not billing entitlement. Host captures send
@@ -46,7 +50,7 @@ bounded browser-derived strings, never resource identities or arbitrary product 
 | Event | Signal |
 | --- | --- |
 | `setup_state_observed` | Provider/model/project readiness (`yes/no/unknown`); first current observation and changes, not every poll. |
-| `setup_action_finished` | Explicit setup operation, outcome and fixed failure category; automatic Default provisioning is excluded. |
+| `setup_action_finished` | Explicit setup operation, outcome and fixed failure category; automatic Default provisioning is excluded. `directory_pick` is the native folder picker (succeeded / cancelled / failed, never the path); `project_open` reports the typed `not_git` / `already_open` reasons from the projects module's coded errors, and every untyped failure stays `unknown` — reasons are never derived from error text. |
 | `agent_run_started` | Work-cycle origin, workspace kind and catalog-bucketed provider/model. |
 | `agent_run_settled` | Final outcome, elapsed-time/retry/compaction buckets; only `agent_settled`, never attempt-level `agent_end`. |
 | `task_completed` | Nonempty task-group completion transition after artifact reconciliation, change evidence and whether verification was recorded. |

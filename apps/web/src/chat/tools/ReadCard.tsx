@@ -1,9 +1,14 @@
 import { RiFileTextLine as FileText } from "@remixicon/react";
-import type { ToolRenderProps } from "../toolRegistry";
+import {
+	languageFromPath,
+	numArg,
+	resultText,
+	strArg,
+	type ToolRenderProps,
+} from "@thinkrail/extension-api/web";
 import { CodeBlock } from "./CodeBlock";
 import { Collapsible, countLines } from "./Collapsible";
 import { ToolFileLink } from "./ToolFileLink";
-import { languageFromPath, numArg, resultText, strArg } from "./toolHelpers";
 
 export function ReadCard({
 	toolCallId,

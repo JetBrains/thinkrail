@@ -3,7 +3,7 @@ import { WS_CHANNELS } from "@thinkrail/contracts";
 
 const BOOKING_URL = "https://calendar.app.google/5suMJdDEBFvYJ4zN9";
 const INVITATION_COPY =
-	"Join us for a user interview, tell us about your experience with ThinkRail, and receive 100 bonus credits in Central (JetBrains AI).";
+	"Tell us about your experience with ThinkRail in a user interview. After you complete the interview, you will receive 100 bonus credits in Central (JetBrains AI).";
 
 type ClientRequest = {
 	id?: string;

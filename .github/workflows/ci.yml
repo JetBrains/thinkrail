@@ -76,9 +76,15 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run check:pi-packages
 
-  e2e:
-    name: E2E (no-agent)
+  e2e-shard:
+    name: E2E (no-agent) shard ${{ matrix.shard }}/2
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    env:
+      THINKRAIL_E2E_JOB_SHARD: ${{ matrix.shard }}/2
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -94,19 +100,32 @@ jobs:
       - name: Install Playwright Chromium
         run: bunx playwright install --with-deps chromium
       # `bun run e2e` is self-contained: it builds the web app, boots the host on an isolated
-      # port + state dir, runs the @agent-free suite headless, then tears it all down.
+      # port + state dir, runs this job's slice of the @agent-free suite headless, then tears it all down.
       - run: bun run e2e
       - name: Upload Playwright report
         if: ${{ failure() }}
         uses: actions/upload-artifact@v5
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: playwright-report/
           retention-days: 7
 
-  binary:
-    name: Binary smoke & e2e
+  # Required-check name in the main ruleset: aggregates the shard matrix.
+  e2e:
+    name: E2E (no-agent)
+    needs: e2e-shard
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.e2e-shard.result }}" = success
+
+  binary-shard:
+    name: Binary smoke & e2e shard ${{ matrix.shard }}/4
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -125,18 +144,28 @@ jobs:
       # compiled binary, so from-source suites can't catch them.
       - run: bun run build:binary
       - run: bun run smoke:binary
+        if: ${{ matrix.shard == 1 }}
       - name: Install Playwright Chromium
         run: bunx playwright install --with-deps chromium
-      # The whole no-agent e2e suite against the artifact (grep-inverts @dev-seam too — the fake login
-      # providers only exist in the dev boot): the broad net for works-from-source/broken-in-the-binary.
-      - run: bun run e2e:binary
+      # This shard of the no-agent e2e suite against the artifact (grep-inverts @dev-seam too — the fake
+      # login providers only exist in the dev boot): the broad net for works-from-source/broken-in-the-binary.
+      - run: bun run e2e:binary --shard=${{ matrix.shard }}/4
       - name: Upload Playwright report
         if: ${{ failure() }}
         uses: actions/upload-artifact@v5
         with:
-          name: playwright-report-binary
+          name: playwright-report-binary-${{ matrix.shard }}
           path: playwright-report-binary/
           retention-days: 7
+
+  # Required-check name in the main ruleset: aggregates the shard matrix.
+  binary:
+    name: Binary smoke & e2e
+    needs: binary-shard
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.binary-shard.result }}" = success
 
   binary-windows:
     name: Binary smoke (windows)
@@ -160,9 +189,13 @@ jobs:
       - run: bun run build:binary
       - run: bun run smoke:binary
 
-  desktop:
-    name: Desktop smoke & e2e
+  desktop-shard:
+    name: Desktop smoke & e2e shard ${{ matrix.shard }}/4
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
@@ -179,17 +212,46 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            dbus-x11 xauth xvfb libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2
+            dbus-x11 x11-utils xvfb libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2
           bunx playwright install --with-deps chromium
+      - name: Start virtual display
+        run: |
+          for attempt in 1 2 3; do
+            Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp > "$RUNNER_TEMP/xvfb.log" 2>&1 &
+            xvfb_pid=$!
+            for _ in $(seq 100); do
+              if xdpyinfo -display :99 > /dev/null 2>&1; then
+                echo "DISPLAY=:99" >> "$GITHUB_ENV"
+                exit 0
+              fi
+              sleep 0.1
+            done
+            kill -9 "$xvfb_pid" 2> /dev/null || true
+            wait "$xvfb_pid" 2> /dev/null || true
+            rm -f /tmp/.X99-lock /tmp/.X11-unix/X99
+            echo "::warning::Xvfb did not accept a client on attempt $attempt; restarting"
+          done
+          cat "$RUNNER_TEMP/xvfb.log"
+          exit 1
       - run: bun run desktop:build
       - name: Smoke native desktop window and packaged runtime
-        run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 xvfb-run -a bun run smoke:desktop
+        if: ${{ matrix.shard == 1 }}
+        run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 bun run smoke:desktop
       - name: Run no-agent e2e against the embedded desktop host
-        run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 xvfb-run -a bun run e2e:desktop
+        run: env LIBGL_ALWAYS_SOFTWARE=1 WEBKIT_DISABLE_COMPOSITING_MODE=1 bun run e2e:desktop --shard=${{ matrix.shard }}/4
       - name: Upload Playwright report
         if: ${{ failure() }}
         uses: actions/upload-artifact@v5
         with:
-          name: playwright-report-desktop
+          name: playwright-report-desktop-${{ matrix.shard }}
           path: playwright-report-desktop/
           retention-days: 7
+
+  # Required-check name in the main ruleset: aggregates the shard matrix.
+  desktop:
+    name: Desktop smoke & e2e
+    needs: desktop-shard
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.desktop-shard.result }}" = success

@@ -27,9 +27,7 @@ theme = adding one `bundled/*.theme.json` file** (a PR + rebuild) — no code, c
 - **Public surface:** `index.ts` only — `initializeBundledThemes` (the synchronous bootstrap),
   `applyTheme` / `resolveTheme`, preference-aware `applyThemePreference` /
   `resolveThemePreference`, `deriveSystemThemePair`, `readSystemAppearance`,
-  `onSystemAppearanceChange`, `getThemes`, `onThemeSwap` (subscribe to a completed theme change — this
-  module owns the `data-theme` signal, so it owns the way to observe it; Monaco/xterm/mermaid all re-read
-  their palettes through it rather than each hand-rolling a MutationObserver), `readThemeHint` /
+  `onSystemAppearanceChange`, `getThemes`, `readThemeHint` /
   `writeThemeHint`, and the manifest/descriptor/preference-result types plus the Shiki registration and its
   `resolveThinkrailShikiTheme` strict-consumer adapter.
 - **Allowed external deps:** `@thinkrail/contracts` for the opaque ids, theme preference shapes and
@@ -125,6 +123,8 @@ matching contrast, then the same normal/any fallback. A persisted pair is reused
 Application is atomic from consumers' perspective: write the complete variable set, `color-scheme`, and
 semantic contrast metadata, then publish the effective manifest id through `data-theme` last, so generic
 consumers (Monaco/xterm/mermaid) can rebuild after that signal without observing half a palette.
+The catalog-independent `onThemeSwap` subscription lives in `@thinkrail/ui/theme`; app and extension
+consumers use it rather than hand-rolling MutationObservers. Theme selection and application stay here.
 Selected-text foregrounds are removed when their manifest values are `null`. In system mode one media-query
 listener reapplies locally on `change`; it never writes config or affects another client, and its owner must
 clean it up when preference or component lifetime changes.

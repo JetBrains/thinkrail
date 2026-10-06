@@ -1,5 +1,6 @@
 import { RiCloseLine as X } from "@remixicon/react";
 import { REQUEST_IMAGE_BASE64_BUDGET } from "@thinkrail/contracts";
+import { cn } from "@thinkrail/ui/utils";
 import {
 	type ClipboardEvent,
 	type DragEvent,
@@ -8,7 +9,6 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { cn } from "@/lib";
 import { FileChip } from "./FileChip";
 import { type AttachedImage, fileToAttachedImage } from "./imageAttachment";
 import type { ChatAttachment } from "./types";

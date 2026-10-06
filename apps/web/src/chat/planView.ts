@@ -8,8 +8,9 @@ import type {
 	TodoItem,
 	TodoPlan,
 } from "@thinkrail/contracts";
+import type { ToolStatus } from "@thinkrail/extension-api/web";
 import { type AskState, deriveAskStates } from "./askState";
-import type { ChatTurn, ToolResultState, ToolStatus } from "./types";
+import type { ChatTurn, ToolResultState } from "./types";
 
 export type ItemChangeSet =
 	| { kind: "commit"; sha: string; files: GitFileChange[] }

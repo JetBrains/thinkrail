@@ -13,11 +13,11 @@ import {
 	type ProviderStatus,
 	type ProviderStatusReport,
 } from "@thinkrail/contracts";
+import { Button } from "@thinkrail/ui/button";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { LoginDialog } from "@/auth";
 import { AUTH_KIND_LABEL } from "@/chat/modelPicker";
 import { SkeletonRows } from "@/components/Skeleton";
-import { Button } from "@/components/ui/button";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { JetBrainsAiCard } from "./JetBrainsAiCard";

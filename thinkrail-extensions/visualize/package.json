@@ -1,0 +1,25 @@
+{
+	"name": "@thinkrail/ext-visualize",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./web": "./web/index.ts"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@remixicon/react": "catalog:",
+		"@thinkrail/extension-api": "workspace:*",
+		"@thinkrail/ui": "workspace:*",
+		"mermaid": "catalog:",
+		"react": "catalog:"
+	},
+	"devDependencies": {
+		"@types/bun": "catalog:",
+		"@types/react": "catalog:",
+		"typescript": "catalog:"
+	}
+}

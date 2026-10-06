@@ -14,10 +14,10 @@ import {
 	RiNetworkFill,
 	RiStackFill,
 } from "@remixicon/react";
+import { Button } from "@thinkrail/ui/button";
+import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useMemo, useState } from "react";
 import { LoadingRegion } from "../components/Skeleton";
-import { Button } from "../components/ui/button";
-import { cn } from "../lib";
 import { selectActiveEditorTab, useAppStore } from "../store";
 import { openFileInTab } from "./openTabs";
 import {

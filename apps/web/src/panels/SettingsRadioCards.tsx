@@ -1,5 +1,5 @@
 import { RiCheckLine as Check } from "@remixicon/react";
-import { cn } from "@/lib";
+import { cn } from "@thinkrail/ui/utils";
 
 export interface SettingsRadioChoice<T extends string> {
 	id: T;

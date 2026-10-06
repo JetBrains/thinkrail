@@ -1,5 +1,3 @@
-import type { AnchorDraft } from "@/resources";
-
 export interface SvgThemeTokens {
 	background: string;
 	foreground: string;
@@ -77,10 +75,6 @@ export function svgIntrinsicSize(svg: string): { width: number; height: number }
 
 export function svgByteLength(svg: string): number {
 	return new TextEncoder().encode(svg).byteLength;
-}
-
-export function svgFileDraft(): AnchorDraft {
-	return { selectors: [], label: "file" };
 }
 
 export function svgDiffViewState(state: unknown): SvgDiffMode {

@@ -1,6 +1,5 @@
 import { RiAlertLine as Alert } from "@remixicon/react";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -8,7 +7,8 @@ import {
 	DialogFooter,
 	DialogHeader,
 	DialogTitle,
-} from "@/components/ui/dialog";
+} from "@thinkrail/ui/dialog";
+import { useState } from "react";
 
 export function OpenProjectPathDialog({
 	open,

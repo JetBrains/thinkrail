@@ -1,4 +1,6 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
+import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { cn } from "@thinkrail/ui/utils";
 import {
 	type CSSProperties,
 	type ReactNode,
@@ -8,8 +10,6 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { IconTooltip } from "@/components/ui/tooltip";
-import { cn } from "@/lib";
 import type { AnchorDraft, SurfaceReview } from "@/resources";
 import { ReviewComposer } from "../ReviewComposer";
 import { ReviewThreadCard } from "../ReviewThreadCard";

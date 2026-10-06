@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { JbcentralQuotaSnapshot } from "@thinkrail/contracts";
+import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
-import { TooltipProvider } from "@/components/ui/tooltip";
 import {
 	JbcentralQuotaIndicator,
 	type JbcentralQuotaViewSnapshot,
