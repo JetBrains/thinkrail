@@ -18,7 +18,8 @@ surface supports copying its modified source, split/unified layout, and ignore-w
 pane exposes only those applicable controls. `boundedDiff` marks a diff renderer that manages its own
 viewport (virtualized table, paged PDF, sandboxed HTML frame) and therefore needs a bounded height; every
 other diff lays out at its natural height, which is what lets the continuous Changes review stack sections
-in one scroll.
+in one scroll. `HunkActions.triage` is optional: a surface that tracks kept hunks supplies the kept keys,
+a setter, and a sink for the renderer's hunk content keys; a renderer without it shows no Keep control.
 
 `ResourceContent` keeps text, retrievable bytes, and an absent diff side distinct. In particular, absence
 is never represented by a byte payload without a URL. `SurfaceReview` carries authoritative anchors; a
