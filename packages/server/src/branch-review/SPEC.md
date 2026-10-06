@@ -12,11 +12,16 @@ tags: [github, gitlab, pull-request]
 ## Responsibility
 
 Best-effort lookup of the code review associated with a workspace branch — open, merged, or closed —
-GitHub.com PR via the local `gh` CLI or GitLab.com MR via `glab`. The lookup asks for **every state**
-(`gh pr list --state all`, `glab mr list --all`, a handful of rows) and picks **an open review first,
-otherwise the most recently merged/closed one**, carrying `state` and `changedAt` (merge or close time) on
-the `OpenBranchReview`: one lookup serves the topbar chip (open = success, merged = info, closed =
-neutral) and the Settled shelf's "PR merged/closed" rule, instead of two polls disagreeing. A pre-v78
+GitHub.com PR via the local `gh` CLI or GitLab.com MR via `glab`. The lookup asks for **an open review
+first** (`gh pr list --state open --limit 1`, `glab mr list --per-page 1`; one call, the same as before
+settled states existed) and **only when there is none pages the newest merged/closed rows** (`--state
+all` / `--all`, five rows, the most recently merged or closed one wins). Two bounded calls rather than
+one combined page because a combined page is ordered by creation: a branch with an older still-open
+review and several newer settled ones would present only the settled ones, and a host trusting that
+answer would shelve a workspace whose PR is still open. The answer carries `state` and `changedAt`
+(merge or close time) on the `OpenBranchReview`: one lookup serves the topbar chip (open = success,
+merged = info, closed = neutral) and the Settled shelf's "PR merged/closed" rule, instead of two polls
+disagreeing. A pre-v78
 consumer that only understood open reviews reads a merged/closed row as a live PR, which is why the
 contracts spec pins `state` to `WORKSPACE_SETTLE_PROTOCOL_VERSION`.
 

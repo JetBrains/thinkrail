@@ -19,7 +19,7 @@ type ReviewRow = {
 	createdAt?: number;
 };
 type ParsedReviewRows = { valid: true; rows: ReviewRow[] } | { valid: false };
-const REVIEW_ROW_LIMIT = "5";
+const SETTLED_REVIEW_ROW_LIMIT = "5";
 
 function detectReviewProviderResult(cwd: string, branch: string): ProviderDetection {
 	const configured = [
@@ -142,6 +142,58 @@ export function findBranchReviewOutcomeWithRunner(
 	return lookup;
 }
 
+function reviewListCommand(
+	provider: ReviewProvider,
+	branch: string,
+	scope: "open" | "settled",
+): string[] {
+	if (provider === "github") {
+		return [
+			"gh",
+			"pr",
+			"list",
+			"--head",
+			branch,
+			"--state",
+			scope === "open" ? "open" : "all",
+			"--json",
+			"number,url,state,mergedAt,closedAt,createdAt",
+			"--limit",
+			scope === "open" ? "1" : SETTLED_REVIEW_ROW_LIMIT,
+		];
+	}
+	return [
+		"glab",
+		"mr",
+		"list",
+		"--source-branch",
+		branch,
+		...(scope === "open" ? [] : ["--all"]),
+		"--output",
+		"json",
+		"--per-page",
+		scope === "open" ? "1" : SETTLED_REVIEW_ROW_LIMIT,
+	];
+}
+
+async function listReviewRows(
+	cwd: string,
+	provider: ReviewProvider,
+	branch: string,
+	scope: "open" | "settled",
+	run: CommandRunner,
+): Promise<ReviewRow[] | null> {
+	const result = await run(cwd, reviewListCommand(provider, branch, scope));
+	if (!result.ok) return null;
+	const parsed = parseReviewRows(result.out, provider === "github" ? "number" : "iid");
+	return parsed.valid ? parsed.rows : null;
+}
+
+/**
+ * Open reviews are asked for on their own and win outright; only when there is none does the lookup
+ * page through the newest merged/closed rows — a bounded combined page could bury an older open review
+ * under newer settled ones.
+ */
 async function lookupOpenBranchReview(
 	cwd: string,
 	branch: string,
@@ -152,39 +204,14 @@ async function lookupOpenBranchReview(
 		const provider = detection.provider;
 		if (!provider) return { value: null, cacheable: detection.cacheable };
 
-		const command =
-			provider === "github"
-				? [
-						"gh",
-						"pr",
-						"list",
-						"--head",
-						branch,
-						"--state",
-						"all",
-						"--json",
-						"number,url,state,mergedAt,closedAt,createdAt",
-						"--limit",
-						REVIEW_ROW_LIMIT,
-					]
-				: [
-						"glab",
-						"mr",
-						"list",
-						"--source-branch",
-						branch,
-						"--all",
-						"--output",
-						"json",
-						"--per-page",
-						REVIEW_ROW_LIMIT,
-					];
-		const result = await run(cwd, command);
-		if (!result.ok) return { value: null, cacheable: false };
-
-		const parsed = parseReviewRows(result.out, provider === "github" ? "number" : "iid");
-		if (!parsed.valid) return { value: null, cacheable: false };
-		const row = pickReviewRow(parsed.rows);
+		const open = await listReviewRows(cwd, provider, branch, "open", run);
+		if (open === null) return { value: null, cacheable: false };
+		let row = pickReviewRow(open);
+		if (row === null) {
+			const settled = await listReviewRows(cwd, provider, branch, "settled", run);
+			if (settled === null) return { value: null, cacheable: false };
+			row = pickReviewRow(settled);
+		}
 		return {
 			value:
 				row === null
