@@ -1,6 +1,7 @@
 import type { NativeQuitHint } from "@thinkrail/contracts";
+import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
-import { cn, platformShortcutLabel } from "../lib";
+import { platformShortcutLabel } from "../lib";
 
 type VisibleQuitHint = Exclude<NativeQuitHint, "hidden">;
 
