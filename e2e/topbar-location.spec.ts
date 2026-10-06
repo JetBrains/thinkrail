@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type WebSocketRoute } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
 	defaultWorkspaceRow,
@@ -81,10 +81,15 @@ test("the location segments name the active workspace and switch through their m
 	);
 	await expect(page.getByTestId("scope-branch")).toHaveText("workspace-1");
 
-	// Branch card: copy the branch name and retarget the compare base.
-	await page.getByTestId("scope-branch-trigger").click();
+	// Branch card: keyboard-open lands focus inside the card so Tab reaches its actions, then copy the
+	// branch name and retarget the compare base.
+	await page.getByTestId("scope-branch-trigger").focus();
+	await page.keyboard.press("Enter");
 	const card = page.getByTestId("scope-branch-popover");
 	await expect(card).toBeVisible();
+	await expect(card).toBeFocused();
+	await page.keyboard.press("Tab");
+	await expect(card.getByTestId("scope-branch-copy")).toBeFocused();
 	await expect(card).toContainText("workspace-1");
 	await expect(card).toContainText("main");
 	await testInfo.attach("branch-card", {
@@ -146,4 +151,47 @@ test("the location segments name the active workspace and switch through their m
 	await page.getByTestId("confirm-remove").click();
 	await expect(page.getByTestId("scope-name")).toHaveText("Default");
 	await expect(worktreeRows(page)).toHaveCount(0);
+});
+
+test("an inline rename opened from the topbar stays pending across a reconnect", async ({
+	page,
+}) => {
+	let firstSocket: WebSocketRoute | undefined;
+	let socketsOpened = 0;
+	let releaseReconnect: () => void = () => {};
+	const reconnectAllowed = new Promise<void>((resolve) => {
+		releaseReconnect = resolve;
+	});
+	await page.routeWebSocket(/\/ws(\?|$)/, async (socket) => {
+		socketsOpened += 1;
+		if (socketsOpened > 1) await reconnectAllowed;
+		firstSocket ??= socket;
+		socket.connectToServer();
+	});
+
+	await openFixtureProject(page);
+	const created = await createWorkspaceViaDialog(page);
+	await page.getByTestId("scope-workspace").click();
+	await page.getByTestId("scope-workspace-menu").getByTestId("scope-workspace-rename").click();
+	const input = page.locator('[data-testid="scope-name"][data-editing]');
+	await expect(input).toBeFocused();
+
+	await firstSocket?.close();
+	await expect(page.getByTestId("connection-status")).not.toHaveAttribute(
+		"data-status",
+		"connected",
+	);
+	await input.fill("Renamed while offline");
+	await input.press("Enter");
+	await expect(input).toBeVisible();
+	await expect(input).toHaveValue("Renamed while offline");
+
+	releaseReconnect();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect.poll(() => socketsOpened).toBeGreaterThan(1);
+	await expect(page.getByTestId("scope-name")).toHaveText("Renamed while offline");
+	await expect(page.getByTestId("scope-branch")).toHaveText(created.branch);
+	await expect(worktreeRows(page).first().getByTestId("workspace-name")).toHaveText(
+		"Renamed while offline",
+	);
 });

@@ -60,9 +60,12 @@ branch. It renders what the store and `workspace.openReview` already report; it 
   latter through the shared confirm dialog; Default is non-removable) above *Switch to* (siblings with
   `RunningIcon` while an agent works, loading the list on first open when the tree has not) and *New
   workspace* with the `Mod+N` label, which opens the shell-owned dialog. Rename replaces the pill with the
-  chrome-less inline input used elsewhere: Enter/blur commit, Escape cancels, unchanged or blank never
-  requests. At Project home the pill reads "Project home" and offers only the switcher and creation.
-- **BRANCH · from base** opens the git card: branch (copy → success toast), *Based on* (hidden for
+  chrome-less inline input used elsewhere and runs on the tree's shared `useWorkspaceRename` controller:
+  Enter/blur commit, Escape cancels, unchanged or blank never requests, and a commit made while the socket's
+  rename capability is unknown stays pending in the editor until a capable welcome restores it. At Project
+  home the pill reads "Project home" and offers only the switcher and creation.
+- **BRANCH · from base** opens the git card, moving focus onto the card itself (not its first button, which
+  would pop the copy tooltip) so one Tab reaches the actions: branch (copy → success toast), *Based on* (hidden for
   user-owned workspaces, whose caption is plain "BRANCH"), *Compare to* (the Changes panel's `BranchPicker`
   bound to `workspace.setDiffBase`, so the two controls can never disagree), and — only when the host has a
   review — *Remote* (`n commits to push · n commits behind origin` or "In sync with origin") and the

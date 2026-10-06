@@ -10,7 +10,7 @@ import type { OpenBranchReview, Workspace } from "@thinkrail/contracts";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { copyText } from "../../lib";
 import { BranchPicker } from "../../panels/BranchPicker";
 import { useBranchList } from "../../panels/branches";
@@ -53,6 +53,7 @@ export function BranchSegment({
 	review: OpenBranchReview | null;
 }) {
 	const [open, setOpen] = useState(false);
+	const contentRef = useRef<HTMLDivElement>(null);
 	const diffBase = useAppStore((s) => selectDiffBaseRef(s, workspace.id));
 	const { branches, refreshing, refresh } = useBranchList(open ? workspace.projectId : null);
 	const userOwned = isUserOwnedWorkspace(workspace);
@@ -130,7 +131,11 @@ export function BranchSegment({
 				align="start"
 				data-testid="scope-branch-popover"
 				className="flex w-[380px] flex-col py-8"
-				onOpenAutoFocus={(event) => event.preventDefault()}
+				onOpenAutoFocus={(event) => {
+					event.preventDefault();
+					contentRef.current?.focus();
+				}}
+				ref={contentRef}
 			>
 				<Row
 					label="Branch"

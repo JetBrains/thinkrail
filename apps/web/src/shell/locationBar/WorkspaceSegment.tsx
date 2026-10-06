@@ -21,7 +21,7 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { cn } from "@thinkrail/ui/utils";
-import { type KeyboardEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { RunningIcon } from "../../components/RunningIcon";
 import { copyText, platformShortcutLabel } from "../../lib";
 import { RemoveWorkspaceDialog } from "../../panels/RemoveWorkspaceDialog";
@@ -32,7 +32,7 @@ import {
 	renameWorkspace,
 	revealWorkspace,
 	useEditors,
-	workspaceRenameValue,
+	useWorkspaceRename,
 } from "../../panels/workspaceActions";
 import {
 	isDefaultWorkspace,
@@ -57,49 +57,23 @@ export function WorkspaceSegment({
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const editors = useEditors();
 	const [confirmOpen, setConfirmOpen] = useState(false);
-	const [editing, setEditing] = useState(false);
-	const nameRef = useRef<HTMLInputElement>(null);
-	const cancelNextBlurRef = useRef(false);
-	const enterRenameRef = useRef(false);
 
 	useEffect(() => {
 		if (!menuOpen || siblings !== undefined) return;
 		void loadProjectWorkspaces(project.id).catch(() => {});
 	}, [menuOpen, project.id, siblings]);
 
-	useEffect(() => {
-		if (!editing) return;
-		const frame = requestAnimationFrame(() => {
-			nameRef.current?.focus();
-			nameRef.current?.select();
-		});
-		return () => cancelAnimationFrame(frame);
-	}, [editing]);
-
 	const canRename = workspace !== null && canRenameWorkspace(protocolVersion, workspace);
 	const isDefault = workspace !== null && isDefaultWorkspace(workspace);
 	const isExternal = workspace !== null && isExternalWorkspace(workspace);
 	const name = workspace?.name ?? "Project home";
-
-	const commitRename = () => {
-		if (!workspace) return;
-		const cancelled = cancelNextBlurRef.current;
-		cancelNextBlurRef.current = false;
-		setEditing(false);
-		if (cancelled) return;
-		const next = workspaceRenameValue(workspace.name, nameRef.current?.value ?? "");
-		if (next) renameWorkspace(workspace, next);
-	};
-	const onNameKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-		if (event.key === "Enter") {
-			event.preventDefault();
-			nameRef.current?.blur();
-		} else if (event.key === "Escape") {
-			event.preventDefault();
-			cancelNextBlurRef.current = true;
-			nameRef.current?.blur();
-		}
-	};
+	const rename = useWorkspaceRename({
+		workspace,
+		canRename,
+		onRename: (next) => {
+			if (workspace) renameWorkspace(workspace, next);
+		},
+	});
 
 	const switchTargets = (siblings ?? []).filter((candidate) => candidate.id !== workspace?.id);
 
@@ -109,17 +83,16 @@ export function WorkspaceSegment({
 			testid="scope-workspace-segment"
 			className="max-w-[460px] border-l-0 pr-0 pl-0 sm:border-l sm:pr-8 sm:pl-12"
 		>
-			{editing && workspace ? (
+			{rename.editing && workspace ? (
 				<input
-					ref={nameRef}
+					ref={rename.nameRef}
 					data-testid="scope-name"
 					data-editing
 					type="text"
 					spellCheck={false}
 					aria-label="Workspace name"
 					defaultValue={workspace.name}
-					onKeyDown={onNameKeyDown}
-					onBlur={commitRename}
+					{...rename.inputProps}
 					className="window-no-drag h-22 w-full min-w-0 truncate rounded-[var(--radius-sm)] border-0 bg-control-bg px-8 text-text-default tr-title-section outline-none ring-1 ring-control-border-active"
 				/>
 			) : (
@@ -137,11 +110,7 @@ export function WorkspaceSegment({
 					<DropdownMenuContent
 						align="start"
 						data-testid="scope-workspace-menu"
-						onCloseAutoFocus={(event) => {
-							if (!enterRenameRef.current) return;
-							enterRenameRef.current = false;
-							event.preventDefault();
-						}}
+						onCloseAutoFocus={rename.onMenuCloseAutoFocus}
 					>
 						{workspace ? (
 							<>
@@ -166,14 +135,7 @@ export function WorkspaceSegment({
 									</DropdownMenuSub>
 								) : null}
 								{canRename ? (
-									<DropdownMenuItem
-										data-testid="scope-workspace-rename"
-										onSelect={() => {
-											cancelNextBlurRef.current = false;
-											enterRenameRef.current = true;
-											setEditing(true);
-										}}
-									>
+									<DropdownMenuItem data-testid="scope-workspace-rename" onSelect={rename.start}>
 										<Pencil />
 										Rename
 									</DropdownMenuItem>
