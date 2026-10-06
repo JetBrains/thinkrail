@@ -91,7 +91,7 @@ test("an open PR adds the REMOTE chips and the PULL REQUEST chip link", () => {
 	expect(html).toContain("PR #648");
 });
 
-test("a user-owned workspace shows a plain BRANCH caption and no review", () => {
+test("a user-owned workspace shows a plain BRANCH caption; a URL-less review stays a static chip", () => {
 	const html = render(userOwned, { kind: "pull-request", number: 1, behindCommits: 3 });
 	expect(html).not.toContain("scope-base");
 	expect(html).not.toContain("· from");

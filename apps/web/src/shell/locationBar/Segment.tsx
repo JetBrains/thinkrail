@@ -17,7 +17,7 @@ export function Segment({
 		<div
 			data-testid={testid}
 			className={cn(
-				"flex h-topbar-row min-w-0 flex-col justify-center border-border-default border-l pr-8 pl-12 first:border-l-0 first:pl-0",
+				"flex h-topbar-row min-w-0 flex-col justify-center border-border-default border-l pr-8 pl-12",
 				className,
 			)}
 		>
@@ -32,8 +32,13 @@ export function Segment({
 export const pillClass =
 	"window-no-drag inline-flex h-22 min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-selected data-[state=open]:text-text-default";
 
-export function PillChevron() {
-	return <ChevronDown aria-hidden="true" className="size-14 shrink-0 text-text-subtle" />;
+export function PillChevron({ className }: { className?: string | undefined }) {
+	return (
+		<ChevronDown
+			aria-hidden="true"
+			className={cn("size-14 shrink-0 text-text-subtle", className)}
+		/>
+	);
 }
 
 export type ChipTone = "neutral" | "success" | "warning" | "info";

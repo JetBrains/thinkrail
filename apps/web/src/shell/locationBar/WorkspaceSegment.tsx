@@ -104,7 +104,11 @@ export function WorkspaceSegment({
 	const switchTargets = (siblings ?? []).filter((candidate) => candidate.id !== workspace?.id);
 
 	return (
-		<Segment caption="Workspace" testid="scope-workspace-segment" className="max-w-[460px]">
+		<Segment
+			caption="Workspace"
+			testid="scope-workspace-segment"
+			className="max-w-[460px] border-l-0 pr-0 pl-0 sm:border-l sm:pr-8 sm:pl-12"
+		>
 			{editing && workspace ? (
 				<input
 					ref={nameRef}
@@ -128,7 +132,7 @@ export function WorkspaceSegment({
 						<span data-testid="scope-name" className="truncate tr-title-section">
 							{name}
 						</span>
-						<PillChevron />
+						<PillChevron className="hidden sm:block" />
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
 						align="start"
