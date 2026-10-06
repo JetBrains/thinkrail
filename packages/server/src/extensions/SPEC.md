@@ -5,7 +5,7 @@ status: active
 title: extensions — the server registry of ThinkRail extensions
 parent: module-server
 depends-on: [module-extension-api, module-thinkrail-extensions]
-tags: [extensions]
+tags: [extensions, public-surface-checked]
 ---
 
 ## Responsibility

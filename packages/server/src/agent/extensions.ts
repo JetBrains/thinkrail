@@ -7,6 +7,7 @@ import {
 	type ExtensionAPI,
 	type ExtensionFactory,
 	getAgentDir,
+	type InlineExtension,
 	type PathMetadata,
 	type ResourceDiagnostic,
 	type ResourceLoader,
@@ -15,6 +16,11 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
 import specGraphExtension from "pi-spec-graph";
+import {
+	registryInlineExtensions,
+	resolveExtensionSkillRoots,
+	serverExtensions,
+} from "../extensions";
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
 import {
 	type AskUserQuestionWaiters,
@@ -61,16 +67,16 @@ function resolveDevPaths(): { extensionPaths: string[]; skillPaths: string[] } {
 	if (devPaths) return devPaths;
 	const require = createRequire(import.meta.url);
 	const webAccessPath = require.resolve("pi-web-access/index.ts");
-	const visualizePath = require.resolve("pi-visualize/index.ts");
 	const specGraphPath = require.resolve("pi-spec-graph/index.ts");
 	const workflowPath = require.resolve("pi-thinkrail-workflow/index.ts");
 	const todosPath = require.resolve("pi-todos/index.ts");
 	devPaths = {
-		extensionPaths: [webAccessPath, visualizePath, specGraphPath, workflowPath, todosPath],
+		extensionPaths: [webAccessPath, specGraphPath, workflowPath, todosPath],
 		skillPaths: [
 			join(dirname(specGraphPath), "skills"),
 			join(dirname(workflowPath), "skills"),
 			join(dirname(todosPath), "skills"),
+			...serverExtensions.flatMap(resolveExtensionSkillRoots),
 		],
 	};
 	return devPaths;
@@ -185,8 +191,13 @@ function webAccessFactory(): BundledExtensionFactory {
 	return devWebAccessFactory;
 }
 
-export function childExtensionFactories(): ExtensionFactory[] {
-	return [headlessSearchPolicy, webAccessFactory(), specGraphExtension];
+export function childExtensionFactories(): InlineExtension[] {
+	return [
+		headlessSearchPolicy,
+		webAccessFactory(),
+		specGraphExtension,
+		...registryInlineExtensions("childExtensions"),
+	];
 }
 
 export async function buildResourceLoader(
@@ -197,7 +208,8 @@ export async function buildResourceLoader(
 	extraFactories: ExtensionFactory[] = [],
 	askUserQuestionWaiters: AskUserQuestionWaiters = createAskUserQuestionWaiters(),
 ): Promise<ResourceLoader> {
-	const sharedFactories = [
+	const sharedFactories: InlineExtension[] = [
+		...registryInlineExtensions("extensions"),
 		headlessSearchPolicy,
 		askUserQuestionExtension(askUserQuestionWaiters),
 		reviewToolExtension,
