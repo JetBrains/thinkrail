@@ -40,7 +40,17 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
-      - run: bun run --filter @thinkrail/website build
+      - name: Build with the production PostHog key
+        env:
+          PUBLIC_POSTHOG_PROJECT_KEY: ${{ secrets.POSTHOG_PROJECT_KEY }}
+        run: |
+          set -eu
+          case "$PUBLIC_POSTHOG_PROJECT_KEY" in
+            phc_?*) ;;
+            *) echo "::error::website environment secret POSTHOG_PROJECT_KEY must be a phc_ project key"; exit 1 ;;
+          esac
+          bun run --filter @thinkrail/website build
+          grep -rqF "$PUBLIC_POSTHOG_PROJECT_KEY" apps/website/dist || { echo "::error::PostHog key missing from the built site"; exit 1; }
       - run: bun run --filter @thinkrail/website smoke:attribution
       - name: Apply attribution migrations
         working-directory: apps/website

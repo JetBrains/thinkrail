@@ -3,7 +3,7 @@ import { createWebsiteAnalytics, type MarketingConsentAdapter, type PostHogOptio
 
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
-const expectedPostHogProjectKey = "phc_AFJBcKraEUrfpTrSSMjBGXMHTusYudtFfxWqdevchy8X";
+const expectedPostHogProjectKey = "phc_test";
 const expectedPostHogOptions: PostHogOptions = {
 	api_host: "https://p.thinkrail.ai",
 	ui_host: "https://eu.posthog.com",
@@ -219,6 +219,7 @@ describe("website analytics", () => {
 		const consent = createConsent();
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -237,11 +238,30 @@ describe("website analytics", () => {
 		});
 	});
 
+	test("a keyless build has no configuration and loads nothing even on the production host", () => {
+		const dom = installDom("site.example", { storedJourney: existingJourneyId });
+		const consent = createConsent(true);
+		const analytics = createWebsiteAnalytics({
+			productionHostname: "site.example",
+			postHogProjectKey: "",
+			marketingConsent: consent.adapter,
+		});
+
+		expect(analytics.configurationForHostname("site.example")).toBeUndefined();
+		analytics.capture("content_viewed", contentViewed);
+		analytics.init();
+
+		expect(consent.activity).toEqual([]);
+		expect(dom.storageCalls).toEqual([]);
+		expect(dom.scripts).toEqual([]);
+	});
+
 	test("never queues, subscribes, accesses storage, or loads vendors outside the exact host", () => {
 		const dom = installDom("preview.example", { storedJourney: existingJourneyId });
 		const consent = createConsent(true);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -261,6 +281,7 @@ describe("website analytics", () => {
 		const consent = createConsent();
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -291,6 +312,7 @@ describe("website analytics", () => {
 		const consent = createConsent();
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -321,6 +343,7 @@ describe("website analytics", () => {
 		const consent = createConsent(true);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -356,6 +379,7 @@ describe("website analytics", () => {
 		const consent = createConsent(true);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 		const downloadStarted = {
@@ -411,6 +435,7 @@ describe("website analytics", () => {
 		const consent = createConsent(true);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -434,6 +459,7 @@ describe("website analytics", () => {
 		const consent = createConsent(true);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -454,6 +480,7 @@ describe("website analytics", () => {
 		const consent = createConsent(undefined);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 		const observed: Array<string | undefined> = [];
@@ -483,6 +510,7 @@ describe("website analytics", () => {
 		const consent = createConsent();
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -507,6 +535,7 @@ describe("website analytics", () => {
 		const consent = createConsent();
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -525,6 +554,7 @@ describe("website analytics", () => {
 		const consent = createConsent(false);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -574,6 +604,7 @@ describe("website analytics", () => {
 		const consent = createConsent(undefined);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -601,6 +632,7 @@ describe("website analytics", () => {
 		const consent = createConsent(true);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -619,6 +651,7 @@ describe("website analytics", () => {
 		const consent = createConsent();
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -642,6 +675,7 @@ describe("website analytics", () => {
 		const consent = createConsent();
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -666,6 +700,7 @@ describe("website analytics", () => {
 		const consent = createConsent(true);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 

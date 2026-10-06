@@ -1,4 +1,3 @@
-const postHogProjectKey = "phc_AFJBcKraEUrfpTrSSMjBGXMHTusYudtFfxWqdevchy8X";
 const postHogProxyHost = "https://p.thinkrail.ai";
 const postHogUiHost = "https://eu.posthog.com";
 const gtmContainerId = "GTM-WDW2DZW4";
@@ -75,6 +74,7 @@ export type WebsiteAnalytics = {
 
 export type WebsiteAnalyticsOptions = {
 	productionHostname: string;
+	postHogProjectKey: string;
 	marketingConsent: MarketingConsentAdapter;
 };
 
@@ -92,7 +92,7 @@ declare global {
 	}
 }
 
-const sharedConfiguration: WebsiteAnalyticsConfiguration = {
+const configurationForKey = (postHogProjectKey: string): WebsiteAnalyticsConfiguration => ({
 	postHog: {
 		projectKey: postHogProjectKey,
 		scriptUrl: `${postHogProxyHost}/static/array.js`,
@@ -110,7 +110,7 @@ const sharedConfiguration: WebsiteAnalyticsConfiguration = {
 		containerId: gtmContainerId,
 		scriptUrl: `https://www.googletagmanager.com/gtm.js?id=${gtmContainerId}`,
 	},
-};
+});
 
 function initPostHog(
 	configuration: WebsiteAnalyticsConfiguration["postHog"],
@@ -164,8 +164,12 @@ function removeStoredJourneyId(): void {
 
 export function createWebsiteAnalytics({
 	productionHostname,
+	postHogProjectKey,
 	marketingConsent,
 }: WebsiteAnalyticsOptions): WebsiteAnalytics {
+	const productionConfiguration = postHogProjectKey
+		? configurationForKey(postHogProjectKey)
+		: undefined;
 	let initialized = false;
 	let consentGranted: boolean | undefined;
 	let journeyId: string | undefined;
@@ -178,7 +182,7 @@ export function createWebsiteAnalytics({
 	}> = [];
 
 	function configurationForHostname(hostname: string): WebsiteAnalyticsConfiguration | undefined {
-		return hostname === productionHostname ? sharedConfiguration : undefined;
+		return hostname === productionHostname ? productionConfiguration : undefined;
 	}
 
 	function enabledInCurrentWindow(): boolean {
@@ -292,9 +296,9 @@ export function createWebsiteAnalytics({
 	}
 
 	function init(): void {
-		if (!enabledInCurrentWindow() || initialized) return;
+		const configuration = productionConfiguration;
+		if (!enabledInCurrentWindow() || initialized || configuration === undefined) return;
 		initialized = true;
-		const configuration = sharedConfiguration;
 		try {
 			marketingConsent.subscribe(refreshConsent);
 			refreshConsent();
