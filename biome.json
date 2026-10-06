@@ -10,6 +10,7 @@
 		"includes": [
 			"**",
 			"!designs",
+			"!design-audit/buttons.html",
 			"!**/.claude",
 			"!apps/web/src/styles/generated",
 			"!apps/web/src/chat/generated"
@@ -22,13 +23,27 @@
 	},
 	"linter": {
 		"enabled": true,
+		"domains": {
+			"test": "recommended"
+		},
 		"rules": {
 			"preset": "recommended",
-			"suspicious": {
-				"noExplicitAny": "error"
+			"nursery": {
+				"noImpliedEval": "error",
+				"noPlaywrightMissingAwait": "error",
+				"noIdenticalTestTitle": "error"
 			},
 			"style": {
-				"noNonNullAssertion": "error"
+				"noNonNullAssertion": "error",
+				"useThrowOnlyError": "error",
+				"useThrowNewError": "error"
+			},
+			"suspicious": {
+				"noExplicitAny": "error",
+				"noNestedPromises": "error",
+				"noUnusedExpressions": "error",
+				"useGuardForIn": "error",
+				"noEvolvingTypes": "error"
 			}
 		}
 	},
@@ -58,6 +73,21 @@
 					"correctness": {
 						"noUnusedVariables": "off",
 						"noUnusedImports": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": [
+				"apps/web/**",
+				"apps/website/**",
+				"packages/ui/**",
+				"thinkrail-extensions/*/web/**"
+			],
+			"linter": {
+				"rules": {
+					"correctness": {
+						"useHookAtTopLevel": "error"
 					}
 				}
 			}
