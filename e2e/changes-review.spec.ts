@@ -1,4 +1,4 @@
-import { writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import {
@@ -261,4 +261,90 @@ test("a round's receipt comes from the host's turn snapshot and Review turn open
 	await page.getByTestId("changes-scope-trigger").click();
 	await expect(page.getByTestId("changes-scope-last-turn")).toContainText("Last turn · 1 file");
 	await expect(page.getByTestId("changes-scope-last-turn")).toHaveAttribute("data-active", "true");
+});
+
+test("the review guide walks the reviewer's reading order and findings with N", async ({
+	page,
+}) => {
+	const worktree = await seedThreeChanges(page);
+	const workspaceId = JSON.parse(readFileSync(join(E2E_DATA_DIR, "workspaces.json"), "utf8")).find(
+		(w: { worktreePath: string }) => w.worktreePath === worktree,
+	).id as string;
+	const baseSha = gitAs(worktree, "rev-parse", "HEAD");
+	mkdirSync(join(E2E_DATA_DIR, "reviews"), { recursive: true });
+	writeFileSync(
+		join(E2E_DATA_DIR, "reviews", `${workspaceId}.json`),
+		JSON.stringify({
+			review: {
+				id: "rev_seeded",
+				workspaceId,
+				status: "open",
+				baseSha,
+				createdAt: 1,
+				guide: {
+					summary: "Small and coherent; one risk in the script.",
+					readingOrder: [
+						{ path: "notes.txt", why: "Context first." },
+						{ path: "script.ts", why: "The actual change." },
+					],
+					verdict: "request_changes",
+					todoId: "t1",
+					sessionId: "seeded",
+					reviewedSha: baseSha,
+					at: 1,
+				},
+			},
+			comments: [
+				{
+					id: "finding-1",
+					reviewId: "rev_seeded",
+					kind: "diff",
+					anchor: {
+						path: "script.ts",
+						side: "worktree",
+						selectors: [{ kind: "lineRange", startLine: 1, endLine: 1 }],
+					},
+					body: "RISK: the flag is exported without a reader.",
+					status: "draft",
+					anchorState: "anchored",
+					author: "agent",
+					origin: { todoId: "t1", reviewedSha: baseSha, sessionId: "seeded" },
+					createdAt: 1,
+				},
+			],
+		}),
+	);
+
+	await page.reload();
+	await revealWorkbenchTool(page, "changes");
+	await row(page, "README.md").click();
+	await expect(reviewTab(page)).toHaveCount(1);
+	const guide = page.getByTestId("changes-review-guide");
+	await expect(guide).toBeVisible();
+	await expect(guide.getByTestId("changes-review-guide-summary")).toContainText(
+		"one risk in the script",
+	);
+	await expect(guide.getByTestId("changes-review-guide-step")).toHaveCount(2);
+	await expect(guide.getByTestId("changes-review-guide-finding")).toHaveCount(1);
+
+	await guide.getByTestId("changes-review-guide-next").click();
+	await expect(row(page, "notes.txt")).toHaveAttribute("data-active", "true");
+	await expect(guide.getByTestId("changes-review-guide-step").first()).toHaveAttribute(
+		"data-active",
+		"true",
+	);
+	await page.keyboard.press("n");
+	await expect(row(page, "script.ts")).toHaveAttribute("data-active", "true");
+	await page.keyboard.press("n");
+	await expect(guide.getByTestId("changes-review-guide-finding")).toHaveAttribute(
+		"data-active",
+		"true",
+	);
+	await expect(guide.getByTestId("changes-review-guide-fix")).toBeVisible();
+	await expect(guide.getByTestId("changes-review-guide-next")).toContainText("Restart");
+
+	await page.getByTestId("changes-review-guide-toggle").click();
+	await expect(guide).toHaveCount(0);
+	await page.getByTestId("changes-review-guide-toggle").click();
+	await expect(page.getByTestId("changes-review-guide")).toBeVisible();
 });

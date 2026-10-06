@@ -1433,7 +1433,17 @@ own section. The kebab menu (`plan-menu`, a
   model; the stacked view's bottom bar shows `n of N reviewed`, **Next unreviewed** (`J`, wraps) and
   **Mark all viewed**, and `V` toggles the active section. There is deliberately no *Revert all*: the
   host has no atomic multi-file discard and a bulk destructive action on a review surface earns its
-  keystroke only once it exists server-side. The per-file `DiffTab` passes no triage and is unchanged. **Scale rules**:
+  keystroke only once it exists server-side. The per-file `DiffTab` passes no triage and is unchanged.
+  **The reviewer's story is a walk, not a report.** When the workspace review carries a `guide` (the newest
+  plan-step verdict's summary and suggested reading order, see [[submodule-server-reviews]]) or any open
+  agent finding, the stacked view grows a left **review guide rail** (`ChangesReviewGuide`, toggled from the
+  toolbar, never shown in One-file mode): verdict badge + summary, the numbered reading order (steps for
+  files outside the scope are disabled rather than hidden, so the order stays legible), and the findings.
+  `guideSteps` is the one derivation — reading steps first, then open agent findings by path — and
+  **Start / Next / Restart** (`N`, `P` back) walk it: a step reveals its section through the tab's one-shot
+  reveal, a finding step also fires the store's `reviewFocusRequest`, so the thread card is scrolled to by
+  the same path the Review panel uses. *Fix this one* and *Apply fixes* are the Review panel's send paths
+  (`sendReviewComment`, `sendReviewBatch` over the open finding ids), not new mutations. **Scale rules**:
   a section whose file changed more than 400 lines, or whose path is a lock/generated file, mounts
   collapsed behind *Expand* / *Open as tab*; a scope with more than 50 files shows a dismissable notice
   offering *One file*; nothing switches mode on its own, because a review surface that re-arranges
