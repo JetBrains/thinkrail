@@ -1391,16 +1391,43 @@ own section. The kebab menu (`plan-menu`, a
   `server/src/git/SPEC.md`). The **target branch lives beside the scope menu, not inside it**
   (as first designed): a searchable list belongs in a combobox, and a nested Radix submenu closes itself when
   the menu re-renders as those lazy reads land.
-- **The diff is a center resource tab, not an inset inside the Changes tool.** Clicking a Changes row
-  reads `git.diffFile` and opens one `DiffTab` per *(path, scope)* through `openDiffInTab`; preview/keep,
-  navigation-stamp, target-ref, and live-refresh semantics are unchanged. `DiffPane` describes the returned
-  `ResourceMeta`, resolves the registry for `diff`, and lazily mounts the selected renderer. Byte-only
+- **The diff is a center resource tab, not an inset inside the Changes tool, and Changes has two
+  presentations.** A single click on a Changes row opens (or reveals inside) the workspace's **review
+  tab** for the panel's scope — `ChangesReviewPane`, one `ChangesTab` per *(workspace, scope)*
+  (`changesTabId`), preview intent — with every changed file of the scope as a **section** in one
+  scrolling surface: sticky section headers (status, path, `+N −M`, the renderer segment when the
+  registry returns more than one candidate, *Open as tab*, *Revert file*, *Viewed*), bodies that read
+  `git.diffFile` lazily as they scroll into view and refresh under the same live-refresh contract as a
+  `DiffTab`. A double click, or a section's *Open as tab*, opens the per-file **`DiffTab`** *(path,
+  scope)* through `openDiffInTab` at the `keep` intent — the deep single-file surface is a promotion,
+  never the first click. The review tab has two **view modes**, chosen by a `Stacked | One file` segment
+  in its toolbar and held app-wide (`store.changesLayout`, like `changesView`): *Stacked* is the
+  continuous list; *One file* shows one section at a time with `Prev / Next` and a `n / N` counter
+  (`V` marks viewed and advances, `Alt+↓` / `Alt+↑` step files). Both modes read one model —
+  the scope's ordered file list, `viewed`, `activePath`, collapse overrides, `Split | Inline`, ¶ — so
+  switching never loses review progress; a second tab kind per mode was rejected for exactly that reason.
+  **The Changes sidebar is the review tab's navigator**: its row highlight follows the tab's
+  `activePath` (the section at the top of the viewport, or the single file shown), viewed files carry a
+  check glyph, and clicking a row reveals that section; `changesView` defaults to **Tree**. **Scale rules**:
+  a section whose file changed more than 400 lines, or whose path is a lock/generated file, mounts
+  collapsed behind *Expand* / *Open as tab*; a scope with more than 50 files shows a dismissable notice
+  offering *One file*; nothing switches mode on its own, because a review surface that re-arranges
+  itself mid-review loses the reader's place. The list is a `react-virtuoso` grouped list (one group per
+  file, header sticky); Pierre `CodeView` was evaluated for the container and rejected because its items
+  are only `file` / `diff`, so it cannot host the rendered-markdown, image, SVG, CSV, JSON, notebook, and PDF
+  renderers that a section must dispatch exactly like `DiffPane` does. Both `DiffPane` and a section
+  render the shared **`DiffSurface`**: it describes the returned `ResourceMeta`, resolves the registry
+  for `diff`, lazily mounts the selected renderer, hosts that file's review threads and hunk actions,
+  and shows the unplaced strip. Byte-only
   original sides use the response's resolved original oid with `/blob`; an absent side is explicit, never a
   bytes value with a fabricated URL. The fixed toolbar keeps path and per-file review send, then exposes ¶
   whitespace, modified-side copy, and **Split | Inline** only when the selected renderer advertises the
   corresponding capability. It renders one `view-toggle-<renderer suffix>` segment per candidate when the
   registry returns more than one. Renderer choice replaces the old markdown-only `rendered` state; layout
-  and whitespace remain independent diff state.
+  and whitespace remain independent diff state. The review tab's toolbar carries the same whitespace and
+  `Split | Inline` controls for every section at once, the scope and target as read-only chips (the scope
+  is chosen in the Changes header and is part of the tab's identity), the file / `+ −` totals with the
+  viewed count, *Collapse all* / *Expand all*, and `Send review (N)` over the workspace's drafts.
 
   Bundled candidates are registered once from `panels/resources/register.ts`: `thinkrail/code` renders
   every source diff with Pierre `FileDiff` and supports copy, layout, and whitespace controls;
