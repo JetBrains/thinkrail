@@ -26,6 +26,8 @@ import { resetConfigCache } from "../settings";
 import { handleRequest } from "./handlers";
 import { runObservation } from "./runAnalytics";
 
+const TEST_KEY = "phc_test";
+
 const PRIVATE = "private-auth-attribution";
 const context = { clientKey: `${PRIVATE}-client` };
 const workspaceId = `${PRIVATE}-workspace`;
@@ -130,6 +132,7 @@ beforeEach(async () => {
 		},
 	]);
 	initializeAnalytics({
+		posthogApiKey: TEST_KEY,
 		additionalEnabled: false,
 		env: {},
 		fetchImpl: ((url: Parameters<typeof fetch>[0], init?: RequestInit) => {

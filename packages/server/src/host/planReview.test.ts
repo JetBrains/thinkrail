@@ -39,6 +39,8 @@ import {
 import { withReviewLock } from "./reviewLock";
 import { isItemUnderActiveReview } from "./todoReview";
 
+const TEST_KEY = "phc_test";
+
 let dataDir: string;
 let worktree: string;
 const WS = "ws-planreview";
@@ -891,6 +893,7 @@ test("itemTitleOf labels a Review-All adopted commit with its subject, not the c
 test("only actual agent verdicts emit review decisions, and never leak plan content", async () => {
 	const events: { event: string; properties: Record<string, unknown> }[] = [];
 	initializeAnalytics({
+		posthogApiKey: TEST_KEY,
 		additionalEnabled: true,
 		env: {},
 		fetchImpl: (async (_url: string | URL | Request, init?: RequestInit) => {

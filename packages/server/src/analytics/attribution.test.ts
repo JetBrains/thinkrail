@@ -15,6 +15,8 @@ import {
 	track,
 } from "./service";
 
+const TEST_KEY = "phc_test";
+
 const claimId = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 const bridgeId = "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBA";
 const journeyId = "123e4567-e89b-42d3-a456-426614174000";
@@ -120,6 +122,7 @@ test("a packaged confirmed grant claims once, links once, and persists only norm
 	}) as typeof fetch;
 
 	initializeAnalytics({
+		posthogApiKey: TEST_KEY,
 		build: "binary",
 		additionalEnabled: true,
 		env: {},
@@ -206,6 +209,7 @@ test("a packaged confirmed grant claims once, links once, and persists only norm
 	resetAnalyticsForTests();
 	const restartEvents: CapturedEvent[] = [];
 	initializeAnalytics({
+		posthogApiKey: TEST_KEY,
 		build: "binary",
 		additionalEnabled: true,
 		env: {},
@@ -270,6 +274,7 @@ test("revocation aborts a never-settling generation and the consumed attempt nev
 	let requests = 0;
 	let opens = 0;
 	initializeAnalytics({
+		posthogApiKey: TEST_KEY,
 		build: "binary",
 		additionalEnabled: true,
 		env: {},
@@ -320,6 +325,7 @@ test("redeem activates memory and emits linked when terminal persistence replace
 		throw new Error("unexpected attribution request");
 	}) as typeof fetch;
 	initializeAnalytics({
+		posthogApiKey: TEST_KEY,
 		build: "binary",
 		additionalEnabled: true,
 		env: {},
@@ -487,6 +493,7 @@ test("default polling allows a human-scale confirmation window within the claim 
 		throw new Error("redeem must not run");
 	}) as typeof fetch;
 	initializeAnalytics({
+		posthogApiKey: TEST_KEY,
 		build: "desktop",
 		additionalEnabled: true,
 		env: {},
@@ -528,6 +535,7 @@ test.each([
 ])("$label skips without consuming the attempt", ({ build, additionalEnabled, opener, env }) => {
 	const scheduled: Array<() => void> = [];
 	initializeAnalytics({
+		posthogApiKey: TEST_KEY,
 		build,
 		additionalEnabled,
 		env,

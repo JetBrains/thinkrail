@@ -3,6 +3,7 @@ export interface DesktopHostOptions {
 	staticDir: string;
 	appVersion: string;
 	channel: string;
+	posthogProjectKey: string;
 	openExternal?: (url: string) => void;
 }
 

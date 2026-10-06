@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { NativeCommand, NativeQuitHint, NativeWindowState } from "@thinkrail/contracts";
-import { channel, version } from "@thinkrail/shared/version";
+import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
 import Electrobun, {
 	ApplicationMenu,
 	BrowserView,
@@ -148,6 +148,7 @@ async function start(): Promise<void> {
 		staticDir: join(PATHS.VIEWS_FOLDER, "web"),
 		appVersion: version,
 		channel,
+		posthogProjectKey,
 		...(Electrobun.app.isPackaged
 			? { openExternal: (url: string) => Utils.openExternal(url) }
 			: {}),

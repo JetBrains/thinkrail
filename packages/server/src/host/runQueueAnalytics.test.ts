@@ -25,6 +25,8 @@ import { resetConfigCache } from "../settings";
 import { handleRequest } from "./handlers";
 import { runObservation } from "./runAnalytics";
 
+const TEST_KEY = "phc_test";
+
 let directory: string;
 const saved = {
 	THINKRAIL_DATA_DIR: process.env.THINKRAIL_DATA_DIR,
@@ -106,6 +108,7 @@ test.each([
 	]);
 	const events: { event: string; properties: Record<string, unknown> }[] = [];
 	initializeAnalytics({
+		posthogApiKey: TEST_KEY,
 		additionalEnabled: false,
 		env: {},
 		fetchImpl: (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
