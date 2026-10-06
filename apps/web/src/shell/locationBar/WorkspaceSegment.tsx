@@ -56,7 +56,11 @@ export function WorkspaceSegment({
 	const sessionStateByWorkspace = useAppStore((s) => (menuOpen ? s.sessionStateByWorkspace : null));
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const editors = useEditors();
-	const [confirmOpen, setConfirmOpen] = useState(false);
+	const [removing, setRemoving] = useState<Workspace | null>(null);
+	const workspaceId = workspace?.id ?? null;
+	useEffect(() => {
+		setRemoving((current) => (current && current.id !== workspaceId ? null : current));
+	}, [workspaceId]);
 
 	useEffect(() => {
 		if (!menuOpen || siblings !== undefined) return;
@@ -152,7 +156,7 @@ export function WorkspaceSegment({
 									<DropdownMenuItem
 										data-testid="scope-workspace-remove"
 										className="text-feedback-error focus:bg-feedback-error-subtle [&_svg]:text-feedback-error"
-										onSelect={() => setConfirmOpen(true)}
+										onSelect={() => setRemoving(workspace)}
 									>
 										<Trash2 />
 										{isExternal ? "Remove from ThinkRail" : "Remove workspace"}
@@ -204,11 +208,13 @@ export function WorkspaceSegment({
 					</DropdownMenuContent>
 				</DropdownMenu>
 			)}
-			{workspace && !isDefault ? (
+			{removing ? (
 				<RemoveWorkspaceDialog
-					workspace={workspace}
-					open={confirmOpen}
-					onOpenChange={setConfirmOpen}
+					workspace={removing}
+					open
+					onOpenChange={(open) => {
+						if (!open) setRemoving(null);
+					}}
 				/>
 			) : null}
 		</Segment>

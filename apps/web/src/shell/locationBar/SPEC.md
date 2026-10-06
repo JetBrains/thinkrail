@@ -66,7 +66,10 @@ branch. It renders what the store and `workspace.openReview` already report; it 
   is bound to the workspace the edit started on, and because this segment is one persistent instance (the
   tree's rows are keyed per workspace), activating another workspace while the editor is open abandons the
   edit — pending offline commit included — rather than letting a later welcome rename the newly active
-  workspace. At Project home the pill reads "Project home" and offers only the switcher and creation.
+  workspace. The Remove confirmation follows the same rule: it renders from the workspace snapshotted when
+  Remove was chosen and dismisses itself if the active workspace changes underneath it (browser Back, a
+  remote removal fallback), so confirming can never delete a workspace other than the one it names. At
+  Project home the pill reads "Project home" and offers only the switcher and creation.
 - **BRANCH · from base** opens the git card, moving focus onto the card itself (not its first button, which
   would pop the copy tooltip) so one Tab reaches the actions: branch (copy → success toast), *Based on* (hidden for
   user-owned workspaces, whose caption is plain "BRANCH"), *Compare to* (the Changes panel's `BranchPicker`

@@ -245,3 +245,40 @@ test("navigating away abandons a pending topbar rename instead of renaming the n
 	await expect(rows.nth(1).getByTestId("workspace-name")).toHaveText("workspace-2");
 	await expect(page.getByText("Meant for workspace-2")).toHaveCount(0);
 });
+
+test("a remove confirmation opened from the topbar is bound to that workspace and closes when the scope moves", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await createWorkspaceViaDialog(page);
+	const rows = worktreeRows(page);
+	const currentHash = () => page.evaluate(() => window.location.hash);
+	await rows.nth(0).getByRole("button").first().click();
+	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
+	const workspace1Hash = await currentHash();
+	await rows.nth(1).getByRole("button").first().click();
+	await expect(page.getByTestId("scope-name")).toHaveText("workspace-2");
+	await expect.poll(currentHash).not.toBe(workspace1Hash);
+
+	await page.getByTestId("scope-workspace").click();
+	await page.getByTestId("scope-workspace-menu").getByTestId("scope-workspace-remove").click();
+	const confirm = page.getByTestId("confirm-remove");
+	await expect(confirm).toBeVisible();
+	await expect(page.getByRole("alertdialog")).toContainText("workspace-2");
+
+	// Browser Back re-activates workspace-1 underneath the open confirmation.
+	await page.goBack();
+	await expect.poll(currentHash).toBe(workspace1Hash);
+	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
+	await expect(confirm).toHaveCount(0);
+	await expect(rows).toHaveCount(2);
+
+	// Re-opened for the now-active workspace, it names and removes exactly that one.
+	await page.getByTestId("scope-workspace").click();
+	await page.getByTestId("scope-workspace-menu").getByTestId("scope-workspace-remove").click();
+	await expect(page.getByRole("alertdialog")).toContainText("workspace-1");
+	await confirm.click();
+	await expect(rows).toHaveCount(1);
+	await expect(rows.first().getByTestId("workspace-name")).toHaveText("workspace-2");
+});
