@@ -142,6 +142,14 @@ as the frozen non-enumerable `__THINKRAIL_NATIVE_SHORTCUTS__` `NativeShortcutsBr
 `shortcutsBridge.ts`) on every desktop platform; only the macOS menu sends events today. On Windows and
 Linux the web shell owns Ctrl+W / Ctrl+F4 (close item) through its command table.
 
+The preload also exposes the frozen non-enumerable `__THINKRAIL_NATIVE_NOTIFICATIONS__`
+`NativeNotificationBridge` ([[module-contracts]]) on every desktop platform: its one `show({ title,
+subtitle?, body, silent? })` method forwards a `showNotification` RPC request to the main process, which
+calls Electrobun `Utils.showNotification` (native OS notification center). The web client detects this
+bridge by capability and routes its attention notifications through it instead of the page Notifications
+API — the web shell keeps no desktop branch. Electrobun click callbacks are not landed yet, so the native
+notification carries no click action.
+
 Each chord has exactly one owner: a native menu accelerator (forwarded as a `NativeCommand`) or web
 keydown, never both, because the webview still receives keydown for accelerator chords. Native owns chords
 the OS or browser reserves (Command-Q/W/H/M); web owns Ctrl+Q/W/F4 where no native menu claims them.

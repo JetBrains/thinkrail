@@ -34,16 +34,33 @@ Producer → queue → consumer, so the decision to notify is deferred to the mo
   fresh `installSessionStateSnapshot` never storms.
 - **Engine** (`attentionNotificationEngine`): a DOM-free queue with one global collection window
   (`ATTENTION_WINDOW_MS`, 1s). Accumulated edges flush as one batch; the latest event per session wins.
-- **Consumer** (flush): emits only when every gate passes — master toggle on, permission granted, window
-  **not** focused, and the session's dot **still lit** (already-answered edges are dropped). One surviving
-  session opens its chat (`activateWorkspaceFromRoute`, landing at the latest message); several open the
-  cross-workspace `SessionSwitcher` palette (`openSessionSwitcher` on [[submodule-web-store]]) so the user
-  picks the one to attend, instead of landing in a window that may not show the right chat.
-  `formatNotification` keeps the title as the bold **ThinkRail** mark and puts the detail in the body
-  (`{worktree} · {reason}` for one, `N worktrees need your attention` for several); a per-session `tag` lets the browser replace rather than
-  stack. Every notification also sets the symbol-only ThinkRail icon (`/favicon.svg`, the
-  browser-tab/shell-logo artwork), honored by Chrome/Edge/Firefox; Safari ignores a page notification's icon
-  and shows its own browser icon (platform limitation).
+- **Consumer** (flush): emits only when every gate passes — master toggle on, channel permission granted,
+  window **not** focused, and the session's dot **still lit** (already-answered edges are dropped). One
+  surviving session opens its chat (`activateWorkspaceFromRoute`, landing at the latest message); several
+  open the cross-workspace `SessionSwitcher` palette (`openSessionSwitcher` on [[submodule-web-store]]) so
+  the user picks the one to attend, instead of landing in a window that may not show the right chat.
+  `formatNotification` keeps the title as the bold **ThinkRail** mark, the worktree as `subtitle`, and the
+  reason as `body` (`N worktrees need your attention` for several); a per-session `tag` lets the browser
+  replace rather than stack.
+
+## Channels
+
+The consumer emits through a `NotificationChannel` (permission / requestPermission / show) that
+`selectNotificationChannel()` picks by capability — suppression, format, queue, and settings stay
+channel-agnostic above it:
+
+- **Web** (`webNotifications`): the page Notifications API. It has no subtitle field, so it folds
+  `subtitle · body` into one line, and uses the browser permission flow. It also sets the symbol-only
+  ThinkRail icon (`/favicon.svg`, the browser-tab/shell-logo artwork), honored by Chrome/Edge/Firefox;
+  Safari ignores a page notification's icon and shows its own. On mobile the constructor can throw
+  (Android Chrome needs a Service Worker; iOS Safari needs an installed PWA) and is swallowed as a no-op.
+- **Desktop** (`desktopNotifications`): the native OS channel via the frozen
+  `__THINKRAIL_NATIVE_NOTIFICATIONS__` bridge ([[module-desktop]]), using `subtitle` as a distinct field.
+  The OS owns permission, so `permission()` is always `granted` and the in-app preface never shows.
+  Electrobun click callbacks are not landed yet, so a native notification carries no click action.
+
+Selection is capability-detection only (the bridge's presence), never a `desktop` branch. No Service
+Worker on either channel: a fully-closed app has no live client and raises nothing by design.
 
 ## Suppression
 
@@ -65,17 +82,15 @@ toggle is host-synced app config and defaults on (notifications still require th
 
 ## Boundary
 
-- **Owns:** the attention-notification pipeline and the browser Notifications API wrapper
-  (`webNotifications`). No Service Worker: a closed app has no live client and nothing to deliver, so a
-  fully-closed app raises nothing by design. Cross-system: desktop Chrome/Edge/Firefox/Safari show the
-  page-context notification; on mobile (Android Chrome needs a Service Worker, iOS Safari needs an
-  installed PWA) the constructor can throw and is swallowed as a no-op rather than crashing the flush.
+- **Owns:** the attention-notification pipeline, the `NotificationChannel` seam, and both channel
+  implementations (browser Notifications API + the native desktop bridge wrapper).
 - **Public surface (`index.ts` barrel):** `useAttentionNotifications`, `NotificationPermissionPrompt`,
-  `ATTENTION_WINDOW_MS`.
+  `selectNotificationChannel`, `NotificationChannel`, `NotificationPermissionState`, `ATTENTION_WINDOW_MS`.
 - **Allowed deps:** [[submodule-web-store]] (session-state reads, prompt state, `activateWorkspaceFromRoute`
   and `openSessionSwitcher` actions), `ui` (the preface dialog), [[module-contracts]] (`SessionState` /
-  `SessionCompletion` types), React, Remix Icon.
-- **Forbidden:** a second source of truth for attention; raw agent-event listening; any host/`pi` import.
+  `SessionCompletion` / `NativeNotificationBridge` types), React, Remix Icon.
+- **Forbidden:** a second source of truth for attention; raw agent-event listening; any host/`pi` import;
+  branching on `desktop` (channel choice is capability detection of the native bridge).
 
 The master toggle (`notificationsEnabled`) lives in app config; its Settings panel is
 `panels/NotificationsSettings`, not this module. Multi-client is accepted: focus is client-local, so one
