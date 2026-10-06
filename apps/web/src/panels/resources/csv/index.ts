@@ -16,6 +16,7 @@ export const csvRenderer: ResourceRenderer = {
 		copy: true,
 		layout: false,
 		whitespace: false,
+		boundedDiff: true,
 	},
 	loadView: () => import("./View"),
 	loadDiff: () => import("./Diff"),

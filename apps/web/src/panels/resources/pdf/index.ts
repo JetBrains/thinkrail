@@ -13,6 +13,7 @@ export const pdfRenderer: ResourceRenderer = {
 		copy: false,
 		layout: false,
 		whitespace: false,
+		boundedDiff: true,
 	},
 	loadView: () => import("./View"),
 	loadDiff: () => import("./Diff"),

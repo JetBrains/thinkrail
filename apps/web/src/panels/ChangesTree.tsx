@@ -45,7 +45,7 @@ function ChangeNodeRow({
 				>
 					{({ onContextMenu }) => (
 						<TreeRow
-							testid="change-node"
+							testid="change-item"
 							onContextMenu={onContextMenu}
 							kind="file"
 							highlight="wrapper"
