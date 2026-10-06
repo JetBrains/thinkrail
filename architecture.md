@@ -149,9 +149,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
    first-words heuristic, or host-side link parsing names anything: each of those produced names users
    wanted to fix. Every write is conditional on the target still being unnamed, so any manual name always
    wins and the first name is final — nothing retitles automatically. While a target is unnamed, each
-   turn's system prompt says so; guidelines alone were measurably skipped. While the workspace is
-   unnamed, one call must name both chat and workspace so they agree, but they stay independent identities written separately — not a cascade. If
-   the agent never calls the tool, the target stays unnamed (accepted). Clients hydrate `SessionSummary.title`, converge live on `session_info_changed`, and continue to
+   turn's system prompt says so; guidelines alone were measurably skipped. While a managed workspace is
+   unnamed, every call must carry its name, and the agent is asked to pass all missing names in one call
+   so chat and workspace agree, but they stay independent identities written separately — not a cascade. If the agent never calls the tool, the target stays unnamed (accepted). Clients hydrate `SessionSummary.title`, converge live on `session_info_changed`, and continue to
    route by session id, so duplicate human titles are legal.
 9. **Domain state, frontend-local frame, and workspace-local views.** *Domain* state — projects,
    workspaces, **sessions + their transcripts**, terminal catalogs/PTYs, and git — is backend-owned, shared,
