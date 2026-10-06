@@ -41,6 +41,7 @@
 	--on-primary-soft: color-mix(in srgb, var(--on-accent) 20%, transparent);
 	--feedback-info: var(--info);
 	--feedback-info-subtle: color-mix(in srgb, var(--info) 12%, transparent);
+	--feedback-info-muted: color-mix(in srgb, var(--info) 40%, transparent);
 	--feedback-success: var(--success);
 	--feedback-success-subtle: color-mix(in srgb, var(--success) 12%, transparent);
 	--feedback-success-muted: color-mix(in srgb, var(--success) 40%, transparent);
@@ -49,6 +50,7 @@
 	--feedback-error-muted: color-mix(in srgb, var(--danger) 40%, transparent);
 	--feedback-warning: var(--warning);
 	--feedback-warning-subtle: color-mix(in srgb, var(--warning) 12%, transparent);
+	--feedback-warning-muted: color-mix(in srgb, var(--warning) 40%, transparent);
 	--bubble-user-bg: color-mix(in srgb, var(--bubble-accent) 10%, transparent);
 	--bubble-user-border: color-mix(in srgb, var(--bubble-accent) 40%, transparent);
 	--selection-text: var(--selection-foreground, inherit); /* nullable in the manifest (high contrast keeps the native foreground) */
@@ -114,6 +116,7 @@
 	--color-on-primary-soft: var(--on-primary-soft);
 	--color-feedback-info: var(--feedback-info);
 	--color-feedback-info-subtle: var(--feedback-info-subtle);
+	--color-feedback-info-muted: var(--feedback-info-muted);
 	--color-feedback-success: var(--feedback-success);
 	--color-feedback-success-subtle: var(--feedback-success-subtle);
 	--color-feedback-success-muted: var(--feedback-success-muted);
@@ -122,6 +125,7 @@
 	--color-feedback-error-muted: var(--feedback-error-muted);
 	--color-feedback-warning: var(--feedback-warning);
 	--color-feedback-warning-subtle: var(--feedback-warning-subtle);
+	--color-feedback-warning-muted: var(--feedback-warning-muted);
 	--color-bubble-user-bg: var(--bubble-user-bg);
 	--color-bubble-user-border: var(--bubble-user-border);
 	--color-sunken: var(--sunken);

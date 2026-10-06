@@ -566,9 +566,10 @@ test("Ctrl+R and Escape are owned app-wide: both work with focus outside the com
 	const overlay = page.getByTestId("history-overlay");
 	const query = page.getByTestId("history-query");
 	const scopeBadge = page.getByTestId("history-scope");
-	const outside = page.getByTestId("scope-context");
+	const header = page.getByTestId("topbar");
+	const clickOutside = () => header.click({ position: { x: 4, y: 20 } });
 
-	await outside.click();
+	await clickOutside();
 	await page.keyboard.press("Control+r");
 	await expect(overlay).toBeVisible();
 	await expect(query).toBeFocused();
@@ -579,7 +580,7 @@ test("Ctrl+R and Escape are owned app-wide: both work with focus outside the com
 
 	await page.keyboard.press("Control+r");
 	await expect(overlay).toBeVisible();
-	await outside.click();
+	await clickOutside();
 	await page.keyboard.press("Escape");
 	await expect(overlay).toBeHidden();
 	await expect(input).toBeFocused();
@@ -598,7 +599,7 @@ test("Ctrl+R and Escape are owned app-wide: both work with focus outside the com
 
 	await page.keyboard.press("Control+r");
 	await expect(scopeBadge).toHaveAttribute("data-scope", "workspace");
-	await outside.click();
+	await clickOutside();
 	await page.keyboard.press("Control+r");
 	await expect(scopeBadge).toHaveAttribute("data-scope", "project");
 

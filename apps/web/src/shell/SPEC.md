@@ -29,6 +29,7 @@ Every child is a directory module with `index.ts` as its public surface:
 - `chatReconciliation/` ([[submodule-web-shell-chat-reconciliation]]) owns host session/local placement/cache/history convergence and chat deep-link orchestration.
 - `terminalReconciliation/` ([[submodule-web-shell-terminal-reconciliation]]) owns host terminal-catalog/local placement convergence without owning PTY lifetime.
 - `legacySelection/` ([[submodule-web-shell-legacy-selection]]) is the sole temporary adapter from workbench attention to migration-era active editor/terminal/preview mirrors.
+- `locationBar/` ([[submodule-web-shell-location-bar]]) owns the topbar's captioned location segments and their project / workspace / branch controls; it reaches `panels` per-file and `store`/`transport`, never the layout engine.
 
 The sibling dependency graph is: `layoutState → layout`; `chatReconciliation → layout + layoutState`; `terminalReconciliation → layout`; `layoutIntents → layout + chatReconciliation + terminalReconciliation`; `legacySelection` reaches store selectors/actions only; and `WorkspaceWorkbench` composes each active orchestration barrel with `layout`, panels, and render callbacks. Chat resource availability is isolated behind a per-session selector component; the parent workbench never subscribes to the whole `sessions` record, so a streaming runtime cannot invalidate every tab renderer and side tool behind it. Siblings import only through barrels. Tests live with the orchestration module that owns the behavior rather than making store tests import shell runtime effects.
 
@@ -48,8 +49,10 @@ drag strip. Padding was deliberately not used for the inset: the `spacingUsage` 
 name only canonical steps, and a CSS `padding-left: max(…)` would need a gate exemption. The header is
 `select-none`; its whole trailing action cluster (`topbar-actions`) is `window-no-drag`, so any button
 placed inside it — the Update affordance, quota Retry, Settings — is excluded from dragging by
-construction, and buttons must not be placed elsewhere in the header (`topbarChrome.test.ts` gates this),
-while plain text (breadcrumb, connection label) stays draggable. The one other button group is
+construction; `Shell.tsx` itself places no other button in the header (`topbarChrome.test.ts` gates this).
+The location strip ([[submodule-web-shell-location-bar]]) is the one deliberate exception: its pills and
+chips each carry `window-no-drag` while their captions and hairlines stay draggable, so a user can still
+grab the strip between controls. Plain text such as the connection label stays draggable. The one other button group is
 `NativeWindowControls`: when the host installs the optional `NativeWindowControlsBridge`
 (`__THINKRAIL_NATIVE_WINDOW_CONTROLS__`, [[module-contracts]]) — today only the Windows desktop — Shell
 mounts `useNativeWindowControls`, which mirrors `updates`' capability hook (read the global once, `getState`,
@@ -67,11 +70,13 @@ normalized state into props-driven controls. Its compact status affordance opens
 without a capability, neither renders. Panels receive optional React content, never launcher or native-runtime
 checks. The topbar identity is the icon-only ThinkRail mark—the same
 vector served as `public/favicon.svg`, inlined at 32×32 and rendered
-through semantic `text-primary`—with no divider before location. An active workspace shows one line of
-`project / workspace  branch · from baseBranch` plus optional review metadata on `tr-text-ui`; project and
-workspace use `text-text-default`, while branch/trailing metadata use `text-text-muted`, with progressive
-responsive degradation. A selected project without an active workspace shows Project Home. No selected
-project leaves the logo alone.
+through semantic `text-primary`—with no divider before location. With a context project the mark is followed
+by the `locationBar` strip: captioned segments **PROJECT · WORKSPACE · BRANCH · from base · REMOTE · PULL
+REQUEST** whose values are controls (project switcher, workspace actions + sibling switcher, branch card,
+remote/PR status chips), with the drop order and grammar owned by [[submodule-web-shell-location-bar]]. Shell
+passes it the context project, the active workspace (or `null` for Project Home), the open review from
+`useOpenBranchReview`, and the callback that opens the shell-owned New workspace dialog. No selected project
+leaves the logo alone.
 
 Immediately before host connection status, the topbar conditionally renders the **JetBrains recurring-quota
 readout** (protocol v59): a neutral Coins icon + locale-formatted `remaining / total credits`. It exists only

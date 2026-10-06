@@ -198,6 +198,15 @@
 	text-transform: uppercase;
 	font-style: normal;
 }
+.tr-text-caption {
+	font-family: var(--tr-font-family-interface);
+	font-size: var(--tr-font-size-s10);
+	font-weight: var(--tr-font-weight-medium);
+	line-height: var(--tr-line-height-compact);
+	letter-spacing: var(--tr-letter-spacing-wide);
+	text-transform: uppercase;
+	font-style: normal;
+}
 .tr-text-action {
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s12);

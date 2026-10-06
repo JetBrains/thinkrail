@@ -202,6 +202,15 @@
 			"labelPill": {
 				"$ref": "ui.eyebrow"
 			},
+			"caption": {
+				"fontFamily": "interface",
+				"fontSize": "s10",
+				"fontWeight": "medium",
+				"lineHeight": "compact",
+				"letterSpacing": "wide",
+				"textTransform": "uppercase",
+				"fontStyle": "normal"
+			},
 			"action": {
 				"$ref": "title.compact"
 			},

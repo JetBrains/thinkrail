@@ -77,12 +77,13 @@ The rules, all enforced by `typography:validate`:
 `textStyles` groups: **brand** (`hero` — the Welcome text identity; the shell logo is supplied vector
 artwork) · **heading** (`xl`, `lg`, `md`, `sm` — the shared document heading scale) · **title**
 (`dialog`, `card`→dialog, `section`, `compact`, `entity`→body.reading)
-· **ui** (`default`, `metadata`, `eyebrow`, `labelPill`→eyebrow, `action`→title.compact,
-`emphasis`→title.compact) · **body** (`reading`) · **code** (`text` — the base 13px code style, `document`, `otp`, `textSmall` — an 11px code style for
+· **ui** (`default`, `metadata`, `eyebrow`, `labelPill`→eyebrow, `caption` — the 10px/compact uppercase
+field caption the topbar location segments stack above a 22px value row, where `eyebrow`'s 18px line would not
+fit the 40px strip, `action`→title.compact, `emphasis`→title.compact) · **body** (`reading`) · **code** (`text` — the base 13px code style, `document`, `otp`, `textSmall` — an 11px code style for
 inline code in table cells). `proseSystems` holds one entry per markdown surface, almost entirely aliases
 into the above. Dead aliases are not retained: prose points directly to the semantic style it uses.
 
-**19 canonical definitions + 30 aliases = 49 styles.**
+**20 canonical definitions + 30 aliases = 50 styles.**
 
 One prose rule is deliberately *not* a semantic style: `<strong>` / `<b>` gets **weight only**
 (`--tr-font-weight-medium`), emitted by the generator into each prose system. A complete style there
@@ -118,7 +119,7 @@ The generator derives one class per semantic style, mechanically:
 | `heading.xl` · `heading.lg` · `heading.md` · `heading.sm` | `.tr-heading-xl` · `.tr-heading-lg` · `.tr-heading-md` · `.tr-heading-sm` |
 | `title.dialog` · `title.card` · `title.section` · `title.compact` · `title.entity` | `.tr-title-dialog` · `.tr-title-card` · `.tr-title-section` · `.tr-title-compact` · `.tr-title-entity` |
 | `ui.default` · `ui.metadata` | `.tr-text-ui` · `.tr-text-metadata` |
-| `ui.eyebrow` · `ui.labelPill` · `ui.action` · `ui.emphasis` | `.tr-text-eyebrow` · `.tr-text-label-pill` · `.tr-text-action` · `.tr-text-emphasis` |
+| `ui.eyebrow` · `ui.labelPill` · `ui.caption` · `ui.action` · `ui.emphasis` | `.tr-text-eyebrow` · `.tr-text-label-pill` · `.tr-text-caption` · `.tr-text-action` · `.tr-text-emphasis` |
 | `body.reading` | `.tr-text-reading` |
 | `code.text` · `code.document` · `code.otp` · `code.textSmall` | `.tr-code-text` · `.tr-code-document` · `.tr-code-otp` · `.tr-code-text-small` |
 | `proseSystems.<id>.*` | `.tr-prose-<id>` + one element selector each |

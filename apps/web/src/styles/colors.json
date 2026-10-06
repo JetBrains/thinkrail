@@ -171,6 +171,11 @@
 			"alpha": "wash",
 			"publish": true
 		},
+		"feedback-info-muted": {
+			"from": "info",
+			"alpha": "muted",
+			"publish": true
+		},
 		"feedback-success": {
 			"from": "success",
 			"publish": true
@@ -206,6 +211,11 @@
 		"feedback-warning-subtle": {
 			"from": "warning",
 			"alpha": "wash",
+			"publish": true
+		},
+		"feedback-warning-muted": {
+			"from": "warning",
+			"alpha": "muted",
 			"publish": true
 		},
 		"bubble-user-bg": {

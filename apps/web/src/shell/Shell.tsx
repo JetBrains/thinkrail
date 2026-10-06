@@ -1,7 +1,5 @@
 import {
-	RiArrowRightSLine as ChevronRight,
 	RiCircleLine as Circle,
-	RiGitBranchLine as GitBranch,
 	RiCircleFill,
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
@@ -16,10 +14,9 @@ import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
 import { ProjectTree } from "../panels/ProjectTree";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
-import { openReviewLabel, useOpenBranchReview } from "../panels/useOpenBranchReview";
+import { useOpenBranchReview } from "../panels/useOpenBranchReview";
 import { WelcomePanel } from "../panels/WelcomePanel";
 import {
-	isUserOwnedWorkspace,
 	SettingsSection,
 	selectActiveWorkspace,
 	selectAnalyticsConsentPromptOpen,
@@ -40,6 +37,7 @@ import { CollapsedPanelRail } from "./CollapsedPanelRail";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
+import { LocationBar } from "./locationBar";
 import { NativeWindowControls } from "./NativeWindowControls";
 import { SessionSwitcher } from "./SessionSwitcher";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
@@ -150,52 +148,15 @@ export function Shell() {
 					data-testid="window-chrome-inset-left"
 					className="w-window-chrome-inset-left shrink-0"
 				/>
-				<div className="flex min-w-0 items-center gap-12 pr-12">
+				<div className="flex min-w-0 flex-1 items-center gap-12 pr-12">
 					<BrandLogo />
 					{contextProject ? (
-						<div
-							data-testid="scope-context"
-							data-context={activeWorkspace ? "workspace" : "project-home"}
-							className="flex min-w-0 items-center gap-4 overflow-hidden leading-tight tr-text-ui"
-						>
-							<span className="hidden min-w-0 items-center gap-4 sm:flex">
-								<span
-									data-testid="scope-project"
-									className="max-w-[160px] truncate text-text-default"
-								>
-									{contextProject.name}
-								</span>
-								<ChevronRight className="size-16 shrink-0 text-text-muted" />
-							</span>
-							<span data-testid="scope-name" className="max-w-[220px] truncate text-text-default">
-								{activeWorkspace?.name ?? "Project home"}
-							</span>
-							{activeWorkspace ? (
-								<>
-									<GitBranch className="size-14 shrink-0 text-text-muted" />
-									<span data-testid="scope-branch" className="truncate text-text-muted">
-										{activeWorkspace.branch}
-									</span>
-									{isUserOwnedWorkspace(activeWorkspace) ? null : (
-										<span
-											data-testid="scope-base"
-											className="hidden shrink-0 text-text-muted md:inline"
-										>
-											· from {activeWorkspace.baseBranch}
-										</span>
-									)}
-									{openReview ? (
-										<span
-											data-testid="scope-review"
-											data-kind={openReview.kind}
-											className="shrink-0 text-text-muted"
-										>
-											· {openReviewLabel(openReview)}
-										</span>
-									) : null}
-								</>
-							) : null}
-						</div>
+						<LocationBar
+							project={contextProject}
+							workspace={activeWorkspace}
+							review={activeWorkspace ? openReview : null}
+							onNewWorkspace={() => setNewWorkspaceProjectId(contextProject.id)}
+						/>
 					) : null}
 				</div>
 				<div

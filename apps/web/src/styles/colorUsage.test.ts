@@ -60,6 +60,7 @@ const NON_COLOR = new Set([
 	"y",
 	"t-0",
 	"b-0",
+	"l-0",
 	"l-2",
 	"r-2",
 	"t-2",
