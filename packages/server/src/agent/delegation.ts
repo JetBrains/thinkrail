@@ -16,7 +16,11 @@ import {
 } from "pi-delegation";
 import { createSubagents, type Subagents } from "pi-subagents";
 import { dataDir } from "../persistence";
-import { canUseSessionResources, liveParentContext } from "./agentSessionManager";
+import {
+	buildSessionSettings,
+	canUseSessionResources,
+	liveParentContext,
+} from "./agentSessionManager";
 import { publishSessionResourcesChanged } from "./chatResources";
 import { childExtensionFactories } from "./extensions";
 import { getPiRuntime } from "./piRuntime";
@@ -38,6 +42,7 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 			scope: workspaceId,
 			modelRuntime: getPiRuntime,
 			childExtensionFactories: childExtensionFactories(),
+			buildChildSettings: buildSessionSettings,
 		});
 		service.onLifecycle((event) => {
 			const parentSessionId =

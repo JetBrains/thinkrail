@@ -1210,6 +1210,31 @@ test("extensions opt-in loads ONLY the embedder-bound curated set — and only w
 	}
 });
 
+test("buildChildSettings builds each child's settings manager with the parent cwd", async () => {
+	const calls: string[] = [];
+	const scoped = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-settings",
+		modelRuntime: runtime,
+		buildChildSettings: (cwd) => {
+			calls.push(cwd);
+			return SettingsManager.inMemory({ images: { autoResize: false } });
+		},
+	});
+	faux.setResponses([fauxAssistantMessage("BUILT")]);
+	const child = await scoped.createChild(subagentSpec());
+	try {
+		expect(calls).toEqual([parentCwd]);
+		expect((await child.runQueued("go")).finalText).toBe("BUILT");
+	} finally {
+		await scoped.disposeChildrenOf(parent.sessionId);
+	}
+});
+
 test("extensions opt-in is inert when the embedder binds no child factories", async () => {
 	faux.setResponses([fauxAssistantMessage("STILL_FINE")]);
 	const child = await service.createChild(

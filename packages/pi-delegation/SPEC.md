@@ -153,7 +153,9 @@ shutdown release barriers; and finalized outcomes after a shrinking compaction.
   registries, so one mutable fallback must never synchronize provider state across them),
   `maxConcurrentPerParent`, `childExtensionFactories` (the curated set a child MAY load — decision
   #25; pi `InlineExtension`s, so an embedder passes bare factories or `{ name, factory }` and keeps
-  the name in pi diagnostics).
+  the name in pi diagnostics), `buildChildSettings` (an optional embedder hook `(cwd) =>
+  SettingsManager` the core calls to build each child's settings manager — decision #31; absent →
+  the core self-creates one with `SettingsManager.create(cwd)`).
 - Storage helpers: `defaultDelegationRoot` / `delegationSessionDir` / `deriveChildSessionFile`
   (post-restart transcript reads) / `DEFAULT_SCOPE`.
 - The contract types themselves (incl. `DelegationError`/`DelegationErrorCode`) — enumerated and
@@ -484,3 +486,14 @@ run-scoped signal. Non-user paths retain their behavior.
 30. **Resource control is literal and invocation-scoped.** Steering never starts a turn, queues are
     cleared before successor admission, and cancellation spans preflight through terminal settlement.
     Finalized message events supply stop/text evidence; pi persisted-entry stats supply usage deltas.
+31. **Child settings are an embedder-bound infrastructure hook, never a `SessionOptions` mirror**
+    (issue #604). The core assembles each child with `bindings.buildChildSettings?.(cwd) ??
+    SettingsManager.create(cwd)`, so an embedder injects the same settings manager its own sessions
+    use — for ThinkRail, `buildSessionSettings`, which carries the in-memory `images.autoResize:
+    false` override (re-applied after every `settings.reload()`) the single-file binary needs because
+    it ships no photon/WASM resizer. Without it children ran on pi's default settings and every image
+    a child read or received in a tool result was dropped with pi's `[Image omitted: could not be
+    resized below the inline image size limit.]` note in the compiled binary. The hook lives on
+    `DelegationBindings` beside `childExtensionFactories` (not in `SessionOptions`), keeping the
+    firewall of decision #3 — the settings manager stays infrastructure the consumer cannot shape
+    per child.

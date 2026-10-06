@@ -196,6 +196,7 @@ export function childExtensionFactories(): InlineExtension[] {
 		headlessSearchPolicy,
 		webAccessFactory(),
 		specGraphExtension,
+		oversizedImageGuard,
 		...registryInlineExtensions("childExtensions"),
 	];
 }

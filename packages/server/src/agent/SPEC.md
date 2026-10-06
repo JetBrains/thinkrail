@@ -133,7 +133,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `reload()` — including inside `createAgentSession` — so a one-shot override never reached a prompt. Since
     pi 0.87 the same setting also governs prompt-attached and tool-result images, so the override is what keeps
     pi from rewriting user text with `[Image omitted…]` hints (which would defeat the client's optimistic-echo
-    dedup); a shared `registerSession` publishes each event
+    dedup). Delegated children reuse the very same semantics: `delegation` passes `buildSessionSettings`
+    as the delegation core's `buildChildSettings` binding, so every subagent gets the `images.autoResize:false`
+    override too (pi-delegation decision #31) — otherwise children ran on pi's default settings and
+    dropped every image in the compiled binary (issue #604). A shared `registerSession` publishes each event
     tagged with its id + `bindExtensions({ mode:'rpc', uiContext })`. The event projection retains the
     final `agent_end` assistant's reported terminal metadata and attaches it to `agent_settled`, so the
     wire has one authoritative automatic-work terminal even when compaction/retry happens between those
@@ -598,11 +601,14 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     Children opting into extensions
     (`extensions: true` in their definition) get the **curated child set**
     (`childExtensionFactories` in `extensions`, pi `InlineExtension`s): the headless-search policy +
-    `pi-web-access` + `pi-spec-graph` + every registry extension's `childExtensions` (named inline, from
-    [[submodule-server-extensions]]; none today) — deliberately not the parent's full set (rationale + the
-    listed-children carve-out: core decision #25). Web-access reaches the child set via a **named
-    bundled-seam field** (`BundledExtensions.webAccessFactory`) in the binary and a Bun `require` in dev —
-    its raw third-party `.ts` must stay out of the strict tsc graph.
+    `pi-web-access` + `pi-spec-graph` + the `oversizedImageGuard` + every registry extension's
+    `childExtensions` (named inline, from [[submodule-server-extensions]]; none today) — deliberately
+    not the parent's full set (rationale + the listed-children carve-out: core decision #25). The guard
+    rides the child set because children now receive raw images (see the `buildSessionSettings`
+    bullet): with `images.autoResize:false` an oversized image an Anthropic child reads would otherwise
+    400 its request. Web-access reaches the child set via a **named bundled-seam field**
+    (`BundledExtensions.webAccessFactory`) in the binary and a Bun `require` in dev — its raw
+    third-party `.ts` must stay out of the strict tsc graph.
   - `extensions` — Pi resource wiring. Candidate generation loads the reviewed external Central path once
     through a headless `DefaultResourceLoader` to apply provider registrations, without inspecting it.
     `buildResourceLoader(cwd, settingsManager, getAdmission, excludedPaths, extraFactories?)` then resolves
