@@ -381,6 +381,9 @@ themselves.
   answers the SPA `index.html` with status 200 — an `<img>` shows nothing and a PDF fetch "succeeds" with
   HTML, while the host-served build and the e2e suite stay green. `vite.config.ts` therefore proxies
   `/files` and `/blob` beside `/ws`, and `devProxy.test.ts` pins the list to the composer's constants.
+- **`typecheck` runs two projects.** `tsconfig.json` checks the browser app with DOM types only;
+  `tsconfig.test.json` checks tests, `scripts/`, and `vite.config.ts` with Bun types. Its `exclude` list
+  names test files that do not typecheck yet: it only shrinks — fix a file and drop its entry, never add one.
 
 ## Later
 

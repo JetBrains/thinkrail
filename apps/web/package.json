@@ -7,7 +7,7 @@
 		"dev": "vite",
 		"build": "bun run typography:check && bun run colors:check && bun run spacing:check && bun run provider-glyphs:check && tsc --noEmit && vite build",
 		"build:profile": "vite build --mode profile",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
 		"test": "bun test",
 		"preview": "vite preview",
 		"typography:generate": "bun scripts/generate-typography.ts",

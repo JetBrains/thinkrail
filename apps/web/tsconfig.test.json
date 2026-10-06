@@ -1,0 +1,33 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"rootDir": ".",
+		"types": ["bun"]
+	},
+	"include": [
+		"src/**/*.d.ts",
+		"src/**/*.test.ts",
+		"src/**/*.test.tsx",
+		"scripts",
+		"vite.config.ts"
+	],
+	"exclude": [
+		"src/chat/planMarkdown.test.ts",
+		"src/chat/planView.test.ts",
+		"src/chat/readingBand.test.ts",
+		"src/chat/rows.test.ts",
+		"src/chat/useChatTodos.test.ts",
+		"src/chat/useModelPreferences.test.ts",
+		"src/chat/useTranscriptSync.test.ts",
+		"src/navigation/restore.test.ts",
+		"src/panels/resources/pdf/index.test.ts",
+		"src/panels/reviewModel.test.ts",
+		"src/shell/layout/model.test.ts",
+		"src/shell/shortcutCommands.test.ts",
+		"src/store/appStore.test.ts",
+		"src/store/selectors.test.ts",
+		"src/styles/typography.test.ts",
+		"src/transport/piEventBatcher.test.ts",
+		"src/transport/transport.test.ts"
+	]
+}
