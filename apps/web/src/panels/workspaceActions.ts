@@ -1,6 +1,7 @@
 import {
 	type EditorInfo,
 	type SettledRemovalResult,
+	type SettledRemovalTarget,
 	WORKSPACE_RENAME_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	type Workspace,
@@ -248,16 +249,21 @@ export function keptSettledRemovalsText(kept: SettledRemovalResult["kept"]): str
 	return `Kept ${count} that became active after the preview.`;
 }
 
+export function settledRemovalTarget(
+	workspace: Pick<Workspace, "id" | "lastActiveAt" | "review">,
+): SettledRemovalTarget {
+	return {
+		id: workspace.id,
+		...(workspace.lastActiveAt !== undefined ? { lastActiveAt: workspace.lastActiveAt } : {}),
+		...(workspace.review?.state !== undefined ? { reviewState: workspace.review.state } : {}),
+	};
+}
+
 export function removeSettledWorkspaces(
-	workspaces: readonly Pick<Workspace, "id" | "lastActiveAt">[],
+	workspaces: readonly Pick<Workspace, "id" | "lastActiveAt" | "review">[],
 ): void {
 	void getTransport()
-		.request("workspace.removeSettled", {
-			targets: workspaces.map((w) => ({
-				id: w.id,
-				...(w.lastActiveAt !== undefined ? { lastActiveAt: w.lastActiveAt } : {}),
-			})),
-		})
+		.request("workspace.removeSettled", { targets: workspaces.map(settledRemovalTarget) })
 		.then((result) => {
 			const kept = keptSettledRemovalsText(result.kept);
 			if (kept) toast.info(kept);

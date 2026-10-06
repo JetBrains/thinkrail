@@ -208,6 +208,7 @@ function folderTruth(repoPath: string): { branch: string; baseBranch: string } {
 
 function applyFolderTruth(ws: Workspace, truth: { branch: string; baseBranch: string }): boolean {
 	if (ws.branch === truth.branch && ws.baseBranch === truth.baseBranch) return false;
+	if (ws.branch !== truth.branch) delete ws.review;
 	ws.branch = truth.branch;
 	ws.baseBranch = truth.baseBranch;
 	return true;
@@ -500,7 +501,12 @@ export function recordWorkspaceActivity(id: string, at: number = Date.now()): Wo
 	if (!ws) return null;
 	const previous = ws.lastActiveAt ?? 0;
 	const overridden = ws.settledOverride !== undefined;
-	if (!overridden && at - previous < ACTIVITY_COALESCE_MS) return ws;
+	const changedAt =
+		ws.review?.state === "merged" || ws.review?.state === "closed"
+			? ws.review.changedAt
+			: undefined;
+	const reviewSettles = changedAt !== undefined && previous <= changedAt;
+	if (!overridden && !reviewSettles && at - previous < ACTIVITY_COALESCE_MS) return ws;
 	if (at > previous) ws.lastActiveAt = at;
 	if (overridden) {
 		delete ws.settledOverride;
@@ -579,10 +585,14 @@ function sameReview(a: OpenBranchReview | undefined, b: OpenBranchReview | undef
 	);
 }
 
-export function setWorkspaceReview(id: string, review: OpenBranchReview | null): Workspace | null {
+export function setWorkspaceReview(
+	id: string,
+	review: OpenBranchReview | null,
+	branch: string,
+): Workspace | null {
 	const all = loadWorkspaces();
 	const ws = all.find((workspace) => workspace.id === id);
-	if (!ws) return null;
+	if (!ws || ws.branch !== branch) return null;
 	const next = review ? reviewSnapshot(review) : undefined;
 	if (sameReview(ws.review, next)) return ws;
 	if (next) ws.review = next;
@@ -595,11 +605,15 @@ export function setWorkspaceReview(id: string, review: OpenBranchReview | null):
 async function unpushedCommits(ws: Workspace): Promise<number | null> {
 	const divergence = await countPushDivergence(ws.worktreePath, ws.branch);
 	if (divergence) return divergence.ahead;
+	const tracking = await gitAsync(ws.worktreePath, ["for-each-ref", "--count=1", "refs/remotes"]);
+	if (!tracking.ok) return null;
+	if (!tracking.out) return 0;
 	const counted = await gitAsync(ws.worktreePath, [
 		"rev-list",
 		"--count",
-		"--end-of-options",
-		`${ws.diffBase ?? ws.baseBranch}..HEAD`,
+		"HEAD",
+		"--not",
+		"--remotes",
 		"--",
 	]);
 	if (!counted.ok) return null;
@@ -716,7 +730,9 @@ export function forgetQuietWorkspace(target: SettledRemovalTarget): ForgetQuietO
 	const ws = all.find((w) => w.id === target.id);
 	if (!ws || ws.kind === "default") return { ok: false, reason: "missing" };
 	if (ws.settledOverride === "active") return { ok: false, reason: "active" };
-	if (ws.lastActiveAt !== target.lastActiveAt) return { ok: false, reason: "changed" };
+	if (ws.lastActiveAt !== target.lastActiveAt || ws.review?.state !== target.reviewState) {
+		return { ok: false, reason: "changed" };
+	}
 	dropWorkspaceRecord(all, ws);
 	return { ok: true, workspace: ws };
 }

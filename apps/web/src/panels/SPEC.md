@@ -83,11 +83,13 @@ treatment.
   `workspace.settledRemovalPreview` and names how many settled worktrees hold uncommitted changes or
   unpushed commits — those are **excluded unless the user ticks *Include them***, the confirm button
   carries the final count, and confirming issues **one `workspace.removeSettled`** carrying each target's
-  `lastActiveAt` as the client saw it (branches kept, as the single-row confirm already promises). The
-  host, not the dialog, has the last word: a row that a session got busy in, that the user pinned live
-  from another client, or whose activity stamp moved since the preview comes back in `kept` and is left
-  alone — the dialog's list is a snapshot, and N blind `workspace.remove`s from a snapshot could tear
-  down a workspace someone had just started working in. Kept rows surface as one info toast. **Unknown is unsafe, never clean:** a `null` count, a row the
+  `lastActiveAt` and `review.state` as the client judged them (branches kept, as the single-row confirm
+  already promises). The host, not the dialog, has the last word: a row that a session got busy in, that
+  the user pinned live from another client, or whose activity stamp or PR state moved since the preview
+  comes back in `kept` and is left alone. The dialog's target list is re-derived from the store on every
+  push (a row that goes live simply leaves it), but the store can trail the host by a push, and N blind
+  `workspace.remove`s issued in that moment could tear down a workspace someone had just started working
+  in, or whose PR had just been opened — hence the host-side compare. Kept rows surface as one info toast. **Unknown is unsafe, never clean:** a `null` count, a row the
   preview did not return, or a failed preview request flags the row as *couldn't be checked* and excludes
   it the same way, so a worktree git could not inspect is never removed without the explicit opt-in, and
   the button stays disabled while the check is still running. Nothing about settling touches disk: the shelf is a list state,

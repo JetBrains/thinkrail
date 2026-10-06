@@ -81,7 +81,7 @@ async function refreshReview(row: Workspace, fresh: boolean): Promise<void> {
 	reviewRefreshedAt.set(row.id, Date.now());
 	try {
 		const outcome = await findBranchReviewOutcome(row.worktreePath, row.branch, { fresh });
-		if (outcome.reliable) setWorkspaceReview(row.id, outcome.value);
+		if (outcome.reliable) setWorkspaceReview(row.id, outcome.value, row.branch);
 	} catch {
 		log.warn(`review refresh failed for workspace ${row.id}`);
 	}

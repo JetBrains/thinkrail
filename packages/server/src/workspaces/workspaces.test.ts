@@ -741,12 +741,15 @@ test("refreshUserOwnedWorkspace re-syncs and publishes Default drift off the lis
 	refreshUserOwnedWorkspace(def.id);
 	expect(events).toHaveLength(0);
 
+	setWorkspaceReview(def.id, { kind: "pull-request", number: 5, state: "merged" }, def.branch);
+	events.length = 0;
 	git(repo, "switch", "-c", "feature/live");
 	refreshUserOwnedWorkspace(def.id);
 	expect(events).toEqual([
 		{ kind: "updated", workspace: { ...def, branch: "feature/live", baseBranch: "feature/live" } },
 	]);
 	expect(listWorkspaceRecords("p1").find((w) => w.id === def.id)?.branch).toBe("feature/live");
+	expect(listWorkspaceRecords("p1").find((w) => w.id === def.id)?.review).toBeUndefined();
 
 	refreshUserOwnedWorkspace(worktree.id);
 	refreshUserOwnedWorkspace("nope");
@@ -933,12 +936,24 @@ test("recordWorkspaceActivity coalesces within a minute, never moves backwards, 
 
 	expect(recordWorkspaceActivity(ws.id, t0 - 10_000_000)?.lastActiveAt).toBe(t0 + 61_000);
 
+	setWorkspaceReview(
+		ws.id,
+		{ kind: "pull-request", number: 3, state: "merged", changedAt: t0 + 61_500 },
+		ws.branch,
+	);
+	events.length = 0;
+	expect(recordWorkspaceActivity(ws.id, t0 + 62_000)?.lastActiveAt).toBe(t0 + 62_000);
+	expect(events.map((e) => e.kind)).toEqual(["updated"]);
+	expect(recordWorkspaceActivity(ws.id, t0 + 63_000)?.lastActiveAt).toBe(t0 + 62_000);
+	expect(events).toHaveLength(1);
+	setWorkspaceReview(ws.id, null, ws.branch);
+
 	settleWorkspace(ws.id);
 	events.length = 0;
-	const cleared = recordWorkspaceActivity(ws.id, t0 + 62_000);
+	const cleared = recordWorkspaceActivity(ws.id, t0 + 64_000);
 	expect(cleared?.settledOverride).toBeUndefined();
 	expect(cleared?.settledAt).toBeUndefined();
-	expect(cleared?.lastActiveAt).toBe(t0 + 62_000);
+	expect(cleared?.lastActiveAt).toBe(t0 + 64_000);
 	expect(events.map((e) => e.kind)).toEqual(["updated"]);
 	expect(recordWorkspaceActivity("missing")).toBeNull();
 });
@@ -1038,6 +1053,7 @@ test("forgetQuietWorkspace removes a row only while the client's settle facts st
 	const seen = (row: Workspace | undefined) => ({
 		id: row?.id ?? "",
 		...(row?.lastActiveAt !== undefined ? { lastActiveAt: row.lastActiveAt } : {}),
+		...(row?.review?.state !== undefined ? { reviewState: row.review.state } : {}),
 	});
 	expect(
 		forgetQuietWorkspace({ id: moved.id, lastActiveAt: (moved.lastActiveAt ?? 0) - 1 }),
@@ -1046,16 +1062,26 @@ test("forgetQuietWorkspace removes a row only while the client's settle facts st
 		reason: "changed",
 	});
 	expect(forgetQuietWorkspace({ id: moved.id })).toEqual({ ok: false, reason: "changed" });
+	const judgedWithoutReview = seen(moved);
+	setWorkspaceReview(moved.id, { kind: "pull-request", number: 7, state: "open" }, moved.branch);
+	expect(forgetQuietWorkspace(judgedWithoutReview)).toEqual({ ok: false, reason: "changed" });
+	expect(forgetQuietWorkspace({ ...judgedWithoutReview, reviewState: "merged" })).toEqual({
+		ok: false,
+		reason: "changed",
+	});
+	setWorkspaceReview(moved.id, null, moved.branch);
 	expect(forgetQuietWorkspace(seen(pinned))).toEqual({ ok: false, reason: "active" });
 	expect(forgetQuietWorkspace({ id: "missing" })).toEqual({ ok: false, reason: "missing" });
 	expect(forgetQuietWorkspace(seen(def))).toEqual({ ok: false, reason: "missing" });
 	expect(listWorkspaceRecords("p1").map((row) => row.id)).toContain(moved.id);
-	expect(events).toEqual([]);
+	expect(events.filter((event) => event.kind === "removed")).toEqual([]);
 
 	const outcome = forgetQuietWorkspace(seen(quiet));
 	expect(outcome).toEqual({ ok: true, workspace: expect.objectContaining({ id: quiet.id }) });
 	expect(listWorkspaceRecords("p1").map((row) => row.id)).not.toContain(quiet.id);
-	expect(events).toEqual([{ kind: "removed", projectId: "p1", id: quiet.id }]);
+	expect(events.filter((event) => event.kind === "removed")).toEqual([
+		{ kind: "removed", projectId: "p1", id: quiet.id },
+	]);
 });
 
 test("setWorkspaceReview persists a trimmed snapshot and stays silent when nothing changed", async () => {
@@ -1071,29 +1097,37 @@ test("setWorkspaceReview persists a trimmed snapshot and stays silent when nothi
 		state: "open" as const,
 		unpushedCommits: 3,
 	};
-	expect(setWorkspaceReview(ws.id, review)?.review).toEqual({
+	expect(setWorkspaceReview(ws.id, review, ws.branch)?.review).toEqual({
 		kind: "pull-request",
 		number: 42,
 		url: "https://github.com/acme/app/pull/42",
 		state: "open",
 	});
 	expect(events.map((e) => e.kind)).toEqual(["updated"]);
-	expect(setWorkspaceReview(ws.id, review)?.review?.number).toBe(42);
+	expect(setWorkspaceReview(ws.id, review, ws.branch)?.review?.number).toBe(42);
 	expect(events).toHaveLength(1);
 
-	const merged = setWorkspaceReview(ws.id, {
-		...review,
-		state: "merged",
-		changedAt: 1_700_000_000_000,
-	});
+	const merged = setWorkspaceReview(
+		ws.id,
+		{ ...review, state: "merged", changedAt: 1_700_000_000_000 },
+		ws.branch,
+	);
 	expect(merged?.review).toMatchObject({ state: "merged", changedAt: 1_700_000_000_000 });
 	expect(events).toHaveLength(2);
-	expect(setWorkspaceReview(ws.id, null)?.review).toBeUndefined();
+	expect(setWorkspaceReview(ws.id, null, ws.branch)?.review).toBeUndefined();
 	expect(events).toHaveLength(3);
-	expect(setWorkspaceReview("missing", null)).toBeNull();
+	expect(setWorkspaceReview("missing", null, "main")).toBeNull();
+	expect(setWorkspaceReview(ws.id, review, "some-other-branch")).toBeNull();
+	expect(listWorkspaceRecords("p1").find((row) => row.id === ws.id)?.review).toBeUndefined();
+	expect(events).toHaveLength(3);
 });
 
 test("settledRemovalPreview counts uncommitted files and commits no remote has", async () => {
+	const remoteRepo = join(dataDir, "remote.git");
+	git(repo, "init", "--bare", remoteRepo);
+	git(repo, "remote", "add", "origin", remoteRepo);
+	git(repo, "push", "origin", "main");
+	git(repo, "fetch", "origin");
 	const clean = await createWorkspace("p1", "Clean");
 	const dirty = await createWorkspace("p1", "Dirty");
 	writeFileSync(join(dirty.worktreePath, "a.txt"), "a\n");
@@ -1102,12 +1136,29 @@ test("settledRemovalPreview counts uncommitted files and commits no remote has",
 	writeFileSync(join(ahead.worktreePath, "c.txt"), "c\n");
 	git(ahead.worktreePath, "add", "-A");
 	git(ahead.worktreePath, "commit", "-m", "local only");
+	setWorkspaceDiffBase(ahead.id, ahead.branch);
+	const pushed = await createWorkspace("p1", "Pushed");
+	writeFileSync(join(pushed.worktreePath, "d.txt"), "d\n");
+	git(pushed.worktreePath, "add", "-A");
+	git(pushed.worktreePath, "commit", "-m", "shared");
+	git(pushed.worktreePath, "push", "-u", "origin", pushed.branch);
 
-	const preview = await settledRemovalPreview([clean.id, dirty.id, ahead.id, "missing"]);
+	const preview = await settledRemovalPreview([clean.id, dirty.id, ahead.id, pushed.id, "missing"]);
 	expect(preview).toEqual([
 		{ id: clean.id, dirty: 0, unpushed: 0 },
 		{ id: dirty.id, dirty: 2, unpushed: 0 },
 		{ id: ahead.id, dirty: 0, unpushed: 1 },
+		{ id: pushed.id, dirty: 0, unpushed: 0 },
 		{ id: "missing", dirty: null, unpushed: null },
+	]);
+});
+
+test("a repository with no remote-tracking refs has nothing to push, so nothing is unpushed", async () => {
+	const local = await createWorkspace("p1", "Local");
+	writeFileSync(join(local.worktreePath, "e.txt"), "e\n");
+	git(local.worktreePath, "add", "-A");
+	git(local.worktreePath, "commit", "-m", "only here");
+	expect(await settledRemovalPreview([local.id])).toEqual([
+		{ id: local.id, dirty: 0, unpushed: 0 },
 	]);
 });

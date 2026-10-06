@@ -507,8 +507,11 @@ enabled/confirmed choice before entering analytics attribution.
   artifacts, watcher, terminals — synchronously, so every removed row is gone from the UI at once) while
   the slow halves (session purge + `git worktree remove`) run **one worktree after another**, not forty
   at once: the reclaim is a synchronous git call, and forty of them resuming in one microtask drain would
-  freeze the host for seconds. The client's list is a snapshot, and only the host can know what happened
-  since — in another client, or in an agent turn that started after the preview. **Review refresh:** after a
+  freeze the host for seconds. The client re-derives its list from every push it receives, but a push
+  is in flight for a moment and a second client may be ahead of it; the host compares against the facts
+  the confirming client actually judged from, so a row that stayed settled under newer facts (a parked
+  row whose PR reopened) is removed as asked, and a row that would have gone live is kept. **Review
+  refresh:** after a
   `workspace.list` reply and on a five-minute timer the host refreshes the `review` snapshot of the rows
   whose PR state can still change the partition — live rows on every pass, **idle-settled rows at most
   every 30 minutes** (a PR opened for a dormant branch from outside ThinkRail must still bring it back,
@@ -516,7 +519,13 @@ enabled/confirmed choice before entering analytics attribution.
   override wins regardless) or already merged/closed (a reopened review is caught on activation) —
   bounded to a few concurrent provider calls and riding the module's 60 s cache; a fresh
   `workspace.openReview` for the active workspace also writes the snapshot, so the active row is always
-  current. **Backfill:** the same post-list pass gives records without `lastActiveAt` their
+  current. Both writers pass the branch the lookup was made for, and `workspaces` drops an answer whose
+  branch has moved underneath it. **Protocol skew:** `RequestContext.protocolVersion` is the socket's
+  advertised protocol (absent for in-process callers, who speak the current one); `workspace.openReview`
+  answers a client older than `WORKSPACE_SETTLE_PROTOCOL_VERSION` with `null` for a merged or closed
+  review, because such a client reads any review as an open PR and its plan pane would offer *Push
+  updates* that creates a new PR — the host snapshot itself still records the true state. **Backfill:**
+  the same post-list pass gives records without `lastActiveAt` their
   stamp from the newest chat's `updatedAt` (`listSessions`), else the worktree's `.git` gitfile mtime
   (managed and external worktrees alike — only the Default row, whose `.git` is the repository itself,
   skips to now), through `backfillWorkspaceActivity` — once per record, since the stamp then exists.

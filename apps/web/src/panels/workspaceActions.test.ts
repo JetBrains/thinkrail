@@ -4,6 +4,7 @@ import {
 	canRenameWorkspace,
 	createRenameController,
 	keptSettledRemovalsText,
+	settledRemovalTarget,
 	workspaceRenameValue,
 } from "./workspaceActions";
 
@@ -120,4 +121,18 @@ test("a bulk remove names the rows the host kept, and says nothing when every ro
 			{ id: "b", reason: "active" },
 		]),
 	).toBe("Kept 2 workspaces that became active after the preview.");
+});
+
+test("a bulk-remove target carries exactly the record facts the row was judged settled from", () => {
+	expect(settledRemovalTarget(managed)).toEqual({ id: "w1" });
+	expect(
+		settledRemovalTarget({
+			...managed,
+			lastActiveAt: 1_000,
+			review: { kind: "pull-request", number: 618, state: "merged", changedAt: 900 },
+		}),
+	).toEqual({ id: "w1", lastActiveAt: 1_000, reviewState: "merged" });
+	expect(
+		settledRemovalTarget({ ...managed, review: { kind: "pull-request", number: 618 } }),
+	).toEqual({ id: "w1" });
 });

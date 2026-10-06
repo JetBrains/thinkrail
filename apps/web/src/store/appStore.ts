@@ -3719,13 +3719,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...req,
 					...(advanced ? { navigation: advanced.stamp } : {}),
 				},
-				selectedProjectId: req.projectId,
-				activeWorkspaceId: req.workspaceId,
+				...workspaceActivationPatch(state, { id: req.workspaceId, projectId: req.projectId }),
 				pendingWorkspaceChatActivation: null,
-				workspaceSelectionHistory: withWorkspaceSelected(
-					state.workspaceSelectionHistory,
-					req.workspaceId,
-				),
 			};
 		}),
 	clearChatLocation: () => set({ chatLocationRequest: null }),

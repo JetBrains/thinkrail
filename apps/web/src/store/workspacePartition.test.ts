@@ -241,6 +241,29 @@ describe("the active-workspace live latch", () => {
 		expect(useAppStore.getState().activeWorkspaceLiveLatch).toBe(false);
 	});
 
+	test("a history jump into a settled chat judges the destination like any other selection", () => {
+		const store = useAppStore.getState();
+		store.setWorkspaces("p1", [
+			ws("fresh", { lastActiveAt: NOW - 1000 }),
+			ws("dormant", { lastActiveAt: NOW - 400 * DAY }),
+		]);
+		store.activateWorkspace({ id: "fresh", projectId: "p1" });
+		expect(useAppStore.getState().activeWorkspaceLiveLatch).toBe(true);
+		store.requestChatLocation({
+			workspaceId: "dormant",
+			projectId: "p1",
+			sessionId: "s1",
+			messageIndex: 0,
+			anchorText: "old plan",
+		});
+		const state = useAppStore.getState();
+		expect(state.activeWorkspaceId).toBe("dormant");
+		expect(state.activeWorkspaceLiveLatch).toBe(false);
+		expect(
+			selectWorkspacePartition(state, "p1", NOW).settled.map((row) => row.workspace.id),
+		).toEqual(["dormant"]);
+	});
+
 	test("real work pushed for the active row re-arms the latch; other rows' pushes do not", () => {
 		const store = useAppStore.getState();
 		store.setWorkspaces("p1", [ws("fresh"), ws("idle", { lastActiveAt: NOW - 400 * DAY })]);

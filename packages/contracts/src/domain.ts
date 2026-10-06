@@ -82,10 +82,11 @@ export interface SettledRemovalPreview {
 	unpushed: number | null;
 }
 
-/** A row the client judged settled, with the activity stamp it judged from. */
+/** A row the client judged settled, with the record facts it judged from. */
 export interface SettledRemovalTarget {
 	id: string;
 	lastActiveAt?: number;
+	reviewState?: BranchReviewState;
 }
 
 export type SettledRemovalRefusal = "running" | "active" | "changed";

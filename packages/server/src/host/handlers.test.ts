@@ -13,7 +13,7 @@ import type {
 	Workspace,
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
-import { WS_METHODS } from "@thinkrail/contracts";
+import { WORKSPACE_SETTLE_PROTOCOL_VERSION, WS_METHODS } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import {
 	type CreateSessionResult,
@@ -27,7 +27,12 @@ import { addComment, getReviewSnapshot } from "../reviews";
 import { resetConfigCache } from "../settings";
 import { todoReviewRecord } from "../todos";
 import { stopAllWatches } from "../watch";
-import { handleRequest, requestMethodDiagnostic, shouldRefreshOpenReview } from "./handlers";
+import {
+	handleRequest,
+	openReviewForClient,
+	requestMethodDiagnostic,
+	shouldRefreshOpenReview,
+} from "./handlers";
 
 const CTX = { clientKey: "test-client" };
 
@@ -120,6 +125,18 @@ test("open-review cache reuse is opt-in so older clients remain fresh", () => {
 	expect(shouldRefreshOpenReview(undefined)).toBe(true);
 	expect(shouldRefreshOpenReview(false)).toBe(true);
 	expect(shouldRefreshOpenReview(true)).toBe(false);
+});
+
+test("a client older than the settled protocol never hears about a merged or closed review", () => {
+	const merged = { kind: "pull-request", number: 9, state: "merged" } as const;
+	const open = { kind: "pull-request", number: 10, state: "open" } as const;
+	const stateless = { kind: "pull-request", number: 11 } as const;
+	expect(openReviewForClient(merged, WORKSPACE_SETTLE_PROTOCOL_VERSION - 1)).toBeNull();
+	expect(openReviewForClient(open, WORKSPACE_SETTLE_PROTOCOL_VERSION - 1)).toBe(open);
+	expect(openReviewForClient(stateless, WORKSPACE_SETTLE_PROTOCOL_VERSION - 1)).toBe(stateless);
+	expect(openReviewForClient(merged, WORKSPACE_SETTLE_PROTOCOL_VERSION)).toBe(merged);
+	expect(openReviewForClient(merged, undefined)).toBe(merged);
+	expect(openReviewForClient(null, WORKSPACE_SETTLE_PROTOCOL_VERSION - 1)).toBeNull();
 });
 
 test("request diagnostics expose only registered method names", async () => {

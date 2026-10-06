@@ -1,4 +1,5 @@
 import type {
+	OpenBranchReview,
 	ReviewComment,
 	ReviewFixDetails,
 	ReviewSendResult,
@@ -12,7 +13,7 @@ import type {
 	WsParams,
 	WsResult,
 } from "@thinkrail/contracts";
-import { isControlMessage } from "@thinkrail/contracts";
+import { isControlMessage, WORKSPACE_SETTLE_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	abortSession,
@@ -219,6 +220,8 @@ const log = logger("host");
 
 export interface RequestContext {
 	clientKey: string;
+	/** The socket's advertised protocol; absent for in-process callers, who speak the current one. */
+	protocolVersion?: number;
 	runHostUpdate?: () => void;
 }
 
@@ -478,7 +481,7 @@ const handlers: WsHandlers = {
 		void scheduleLifecyclePass(p.projectId);
 		return rows;
 	},
-	"workspace.openReview": async (p) => {
+	"workspace.openReview": async (p, ctx) => {
 		const ws = getWorkspace(p.workspaceId);
 		const fresh = shouldRefreshOpenReview(p.allowCached);
 		const [outcome, divergence] = await Promise.all([
@@ -486,8 +489,8 @@ const handlers: WsHandlers = {
 			// Only pay the network fetch on a fresh lookup (focus / explicit refresh), not a cached activation.
 			countPushDivergence(ws.worktreePath, ws.branch, { fetch: fresh }),
 		]);
-		if (outcome.reliable) setWorkspaceReview(ws.id, outcome.value);
-		const review = outcome.value;
+		if (outcome.reliable) setWorkspaceReview(ws.id, outcome.value, ws.branch);
+		const review = openReviewForClient(outcome.value, ctx.protocolVersion);
 		if (!review) return review;
 		return {
 			...review,
@@ -1173,6 +1176,19 @@ export function requestMethodDiagnostic(method: string): string {
 
 export function shouldRefreshOpenReview(allowCached: boolean | undefined): boolean {
 	return allowCached !== true;
+}
+
+export function openReviewForClient(
+	review: OpenBranchReview | null,
+	protocolVersion: number | undefined,
+): OpenBranchReview | null {
+	if (
+		!review ||
+		protocolVersion === undefined ||
+		protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION
+	)
+		return review;
+	return review.state === undefined || review.state === "open" ? review : null;
 }
 
 export async function handleRequest(
