@@ -166,6 +166,11 @@ export function useOpenBranchReview(
 	};
 }
 
+/** A pre-v78 host never reported anything but open reviews, so an absent `state` reads as open. */
+export function isOpenBranchReview(review: OpenBranchReview): boolean {
+	return review.state === undefined || review.state === "open";
+}
+
 export function openReviewLabel(review: OpenBranchReview): string {
 	return review.kind === "pull-request" ? `PR #${review.number}` : `MR !${review.number}`;
 }

@@ -74,7 +74,7 @@ import { PlanCommitsMenu } from "./PlanCommitsMenu";
 import { PrComposeDialog, type PrComposeState } from "./PrComposeDialog";
 import { PrSetupDialog, type PrSetupState } from "./PrSetupDialog";
 import { FileRow } from "./planFileRow";
-import { openReviewLabel, useOpenBranchReview } from "./useOpenBranchReview";
+import { isOpenBranchReview, openReviewLabel, useOpenBranchReview } from "./useOpenBranchReview";
 
 function ChangeSetBlock({
 	item,
@@ -882,11 +882,13 @@ export default function PlanPane({
 	const hostPlatform = useAppStore((s) => s.hostPlatform);
 	const canReview = supportsPlanReview(useAppStore((s) => s.protocolVersion));
 	const {
-		review: openReview,
-		url: openReviewUrl,
+		review: branchReview,
+		url: branchReviewUrl,
 		noteOpenReview,
 		refreshOpenReview,
 	} = useOpenBranchReview(workspace, connection);
+	const openReview = branchReview && isOpenBranchReview(branchReview) ? branchReview : null;
+	const openReviewUrl = openReview ? branchReviewUrl : undefined;
 	const [prBusy, setPrBusy] = useState(false);
 	const [prSetup, setPrSetup] = useState<PrSetupState | null>(null);
 	const [prCompose, setPrCompose] = useState<PrComposeState | null>(null);

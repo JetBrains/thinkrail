@@ -1,10 +1,21 @@
 import { expect, test } from "bun:test";
 import { createOpenBranchReviewState } from "./openBranchReviewState";
-import { openReviewLabel, startOpenBranchReviewSync } from "./useOpenBranchReview";
+import {
+	isOpenBranchReview,
+	openReviewLabel,
+	startOpenBranchReviewSync,
+} from "./useOpenBranchReview";
 
 test("formats provider-native review references", () => {
 	expect(openReviewLabel({ kind: "pull-request", number: 214 })).toBe("PR #214");
 	expect(openReviewLabel({ kind: "merge-request", number: 73 })).toBe("MR !73");
+});
+
+test("only an open review (or a pre-v78 one without state) is an open review for PR actions", () => {
+	expect(isOpenBranchReview({ kind: "pull-request", number: 1 })).toBe(true);
+	expect(isOpenBranchReview({ kind: "pull-request", number: 1, state: "open" })).toBe(true);
+	expect(isOpenBranchReview({ kind: "pull-request", number: 1, state: "merged" })).toBe(false);
+	expect(isOpenBranchReview({ kind: "merge-request", number: 1, state: "closed" })).toBe(false);
 });
 
 test("activation opts into cache reuse while focus performs a fresh read", async () => {

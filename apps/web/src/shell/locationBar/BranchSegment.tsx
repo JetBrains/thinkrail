@@ -14,14 +14,13 @@ import { type ReactNode, useRef, useState } from "react";
 import { copyText } from "../../lib";
 import { BranchPicker } from "../../panels/BranchPicker";
 import { useBranchList } from "../../panels/branches";
-import { openReviewLabel } from "../../panels/useOpenBranchReview";
+import { isOpenBranchReview, openReviewLabel } from "../../panels/useOpenBranchReview";
 import { isUserOwnedWorkspace, selectDiffBaseRef, toast, useAppStore } from "../../store";
 import { errorText, getTransport } from "../../transport";
 import {
 	pluralCommits,
 	remoteCounts,
 	reviewChipLabel,
-	reviewIsOpen,
 	reviewStateLabel,
 	reviewTone,
 } from "./locationModel";
@@ -181,7 +180,7 @@ export function BranchSegment({
 				</Row>
 				{review ? (
 					<>
-						{reviewIsOpen(review) ? (
+						{isOpenBranchReview(review) ? (
 							<Row label="Remote">
 								<span
 									data-testid="scope-remote-summary"
