@@ -2,6 +2,7 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiFileCopyLine as Copy,
 	RiFileScanLine as FileDiff,
+	RiExternalLinkLine as OpenAsTab,
 } from "@remixicon/react";
 import {
 	DropdownMenu,
@@ -19,11 +20,13 @@ export function ChangeRowActions({
 	path,
 	active = false,
 	onView,
+	onOpenTab,
 	children,
 }: {
 	path: string;
 	active?: boolean;
 	onView: () => void;
+	onOpenTab: () => void;
 	children: (rowProps: { onContextMenu: (event: MouseEvent) => void }) => ReactNode;
 }) {
 	const [open, setOpen] = useState(false);
@@ -52,7 +55,11 @@ export function ChangeRowActions({
 			<DropdownMenuContent align="end" data-testid="change-row-actions">
 				<DropdownMenuItem data-testid="change-action-view" onSelect={onView}>
 					<FileDiff />
-					View
+					Review
+				</DropdownMenuItem>
+				<DropdownMenuItem data-testid="change-action-open-tab" onSelect={onOpenTab}>
+					<OpenAsTab />
+					Open as tab
 				</DropdownMenuItem>
 				<DropdownMenuItem
 					data-testid="change-action-copy-path"

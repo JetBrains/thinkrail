@@ -27,6 +27,8 @@ import { SendReviewButton } from "./SendReviewButton";
 import { ToggleSegment } from "./ToggleSegment";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
+const SECTION_HEADER_HEIGHT = 32;
+
 export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const { workspaceId, scope } = tab;
 	const mobile = usePhoneViewport();
@@ -103,6 +105,31 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const current = files[currentIndex];
 
 	const virtuoso = useRef<VirtuosoHandle>(null);
+	const scrollerRef = useRef<HTMLElement | null>(null);
+	const activePathRef = useRef(tab.activePath);
+	activePathRef.current = tab.activePath;
+	const spyFrame = useRef(0);
+	const restoredStacked = useRef(false);
+	const spyActiveSection = useCallback(() => {
+		if (!restoredStacked.current) return;
+		cancelAnimationFrame(spyFrame.current);
+		spyFrame.current = requestAnimationFrame(() => {
+			const scroller = scrollerRef.current;
+			if (!scroller) return;
+			const edge = scroller.getBoundingClientRect().top + SECTION_HEADER_HEIGHT;
+			let active: string | null = null;
+			for (const section of scroller.querySelectorAll<HTMLElement>(
+				'[data-testid="changes-section"]',
+			)) {
+				const rect = section.getBoundingClientRect();
+				if (rect.top <= edge && rect.bottom > edge) active = section.dataset.path ?? null;
+			}
+			if (active !== null && active !== activePathRef.current) {
+				setActivePath(workspaceId, tab.id, active);
+			}
+		});
+	}, [setActivePath, tab.id, workspaceId]);
+	useEffect(() => () => cancelAnimationFrame(spyFrame.current), []);
 	const revealTick = tab.reveal?.tick;
 	const revealPath = tab.reveal?.path;
 	useEffect(() => {
@@ -137,6 +164,22 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		if (tab.activePath !== null && files.some((change) => change.path === tab.activePath)) return;
 		setActivePath(workspaceId, tab.id, files[0]?.path ?? null);
 	}, [files, setActivePath, status, tab.activePath, tab.id, workspaceId]);
+
+	const pendingReveal = tab.reveal !== null;
+	useEffect(() => {
+		if (layout !== "stacked") {
+			restoredStacked.current = false;
+			return;
+		}
+		if (pendingReveal || !status || restoredStacked.current) return;
+		restoredStacked.current = true;
+		const index = files.findIndex((change) => change.path === activePathRef.current);
+		if (index <= 0) return;
+		const frame = requestAnimationFrame(() =>
+			virtuoso.current?.scrollToIndex({ index, align: "start" }),
+		);
+		return () => cancelAnimationFrame(frame);
+	}, [files, layout, pendingReveal, status]);
 
 	const toggleViewed = useCallback(
 		(path: string) => setViewed(workspaceId, tab.id, path, !viewedSet.has(path)),
@@ -401,12 +444,11 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 						computeItemKey={(_index, change) => change.path}
 						className="h-full min-h-0 [overflow-anchor:none]"
 						increaseViewportBy={{ top: 200, bottom: 600 }}
-						rangeChanged={(range) => {
-							const first = files[range.startIndex];
-							if (first && first.path !== tab.activePath) {
-								setActivePath(workspaceId, tab.id, first.path);
-							}
+						scrollerRef={(element) => {
+							scrollerRef.current = element instanceof HTMLElement ? element : null;
 						}}
+						onScroll={spyActiveSection}
+						rangeChanged={spyActiveSection}
 						itemContent={(_index, change) => (
 							<ChangesFileSection
 								tab={tab}

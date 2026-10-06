@@ -7,6 +7,7 @@ import {
 } from "../lib";
 import {
 	type CenterNavigationStamp,
+	type ChangesTab,
 	type EditorTab,
 	isCenterNavigationCurrent,
 	layoutOpenOptionsForNavigation,
@@ -18,7 +19,7 @@ import {
 	useAppStore,
 } from "../store";
 import { getTransport } from "../transport";
-import { diffTabId, diffTabName } from "./changesModel";
+import { changesTabId, changesTabName, diffTabId, diffTabName } from "./changesModel";
 
 function baseName(path: string): string {
 	return path.split("/").pop() || path;
@@ -215,4 +216,50 @@ export function openDiffInTab(
 		}),
 		requestedNavigation,
 	);
+}
+
+export async function openChangesTab(
+	workspaceId: string,
+	scope: GitDiffScope,
+	options: { revealPath?: string | null } = {},
+	intent: TabIntent = "preview",
+	requestedNavigation?: CenterNavigationStamp | null,
+): Promise<void> {
+	const navigation =
+		requestedNavigation === undefined
+			? useAppStore.getState().beginCenterNavigation(workspaceId)
+			: requestedNavigation;
+	const requestedAt = navTick(workspaceId);
+	if (intent === "preview") {
+		await new Promise((resolve) => setTimeout(resolve, DOUBLE_CLICK_SETTLE_MS));
+	}
+	const state = useAppStore.getState();
+	if (state.removedWorkspaceIds[workspaceId]) return;
+	const overtaken = navigation
+		? !isCenterNavigationCurrent(state, workspaceId, navigation)
+		: navTick(workspaceId) !== requestedAt;
+	if (intent === "preview" && overtaken) return;
+	const id = changesTabId(workspaceId, scope);
+	const revealPath = options.revealPath
+		? projectRelativePath(options.revealPath, selectWorkspaceById(state, workspaceId)?.worktreePath)
+		: null;
+	const existing = (state.tabsByWorkspace[workspaceId] ?? []).find(
+		(tab): tab is ChangesTab => tab.id === id && tab.kind === "changes",
+	);
+	const base: ChangesTab = existing ?? {
+		kind: "changes",
+		id,
+		workspaceId,
+		name: changesTabName(scope),
+		scope,
+		viewed: [],
+		activePath: null,
+		collapsed: {},
+		reveal: null,
+		sections: {},
+	};
+	const tab: ChangesTab = revealPath
+		? { ...base, reveal: { path: revealPath, tick: (base.reveal?.tick ?? 0) + 1 } }
+		: base;
+	state.openTab(tab, intent, true, layoutOpenOptionsForNavigation(state, workspaceId, navigation));
 }

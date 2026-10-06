@@ -14,6 +14,7 @@ export function TreeRow({
 	expanded,
 	active,
 	dataStatus,
+	dataViewed,
 	label,
 	labelClassName,
 	trailing,
@@ -27,6 +28,7 @@ export function TreeRow({
 	expanded?: boolean;
 	active?: boolean;
 	dataStatus?: string;
+	dataViewed?: boolean;
 	label: string;
 	labelClassName?: string;
 	trailing?: ReactNode;
@@ -45,6 +47,7 @@ export function TreeRow({
 			data-kind={kind}
 			data-active={active ? true : undefined}
 			data-status={dataStatus}
+			data-viewed={dataViewed ? true : undefined}
 			onClick={onClick}
 			onDoubleClick={onDoubleClick}
 			onContextMenu={onContextMenu}

@@ -21,6 +21,7 @@ import { QuietScrollArea } from "../components/QuietScrollArea";
 import { LoadingRegion } from "../components/Skeleton";
 import { type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
+import { ChangesReviewPane } from "../panels/ChangesReviewPane";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FileTree } from "../panels/FileTree";
@@ -339,15 +340,36 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		const cachedResources = new Set(
 			cache.flatMap((item) => {
 				const resource = toLayoutTab(item);
-				return resource && (resource.kind === "file" || resource.kind === "diff")
+				return resource &&
+					(resource.kind === "file" || resource.kind === "diff" || resource.kind === "changes")
 					? [layoutResourceIdentity(resource)]
 					: [];
 			}),
 		);
 		for (const tab of collectAllGroups(document).flatMap((group) => group.tabs)) {
-			if (tab.kind !== "file" && tab.kind !== "diff") continue;
+			if (tab.kind !== "file" && tab.kind !== "diff" && tab.kind !== "changes") continue;
 			const identity = layoutResourceIdentity(tab);
 			if (cachedResources.has(identity)) continue;
+			if (tab.kind === "changes") {
+				useAppStore.getState().openTab(
+					{
+						kind: "changes",
+						id: tab.id,
+						workspaceId,
+						name: tab.name,
+						scope: tab.scope,
+						viewed: [],
+						activePath: null,
+						collapsed: {},
+						reveal: null,
+						sections: {},
+					},
+					"keep",
+					false,
+					{ activate: false },
+				);
+				continue;
+			}
 			const cacheArrived = () =>
 				(useAppStore.getState().tabsByWorkspace[workspaceId] ?? []).some((item) => {
 					const resource = toLayoutTab(item);
@@ -425,12 +447,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 
 	const editorById = useMemo(() => new Map(editorTabs.map((tab) => [tab.id, tab])), [editorTabs]);
 	const editorByResource = useMemo(() => {
-		const resources = new Map<
-			string,
-			Extract<EditorTab, { kind: "file" }> | Extract<EditorTab, { kind: "diff" }>
-		>();
+		const resources = new Map<string, Extract<EditorTab, { kind: "file" | "diff" | "changes" }>>();
 		for (const tab of editorTabs) {
-			if (tab.kind !== "file" && tab.kind !== "diff") continue;
+			if (tab.kind !== "file" && tab.kind !== "diff" && tab.kind !== "changes") continue;
 			const identity = layoutResourceIdentity(tab);
 			if (!resources.has(identity)) resources.set(identity, tab);
 		}
@@ -488,11 +507,17 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			const exact = editorById.get(tab.id);
 			const editor =
 				exact &&
-				(exact.kind === "file" || exact.kind === "diff") &&
+				(exact.kind === "file" || exact.kind === "diff" || exact.kind === "changes") &&
 				layoutResourceIdentity(exact) === identity
 					? exact
 					: editorByResource.get(identity);
-			if (!editor) return <MissingResource label={tab.kind === "file" ? "file" : "diff"} />;
+			if (!editor) {
+				return (
+					<MissingResource
+						label={tab.kind === "file" ? "file" : tab.kind === "changes" ? "changes" : "diff"}
+					/>
+				);
+			}
 			return (
 				<ErrorBoundary label="editor" resetKeys={[workspaceId, tab.id]}>
 					<Suspense fallback={<MissingResource label="editor" />}>
@@ -500,7 +525,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							<FilePane tab={editor} />
 						) : editor.kind === "diff" ? (
 							<DiffPane tab={editor} />
-						) : null}
+						) : (
+							<ChangesReviewPane tab={editor} />
+						)}
 					</Suspense>
 				</ErrorBoundary>
 			);
@@ -788,7 +815,12 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							);
 							if (tab.kind === "chat") {
 								state.closeChatToHistory(tab.sessionId, false, workspaceId, false);
-							} else if (tab.kind === "file" || tab.kind === "diff" || tab.kind === "document") {
+							} else if (
+								tab.kind === "file" ||
+								tab.kind === "diff" ||
+								tab.kind === "changes" ||
+								tab.kind === "document"
+							) {
 								for (const cache of state.tabsByWorkspace[workspaceId] ?? []) {
 									const resource = toLayoutTab(cache);
 									if (resource && layoutResourceIdentity(resource) === closedIdentity) {
