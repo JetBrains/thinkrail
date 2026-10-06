@@ -274,6 +274,30 @@ test("reservations and attachments reject malformed or excessive catalog entries
 	);
 });
 
+test("terminal input and grid reject malformed values before reaching the PTY", () => {
+	for (const data of [42, [104, 105], { text: "hi" }]) {
+		expect(() => writeTerminal("missing", data as unknown as string, "client-1")).toThrow(
+			"Invalid terminal input",
+		);
+	}
+	for (const bad of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, "80", 32_768]) {
+		const size = bad as unknown as number;
+		expect(() => resizeTerminal("missing", size, 24, "client-1")).toThrow("Invalid terminal size");
+		expect(() => resizeTerminal("missing", 80, size, "client-1")).toThrow("Invalid terminal size");
+		expect(() => attachTerminal(WS, "tab-a", "client-1", { cols: size })).toThrow(
+			"Invalid terminal size",
+		);
+		expect(() => attachTerminal(WS, "tab-a", "client-1", { rows: size })).toThrow(
+			"Invalid terminal size",
+		);
+	}
+	expect(listTerminals(WS)).toEqual([]);
+	expect(() => writeTerminal("missing", "", "client-1")).not.toThrow();
+	expect(() => writeTerminal("missing", "echo hi\r", "client-1")).not.toThrow();
+	expect(() => resizeTerminal("missing", 1, 1, "client-1")).not.toThrow();
+	expect(() => resizeTerminal("missing", 32_767, 32_767, "client-1")).not.toThrow();
+});
+
 test("revival bounds the catalog and sanitizes durable identities", () => {
 	saveTerminalSessions({
 		[WS]: [

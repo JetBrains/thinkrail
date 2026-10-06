@@ -21,6 +21,44 @@ type RuntimeAppConfigUpdate = AppConfigUpdate & {
 	recentModels?: unknown;
 };
 
+const ACCEPTED_UPDATE_KEYS = {
+	theme: true,
+	themeMode: true,
+	systemThemePair: true,
+	analyticsEnabled: true,
+	analyticsConsentConfirmed: true,
+	notificationsEnabled: true,
+	terminalReplayKb: true,
+	terminalWindowsShell: true,
+	composerGrowthLimit: true,
+	chatLineWidth: true,
+	fileLineWidth: true,
+	chatLineWidthBounded: true,
+	fileLineWidthBounded: true,
+	customLayoutPresets: true,
+	favoriteModels: true,
+	defaultModel: true,
+	defaultEffort: true,
+	reviewModel: true,
+	reviewEffort: true,
+	reviewAutoFix: true,
+	agentReviewEnabled: true,
+	subagentsEnabled: true,
+	jbcentralQuotaEnabled: true,
+	jbcentralQuotaRefreshSeconds: true,
+	chatMessageOrder: true,
+	layout: true,
+	recentModels: true,
+} satisfies Record<keyof RuntimeAppConfigUpdate, true>;
+
+function assertUpdateShape(update: unknown): void {
+	if (typeof update !== "object" || update === null || Array.isArray(update)) {
+		throw new Error("settings update must be an object");
+	}
+	const unknownKey = Object.keys(update).find((key) => !Object.hasOwn(ACCEPTED_UPDATE_KEYS, key));
+	if (unknownKey !== undefined) throw new Error(`Unknown setting: ${unknownKey}`);
+}
+
 function isWireModelRef(value: unknown): value is WireModel {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return false;
 	const record = value as Record<string, unknown>;
@@ -61,6 +99,7 @@ export function getConfig(): AppConfig {
 }
 
 export function updateConfig(partial: AppConfigUpdate): AppConfig {
+	assertUpdateShape(partial);
 	const runtimeUpdate: RuntimeAppConfigUpdate = { ...partial };
 	delete runtimeUpdate.chatMessageOrder;
 	delete runtimeUpdate.layout;

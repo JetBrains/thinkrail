@@ -595,10 +595,11 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   session reaches idle, which is Stop's lossless path)/`dispose`/**`delete`**/`setModel`/
   `setThinkingLevel`/`compact`/`getStats`/`getCommands`/`extUiReply`/**`answerQuestion`** (the inline
   `ask_user_question` reply, correlated by tool call id)/**`list`**/**`getMessages`** (the
-  read side) / **`settings.update`** (merge + validate + persist a top-level partial `AppConfig`; when present,
-  `customLayoutPresets` and `systemThemePair` are complete replacements; entering system mode requires a
-  complete existing-or-incoming pair. A legacy `{ theme }` mutation without explicit `themeMode` means a
-  fixed-theme selection and exits system mode; returns the merged config) /
+  read side) / **`settings.update`** (merge + validate + persist a top-level partial `AppConfig`; rejects a
+  non-object payload or unknown key and drops retired keys; when present, `customLayoutPresets` and
+  `systemThemePair` are complete replacements; entering system mode requires a complete existing-or-incoming
+  pair. A legacy `{ theme }` mutation without explicit `themeMode` means a fixed-theme selection and exits
+  system mode; returns the merged config) /
   **`feedback.respond`** (`{ action: InterviewResponse }` → ack; persists the automatic invitation's book,
   postpone, or permanent-dismiss result; the Settings link never calls it;
   `FEEDBACK_INTERVIEW_PROTOCOL_VERSION` pins the addressed channel's v56 introduction so the host does not

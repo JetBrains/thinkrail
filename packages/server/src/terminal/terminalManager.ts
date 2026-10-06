@@ -130,6 +130,23 @@ function assertTerminalTitle(title: string): void {
 	if (!isValidTerminalTitle(title)) throw new Error("Invalid terminal title");
 }
 
+const MAX_TERMINAL_GRID_DIMENSION = 32_767;
+
+function assertTerminalGridDimension(value: unknown): void {
+	if (
+		typeof value !== "number" ||
+		!Number.isInteger(value) ||
+		value < 1 ||
+		value > MAX_TERMINAL_GRID_DIMENSION
+	) {
+		throw new Error("Invalid terminal size");
+	}
+}
+
+function assertTerminalData(data: unknown): void {
+	if (typeof data !== "string") throw new Error("Invalid terminal input");
+}
+
 function assertTerminalCatalogCapacity(tabs: readonly TabRecord[]): void {
 	if (tabs.length >= MAX_TERMINAL_TABS_PER_WORKSPACE) {
 		throw new Error(
@@ -254,6 +271,8 @@ export function attachTerminal(
 ): AttachResult {
 	assertTerminalTabKey(tabKey);
 	if (options.title !== undefined) assertTerminalTitle(options.title);
+	if (options.cols !== undefined) assertTerminalGridDimension(options.cols);
+	if (options.rows !== undefined) assertTerminalGridDimension(options.rows);
 	const tabs = tabsFor(workspaceId);
 	const isNewTab = !tabs.some((tab) => tab.tabKey === tabKey);
 	if (isNewTab) {
@@ -313,6 +332,7 @@ function announceDisplaced(id: string, caller: string): void {
 }
 
 export function writeTerminal(id: string, data: string, caller: string): void {
+	assertTerminalData(data);
 	const entry = attachedEntry(id, caller);
 	if (!entry) {
 		announceDisplaced(id, caller);
@@ -322,6 +342,8 @@ export function writeTerminal(id: string, data: string, caller: string): void {
 }
 
 export function resizeTerminal(id: string, cols: number, rows: number, caller: string): void {
+	assertTerminalGridDimension(cols);
+	assertTerminalGridDimension(rows);
 	const entry = attachedEntry(id, caller);
 	if (!entry) {
 		announceDisplaced(id, caller);

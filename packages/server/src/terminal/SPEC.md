@@ -94,6 +94,12 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   and at most 500 characters, and a title is non-empty and at most 1000 characters. Reservation and new attach
   share those checks. Revival truncates oversized catalogs, drops invalid keys, and repairs invalid titles
   before exposing host-authoritative membership.
+- **Terminal input and grid sizes are validated before any PTY or catalog work.** Terminal input must be a
+  string, because the PTY `write` turns a number into a raw `TypeError` and an array of numbers into raw bytes.
+  Attach, when it supplies a size, and resize require `cols` and `rows` to be integers from 1 through 32,767.
+  xterm's fit sends at least 2x1, and 32,767 is the largest value Windows ConPTY's signed 16-bit size field can
+  hold, so real screens never hit either end. This is not a security bound: a client that can resize can also
+  type commands.
 - **Tracked-grid updates are change-only.** Each live entry tracks the grid applied at spawn or by the last
   successful resize. Attach and explicit resize advance that grid only when it changes, and failed calls do not
   advance it. A reattach may still perform a *transient* redraw nudge (below) that leaves the tracked grid
@@ -176,7 +182,8 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
 - `shellArgs.test.ts` — shell executable precedence across Unix and Windows plus platform-specific
   arguments; `auto`'s pwsh-then-powershell resolution via an injected `WhichFn`; every explicit preference
   is a literal pin regardless of what `which` reports; `ComSpec`/`COMSPEC` no longer influence the result.
-- `terminalManager.test.ts` — transactional durable reservation without spawn, catalog bounds, attach
+- `terminalManager.test.ts` — transactional durable reservation without spawn, catalog bounds, rejection
+  of malformed write data and out-of-range or non-integer grid sizes on resize and attach, attach
   idempotency (incl. concurrent), takeover, displaced-client rejection, tab-list broadcast, close/busy,
   revive. Replay-persistence and natural-exit cases use bounded publisher-observed data/exit conditions as
   readiness edges, never elapsed time; their expected output marker never appears contiguously in the command
