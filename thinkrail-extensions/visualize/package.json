@@ -4,6 +4,7 @@
 	"private": true,
 	"type": "module",
 	"exports": {
+		"./server": "./server/index.ts",
 		"./web": "./web/index.ts"
 	},
 	"scripts": {
@@ -13,11 +14,14 @@
 	"dependencies": {
 		"@remixicon/react": "catalog:",
 		"@thinkrail/extension-api": "workspace:*",
+		"@thinkrail.ai/pi-visualize": "workspace:*",
 		"@thinkrail/ui": "workspace:*",
+		"linkedom": "0.16.11",
 		"mermaid": "catalog:",
 		"react": "catalog:"
 	},
 	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "catalog:",
 		"@types/bun": "catalog:",
 		"@types/react": "catalog:",
 		"typescript": "catalog:"
