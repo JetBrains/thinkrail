@@ -158,7 +158,8 @@ a random installation ID. Usage analytics never include prompts, code, files, cr
 identity. Additional product usage and how you found ThinkRail are shared only while **Share additional usage
 data** is on; the switch is offered at first launch and lives in **Settings → Privacy**. When launching from
 the command line, `thinkrail --no-analytics` (or `THINKRAIL_NO_ANALYTICS=1`) turns additional sharing off for
-that run.
+that run. With additional sharing on, a packaged build may open the ThinkRail blog in your browser once to
+link your installation to the website visit that brought you here; that link expires after 30 days.
 
 ## Under the hood
 
