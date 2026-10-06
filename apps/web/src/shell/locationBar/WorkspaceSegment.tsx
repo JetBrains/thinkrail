@@ -293,7 +293,7 @@ export function WorkspaceSegment({
 						)}
 						{partition !== null && partition.settled.length > 0 ? (
 							<DropdownMenuSub>
-								<DropdownMenuSubTrigger data-testid="scope-workspace-settled">
+								<DropdownMenuSubTrigger data-testid="scope-workspace-settled-group">
 									<RiCheckboxCircleLine />
 									Settled · {partition.settled.length}
 								</DropdownMenuSubTrigger>

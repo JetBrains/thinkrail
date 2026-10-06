@@ -26,10 +26,7 @@ export function stampSessionActivity(record: SessionStateRecord): void {
 	recordWorkspaceActivity(record.workspaceId);
 }
 
-/**
- * Rows whose review state can still change the partition: not parked by the user, not already merged or
- * closed, and not past the idle window. Everything else is settled for a reason the provider cannot undo.
- */
+/** Rows whose review state can still change the partition. */
 export function candidateLiveRows(rows: readonly Workspace[], now = Date.now()): Workspace[] {
 	const idleDays = getConfig().settleIdleDays;
 	return rows.filter((row) => {

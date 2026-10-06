@@ -9,7 +9,6 @@ export function reviewIsOpen(review: OpenBranchReview): boolean {
 	return review.state === undefined || review.state === "open";
 }
 
-/** Divergence only matters while the review is open; against a merged branch it is noise. */
 export function remoteCounts(review: OpenBranchReview | null): RemoteCounts | null {
 	if (!review || !reviewIsOpen(review)) return null;
 	const unpushed = review.unpushedCommits ?? 0;

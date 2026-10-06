@@ -4,6 +4,7 @@ import {
 	defaultWorkspaceRow,
 	openFixtureProject,
 	openTerminal,
+	worktreeRow,
 	worktreeRows,
 } from "./fixtures/app";
 
@@ -21,14 +22,14 @@ test("editor tabs are scoped to the active workspace", async ({ page }) => {
 
 	await createWorkspaceViaDialog(page);
 	await expect(workspaces).toHaveCount(2);
-	await expect(workspaces.nth(1)).toHaveAttribute("data-active", "true");
+	await expect(worktreeRow(page, "workspace-2")).toHaveAttribute("data-active", "true");
 	await expect(tabs).toHaveCount(1);
 	await expect(tabs.filter({ hasText: "README.md" })).toHaveCount(0);
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-2");
 	await expect(page.getByTestId("scope-branch")).toHaveText("workspace-2");
 
-	await workspaces.nth(0).getByRole("button").first().click();
-	await expect(workspaces.nth(0)).toHaveAttribute("data-active", "true");
+	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
+	await expect(worktreeRow(page, "workspace-1")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
 	await expect(page.getByTestId("scope-branch")).toHaveText("workspace-1");
 	await expect(tabs).toHaveCount(2);
@@ -41,7 +42,7 @@ test("the selected side tool follows workspace switches", async ({ page }) => {
 	await createWorkspaceViaDialog(page);
 	const workspaces = worktreeRows(page);
 	await expect(workspaces).toHaveCount(2);
-	await workspaces.nth(0).getByRole("button").first().click();
+	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
 
 	const groupInfo = await page.getByTestId("tab-specs").evaluate((tab) => {
@@ -66,7 +67,7 @@ test("the selected side tool follows workspace switches", async ({ page }) => {
 		"true",
 	);
 
-	await workspaces.nth(1).getByRole("button").first().click();
+	await worktreeRow(page, "workspace-2").getByRole("button").first().click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-2");
 	await expect(group.getByTestId("tab-projects").getByRole("tab")).toHaveAttribute(
 		"aria-selected",
@@ -82,7 +83,7 @@ test("the selected side tool follows workspace switches", async ({ page }) => {
 	const review = page.getByTestId("tab-review").getByRole("tab");
 	await page.getByTestId("tab-review").click();
 	await expect(review).toHaveAttribute("aria-selected", "true");
-	await workspaces.nth(0).getByRole("button").first().click();
+	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
 	await expect(review).toHaveAttribute("aria-selected", "true");
 	await expect(group.getByTestId("tab-projects").getByRole("tab")).toHaveAttribute(
@@ -95,7 +96,6 @@ test("switching workspaces re-targets the mounted workbench instead of remountin
 	page,
 }) => {
 	await openFixtureProject(page);
-	const workspaces = worktreeRows(page);
 
 	await createWorkspaceViaDialog(page);
 	await page.getByTestId("tab-files").click();
@@ -105,7 +105,7 @@ test("switching workspaces re-targets the mounted workbench instead of remountin
 	const terminalCount = await terminalTabs.count();
 
 	await createWorkspaceViaDialog(page);
-	await expect(workspaces.nth(1)).toHaveAttribute("data-active", "true");
+	await expect(worktreeRow(page, "workspace-2")).toHaveAttribute("data-active", "true");
 
 	await page.evaluate(() => {
 		const chrome = ["workspace-workbench", "center-tabs", "left-nav"] as const;
@@ -125,8 +125,8 @@ test("switching workspaces re-targets the mounted workbench instead of remountin
 		(window as unknown as { __switchProbe: () => number }).__switchProbe = () => fadeIns;
 	});
 
-	await workspaces.nth(0).getByRole("button").first().click();
-	await expect(workspaces.nth(0)).toHaveAttribute("data-active", "true");
+	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
+	await expect(worktreeRow(page, "workspace-1")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("editor-tab").filter({ hasText: "README.md" })).toBeVisible();
 	await expect(terminalTabs).toHaveCount(terminalCount);
 
@@ -153,7 +153,6 @@ test("switching workspaces re-targets the mounted workbench instead of remountin
 
 test("a same-id terminal body remounts instead of carrying across workspaces", async ({ page }) => {
 	await openFixtureProject(page);
-	const workspaces = worktreeRows(page);
 	await createWorkspaceViaDialog(page);
 	await createWorkspaceViaDialog(page);
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-2");
@@ -163,7 +162,7 @@ test("a same-id terminal body remounts instead of carrying across workspaces", a
 	await expect(terminal).toHaveAttribute("data-ready", "true");
 	await terminal.evaluate((node) => node.setAttribute("data-switch-probe", "workspace-2"));
 
-	await workspaces.nth(0).getByRole("button").first().click();
+	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
 	await expect(terminal).toHaveAttribute("data-ready", "true");
 	await expect(terminal).not.toHaveAttribute("data-switch-probe", "workspace-2");

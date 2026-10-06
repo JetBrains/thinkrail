@@ -232,7 +232,7 @@ export type SettledReason =
 	| { kind: "review"; state: "merged" | "closed" }
 	| { kind: "idle"; since: number };
 
-/** The chip text — short enough for a 230px rail; `settledReasonTitle` carries the long form. */
+/** Chip text; `settledReasonTitle` is the long form. */
 export function settledReasonLabel(reason: SettledReason, now: number): string {
 	switch (reason.kind) {
 		case "override":
@@ -271,11 +271,7 @@ interface PartitionState extends SessionStateProjection {
 	settleIdleDays: number | null;
 }
 
-/**
- * Why a workspace sits on its project's Settled shelf, or `null` while it is live. The rules run in
- * order: blockers (working, needs attention, Default, the latched active row) → the user's override →
- * a merged/closed review without newer activity → an open review → the idle window.
- */
+/** Why a workspace sits on its project's Settled shelf, or `null` while it is live. */
 export function selectWorkspaceSettledReason(
 	state: PartitionState,
 	workspace: Workspace,

@@ -3,7 +3,7 @@ import {
 	activeWorktreeRow,
 	createWorkspaceViaDialog,
 	openFixtureProject,
-	worktreeRows,
+	worktreeRow,
 } from "./fixtures/app";
 import { readChatViewportCenterOffsets } from "./fixtures/chatScroll";
 import { seedExternalCwdSessions, seedWorkspaceSession } from "./fixtures/sessions";
@@ -137,9 +137,8 @@ test("selecting a cross-workspace message hit switches the active workspace and 
 	});
 	await page.waitForTimeout(2_100);
 
-	await createWorkspaceViaDialog(page);
-	const workspaces = worktreeRows(page);
-	await expect(workspaces.nth(1)).toHaveAttribute("data-active", "true");
+	const workspaceB = await createWorkspaceViaDialog(page);
+	await expect(worktreeRow(page, workspaceB.name)).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
 	await page.getByTestId("chat-input").press("Control+r");
@@ -159,8 +158,8 @@ test("selecting a cross-workspace message hit switches the active workspace and 
 	await query.press("Enter");
 
 	await expect(overlay).toBeHidden();
-	await expect(workspaces.nth(0)).toHaveAttribute("data-active", "true");
-	await expect(workspaces.nth(1)).not.toHaveAttribute("data-active", "true");
+	await expect(worktreeRow(page, workspaceA.name)).toHaveAttribute("data-active", "true");
+	await expect(worktreeRow(page, workspaceB.name)).not.toHaveAttribute("data-active", "true");
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(2);
 	const flashRow = page.locator("[data-flash]");
 	await expect(flashRow).toBeVisible();
@@ -171,8 +170,8 @@ test("an unmapped message hit is a no-op — the overlay stays open and the acti
 	page,
 }) => {
 	await openFixtureProject(page);
-	await createWorkspaceViaDialog(page);
-	await createWorkspaceViaDialog(page);
+	const quiet = await createWorkspaceViaDialog(page);
+	const current = await createWorkspaceViaDialog(page);
 	seedExternalCwdSessions();
 	await page.waitForTimeout(2_100);
 
@@ -197,9 +196,8 @@ test("an unmapped message hit is a no-op — the overlay stays open and the acti
 
 	await expect(overlay).toBeVisible();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
-	const workspaces = worktreeRows(page);
-	await expect(workspaces.nth(1)).toHaveAttribute("data-active", "true");
-	await expect(workspaces.nth(0)).not.toHaveAttribute("data-active", "true");
+	await expect(worktreeRow(page, current.name)).toHaveAttribute("data-active", "true");
+	await expect(worktreeRow(page, quiet.name)).not.toHaveAttribute("data-active", "true");
 });
 
 test("searching a prompt's own words that an assistant reply also echoes shows only an assistant crumb in MESSAGES, and the prompt row gets a jump icon", async ({
@@ -292,8 +290,8 @@ test("an unmapped prompt hit shows no jump icon, and Shift+Enter on it is a no-o
 	page,
 }) => {
 	await openFixtureProject(page);
-	await createWorkspaceViaDialog(page);
-	await createWorkspaceViaDialog(page);
+	const quiet = await createWorkspaceViaDialog(page);
+	const current = await createWorkspaceViaDialog(page);
 	seedExternalCwdSessions();
 	await page.waitForTimeout(2_100);
 
@@ -318,7 +316,6 @@ test("an unmapped prompt hit shows no jump icon, and Shift+Enter on it is a no-o
 
 	await expect(overlay).toBeVisible();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(1);
-	const workspaces = worktreeRows(page);
-	await expect(workspaces.nth(1)).toHaveAttribute("data-active", "true");
-	await expect(workspaces.nth(0)).not.toHaveAttribute("data-active", "true");
+	await expect(worktreeRow(page, current.name)).toHaveAttribute("data-active", "true");
+	await expect(worktreeRow(page, quiet.name)).not.toHaveAttribute("data-active", "true");
 });

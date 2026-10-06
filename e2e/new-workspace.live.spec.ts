@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { openFixtureProject, worktreeRows } from "./fixtures/app";
+import { openFixtureProject, worktreeRow, worktreeRows } from "./fixtures/app";
 import { isExactE2eModel, resolveE2eModel } from "./fixtures/centralAgent";
 import { E2E_CENTRAL_ARTIFACT, E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
@@ -102,6 +102,6 @@ test("two dialog kick-offs in separate workspaces stream concurrently", {
 
 	await expect(doneNotice).toBeVisible({ timeout: 90_000 });
 
-	await worktreeRows(page).nth(0).getByRole("button").first().click();
+	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
 	await expect(doneNotice).toBeVisible({ timeout: 90_000 });
 });

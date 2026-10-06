@@ -78,14 +78,6 @@ const inFlight = new Map<string, Promise<BranchReviewOutcome>>();
 
 const cacheKey = (cwd: string, branch: string) => `${cwd}\u0000${branch}`;
 
-export function findOpenBranchReview(
-	cwd: string,
-	branch: string,
-	options: { fresh?: boolean } = {},
-): Promise<OpenBranchReview | null> {
-	return findOpenBranchReviewWithRunner(cwd, branch, runProviderCommand, options);
-}
-
 export function findBranchReviewOutcome(
 	cwd: string,
 	branch: string,

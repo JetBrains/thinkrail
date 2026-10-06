@@ -225,6 +225,12 @@ export function worktreeRows(page: Page): Locator {
 	return page.locator('[data-testid="workspace-item"]:not([data-kind="default"])');
 }
 
+export function worktreeRow(page: Page, name: string): Locator {
+	return worktreeRows(page).filter({
+		has: page.getByTestId("workspace-name").getByText(name, { exact: true }),
+	});
+}
+
 export function activeWorktreeRow(page: Page): Locator {
 	return worktreeRows(page).and(page.locator('[data-active="true"]'));
 }

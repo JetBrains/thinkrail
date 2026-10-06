@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import type { TodoPlan } from "@thinkrail/contracts";
-import { findOpenBranchReview, forgetOpenBranchReview } from "../branch-review";
+import { findBranchReviewOutcome, forgetOpenBranchReview } from "../branch-review";
 import {
 	compareQuickPullUrl,
 	ghPrFlow,
@@ -499,7 +499,7 @@ describe("openPr — push lifecycle and cache invalidation", () => {
 	});
 
 	test("a successful push clears a settled answer even when gh is offline", async () => {
-		expect(await findOpenBranchReview(repo, "feature")).toBeNull();
+		expect((await findBranchReviewOutcome(repo, "feature")).value).toBeNull();
 		writeFileSync(reviewMode, "open\n");
 		process.env.THINKRAIL_GH_OFFLINE = "1";
 
@@ -510,17 +510,17 @@ describe("openPr — push lifecycle and cache invalidation", () => {
 			body: "Body",
 		});
 		expect(result.action).toBe("compare");
-		expect(await findOpenBranchReview(repo, "feature")).toEqual({
+		expect((await findBranchReviewOutcome(repo, "feature")).value).toEqual({
 			kind: "pull-request",
 			number: 7,
 		});
 	});
 
 	test("an ambiguous gh mutation clears a null cached concurrently with the attempt", async () => {
-		expect(await findOpenBranchReview(repo, "feature")).toBeNull();
+		expect((await findBranchReviewOutcome(repo, "feature")).value).toBeNull();
 		const run: PrCommandRunner = async (_cwd, command) => {
 			if (command[2] === "create") {
-				expect(await findOpenBranchReview(repo, "feature")).toBeNull();
+				expect((await findBranchReviewOutcome(repo, "feature")).value).toBeNull();
 				writeFileSync(reviewMode, "open\n");
 				return { ok: true, out: "ambiguous" };
 			}
@@ -533,14 +533,14 @@ describe("openPr — push lifecycle and cache invalidation", () => {
 			async () => null,
 		);
 		expect(result.action).toBe("compare");
-		expect(await findOpenBranchReview(repo, "feature")).toEqual({
+		expect((await findBranchReviewOutcome(repo, "feature")).value).toEqual({
 			kind: "pull-request",
 			number: 7,
 		});
 	});
 
 	test("a successful non-GitHub push clears an answer before the pushed return", async () => {
-		expect(await findOpenBranchReview(repo, "feature")).toBeNull();
+		expect((await findBranchReviewOutcome(repo, "feature")).value).toBeNull();
 		sh(repo, "remote", "set-url", "origin", remote);
 		const result = await openPr({ workspaceId: "w1", sessionId: "s1" }, async () => {
 			throw new Error("a non-GitHub push must not run gh");
@@ -549,7 +549,7 @@ describe("openPr — push lifecycle and cache invalidation", () => {
 
 		sh(repo, "remote", "set-url", "origin", "https://github.com/acme/widgets.git");
 		writeFileSync(reviewMode, "open\n");
-		expect(await findOpenBranchReview(repo, "feature")).toEqual({
+		expect((await findBranchReviewOutcome(repo, "feature")).value).toEqual({
 			kind: "pull-request",
 			number: 7,
 		});

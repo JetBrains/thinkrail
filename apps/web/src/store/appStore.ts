@@ -834,7 +834,7 @@ interface AppState {
 	settledShelfShown: Record<string, number>;
 	selectedProjectId: string | null;
 	activeWorkspaceId: string | null;
-	/** True while the active workspace was live when selected or has worked since; selection never moves a row. */
+	/** The active workspace counts as live while this holds, whatever the idle window says. */
 	activeWorkspaceLiveLatch: boolean;
 	workspaceSelectionHistory: string[];
 	pendingWorkspaceChatActivation: string | null;
