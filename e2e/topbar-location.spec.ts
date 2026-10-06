@@ -4,6 +4,7 @@ import {
 	defaultWorkspaceRow,
 	openFixtureProject,
 	PHONE_VIEWPORT,
+	worktreeRow,
 	worktreeRows,
 } from "./fixtures/app";
 
@@ -231,9 +232,10 @@ test("navigating away abandons a pending topbar rename instead of renaming the n
 	await expect(input).toHaveValue("Meant for workspace-2");
 
 	// Activate another renamable workspace from the tree while the offline commit is still pending.
-	const rows = worktreeRows(page);
-	await rows.nth(0).getByRole("button").first().click();
-	await expect(rows.nth(0)).toHaveAttribute("data-active", "true");
+	const first = worktreeRow(page, "workspace-1");
+	const second = worktreeRow(page, "workspace-2");
+	await first.getByRole("button", { name: "workspace-1", exact: true }).click();
+	await expect(first).toHaveAttribute("data-active", "true");
 	await expect(input).toHaveCount(0);
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
 
@@ -241,8 +243,8 @@ test("navigating away abandons a pending topbar rename instead of renaming the n
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await expect.poll(() => socketsOpened).toBeGreaterThan(1);
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
-	await expect(rows.nth(0).getByTestId("workspace-name")).toHaveText("workspace-1");
-	await expect(rows.nth(1).getByTestId("workspace-name")).toHaveText("workspace-2");
+	await expect(first.getByTestId("workspace-name")).toHaveText("workspace-1");
+	await expect(second.getByTestId("workspace-name")).toHaveText("workspace-2");
 	await expect(page.getByText("Meant for workspace-2")).toHaveCount(0);
 });
 
@@ -254,10 +256,14 @@ test("a remove confirmation opened from the topbar is bound to that workspace an
 	await createWorkspaceViaDialog(page);
 	const rows = worktreeRows(page);
 	const currentHash = () => page.evaluate(() => window.location.hash);
-	await rows.nth(0).getByRole("button").first().click();
+	await worktreeRow(page, "workspace-1")
+		.getByRole("button", { name: "workspace-1", exact: true })
+		.click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
 	const workspace1Hash = await currentHash();
-	await rows.nth(1).getByRole("button").first().click();
+	await worktreeRow(page, "workspace-2")
+		.getByRole("button", { name: "workspace-2", exact: true })
+		.click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-2");
 	await expect.poll(currentHash).not.toBe(workspace1Hash);
 
