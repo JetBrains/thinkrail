@@ -23,7 +23,7 @@ async function openDiff(page: Page): Promise<void> {
 		"export const one = 1;\nexport const two = 2;\nexport const three = 3;\n",
 	);
 	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).dblclick();
 	await expect(
 		page.getByTestId("diff-view").getByText("three = 3", { exact: false }).last(),
 	).toBeVisible();
@@ -160,7 +160,7 @@ test("selection → icon → inline composer → draft; the tab wears the violet
 		page.locator('[data-testid="editor-tab"][data-active="true"] [data-testid="review-tab-flag"]'),
 	).toHaveCount(0);
 	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).dblclick();
 	await expect(page.getByTestId("send-review-button")).toBeVisible();
 
 	await composeComment(page, "one = 1", "never mind");
@@ -277,7 +277,7 @@ test("sidebar: an accordion — the active reviewed file's section auto-unfolds;
 		"notes.txt",
 	);
 	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).dblclick();
 	await expect(page.locator('[data-testid="editor-tab"][data-active="true"]')).toContainText(
 		"script.ts",
 	);
@@ -296,7 +296,7 @@ test("sidebar: an accordion — the active reviewed file's section auto-unfolds;
 	await expect(section).toHaveAttribute("data-expanded", "true");
 	await expect(rows).toHaveCount(2);
 	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).dblclick();
 	await expect(page.locator('[data-testid="editor-tab"][data-active="true"]')).toContainText(
 		"script.ts",
 	);
@@ -327,7 +327,7 @@ test("a selection spanning both sides of a unified diff is blocked instead of re
 	await createWorkspaceViaDialog(page);
 	writeFileSync(join(worktree(), "README.md"), "# renamed\n");
 	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "README.md" }).dblclick();
 	await page.getByTestId("view-toggle-code").click();
 	await page.getByTestId("diff-toggle-inline").click();
 	const diff = page.getByTestId("diff-view");
@@ -373,7 +373,7 @@ test("the Review panel carries its own send buttons: per-file at the file level,
 	}
 	writeFileSync(join(worktree(), "notes.txt"), "a fresh remark target\nsecond line\n");
 	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("change-item").filter({ hasText: "notes.txt" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "notes.txt" }).dblclick();
 	await composeComment(page, "fresh remark", "three");
 	await page.getByTestId("review-composer-save").click();
 	await expect(page.getByTestId("review-composer")).toHaveCount(0);
@@ -668,7 +668,7 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 	await createWorkspaceViaDialog(page);
 	writeFileSync(join(worktree(), "README.md"), "# sample-project — renamed\n\nA new intro line.\n");
 	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "README.md" }).dblclick();
 	await expect(page.getByTestId("rendered-diff")).toContainText("renamed");
 	await page.getByTestId("view-toggle-code").click();
 	await expect(page.getByTestId("view-toggle-code")).toHaveAttribute("data-active", "true");
@@ -877,7 +877,7 @@ test("Done is undone by a fresh remark: the file re-lists the moment a new comme
 	await expect(page.getByTestId("review-empty")).toBeVisible();
 
 	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).dblclick();
 	await composeComment(page, "three = 3", "One more thing.");
 	await page.getByTestId("review-composer-save").click();
 	await expect(page.getByTestId("review-pending-badge")).toHaveText("1");

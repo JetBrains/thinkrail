@@ -35,6 +35,7 @@ import { TerminalWorkbenchBody, useTerminalClose } from "../panels/TerminalWorkb
 import { useWorkspaceReview } from "../panels/useWorkspaceReview";
 import { useWorkspaceSpecs } from "../panels/useWorkspaceSpecs";
 import {
+	createChangesTab,
 	type EditorTab,
 	isConnectedGeneration,
 	isDefaultWorkspace,
@@ -351,23 +352,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			const identity = layoutResourceIdentity(tab);
 			if (cachedResources.has(identity)) continue;
 			if (tab.kind === "changes") {
-				useAppStore.getState().openTab(
-					{
-						kind: "changes",
-						id: tab.id,
-						workspaceId,
-						name: tab.name,
-						scope: tab.scope,
-						viewed: [],
-						activePath: null,
-						collapsed: {},
-						reveal: null,
-						sections: {},
-					},
-					"keep",
-					false,
-					{ activate: false },
-				);
+				useAppStore
+					.getState()
+					.openTab(createChangesTab(workspaceId, tab.id, tab.name, tab.scope), "keep", false, {
+						activate: false,
+					});
 				continue;
 			}
 			const cacheArrived = () =>

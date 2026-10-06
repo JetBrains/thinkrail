@@ -11,13 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { usePhoneViewport } from "@/lib";
 import { LoadingRegion } from "../components/Skeleton";
-import {
-	type ChangesLayout,
-	type ChangesTab,
-	selectDiffBaseRef,
-	toast,
-	useAppStore,
-} from "../store";
+import { type ChangesTab, selectDiffBaseRef, toast, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { ChangesFileSection, type SectionContentCache } from "./ChangesFileSection";
 import { LARGE_SCOPE_FILES, scopeKey, scopeLabel, sectionCollapsedByDefault } from "./changesModel";
@@ -28,6 +22,26 @@ import { ToggleSegment } from "./ToggleSegment";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
 const SECTION_HEADER_HEIGHT = 32;
+const END_NOTE_HEIGHT = 48;
+
+interface ReviewListContext {
+	tailHeight: number;
+	fileCount: number;
+}
+
+function ReviewListFooter({ context }: { context?: ReviewListContext }) {
+	return (
+		<div
+			data-testid="changes-review-end"
+			style={{ minHeight: context?.tailHeight ?? 0 }}
+			className="px-12 py-16 text-center tr-text-metadata text-text-subtle"
+		>
+			End of changes · {context?.fileCount ?? 0} {context?.fileCount === 1 ? "file" : "files"}
+		</div>
+	);
+}
+
+const REVIEW_LIST_COMPONENTS = { Footer: ReviewListFooter };
 
 export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const { workspaceId, scope } = tab;
@@ -96,7 +110,6 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const viewedCount = files.filter((change) => viewedSet.has(change.path)).length;
 	const view = mobile ? "inline" : (tab.view ?? "split");
 	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
-	const effectiveLayout: ChangesLayout = layout;
 
 	const currentIndex = Math.max(
 		0,
@@ -106,6 +119,22 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 
 	const virtuoso = useRef<VirtuosoHandle>(null);
 	const scrollerRef = useRef<HTMLElement | null>(null);
+	const [tailHeight, setTailHeight] = useState(0);
+	const tailObserver = useRef<ResizeObserver | null>(null);
+	const attachScroller = useCallback((element: HTMLElement | Window | null) => {
+		tailObserver.current?.disconnect();
+		tailObserver.current = null;
+		scrollerRef.current = element instanceof HTMLElement ? element : null;
+		if (!scrollerRef.current) return;
+		const measure = () => {
+			const height = scrollerRef.current?.clientHeight ?? 0;
+			setTailHeight(Math.max(0, height - SECTION_HEADER_HEIGHT - END_NOTE_HEIGHT));
+		};
+		measure();
+		tailObserver.current = new ResizeObserver(measure);
+		tailObserver.current.observe(scrollerRef.current);
+	}, []);
+	useEffect(() => () => tailObserver.current?.disconnect(), []);
 	const activePathRef = useRef(tab.activePath);
 	activePathRef.current = tab.activePath;
 	const spyFrame = useRef(0);
@@ -116,13 +145,12 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		spyFrame.current = requestAnimationFrame(() => {
 			const scroller = scrollerRef.current;
 			if (!scroller) return;
-			const edge = scroller.getBoundingClientRect().top + SECTION_HEADER_HEIGHT;
+			const edge = scroller.getBoundingClientRect().top + SECTION_HEADER_HEIGHT / 2;
 			let active: string | null = null;
 			for (const section of scroller.querySelectorAll<HTMLElement>(
 				'[data-testid="changes-section"]',
 			)) {
-				const rect = section.getBoundingClientRect();
-				if (rect.top <= edge && rect.bottom > edge) active = section.dataset.path ?? null;
+				if (section.getBoundingClientRect().top <= edge) active = section.dataset.path ?? null;
 			}
 			if (active !== null && active !== activePathRef.current) {
 				setActivePath(workspaceId, tab.id, active);
@@ -202,7 +230,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	};
 
 	useEffect(() => {
-		if (effectiveLayout !== "single") return;
+		if (layout !== "single") return;
 		const onKey = (event: KeyboardEvent) => {
 			const target = event.target as HTMLElement | null;
 			if (
@@ -229,7 +257,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const targetLabel =
 		scope.kind === "branch" ? `vs ${baseRef}` : scope.kind === "uncommitted" ? "worktree" : null;
 	const showLargeNotice =
-		effectiveLayout === "stacked" && files.length > LARGE_SCOPE_FILES && !largeNoticeDismissed;
+		layout === "stacked" && files.length > LARGE_SCOPE_FILES && !largeNoticeDismissed;
 
 	return (
 		<div data-testid="changes-review" className="flex h-full min-h-0 flex-col">
@@ -262,7 +290,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 				) : null}
 				<span className="ml-auto flex shrink-0 items-center gap-4">
 					<SendReviewButton workspaceId={workspaceId} path={null} testid="changes-review-send" />
-					{effectiveLayout === "stacked" && files.length > 0 ? (
+					{layout === "stacked" && files.length > 0 ? (
 						<>
 							<HeaderIconButton
 								testid="changes-review-collapse-all"
@@ -320,13 +348,13 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 					<ToggleSegment
 						testid="changes-review-layout-stacked"
 						label="Stacked"
-						active={effectiveLayout === "stacked"}
+						active={layout === "stacked"}
 						onClick={() => setLayout("stacked")}
 					/>
 					<ToggleSegment
 						testid="changes-review-layout-single"
 						label="One file"
-						active={effectiveLayout === "single"}
+						active={layout === "single"}
 						onClick={() => setLayout("single")}
 					/>
 				</span>
@@ -351,7 +379,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 				<p data-testid="changes-review-empty" className="p-12 tr-text-metadata text-text-muted">
 					No changes in this scope.
 				</p>
-			) : effectiveLayout === "single" && current ? (
+			) : layout === "single" && current ? (
 				<>
 					<div
 						data-testid="changes-review-walk"
@@ -438,17 +466,16 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 							</button>
 						</div>
 					) : null}
-					<Virtuoso<GitFileChange>
+					<Virtuoso<GitFileChange, ReviewListContext>
 						ref={virtuoso}
 						data={files}
 						computeItemKey={(_index, change) => change.path}
 						className="h-full min-h-0 [overflow-anchor:none]"
 						increaseViewportBy={{ top: 200, bottom: 600 }}
-						scrollerRef={(element) => {
-							scrollerRef.current = element instanceof HTMLElement ? element : null;
-						}}
+						scrollerRef={attachScroller}
 						onScroll={spyActiveSection}
 						rangeChanged={spyActiveSection}
+						totalListHeightChanged={spyActiveSection}
 						itemContent={(_index, change) => (
 							<ChangesFileSection
 								tab={tab}
@@ -462,13 +489,8 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 								onToggleViewed={() => toggleViewed(change.path)}
 							/>
 						)}
-						components={{
-							Footer: () => (
-								<div className="px-12 py-24 text-center tr-text-metadata text-text-subtle">
-									End of changes · {files.length} {files.length === 1 ? "file" : "files"}
-								</div>
-							),
-						}}
+						context={{ tailHeight, fileCount: files.length }}
+						components={REVIEW_LIST_COMPONENTS}
 					/>
 				</div>
 			)}

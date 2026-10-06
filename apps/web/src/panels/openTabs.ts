@@ -8,6 +8,7 @@ import {
 import {
 	type CenterNavigationStamp,
 	type ChangesTab,
+	createChangesTab,
 	type EditorTab,
 	isCenterNavigationCurrent,
 	layoutOpenOptionsForNavigation,
@@ -246,18 +247,7 @@ export async function openChangesTab(
 	const existing = (state.tabsByWorkspace[workspaceId] ?? []).find(
 		(tab): tab is ChangesTab => tab.id === id && tab.kind === "changes",
 	);
-	const base: ChangesTab = existing ?? {
-		kind: "changes",
-		id,
-		workspaceId,
-		name: changesTabName(scope),
-		scope,
-		viewed: [],
-		activePath: null,
-		collapsed: {},
-		reveal: null,
-		sections: {},
-	};
+	const base = existing ?? createChangesTab(workspaceId, id, changesTabName(scope), scope);
 	const tab: ChangesTab = revealPath
 		? { ...base, reveal: { path: revealPath, tick: (base.reveal?.tick ?? 0) + 1 } }
 		: base;

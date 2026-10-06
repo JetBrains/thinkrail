@@ -59,7 +59,7 @@ test("a phone-class diff is unified only, and a tapped line authors a thread tha
 		"export const one = 1;\nexport const two = 2;\nexport const three = 3;\n",
 	);
 	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).dblclick();
 	const diff = page.getByTestId("diff-view");
 	await expect(diff.getByText("three = 3", { exact: false }).last()).toBeVisible();
 	await expect(page.getByTestId("diff-toggle-split")).toBeVisible();

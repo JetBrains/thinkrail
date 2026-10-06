@@ -37,7 +37,7 @@ test("a live rendered-diff refresh preserves the reader's scroll position", asyn
 	await revealWorkbenchTool(page, "changes");
 	const change = page.getByTestId("change-item").filter({ hasText: "scroll-refresh.md" });
 	await fsExpect(change).toBeVisible();
-	await change.click();
+	await change.dblclick();
 	const diff = page.getByTestId("rendered-diff");
 	await fsExpect(diff).toContainText("first refresh paragraph 299");
 	await expect
@@ -84,7 +84,7 @@ test("worktree changes on disk appear live in Specs, Files, Changes, and an open
 	await expect(readmeRow).toHaveCount(0);
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited live by e2e\n");
 	await fsExpect(readmeRow).toHaveAttribute("data-status", "modified");
-	await readmeRow.click();
+	await readmeRow.dblclick();
 	await page.getByTestId("view-toggle-code").click();
 	await expect(
 		page.getByTestId("diff-view").getByText("edited live by e2e", { exact: false }).last(),
