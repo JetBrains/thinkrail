@@ -927,7 +927,7 @@ interface AppState {
 	modelsFresh: boolean;
 	changesRequest: {
 		workspaceId: string;
-		path: string;
+		path: string | null;
 		navTick: number;
 		navigation: CenterNavigationStamp | null;
 	} | null;
@@ -1215,7 +1215,7 @@ interface AppState {
 	setChatPreferences: (order: ChatMessageOrder, movement: StreamingResponseMovement) => void;
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
-	requestChangesView: (workspaceId: string, path: string) => void;
+	requestChangesView: (workspaceId: string, path: string | null, scope?: GitDiffScope) => void;
 	clearChangesRequest: () => void;
 	requestChatLocation: (req: ChatLocationRequest) => void;
 	clearChatLocation: () => void;
@@ -3880,7 +3880,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						}),
 					},
 		),
-	requestChangesView: (workspaceId, path) =>
+	requestChangesView: (workspaceId, path, scope) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const advanced = advanceCenterNavigation(s, workspaceId);
@@ -3896,6 +3896,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 					navTick: selectWorkspaceNavTick(s, workspaceId) + 1,
 					navigation: advanced.stamp,
 				},
+				...(scope
+					? { diffScopeByWorkspace: { ...s.diffScopeByWorkspace, [workspaceId]: scope } }
+					: {}),
 				...advanced.patch,
 			};
 		}),
