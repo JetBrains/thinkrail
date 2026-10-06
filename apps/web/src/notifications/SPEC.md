@@ -36,7 +36,7 @@ Producer → queue → consumer, so the decision to notify is deferred to the mo
 - **Consumer** (flush): emits only when every gate passes — master toggle on, permission granted, window
   **not** focused, and the session's dot **still lit** (already-answered edges are dropped). One surviving
   session opens its chat (`requestChatLocation`); several focus the app. `formatNotification` keeps the title
-  as the bold **ThinkRail** mark and puts the detail in the body (`{worktree} \u00b7 {reason}` for one,
+  as the bold **ThinkRail** mark and puts the detail in the body (`{worktree} · {reason}` for one,
   `N worktrees need your attention` for several); a per-session `tag` lets the browser replace rather than
   stack. Every notification also sets the symbol-only ThinkRail icon (`/favicon.svg`, the
   browser-tab/shell-logo artwork), honored by Chrome/Edge/Firefox; Safari ignores a page notification's icon
