@@ -317,7 +317,8 @@ export const WS_CHANNELS = {
 	reviewFailed: "review.failed",
 } as const;
 
-export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];
+type SameUnion<A extends B, B extends C, C = A> = A;
+type _MethodsMatchMap = SameUnion<(typeof WS_METHODS)[keyof typeof WS_METHODS], WsMethodName>;
 export type WsChannel = (typeof WS_CHANNELS)[keyof typeof WS_CHANNELS];
 
 export const ASK_USER_ANSWERS_CUSTOM_TYPE = "ask-user-answers";

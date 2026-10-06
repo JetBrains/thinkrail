@@ -170,7 +170,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   and waits bounded so pi persists their "Operation aborted" tool results and transcripts land paired,
   except a session blocked on `ask_user_question`: shutdown deliberately leaves that call dangling and the
   next attach repairs it to an answerable ack; explicit user Stop remains the terminal-abort path); `handlers.ts` (the WS method→handler
-  registry, including `workspace.rename` as the direct manual door into
+  registry, typed `WsHandlers = { [M in WsMethodName]: WsHandler<M> }`, so a missing, extra, or mistyped
+  handler fails typecheck; `handleRequest` narrows the wire's `unknown` params once, at dispatch, and
+  params are not shape-validated at runtime. The registry includes `workspace.rename` as the direct manual door into
   `renameWorkspace(id, name)` (no `branch` option) — the workspaces module changes only the
   display label, persists, and publishes it, so the handler never mutates Git, emits, or patches a client
   separately. The host's `resolveNewChatModel` composes AppConfig settings with the agent's settled available
@@ -481,7 +483,7 @@ enabled/confirmed choice before entering analytics attribution.
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
   `BootHostOptions`, `BootedHost`, `BuildKind`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
-  `boot.ts`); `persistence` (`dataDir` — where `crashLog.ts` writes); `pi-todos/core` (reduced synchronous
+  `boot.ts`; `codedError`); `persistence` (`dataDir` — where `crashLog.ts` writes); `pi-todos/core` (reduced synchronous
   task snapshots, with group status still core-owned); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
   `resolveWorktreeFile`/`resourceMeta` and `git`'s `readBlobStreamAtAsync` for the `/files` + `/blob`
   routes); Bun/Node.
