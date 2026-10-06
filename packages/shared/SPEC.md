@@ -83,7 +83,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 - **/version** — the one permanent release-stamping seam. Source runs report `0.0.0-dev`; release CI
   overwrites this module in its throwaway checkout before building either artifact family so CLI
   `--version`, desktop package metadata, analytics, and `server.welcome.appVersion` cannot drift. It
-  contains identity data only and has no launcher dependency.
+  contains identity data plus the release-only public `posthogProjectKey` (empty in source, so
+  unstamped builds never report) and has no launcher dependency.
 - **/codedError** — `CodedError(code, message)` + `errorCodeOf(err)`: an error carrying a wire
   `WsErrorCode`, so a failure a client must react to *specifically* travels as a name rather than a string
   to pattern-match. It lives here because both ends of the seam need it and neither may import the other:
