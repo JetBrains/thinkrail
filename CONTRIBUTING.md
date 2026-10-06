@@ -28,9 +28,35 @@ bun install
 bun run dev
 ```
 
-`bun run dev` boots the host and the web client together and cleans up on `Ctrl+C`. Source/dev runs expose
-no application updater: update a checkout with Git and rebuild it. On-disk app state lives under
+`bun run dev` boots the host and the web client together and cleans up on `Ctrl+C`. Source/dev runs and
+locally unstamped builds expose no application updater: update a checkout with Git and rebuild it.
+Running `thinkrail update` from source installs a published binary; it does not pull, install
+dependencies, or rebuild the checkout. On-disk app state (projects, workspaces, worktrees) lives under
 `~/.thinkrail`.
+
+To run the launchers:
+
+```bash
+bun run --filter @thinkrail/cli dev  # browser launcher
+bun run build:binary                 # standalone CLI artifact
+bun run desktop:dev                  # package and open the Electrobun app
+bun run desktop:build                # package without opening it
+```
+
+Desktop commands use the standard Electrobun CLI/configuration. Its pre-build hook builds the shared UI
+and stages ThinkRail's PI/native resources; Electrobun owns preload bundling and installer creation.
+Create host-native installers with `bun run desktop:package:stable` or `bun run desktop:package:canary`;
+`canary` is Electrobun's internal name for the public **nightly** channel. Native/installer smoke and shared
+CLI/desktop probes live in `packages/artifact-tests`, outside the application packages. Run
+`bun run smoke:desktop` after a dev build; installer smoke takes an artifact path and channel via
+`bun run smoke:desktop:installer <path> <stable|canary>`. Local installer smoke is not notarization
+verification: the coordinated macOS release pipeline signs Electrobun's expanded app archive and finalizes
+the DMG, and that intermediate archive is not a public download.
+
+## Repository layout
+
+[`architecture.md`](architecture.md) lists every app and package with its role and allowed dependencies;
+each module carries its own `SPEC.md`.
 
 ## Testing and linting
 
@@ -53,6 +79,8 @@ bun run e2e -- e2e/changes.spec.ts                  # focused iteration
 bun run e2e -- --last-failed                        # repair loop
 bun run e2e:serial                                  # one-host debugging fallback
 bun run e2e -- --shards=12                          # explicit 1–16 override
+bun run e2e:binary                                  # packaged CLI host (build first)
+bun run e2e:desktop                                 # packaged desktop host (build first)
 bun run e2e:full                                    # everything; needs pi auth
 bun run e2e:agent                                   # only @agent; remains serial
 ```
