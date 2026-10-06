@@ -44,9 +44,14 @@ import {
 	withAvailablePlacementId,
 } from "./model";
 import { BUILTIN_LAYOUT_PRESETS } from "./presets";
-import type { LayoutCenterTab, LayoutTerminalTab, WorkspaceLayoutDocument } from "./types";
+import type {
+	LayoutCenterTab,
+	LayoutFileTab,
+	LayoutTerminalTab,
+	WorkspaceLayoutDocument,
+} from "./types";
 
-const file = (id: string): LayoutCenterTab => ({
+const file = (id: string): LayoutFileTab => ({
 	kind: "file",
 	id,
 	name: `${id}.ts`,
@@ -72,8 +77,8 @@ function baseDocument(tabs: LayoutCenterTab[] = []): WorkspaceLayoutDocument {
 	};
 }
 
-function mutation<T extends { document: WorkspaceLayoutDocument } | { reason: string }>(result: T) {
-	if ("reason" in result) throw new Error(result.reason);
+function mutation(result: LayoutOperationResult) {
+	if (isLayoutUnavailable(result)) throw new Error(result.reason);
 	return result;
 }
 
@@ -381,9 +386,11 @@ describe("workspace layout model", () => {
 		};
 		let document = baseDocument([file("one"), terminal]);
 		document = mutation(createAuxiliaryGroup(document, "bottom", terminal, 0, 1)).document;
+		const [bottomGroup] = document.bottom.groups;
+		if (!bottomGroup) throw new Error("expected one bottom group");
 		expect(findTabLocation(document, terminal.id)).toEqual({
 			area: "bottom",
-			groupId: document.bottom.groups[0]?.id,
+			groupId: bottomGroup.id,
 		});
 		expect(document.bottom.visible).toBe(true);
 		expect(
@@ -917,8 +924,16 @@ describe("workspace layout model", () => {
 			lastFocusedSideGroupId: {},
 			navigationClockByGroup: {},
 		});
-		expect(fromUntrustedPlainObjects.selectedByGroup.constructor).toBe("one");
-		expect(fromUntrustedPlainObjects.navigationClockByGroup.constructor).toBe(0);
+		expect(
+			Object.getOwnPropertyDescriptor(fromUntrustedPlainObjects.selectedByGroup, "constructor")
+				?.value,
+		).toBe("one");
+		expect(
+			Object.getOwnPropertyDescriptor(
+				fromUntrustedPlainObjects.navigationClockByGroup,
+				"constructor",
+			)?.value,
+		).toBe(0);
 	});
 
 	test("session pruning removes both chat and registered TODO references without touching neighbors", () => {
@@ -1038,7 +1053,7 @@ describe("workspace layout model", () => {
 					}
 					default: {
 						const side = random() % 2 === 0 ? "left" : "right";
-						result = setSideVisibility(document, side, !document[side].visible);
+						result = { document: setSideVisibility(document, side, !document[side].visible) };
 					}
 				}
 				if (!isLayoutUnavailable(result)) document = result.document;
