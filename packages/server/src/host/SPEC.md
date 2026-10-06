@@ -348,8 +348,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
     provisional pass left unlocked are still nameable.
   - The result text states, per target, whether it was applied or kept because it was already named, so
     the agent stops. A `branch` without a usable `workspace_name` is rejected before any write (the slug
-    would otherwise be silently dropped while the agent believes it is done), and a call that names only
-    the chat while the workspace is still nameable says so, so the agent completes the pair. The first name is final, and a manual rename always wins.
+    would otherwise be silently dropped while the agent believes it is done). A call without a usable
+    `workspace_name` while the workspace is still nameable is rejected the same way: a success result
+    that asked the agent to "call again" was ignored live (Opus named the chat, then moved on), and one
+    call keeps chat and workspace names in agreement. The first name is final, and a manual rename always wins.
   - `workspaceNeedsName(sessionId)` uses the same eligibility rule (managed, not `renamed`), so agent's
     turn-start `pending-naming` reminder and the write policy can't disagree.
   - A target the agent never names stays unnamed; there is no fallback.

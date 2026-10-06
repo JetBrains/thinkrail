@@ -538,8 +538,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     uses `<Verb> #<n> <title verbatim>`. Guidelines alone proved too weak (live e2e, Claude Opus: named 1 of
     3 real-task turns; 0 of 3 when the prompt asked for a one-sentence answer). So while the chat (pi session
     name) or its workspace is still unnamed, a `before_agent_start` hook adds a state-specific
-    **`pending-naming`** system-prompt section ("this chat has no title yet … call set_title before your other
-    tool calls … otherwise ignore this note"); with it the same real-task turn named 3 of 3. Its wording is
+    **`pending-naming`** system-prompt section ("this chat has no title yet … call set_title with chat_title
+    before your other tool calls … otherwise ignore this note"); with it the same real-task turn named 3 of 3.
+    The section and the guidelines name the fields still missing (`workspace_name` and `branch` while the
+    workspace is unnamed) because "once" alone let a call name only the chat. Its wording is
     deliberately low-pressure: an earlier "first action … even when the answer is one sentence" made the model
     add narration preambles on unrelated tool-only turns. The section disappears once both are named, which
     costs one prompt-cache miss per chat, early in it. The write policy and the workspace half of that state are
