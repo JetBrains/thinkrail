@@ -105,12 +105,12 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   re-selection stays cheap). The `session.create` / `session.reloadResources` wrappers issue their load only
   after that preparation, so no call site can accidentally reverse readiness and baseline ordering. The
   `session.getMessages` wrapper is a transcript read and never waits for readiness (a fresh watcher's ~750ms
-  startup would otherwise delay every cold restore): the host always answers it with a live summary, whose
-  callers discard the baseline, so it sends the same real preparation first without awaiting it (the read
-  still starts and promotes the watcher; a failure stays retryable by the next load) and reports the tick
-  captured before the read — conservative should a disk-only summary ever arrive. It also rejects unless the returned summary exactly matches both requested
-  workspace and session, making that untrusted-response identity check one shared installation boundary rather
-  than a caller convention).
+  startup would otherwise delay every cold restore): the host answers it with a live summary, whose callers
+  discard the baseline, so it sends the same real preparation without awaiting it (the read still starts and
+  promotes the watcher; a failure stays retryable by the next load) and reports the tick captured before the
+  read — conservative should a disk-only summary ever arrive. It also rejects unless the returned summary
+  exactly matches both requested workspace and session, making that untrusted-response identity check one
+  shared installation boundary rather than a caller convention).
 - **`mcp.ts`** is the one MCP read path shared by Settings and the chat Resources view:
   **`requestMcpList(method, params)`** serializes `mcp.list` and every list-returning mutation per workspace
   and connection generation, including installation through `installMcpList` before dispatching the next
