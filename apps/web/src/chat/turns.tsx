@@ -804,14 +804,17 @@ export function TurnDivider({
 				]),
 			)
 		: undefined;
+	const counted = new Set(changedFiles);
 	const totals = receipt
-		? receipt.changes.reduce(
-				(sum, change) => ({
-					added: sum.added + (change.added ?? 0),
-					removed: sum.removed + (change.removed ?? 0),
-				}),
-				{ added: 0, removed: 0 },
-			)
+		? receipt.changes
+				.filter((change) => counted.has(change.path))
+				.reduce(
+					(sum, change) => ({
+						added: sum.added + (change.added ?? 0),
+						removed: sum.removed + (change.removed ?? 0),
+					}),
+					{ added: 0, removed: 0 },
+				)
 		: null;
 	const allGroups: ArtifactGroup[] = [
 		{

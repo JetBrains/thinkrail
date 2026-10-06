@@ -567,7 +567,7 @@ prior opaque state, and each implementation rejects state it cannot interpret. D
 `view` on file documents and `rendered` on diff documents are outside the accepted cache shape and are
 ignored on read; no migration state exists. Opened by `ChangesPanel` at the `keep` intent (double click /
 *Open as tab*); a single click opens the **`ChangesTab`** instead. **`ChangesTab`** (`kind: "changes"`, id
-`${workspaceId}:changes:${scopeKey}` computed by `changesTabId` — one per *(workspace, scope)*) is the review surface over
+`tupleKey("changes", workspaceId, scopeKey)` computed by `changesTabId` — one per *(workspace, scope)*) is the review surface over
 **every** changed file of one scope. Like a `DiffTab` its scope is part of its identity and the target ref
 is not; unlike a `DiffTab` it carries **no content** — the pane reads `git.status` and each section its own
 `git.diffFile`, so the persisted layout tab is just kind + id + name + scope and reload hydration rebuilds the
@@ -578,12 +578,19 @@ collapse overrides over the scale defaults, a one-shot `reveal` (`{ path, tick }
 per-path `rendererId` / opaque `viewState` written through the workspace-explicit `setChangesTabSection*`
 actions. The stacked-vs-one-file mode is **not** on the tab: `changesLayout` (`"stacked"` default |
 `"single"`) is app-wide like `changesView`, a reading preference rather than a property of one review.
-The tab is preview-eligible like `FileTab` and `DiffTab`.
+The tab is preview-eligible like `FileTab` and `DiffTab` — until it holds progress: the first `viewed` or
+`kept` write (`recordChangesTabProgress`) also keeps the preview, in the same `set`, so a later single-click
+preview opens beside the review instead of evicting the reader's marks. Progress is **session-scoped**:
+`viewed`/`kept` live on the tab object only, a reload rebuilds the tab empty, and a viewed file does not
+lapse when the agent rewrites it (kept hunks do, through their content key) — persisting viewed per file
+hash across reloads is the known follow-up, not an accident.
 **`turnsByWorkspace`** holds each workspace's host-recorded agent runs (`TurnChangeSet[]`, oldest first):
 `setWorkspaceTurns` installs the `workspace.turns` answer and `applyTurnChanged` folds a `turn.changed` push
 in (deduped by id, kept sorted, capped like the host); both are dropped with the workspace. The list is
-read by the chat's turn dividers (the round's receipt) and by the Changes scope menu (*Last turn*); it is
-fetched once per workspace and connection by the shell through `panels/useWorkspaceTurns`.
+read by the chat's turn dividers (the round's receipt) and by the Changes scope menu (*Last turn*). The
+shell is the one loader (`useLoadWorkspaceTurns`, re-reading `workspace.turns` on every connection
+generation so a run that settled while the socket was down still arrives); every other consumer only
+reads through `useWorkspaceTurns`.
 **`requestChangesView(workspaceId, path | null, scope?)`** gained two optional dimensions for the chat's
 *Review turn* action: a `scope` lands on `diffScopeByWorkspace` atomically with the reveal intent, and a
 `null` path means "open the review tab for that scope" rather than "reveal this file".

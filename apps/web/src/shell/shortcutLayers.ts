@@ -1,18 +1,12 @@
-export const MODAL_LAYER_SELECTOR = [
-	'[aria-modal="true"]',
-	'[role="dialog"][data-state="open"]',
-	'[role="alertdialog"][data-state="open"]',
-].join(", ");
+import { hasLayer, MODAL_LAYER_SELECTOR } from "../lib";
+
+export { hasLayer, MODAL_LAYER_SELECTOR };
 
 const DISMISSIBLE_LAYER_SELECTOR = [MODAL_LAYER_SELECTOR, '[role="menu"][data-state="open"]'].join(
 	", ",
 );
 
 const GROUP_LAYER_SELECTOR = '[data-testid="history-overlay"]';
-
-export function hasLayer(root: Pick<Document, "querySelector">, selector: string) {
-	return root.querySelector(selector) !== null;
-}
 
 const GROUP_ID_SELECTOR = "[data-group-id]";
 

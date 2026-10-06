@@ -82,8 +82,11 @@ not this module; the theme-aware highlighter remains app-local.
   and cmd, so it may be interpolated into a command a human copies and runs), `parseSkillInvocation`, `matchesSkillInvocationCommand`,
   `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
   `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
-  `readLayoutSelection`, `readLayoutNavigationClock`, `sameLayoutAttention`, and the
-  `LayoutAttention` type.
+  `readLayoutSelection`, `readLayoutNavigationClock`, `sameLayoutAttention`, the `LayoutAttention`
+  type, and the keyboard gate shared by the shell's chords and the panels' plain-letter review
+  shortcuts: `MODAL_LAYER_SELECTOR` + `hasLayer` (an open modal/dialog/alertdialog owns the keyboard)
+  and `isTextEntryTarget` (inputs, textareas, selects and contenteditable keep their letters) —
+  duck-typed on the target so it holds in DOM-less tests.
 - **Allowed deps:** React (the viewport subscription hook only);
   `@thinkrail/contracts` (types only for canonical messages; the layout-resource identity input is a local structural type); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
   through the barrel).

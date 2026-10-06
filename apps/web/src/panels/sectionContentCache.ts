@@ -31,7 +31,8 @@ export function createSectionContentCache(): SectionContentCache {
 			content.set(path, next);
 		},
 		load(path, read, loadedTick, loadedTarget) {
-			const inFlight = pending.get(path);
+			const key = `${loadedTarget}\u0000${path}`;
+			const inFlight = pending.get(key);
 			if (inFlight) return inFlight;
 			const promise = read()
 				.then((fresh) => {
@@ -40,9 +41,9 @@ export function createSectionContentCache(): SectionContentCache {
 					return next;
 				})
 				.finally(() => {
-					if (pending.get(path) === promise) pending.delete(path);
+					if (pending.get(key) === promise) pending.delete(key);
 				});
-			pending.set(path, promise);
+			pending.set(key, promise);
 			return promise;
 		},
 	};

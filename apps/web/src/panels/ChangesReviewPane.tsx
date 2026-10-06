@@ -19,7 +19,8 @@ import { ChangesReviewGuide, guideSteps } from "./ChangesReviewGuide";
 import { LARGE_SCOPE_FILES, scopeKey, scopeLabel, sectionCollapsedByDefault } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { HeaderIconButton } from "./HeaderIconButton";
-import { SendReviewButton } from "./SendReviewButton";
+import { ownsReviewShortcut } from "./reviewShortcuts";
+import { SendAllReviewsButton } from "./SendReviewButton";
 import { createSectionContentCache } from "./sectionContentCache";
 import { ToggleSegment } from "./ToggleSegment";
 import { useWorkspaceRead } from "./useWorkspaceRead";
@@ -28,6 +29,7 @@ import { useWorkspaceTurns } from "./useWorkspaceTurns";
 const SECTION_HEADER_HEIGHT = 32;
 const END_NOTE_HEIGHT = 48;
 const REVEAL_SETTLE_MS = 1_200;
+const USER_SCROLL_EVENTS = ["wheel", "touchstart", "pointerdown"] as const;
 
 interface ReviewListContext {
 	tailHeight: number;
@@ -73,7 +75,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		[reviewComments, reviewGuide],
 	);
 	const [guideHidden, setGuideHidden] = useState(false);
-	const guideOpen = guideAvailable && !guideHidden && layout === "stacked";
+	const guideOpen = guideAvailable && !guideHidden && layout === "stacked" && !mobile;
 	const [largeNoticeDismissed, setLargeNoticeDismissed] = useState(false);
 
 	const { reload } = useWorkspaceRead(
@@ -130,35 +132,53 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const view = mobile ? "inline" : (tab.view ?? "split");
 	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
 
-	const currentIndex = Math.max(
-		0,
-		files.findIndex((change) => change.path === tab.activePath),
-	);
+	const lastIndex = useRef(0);
+	const foundIndex = files.findIndex((change) => change.path === tab.activePath);
+	const currentIndex =
+		foundIndex >= 0 ? foundIndex : Math.min(lastIndex.current, Math.max(0, files.length - 1));
+	lastIndex.current = currentIndex;
 	const current = files[currentIndex];
 
 	const virtuoso = useRef<VirtuosoHandle>(null);
 	const scrollerRef = useRef<HTMLElement | null>(null);
 	const [tailHeight, setTailHeight] = useState(0);
 	const tailObserver = useRef<ResizeObserver | null>(null);
+	const settling = useRef<{ index: number; until: number } | null>(null);
+	const detachScroller = useRef<(() => void) | null>(null);
 	const attachScroller = useCallback((element: HTMLElement | Window | null) => {
+		detachScroller.current?.();
+		detachScroller.current = null;
 		tailObserver.current?.disconnect();
 		tailObserver.current = null;
-		scrollerRef.current = element instanceof HTMLElement ? element : null;
-		if (!scrollerRef.current) return;
+		const scroller = element instanceof HTMLElement ? element : null;
+		scrollerRef.current = scroller;
+		if (!scroller) return;
 		const measure = () => {
-			const height = scrollerRef.current?.clientHeight ?? 0;
-			setTailHeight(Math.max(0, height - SECTION_HEADER_HEIGHT - END_NOTE_HEIGHT));
+			setTailHeight(Math.max(0, scroller.clientHeight - SECTION_HEADER_HEIGHT - END_NOTE_HEIGHT));
 		};
 		measure();
 		tailObserver.current = new ResizeObserver(measure);
-		tailObserver.current.observe(scrollerRef.current);
+		tailObserver.current.observe(scroller);
+		const endSettle = () => {
+			settling.current = null;
+		};
+		for (const type of USER_SCROLL_EVENTS)
+			scroller.addEventListener(type, endSettle, { passive: true });
+		detachScroller.current = () => {
+			for (const type of USER_SCROLL_EVENTS) scroller.removeEventListener(type, endSettle);
+		};
 	}, []);
-	useEffect(() => () => tailObserver.current?.disconnect(), []);
+	useEffect(
+		() => () => {
+			tailObserver.current?.disconnect();
+			detachScroller.current?.();
+		},
+		[],
+	);
 	const activePathRef = useRef(tab.activePath);
 	activePathRef.current = tab.activePath;
 	const spyFrame = useRef(0);
 	const restoredStacked = useRef(false);
-	const settling = useRef<{ index: number; until: number } | null>(null);
 	const scrollToSection = useCallback((index: number) => {
 		settling.current = { index, until: Date.now() + REVEAL_SETTLE_MS };
 		virtuoso.current?.scrollToIndex({ index, align: "start" });
@@ -216,8 +236,8 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	useEffect(() => {
 		if (!status || tab.reveal) return;
 		if (tab.activePath !== null && files.some((change) => change.path === tab.activePath)) return;
-		setActivePath(workspaceId, tab.id, files[0]?.path ?? null);
-	}, [files, setActivePath, status, tab.activePath, tab.id, tab.reveal, workspaceId]);
+		setActivePath(workspaceId, tab.id, current?.path ?? null);
+	}, [current, files, setActivePath, status, tab.activePath, tab.id, tab.reveal, workspaceId]);
 
 	const pendingReveal = tab.reveal !== null;
 	useEffect(() => {
@@ -267,13 +287,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	useEffect(() => {
 		if (!status) return;
 		const onKey = (event: KeyboardEvent) => {
-			const target = event.target as HTMLElement | null;
-			if (
-				target &&
-				(target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))
-			) {
-				return;
-			}
+			if (!ownsReviewShortcut(event, tab)) return;
 			const plain = !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
 			if (event.altKey && event.key === "ArrowDown") {
 				event.preventDefault();
@@ -334,7 +348,11 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 					</span>
 				) : null}
 				<span className="ml-auto flex shrink-0 items-center gap-4">
-					<SendReviewButton workspaceId={workspaceId} path={null} testid="changes-review-send" />
+					<SendAllReviewsButton
+						workspaceId={workspaceId}
+						testid="changes-review-send"
+						verb="Send review"
+					/>
 					{layout === "stacked" && files.length > 0 ? (
 						<>
 							<HeaderIconButton
@@ -365,7 +383,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 							</HeaderIconButton>
 						</>
 					) : null}
-					{guideAvailable && layout === "stacked" ? (
+					{guideAvailable && layout === "stacked" && !mobile ? (
 						<HeaderIconButton
 							testid="changes-review-guide-toggle"
 							label={guideOpen ? "Hide the review guide" : "Show the review guide"}
@@ -499,7 +517,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 				<div className="flex min-h-0 flex-1">
 					{guideOpen ? (
 						<ChangesReviewGuide
-							workspaceId={workspaceId}
+							tab={tab}
 							files={files}
 							guide={reviewGuide}
 							comments={reviewComments}

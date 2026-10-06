@@ -34,7 +34,7 @@ import { SpecsPanel } from "../panels/SpecsPanel";
 import { TerminalWorkbenchBody, useTerminalClose } from "../panels/TerminalWorkbench";
 import { useWorkspaceReview } from "../panels/useWorkspaceReview";
 import { useWorkspaceSpecs } from "../panels/useWorkspaceSpecs";
-import { useWorkspaceTurns } from "../panels/useWorkspaceTurns";
+import { useLoadWorkspaceTurns } from "../panels/useWorkspaceTurns";
 import {
 	createChangesTab,
 	type EditorTab,
@@ -236,7 +236,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const terminalClose = useTerminalClose();
 	const specs = useWorkspaceSpecs(workspaceId);
 	const review = useWorkspaceReview(workspaceId);
-	useWorkspaceTurns(workspaceId);
+	useLoadWorkspaceTurns(workspaceId);
 	const reviewComments = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.comments);
 	const reviewDraftCount = useAppStore((state) => selectReviewDraftCount(state, workspaceId));
 	const reviewFlagByPath = useMemo(() => reviewFlags(reviewComments), [reviewComments]);

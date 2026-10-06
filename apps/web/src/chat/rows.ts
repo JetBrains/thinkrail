@@ -237,18 +237,18 @@ export interface TurnDividerData {
 	receipt: TurnReceipt | null;
 }
 
-const RUN_START_SLACK_MS = 5_000;
+const RUN_START_SLACK_MS = 1_000;
 
 export function matchTurnReceipt(
 	agentTurns: readonly TurnChangeSet[],
 	startMs: number | null,
-	endMs: number | null,
+	nextStartMs: number | null,
 ): TurnReceipt | null {
 	if (startMs === null) return null;
 	const runs = agentTurns.filter(
 		(turn) =>
 			turn.startedAt >= startMs - RUN_START_SLACK_MS &&
-			(endMs === null || turn.startedAt <= endMs + RUN_START_SLACK_MS),
+			(nextStartMs === null || turn.startedAt < nextStartMs - RUN_START_SLACK_MS),
 	);
 	const first = runs[0];
 	const last = runs.at(-1);
@@ -258,7 +258,7 @@ export function matchTurnReceipt(
 	return {
 		scope: {
 			kind: "turn",
-			id: last.id,
+			id: first === last ? last.id : `${first.id}..${last.id}`,
 			baseTree: first.baseTree,
 			headTree: last.headTree,
 			startedAt: first.startedAt,
@@ -312,7 +312,9 @@ export function turnDivider(
 	const startMs = user?.kind === "user" ? user.message.timestamp : null;
 	const elapsedMs = startMs != null && endMs != null ? endMs - startMs : null;
 
-	const receipt = matchTurnReceipt(agentTurns, startMs ?? null, endMs);
+	const nextUser = turns[endIndex + 1];
+	const nextStartMs = nextUser?.kind === "user" ? (nextUser.message.timestamp ?? null) : null;
+	const receipt = matchTurnReceipt(agentTurns, startMs ?? null, nextStartMs);
 	const specs: string[] = [];
 	const changedFiles: string[] = [];
 	for (const [path, isSpecPath] of written) (isSpecPath ? specs : changedFiles).push(path);

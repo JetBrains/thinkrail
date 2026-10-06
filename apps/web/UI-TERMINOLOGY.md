@@ -368,8 +368,11 @@ classification remain current even while those tool bodies are not selected.
 
 ## Changes Tool
 
-The Changes body keeps its own feature toolbar: scope menu, target-branch picker, and List\|Tree toggle.
-Rows open center diff tabs. `ChangesPanel` remains arrangement-agnostic; only its side placement changed.
+The Changes body keeps its own feature toolbar: scope menu, target-branch picker, and List\|Tree toggle
+(Tree by default). A single click on a row opens the scope's **Changes review tab** — every changed file as
+a stacked section, or one at a time in its **One file** mode — and the sidebar is that tab's navigator
+(the row of the section in view is active, viewed files carry a mark); double-click or *Open as tab* opens
+the per-file diff tab. `ChangesPanel` remains arrangement-agnostic; only its side placement changed.
 
 | Canonical name | Implementation | `data-testid` | Responsibility |
 |---|---|---|---|

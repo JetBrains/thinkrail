@@ -289,9 +289,13 @@ export default function ChatView({
 		enabled: sessionRuntime !== undefined,
 	});
 
-	const agentTurns = useAppStore((state) => state.turnsByWorkspace[workspaceId]);
+	const workspaceTurns = useAppStore((state) => state.turnsByWorkspace[workspaceId]);
+	const agentTurns = useMemo(
+		() => workspaceTurns?.filter((turn) => turn.sessionId === sessionId) ?? NO_AGENT_TURNS,
+		[sessionId, workspaceTurns],
+	);
 	const chronologicalRows = useMemo(
-		() => deriveRows(turns, toolResults, isStreaming, isSpec, agentTurns ?? NO_AGENT_TURNS),
+		() => deriveRows(turns, toolResults, isStreaming, isSpec, agentTurns),
 		[turns, toolResults, isStreaming, isSpec, agentTurns],
 	);
 	const rows = useMemo(

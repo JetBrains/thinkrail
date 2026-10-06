@@ -26,7 +26,7 @@ import { useScrollViewState } from "../../useScrollViewState";
 import { type AnnotationSlot, reconcileAnnotationSlots } from "./annotationSlots";
 import {
 	type ChangeBlock,
-	changeBlockContentKey,
+	changeBlockContentKeys,
 	changeBlockId,
 	computeActionBlocks,
 } from "./changeBlocks";
@@ -254,17 +254,15 @@ function PierreDiffSurface({
 		() => new Map(blocks.map((block) => [changeBlockId(block), block])),
 		[blocks],
 	);
+	const triage = hunkActions?.triage;
 	const contentKeyById = useMemo(
 		() =>
-			new Map(
-				blocks.map((block) => [
-					changeBlockId(block),
-					changeBlockContentKey(block, originalText ?? "", modifiedText ?? ""),
-				]),
-			),
-		[blocks, modifiedText, originalText],
+			triage
+				? changeBlockContentKeys(blocks, originalText ?? "", modifiedText ?? "")
+				: new Map<string, string>(),
+		[blocks, modifiedText, originalText, triage],
 	);
-	const onHunkKeys = hunkActions?.triage?.onHunkKeys;
+	const onHunkKeys = triage?.onHunkKeys;
 	useEffect(() => {
 		onHunkKeys?.([...contentKeyById.values()]);
 	}, [contentKeyById, onHunkKeys]);

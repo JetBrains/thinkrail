@@ -32,7 +32,9 @@ test("turn-divider files-changed chip opens the file's diff and highlights its r
 	const row = page.getByTestId("change-item").filter({ hasText: "notes.txt" });
 	await expect(row).toBeVisible();
 	await expect(row).toHaveAttribute("data-active", "true");
-	await expect(page.getByTestId("diff-view")).toBeVisible();
+	await expect(
+		page.locator('[data-testid="changes-section"][data-path="notes.txt"]'),
+	).toBeVisible();
 });
 
 test("turn-divider counts a scratch task-spec as a spec and opens it from the Specs panel", {
@@ -100,7 +102,8 @@ test("a multi-artifact chip expands into the round's list instead of guessing wh
 
 	await list.getByTestId("turn-divider-files-list-item").filter({ hasText: "beta.txt" }).click();
 	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
-	await expect(page.getByTestId("diff-view")).toBeVisible();
+	await expect(page.getByTestId("changes-review")).toBeVisible();
+	await expect(page.locator('[data-testid="changes-section"][data-path="beta.txt"]')).toBeVisible();
 	const row = page.getByTestId("change-item").filter({ hasText: "beta.txt" });
 	await expect(row).toHaveAttribute("data-active", "true");
 	await expect(

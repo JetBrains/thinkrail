@@ -40,22 +40,27 @@ export function changeBlockId(block: ChangeBlock): string {
 	return `${block.original.start}:${block.original.count}:${block.modified.start}:${block.modified.count}`;
 }
 
-export function changeBlockContentKey(
-	block: ChangeBlock,
+export function changeBlockContentKeys(
+	blocks: readonly ChangeBlock[],
 	original: string,
 	modified: string,
-): string {
-	const removed = spanText(original, block.original);
-	const added = spanText(modified, block.modified);
-	return `${fnv1a(removed)}-${fnv1a(added)}`;
+): Map<string, string> {
+	const originalLines = original.split("\n");
+	const modifiedLines = modified.split("\n");
+	const seen = new Map<string, number>();
+	return new Map(
+		blocks.map((block) => {
+			const content = `${fnv1a(spanText(originalLines, block.original))}-${fnv1a(spanText(modifiedLines, block.modified))}`;
+			const ordinal = seen.get(content) ?? 0;
+			seen.set(content, ordinal + 1);
+			return [changeBlockId(block), ordinal === 0 ? content : `${content}#${ordinal}`];
+		}),
+	);
 }
 
-function spanText(text: string, span: LineSpan): string {
+function spanText(lines: readonly string[], span: LineSpan): string {
 	if (span.count === 0) return "";
-	return text
-		.split("\n")
-		.slice(span.start - 1, span.start - 1 + span.count)
-		.join("\n");
+	return lines.slice(span.start - 1, span.start - 1 + span.count).join("\n");
 }
 
 function fnv1a(text: string): string {

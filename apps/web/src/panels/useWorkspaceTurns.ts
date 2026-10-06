@@ -6,24 +6,25 @@ import { getTransport, supportsTurnChanges } from "../transport";
 const EMPTY: readonly TurnChangeSet[] = [];
 
 export function useWorkspaceTurns(workspaceId: string | null): readonly TurnChangeSet[] {
-	const turns = useAppStore((state) =>
-		workspaceId ? state.turnsByWorkspace[workspaceId] : undefined,
+	return (
+		useAppStore((state) => (workspaceId ? state.turnsByWorkspace[workspaceId] : undefined)) ?? EMPTY
 	);
+}
+
+export function useLoadWorkspaceTurns(workspaceId: string | null): void {
 	const supported = useAppStore((state) => supportsTurnChanges(state.protocolVersion));
 	const generation = useAppStore((state) => state.connectionGeneration);
-	const loaded = turns !== undefined;
 	useEffect(() => {
-		if (!workspaceId || !supported || loaded) return;
+		if (!workspaceId || !supported) return;
 		let cancelled = false;
 		getTransport()
 			.request("workspace.turns", { workspaceId })
-			.then(({ turns: fresh }) => {
-				if (!cancelled) useAppStore.getState().setWorkspaceTurns(workspaceId, fresh);
+			.then(({ turns }) => {
+				if (!cancelled) useAppStore.getState().setWorkspaceTurns(workspaceId, turns);
 			})
 			.catch(() => {});
 		return () => {
 			cancelled = true;
 		};
-	}, [generation, loaded, supported, workspaceId]);
-	return turns ?? EMPTY;
+	}, [generation, supported, workspaceId]);
 }
