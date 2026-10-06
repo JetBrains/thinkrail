@@ -68,7 +68,6 @@ test("a worktree renders project, workspace and branch · from base segments", (
 	expect(html).toContain(">Image selection coordinates bug<");
 	expect(html).toContain(">fix-image-region-comment-coords<");
 	expect(html).toContain(">origin/main<");
-	// Captioned grammar: the base branch lives in the BRANCH caption, never beside the value.
 	const caption = /Branch<span[^>]*>· from <span data-testid="scope-base">origin\/main<\/span>/;
 	expect(html).toMatch(caption);
 });
@@ -97,7 +96,6 @@ test("a user-owned workspace shows a plain BRANCH caption; a URL-less review sta
 	expect(html).not.toContain("· from");
 	expect(testids(html)).toContain("scope-remote-behind");
 	expect(html).toContain(">3 behind");
-	// A review without a URL stays a static chip, not a link.
 	expect(html).toMatch(/<span data-testid="scope-review" data-kind="pull-request"/);
 });
 
