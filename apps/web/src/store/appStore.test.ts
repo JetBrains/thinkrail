@@ -3797,6 +3797,7 @@ test("changes tabs: one per scope, preview-eligible, and review progress survive
 		collapsed: {},
 		reveal: null,
 		sections: {},
+		kept: {},
 	};
 	s().openTab(tab, "preview");
 	expect(s().previewTabByWorkspace.ws1).toBe(tab.id);
@@ -3815,6 +3816,10 @@ test("changes tabs: one per scope, preview-eligible, and review progress survive
 	s().setChangesTabSectionViewState("ws1", tab.id, "README.md", { scrollTop: 7 });
 	s().setChangesTabView("ws1", tab.id, "inline");
 	s().setChangesTabIgnoreWhitespace("ws1", tab.id, true);
+	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h1", true);
+	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h2", true);
+	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h1", false);
+	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h1", false);
 
 	const after = s().tabsByWorkspace.ws1?.[0];
 	if (after?.kind !== "changes") throw new Error("expected a changes tab");
@@ -3828,6 +3833,7 @@ test("changes tabs: one per scope, preview-eligible, and review progress survive
 	});
 	expect(after.view).toBe("inline");
 	expect(after.ignoreWhitespace).toBe(true);
+	expect(after.kept).toEqual({ "src/a.ts": ["h2"] });
 
 	s().clearChangesTabReveal("ws1", tab.id);
 	const cleared = s().tabsByWorkspace.ws1?.[0];

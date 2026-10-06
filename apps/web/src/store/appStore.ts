@@ -183,6 +183,7 @@ export interface ChangesTab {
 	collapsed: Record<string, boolean>;
 	reveal: ChangesTabReveal | null;
 	sections: Record<string, ChangesTabSection>;
+	kept: Record<string, string[]>;
 }
 export interface PlanTab {
 	kind: "plan";
@@ -214,6 +215,7 @@ export function createChangesTab(
 		collapsed: {},
 		reveal: null,
 		sections: {},
+		kept: {},
 	};
 }
 
@@ -1067,6 +1069,13 @@ interface AppState {
 		id: string,
 		path: string,
 		viewState: unknown,
+	) => void;
+	setChangesTabHunkKept: (
+		workspaceId: string,
+		id: string,
+		path: string,
+		key: string,
+		kept: boolean,
 	) => void;
 	changesView: "list" | "tree";
 	setChangesView: (view: "list" | "tree") => void;
@@ -2787,6 +2796,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 				...tab,
 				sections: { ...tab.sections, [path]: { ...tab.sections[path], viewState } },
 			})),
+		),
+	setChangesTabHunkKept: (workspaceId, id, path, key, kept) =>
+		set((s) =>
+			patchChangesTab(s, workspaceId, id, (tab) => {
+				const current = tab.kept[path] ?? [];
+				if (current.includes(key) === kept) return tab;
+				const next = kept ? [...current, key] : current.filter((k) => k !== key);
+				return { ...tab, kept: { ...tab.kept, [path]: next } };
+			}),
 		),
 	setChangesView: (view) => set({ changesView: view }),
 	setChangesLayout: (changesLayout) => set({ changesLayout }),
