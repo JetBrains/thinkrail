@@ -117,15 +117,21 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 		if (!status || changesRequest?.workspaceId !== workspaceId) return;
 		if (useAppStore.getState().changesRequest !== changesRequest) return;
 		const want = changesRequest.path;
-		const match = status.changes.find((c) => matchesWorktreePath(want, c.path));
 		const currentState = useAppStore.getState();
 		const overtaken = changesRequest.navigation
 			? !isCenterNavigationCurrent(currentState, workspaceId, changesRequest.navigation)
 			: selectWorkspaceNavTick(currentState, workspaceId) !== changesRequest.navTick;
-		if (match && !overtaken) openDiff(match.path, "preview", changesRequest.navigation);
-		else setHighlighted(match ? match.path : want);
+		if (want === null) {
+			if (!overtaken) {
+				void openChangesTab(workspaceId, scope, {}, "preview", changesRequest.navigation);
+			}
+		} else {
+			const match = status.changes.find((c) => matchesWorktreePath(want, c.path));
+			if (match && !overtaken) openDiff(match.path, "preview", changesRequest.navigation);
+			else setHighlighted(match ? match.path : want);
+		}
 		useAppStore.getState().clearChangesRequest();
-	}, [changesRequest, status, workspaceId, openDiff]);
+	}, [changesRequest, status, workspaceId, openDiff, scope]);
 
 	useEffect(() => {
 		if (activeDiffTab || reviewTabActive) setHighlighted(null);
