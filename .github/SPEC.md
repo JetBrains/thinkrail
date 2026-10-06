@@ -42,6 +42,13 @@ runners ([[module-browser-e2e]] owns the slicing). The ruleset's required check 
 "Binary smoke & e2e" and "Desktop smoke & e2e" belong to aggregate gate jobs that succeed only when every
 shard of their matrix succeeded; renaming a gate without updating the ruleset blocks the merge queue.
 Shard counts trade runner minutes for wall time and are tuned against observed per-job durations.
+Native artifact smokes run only in shard 1: repeating an identical probe per shard adds no coverage and
+multiplies exposure to runner-environment faults.
+
+Linux desktop jobs start Xvfb as their own step and proceed only once an X client connects to the exported
+`DISPLAY`; a server that never answers is restarted a bounded number of times, then fails the job. Only the
+virtual display is retried, never the smoke or the browser tests: once the display is proven, every
+application failure fails CI.
 
 A platform's native behavior is proven only on that platform. Windows remains a PR gate because its
 executable, environment, path, and trash behavior differs materially from POSIX hosts. Its subprocess
