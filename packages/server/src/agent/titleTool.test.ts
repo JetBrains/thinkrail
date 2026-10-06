@@ -35,7 +35,7 @@ test("set_title delegates the write policy to the host handler and returns its v
 test("the guidance names once-only, user-language, and the PR/issue form", () => {
 	const tool = createSetTitleTool();
 	const guidance = [tool.description, ...(tool.promptGuidelines ?? [])].join("\n");
-	expect(guidance).toContain("once per conversation");
+	expect(guidance).toContain("once per conversation, with chat_title, workspace_name and branch");
 	expect(guidance).toContain("language the user writes in");
 	expect(guidance).toContain("<Verb> #<number> <its exact title>");
 });
@@ -52,11 +52,15 @@ test("the tool is registered for top-level sessions, never in a subagent child's
 });
 
 test("pendingNamingRule names exactly what is still unnamed, and vanishes once both are named", () => {
-	expect(pendingNamingRule(true, true)).toContain(
-		"this chat has no title and its workspace has no name yet",
-	);
-	expect(pendingNamingRule(true, false)).toContain("this chat has no title yet");
-	expect(pendingNamingRule(false, true)).toContain("its workspace has no name yet");
+	const both = pendingNamingRule(true, true);
+	expect(both).toContain("this chat has no title and its workspace has no name yet");
+	expect(both).toContain("call set_title with chat_title, workspace_name and branch before");
+	const chatOnly = pendingNamingRule(true, false);
+	expect(chatOnly).toContain("this chat has no title yet");
+	expect(chatOnly).toContain("call set_title with chat_title before");
+	const workspaceOnly = pendingNamingRule(false, true);
+	expect(workspaceOnly).toContain("its workspace has no name yet");
+	expect(workspaceOnly).toContain("call set_title with workspace_name and branch before");
 	expect(pendingNamingRule(false, false)).toBeNull();
 });
 
@@ -81,7 +85,7 @@ test("the turn-start hook adds the pending-naming section only while something i
 		return event.systemPromptOptions.sections["pending-naming"];
 	};
 
-	expect(run(undefined)).toContain("call set_title before your other tool calls");
+	expect(run(undefined)).toContain("before your other tool calls");
 	workspaceUnnamed = false;
 	expect(run("Named")).toBeUndefined();
 	expect(run(undefined)).toContain("this chat has no title yet");
