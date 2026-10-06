@@ -1655,6 +1655,17 @@ async function queueSessionMessage(
 	}
 }
 
+async function steerEntry(
+	entry: Entry,
+	text: string,
+	images: ImageContent[] | undefined,
+): Promise<void> {
+	await queueSessionMessage(entry, "steering", text, images, () =>
+		entry.session.steer(text, images),
+	);
+	if (entry.askUserQuestionWaiters.supersede()) publishEntryState(entry);
+}
+
 export async function promptSession(
 	sessionId: string,
 	text: string,
@@ -1662,9 +1673,7 @@ export async function promptSession(
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
 	if (entry.session.isStreaming) {
-		await queueSessionMessage(entry, "steering", text, images, () =>
-			entry.session.steer(text, images),
-		);
+		await steerEntry(entry, text, images);
 		return;
 	}
 	await entry.session.prompt(text, images ? { images } : undefined);
@@ -1675,10 +1684,7 @@ export async function steerSession(
 	text: string,
 	images?: ImageContent[],
 ): Promise<void> {
-	const entry = mustGetEntry(sessionId);
-	await queueSessionMessage(entry, "steering", text, images, () =>
-		entry.session.steer(text, images),
-	);
+	await steerEntry(mustGetEntry(sessionId), text, images);
 }
 
 export async function followUpSession(
@@ -1757,7 +1763,10 @@ export async function removeQueuedSession(
 	const removed = index >= 0 && index < lane.length ? (lane.splice(index, 1)[0] ?? null) : null;
 	const keep = { ...drained, [kind]: lane };
 	for (const message of keep.steering) {
-		await steerSession(sessionId, message.text, message.images ? [...message.images] : undefined);
+		const images = message.images ? [...message.images] : undefined;
+		await queueSessionMessage(entry, "steering", message.text, images, () =>
+			session.steer(message.text, images),
+		);
 	}
 	for (const message of keep.followUp) {
 		await followUpSession(
