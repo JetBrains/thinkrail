@@ -23,6 +23,7 @@ import {
 	layoutResourceIdentity,
 	normalizePath,
 	readLayoutSelection,
+	relativeTime,
 } from "../lib";
 import type {
 	LayoutAuxiliaryRegion,
@@ -228,7 +229,7 @@ export const SETTLED_SHELF_MORE = 25;
 const DAY_MS = 24 * 60 * 60_000;
 
 export type SettledReason =
-	| { kind: "override" }
+	| { kind: "override"; since?: number }
 	| { kind: "review"; state: "merged" | "closed" }
 	| { kind: "idle"; since: number };
 
@@ -247,7 +248,9 @@ export function settledReasonLabel(reason: SettledReason, now: number): string {
 export function settledReasonTitle(reason: SettledReason, now: number): string {
 	switch (reason.kind) {
 		case "override":
-			return "Settled by you";
+			return reason.since === undefined
+				? "Settled by you"
+				: `Settled by you ${relativeTime(reason.since, now)}`;
 		case "review":
 			return reason.state === "merged" ? "Pull request merged" : "Pull request closed";
 		case "idle":
@@ -284,7 +287,11 @@ export function selectWorkspaceSettledReason(
 	) {
 		return null;
 	}
-	if (workspace.settledOverride === "settled") return { kind: "override" };
+	if (workspace.settledOverride === "settled") {
+		return workspace.settledAt === undefined
+			? { kind: "override" }
+			: { kind: "override", since: workspace.settledAt };
+	}
 	if (workspace.settledOverride === "active") return null;
 	if (state.activeWorkspaceId === workspace.id && state.activeWorkspaceLiveLatch) return null;
 	const review = workspace.review;

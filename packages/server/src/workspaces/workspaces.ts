@@ -20,7 +20,6 @@ import {
 	git,
 	gitAsync,
 	gitHeadSha,
-	gitStatus,
 	listRemotes,
 	remoteNameOf,
 	remoteRefOid,
@@ -599,22 +598,46 @@ async function unpushedCommits(ws: Workspace): Promise<number | null> {
 	return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
+const REMOVAL_PREVIEW_CONCURRENCY = 4;
+
+function nulCount(output: string): number {
+	return output.split("\0").filter((field) => field.length > 0).length;
+}
+
+async function uncommittedCount(ws: Workspace): Promise<number | null> {
+	const [tracked, untracked] = await Promise.all([
+		gitAsync(
+			ws.worktreePath,
+			["diff", "--name-only", "-z", "--no-ext-diff", "--end-of-options", "HEAD", "--"],
+			{ raw: true },
+		),
+		gitAsync(ws.worktreePath, ["ls-files", "-z", "--others", "--exclude-standard"], { raw: true }),
+	]);
+	if (!tracked.ok || !untracked.ok) return null;
+	return nulCount(tracked.out) + nulCount(untracked.out);
+}
+
 export async function settledRemovalPreview(ids: string[]): Promise<SettledRemovalPreview[]> {
 	const byId = new Map(loadWorkspaces().map((workspace) => [workspace.id, workspace]));
-	return Promise.all(
-		ids.map(async (id) => {
-			const ws = byId.get(id);
-			if (!ws) return { id, dirty: null, unpushed: null };
-			const [dirty, unpushed] = await Promise.all([
-				gitStatus(id, { kind: "uncommitted" }).then(
-					(status) => status.changes.length,
-					() => null,
-				),
-				unpushedCommits(ws).catch(() => null),
-			]);
-			return { id, dirty, unpushed };
+	const results: SettledRemovalPreview[] = new Array(ids.length);
+	const queue = ids.map((id, index) => ({ id, index }));
+	await Promise.all(
+		Array.from({ length: Math.min(REMOVAL_PREVIEW_CONCURRENCY, queue.length) }, async () => {
+			for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
+				const ws = byId.get(next.id);
+				if (!ws) {
+					results[next.index] = { id: next.id, dirty: null, unpushed: null };
+					continue;
+				}
+				const [dirty, unpushed] = await Promise.all([
+					uncommittedCount(ws).catch(() => null),
+					unpushedCommits(ws).catch(() => null),
+				]);
+				results[next.index] = { id: next.id, dirty, unpushed };
+			}
 		}),
 	);
+	return results;
 }
 
 export async function listWorkspaces(

@@ -499,14 +499,17 @@ enabled/confirmed choice before entering analytics attribution.
   calls `recordWorkspaceHead`. Reading a result, selecting a workspace, or opening files never stamps —
   "looking is not working" is the user-visible rule. `workspace.settle` / `workspace.unsettle` /
   `workspace.settledRemovalPreview` are thin handlers over the module. **Review refresh:** after a
-  `workspace.list` reply and on a five-minute timer the host refreshes the `review` snapshot of every
-  *candidate-live* row of each open project (not overridden-settled, not already merged/closed, not past
-  the idle window — the host can evaluate those three cheaply and they are exactly the rows whose PR state
-  can still change the partition), bounded to a few concurrent provider calls and riding the module's 60 s
-  cache; a fresh `workspace.openReview` for the active workspace also writes the snapshot, so the active
-  row is always current. **Backfill:** the same post-list pass gives records without `lastActiveAt` their
-  stamp from the newest chat's `updatedAt` (`listSessions`), else the worktree's `.git` gitfile mtime,
-  else now, through `backfillWorkspaceActivity` — once per record, since the stamp then exists.
+  `workspace.list` reply and on a five-minute timer the host refreshes the `review` snapshot of the rows
+  whose PR state can still change the partition — live rows on every pass, **idle-settled rows at most
+  every 30 minutes** (a PR opened for a dormant branch from outside ThinkRail must still bring it back,
+  but dormant branches are the long tail and must stay cheap), and never rows parked by the user (the
+  override wins regardless) or already merged/closed (a reopened review is caught on activation) —
+  bounded to a few concurrent provider calls and riding the module's 60 s cache; a fresh
+  `workspace.openReview` for the active workspace also writes the snapshot, so the active row is always
+  current. **Backfill:** the same post-list pass gives records without `lastActiveAt` their
+  stamp from the newest chat's `updatedAt` (`listSessions`), else the worktree's `.git` gitfile mtime
+  (managed and external worktrees alike — only the Default row, whose `.git` is the repository itself,
+  skips to now), through `backfillWorkspaceActivity` — once per record, since the stamp then exists.
 
 ## Get right
 

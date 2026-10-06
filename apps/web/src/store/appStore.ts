@@ -1227,6 +1227,8 @@ function workspaceActivationPatch(
 		| "workspaces"
 		| "sessionStateByWorkspace"
 		| "settleIdleDays"
+		| "activeWorkspaceId"
+		| "activeWorkspaceLiveLatch"
 	>,
 	workspace: Pick<Workspace, "id" | "projectId">,
 ):
@@ -1240,16 +1242,19 @@ function workspaceActivationPatch(
 	| Record<string, never> {
 	if (state.removedWorkspaceIds[workspace.id]) return {};
 	const record = state.workspaces[workspace.projectId]?.find((w) => w.id === workspace.id);
+	const activeWorkspaceLiveLatch =
+		state.activeWorkspaceId === workspace.id
+			? state.activeWorkspaceLiveLatch
+			: record === undefined ||
+				selectWorkspaceSettledReason(
+					{ ...state, activeWorkspaceId: null, activeWorkspaceLiveLatch: false },
+					record,
+					Date.now(),
+				) === null;
 	return {
 		selectedProjectId: workspace.projectId,
 		activeWorkspaceId: workspace.id,
-		activeWorkspaceLiveLatch:
-			record === undefined ||
-			selectWorkspaceSettledReason(
-				{ ...state, activeWorkspaceId: null, activeWorkspaceLiveLatch: false },
-				record,
-				Date.now(),
-			) === null,
+		activeWorkspaceLiveLatch,
 		workspaceSelectionHistory: withWorkspaceSelected(state.workspaceSelectionHistory, workspace.id),
 	};
 }

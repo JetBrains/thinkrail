@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { SessionStateRecord, Workspace } from "@thinkrail/contracts";
 import { useAppStore } from "./appStore";
-import { selectWorkspacePartition, selectWorkspaceSettledReason } from "./selectors";
+import {
+	selectWorkspacePartition,
+	selectWorkspaceSettledReason,
+	settledReasonTitle,
+} from "./selectors";
 
 const DAY = 24 * 60 * 60_000;
 const NOW = 1_800_000_000_000;
@@ -93,6 +97,16 @@ describe("selectWorkspaceSettledReason", () => {
 		expect(
 			selectWorkspaceSettledReason(base, ws("parked", { settledOverride: "settled" }), NOW),
 		).toEqual({ kind: "override" });
+		expect(
+			selectWorkspaceSettledReason(
+				base,
+				ws("parked-at", { settledOverride: "settled", settledAt: NOW - 2 * DAY }),
+				NOW,
+			),
+		).toEqual({ kind: "override", since: NOW - 2 * DAY });
+		expect(settledReasonTitle({ kind: "override", since: NOW - 2 * DAY }, NOW)).toBe(
+			"Settled by you 2d ago",
+		);
 		expect(
 			selectWorkspaceSettledReason(
 				base,
@@ -209,6 +223,21 @@ describe("the active-workspace live latch", () => {
 		store.activateWorkspace({ id: "fresh", projectId: "p1" });
 		expect(useAppStore.getState().activeWorkspaceLiveLatch).toBe(true);
 		store.activateWorkspace({ id: "idle", projectId: "p1" });
+		expect(useAppStore.getState().activeWorkspaceLiveLatch).toBe(false);
+	});
+
+	test("re-activating the current workspace keeps its latch instead of re-judging it", () => {
+		const store = useAppStore.getState();
+		const aging = ws("aging", { lastActiveAt: Date.now() - 1000 });
+		store.setWorkspaces("p1", [aging]);
+		store.activateWorkspace({ id: "aging", projectId: "p1" });
+		expect(useAppStore.getState().activeWorkspaceLiveLatch).toBe(true);
+		store.updateWorkspace(ws("aging", { lastActiveAt: NOW - 400 * DAY }));
+		store.activateWorkspace({ id: "aging", projectId: "p1" });
+		expect(useAppStore.getState().activeWorkspaceLiveLatch).toBe(true);
+		store.activateWorkspace({ id: "fresh", projectId: "p1" });
+		store.setWorkspaces("p1", [ws("fresh"), ws("aging", { lastActiveAt: NOW - 400 * DAY })]);
+		store.activateWorkspace({ id: "aging", projectId: "p1" });
 		expect(useAppStore.getState().activeWorkspaceLiveLatch).toBe(false);
 	});
 

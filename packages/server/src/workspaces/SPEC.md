@@ -235,9 +235,13 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `setWorkspaceSubagentsOverride`, `recordWorkspaceActivity`, `backfillWorkspaceActivity`,
   `recordWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`,
   `settledRemovalPreview`.
-- `settledRemovalPreview(ids)` (**async**) — per worktree the dirty-file count (`gitStatus`) and the
-  commits its branch has that its upstream lacks (`countPushDivergence`), both through the `git` barrel;
-  unreadable worktrees report `null` counts rather than a false clean. It is the preview behind the rail's
+- `settledRemovalPreview(ids)` (**async**) — per worktree the dirty-file count (tracked `diff --name-only`
+  + untracked `ls-files --others`, two cheap `gitAsync` reads rather than the Changes panel's full
+  `gitStatus`, which also reads file contents) and the commits its branch has that its upstream lacks
+  (`countPushDivergence`, falling back to `base..HEAD` for a never-pushed branch); the fan-out is bounded
+  to four worktrees at a time, because the motivating shelf holds dozens of rows and an unbounded
+  `Promise.all` would spawn hundreds of git processes at once; unreadable worktrees report `null` counts
+  rather than a false clean. It is the preview behind the rail's
   bulk *Remove all settled…*, which excludes flagged rows unless the user opts them in; the removal itself
   is the unchanged per-id `removeWorkspace`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;

@@ -1,11 +1,24 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	realpathSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { SessionStateRecord, Workspace } from "@thinkrail/contracts";
 import { resetConfigCache, updateConfig } from "../settings";
-import { createWorkspace, listWorkspaceRecords, settleWorkspace } from "../workspaces";
-import { candidateLiveRows, scheduleLifecyclePass, stampSessionActivity } from "./settledLifecycle";
+import {
+	createWorkspace,
+	listWorkspaceRecords,
+	openExistingWorktree,
+	settleWorkspace,
+} from "../workspaces";
+import { reviewRefreshRows, scheduleLifecyclePass, stampSessionActivity } from "./settledLifecycle";
 
 let dataDir: string;
 let repo: string;
@@ -55,7 +68,7 @@ afterEach(() => {
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
 });
 
-test("candidate-live rows are the ones whose review can still change the partition", () => {
+test("review refresh covers live rows every pass and idle rows on a 30-minute pace, never parked or closed ones", () => {
 	const now = Date.now();
 	const rows = [
 		row({ id: "default", kind: "default", lastActiveAt: now }),
@@ -72,15 +85,37 @@ test("candidate-live rows are the ones whose review can still change the partiti
 		row({ id: "fresh", lastActiveAt: now - 1 * DAY_MS }),
 		row({ id: "unstamped" }),
 	];
-	expect(candidateLiveRows(rows, now).map((r) => r.id)).toEqual([
+	const never = new Map<string, number>();
+	expect(reviewRefreshRows(rows, now, never).map((r) => r.id)).toEqual([
 		"pinned",
 		"open-stale",
+		"idle",
 		"fresh",
 		"unstamped",
 	]);
 
+	const justRefreshed = new Map([["idle", now - 5 * 60_000]]);
+	expect(reviewRefreshRows(rows, now, justRefreshed).map((r) => r.id)).not.toContain("idle");
+	const stale = new Map([["idle", now - 31 * 60_000]]);
+	expect(reviewRefreshRows(rows, now, stale).map((r) => r.id)).toContain("idle");
+
 	updateConfig({ settleIdleDays: null });
-	expect(candidateLiveRows(rows, now).map((r) => r.id)).toContain("idle");
+	expect(reviewRefreshRows(rows, now, justRefreshed).map((r) => r.id)).toContain("idle");
+});
+
+test("the lifecycle pass backfills an external worktree from its gitfile, not from now", async () => {
+	const path = join(dataDir, "outside");
+	git(repo, "worktree", "add", "-b", "outside", path);
+	const attached = await openExistingWorktree("p1", path);
+	const all = JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8")) as Workspace[];
+	for (const record of all) if (record.id === attached.id) delete record.lastActiveAt;
+	writeFileSync(join(dataDir, "workspaces.json"), JSON.stringify(all));
+	const gitfileAt = statSync(join(path, ".git")).mtimeMs;
+
+	await scheduleLifecyclePass("p1");
+
+	const after = listWorkspaceRecords("p1").find((r) => r.id === attached.id);
+	expect(after?.lastActiveAt).toBe(gitfileAt);
 });
 
 test("a running session stamps its workspace; idle state changes do not", async () => {

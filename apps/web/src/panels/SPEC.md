@@ -83,7 +83,10 @@ treatment.
   `workspace.settledRemovalPreview` and names how many settled worktrees hold uncommitted changes or
   unpushed commits — those are **excluded unless the user ticks *Include them***, the confirm button
   carries the final count, and confirming issues the ordinary `workspace.remove` per id (branches kept, as
-  the single-row confirm already promises). Nothing about settling touches disk: the shelf is a list state,
+  the single-row confirm already promises). **Unknown is unsafe, never clean:** a `null` count, a row the
+  preview did not return, or a failed preview request flags the row as *couldn't be checked* and excludes
+  it the same way, so a worktree git could not inspect is never removed without the explicit opt-in, and
+  the button stays disabled while the check is still running. Nothing about settling touches disk: the shelf is a list state,
   and *Remove* stays the only teardown. Why this shape (recorded once): an explicit-archive-only rail left
   the housekeeping to the user (48 rows on the author's machine), a pure recency fold had no way to say
   "done", and a hidden Archived tier made rows disappear without a visible home — the shelf keeps every
