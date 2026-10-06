@@ -151,12 +151,14 @@ test("a branch without workspace_name is rejected before anything is written", a
 	expect(getWorkspace(ws.id).renamed).toBeUndefined();
 });
 
-test("a chat-only call on an unnamed workspace says the workspace still needs a name", async () => {
+test("a chat-only call on an unnamed workspace is rejected before anything is written", async () => {
 	const ws = await createWorkspace("p1");
-	const text = await applyAgentTitle("s1", { chat_title: "Fix login" }, fakeChat(ws.id).deps);
-	expect(text).toBe(
-		'Chat title set to "Fix login".\nWorkspace is still unnamed: call set_title again with workspace_name and branch.',
+	const chat = fakeChat(ws.id);
+	await expect(applyAgentTitle("s1", { chat_title: "Fix login" }, chat.deps)).rejects.toThrow(
+		"pass chat_title, workspace_name and branch together in one call",
 	);
+	expect(chat.writes).toEqual([]);
+	expect(getWorkspace(ws.id).renamed).toBeUndefined();
 
 	renameWorkspace(ws.id, "Mine");
 	const named = await applyAgentTitle("s2", { chat_title: "Other" }, fakeChat(ws.id).deps);
