@@ -70,7 +70,7 @@ toggle is host-synced app config and defaults on (notifications still require th
 - **Public surface (`index.ts` barrel):** `useAttentionNotifications`, `NotificationPermissionPrompt`,
   `ATTENTION_WINDOW_MS`.
 - **Allowed deps:** [[submodule-web-store]] (session-state reads, prompt state + `activateWorkspaceFromRoute`
-  actions), `components/ui` (the preface dialog), [[module-contracts]] (`SessionState` / `SessionCompletion`
+  actions), `ui` (the preface dialog), [[module-contracts]] (`SessionState` / `SessionCompletion`
   types), React, Remix Icon.
 - **Forbidden:** a second source of truth for attention; raw agent-event listening; any host/`pi` import.
 

@@ -1,5 +1,5 @@
+import { Button } from "@thinkrail/ui/button";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import {
 	type NotificationPermissionState,
 	notificationPermission,

@@ -1,4 +1,3 @@
-import { useRef } from "react";
 import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -8,6 +7,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
+import { useRef } from "react";
 import { toast, useAppStore } from "@/store";
 import { snoozePrompt } from "./notificationPrompt";
 import { requestNotificationPermission } from "./webNotifications";
