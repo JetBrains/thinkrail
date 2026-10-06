@@ -16,6 +16,7 @@ import type {
 	ReviewComment,
 	ReviewCommentKind,
 	ReviewCommentStatus,
+	ReviewGuide,
 	ReviewSnapshot,
 } from "@thinkrail/contracts";
 import { classifyBytes, decodeText } from "../fs";
@@ -377,6 +378,13 @@ export async function addComment(input: AddCommentInput): Promise<ReviewComment>
 			snapshot.review.doneFiles = snapshot.review.doneFiles.filter((p) => p !== key);
 		persistAndPublish(input.workspaceId, snapshot);
 		return comment;
+	});
+}
+
+export async function setReviewGuide(workspaceId: string, guide: ReviewGuide): Promise<void> {
+	return mutateSnapshot(workspaceId, (snapshot) => {
+		snapshot.review.guide = guide;
+		persistAndPublish(workspaceId, snapshot);
 	});
 }
 

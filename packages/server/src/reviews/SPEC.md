@@ -203,7 +203,10 @@ lands can still finish its record; archived updates persist without publishing a
   (draft-only), `clearReview`, `markCommentsSent`, `rollbackSend` (undo `markCommentsSent` on a
   pre-turn send rejection), `markFileDone`, `fileReviewSession` + `reviewSessionKey`/`REVIEW_LEVEL_KEY` (the
   per-key chat pin), `resolveCommentFromAgent`, `reanchorWorkspace`, `sendableComments`,
-  `buildSendPackage`, `removeWorkspaceReviews`, `setReviewPublisher` (+ the pure
+  `buildSendPackage`, `removeWorkspaceReviews`, `setReviewPublisher`, `setReviewGuide` (the newest
+  plan-step verdict's narrative — summary, suggested reading order, verdict, provenance — stored on the
+  open review as `review.guide` and fanned out with the snapshot, so the Changes review tab can walk it
+  without a second read; written by `host`'s verdict recorder, never by a client) (+ the pure
   anchoring/render helpers: `reanchor`, `buildTextQuote`, `hashContent`, `lineRangeOf`, `textQuoteOf`,
   `renderPackage`).
 - **Allowed deps:** `contracts` (types), `persistence` (data dir), `log`, `workspaces` (worktree path lookup),

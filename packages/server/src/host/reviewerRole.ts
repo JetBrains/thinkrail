@@ -1,3 +1,5 @@
+import { REVIEW_READING_ORDER_LIMIT } from "@thinkrail/contracts";
+
 export const REVIEWER_TOOLS = [
 	"read",
 	"grep",
@@ -71,12 +73,15 @@ export const REVIEWER_SYSTEM_PROMPT = [
 	"```json",
 	'{ "verdict": "approve" | "request_changes",',
 	'  "summary": "one short paragraph on the overall judgement",',
+	'  "readingOrder": [ { "path": "src/x.ts", "why": "one line: why a reader should start here" } ],',
 	'  "findings": [ { "id": "f1", "path": "src/x.ts", "startLine": 12, "endLine": 14, "body": "what is wrong and what to do" } ] }',
 	"```",
 	"Use `approve` only when nothing blocks (findings may then be empty); approving without having read",
 	"the change set, or requesting changes with no finding, are both failures. Every finding needs a",
 	"stable `id` and a `body`; `path`/`startLine`/`endLine` are optional but include them when the problem",
-	"is at a location.",
+	"is at a location. `readingOrder` is optional: when the change set spans several files, list the changed",
+	`files (at most ${REVIEW_READING_ORDER_LIMIT}) in the order a human should read them to understand the change, each with one`,
+	"line of why — contracts and data shapes before their consumers, the core change before its tests.",
 ].join("\n");
 
 export const REVIEWER_OUTPUT_CONTRACT =
