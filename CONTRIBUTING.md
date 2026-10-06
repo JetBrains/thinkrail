@@ -29,8 +29,9 @@ bun run dev
 ```
 
 `bun run dev` boots the host and the web client together and cleans up on `Ctrl+C`. Source/dev runs expose
-no application updater: update a checkout with Git and rebuild it. On-disk app state lives under
-`~/.thinkrail`.
+no application updater: update a checkout with Git and rebuild it. Running `thinkrail update` from a
+checkout installs a published binary; it does not pull, install dependencies, or rebuild. On-disk app
+state lives under `~/.thinkrail`.
 
 To run the launchers:
 
@@ -53,12 +54,11 @@ channel via `bun run smoke:desktop:installer <path> <stable|canary>`.
 
 ## Artifact signing
 
-JetBrains signs the Windows CLI and desktop setup executable. The macOS CLI is signed
-but not yet notarized; Linux artifacts are unsigned. Signed and notarized desktop
-DMGs require the coordinated JetBrains service pipeline, which consumes Electrobun's
-expanded app archive for signing and SRE DMG finalization — that intermediate archive
-is not a public download, and the macOS signing limitation stands until the pipeline
-update is deployed. Local installer smoke is not notarization verification.
+Release artifacts are signed by JetBrains' private release pipeline: the macOS desktop DMG is signed,
+notarized, and stapled; the macOS CLI is signed but not notarized; the Windows CLI and desktop setup
+executable are signed; Linux artifacts are unsigned. For macOS, the pipeline signs Electrobun's expanded
+app archive and finalizes the DMG around it — that intermediate archive is never a public download.
+Packages you build locally are unsigned, and local installer smoke is not notarization verification.
 Electrobun 2.0.1 provides no macOS Intel desktop build.
 
 ## Architecture (three rings)
@@ -72,21 +72,8 @@ Electrobun 2.0.1 provides no macOS Intel desktop build.
 
 The engine is **`pi` only, run in-process** via `@earendil-works/pi-coding-agent`.
 `apps/web` depends on `packages/contracts` only — never on the server — which is what
-makes the UI shippable on its own.
-
-```
-apps/
-  cli/        browser launcher: boot host + open browser
-  web/        mobile-first UI client
-  desktop/    Electrobun local-host launcher + native packaging
-  website/    public landing + blog + vibecoding site (Cloudflare Pages)
-packages/
-  artifact-tests/ source-only CLI/desktop artifact and installer tests
-  server/     createServer(): Bun.serve + AgentSessionManager
-  contracts/  the wire (types-only)
-  shared/     server-side helpers (shellEnv, freePort)
-  spec-graph/ portable pi extension: spec_* tools + skill
-```
+makes the UI shippable on its own. The full package map, including the bundled `pi`
+extensions, lives in [`architecture.md`](architecture.md#topology--three-rings).
 
 ## Testing and linting
 
@@ -109,6 +96,8 @@ bun run e2e -- e2e/changes.spec.ts                  # focused iteration
 bun run e2e -- --last-failed                        # repair loop
 bun run e2e:serial                                  # one-host debugging fallback
 bun run e2e -- --shards=12                          # explicit 1–16 override
+bun run e2e:binary                                  # packaged CLI host (build first)
+bun run e2e:desktop                                 # packaged desktop host (build first)
 bun run e2e:full                                    # everything; needs pi auth
 bun run e2e:agent                                   # only @agent; remains serial
 ```
