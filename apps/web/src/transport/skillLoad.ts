@@ -55,7 +55,8 @@ export function createSkillLoadRequests(deps: SkillLoadDependencies) {
 			return { result, syncedTick };
 		},
 		async getSessionMessages(params: WsParams<"session.getMessages">) {
-			const syncedTick = await prepare(params.workspaceId, false);
+			const syncedTick = deps.workspaceTick(params.workspaceId);
+			prepare(params.workspaceId, false).catch(() => {});
 			const result = await deps.getSessionMessages(params);
 			if (
 				result.summary.workspaceId !== params.workspaceId ||
