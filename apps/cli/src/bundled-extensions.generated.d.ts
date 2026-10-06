@@ -5,7 +5,7 @@
 
 import type { BundledExtensionFactory } from "@thinkrail/server";
 
-/** The bundled pi extensions' default-export factories, value-imported, in load order. */
+/** The bundled pi packages' default-export factories, value-imported, in load order (registry extensions arrive through `@thinkrail/server`'s own import graph). */
 export declare const bundledExtensionFactories: BundledExtensionFactory[];
 
 export declare const bundledWebAccessFactory: BundledExtensionFactory;
@@ -17,7 +17,7 @@ export interface EmbeddedSkillFile {
 	data: string;
 }
 
-/** Every file under the bundled extensions' wired `skills/` dirs, embedded into the single-file binary. */
+/** Every file under the bundled skill roots (`BuildRuntimeSources.skillRoots`), embedded into the single-file binary. */
 export declare const embeddedSkillFiles: EmbeddedSkillFile[];
 
 /** Content hash of the embedded skills — keys the on-disk staging dir so a new build re-extracts. */

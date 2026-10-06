@@ -48,10 +48,9 @@ rmSync(stageDir, { recursive: true, force: true });
 mkdirSync(runtimeDir, { recursive: true });
 const sources = resolveBuildRuntimeSources();
 const skillRoutes = new Set<string>();
-for (const extension of sources.extensions) {
-	if (!extension.skills) continue;
-	for (const source of listFiles(extension.skills).sort()) {
-		const route = relative(extension.skills, source).split(sep).join("/");
+for (const skillRoot of sources.skillRoots) {
+	for (const source of listFiles(skillRoot).sort()) {
+		const route = relative(skillRoot, source).split(sep).join("/");
 		if (skillRoutes.has(route)) throw new Error(`duplicate staged skill route: ${route}`);
 		skillRoutes.add(route);
 		const destination = join(runtimeDir, "skills", route);
@@ -80,7 +79,7 @@ export async function startDesktopHost(options) {
       macos: options.runtimeDir + "/macos-trash",
       windows: options.runtimeDir + "/windows-trash.exe",
     },
-    ${bundledRuntimeKeys.webAccessFactory}: factory0,
+    ${bundledRuntimeKeys.webAccessFactory}: factory${sources.webAccessIndex},
   });
   return bootHost({
     port: 0,
