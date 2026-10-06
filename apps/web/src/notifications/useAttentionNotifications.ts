@@ -12,7 +12,7 @@ import {
 } from "./webNotifications";
 
 /** Collection-window length: enqueued edges accumulate this long, then flush as one batch. */
-export const ATTENTION_WINDOW_MS = 2000;
+export const ATTENTION_WINDOW_MS = 1000;
 
 type AppState = ReturnType<typeof useAppStore.getState>;
 

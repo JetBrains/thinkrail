@@ -32,7 +32,7 @@ Producer → queue → consumer, so the decision to notify is deferred to the mo
   silently on the first installed snapshot and on every reconnect (`connectionGeneration` change) so a
   fresh `installSessionStateSnapshot` never storms.
 - **Engine** (`attentionNotificationEngine`): a DOM-free queue with one global collection window
-  (`ATTENTION_WINDOW_MS`, 2s). Accumulated edges flush as one batch; the latest event per session wins.
+  (`ATTENTION_WINDOW_MS`, 1s). Accumulated edges flush as one batch; the latest event per session wins.
 - **Consumer** (flush): emits only when every gate passes — master toggle on, permission granted, window
   **not** focused, and the session's dot **still lit** (already-answered edges are dropped). One surviving
   session opens its chat (`requestChatLocation`); several focus the app. `formatNotification` composes
