@@ -1,4 +1,4 @@
-import type { OpenBranchReview } from "@thinkrail/contracts";
+import type { BranchReviewState, OpenBranchReview } from "@thinkrail/contracts";
 import { git, nonInteractiveGitEnv } from "../git";
 import { runBounded } from "../subprocess";
 
@@ -11,8 +11,15 @@ type CommandResult = { ok: boolean; out: string };
 type CommandRunner = (cwd: string, command: string[]) => Promise<CommandResult>;
 type LookupResult = { value: OpenBranchReview | null; cacheable: boolean };
 type LookupOptions = { fresh?: boolean; now?: () => number };
-type ReviewRow = { number: number; url?: string };
-type ParsedReviewRow = { valid: true; value: ReviewRow | null } | { valid: false };
+type ReviewRow = {
+	number: number;
+	url?: string;
+	state?: BranchReviewState;
+	changedAt?: number;
+	createdAt?: number;
+};
+type ParsedReviewRows = { valid: true; rows: ReviewRow[] } | { valid: false };
+const REVIEW_ROW_LIMIT = "5";
 
 function detectReviewProviderResult(cwd: string, branch: string): ProviderDetection {
 	const configured = [
@@ -140,26 +147,40 @@ async function lookupOpenBranchReview(
 						"--head",
 						branch,
 						"--state",
-						"open",
+						"all",
 						"--json",
-						"number,url",
+						"number,url,state,mergedAt,closedAt,createdAt",
 						"--limit",
-						"1",
+						REVIEW_ROW_LIMIT,
 					]
-				: ["glab", "mr", "list", "--source-branch", branch, "--output", "json", "--per-page", "1"];
+				: [
+						"glab",
+						"mr",
+						"list",
+						"--source-branch",
+						branch,
+						"--all",
+						"--output",
+						"json",
+						"--per-page",
+						REVIEW_ROW_LIMIT,
+					];
 		const result = await run(cwd, command);
 		if (!result.ok) return { value: null, cacheable: false };
 
-		const parsed = parseReviewRow(result.out, provider === "github" ? "number" : "iid");
+		const parsed = parseReviewRows(result.out, provider === "github" ? "number" : "iid");
 		if (!parsed.valid) return { value: null, cacheable: false };
+		const row = pickReviewRow(parsed.rows);
 		return {
 			value:
-				parsed.value === null
+				row === null
 					? null
 					: {
 							kind: provider === "github" ? "pull-request" : "merge-request",
-							number: parsed.value.number,
-							...(parsed.value.url ? { url: parsed.value.url } : {}),
+							number: row.number,
+							...(row.url ? { url: row.url } : {}),
+							...(row.state ? { state: row.state } : {}),
+							...(row.changedAt !== undefined ? { changedAt: row.changedAt } : {}),
 						},
 			cacheable: true,
 		};
@@ -176,27 +197,82 @@ function reviewRowUrl(row: Record<string, unknown>): string | undefined {
 	return undefined;
 }
 
-function parseReviewRow(output: string, field: "number" | "iid"): ParsedReviewRow {
+function reviewRowState(row: Record<string, unknown>): BranchReviewState | undefined {
+	const raw = row.state;
+	if (typeof raw !== "string") return undefined;
+	switch (raw.toLowerCase()) {
+		case "open":
+		case "opened":
+		case "locked":
+			return "open";
+		case "merged":
+			return "merged";
+		case "closed":
+			return "closed";
+		default:
+			return undefined;
+	}
+}
+
+function reviewRowTime(row: Record<string, unknown>, keys: string[]): number | undefined {
+	for (const key of keys) {
+		const value = row[key];
+		if (typeof value !== "string") continue;
+		const parsed = Date.parse(value);
+		if (Number.isFinite(parsed)) return parsed;
+	}
+	return undefined;
+}
+
+function parseReviewRows(output: string, field: "number" | "iid"): ParsedReviewRows {
 	try {
 		const rows: unknown = JSON.parse(output);
 		if (!Array.isArray(rows)) return { valid: false };
-		if (rows.length === 0) return { valid: true, value: null };
-		const first: unknown = rows[0];
-		if (typeof first !== "object" || first === null) return { valid: false };
-		const row = first as Record<string, unknown>;
-		const value = row[field];
-		if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0)
-			return { valid: false };
-		const url = reviewRowUrl(row);
-		return { valid: true, value: { number: value, ...(url ? { url } : {}) } };
+		const parsed: ReviewRow[] = [];
+		for (const item of rows) {
+			if (typeof item !== "object" || item === null) return { valid: false };
+			const row = item as Record<string, unknown>;
+			const value = row[field];
+			if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0)
+				return { valid: false };
+			const url = reviewRowUrl(row);
+			const state = reviewRowState(row);
+			const changedAt =
+				state === "merged"
+					? reviewRowTime(row, ["mergedAt", "merged_at"])
+					: state === "closed"
+						? reviewRowTime(row, ["closedAt", "closed_at"])
+						: undefined;
+			const createdAt = reviewRowTime(row, ["createdAt", "created_at"]);
+			parsed.push({
+				number: value,
+				...(url ? { url } : {}),
+				...(state ? { state } : {}),
+				...(changedAt !== undefined ? { changedAt } : {}),
+				...(createdAt !== undefined ? { createdAt } : {}),
+			});
+		}
+		return { valid: true, rows: parsed };
 	} catch {
 		return { valid: false };
 	}
 }
 
+/** An open review wins; otherwise the most recently merged/closed one (newest-created on a tie). */
+export function pickReviewRow(rows: readonly ReviewRow[]): ReviewRow | null {
+	if (rows.length === 0) return null;
+	const open = rows.find((row) => row.state === "open" || row.state === undefined);
+	if (open) return open;
+	return rows.reduce((best, row) => {
+		const bestAt = best.changedAt ?? best.createdAt ?? 0;
+		const rowAt = row.changedAt ?? row.createdAt ?? 0;
+		return rowAt > bestAt ? row : best;
+	});
+}
+
 export function reviewNumber(output: string, field: "number" | "iid"): number | null {
-	const parsed = parseReviewRow(output, field);
-	return parsed.valid ? (parsed.value?.number ?? null) : null;
+	const parsed = parseReviewRows(output, field);
+	return parsed.valid ? (parsed.rows[0]?.number ?? null) : null;
 }
 
 export async function runProviderCommand(

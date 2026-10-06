@@ -96,13 +96,57 @@ test("queries an open GitHub PR for the explicit branch", async () => {
 		"--head",
 		"feature",
 		"--state",
-		"open",
+		"all",
 		"--json",
-		"number,url",
+		"number,url,state,mergedAt,closedAt,createdAt",
 		"--limit",
-		"1",
+		"5",
 	]);
 	expect(review).toEqual({ kind: "pull-request", number: 214 });
+});
+
+test("an open review wins over newer merged or closed ones, and carries its state", async () => {
+	const cwd = repo("git@github.com:acme/app.git");
+	const review = await findOpenBranchReviewWithRunner(cwd, "feature", async () => ({
+		ok: true,
+		out: JSON.stringify([
+			{
+				number: 300,
+				state: "CLOSED",
+				closedAt: "2026-10-05T10:00:00Z",
+				createdAt: "2026-10-04T00:00:00Z",
+			},
+			{ number: 299, state: "OPEN", createdAt: "2026-10-01T00:00:00Z" },
+		]),
+	}));
+	expect(review).toEqual({ kind: "pull-request", number: 299, state: "open" });
+});
+
+test("without an open review the most recently merged or closed one is reported with its time", async () => {
+	const cwd = repo("git@github.com:acme/app.git");
+	const review = await findOpenBranchReviewWithRunner(cwd, "feature", async () => ({
+		ok: true,
+		out: JSON.stringify([
+			{
+				number: 301,
+				state: "CLOSED",
+				closedAt: "2026-10-02T10:00:00Z",
+				createdAt: "2026-10-02T00:00:00Z",
+			},
+			{
+				number: 298,
+				state: "MERGED",
+				mergedAt: "2026-10-03T12:00:00Z",
+				createdAt: "2026-09-30T00:00:00Z",
+			},
+		]),
+	}));
+	expect(review).toEqual({
+		kind: "pull-request",
+		number: 298,
+		state: "merged",
+		changedAt: Date.parse("2026-10-03T12:00:00Z"),
+	});
 });
 
 test("queries an open GitLab MR for the explicit branch", async () => {
@@ -119,12 +163,35 @@ test("queries an open GitLab MR for the explicit branch", async () => {
 		"list",
 		"--source-branch",
 		"feature",
+		"--all",
 		"--output",
 		"json",
 		"--per-page",
-		"1",
+		"5",
 	]);
 	expect(review).toEqual({ kind: "merge-request", number: 73 });
+});
+
+test("GitLab's opened/merged/closed vocabulary and snake_case times normalize to the wire state", async () => {
+	const cwd = repo("https://gitlab.com/acme/app.git");
+	const review = await findOpenBranchReviewWithRunner(cwd, "feature", async () => ({
+		ok: true,
+		out: JSON.stringify([
+			{
+				iid: 74,
+				state: "merged",
+				merged_at: "2026-10-01T08:00:00Z",
+				web_url: "https://gitlab.com/acme/app/-/merge_requests/74",
+			},
+		]),
+	}));
+	expect(review).toEqual({
+		kind: "merge-request",
+		number: 74,
+		url: "https://gitlab.com/acme/app/-/merge_requests/74",
+		state: "merged",
+		changedAt: Date.parse("2026-10-01T08:00:00Z"),
+	});
 });
 
 test("failed and malformed lookups degrade to null without being cached", async () => {
