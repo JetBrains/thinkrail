@@ -5,20 +5,29 @@ import { ChangeRowActions, ROW_MENU_SLOT } from "./ChangeRowActions";
 import { buildChangesTree, type ChangeTreeNode, statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { TreeRow } from "./TreeRow";
+import { ViewedMark } from "./ViewedMark";
 
 export function ChangesTree({
 	changes,
 	onOpen,
 	isActive,
+	isViewed,
 }: {
 	changes: readonly GitFileChange[];
 	onOpen: (path: string, intent: TabIntent) => void;
 	isActive: (path: string) => boolean;
+	isViewed: (path: string) => boolean;
 }) {
 	return (
 		<ul className="flex flex-col motion-safe:animate-reveal">
 			{buildChangesTree(changes).map((node) => (
-				<ChangeNodeRow key={node.path} node={node} onOpen={onOpen} isActive={isActive} />
+				<ChangeNodeRow
+					key={node.path}
+					node={node}
+					onOpen={onOpen}
+					isActive={isActive}
+					isViewed={isViewed}
+				/>
 			))}
 		</ul>
 	);
@@ -28,10 +37,12 @@ function ChangeNodeRow({
 	node,
 	onOpen,
 	isActive,
+	isViewed,
 }: {
 	node: ChangeTreeNode;
 	onOpen: (path: string, intent: TabIntent) => void;
 	isActive: (path: string) => boolean;
+	isViewed: (path: string) => boolean;
 }) {
 	const [expanded, setExpanded] = useState(true);
 
@@ -42,6 +53,7 @@ function ChangeNodeRow({
 					path={node.path}
 					active={isActive(node.path)}
 					onView={() => onOpen(node.path, "preview")}
+					onOpenTab={() => onOpen(node.path, "keep")}
 				>
 					{({ onContextMenu }) => (
 						<TreeRow
@@ -51,11 +63,17 @@ function ChangeNodeRow({
 							highlight="wrapper"
 							active={isActive(node.path)}
 							dataStatus={node.status}
+							dataViewed={isViewed(node.path)}
 							label={node.name}
-							labelClassName={statusNameClass(node.status)}
+							labelClassName={`${statusNameClass(node.status)} ${isViewed(node.path) ? "opacity-60" : ""}`}
 							onClick={() => onOpen(node.path, "preview")}
 							onDoubleClick={() => onOpen(node.path, "keep")}
-							trailing={<DiffStatBadge added={node.added} removed={node.removed} />}
+							trailing={
+								<>
+									{isViewed(node.path) ? <ViewedMark /> : null}
+									<DiffStatBadge added={node.added} removed={node.removed} />
+								</>
+							}
 						/>
 					)}
 				</ChangeRowActions>
@@ -79,7 +97,13 @@ function ChangeNodeRow({
 			{expanded && (
 				<ul className="flex flex-col pl-12">
 					{node.children.map((child) => (
-						<ChangeNodeRow key={child.path} node={child} onOpen={onOpen} isActive={isActive} />
+						<ChangeNodeRow
+							key={child.path}
+							node={child}
+							onOpen={onOpen}
+							isActive={isActive}
+							isViewed={isViewed}
+						/>
 					))}
 				</ul>
 			)}
