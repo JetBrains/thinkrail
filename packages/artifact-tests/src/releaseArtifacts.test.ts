@@ -142,6 +142,61 @@ function collect(root: string, target: string, channel: string) {
 	});
 }
 
+function stampIdentity(channel: string, key: string) {
+	const script = action.runs.steps.find(
+		(step) => step.name === "Stamp shared release identity",
+	)?.run;
+	if (!script) throw new Error("release identity stamp script is missing");
+	const root = mkdtempSync(join(tmpdir(), "thinkrail-release-stamp-"));
+	roots.push(root);
+	const bin = join(root, "bin");
+	mkdirSync(bin, { recursive: true });
+	mkdirSync(join(root, "packages/shared/src"), { recursive: true });
+	writeFileSync(join(bin, "git"), "#!/bin/sh\necho abc1234\n", { mode: 0o755 });
+	const result = Bun.spawnSync(["bash", "-c", script], {
+		cwd: root,
+		env: {
+			...process.env,
+			PATH: `${bin}:${process.env.PATH}`,
+			VERSION: "1.2.3",
+			CHANNEL: channel,
+			POSTHOG_PROJECT_KEY: key,
+		},
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const versionPath = join(root, "packages/shared/src/version.ts");
+	return {
+		result,
+		stamped: existsSync(versionPath) ? readFileSync(versionPath, "utf8") : undefined,
+	};
+}
+
+test("release stamping bakes the CI-supplied analytics key without echoing it", () => {
+	const { result, stamped } = stampIdentity("stable", "phc_release");
+	expect(result.exitCode).toBe(0);
+	expect(stamped).toBe(
+		[
+			'export const version = "1.2.3";',
+			'export const channel = "stable";',
+			'export const commit = "abc1234";',
+			'export const posthogProjectKey = "phc_release";',
+			"",
+		].join("\n"),
+	);
+	expect(`${result.stdout}${result.stderr}`).not.toContain("phc_release");
+});
+
+test.each([
+	{ channel: "stable", key: "" },
+	{ channel: "nightly", key: "not-a-key" },
+	{ channel: "dev", key: "phc_release" },
+])("release stamping fails closed for %j", ({ channel, key }) => {
+	const { result, stamped } = stampIdentity(channel, key);
+	expect(result.exitCode).not.toBe(0);
+	expect(stamped).toBeUndefined();
+});
+
 test("Windows packaging places System32 tar ahead of Git tar", () => {
 	const root = fixture();
 	const bin = join(root, "bin");
