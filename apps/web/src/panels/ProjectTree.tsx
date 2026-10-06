@@ -545,7 +545,13 @@ function WorkspaceRow({
 		setMenuOpen(true);
 	};
 	const [confirmOpen, setConfirmOpen] = useState(false);
-	const rename = useWorkspaceRename({
+	const {
+		editing,
+		nameRef,
+		start: startRename,
+		inputProps: renameInputProps,
+		onMenuCloseAutoFocus,
+	} = useWorkspaceRename({
 		workspace,
 		canRename,
 		onRename: (_target, name) => onRename(name),
@@ -584,19 +590,19 @@ function WorkspaceRow({
 					isActive || menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"
 				}`}
 			>
-				{rename.editing ? (
+				{editing ? (
 					<div className={identityClass}>
 						{identityIcon}
 						<span className="flex min-w-0 flex-1 flex-col">
 							<input
-								ref={rename.nameRef}
+								ref={nameRef}
 								data-testid="workspace-name"
 								data-editing
 								type="text"
 								spellCheck={false}
 								aria-label="Workspace name"
 								defaultValue={workspace.name}
-								{...rename.inputProps}
+								{...renameInputProps}
 								className={`w-full min-w-0 truncate border-0 bg-transparent p-0 tr-text-ui leading-tight outline-none ${isActive ? "text-primary" : "text-text-muted"}`}
 							/>
 							{branchLabel}
@@ -628,7 +634,7 @@ function WorkspaceRow({
 					<DropdownMenuContent
 						align="end"
 						data-testid="workspace-actions"
-						onCloseAutoFocus={rename.onMenuCloseAutoFocus}
+						onCloseAutoFocus={onMenuCloseAutoFocus}
 					>
 						{editors.length > 0 && (
 							<DropdownMenuSub>
@@ -650,7 +656,7 @@ function WorkspaceRow({
 							</DropdownMenuSub>
 						)}
 						{canRename ? (
-							<DropdownMenuItem data-testid="workspace-rename" onSelect={rename.start}>
+							<DropdownMenuItem data-testid="workspace-rename" onSelect={startRename}>
 								<Pencil />
 								Rename
 							</DropdownMenuItem>

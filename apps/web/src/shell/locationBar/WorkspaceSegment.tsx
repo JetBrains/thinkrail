@@ -71,7 +71,13 @@ export function WorkspaceSegment({
 	const isDefault = workspace !== null && isDefaultWorkspace(workspace);
 	const isExternal = workspace !== null && isExternalWorkspace(workspace);
 	const name = workspace?.name ?? "Project home";
-	const rename = useWorkspaceRename({ workspace, canRename, onRename: renameWorkspace });
+	const {
+		editing,
+		nameRef,
+		start: startRename,
+		inputProps: renameInputProps,
+		onMenuCloseAutoFocus,
+	} = useWorkspaceRename({ workspace, canRename, onRename: renameWorkspace });
 
 	const switchTargets = (siblings ?? []).filter((candidate) => candidate.id !== workspace?.id);
 
@@ -81,16 +87,16 @@ export function WorkspaceSegment({
 			testid="scope-workspace-segment"
 			className="max-w-[460px] border-l-0 pr-0 pl-0 sm:border-l sm:pr-8 sm:pl-12"
 		>
-			{rename.editing && workspace ? (
+			{editing && workspace ? (
 				<input
-					ref={rename.nameRef}
+					ref={nameRef}
 					data-testid="scope-name"
 					data-editing
 					type="text"
 					spellCheck={false}
 					aria-label="Workspace name"
 					defaultValue={workspace.name}
-					{...rename.inputProps}
+					{...renameInputProps}
 					className="window-no-drag h-22 w-full min-w-0 truncate rounded-[var(--radius-sm)] border-0 bg-control-bg px-8 text-text-default tr-title-section outline-none ring-1 ring-control-border-active"
 				/>
 			) : (
@@ -108,7 +114,7 @@ export function WorkspaceSegment({
 					<DropdownMenuContent
 						align="start"
 						data-testid="scope-workspace-menu"
-						onCloseAutoFocus={rename.onMenuCloseAutoFocus}
+						onCloseAutoFocus={onMenuCloseAutoFocus}
 					>
 						{workspace ? (
 							<>
@@ -133,7 +139,7 @@ export function WorkspaceSegment({
 									</DropdownMenuSub>
 								) : null}
 								{canRename ? (
-									<DropdownMenuItem data-testid="scope-workspace-rename" onSelect={rename.start}>
+									<DropdownMenuItem data-testid="scope-workspace-rename" onSelect={startRename}>
 										<Pencil />
 										Rename
 									</DropdownMenuItem>

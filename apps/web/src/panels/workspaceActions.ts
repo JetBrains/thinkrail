@@ -8,7 +8,7 @@ import {
 	type KeyboardEvent,
 	type RefObject,
 	useEffect,
-	useMemo,
+	useInsertionEffect,
 	useRef,
 	useState,
 } from "react";
@@ -124,34 +124,40 @@ export interface WorkspaceRename {
 	onMenuCloseAutoFocus(event: Event): void;
 }
 
+type RenameControllerOptions = Parameters<typeof createRenameController<Workspace>>[0];
+
+function useRenameController(options: RenameControllerOptions): RenameController<Workspace> {
+	const [controller] = useState(() => createRenameController(options));
+	return controller;
+}
+
 export function useWorkspaceRename(options: {
 	workspace: Workspace | null;
 	canRename: boolean;
 	onRename: (workspace: Workspace, name: string) => void;
 }): WorkspaceRename {
+	const { workspace, canRename, onRename } = options;
 	const [editing, setEditing] = useState(false);
 	const nameRef = useRef<HTMLInputElement>(null);
 	const enterRenameRef = useRef(false);
-	const latest = useRef(options);
-	latest.current = options;
-	const controller = useMemo(
-		() =>
-			createRenameController<Workspace>({
-				canRename: latest.current.canRename,
-				onRename: (target, name) => latest.current.onRename(target, name),
-				onEditingChange: setEditing,
-			}),
-		[],
-	);
+	const onRenameRef = useRef(onRename);
+	useInsertionEffect(() => {
+		onRenameRef.current = onRename;
+	});
+	const controller = useRenameController({
+		canRename: false,
+		onRename: (target, name) => onRenameRef.current(target, name),
+		onEditingChange: setEditing,
+	});
 
-	const workspaceId = options.workspace?.id ?? null;
+	const workspaceId = workspace?.id ?? null;
 	useEffect(() => {
 		controller.reset();
 	}, [controller, workspaceId]);
 
 	useEffect(() => {
-		controller.setCanRename(options.canRename);
-	}, [controller, options.canRename]);
+		controller.setCanRename(canRename);
+	}, [controller, canRename]);
 
 	useEffect(() => {
 		if (!editing) return;
@@ -166,7 +172,6 @@ export function useWorkspaceRename(options: {
 		editing,
 		nameRef,
 		start() {
-			const workspace = latest.current.workspace;
 			if (!workspace) return;
 			enterRenameRef.current = true;
 			controller.start(workspace, workspace.name);
