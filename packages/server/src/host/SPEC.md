@@ -491,8 +491,8 @@ enabled/confirmed choice before entering analytics attribution.
   routes); Bun/Node.
 - **Forbidden:** being imported by any feature module; importing `web`/`cli`/`desktop`.
 
-- **Settled-lifecycle wiring.** The host is where the three activity sources meet the `workspaces`
-  writers: the normalized session-state publisher stamps `recordWorkspaceActivity(record.workspaceId)`
+- **Settled-lifecycle wiring (`settledLifecycle.ts`).** The host is where the three activity sources meet the
+  `workspaces` writers: the normalized session-state publisher stamps `recordWorkspaceActivity(record.workspaceId)`
   whenever a record reports `execution: "running"` (a user prompt flips it, so both user and agent turns
   count — and the writer's one-per-minute coalescing makes a streaming agent cheap), `terminal.write`
   stamps the tab's workspace (the terminal barrel resolves tab → workspace), and the repo-metadata callback

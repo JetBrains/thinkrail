@@ -8,6 +8,7 @@ import {
 	isComposerGrowthLimit,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
+	isSettleIdleDays,
 	isTerminalWindowsShell,
 	normalizeThemePreference,
 	type Project,
@@ -307,6 +308,9 @@ export function loadConfig(): AppConfig {
 		terminalWindowsShell: isTerminalWindowsShell(value.terminalWindowsShell)
 			? value.terminalWindowsShell
 			: DEFAULT_CONFIG.terminalWindowsShell,
+		settleIdleDays: isSettleIdleDays(value.settleIdleDays)
+			? value.settleIdleDays
+			: DEFAULT_CONFIG.settleIdleDays,
 	};
 }
 

@@ -5,6 +5,7 @@ import {
 	isComposerGrowthLimit,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
+	isSettleIdleDays,
 	isSystemThemePair,
 	isTerminalWindowsShell,
 	isThemeMode,
@@ -48,6 +49,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	subagentsEnabled: true,
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: true,
+	settleIdleDays: true,
 	chatMessageOrder: true,
 	layout: true,
 	recentModels: true,
@@ -187,6 +189,12 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		!isJbcentralQuotaRefreshSeconds(jbcentralQuotaRefreshSeconds)
 	) {
 		throw new Error("jbcentralQuotaRefreshSeconds must be a whole number from 1 to 3600");
+	}
+	if (
+		runtimeUpdate.settleIdleDays !== undefined &&
+		!isSettleIdleDays(runtimeUpdate.settleIdleDays)
+	) {
+		throw new Error("settleIdleDays must be a whole number of days from 1 to 365, or null");
 	}
 	if (themeMode !== undefined && !isThemeMode(themeMode)) {
 		throw new Error("themeMode must be fixed or system");

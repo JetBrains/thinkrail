@@ -319,6 +319,10 @@ export function listTerminals(workspaceId: string): TerminalTabInfo[] {
 	return tabsFor(workspaceId).map(({ tabKey, title }) => ({ tabKey, title }));
 }
 
+export function terminalWorkspaceId(id: string): string | null {
+	return terminals.get(id)?.workspaceId ?? null;
+}
+
 function attachedEntry(id: string, caller: string): TerminalEntry | undefined {
 	const entry = terminals.get(id);
 	return entry?.attachedClient === caller ? entry : undefined;

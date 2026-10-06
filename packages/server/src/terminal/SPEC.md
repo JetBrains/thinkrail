@@ -24,7 +24,8 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   `resizeTerminal`, `closeTerminalTab`, `resumeClientTerminals`, `closeWorkspaceTerminals`,
   `persistTerminalSessions`, `reviveTerminalSessions`, `closeAllTerminals`, `resetTerminalState` (test seam),
   `setTerminalPublisher`,
-  `setTerminalTabsPublisher`;
+  `setTerminalTabsPublisher`, `terminalWorkspaceId` (tab id → owning workspace, the one read the host needs
+  to count terminal input as workspace activity without the module knowing about settling);
   the `TerminalDeliveryResult` type shared with the host publisher adapter.
 - **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`, `TerminalWindowsShell`), `bun-pty`,
   `Bun.which`, `process.env`.

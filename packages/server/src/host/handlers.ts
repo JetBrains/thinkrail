@@ -136,6 +136,7 @@ import {
 	listTerminals,
 	reserveTerminal,
 	resizeTerminal,
+	terminalWorkspaceId,
 	writeTerminal,
 } from "../terminal";
 import {
@@ -164,10 +165,15 @@ import {
 	listWorkspaces,
 	openExistingWorktree,
 	reclaimWorktree,
+	recordWorkspaceActivity,
 	renameWorkspace,
+	settledRemovalPreview,
+	settleWorkspace,
 	setWorkspaceDiffBase,
+	setWorkspaceReview,
 	setWorkspaceSkillOverride,
 	setWorkspaceSubagentsOverride,
+	unsettleWorkspace,
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
@@ -194,6 +200,7 @@ import {
 import { startPlanReview } from "./requestReview";
 import { withChangeLock, withReviewLock } from "./reviewLock";
 import { runObservation } from "./runAnalytics";
+import { scheduleLifecyclePass } from "./settledLifecycle";
 import { taskObservation } from "./taskAnalytics";
 import {
 	claimItemFix,
@@ -433,9 +440,11 @@ const handlers: WsHandlers = {
 		return renameWorkspace(p.id, p.name);
 	},
 	"workspace.list": async (p) => {
-		return (
+		const rows = (
 			await listWorkspaces(p.projectId, { includeDiffStats: p.includeDiffStats ?? true })
 		).map((workspace) => ({ ...workspace, ...provisionInitialTerminal(workspace) }));
+		void scheduleLifecyclePass(p.projectId);
+		return rows;
 	},
 	"workspace.openReview": async (p) => {
 		const ws = getWorkspace(p.workspaceId);
@@ -445,6 +454,7 @@ const handlers: WsHandlers = {
 			// Only pay the network fetch on a fresh lookup (focus / explicit refresh), not a cached activation.
 			countPushDivergence(ws.worktreePath, ws.branch, { fetch: fresh }),
 		]);
+		setWorkspaceReview(ws.id, review);
 		if (!review) return review;
 		return {
 			...review,
@@ -452,6 +462,9 @@ const handlers: WsHandlers = {
 			...(divergence && divergence.behind > 0 ? { behindCommits: divergence.behind } : {}),
 		};
 	},
+	"workspace.settle": (params) => settleWorkspace(params.id),
+	"workspace.unsettle": (params) => unsettleWorkspace(params.id),
+	"workspace.settledRemovalPreview": (params) => settledRemovalPreview(params.ids),
 	"workspace.remove": (params) => {
 		const id = params.id;
 		const ws = forgetWorkspace(id);
@@ -656,6 +669,8 @@ const handlers: WsHandlers = {
 	}),
 	"terminal.write": (p, ctx) => {
 		writeTerminal(p.id, p.data, ctx.clientKey);
+		const workspaceId = terminalWorkspaceId(p.id);
+		if (workspaceId) recordWorkspaceActivity(workspaceId);
 		return { ok: true } as const;
 	},
 	"terminal.resize": (p, ctx) => {
