@@ -79,9 +79,12 @@ Local tests use disposable fixtures and have no production access. Run affected 
 caused by the requested change, and rerun them without asking for approval at each step.
 
 - Iterate with the smallest relevant unit or focused E2E target.
-- For shipped app behavior or integration changes, run the complete browser E2E suite once after the
-  combined implementation and before final handoff or PR — not once per TODO item or commit. Use
-  `bun run e2e:full` when the change touches real agent behavior; otherwise use `bun run e2e`.
+- For shipped app behavior or integration changes, run the complete no-agent browser suite
+  (`bun run e2e`) once after the combined implementation and before final handoff or PR — not once per
+  TODO item or commit.
+- When the change touches real agent behavior, also run the focused live specs that cover it, e.g.
+  `bun run e2e:full e2e/agent-naming.live.spec.ts`; that needs no approval. Ask the user before running
+  the complete `bun run e2e:full` suite: it spends real provider tokens and much more time.
 - Documentation/spec-only changes and test-harness-only changes use targeted checks unless they can
   affect the shipped runtime.
 - Fast gates: `bun run check:deps`, `bun run check:boundaries`, `bun run check:seams`, `bun run lint`,
