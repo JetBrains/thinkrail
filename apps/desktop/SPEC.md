@@ -382,12 +382,14 @@ builds, and unit tests do not prepare the native SDK.
 Desktop typechecking consumes the official SDK's `.ts` sources through the same baseUrl-free paths used
 by editor tooling; no handwritten API declarations or shadow typecheck config exist. As explicitly
 approved, desktop alone sets `exactOptionalPropertyTypes: false` to match Electrobun's source contract,
-while retaining `strict: true` and `noUncheckedIndexedAccess: true`. This setting applies to the desktop
-compilation, including imported workspace source; every other package retains its separate unchanged
-strict check. The upstream source incompatibility is tracked in Electrobun issue #516; `skipLibCheck`
-cannot exclude imported implementation `.ts`. The direct-source approach follows the v2 migration guide
-and avoids a second declaration-generation pipeline. Canonical main imports use `electrobun/main`; the
-preload retains `electrobun/view`, and the RPC schema retains its `bun`/`webview` keys.
+while retaining `strict: true` and `noUncheckedIndexedAccess: true`. Desktop also sets
+`noImplicitReturns: false` because Electrobun's browser and native SDK sources fail it; the other base
+lint-style flags stay on. These settings apply to the desktop compilation, including imported workspace
+source; every other package retains its separate unchanged strict check. The optional-property
+incompatibility is tracked in Electrobun issue #516; `skipLibCheck` cannot exclude imported implementation
+`.ts`. The direct-source approach follows the v2 migration guide and avoids a second declaration-generation
+pipeline. Canonical main imports use `electrobun/main`; the preload retains `electrobun/view`, and the RPC
+schema retains its `bun`/`webview` keys.
 
 References: [official v2 migration](https://framework.blackboard.sh/electrobun/guides/migrating-to-v2/),
 [upstream optional-property issue](https://github.com/blackboardsh/electrobun/issues/516).
