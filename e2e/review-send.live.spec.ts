@@ -26,7 +26,7 @@ test("a review send reads back from the chat: summary → file → comment + fra
 			.filter({ hasText: "Couldn't load this workspace's chats" })
 			.getByRole("button", { name: "Dismiss" });
 		if (await staleNotification.isVisible()) await staleNotification.click();
-		await changeItem.click({ timeout: 2_000 });
+		await changeItem.dblclick({ timeout: 2_000 });
 	}).toPass({ timeout: 30_000 });
 	await selectPierreLine(page.getByTestId("diff-view"), "two = 2");
 	await page.getByTestId("review-composer-input").fill("Please rename `two` to `pair`.");

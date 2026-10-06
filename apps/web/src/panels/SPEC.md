@@ -1407,8 +1407,13 @@ own section. The kebab menu (`plan-menu`, a
   the scope's ordered file list, `viewed`, `activePath`, collapse overrides, `Split | Inline`, ¶ — so
   switching never loses review progress; a second tab kind per mode was rejected for exactly that reason.
   **The Changes sidebar is the review tab's navigator**: its row highlight follows the tab's
-  `activePath` (the section at the top of the viewport, or the single file shown), viewed files carry a
-  check glyph, and clicking a row reveals that section; `changesView` defaults to **Tree**. **Scale rules**:
+  `activePath` (the section whose header has crossed the toolbar's midline, or the single file shown),
+  viewed files carry a check glyph, and clicking a row reveals that section (and expands it if it was
+  collapsed); `changesView` defaults to **Tree**, and a file row is `change-item` in both views because
+  it is the same thing. The list ends in a measured tail the height of the viewport so the last file can
+  be scrolled to the top and become active, as on GitHub. The scroll-spy never auto-reveals the Review
+  tool: `selectActiveReviewedPath` deliberately ignores the review tab, because a reveal fired by
+  scrolling would replace the Changes navigator in its shared side group mid-read. **Scale rules**:
   a section whose file changed more than 400 lines, or whose path is a lock/generated file, mounts
   collapsed behind *Expand* / *Open as tab*; a scope with more than 50 files shows a dismissable notice
   offering *One file*; nothing switches mode on its own, because a review surface that re-arranges

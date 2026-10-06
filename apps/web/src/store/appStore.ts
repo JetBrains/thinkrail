@@ -197,6 +197,26 @@ export function chatTabId(workspaceId: string, sessionId: string): string {
 	return tupleKey("chat", workspaceId, sessionId);
 }
 
+export function createChangesTab(
+	workspaceId: string,
+	id: string,
+	name: string,
+	scope: GitDiffScope,
+): ChangesTab {
+	return {
+		kind: "changes",
+		id,
+		workspaceId,
+		name,
+		scope,
+		viewed: [],
+		activePath: null,
+		collapsed: {},
+		reveal: null,
+		sections: {},
+	};
+}
+
 function editorResourceIdentity(tab: EditorTab): string {
 	if (tab.kind === "doc") {
 		return tupleKey("layout-resource", "document", "todo-plan", tab.sourceId);

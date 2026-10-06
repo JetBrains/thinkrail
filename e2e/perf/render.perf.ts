@@ -349,7 +349,7 @@ async function largeDiff(page: Page, run: number): Promise<void> {
 	await expect(change).toBeVisible();
 
 	await measure(page, "large-diff", run, async () => {
-		await change.click();
+		await change.dblclick();
 		const diff = page.getByTestId("diff-view");
 		await expect(diff.getByText("changed line 0", { exact: false }).first()).toBeVisible({
 			timeout: 20_000,

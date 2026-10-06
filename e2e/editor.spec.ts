@@ -170,7 +170,7 @@ test("opens an uncompressed PDF in the PDF renderer and its change in the PDF di
 
 	writeFileSync(join(workspace.worktreePath, "RENDERERS.pdf"), asciiPdf("CHANGED PDF FIXTURE"));
 	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("change-item").filter({ hasText: "RENDERERS.pdf" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "RENDERERS.pdf" }).dblclick();
 	await expect(page.getByTestId("pdf-diff")).toBeVisible();
 	await expect(page.getByTestId("pdf-diff-page")).toHaveCount(1);
 });
@@ -191,7 +191,7 @@ test("a Git LFS pointer shows as a card in the view and per side in the diff, wi
 
 	writeFileSync(join(workspace.worktreePath, "LFS-ASSET.png"), lfsPointer("beef", 4_000_000));
 	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("change-item").filter({ hasText: "LFS-ASSET.png" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "LFS-ASSET.png" }).dblclick();
 	await expect(page.getByTestId("lfs-diff")).toBeVisible();
 	await expect(page.getByTestId("lfs-pointer-original-size")).toHaveText("12 KB");
 	await expect(page.getByTestId("lfs-pointer-modified-size")).toHaveText("3.8 MB");
@@ -209,7 +209,7 @@ test("renders a PNG and opens its changed version in the 2-up image diff", async
 	const imagePath = join(workspace.worktreePath, "RENDERERS.png");
 	writeFileSync(imagePath, Buffer.concat([readFileSync(imagePath), Buffer.from("changed")]));
 	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("change-item").filter({ hasText: "RENDERERS.png" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "RENDERERS.png" }).dblclick();
 	await expect(page.getByTestId("image-diff-mode")).toBeVisible();
 	await expect(page.getByTestId("image-diff-2-up")).toHaveAttribute("data-active", "true");
 });
