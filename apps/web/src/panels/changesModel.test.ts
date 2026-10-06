@@ -3,11 +3,14 @@ import type { GitFileChange } from "@thinkrail/contracts";
 import {
 	buildChangesTree,
 	type ChangeTreeDir,
+	changesTabId,
+	changesTabName,
 	diffTabId,
 	diffTabName,
 	scopeKey,
 	scopeLabel,
 	scopeTitle,
+	sectionCollapsedByDefault,
 	splitPath,
 } from "./changesModel";
 
@@ -76,6 +79,30 @@ test("diffTabName tags every non-default scope so two tabs of one file are disti
 	expect(diffTabName({ kind: "uncommitted" }, "src/a.ts")).toBe("a.ts · uncommitted");
 	expect(diffTabName({ kind: "commit", sha: "abc1234567" }, "src/a.ts")).toBe("a.ts · abc1234");
 	expect(diffTabName({ kind: "pinned", baseRef: "abc1234567" }, "src/a.ts")).toBe("a.ts · abc1234");
+});
+
+test("changesTabId: one review tab per (workspace, scope), disjoint from every diff tab id", () => {
+	const branch = changesTabId("ws1", { kind: "branch" });
+	expect(branch).toBe("changes:3:ws16:branch");
+	expect(changesTabId("ws1", { kind: "commit", sha: "abc123" })).not.toBe(branch);
+	expect(changesTabId("ws2", { kind: "branch" })).not.toBe(branch);
+	expect(branch.startsWith("diff:")).toBe(false);
+	expect(changesTabName({ kind: "branch" })).toBe("Changes");
+	expect(changesTabName({ kind: "uncommitted" })).toBe("Changes · uncommitted");
+	expect(changesTabName({ kind: "commit", sha: "abc1234567" })).toBe("Changes · abc1234");
+});
+
+test("sectionCollapsedByDefault folds large and generated files, never an ordinary source change", () => {
+	expect(sectionCollapsedByDefault(change("src/a.ts", { added: 300, removed: 100 }))).toBe(false);
+	expect(sectionCollapsedByDefault(change("src/a.ts", { added: 300, removed: 101 }))).toBe(true);
+	expect(sectionCollapsedByDefault(change("bun.lock"))).toBe(true);
+	expect(sectionCollapsedByDefault(change("web/package-lock.json"))).toBe(true);
+	expect(sectionCollapsedByDefault(change("dist/app.min.js"))).toBe(true);
+	expect(sectionCollapsedByDefault(change("src/__snapshots__/a.test.ts.snap"))).toBe(true);
+	expect(sectionCollapsedByDefault(change("src/lockfile.ts"))).toBe(false);
+	expect(
+		sectionCollapsedByDefault(change("docs/notes.md", { added: undefined, removed: undefined })),
+	).toBe(false);
 });
 
 test("scopeLabel keeps a commit scope short (sha), with the subject in the tooltip", () => {

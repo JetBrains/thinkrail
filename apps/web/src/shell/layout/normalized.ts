@@ -1,4 +1,4 @@
-import { layoutResourceIdentity } from "../../lib";
+import { isPreviewCompatibleTabKind, layoutResourceIdentity } from "../../lib";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutBottomAlignment,
@@ -170,9 +170,7 @@ function projectedCenter(
 	const group = view.groups[node.id];
 	const tabs = group?.tabs ?? [];
 	const preview = group?.previewTabId
-		? tabs.find(
-				(tab) => tab.id === group.previewTabId && (tab.kind === "file" || tab.kind === "diff"),
-			)
+		? tabs.find((tab) => tab.id === group.previewTabId && isPreviewCompatibleTabKind(tab.kind))
 		: undefined;
 	return {
 		kind: "group",

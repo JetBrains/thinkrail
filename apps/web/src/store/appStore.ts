@@ -61,6 +61,7 @@ import type {
 	ToolResultState,
 } from "../chat/types";
 import {
+	isPreviewCompatibleTabKind,
 	type LayoutAttention,
 	layoutResourceIdentity,
 	matchesSkillInvocationCommand,
@@ -160,6 +161,29 @@ export interface DiffTab {
 	ignoreWhitespace?: boolean;
 	loadedTick?: number;
 }
+export type ChangesLayout = "stacked" | "single";
+export interface ChangesTabReveal {
+	path: string;
+	tick: number;
+}
+export interface ChangesTabSection {
+	rendererId?: string;
+	viewState?: unknown;
+}
+export interface ChangesTab {
+	kind: "changes";
+	id: string;
+	workspaceId: string;
+	name: string;
+	scope: GitDiffScope;
+	view?: DiffTabView;
+	ignoreWhitespace?: boolean;
+	viewed: string[];
+	activePath: string | null;
+	collapsed: Record<string, boolean>;
+	reveal: ChangesTabReveal | null;
+	sections: Record<string, ChangesTabSection>;
+}
 export interface PlanTab {
 	kind: "plan";
 	id: string;
@@ -167,7 +191,7 @@ export interface PlanTab {
 	name: string;
 	sessionId: string;
 }
-export type EditorTab = FileTab | ChatTab | DocTab | DiffTab | PlanTab;
+export type EditorTab = FileTab | ChatTab | DocTab | DiffTab | ChangesTab | PlanTab;
 
 export function chatTabId(workspaceId: string, sessionId: string): string {
 	return tupleKey("chat", workspaceId, sessionId);
@@ -997,8 +1021,37 @@ interface AppState {
 	setTabViewState: (workspaceId: string, id: string, viewState: unknown) => void;
 	setDiffTabView: (id: string, view: DiffTabView) => void;
 	setDiffTabIgnoreWhitespace: (id: string, ignoreWhitespace: boolean) => void;
+	setChangesTabView: (workspaceId: string, id: string, view: DiffTabView) => void;
+	setChangesTabIgnoreWhitespace: (
+		workspaceId: string,
+		id: string,
+		ignoreWhitespace: boolean,
+	) => void;
+	setChangesTabViewed: (workspaceId: string, id: string, path: string, viewed: boolean) => void;
+	setChangesTabActivePath: (workspaceId: string, id: string, path: string | null) => void;
+	setChangesTabCollapsed: (
+		workspaceId: string,
+		id: string,
+		overrides: Record<string, boolean | null>,
+	) => void;
+	requestChangesTabReveal: (workspaceId: string, id: string, path: string) => void;
+	clearChangesTabReveal: (workspaceId: string, id: string) => void;
+	setChangesTabSectionRenderer: (
+		workspaceId: string,
+		id: string,
+		path: string,
+		rendererId: string,
+	) => void;
+	setChangesTabSectionViewState: (
+		workspaceId: string,
+		id: string,
+		path: string,
+		viewState: unknown,
+	) => void;
 	changesView: "list" | "tree";
 	setChangesView: (view: "list" | "tree") => void;
+	changesLayout: ChangesLayout;
+	setChangesLayout: (layout: ChangesLayout) => void;
 	diffScopeByWorkspace: Record<string, GitDiffScope>;
 	setDiffScope: (workspaceId: string, scope: GitDiffScope) => void;
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
@@ -1377,6 +1430,21 @@ function patchDiffTab(
 			[wsId]: tabs.map((t) => (t.id === id && t.kind === "diff" ? { ...t, ...patch } : t)),
 		},
 	};
+}
+
+function patchChangesTab(
+	state: Pick<AppState, "tabsByWorkspace">,
+	workspaceId: string,
+	id: string,
+	patch: (tab: ChangesTab) => ChangesTab,
+): Partial<AppState> {
+	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
+	const index = tabs.findIndex((tab) => tab.id === id && tab.kind === "changes");
+	const current = tabs[index];
+	if (current?.kind !== "changes") return {};
+	const next = patch(current);
+	if (next === current) return {};
+	return { tabsByWorkspace: { ...state.tabsByWorkspace, [workspaceId]: tabs.with(index, next) } };
 }
 
 function sameSpecNode(a: SpecGraphNode, b: SpecGraphNode): boolean {
@@ -1961,7 +2029,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	specsByWorkspace: {},
 	reviewsByWorkspace: {},
 	reviewFocusRequest: null,
-	changesView: "list",
+	changesView: "tree",
+	changesLayout: "stacked",
 	diffScopeByWorkspace: {},
 	chatLocationRequest: null,
 	historyOpenRequest: null,
@@ -2464,7 +2533,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const tabs = s.tabsByWorkspace[wsId] ?? [];
 			const resolvedId = availableEditorTabId(tabs, tab);
 			const resolvedTab = resolvedId === tab.id ? tab : { ...tab, id: resolvedId };
-			const previewCompatible = resolvedTab.kind === "file" || resolvedTab.kind === "diff";
+			const previewCompatible = isPreviewCompatibleTabKind(resolvedTab.kind);
 			const effectiveIntent = previewCompatible ? intent : "keep";
 			const claimPreview = previewCompatible && options.claimPreview === true;
 			const preview = s.previewTabByWorkspace[wsId];
@@ -2642,7 +2711,65 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setDiffTabView: (id, view) => set((s) => patchDiffTab(s, id, { view })),
 	setDiffTabIgnoreWhitespace: (id, ignoreWhitespace) =>
 		set((s) => patchDiffTab(s, id, { ignoreWhitespace })),
+	setChangesTabView: (workspaceId, id, view) =>
+		set((s) => patchChangesTab(s, workspaceId, id, (tab) => ({ ...tab, view }))),
+	setChangesTabIgnoreWhitespace: (workspaceId, id, ignoreWhitespace) =>
+		set((s) => patchChangesTab(s, workspaceId, id, (tab) => ({ ...tab, ignoreWhitespace }))),
+	setChangesTabViewed: (workspaceId, id, path, viewed) =>
+		set((s) =>
+			patchChangesTab(s, workspaceId, id, (tab) => {
+				const has = tab.viewed.includes(path);
+				if (has === viewed) return tab;
+				return {
+					...tab,
+					viewed: viewed ? [...tab.viewed, path] : tab.viewed.filter((p) => p !== path),
+				};
+			}),
+		),
+	setChangesTabActivePath: (workspaceId, id, path) =>
+		set((s) =>
+			patchChangesTab(s, workspaceId, id, (tab) =>
+				tab.activePath === path ? tab : { ...tab, activePath: path },
+			),
+		),
+	setChangesTabCollapsed: (workspaceId, id, overrides) =>
+		set((s) =>
+			patchChangesTab(s, workspaceId, id, (tab) => {
+				const collapsed = { ...tab.collapsed };
+				for (const [path, value] of Object.entries(overrides)) {
+					if (value === null) delete collapsed[path];
+					else collapsed[path] = value;
+				}
+				return { ...tab, collapsed };
+			}),
+		),
+	requestChangesTabReveal: (workspaceId, id, path) =>
+		set((s) =>
+			patchChangesTab(s, workspaceId, id, (tab) => ({
+				...tab,
+				reveal: { path, tick: (tab.reveal?.tick ?? 0) + 1 },
+			})),
+		),
+	clearChangesTabReveal: (workspaceId, id) =>
+		set((s) =>
+			patchChangesTab(s, workspaceId, id, (tab) => (tab.reveal ? { ...tab, reveal: null } : tab)),
+		),
+	setChangesTabSectionRenderer: (workspaceId, id, path, rendererId) =>
+		set((s) =>
+			patchChangesTab(s, workspaceId, id, (tab) => ({
+				...tab,
+				sections: { ...tab.sections, [path]: { ...tab.sections[path], rendererId } },
+			})),
+		),
+	setChangesTabSectionViewState: (workspaceId, id, path, viewState) =>
+		set((s) =>
+			patchChangesTab(s, workspaceId, id, (tab) => ({
+				...tab,
+				sections: { ...tab.sections, [path]: { ...tab.sections[path], viewState } },
+			})),
+		),
 	setChangesView: (view) => set({ changesView: view }),
+	setChangesLayout: (changesLayout) => set({ changesLayout }),
 	setDiffScope: (workspaceId, scope) =>
 		set((s) =>
 			s.removedWorkspaceIds[workspaceId]

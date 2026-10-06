@@ -3781,6 +3781,74 @@ test("chat presentation preferences are client-local and cannot be overwritten b
 	expect(useAppStore.getState().streamingResponseMovement).toEqual({ settle: 60, trigger: 90 });
 });
 
+test("changes tabs: one per scope, preview-eligible, and review progress survives a re-open", () => {
+	const s = () => useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	expect(s().changesView).toBe("tree");
+	expect(s().changesLayout).toBe("stacked");
+	const tab = {
+		kind: "changes" as const,
+		id: "ws1:changes:branch",
+		workspaceId: "ws1",
+		name: "Changes",
+		scope: { kind: "branch" } as const,
+		viewed: [],
+		activePath: null,
+		collapsed: {},
+		reveal: null,
+		sections: {},
+	};
+	s().openTab(tab, "preview");
+	expect(s().previewTabByWorkspace.ws1).toBe(tab.id);
+	expect(s().activeTabByWorkspace.ws1).toBe(tab.id);
+
+	s().setChangesTabViewed("ws1", tab.id, "src/a.ts", true);
+	s().setChangesTabViewed("ws1", tab.id, "src/a.ts", true);
+	s().setChangesTabViewed("ws1", tab.id, "src/b.ts", true);
+	s().setChangesTabViewed("ws1", tab.id, "src/b.ts", false);
+	s().setChangesTabActivePath("ws1", tab.id, "src/a.ts");
+	s().setChangesTabCollapsed("ws1", tab.id, { "bun.lock": false, "src/a.ts": true });
+	s().setChangesTabCollapsed("ws1", tab.id, { "src/a.ts": null });
+	s().requestChangesTabReveal("ws1", tab.id, "src/b.ts");
+	s().requestChangesTabReveal("ws1", tab.id, "src/b.ts");
+	s().setChangesTabSectionRenderer("ws1", tab.id, "README.md", "thinkrail/markdown");
+	s().setChangesTabSectionViewState("ws1", tab.id, "README.md", { scrollTop: 7 });
+	s().setChangesTabView("ws1", tab.id, "inline");
+	s().setChangesTabIgnoreWhitespace("ws1", tab.id, true);
+
+	const after = s().tabsByWorkspace.ws1?.[0];
+	if (after?.kind !== "changes") throw new Error("expected a changes tab");
+	expect(after.viewed).toEqual(["src/a.ts"]);
+	expect(after.activePath).toBe("src/a.ts");
+	expect(after.collapsed).toEqual({ "bun.lock": false });
+	expect(after.reveal).toEqual({ path: "src/b.ts", tick: 2 });
+	expect(after.sections["README.md"]).toEqual({
+		rendererId: "thinkrail/markdown",
+		viewState: { scrollTop: 7 },
+	});
+	expect(after.view).toBe("inline");
+	expect(after.ignoreWhitespace).toBe(true);
+
+	s().clearChangesTabReveal("ws1", tab.id);
+	const cleared = s().tabsByWorkspace.ws1?.[0];
+	expect(cleared?.kind === "changes" && cleared.reveal).toBeNull();
+
+	s().openTab(cleared as typeof tab, "keep");
+	expect(s().tabsByWorkspace.ws1).toHaveLength(1);
+	expect(s().previewTabByWorkspace.ws1).toBeUndefined();
+	const kept = s().tabsByWorkspace.ws1?.[0];
+	expect(kept?.kind === "changes" && kept.viewed).toEqual(["src/a.ts"]);
+
+	// a different scope is a different tab
+	s().openTab({ ...tab, id: "ws1:changes:uncommitted", scope: { kind: "uncommitted" } }, "preview");
+	expect(s().tabsByWorkspace.ws1).toHaveLength(2);
+	// actions against a foreign workspace or an unknown id are no-ops
+	const before = s().tabsByWorkspace;
+	s().setChangesTabViewed("ws2", tab.id, "x", true);
+	s().setChangesTabActivePath("ws1", "missing", "x");
+	expect(s().tabsByWorkspace).toBe(before);
+});
+
 test("diff tabs: openTab dedupes by id + activates; renderer, view state, and contents update in place", () => {
 	const s = () => useAppStore.getState();
 	useAppStore.setState({ activeWorkspaceId: "ws1" });

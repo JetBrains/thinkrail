@@ -32,6 +32,8 @@ export function tabIcon(tab: LayoutTab, active = false): ReactNode {
 			) : (
 				<RiGitPullRequestLine className={cls} />
 			);
+		case "changes":
+			return <CustomIcon name={active ? "file-diff-fill" : "file-diff-line"} className={cls} />;
 		case "chat":
 			return active ? <RiChat2Fill className={cls} /> : <RiChat2Line className={cls} />;
 		case "document":
