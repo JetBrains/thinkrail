@@ -1,4 +1,6 @@
 import type {
+	NativeNotificationBridge,
+	NativeNotificationInput,
 	NativeUpdateBridge,
 	NativeUpdateState,
 	NativeWindowControlsBridge,
@@ -85,6 +87,17 @@ Object.defineProperty(globals, "__THINKRAIL_NATIVE_UPDATES__", {
 });
 Object.defineProperty(globals, "__THINKRAIL_NATIVE_SHORTCUTS__", {
 	value: shortcuts.bridge,
+	writable: false,
+	configurable: false,
+	enumerable: false,
+});
+const notificationBridge: NativeNotificationBridge = Object.freeze({
+	show: (input: NativeNotificationInput) => {
+		void rpc.request.showNotification(input);
+	},
+});
+Object.defineProperty(globals, "__THINKRAIL_NATIVE_NOTIFICATIONS__", {
+	value: notificationBridge,
 	writable: false,
 	configurable: false,
 	enumerable: false,
