@@ -33,3 +33,4 @@ export {
 } from "./git";
 export { git, gitAsync, gitAsyncBytes, gitAsyncStream, nonInteractiveGitEnv } from "./gitExec";
 export { assertSafeRef, isSafeRef, remoteNameOf, remoteTrackingRef } from "./refs";
+export { snapshotWorktree } from "./snapshot";

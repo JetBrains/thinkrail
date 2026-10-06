@@ -75,6 +75,7 @@ import {
 	setTerminalTabsPublisher,
 } from "../terminal";
 import { isTodoToolEnd, maybeAttachChangeArtifacts } from "../todos";
+import { setTurnPublisher, TurnTracker } from "../turns";
 import {
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
@@ -687,8 +688,24 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		);
 	});
 
+	const turnTracker = new TurnTracker((sessionId) => {
+		const workspaceId = getSessionWorkspaceId(sessionId);
+		if (!workspaceId) return null;
+		try {
+			return { workspaceId, worktreePath: getWorkspace(workspaceId).worktreePath };
+		} catch {
+			return null;
+		}
+	});
+	setTurnPublisher((turn) => {
+		server.publish(
+			WS_CHANNELS.turnChanged,
+			JSON.stringify({ channel: WS_CHANNELS.turnChanged, data: turn }),
+		);
+	});
 	setSessionPublisher((payload) => {
 		runObservation.observe(payload.sessionId, payload.event);
+		void turnTracker.observe(payload.sessionId, payload.event);
 		if (payload.event.type === "tool_execution_start") {
 			const workspaceId = getSessionWorkspaceId(payload.sessionId);
 			if (workspaceId) taskObservation.toolStarted(workspaceId, payload.sessionId, payload.event);

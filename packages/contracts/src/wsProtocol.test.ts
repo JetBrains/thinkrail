@@ -32,6 +32,7 @@ import {
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
+	TURN_CHANGES_PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_CHANNELS,
@@ -132,9 +133,16 @@ test("host-owned new-chat defaults are pinned to v72", () => {
 	expect(WS_METHODS).not.toHaveProperty("modelSetDefault");
 });
 
+test("per-turn change sets, the turn diff scope and the turn.changed push are pinned to v79", () => {
+	expect(PROTOCOL_VERSION).toBe(79);
+	expect(TURN_CHANGES_PROTOCOL_VERSION).toBe(79);
+	expect(WS_METHODS.workspaceTurns).toBe("workspace.turns");
+	expect(WS_CHANNELS.turnChanged).toBe("turn.changed");
+});
+
 test("the settled workspace shelf is pinned to v78", () => {
-	expect(PROTOCOL_VERSION).toBe(78);
 	expect(WORKSPACE_SETTLE_PROTOCOL_VERSION).toBe(78);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKSPACE_SETTLE_PROTOCOL_VERSION);
 	expect(WS_METHODS.workspaceSettle).toBe("workspace.settle");
 	expect(WS_METHODS.workspaceUnsettle).toBe("workspace.unsettle");
 	expect(DEFAULT_CONFIG.settleIdleDays).toBe(SETTLE_IDLE_DAYS.default);

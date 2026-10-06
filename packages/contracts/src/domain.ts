@@ -342,7 +342,19 @@ export type GitDiffScope =
 	| { kind: "branch" }
 	| { kind: "uncommitted" }
 	| { kind: "commit"; sha: string }
-	| { kind: "pinned"; baseRef: string };
+	| { kind: "pinned"; baseRef: string }
+	| { kind: "turn"; id: string; baseTree: string; headTree: string; startedAt: number };
+
+export interface TurnChangeSet {
+	id: string;
+	workspaceId: string;
+	sessionId: string;
+	startedAt: number;
+	settledAt: number;
+	baseTree: string;
+	headTree: string;
+	changes: GitFileChange[];
+}
 
 export interface GitCommit {
 	sha: string;
