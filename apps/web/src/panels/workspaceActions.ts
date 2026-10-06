@@ -1,6 +1,7 @@
 import {
 	type EditorInfo,
 	WORKSPACE_RENAME_PROTOCOL_VERSION,
+	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
 import {
@@ -36,6 +37,26 @@ export function canRenameWorkspace(protocolVersion: number | null, workspace: Wo
 		workspace.kind !== "default" &&
 		workspace.kind !== "external"
 	);
+}
+
+export function canSettleWorkspace(protocolVersion: number | null, workspace: Workspace): boolean {
+	return (
+		protocolVersion !== null &&
+		protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION &&
+		workspace.kind !== "default"
+	);
+}
+
+export function settleWorkspace(workspaceId: string): void {
+	void getTransport()
+		.request("workspace.settle", { id: workspaceId })
+		.catch((err) => toast.error(errorText(err, "Couldn't settle the workspace")));
+}
+
+export function unsettleWorkspace(workspaceId: string): void {
+	void getTransport()
+		.request("workspace.unsettle", { id: workspaceId })
+		.catch((err) => toast.error(errorText(err, "Couldn't keep the workspace active")));
 }
 
 export function workspaceRenameValue(currentName: string, input: string): string | null {

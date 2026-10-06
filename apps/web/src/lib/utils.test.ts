@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+	compactAge,
 	cssColorToHex,
 	hasPlatformModifier,
 	isAbsolutePath,
@@ -182,4 +183,9 @@ test("relativeTime measures against the given now, not the clock", () => {
 	expect(relativeTime(now - 5 * 60_000, now)).toBe("5m ago");
 	expect(relativeTime(now - 3 * 3_600_000, now)).toBe("3h ago");
 	expect(relativeTime(now - 2 * 86_400_000, now)).toBe("2d ago");
+	expect(compactAge(now - 20 * 60_000, now)).toBe("<1h");
+	expect(compactAge(now - 5 * 3_600_000, now)).toBe("5h");
+	expect(compactAge(now - 13 * 86_400_000, now)).toBe("13d");
+	expect(compactAge(now - 20 * 86_400_000, now)).toBe("2w");
+	expect(compactAge(now - 100 * 86_400_000, now)).toBe("3mo");
 });

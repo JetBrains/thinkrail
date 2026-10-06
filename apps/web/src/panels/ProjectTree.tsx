@@ -1,4 +1,6 @@
 import {
+	RiArrowGoBackLine as ArrowGoBack,
+	RiCheckLine as Check,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 	RiFileCopyLine as Copy,
@@ -10,6 +12,8 @@ import {
 	RiMore2Line as MoreVertical,
 	RiPencilLine as Pencil,
 	RiAddLine as Plus,
+	RiCheckboxCircleLine,
+	RiExpandUpDownLine,
 	RiFolderFill,
 	RiFolderLine,
 	RiFolderOpenFill,
@@ -39,40 +43,84 @@ import {
 } from "@thinkrail/ui/dropdown-menu";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
-import { type MouseEvent, useCallback, useEffect, useRef, useState } from "react";
+import {
+	type MouseEvent,
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
-import { copyText, platformShortcutLabel } from "@/lib";
+import { compactAge, copyText, platformShortcutLabel } from "@/lib";
 import { LoadingRegion } from "../components/Skeleton";
 import {
 	isDefaultWorkspace,
 	isExternalWorkspace,
+	SETTLED_SHELF_MORE,
+	SETTLED_SHELF_PAGE,
+	type SettledReason,
 	selectActiveWorkspaceProjectId,
 	selectProjectIsRunning,
 	selectProjectNeedsAttention,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
+	selectWorkspacePartition,
 	toast,
 	useAppStore,
+	type WorkspaceSort,
 } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
+import { RemoveSettledDialog } from "./RemoveSettledDialog";
 import { RemoveWorkspaceDialog } from "./RemoveWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
 import {
 	canRenameWorkspace,
+	canSettleWorkspace,
 	loadProjectWorkspaces,
 	openWorkspaceIn,
 	renameWorkspace,
 	revealWorkspace,
+	settleWorkspace,
+	unsettleWorkspace,
 	useEditors,
 	useWorkspaceRename,
 } from "./workspaceActions";
 
 const CREATE_WORKSPACE_LABEL = `Create workspace (${platformShortcutLabel("N")} or ${platformShortcutLabel("N", { alt: true })})`;
+const MINUTE_MS = 60_000;
+const SORT_LABELS: Record<WorkspaceSort, string> = {
+	recent: "Recent activity",
+	created: "Created",
+	name: "Name",
+};
+const HOVER_CONTROL_CLASS =
+	"flex size-20 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100 disabled:pointer-events-none disabled:opacity-0";
+
+function useMinuteTick(): number {
+	const [now, setNow] = useState(() => Date.now());
+	useEffect(() => {
+		const timer = setInterval(() => setNow(Date.now()), MINUTE_MS);
+		return () => clearInterval(timer);
+	}, []);
+	return now;
+}
+
+export function settledReasonLabel(reason: SettledReason, now: number): string {
+	switch (reason.kind) {
+		case "override":
+			return "settled by you";
+		case "review":
+			return reason.state;
+		case "idle":
+			return `idle ${compactAge(reason.since, now)}`;
+	}
+}
 
 export function ProjectTree() {
 	const projects = useAppStore((s) => s.projects);
@@ -81,8 +129,15 @@ export function ProjectTree() {
 	const workspaces = useAppStore((s) => s.workspaces);
 	const worktreeCreations = useAppStore((s) => s.worktreeCreationsByProject);
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
+	const activeWorkspaceLiveLatch = useAppStore((s) => s.activeWorkspaceLiveLatch);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const sessionStateByWorkspace = useAppStore((s) => s.sessionStateByWorkspace);
+	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
+	const workspaceSort = useAppStore((s) => s.workspaceSort);
+	const settledShelfExpanded = useAppStore((s) => s.settledShelfExpanded);
+	const settledShelfShown = useAppStore((s) => s.settledShelfShown);
+	const now = useMinuteTick();
+	const [removeSettledProjectId, setRemoveSettledProjectId] = useState<string | null>(null);
 
 	const editors = useEditors();
 
@@ -124,6 +179,27 @@ export function ProjectTree() {
 	useEffect(() => {
 		if (activeProjectId) useAppStore.getState().expandProject(activeProjectId);
 	}, [activeProjectId]);
+
+	const partitionState = {
+		workspaces,
+		sessionStateByWorkspace,
+		activeWorkspaceId,
+		activeWorkspaceLiveLatch,
+		settleIdleDays,
+		workspaceSort,
+	};
+	const activeSettledIndex =
+		activeProjectId && activeWorkspaceId
+			? selectWorkspacePartition(partitionState, activeProjectId, now).settled.findIndex(
+					(row) => row.workspace.id === activeWorkspaceId,
+				)
+			: -1;
+	useEffect(() => {
+		if (!activeProjectId || activeSettledIndex < 0) return;
+		const store = useAppStore.getState();
+		store.toggleSettledShelf(activeProjectId, true);
+		store.showMoreSettled(activeProjectId, activeSettledIndex + 1);
+	}, [activeProjectId, activeSettledIndex]);
 
 	const loadWorkspaces = useCallback(async (projectId: string) => {
 		await loadProjectWorkspaces(projectId);
@@ -247,24 +323,35 @@ export function ProjectTree() {
 								<LoadingRegion rows={2} className="py-4 pr-8 pl-16" />
 							)}
 							{isExpanded && list !== undefined && (
-								<ul className="mt-4 flex flex-col gap-4 motion-safe:animate-reveal">
-									{list.map((ws) => (
+								<SettledPartition
+									projectId={project.id}
+									partition={selectWorkspacePartition(partitionState, project.id, now)}
+									sort={workspaceSort}
+									shelfExpanded={settledShelfExpanded[project.id] === true}
+									shelfShown={settledShelfShown[project.id] ?? SETTLED_SHELF_PAGE}
+									onRemoveAllSettled={() => setRemoveSettledProjectId(project.id)}
+									renderRow={(ws, settled) => (
 										<WorkspaceRow
 											key={ws.id}
 											workspace={ws}
+											settled={settled}
+											now={now}
 											isActive={activeWorkspaceId === ws.id}
 											needsAttention={selectWorkspaceNeedsAttention(stateProjection, ws.id)}
 											isRunning={selectWorkspaceIsRunning(stateProjection, ws.id)}
 											canRename={canRenameWorkspace(protocolVersion, ws)}
+											canSettle={canSettleWorkspace(protocolVersion, ws)}
 											editors={editors}
 											onSelect={() => selectWorkspace(ws)}
 											onOpenIn={(editor) => openWorkspaceIn(ws, editor)}
 											onCopyPath={() => void copyText(ws.worktreePath)}
 											onReveal={() => revealWorkspace(ws)}
 											onRename={(name) => renameWorkspace(ws, name)}
+											onSettle={() => settleWorkspace(ws.id)}
+											onKeepActive={() => unsettleWorkspace(ws.id)}
 										/>
-									))}
-								</ul>
+									)}
+								/>
 							)}
 							{isExpanded && (worktreeCreations[project.id] ?? 0) > 0 && (
 								<div
@@ -294,6 +381,20 @@ export function ProjectTree() {
 				/>
 			) : null}
 
+			{removeSettledProjectId !== null ? (
+				<RemoveSettledDialog
+					open
+					workspaces={selectWorkspacePartition(
+						partitionState,
+						removeSettledProjectId,
+						now,
+					).settled.map((row) => row.workspace)}
+					onOpenChange={(isOpen) => {
+						if (!isOpen) setRemoveSettledProjectId(null);
+					}}
+				/>
+			) : null}
+
 			{existingDialogProjectId !== null ? (
 				<ExistingWorktreeDialog
 					open
@@ -311,6 +412,125 @@ export function ProjectTree() {
 
 			{dialogs}
 		</nav>
+	);
+}
+
+function SettledPartition({
+	projectId,
+	partition,
+	sort,
+	shelfExpanded,
+	shelfShown,
+	onRemoveAllSettled,
+	renderRow,
+}: {
+	projectId: string;
+	partition: ReturnType<typeof selectWorkspacePartition>;
+	sort: WorkspaceSort;
+	shelfExpanded: boolean;
+	shelfShown: number;
+	onRemoveAllSettled: () => void;
+	renderRow: (workspace: Workspace, settled: SettledReason | null) => ReactNode;
+}) {
+	const [shelfMenuOpen, setShelfMenuOpen] = useState(false);
+	const settledCount = partition.settled.length;
+	const shown = partition.settled.slice(0, shelfShown);
+	const remaining = settledCount - shown.length;
+	return (
+		<div className="mt-4 flex flex-col gap-4 motion-safe:animate-reveal">
+			<label
+				data-testid="workspace-sort"
+				className="flex h-20 items-center gap-4 pr-4 pl-24 text-text-subtle tr-text-metadata"
+			>
+				<RiExpandUpDownLine className="size-12 shrink-0" aria-hidden="true" />
+				<select
+					aria-label="Sort workspaces"
+					value={sort}
+					onChange={(event) =>
+						useAppStore.getState().setWorkspaceSort(event.target.value as WorkspaceSort)
+					}
+					className="min-w-0 cursor-pointer appearance-none truncate border-0 bg-transparent p-0 text-text-subtle tr-text-metadata outline-none hover:text-text-muted focus-visible:text-text-default"
+				>
+					{(Object.keys(SORT_LABELS) as WorkspaceSort[]).map((option) => (
+						<option key={option} value={option}>
+							{SORT_LABELS[option]}
+						</option>
+					))}
+				</select>
+			</label>
+			<ul className="flex flex-col gap-4">{partition.live.map((ws) => renderRow(ws, null))}</ul>
+			<div
+				data-testid="settled-shelf"
+				data-count={settledCount}
+				data-expanded={shelfExpanded}
+				className={cn(
+					"group/shelf flex h-28 min-w-0 items-center gap-4 rounded-[var(--radius-sm)] pr-4 pl-12 text-text-subtle tr-text-metadata",
+					shelfMenuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered",
+				)}
+			>
+				<button
+					type="button"
+					data-testid="settled-shelf-toggle"
+					aria-expanded={shelfExpanded}
+					onClick={() => useAppStore.getState().toggleSettledShelf(projectId)}
+					className="flex min-w-0 flex-1 items-center gap-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+				>
+					{shelfExpanded ? (
+						<ChevronDown className="size-14 shrink-0" />
+					) : (
+						<ChevronRight className="size-14 shrink-0" />
+					)}
+					<RiCheckboxCircleLine className="size-14 shrink-0" />
+					<span className="truncate">Settled · {settledCount}</span>
+				</button>
+				<DropdownMenu open={shelfMenuOpen} onOpenChange={setShelfMenuOpen}>
+					<DropdownMenuTrigger
+						data-testid="settled-shelf-menu"
+						aria-label="Settled shelf actions"
+						className={cn(
+							HOVER_CONTROL_CLASS,
+							"[@media(hover:hover)]:group-hover/shelf:opacity-100",
+						)}
+					>
+						<MoreVertical className="size-14" />
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="end">
+						<DropdownMenuItem
+							data-testid="remove-all-settled"
+							disabled={settledCount === 0}
+							className="text-feedback-error focus:bg-feedback-error-subtle [&_svg]:text-feedback-error"
+							onSelect={onRemoveAllSettled}
+						>
+							<Trash2 />
+							Remove all settled…
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
+			</div>
+			{shelfExpanded ? (
+				<ul className="flex flex-col gap-2" data-testid="settled-shelf-rows">
+					{settledCount === 0 ? (
+						<li className="py-4 pr-4 pl-24 text-text-subtle tr-text-metadata">Nothing settled</li>
+					) : (
+						shown.map((row) => renderRow(row.workspace, row.reason))
+					)}
+					{remaining > 0 ? (
+						<li>
+							<button
+								type="button"
+								data-testid="settled-shelf-more"
+								onClick={() =>
+									useAppStore.getState().showMoreSettled(projectId, shelfShown + SETTLED_SHELF_MORE)
+								}
+								className="flex h-24 w-full items-center rounded-[var(--radius-sm)] pl-24 text-left text-text-subtle tr-text-metadata hover:bg-control-bg-hovered hover:text-text-muted"
+							>
+								Show {Math.min(SETTLED_SHELF_MORE, remaining)} more
+							</button>
+						</li>
+					) : null}
+				</ul>
+			) : null}
+		</div>
 	);
 }
 
@@ -502,31 +722,43 @@ function ProjectRow({
 
 function WorkspaceRow({
 	workspace,
+	settled,
+	now,
 	isActive,
 	needsAttention,
 	isRunning,
 	canRename,
+	canSettle,
 	editors,
 	onSelect,
 	onOpenIn,
 	onCopyPath,
 	onReveal,
 	onRename,
+	onSettle,
+	onKeepActive,
 }: {
 	workspace: Workspace;
+	settled: SettledReason | null;
+	now: number;
 	isActive: boolean;
 	needsAttention: boolean;
 	isRunning: boolean;
 	canRename: boolean;
+	canSettle: boolean;
 	editors: EditorInfo[];
 	onSelect: () => void;
 	onOpenIn: (editor: EditorInfo) => void;
 	onCopyPath: () => void;
 	onReveal: () => void;
 	onRename: (name: string) => void;
+	onSettle: () => void;
+	onKeepActive: () => void;
 }) {
 	const isDefault = isDefaultWorkspace(workspace);
 	const isExternal = isExternalWorkspace(workspace);
+	const isSettled = settled !== null;
+	const settleBlocked = isRunning || needsAttention;
 	const Icon = isActive
 		? isDefault
 			? RiHome2Fill
@@ -538,7 +770,7 @@ function WorkspaceRow({
 			: isExternal
 				? FolderOpen
 				: GitBranch;
-	const isTwoLine = workspace.branch !== workspace.name;
+	const isTwoLine = !isSettled && workspace.branch !== workspace.name;
 	const [menuOpen, setMenuOpen] = useState(false);
 	const openMenuFromContext = (event: MouseEvent) => {
 		event.preventDefault();
@@ -576,6 +808,49 @@ function WorkspaceRow({
 		</span>
 	) : null;
 
+	const reasonChip = settled ? (
+		<span
+			data-testid="workspace-settled-reason"
+			data-reason={settled.kind}
+			className={cn(
+				"shrink-0 rounded-full border px-4 tr-text-caption",
+				settled.kind === "review" && settled.state === "merged"
+					? "border-feedback-info-muted text-feedback-info"
+					: settled.kind === "override"
+						? "border-feedback-warning-muted text-feedback-warning"
+						: "border-border-default text-text-subtle",
+			)}
+		>
+			{settledReasonLabel(settled, now)}
+		</span>
+	) : null;
+	const hoverAction = isSettled ? (
+		<IconTooltip label="Keep active">
+			<button
+				type="button"
+				data-testid="workspace-keep-active"
+				aria-label={`Keep ${workspace.name} active`}
+				onClick={onKeepActive}
+				className={HOVER_CONTROL_CLASS}
+			>
+				<ArrowGoBack className="size-14" />
+			</button>
+		</IconTooltip>
+	) : canSettle ? (
+		<IconTooltip label={settleBlocked ? "Finish or read the result first" : "Settle"}>
+			<button
+				type="button"
+				data-testid="workspace-settle"
+				aria-label={`Settle ${workspace.name}`}
+				disabled={settleBlocked}
+				onClick={onSettle}
+				className={HOVER_CONTROL_CLASS}
+			>
+				<Check className="size-14" />
+			</button>
+		</IconTooltip>
+	) : null;
+
 	return (
 		<li>
 			<fieldset
@@ -583,12 +858,15 @@ function WorkspaceRow({
 				data-testid="workspace-item"
 				data-active={isActive}
 				data-kind={workspace.kind ?? "worktree"}
+				data-settled={settled?.kind}
 				data-attention={needsAttention || undefined}
 				data-running={isRunning || undefined}
 				onContextMenu={openMenuFromContext}
-				className={`group flex min-h-28 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border-0 py-4 pr-4 pl-24 transition-colors ${
-					isActive || menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"
-				}`}
+				className={cn(
+					"group flex min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border-0 pr-4 pl-24 transition-colors",
+					isSettled ? "min-h-24 py-2" : "min-h-28 py-4",
+					isActive || menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered",
+				)}
 			>
 				{editing ? (
 					<div className={identityClass}>
@@ -622,12 +900,14 @@ function WorkspaceRow({
 						</span>
 					</button>
 				)}
+				{reasonChip}
 				{needsAttention ? <AttentionDot /> : null}
+				{hoverAction}
 				<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="workspace-menu"
 						aria-label={`Actions for ${workspace.name}`}
-						className="flex size-20 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100"
+						className={HOVER_CONTROL_CLASS}
 					>
 						<MoreVertical className="size-14" />
 					</DropdownMenuTrigger>
@@ -669,6 +949,29 @@ function WorkspaceRow({
 							<FolderOpen />
 							Reveal in file manager
 						</DropdownMenuItem>
+						{canSettle ? (
+							<>
+								<DropdownMenuSeparator />
+								{isSettled ? (
+									<DropdownMenuItem
+										data-testid="workspace-menu-keep-active"
+										onSelect={onKeepActive}
+									>
+										<ArrowGoBack />
+										Keep active
+									</DropdownMenuItem>
+								) : (
+									<DropdownMenuItem
+										data-testid="workspace-menu-settle"
+										disabled={settleBlocked}
+										onSelect={onSettle}
+									>
+										<Check />
+										Settle
+									</DropdownMenuItem>
+								)}
+							</>
+						) : null}
 						{!isDefault && (
 							<>
 								<DropdownMenuSeparator />

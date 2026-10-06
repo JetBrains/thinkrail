@@ -253,6 +253,18 @@ export function relativeTime(ms: number, now: number): string {
 	return `${Math.floor(h / 24)}d ago`;
 }
 
+/** Compact elapsed label for dense rows: `3h`, `12d`, `3w`, `4mo`. */
+export function compactAge(ms: number, now: number): string {
+	const hours = Math.max(0, Math.floor((now - ms) / 3_600_000));
+	if (hours < 1) return "<1h";
+	if (hours < 24) return `${hours}h`;
+	const days = Math.floor(hours / 24);
+	if (days < 14) return `${days}d`;
+	const weeks = Math.floor(days / 7);
+	if (weeks < 10) return `${weeks}w`;
+	return `${Math.floor(days / 30)}mo`;
+}
+
 export function isShellInert(value: string): boolean {
 	return /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(value);
 }
