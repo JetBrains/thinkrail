@@ -579,6 +579,14 @@ per-path `rendererId` / opaque `viewState` written through the workspace-explici
 actions. The stacked-vs-one-file mode is **not** on the tab: `changesLayout` (`"stacked"` default |
 `"single"`) is app-wide like `changesView`, a reading preference rather than a property of one review.
 The tab is preview-eligible like `FileTab` and `DiffTab`.
+**`turnsByWorkspace`** holds each workspace's host-recorded agent runs (`TurnChangeSet[]`, oldest first):
+`setWorkspaceTurns` installs the `workspace.turns` answer and `applyTurnChanged` folds a `turn.changed` push
+in (deduped by id, kept sorted, capped like the host); both are dropped with the workspace. The list is
+read by the chat's turn dividers (the round's receipt) and by the Changes scope menu (*Last turn*); it is
+fetched once per workspace and connection by the shell through `panels/useWorkspaceTurns`.
+**`requestChangesView(workspaceId, path | null, scope?)`** gained two optional dimensions for the chat's
+*Review turn* action: a `scope` lands on `diffScopeByWorkspace` atomically with the reveal intent, and a
+`null` path means "open the review tab for that scope" rather than "reveal this file".
 **`diffScopeByWorkspace`** + **`setDiffScope(workspaceId, scope)`** hold *what* each workspace's Changes
 panel is diffing (read through **`selectDiffScope`**, which defaults to the shared, referentially stable
 `BRANCH_SCOPE`); keyed **per workspace**, not app-wide like `changesView`, because a scope belongs to that
