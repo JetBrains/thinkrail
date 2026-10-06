@@ -42,6 +42,7 @@ import {
 	isBackgroundCommandCompletionMessage,
 	isControlMessage,
 	isLineWidth,
+	isSettleIdleDays,
 	isSubagentCompletionMessage,
 	isTerminalWindowsShell,
 	isTodoReviewFixMessage,
@@ -88,14 +89,17 @@ import {
 	type HistoryTarget,
 	isChatResourceReadCurrent,
 	isChatResourceScopeAlive,
+	SETTLED_SHELF_PAGE,
 	selectActiveWorkspaceProjectId,
 	selectAttentionCenterTab,
 	selectLayoutResourcePlacement,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
 	selectWorkspaceSessionIds,
+	selectWorkspaceSettledReason,
 	selectWorkspaceTick,
 	supportsChatResources,
+	type WorkspaceSort,
 } from "./selectors";
 
 export interface StreamingResponseMovement {
@@ -824,8 +828,13 @@ interface AppState {
 	workspaces: Record<string, Workspace[]>;
 	removedWorkspaceIds: Record<string, true>;
 	expandedProjectIds: Record<string, true>;
+	workspaceSort: WorkspaceSort;
+	settledShelfExpanded: Record<string, true>;
+	settledShelfShown: Record<string, number>;
 	selectedProjectId: string | null;
 	activeWorkspaceId: string | null;
+	/** True while the active workspace was live when selected or has worked since; selection never moves a row. */
+	activeWorkspaceLiveLatch: boolean;
 	workspaceSelectionHistory: string[];
 	pendingWorkspaceChatActivation: string | null;
 	routeChatTarget: RouteChatTarget | null;
@@ -896,6 +905,7 @@ interface AppState {
 	analyticsConsentConfirmed: boolean;
 	notificationsEnabled: boolean;
 	subagentsEnabled: boolean;
+	settleIdleDays: number | null;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
 	terminalReplayKb: number;
@@ -936,6 +946,9 @@ interface AppState {
 	applyWorkspaceRemoved: (projectId: string, workspaceId: string) => void;
 	selectProject: (projectId: string, opts?: { reveal?: boolean }) => void;
 	toggleProjectExpanded: (projectId: string) => void;
+	setWorkspaceSort: (sort: WorkspaceSort) => void;
+	toggleSettledShelf: (projectId: string, expanded?: boolean) => void;
+	showMoreSettled: (projectId: string, count: number) => void;
 	expandProject: (projectId: string) => void;
 	hydrateExpandedProjects: (projectIds: readonly string[]) => void;
 	selectMain: () => void;
@@ -1149,6 +1162,9 @@ function configPatch(config: AppConfig) {
 				? config.notificationsEnabled
 				: DEFAULT_CONFIG.notificationsEnabled,
 		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
+		settleIdleDays: isSettleIdleDays(config.settleIdleDays)
+			? config.settleIdleDays
+			: DEFAULT_CONFIG.settleIdleDays,
 		jbcentralQuotaEnabled: config.jbcentralQuotaEnabled ?? DEFAULT_CONFIG.jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds:
 			config.jbcentralQuotaRefreshSeconds ?? DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
@@ -1203,15 +1219,36 @@ function withWorkspaceSelected(history: string[], workspaceId: string): string[]
 }
 
 function workspaceActivationPatch(
-	state: Pick<AppState, "removedWorkspaceIds" | "workspaceSelectionHistory">,
+	state: Pick<
+		AppState,
+		| "removedWorkspaceIds"
+		| "workspaceSelectionHistory"
+		| "workspaces"
+		| "sessionStateByWorkspace"
+		| "settleIdleDays"
+	>,
 	workspace: Pick<Workspace, "id" | "projectId">,
 ):
-	| Pick<AppState, "selectedProjectId" | "activeWorkspaceId" | "workspaceSelectionHistory">
+	| Pick<
+			AppState,
+			| "selectedProjectId"
+			| "activeWorkspaceId"
+			| "workspaceSelectionHistory"
+			| "activeWorkspaceLiveLatch"
+	  >
 	| Record<string, never> {
 	if (state.removedWorkspaceIds[workspace.id]) return {};
+	const record = state.workspaces[workspace.projectId]?.find((w) => w.id === workspace.id);
 	return {
 		selectedProjectId: workspace.projectId,
 		activeWorkspaceId: workspace.id,
+		activeWorkspaceLiveLatch:
+			record === undefined ||
+			selectWorkspaceSettledReason(
+				{ ...state, activeWorkspaceId: null, activeWorkspaceLiveLatch: false },
+				record,
+				Date.now(),
+			) === null,
 		workspaceSelectionHistory: withWorkspaceSelected(state.workspaceSelectionHistory, workspace.id),
 	};
 }
@@ -1863,8 +1900,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 	workspaces: {},
 	removedWorkspaceIds: Object.create(null) as Record<string, true>,
 	expandedProjectIds: Object.create(null) as Record<string, true>,
+	workspaceSort: "recent",
+	settledShelfExpanded: Object.create(null) as Record<string, true>,
+	settledShelfShown: Object.create(null) as Record<string, number>,
 	selectedProjectId: null,
 	activeWorkspaceId: null,
+	activeWorkspaceLiveLatch: false,
 	workspaceSelectionHistory: [],
 	pendingWorkspaceChatActivation: null,
 	routeChatTarget: null,
@@ -1928,6 +1969,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	analyticsConsentConfirmed: DEFAULT_CONFIG.analyticsConsentConfirmed,
 	notificationsEnabled: DEFAULT_CONFIG.notificationsEnabled,
 	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
+	settleIdleDays: DEFAULT_CONFIG.settleIdleDays,
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
 	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
 	terminalReplayKb: DEFAULT_CONFIG.terminalReplayKb,
@@ -2110,7 +2152,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 	updateWorkspace: (workspace) =>
 		set((s) => {
 			const list = s.workspaces[workspace.projectId];
-			if (!list?.some((w) => w.id === workspace.id)) return {};
+			const previous = list?.find((w) => w.id === workspace.id);
+			if (!list || !previous) return {};
+			const worked =
+				s.activeWorkspaceId === workspace.id &&
+				(workspace.lastActiveAt ?? 0) > (previous.lastActiveAt ?? 0);
 			return {
 				workspaces: {
 					...s.workspaces,
@@ -2120,6 +2166,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 							: w,
 					),
 				},
+				...(worked && !s.activeWorkspaceLiveLatch ? { activeWorkspaceLiveLatch: true } : {}),
 			};
 		}),
 	removeWorkspace: (projectId, workspaceId) =>
@@ -2198,6 +2245,24 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const expandedProjectIds = withExpandedProject(state.expandedProjectIds, projectId);
 			return expandedProjectIds === state.expandedProjectIds ? {} : { expandedProjectIds };
 		}),
+	setWorkspaceSort: (workspaceSort) =>
+		set((state) => (state.workspaceSort === workspaceSort ? {} : { workspaceSort })),
+	toggleSettledShelf: (projectId, expanded) =>
+		set((state) => {
+			const next = expanded ?? !state.settledShelfExpanded[projectId];
+			if (next === (state.settledShelfExpanded[projectId] === true)) return {};
+			return {
+				settledShelfExpanded: next
+					? withExpandedProject(state.settledShelfExpanded, projectId)
+					: omitKey(state.settledShelfExpanded, projectId),
+			};
+		}),
+	showMoreSettled: (projectId, count) =>
+		set((state) => {
+			const shown = Math.max(state.settledShelfShown[projectId] ?? SETTLED_SHELF_PAGE, count);
+			if (shown === (state.settledShelfShown[projectId] ?? SETTLED_SHELF_PAGE)) return {};
+			return { settledShelfShown: { ...state.settledShelfShown, [projectId]: shown } };
+		}),
 	hydrateExpandedProjects: (projectIds) =>
 		set(() => ({
 			expandedProjectIds: Object.fromEntries(projectIds.map((id) => [id, true as const])),
@@ -2236,13 +2301,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const advanced = advanceCenterNavigation(state, workspace.id);
 			return {
 				...advanced.patch,
-				selectedProjectId: workspace.projectId,
-				activeWorkspaceId: workspace.id,
+				...workspaceActivationPatch(state, workspace),
 				pendingWorkspaceChatActivation: null,
-				workspaceSelectionHistory: withWorkspaceSelected(
-					state.workspaceSelectionHistory,
-					workspace.id,
-				),
 				routeChatTarget: sessionId
 					? {
 							workspaceId: workspace.id,

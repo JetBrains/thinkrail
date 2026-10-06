@@ -221,6 +221,107 @@ export function selectSessionState(
 	return state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.state ?? null;
 }
 
+export type WorkspaceSort = "recent" | "created" | "name";
+export const SETTLED_SHELF_PAGE = 10;
+export const SETTLED_SHELF_MORE = 25;
+const DAY_MS = 24 * 60 * 60_000;
+
+export type SettledReason =
+	| { kind: "override" }
+	| { kind: "review"; state: "merged" | "closed" }
+	| { kind: "idle"; since: number };
+
+export interface SettledRow {
+	workspace: Workspace;
+	reason: SettledReason;
+}
+
+export interface WorkspacePartition {
+	live: Workspace[];
+	settled: SettledRow[];
+}
+
+interface PartitionState extends SessionStateProjection {
+	activeWorkspaceId: string | null;
+	activeWorkspaceLiveLatch: boolean;
+	settleIdleDays: number | null;
+}
+
+/**
+ * Why a workspace sits on its project's Settled shelf, or `null` while it is live. The rules run in
+ * order: blockers (working, needs attention, Default, the latched active row) → the user's override →
+ * a merged/closed review without newer activity → an open review → the idle window.
+ */
+export function selectWorkspaceSettledReason(
+	state: PartitionState,
+	workspace: Workspace,
+	now: number,
+): SettledReason | null {
+	if (isDefaultWorkspace(workspace)) return null;
+	if (
+		selectWorkspaceIsRunning(state, workspace.id) ||
+		selectWorkspaceNeedsAttention(state, workspace.id)
+	) {
+		return null;
+	}
+	if (workspace.settledOverride === "settled") return { kind: "override" };
+	if (workspace.settledOverride === "active") return null;
+	if (state.activeWorkspaceId === workspace.id && state.activeWorkspaceLiveLatch) return null;
+	const review = workspace.review;
+	if (review?.state === "merged" || review?.state === "closed") {
+		const workedSince =
+			review.changedAt !== undefined &&
+			workspace.lastActiveAt !== undefined &&
+			workspace.lastActiveAt > review.changedAt;
+		if (!workedSince) return { kind: "review", state: review.state };
+	} else if (review && (review.state === undefined || review.state === "open")) {
+		return null;
+	}
+	if (state.settleIdleDays === null || workspace.lastActiveAt === undefined) return null;
+	if (now - workspace.lastActiveAt > state.settleIdleDays * DAY_MS) {
+		return { kind: "idle", since: workspace.lastActiveAt };
+	}
+	return null;
+}
+
+function compareWorkspaces(
+	sort: WorkspaceSort,
+	creationIndex: ReadonlyMap<string, number>,
+): (a: Workspace, b: Workspace) => number {
+	const created = (w: Workspace) => creationIndex.get(w.id) ?? 0;
+	switch (sort) {
+		case "recent":
+			return (a, b) => (b.lastActiveAt ?? 0) - (a.lastActiveAt ?? 0) || created(b) - created(a);
+		case "created":
+			return (a, b) => created(b) - created(a);
+		case "name":
+			return (a, b) => a.name.localeCompare(b.name) || created(b) - created(a);
+	}
+}
+
+/** The Default row stays first; every other row sorts by `sort` and splits into live and settled. */
+export function selectWorkspacePartition(
+	state: PartitionState & { workspaces: Record<string, Workspace[]>; workspaceSort: WorkspaceSort },
+	projectId: string,
+	now: number,
+): WorkspacePartition {
+	const rows = state.workspaces[projectId] ?? [];
+	const creationIndex = new Map(rows.map((row, index) => [row.id, index]));
+	const compare = compareWorkspaces(state.workspaceSort, creationIndex);
+	const live: Workspace[] = [];
+	const settled: SettledRow[] = [];
+	for (const workspace of rows) {
+		if (isDefaultWorkspace(workspace)) continue;
+		const reason = selectWorkspaceSettledReason(state, workspace, now);
+		if (reason) settled.push({ workspace, reason });
+		else live.push(workspace);
+	}
+	live.sort(compare);
+	settled.sort((a, b) => compare(a.workspace, b.workspace));
+	const defaults = rows.filter(isDefaultWorkspace);
+	return { live: [...defaults, ...live], settled };
+}
+
 export function selectWorkspaceNeedsAttention(
 	state: SessionStateProjection,
 	workspaceId: string,
