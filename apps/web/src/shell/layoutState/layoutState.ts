@@ -342,6 +342,8 @@ function isWorkspaceView(value: unknown): value is WorkspaceViewState {
 					typeof tab.path === "string" &&
 					validDiffScope(tab.scope)
 				);
+			case "changes":
+				return hasOnlyKeys(tab, ["kind", "id", "name", "scope"]) && validDiffScope(tab.scope);
 			case "chat":
 				return (
 					hasOnlyKeys(tab, ["kind", "id", "name", "sessionId"]) && typeof tab.sessionId === "string"

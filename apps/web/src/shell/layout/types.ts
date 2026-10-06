@@ -18,6 +18,13 @@ export interface LayoutDiffTab {
 	scope: GitDiffScope;
 }
 
+export interface LayoutChangesTab {
+	kind: "changes";
+	id: string;
+	name: string;
+	scope: GitDiffScope;
+}
+
 export interface LayoutChatTab {
 	kind: "chat";
 	id: string;
@@ -51,6 +58,7 @@ export interface LayoutToolTab {
 export type LayoutCenterTab =
 	| LayoutFileTab
 	| LayoutDiffTab
+	| LayoutChangesTab
 	| LayoutChatTab
 	| LayoutDocumentTab
 	| LayoutTerminalTab;

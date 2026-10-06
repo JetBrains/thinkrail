@@ -356,6 +356,8 @@ export function tabSearchKeywords(tab: LayoutTab): string[] {
 		case "file":
 		case "diff":
 			return [name, tab.kind, tab.path];
+		case "changes":
+			return [name, tab.kind, tab.scope.kind];
 		case "chat":
 			return [name, tab.kind, tab.sessionId];
 		case "document":

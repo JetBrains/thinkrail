@@ -5,6 +5,7 @@ import {
 	closeLayoutTab,
 	collectAllGroups,
 	findTabLocation,
+	openCenterTab,
 	resizeBottomRegion,
 	resizeSideRegion,
 	selectTab,
@@ -449,6 +450,34 @@ describe("frontend-local layout state", () => {
 		expect(restored.center).toMatchObject({ kind: "group", tabs: [] });
 		expect(restored.left.groups[0]?.tabs).toEqual([toolTab("projects")]);
 		expect(restored.bottom.visible).toBe(true);
+	});
+
+	test("a persisted changes review tab survives reload as a preview-eligible center tab", async () => {
+		const local = new MemoryStorage();
+		const session = new MemoryStorage();
+		session.setItem("thinkrail:layout-surface-id", "surface-a");
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+		const initial = await ensureWorkspaceLayoutState("workspace");
+		if (initial.center.kind !== "group") throw new Error("expected a single center group");
+		const opened = openCenterTab(
+			initial,
+			{ kind: "changes", id: "ws:changes:branch", name: "Changes", scope: { kind: "branch" } },
+			initial.center.id,
+			"preview",
+		);
+		if (!("document" in opened)) throw new Error(opened.reason);
+		await commitWorkspaceLayout("workspace", opened.document);
+
+		resetLayoutStateForTests();
+		resetStore();
+		setLayoutStateStorageForTests({ local, session }, endpoint);
+
+		const restored = await ensureWorkspaceLayoutState("workspace");
+		expect(restored.center).toMatchObject({
+			kind: "group",
+			previewTabId: "ws:changes:branch",
+			tabs: [{ kind: "changes", id: "ws:changes:branch", scope: { kind: "branch" } }],
+		});
 	});
 
 	test("reload restores the same surface without another host read", async () => {

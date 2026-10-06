@@ -5,6 +5,7 @@ import type {
 	LayoutPresetSideRegion,
 	LayoutToolId,
 } from "@thinkrail/contracts";
+import { isPreviewCompatibleTabKind } from "../../lib";
 import {
 	collectAllGroups,
 	collectCenterGroups,
@@ -236,7 +237,7 @@ function appendWorkspaceTab(
 	const current = groups[groupId] ?? { tabs: [] };
 	groups[groupId] = {
 		tabs: [...current.tabs, tab],
-		...(current.previewTabId || (preview && (tab.kind === "file" || tab.kind === "diff"))
+		...(current.previewTabId || (preview && isPreviewCompatibleTabKind(tab.kind))
 			? { previewTabId: current.previewTabId ?? tab.id }
 			: {}),
 	};

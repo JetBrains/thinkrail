@@ -565,6 +565,7 @@ export function selectAttentionCenterResourceCacheKey(
 		switch (tab.kind) {
 			case "file":
 			case "diff":
+			case "changes":
 			case "chat":
 				return tab.kind === selected.kind && layoutResourceIdentity(tab) === identity;
 			case "doc":

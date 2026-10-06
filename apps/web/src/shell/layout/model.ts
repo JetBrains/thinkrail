@@ -1,4 +1,5 @@
 import {
+	isPreviewCompatibleTabKind,
 	type LayoutAttention,
 	layoutResourceIdentity,
 	randomId,
@@ -459,7 +460,7 @@ export function openCenterTab(
 ): LayoutOperationResult {
 	const resolved = resolvePlacedResource(document, tab);
 	if (resolved.conflictingId) return { reason: "That tab id belongs to another resource." };
-	const previewCompatible = tab.kind === "file" || tab.kind === "diff";
+	const previewCompatible = isPreviewCompatibleTabKind(tab.kind);
 	const effectiveIntent = intent === "preview" && !previewCompatible ? "keep" : intent;
 	const existingTab = resolved.placed;
 	const existing = existingTab ? findTabLocation(document, existingTab.id) : null;
@@ -641,6 +642,7 @@ export function moveTabToGroup(
 		groupIndex < 0 ||
 		movingTab.kind === "file" ||
 		movingTab.kind === "diff" ||
+		movingTab.kind === "changes" ||
 		movingTab.kind === "chat" ||
 		movingTab.kind === "document"
 	) {
@@ -1401,7 +1403,7 @@ export function validateLayoutDocument(
 		for (const tab of node.tabs) trackTab(tab, "center");
 		if (node.previewTabId) {
 			const preview = node.tabs.find((tab) => tab.id === node.previewTabId);
-			if (!preview || (preview.kind !== "file" && preview.kind !== "diff")) {
+			if (!preview || !isPreviewCompatibleTabKind(preview.kind)) {
 				errors.push(`Invalid preview resource: ${node.previewTabId}`);
 			}
 		}

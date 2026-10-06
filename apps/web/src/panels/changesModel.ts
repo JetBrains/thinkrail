@@ -33,6 +33,28 @@ export function diffTabName(scope: GitDiffScope, path: string): string {
 	return `${base} · ${(scope.kind === "pinned" ? scope.baseRef : scope.sha).slice(0, 7)}`;
 }
 
+export function changesTabId(workspaceId: string, scope: GitDiffScope): string {
+	return tupleKey("changes", workspaceId, scopeKey(scope));
+}
+
+export function changesTabName(scope: GitDiffScope): string {
+	if (scope.kind === "branch") return "Changes";
+	if (scope.kind === "uncommitted") return "Changes · uncommitted";
+	return `Changes · ${(scope.kind === "pinned" ? scope.baseRef : scope.sha).slice(0, 7)}`;
+}
+
+const GENERATED_PATH =
+	/(^|\/)([^/]*\.lock|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|[^/]*\.min\.(js|css)|[^/]*\.snap|[^/]*\.map)$/;
+export const LARGE_SECTION_LINES = 400;
+export const LARGE_SCOPE_FILES = 50;
+
+export function sectionCollapsedByDefault(change: GitFileChange): boolean {
+	return (
+		(change.added ?? 0) + (change.removed ?? 0) > LARGE_SECTION_LINES ||
+		GENERATED_PATH.test(change.path)
+	);
+}
+
 export function scopeLabel(scope: GitDiffScope, commits: readonly GitCommit[] = []): string {
 	if (scope.kind === "branch") return "All changes";
 	if (scope.kind === "uncommitted") return "Uncommitted";

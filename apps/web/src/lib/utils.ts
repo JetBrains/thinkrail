@@ -6,34 +6,47 @@ export function tupleKey(namespace: string, ...parts: string[]): string {
 	return `${namespace}:${parts.map((part) => `${part.length}:${part}`).join("")}`;
 }
 
+type LayoutDiffScopeInput =
+	| { kind: "branch" | "uncommitted" }
+	| { kind: "commit"; sha: string }
+	| { kind: "pinned"; baseRef: string };
+
 type LayoutResourceIdentityInput =
 	| { kind: "file"; path: string }
-	| {
-			kind: "diff";
-			path: string;
-			scope:
-				| { kind: "branch" | "uncommitted" }
-				| { kind: "commit"; sha: string }
-				| { kind: "pinned"; baseRef: string };
-	  }
+	| { kind: "diff"; path: string; scope: LayoutDiffScopeInput }
+	| { kind: "changes"; scope: LayoutDiffScopeInput }
 	| { kind: "chat"; sessionId: string }
 	| { kind: "document"; documentKind: string; sourceId: string }
 	| { kind: "terminal"; tabKey: string }
 	| { kind: "tool"; tool: string };
 
+function layoutScopeReference(scope: LayoutDiffScopeInput): string {
+	return scope.kind === "commit" ? scope.sha : scope.kind === "pinned" ? scope.baseRef : "";
+}
+
+export function isPreviewCompatibleTabKind(kind: string): boolean {
+	return kind === "file" || kind === "diff" || kind === "changes";
+}
+
 export function layoutResourceIdentity<T extends LayoutResourceIdentityInput>(tab: T): string {
 	switch (tab.kind) {
 		case "file":
 			return tupleKey("layout-resource", "file", tab.path);
-		case "diff": {
-			const reference =
-				tab.scope.kind === "commit"
-					? tab.scope.sha
-					: tab.scope.kind === "pinned"
-						? tab.scope.baseRef
-						: "";
-			return tupleKey("layout-resource", "diff", tab.path, tab.scope.kind, reference);
-		}
+		case "diff":
+			return tupleKey(
+				"layout-resource",
+				"diff",
+				tab.path,
+				tab.scope.kind,
+				layoutScopeReference(tab.scope),
+			);
+		case "changes":
+			return tupleKey(
+				"layout-resource",
+				"changes",
+				tab.scope.kind,
+				layoutScopeReference(tab.scope),
+			);
 		case "chat":
 			return tupleKey("layout-resource", "chat", tab.sessionId);
 		case "document":
