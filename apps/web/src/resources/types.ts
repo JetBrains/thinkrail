@@ -110,6 +110,7 @@ export interface ResourceRenderer {
 		copy: boolean;
 		layout: boolean;
 		whitespace: boolean;
+		boundedDiff?: boolean;
 	};
 	loadView?(): Promise<{ default: ComponentType<ResourceViewProps> }>;
 	loadDiff?(): Promise<{ default: ComponentType<ResourceDiffProps> }>;

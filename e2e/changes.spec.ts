@@ -358,7 +358,7 @@ test("Changes has a List|Tree toggle; Tree groups files into folders with +/- co
 	const compactFolder = page.getByTestId("change-tree-folder");
 	await expect(compactFolder).toHaveCount(1);
 	await expect(compactFolder).toContainText("docs/guides");
-	const fileNode = page.getByTestId("change-node").filter({ hasText: "notes.md" });
+	const fileNode = page.getByTestId("change-item").filter({ hasText: "notes.md" });
 	await expect(fileNode).toBeVisible();
 	await compactFolder.click();
 	await expect(fileNode).toBeHidden();
@@ -590,7 +590,7 @@ test("A change row's action menu opens from the ⌄ button and from right-click;
 	await expect(page.getByTestId("rendered-diff")).toContainText("two");
 
 	await page.getByTestId("changes-toggle-tree").click();
-	const fileNode = page.getByTestId("change-node").filter({ hasText: "notes.md" });
+	const fileNode = page.getByTestId("change-item").filter({ hasText: "notes.md" });
 	await fileNode.click({ button: "right" });
 	await expect(page.getByTestId("change-row-actions")).toBeVisible();
 	await page.keyboard.press("Escape");
@@ -768,7 +768,7 @@ test("Change rows stay one aligned, fully-highlighted row — menu slot included
 
 	await page.getByTestId("changes-toggle-tree").click();
 	const folderBadge = page.getByTestId("change-tree-folder").filter({ hasText: "packages" });
-	const fileBadge = page.getByTestId("change-node").filter({ hasText: "ForTheChangesPanel.ts" });
+	const fileBadge = page.getByTestId("change-item").filter({ hasText: "ForTheChangesPanel.ts" });
 	const folderRight = await rightEdge(folderBadge);
 	const fileRight = await rightEdge(fileBadge);
 	expect(Math.abs(folderRight - fileRight)).toBeLessThanOrEqual(1);
