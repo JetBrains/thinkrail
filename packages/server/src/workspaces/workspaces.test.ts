@@ -17,6 +17,7 @@ import {
 	completeInitialTerminalReservation,
 	createWorkspace,
 	ensureWorkspaceScratchDir,
+	forgetQuietWorkspace,
 	forgetWorkspace,
 	listExistingWorktrees,
 	listWorkspaceRecords,
@@ -28,6 +29,7 @@ import {
 	refreshUserOwnedWorkspace,
 	removeWorkspace,
 	renameWorkspace,
+	seedWorkspaceHead,
 	settledRemovalPreview,
 	settleWorkspace,
 	setWorkspaceDiffBase,
@@ -1002,6 +1004,58 @@ test("recordWorkspaceHead stamps activity only when the sha actually moved after
 	expect(
 		listWorkspaceRecords("p1").find((row) => row.id === ws.id)?.lastActiveAt ?? 0,
 	).toBeGreaterThan(t0 - 3_600_000);
+});
+
+test("a seeded HEAD baseline lets the very first observed move count as activity", async () => {
+	const ws = await createWorkspace("p1");
+	const stale = (ws.lastActiveAt ?? 0) - 3_600_000;
+	const all = JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8")) as Workspace[];
+	for (const row of all) if (row.id === ws.id) row.lastActiveAt = stale;
+	writeFileSync(join(dataDir, "workspaces.json"), JSON.stringify(all));
+
+	seedWorkspaceHead(ws.id);
+	seedWorkspaceHead(ws.id);
+	writeFileSync(join(ws.worktreePath, "work.txt"), "work\n");
+	git(ws.worktreePath, "add", "-A");
+	git(ws.worktreePath, "commit", "-m", "work");
+	recordWorkspaceHead(ws.id);
+	expect(
+		listWorkspaceRecords("p1").find((row) => row.id === ws.id)?.lastActiveAt ?? 0,
+	).toBeGreaterThan(stale);
+	expect(() => seedWorkspaceHead("missing")).not.toThrow();
+});
+
+test("forgetQuietWorkspace removes a row only while the client's settle facts still hold", async () => {
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+	const quiet = await createWorkspace("p1", "Quiet");
+	const moved = await createWorkspace("p1", "Moved");
+	const pinned = await createWorkspace("p1", "Pinned");
+	unsettleWorkspace(pinned.id);
+	const def = listWorkspaceRecords("p1").find((row) => row.kind === "default");
+	events.length = 0;
+
+	const seen = (row: Workspace | undefined) => ({
+		id: row?.id ?? "",
+		...(row?.lastActiveAt !== undefined ? { lastActiveAt: row.lastActiveAt } : {}),
+	});
+	expect(
+		forgetQuietWorkspace({ id: moved.id, lastActiveAt: (moved.lastActiveAt ?? 0) - 1 }),
+	).toEqual({
+		ok: false,
+		reason: "changed",
+	});
+	expect(forgetQuietWorkspace({ id: moved.id })).toEqual({ ok: false, reason: "changed" });
+	expect(forgetQuietWorkspace(seen(pinned))).toEqual({ ok: false, reason: "active" });
+	expect(forgetQuietWorkspace({ id: "missing" })).toEqual({ ok: false, reason: "missing" });
+	expect(forgetQuietWorkspace(seen(def))).toEqual({ ok: false, reason: "missing" });
+	expect(listWorkspaceRecords("p1").map((row) => row.id)).toContain(moved.id);
+	expect(events).toEqual([]);
+
+	const outcome = forgetQuietWorkspace(seen(quiet));
+	expect(outcome).toEqual({ ok: true, workspace: expect.objectContaining({ id: quiet.id }) });
+	expect(listWorkspaceRecords("p1").map((row) => row.id)).not.toContain(quiet.id);
+	expect(events).toEqual([{ kind: "removed", projectId: "p1", id: quiet.id }]);
 });
 
 test("setWorkspaceReview persists a trimmed snapshot and stays silent when nothing changed", async () => {

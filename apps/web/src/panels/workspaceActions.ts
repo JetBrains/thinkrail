@@ -1,5 +1,6 @@
 import {
 	type EditorInfo,
+	type SettledRemovalResult,
 	WORKSPACE_RENAME_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	type Workspace,
@@ -239,6 +240,29 @@ export function removeWorkspace(workspaceId: string): void {
 	void getTransport()
 		.request("workspace.remove", { id: workspaceId })
 		.catch((err) => toast.error(errorText(err, "Failed to remove workspace")));
+}
+
+export function keptSettledRemovalsText(kept: SettledRemovalResult["kept"]): string | null {
+	if (kept.length === 0) return null;
+	const count = kept.length === 1 ? "1 workspace" : `${kept.length} workspaces`;
+	return `Kept ${count} that became active after the preview.`;
+}
+
+export function removeSettledWorkspaces(
+	workspaces: readonly Pick<Workspace, "id" | "lastActiveAt">[],
+): void {
+	void getTransport()
+		.request("workspace.removeSettled", {
+			targets: workspaces.map((w) => ({
+				id: w.id,
+				...(w.lastActiveAt !== undefined ? { lastActiveAt: w.lastActiveAt } : {}),
+			})),
+		})
+		.then((result) => {
+			const kept = keptSettledRemovalsText(result.kept);
+			if (kept) toast.info(kept);
+		})
+		.catch((err) => toast.error(errorText(err, "Failed to remove settled workspaces")));
 }
 
 export function openWorkspaceIn(workspace: Workspace, editor: EditorInfo): void {

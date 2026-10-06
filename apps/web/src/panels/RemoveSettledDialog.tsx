@@ -11,7 +11,7 @@ import {
 import { useEffect, useState } from "react";
 import { getTransport } from "../transport";
 import { SettingsSwitch } from "./SettingsSwitch";
-import { removeWorkspace } from "./workspaceActions";
+import { removeSettledWorkspaces } from "./workspaceActions";
 
 type Preview =
 	| { kind: "checking" }
@@ -136,7 +136,7 @@ export function RemoveSettledDialog({
 						data-testid="confirm-remove-settled"
 						disabled={targets.length === 0}
 						onClick={() => {
-							for (const workspace of targets) removeWorkspace(workspace.id);
+							removeSettledWorkspaces(targets);
 							onOpenChange(false);
 						}}
 					>

@@ -2,6 +2,8 @@ import type {
 	ReviewComment,
 	ReviewFixDetails,
 	ReviewSendResult,
+	SettledRemovalResult,
+	SettledRemovalTarget,
 	TemplateReadLocation,
 	ThinkingLevel,
 	WireModel,
@@ -28,6 +30,7 @@ import {
 	getSessionResources,
 	getSessionStats,
 	getSessionWorkspaceId,
+	hasBusySession,
 	hasSession,
 	isHostResourceId,
 	isPiSessionId,
@@ -157,6 +160,7 @@ import { ensureWatch, stopWatch } from "../watch";
 import {
 	createWorkspace,
 	ensureWorkspaceScratchDir,
+	forgetQuietWorkspace,
 	forgetWorkspace,
 	getWorkspace,
 	listAllWorkspaceRecords,
@@ -233,6 +237,34 @@ async function archiveTeardown(ws: Workspace): Promise<void> {
 	} catch {
 		log.warn(`workspace archive teardown failed for ${ws.id}`);
 	}
+}
+
+function releaseForgottenWorkspace(ws: Workspace): void {
+	evictSpecIndex(ws.id);
+	removeWorkspaceReviews(ws.id);
+	forgetWorkspaceChanges(ws.id);
+	stopWatch(ws.id);
+	closeWorkspaceTerminals(ws.id);
+}
+
+function removeSettledWorkspaces(targets: SettledRemovalTarget[]): SettledRemovalResult {
+	const result: SettledRemovalResult = { removed: [], kept: [] };
+	let teardowns = Promise.resolve();
+	for (const target of targets) {
+		if (hasBusySession(target.id)) {
+			result.kept.push({ id: target.id, reason: "running" });
+			continue;
+		}
+		const outcome = forgetQuietWorkspace(target);
+		if (!outcome.ok) {
+			if (outcome.reason !== "missing") result.kept.push({ id: target.id, reason: outcome.reason });
+			continue;
+		}
+		releaseForgottenWorkspace(outcome.workspace);
+		teardowns = teardowns.then(() => archiveTeardown(outcome.workspace));
+		result.removed.push(target.id);
+	}
+	return result;
 }
 
 async function sendUserMessage(
@@ -467,18 +499,14 @@ const handlers: WsHandlers = {
 	"workspace.unsettle": (params) => unsettleWorkspace(params.id),
 	"workspace.settledRemovalPreview": (params) => settledRemovalPreview(params.ids),
 	"workspace.remove": (params) => {
-		const id = params.id;
-		const ws = forgetWorkspace(id);
+		const ws = forgetWorkspace(params.id);
 		if (ws) {
-			evictSpecIndex(ws.id);
-			removeWorkspaceReviews(ws.id);
-			forgetWorkspaceChanges(ws.id);
-			stopWatch(ws.id);
-			closeWorkspaceTerminals(ws.id);
+			releaseForgottenWorkspace(ws);
 			void archiveTeardown(ws);
 		}
 		return { ok: true } as const;
 	},
+	"workspace.removeSettled": (params) => removeSettledWorkspaces(params.targets),
 	"workspace.diffStats": (params) => workspaceDiffStats(params.id),
 	"workspace.openIn": (p) => {
 		openEditor(p.editor, getWorkspace(p.id).worktreePath);

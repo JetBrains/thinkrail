@@ -233,7 +233,12 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   together with **`workspace.settle`** / **`workspace.unsettle`** (`{ id }` — Default rejected server-side;
   the response is the updated record and the `workspace.updated` push converges every client) and
   **`workspace.settledRemovalPreview`** (`{ ids }` → per worktree `dirty` file count + `unpushed` commit
-  count, so a bulk Remove can name and exclude work that would be lost)),
+  count, so a bulk Remove can name and exclude work that would be lost) and
+  **`workspace.removeSettled`** (`{ targets: [{ id, lastActiveAt }] }` → `{ removed, kept }`: the bulk
+  teardown is one guarded host call, not N blind `workspace.remove`s — the client sends the activity stamp
+  it judged each row settled from and the host **keeps** a row whose stamp moved, that a session is busy
+  in, or that the user pinned live since (`reason: "changed" | "running" | "active"`), so a workspace
+  another client started working in between preview and confirm is never torn down)),
   **`OpenBranchReview`** (the review reference for the active branch: PR vs MR + number, plus an optional
   **`state`** — `"open" | "merged" | "closed"`, absent on a pre-v78 host and read as open — and
   **`changedAt`**, the ms time the provider merged or closed it; no actions),

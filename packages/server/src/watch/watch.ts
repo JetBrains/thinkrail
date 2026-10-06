@@ -24,6 +24,7 @@ const REPO_META_DEBOUNCE_MS = 300;
 type WatchPublisher = (payload: WorkspaceFsChangedPayload) => void;
 type SkillPathClassifier = (relativePath: string) => boolean;
 type RepoMetaPublisher = (workspaceId: string) => void;
+type WatchStartedPublisher = (workspaceId: string) => void;
 
 const ALREADY_READY: WorkspaceWatchReadyResult = { startupNudge: false };
 const STARTUP_NUDGE: WorkspaceWatchReadyResult = { startupNudge: true };
@@ -32,6 +33,7 @@ const startupFallback = Promise.resolve(STARTUP_NUDGE);
 
 let publish: WatchPublisher | null = null;
 let publishRepoMeta: RepoMetaPublisher | null = null;
+let publishWatchStarted: WatchStartedPublisher | null = null;
 let isSkillPath: SkillPathClassifier | null = null;
 
 export function setWatchPublisher(publisher: WatchPublisher | null): void {
@@ -44,6 +46,10 @@ export function setSkillPathClassifier(classifier: SkillPathClassifier | null): 
 
 export function setRepoMetaPublisher(publisher: RepoMetaPublisher | null): void {
 	publishRepoMeta = publisher;
+}
+
+export function setWatchStartedPublisher(publisher: WatchStartedPublisher | null): void {
+	publishWatchStarted = publisher;
 }
 
 function isRepoMetaPath(relPath: string): boolean {
@@ -210,6 +216,7 @@ export function ensureWatch(
 			metaWatcher: null,
 		};
 		entries.set(workspaceId, entry);
+		publishWatchStarted?.(workspaceId);
 		if (entry.prewarmOnly) evictExcessPrewarmOnlyWatches();
 		entry.nudgeTimer = setTimeout(() => {
 			if (entries.get(workspaceId) !== entry) return;
@@ -224,6 +231,7 @@ export function ensureWatch(
 		if (gitDir) entry.metaWatcher = watchGitDir(workspaceId, gitDir, watcher);
 		return ready;
 	} catch {
+		stopWatch(workspaceId);
 		coalescer.dispose();
 		log.warn(`could not watch worktree for workspace ${workspaceId}`);
 		return startupFallback;

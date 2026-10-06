@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
+	SettledRemovalResult,
 	Template,
 	TemplateInfo,
 	WireModel,
@@ -389,6 +390,57 @@ test("todo.requestFix on a chat that isn't on disk rolls the record back and nev
 	const after = (await getReviewSnapshot(workspace.id)).comments.find((c) => c.id === finding.id);
 	expect(after?.status).toBe("draft");
 	expect(after?.sessionId).toBeUndefined();
+});
+
+test("workspace.removeSettled tears down only rows whose settle facts still match the client's snapshot", async () => {
+	const quiet = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Quiet" },
+		CTX,
+	)) as Workspace;
+	const moved = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Moved" },
+		CTX,
+	)) as Workspace;
+	const pinned = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Pinned" },
+		CTX,
+	)) as Workspace;
+	await handleRequest("workspace.unsettle", { id: pinned.id }, CTX);
+	const seen = (row: Workspace) => ({
+		id: row.id,
+		...(row.lastActiveAt !== undefined ? { lastActiveAt: row.lastActiveAt } : {}),
+	});
+
+	const result = (await handleRequest(
+		"workspace.removeSettled",
+		{
+			targets: [
+				seen(quiet),
+				{ id: moved.id, lastActiveAt: (moved.lastActiveAt ?? 0) - 1 },
+				seen(pinned),
+				{ id: "gone" },
+			],
+		},
+		CTX,
+	)) as SettledRemovalResult;
+	expect(result).toEqual({
+		removed: [quiet.id],
+		kept: [
+			{ id: moved.id, reason: "changed" },
+			{ id: pinned.id, reason: "active" },
+		],
+	});
+	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+	expect(rows.map((row) => row.id)).toEqual(expect.arrayContaining([moved.id, pinned.id]));
+	expect(rows.map((row) => row.id)).not.toContain(quiet.id);
+	for (let attempt = 0; attempt < 200 && existsSync(quiet.worktreePath); attempt++) {
+		await new Promise((resolve) => setTimeout(resolve, 10));
+	}
+	expect(existsSync(quiet.worktreePath)).toBe(false);
+	expect(existsSync(moved.worktreePath)).toBe(true);
 });
 
 test("workspace mutation handlers reject the Default before any side effect", async () => {

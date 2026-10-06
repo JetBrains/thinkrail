@@ -496,9 +496,19 @@ enabled/confirmed choice before entering analytics attribution.
   whenever a record reports `execution: "running"` (a user prompt flips it, so both user and agent turns
   count — and the writer's one-per-minute coalescing makes a streaming agent cheap), `terminal.write`
   stamps the tab's workspace (the terminal barrel resolves tab → workspace), and the repo-metadata callback
-  calls `recordWorkspaceHead`. Reading a result, selecting a workspace, or opening files never stamps —
-  "looking is not working" is the user-visible rule. `workspace.settle` / `workspace.unsettle` /
-  `workspace.settledRemovalPreview` are thin handlers over the module. **Review refresh:** after a
+  calls `recordWorkspaceHead`, with `watch`'s watch-started nudge wired to `seedWorkspaceHead` so every
+  watcher has a HEAD baseline before its first event. Reading a result, selecting a workspace, or opening
+  files never stamps — "looking is not working" is the user-visible rule. `workspace.settle` /
+  `workspace.unsettle` / `workspace.settledRemovalPreview` are thin handlers over the module.
+  **`workspace.removeSettled`** is the guarded bulk teardown: per target, `hasBusySession` (agent) then
+  `forgetQuietWorkspace` (workspaces) decide synchronously whether the row is still what the client saw;
+  a refused row is reported in `kept` with its reason and nothing of it is touched, a forgotten row is
+  released like `workspace.remove` releases one (`releaseForgottenWorkspace`: spec index, reviews, change
+  artifacts, watcher, terminals — synchronously, so every removed row is gone from the UI at once) while
+  the slow halves (session purge + `git worktree remove`) run **one worktree after another**, not forty
+  at once: the reclaim is a synchronous git call, and forty of them resuming in one microtask drain would
+  freeze the host for seconds. The client's list is a snapshot, and only the host can know what happened
+  since — in another client, or in an agent turn that started after the preview. **Review refresh:** after a
   `workspace.list` reply and on a five-minute timer the host refreshes the `review` snapshot of the rows
   whose PR state can still change the partition — live rows on every pass, **idle-settled rows at most
   every 30 minutes** (a PR opened for a dormant branch from outside ThinkRail must still bring it back,

@@ -321,7 +321,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     returned result is not persisted ahead of attach-time repair. `disposeAllSessions` remains the synchronous
     emergency stop, but registers its best-effort child cascades
     in the same pending set; `getSessionWorkspaceId(sessionId)` (the live session→workspace
-    lookup the host's `set_title` handler keys on); `removeSession`/`disposeAllSessions`;
+    lookup the host's `set_title` handler keys on); **`hasBusySession(workspaceId)`** (true while any live
+    session of the workspace is running, waiting on the user, or holds queued messages — the host's
+    synchronous guard before a bulk teardown of rows a client judged quiet, derived from the same
+    `SessionState` the clients see); `removeSession`/`disposeAllSessions`;
     **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: close session admission for
     the workspace before its first await, capture every registered parent, synchronously close its resource
     owners, and start parent abort/removal while concurrently draining preparations from the retired

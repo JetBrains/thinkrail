@@ -3,6 +3,7 @@ import { WORKSPACE_RENAME_PROTOCOL_VERSION, type Workspace } from "@thinkrail/co
 import {
 	canRenameWorkspace,
 	createRenameController,
+	keptSettledRemovalsText,
 	workspaceRenameValue,
 } from "./workspaceActions";
 
@@ -106,4 +107,17 @@ test("reset abandons an open or pending edit so a later capable welcome renames 
 	expect(renamed).toEqual([]);
 	rename.reset();
 	expect(editing).toEqual([true, false]);
+});
+
+test("a bulk remove names the rows the host kept, and says nothing when every row went", () => {
+	expect(keptSettledRemovalsText([])).toBeNull();
+	expect(keptSettledRemovalsText([{ id: "a", reason: "running" }])).toBe(
+		"Kept 1 workspace that became active after the preview.",
+	);
+	expect(
+		keptSettledRemovalsText([
+			{ id: "a", reason: "changed" },
+			{ id: "b", reason: "active" },
+		]),
+	).toBe("Kept 2 workspaces that became active after the preview.");
 });

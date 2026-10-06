@@ -7,6 +7,8 @@ import type {
 	OpenBranchReview,
 	Project,
 	SettledRemovalPreview,
+	SettledRemovalRefusal,
+	SettledRemovalTarget,
 	SubagentOverride,
 	Workspace,
 } from "@thinkrail/contracts";
@@ -529,6 +531,13 @@ export function recordWorkspaceHead(id: string): void {
 	if (previous !== undefined && previous !== sha) recordWorkspaceActivity(id);
 }
 
+export function seedWorkspaceHead(id: string): void {
+	if (observedHeadSha.has(id)) return;
+	if (!loadWorkspaces().some((workspace) => workspace.id === id)) return;
+	const sha = gitHeadSha(id);
+	if (sha) observedHeadSha.set(id, sha);
+}
+
 function setSettledOverride(id: string, override: "settled" | "active"): Workspace {
 	const all = loadWorkspaces();
 	const ws = all.find((workspace) => workspace.id === id);
@@ -682,14 +691,34 @@ export function listAllWorkspaceRecords(): Workspace[] {
 	return loadWorkspaces();
 }
 
+function dropWorkspaceRecord(all: Workspace[], ws: Workspace): void {
+	saveWorkspaces(all.filter((w) => w.id !== ws.id));
+	observedHeadSha.delete(ws.id);
+	emit({ kind: "removed", projectId: ws.projectId, id: ws.id });
+}
+
 export function forgetWorkspace(id: string): Workspace | null {
 	const all = loadWorkspaces();
 	const ws = all.find((w) => w.id === id);
 	if (!ws) return null;
 	if (ws.kind === "default") throw new Error("The Default workspace cannot be removed");
-	saveWorkspaces(all.filter((w) => w.id !== id));
-	emit({ kind: "removed", projectId: ws.projectId, id: ws.id });
+	dropWorkspaceRecord(all, ws);
 	return ws;
+}
+
+export type ForgetQuietOutcome =
+	| { ok: true; workspace: Workspace }
+	| { ok: false; reason: Exclude<SettledRemovalRefusal, "running"> | "missing" };
+
+/** Forgets the row only while the facts the client judged it settled from still hold. */
+export function forgetQuietWorkspace(target: SettledRemovalTarget): ForgetQuietOutcome {
+	const all = loadWorkspaces();
+	const ws = all.find((w) => w.id === target.id);
+	if (!ws || ws.kind === "default") return { ok: false, reason: "missing" };
+	if (ws.settledOverride === "active") return { ok: false, reason: "active" };
+	if (ws.lastActiveAt !== target.lastActiveAt) return { ok: false, reason: "changed" };
+	dropWorkspaceRecord(all, ws);
+	return { ok: true, workspace: ws };
 }
 
 export function reclaimWorktree(ws: Workspace): void {

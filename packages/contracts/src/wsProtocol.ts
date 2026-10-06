@@ -40,6 +40,8 @@ import type {
 	SessionResources,
 	SessionStateRecord,
 	SettledRemovalPreview,
+	SettledRemovalResult,
+	SettledRemovalTarget,
 	SpecGraphSnapshot,
 	SubagentOverride,
 	Template,
@@ -195,6 +197,7 @@ export const WS_METHODS = {
 	workspaceSettle: "workspace.settle",
 	workspaceUnsettle: "workspace.unsettle",
 	workspaceSettledRemovalPreview: "workspace.settledRemovalPreview",
+	workspaceRemoveSettled: "workspace.removeSettled",
 	workspaceWatchReady: "workspace.watchReady",
 	workspaceOpenIn: "workspace.openIn",
 	workspaceReveal: "workspace.reveal",
@@ -535,6 +538,10 @@ export interface WsMethodMap {
 	"workspace.settledRemovalPreview": {
 		params: { ids: string[] };
 		result: SettledRemovalPreview[];
+	};
+	"workspace.removeSettled": {
+		params: { targets: SettledRemovalTarget[] };
+		result: SettledRemovalResult;
 	};
 	"workspace.watchReady": {
 		params: { workspaceId: string; prewarm?: boolean };

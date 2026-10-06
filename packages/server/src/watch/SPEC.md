@@ -94,7 +94,14 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   marker). A watcher that errors mid-flight (ENOSPC, root deleted) is warn-logged and dropped —
   panels fall back to read-on-demand until a later read re-creates it. No idle-stop (bounded by
   workspaces actually visited plus the capped prewarm tier).
+- **Watch-started nudge (third seam):** the moment a watcher entry is created (real or prewarm), before any
+  event can reach the repo-metadata nudge, `setWatchStartedPublisher(workspaceId)` fires once — the host
+  uses it to take the worktree's HEAD baseline, so the first git-metadata event of a watcher is judged
+  against a known sha instead of being spent on seeding. A re-created watcher (inode change, prewarm
+  re-admission) fires it again; the consumer is idempotent. It runs inside the registration's guarded
+  region, and a throw there — from it or from anything after `entries.set` — tears the fresh entry down
+  (`stopWatch`) rather than leaving a registered watcher whose readiness never settles.
 - **Public surface (barrel):** `ensureWatch`, `stopWatch`, `stopAllWatches`, `setWatchPublisher`,
-  `setRepoMetaPublisher`, `setSkillPathClassifier`.
+  `setRepoMetaPublisher`, `setWatchStartedPublisher`, `setSkillPathClassifier`.
 - **Allowed deps:** `persistence` (workspace lookup), `log`; `contracts` (payload type); Bun/Node.
 - **Forbidden:** `host`; sibling features; any pi package.

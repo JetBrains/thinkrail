@@ -10,6 +10,7 @@ import {
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
 	setWatchPublisher,
+	setWatchStartedPublisher,
 	stopAllWatches,
 	stopWatch,
 } from "./watch";
@@ -180,6 +181,7 @@ afterEach(() => {
 	stopAllWatches();
 	setWatchPublisher(null);
 	setRepoMetaPublisher(null);
+	setWatchStartedPublisher(null);
 	setSkillPathClassifier(null);
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
@@ -222,8 +224,12 @@ test("a missing classifier degrades a concrete event to unknown", async () => {
 
 test("a .git write nudges the repo-meta sink without ever becoming an fsChanged path", async () => {
 	const nudges: string[] = [];
+	const started: string[] = [];
 	setRepoMetaPublisher((id) => nudges.push(id));
+	setWatchStartedPublisher((id) => started.push(`${id}:${nudges.length}`));
 	ensureWatch("ws1");
+	ensureWatch("ws1");
+	expect(started).toEqual(["ws1:0"]);
 	await sleep(100);
 
 	mkdirSync(join(worktree, ".git"), { recursive: true });
@@ -239,6 +245,20 @@ test("a .git write nudges the repo-meta sink without ever becoming an fsChanged 
 	writeFileSync(join(worktree, ".git", "HEAD"), "ref: refs/heads/other\n");
 	await sleep(600);
 	expect(nudges).toEqual(["ws1"]);
+});
+
+test("a watch-started publisher that throws leaves no half-registered watcher behind", async () => {
+	let calls = 0;
+	setWatchStartedPublisher(() => {
+		calls += 1;
+		if (calls === 1) throw new Error("seed failed");
+	});
+	expect(await ensureWatch("ws1")).toEqual({ startupNudge: true });
+	expect(calls).toBe(1);
+	const ready = ensureWatch("ws1");
+	expect(calls).toBe(2);
+	expect(await ready).toEqual({ startupNudge: true });
+	expect(await ensureWatch("ws1")).toEqual({ startupNudge: false });
 });
 
 test("a linked worktree's git metadata lives outside the root — its churn still nudges the sink", async () => {

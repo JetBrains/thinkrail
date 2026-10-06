@@ -372,6 +372,17 @@ export function getSessionState(sessionId: string): SessionState {
 	return stateFromEntry(mustGetEntry(sessionId));
 }
 
+/** A session in the workspace is running, waiting on the user, or holds queued messages. */
+export function hasBusySession(workspaceId: string): boolean {
+	for (const [sessionId, entry] of sessions) {
+		if (entry.workspaceId !== workspaceId || isSessionDeleted(sessionId, workspaceId)) continue;
+		const state = stateFromEntry(entry);
+		if (state.execution === "running" || state.needsInput !== null || state.queuedCount > 0)
+			return true;
+	}
+	return false;
+}
+
 function stateRecordForEntry(entry: Entry): SessionStateRecord {
 	const projectId = resolveProjectId(entry.workspaceId);
 	if (!projectId) throw new Error(`Unknown workspace: ${entry.workspaceId}`);

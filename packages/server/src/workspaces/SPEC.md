@@ -188,9 +188,12 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   emits); `backfillWorkspaceActivity(id, at)` — sets the stamp only when the record has none and touches
   no override (the upgrade path for records that predate the field); `recordWorkspaceHead(id)` — reads the
   worktree's `HEAD` sha and calls `recordWorkspaceActivity` when it differs from the last sha observed in
-  this host lifetime (the first observation only seeds — a HEAD move is the commit/pull/checkout proxy;
-  the raw git-dir watcher fires on index refreshes too, which is why the sha, not the event, is the
-  signal); `settleWorkspace(id)` / `unsettleWorkspace(id)` — set `"settled"` / `"active"` with `settledAt`,
+  this host lifetime (a HEAD move is the commit/pull/checkout proxy; the raw git-dir watcher fires on
+  index refreshes too, which is why the sha, not the event, is the signal), with `seedWorkspaceHead(id)`
+  taking that baseline **when the worktree's watcher starts** — the observed-sha memory is per host
+  lifetime, so without the seed the first event after a restart could only record the sha, and the very
+  commit that should have brought a parked workspace back would pass unnoticed; an unseeded first
+  observation still only seeds. `settleWorkspace(id)` / `unsettleWorkspace(id)` — set `"settled"` / `"active"` with `settledAt`,
   **throw on `kind: "default"`** (the project folder is never shelved); `setWorkspaceReview(id, review |
   null)` — persists the snapshot and emits `updated` only when it actually changed, so the periodic
   provider refresh is silent while nothing moves. Every writer emits the full-snapshot `updated`.
@@ -233,8 +236,15 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,
   `setWorkspaceSubagentsOverride`, `recordWorkspaceActivity`, `backfillWorkspaceActivity`,
-  `recordWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`,
-  `settledRemovalPreview`.
+  `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`,
+  `settledRemovalPreview`, `forgetQuietWorkspace`, `ForgetQuietOutcome`.
+- `forgetQuietWorkspace({ id, lastActiveAt })` — the bulk-remove half of `forgetWorkspace`: one synchronous
+  read-check-write that drops the record **only while the facts the client judged it settled from still
+  hold** — refused as `"active"` when the user has since pinned it live, as `"changed"` when its
+  `lastActiveAt` is not the stamp the client sent (any real activity since the preview, since activity
+  always writes the stamp of a quiet row), and as `"missing"` for an unknown or Default id. Being
+  synchronous is the point: no activity writer can interleave between the check and the removal. The
+  session-busy check is the host's, since this module has no `agent` edge.
 - `settledRemovalPreview(ids)` (**async**) — per worktree the dirty-file count (tracked `diff --name-only`
   + untracked `ls-files --others`, two cheap `gitAsync` reads rather than the Changes panel's full
   `gitStatus`, which also reads file contents) and the commits its branch has that its upstream lacks

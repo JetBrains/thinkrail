@@ -79,12 +79,14 @@ import {
 	setRepoMetaPublisher,
 	setSkillPathClassifier,
 	setWatchPublisher,
+	setWatchStartedPublisher,
 	stopAllWatches,
 } from "../watch";
 import {
 	getWorkspace,
 	recordWorkspaceHead,
 	refreshUserOwnedWorkspace,
+	seedWorkspaceHead,
 	setWorkspacePublisher,
 } from "../workspaces";
 import { BLOB_PREFIX, FILES_PREFIX, serveBlob, serveWorktreeFile } from "./fileRoutes";
@@ -594,6 +596,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	setSkillPathClassifier(isProjectSkillPath);
 	setFsNudgePublisher(publishFsChanged);
 
+	setWatchStartedPublisher(seedWorkspaceHead);
 	setRepoMetaPublisher((workspaceId) => {
 		recordWorkspaceHead(workspaceId);
 		refreshUserOwnedWorkspace(workspaceId);

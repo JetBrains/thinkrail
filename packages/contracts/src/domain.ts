@@ -82,6 +82,20 @@ export interface SettledRemovalPreview {
 	unpushed: number | null;
 }
 
+/** A row the client judged settled, with the activity stamp it judged from. */
+export interface SettledRemovalTarget {
+	id: string;
+	lastActiveAt?: number;
+}
+
+export type SettledRemovalRefusal = "running" | "active" | "changed";
+
+/** `kept` rows were no longer quiet when the host got to them and were left untouched. */
+export interface SettledRemovalResult {
+	removed: string[];
+	kept: Array<{ id: string; reason: SettledRemovalRefusal }>;
+}
+
 export type GhSetupProblem = "missing" | "unauthenticated";
 
 export interface PrDraft {
