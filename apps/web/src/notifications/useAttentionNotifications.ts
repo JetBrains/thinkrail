@@ -36,13 +36,12 @@ function navigate(spec: NotificationSpec): void {
 	const state = useAppStore.getState();
 	const projectId = selectWorkspaceById(state, spec.target.workspaceId)?.projectId;
 	if (!projectId) return;
-	state.requestChatLocation({
-		workspaceId: spec.target.workspaceId,
-		projectId,
-		sessionId: spec.target.sessionId,
-		messageIndex: 0,
-		anchorText: "",
-	});
+	// The route-based open lands the chat at its latest message (no message jump/flash), same as a
+	// deep link — not requestChatLocation, which reveals a specific message.
+	state.activateWorkspaceFromRoute(
+		{ id: spec.target.workspaceId, projectId },
+		spec.target.sessionId,
+	);
 }
 
 /**
