@@ -4,7 +4,9 @@ import { basename, dirname, join, resolve } from "node:path";
 import type {
 	DiffStats,
 	ExistingWorktreeCandidate,
+	OpenBranchReview,
 	Project,
+	SettledRemovalPreview,
 	SubagentOverride,
 	Workspace,
 } from "@thinkrail/contracts";
@@ -13,9 +15,12 @@ import {
 	assertSafeRef,
 	canonicalPath,
 	changedFileArgs,
+	countPushDivergence,
 	currentBranch,
 	git,
 	gitAsync,
+	gitHeadSha,
+	gitStatus,
 	listRemotes,
 	remoteNameOf,
 	remoteRefOid,
@@ -188,6 +193,7 @@ export async function openExistingWorktree(
 		baseBranch,
 		renamed: true,
 		initialTerminalPending: true,
+		lastActiveAt: Date.now(),
 	};
 	all.push(workspace);
 	saveWorkspaces(all);
@@ -285,6 +291,7 @@ export async function createWorkspace(
 		worktreePath,
 		baseBranch,
 		initialTerminalPending: true,
+		lastActiveAt: Date.now(),
 		...(displayName ? { renamed: true } : {}),
 	};
 	ensureWorkspaceScratchDir(workspace);
@@ -481,6 +488,133 @@ export function setWorkspaceDiffBase(id: string, ref: string | null): Workspace 
 	saveWorkspaces(all);
 	emit({ kind: "updated", workspace: ws });
 	return ws;
+}
+
+const ACTIVITY_COALESCE_MS = 60_000;
+const observedHeadSha = new Map<string, string>();
+
+export function recordWorkspaceActivity(id: string, at: number = Date.now()): Workspace | null {
+	const all = loadWorkspaces();
+	const ws = all.find((workspace) => workspace.id === id);
+	if (!ws) return null;
+	const previous = ws.lastActiveAt ?? 0;
+	const overridden = ws.settledOverride !== undefined;
+	if (!overridden && at - previous < ACTIVITY_COALESCE_MS) return ws;
+	if (at > previous) ws.lastActiveAt = at;
+	if (overridden) {
+		delete ws.settledOverride;
+		delete ws.settledAt;
+	}
+	saveWorkspaces(all);
+	emit({ kind: "updated", workspace: ws });
+	return ws;
+}
+
+export function backfillWorkspaceActivity(id: string, at: number): Workspace | null {
+	const all = loadWorkspaces();
+	const ws = all.find((workspace) => workspace.id === id);
+	if (!ws) return null;
+	if (ws.lastActiveAt !== undefined) return ws;
+	ws.lastActiveAt = at;
+	saveWorkspaces(all);
+	emit({ kind: "updated", workspace: ws });
+	return ws;
+}
+
+export function recordWorkspaceHead(id: string): void {
+	if (!loadWorkspaces().some((workspace) => workspace.id === id)) return;
+	const sha = gitHeadSha(id);
+	if (!sha) return;
+	const previous = observedHeadSha.get(id);
+	observedHeadSha.set(id, sha);
+	if (previous !== undefined && previous !== sha) recordWorkspaceActivity(id);
+}
+
+function setSettledOverride(id: string, override: "settled" | "active"): Workspace {
+	const all = loadWorkspaces();
+	const ws = all.find((workspace) => workspace.id === id);
+	if (!ws) throw new Error(`Unknown workspace: ${id}`);
+	if (ws.kind === "default") throw new Error("The Default workspace cannot be settled");
+	ws.settledOverride = override;
+	ws.settledAt = Date.now();
+	saveWorkspaces(all);
+	emit({ kind: "updated", workspace: ws });
+	return ws;
+}
+
+export function settleWorkspace(id: string): Workspace {
+	return setSettledOverride(id, "settled");
+}
+
+export function unsettleWorkspace(id: string): Workspace {
+	return setSettledOverride(id, "active");
+}
+
+function reviewSnapshot(review: OpenBranchReview): OpenBranchReview {
+	return {
+		kind: review.kind,
+		number: review.number,
+		...(review.url ? { url: review.url } : {}),
+		...(review.state ? { state: review.state } : {}),
+		...(review.changedAt !== undefined ? { changedAt: review.changedAt } : {}),
+	};
+}
+
+function sameReview(a: OpenBranchReview | undefined, b: OpenBranchReview | undefined): boolean {
+	if (!a || !b) return a === b;
+	return (
+		a.kind === b.kind &&
+		a.number === b.number &&
+		a.url === b.url &&
+		a.state === b.state &&
+		a.changedAt === b.changedAt
+	);
+}
+
+export function setWorkspaceReview(id: string, review: OpenBranchReview | null): Workspace | null {
+	const all = loadWorkspaces();
+	const ws = all.find((workspace) => workspace.id === id);
+	if (!ws) return null;
+	const next = review ? reviewSnapshot(review) : undefined;
+	if (sameReview(ws.review, next)) return ws;
+	if (next) ws.review = next;
+	else delete ws.review;
+	saveWorkspaces(all);
+	emit({ kind: "updated", workspace: ws });
+	return ws;
+}
+
+async function unpushedCommits(ws: Workspace): Promise<number | null> {
+	const divergence = await countPushDivergence(ws.worktreePath, ws.branch);
+	if (divergence) return divergence.ahead;
+	const counted = await gitAsync(ws.worktreePath, [
+		"rev-list",
+		"--count",
+		"--end-of-options",
+		`${ws.diffBase ?? ws.baseBranch}..HEAD`,
+		"--",
+	]);
+	if (!counted.ok) return null;
+	const parsed = Number.parseInt(counted.out, 10);
+	return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+export async function settledRemovalPreview(ids: string[]): Promise<SettledRemovalPreview[]> {
+	const byId = new Map(loadWorkspaces().map((workspace) => [workspace.id, workspace]));
+	return Promise.all(
+		ids.map(async (id) => {
+			const ws = byId.get(id);
+			if (!ws) return { id, dirty: null, unpushed: null };
+			const [dirty, unpushed] = await Promise.all([
+				gitStatus(id, { kind: "uncommitted" }).then(
+					(status) => status.changes.length,
+					() => null,
+				),
+				unpushedCommits(ws).catch(() => null),
+			]);
+			return { id, dirty, unpushed };
+		}),
+	);
 }
 
 export async function listWorkspaces(
