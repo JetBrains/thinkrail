@@ -51,11 +51,11 @@ export function WorkspaceSegment({
 	workspace: Workspace | null;
 	onNewWorkspace: () => void;
 }) {
+	const [menuOpen, setMenuOpen] = useState(false);
 	const siblings = useAppStore((s) => s.workspaces[project.id]);
-	const sessionStateByWorkspace = useAppStore((s) => s.sessionStateByWorkspace);
+	const sessionStateByWorkspace = useAppStore((s) => (menuOpen ? s.sessionStateByWorkspace : null));
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const editors = useEditors();
-	const [menuOpen, setMenuOpen] = useState(false);
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [editing, setEditing] = useState(false);
 	const nameRef = useRef<HTMLInputElement>(null);
@@ -212,7 +212,9 @@ export function WorkspaceSegment({
 							<DropdownMenuItem disabled>No other workspaces</DropdownMenuItem>
 						) : (
 							switchTargets.map((candidate) => {
-								const running = selectWorkspaceIsRunning({ sessionStateByWorkspace }, candidate.id);
+								const running =
+									sessionStateByWorkspace !== null &&
+									selectWorkspaceIsRunning({ sessionStateByWorkspace }, candidate.id);
 								const Icon = isDefaultWorkspace(candidate)
 									? House
 									: isExternalWorkspace(candidate)
