@@ -326,9 +326,9 @@ async function recordVerdict(
 	const capture = additionalCapture();
 	const decided = (verdict: "approved" | "changes_requested") =>
 		captureAdditional(capture, { name: "review_decided", params: { actor: "agent", verdict } });
-	if (result.summary || result.readingOrder?.length) {
-		try {
-			await setReviewGuide(params.workspaceId, {
+	try {
+		await withReviewLock(params.workspaceId, () =>
+			setReviewGuide(params.workspaceId, {
 				summary: result.summary ?? "",
 				readingOrder: result.readingOrder ?? [],
 				verdict: result.verdict,
@@ -336,10 +336,10 @@ async function recordVerdict(
 				sessionId: params.sessionId,
 				reviewedSha,
 				at: Date.now(),
-			});
-		} catch (error) {
-			log.warn(`review guide was not recorded for ${params.workspaceId}`, error as Error);
-		}
+			}),
+		);
+	} catch (error) {
+		log.warn(`review guide was not recorded for ${params.workspaceId}`, error as Error);
 	}
 	if (result.verdict === "approve") {
 		const open = await itemOpenFindings(params);

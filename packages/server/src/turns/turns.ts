@@ -42,7 +42,9 @@ export function forgetWorkspaceTurns(workspaceId: string): void {
 function recordTurn(turn: TurnChangeSet): void {
 	const turns = loadTurns();
 	const existing = turns.byWorkspace[turn.workspaceId] ?? [];
-	const next = [...existing.filter((t) => t.id !== turn.id), turn].slice(-TURNS_PER_WORKSPACE);
+	const next = [...existing.filter((t) => t.id !== turn.id), turn]
+		.sort((a, b) => a.startedAt - b.startedAt)
+		.slice(-TURNS_PER_WORKSPACE);
 	saveTurns({ ...turns, byWorkspace: { ...turns.byWorkspace, [turn.workspaceId]: next } });
 }
 
@@ -54,6 +56,7 @@ export class TurnTracker {
 			sessionId: string,
 		) => { workspaceId: string; worktreePath: string } | null,
 		private readonly now: () => number = Date.now,
+		private readonly snapshot: (worktreePath: string) => Promise<string | null> = snapshotWorktree,
 	) {}
 
 	observe(sessionId: string, event: PiEvent): Promise<void> {
@@ -61,7 +64,7 @@ export class TurnTracker {
 			if (this.pending.has(sessionId)) return Promise.resolve();
 			const target = this.resolve(sessionId);
 			if (!target) return Promise.resolve();
-			const baseTree = snapshotWorktree(target.worktreePath).catch(() => null);
+			const baseTree = this.snapshot(target.worktreePath).catch(() => null);
 			this.pending.set(sessionId, { startedAt: this.now(), baseTree });
 			return baseTree.then(() => {});
 		}
@@ -71,7 +74,8 @@ export class TurnTracker {
 		if (!run) return Promise.resolve();
 		const target = this.resolve(sessionId);
 		if (!target) return Promise.resolve();
-		return this.settle(sessionId, target, run).catch((error) => {
+		const headTree = this.snapshot(target.worktreePath);
+		return this.settle(sessionId, target, run, headTree).catch((error) => {
 			log.warn(`turn change set was not recorded for ${sessionId}`, error as Error);
 		});
 	}
@@ -80,11 +84,10 @@ export class TurnTracker {
 		sessionId: string,
 		target: { workspaceId: string; worktreePath: string },
 		run: PendingRun,
+		head: Promise<string | null>,
 	): Promise<void> {
-		const baseTree = await run.baseTree;
-		if (!baseTree) return;
-		const headTree = await snapshotWorktree(target.worktreePath);
-		if (!headTree || headTree === baseTree) return;
+		const [baseTree, headTree] = await Promise.all([run.baseTree, head]);
+		if (!baseTree || !headTree || headTree === baseTree) return;
 		const id = `${sessionId}:${run.startedAt}`;
 		const status = await gitStatus(target.workspaceId, {
 			kind: "turn",
@@ -94,6 +97,7 @@ export class TurnTracker {
 			startedAt: run.startedAt,
 		});
 		if (status.changes.length === 0) return;
+		if (this.resolve(sessionId)?.workspaceId !== target.workspaceId) return;
 		const turn: TurnChangeSet = {
 			id,
 			workspaceId: target.workspaceId,

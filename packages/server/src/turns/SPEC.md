@@ -45,6 +45,19 @@ pi's `turn_*` (one assistant message): a receipt per message would fragment one 
   the last run that changed something.
 - **The first `agent_start` of a run wins.** pi re-emits `agent_start` on retries; a pending run is kept
   until its settle, so the base snapshot is the state before the agent's first write.
-- **Accepted race:** the base snapshot is asynchronous and an agent write that lands before it finishes
-  would be missed. Model latency makes this practically impossible for the first tool call; a
-  blocking snapshot would delay every run start on large repos.
+- **Both snapshots start at their boundary.** The base snapshot starts at `agent_start` and the head
+  snapshot at `agent_settled`, each synchronously inside the event handler; the settle then awaits both.
+  Waiting for a slow base before starting the head would let the next run's first writes leak into this
+  run's receipt. What remains is the accepted race: a snapshot is asynchronous git work, and an agent
+  write that lands while it runs may fall on either side. Model latency makes this practically
+  impossible for the first tool call; a blocking snapshot would delay every run start on large repos.
+- **A removed workspace records nothing.** Membership is re-resolved right before the record/publish
+  step, so a run settling while its workspace is removed cannot recreate the workspace's entry in
+  `turns.json` (`forgetWorkspaceTurns` only deletes what is already there); `workspace.turns` likewise
+  rejects an unknown workspace.
+- **Start order is the order.** Turns are stored and capped by `startedAt`, not by settle time, so a
+  later-started run that settles first does not become "Last turn" — the client applies the same rule
+  to a live `turn.changed`, so a reload never disagrees with the push.
+- The host subscribes every socket to `turn.changed` at open, like the other workspace channels; a
+  receipt that only ever reached the client through `workspace.turns` on reload is the bug this line
+  guards against.

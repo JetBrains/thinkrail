@@ -68,8 +68,11 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   Any invalid output is a failed review, not a silent approve: the mark is cleared and the item returns to
   unreviewed. `parseVerdict` also **constructs the result explicitly** (verdict/summary/readingOrder/findings only — `readingOrder`
   is the reviewer's optional ordered `{ path, why }` list, capped at `REVIEW_READING_ORDER_LIMIT` by the
-  contract validator; every verdict carrying a summary or an order is also written to the workspace review
-  as its `guide` through `reviews.setReviewGuide`, before the verdict branches) rather
+  contract validator; **every accepted verdict** replaces the workspace review's `guide` through
+  `reviews.setReviewGuide` — summary and order empty when the reviewer gave none — under `withReviewLock`
+  and before the verdict branches, so a narrative-less re-review can never leave the previous verdict's
+  badge and reading order standing, and a concurrent Clear cannot swallow the write into the review it is
+  replacing) rather
   than spreading the model object, so a host-only field the model hallucinates — e.g. `blockedByOpenFindings`
   — can never survive to mislead the card; the host sets it solely from its own open-finding check.
 - **The `reviewing` mark is set synchronously** at start/enqueue, so the panel pulses the instant the
