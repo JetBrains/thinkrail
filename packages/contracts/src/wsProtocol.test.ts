@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_CONFIG, RECENT_MODELS_LIMIT, type ReviewFixDetails } from "./domain";
+import {
+	DEFAULT_CONFIG,
+	isSettleIdleDays,
+	RECENT_MODELS_LIMIT,
+	type ReviewFixDetails,
+	SETTLE_IDLE_DAYS,
+} from "./domain";
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
@@ -27,6 +33,7 @@ import {
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
+	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_CHANNELS,
 	WS_METHODS,
 } from "./wsProtocol";
@@ -125,8 +132,21 @@ test("host-owned new-chat defaults are pinned to v72", () => {
 	expect(WS_METHODS).not.toHaveProperty("modelSetDefault");
 });
 
+test("the settled workspace shelf is pinned to v78", () => {
+	expect(PROTOCOL_VERSION).toBe(78);
+	expect(WORKSPACE_SETTLE_PROTOCOL_VERSION).toBe(78);
+	expect(WS_METHODS.workspaceSettle).toBe("workspace.settle");
+	expect(WS_METHODS.workspaceUnsettle).toBe("workspace.unsettle");
+	expect(WS_METHODS.workspaceSettledRemovalPreview).toBe("workspace.settledRemovalPreview");
+	expect(DEFAULT_CONFIG.settleIdleDays).toBe(SETTLE_IDLE_DAYS.default);
+	expect(isSettleIdleDays(null)).toBe(true);
+	expect(isSettleIdleDays(3)).toBe(true);
+	expect(isSettleIdleDays(0)).toBe(false);
+	expect(isSettleIdleDays(2.5)).toBe(false);
+	expect(isSettleIdleDays("3")).toBe(false);
+});
+
 test("picker metadata and host-kept favorites/recents are pinned to v77", () => {
-	expect(PROTOCOL_VERSION).toBe(77);
 	expect(MODEL_PICKER_PROTOCOL_VERSION).toBe(77);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(MODEL_PICKER_PROTOCOL_VERSION);
 	expect(DEFAULT_CONFIG.favoriteModels).toEqual([]);

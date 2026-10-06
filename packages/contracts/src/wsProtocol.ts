@@ -39,6 +39,7 @@ import type {
 	ReviewSnapshot,
 	SessionResources,
 	SessionStateRecord,
+	SettledRemovalPreview,
 	SpecGraphSnapshot,
 	SubagentOverride,
 	Template,
@@ -102,7 +103,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 77;
+export const PROTOCOL_VERSION = 78;
+export const WORKSPACE_SETTLE_PROTOCOL_VERSION = 78;
 export const MODEL_PICKER_PROTOCOL_VERSION = 77;
 export const CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION = 76;
 export const CHANGE_MUTATIONS_PROTOCOL_VERSION = 75;
@@ -190,6 +192,9 @@ export const WS_METHODS = {
 	workspaceSetSkillOverride: "workspace.setSkillOverride",
 	workspaceSetSubagentsOverride: "workspace.setSubagentsOverride",
 	workspaceSetDiffBase: "workspace.setDiffBase",
+	workspaceSettle: "workspace.settle",
+	workspaceUnsettle: "workspace.unsettle",
+	workspaceSettledRemovalPreview: "workspace.settledRemovalPreview",
 	workspaceWatchReady: "workspace.watchReady",
 	workspaceOpenIn: "workspace.openIn",
 	workspaceReveal: "workspace.reveal",
@@ -525,6 +530,12 @@ export interface WsMethodMap {
 		result: Workspace;
 	};
 	"workspace.setDiffBase": { params: { id: string; ref: string | null }; result: Workspace };
+	"workspace.settle": { params: { id: string }; result: Workspace };
+	"workspace.unsettle": { params: { id: string }; result: Workspace };
+	"workspace.settledRemovalPreview": {
+		params: { ids: string[] };
+		result: SettledRemovalPreview[];
+	};
 	"workspace.watchReady": {
 		params: { workspaceId: string; prewarm?: boolean };
 		result: WorkspaceWatchReadyResult;

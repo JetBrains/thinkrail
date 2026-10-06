@@ -29,6 +29,9 @@ export interface DiffStats {
 
 export type SubagentOverride = "on" | "off";
 
+/** `"settled"` = the user parked the workspace on the shelf; `"active"` = the user pinned it live. */
+export type SettledOverride = "settled" | "active";
+
 export interface Workspace {
 	id: string;
 	projectId: string;
@@ -43,13 +46,25 @@ export interface Workspace {
 	diffStats?: DiffStats;
 	skillOverrides?: Record<string, "on" | "off">;
 	subagentsOverride?: SubagentOverride;
+	/** Newest real activity (chat/agent turn, terminal input, HEAD move) in ms; viewing never counts. */
+	lastActiveAt?: number;
+	settledOverride?: SettledOverride;
+	settledAt?: number;
+	/** The host's last-known review for the branch; refreshed host-side so every client sees one state. */
+	review?: OpenBranchReview;
 }
+
+export type BranchReviewState = "open" | "merged" | "closed";
 
 export interface OpenBranchReview {
 	kind: "pull-request" | "merge-request";
 	number: number;
 	/** The review's web page, when the provider reported one — what makes the `PR #N` chip a link. */
 	url?: string;
+	/** Absent on a pre-v78 host, which only ever reported open reviews. */
+	state?: BranchReviewState;
+	/** When the provider merged or closed the review, in ms. */
+	changedAt?: number;
 	/** `workspace.openReview` only: local commits origin/<branch> doesn't have yet. */
 	unpushedCommits?: number;
 	/**
@@ -58,6 +73,13 @@ export interface OpenBranchReview {
 	 * this does not imply the checkout rewrote history or that a force-push is appropriate.
 	 */
 	behindCommits?: number;
+}
+
+/** One settled worktree's would-be-lost work: `null` counts mean git could not answer. */
+export interface SettledRemovalPreview {
+	id: string;
+	dirty: number | null;
+	unpushed: number | null;
 }
 
 export type GhSetupProblem = "missing" | "unauthenticated";
@@ -619,6 +641,8 @@ export interface AppConfig extends ThemePreference {
 	jbcentralQuotaRefreshSeconds: number;
 	/** Which shell new workspace terminals start on Windows; ignored on other platforms. */
 	terminalWindowsShell: TerminalWindowsShell;
+	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
+	settleIdleDays: number | null;
 }
 
 /** How many recently chosen models the host remembers. */
@@ -646,6 +670,18 @@ export type TerminalWindowsShell = (typeof TERMINAL_WINDOWS_SHELLS)[number];
 
 export function isTerminalWindowsShell(value: unknown): value is TerminalWindowsShell {
 	return TERMINAL_WINDOWS_SHELLS.some((shell) => shell === value);
+}
+
+export const SETTLE_IDLE_DAYS = { min: 1, max: 365, default: 3 } as const;
+
+export function isSettleIdleDays(value: unknown): value is number | null {
+	return (
+		value === null ||
+		(typeof value === "number" &&
+			Number.isInteger(value) &&
+			value >= SETTLE_IDLE_DAYS.min &&
+			value <= SETTLE_IDLE_DAYS.max)
+	);
 }
 
 export const JBCENTRAL_QUOTA_REFRESH_SECONDS = { min: 1, max: 3600, default: 30 } as const;
@@ -680,6 +716,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	subagentsEnabled: true,
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
+	settleIdleDays: SETTLE_IDLE_DAYS.default,
 };
 
 export function normalizeThemePreference(value: unknown): ThemePreference {
