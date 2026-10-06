@@ -58,6 +58,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const setActivePath = useAppStore((state) => state.setChangesTabActivePath);
 	const setCollapsed = useAppStore((state) => state.setChangesTabCollapsed);
 	const clearReveal = useAppStore((state) => state.clearChangesTabReveal);
+	const requestReveal = useAppStore((state) => state.requestChangesTabReveal);
 	const cache = useRef<SectionContentCache>(new Map()).current;
 	const [largeNoticeDismissed, setLargeNoticeDismissed] = useState(false);
 
@@ -209,28 +210,39 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		return () => cancelAnimationFrame(frame);
 	}, [files, layout, pendingReveal, status]);
 
-	const toggleViewed = useCallback(
-		(path: string) => setViewed(workspaceId, tab.id, path, !viewedSet.has(path)),
-		[setViewed, tab.id, viewedSet, workspaceId],
+	const setPathViewed = useCallback(
+		(path: string, next: boolean) => setViewed(workspaceId, tab.id, path, next),
+		[setViewed, tab.id, workspaceId],
 	);
 	const toggleCollapsed = useCallback(
 		(change: GitFileChange) =>
 			setCollapsed(workspaceId, tab.id, { [change.path]: !isCollapsed(change) }),
 		[isCollapsed, setCollapsed, tab.id, workspaceId],
 	);
-	const step = (delta: number) => {
-		const next = files[currentIndex + delta];
-		if (next) setActivePath(workspaceId, tab.id, next.path);
+	const goTo = (change: GitFileChange | undefined) => {
+		if (!change) return;
+		if (layout === "single") setActivePath(workspaceId, tab.id, change.path);
+		else requestReveal(workspaceId, tab.id, change.path);
+	};
+	const step = (delta: number) => goTo(files[currentIndex + delta]);
+	const nextUnreviewed = () => {
+		const after = files.slice(currentIndex + 1).find((change) => !viewedSet.has(change.path));
+		goTo(after ?? files.find((change) => !viewedSet.has(change.path)));
 	};
 	const markViewedAndAdvance = () => {
 		if (!current) return;
 		const wasViewed = viewedSet.has(current.path);
 		setViewed(workspaceId, tab.id, current.path, !wasViewed);
-		if (!wasViewed) step(1);
+		if (!wasViewed && layout === "single") step(1);
+	};
+	const markAllViewed = () => {
+		for (const change of files) {
+			if (!viewedSet.has(change.path)) setViewed(workspaceId, tab.id, change.path, true);
+		}
 	};
 
 	useEffect(() => {
-		if (layout !== "single") return;
+		if (!status) return;
 		const onKey = (event: KeyboardEvent) => {
 			const target = event.target as HTMLElement | null;
 			if (
@@ -239,15 +251,19 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 			) {
 				return;
 			}
+			const plain = !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
 			if (event.altKey && event.key === "ArrowDown") {
 				event.preventDefault();
 				step(1);
 			} else if (event.altKey && event.key === "ArrowUp") {
 				event.preventDefault();
 				step(-1);
-			} else if (!event.metaKey && !event.ctrlKey && !event.altKey && event.key === "v") {
+			} else if (plain && event.key === "v") {
 				event.preventDefault();
 				markViewedAndAdvance();
+			} else if (plain && event.key === "j") {
+				event.preventDefault();
+				nextUnreviewed();
 			}
 		};
 		window.addEventListener("keydown", onKey);
@@ -436,7 +452,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 							viewed={viewedSet.has(current.path)}
 							cache={cache}
 							onToggleCollapsed={() => {}}
-							onToggleViewed={() => toggleViewed(current.path)}
+							onSetViewed={(next) => setPathViewed(current.path, next)}
 						/>
 					</div>
 				</>
@@ -486,12 +502,54 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 								viewed={viewedSet.has(change.path)}
 								cache={cache}
 								onToggleCollapsed={() => toggleCollapsed(change)}
-								onToggleViewed={() => toggleViewed(change.path)}
+								onSetViewed={(next) => setPathViewed(change.path, next)}
 							/>
 						)}
 						context={{ tailHeight, fileCount: files.length }}
 						components={REVIEW_LIST_COMPONENTS}
 					/>
+					<div
+						data-testid="changes-review-triage"
+						className="absolute inset-x-0 bottom-0 flex h-32 items-center gap-8 border-border-default border-t bg-container-header-bg px-12"
+					>
+						<span className="tr-text-metadata text-text-muted">
+							{viewedCount} of {files.length} reviewed
+						</span>
+						<span
+							className="h-4 w-120 overflow-hidden rounded-[var(--radius-xs)] bg-control-bg-hovered"
+							aria-hidden="true"
+						>
+							<span
+								data-testid="changes-review-progress"
+								className="block h-full bg-primary"
+								style={{ width: `${files.length ? (viewedCount / files.length) * 100 : 0}%` }}
+							/>
+						</span>
+						<span className="ml-auto flex items-center gap-4">
+							<button
+								type="button"
+								data-testid="changes-review-next-unreviewed"
+								disabled={viewedCount >= files.length}
+								onClick={nextUnreviewed}
+								className="flex h-24 items-center gap-4 rounded-[var(--radius-sm)] border border-control-border-default px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
+							>
+								Next unreviewed
+								<kbd className="rounded-[var(--radius-xs)] border border-control-border-default px-4 tr-code-text text-text-subtle">
+									J
+								</kbd>
+							</button>
+							<button
+								type="button"
+								data-testid="changes-review-mark-all"
+								disabled={viewedCount >= files.length}
+								onClick={markAllViewed}
+								className="flex h-24 items-center gap-4 rounded-[var(--radius-sm)] border border-control-border-default px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
+							>
+								<Check className="size-14" />
+								Mark all viewed
+							</button>
+						</span>
+					</div>
 				</div>
 			)}
 		</div>

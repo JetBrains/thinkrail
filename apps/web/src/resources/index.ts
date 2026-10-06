@@ -4,6 +4,7 @@ export { anchorLabel, isPlaceable } from "./review";
 export type {
 	AnchorDraft,
 	HunkActions,
+	HunkTriage,
 	ResourceAnchorCapability,
 	ResourceContent,
 	ResourceDescriptor,

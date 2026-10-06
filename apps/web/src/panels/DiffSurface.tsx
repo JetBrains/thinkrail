@@ -12,6 +12,7 @@ import { usePhoneViewport } from "@/lib";
 import {
 	describeResource,
 	type HunkActions,
+	type HunkTriage,
 	type ResourceContent,
 	type ResourceDescriptor,
 	type ResourceDiffProps,
@@ -49,6 +50,7 @@ export interface DiffSurfaceInput {
 	content: DiffSurfaceContent;
 	rendererId: string | undefined;
 	reload: () => void;
+	triage?: HunkTriage;
 }
 
 export interface DiffSurface {
@@ -118,6 +120,7 @@ export function useDiffSurface({
 	content,
 	rendererId,
 	reload,
+	triage,
 }: DiffSurfaceInput): DiffSurface {
 	const mobile = usePhoneViewport();
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
@@ -265,8 +268,16 @@ export function useDiffSurface({
 	);
 	const hunkActions = useMemo<HunkActions | undefined>(
 		() =>
-			mutationsAvailable ? { revert: revertBlock, revertFile, askAgent, agentWorking } : undefined,
-		[agentWorking, askAgent, mutationsAvailable, revertBlock, revertFile],
+			mutationsAvailable
+				? {
+						revert: revertBlock,
+						revertFile,
+						askAgent,
+						agentWorking,
+						...(triage ? { triage } : {}),
+					}
+				: undefined,
+		[agentWorking, askAgent, mutationsAvailable, revertBlock, revertFile, triage],
 	);
 
 	return {
