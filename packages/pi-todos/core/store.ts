@@ -53,8 +53,6 @@ export function groupStatus(group: TodoGroup): TodoGroupStatus {
 const CURRENT_VERSION = 6 as const;
 
 // Home for a stray: an agent `done` item left in the loose lane on re-plan (see core/SPEC.md).
-// Agent-authored loose items are a raw scratchpad; a `done` one is out of contract and gets parked here
-// instead of being silently dropped, so the review trail is not lost.
 const CARRIED_LOOSE_GROUP = "Completed";
 
 const STATUS_SET: ReadonlySet<string> = new Set(TODO_STATUSES);
@@ -379,8 +377,6 @@ export class TodoStore {
 			const title = flattenTitle(decodeEscapes(g.title));
 			return { id: freshId("g"), title, todos: g.todos.map((w) => reconcile(title, w)) };
 		});
-		// Loose = shared scratchpad: carry BOTH origins across a reconcile. User items are theirs to keep;
-		// agent-pending items are raw notes the agent has not yet promoted into a group.
 		const resultLoose = current.todos.filter((t) => t.origin === "user" || t.status !== "done");
 		const carriedGroups: TodoGroup[] = [];
 		const carriedLooseDone: Todo[] = [];

@@ -42,7 +42,7 @@ export function formatPlan(plan: TodoPlan): string {
 		for (const todo of group.todos) lines.push(`  ${formatTodo(todo)}`);
 	}
 	if (plan.todos.length > 0) {
-		if (plan.groups.length > 0) lines.push("Your requests:");
+		if (plan.groups.length > 0) lines.push("Loose queue:");
 		for (const todo of plan.todos) lines.push(formatTodo(todo));
 	}
 	return lines.join("\n");

@@ -237,7 +237,7 @@ test("todo_update reports paused items and suggests the next step after done", a
 	}
 });
 
-test("todo_list renders groups first, then the user's loose lane last (a mid-task add queues after the current work)", async () => {
+test("todo_list renders groups first, then the loose queue last (a mid-task add queues after the current work)", async () => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
 	try {
 		await run("todo_add", { title: "agent step", group: "Refactor" }, cwd);
@@ -245,7 +245,7 @@ test("todo_list renders groups first, then the user's loose lane last (a mid-tas
 
 		const text = resultText(await run("todo_list", {}, cwd));
 		const groupAt = text.indexOf("▸ Refactor");
-		const headerAt = text.indexOf("Your requests:");
+		const headerAt = text.indexOf("Loose queue:");
 		const looseAt = text.indexOf("user ask");
 		expect(groupAt).toBeGreaterThanOrEqual(0);
 		expect(headerAt).toBeGreaterThan(groupAt);

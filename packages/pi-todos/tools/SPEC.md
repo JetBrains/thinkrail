@@ -54,8 +54,8 @@ and the host wire use loose items, and the agent can author loose too):
   every completion), extended not rewritten when an earlier note survives; it accepts an early call but
   flags how many items are still open (the UI shows the note only once everything is done).
 - **Group-first output:** `formatPlan` renders each group under `formatGroupHeader` — `▸ <title>
-  [<derived status> <done>/<total>]` — with its steps indented, **then the loose lane (the user's own
-  adds) last** under a `Your requests:` header. The user's lane is last on purpose: a request added
+  [<derived status> <done>/<total>]` — with its steps indented, **then the loose lane (the shared raw-input
+  queue) last** under a `Loose queue:` header. The loose lane is last on purpose: an item added
   mid-task queues *after* the agent's current work, so reading top-to-bottom resumes/finishes the
   active task first. Same two-level order the user sees (`TodoList`) and `flat()`/`list()` return.
 

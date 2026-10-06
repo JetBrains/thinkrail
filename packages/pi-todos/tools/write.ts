@@ -25,7 +25,7 @@ const group = Type.Object({
 const parameters = Type.Object({
 	groups: Type.Array(group, {
 		description:
-			"The plan as tasks: one group per user ask (title = the outcome), each carrying its ordered steps. Use a 1–2-step group only when the user explicitly asked for a plan; otherwise plans start at three substantive steps. Loose items are the user's lane — you never author them.",
+			"The plan as tasks: one group per user ask (title = the outcome), each carrying its ordered steps. Use a 1–2-step group only when the user explicitly asked for a plan; otherwise plans start at three substantive steps. Loose items are the shared raw-input queue — todo_write never touches them.",
 	}),
 });
 
@@ -34,7 +34,7 @@ export function registerTodoWrite(pi: ExtensionAPI): void {
 		name: "todo_write",
 		label: "Todo Write",
 		description:
-			"Lay out or reconcile the plan as these groups — one group per task (a user ask; title = the outcome), each with its ordered steps. This RECONCILES, it does not destructively replace: written steps are matched to existing ones by group title + step title and keep their status/summary/id, so re-running it is safe and lossless (a re-listed in-progress or done step is NOT reset — status advances only via todo_update, and a status you pass here for an existing step is ignored). Unmatched written steps are created; your steps you omit are dropped; the user's items and completed (done) items are always preserved. Keep step titles stable across a re-plan — a reworded title reads as a new step. For a single change prefer todo_add/todo_update (cheaper than restating the whole plan).",
+			"Lay out or reconcile the plan as these groups — one group per task (a user ask; title = the outcome), each with its ordered steps. This RECONCILES, it does not destructively replace: written steps are matched to existing ones by group title + step title and keep their status/summary/id, so re-running it is safe and lossless (a re-listed in-progress or done step is NOT reset — status advances only via todo_update, and a status you pass here for an existing step is ignored). Unmatched written steps are created; your steps you omit are dropped; loose items and completed (done) items are always preserved. Keep step titles stable across a re-plan — a reworded title reads as a new step. For a single change prefer todo_add/todo_update (cheaper than restating the whole plan).",
 		promptSnippet:
 			"todo_write — lay out or reconcile the plan (groups only; matches steps by title, keeps their progress; prefer todo_add/todo_update for one change).",
 		parameters,

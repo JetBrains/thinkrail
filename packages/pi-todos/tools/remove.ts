@@ -11,7 +11,7 @@ export function registerTodoRemove(pi: ExtensionAPI): void {
 		name: "todo_remove",
 		label: "Todo Remove",
 		description:
-			"Delete an item from the list by id. Rarely needed: a finished item is marked done (todo_update), not removed — done items stay as the user's history. Remove only when the user explicitly asks to drop an item.",
+			"Delete an item from the list by id. Rarely needed: a finished item is marked done (todo_update), not removed — done items stay as the user's history. Remove only when the user explicitly asks to drop an item, or to clear a raw loose item you just promoted into a group.",
 		promptSnippet:
 			"todo_remove — delete an item (only when the user asks; done items stay, not removed).",
 		parameters,
