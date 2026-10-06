@@ -341,7 +341,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `deriveAskStates(turns, askAnswers, toolResults)` + `AskStatesContext`/`useAskState` (provided by
   `ChatView`, and also by the plan page's `PlanAskQuestion` so the SAME `AskUserQuestionCard` can be
   answered from the plan — see `panels/SPEC.md`; `null` standalone). A live blocking ask resolves through its native tool result; a
-  restart-repaired eligible ack resolves later through `ask-user-answers`; a stopped/error/length result is
+  restart-repaired eligible ack resolves later through `ask-user-answers`; a live ask the user typed past
+  returns that same ack natively, so "superseded" (ack + later user turn) reads identically whether the
+  session was live or restored; a stopped/error/length result is
   terminal because Pi never executes tools from a length-truncated assistant response. "Answered /
   superseded / stopped / awaiting" is therefore derived once from all three transcript
   projections and consumed by the card and plan glance, keeping both props-driven everywhere else.

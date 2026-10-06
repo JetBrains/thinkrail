@@ -83,7 +83,7 @@ const DESCRIPTION = `Ask the user one or more structured, multiple-choice questi
 1. The request is underspecified and you cannot proceed without a concrete decision.
 2. You need a user preference, requirement, or a direction/implementation choice.
 
-Calling this tool PAUSES EXECUTION until the user answers: the questions render inline in the chat as an interactive card (tabs when there are several), and the user's answers arrive as this tool's result. Do not continue working on the blocked task or assume an answer while the tool is pending. The user answers or skips through the card; composer messages sent meanwhile queue behind the question and do not resolve it. Notes:
+Calling this tool PAUSES EXECUTION until the user answers: the questions render inline in the chat as an interactive card (tabs when there are several), and the user's answers arrive as this tool's result. Do not continue working on the blocked task or assume an answer while the tool is pending. The user answers or skips through the card, or replies in chat instead — then the card is superseded and their free-form reply arrives as the next user message. Notes:
 - Every question also gets an "Other" option with a free-text field, and the user can always Skip the whole questionnaire (you are told they declined) — do NOT author "Other"-style, free-text, or escape options yourself (reserved labels are rejected).
 - Set multiSelect: true when several answers are valid; the user may combine checked options with their own typed answer.
 - If you recommend one option, make it FIRST, append "(Recommended)" to its label, and set its recommendedReason to one short sentence on why you recommend it over the alternatives (shown inline under the option).

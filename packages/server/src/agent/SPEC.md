@@ -452,9 +452,19 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     reverse the winner. Semantic validation still gates execution: an answer accepted in the pre-execute
     window is acknowledged only if the real ask returned and `turn_end` contains its result; validation error
     or a missing result rejects the answer RPC rather than hanging or claiming success. Every expected call Pi
-    does not execute is cleared at `turn_end`. Pi retains ordinary steering/follow-up queues and cannot cross the
-    answer. The answer RPC resolves the phase and acknowledges only after the matching result reaches the
-    persisted `turn_end` boundary. Explicit Stop drains the queue and aborts an unanswered phase with a stable
+    does not execute is cleared at `turn_end`. The answer RPC resolves the phase and acknowledges only after
+    the matching result reaches the persisted `turn_end` boundary.
+
+    **Typing instead of answering supersedes the live card, exactly as after a restart.** `steerSession` and
+    a streaming-time `promptSession` queue the text in Pi's steering lane first and then `supersede()` every
+    expected/waiting call: the tool returns the same canonical ack (`ASK_ACK_TEXT`, `details {kind:"ack"}`)
+    the restart repair writes, Pi drains the steering message as the next user turn, and the card derives
+    `superseded` from the transcript through the one shape it already understands (ack + later user
+    message). A later answer RPC fails with the `superseded` answerability error; a call already in
+    `answer-accepted-uncommitted` is never superseded (the answer wins and the steering delivers after it).
+    Scope is deliberately narrow: only the user's own composer send supersedes — the follow-up lane
+    (Cmd+Enter), steering queued *before* the card appeared, `removeQueuedSession`'s internal re-queue, and
+    nudges (which already stop at `needsInput`) all leave the card open. Explicit Stop drains the queue and aborts an unanswered phase with a stable
     stopped error; after Submit wins, Stop defers Pi abort until the answer persists and then ends only the
     continuation. Either ordering leaves one terminal provider-valid result.
 
@@ -467,9 +477,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     Submit simply appears again. Queue entries remain Pi-owned and live-only by explicit scope. The card
     derives both forms from the transcript (native live result versus repaired ack + custom answer).
 
-    Rejected alternatives: immediate ack on every live call lets Pi drain queued input and supersede the
-    unanswered card; restoring a dangling invocation exactly requires a lifecycle-safe resume API Pi does
-    not expose; a durable host queue/SQLite outbox is unnecessary when only the question must survive.
+    Rejected alternatives: immediate ack on every live call lets Pi drain input queued *before* the card
+    and supersede it unseen; restoring a dangling invocation exactly requires a lifecycle-safe resume API Pi
+    does not expose; a durable host queue/SQLite outbox is unnecessary when only the question must survive;
+    a client-side "skip then steer" pair races the answer path and leaves a decline in the transcript
+    where the restored path leaves an ack.
   - `sessionRepair` — `repairDanglingToolCalls(sessionManager)`: the restart safety net (rationale under
     the manager bullet above). Pure over pi's `SessionManager` (compaction-aware via
     `buildSessionContext`; idempotent; appends only missing results from the active tail batch) —
