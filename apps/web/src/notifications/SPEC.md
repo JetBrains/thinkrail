@@ -62,14 +62,16 @@ channel-agnostic above it:
 Selection is capability-detection only (the bridge's presence), never a `desktop` branch. No Service
 Worker on either channel: a fully-closed app has no live client and raises nothing by design.
 
-**OS-dependent (desktop).** The native rendering is Electrobun's: macOS `UNUserNotificationCenter`
-(title+subtitle+body, OS-requested authorization on first show), Windows Toast (title+body, needs an App
-User Model ID), Linux libnotify/D-Bus (DE-dependent, Wayland caveats). The prerequisites the host owns are
-already set — the Windows AUMID / macOS bundle id come from `apps/desktop/electrobun.config.ts`
-(`identifier: ai.thinkrail.app`, name `ThinkRail`) — and the OS supplies the app icon (the native call has
-no icon field). **Limitation:** the bridge exposes no way to read the OS permission state, so the desktop
-channel reports `granted` unconditionally; if the user has denied notifications at the OS level the call is
-accepted and silently not shown. Querying/handling OS permission (and click callbacks) is deferred.
+**OS-dependent (desktop).** The native rendering is the pinned Electrobun 2.0.1 backend, which takes
+`title` + `body` + `subtitle` + `silent` and renders per platform: macOS `UNUserNotificationCenter`
+(native title/subtitle/body, OS-requested authorization on first show), Windows a `Shell_NotifyIconW` tray
+**balloon** (title + body; `subtitle` folds in as an extra line per the SDK — not a Windows Toast and no App
+User Model ID), Linux libnotify/D-Bus (DE-dependent, Wayland caveats, subtitle folded likewise). The macOS
+bundle id comes from `apps/desktop/electrobun.config.ts` (`identifier: ai.thinkrail.app`, name `ThinkRail`),
+and the OS supplies the app icon (the native call has no icon field). **Limitation:** the bridge exposes no
+way to read the OS permission state, so the desktop channel reports `granted` unconditionally; if the user
+has denied notifications at the OS level the call is accepted and silently not shown. Querying/handling OS
+permission (and click callbacks) is deferred.
 
 ## Suppression
 

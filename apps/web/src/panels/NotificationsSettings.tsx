@@ -1,20 +1,33 @@
 import { Button } from "@thinkrail/ui/button";
 import { useState } from "react";
-import { type NotificationPermissionState, selectNotificationChannel } from "@/notifications";
+import {
+	type NotificationChannel,
+	type NotificationPermissionState,
+	selectNotificationChannel,
+} from "@/notifications";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { SettingsSwitch } from "./SettingsSwitch";
 
 const NOTIFICATIONS_DESCRIPTION =
-	"Get an out-of-app notification when a worktree needs you — an agent asks a question, finishes, or fails. Notifications only appear while this window isn't focused, and your browser must grant permission.";
+	"Get an out-of-app notification when a worktree needs you — an agent asks a question, finishes, or fails. Notifications only appear while this window isn't focused.";
 
 function PermissionRow({
+	kind,
 	permission,
 	onAllow,
 }: {
+	kind: NotificationChannel["kind"];
 	permission: NotificationPermissionState;
 	onAllow: () => void;
 }) {
+	if (kind === "os") {
+		return (
+			<p className="text-text-muted tr-text-metadata">
+				Your operating system delivers these notifications.
+			</p>
+		);
+	}
 	if (permission === "granted") {
 		return (
 			<p className="text-text-muted tr-text-metadata">Your browser is allowing notifications.</p>
@@ -48,6 +61,9 @@ function PermissionRow({
 
 export function NotificationsSettings() {
 	const enabled = useAppStore((s) => s.notificationsEnabled);
+	const [channelKind] = useState<NotificationChannel["kind"]>(
+		() => selectNotificationChannel().kind,
+	);
 	const [permission, setPermission] = useState<NotificationPermissionState>(() =>
 		selectNotificationChannel().permission(),
 	);
@@ -92,7 +108,9 @@ export function NotificationsSettings() {
 						onChange={setEnabled}
 					/>
 				</div>
-				{enabled && <PermissionRow permission={permission} onAllow={requestPermission} />}
+				{enabled && (
+					<PermissionRow kind={channelKind} permission={permission} onAllow={requestPermission} />
+				)}
 			</div>
 		</section>
 	);

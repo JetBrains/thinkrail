@@ -42,6 +42,7 @@ export interface ShowNotificationInput {
  */
 export function createWebNotificationChannel(): NotificationChannel {
 	return {
+		kind: "browser",
 		permission: notificationPermission,
 		requestPermission: requestNotificationPermission,
 		show: (spec, onClick) => {

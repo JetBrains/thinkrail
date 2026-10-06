@@ -23,6 +23,7 @@ describe("desktop notification channel", () => {
 
 	test("permission is always granted (OS-managed, no browser flow)", async () => {
 		const { channel } = harness();
+		expect(channel.kind).toBe("os");
 		expect(channel.permission()).toBe("granted");
 		await expect(channel.requestPermission()).resolves.toBe("granted");
 	});

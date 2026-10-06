@@ -10,6 +10,8 @@ import { createWebNotificationChannel, type NotificationPermissionState } from "
  * one by capability, and suppression/format/settings stay channel-agnostic above it.
  */
 export interface NotificationChannel {
+	/** How permission is owned, so UI can show channel-appropriate copy: the browser prompt vs the OS. */
+	kind: "browser" | "os";
 	permission: () => NotificationPermissionState;
 	requestPermission: () => Promise<NotificationPermissionState>;
 	show: (spec: NotificationSpec, onClick: () => void) => void;

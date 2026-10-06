@@ -177,6 +177,7 @@ describe("web notification channel", () => {
 
 	test("permission delegates to the browser", () => {
 		MockNotification.permission = "granted";
+		expect(createWebNotificationChannel().kind).toBe("browser");
 		expect(createWebNotificationChannel().permission()).toBe("granted");
 	});
 });

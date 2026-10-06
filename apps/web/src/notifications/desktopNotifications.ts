@@ -29,6 +29,7 @@ export function createDesktopNotificationChannel(
 	bridge: NativeNotificationBridge,
 ): NotificationChannel {
 	return {
+		kind: "os",
 		permission: () => "granted",
 		requestPermission: async () => "granted",
 		show: (spec) => {
