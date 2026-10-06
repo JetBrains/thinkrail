@@ -35,11 +35,13 @@ interface ClientNamespace<T> {
 
 export class RequestReplayCache<T> {
 	private readonly clients = new Map<string, ClientNamespace<T>>();
+	private readonly maxRequestsPerClient: number;
+	private readonly maxWeightPerClient: number;
 
-	constructor(
-		private readonly maxRequestsPerClient = 512,
-		private readonly maxWeightPerClient = 16 * 1024 * 1024,
-	) {}
+	constructor(maxRequestsPerClient = 512, maxWeightPerClient = 16 * 1024 * 1024) {
+		this.maxRequestsPerClient = maxRequestsPerClient;
+		this.maxWeightPerClient = maxWeightPerClient;
+	}
 
 	run(
 		clientKey: string,

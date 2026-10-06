@@ -93,13 +93,17 @@ class Lease implements DagLease {
 	private saving: Promise<void> | undefined;
 	private releasing: Promise<void> | undefined;
 	private readonly pending = new Set<Promise<unknown>>();
+	readonly dagId: string;
+	private readonly scope: string;
+	private readonly dir: string;
+	readonly ownership: Ownership;
 
-	constructor(
-		readonly dagId: string,
-		private readonly scope: string,
-		private readonly dir: string,
-		readonly ownership: Ownership,
-	) {}
+	constructor(dagId: string, scope: string, dir: string, ownership: Ownership) {
+		this.dagId = dagId;
+		this.scope = scope;
+		this.dir = dir;
+		this.ownership = ownership;
+	}
 
 	admit<T>(operation: () => Promise<T>): Promise<T> {
 		if (this.closed)

@@ -15,13 +15,17 @@ class FakeElement {
 	readonly children: FakeElement[] = [];
 	private readonly values = new Map<string, string>();
 	private parent: FakeElement | null = null;
+	readonly localName: string;
+	private readonly text: string;
 
 	constructor(
-		readonly localName: string,
+		localName: string,
 		attributes: Record<string, string> = {},
-		private readonly text = "",
+		text = "",
 		children: readonly FakeElement[] = [],
 	) {
+		this.localName = localName;
+		this.text = text;
 		for (const [name, value] of Object.entries(attributes)) this.values.set(name, value);
 		for (const child of children) this.append(child);
 	}

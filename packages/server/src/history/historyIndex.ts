@@ -48,12 +48,15 @@ async function listJsonl(dir: string): Promise<string[]> {
 }
 
 export class HistoryIndex {
-	private records = new Map<string, SessionRecord>();
+	private readonly records = new Map<string, SessionRecord>();
 	private building: Promise<void> | null = null;
 	private built = false;
 	private lastCheck = 0;
+	private readonly sessionDir: string | undefined;
 
-	constructor(private sessionDir?: string) {}
+	constructor(sessionDir?: string) {
+		this.sessionDir = sessionDir;
+	}
 
 	private async listFiles(): Promise<string[]> {
 		if (this.sessionDir) return listJsonl(this.sessionDir);

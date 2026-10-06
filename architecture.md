@@ -454,6 +454,10 @@ dependency. This keeps test process drivers outside both launchers and the serve
 - Never **value**-import `pi` in browser-bundled code; import types only, from the `pi-ai` /
   `pi-agent-core` package roots (type-only imports are erased at build, keeping the bundle provider-free).
   `@earendil-works/pi-coding-agent` is server-only — it never reaches `contracts`/`web`.
+- TypeScript stays type-strippable: `erasableSyntaxOnly` in `tsconfig.base.json` plus Biome
+  `noParameterProperties`/`noEnum`/`noNamespace` (which also cover files outside any tsconfig) ban enums,
+  namespaces, and constructor parameter properties, so Node type stripping, Bun, and oxc run sources
+  unchanged.
 - One id model: the UI tab id vs `session.sessionId` (the `AgentSession` id). No separate pi UUID.
 - The agent runs in-process with **no crash isolation** — wrap session calls and forward errors; a fatal
   fault takes the whole host down (accepted tradeoff vs the subprocess RPC mode).

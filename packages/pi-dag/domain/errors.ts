@@ -29,8 +29,11 @@ export interface DagFailure {
 export type DagResult<T> = { ok: true; value: T } | { ok: false; error: DagFailure };
 
 export class DagError extends Error {
-	constructor(readonly failure: DagFailure) {
+	readonly failure: DagFailure;
+
+	constructor(failure: DagFailure) {
 		super(failure.message);
+		this.failure = failure;
 		this.name = "DagError";
 	}
 }
