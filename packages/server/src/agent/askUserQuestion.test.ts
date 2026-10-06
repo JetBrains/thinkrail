@@ -545,6 +545,80 @@ test("a live waiter rejects with the stable stopped result when Pi aborts", asyn
 	await expect(pending).rejects.toThrow(ASK_STOPPED_ERROR);
 });
 
+test("a user message typed past a waiting call supersedes it with the canonical ack", async () => {
+	const waiters = createAskUserQuestionWaiters();
+	const pending = createAskUserQuestionTool(waiters).execute(
+		"tc-typed-past",
+		args() as never,
+		undefined,
+		undefined,
+		ctx(),
+	);
+	await Promise.resolve();
+	expect(waiters.isWaitingForAnswer()).toBe(true);
+	expect(waiters.supersede()).toBe(true);
+	expect(waiters.isWaitingForAnswer()).toBe(false);
+	expect(waiters.hasRecoverableCall()).toBe(false);
+	expect(waiters.currentQuestion()).toEqual({ interactionId: "tc-typed-past", needsInput: false });
+	const response = await pending;
+	expect(textOf(response)).toBe(ASK_ACK_TEXT);
+	expect(response.details).toEqual({ kind: "ack" });
+	expect((response as { terminate?: boolean }).terminate).toBeUndefined();
+	expect(() => waiters.answer("tc-typed-past", { answers: [], cancelled: true })).toThrow(
+		"superseded by a later message",
+	);
+	expect(waiters.supersede()).toBe(false);
+	waiters.persistTurn([
+		{ toolCallId: "tc-typed-past", toolName: "ask_user_question", ...(await pending) },
+	]);
+	expect(waiters.currentQuestion()).toBeNull();
+});
+
+test("a user message typed in the pre-execute window supersedes the expected call", async () => {
+	const waiters = createAskUserQuestionWaiters();
+	waiters.expect("tc-typed-early");
+	expect(waiters.supersede()).toBe(true);
+	const response = await createAskUserQuestionTool(waiters).execute(
+		"tc-typed-early",
+		args() as never,
+		undefined,
+		undefined,
+		ctx(),
+	);
+	expect(response.details).toEqual({ kind: "ack" });
+	waiters.persistTurn([]);
+});
+
+test("supersede never reverses an answer that was already accepted", async () => {
+	const waiters = createAskUserQuestionWaiters();
+	const pending = createAskUserQuestionTool(waiters).execute(
+		"tc-answered-first",
+		args() as never,
+		undefined,
+		undefined,
+		ctx(),
+	);
+	await Promise.resolve();
+	const result: AskUserQuestionResult = {
+		cancelled: false,
+		answers: [{ questionIndex: 0, question: "Which library?", kind: "option", answer: "luxon" }],
+	};
+	const answered = waiters.answer("tc-answered-first", result);
+	expect(waiters.supersede()).toBe(false);
+	expect((await pending).details).toEqual(result);
+	waiters.persistTurn([persistedAnswer("tc-answered-first", result)]);
+	if (answered.handled) await answered.persisted;
+});
+
+test("supersede leaves a stopped call stopped", async () => {
+	const waiters = createAskUserQuestionWaiters();
+	waiters.expect("tc-stopped");
+	waiters.prepareAbort();
+	expect(waiters.supersede()).toBe(false);
+	await expect(waiters.wait("tc-stopped", undefined)).rejects.toThrow(ASK_STOPPED_ERROR);
+	waiters.persistTurn([]);
+});
+
 test("execute returns the no-UI error (non-terminating) when hasUI is false", async () => {
 	const r = await run(false);
 	expect(textOf(r)).toContain("UI not available");
