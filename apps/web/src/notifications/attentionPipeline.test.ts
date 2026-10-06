@@ -106,8 +106,8 @@ describe("observer + engine pipeline", () => {
 		observe(); // rising edge → enqueue
 		clock.run();
 		expect(emitted).toHaveLength(1);
-		expect(emitted[0]?.title).toBe("s1");
-		expect(emitted[0]?.body).toBe("Waiting for your input");
+		expect(emitted[0]?.title).toBe("ThinkRail");
+		expect(emitted[0]?.body).toBe("s1 · Waiting for your input");
 		expect(emitted[0]?.target).toEqual({ kind: "chat", workspaceId: "w1", sessionId: "s1" });
 	});
 

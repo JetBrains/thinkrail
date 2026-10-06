@@ -59,10 +59,12 @@ export function formatNotification(events: readonly AttentionEvent[]): Notificat
 	const [event] = events;
 	if (!event) return null;
 	if (events.length === 1) {
-		const name = event.worktreeName.trim() || APP_NAME;
+		const name = event.worktreeName.trim();
+		const reason = reasonLabel(event.reason);
+		// Title is always the bold ThinkRail mark; the worktree and reason sit in the body.
 		return {
-			title: name,
-			body: truncate(reasonLabel(event.reason)),
+			title: APP_NAME,
+			body: truncate(name ? `${name} · ${reason}` : reason),
 			tag: `attention:${event.sessionId}`,
 			target: { kind: "chat", workspaceId: event.workspaceId, sessionId: event.sessionId },
 		};

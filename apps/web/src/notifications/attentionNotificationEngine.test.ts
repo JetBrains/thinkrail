@@ -166,7 +166,7 @@ describe("createAttentionNotificationEngine", () => {
 		engine.enqueue(event({ sessionId: "s1", worktreeName: "new" }));
 		clock.run();
 		expect(emitted).toHaveLength(1);
-		expect(emitted[0]?.title).toBe("new");
+		expect(emitted[0]?.body).toContain("new");
 	});
 
 	test("flushNow with nothing pending emits nothing", () => {
