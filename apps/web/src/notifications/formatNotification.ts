@@ -53,7 +53,7 @@ function truncate(text: string): string {
 
 /**
  * Collapse a window's accumulated attention events into one notification: a single worktree opens
- * its chat on click, several focus the app. Returns null when nothing passed.
+ * its chat on click, several open the session switcher. Returns null when nothing passed.
  */
 export function formatNotification(events: readonly AttentionEvent[]): NotificationSpec | null {
 	const [event] = events;
