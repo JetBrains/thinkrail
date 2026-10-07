@@ -303,7 +303,7 @@ test("a valid live execution is sequential, blocks for its answer, and returns t
 		});
 	await Promise.resolve();
 	expect(settled).toBe(false);
-	expect(waiters.isWaitingForAnswer()).toBe(true);
+	expect(waiters.currentQuestion()).toEqual({ interactionId: "tc-1", needsInput: true });
 	expect(waiters.hasRecoverableCall()).toBe(true);
 
 	const result: AskUserQuestionResult = {
@@ -312,7 +312,7 @@ test("a valid live execution is sequential, blocks for its answer, and returns t
 	};
 	const answered = waiters.answer("tc-1", result);
 	expect(answered.handled).toBe(true);
-	expect(waiters.isWaitingForAnswer()).toBe(false);
+	expect(waiters.currentQuestion()).toEqual({ interactionId: "tc-1", needsInput: false });
 	expect(waiters.hasRecoverableCall()).toBe(true);
 	const response = await pending;
 	expect(textOf(response)).toContain('"Which library?"="luxon"');
@@ -403,7 +403,7 @@ test("explicit Stop claims an expected call before execute or a late answer can 
 	const waiters = createAskUserQuestionWaiters();
 	waiters.expect("tc-stop-expected");
 	expect(waiters.prepareAbort()).toBeNull();
-	expect(waiters.isWaitingForAnswer()).toBe(false);
+	expect(waiters.currentQuestion()?.needsInput).toBe(false);
 	expect(waiters.hasRecoverableCall()).toBe(false);
 	await expect(waiters.wait("tc-stop-expected", undefined)).rejects.toThrow(ASK_STOPPED_ERROR);
 	expect(() => waiters.answer("tc-stop-expected", { answers: [], cancelled: true })).toThrow(
@@ -460,7 +460,7 @@ test("turn_end without the returned answer rejects persistence instead of hangin
 test("turn_end clears an expected call that Pi never executed", async () => {
 	const waiters = createAskUserQuestionWaiters();
 	waiters.expect("tc-skipped");
-	expect(waiters.isWaitingForAnswer()).toBe(true);
+	expect(waiters.currentQuestion()).toEqual({ interactionId: "tc-skipped", needsInput: true });
 	expect(waiters.hasRecoverableCall()).toBe(true);
 	const answered = waiters.answer("tc-skipped", { answers: [], cancelled: true });
 	waiters.persistTurn([]);
@@ -555,9 +555,8 @@ test("a user message typed past a waiting call supersedes it with the canonical 
 		ctx(),
 	);
 	await Promise.resolve();
-	expect(waiters.isWaitingForAnswer()).toBe(true);
+	expect(waiters.currentQuestion()?.needsInput).toBe(true);
 	expect(waiters.supersede()).toBe(true);
-	expect(waiters.isWaitingForAnswer()).toBe(false);
 	expect(waiters.hasRecoverableCall()).toBe(false);
 	expect(waiters.currentQuestion()).toEqual({ interactionId: "tc-typed-past", needsInput: false });
 	const response = await pending;

@@ -373,7 +373,6 @@ export interface AskUserQuestionWaiters {
 	): void;
 	supersede(): boolean;
 	currentQuestion(): { interactionId: string; needsInput: boolean } | null;
-	isWaitingForAnswer(): boolean;
 	hasRecoverableCall(): boolean;
 	prepareShutdown(): Promise<void> | null;
 	prepareAbort(): Promise<void> | null;
@@ -496,11 +495,6 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 				};
 			}
 			return null;
-		},
-		isWaitingForAnswer() {
-			return [...waiting.values()].some(
-				(waiter) => waiter.phase === "expected" || waiter.phase === "waiting",
-			);
 		},
 		hasRecoverableCall() {
 			return [...waiting.values()].some(
