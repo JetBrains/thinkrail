@@ -946,6 +946,36 @@ test("A failed read says so — it never renders as an empty (clean) change set"
 	await expect(page.getByTestId("changes-error")).toHaveCount(0);
 });
 
+test("A source diff keeps its scroll position across a tab switch", async ({ page }) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const worktree = worktreeDir();
+	const source = (version: string) =>
+		`${Array.from({ length: 400 }, (_, index) =>
+			index % 7 === 0
+				? `export const v${index} = "${version} ${index}";`
+				: `export const c${index} = ${index};`,
+		).join("\n")}\n`;
+	commitFile(worktree, "scroll-code.ts", source("base"), "add scroll fixture");
+	writeFileSync(join(worktree, "scroll-code.ts"), source("edited"));
+
+	await page.getByTestId("tab-changes").click();
+	await page.getByTestId("change-item").filter({ hasText: "scroll-code.ts" }).click();
+	const diff = page.getByTestId("diff-view");
+	await expect(diffText(page, "edited 399")).toBeVisible();
+	const top = await diff.evaluate((node) => {
+		node.scrollTop = (node.scrollHeight - node.clientHeight) * 0.6;
+		return node.scrollTop;
+	});
+	expect(top).toBeGreaterThan(1_000);
+
+	await page.locator('[data-testid="editor-tab"][data-kind="chat"]').click();
+	await expect(diff).toHaveCount(0);
+	await page.locator('[data-testid="editor-tab"][data-kind="diff"]').click();
+	await expect(diffText(page, "edited 399")).toBeVisible();
+	await expect.poll(() => diff.evaluate((node) => node.scrollTop)).toBe(top);
+});
+
 test("Closing a diff tab removes its Pierre surface", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);

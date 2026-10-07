@@ -986,6 +986,12 @@ own section. The kebab menu (`plan-menu`, a
   resolves the registry for its intent and phone class, lazily mounts the selected candidate, and keeps
   `rendererId` plus opaque view state on the tab. The lazy implementation identity includes renderer id and
   phone class, so crossing the breakpoint swaps the code implementation and discards incompatible state.
+  Scroll-backed view state goes through the one `useScrollViewState` hook: the offset is saved when the
+  scroller detaches and re-applied when a scroller attaches. A renderer may fill its scroller only after
+  mount — the Pierre surfaces render nothing until their shared worker pool, torn down when the last
+  surface unmounts, has re-initialized — so a restore the scroller cannot yet hold stays pending until its
+  content grows to fit or the user scrolls, and a pending offset is what gets saved if the tab leaves
+  first. Without that hold, a tab switch back to a source diff landed at the top and then persisted 0.
   Two or more candidates become one ordered toggle whose ids are the test hooks. Threads whose selectors
   the selected renderer cannot place for the pane's view or diff intent remain visible in an unplaced
   strip; its action switches to the first candidate that advertises matching anchor geometry for that intent.
