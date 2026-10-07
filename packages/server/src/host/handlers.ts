@@ -602,9 +602,8 @@ const handlers: WsHandlers = {
 	"pr.preview": (params) => previewPr(params),
 	"pr.open": async (p) => {
 		refreshUserOwnedWorkspace(p.workspaceId);
-		const branch = getWorkspace(p.workspaceId).branch;
 		recordWorkspaceActivity(p.workspaceId);
-		const result = await observePrAction(() => openPr(p), p.source ?? "other");
+		const { branch, ...result } = await observePrAction(() => openPr(p), p.source ?? "other");
 		if (result.review) {
 			setWorkspaceReview(
 				p.workspaceId,

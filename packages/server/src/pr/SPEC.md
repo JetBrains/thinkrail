@@ -105,7 +105,10 @@ value. Then:
    session. A probe that finds gh installed + authed (a transient flow failure) and the offline
    seam stay unnamed — the silent compare fallback remains.
 6. Every result carries `dirtyFiles` (uncommitted-change count) so the client can warn that those
-   won't be in the PR. Dirty state never blocks.
+   won't be in the PR. Dirty state never blocks. The server-side `openPr` result also carries the exact
+   refreshed `branch` used for push/gh/compare; the host CASes the review snapshot against that branch and
+   strips it before the wire response. Capturing branch before the dirty-read await is unsound for
+   user-owned checkouts because `openPr` deliberately refreshes after that await.
 
 The open-PR *read* side stays `workspace.openReview` (`branch-review`) — this module persists
 nothing; the client re-derives button/chip state from that lookup plus this call's result. That

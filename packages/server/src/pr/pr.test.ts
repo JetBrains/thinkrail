@@ -510,6 +510,7 @@ describe("openPr — push lifecycle and cache invalidation", () => {
 			body: "Body",
 		});
 		expect(result.action).toBe("compare");
+		expect(result.branch).toBe("feature");
 		expect((await findBranchReviewOutcome(repo, "feature")).value).toEqual({
 			kind: "pull-request",
 			number: 7,

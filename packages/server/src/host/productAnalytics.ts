@@ -256,12 +256,12 @@ export function directoryPickOutcome(selected: {
 	return { outcome: selected.path === null ? "cancelled" : "succeeded", reason: "none" };
 }
 
-export async function observePrAction(
-	operation: () => Promise<OpenPrResult>,
+export async function observePrAction<T extends OpenPrResult>(
+	operation: () => Promise<T>,
 	source: PlanActionSource = "other",
-): Promise<OpenPrResult> {
+): Promise<T> {
 	const capture = additionalCapture();
-	let result: OpenPrResult;
+	let result: T;
 	try {
 		result = await operation();
 	} catch (error) {

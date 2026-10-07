@@ -519,7 +519,8 @@ enabled/confirmed choice before entering analytics attribution.
   the compare-and-swap baseline. The host compares against that baseline, so any lifecycle change is kept,
   and it reruns the work-safety check so a clean row dirtied after the preview is kept unless that exact id
   was explicitly approved as unsafe. Starting `pr.open` itself stamps activity before its first await and
-  persists any returned PR as an open branch snapshot before replying; accepting a button/auto plan review
+  persists any returned PR against the exact post-dirty-read branch reported by `openPr` (then strips that
+  host-only context from the wire); accepting a button/auto plan review
   stamps activity synchronously too, so even a completed-fast review changes the removal CAS fact. **Review refresh:** after a
   `workspace.list` reply and on a five-minute timer the host refreshes the `review` snapshot of the rows
   whose PR state can still change the partition — live rows on every pass, **idle-settled rows at most
