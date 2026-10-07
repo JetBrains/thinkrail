@@ -5,7 +5,7 @@ status: active
 title: agent — in-process pi sessions
 parent: module-server
 depends-on: [module-contracts, module-pi-delegation, module-pi-subagents, module-pi-background-commands]
-references: [module-spec-graph, central-integration]
+references: [module-spec-graph, central-integration, submodule-server-extensions]
 tags: [pi]
 ---
 
@@ -584,11 +584,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `@thinkrail/shared/codedError` edge, shared with Chat Resources and mirroring `git`'s use).
     Children opting into extensions
     (`extensions: true` in their definition) get the **curated child set**
-    (`childExtensionFactories` in `extensions`): the headless-search policy + `pi-web-access` +
-    `pi-spec-graph` — deliberately not the parent's full set (rationale + the listed-children
-    carve-out: core decision #25). Web-access reaches the child set via a **named bundled-seam
-    field** (`BundledExtensions.webAccessFactory`) in the binary and a Bun `require` in dev — its
-    raw third-party `.ts` must stay out of the strict tsc graph.
+    (`childExtensionFactories` in `extensions`, pi `InlineExtension`s): the headless-search policy +
+    `pi-web-access` + `pi-spec-graph` + every registry extension's `childExtensions` (named inline, from
+    [[submodule-server-extensions]]; none today) — deliberately not the parent's full set (rationale + the
+    listed-children carve-out: core decision #25). Web-access reaches the child set via a **named
+    bundled-seam field** (`BundledExtensions.webAccessFactory`) in the binary and a Bun `require` in dev —
+    its raw third-party `.ts` must stay out of the strict tsc graph.
   - `extensions` — Pi resource wiring. Candidate generation loads the reviewed external Central path once
     through a headless `DefaultResourceLoader` to apply provider registrations, without inspecting it.
     `buildResourceLoader(cwd, settingsManager, getAdmission, excludedPaths, extraFactories?)` then resolves
@@ -599,10 +600,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     from session discovery—even if the global artifact changes—so a session cannot mutate its generation.
     All other user extensions
     retain normal discovery. The loader then adds
-    automatic **portable cross-agent skill aliases**, then loads the five bundled extensions — **`pi-web-access`**
-    (`web_search` + `fetch_content`), **`pi-visualize`** (`visualize`), **`pi-spec-graph`** (the `spec_*`
+    automatic **portable cross-agent skill aliases**, then loads the four bundled pi packages — **`pi-web-access`**
+    (`web_search` + `fetch_content`), **`pi-spec-graph`** (the `spec_*`
     tools + its `before_agent_start` rule), **`pi-thinkrail-workflow`** (the workflow-router rule +
-    workflow skills), and **`pi-todos`** (the `todo_*` tools + its skill). Existing personal aliases are Claude
+    workflow skills), and **`pi-todos`** (the `todo_*` tools + its skill) — and the **ThinkRail extensions
+    from the server registry** ([[submodule-server-extensions]]; today `visualize`, whose server half
+    injects the strict mermaid validator) as named inline extensions. Existing personal aliases are Claude
     (`${CLAUDE_CONFIG_DIR:-~/.claude}/skills`), Codex (`${CODEX_HOME:-~/.codex}/skills`), Copilot
     (`~/.copilot/skills`), and Gemini (`${GEMINI_CLI_HOME:-~}/.gemini/skills`), **plus each installed Claude
     plugin's `skills/` dir** (read from `~/.claude/plugins/installed_plugins.json` — the resolved `installPath`,
@@ -643,17 +646,22 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     (via `skills.state`) or a project (via `project.skills`, current checkout, no overrides) — and
     **`listProjectAliasSkillNames`** is the notice's present-alias count. The full session loader supports
     **two modes**:
-    - **Run-from-source (default):** `additionalExtensionPaths` pointing at the packages' raw `.ts`
+    - **Run-from-source (default):** `additionalExtensionPaths` pointing at the pi packages' raw `.ts`
       entries (pi's loader jiti-loads them — no value-import into our typecheck graph), resolved
       **lazily on first use** (never at module load: the resolve requires `node_modules`, which a
       compiled binary lacks). The workspace packages' `pi.skills` manifests aren't auto-discovered for
-      file-path entries — their `skills/` dirs (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`) are
-      wired via **`additionalSkillPaths`**.
+      file-path entries — their `skills/` dirs (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`) plus
+      the registry extensions' owner-resolved skill roots are wired via **`additionalSkillPaths`**.
+      Registry extensions themselves are never path-loaded: they are the same named inline factories in
+      both modes (one composition mode; `{ name, factory }` keeps `<inline:visualize>` in diagnostics).
     - **Bundled launchers (compiled CLI binary and packaged desktop runtime):** the launcher awaits the
-      **`registerBundledRuntime({ factories, skillsDir, trashHelpers, webAccessFactory })` seam** before the first session — the same bundled extensions as
+      **`registerBundledRuntime({ factories, skillsDir, trashHelpers, webAccessFactory })` seam** before the first session — the same four pi packages as
       **value-imported default-export factories** (pi gives `extensionFactories` full API parity with path loading; what's lost —
       file-relative `baseDir`, per-reload re-evaluation — none of them use) plus a staged on-disk
-      skills dir (pi reads `SKILL.md` via plain fs, so skills must live on the real filesystem). The
+      skills dir (pi reads `SKILL.md` via plain fs, so skills must live on the real filesystem; the
+      bundled runtime uses **only** this staged root — it never resolves an extension-owned package from
+      the host's `createRequire`). Registry extensions need no seam field: `@thinkrail/server`'s static
+      import of each `@thinkrail/ext-*/server` carries them into the binary and the desktop bundle. The
       seam also performs the **bundled-artifact pi registrations**: pi hides Node-only provider code behind
       bundler-opaque variable-specifier dynamic imports (so browser bundles can't reach `node:http`
       OAuth servers / the AWS SDK), which a single-file binary can't resolve at runtime — every OAuth
@@ -727,11 +735,12 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   + `/compat` subpaths, value-imported **only** inside `registerBundledRuntime`'s dynamic imports);
   `pi-delegation` + `pi-subagents` (the portable delegation runtime and Agent-tool composition,
   value-imported by the host embedding); `pi-background-commands` (the session-bound command
-  capability, likewise value-imported by its host embedding); `pi-web-access` + `pi-visualize` + `pi-spec-graph` +
-  `pi-thinkrail-workflow` + `pi-todos` (the bundled extension set — parent sessions load the set through
+  capability, likewise value-imported by its host embedding); `pi-web-access` + `pi-spec-graph` +
+  `pi-thinkrail-workflow` + `pi-todos` (the bundled pi packages — parent sessions load the set through
   resource-loader paths or launcher factories; delegated children value-import `pi-spec-graph` and receive
   the named `pi-web-access` factory through the bundled runtime seam, with source-mode Bun `require` as the
-  dev equivalent); `typebox` (the `ask_user_question` parameter schema); `jsonc-parser` (targeted
+  dev equivalent); the sibling `extensions` registry module (the ThinkRail extensions' inline factories and
+  skill roots — `agent` never imports an `@thinkrail/ext-*` package or its pi package directly); `typebox` (the `ask_user_question` parameter schema); `jsonc-parser` (targeted
   `models.json` edits in `modelContext`); `trash` (reached only through the
   sibling **`trash` module** — see [[submodule-server-trash]]: one path, globbing disabled, allowed to
   throw, never degraded to `unlink`; the launcher's staged-helper and procfs-parser seams live there too,

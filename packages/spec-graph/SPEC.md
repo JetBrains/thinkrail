@@ -80,7 +80,7 @@ must not carry a host brand. A third-party extension that returns `systemPrompt`
 drops every structured section, ours included — pi's documented force semantics; accepted rather than
 re-appending the rule to a forced prompt.
 Each tool carries a `description` (its constraints) and a one-line `promptSnippet` (its entry in the system
-prompt's Available-tools list, matching the bundled `pi-web-access` / `pi-visualize` tools). This is
+prompt's Available-tools list, matching the bundled `pi-web-access` / `visualize` tools). This is
 pi-native prompt influence through an extension, not host prompt assembly.
 
 ## thinkrail integration
