@@ -5,7 +5,7 @@ status: active
 title: Native artifact test harnesses
 parent: architecture
 depends-on: [module-cli, module-server, module-shared]
-references: [module-desktop, module-browser-e2e, module-ci-release]
+references: [module-desktop, module-browser-e2e, module-ci-release, module-ext-visualize]
 tags: [testing, artifacts, public-surface-checked]
 ---
 
@@ -41,8 +41,12 @@ fixture value-imports a bare `@earendil-works/pi-coding-agent` specifier and sur
 its model name, so the load exercises pi's virtual-module mapping through the transform path the host
 forces — a bundle missing the `PI_BUNDLED_NODE` define fails this probe; [[submodule-server-agent]] owns
 the seam),
-exercise the bundled factories/skills, reach an OAuth URL without a provider turn, verify health/UI and
-transcript trash, and shut down. CLI-specific probes also check its exit-only and embedded-cache behavior.
+exercise the bundled factories/skills, run **one scripted provider turn** — the fixture also registers a
+pi-ai faux `streamSimple` under its own `api` name that always calls `visualize` with a dangling flowchart
+edge, so the probe asserts the strict mermaid parse error reaches the transcript as an `isError` tool
+result (the packaged host composes the ThinkRail extension registry, never the portable package's
+best-effort probe; [[module-ext-visualize]]) — reach an OAuth URL without a provider turn, verify health/UI
+and transcript trash, and shut down. CLI-specific probes also check its exit-only and embedded-cache behavior.
 Native desktop smoke loads the real UI and verifies route/preload messaging plus the production external
 navigation handler. On macOS it also drives the title-bar double-click path end to end: a no-drag
 double-click must not act, and the header double-click's recorded action and resulting window state must
