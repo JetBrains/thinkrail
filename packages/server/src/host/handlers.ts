@@ -306,9 +306,10 @@ function fireTodoFixPrompt(
 	details: ReviewFixDetails,
 	previous: TodoReviewRecord | undefined,
 	requested: TodoReviewRecord,
-	findingIds: string[],
+	findings: readonly ReviewComment[],
 	capture: AdditionalAnalyticsCapture | null,
 ): void {
+	const findingIds = findings.map((c) => c.id);
 	void ackSend(
 		runObservation.send(p.sessionId, "internal", () =>
 			sendReviewFixToSession(p.sessionId, pkg, details),
@@ -320,6 +321,7 @@ function fireTodoFixPrompt(
 					name: "review_decided",
 					params: { actor: "user", verdict: "changes_requested" },
 				});
+				captureReviewCommentsSent(capture, findings);
 			},
 			(err) => {
 				rollbackTodoFix(p, previous, requested);
@@ -647,12 +649,14 @@ const handlers: Record<string, Handler> = {
 						note: p.feedback.trim(),
 						comments: findings,
 					});
-					if (findings.length === 0)
-						return { ...request, fixText: request.pkg, details, findingIds: [] as string[] };
+					if (findings.length === 0) return { ...request, fixText: request.pkg, details, findings };
 					const fixText = `${request.pkg}\n\n${await buildSendPackage(p.workspaceId, findings)}`;
-					const findingIds = findings.map((c) => c.id);
-					await markCommentsSent(p.workspaceId, findingIds, p.sessionId);
-					return { ...request, fixText, details, findingIds };
+					await markCommentsSent(
+						p.workspaceId,
+						findings.map((c) => c.id),
+						p.sessionId,
+					);
+					return { ...request, fixText, details, findings };
 				} catch (error) {
 					rollbackTodoFix(p, request.previous, request.requested);
 					throw error;
@@ -665,12 +669,16 @@ const handlers: Record<string, Handler> = {
 					prepared.details,
 					prepared.previous,
 					prepared.requested,
-					prepared.findingIds,
+					prepared.findings,
 					capture,
 				);
 			} catch (error) {
-				if (prepared.findingIds.length > 0)
-					rollbackSend(p.workspaceId, prepared.findingIds, p.sessionId);
+				if (prepared.findings.length > 0)
+					rollbackSend(
+						p.workspaceId,
+						prepared.findings.map((c) => c.id),
+						p.sessionId,
+					);
 				rollbackTodoFix(p, prepared.previous, prepared.requested);
 				throw error;
 			}

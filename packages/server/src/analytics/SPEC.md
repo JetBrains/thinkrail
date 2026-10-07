@@ -65,18 +65,22 @@ bounded browser-derived strings, never resource identities or arbitrary product 
 
 The review-comment funnel is host-observed off existing wire/tool actions: `review_comment_added`
 off the `review.commentAdd` handler (human, `author:user`) and each plan-review finding the host files
-into the Review tab (`author:agent`, with the persisted `kind`, so an anchor fallback reads as `review`); `review_comment_sent` off `review.sendComment` and `review.sendBatch`, emitted once
-per comment in the already-re-anchored send set so `outdated` reports true anchor drift at send time and the
-added→sent→resolved conversion is countable across a personless population (a per-action event with a count
-bucket would make that ratio unrecoverable). It fires on the send's **acceptance**, not when the detached
-prompt starts: a pre-turn rejection (bad model/expired key) rolls the comments back to draft, so an early
-capture would report an undelivered comment as sent and inflate the conversion; `review_comment_resolved` off `review.commentUpdate` (user
-resolved/dismissed) and the agent `resolve_comment` seam (`agent`/`resolved`). No comment body, path, anchor
-text or line numbers are ever copied — only the closed `author`/`kind`/`actor`/`outcome`/`outdated` enums.
+into the Review tab (`author:agent`, with the persisted `kind`, so an anchor fallback reads as `review`).
+`review_comment_sent` fires once per comment for every delivery to an agent: `review.sendComment` /
+`review.sendBatch`, the plan-review fix delivered to the worker (button path after its acknowledgement,
+tool path when its locked file+mark+record transaction commits), and the user's Request-fix. Per-comment
+keeps added→sent→resolved countable across a personless population (a per-action count bucket would make
+that ratio unrecoverable); `outdated` reports anchor drift in the already-re-anchored send set. It fires on
+**acceptance**, not when a detached prompt starts: a pre-turn rejection (bad model/expired key) rolls the
+comments back to draft, so an early capture would inflate the conversion. `review_comment_resolved` fires
+only on an actual transition into `resolved`/`dismissed` — `review.commentUpdate` (user) and the agent
+`resolve_comment` seam (`agent`/`resolved`) — so an idempotent repeat from a stale client never counts
+twice. No comment body, path, anchor text or line numbers are ever copied — only the closed
+`author`/`kind`/`actor`/`outcome`/`outdated` enums.
 
 The plan/TODO funnel rides existing wire actions, never browser autocapture: the host captures
 `plan_opened` off a deliberate `todo.list { opened }` call (the plan page open or the chat popup open —
-not the automatic refetches), `plan_item_added` off `todo.add` (`surface` names the in-chat add row or
+not the automatic refetches), `plan_item_added` off a successful `todo.add` (`surface` names the in-chat add row or
 the plan page's add row), and stamps the `source` discriminator on
 `pr_action_finished` from the `pr.open` caller (`plan_page` when the plan page's PR button drove it). The
 plan page's Review stage runs through pi-subagents delegation ([[submodule-server-host]]'s plan review),

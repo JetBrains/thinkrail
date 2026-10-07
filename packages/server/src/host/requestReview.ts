@@ -49,6 +49,7 @@ import {
 	additionalCapture,
 	captureAdditional,
 	captureReviewCommentAdded,
+	captureReviewCommentsSent,
 } from "./productAnalytics";
 import { REVIEWER_OUTPUT_CONTRACT, REVIEWER_SYSTEM_PROMPT, REVIEWER_TOOLS } from "./reviewerRole";
 import { withReviewLock } from "./reviewLock";
@@ -200,19 +201,21 @@ async function fileFindings(
 	reviewedSha: string,
 	raw: ReviewFixComment[],
 	capture: AdditionalAnalyticsCapture | null,
-): Promise<ReviewFixComment[]> {
-	const findings: ReviewFixComment[] = [];
+): Promise<{ filed: ReviewFixComment[]; comments: ReviewComment[] }> {
+	const filed: ReviewFixComment[] = [];
+	const comments: ReviewComment[] = [];
 	try {
 		for (const f of raw) {
 			const persisted = await fileFinding(params, reviewedSha, f);
 			captureReviewCommentAdded(capture, persisted);
-			findings.push({ ...f, id: persisted.id });
+			filed.push({ ...f, id: persisted.id });
+			comments.push(persisted);
 		}
 	} catch (err) {
-		for (const f of findings) await deleteComment(params.workspaceId, f.id).catch(() => {});
+		for (const f of filed) await deleteComment(params.workspaceId, f.id).catch(() => {});
 		throw err;
 	}
-	return findings;
+	return { filed, comments };
 }
 
 /** Undo just-filed findings while the review lock is held: roll back any `sent` assignment first, then
@@ -251,12 +254,13 @@ async function deliverFixToWorker(
 	capture: AdditionalAnalyticsCapture | null,
 ): Promise<VerdictOutcome> {
 	let marked: string[] = [];
+	let sent: ReviewComment[] = [];
 	let filed: ReviewFixComment[] = [];
 	let recorded = false;
 	try {
 		const prepared = await withReviewLock(params.workspaceId, async () => {
 			const snapshot = await getReviewSnapshot(params.workspaceId);
-			filed = await fileFindings(params, reviewedSha, raw, capture);
+			filed = (await fileFindings(params, reviewedSha, raw, capture)).filed;
 			let item: Todo;
 			try {
 				item = record(1).item;
@@ -272,6 +276,7 @@ async function deliverFixToWorker(
 			if (sentIds.length > 0) {
 				await markCommentsSent(params.workspaceId, sentIds, params.sessionId);
 				marked = sentIds;
+				sent = findings;
 			}
 			return {
 				text: fixPackage
@@ -287,6 +292,7 @@ async function deliverFixToWorker(
 			};
 		});
 		await ackSend(sendReviewFixToSession(params.sessionId, prepared.text, prepared.details));
+		captureReviewCommentsSent(capture, sent);
 		return { kind: "changes", canAutoFix: true, findings: filed };
 	} catch (err) {
 		if (!recorded) throw err;
@@ -343,7 +349,7 @@ async function recordVerdict(
 		// draft `sent` between two writes (defeating fileFindings' compensation), and a record-write failure
 		// deletes the just-filed drafts rather than stranding them past the cancel. See planReview.SPEC.md.
 		const findings = await withReviewLock(params.workspaceId, async () => {
-			const filed = await fileFindings(params, reviewedSha, result.findings, capture);
+			const { filed } = await fileFindings(params, reviewedSha, result.findings, capture);
 			try {
 				record(2);
 			} catch (err) {
@@ -360,8 +366,9 @@ async function recordVerdict(
 		// canonical ids the worker never received. `fileFindings` compensates a mid-loop persist failure;
 		// a mark failure deletes the just-filed drafts; a record failure rolls the sent findings back and
 		// deletes them so the cancel leaves nothing open. See planReview.SPEC.md.
-		const findings = await withReviewLock(params.workspaceId, async () => {
-			const filed = await fileFindings(params, reviewedSha, result.findings, capture);
+		const { filed: findings, comments } = await withReviewLock(params.workspaceId, async () => {
+			const filing = await fileFindings(params, reviewedSha, result.findings, capture);
+			const { filed } = filing;
 			try {
 				await markCommentsSent(
 					params.workspaceId,
@@ -378,8 +385,9 @@ async function recordVerdict(
 				await unfileFindings(params, filed, true);
 				throw err;
 			}
-			return filed;
+			return filing;
 		});
+		captureReviewCommentsSent(capture, comments);
 		return { kind: "changes", canAutoFix: true, findings };
 	}
 	// Button path: when we win the fix claim, deliverFixToWorker files + records + marks-sent + sends as
@@ -389,7 +397,7 @@ async function recordVerdict(
 	if (claimItemFix(params.sessionId, params.id))
 		return deliverFixToWorker(params, note, reviewedSha, result.findings, record, capture);
 	const findings = await withReviewLock(params.workspaceId, async () => {
-		const filed = await fileFindings(params, reviewedSha, result.findings, capture);
+		const { filed } = await fileFindings(params, reviewedSha, result.findings, capture);
 		try {
 			record(2);
 		} catch (err) {
