@@ -282,26 +282,6 @@
         "typebox": "*",
       },
     },
-    "packages/pi-visualize": {
-      "name": "pi-visualize",
-      "version": "0.1.0",
-      "dependencies": {
-        "linkedom": "0.16.11",
-        "mermaid": "catalog:",
-      },
-      "devDependencies": {
-        "@earendil-works/pi-ai": "catalog:",
-        "@earendil-works/pi-coding-agent": "catalog:",
-        "@types/bun": "catalog:",
-        "typebox": "catalog:",
-        "typescript": "catalog:",
-      },
-      "peerDependencies": {
-        "@earendil-works/pi-ai": "*",
-        "@earendil-works/pi-coding-agent": "*",
-        "typebox": "*",
-      },
-    },
     "packages/server": {
       "name": "@thinkrail/server",
       "version": "0.0.0",
@@ -2048,8 +2028,6 @@
     "pi-thinkrail-workflow": ["pi-thinkrail-workflow@workspace:packages/pi-thinkrail-workflow"],
 
     "pi-todos": ["pi-todos@workspace:packages/pi-todos"],
-
-    "pi-visualize": ["pi-visualize@workspace:packages/pi-visualize"],
 
     "pi-web-access": ["pi-web-access@0.13.0", "", { "dependencies": { "@mozilla/readability": "^0.6.0", "linkedom": "^0.16.0", "p-limit": "^6.1.0", "turndown": "^7.2.0", "unpdf": "^1.6.2" }, "peerDependencies": { "@earendil-works/pi-ai": "*", "@earendil-works/pi-coding-agent": "*", "@earendil-works/pi-tui": "*", "typebox": "*" } }, "sha512-ny0bHisMWdobmu1hcMp/jqjaRh6pYrH7dctBK2CVyRF4ia7bP47RnOPYdG1yiks9ohtcanWir5Hl9EFap8h0zQ=="],
 
