@@ -282,26 +282,6 @@
         "typebox": "*",
       },
     },
-    "packages/pi-visualize": {
-      "name": "pi-visualize",
-      "version": "0.1.0",
-      "dependencies": {
-        "linkedom": "0.16.11",
-        "mermaid": "catalog:",
-      },
-      "devDependencies": {
-        "@earendil-works/pi-ai": "catalog:",
-        "@earendil-works/pi-coding-agent": "catalog:",
-        "@types/bun": "catalog:",
-        "typebox": "catalog:",
-        "typescript": "catalog:",
-      },
-      "peerDependencies": {
-        "@earendil-works/pi-ai": "*",
-        "@earendil-works/pi-coding-agent": "*",
-        "typebox": "*",
-      },
-    },
     "packages/server": {
       "name": "@thinkrail/server",
       "version": "0.0.0",
@@ -310,6 +290,8 @@
         "@earendil-works/pi-coding-agent": "catalog:",
         "@stroncium/procfs": "1.2.1",
         "@thinkrail/contracts": "workspace:*",
+        "@thinkrail/ext-visualize": "workspace:*",
+        "@thinkrail/extension-api": "workspace:*",
         "@thinkrail/shared": "workspace:*",
         "bun-pty": "0.4.10",
         "jsonc-parser": "3.3.1",
@@ -319,7 +301,6 @@
         "pi-subagents": "workspace:*",
         "pi-thinkrail-workflow": "workspace:*",
         "pi-todos": "workspace:*",
-        "pi-visualize": "workspace:*",
         "pi-web-access": "0.13.0",
         "pino": "10.3.1",
         "pino-pretty": "13.1.3",
@@ -423,12 +404,15 @@
       "version": "0.0.0",
       "dependencies": {
         "@remixicon/react": "catalog:",
+        "@thinkrail.ai/pi-visualize": "workspace:*",
         "@thinkrail/extension-api": "workspace:*",
         "@thinkrail/ui": "workspace:*",
+        "linkedom": "0.16.11",
         "mermaid": "catalog:",
         "react": "catalog:",
       },
       "devDependencies": {
+        "@earendil-works/pi-coding-agent": "catalog:",
         "@types/bun": "catalog:",
         "@types/react": "catalog:",
         "typescript": "catalog:",
@@ -2044,8 +2028,6 @@
     "pi-thinkrail-workflow": ["pi-thinkrail-workflow@workspace:packages/pi-thinkrail-workflow"],
 
     "pi-todos": ["pi-todos@workspace:packages/pi-todos"],
-
-    "pi-visualize": ["pi-visualize@workspace:packages/pi-visualize"],
 
     "pi-web-access": ["pi-web-access@0.13.0", "", { "dependencies": { "@mozilla/readability": "^0.6.0", "linkedom": "^0.16.0", "p-limit": "^6.1.0", "turndown": "^7.2.0", "unpdf": "^1.6.2" }, "peerDependencies": { "@earendil-works/pi-ai": "*", "@earendil-works/pi-coding-agent": "*", "@earendil-works/pi-tui": "*", "typebox": "*" } }, "sha512-ny0bHisMWdobmu1hcMp/jqjaRh6pYrH7dctBK2CVyRF4ia7bP47RnOPYdG1yiks9ohtcanWir5Hl9EFap8h0zQ=="],
 

@@ -34,7 +34,8 @@ e2e).
   installs SIGINT/SIGTERM graceful-shutdown handlers), both re-exported from
   `host/`; plus `registerBundledRuntime` (+ its types, re-exported from `agent/`) — the compiled-binary
   seam by which a launcher that cannot path-load the bundled pi extensions (no `node_modules` inside a
-  `bun build --compile` binary or packaged Electrobun server runtime) injects them as value-imported factories + a staged skills dir, injects
+  `bun build --compile` binary or packaged Electrobun server runtime) injects them as value-imported factories + a staged skills dir (registry extensions need no injection — their factories arrive through the
+  static import graph), injects
   the staged macOS/Windows OS-trash helper paths, and registers pi's statically-bundled provider flows
   (the OAuth flows + the Bedrock module) that pi otherwise reaches through binary-hostile
   variable-specifier dynamic imports (see the agent SPEC). Build-only
@@ -47,7 +48,9 @@ e2e).
   deliberate second entry that avoids evaluating `host` (Bun-only: `Bun.serve`, `bun-pty`) under the
   node-run e2e worker. Not for `apps/*` use — the web/CLI boundary rules are unchanged.
 - **Allowed deps:** `contracts` (types + WS constants), `shared` (`shellEnv` and the Central adapter), `bun-pty`,
-  `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), `pino` + its pretty/rolling
+  `@earendil-works/pi-coding-agent` + `@earendil-works/pi-ai` (runtime), `extension-api` (`./server` types)
+  + every `thinkrail-extensions/*` **server subpath only** (the registry's composition edge; the host no
+  longer depends directly on a pi package an extension owns), `pino` + its pretty/rolling
   destinations (host diagnostics), `jsonc-parser` (targeted shared Pi configuration edits), Bun/Node.
 - **Deployment obligation:** product behavior lives in the owning server feature module and is composed by
   `host`; launchers only supply boot options and packaged resources. When a demonstrated second environment
@@ -84,6 +87,7 @@ internals**. The edges between them are owned here (see the dependency graph), n
 | `watch` | per-worktree fs watcher → debounced `workspace.fsChanged` invalidation push | [watch/SPEC.md](src/watch/SPEC.md) |
 | `terminal` | workspace-scoped `bun-pty` terminals | [terminal/SPEC.md](src/terminal/SPEC.md) |
 | `agent` | in-process pi sessions + current/retained runtime generations + one-shot completions | [agent/SPEC.md](src/agent/SPEC.md) |
+| `extensions` | the server registry of ThinkRail extensions (`@thinkrail/ext-*/server`): ordered descriptors + public specifiers, inline flattening, owner-scoped skill resolution | [extensions/SPEC.md](src/extensions/SPEC.md) |
 | `auth` | provider status/login plus native JetBrains Central lifecycle and quota orchestration | [auth/SPEC.md](src/auth/SPEC.md) |
 | `assist` | ad-hoc one-shot tasks (plan summaries, …) on a cheap model, best-effort | [assist/SPEC.md](src/assist/SPEC.md) |
 | `analytics` | always-on basic events + preference-controlled optional insights → PostHog sink (privacy contract in its spec) | [analytics/SPEC.md](src/analytics/SPEC.md) |
@@ -126,8 +130,11 @@ the host from env via `bootHost` for dev/e2e.
 - `assist` → `agent` (the one-shot completion primitive)
 - `auth` → `agent` (the current runtime/auth facade plus candidate prepare/activate; one-way, `agent` never imports `auth`)
 - `agent` → `log`, `persistence` (`dataDir` for delegation plus session lifecycle/receipt load-save operations),
-  `trash` (a chat delete's recoverable transcript move) — otherwise the pi runtime alone; auth passes desired
-  opaque Central paths through its public generation seam
+  `trash` (a chat delete's recoverable transcript move), `extensions` (the registry's flattened parent and
+  child inline extensions plus, in unbundled dev, its skill roots) — otherwise the pi runtime alone; auth
+  passes desired opaque Central paths through its public generation seam
+- `extensions` → `@thinkrail/ext-*/server` + `@thinkrail/extension-api/server` (external); `buildSupport.ts`
+  (build-only) also reads it to stage the extensions' skill roots
 - `persistence`, `dialog`, `history`, `templates`, `subprocess`, `trash` → (leaves)
 
 Rules: features never import `host`, and never each other except the edges above. The graph is acyclic.

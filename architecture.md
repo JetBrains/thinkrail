@@ -20,7 +20,8 @@ dials it over the network; a phone reaches the selected host over Tailscale.
 
 - **Engine host** (`packages/server` + `packages/shared`, launched by `apps/cli` or `apps/desktop`
   in local-host mode): owns `pi`, session state, persistence, and serves the wire endpoint. It bundles pi extensions
-  (`pi-web-access`, `pi-visualize`, `pi-spec-graph`, `pi-thinkrail-workflow`) into every session.
+  (`pi-web-access`, `pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`) and the ThinkRail extensions
+  from its server registry (`visualize`) into every session.
 - **The wire** (`packages/contracts`): the typed, versioned protocol — the only coupling between client
   and host.
 - **UI client** (`apps/web`): a mobile-first React client, transport-driven and endpoint-configurable,
@@ -32,12 +33,11 @@ apps/web        UI client (mobile-first)                           ── depend
 apps/desktop    Electrobun local-host launcher                     ── depends on ─▶ packages/server, packages/contracts, packages/shared
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
-packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared, packages/pi-background-commands, packages/pi-delegation, packages/pi-subagents
+packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared, packages/pi-background-commands, packages/pi-delegation, packages/pi-subagents, packages/extension-api/server, thinkrail-extensions/*/server
 packages/contracts  the wire (types plus tiny pure runtime)
 packages/shared     shellEnv (server-side only)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
                     its pi-free core/ read model also backs the host's spec.graph read method)
-packages/pi-visualize          portable pi extension: the visualize tool (bundled into every session)
 packages/pi-delegation         portable pure-pi package: the delegation core — controlled child sessions
                     for live session parents or independent resource owners
 packages/pi-dag               portable durable backend DAGs over pi-delegation; host-owned resources;
@@ -51,7 +51,7 @@ packages/pi-thinkrail-workflow pi extension: the workflow skill system + its alw
 pi-extensions/*     portable pi packages published to npm as @thinkrail.ai/pi-<name>; work in vanilla pi
                     (decided, Decision 20; the pi-* packages above move here per publish wave)
 thinkrail-extensions/*  ThinkRail extensions: a pi capability + ./server and ./web halves, composed by one
-                    registry file per side (decided, Decision 21) ── depends on ─▶ pi-extensions/*,
+                    registry file per side (Decision 21; visualize shipped) ── depends on ─▶ pi-extensions/*,
                     packages/extension-api, packages/ui
 packages/extension-api  types + define* helpers for extension halves ── depends on ─▶ packages/contracts
 packages/ui         owned shadcn/Radix primitives + cn + onThemeSwap ── may depend on ─▶ packages/contracts
@@ -337,8 +337,10 @@ dependency. This keeps test process drivers outside both launchers and the serve
     extension only through explicit seams — the one property fixed now so later extensions (wire
     methods, panels) extend the `define*` objects instead of replacing them. Composition is static: a
     server registry (`packages/server/src/extensions/registry.ts`) whose static imports carry factories
-    into every launcher without generated factory lists, and a web registry
-    (`apps/web/src/extensions/registry.ts`). The SDK is `packages/extension-api` (types + `define*`) and
+    into every launcher without generated factory lists (the packagers' generated lists now cover only
+    the pi packages not yet wrapped as extensions), and a web registry
+    (`apps/web/src/extensions/registry.ts`). Skill packages are resolved from the extension's own
+    dependency graph, never the host's. The SDK is `packages/extension-api` (types + `define*`) and
     `packages/ui` (owned primitives, `cn`, `onThemeSwap`); the highlighted `CodeBlock` stays app-local
     until a second consumer exists. Decision 1's browser-only dependency rule is enforced with
     source-half and public-subpath checks, including the SDK's separate `./web` and `./server` contracts. **Delivery rule:** every extension arrives as three independently shippable
@@ -347,10 +349,13 @@ dependency. This keeps test process drivers outside both launchers and the serve
     settings and runtime-loaded third-party extensions are explicit deferrals. Rejected: runtime-loaded
     bundles now (React singleton, versioned UI API, security story first), a logical extension inside
     the apps (three physical homes, no boundary), generated factory lists derived from descriptors
-    (functions yield no import specifiers). Pilot: visualize — `lovely-mermaid` for TUI rendering and
+    (functions yield no import specifiers); keeping path-based dev loading beside the inline composition
+    (one composition mode; `{ name, factory }` keeps diagnostics); resolving `skillPackages` from the
+    host (the host no longer depends on extension-owned pi packages, so `MODULE_NOT_FOUND` in isolated
+    layouts). Pilot, shipped in three PRs: visualize — `lovely-mermaid` for TUI rendering and
     best-effort validation in the portable package, strict `mermaid`+`linkedom` validation injected by
-    the ThinkRail server half through `createVisualizeExtension({ validateMermaid })`. Detail:
-    [[module-thinkrail-extensions]].
+    the ThinkRail server half through `createVisualizeExtension({ validateMermaid })`; the old
+    `packages/pi-visualize` is deleted. Detail: [[module-thinkrail-extensions]].
 
 ## Invariants
 

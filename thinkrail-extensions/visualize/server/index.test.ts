@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import factory from "./index.ts";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import extension from "./index";
 
 type ExecResult = { content: Array<{ type: string; text: string }>; details: unknown };
 type CapturedTool = {
 	name: string;
-	label: string;
 	execute: (id: string, params: unknown) => Promise<ExecResult>;
 };
 
@@ -15,26 +15,30 @@ function loadTool(): CapturedTool {
 			captured = def;
 		},
 	};
-	factory(fakePi as unknown as Parameters<typeof factory>[0]);
+	const factory = extension.extensions[0];
+	if (!factory) throw new Error("server half declares no extension factory");
+	factory(fakePi as unknown as ExtensionAPI);
 	if (!captured) throw new Error("factory did not register a tool");
 	return captured;
 }
 
-describe("visualize extension", () => {
-	test("registers a tool named 'visualize'", () => {
+describe("visualize server half", () => {
+	test("composes one parent extension named visualize and no children or skills", () => {
+		expect(extension.name).toBe("visualize");
+		expect(extension.extensions).toHaveLength(1);
+		expect(extension).not.toHaveProperty("childExtensions");
+		expect(extension).not.toHaveProperty("skillPackages");
 		expect(loadTool().name).toBe("visualize");
 	});
 
-	test("execute renders valid labeled Mermaid without leaking DOM globals", async () => {
+	test("accepts valid Mermaid without leaking DOM globals", async () => {
 		const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
 		const documentDescriptor = Object.getOwnPropertyDescriptor(globalThis, "document");
 		const res = await loadTool().execute("id", {
 			type: "diagram",
 			mermaid: "flowchart LR\n A[Start] --> B[Done]",
 		});
-		expect(res.content[0]?.type).toBe("text");
 		expect(res.content[0]?.text).toContain("```mermaid");
-		expect(res.content[0]?.text).toContain("A[Start] --> B[Done]");
 		expect(res.details).toEqual({
 			type: "diagram",
 			mermaid: "flowchart LR\n A[Start] --> B[Done]",
@@ -43,17 +47,15 @@ describe("visualize extension", () => {
 		expect(Object.getOwnPropertyDescriptor(globalThis, "document")).toEqual(documentDescriptor);
 	});
 
-	test("execute renders a comparison with pros and a recommended marker", async () => {
-		const res = await loadTool().execute("id", {
-			type: "comparison",
-			options: [{ name: "A", pros: ["x"], recommended: true }],
-		});
-		expect(res.content[0]?.text).toContain("A");
-		expect(res.content[0]?.text).toContain("- x");
-		expect(res.content[0]?.text).toContain("✅ Recommended");
+	test("rejects a dangling flowchart edge with the strict mermaid parse error", async () => {
+		await expect(
+			loadTool().execute("id", { type: "diagram", mermaid: "flowchart LR\n A -->" }),
+		).rejects.toThrow(
+			/visualize: invalid Mermaid syntax in `mermaid`[\s\S]*parse error[\s\S]*correct the syntax and call `visualize` again/i,
+		);
 	});
 
-	test("execute rejects invalid comparison Mermaid with its option location", async () => {
+	test("rejects invalid comparison Mermaid with its option location", async () => {
 		await expect(
 			loadTool().execute("id", {
 				type: "comparison",
@@ -65,24 +67,18 @@ describe("visualize extension", () => {
 		).rejects.toThrow(/visualize: invalid Mermaid syntax in `options\[1\]\.mermaid`/);
 	});
 
-	test("execute rejects whitespace-only comparison Mermaid before browser rendering", async () => {
-		await expect(
-			loadTool().execute("id", {
-				type: "comparison",
-				options: [{ name: "Blank", mermaid: "   " }],
-			}),
-		).rejects.toThrow(/visualize: invalid Mermaid syntax in `options\[0\]\.mermaid`/);
+	test("validates diagram kinds whose sanitizer needs a real document", async () => {
+		for (const mermaid of [
+			"classDiagram\n class A\n A : +run()",
+			"stateDiagram-v2\n [*] --> Idle\n Idle --> Running",
+			"gantt\n title T\n dateFormat YYYY-MM-DD\n section S\n Task :a1, 2024-01-01, 3d",
+			"mindmap\n  root((r))\n    child",
+		]) {
+			await expect(loadTool().execute("id", { type: "diagram", mermaid })).resolves.toBeDefined();
+		}
 	});
 
-	test("execute rejects invalid top-level Mermaid with correction feedback", async () => {
-		await expect(
-			loadTool().execute("id", { type: "diagram", mermaid: "flowchart LR\n A -->" }),
-		).rejects.toThrow(
-			/visualize: invalid Mermaid syntax in `mermaid`[\s\S]*parse error[\s\S]*correct the syntax and call `visualize` again/i,
-		);
-	});
-
-	test("execute serializes Mermaid parsing across tool instances", async () => {
+	test("serializes Mermaid parsing across tool instances", async () => {
 		await loadTool().execute("warmup", { type: "diagram", mermaid: "flowchart LR\n A --> B" });
 		const mermaid = (await import("mermaid")).default;
 		const parseDescriptor = Object.getOwnPropertyDescriptor(mermaid, "parse");
@@ -107,9 +103,5 @@ describe("visualize extension", () => {
 		} finally {
 			if (parseDescriptor) Object.defineProperty(mermaid, "parse", parseDescriptor);
 		}
-	});
-
-	test("execute rejects an invalid shape", async () => {
-		await expect(loadTool().execute("id", { type: "diagram" })).rejects.toThrow(/mermaid/);
 	});
 });

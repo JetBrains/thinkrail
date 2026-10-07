@@ -97,7 +97,7 @@ What ThinkRail does, at product level; the linked spec owns the detail.
 - **Providers** — in-app sign-in and API keys through pi's auth, and JetBrains AI through the user's
   `central` CLI ([[submodule-server-auth]], [[central-integration]]).
 - **Agent tools** — web research and inline diagrams and comparisons in chat
-  ([[submodule-web-chat-tools-web]], [[pi-visualize-module]]).
+  ([[submodule-web-chat-tools-web]], [[module-ext-visualize]]).
 - **Around the workspace** — open a worktree in an installed editor or IDE, and keep the app itself up
   to date ([[submodule-server-editors]], [[submodule-web-updates]]).
 - **Brand** — ThinkRail green accent (bright on dark themes, deepened on light ones so it clears AA on

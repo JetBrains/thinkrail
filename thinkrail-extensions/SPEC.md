@@ -16,9 +16,10 @@ third-party pi package — with its ThinkRail-specific halves: what the host bun
 the web client presents the capability's tools. The host composes extensions from **one registry file per
 side**; how a user would install, enable or discover an extension is deliberately not designed.
 
-The first extension (`visualize`) supplies its `./web` half through [[module-ext-visualize]]. Server
-composition below is the decided contract for the subsequent server extraction, not a shipped registry. Install UX, marketplace, per-extension settings, wire methods,
-panels and store contributions are explicit deferrals, not gaps.
+The first extension (`visualize`, [[module-ext-visualize]]) ships both halves; the host composes them from
+the two registry files below ([[submodule-server-extensions]], [[submodule-web-extensions]]). Install UX,
+marketplace, per-extension settings, wire methods, panels and store contributions are explicit deferrals,
+not gaps.
 
 ## Shape — two entrypoints, no root barrel
 
@@ -64,14 +65,15 @@ What a `./web` half may import:
 - **Server:** `packages/server/src/extensions/registry.ts` statically imports every
   `@thinkrail/ext-*/server` and exports entries `{ specifier, extension }` — the descriptor **and its public
   server specifier as a string**. Static imports put the factories into the compiled CLI binary and the
-  desktop bundle through the normal server graph, so the packagers generate no factory lists for them.
-  The resource loader flattens `extensions` / `childExtensions` into named inline extensions in dev and
-  bundled mode alike. **Skill resolution is owner-scoped:** one shared resolver resolves the extension's
-  entry from `specifier`, then each `skillPackages` manifest via `createRequire(extensionEntry)` — build
-  support stages the flattened roots, unbundled dev resolves at runtime, the bundled runtime uses only the
-  injected staged root. The launcher infrastructure (desktop's bundled server runtime, `startDesktopHost`,
-  `registerBundledRuntime`'s OAuth/Bedrock/trash registration, the generated-module isolation of
-  `pi-web-access`) is unchanged by this.
+  desktop bundle through the normal server graph, so the packagers generate no factory lists for them
+  (the generated lists remain only for the pi packages not yet wrapped as extensions). The resource
+  loader flattens `extensions` / `childExtensions` into named inline extensions in dev and bundled mode
+  alike — one composition mode, no path-based dev loading. **Skill resolution is owner-scoped:** one
+  shared resolver resolves the extension's entry from `specifier`, then each `skillPackages` manifest via
+  `createRequire(extensionEntry)` — build support stages the flattened roots, unbundled dev resolves at
+  runtime, the bundled runtime uses only the injected staged root. The launcher infrastructure (desktop's
+  bundled server runtime, `startDesktopHost`, `registerBundledRuntime`'s OAuth/Bedrock/trash registration,
+  the generated-module isolation of `pi-web-access`) is unchanged by this.
 - **Web:** `apps/web/src/extensions/registry.ts` exports the ordered web extensions;
   `registerWebExtensions()` feeds their `toolRenderers` into the chat tool registry. App-local tool
   registrations retain their side-effect imports; extension descriptors need none.
@@ -102,5 +104,5 @@ the default tool renderer until step 2 — never visualize, whose renderer exist
 
 | extension | pi capability | notes |
 | --- | --- | --- |
-| `visualize` | `@thinkrail.ai/pi-visualize` | `./server` injects the **strict** mermaid validator (`mermaid` at the web renderer's catalog version, initialised through `linkedom` — required: DOMPurify needs a real `document` for flowchart/class/state/gantt/mindmap, verified under Bun). `./web` carries the diagram/comparison cards and exports `MermaidView`. The guarantee is syntax parsing, not SVG/layout success; the browser renderer keeps its fallback. |
+| `visualize` | `@thinkrail.ai/pi-visualize` | shipped. `./server` injects the **strict** mermaid validator (`mermaid` at the web renderer's catalog version, initialised through `linkedom` — required: DOMPurify needs a real `document` for flowchart/class/state/gantt/mindmap, verified under Bun). `./web` carries the diagram/comparison cards and exports `MermaidView`. The guarantee is syntax parsing, not SVG/layout success; the browser renderer keeps its fallback. |
 | `web-access` | third-party `pi-web-access` | planned next: wraps the npm package with the existing renderers and `headlessSearchPolicy`, removing the last packager special case. |

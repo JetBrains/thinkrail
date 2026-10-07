@@ -2,7 +2,7 @@ import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type {
 	ExtensionContext,
-	ExtensionFactory,
+	InlineExtension,
 	ModelRegistry,
 	ModelRuntime,
 } from "@earendil-works/pi-coding-agent";
@@ -185,7 +185,7 @@ export interface DelegationBindings {
 	scope?: string;
 	modelRuntime?: ModelRuntime | (() => ModelRuntime | Promise<ModelRuntime>);
 	maxConcurrentPerParent?: number;
-	childExtensionFactories?: ExtensionFactory[];
+	childExtensionFactories?: InlineExtension[];
 }
 
 export type HistoryCaptureSource =
@@ -219,7 +219,7 @@ export type ResourceContextInput = {
 
 export interface ResourceDelegationOptions {
 	maxConcurrent?: number;
-	childExtensionFactories?: ExtensionFactory[];
+	childExtensionFactories?: InlineExtension[];
 }
 
 export type ResourceSpawnRecord = Omit<SpawnRecord, "parentSessionId"> & {
