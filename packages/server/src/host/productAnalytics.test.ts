@@ -485,6 +485,11 @@ test("review-comment analytics distinguish author/actor and stay per-comment wit
 		{ workspaceId, id: review.id, status: "dismissed" },
 		ctx,
 	);
+	await handleRequest(
+		"review.commentUpdate",
+		{ workspaceId, id: review.id, status: "dismissed" },
+		ctx,
+	);
 	const grant = getAdditionalAnalyticsCapture();
 	captureReviewCommentAdded(grant, { author: "agent", kind: "inline" } as ReviewComment);
 	captureReviewCommentResolved(grant, "agent", "resolved");

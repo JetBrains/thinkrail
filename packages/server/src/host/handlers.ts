@@ -1159,9 +1159,13 @@ const handlers: Record<string, Handler> = {
 		};
 		const capture = additionalCapture();
 		return withReviewLock(p.workspaceId, async () => {
+			const terminal = p.status === "resolved" || p.status === "dismissed" ? p.status : null;
+			const before = terminal
+				? (await getReviewSnapshot(p.workspaceId)).comments.find((c) => c.id === p.id)?.status
+				: undefined;
 			const updated = await updateComment(p);
-			if (p.status === "resolved" || p.status === "dismissed")
-				captureReviewCommentResolved(capture, "user", p.status);
+			if (terminal && before !== terminal && updated.status === terminal)
+				captureReviewCommentResolved(capture, "user", terminal);
 			// Resolving/dismissing the item's last open finding must clear its changes_requested verdict
 			// too (no-op while findings remain), the same invariant as commentDelete.
 			if (updated.origin?.todoId)
