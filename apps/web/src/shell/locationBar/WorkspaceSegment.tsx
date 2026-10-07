@@ -66,6 +66,7 @@ export function WorkspaceSegment({
 	const siblings = useAppStore((s) => s.workspaces[project.id]);
 	const sessionStateByWorkspace = useAppStore((s) => (menuOpen ? s.sessionStateByWorkspace : null));
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	const workspaceSettlingSupported = useAppStore((s) => s.workspaceSettlingSupported);
 	const now = useNow();
 	const activeWorkspaceLiveLatch = useAppStore((s) => s.activeWorkspaceLiveLatch);
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
@@ -74,7 +75,7 @@ export function WorkspaceSegment({
 		workspace
 			? selectWorkspaceSettledReason(
 					{
-						protocolVersion: s.protocolVersion,
+						workspaceSettlingSupported: s.workspaceSettlingSupported,
 						sessionStateByWorkspace: s.sessionStateByWorkspace,
 						activeWorkspaceId: s.activeWorkspaceId,
 						activeWorkspaceLiveLatch: s.activeWorkspaceLiveLatch,
@@ -119,7 +120,7 @@ export function WorkspaceSegment({
 		if (!menuOpen || siblings === undefined) return null;
 		const projection = {
 			workspaces: { [project.id]: siblings },
-			protocolVersion,
+			workspaceSettlingSupported,
 			sessionStateByWorkspace: sessionStateByWorkspace ?? {},
 			activeWorkspaceId: workspace?.id ?? null,
 			activeWorkspaceLiveLatch,
@@ -137,11 +138,11 @@ export function WorkspaceSegment({
 		siblings,
 		sessionStateByWorkspace,
 		project.id,
-		protocolVersion,
 		workspace?.id,
 		activeWorkspaceLiveLatch,
 		settleIdleDays,
 		workspaceSort,
+		workspaceSettlingSupported,
 		now,
 	]);
 

@@ -48,11 +48,11 @@ function session(
 }
 
 beforeEach(() => {
-	useAppStore.setState({ protocolVersion: 78 });
+	useAppStore.setState({ protocolVersion: 78, workspaceSettlingSupported: true });
 });
 
 const base = {
-	protocolVersion: 78 as number | null,
+	workspaceSettlingSupported: true,
 	sessionStateByWorkspace: {},
 	activeWorkspaceId: null,
 	activeWorkspaceLiveLatch: false,
@@ -240,7 +240,7 @@ describe("selectWorkspacePartition", () => {
 			selectWorkspacePartition(
 				{
 					...base,
-					protocolVersion: 77,
+					workspaceSettlingSupported: false,
 					workspaces: { p1: legacyRows },
 					workspaceSort: "recent",
 				},
@@ -251,9 +251,22 @@ describe("selectWorkspacePartition", () => {
 		const staleSettled = legacyRows[1];
 		if (!staleSettled) throw new Error("expected the stale settled fixture");
 		expect(
-			selectWorkspaceSettledReason({ ...base, protocolVersion: 77 }, staleSettled, NOW),
+			selectWorkspaceSettledReason(
+				{ ...base, workspaceSettlingSupported: false },
+				staleSettled,
+				NOW,
+			),
 		).toBeNull();
 	});
+});
+
+test("settled capability survives reconnect limbo until the next welcome decides", () => {
+	const store = useAppStore.getState();
+	store.setStatus("disconnected");
+	expect(useAppStore.getState().protocolVersion).toBeNull();
+	expect(useAppStore.getState().workspaceSettlingSupported).toBe(true);
+	store.installWelcomeSnapshot(77, [], []);
+	expect(useAppStore.getState().workspaceSettlingSupported).toBe(false);
 });
 
 describe("the active-workspace live latch", () => {

@@ -275,7 +275,7 @@ export interface WorkspacePartition {
 }
 
 interface PartitionState extends SessionStateProjection {
-	protocolVersion: number | null;
+	workspaceSettlingSupported: boolean;
 	activeWorkspaceId: string | null;
 	activeWorkspaceLiveLatch: boolean;
 	settleIdleDays: number | null;
@@ -287,8 +287,7 @@ export function selectWorkspaceSettledReason(
 	workspace: Workspace,
 	now: number,
 ): SettledReason | null {
-	if (!supportsWorkspaceSettling(state.protocolVersion) || isDefaultWorkspace(workspace))
-		return null;
+	if (!state.workspaceSettlingSupported || isDefaultWorkspace(workspace)) return null;
 	if (
 		selectWorkspaceIsRunning(state, workspace.id) ||
 		selectWorkspaceNeedsAttention(state, workspace.id)
@@ -340,7 +339,7 @@ export function selectWorkspacePartition(
 	now: number,
 ): WorkspacePartition {
 	const rows = state.workspaces[projectId] ?? [];
-	if (!supportsWorkspaceSettling(state.protocolVersion)) return { live: rows, settled: [] };
+	if (!state.workspaceSettlingSupported) return { live: rows, settled: [] };
 	const creationIndex = new Map(rows.map((row, index) => [row.id, index]));
 	const compare = compareWorkspaces(state.workspaceSort, creationIndex);
 	const live: Workspace[] = [];

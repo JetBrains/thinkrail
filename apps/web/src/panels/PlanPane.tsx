@@ -64,7 +64,6 @@ import {
 	selectAgentReviewCommentCount,
 	selectChatTitle,
 	selectWorkspaceById,
-	supportsWorkspaceSettling,
 	useAppStore,
 } from "../store";
 import { errorText, getTransport, supportsPlanReview, wsErrorCode } from "../transport";
@@ -887,6 +886,7 @@ export default function PlanPane({
 	}, [connection, hasRuntime, workspaceId, sessionId]);
 	const hostPlatform = useAppStore((s) => s.hostPlatform);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	const workspaceSettlingSupported = useAppStore((s) => s.workspaceSettlingSupported);
 	const canReview = supportsPlanReview(protocolVersion);
 	const {
 		review: branchReview,
@@ -899,7 +899,7 @@ export default function PlanPane({
 	const resolvedBranchReview = resolveBranchReview(
 		branchReviewWithUrl,
 		workspace?.review,
-		supportsWorkspaceSettling(protocolVersion),
+		workspaceSettlingSupported,
 	);
 	const openReview =
 		resolvedBranchReview.review && isOpenBranchReview(resolvedBranchReview.review)

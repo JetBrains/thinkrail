@@ -99,6 +99,7 @@ import {
 	selectWorkspaceSettledReason,
 	selectWorkspaceTick,
 	supportsChatResources,
+	supportsWorkspaceSettling,
 	type WorkspaceSort,
 } from "./selectors";
 
@@ -830,6 +831,7 @@ interface AppState {
 	removedWorkspaceIds: Record<string, true>;
 	expandedProjectIds: Record<string, true>;
 	workspaceSort: WorkspaceSort;
+	workspaceSettlingSupported: boolean;
 	settledShelfExpanded: Record<string, true>;
 	settledShelfShown: Record<string, number>;
 	selectedProjectId: string | null;
@@ -1226,7 +1228,7 @@ function workspaceActivationPatch(
 		| "workspaceSelectionHistory"
 		| "workspaces"
 		| "sessionStateByWorkspace"
-		| "protocolVersion"
+		| "workspaceSettlingSupported"
 		| "settleIdleDays"
 		| "activeWorkspaceId"
 		| "activeWorkspaceLiveLatch"
@@ -1908,6 +1910,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	removedWorkspaceIds: Object.create(null) as Record<string, true>,
 	expandedProjectIds: Object.create(null) as Record<string, true>,
 	workspaceSort: "recent",
+	workspaceSettlingSupported: false,
 	settledShelfExpanded: Object.create(null) as Record<string, true>,
 	settledShelfShown: Object.create(null) as Record<string, number>,
 	selectedProjectId: null,
@@ -2098,6 +2101,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
 			return {
 				protocolVersion,
+				workspaceSettlingSupported: supportsWorkspaceSettling(protocolVersion),
 				resourceSnapshots: supportsChatResources(protocolVersion)
 					? staleChatResources(state.resourceSnapshots)
 					: {},

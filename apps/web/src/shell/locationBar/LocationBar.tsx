@@ -1,6 +1,6 @@
 import type { OpenBranchReview, Project, Workspace } from "@thinkrail/contracts";
 import { resolveBranchReview } from "../../panels/useOpenBranchReview";
-import { supportsWorkspaceSettling, useAppStore } from "../../store";
+import { useAppStore } from "../../store";
 import { BranchSegment, ReviewSegment } from "./BranchSegment";
 import { ProjectSegment } from "./ProjectSegment";
 import { WorkspaceSegment } from "./WorkspaceSegment";
@@ -16,12 +16,8 @@ export function LocationBar({
 	review: OpenBranchReview | null;
 	onNewWorkspace: () => void;
 }) {
-	const protocolVersion = useAppStore((state) => state.protocolVersion);
-	const resolvedReview = resolveBranchReview(
-		review,
-		workspace?.review,
-		supportsWorkspaceSettling(protocolVersion),
-	);
+	const workspaceSettlingSupported = useAppStore((state) => state.workspaceSettlingSupported);
+	const resolvedReview = resolveBranchReview(review, workspace?.review, workspaceSettlingSupported);
 	const shownReview = resolvedReview.review;
 	return (
 		<div

@@ -107,7 +107,7 @@ export function ProjectTree() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspaceLiveLatch = useAppStore((s) => s.activeWorkspaceLiveLatch);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
-	const supportsSettling = supportsWorkspaceSettling(protocolVersion);
+	const supportsSettling = useAppStore((s) => s.workspaceSettlingSupported);
 	const sessionStateByWorkspace = useAppStore((s) => s.sessionStateByWorkspace);
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
 	const workspaceSort = useAppStore((s) => s.workspaceSort);
@@ -159,7 +159,7 @@ export function ProjectTree() {
 
 	const partitionState = {
 		workspaces,
-		protocolVersion,
+		workspaceSettlingSupported: supportsSettling,
 		sessionStateByWorkspace,
 		activeWorkspaceId,
 		activeWorkspaceLiveLatch,
@@ -180,8 +180,10 @@ export function ProjectTree() {
 	}, [activeProjectId, activeSettledIndex]);
 
 	useEffect(() => {
-		if (!supportsSettling) setRemoveSettledProjectId(null);
-	}, [supportsSettling]);
+		if (protocolVersion !== null && !supportsWorkspaceSettling(protocolVersion)) {
+			setRemoveSettledProjectId(null);
+		}
+	}, [protocolVersion]);
 
 	const loadWorkspaces = useCallback(async (projectId: string) => {
 		await loadProjectWorkspaces(projectId);

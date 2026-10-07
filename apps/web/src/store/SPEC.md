@@ -75,7 +75,9 @@ selected-log state belong to chat integration, not domain persistence. See
   menu, and the shelf alike so the three can never disagree. Below
   `WORKSPACE_SETTLE_PROTOCOL_VERSION` it returns the host's raw list as `live`, unsorted, and ignores even
   stale persisted settle fields; activation uses the same gate, preserving the legacy host's order and
-  behavior. On a capable host, rules in order are: a row with an agent
+  behavior. `workspaceSettlingSupported` records the last completed welcome's verdict rather than clearing
+  during a transient disconnect, so reconnect cannot remount the rail and discard an in-place rename; a
+  later older welcome turns it off authoritatively. On a capable host, rules in order are: a row with an agent
   working or needing attention, or the Default workspace, is live; `settledOverride: "settled"` settles,
   `"active"` keeps live (the user's word beats the latch below — settling the row you are in must move
   it); the active workspace while **`activeWorkspaceLiveLatch`** holds is live; a `review.state` of
