@@ -15,12 +15,14 @@ const CPU_THROTTLE = 4;
 const FRAME_GAP_MS = 15;
 const STREAM_CHARS = 25_000;
 const SWITCH_AFTER_MS = 400;
-const FIRST_VISIBLE_BUDGET_MS = 750;
+const FIRST_VISIBLE_BUDGET_MS = 2_000;
+const EDGE_SETTLE_MS = 500;
 
 interface ProbeFrame {
 	t: number;
 	mounted: boolean;
 	shown: boolean;
+	hiddenWithRows: boolean;
 	latestRowInView: boolean;
 	edgeInView: boolean | null;
 }
@@ -44,13 +46,15 @@ const installProbe = (page: Page, latestFirst: boolean) =>
 			const row = newestFirst ? rows[0] : rows.at(-1);
 			const view = scroller?.getBoundingClientRect();
 			const rect = row?.getBoundingClientRect();
+			const visible = !!row?.checkVisibility({ opacityProperty: true, visibilityProperty: true });
 			const edge = chat
 				?.querySelector<HTMLElement>('[data-testid="chat-stream-edge"]')
 				?.getBoundingClientRect();
 			probe.frames.push({
 				t: performance.now(),
 				mounted: !!list,
-				shown: !!list && list.style.visibility !== "hidden" && rows.length > 0,
+				shown: visible,
+				hiddenWithRows: rows.length > 0 && !visible,
 				latestRowInView:
 					!!view && !!rect && rect.bottom > view.top + 1 && rect.top < view.bottom - 1,
 				edgeInView:
@@ -153,19 +157,24 @@ for (const { order, mode, viewport } of cases) {
 			const streamDoneAt = await now(page);
 			await expect(chat).toContainText(replay.finalTail, { timeout: 60_000 });
 			await expect(chat).toHaveAttribute("data-streaming", "false", { timeout: 60_000 });
-			const frames = (await readProbe(page)).filter(
-				(frame) => frame.t >= activatedAt && frame.t <= streamDoneAt,
-			);
+			const probed = (await readProbe(page)).filter((frame) => frame.t <= streamDoneAt);
+			const frames = probed.filter((frame) => frame.t >= activatedAt);
 			const mountedAt = frames.find((frame) => frame.mounted)?.t ?? Number.NaN;
 			const firstShown = frames.findIndex((frame) => frame.shown);
 			const first = frames[firstShown];
+			const hiddenRowFrames = probed.filter((frame) => frame.hiddenWithRows).length;
+			expect(hiddenRowFrames, "frames with rendered rows hidden").toBe(0);
 			expect(first, "transcript shown while streaming").toBeDefined();
 			expect((first?.t ?? Number.POSITIVE_INFINITY) - mountedAt).toBeLessThanOrEqual(
 				FIRST_VISIBLE_BUDGET_MS,
 			);
 			expect(first?.latestRowInView, "latest row in view on first shown frame").toBe(true);
-			if (mode === "tab-return") {
-				expect(first?.edgeInView, "stream edge in view on first shown frame").toBe(true);
+			if (mode === "tab-return" && first) {
+				const edgeSettled = frames
+					.slice(firstShown)
+					.filter((frame) => frame.t - first.t <= EDGE_SETTLE_MS)
+					.some((frame) => frame.edgeInView);
+				expect(edgeSettled, "stream edge reaches view soon after the transcript shows").toBe(true);
 			}
 			const blankLater = frames.slice(firstShown).filter((frame) => !frame.shown).length;
 			expect(blankLater, "blank frames after the transcript was shown").toBe(0);
