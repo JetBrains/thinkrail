@@ -756,6 +756,28 @@ test("refreshUserOwnedWorkspace re-syncs and publishes Default drift off the lis
 	expect(events).toHaveLength(1);
 });
 
+test("refreshUserOwnedWorkspace drops an external worktree's branch-bound review", async () => {
+	const path = join(dataDir, "outside");
+	git(repo, "worktree", "add", "-b", "outside-a", path);
+	const external = await openExistingWorktree("p1", path);
+	setWorkspaceReview(
+		external.id,
+		{ kind: "pull-request", number: 6, state: "merged" },
+		external.branch,
+	);
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+
+	git(path, "switch", "-c", "outside-b");
+	refreshUserOwnedWorkspace(external.id);
+
+	const refreshed = listWorkspaceRecords("p1").find((workspace) => workspace.id === external.id);
+	if (!refreshed) throw new Error("expected the refreshed external workspace");
+	expect(refreshed.branch).toBe("outside-b");
+	expect(refreshed.review).toBeUndefined();
+	expect(events).toEqual([{ kind: "updated", workspace: refreshed }]);
+});
+
 test("the Default workspace is non-removable and non-renamable — loud server-side guards", async () => {
 	const def = (await listWorkspaces("p1"))[0];
 	if (!def) throw new Error("expected the ensured Default workspace");

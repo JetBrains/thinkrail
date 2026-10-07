@@ -389,8 +389,7 @@ export function refreshUserOwnedWorkspace(workspaceId: string): void {
 	if (truth.kind === "default") {
 		if (!applyFolderTruth(workspace, truth)) return;
 	} else {
-		if (workspace.branch === truth.branch) return;
-		workspace.branch = truth.branch;
+		if (!applyFolderTruth(workspace, { branch: truth.branch, baseBranch: workspace.baseBranch })) return;
 	}
 	saveWorkspaces(all);
 	emit({ kind: "updated", workspace });
