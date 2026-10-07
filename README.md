@@ -159,8 +159,8 @@ identity. Additional product usage and how you found ThinkRail are shared only w
 data** is on; the switch is offered at first launch and lives in **Settings → Privacy**. When launching from
 the command line, `thinkrail --no-analytics` (or `THINKRAIL_NO_ANALYTICS=1`) turns additional sharing off for
 that run. With additional sharing on, a packaged build may open the ThinkRail blog in your browser once to
-link your installation to the website visit that brought you here — only if you accepted marketing cookies
-on the website — and that link expires after 30 days.
+link your installation to the website visit that brought you here — only where you accepted marketing cookies on the
+website or no consent is required — and that link expires after 30 days.
 
 ## Under the hood
 
