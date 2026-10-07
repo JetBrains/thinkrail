@@ -485,8 +485,6 @@ test("review-comment analytics distinguish author/actor and stay per-comment wit
 		{ workspaceId, id: review.id, status: "dismissed" },
 		ctx,
 	);
-	// Agent-authored find + agent resolve + the per-comment send fan-out go through the host helpers,
-	// each carrying the grant captured at its operation's synchronous entry.
 	const grant = getAdditionalAnalyticsCapture();
 	captureReviewCommentAdded(grant, { author: "agent", kind: "inline" } as ReviewComment);
 	captureReviewCommentResolved(grant, "agent", "resolved");
@@ -521,7 +519,7 @@ test("review-comment analytics distinguish author/actor and stay per-comment wit
 
 test("plan_opened rides an explicit todo.list open; plan_item_added rides todo.add; refetches stay silent", async () => {
 	const { ref, ctx } = await taskFixture();
-	await handleRequest("todo.list", ref, ctx); // a plain refetch — no plan_opened
+	await handleRequest("todo.list", ref, ctx);
 	await handleRequest("todo.list", { ...ref, opened: "page" }, ctx);
 	await handleRequest("todo.list", { ...ref, opened: "popup" }, ctx);
 	await handleRequest("todo.add", { ...ref, title: "user step", surface: "chat" }, ctx);

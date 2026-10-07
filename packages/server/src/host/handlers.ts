@@ -285,7 +285,6 @@ function fireReviewPrompt(
 	const ids = comments.map((c) => c.id);
 	void ackSend(runObservation.send(sessionId, "internal", () => send(sessionId, pkg)))
 		.then(
-			// capture on acceptance, not before: a pre-turn rejection rolls these back to draft.
 			() => captureReviewCommentsSent(capture, comments),
 			(err) => {
 				rollbackSend(workspaceId, ids, sessionId);

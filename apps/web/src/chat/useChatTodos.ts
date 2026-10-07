@@ -45,7 +45,6 @@ export interface ChatTodos {
 	add: (title: string, surface?: "chat" | "page") => Promise<void>;
 	remove: (id: string) => Promise<void>;
 	openPlan: () => void;
-	/** Records plan_opened for the in-chat popup (openPlan already records the page). */
 	notifyOpened: (surface: "popup") => void;
 	openChanges: (target: { sha: string } | { path: string }) => void;
 	startReview: (id: string) => Promise<void>;

@@ -61,9 +61,6 @@ export function captureAdditional(
 	} catch {}
 }
 
-// The grant is captured at the operation's synchronous entry and passed in (never re-read here): a
-// pre-consent action finishing after enablement must not emit through the new grant. The grant
-// closure self-guards, so a stale token is inert after revoke/re-enable (see analytics/SPEC.md).
 export function captureReviewCommentAdded(
 	capture: AdditionalAnalyticsCapture | null,
 	comment: ReviewComment,
@@ -77,7 +74,6 @@ export function captureReviewCommentAdded(
 	});
 }
 
-/** One event per comment (not per send action), so added→sent→resolved is a countable funnel. */
 export function captureReviewCommentsSent(
 	capture: AdditionalAnalyticsCapture | null,
 	comments: readonly ReviewComment[],
