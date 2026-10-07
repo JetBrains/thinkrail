@@ -145,7 +145,8 @@ Linux the web shell owns Ctrl+W / Ctrl+F4 (close item) through its command table
 The preload also exposes the frozen non-enumerable `__THINKRAIL_NATIVE_NOTIFICATIONS__`
 `NativeNotificationBridge` ([[module-contracts]]) on every desktop platform: its one `show({ title,
 subtitle?, body, silent? })` method forwards a `showNotification` RPC request to the main process, which
-calls Electrobun `Utils.showNotification` (native OS notification center). The web client detects this
+calls Electrobun `Utils.showNotification` (native OS notification center); delivery is best-effort, so a
+failed request is dropped rather than surfacing an unhandled rejection. The web client detects this
 bridge by capability and routes its attention notifications through it instead of the page Notifications
 API — the web shell keeps no desktop branch. Electrobun click callbacks are not landed yet, so the native
 notification carries no click action.

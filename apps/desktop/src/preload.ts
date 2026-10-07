@@ -93,7 +93,7 @@ Object.defineProperty(globals, "__THINKRAIL_NATIVE_SHORTCUTS__", {
 });
 const notificationBridge: NativeNotificationBridge = Object.freeze({
 	show: (input: NativeNotificationInput) => {
-		void rpc.request.showNotification(input);
+		rpc.request.showNotification(input).catch(() => undefined);
 	},
 });
 Object.defineProperty(globals, "__THINKRAIL_NATIVE_NOTIFICATIONS__", {
