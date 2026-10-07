@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { type BuildKind, bootHost } from "@thinkrail/server";
 import { spawnDetached } from "@thinkrail/shared/spawn";
 import { printStartupMark } from "@thinkrail/shared/startupMark";
-import { channel, version } from "@thinkrail/shared/version";
+import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
 import { type CliOptions, parseArgs, parseSubcommand, USAGE } from "./args";
 import { openUiThenStartAttribution } from "./attributionReadiness";
 import { runUninstall } from "./uninstall";
@@ -68,6 +68,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 		appVersion: version,
 		...(options.verbose ? { verbose: true } : {}),
 		analytics: {
+			posthogApiKey: posthogProjectKey,
 			channel,
 			build,
 			mute: options.noAnalytics,

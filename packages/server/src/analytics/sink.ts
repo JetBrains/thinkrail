@@ -22,8 +22,6 @@ export interface PostHogSinkOptions {
 
 export const POSTHOG_EU_HOST = "https://eu.i.posthog.com";
 
-export const POSTHOG_PROJECT_KEY = "phc_AFJBcKraEUrfpTrSSMjBGXMHTusYudtFfxWqdevchy8X";
-
 const SHUTDOWN_TIMEOUT_MS = 2_000;
 
 export function createPostHogSink(options: PostHogSinkOptions): AnalyticsSink {

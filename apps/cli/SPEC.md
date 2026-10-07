@@ -149,11 +149,11 @@ worktrees and any uncommitted work in them. pi's own state (`~/.pi`) is never to
 
 ## Version stamping (release seam)
 
-`@thinkrail/shared/version` exports `{ version, channel, commit }` with a permanent from-source default
-(`0.0.0-dev`). The release pipeline overwrites that one module in the throwaway CI checkout before
-building CLI and desktop, so both report identical identity. There is no analytics-key seam here.
-`bootstrap.ts` prints the shared version for `--version`, passes it into `bootHost` for
-`server.welcome.appVersion`, and threads channel, `build: "binary" | "source"`, and the per-run additional-data suppression into analytics. When normal opening is enabled it also supplies the existing `openBrowser` launcher callback for the packaged binary's one-shot attribution claim, opens the local UI first, then explicitly signals `server.startAttributionClaim()`. `--no-open` omits that capability and never signals readiness, so it does not consume an attempt. Source runs remain ineligible.
+`@thinkrail/shared/version` exports `{ version, channel, commit, posthogProjectKey }` with a permanent
+from-source default (`0.0.0-dev`, empty key). The release pipeline overwrites that one module in the
+throwaway CI checkout before building CLI and desktop, so both report identical identity and only
+release builds carry an analytics key. `bootstrap.ts` prints the shared version for `--version`, passes
+it into `bootHost` for `server.welcome.appVersion`, and threads the key, channel, `build: "binary" | "source"`, and the per-run additional-data suppression into analytics. When normal opening is enabled it also supplies the existing `openBrowser` launcher callback for the packaged binary's one-shot attribution claim, opens the local UI first, then explicitly signals `server.startAttributionClaim()`. `--no-open` omits that capability and never signals readiness, so it does not consume an attempt. Source runs remain ineligible.
 
 ## Launch entries + build provenance
 

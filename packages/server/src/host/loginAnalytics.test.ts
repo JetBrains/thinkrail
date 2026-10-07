@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { initializeAnalytics, resetAnalyticsForTests } from "../analytics";
 import { dropLogin, recordLoginStart, trackLoginOutcome } from "./loginAnalytics";
 
+const TEST_KEY = "phc_test";
+
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 
@@ -21,6 +23,7 @@ beforeEach(() => {
 	resetAnalyticsForTests();
 	sent = [];
 	initializeAnalytics({
+		posthogApiKey: TEST_KEY,
 		channel: "stable",
 		additionalEnabled: false,
 		env: {},

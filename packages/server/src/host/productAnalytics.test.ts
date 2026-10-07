@@ -37,6 +37,8 @@ import {
 } from "./productAnalytics";
 import { TaskObservation, taskObservation } from "./taskAnalytics";
 
+const TEST_KEY = "phc_test";
+
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 interface SentEvent {
@@ -53,6 +55,7 @@ beforeEach(() => {
 	taskObservation.clear();
 	sent = [];
 	initializeAnalytics({
+		posthogApiKey: TEST_KEY,
 		additionalEnabled: true,
 		env: {},
 		fetchImpl: (async (_url: string | URL | Request, init?: RequestInit) => {
@@ -94,6 +97,7 @@ test("an unrelated update preserves an unconfirmed legacy grant until the mount 
 	const config = { analyticsEnabled: true, analyticsConsentConfirmed: false };
 	resetAnalyticsForTests();
 	initializeAnalytics({
+		posthogApiKey: TEST_KEY,
 		additionalEnabled: initialAdditionalAnalyticsEnabled(config),
 		env: {},
 		fetchImpl: (async () => new Response("{}", { status: 200 })) as unknown as typeof fetch,

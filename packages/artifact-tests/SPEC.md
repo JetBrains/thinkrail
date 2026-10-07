@@ -63,7 +63,8 @@ inherited CI/test/optional mutes and proxies for human-mode launches, checks fir
 emits `app_installed` before `app_started`, checks restart emits only `app_started`, and pins standard
 desktop/release/platform provenance plus one UUID across both (including additional opt-out). It then proves
 CI and test mutes independently. No UI action or confirmation is simulated; delivery is checked after normal
-host shutdown. The expected release identity is the shared identity used to build the artifact.
+host shutdown. The expected release identity is the shared identity used to build the artifact, so the
+probe needs a release-stamped (keyed) artifact; an unstamped build correctly emits nothing.
 
 Every host owns isolated home, data, agent and cache directories; environment overrides respect Windows'
 case-insensitive keys. The native UI launch pre-creates its home directory: on macOS the window never

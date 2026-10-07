@@ -89,6 +89,7 @@ export async function startDesktopHost(options) {
     staticDir: options.staticDir,
     appVersion: options.appVersion,
     analytics: {
+      posthogApiKey: options.posthogProjectKey,
       channel: options.channel,
       build: "desktop",
       ...(options.openExternal ? { openExternal: options.openExternal } : {}),
