@@ -34,11 +34,13 @@ branch. It renders what the store and `workspace.openReview` already report; it 
 
 ## Grammar
 
-- A segment is `h-topbar-row`, `border-l` from the second segment on, caption `tr-text-caption` in
-  `text-subtle`, value row 24px. The caption can carry a lowercase code fragment (`· from <base>` as
-  `tr-code-text-small leading-none`), which is why the uppercase caption style exists at 10px: eyebrow's 18px
-  line would not fit the 40px strip above a 22px value.
-- Values are pills (`pillClass`: 22px, `window-no-drag`, resting chevron in `text-subtle`, hover
+- A segment is `h-topbar-row`, `border-l` from the second segment on, and its vertical rhythm is spent
+  explicitly on the spacing scale — `py-4`, a 10px caption row (`tr-text-caption leading-none` in
+  `text-subtle`), `gap-2`, a 20px value row — so the 40px strip keeps a visible margin above the caption and
+  below the pill instead of whatever `justify-center` leaves over. The caption can carry a lowercase code
+  fragment (`· from <base>` as `tr-code-text-small leading-none`), which is why the uppercase caption style
+  exists at 10px: eyebrow's 18px line would not fit above a 20px value.
+- Values are pills (`pillClass`: 20px, `window-no-drag`, resting chevron in `text-subtle`, hover
   `control-bg-hovered`, open `control-bg-selected`) or status chips (`chipClass`: 20px, rounded-full,
   `tr-text-emphasis`, feedback-tinted `-subtle` fill with the solid feedback text; interactive chips hover to
   the `-muted` step). Project names are `tr-text-ui`, the workspace name `tr-title-section`, branch names

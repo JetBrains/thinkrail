@@ -17,20 +17,20 @@ export function Segment({
 		<div
 			data-testid={testid}
 			className={cn(
-				"flex h-topbar-row min-w-0 flex-col justify-center border-border-default border-l pr-8 pl-12",
+				"flex h-topbar-row min-w-0 flex-col gap-2 border-border-default border-l py-4 pr-8 pl-12",
 				className,
 			)}
 		>
-			<span className="flex min-w-0 items-baseline gap-4 truncate pl-8 text-text-subtle tr-text-caption">
+			<span className="flex h-10 min-w-0 items-baseline gap-4 truncate pl-8 text-text-subtle tr-text-caption leading-none">
 				{caption}
 			</span>
-			<div className="flex h-24 min-w-0 items-center gap-4">{children}</div>
+			<div className="flex h-20 min-w-0 items-center gap-4">{children}</div>
 		</div>
 	);
 }
 
 export const pillClass =
-	"window-no-drag inline-flex h-22 min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-selected data-[state=open]:text-text-default";
+	"window-no-drag inline-flex h-20 min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-selected data-[state=open]:text-text-default";
 
 export function PillChevron({ className }: { className?: string | undefined }) {
 	return (
