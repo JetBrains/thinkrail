@@ -458,8 +458,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     persists and then ends only the continuation. Either ordering leaves one terminal provider-valid result.
 
     **Typing instead of answering supersedes the live card, exactly as after a restart.** `steerSession` and
-    a streaming-time `promptSession` queue the text in Pi's steering lane first and then `supersede()` every
-    expected/waiting call: the tool returns the same canonical ack (`ASK_ACK_TEXT`, `details {kind:"ack"}`)
+    a streaming-time `promptSession` queue the text in Pi's steering lane first and, only when `steer()`
+    reports the `queued` disposition (an extension `input` handler that returns `handled` queues nothing, so
+    no user turn would follow the ack), `supersede()` every expected/waiting call: the tool returns the same canonical ack (`ASK_ACK_TEXT`, `details {kind:"ack"}`)
     the restart repair writes, Pi drains the steering message as the next user turn, and the card derives
     `superseded` from the transcript through the one shape it already understands (ack + later user
     message). A later answer RPC fails with the `superseded` answerability error; a call already in

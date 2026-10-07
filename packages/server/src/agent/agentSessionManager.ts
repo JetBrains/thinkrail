@@ -421,10 +421,11 @@ export function nudgeSession(
 	if (state.execution === "running" || entry.nudgePromptPending) {
 		return {
 			disposition: "queued",
-			send: () =>
-				queueSessionMessage(entry, "followUp", text, images, () =>
+			send: async () => {
+				await queueSessionMessage(entry, "followUp", text, images, () =>
 					entry.session.followUp(text, images),
-				),
+				);
+			},
 		};
 	}
 	entry.nudgePromptPending = true;
@@ -1631,13 +1632,13 @@ function mergeQueueContent(
 	};
 }
 
-async function queueSessionMessage(
+async function queueSessionMessage<T>(
 	entry: Entry,
 	kind: QueueLane,
 	text: string,
 	images: ImageContent[] | undefined,
-	send: () => Promise<unknown>,
-): Promise<void> {
+	send: () => Promise<T>,
+): Promise<T> {
 	const tracked: TrackedQueuedMessage = {
 		id: entry.nextQueuedMessageId++,
 		text,
@@ -1645,7 +1646,7 @@ async function queueSessionMessage(
 	};
 	entry.queuedMessages[kind].push(tracked);
 	try {
-		await send();
+		return await send();
 	} catch (error) {
 		entry.queuedMessages[kind] = entry.queuedMessages[kind].filter(
 			(message) => message.id !== tracked.id,
@@ -1660,10 +1661,11 @@ async function steerEntry(
 	text: string,
 	images: ImageContent[] | undefined,
 ): Promise<void> {
-	await queueSessionMessage(entry, "steering", text, images, () =>
+	const disposition = await queueSessionMessage(entry, "steering", text, images, () =>
 		entry.session.steer(text, images),
 	);
-	if (entry.askUserQuestionWaiters.supersede()) publishEntryState(entry);
+	if (disposition === "queued" && entry.askUserQuestionWaiters.supersede())
+		publishEntryState(entry);
 }
 
 export async function promptSession(

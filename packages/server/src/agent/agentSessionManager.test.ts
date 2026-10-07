@@ -180,6 +180,27 @@ function installAskToolGate(name: string): {
 	};
 }
 
+function installInputSwallower(name: string, marker: string): { remove: () => void } {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const extensionPath = join(agentDir, "extensions", `${name}.ts`);
+	mkdirSync(dirname(extensionPath), { recursive: true });
+	writeFileSync(
+		extensionPath,
+		[
+			'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";',
+			"export default function (pi: ExtensionAPI) {",
+			'\tpi.on("input", (event) => {',
+			`\t\tif (event.text.includes(${JSON.stringify(marker)})) return { action: "handled" };`,
+			"\t\treturn undefined;",
+			"\t});",
+			"}",
+			"",
+		].join("\n"),
+	);
+	return { remove: () => rmSync(extensionPath, { force: true }) };
+}
+
 function installStalledAskResultHook(name: string): { startedPath: string; remove: () => void } {
 	const agentDir = process.env.PI_CODING_AGENT_DIR;
 	if (!agentDir) throw new Error("agent dir not isolated");
@@ -1663,6 +1684,55 @@ for (const [entryPoint, send] of [
 		}
 	});
 }
+
+test("input an extension handles (never queued) leaves the live question awaiting", async () => {
+	const swallower = installInputSwallower("ask-input-swallower", "SWALLOWED_BY_EXTENSION");
+	const toolCallId = "question-survives-handled-input";
+	fauxA.setResponses([
+		fauxAssistantMessage(fauxToolCall("ask_user_question", typedPastQuestion, { id: toolCallId })),
+		fauxAssistantMessage("ANSWERED_AFTER_HANDLED_INPUT"),
+	]);
+	const cwd = tmpCwd("trpi-handled-input-question-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-handled-input-question",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Choose a library.");
+	try {
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("question");
+
+		await steerSession(session.sessionId, "SWALLOWED_BY_EXTENSION");
+		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("question");
+		const { summary } = await getSessionMessages(
+			session.sessionId,
+			"ws-handled-input-question",
+			cwd,
+		);
+		expect(summary.queue).toBeUndefined();
+
+		const result: AskUserQuestionResult = {
+			cancelled: false,
+			answers: [{ questionIndex: 0, question: "Which library?", kind: "option", answer: "luxon" }],
+		};
+		await answerQuestion(session.sessionId, toolCallId, result);
+		await prompting;
+		const transcript = JSON.stringify(
+			(await getSessionMessages(session.sessionId, "ws-handled-input-question", cwd)).messages,
+		);
+		expect(transcript).not.toContain('"kind":"ack"');
+		expect(transcript).not.toContain("SWALLOWED_BY_EXTENSION");
+		expect(transcript).toContain('"answer":"luxon"');
+	} finally {
+		swallower.remove();
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+});
 
 test("typing in the pre-execute window (tool_call hook still running) supersedes the expected question", async () => {
 	const gate = installAskToolGate("ask-typed-early-gate");
