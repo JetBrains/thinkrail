@@ -961,6 +961,31 @@ p.hero-lede {
 	margin: 22px 0 8px;
 }
 
+.send-link {
+	margin: 22px 0 0;
+}
+
+.send-link-btn {
+	justify-content: center;
+	width: 100%;
+}
+
+.send-link-done,
+.send-link-btn.copied .send-link-label {
+	display: none;
+}
+
+.send-link-btn.copied .send-link-done {
+	display: inline;
+}
+
+p.send-link-note {
+	margin: 8px 0 0;
+	color: var(--muted);
+	font-size: 11.5px;
+	line-height: 1.45;
+}
+
 .install-tabs,
 .windows-shell-tabs {
 	display: none;

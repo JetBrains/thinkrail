@@ -298,6 +298,7 @@ export const SettingsSection = {
 	Terminal: "terminal",
 	Templates: "templates",
 	Review: "review",
+	Notifications: "notifications",
 	Privacy: "privacy",
 	Feedback: "feedback",
 } as const;
@@ -886,11 +887,14 @@ interface AppState {
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
 	interviewPromptOpen: boolean;
+	notificationPromptOpen: boolean;
+	sessionSwitcherOpen: boolean;
 	theme: ThemeId;
 	themeMode: ThemeMode;
 	systemThemePair: SystemThemePair | undefined;
 	analyticsEnabled: boolean;
 	analyticsConsentConfirmed: boolean;
+	notificationsEnabled: boolean;
 	subagentsEnabled: boolean;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
@@ -1096,6 +1100,11 @@ interface AppState {
 	setSettingsSection: (section: SettingsSection) => void;
 	showInterviewPrompt: () => void;
 	hideInterviewPrompt: () => void;
+	openNotificationPrompt: () => void;
+	closeNotificationPrompt: () => void;
+	openSessionSwitcher: () => void;
+	closeSessionSwitcher: () => void;
+	toggleSessionSwitcher: () => void;
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
 	setStreamingResponseMovement: (movement: StreamingResponseMovement) => void;
 	setChatPreferences: (order: ChatMessageOrder, movement: StreamingResponseMovement) => void;
@@ -1135,6 +1144,10 @@ function configPatch(config: AppConfig) {
 			typeof config.analyticsConsentConfirmed === "boolean"
 				? config.analyticsConsentConfirmed
 				: DEFAULT_CONFIG.analyticsConsentConfirmed,
+		notificationsEnabled:
+			typeof config.notificationsEnabled === "boolean"
+				? config.notificationsEnabled
+				: DEFAULT_CONFIG.notificationsEnabled,
 		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
 		jbcentralQuotaEnabled: config.jbcentralQuotaEnabled ?? DEFAULT_CONFIG.jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds:
@@ -1906,11 +1919,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
 	interviewPromptOpen: false,
+	notificationPromptOpen: false,
+	sessionSwitcherOpen: false,
 	theme: DEFAULT_CONFIG.theme,
 	themeMode: DEFAULT_CONFIG.themeMode,
 	systemThemePair: DEFAULT_CONFIG.systemThemePair,
 	analyticsEnabled: DEFAULT_CONFIG.analyticsEnabled,
 	analyticsConsentConfirmed: DEFAULT_CONFIG.analyticsConsentConfirmed,
+	notificationsEnabled: DEFAULT_CONFIG.notificationsEnabled,
 	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
 	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,
@@ -3573,6 +3589,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set({ settingsOpen: true, settingsSection: section }),
 	closeSettings: () => set({ settingsOpen: false }),
 	setSettingsSection: (section) => set({ settingsSection: section }),
+	openNotificationPrompt: () =>
+		set((state) => (state.notificationPromptOpen ? state : { notificationPromptOpen: true })),
+	closeNotificationPrompt: () => set({ notificationPromptOpen: false }),
+	openSessionSwitcher: () =>
+		set((state) => (state.sessionSwitcherOpen ? state : { sessionSwitcherOpen: true })),
+	closeSessionSwitcher: () => set({ sessionSwitcherOpen: false }),
+	toggleSessionSwitcher: () =>
+		set((state) => ({ sessionSwitcherOpen: !state.sessionSwitcherOpen })),
 	showInterviewPrompt: () =>
 		set((state) => (state.interviewPromptOpen ? state : { interviewPromptOpen: true })),
 	hideInterviewPrompt: () => set({ interviewPromptOpen: false }),

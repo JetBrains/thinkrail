@@ -38,15 +38,47 @@ export type WebsiteContentViewedProperties = {
 	content_key: string;
 };
 
+export type WebsiteCtaLocation =
+	| "hero"
+	| "install_section"
+	| "quick_start"
+	| "final_cta"
+	| "blog_post";
+
+export type WebsiteGithubLocation =
+	| WebsiteCtaLocation
+	| "header"
+	| "footer"
+	| "terminal"
+	| "mock_hint"
+	| "other";
+
 export type WebsiteInstallCtaClickedProperties = {
 	content_key: string;
-	cta_location: "hero" | "install_section" | "quick_start" | "final_cta" | "blog_post";
+	cta_location: WebsiteCtaLocation;
 	install_method: "desktop" | "cli";
+};
+
+export type WebsiteInstallCommandCopiedProperties = {
+	content_key: string;
+	cta_location: "hero" | "install_section";
+	shell: "sh" | "powershell" | "cmd";
+};
+
+export type WebsiteGithubClickedProperties = {
+	content_key: string;
+	cta_location: WebsiteGithubLocation;
+	target: "repo" | "releases" | "other";
+};
+
+export type WebsiteInstallLinkShareClickedProperties = {
+	content_key: string;
+	cta_location: "hero" | "quick_start";
 };
 
 export type WebsiteDownloadStartedProperties = {
 	content_key: string;
-	cta_location: "hero" | "install_section" | "quick_start" | "final_cta" | "blog_post";
+	cta_location: WebsiteCtaLocation;
 	platform: "macos" | "windows" | "linux";
 	architecture: "arm64" | "x64";
 	artifact: "dmg" | "zip" | "tar.gz";
@@ -57,6 +89,9 @@ export type WebsiteAnalyticsEventProperties = {
 	content_viewed: WebsiteContentViewedProperties;
 	install_cta_clicked: WebsiteInstallCtaClickedProperties;
 	download_started: WebsiteDownloadStartedProperties;
+	install_command_copied: WebsiteInstallCommandCopiedProperties;
+	github_clicked: WebsiteGithubClickedProperties;
+	install_link_share_clicked: WebsiteInstallLinkShareClickedProperties;
 };
 
 export type WebsiteAnalyticsEventName = keyof WebsiteAnalyticsEventProperties;

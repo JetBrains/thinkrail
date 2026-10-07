@@ -1,5 +1,6 @@
 import type {
 	NativeCommand,
+	NativeNotificationInput,
 	NativeQuitHint,
 	NativeUpdateState,
 	NativeWindowState,
@@ -19,6 +20,7 @@ export type DesktopRpc = {
 			checkForUpdates: { params: undefined; response: undefined };
 			downloadUpdate: { params: undefined; response: undefined };
 			restartToUpdate: { params: undefined; response: undefined };
+			showNotification: { params: NativeNotificationInput; response: undefined };
 		};
 		messages: {
 			routeChanged: { hash: string };

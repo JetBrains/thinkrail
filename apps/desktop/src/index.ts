@@ -234,6 +234,14 @@ async function start(): Promise<void> {
 					await updateController.restartToUpdate();
 					return undefined;
 				},
+				showNotification: (input): undefined => {
+					Utils.showNotification({
+						title: input.title,
+						body: input.body,
+						...(input.subtitle === undefined ? {} : { subtitle: input.subtitle }),
+						...(input.silent === undefined ? {} : { silent: input.silent }),
+					});
+				},
 			},
 			messages: {
 				titleBarDoubleClick: () => {
