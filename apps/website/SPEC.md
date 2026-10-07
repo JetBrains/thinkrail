@@ -195,8 +195,21 @@ section, quick start, final CTA, or blog post; one recognized activation emits `
 creates and stores a canonical per-download bridge ID before `download_started`, and that event carries
 the same ID. A later desktop download replaces only the stored latest bridge ID; a download without
 consent remains bridge-less. Opening either landing command-line disclosure emits only
-`install_cta_clicked` (`cli`); closing it does not. No page or child module carries analytics imports,
-vendor configuration, or another loader.
+`install_cta_clicked` (`cli`); closing it does not. That open is browsing, not install intent: a
+primary-button click on a `[data-copy]` control whose value is a known install command emits
+`install_command_copied` with its `sh`/`powershell`/`cmd` shell and hero or install-section location
+(other copy values emit nothing; selecting and copying the text manually is not observed). Any other
+link into the `JetBrains/thinkrail` repository (exact repo, `#`/`?` suffix, or sub-path; never a
+sibling repository or a desktop alias) emits `github_clicked` with a `repo`/`releases`/`other` target
+and a location from the containing blog post, final CTA, quick start, install section, hero (`#readme`
+or the vibecoding `#top`), header, footer, terminal, or mock-callout tooltip — `other` when none
+contains it. GitHub clicks are a separate signal: GTM reporting counts only `download_started` and
+`install_command_copied` as install intent, because a repository visit mixes starring and browsing with
+installing. A primary-button click on a `[data-share-install-link]` control in the hero or quick start
+emits `install_link_share_clicked`; it records the activation, not whether the share sheet completed.
+Each of these events attempts the live navigation touch first, like the existing actions. No page or
+child module carries analytics imports, vendor configuration, or another loader; controls expose only
+the `data-copy` / `data-share-install-link` markers the delegation reads.
 
 The existing GTM container remains Cookiebot's control plane; route-specific downstream tags use a
 `thinkrail.ai` hostname condition plus Page Path, never another GTM container. Sharing the exact apex

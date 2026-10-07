@@ -1,6 +1,11 @@
 import type {
+	WebsiteCtaLocation,
 	WebsiteDownloadStartedProperties,
+	WebsiteGithubClickedProperties,
+	WebsiteGithubLocation,
+	WebsiteInstallCommandCopiedProperties,
 	WebsiteInstallCtaClickedProperties,
+	WebsiteInstallLinkShareClickedProperties,
 } from "@thinkrail/website-analytics";
 import { captureAnalytics } from "./analytics";
 import {
@@ -8,10 +13,10 @@ import {
 	recordCurrentAttributionTouch,
 	recordCurrentDownloadBridge,
 } from "./attribution";
+import { installCommands } from "./installCommands";
 
 const maxContentKeyLength = 105;
-
-export type WebsiteCtaLocation = WebsiteInstallCtaClickedProperties["cta_location"];
+const githubRepositoryUrl = "https://github.com/JetBrains/thinkrail";
 
 type DesktopArtifact = Pick<
 	WebsiteDownloadStartedProperties,
@@ -85,6 +90,26 @@ const locationSelectors = [
 	["hero", "#readme"],
 ] as const satisfies ReadonlyArray<readonly [WebsiteCtaLocation, string]>;
 
+const githubLocationSelectors = [
+	["blog_post", ".blog-post"],
+	["final_cta", "#cta"],
+	["quick_start", "#quick-start"],
+	["install_section", "#install"],
+	["hero", "#readme"],
+	["hero", "#top"],
+	["header", "header"],
+	["footer", "#contributing"],
+	["footer", "footer"],
+	["terminal", ".terminal"],
+	["mock_hint", "#mock-tooltip"],
+] as const satisfies ReadonlyArray<readonly [WebsiteGithubLocation, string]>;
+
+const installCommandShells = new Map<string, WebsiteInstallCommandCopiedProperties["shell"]>([
+	[installCommands.macos, "sh"],
+	[installCommands.windows.powershell, "powershell"],
+	[installCommands.windows.cmd, "cmd"],
+]);
+
 const initializedDocuments = new WeakSet<object>();
 
 function hasOwn<Value extends object>(value: Value, key: PropertyKey): key is keyof Value {
@@ -100,7 +125,7 @@ function hasClosest(value: unknown): value is ClosestElement {
 	);
 }
 
-function hasAnchorAttributes(value: unknown): value is AttributeElement {
+function hasAttributeAccess(value: unknown): value is AttributeElement {
 	return hasClosest(value) && "getAttribute" in value && typeof value.getAttribute === "function";
 }
 
@@ -135,6 +160,73 @@ export function ctaLocationForElement(element: ClosestElement): WebsiteCtaLocati
 		if (element.closest(selector) !== null) return location;
 	}
 	return undefined;
+}
+
+export function githubLocationForElement(element: ClosestElement): WebsiteGithubLocation {
+	for (const [location, selector] of githubLocationSelectors) {
+		if (element.closest(selector) !== null) return location;
+	}
+	return "other";
+}
+
+export function githubTargetForUrl(
+	url: string,
+): WebsiteGithubClickedProperties["target"] | undefined {
+	if (!url.startsWith(githubRepositoryUrl) || desktopArtifactForUrl(url) !== undefined) {
+		return undefined;
+	}
+	const rest = url.slice(githubRepositoryUrl.length);
+	if (rest === "" || rest === "/" || rest.startsWith("#") || rest.startsWith("?")) return "repo";
+	if (!rest.startsWith("/")) return undefined;
+	return /^\/releases(?:[/?#]|$)/.test(rest) ? "releases" : "other";
+}
+
+export function githubClickedEvent(
+	contentKey: string,
+	anchor: ClosestElement,
+	url: string,
+): { event: "github_clicked"; properties: WebsiteGithubClickedProperties } | undefined {
+	const target = githubTargetForUrl(url);
+	if (target === undefined) return undefined;
+	return {
+		event: "github_clicked",
+		properties: {
+			content_key: contentKey,
+			cta_location: githubLocationForElement(anchor),
+			target,
+		},
+	};
+}
+
+export function installCommandCopiedEvent(
+	contentKey: string,
+	button: AttributeElement,
+):
+	| { event: "install_command_copied"; properties: WebsiteInstallCommandCopiedProperties }
+	| undefined {
+	const shell = installCommandShells.get(button.getAttribute("data-copy") ?? "");
+	const ctaLocation = ctaLocationForElement(button);
+	if (shell === undefined || (ctaLocation !== "hero" && ctaLocation !== "install_section")) {
+		return undefined;
+	}
+	return {
+		event: "install_command_copied",
+		properties: { content_key: contentKey, cta_location: ctaLocation, shell },
+	};
+}
+
+export function installLinkShareClickedEvent(
+	contentKey: string,
+	button: ClosestElement,
+):
+	| { event: "install_link_share_clicked"; properties: WebsiteInstallLinkShareClickedProperties }
+	| undefined {
+	const ctaLocation = ctaLocationForElement(button);
+	if (ctaLocation !== "hero" && ctaLocation !== "quick_start") return undefined;
+	return {
+		event: "install_link_share_clicked",
+		properties: { content_key: contentKey, cta_location: ctaLocation },
+	};
 }
 
 export function cliDisclosureLocation(
@@ -189,10 +281,10 @@ export function desktopClickEvents(
 	];
 }
 
-function closestAnchor(target: unknown): AttributeElement | undefined {
+function closestWithAttributes(target: unknown, selector: string): AttributeElement | undefined {
 	if (!hasClosest(target)) return undefined;
-	const anchor = target.closest("a[href]");
-	return hasAnchorAttributes(anchor) ? anchor : undefined;
+	const element = target.closest(selector);
+	return hasAttributeAccess(element) ? element : undefined;
 }
 
 export function initAnalyticsEvents(
@@ -212,18 +304,11 @@ export function initAnalyticsEvents(
 	initializeAttribution();
 	capture("content_viewed", { content_key: contentKey });
 
-	const captureDesktopClick = (event: Event): void => {
-		const button = "button" in event ? event.button : undefined;
-		if ((event.type === "click" && button !== 0) || (event.type === "auxclick" && button !== 1)) {
-			return;
-		}
-		const anchor = closestAnchor(event.target);
-		if (anchor === undefined) return;
+	const captureDesktopDownload = (anchor: AttributeElement, url: string): boolean => {
 		const ctaLocation = ctaLocationForElement(anchor);
-		const url = anchor.getAttribute("href");
-		if (ctaLocation === undefined || url === null) return;
+		if (ctaLocation === undefined) return false;
 		const events = desktopClickEvents(contentKey, ctaLocation, url);
-		if (events === undefined) return;
+		if (events === undefined) return false;
 		recordAttribution();
 		capture("install_cta_clicked", events[0].properties);
 		recordAttribution();
@@ -232,10 +317,45 @@ export function initAnalyticsEvents(
 			...events[1].properties,
 			...(bridgeId === undefined ? {} : { bridge_id: bridgeId }),
 		});
+		return true;
 	};
 
-	analyticsDocument.addEventListener("click", captureDesktopClick);
-	analyticsDocument.addEventListener("auxclick", captureDesktopClick);
+	const captureControlClick = (target: unknown): void => {
+		const copyButton = closestWithAttributes(target, "[data-copy]");
+		const copied = copyButton && installCommandCopiedEvent(contentKey, copyButton);
+		if (copied) {
+			recordAttribution();
+			capture(copied.event, copied.properties);
+			return;
+		}
+		const shareButton = closestWithAttributes(target, "[data-share-install-link]");
+		const shared = shareButton && installLinkShareClickedEvent(contentKey, shareButton);
+		if (shared) {
+			recordAttribution();
+			capture(shared.event, shared.properties);
+		}
+	};
+
+	const captureClick = (event: Event): void => {
+		const button = "button" in event ? event.button : undefined;
+		if ((event.type === "click" && button !== 0) || (event.type === "auxclick" && button !== 1)) {
+			return;
+		}
+		const anchor = closestWithAttributes(event.target, "a[href]");
+		if (anchor === undefined) {
+			if (event.type === "click") captureControlClick(event.target);
+			return;
+		}
+		const url = anchor.getAttribute("href");
+		if (url === null || captureDesktopDownload(anchor, url)) return;
+		const github = githubClickedEvent(contentKey, anchor, url);
+		if (github === undefined) return;
+		recordAttribution();
+		capture(github.event, github.properties);
+	};
+
+	analyticsDocument.addEventListener("click", captureClick);
+	analyticsDocument.addEventListener("auxclick", captureClick);
 	analyticsDocument.addEventListener(
 		"toggle",
 		(event) => {

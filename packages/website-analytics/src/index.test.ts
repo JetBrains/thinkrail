@@ -549,6 +549,39 @@ describe("website analytics", () => {
 		);
 	});
 
+	test("captures GitHub, install-command, and share-link intent events unchanged", () => {
+		const dom = installDom("site.example");
+		const consent = createConsent(false);
+		const analytics = createWebsiteAnalytics({
+			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
+			marketingConsent: consent.adapter,
+		});
+		const github = { content_key: "vibecoding", cta_location: "hero", target: "repo" } as const;
+		const copied = {
+			content_key: "landing",
+			cta_location: "install_section",
+			shell: "sh",
+		} as const;
+		const shared = { content_key: "landing", cta_location: "hero" } as const;
+
+		analytics.init();
+		analytics.capture("github_clicked", github);
+		analytics.capture("install_command_copied", copied);
+		analytics.capture("install_link_share_clicked", shared);
+		dom.loadPostHog();
+
+		expect(
+			dom.vendorCalls
+				.filter(({ method }) => method === "capture")
+				.map(({ value, properties }) => ({ event: value, properties })),
+		).toEqual([
+			{ event: "github_clicked", properties: github },
+			{ event: "install_command_copied", properties: copied },
+			{ event: "install_link_share_clicked", properties: shared },
+		]);
+	});
+
 	test("captures closed CTA and bridge-less download properties without journey enrichment", () => {
 		const dom = installDom("site.example");
 		const consent = createConsent(false);
