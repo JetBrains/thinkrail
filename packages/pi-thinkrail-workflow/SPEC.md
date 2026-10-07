@@ -13,7 +13,7 @@ references: [module-workflow-tests]
 
 `pi-thinkrail-workflow` is a pi extension that ships ThinkRail's **workflow system** — skills that
 codify how the agent should *run a piece of work*. (Contrast: `pi-spec-graph` defines what the spec
-model *is*; `pi-visualize` is a rendering tool.) It contributes exactly two things, wired by the
+model *is*; `visualize` is a rendering tool.) It contributes exactly two things, wired by the
 `package.json` pi manifest (`pi: { extensions: ["./index.ts"], skills: ["./skills"] }`):
 
 - **`index.ts`** — an `ExtensionFactory` registering one always-on `before_agent_start` rule that,
@@ -54,7 +54,7 @@ dispatcher to load rather than relying on description-matching (see [[module-web
   `before_agent_start` rule and skill content.
 - **Forbidden:** any `@thinkrail/*` package, `apps/web`, `packages/server` internals — reached only by
   tool *name* (`ask_user_question`, `spec_*`), never by import.
-- **Not portable, and honest about it.** Unlike `pi-spec-graph` and `pi-visualize`, this package's skill
+- **Not portable, and honest about it.** Unlike `pi-spec-graph` and `@thinkrail.ai/pi-visualize`, this package's skill
   content assumes the host's `ask_user_question` tool (`packages/server/src/agent/askUserQuestion.ts`) is
   present in the session — that tool exists only in thinkrail. This package does not claim to run
   under vanilla `pi`; it is a workspace-internal module, not a portable capability. It stays its own

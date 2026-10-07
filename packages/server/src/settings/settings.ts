@@ -79,6 +79,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		["fileLineWidthBounded", runtimeUpdate.fileLineWidthBounded],
 		["analyticsEnabled", runtimeUpdate.analyticsEnabled],
 		["analyticsConsentConfirmed", runtimeUpdate.analyticsConsentConfirmed],
+		["notificationsEnabled", runtimeUpdate.notificationsEnabled],
 		["reviewAutoFix", runtimeUpdate.reviewAutoFix],
 		["agentReviewEnabled", runtimeUpdate.agentReviewEnabled],
 	] as const) {

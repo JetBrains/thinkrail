@@ -381,7 +381,7 @@ selected-log state belong to chat integration, not domain persistence. See
   `provider.login` frame (creating `activeLogin` if the frame arrived first; ignoring frames for a different
   live login), **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Github`/`Appearance`/`LineWidth`/`Chat`/`Layout`/`Updates`/`Terminal`/`Templates`/`Review`/`Privacy`/`Feedback`) with
+  **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Github`/`Appearance`/`LineWidth`/`Chat`/`Layout`/`Updates`/`Terminal`/`Templates`/`Review`/`Notifications`/`Privacy`/`Feedback`) with
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear, Welcome provider warning, and update-ready
   shell affordance can deep-link without prop-drilling. The optional Update key is navigation only. Native
@@ -389,6 +389,9 @@ selected-log state belong to chat integration, not domain persistence. See
   snapshot is host domain state, installed atomically from `server.welcome` or replaced by the one
   `host.updateAvailable` push. It remains visible through a temporary disconnect; a later welcome replaces or
   clears it. The
+  ephemeral **`notificationPromptOpen`** plus **`openNotificationPrompt()`** / **`closeNotificationPrompt()`**
+  is the client-local render flag for the attention-notification permission preface (cadence/snooze and the
+  trigger live in [[submodule-web-notifications]], never the store). The
   ephemeral **`interviewPromptOpen`** plus
   **`showInterviewPrompt()`** / **`hideInterviewPrompt()`** is the render projection of the host's addressed
   invitation; transport opens it idempotently, clears it before each valid welcome's possible redelivery so
@@ -410,6 +413,7 @@ selected-log state belong to chat integration, not domain persistence. See
   optional **`defaultModel: WireModel` / `defaultEffort: ThinkingLevel`** for new chats, the picker's
   **`favoriteModels` / `recentModels: WireModel[]`** (defaulting to `[]` so a pre-v77 host reads as "none"),
   **`analyticsEnabled: boolean`**, **`analyticsConsentConfirmed: boolean`**,
+  **`notificationsEnabled: boolean`** (the attention-notification master toggle),
   **`subagentsEnabled: boolean`**, **`jbcentralQuotaEnabled: boolean`**,
   and **`jbcentralQuotaRefreshSeconds: number`** ride the same `applyConfig` fold (host-owned, fieldwise
   defaulted/validated from the contracts helpers so an older or malformed host snapshot cannot poison

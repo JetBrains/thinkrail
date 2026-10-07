@@ -83,7 +83,7 @@ const DESCRIPTION = `Ask the user one or more structured, multiple-choice questi
 1. The request is underspecified and you cannot proceed without a concrete decision.
 2. You need a user preference, requirement, or a direction/implementation choice.
 
-Calling this tool PAUSES EXECUTION until the user answers: the questions render inline in the chat as an interactive card (tabs when there are several), and the user's answers arrive as this tool's result. Do not continue working on the blocked task or assume an answer while the tool is pending. The user answers or skips through the card; composer messages sent meanwhile queue behind the question and do not resolve it. Notes:
+Calling this tool PAUSES EXECUTION until the user answers: the questions render inline in the chat as an interactive card (tabs when there are several), and the user's answers arrive as this tool's result. Do not continue working on the blocked task or assume an answer while the tool is pending. The user answers or skips through the card, or replies in chat instead — then the card is superseded and their free-form reply arrives as the next user message. Notes:
 - Every question also gets an "Other" option with a free-text field, and the user can always Skip the whole questionnaire (you are told they declined) — do NOT author "Other"-style, free-text, or escape options yourself (reserved labels are rejected).
 - Set multiSelect: true when several answers are valid; the user may combine checked options with their own typed answer.
 - If you recommend one option, make it FIRST, append "(Recommended)" to its label, and set its recommendedReason to one short sentence on why you recommend it over the alternatives (shown inline under the option).
@@ -304,9 +304,15 @@ export const ASK_STOPPED_ERROR = "Question cancelled because the run was stopped
 
 export type AskUserQuestionWaitOutcome =
 	| { kind: "answer"; result: AskUserQuestionResult }
+	| { kind: "superseded" }
 	| { kind: "abandoned" };
 
-type LiveQuestionPhase = "expected" | "waiting" | "answer-accepted-uncommitted" | "stopped";
+type LiveQuestionPhase =
+	| "expected"
+	| "waiting"
+	| "answer-accepted-uncommitted"
+	| "superseded"
+	| "stopped";
 
 interface LiveQuestionWaiter {
 	phase: LiveQuestionPhase;
@@ -365,8 +371,8 @@ export interface AskUserQuestionWaiters {
 			isError?: boolean;
 		}[],
 	): void;
+	supersede(): boolean;
 	currentQuestion(): { interactionId: string; needsInput: boolean } | null;
-	isWaitingForAnswer(): boolean;
 	hasRecoverableCall(): boolean;
 	prepareShutdown(): Promise<void> | null;
 	prepareAbort(): Promise<void> | null;
@@ -405,6 +411,7 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 			}
 			waiter.executeStarted = true;
 			if (waiter.phase === "answer-accepted-uncommitted") return waiter.answerPromise;
+			if (waiter.phase === "superseded") return Promise.resolve({ kind: "superseded" });
 			if (waiter.phase === "stopped") return Promise.reject(new Error(ASK_STOPPED_ERROR));
 			waiter.phase = "waiting";
 			if (signal?.aborted) {
@@ -426,8 +433,11 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 			const waiter = waiting.get(toolCallId);
 			if (!waiter) return { handled: false };
 			if (waiter.phase === "stopped") throw notAwaiting(toolCallId);
+			if (waiter.phase === "superseded") {
+				throw new Error(`${ANSWERABILITY_ERRORS.superseded}: ${toolCallId}`);
+			}
 			if (waiter.phase === "answer-accepted-uncommitted") {
-				throw new Error(`This questionnaire was already answered: ${toolCallId}`);
+				throw new Error(`${ANSWERABILITY_ERRORS.already_answered}: ${toolCallId}`);
 			}
 			waiter.phase = "answer-accepted-uncommitted";
 			waiter.resolveAnswer({ kind: "answer", result });
@@ -467,6 +477,16 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 				}
 			}
 		},
+		supersede() {
+			let superseded = false;
+			for (const waiter of waiting.values()) {
+				if (waiter.phase !== "expected" && waiter.phase !== "waiting") continue;
+				if (waiter.phase === "waiting") waiter.resolveAnswer({ kind: "superseded" });
+				waiter.phase = "superseded";
+				superseded = true;
+			}
+			return superseded;
+		},
 		currentQuestion() {
 			for (const [interactionId, waiter] of waiting) {
 				return {
@@ -476,13 +496,10 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 			}
 			return null;
 		},
-		isWaitingForAnswer() {
-			return [...waiting.values()].some(
-				(waiter) => waiter.phase === "expected" || waiter.phase === "waiting",
-			);
-		},
 		hasRecoverableCall() {
-			return [...waiting.values()].some((waiter) => waiter.phase !== "stopped");
+			return [...waiting.values()].some(
+				(waiter) => waiter.phase !== "stopped" && waiter.phase !== "superseded",
+			);
 		},
 		prepareShutdown() {
 			shutdownPrepared = true;
@@ -528,7 +545,7 @@ export function isolateAskUserQuestionBatch(message: AgentMessage): AgentMessage
 
 export function createAskUserQuestionTool(
 	waiters: AskUserQuestionWaiters,
-): ToolDefinition<typeof AskUserQuestionSchema, AskUserQuestionResult> {
+): ToolDefinition<typeof AskUserQuestionSchema, AskUserQuestionResult | AskUserQuestionAckDetails> {
 	return {
 		name: ASK_USER_QUESTION_TOOL_NAME,
 		label: "Ask User Question",
@@ -544,6 +561,9 @@ export function createAskUserQuestionTool(
 			if (!validation.ok) return toolResult(validation.message, { answers: [], cancelled: true });
 
 			const outcome = await waiters.wait(toolCallId, signal);
+			if (outcome.kind === "superseded") {
+				return { content: [{ type: "text", text: ASK_ACK_TEXT }], details: { kind: "ack" } };
+			}
 			if (outcome.kind === "abandoned") {
 				return {
 					...toolResult(ASK_STOPPED_ERROR, { answers: [], cancelled: true }),

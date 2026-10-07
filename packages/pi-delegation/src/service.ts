@@ -3,8 +3,8 @@ import {
 	type AgentSession,
 	createAgentSession,
 	DefaultResourceLoader,
-	type ExtensionFactory,
 	getAgentDir,
+	type InlineExtension,
 	ModelRuntime,
 	SessionManager,
 	SettingsManager,
@@ -62,7 +62,7 @@ interface ResourceState {
 	readonly id: string;
 	context?: Promise<PreparedContext>;
 	semaphore?: Semaphore;
-	readonly factories: ExtensionFactory[];
+	readonly factories: InlineExtension[];
 	readonly children: Map<string, ChildEntry>;
 	readonly pending: Set<Promise<unknown>>;
 	readonly opening: Set<string>;
@@ -752,7 +752,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		runtime: ModelRuntime,
 		model: AgentSession["model"],
 		thinkingLevel: SessionOptions["thinkingLevel"],
-		factories: ExtensionFactory[],
+		factories: InlineExtension[],
 		manager: SessionManager,
 	): Promise<AgentSession> {
 		const settingsManager = SettingsManager.create(cwd);

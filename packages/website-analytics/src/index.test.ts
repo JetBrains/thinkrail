@@ -3,7 +3,7 @@ import { createWebsiteAnalytics, type MarketingConsentAdapter, type PostHogOptio
 
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
 const originalDocument = Object.getOwnPropertyDescriptor(globalThis, "document");
-const expectedPostHogProjectKey = "phc_AFJBcKraEUrfpTrSSMjBGXMHTusYudtFfxWqdevchy8X";
+const expectedPostHogProjectKey = "phc_test";
 const expectedPostHogOptions: PostHogOptions = {
 	api_host: "https://p.thinkrail.ai",
 	ui_host: "https://eu.posthog.com",
@@ -219,6 +219,7 @@ describe("website analytics", () => {
 		const consent = createConsent();
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -237,11 +238,30 @@ describe("website analytics", () => {
 		});
 	});
 
+	test("a keyless build has no configuration and loads nothing even on the production host", () => {
+		const dom = installDom("site.example", { storedJourney: existingJourneyId });
+		const consent = createConsent(true);
+		const analytics = createWebsiteAnalytics({
+			productionHostname: "site.example",
+			postHogProjectKey: "",
+			marketingConsent: consent.adapter,
+		});
+
+		expect(analytics.configurationForHostname("site.example")).toBeUndefined();
+		analytics.capture("content_viewed", contentViewed);
+		analytics.init();
+
+		expect(consent.activity).toEqual([]);
+		expect(dom.storageCalls).toEqual([]);
+		expect(dom.scripts).toEqual([]);
+	});
+
 	test("never queues, subscribes, accesses storage, or loads vendors outside the exact host", () => {
 		const dom = installDom("preview.example", { storedJourney: existingJourneyId });
 		const consent = createConsent(true);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -261,6 +281,7 @@ describe("website analytics", () => {
 		const consent = createConsent();
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -291,6 +312,7 @@ describe("website analytics", () => {
 		const consent = createConsent();
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -321,6 +343,7 @@ describe("website analytics", () => {
 		const consent = createConsent(true);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -356,6 +379,7 @@ describe("website analytics", () => {
 		const consent = createConsent(true);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 		const downloadStarted = {
@@ -411,6 +435,7 @@ describe("website analytics", () => {
 		const consent = createConsent(true);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -434,6 +459,7 @@ describe("website analytics", () => {
 		const consent = createConsent(true);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -454,6 +480,7 @@ describe("website analytics", () => {
 		const consent = createConsent(undefined);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 		const observed: Array<string | undefined> = [];
@@ -483,6 +510,7 @@ describe("website analytics", () => {
 		const consent = createConsent();
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -507,6 +535,7 @@ describe("website analytics", () => {
 		const consent = createConsent();
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -520,11 +549,45 @@ describe("website analytics", () => {
 		);
 	});
 
+	test("captures GitHub, install-command, and share-link intent events unchanged", () => {
+		const dom = installDom("site.example");
+		const consent = createConsent(false);
+		const analytics = createWebsiteAnalytics({
+			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
+			marketingConsent: consent.adapter,
+		});
+		const github = { content_key: "vibecoding", cta_location: "hero", target: "repo" } as const;
+		const copied = {
+			content_key: "landing",
+			cta_location: "install_section",
+			shell: "sh",
+		} as const;
+		const shared = { content_key: "landing", cta_location: "hero" } as const;
+
+		analytics.init();
+		analytics.capture("github_clicked", github);
+		analytics.capture("install_command_copied", copied);
+		analytics.capture("install_link_share_clicked", shared);
+		dom.loadPostHog();
+
+		expect(
+			dom.vendorCalls
+				.filter(({ method }) => method === "capture")
+				.map(({ value, properties }) => ({ event: value, properties })),
+		).toEqual([
+			{ event: "github_clicked", properties: github },
+			{ event: "install_command_copied", properties: copied },
+			{ event: "install_link_share_clicked", properties: shared },
+		]);
+	});
+
 	test("captures closed CTA and bridge-less download properties without journey enrichment", () => {
 		const dom = installDom("site.example");
 		const consent = createConsent(false);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -574,6 +637,7 @@ describe("website analytics", () => {
 		const consent = createConsent(undefined);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -601,6 +665,7 @@ describe("website analytics", () => {
 		const consent = createConsent(true);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -619,6 +684,7 @@ describe("website analytics", () => {
 		const consent = createConsent();
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -642,6 +708,7 @@ describe("website analytics", () => {
 		const consent = createConsent();
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 
@@ -666,6 +733,7 @@ describe("website analytics", () => {
 		const consent = createConsent(true);
 		const analytics = createWebsiteAnalytics({
 			productionHostname: "site.example",
+			postHogProjectKey: expectedPostHogProjectKey,
 			marketingConsent: consent.adapter,
 		});
 

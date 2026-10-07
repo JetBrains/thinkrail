@@ -53,6 +53,7 @@ import {
 	setLoginPublisher,
 	stopJbcentralRuntime,
 } from "../auth";
+import { forgetOpenBranchReview } from "../branch-review";
 import { redeliverInterview, releaseInterview, setFeedbackPublisher } from "../feedback";
 import { logger } from "../log";
 import { loadWorkspaces } from "../persistence";
@@ -562,6 +563,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	setRepoMetaPublisher((workspaceId) => {
 		refreshUserOwnedWorkspace(workspaceId);
+		const workspace = loadWorkspaces().find((w) => w.id === workspaceId);
+		if (workspace) forgetOpenBranchReview(workspace.worktreePath);
 		publishFsChanged({ workspaceId, paths: [], truncated: false, skillChange: "none" });
 	});
 

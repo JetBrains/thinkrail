@@ -16,15 +16,16 @@ The six `pi` custom tools that expose the backlog to the agent — `todo_list`, 
 The finite-vocabulary `status` param derives its enum from the `core/` tuple via
 `StringEnum`, so the schema and the model move together (pinned by `tools.test.ts`).
 
-**This layer is where the agent-facing constraints live** (core stays permissive — the user lane and
-the host wire still use loose items):
-- **No loose authoring:** `todo_write`'s schema offers `groups` only; `todo_add` errors unless `group`
-  or `after` is given (`after` = insert after that step, in its group; wins over `group`). An `after`
-  anchored to one of the **user's** loose items is **rejected**: the insert inherits the anchor's lane, so it
-  would place an agent-origin open item in the user's lane — which `todo_write` drops (loose keeps only user
-  or done items), making the step appear among the user's requests and then vanish on the next re-plan. The
-  policy lives here, not in `core`: `TodoStore.add` stays permissive because the host writes the user's own
-  lane through it.
+**This layer is where the agent-facing constraints live** (core stays permissive — both the user lane
+and the host wire use loose items, and the agent can author loose too):
+- **Loose authoring is a scratchpad, not a plan surface:** `todo_write`'s schema offers `groups` only,
+  so a re-plan never mints or edits loose items. `todo_add` accepts `group`, `after`, or **neither** —
+  omitting both drops a raw loose item into the shared pre-work queue the user and agent share; the
+  skill carries the promote-on-work discipline (take a loose item into work by authoring a group with a
+  proper title + steps, then removing the raw loose item). An `after` anchored to a loose item is
+  **rejected**: loose items are promoted into a group, not grown with siblings, so inheriting the
+  anchor's lane would misrepresent intent. `TodoStore.add` stays permissive because the host writes the
+  user's own loose lane through it.
 - **`todo_write` reconciles, it never destructively replaces:** the tool forwards its `groups` to
   `TodoStore.replaceAll`, which matches written steps to existing ones by group + step title and keeps
   their progress (see [[submodule-pi-todos-core]]). So a mid-task re-plan is safe and lossless — there is
@@ -53,8 +54,8 @@ the host wire still use loose items):
   every completion), extended not rewritten when an earlier note survives; it accepts an early call but
   flags how many items are still open (the UI shows the note only once everything is done).
 - **Group-first output:** `formatPlan` renders each group under `formatGroupHeader` — `▸ <title>
-  [<derived status> <done>/<total>]` — with its steps indented, **then the loose lane (the user's own
-  adds) last** under a `Your requests:` header. The user's lane is last on purpose: a request added
+  [<derived status> <done>/<total>]` — with its steps indented, **then the loose lane (the shared raw-input
+  queue) last** under a `Loose queue:` header. The loose lane is last on purpose: an item added
   mid-task queues *after* the agent's current work, so reading top-to-bottom resumes/finishes the
   active task first. Same two-level order the user sees (`TodoList`) and `flat()`/`list()` return.
 

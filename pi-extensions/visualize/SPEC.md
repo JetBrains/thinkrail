@@ -11,9 +11,8 @@ tags: [pi-extension, visualization, mermaid]
 
 The published, portable half of the visualization capability: one tool, `visualize`, that validates a
 diagram or comparison request, returns a markdown fallback as the model-facing result, and draws the
-result in pi's terminal UI. It knows nothing about ThinkRail. Successor of [[pi-visualize-module]]
-(`packages/pi-visualize`), which stays loaded by the ThinkRail host until the wiring PR composes this
-package through [[module-thinkrail-extensions]] and deletes it.
+result in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes it through [[module-ext-visualize]]'s server half
+(the successor of the deleted `packages/pi-visualize`), injecting its strict validator.
 
 ## Public surface
 

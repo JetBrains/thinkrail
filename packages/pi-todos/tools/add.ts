@@ -18,13 +18,13 @@ const parameters = Type.Object({
 	group: Type.Optional(
 		Type.String({
 			description:
-				"Title of the group (task) to append into — created if it doesn't exist yet. Required unless `after` is given: your items always belong to a group; loose items are the user's lane.",
+				"Title of the group (task) to append into — created if it doesn't exist yet. Omit `group` and `after` to drop a raw item into the loose queue (a shared scratchpad with the user) — do that for unprocessed notes, not for work you are about to execute: a loose item you take into work gets promoted into a proper group first (see the skill).",
 		}),
 	),
 	after: Type.Optional(
 		Type.String({
 			description:
-				"Id of an existing step to insert right after — the surgical mid-plan insert. Must be a step inside a task, never one of the user's own items. When given, `group` is ignored (the new item joins that step's group).",
+				"Id of an existing step to insert right after — the surgical mid-plan insert. Must be a step inside a task, never one of the user's own loose items. When given, `group` is ignored (the new item joins that step's group).",
 		}),
 	),
 	note: Type.Optional(
@@ -37,16 +37,11 @@ export function registerTodoAdd(pi: ExtensionAPI): void {
 		name: "todo_add",
 		label: "Todo Add",
 		description:
-			"Add one item to this chat's TODO plan without touching the rest. Pass `group` (the task it belongs to — created if new) to append it as that task's next step, or `after` (the id of an existing step **inside a task**) to insert it right after that step — one of the two is required: your items always live in a group, the loose lane belongs to the user, so an `after` pointing at one of the user's own items is rejected. Prefer this over todo_write for a single addition, which never disturbs existing (esp. done) items.",
+			"Add one item to this chat's TODO plan without touching the rest. Pass `group` (the task it belongs to — created if new) to append it as that task's next step, `after` (the id of an existing step **inside a task**) to insert it right after that step, or omit both to drop a raw item into the loose queue — the shared pre-work scratchpad you and the user both write to. Loose is for unprocessed notes/kernels only; when you actually take a loose item into work you promote it into a group first (see the skill). An `after` pointing at a loose item is rejected. Prefer this over todo_write for a single addition, which never disturbs existing (esp. done) items.",
 		promptSnippet:
-			"todo_add — add one step (into a `group`, or `after` an existing step; leaves the rest, incl. done, untouched).",
+			"todo_add — add one step (into a `group`, `after` an existing step, or loose when both are omitted — a shared scratchpad with the user; promote before working it).",
 		parameters,
 		async execute(_callId, params, _signal, _onUpdate, ctx) {
-			if (params.group === undefined && params.after === undefined) {
-				return errorResult(
-					"Pass `group` (the task this step belongs to) or `after` (an existing step id) — loose items are the user's lane.",
-				);
-			}
 			const store = storeFor(ctx);
 			if (params.after !== undefined) {
 				const plan = store.read();
@@ -54,7 +49,7 @@ export function registerTodoAdd(pi: ExtensionAPI): void {
 					const known = plan.todos.some((t) => t.id === params.after);
 					return errorResult(
 						known
-							? `"${params.after}" is one of the user's own items — anchor to a step inside a task, or pass \`group\` to append there.`
+							? `"${params.after}" is a loose item — anchor to a step inside a task, or pass \`group\` to append there (loose items are promoted into a group, not grown with siblings).`
 							: `No step with id "${params.after}" to insert after.`,
 					);
 				}

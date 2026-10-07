@@ -13,6 +13,9 @@ inputs:
   target:
     description: "Bun compile target matching this native runner"
     required: true
+  posthog-project-key:
+    description: "Public PostHog project key baked into release analytics; never committed"
+    required: true
 outputs:
   artifact-name:
     description: "CLI artifact filename"
@@ -44,15 +47,25 @@ runs:
       env:
         VERSION: ${{ inputs.version }}
         CHANNEL: ${{ inputs.channel }}
+        POSTHOG_PROJECT_KEY: ${{ inputs.posthog-project-key }}
       run: |
         set -eu
+        case "$CHANNEL" in
+          nightly|stable) ;;
+          *) echo "::error::unsupported release channel $CHANNEL"; exit 1 ;;
+        esac
+        case "$POSTHOG_PROJECT_KEY" in
+          phc_?*) ;;
+          *) echo "::error::posthog-project-key must be a phc_ project key"; exit 1 ;;
+        esac
         commit=$(git rev-parse --short HEAD)
         cat > packages/shared/src/version.ts <<EOF
         export const version = "${VERSION}";
         export const channel = "${CHANNEL}";
         export const commit = "${commit}";
+        export const posthogProjectKey = "${POSTHOG_PROJECT_KEY}";
         EOF
-        cat packages/shared/src/version.ts
+        echo "stamped version=${VERSION} channel=${CHANNEL} commit=${commit} posthogProjectKey=set"
 
     - name: Build web UI
       shell: bash

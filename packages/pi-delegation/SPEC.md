@@ -152,7 +152,8 @@ shutdown release barriers; and finalized outcomes after a shrinking compaction.
   and caches it until `disposeChildrenOf(parent)` — a service may resolve parents backed by different
   registries, so one mutable fallback must never synchronize provider state across them),
   `maxConcurrentPerParent`, `childExtensionFactories` (the curated set a child MAY load — decision
-  #25).
+  #25; pi `InlineExtension`s, so an embedder passes bare factories or `{ name, factory }` and keeps
+  the name in pi diagnostics).
 - Storage helpers: `defaultDelegationRoot` / `delegationSessionDir` / `deriveChildSessionFile`
   (post-restart transcript reads) / `DEFAULT_SCOPE`.
 - The contract types themselves (incl. `DelegationError`/`DelegationErrorCode`) — enumerated and

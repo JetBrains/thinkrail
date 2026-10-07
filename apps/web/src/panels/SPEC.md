@@ -540,7 +540,15 @@ a project picker, the prompt hero, and the reused
   carries the discoverability half (`chat/SPEC.md`: a `slash-templates-empty` footer nudge deep-linking
   here when no template exists anywhere), since this offer is otherwise two clicks deep in a dialog. **This
   project**'s empty state is unchanged (still the bare text) — the offer is Global-only, since it only
-  ever seeds global files. No server change. **`PrivacySettings`** manages the additional-data preference and
+  ever seeds global files. No server change. **`NotificationsSettings`** is the single master on/off control
+  for out-of-app attention notifications (default on), persisting `{ notificationsEnabled }` through
+  `settings.update`. While enabled it also surfaces the live browser permission via the
+  [[submodule-web-notifications]] barrel: an **Allow in browser** button when permission is still `default`
+  (the click is the user gesture that calls `requestNotificationPermission`), a blocked hint on `denied`, and
+  a granted/unsupported line otherwise — the visible, in-app acquisition path that does not depend on an
+  out-of-focus event. The notification pipeline, suppression, and away-path permission preface live in
+  [[submodule-web-notifications]].
+  **`PrivacySettings`** manages the additional-data preference and
   confirmation together; the event contract belongs to [[submodule-server-analytics]].
   **`AnalyticsConsentDialog`** mounts once through shell after a capable host's unconfirmed config hydrates.
   It initializes the draft switch on and immediately persists `{ analyticsEnabled: true }`; persistence and
@@ -635,8 +643,9 @@ a project picker, the prompt hero, and the reused
   `session.answerQuestion`; the chat-only actions — reveal/focus/subagent — are no-ops) plus a derived
   `AskStatesContext`, so an answer submitted from the plan flows through the identical path as the chat.
   When there's no pending question AND no step is in progress, the same slot instead shows the **agent's
-  latest message** (`plan-agent-message`, `planView.lastAgentText` rendered Markdown, clamped, live while
-  it streams) — so the plan stays transparent about what the agent is doing when it isn't asking or on a
+  latest message** (`plan-agent-message`, `planView.lastAgentText` rendered Markdown inside a bounded
+  scroll area — `max-h-[12rem] overflow-y-auto` so the full message stays readable without pushing
+  the plan items down — live while it streams) — so the plan stays transparent about what the agent is doing when it isn't asking or on a
   step; it renders nothing when a step is in progress or there's no message. Below the items the Session ends in a **chat/steer
   composer** (`plan-session-chat`, a `PlanComposer` textarea that works like the chat composer — Enter
   sends, Shift+Enter newlines) whose send adapts to the run: while the agent is streaming it **steers**
@@ -649,7 +658,12 @@ a project picker, the prompt hero, and the reused
   and not awaited — `session.prompt` resolves only when the run ends — so a rejection surfaces as an
   `appendErrorTurn` in that chat and nothing is lost. A **steer** is not recorded (it arrives with the
   delivered message), so it is awaited: a failed hydration or a rejected steer toasts and rethrows, and the
-  draft stays in the plan. Only a delivered/recorded send opens the chat (`openChatInTab`). `PlanComposer` ignores a submit while the previous one is in flight,
+  draft stays in the plan. **A send from the plan stays on the plan** — it never auto-switches to the
+  chat tab (an earlier version did via `openChatInTab` on the success path; dropped because the plan is
+  itself a working surface and the agent's reply streams into the live `plan-agent-message` block right
+  below). To jump to the chat you click the Session status chip (`Working…` / `Question`) or the
+  explicit Open-chat affordances — those are the only `openChatInTab` call sites in the plan now.
+  `PlanComposer` ignores a submit while the previous one is in flight,
   so a repeated Enter can't add or send the same draft twice. So a completed
   plan (no open steps) turns its Session into a chat entry point rather than a dead "all steps done" line,
   and a running plan gets an in-place steering field. The one exception is a **truly empty** plan (no items,
@@ -855,6 +869,9 @@ own section. The kebab menu (`plan-menu`, a
   older clients, so a PR closed/merged on GitHub drops out of the chip, label, and stepper on that
   refetch instead of sticking until remount. Focus received while disconnected latches that fresh
   intent and spends it on reconnect rather than falling back to a cache-eligible activation read. The
+  workspace's `fsChanged` tick re-reads with `allowCached: true` (`reload`): the host drops its cached
+  answer on a `.git` meta nudge, so a PR opened or pushed from a terminal still surfaces, while a fresh
+  read would `git fetch`, write `.git`, nudge again, and loop. The
   URL is kept across refetches while the review number matches. A `compare` result opens the prefilled
   GitHub
   compare page (`window.open`); every outcome toasts, uncommitted files get a separate info toast.
@@ -977,6 +994,12 @@ own section. The kebab menu (`plan-menu`, a
   resolves the registry for its intent and phone class, lazily mounts the selected candidate, and keeps
   `rendererId` plus opaque view state on the tab. The lazy implementation identity includes renderer id and
   phone class, so crossing the breakpoint swaps the code implementation and discards incompatible state.
+  Scroll-backed view state goes through the one `useScrollViewState` hook: the offset is saved when the
+  scroller detaches and re-applied when a scroller attaches. A renderer may fill its scroller only after
+  mount — the Pierre surfaces render nothing until their shared worker pool, torn down when the last
+  surface unmounts, has re-initialized — so a restore the scroller cannot yet hold stays pending until its
+  content grows to fit or the user scrolls, and a pending offset is what gets saved if the tab leaves
+  first. Without that hold, a tab switch back to a source diff landed at the top and then persisted 0.
   Two or more candidates become one ordered toggle whose ids are the test hooks. Threads whose selectors
   the selected renderer cannot place for the pane's view or diff intent remain visible in an unplaced
   strip; its action switches to the first candidate that advertises matching anchor geometry for that intent.

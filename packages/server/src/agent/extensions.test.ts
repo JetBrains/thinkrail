@@ -3,7 +3,13 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SettingsManager } from "@earendil-works/pi-coding-agent";
-import { buildResourceLoader, listProjectAliasSkillNames, listSkillCommands } from "./extensions";
+import { registryInlineExtensions } from "../extensions";
+import {
+	buildResourceLoader,
+	childExtensionFactories,
+	listProjectAliasSkillNames,
+	listSkillCommands,
+} from "./extensions";
 import type { SkillAdmissionContext } from "./skillAdmission";
 
 function ctx(trusted: boolean, acknowledged: string[] = []): SkillAdmissionContext {
@@ -324,5 +330,54 @@ describe("buildResourceLoader", () => {
 			restore();
 			rmSync(root, { recursive: true, force: true });
 		}
+	});
+});
+
+describe("registry extensions", () => {
+	async function visualizeTool(cwd: string, agentDir: string) {
+		const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted: true });
+		const loader = await buildResourceLoader(cwd, settingsManager, () => ctx(true));
+		const extension = loader
+			.getExtensions()
+			.extensions.find((candidate) => candidate.tools.has("visualize"));
+		if (!extension) throw new Error("visualize is not loaded");
+		const tool = extension.tools.get("visualize");
+		if (!tool) throw new Error("visualize tool is missing");
+		return {
+			extension,
+			execute: (params: unknown) =>
+				tool.definition.execute("call", params, undefined, undefined, undefined as never),
+		};
+	}
+
+	it("loads visualize as a named inline extension with the strict mermaid validator", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		try {
+			const { extension, execute } = await visualizeTool(project, agentDir);
+			expect(extension.path).toBe("<inline:visualize>");
+			await expect(
+				execute({ type: "diagram", mermaid: "flowchart LR\n A --> B" }),
+			).resolves.toMatchObject({ details: { type: "diagram" } });
+			await expect(execute({ type: "diagram", mermaid: "flowchart LR\n A -->" })).rejects.toThrow(
+				/invalid Mermaid syntax in `mermaid`[\s\S]*Parse error/,
+			);
+		} finally {
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("keeps the curated child set and appends registry children", () => {
+		const children = childExtensionFactories();
+		expect(children).toHaveLength(3 + registryInlineExtensions("childExtensions").length);
+		expect(children.slice(0, 3).every((inline) => typeof inline === "function")).toBe(true);
+		expect(children.slice(3)).toEqual(registryInlineExtensions("childExtensions"));
 	});
 });

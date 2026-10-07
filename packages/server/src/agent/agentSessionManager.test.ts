@@ -77,7 +77,7 @@ import {
 	steerSession,
 	toWireModel,
 } from "./agentSessionManager";
-import { ASK_STOPPED_ERROR, assessAnswerability } from "./askUserQuestion";
+import { ASK_ACK_TEXT, ASK_STOPPED_ERROR, assessAnswerability } from "./askUserQuestion";
 import { configurePiRuntime } from "./piRuntime";
 import { setExtUiPublisher } from "./webUiContext";
 
@@ -178,6 +178,27 @@ function installAskToolGate(name: string): {
 		release: () => writeFileSync(releasePath, ""),
 		remove: () => rmSync(extensionPath, { force: true }),
 	};
+}
+
+function installInputSwallower(name: string, marker: string): { remove: () => void } {
+	const agentDir = process.env.PI_CODING_AGENT_DIR;
+	if (!agentDir) throw new Error("agent dir not isolated");
+	const extensionPath = join(agentDir, "extensions", `${name}.ts`);
+	mkdirSync(dirname(extensionPath), { recursive: true });
+	writeFileSync(
+		extensionPath,
+		[
+			'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";',
+			"export default function (pi: ExtensionAPI) {",
+			'\tpi.on("input", (event) => {',
+			`\t\tif (event.text.includes(${JSON.stringify(marker)})) return { action: "handled" };`,
+			"\t\treturn undefined;",
+			"\t});",
+			"}",
+			"",
+		].join("\n"),
+	);
+	return { remove: () => rmSync(extensionPath, { force: true }) };
 }
 
 function installStalledAskResultHook(name: string): { startedPath: string; remove: () => void } {
@@ -1380,10 +1401,10 @@ test("an answer accepted before execute persists before Stop aborts the continua
 	prompting.catch(() => {});
 	try {
 		await waitForPath(gate.startedPath);
-		await steerSession(session.sessionId, "STEER_BEFORE_STOP");
-		await followUpSession(session.sessionId, "FOLLOW_UP_BEFORE_STOP");
 		const result = gatedQuestionAnswer();
 		const answering = answerQuestion(session.sessionId, toolCallId, result);
+		await steerSession(session.sessionId, "STEER_BEFORE_STOP");
+		await followUpSession(session.sessionId, "FOLLOW_UP_BEFORE_STOP");
 		let stopResolved = false;
 		const stopping = abortSession(session.sessionId, true).then((queue) => {
 			stopResolved = true;
@@ -1477,7 +1498,7 @@ test("emergency session disposal rejects an accepted answer that cannot persist"
 	}
 });
 
-test("a live question blocks continuation, preserves queue order, and acknowledges after its native result persists", async () => {
+test("a live question blocks continuation, keeps the follow-up lane behind it, and acknowledges after its native result persists", async () => {
 	const toolCallId = "live-question";
 	const question = {
 		questions: [
@@ -1510,6 +1531,7 @@ test("a live question blocks continuation, preserves queue order, and acknowledg
 			await continuationGate;
 			return fauxAssistantMessage("QUESTION_CONTINUED");
 		},
+		fauxAssistantMessage("FOLLOW_UP_HANDLED"),
 	]);
 	const cwd = tmpCwd("trpi-live-question-");
 	const session = await createSession({
@@ -1527,7 +1549,7 @@ test("a live question blocks continuation, preserves queue order, and acknowledg
 		const nudge = nudgeSession(session.sessionId, "[thinkrail:todo-nudge] ignored");
 		expect(nudge.disposition).toBe("needs_input");
 		await nudge.send();
-		await steerSession(session.sessionId, "QUEUED_WHILE_ASKING");
+		await followUpSession(session.sessionId, "QUEUED_WHILE_ASKING");
 		await Promise.resolve();
 		expect(continuationCalls).toBe(0);
 
@@ -1554,15 +1576,252 @@ test("a live question blocks continuation, preserves queue order, and acknowledg
 		if (persistedResult?.role !== "toolResult") throw new Error("native result was not persisted");
 		expect(persistedResult.details).toEqual<AskUserQuestionResult>(result);
 		expect(messages.some((message) => message.role === "custom")).toBe(false);
-		expect(continuationContext.indexOf('"role":"toolResult"')).toBeLessThan(
-			continuationContext.indexOf("QUEUED_WHILE_ASKING"),
-		);
+		expect(continuationContext).toContain('"role":"toolResult"');
+		expect(continuationContext).not.toContain("QUEUED_WHILE_ASKING");
 
 		releaseContinuation();
 		await prompting;
+		const after = JSON.stringify(
+			(await getSessionMessages(session.sessionId, "ws-live-question", cwd)).messages,
+		);
+		expect(after.indexOf("QUESTION_CONTINUED")).toBeLessThan(after.indexOf("QUEUED_WHILE_ASKING"));
 	} finally {
 		releaseContinuation();
 		removeSession(session.sessionId);
+	}
+});
+
+const typedPastQuestion = {
+	questions: [
+		{
+			question: "Which library?",
+			header: "Library",
+			options: [
+				{ label: "date-fns", description: "small" },
+				{ label: "luxon", description: "time zones" },
+			],
+		},
+	],
+};
+
+async function expectTypedPastTranscript(
+	sessionId: string,
+	workspaceId: string,
+	cwd: string,
+	toolCallId: string,
+	typedText: string,
+): Promise<void> {
+	await expect(
+		answerQuestion(sessionId, toolCallId, { answers: [], cancelled: true }),
+	).rejects.toThrow("superseded by a later message");
+	const { messages } = await getSessionMessages(sessionId, workspaceId, cwd);
+	const askIndex = messages.findIndex(
+		(message) => message.role === "toolResult" && message.toolCallId === toolCallId,
+	);
+	const persisted = messages[askIndex];
+	if (persisted?.role !== "toolResult") throw new Error("ack result was not persisted");
+	expect(persisted.details).toEqual({ kind: "ack" });
+	expect(persisted.isError).toBe(false);
+	expect(JSON.stringify(persisted.content)).toContain(ASK_ACK_TEXT);
+	expect(messages[askIndex + 1]?.role).toBe("user");
+	expect(JSON.stringify(messages[askIndex + 1])).toContain(typedText);
+	expect(messages.some((message) => message.role === "custom")).toBe(false);
+	expect(assessAnswerability(messages, toolCallId)).toEqual({ ok: false, reason: "superseded" });
+}
+
+for (const [entryPoint, send] of [
+	["session.steer", steerSession],
+	["session.prompt while streaming", promptSession],
+] as const) {
+	test(`typing past a live question via ${entryPoint} supersedes it: the ack persists and the text is the next user message`, async () => {
+		const toolCallId = "typed-past-question";
+		let continuationContext = "";
+		fauxA.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("ask_user_question", typedPastQuestion, { id: toolCallId }),
+			),
+			(context) => {
+				continuationContext = JSON.stringify(context.messages);
+				return fauxAssistantMessage("REPLIED_TO_TYPED_TEXT");
+			},
+		]);
+		const cwd = tmpCwd("trpi-typed-past-question-");
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-typed-past-question",
+			model: toWireModel(fauxA.getModel()),
+		});
+		try {
+			const prompting = promptSession(session.sessionId, "Choose a library.");
+			for (let attempt = 0; attempt < 100; attempt++) {
+				if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
+				await new Promise((resolve) => setTimeout(resolve, 5));
+			}
+			expect(seen(session.sessionId)).toContain('"toolName":"ask_user_question"');
+			expect(getSessionState(session.sessionId).needsInput).toEqual({
+				interactionId: `question:${toolCallId}`,
+				kind: "question",
+			});
+
+			await send(session.sessionId, "TYPED_PAST_THE_QUESTION");
+			expect(getSessionState(session.sessionId).needsInput).toBeNull();
+			await prompting;
+
+			await expectTypedPastTranscript(
+				session.sessionId,
+				"ws-typed-past-question",
+				cwd,
+				toolCallId,
+				"TYPED_PAST_THE_QUESTION",
+			);
+			expect(continuationContext.indexOf('"kind":"ack"')).toBeLessThan(
+				continuationContext.indexOf("TYPED_PAST_THE_QUESTION"),
+			);
+			expect(seen(session.sessionId)).toContain("REPLIED_TO_TYPED_TEXT");
+			expect(getSessionState(session.sessionId).needsInput).toBeNull();
+		} finally {
+			removeSession(session.sessionId);
+		}
+	});
+}
+
+test("input an extension handles (never queued) leaves the live question awaiting", async () => {
+	const swallower = installInputSwallower("ask-input-swallower", "SWALLOWED_BY_EXTENSION");
+	const toolCallId = "question-survives-handled-input";
+	fauxA.setResponses([
+		fauxAssistantMessage(fauxToolCall("ask_user_question", typedPastQuestion, { id: toolCallId })),
+		fauxAssistantMessage("ANSWERED_AFTER_HANDLED_INPUT"),
+	]);
+	const cwd = tmpCwd("trpi-handled-input-question-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-handled-input-question",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Choose a library.");
+	try {
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("question");
+
+		await steerSession(session.sessionId, "SWALLOWED_BY_EXTENSION");
+		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("question");
+		const { summary } = await getSessionMessages(
+			session.sessionId,
+			"ws-handled-input-question",
+			cwd,
+		);
+		expect(summary.queue).toBeUndefined();
+
+		const result: AskUserQuestionResult = {
+			cancelled: false,
+			answers: [{ questionIndex: 0, question: "Which library?", kind: "option", answer: "luxon" }],
+		};
+		await answerQuestion(session.sessionId, toolCallId, result);
+		await prompting;
+		const transcript = JSON.stringify(
+			(await getSessionMessages(session.sessionId, "ws-handled-input-question", cwd)).messages,
+		);
+		expect(transcript).not.toContain('"kind":"ack"');
+		expect(transcript).not.toContain("SWALLOWED_BY_EXTENSION");
+		expect(transcript).toContain('"answer":"luxon"');
+	} finally {
+		swallower.remove();
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+});
+
+test("typing in the pre-execute window (tool_call hook still running) supersedes the expected question", async () => {
+	const gate = installAskToolGate("ask-typed-early-gate");
+	const toolCallId = "typed-before-execute";
+	fauxA.setResponses([
+		gatedQuestionMessage(toolCallId),
+		fauxAssistantMessage("REPLIED_AFTER_EARLY_TYPING"),
+	]);
+	const cwd = tmpCwd("trpi-typed-before-execute-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-typed-before-execute",
+		model: toWireModel(fauxA.getModel()),
+	});
+	const prompting = promptSession(session.sessionId, "Ask before continuing.");
+	prompting.catch(() => {});
+	try {
+		await waitForPath(gate.startedPath);
+		await steerSession(session.sessionId, "TYPED_BEFORE_EXECUTE");
+		expect(getSessionState(session.sessionId).needsInput).toBeNull();
+		gate.release();
+		await prompting;
+		await expectTypedPastTranscript(
+			session.sessionId,
+			"ws-typed-before-execute",
+			cwd,
+			toolCallId,
+			"TYPED_BEFORE_EXECUTE",
+		);
+		expect(seen(session.sessionId)).toContain("REPLIED_AFTER_EARLY_TYPING");
+	} finally {
+		gate.release();
+		gate.remove();
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+});
+
+test("removing a queued message while a question is live re-queues the rest without superseding it", async () => {
+	const toolCallId = "live-question-queue-edit";
+	const cwd = tmpCwd("trpi-live-question-queue-edit-");
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-live-question-queue-edit",
+		model: toWireModel(fauxA.getModel()),
+	});
+	fauxA.setResponses([
+		async () => {
+			await steerSession(session.sessionId, "PRE_QUEUED_STEER");
+			return fauxAssistantMessage(
+				fauxToolCall("ask_user_question", typedPastQuestion, { id: toolCallId }),
+			);
+		},
+		fauxAssistantMessage("ANSWERED_WITH_QUEUE_INTACT"),
+		fauxAssistantMessage("FOLLOW_UP_HANDLED"),
+	]);
+	const prompting = promptSession(session.sessionId, "Choose a library.");
+	try {
+		for (let attempt = 0; attempt < 100; attempt++) {
+			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+		await followUpSession(session.sessionId, "FOLLOW_UP_ONE");
+		await followUpSession(session.sessionId, "FOLLOW_UP_TWO");
+		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("question");
+
+		const removed = await removeQueuedSession(session.sessionId, "followUp", 0);
+		expect(removed.removed).toEqual({ text: "FOLLOW_UP_ONE" });
+		expect(removed.queue).toEqual({ steering: ["PRE_QUEUED_STEER"], followUp: ["FOLLOW_UP_TWO"] });
+		expect(getSessionState(session.sessionId).needsInput?.kind).toBe("question");
+
+		const result: AskUserQuestionResult = {
+			cancelled: false,
+			answers: [{ questionIndex: 0, question: "Which library?", kind: "option", answer: "luxon" }],
+		};
+		await answerQuestion(session.sessionId, toolCallId, result);
+		await prompting;
+		const transcript = JSON.stringify(
+			(await getSessionMessages(session.sessionId, "ws-live-question-queue-edit", cwd)).messages,
+		);
+		expect(transcript).not.toContain('"kind":"ack"');
+		expect(transcript.indexOf('"answer":"luxon"')).toBeLessThan(
+			transcript.indexOf("PRE_QUEUED_STEER"),
+		);
+		expect(transcript).not.toContain("FOLLOW_UP_ONE");
+		expect(transcript).toContain("FOLLOW_UP_TWO");
+	} finally {
+		await prompting.catch(() => {});
+		if (hasSession(session.sessionId)) removeSession(session.sessionId);
 	}
 });
 
@@ -1748,22 +2007,24 @@ test("explicit Stop restores both queues and persists a terminal ask error", asy
 			},
 		],
 	};
-	fauxA.setResponses([
-		fauxAssistantMessage(fauxToolCall("ask_user_question", question, { id: toolCallId })),
-	]);
 	const cwd = tmpCwd("trpi-stop-question-");
 	const session = await createSession({
 		cwd,
 		workspaceId: "ws-stop-question",
 		model: toWireModel(fauxA.getModel()),
 	});
+	fauxA.setResponses([
+		async () => {
+			await steerSession(session.sessionId, "RESTORED_STEER");
+			return fauxAssistantMessage(fauxToolCall("ask_user_question", question, { id: toolCallId }));
+		},
+	]);
 	const prompting = promptSession(session.sessionId, "Ask before continuing.");
 	try {
 		for (let attempt = 0; attempt < 100; attempt++) {
 			if (seen(session.sessionId).includes('"toolName":"ask_user_question"')) break;
 			await new Promise((resolve) => setTimeout(resolve, 5));
 		}
-		await steerSession(session.sessionId, "RESTORED_STEER");
 		await followUpSession(session.sessionId, "RESTORED_FOLLOW_UP");
 
 		const stopping = abortSession(session.sessionId, true);

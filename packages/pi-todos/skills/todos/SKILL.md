@@ -1,6 +1,6 @@
 ---
 name: todos
-description: "Use when the user asks for a shared plan, a task needs at least three substantive execution steps, or a user-origin TODO is pending. Without an explicit plan request, not for one-shot answers or checks, or one- to two-step work that is not already in the list."
+description: "Use when the user asks for a shared plan, a task needs at least three substantive execution steps, or a loose TODO is pending. Without an explicit plan request, not for one-shot answers or checks, or one- to two-step work that is not already in the list."
 ---
 
 # Chat TODO plan
@@ -15,14 +15,17 @@ description: "Use when the user asks for a shared plan, a task needs at least th
   detail** — the human's default plan view shows titles + status and keeps notes behind a disclosure —
   so it's where your own tracking, reminders, and the done-criterion live (e.g. "login e2e green"),
   never a place the user must read to follow along. A task's own status is never stored — it derives from its steps.
-- **Loose items are the user's lane — and they sit at the END of the plan.** They hold what the
-  **user** adds from the UI; you work them, but never group, rewrite, or drop them. `todo_list` renders
-  them **last**, after every group, on purpose: a request the user adds mid-task queues *after* your
-  current work. So **finish (or resume) the task you're on before you pick up a loose item** — don't
-  jump to a freshly-added user item and abandon a step you had in progress. You don't author loose
-  items (the tools require a `group` or an `after` anchor). An ordinary 1–2-step chat ask gets a group
-  only when the user explicitly requested a plan; a pending loose item is already in the plan, so work
-  and complete that exact item with `todo_update` regardless of its size.
+- **Loose items are the shared raw-input queue — and they sit at the END of the plan.** Both sides
+  write there: the user adds from the UI, and you may drop an unprocessed note with `todo_add` (no
+  `group`, no `after`). Loose is *pre-work* — raw kernels and half-formed asks, never a step you are
+  about to execute. `todo_list` renders them **last**, after every group, on purpose: an item added
+  mid-task queues *after* your current work. So **finish (or resume) the task you're on before you pick
+  up a loose item** — don't jump to a freshly-added item and abandon a step you had in progress.
+- **Promote a loose item when you take it into work** — never progress the raw text in place. Author a
+  group with an outcome title and its decomposed steps (`todo_add` with `group:`, one call per step),
+  flip its first step to `in_progress`, then `todo_remove` the raw loose item. Size doesn't matter: a
+  pending loose item is already in the plan, so even a 1–2-step one becomes a small group. Don't
+  rewrite or drop a loose item for any other reason.
 - It is **shared and live**: you maintain it, and the **user edits it while you work** — adding tasks,
   removing ones they've dropped. The stored list is the **source of truth**; what you remember is only
   a snapshot. **Re-read it (`todo_list`)** to stay in sync, don't trust your memory of it.
@@ -65,17 +68,16 @@ shape `check → result` (or the honest "not verified").
    - Don't start the next group while the current one has open steps. The one exception: a genuinely
      **blocked** task — record why in the step's `note`, tell the user, and move on to the next group.
    - Re-read with `todo_list` before choosing each next item, after user input, and before completion.
-     New user items are appended to the lane at the end — take them up after the in-progress step. If
+     New loose items are appended at the end — take them up (promoted) after the in-progress step. If
      an item you planned is gone, the user dropped it: skip it and do not re-add it.
    - The tool results help you: after a `done` they name the task's next step; when nothing is
      `in_progress` they remind you to flip the step you're on. Act on those nudges.
 3. **A qualifying new ask mid-session gets a new group** (`todo_add` with `group:`, one per step, or
    several calls for several steps). An ordinary 1–2-step chat ask gets that group only when the user
    explicitly requested a plan; otherwise finish the in-progress task, then handle it directly. When
-   that short ask is already a pending user-origin loose item, instead progress that exact item with
-   `todo_update` until done. Never mix a new ask's steps into the current group. **A step discovered
-   inside the current task** slots in with `todo_add after: <current step id>`; an anchor in the user's
-   loose lane is rejected. Do not rebuild the plan with `todo_write` for that.
+   that short ask is already a pending loose item, promote it into its own group instead. Never mix a new ask's steps into the current group. **A step discovered
+   inside the current task** slots in with `todo_add after: <current step id>`; an anchor on a loose
+   item is rejected. Do not rebuild the plan with `todo_write` for that.
 4. **Reconcile before completion.** Read `todo_list` once more before the final handoff. If open
    steps remain, either do them or clearly say what is left and why.
 
@@ -137,7 +139,8 @@ reviewer, not for yourself.
 ## Invariants
 
 - **Done stays.** Completing a step = `todo_update` → `done`. **Never delete a done item** — it's the
-  user's history. `todo_remove` is only for when the user explicitly asks to drop something.
+  user's history. `todo_remove` is only for when the user explicitly asks to drop something, or for
+  the raw loose item you just promoted into a group.
 - **Edit surgically.** After the first plan, prefer `todo_update` / `todo_add` (they touch one item) for
   a single change — cheaper than restating the whole plan. `todo_write` **reconciles** (it's not a
   destructive replace): it matches your written steps to the existing ones by group + step title and
@@ -145,17 +148,19 @@ reviewer, not for yourself.
   restructuring, not to nudge one item. Status advances only via `todo_update`; a `status` you put in
   `todo_write` on a step that already exists is ignored.
 - **Respect the user's edits.** The list is shared; treat their additions as new requests and their
-  removals as cancellations. Loose items are theirs — do them, but don't rewrite or drop them when you
-  re-plan. (`todo_write` never touches user items and keeps done items; but keep your steps' titles
+  removals as cancellations. Loose items are the shared queue — promote them when you work them, but
+  don't rewrite or drop them when you re-plan. (`todo_write` never touches loose items and keeps done
+  items; but keep your steps' titles
   stable across a re-plan — a reworded title reads as a new step, so the old one's progress won't carry.)
 
 ## Tools
 
 - `todo_list` — read the current plan (the source of truth; re-read to catch the user's edits).
-- `todo_add` — add one step (into a `group`, or `after` an existing step; leaves the rest untouched).
+- `todo_add` — add one step (into a `group`, `after` an existing step, or loose when both are omitted;
+  leaves the rest untouched).
 - `todo_update` — progress one step (`in_progress` on start, `done` when finished — with a `summary`
   when the step changed code; done stays).
-- `todo_remove` — delete one item (only when the user asks).
+- `todo_remove` — delete one item (only when the user asks, or the raw loose item you just promoted).
 - `todo_write` — lay out or reconcile the plan (groups only — one per task; matches steps by title and
   keeps their progress; prefer `todo_add`/`todo_update` for a single change).
 - `todo_plan_summary` — after the last item is done: a short overall summary of what the plan

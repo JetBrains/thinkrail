@@ -1,5 +1,5 @@
 ---
-title: A lightweight IDE that follows Pi's philosophy
+title: An agentic IDE that follows Pi's philosophy
 slug: thinkrail-pi-skills-and-desktop-apps
 date: 2026-10-01
 author: maciej-gorywoda

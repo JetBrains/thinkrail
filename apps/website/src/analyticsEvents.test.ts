@@ -6,8 +6,14 @@ import {
 	ctaLocationForElement,
 	desktopArtifactForUrl,
 	desktopClickEvents,
+	githubClickedEvent,
+	githubLocationForElement,
+	githubTargetForUrl,
 	initAnalyticsEvents,
+	installCommandCopiedEvent,
+	installLinkShareClickedEvent,
 } from "./analyticsEvents";
+import { installCommands } from "./installCommands";
 
 const stableDesktopAliases = {
 	"https://github.com/JetBrains/thinkrail/releases/latest/download/thinkrail-desktop-darwin-arm64.dmg":
@@ -86,6 +92,22 @@ function desktopAnchor(url: string, locationSelector: string) {
 		},
 		getAttribute(name: string) {
 			return name === "href" ? url : null;
+		},
+	};
+}
+
+function attributeElement(
+	locationSelector: string,
+	ownSelector: string,
+	attributes: Record<string, string>,
+) {
+	return {
+		closest(selector: string) {
+			if (selector === ownSelector || selector === locationSelector) return this;
+			return null;
+		},
+		getAttribute(name: string) {
+			return attributes[name] ?? null;
 		},
 	};
 }
@@ -194,6 +216,95 @@ describe("CTA classification", () => {
 			},
 		});
 		expect(cliDisclosureOpenedEvent(contentKey, disclosure(true, "details.other"))).toBeUndefined();
+	});
+});
+
+describe("GitHub link classification", () => {
+	test.each([
+		["https://github.com/JetBrains/thinkrail", "repo"],
+		["https://github.com/JetBrains/thinkrail/", "repo"],
+		["https://github.com/JetBrains/thinkrail#install", "repo"],
+		["https://github.com/JetBrains/thinkrail/releases", "releases"],
+		["https://github.com/JetBrains/thinkrail/releases/tag/v1.0.0", "releases"],
+		["https://github.com/JetBrains/thinkrail/issues", "other"],
+		["https://github.com/JetBrains/thinkrail/blob/main/LICENSE", "other"],
+	] as const)("classifies %s as %s", (url, target) => {
+		expect(githubTargetForUrl(url)).toBe(target);
+	});
+
+	test.each([
+		...Object.keys(stableDesktopAliases),
+		"https://github.com/JetBrains/thinkrail-other",
+		"https://github.com/JetBrains",
+		"https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh",
+		"#quick-start",
+	])("ignores %s", (url) => {
+		expect(githubTargetForUrl(url)).toBeUndefined();
+	});
+
+	test.each([
+		[".blog-post", "blog_post"],
+		["#readme", "hero"],
+		["#top", "hero"],
+		["#install", "install_section"],
+		["header", "header"],
+		["#contributing", "footer"],
+		["footer", "footer"],
+		[".terminal", "terminal"],
+		["#mock-tooltip", "mock_hint"],
+		["main", "other"],
+	] as const)("derives the GitHub location %s as %s", (selector, expected) => {
+		expect(githubLocationForElement(elementAt(selector))).toBe(expected);
+	});
+
+	test("builds a bounded GitHub click event", () => {
+		expect(
+			githubClickedEvent("vibecoding", elementAt("#top"), "https://github.com/JetBrains/thinkrail"),
+		).toEqual({
+			event: "github_clicked",
+			properties: { content_key: "vibecoding", cta_location: "hero", target: "repo" },
+		});
+	});
+});
+
+describe("install command copies and link shares", () => {
+	test.each([
+		[installCommands.macos, "sh"],
+		[installCommands.windows.powershell, "powershell"],
+		[installCommands.windows.cmd, "cmd"],
+	] as const)("maps the copied command to its shell %s", (command, shell) => {
+		const button = attributeElement("#install", "[data-copy]", { "data-copy": command });
+		expect(installCommandCopiedEvent("landing", button)).toEqual({
+			event: "install_command_copied",
+			properties: { content_key: "landing", cta_location: "install_section", shell },
+		});
+	});
+
+	test("ignores unknown copied values and copies outside the install controls", () => {
+		expect(
+			installCommandCopiedEvent(
+				"landing",
+				attributeElement("#install", "[data-copy]", { "data-copy": "echo hi" }),
+			),
+		).toBeUndefined();
+		expect(
+			installCommandCopiedEvent(
+				"landing",
+				attributeElement("#cta", "[data-copy]", { "data-copy": installCommands.macos }),
+			),
+		).toBeUndefined();
+	});
+
+	test("derives share locations only for the hero and quick start", () => {
+		expect(installLinkShareClickedEvent("landing", elementAt("#readme"))).toEqual({
+			event: "install_link_share_clicked",
+			properties: { content_key: "landing", cta_location: "hero" },
+		});
+		expect(installLinkShareClickedEvent("vibecoding", elementAt("#quick-start"))).toEqual({
+			event: "install_link_share_clicked",
+			properties: { content_key: "vibecoding", cta_location: "quick_start" },
+		});
+		expect(installLinkShareClickedEvent("landing", elementAt("#install"))).toBeUndefined();
 	});
 });
 
@@ -359,6 +470,55 @@ describe("analytics event initialization", () => {
 					install_method: "cli",
 				},
 			},
+		]);
+	});
+
+	test("delegates GitHub, copy, and share clicks with a live attribution touch each", () => {
+		const document = new FakeDocument();
+		const log = captureLog();
+		const order: string[] = [];
+		const capture: Capture = ((event, properties) => {
+			order.push(event);
+			log.capture(event, properties);
+		}) as Capture;
+		initAnalyticsEvents(
+			document,
+			"/",
+			capture,
+			() => {},
+			() => order.push("action_touch"),
+			() => {
+				order.push("download_bridge");
+				return undefined;
+			},
+		);
+		log.events.length = 0;
+		order.length = 0;
+
+		const github = desktopAnchor("https://github.com/JetBrains/thinkrail", "header");
+		const copy = attributeElement("#readme", "[data-copy]", { "data-copy": installCommands.linux });
+		const share = attributeElement("#readme", "[data-share-install-link]", {});
+		document.dispatch("click", { button: 0, target: github });
+		document.dispatch("auxclick", { button: 1, target: github });
+		document.dispatch("click", { button: 0, target: copy });
+		document.dispatch("auxclick", { button: 1, target: copy });
+		document.dispatch("click", { button: 0, target: share });
+
+		expect(order).toEqual([
+			"action_touch",
+			"github_clicked",
+			"action_touch",
+			"github_clicked",
+			"action_touch",
+			"install_command_copied",
+			"action_touch",
+			"install_link_share_clicked",
+		]);
+		expect(log.events.map(({ properties }) => properties)).toEqual([
+			{ content_key: "landing", cta_location: "header", target: "repo" },
+			{ content_key: "landing", cta_location: "header", target: "repo" },
+			{ content_key: "landing", cta_location: "hero", shell: "sh" },
+			{ content_key: "landing", cta_location: "hero" },
 		]);
 	});
 });

@@ -19,8 +19,9 @@ plan UX ([[submodule-web-chat]]'s "Chat TODO plan"), modeled on [[module-spec-gr
   rule. The rule is deliberately **short and byte-stable** — awareness that a shared list + `todo_*` tools
   exist, plus the threshold for loading the todos skill: an explicit user request or at least three
   substantive execution steps, once the task is understood enough to plan. That threshold governs
-  creating a plan, not honoring one: a pending user-origin item already in the shared list is always
-  progressed through its exact item regardless of size. The lever is *understanding*, not prompt volume:
+  creating a plan, not honoring one — a loose item (either side can author one, see below) is
+  promoted into a proper group when the agent takes it into work, not progressed in place. The lever is
+  *understanding*, not prompt volume:
   **how to work with the list lives in the skill; each tool's invariants live in its own description.**
   (We tried injecting the live list into every prompt and pulled it back — the tools + skill carry it
   instead.) The rule rides as the `pi-todos` entry of pi's `systemPromptOptions.sections`, mutated in place
@@ -33,16 +34,16 @@ plan UX ([[submodule-web-chat]]'s "Chat TODO plan"), modeled on [[module-spec-gr
 - **`skills/todos/SKILL.md`** — the bundled skill: the chat-plan discipline — group = task (one user
   ask, outcome-titled; ordinarily 3–7 substantive, verifiable steps), work tasks strictly in order with one
   step `in_progress` (blocked task = note why, tell the user, move on), and reconcile the user's live edits
-  before choosing each next item, after user input, and before completion. A pending user-origin loose item
-  is progressed in place regardless of size; the no-plan rule for smaller tasks applies only to ordinary
-  chat asks that are not already represented in the shared list.
+  before choosing each next item, after user input, and before completion. A loose item taken into
+  work is promoted (fresh group with a proper outcome title + decomposed steps, raw loose item removed);
+  the no-plan rule for smaller tasks applies only to ordinary chat asks that never entered the queue.
 
 ## The tools
 
 | Tool | Purpose |
 | --- | --- |
 | `todo_list` | Read the current plan, rendered **group-first** (each group under a derived status + done/total header), optionally filtered by status. |
-| `todo_add` | Add one item — into a `group`, or `after` an existing item (**one of the two is required**: the agent can't author loose items). |
+| `todo_add` | Add one item — into a `group`, `after` an existing item, or **loose** (both omitted) — the shared raw-input queue the agent and user both write to. `after` on a loose item is rejected (loose items are promoted into a group, not grown with siblings). |
 | `todo_update` | Change an item's status / title / note / artifacts — how the agent flips `pending → in_progress → done`. Reports auto-demoted (`paused`) items; a `done` flip suggests the group's next open step. |
 | `todo_remove` | Drop an item. |
 | `todo_write` | **Reconcile** the agent's plan from fresh **groups only** — one group per task, steps inside, written once the task is understood enough to plan. Identity-preserving, not a destructive replace: see below. |
@@ -55,10 +56,15 @@ reads it through this helper and ships it on the wire DTO (`TodoGroupItem.status
 it — one truth table, one home.
 Two invariants are held structurally, not by model memory: **exactly one `in_progress` across the
 plan** (setting it auto-demotes the previous one back to `pending` — reported in the result as
-"paused"), and **the agent never authors loose items** (the tools require `group`/`after`; loose is
-the user's lane). Status discipline gets in-band feedback: tool results append a nudge when open items
-exist but nothing is `in_progress`, and a `done` flip names the task's next open step — suggest-only,
-never auto-started (that would fake "in work" when the agent stops).
+"paused"), and **`todo_write` never touches the loose lane** (`WritePlan` has no `todos` field, so a
+re-plan can't mint, edit, or drop loose items). Loose authoring itself is open to both sides — the
+user from the UI and the agent via `todo_add` with no `group`/`after` — so loose is the shared
+raw-input queue; the skill carries the promote-on-work discipline (an agent that takes a loose item
+into work promotes it into a group with a proper title + decomposed steps and removes the raw loose
+item, rather than progressing the raw text in place). Status discipline gets in-band feedback: tool
+results append a nudge when open items exist but nothing is `in_progress`, and a `done` flip names the
+task's next open step — suggest-only, never auto-started (that would fake "in work" when the agent
+stops).
 
 The tool resolves its list from `ctx.sessionManager.getSessionId()`, so it always reads/writes the list
 of the conversation it runs in.
@@ -84,16 +90,16 @@ wire method exists and accepts a status, but no UI path calls it today; it's res
 lever.)
 
 Each item carries an **`origin`** (`agent` | `user`) — UI adds are `user`, the agent's tools write
-`agent`. This is a **structural guard, not just guidance**: `todo_write` is an **identity-preserving
-reconcile, not a replace** — written steps are matched to existing ones by `(group title, step title)` and
-keep their id/status/summary/verification/commitSubject/artifacts (only `note` is refreshed; a written
-status on a match is ignored — status advances via `todo_update`). Unmatched written steps are created;
-omitted **agent-open** steps are dropped; **`user` items and any `done` item are always preserved** — so a
-re-plan can never drop the user's requests or the completed history, and re-running it is lossless. The
-**loose lane is user-only**: `WritePlan` has no `todos` field (writes are groups-only), so the agent never
-mints a loose item; the UI marks `user` items so the human sees which are theirs. See
-[[submodule-pi-todos-core]] for the full reconcile contract (title-matching is the accepted limit — a
-rename reads as a new step).
+`agent`. `todo_write` is an **identity-preserving reconcile, not a replace** — written steps are matched
+to existing ones by `(group title, step title)` and keep their
+id/status/summary/verification/commitSubject/artifacts (only `note` is refreshed; a written status on a
+match is ignored — status advances via `todo_update`). Unmatched written steps are created; omitted
+**agent-open** steps inside a group are dropped; **loose items and any `done` item are always
+preserved** — so a re-plan can never drop the shared raw-input queue or the completed history, and
+re-running it is lossless. The **loose lane is shared raw input**: the UI marks `user` items so the
+human still sees which are theirs; `WritePlan` has no `todos` field, so `todo_write` can't mint or edit
+loose items regardless of origin. See [[submodule-pi-todos-core]] for the full reconcile contract
+(title-matching is the accepted limit — a rename reads as a new step).
 
 ## Artifacts
 

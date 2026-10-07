@@ -9,9 +9,9 @@ tags:
   - thinkrail
 ---
 
-#### A GUI for Pi Coding Agent
+#### An IDE for Pi Coding Agent
 
-ThinkRail is a lightweight, agentic IDE for the [Pi Coding Agent](https://pi.dev/), designed to complement its powerful command-line workflow. Pi’s strength lies in its flexibility: it is a minimal harness that lets you customize extensions and skills, and configure your working environment to fit your exact needs. This power, however, comes at a cost. New users often find themselves spending significant time learning how to navigate Pi, and even experienced users may find the workflow unnecessarily clunky.
+ThinkRail is an agentic IDE for the [Pi Coding Agent](https://pi.dev/), designed to complement its powerful command-line workflow. Pi’s strength lies in its flexibility: it is a minimal harness that lets you customize extensions and skills, and configure your working environment to fit your exact needs. This power, however, comes at a cost. New users often find themselves spending significant time learning how to navigate Pi, and even experienced users may find the workflow unnecessarily clunky.
 
 We believe ThinkRail can make Pi more accessible without compromising its power. It provides a visual layer on top of Pi, making it easier to onboard and become productive while preserving all of Pi’s depth and extensibility. What's more, ThinkRail’s integration with Git and GitHub also makes it easier to collaborate on projects in real time.
 

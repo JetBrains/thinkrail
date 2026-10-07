@@ -42,6 +42,7 @@
 		"@xterm/xterm": "6.0.0",
 		"diff": "8.0.4",
 		"jsondiffpatch": "0.7.3",
+		"marked": "16.4.2",
 		"monaco-editor": "0.55.1",
 		"node-htmldiff": "0.9.4",
 		"pdfjs-dist": "5.4.449",

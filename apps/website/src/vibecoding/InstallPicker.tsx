@@ -1,11 +1,58 @@
-import { Download } from "lucide-react";
+import { Download, Send } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useEffect, useId, useState } from "react";
+import { installShareUrl, isMobileDevice, shareInstallLink } from "../installLinkShare";
 import { detectInstallPlatform, type InstallPlatform, installPlatforms } from "./desktopDownloads";
+
+const shareAnchor = "quick-start";
 
 export function useDetectedInstallPlatform(): InstallPlatform | null | undefined {
 	const [platform, setPlatform] = useState<InstallPlatform | null>();
 	useEffect(() => setPlatform(detectInstallPlatform(navigator) ?? null), []);
 	return platform;
+}
+
+function useIsMobileDevice(): boolean {
+	const [mobile, setMobile] = useState(false);
+	useEffect(() => {
+		const nav: Navigator & { userAgentData?: { platform?: string } } = navigator;
+		setMobile(
+			isMobileDevice({
+				userAgentDataPlatform: nav.userAgentData?.platform,
+				platform: nav.platform,
+				userAgent: nav.userAgent,
+				maxTouchPoints: nav.maxTouchPoints,
+			}),
+		);
+	}, []);
+	return mobile;
+}
+
+function SendLinkAction() {
+	const [copied, setCopied] = useState(false);
+
+	async function send() {
+		const url = installShareUrl(window.location.href, shareAnchor);
+		if ((await shareInstallLink(navigator, url)) !== "copied") return;
+		setCopied(true);
+		setTimeout(() => setCopied(false), 1400);
+	}
+
+	return (
+		<div className="mb-3">
+			<button
+				type="button"
+				data-share-install-link={shareAnchor}
+				onClick={send}
+				className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-sm bg-primary px-3 text-[12px] font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+			>
+				<span aria-live="polite">{copied ? "Link copied" : "Send link to my computer"}</span>
+				<Send size={14} aria-hidden="true" />
+			</button>
+			<p className="mt-2 text-[11px] leading-4 text-text-muted">
+				ThinkRail runs on macOS, Windows, and Linux.
+			</p>
+		</div>
+	);
 }
 
 function moveTab<T extends string>(
@@ -57,12 +104,14 @@ export function InstallPicker() {
 	const detectedPlatform = useDetectedInstallPlatform();
 	const [platform, setPlatform] = useState<InstallPlatform>();
 	const activePlatform = platform ?? detectedPlatform ?? "macos";
+	const mobile = useIsMobileDevice();
 
 	const platformTabId = (value: InstallPlatform) => `${pickerId}-platform-${value}-tab`;
 	const platformPanelId = (value: InstallPlatform) => `${pickerId}-platform-${value}-panel`;
 
 	return (
 		<div className="max-w-4xl">
+			{mobile ? <SendLinkAction /> : null}
 			<div className="overflow-hidden rounded-md border border-border bg-container-workspace-bg">
 				<div className="flex min-h-9 items-stretch bg-container-header-bg">
 					<div

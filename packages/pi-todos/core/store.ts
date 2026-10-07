@@ -52,7 +52,7 @@ export function groupStatus(group: TodoGroup): TodoGroupStatus {
 
 const CURRENT_VERSION = 6 as const;
 
-// Home for a legacy stray: an agent `done` item found in the (user-only) loose lane on re-plan (see core/SPEC.md).
+// Home for a stray: an agent `done` item left in the loose lane on re-plan (see core/SPEC.md).
 const CARRIED_LOOSE_GROUP = "Completed";
 
 const STATUS_SET: ReadonlySet<string> = new Set(TODO_STATUSES);
@@ -377,7 +377,7 @@ export class TodoStore {
 			const title = flattenTitle(decodeEscapes(g.title));
 			return { id: freshId("g"), title, todos: g.todos.map((w) => reconcile(title, w)) };
 		});
-		const resultLoose = current.todos.filter((t) => t.origin === "user");
+		const resultLoose = current.todos.filter((t) => t.origin === "user" || t.status !== "done");
 		const carriedGroups: TodoGroup[] = [];
 		const carriedLooseDone: Todo[] = [];
 		for (const old of current.groups) {

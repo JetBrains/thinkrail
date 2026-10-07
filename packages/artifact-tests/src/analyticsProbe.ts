@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { removeTree } from "@thinkrail/shared/removeTree";
-import { channel, version } from "@thinkrail/shared/version";
+import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
 import {
 	type ArtifactHostAdapter,
 	hostEnvironment,
@@ -139,6 +139,7 @@ export function assertDesktopLaunch(
 }
 
 export async function runDesktopAnalyticsProbe(adapter: ArtifactHostAdapter): Promise<void> {
+	assert(posthogProjectKey !== "", "the analytics probe needs a release-stamped (keyed) build");
 	const root = mkdtempSync(join(tmpdir(), "thinkrail-desktop-analytics-"));
 	const collector = startAnalyticsCollector();
 	let host: RunningArtifactHost | undefined;

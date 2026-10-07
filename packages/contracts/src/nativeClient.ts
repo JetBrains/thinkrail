@@ -41,6 +41,17 @@ export interface NativeWindowControlsBridge {
 	subscribe(listener: (state: NativeWindowState) => void): () => void;
 }
 
+export interface NativeNotificationInput {
+	title: string;
+	subtitle?: string;
+	body: string;
+	silent?: boolean;
+}
+
+export interface NativeNotificationBridge {
+	show(input: NativeNotificationInput): void;
+}
+
 export type NativeQuitHint = "hidden" | "armed" | "release" | "quitting";
 
 export type NativeCommand = "close-item";

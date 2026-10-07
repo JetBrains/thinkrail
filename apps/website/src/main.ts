@@ -1,5 +1,10 @@
 import { deriveEditorTabs } from "./editorTabs";
-import { detectInstallPlatform, type InstallPlatform } from "./installPlatform";
+import { installShareUrl, isMobileDevice, shareInstallLink } from "./installLinkShare";
+import {
+	type BrowserPlatformHints,
+	detectInstallPlatform,
+	type InstallPlatform,
+} from "./installPlatform";
 import { initThemeToggle } from "./theme";
 
 const motionOK = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -276,15 +281,30 @@ function windowsShellFrom(value: string | undefined): WindowsShell | undefined {
 	}
 }
 
+const browserNavigator: NavigatorWithUserAgentData = navigator;
+const platformHints: BrowserPlatformHints = {
+	userAgentDataPlatform: browserNavigator.userAgentData?.platform,
+	platform: browserNavigator.platform,
+	userAgent: browserNavigator.userAgent,
+	maxTouchPoints: browserNavigator.maxTouchPoints,
+};
+
+const sendLink = document.querySelector<HTMLElement>("[data-send-link]");
+if (sendLink && isMobileDevice(platformHints)) {
+	sendLink.hidden = false;
+	for (const button of sendLink.querySelectorAll<HTMLButtonElement>("[data-share-install-link]")) {
+		button.addEventListener("click", async () => {
+			const url = installShareUrl(window.location.href, button.dataset.shareInstallLink ?? "");
+			if ((await shareInstallLink(navigator, url)) !== "copied") return;
+			button.classList.add("copied");
+			setTimeout(() => button.classList.remove("copied"), 1400);
+		});
+	}
+}
+
 const installPicker = document.querySelector<HTMLElement>("[data-install-picker]");
 if (installPicker) {
-	const browserNavigator: NavigatorWithUserAgentData = navigator;
-	const detectedPlatform = detectInstallPlatform({
-		userAgentDataPlatform: browserNavigator.userAgentData?.platform,
-		platform: browserNavigator.platform,
-		userAgent: browserNavigator.userAgent,
-		maxTouchPoints: browserNavigator.maxTouchPoints,
-	});
+	const detectedPlatform = detectInstallPlatform(platformHints);
 	const platformTabs = installPicker.querySelectorAll<HTMLButtonElement>("[data-install-platform]");
 	const platformPanels = installPicker.querySelectorAll<HTMLElement>("[data-install-panel]");
 	const shellTabs = installPicker.querySelectorAll<HTMLButtonElement>("[data-windows-shell]");

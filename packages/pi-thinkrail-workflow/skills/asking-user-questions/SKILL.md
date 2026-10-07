@@ -19,8 +19,9 @@ stays with the referencing skill.
   depends on another question still open belongs to a *later* round, never the same one. Never split
   independent questions across back-to-back calls.
 - **The call blocks the current run.** Answers arrive as this tool's result. Don't keep working on the
-  blocked step or assume an answer until it arrives — seconds or days later. Composer messages sent
-  while the card is open queue behind it; they neither answer nor supersede the round.
+  blocked step or assume an answer until it arrives — seconds or days later. A composer message sent
+  while the card is open supersedes the round: the card closes unanswered and the message arrives as
+  the next user message, so treat it as the user's reply and re-ask only what still matters.
 - After each round, recompute the frontier: answers settle branches, unblock their dependents, and
   prune branches that no longer apply. Ask the next round; never pre-write later rounds.
 - The interview is done when the frontier is empty — every branch visited, nothing material silently

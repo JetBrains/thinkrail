@@ -1,14 +1,11 @@
+import type { MermaidValidator } from "@thinkrail.ai/pi-visualize";
 import { parseHTML } from "linkedom";
 
 type Mermaid = typeof import("mermaid")["default"];
 type DomGlobalName = "document" | "window";
 
-const parseTailKey = Symbol.for("pi-visualize.mermaid.parseTail");
+const parseTailKey = Symbol.for("thinkrail.visualize.mermaid.parseTail");
 let mermaidPromise: Promise<Mermaid> | undefined;
-
-function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
-}
 
 function restoreGlobal(name: DomGlobalName, descriptor: PropertyDescriptor | undefined): void {
 	if (descriptor) {
@@ -50,7 +47,7 @@ function parseTail(mermaid: Mermaid): Promise<void> {
 	return current instanceof Promise ? current : Promise.resolve();
 }
 
-async function parseMermaid(source: string): Promise<void> {
+export const strictMermaidValidator: MermaidValidator = async (source) => {
 	const mermaid = await loadMermaid();
 	const current = parseTail(mermaid).then(async () => {
 		await mermaid.parse(source);
@@ -60,14 +57,4 @@ async function parseMermaid(source: string): Promise<void> {
 		value: current.catch(() => undefined),
 	});
 	return current;
-}
-
-export async function validateMermaidSyntax(location: string, source: string): Promise<void> {
-	try {
-		await parseMermaid(source);
-	} catch (error) {
-		throw new Error(
-			`visualize: invalid Mermaid syntax in \`${location}\`: ${errorMessage(error)}\nCorrect the syntax and call \`visualize\` again.`,
-		);
-	}
-}
+};

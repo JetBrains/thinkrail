@@ -33,6 +33,7 @@ const marketingConsent: MarketingConsentAdapter = {
 
 const websiteAnalytics = createWebsiteAnalytics({
 	productionHostname: "thinkrail.ai",
+	postHogProjectKey: import.meta.env.PUBLIC_POSTHOG_PROJECT_KEY ?? "",
 	marketingConsent,
 });
 

@@ -165,10 +165,17 @@ test("todo_write reconciles a re-listed plan without resetting progress or nudgi
 	}
 });
 
-test("todo_add requires group or after — the agent cannot author loose items", async () => {
+test("todo_add drops a loose item when both group and after are omitted (the shared raw-input queue)", async () => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
 	try {
-		expect(isError(await run("todo_add", { title: "loose?" }, cwd))).toBe(true);
+		const loose = (await run("todo_add", { title: "raw note" }, cwd)) as AgentToolResult<{
+			todo: { id: string; origin: string };
+		}>;
+		expect(isError(loose)).toBe(false);
+		expect(loose.details.todo.origin).toBe("agent");
+		const plan = new TodoStore(cwd, "sess-test").read();
+		expect(plan.todos.map((t) => t.title)).toEqual(["raw note"]);
+		expect(plan.groups).toHaveLength(0);
 		expect(isError(await run("todo_add", { title: "orphan", after: "t_nope" }, cwd))).toBe(true);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
@@ -230,7 +237,7 @@ test("todo_update reports paused items and suggests the next step after done", a
 	}
 });
 
-test("todo_list renders groups first, then the user's loose lane last (a mid-task add queues after the current work)", async () => {
+test("todo_list renders groups first, then the loose queue last (a mid-task add queues after the current work)", async () => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
 	try {
 		await run("todo_add", { title: "agent step", group: "Refactor" }, cwd);
@@ -238,7 +245,7 @@ test("todo_list renders groups first, then the user's loose lane last (a mid-tas
 
 		const text = resultText(await run("todo_list", {}, cwd));
 		const groupAt = text.indexOf("▸ Refactor");
-		const headerAt = text.indexOf("Your requests:");
+		const headerAt = text.indexOf("Loose queue:");
 		const looseAt = text.indexOf("user ask");
 		expect(groupAt).toBeGreaterThanOrEqual(0);
 		expect(headerAt).toBeGreaterThan(groupAt);
@@ -277,13 +284,13 @@ test("todo_list renders group-first with derived status + progress, and nudges w
 	}
 });
 
-test("todo_add refuses an `after` anchor in the user's lane, and a re-plan keeps that lane intact", async () => {
+test("todo_add refuses an `after` anchor pointing at a loose item (promote, don’t grow siblings)", async () => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
 	try {
 		const mine = new TodoStore(cwd, "sess-test").add({ title: "user ask", origin: "user" });
 		const rejected = await run("todo_add", { title: "related step", after: mine.id }, cwd);
 		expect(isError(rejected)).toBe(true);
-		expect(resultText(rejected)).toContain("group");
+		expect(resultText(rejected)).toContain("promoted");
 
 		const plan = new TodoStore(cwd, "sess-test").read();
 		expect(plan.todos.map((t) => t.title)).toEqual(["user ask"]);

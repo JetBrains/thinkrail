@@ -18,7 +18,13 @@ const key = (
 	...overrides,
 });
 
-const all = { projects: true, workspace: true, bottom: true, newWorkspace: true } as const;
+const all = {
+	projects: true,
+	workspace: true,
+	bottom: true,
+	newWorkspace: true,
+	sessionSwitcher: true,
+} as const;
 
 describe("global hotkey routing", () => {
 	test("keeps the existing physical-key chords and adds Mod+Shift+J for bottom", () => {
@@ -37,6 +43,19 @@ describe("global hotkey routing", () => {
 		).toBe("bottom");
 		expect(globalHotkeyCommand(key("KeyK", { shiftKey: true }), all, false, "Linux")).toBeNull();
 		expect(globalHotkeyCommand(key("KeyB", { altKey: true }), all, false, "Linux")).toBeNull();
+	});
+
+	test("routes Mod+K to session-switcher when available, suppressed behind modal", () => {
+		expect(globalHotkeyCommand(key("KeyK"), all, false, "Linux")).toBe("session-switcher");
+		expect(
+			globalHotkeyCommand(key("KeyK", { ctrlKey: false, metaKey: true }), all, false, "MacIntel"),
+		).toBe("session-switcher");
+		expect(globalHotkeyCommand(key("KeyK"), all, true, "Linux")).toBeNull();
+		expect(
+			globalHotkeyCommand(key("KeyK"), { ...all, sessionSwitcher: false }, false, "Linux"),
+		).toBeNull();
+		expect(globalHotkeyCommand(key("KeyK", { shiftKey: true }), all, false, "Linux")).toBeNull();
+		expect(globalHotkeyCommand(key("KeyK", { altKey: true }), all, false, "Linux")).toBeNull();
 	});
 
 	test("routes Mod+N and the Mod+Alt+N alias to new-workspace, never with Shift, never when unavailable or behind a modal", () => {

@@ -50,13 +50,15 @@ export async function applyAgentTitle(
 	if (params.branch?.trim() && !workspaceName) {
 		throw new Error("branch names the workspace branch: pass it together with workspace_name.");
 	}
+	if (!workspaceName && workspaceStillNameable(workspaceId)) {
+		throw new Error(
+			"This workspace is still unnamed: pass chat_title, workspace_name and branch together in one call.",
+		);
+	}
 
 	const lines: string[] = [];
 	if (chatTitle) lines.push(await applyChatTitle(deps, sessionId, workspaceId, chatTitle));
 	if (workspaceName) lines.push(applyWorkspaceName(workspaceId, workspaceName, params.branch));
-	else if (workspaceStillNameable(workspaceId)) {
-		lines.push("Workspace is still unnamed: call set_title again with workspace_name and branch.");
-	}
 	return lines.join("\n");
 }
 

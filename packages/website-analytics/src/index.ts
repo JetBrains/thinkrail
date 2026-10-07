@@ -1,4 +1,3 @@
-const postHogProjectKey = "phc_AFJBcKraEUrfpTrSSMjBGXMHTusYudtFfxWqdevchy8X";
 const postHogProxyHost = "https://p.thinkrail.ai";
 const postHogUiHost = "https://eu.posthog.com";
 const gtmContainerId = "GTM-WDW2DZW4";
@@ -39,15 +38,47 @@ export type WebsiteContentViewedProperties = {
 	content_key: string;
 };
 
+export type WebsiteCtaLocation =
+	| "hero"
+	| "install_section"
+	| "quick_start"
+	| "final_cta"
+	| "blog_post";
+
+export type WebsiteGithubLocation =
+	| WebsiteCtaLocation
+	| "header"
+	| "footer"
+	| "terminal"
+	| "mock_hint"
+	| "other";
+
 export type WebsiteInstallCtaClickedProperties = {
 	content_key: string;
-	cta_location: "hero" | "install_section" | "quick_start" | "final_cta" | "blog_post";
+	cta_location: WebsiteCtaLocation;
 	install_method: "desktop" | "cli";
+};
+
+export type WebsiteInstallCommandCopiedProperties = {
+	content_key: string;
+	cta_location: "hero" | "install_section";
+	shell: "sh" | "powershell" | "cmd";
+};
+
+export type WebsiteGithubClickedProperties = {
+	content_key: string;
+	cta_location: WebsiteGithubLocation;
+	target: "repo" | "releases" | "other";
+};
+
+export type WebsiteInstallLinkShareClickedProperties = {
+	content_key: string;
+	cta_location: "hero" | "quick_start";
 };
 
 export type WebsiteDownloadStartedProperties = {
 	content_key: string;
-	cta_location: "hero" | "install_section" | "quick_start" | "final_cta" | "blog_post";
+	cta_location: WebsiteCtaLocation;
 	platform: "macos" | "windows" | "linux";
 	architecture: "arm64" | "x64";
 	artifact: "dmg" | "zip" | "tar.gz";
@@ -58,6 +89,9 @@ export type WebsiteAnalyticsEventProperties = {
 	content_viewed: WebsiteContentViewedProperties;
 	install_cta_clicked: WebsiteInstallCtaClickedProperties;
 	download_started: WebsiteDownloadStartedProperties;
+	install_command_copied: WebsiteInstallCommandCopiedProperties;
+	github_clicked: WebsiteGithubClickedProperties;
+	install_link_share_clicked: WebsiteInstallLinkShareClickedProperties;
 };
 
 export type WebsiteAnalyticsEventName = keyof WebsiteAnalyticsEventProperties;
@@ -75,6 +109,7 @@ export type WebsiteAnalytics = {
 
 export type WebsiteAnalyticsOptions = {
 	productionHostname: string;
+	postHogProjectKey: string;
 	marketingConsent: MarketingConsentAdapter;
 };
 
@@ -92,7 +127,7 @@ declare global {
 	}
 }
 
-const sharedConfiguration: WebsiteAnalyticsConfiguration = {
+const configurationForKey = (postHogProjectKey: string): WebsiteAnalyticsConfiguration => ({
 	postHog: {
 		projectKey: postHogProjectKey,
 		scriptUrl: `${postHogProxyHost}/static/array.js`,
@@ -110,7 +145,7 @@ const sharedConfiguration: WebsiteAnalyticsConfiguration = {
 		containerId: gtmContainerId,
 		scriptUrl: `https://www.googletagmanager.com/gtm.js?id=${gtmContainerId}`,
 	},
-};
+});
 
 function initPostHog(
 	configuration: WebsiteAnalyticsConfiguration["postHog"],
@@ -164,8 +199,12 @@ function removeStoredJourneyId(): void {
 
 export function createWebsiteAnalytics({
 	productionHostname,
+	postHogProjectKey,
 	marketingConsent,
 }: WebsiteAnalyticsOptions): WebsiteAnalytics {
+	const productionConfiguration = postHogProjectKey
+		? configurationForKey(postHogProjectKey)
+		: undefined;
 	let initialized = false;
 	let consentGranted: boolean | undefined;
 	let journeyId: string | undefined;
@@ -178,7 +217,7 @@ export function createWebsiteAnalytics({
 	}> = [];
 
 	function configurationForHostname(hostname: string): WebsiteAnalyticsConfiguration | undefined {
-		return hostname === productionHostname ? sharedConfiguration : undefined;
+		return hostname === productionHostname ? productionConfiguration : undefined;
 	}
 
 	function enabledInCurrentWindow(): boolean {
@@ -292,9 +331,9 @@ export function createWebsiteAnalytics({
 	}
 
 	function init(): void {
-		if (!enabledInCurrentWindow() || initialized) return;
+		const configuration = productionConfiguration;
+		if (!enabledInCurrentWindow() || initialized || configuration === undefined) return;
 		initialized = true;
-		const configuration = sharedConfiguration;
 		try {
 			marketingConsent.subscribe(refreshConsent);
 			refreshConsent();

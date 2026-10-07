@@ -257,6 +257,10 @@ export function loadConfig(): AppConfig {
 				? value.analyticsEnabled
 				: DEFAULT_CONFIG.analyticsEnabled,
 		analyticsConsentConfirmed: value.analyticsConsentConfirmed === true,
+		notificationsEnabled:
+			typeof value.notificationsEnabled === "boolean"
+				? value.notificationsEnabled
+				: DEFAULT_CONFIG.notificationsEnabled,
 		terminalReplayKb:
 			typeof value.terminalReplayKb === "number" && Number.isFinite(value.terminalReplayKb)
 				? value.terminalReplayKb

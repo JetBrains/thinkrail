@@ -18,12 +18,7 @@ import {
 	type BuildKind,
 } from "./events";
 import { type AnalyticsEnv, environmentMute } from "./mute";
-import {
-	type AnalyticsSink,
-	createPostHogSink,
-	type OutgoingEvent,
-	POSTHOG_PROJECT_KEY,
-} from "./sink";
+import { type AnalyticsSink, createPostHogSink, type OutgoingEvent } from "./sink";
 
 const log = logger("analytics");
 
@@ -95,12 +90,13 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 	resetAnalyticsForTests();
 	try {
 		const env = options.env ?? process.env;
-		if (environmentMute(env)) return;
+		const apiKey = options.posthogApiKey;
+		if (!apiKey || environmentMute(env)) return;
 		readAcquisition();
 		const host = env.THINKRAIL_POSTHOG_HOST ?? options.posthogHost;
 		const createSink = () =>
 			sinkFactory({
-				apiKey: options.posthogApiKey ?? POSTHOG_PROJECT_KEY,
+				apiKey,
 				...(host ? { host } : {}),
 				...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
 			});

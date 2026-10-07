@@ -197,23 +197,24 @@ test("across a re-plan done items rejoin a matching group and a dropped group's 
 	}
 });
 
-test("re-plan keeps the loose lane user-only: agent items never leak into it", () => {
+test("re-plan carries both user and agent-pending loose items (shared raw-input queue)", () => {
 	const root = tempRoot();
 	try {
 		const s = store(root);
 		const userLoose = s.add({ title: "user request", origin: "user" });
+		const agentLoose = s.add({ title: "agent note" });
 		const agentDone = s.add({ title: "agent done", group: "Gone" });
 		s.update(agentDone.id, { status: "done" });
 
 		const plan = s.replaceAll({ groups: [{ title: "Fresh", todos: [{ title: "step" }] }] });
-		expect(plan.todos.map((t) => t.id)).toEqual([userLoose.id]);
-		expect(plan.todos.every((t) => t.origin === "user")).toBe(true);
+		expect(plan.todos.map((t) => t.id).sort()).toEqual([userLoose.id, agentLoose.id].sort());
+		expect(plan.todos.map((t) => t.origin).sort()).toEqual(["agent", "user"]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
 });
 
-test("re-plan carries a legacy agent done loose item into a group, never leaving it in the user lane", () => {
+test("re-plan parks a done agent loose item in Completed and keeps a pending one in the loose lane", () => {
 	const root = tempRoot();
 	try {
 		const file = join(root, storeRel(SESSION));
@@ -233,10 +234,9 @@ test("re-plan carries a legacy agent done loose item into a group, never leaving
 		const plan = store(root).replaceAll({
 			groups: [{ title: "Fresh", todos: [{ title: "step" }] }],
 		});
-		expect(plan.todos).toHaveLength(0);
+		expect(plan.todos.map((t) => t.title)).toEqual(["legacy agent open"]);
 		const completed = plan.groups.find((g) => g.title === "Completed");
 		expect(completed?.todos.map((t) => t.title)).toEqual(["legacy agent done"]);
-		expect(flatItems(plan).map((t) => t.title)).not.toContain("legacy agent open");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

@@ -61,12 +61,16 @@ another.
    single-file bundle is treated as a plain Node runtime and PI's lazy Babel `require` cannot resolve inside
    it ([[submodule-server-agent]] owns the seam). Flattening PI into Electrobun's normal entry is still
    forbidden: it would load `bun-pty` before `BUN_PTY_LIB` is set.
-3. The runtime value-imports the five bundled extension factories and calls `registerBundledRuntime()`
-   with those factories, the named `pi-web-access` factory needed by delegation children, the staged skills,
-   and macOS/Windows trash helpers. The generator's key map must satisfy every key of the server-owned
+3. The runtime value-imports the four bundled pi-package factories (`pi-web-access`, `pi-spec-graph`,
+   `pi-thinkrail-workflow`, `pi-todos`) and calls `registerBundledRuntime()` with those factories, the
+   `pi-web-access` factory needed by delegation children (picked by `BuildRuntimeSources.webAccessIndex`,
+   never by position), the staged skills (every `BuildRuntimeSources.skillRoots` entry flattened into one
+   dir, duplicate routes rejected), and macOS/Windows trash helpers. ThinkRail extensions from the server
+   registry ([[submodule-server-extensions]]) need no generated entry: their factories reach the bundle
+   through `@thinkrail/server`'s static import graph. The generator's key map must satisfy every key of the server-owned
    `BundledExtensions` contract, so adding a required launcher field fails desktop typecheck instead of
    producing a packaged-only `undefined`. It then calls `bootHost()` on loopback port `0` with the staged web
-   directory, baked version, `desktop` analytics provenance, and, only when packaged, the launcher-supplied
+   directory, baked version and release-only analytics key, `desktop` analytics provenance, and, only when packaged, the launcher-supplied
    `Utils.openExternal` callback used by the host's one-shot browser attribution claim. The callback passes through
    `DesktopHostOptions` and the generated runtime. The first native-window `dom-ready` explicitly calls the
    proxied `host.server.startAttributionClaim()` readiness method; host boot and elapsed time do not start a
@@ -137,6 +141,15 @@ its focused item or do nothing; it never closes the native window. The preload e
 as the frozen non-enumerable `__THINKRAIL_NATIVE_SHORTCUTS__` `NativeShortcutsBridge` (built by
 `shortcutsBridge.ts`) on every desktop platform; only the macOS menu sends events today. On Windows and
 Linux the web shell owns Ctrl+W / Ctrl+F4 (close item) through its command table.
+
+The preload also exposes the frozen non-enumerable `__THINKRAIL_NATIVE_NOTIFICATIONS__`
+`NativeNotificationBridge` ([[module-contracts]]) on every desktop platform: its one `show({ title,
+subtitle?, body, silent? })` method forwards a `showNotification` RPC request to the main process, which
+calls Electrobun `Utils.showNotification` (native OS notification center); delivery is best-effort, so a
+failed request is dropped rather than surfacing an unhandled rejection. The web client detects this
+bridge by capability and routes its attention notifications through it instead of the page Notifications
+API — the web shell keeps no desktop branch. Electrobun click callbacks are not landed yet, so the native
+notification carries no click action.
 
 Each chord has exactly one owner: a native menu accelerator (forwarded as a `NativeCommand`) or web
 keydown, never both, because the webview still receives keydown for accelerator chords. Native owns chords
@@ -315,9 +328,11 @@ unsupported. The repository's independently pinned development/CI runtime is ali
 The package runs the official `electrobun build` / `dev` commands. Configuration reads the same shared
 version module as the launcher, without an environment-version bridge. One documented `preBuild` hook
 builds the shared web artifact and stages the application-specific PTY/trash/skill resources and PI
-runtime. The hook runs under Hutch's Cottontail, so it invokes the real Bun CLI to bundle the separately
-staged `.ts` server runtime rather than changing PI's bundler. Its transient factory entry is removed
-even on failure. Staged resources include the workflow SPEC consumed by the bundled skills. A documented
+runtime. The hook runs under Hutch's Cottontail, so it invokes the real Bun CLI both to read the
+`@thinkrail/server/build-support` manifest (which value-loads the server extension registry and with it
+the pi graph — Cottontail's module runtime cannot evaluate that graph; `typebox`'s `String` export is the
+first casualty) and to bundle the separately staged `.ts` server runtime rather than changing PI's
+bundler. Its transient factory entry is removed even on failure. Staged resources include the workflow SPEC consumed by the bundled skills. A documented
 `postBuild` hook removes staging after the framework has copied it; a failed build's staging is replaced
 at the next pre-build. On Windows that hook also brands the bundled uninstaller after its resource exists
 but before release compression, wrapping, and signing. Builds in one worktree remain sequential.

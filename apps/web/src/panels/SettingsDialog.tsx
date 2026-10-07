@@ -8,6 +8,7 @@ import {
 	RiLayoutGridLine as LayoutTemplate,
 	type RemixiconComponentType as LucideIcon,
 	RiChat2Line as MessageSquareText,
+	RiNotification3Line as NotificationBell,
 	RiPaletteLine as Palette,
 	RiSearchEyeLine as ScanEye,
 	RiShieldCheckLine as ShieldCheck,
@@ -26,6 +27,7 @@ import { FeedbackSettings } from "./FeedbackSettings";
 import { GithubSettings } from "./GithubSettings";
 import { LineWidthSettings } from "./LineWidthSettings";
 import { ModelsSettings } from "./ModelsSettings";
+import { NotificationsSettings } from "./NotificationsSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
 import { ReviewSettings } from "./ReviewSettings";
@@ -60,6 +62,7 @@ const SECTIONS: {
 	{ id: SettingsSection.Terminal, label: "Terminal", icon: SquareTerminal },
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
 	{ id: SettingsSection.Review, label: "Review", icon: ScanEye },
+	{ id: SettingsSection.Notifications, label: "Notifications", icon: NotificationBell },
 	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
 	{ id: SettingsSection.Feedback, label: "Feedback", icon: Feedback },
 ];
@@ -169,6 +172,8 @@ export function SettingsDialog({
 							<TemplatesSettings />
 						) : selectedSection === SettingsSection.Review ? (
 							<ReviewSettings />
+						) : selectedSection === SettingsSection.Notifications ? (
+							<NotificationsSettings />
 						) : selectedSection === SettingsSection.Privacy ? (
 							<PrivacySettings />
 						) : selectedSection === SettingsSection.Feedback ? (

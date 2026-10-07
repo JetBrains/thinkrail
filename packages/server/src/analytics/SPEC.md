@@ -24,7 +24,7 @@ modules remain analytics-free. Sibling dependency edges belong to [[module-serve
 
 ## Events
 
-Basic events are always on in human runs: `app_installed`, `app_started`,
+Basic events are always on in keyed human runs: `app_installed`, `app_started`,
 `chat_started { provider, model, auth_method }`, `message_sent { mode, provider, auth_method }`, and
 `provider_login { provider, method, auth_method }`. `app_installed` carries only the standard environment
 properties and is emitted before `app_started` once when a non-CI/non-test binary or desktop initialization
@@ -89,7 +89,8 @@ update that explicitly includes `analyticsEnabled` changes the grant; unrelated 
 it. Settings changes write preference and confirmation together. Window behavior belongs to
 [[submodule-web-panels]]. Confirmed later launches do not prime or reopen.
 
-CI and `NODE_ENV=test` create no vendor clients. `--no-analytics` / `THINKRAIL_NO_ANALYTICS` suppress only
+Only builds stamped with a project key report (see Data boundary); unkeyed source/dev builds, CI and
+`NODE_ENV=test` create no vendor clients and claim no installation marker. `--no-analytics` / `THINKRAIL_NO_ANALYTICS` suppress only
 additional events without changing consent. Host-side analytics is the sole environment-policy reader
 across launchers. Browser attribution is additionally limited to binary/desktop human runs with both
 preference and confirmation true, an injected launcher opener, and no prior attempt. Source, CI/test,
@@ -126,7 +127,12 @@ closed properties. Only built-in provider/model names pass raw; custom values be
 the existing explicit `jbcentral` login name. No chat/file contents, paths/names, resource IDs, credentials,
 arbitrary errors, token/cost counts or recordings are collected.
 
-The sink uses the committed public key, EU endpoint, disabled GeoIP enrichment and
-`$process_person_profile: false`; key/endpoint/fetch injection supports tests and self-hosting. Personless
+The sink uses the launcher-supplied public key, EU endpoint, disabled GeoIP enrichment and
+`$process_person_profile: false`; key/endpoint/fetch injection supports tests and self-hosting. The
+repository carries no key: release CI stamps it into [[module-shared]]'s version seam, so source, dev
+and locally built artifacts (`channel=dev`, `0.0.0-*`) can never pollute production data. A 2026-10-06
+spike of 275 `app_installed` from unstamped dev desktop/binary harness runs without `CI=1` motivated
+this; the `CI`/test mutes alone relied on every harness remembering them. The `phc_` key stays a public
+ingestion key extractable from shipped binaries, so this stops accidental pollution, not deliberate abuse. Personless
 processing does not remove UUID linkage; vendor IP-discard/retention policy is separate. Automated/schema,
 consent-revocation, migration, host-trigger and packaged loopback-delivery tests pin these boundaries.

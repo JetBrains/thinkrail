@@ -18,6 +18,8 @@ import { resetConfigCache, updateConfig } from "../settings";
 import { type BootedHost, bootHost } from "./boot";
 import { handleRequest } from "./handlers";
 
+const TEST_KEY = "phc_test";
+
 process.setMaxListeners(50);
 
 const booted: BootedHost[] = [];
@@ -178,6 +180,7 @@ test("confirming consent observes current setup without another client read or p
 	await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
 	const events: { event: string; properties: Record<string, unknown> }[] = [];
 	initializeAnalytics({
+		posthogApiKey: TEST_KEY,
 		additionalEnabled: false,
 		env: {},
 		fetchImpl: (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
@@ -214,6 +217,7 @@ test("the dialog prime enables ordinary additional events but schedules attribut
 		host: "127.0.0.1",
 		portMode: "exact",
 		analytics: {
+			posthogApiKey: TEST_KEY,
 			build: "binary",
 			env: {},
 			fetchImpl: (async () => new Response("{}")) as unknown as typeof fetch,
@@ -250,6 +254,7 @@ test("a saved confirmed-on choice waits beyond one second for explicit launcher 
 		host: "127.0.0.1",
 		portMode: "exact",
 		analytics: {
+			posthogApiKey: TEST_KEY,
 			build: "desktop",
 			env: {},
 			fetchImpl: (async () => new Response("{}")) as unknown as typeof fetch,
@@ -286,6 +291,7 @@ test("launcher readiness cannot start attribution before an unconfirmed prime is
 		host: "127.0.0.1",
 		portMode: "exact",
 		analytics: {
+			posthogApiKey: TEST_KEY,
 			build: "desktop",
 			env: {},
 			fetchImpl: (async () => new Response("{}")) as unknown as typeof fetch,
@@ -308,6 +314,7 @@ test("the host forwards successful login generation metadata into the basic even
 	await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
 	const events: { event: string; properties: Record<string, unknown> }[] = [];
 	initializeAnalytics({
+		posthogApiKey: TEST_KEY,
 		additionalEnabled: false,
 		env: {},
 		fetchImpl: (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {

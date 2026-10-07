@@ -23,7 +23,9 @@ import {
 	shutdownAnalytics,
 	track,
 } from "./service";
-import { type OutgoingEvent, POSTHOG_PROJECT_KEY } from "./sink";
+import { createPostHogSink, type OutgoingEvent } from "./sink";
+
+const TEST_KEY = "phc_test";
 
 let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
@@ -67,15 +69,19 @@ function boot(
 	sent: SentPayload[],
 	overrides: Partial<Parameters<typeof initializeAnalytics>[0]> = {},
 ): void {
-	initializeAnalytics({
-		appVersion: "1.2.3",
-		channel: "stable",
-		build: "binary",
-		additionalEnabled: false,
-		env: {},
-		fetchImpl: makeFetch(sent),
-		...overrides,
-	});
+	initializeAnalyticsWithSinkFactoryForTests(
+		{
+			posthogApiKey: TEST_KEY,
+			appVersion: "1.2.3",
+			channel: "stable",
+			build: "binary",
+			additionalEnabled: false,
+			env: {},
+			fetchImpl: makeFetch(sent),
+			...overrides,
+		},
+		(options) => createPostHogSink({ ...options, retryDelayMs: 10 }),
+	);
 }
 
 const BASIC_EVENTS = {
@@ -427,7 +433,7 @@ test("campaign-enriched basics use the revocable grant sink across 503 retry and
 	const deadline = Date.now() + 2_000;
 	while (!attempts && Date.now() < deadline) await Bun.sleep(5);
 	expect(attempts).toBe(1);
-	await Bun.sleep(3_500);
+	await Bun.sleep(100);
 	getAdditionalAnalyticsCapture()?.(ADDITIONAL_EVENTS.task_completed);
 	await shutdownAnalytics();
 
@@ -460,7 +466,7 @@ test("campaign-enriched basics stay on the current grant sink while plain basics
 	);
 	const sinks: Array<{ deliveries: OutgoingEvent[]; sending: boolean }> = [];
 	initializeAnalyticsWithSinkFactoryForTests(
-		{ build: "binary", additionalEnabled: true, env: {} },
+		{ posthogApiKey: TEST_KEY, build: "binary", additionalEnabled: true, env: {} },
 		() => {
 			const sink = { deliveries: [] as OutgoingEvent[], sending: true };
 			sinks.push(sink);
@@ -550,7 +556,7 @@ test("a basic sink construction failure does not consume the install marker", as
 	const oldContents = JSON.stringify({ id: "existing-install" });
 	writeFileSync(target, oldContents);
 	initializeAnalyticsWithSinkFactoryForTests(
-		{ build: "binary", additionalEnabled: false, env: {} },
+		{ posthogApiKey: TEST_KEY, build: "binary", additionalEnabled: false, env: {} },
 		() => {
 			throw new Error("sink construction failed");
 		},
@@ -630,16 +636,36 @@ test("source builds neither consume nor emit the packaged-install marker", async
 	expect(allEntries(binary).map((event) => event.event)).toEqual(["app_installed", "app_started"]);
 });
 
-test("EU destination and project key are shared, with an injectable endpoint", async () => {
+test("EU destination carries the launcher-supplied key, with an injectable endpoint", async () => {
 	const sent: SentPayload[] = [];
 	boot(sent);
 	await shutdownAnalytics();
 	expect(sent[0]?.url).toBe("https://eu.i.posthog.com/batch/");
-	expect(sent[0]?.body.api_key).toBe(POSTHOG_PROJECT_KEY);
+	expect(sent[0]?.body.api_key).toBe(TEST_KEY);
 	const retargeted: SentPayload[] = [];
 	boot(retargeted, { env: { THINKRAIL_POSTHOG_HOST: "http://127.0.0.1:4321/" } });
 	await shutdownAnalytics();
 	expect(retargeted[0]?.url).toBe("http://127.0.0.1:4321/batch/");
+});
+
+test.each([
+	{},
+	{ posthogApiKey: "" },
+])("unkeyed builds %j send nothing and leave the install marker unclaimed", async (key) => {
+	const sent: SentPayload[] = [];
+	initializeAnalytics({
+		appVersion: "0.0.0-dev",
+		channel: "dev",
+		build: "binary",
+		additionalEnabled: true,
+		env: {},
+		fetchImpl: makeFetch(sent),
+		...key,
+	});
+	track({ name: "app_started" });
+	await shutdownAnalytics();
+	expect(sent).toEqual([]);
+	expect(existsSync(join(dataDir, "installation.json"))).toBe(false);
 });
 
 test.each([
