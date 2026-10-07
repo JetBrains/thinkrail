@@ -322,8 +322,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     emergency stop, but registers its best-effort child cascades
     in the same pending set; `getSessionWorkspaceId(sessionId)` (the live session→workspace
     lookup the host's `set_title` handler keys on); **`hasBusySession(workspaceId)`** (true while any live
-    session of the workspace is running, waiting on the user, holds queued messages or an active background
-    command, or is still being prepared — the host's synchronous guard before a bulk teardown of rows a client judged quiet, derived
+    session of the workspace is running, compacting, waiting on the user, holds queued messages or an active
+    background command, or is still being prepared — the host's synchronous guard before a bulk teardown of rows a client judged quiet, derived
     from the same `SessionState` the clients see plus the pre-registration gap); `removeSession`/`disposeAllSessions`;
     **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: close session admission for
     the workspace before its first await, capture every registered parent, synchronously close its resource

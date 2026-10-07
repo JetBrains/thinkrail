@@ -372,11 +372,12 @@ export function getSessionState(sessionId: string): SessionState {
 	return stateFromEntry(mustGetEntry(sessionId));
 }
 
-/** A session in the workspace is running, waiting on the user, or holds queued messages. */
+/** The workspace has a preparing/running/compacting session, live input wait/queue, or command. */
 export function hasBusySession(workspaceId: string): boolean {
 	if ((pendingSessionPreparations.get(workspaceId)?.size ?? 0) > 0) return true;
 	for (const [sessionId, entry] of sessions) {
 		if (entry.workspaceId !== workspaceId || isSessionDeleted(sessionId, workspaceId)) continue;
+		if (entry.manualCompactionInProgress || entry.piCompactionInProgress) return true;
 		const state = stateFromEntry(entry);
 		if (state.execution === "running" || state.needsInput !== null || state.queuedCount > 0)
 			return true;

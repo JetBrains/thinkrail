@@ -27,6 +27,7 @@ import { getReviewSnapshot } from "../reviews";
 import { resetConfigCache, updateConfig } from "../settings";
 import * as todos from "../todos";
 import { todoReviewAutoCycles, todoReviewRecord } from "../todos";
+import { getWorkspace } from "../workspaces";
 import { handleRequest } from "./handlers";
 import { itemReviewActive } from "./planReviewQueue";
 import {
@@ -177,7 +178,9 @@ test("an approve verdict settles the step as reviewed by the agent", async () =>
 	const sessionId = await workerSession();
 	const id = committedItem(sessionId);
 
+	expect(getWorkspace(WS).lastActiveAt).toBeUndefined();
 	expect(startPlanReview(WS, sessionId, id, verdictRunner(approve))).toBe(true);
+	expect(getWorkspace(WS).lastActiveAt ?? 0).toBeGreaterThan(0);
 	await settle(sessionId, id);
 
 	const record = todoReviewRecord({ workspaceId: WS, sessionId, id });

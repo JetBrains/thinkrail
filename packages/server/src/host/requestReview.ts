@@ -36,6 +36,7 @@ import {
 	startTodoReview,
 	todoReviewAutoCycles,
 } from "../todos";
+import { recordWorkspaceActivity } from "../workspaces";
 import { ackSend } from "./ackSend";
 import { resolveNewChatModel } from "./newChatModel";
 import {
@@ -490,7 +491,7 @@ export function startPlanReview(
 	if (itemReviewActive(sessionId, itemId)) return false;
 	const params = { workspaceId, sessionId, id: itemId };
 	const { pkg, reviewedSha } = startTodoReview(params);
-	return enqueuePlanReview(workspaceId, sessionId, itemId, async () => {
+	const started = enqueuePlanReview(workspaceId, sessionId, itemId, async () => {
 		let itemTitle = itemId;
 		try {
 			itemTitle = await itemTitleOf(workspaceId, sessionId, itemId);
@@ -511,6 +512,8 @@ export function startPlanReview(
 			await publishReview(workspaceId).catch(() => {});
 		}
 	});
+	if (started) recordWorkspaceActivity(workspaceId);
+	return started;
 }
 
 /** After a fix lands (the worker re-marks the step done), re-review exactly the items still inside their

@@ -93,6 +93,7 @@ import {
 	listBranches,
 	listCommits,
 	prefetchBranch,
+	tryCurrentBranch,
 } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { clampLimit, getHistoryIndex } from "../history";
@@ -285,6 +286,15 @@ async function removeSettledWorkspaces(
 			if (!listAllWorkspaceRecords().some((workspace) => workspace.id === target.id)) {
 				return { kind: "missing" };
 			}
+			const currentWorkspace = getWorkspace(target.id);
+			if (currentWorkspace.kind === "external") {
+				const branch = tryCurrentBranch(currentWorkspace.worktreePath);
+				if (branch === null) return { kind: "kept", id: target.id, reason: "unsafe" };
+				if (branch !== target.branch) {
+					refreshUserOwnedWorkspace(target.id);
+					return { kind: "kept", id: target.id, reason: "changed" };
+				}
+			}
 			if (target.settleIdleDays !== getConfig().settleIdleDays) {
 				return { kind: "kept", id: target.id, reason: "changed" };
 			}
@@ -310,6 +320,7 @@ async function removeSettledWorkspaces(
 				outcome.workspace.id,
 				outcome.workspace.worktreePath,
 			);
+			void sessionsRemoved.catch(() => {});
 			teardowns = teardowns.then(() => archiveTeardown(outcome.workspace, sessionsRemoved));
 			return { kind: "removed", id: target.id };
 		});

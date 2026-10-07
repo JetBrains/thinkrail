@@ -70,7 +70,9 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   than spreading the model object, so a host-only field the model hallucinates — e.g. `blockedByOpenFindings`
   — can never survive to mislead the card; the host sets it solely from its own open-finding check.
 - **The `reviewing` mark is set synchronously** at start/enqueue, so the panel pulses the instant the
-  client re-reads the plan — before any await.
+  client re-reads the plan — before any await. An accepted button or auto-review also records workspace
+  activity before its queued run can settle, fencing concurrent bulk removal even when a fast hidden
+  reviewer starts and finishes inside that removal's asynchronous safety checks.
 - **A detached failure is published, not just logged.** `todo.startReview`/`todo.reviewAll` ack the moment
   the review is enqueued; the run then fails on a detached path (provider error, invalid output, abort) with
   no chat of its own to show it. `startPlanReview` clears the `reviewing` mark and calls

@@ -3109,6 +3109,7 @@ test("compactSession rejects an overlapping manual compaction", async () => {
 			if (Date.now() > deadline) throw new Error("first compaction never started");
 			await new Promise((resolve) => setTimeout(resolve, 20));
 		}
+		expect(hasBusySession("ws-compact-lock")).toBe(true);
 
 		overlappingCompaction = compactSession(sessionId, "second");
 		overlappingCompaction.catch(() => {});
@@ -3130,6 +3131,7 @@ test("compactSession rejects an overlapping manual compaction", async () => {
 		});
 		releaseCompaction();
 		await firstCompaction;
+		expect(hasBusySession("ws-compact-lock")).toBe(false);
 	} finally {
 		releaseCompaction();
 		if (sessionId) removeSession(sessionId);

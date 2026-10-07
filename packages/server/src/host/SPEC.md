@@ -504,21 +504,23 @@ enabled/confirmed choice before entering analytics attribution.
   workspace's change lock, refresh user-owned branch truth, and require a reliable fresh branch-review
   answer unless the still-matching manual-settle override already wins regardless of PR state. They then
   drain queued change-artifact writes and recheck dirty/unpushed work (permitting risk only for an id in the dialog's explicit
-  preview-time allowlist). The current idle window, parent/preparation state, active delegation or plan
-  review, and `forgetQuietWorkspace` then compare the frozen preview facts with no intervening await before
-  the synchronous forget. A refused row
+  preview-time allowlist). Immediately before the synchronous checks, an external checkout's branch is
+  read once more; drift is `changed`, while detached/unreadable truth is `unsafe`. The current idle window,
+  parent/preparation/compaction state, active delegation or plan review, and `forgetQuietWorkspace` then
+  compare the frozen preview facts with no intervening await before the synchronous forget. A refused row
   is reported in `kept` with its reason (`unsafe` included) and nothing of it is touched; a forgotten row is
   released like `workspace.remove` releases one (`releaseForgottenWorkspace`: spec index, reviews, change
   artifacts, watcher, terminals — synchronously, so every removed row is gone from the UI at once).
   Session retirement starts immediately for every accepted row before the reply, closing the stale-client
-  prompt gap; final artifact settlement and synchronous `git worktree remove` remain chained one worktree
+  prompt gap, and every retirement promise receives an immediate rejection observer so a later serialized
+  teardown cannot leave an interim host-fatal unhandled rejection; final artifact settlement and synchronous `git worktree remove` remain chained one worktree
   after another so forty reclaims cannot freeze the host in one microtask drain. The client re-derives membership from every push, but it freezes each
   target's facts when that id set is previewed; otherwise a same-id push during the dialog would overwrite
   the compare-and-swap baseline. The host compares against that baseline, so any lifecycle change is kept,
   and it reruns the work-safety check so a clean row dirtied after the preview is kept unless that exact id
   was explicitly approved as unsafe. Starting `pr.open` itself stamps activity before its first await and
-  persists any returned PR as an open branch snapshot before replying, closing the reciprocal mutation-vs-
-  removal race. **Review refresh:** after a
+  persists any returned PR as an open branch snapshot before replying; accepting a button/auto plan review
+  stamps activity synchronously too, so even a completed-fast review changes the removal CAS fact. **Review refresh:** after a
   `workspace.list` reply and on a five-minute timer the host refreshes the `review` snapshot of the rows
   whose PR state can still change the partition — live rows on every pass, **idle-settled rows at most
   every 30 minutes** (a PR opened for a dormant branch from outside ThinkRail must still bring it back,
