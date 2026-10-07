@@ -1502,7 +1502,7 @@ export default function PlanPane({
 							showAgentMessage={showAgentMessage}
 						/>
 					)}
-					onAdd={plan.add}
+					onAdd={(title) => plan.add(title, "page")}
 					onOpenChat={() => {
 						useAppStore.getState().noteDirectChatActivation(sessionId);
 						void openChatInTab(workspaceId, sessionId);

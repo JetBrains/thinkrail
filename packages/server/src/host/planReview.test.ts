@@ -890,7 +890,7 @@ test("itemTitleOf labels a Review-All adopted commit with its subject, not the c
 	}
 });
 
-test("only actual agent verdicts emit review decisions, and never leak plan content", async () => {
+test("only actual agent verdicts emit review decisions and agent-authored findings, and never leak plan content", async () => {
 	const events: { event: string; properties: Record<string, unknown> }[] = [];
 	initializeAnalytics({
 		posthogApiKey: TEST_KEY,
@@ -918,6 +918,11 @@ test("only actual agent verdicts emit review decisions, and never leak plan cont
 			["agent", "approved"],
 			["agent", "changes_requested"],
 		]);
+		expect(
+			events
+				.filter((event) => event.event === "review_comment_added")
+				.map((event) => [event.properties.author, event.properties.kind]),
+		).toEqual([["agent", "inline"]]);
 		expect(JSON.stringify(events)).not.toContain("private");
 	} finally {
 		await shutdownAnalytics();

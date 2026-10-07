@@ -63,9 +63,9 @@ bounded browser-derived strings, never resource identities or arbitrary product 
 | `pr_action_finished` | Outcome/category; created PRs remain distinct from updates, pushes and compare-page handoffs; `source` = `plan_page` when driven from the plan page's PR stage, else `other`. |
 | `acquisition_linked` | One successful browser-claim redemption, carrying the transient journey/bridge ids and normalized first/last acquisition fields. |
 
-The review-comment funnel is likewise host-observed off existing wire/tool actions: `review_comment_added`
-off the `review.commentAdd` handler (human, `author:user`) and the reviewer agent's `add_review_comment`
-seam (`author:agent`); `review_comment_sent` off `review.sendComment` and `review.sendBatch`, emitted once
+The review-comment funnel is host-observed off existing wire/tool actions: `review_comment_added`
+off the `review.commentAdd` handler (human, `author:user`) and each plan-review finding the host files
+into the Review tab (`author:agent`, with the persisted `kind`, so an anchor fallback reads as `review`); `review_comment_sent` off `review.sendComment` and `review.sendBatch`, emitted once
 per comment in the already-re-anchored send set so `outdated` reports true anchor drift at send time and the
 added→sent→resolved conversion is countable across a personless population (a per-action event with a count
 bucket would make that ratio unrecoverable). It fires on the send's **acceptance**, not when the detached
@@ -76,7 +76,8 @@ text or line numbers are ever copied — only the closed `author`/`kind`/`actor`
 
 The plan/TODO funnel rides existing wire actions, never browser autocapture: the host captures
 `plan_opened` off a deliberate `todo.list { opened }` call (the plan page open or the chat popup open —
-not the automatic refetches), `plan_item_added` off `todo.add`, and stamps the `source` discriminator on
+not the automatic refetches), `plan_item_added` off `todo.add` (`surface` names the in-chat add row or
+the plan page's add row), and stamps the `source` discriminator on
 `pr_action_finished` from the `pr.open` caller (`plan_page` when the plan page's PR button drove it). The
 plan page's Review stage runs through pi-subagents delegation ([[submodule-server-host]]'s plan review),
 whose asynchronous verdict is decoupled from the triggering surface, so `review_decided` carries no source

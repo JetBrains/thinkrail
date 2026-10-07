@@ -42,7 +42,7 @@ export function planIsCompleteWithoutSummary(
 export interface ChatTodos {
 	data: TodoPlan | null;
 	failed: boolean;
-	add: (title: string) => Promise<void>;
+	add: (title: string, surface?: "chat" | "page") => Promise<void>;
 	remove: (id: string) => Promise<void>;
 	openPlan: () => void;
 	/** Records plan_opened for the in-chat popup (openPlan already records the page). */
@@ -173,7 +173,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			.catch(() => {});
 	}, [data, identity, live, sessionId, workspaceId]);
 
-	const add = async (rawTitle: string) => {
+	const add = async (rawTitle: string, surface: "chat" | "page" = "chat") => {
 		const title = rawTitle.trim();
 		if (!title) return;
 		const requestIdentity = identity;
@@ -181,7 +181,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			workspaceId,
 			sessionId,
 			title,
-			surface: "chat",
+			surface,
 		});
 		if (!live(requestIdentity)) return;
 		readGeneration.current += 1;
