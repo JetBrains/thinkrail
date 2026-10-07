@@ -32,8 +32,13 @@ function collectCandidates(state: AppState): AttentionCandidate[] {
 }
 
 function navigate(spec: NotificationSpec): void {
-	if (spec.target.kind === "app") return; // window already focused by the click handler
 	const state = useAppStore.getState();
+	if (spec.target.kind === "switcher") {
+		// Several worktrees need attention — surface the cross-workspace palette so the user picks
+		// one, instead of just focusing a window that may not be showing the right chat.
+		state.openSessionSwitcher();
+		return;
+	}
 	const projectId = selectWorkspaceById(state, spec.target.workspaceId)?.projectId;
 	if (!projectId) return;
 	// The route-based open lands the chat at its latest message (no message jump/flash), same as a

@@ -35,9 +35,11 @@ Producer → queue → consumer, so the decision to notify is deferred to the mo
   (`ATTENTION_WINDOW_MS`, 1s). Accumulated edges flush as one batch; the latest event per session wins.
 - **Consumer** (flush): emits only when every gate passes — master toggle on, permission granted, window
   **not** focused, and the session's dot **still lit** (already-answered edges are dropped). One surviving
-  session opens its chat (`activateWorkspaceFromRoute`, landing at the latest message); several focus the app. `formatNotification` keeps the title
-  as the bold **ThinkRail** mark and puts the detail in the body (`{worktree} · {reason}` for one,
-  `N worktrees need your attention` for several); a per-session `tag` lets the browser replace rather than
+  session opens its chat (`activateWorkspaceFromRoute`, landing at the latest message); several open the
+  cross-workspace `SessionSwitcher` palette (`openSessionSwitcher` on [[submodule-web-store]]) so the user
+  picks the one to attend, instead of landing in a window that may not show the right chat.
+  `formatNotification` keeps the title as the bold **ThinkRail** mark and puts the detail in the body
+  (`{worktree} · {reason}` for one, `N worktrees need your attention` for several); a per-session `tag` lets the browser replace rather than
   stack. Every notification also sets the symbol-only ThinkRail icon (`/favicon.svg`, the
   browser-tab/shell-logo artwork), honored by Chrome/Edge/Firefox; Safari ignores a page notification's icon
   and shows its own browser icon (platform limitation).
@@ -69,9 +71,9 @@ toggle is host-synced app config and defaults on (notifications still require th
   installed PWA) the constructor can throw and is swallowed as a no-op rather than crashing the flush.
 - **Public surface (`index.ts` barrel):** `useAttentionNotifications`, `NotificationPermissionPrompt`,
   `ATTENTION_WINDOW_MS`.
-- **Allowed deps:** [[submodule-web-store]] (session-state reads, prompt state + `activateWorkspaceFromRoute`
-  actions), `ui` (the preface dialog), [[module-contracts]] (`SessionState` / `SessionCompletion`
-  types), React, Remix Icon.
+- **Allowed deps:** [[submodule-web-store]] (session-state reads, prompt state, `activateWorkspaceFromRoute`
+  and `openSessionSwitcher` actions), `ui` (the preface dialog), [[module-contracts]] (`SessionState` /
+  `SessionCompletion` types), React, Remix Icon.
 - **Forbidden:** a second source of truth for attention; raw agent-event listening; any host/`pi` import.
 
 The master toggle (`notificationsEnabled`) lives in app config; its Settings panel is

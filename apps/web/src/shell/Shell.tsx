@@ -74,7 +74,7 @@ export function Shell() {
 	const updates = useUpdates(supportsHostUpdateRun(protocolVersion) ? runHostUpdate : null);
 	const windowControls = useNativeWindowControls();
 	const [newWorkspaceProjectId, setNewWorkspaceProjectId] = useState<string | null>(null);
-	const [sessionSwitcherOpen, setSessionSwitcherOpen] = useState(false);
+	const sessionSwitcherOpen = useAppStore((s) => s.sessionSwitcherOpen);
 
 	const welcomeCenterRef = useRef<HTMLDivElement>(null);
 	const {
@@ -137,7 +137,7 @@ export function Shell() {
 		...(contextProject
 			? { onNewWorkspace: () => setNewWorkspaceProjectId(contextProject.id) }
 			: {}),
-		onSessionSwitcher: () => setSessionSwitcherOpen((prev) => !prev),
+		onSessionSwitcher: () => useAppStore.getState().toggleSessionSwitcher(),
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
@@ -332,7 +332,14 @@ export function Shell() {
 				</div>
 			)}
 			{analyticsConsentOpen ? <AnalyticsConsentDialog /> : <InterviewPromptDialog />}
-			<SessionSwitcher open={sessionSwitcherOpen} onOpenChange={setSessionSwitcherOpen} />
+			<SessionSwitcher
+				open={sessionSwitcherOpen}
+				onOpenChange={(open) => {
+					const store = useAppStore.getState();
+					if (open) store.openSessionSwitcher();
+					else store.closeSessionSwitcher();
+				}}
+			/>
 			<NotificationPermissionPrompt />
 			<Toaster />
 			<AppShortcuts />

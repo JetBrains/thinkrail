@@ -888,6 +888,7 @@ interface AppState {
 	settingsSection: SettingsSection;
 	interviewPromptOpen: boolean;
 	notificationPromptOpen: boolean;
+	sessionSwitcherOpen: boolean;
 	theme: ThemeId;
 	themeMode: ThemeMode;
 	systemThemePair: SystemThemePair | undefined;
@@ -1101,6 +1102,9 @@ interface AppState {
 	hideInterviewPrompt: () => void;
 	openNotificationPrompt: () => void;
 	closeNotificationPrompt: () => void;
+	openSessionSwitcher: () => void;
+	closeSessionSwitcher: () => void;
+	toggleSessionSwitcher: () => void;
 	setChatMessageOrder: (order: ChatMessageOrder) => void;
 	setStreamingResponseMovement: (movement: StreamingResponseMovement) => void;
 	setChatPreferences: (order: ChatMessageOrder, movement: StreamingResponseMovement) => void;
@@ -1916,6 +1920,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	settingsSection: SettingsSection.Providers,
 	interviewPromptOpen: false,
 	notificationPromptOpen: false,
+	sessionSwitcherOpen: false,
 	theme: DEFAULT_CONFIG.theme,
 	themeMode: DEFAULT_CONFIG.themeMode,
 	systemThemePair: DEFAULT_CONFIG.systemThemePair,
@@ -3587,6 +3592,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 	openNotificationPrompt: () =>
 		set((state) => (state.notificationPromptOpen ? state : { notificationPromptOpen: true })),
 	closeNotificationPrompt: () => set({ notificationPromptOpen: false }),
+	openSessionSwitcher: () =>
+		set((state) => (state.sessionSwitcherOpen ? state : { sessionSwitcherOpen: true })),
+	closeSessionSwitcher: () => set({ sessionSwitcherOpen: false }),
+	toggleSessionSwitcher: () =>
+		set((state) => ({ sessionSwitcherOpen: !state.sessionSwitcherOpen })),
 	showInterviewPrompt: () =>
 		set((state) => (state.interviewPromptOpen ? state : { interviewPromptOpen: true })),
 	hideInterviewPrompt: () => set({ interviewPromptOpen: false }),

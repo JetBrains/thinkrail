@@ -16,7 +16,7 @@ export interface AttentionEvent {
 /** Where a click on the emitted notification should land. */
 export type NotificationTarget =
 	| { kind: "chat"; workspaceId: string; sessionId: string }
-	| { kind: "app" };
+	| { kind: "switcher" };
 
 /** A ready-to-show notification derived from one flush of accumulated events. */
 export interface NotificationSpec {
@@ -73,6 +73,6 @@ export function formatNotification(events: readonly AttentionEvent[]): Notificat
 		title: APP_NAME,
 		body: truncate(`${events.length} worktrees need your attention`),
 		tag: AGGREGATE_TAG,
-		target: { kind: "app" },
+		target: { kind: "switcher" },
 	};
 }

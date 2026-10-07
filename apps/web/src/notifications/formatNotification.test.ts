@@ -62,7 +62,7 @@ describe("formatNotification", () => {
 		expect(spec?.body).toBe("Waiting for your input");
 	});
 
-	test("multiple → aggregated notification targeting the app", () => {
+	test("multiple → aggregated notification opens the session switcher", () => {
 		const spec = formatNotification([
 			event({ sessionId: "s1" }),
 			event({ sessionId: "s2" }),
@@ -72,7 +72,7 @@ describe("formatNotification", () => {
 			title: "ThinkRail",
 			body: "3 worktrees need your attention",
 			tag: "thinkrail-attention",
-			target: { kind: "app" },
+			target: { kind: "switcher" },
 		});
 	});
 
@@ -92,7 +92,7 @@ describe("formatNotification", () => {
 		const spec = formatNotification([event({ sessionId: "s1" }), event({ sessionId: "s2" })]);
 		expect(spec?.body).toBe("2 worktrees need your attention");
 		expect(spec?.tag).toBe("thinkrail-attention");
-		expect(spec?.target).toEqual({ kind: "app" });
+		expect(spec?.target).toEqual({ kind: "switcher" });
 	});
 
 	test("body is truncated to ~100 chars", () => {

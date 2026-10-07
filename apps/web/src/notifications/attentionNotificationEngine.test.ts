@@ -92,7 +92,7 @@ describe("createAttentionNotificationEngine", () => {
 		engine.enqueue(event({ sessionId: "s1" }));
 		engine.enqueue(event({ sessionId: "s2" }));
 		clock.run();
-		expect(emitted[0]?.target).toEqual({ kind: "app" });
+		expect(emitted[0]?.target).toEqual({ kind: "switcher" });
 		expect(emitted[0]?.body).toBe("2 worktrees need your attention");
 	});
 
