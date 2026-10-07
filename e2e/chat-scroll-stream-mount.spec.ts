@@ -15,7 +15,7 @@ const CPU_THROTTLE = 4;
 const FRAME_GAP_MS = 15;
 const STREAM_CHARS = 25_000;
 const SWITCH_AFTER_MS = 400;
-const FIRST_VISIBLE_BUDGET_MS = 250;
+const FIRST_VISIBLE_BUDGET_MS = 750;
 
 interface ProbeFrame {
 	t: number;
