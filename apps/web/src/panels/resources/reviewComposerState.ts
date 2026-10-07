@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useReducer } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ResourceContent } from "@/resources";
+import {
+	type ReviewTextBinding,
+	type ReviewTextState,
+	useReviewDraftState,
+} from "./reviewDraftState";
 
 export const FILE_CHANGED_NOTICE = "The file changed — select again.";
 
@@ -14,9 +19,10 @@ export function diffContentStamp(original: ResourceContent, modified: ResourceCo
 }
 
 export interface StampedComposerState<T> {
-	selection: { stamp: string; value: T } | null;
+	selection: { stamp: string; value: T; id: number } | null;
 	composing: boolean;
 	stale: boolean;
+	input?: ReviewTextState;
 }
 
 export type StampedComposerAction<T> =
@@ -35,7 +41,7 @@ export function stampedComposerReducer<T>(
 ): StampedComposerState<T> {
 	if (action.type === "select") {
 		return {
-			selection: { stamp: action.stamp, value: action.value },
+			selection: { stamp: action.stamp, value: action.value, id: (state.selection?.id ?? 0) + 1 },
 			composing: action.composing,
 			stale: false,
 		};
@@ -53,28 +59,45 @@ export function stampedComposerReducer<T>(
 	};
 }
 
-export function useStampedComposer<T>(stamp: string) {
-	const [state, dispatch] = useReducer(
-		stampedComposerReducer<T>,
-		undefined,
-		initialStampedComposerState<T>,
-	);
+export function useStampedComposer<T>(stamp: string, slot = "selection") {
+	const initial = useMemo(() => initialStampedComposerState<T>(), []);
+	const [state, change, scoped] = useReviewDraftState(slot, initial, true);
+	const [restoredSelection] = useState(state.selection);
 	const selectionIsCurrent = state.selection?.stamp === stamp;
 
 	useEffect(() => {
-		dispatch({ type: "refresh", stamp });
-	}, [stamp]);
+		change((current) => stampedComposerReducer(current, { type: "refresh", stamp }));
+	}, [change, stamp]);
 
 	const select = useCallback(
 		(value: T, composing = true) => {
-			dispatch({ type: "select", stamp, value, composing });
+			change((current) =>
+				stampedComposerReducer(current, { type: "select", stamp, value, composing }),
+			);
 		},
-		[stamp],
+		[change, stamp],
 	);
-	const open = useCallback(() => dispatch({ type: "open", stamp }), [stamp]);
-	const close = useCallback(() => dispatch({ type: "close" }), []);
+	const open = useCallback(
+		() => change((current) => stampedComposerReducer(current, { type: "open", stamp })),
+		[change, stamp],
+	);
+	const selection = state.selection;
+	const close = useCallback(
+		() => change((current) => (current.selection === selection ? undefined : current)),
+		[change, selection],
+	);
+	const onInputChange = useCallback(
+		(input: ReviewTextState) =>
+			change((current) => (current.selection === selection ? { ...current, input } : current)),
+		[change, selection],
+	);
+	const input: ReviewTextBinding | undefined = scoped
+		? { value: state.input, onChange: onInputChange, restored: selection === restoredSelection }
+		: undefined;
 
 	return {
+		input,
+		key: scoped ? state.selection?.id : undefined,
 		selection: selectionIsCurrent ? (state.selection?.value ?? null) : null,
 		composing: state.composing && selectionIsCurrent,
 		stale: state.stale || (state.composing && !selectionIsCurrent),

@@ -28,8 +28,7 @@ import { useWorkspaceTurns } from "./useWorkspaceTurns";
 
 const SECTION_HEADER_HEIGHT = 32;
 const END_NOTE_HEIGHT = 48;
-const REVEAL_SETTLE_MS = 1_200;
-const USER_SCROLL_EVENTS = ["wheel", "touchstart", "pointerdown"] as const;
+const USER_SCROLL_EVENTS = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
 
 interface ReviewListContext {
 	tailHeight: number;
@@ -66,6 +65,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const setCollapsed = useAppStore((state) => state.setChangesTabCollapsed);
 	const clearReveal = useAppStore((state) => state.clearChangesTabReveal);
 	const requestReveal = useAppStore((state) => state.requestChangesTabReveal);
+	const requestReviewFocus = useAppStore((state) => state.requestReviewFocus);
 	const cache = useRef(createSectionContentCache()).current;
 	const turns = useWorkspaceTurns(workspaceId);
 	const reviewGuide = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.review.guide);
@@ -143,7 +143,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const scrollerRef = useRef<HTMLElement | null>(null);
 	const [tailHeight, setTailHeight] = useState(0);
 	const tailObserver = useRef<ResizeObserver | null>(null);
-	const settling = useRef<{ index: number; until: number } | null>(null);
+	const settling = useRef<{ path: string; commentId?: string } | null>(null);
 	const detachScroller = useRef<(() => void) | null>(null);
 	const attachScroller = useCallback((element: HTMLElement | Window | null) => {
 		detachScroller.current?.();
@@ -163,9 +163,9 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 			settling.current = null;
 		};
 		for (const type of USER_SCROLL_EVENTS)
-			scroller.addEventListener(type, endSettle, { passive: true });
+			scroller.addEventListener(type, endSettle, { passive: true, capture: true });
 		detachScroller.current = () => {
-			for (const type of USER_SCROLL_EVENTS) scroller.removeEventListener(type, endSettle);
+			for (const type of USER_SCROLL_EVENTS) scroller.removeEventListener(type, endSettle, true);
 		};
 	}, []);
 	useEffect(
@@ -179,18 +179,29 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	activePathRef.current = tab.activePath;
 	const spyFrame = useRef(0);
 	const restoredStacked = useRef(false);
-	const scrollToSection = useCallback((index: number) => {
-		settling.current = { index, until: Date.now() + REVEAL_SETTLE_MS };
+	const scrollToSection = useCallback((index: number, path: string) => {
+		settling.current = { path };
 		virtuoso.current?.scrollToIndex({ index, align: "start" });
+	}, []);
+	const revealComment = useCallback(() => {
+		const commentId = settling.current?.commentId;
+		const scroller = scrollerRef.current;
+		if (!commentId || !scroller) return false;
+		const card = [...scroller.querySelectorAll<HTMLElement>("[data-comment-id]")].find(
+			(element) => element.dataset.commentId === commentId,
+		);
+		if (!card) return false;
+		card.scrollIntoView({ block: "center" });
+		return true;
 	}, []);
 	const spyActiveSection = useCallback(() => {
 		if (!restoredStacked.current) return;
-		if (settling.current) {
-			if (Date.now() < settling.current.until) return;
-			settling.current = null;
-		}
 		cancelAnimationFrame(spyFrame.current);
 		spyFrame.current = requestAnimationFrame(() => {
+			if (settling.current) {
+				revealComment();
+				return;
+			}
 			const scroller = scrollerRef.current;
 			if (!scroller) return;
 			const edge = scroller.getBoundingClientRect().top + SECTION_HEADER_HEIGHT / 2;
@@ -204,32 +215,42 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 				setActivePath(workspaceId, tab.id, active);
 			}
 		});
-	}, [setActivePath, tab.id, workspaceId]);
+	}, [revealComment, setActivePath, tab.id, workspaceId]);
 	useEffect(() => () => cancelAnimationFrame(spyFrame.current), []);
-	const revealTick = tab.reveal?.tick;
-	const revealPath = tab.reveal?.path;
 	useEffect(() => {
-		if (revealTick === undefined || revealPath === undefined || !status) return;
-		const index = files.findIndex((change) => change.path === revealPath);
+		const reveal = tab.reveal;
+		if (!reveal || !status) return;
+		const index = files.findIndex((change) => change.path === reveal.path);
 		if (index >= 0) {
-			setActivePath(workspaceId, tab.id, revealPath);
-			if (tab.collapsed[revealPath] !== false) {
-				setCollapsed(workspaceId, tab.id, { [revealPath]: false });
+			setActivePath(workspaceId, tab.id, reveal.path);
+			if (tab.collapsed[reveal.path] !== false) {
+				setCollapsed(workspaceId, tab.id, { [reveal.path]: false });
 			}
-			if (layout === "stacked") scrollToSection(index);
+			if (layout === "stacked") {
+				restoredStacked.current = true;
+				scrollToSection(index, reveal.path);
+				if (reveal.commentId) {
+					settling.current = { path: reveal.path, commentId: reveal.commentId };
+					requestReviewFocus(workspaceId, reveal.commentId);
+				}
+			} else if (reveal.commentId) {
+				settling.current = null;
+				requestReviewFocus(workspaceId, reveal.commentId);
+			}
 		}
 		clearReveal(workspaceId, tab.id);
 	}, [
 		clearReveal,
 		files,
 		layout,
-		revealPath,
-		revealTick,
+		requestReviewFocus,
+		scrollToSection,
 		setActivePath,
 		setCollapsed,
 		status,
 		tab.collapsed,
 		tab.id,
+		tab.reveal,
 		workspaceId,
 	]);
 
@@ -243,13 +264,15 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	useEffect(() => {
 		if (layout !== "stacked") {
 			restoredStacked.current = false;
+			settling.current = null;
 			return;
 		}
 		if (pendingReveal || !status || restoredStacked.current) return;
 		restoredStacked.current = true;
 		const index = files.findIndex((change) => change.path === activePathRef.current);
-		if (index <= 0) return;
-		const frame = requestAnimationFrame(() => scrollToSection(index));
+		const change = files[index];
+		if (!change) return;
+		const frame = requestAnimationFrame(() => scrollToSection(index, change.path));
 		return () => cancelAnimationFrame(frame);
 	}, [files, layout, pendingReveal, scrollToSection, status]);
 
@@ -278,11 +301,13 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		setViewed(workspaceId, tab.id, current.path, !wasViewed);
 		if (!wasViewed && layout === "single") step(1);
 	};
-	const markAllViewed = () => {
-		for (const change of files) {
-			if (!viewedSet.has(change.path)) setViewed(workspaceId, tab.id, change.path, true);
-		}
-	};
+	const markAllViewed = () =>
+		setViewed(
+			workspaceId,
+			tab.id,
+			files.map((change) => change.path),
+			true,
+		);
 
 	useEffect(() => {
 		if (!status) return;
@@ -521,7 +546,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 							files={files}
 							guide={reviewGuide}
 							comments={reviewComments}
-							onReveal={(path) => requestReveal(workspaceId, tab.id, path)}
+							onReveal={(path, commentId) => requestReveal(workspaceId, tab.id, path, commentId)}
 						/>
 					) : null}
 					<div className="relative min-h-0 flex-1 bg-container-content-bg">
@@ -559,11 +584,13 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 							onScroll={spyActiveSection}
 							rangeChanged={spyActiveSection}
 							totalListHeightChanged={() => {
-								const pending = settling.current;
-								if (pending && Date.now() < pending.until) {
-									virtuoso.current?.scrollToIndex({ index: pending.index, align: "start" });
+								if (revealComment()) return;
+								const index = files.findIndex((change) => change.path === settling.current?.path);
+								if (index >= 0) {
+									virtuoso.current?.scrollToIndex({ index, align: "start" });
 									return;
 								}
+								settling.current = null;
 								spyActiveSection();
 							}}
 							itemContent={(_index, change) => (

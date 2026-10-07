@@ -2,6 +2,12 @@ import { RiSendPlaneLine as Send, RiDeleteBin6Line as Trash2 } from "@remixicon/
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useRef, useState } from "react";
 import type { ReviewThread, ReviewThreadActions } from "../resources";
+import {
+	type ReviewTextState,
+	reviewTextState,
+	selectedReviewText,
+	useReviewDraftState,
+} from "./resources/reviewDraftState";
 import { outdatedReason, threadLabel } from "./reviewModel";
 
 function grow(el: HTMLTextAreaElement): void {
@@ -18,8 +24,16 @@ export function ReviewThreadCard({
 	actions: ReviewThreadActions;
 	onActivate?: (() => void) | undefined;
 }) {
-	const [busy, setBusy] = useState(false);
-	const [draftText, setDraftText] = useState(thread.body);
+	const [localBusy, setBusy] = useState(false);
+	const [localText, setDraftText] = useState(thread.body);
+	const [edit, changeEdit, scoped] = useReviewDraftState<ReviewTextState | undefined>(
+		`thread:${thread.id}`,
+		undefined,
+	);
+	const draftText = scoped ? (edit?.text ?? thread.body) : localText;
+	const textState = edit ?? reviewTextState(draftText);
+	const busy = scoped ? textState.busy : localBusy;
+	const [restored] = useState(edit);
 	const [syncedBody, setSyncedBody] = useState(thread.body);
 	if (syncedBody !== thread.body) {
 		setSyncedBody(thread.body);
@@ -27,10 +41,31 @@ export function ReviewThreadCard({
 	}
 	const editRef = useRef<HTMLTextAreaElement>(null);
 	const cancelledRef = useRef(false);
-	const run = (action: (id: string) => Promise<void>) => {
-		setBusy(true);
-		action(thread.id).catch(() => setBusy(false));
+	const run = (action: () => Promise<void>) => {
+		if (busy) return;
+		const pending = { ...textState, busy: true };
+		if (scoped) changeEdit(() => pending);
+		else setBusy(true);
+		action().then(
+			() => {
+				if (scoped) changeEdit((current) => (current === pending ? undefined : current));
+			},
+			() => {
+				if (scoped)
+					changeEdit((current) => (current === pending ? { ...pending, busy: false } : current));
+				else setBusy(false);
+			},
+		);
 	};
+	useEffect(() => {
+		if (restored)
+			editRef.current?.setSelectionRange(restored.start, restored.end, restored.direction);
+	}, [restored]);
+	useEffect(() => {
+		if (edit && !edit.busy && (thread.status !== "draft" || edit.text === thread.body)) {
+			changeEdit((current) => (current === edit ? undefined : current));
+		}
+	}, [changeEdit, edit, thread.body, thread.status]);
 	useEffect(() => {
 		const el = editRef.current;
 		if (el && el.value === draftText) grow(el);
@@ -42,10 +77,12 @@ export function ReviewThreadCard({
 		}
 		const next = draftText.trim();
 		if (!next || next === thread.body) {
-			setDraftText(thread.body);
+			if (scoped) changeEdit(() => undefined);
+			else setDraftText(thread.body);
 			return;
 		}
-		actions.onUpdateComment(thread.id, next).catch(() => setDraftText(thread.body));
+		if (scoped) run(() => actions.onUpdateComment(thread.id, next));
+		else actions.onUpdateComment(thread.id, next).catch(() => setDraftText(thread.body));
 	};
 	return (
 		<div
@@ -84,8 +121,15 @@ export function ReviewThreadCard({
 								data-testid="review-thread-send"
 								aria-label="Send this comment to the file's review chat"
 								className="review-thread-action disabled:pointer-events-none"
-								disabled={busy}
-								onClick={() => run(actions.onSendComment)}
+								disabled={busy || (scoped && !draftText.trim())}
+								onClick={() =>
+									run(async () => {
+										if (scoped && draftText.trim() !== thread.body) {
+											await actions.onUpdateComment(thread.id, draftText.trim());
+										}
+										await actions.onSendComment(thread.id);
+									})
+								}
 							>
 								<Send className="size-12" />
 							</button>
@@ -97,7 +141,7 @@ export function ReviewThreadCard({
 								aria-label="Delete draft"
 								className="review-thread-action disabled:pointer-events-none"
 								disabled={busy}
-								onClick={() => run(actions.onDeleteComment)}
+								onClick={() => run(() => actions.onDeleteComment(thread.id))}
 							>
 								<Trash2 className="size-12" />
 							</button>
@@ -115,18 +159,33 @@ export function ReviewThreadCard({
 					value={draftText}
 					disabled={busy}
 					onChange={(e) => {
-						setDraftText(e.target.value);
+						if (scoped) {
+							const next = selectedReviewText(e.currentTarget, textState);
+							changeEdit(() => next);
+						} else setDraftText(e.target.value);
 						grow(e.target);
 					}}
-					onBlur={saveEdit}
+					onSelect={(e) => {
+						if (!scoped) return;
+						const next = selectedReviewText(e.currentTarget, textState);
+						if (next !== textState) changeEdit(() => next);
+					}}
+					onBlur={(event) => {
+						if (scoped && event.currentTarget.parentElement?.contains(event.relatedTarget)) return;
+						saveEdit();
+					}}
 					onKeyDown={(e) => {
 						e.stopPropagation();
 						if (e.key === "Escape") {
 							cancelledRef.current = true;
-							setDraftText(thread.body);
+							if (scoped) changeEdit(() => undefined);
+							else setDraftText(thread.body);
 							editRef.current?.blur();
 						}
-						if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) editRef.current?.blur();
+						if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+							if (scoped) e.preventDefault();
+							editRef.current?.blur();
+						}
 					}}
 				/>
 			) : (

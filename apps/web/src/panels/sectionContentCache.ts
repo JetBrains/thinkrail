@@ -24,26 +24,31 @@ export interface SectionContentCache {
 
 export function createSectionContentCache(): SectionContentCache {
 	const content = new Map<string, SectionContent>();
-	const pending = new Map<string, Promise<SectionContent>>();
+	const pending = new Map<
+		string,
+		{ loadedTick: number; loadedTarget: string; promise: Promise<SectionContent> }
+	>();
 	return {
 		get: (path) => content.get(path),
 		set: (path, next) => {
+			pending.delete(path);
 			content.set(path, next);
 		},
 		load(path, read, loadedTick, loadedTarget) {
-			const key = `${loadedTarget}\u0000${path}`;
-			const inFlight = pending.get(key);
-			if (inFlight) return inFlight;
+			const inFlight = pending.get(path);
+			if (inFlight?.loadedTick === loadedTick && inFlight.loadedTarget === loadedTarget) {
+				return inFlight.promise;
+			}
 			const promise = read()
 				.then((fresh) => {
 					const next = { ...fresh, loadedTick, loadedTarget };
-					content.set(path, next);
+					if (pending.get(path)?.promise === promise) content.set(path, next);
 					return next;
 				})
 				.finally(() => {
-					if (pending.get(key) === promise) pending.delete(key);
+					if (pending.get(path)?.promise === promise) pending.delete(path);
 				});
-			pending.set(key, promise);
+			pending.set(path, { loadedTick, loadedTarget, promise });
 			return promise;
 		},
 	};

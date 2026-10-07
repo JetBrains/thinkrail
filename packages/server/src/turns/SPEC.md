@@ -22,7 +22,7 @@ pi's `turn_*` (one assistant message): a receipt per message would fragment one 
 
 ## Boundary
 
-- **Owns:** `TurnTracker` (per-session pending run → settle), `turns.json` under the data dir
+- **Owns:** `TurnTracker` (per-session pending run → settle, plus `drain()` for in-flight recording), `turns.json` under the data dir
   (`persistence.loadTurns` / `saveTurns`, versioned, atomic, capped at 30 runs per workspace, dropped
   with the workspace), `listTurns(workspaceId)`, `turnScope(turn)`, the `turn.changed` publisher seam.
 - **Public surface (barrel):** `TurnTracker`, `listTurns`, `forgetWorkspaceTurns`, `setTurnPublisher`,
@@ -51,10 +51,15 @@ pi's `turn_*` (one assistant message): a receipt per message would fragment one 
   run's receipt. What remains is the accepted race: a snapshot is asynchronous git work, and an agent
   write that lands while it runs may fall on either side. Model latency makes this practically
   impossible for the first tool call; a blocking snapshot would delay every run start on large repos.
-- **A removed workspace records nothing.** Membership is re-resolved right before the record/publish
-  step, so a run settling while its workspace is removed cannot recreate the workspace's entry in
-  `turns.json` (`forgetWorkspaceTurns` only deletes what is already there); `workspace.turns` likewise
-  rejects an unknown workspace.
+- **Receipts belong to the captured workspace, not a live session.** Capture the workspace id and
+  worktree path at `agent_start`; a session detached during settlement must not lose its receipt.
+  Independently check the workspace registry immediately before record/publish, so workspace removal
+  still cannot recreate its entry in `turns.json` (`forgetWorkspaceTurns` only deletes existing records).
+  `workspace.turns` likewise rejects an unknown workspace.
+- **Graceful shutdown drains recording after settling sessions, before disposal.** `drain()` awaits
+  the jobs begun at `agent_settled`; it never invents a settle for a pending start. Both snapshots and
+  status calculation finish before the host returns from shutdown. Synchronous `stop()` remains the
+  emergency path, not a recording barrier.
 - **Start order is the order.** Turns are stored and capped by `startedAt`, not by settle time, so a
   later-started run that settles first does not become "Last turn" — the client applies the same rule
   to a live `turn.changed`, so a reload never disagrees with the push.

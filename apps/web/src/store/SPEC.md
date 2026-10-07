@@ -573,24 +573,37 @@ is not; unlike a `DiffTab` it carries **no content** — the pane reads `git.sta
 `git.diffFile`, so the persisted layout tab is just kind + id + name + scope and reload hydration rebuilds the
 tab without a request. What the tab *does* own is review progress: `viewed` paths, `activePath` (the section
 at the top of the viewport, or the file shown in One-file mode; `ChangesPanel` highlights from it), per-path
-collapse overrides over the scale defaults, a one-shot `reveal` (`{ path, tick }`, written by
+collapse overrides over the scale defaults, a one-shot `reveal` (`{ path, tick, commentId? }`, written by
 `openChangesTab` and consumed by the pane), `view` split|inline + `ignoreWhitespace` for all sections, and
 per-path `rendererId` / opaque `viewState` written through the workspace-explicit `setChangesTabSection*`
-actions. The stacked-vs-one-file mode is **not** on the tab: `changesLayout` (`"stacked"` default |
+actions. Each section also holds opaque `reviewDrafts`, updated by a workspace/tab/path/key-explicit
+functional action. They survive renderer/view-state changes but not tab close or reload; writes cannot
+recreate a closed tab. The first scratch write keeps the preview without navigation, and no scratch write
+is a host review mutation. Renderers own the scratch shape and stale-selection policy.
+The stacked-vs-one-file mode is **not** on the tab: `changesLayout` (`"stacked"` default |
 `"single"`) is app-wide like `changesView`, a reading preference rather than a property of one review.
 The tab is preview-eligible like `FileTab` and `DiffTab` — until it holds progress: the first `viewed` or
-`kept` write (`recordChangesTabProgress`) also keeps the preview, in the same `set`, so a later single-click
-preview opens beside the review instead of evicting the reader's marks. Progress is **session-scoped**:
+`kept` write (`recordChangesTabProgress`) also keeps its canonical layout placement, in the same `set`,
+so restored and split-group previews cannot evict the reader's marks just because the legacy preview
+mirror is empty or names another group. Keeping the last hunk records file and hunk progress atomically;
+bulk viewed updates are one write rather than one store notification and array copy per file. Progress is **session-scoped**:
 `viewed`/`kept` live on the tab object only, a reload rebuilds the tab empty, and a viewed file does not
 lapse when the agent rewrites it (kept hunks do, through their content key) — persisting viewed per file
 hash across reloads is the known follow-up, not an accident.
-**`turnsByWorkspace`** holds each workspace's host-recorded agent runs (`TurnChangeSet[]`, oldest first):
-`setWorkspaceTurns` installs the `workspace.turns` answer and `applyTurnChanged` folds a `turn.changed` push
-in (deduped by id, kept sorted, capped like the host); both are dropped with the workspace. The list is
-read by the chat's turn dividers (the round's receipt) and by the Changes scope menu (*Last turn*). The
-shell is the one loader (`useLoadWorkspaceTurns`, re-reading `workspace.turns` on every connection
-generation so a run that settled while the socket was down still arrives); every other consumer only
-reads through `useWorkspaceTurns`.
+**`turnsByWorkspace`** holds each workspace's host-recorded agent runs (`TurnChangeSet[]`, oldest first
+by `startedAt`, deduplicated by id and capped at 30 like the host). `applyTurnChanged` seeds an unloaded
+workspace as well as replacing an existing receipt. `setWorkspaceTurns` takes the `workspace.turns`
+answer, the immutable list captured before that read, and its connection generation. It replaces the
+baseline with the snapshot, then overlays current receipts whose object identities were absent from the
+baseline: a push during initial/reconnect hydration wins, including a replacement of the same id, while
+unchanged baseline entries omitted by the host are pruned. Both write paths apply the same ordering,
+deduplication and cap. No separate push buffer or revision map is needed; the single loader retains only
+the bounded baseline beside the bounded store list. Disconnected/old-generation responses are no-ops;
+workspace removal drops the list and its tombstone rejects later snapshots and pushes. The list is read
+by the chat's turn dividers (the round's receipt) and by the Changes scope menu (*Last turn*). The shell
+is the one loader (`useLoadWorkspaceTurns`, re-reading `workspace.turns` on every connection generation
+so a run that settled while the socket was down still arrives); every other consumer only reads through
+`useWorkspaceTurns`.
 **`requestChangesView(workspaceId, path | null, scope?)`** gained two optional dimensions for the chat's
 *Review turn* action: a `scope` lands on `diffScopeByWorkspace` atomically with the reveal intent, and a
 `null` path means "open the review tab for that scope" rather than "reveal this file".

@@ -14,7 +14,7 @@ export function ChangesTree({
 	isViewed,
 }: {
 	changes: readonly GitFileChange[];
-	onOpen: (path: string, intent: TabIntent) => void;
+	onOpen: (path: string, intent: TabIntent, claimPreview?: boolean) => void;
 	isActive: (path: string) => boolean;
 	isViewed: (path: string) => boolean;
 }) {
@@ -40,7 +40,7 @@ function ChangeNodeRow({
 	isViewed,
 }: {
 	node: ChangeTreeNode;
-	onOpen: (path: string, intent: TabIntent) => void;
+	onOpen: (path: string, intent: TabIntent, claimPreview?: boolean) => void;
 	isActive: (path: string) => boolean;
 	isViewed: (path: string) => boolean;
 }) {
@@ -67,7 +67,7 @@ function ChangeNodeRow({
 							label={node.name}
 							labelClassName={`${statusNameClass(node.status)} ${isViewed(node.path) ? "opacity-60" : ""}`}
 							onClick={() => onOpen(node.path, "preview")}
-							onDoubleClick={() => onOpen(node.path, "keep")}
+							onDoubleClick={() => onOpen(node.path, "keep", true)}
 							trailing={
 								<>
 									{isViewed(node.path) ? <ViewedMark /> : null}

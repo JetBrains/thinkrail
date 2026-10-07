@@ -1,6 +1,11 @@
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useRef, useState } from "react";
 import type { AnchorDraft, SurfaceReview } from "@/resources";
+import {
+	type ReviewTextBinding,
+	reviewTextState,
+	selectedReviewText,
+} from "./resources/reviewDraftState";
 
 function grow(el: HTMLTextAreaElement): void {
 	el.style.height = "auto";
@@ -12,6 +17,7 @@ export function ReviewComposer({
 	label,
 	commenting,
 	initialText = "",
+	input,
 	notice,
 	onClose,
 	className,
@@ -20,27 +26,37 @@ export function ReviewComposer({
 	label: string;
 	commenting: SurfaceReview["commenting"];
 	initialText?: string;
+	input?: ReviewTextBinding | undefined;
 	notice?: string;
 	onClose: () => void;
 	className?: string;
 }) {
-	const [text, setText] = useState(initialText);
-	const [busy, setBusy] = useState(false);
+	const [initial] = useState(() => ({
+		value: input?.value ?? reviewTextState(initialText),
+		restored: input?.restored === true || input?.value !== undefined,
+	}));
+	const [local, setLocal] = useState(initial.value);
+	const state = input?.value ?? local;
+	const { text, busy } = state;
+	const setInput = input?.onChange ?? setLocal;
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 
 	useEffect(() => {
-		const input = inputRef.current;
-		if (!input) return;
-		input.focus();
-		input.setSelectionRange(input.value.length, input.value.length);
-		grow(input);
-	}, []);
+		const element = inputRef.current;
+		if (!element) return;
+		if (!initial.restored) element.focus();
+		element.setSelectionRange(initial.value.start, initial.value.end, initial.value.direction);
+		grow(element);
+	}, [initial]);
+	useEffect(() => {
+		if (input && !input.value) input.onChange(initial.value);
+	}, [initial, input]);
 
 	const submit = (action: SurfaceReview["commenting"]["onSave"]) => {
 		const body = text.trim();
-		if (!body) return;
-		setBusy(true);
-		action(draft, body).then(onClose, () => setBusy(false));
+		if (busy || !body) return;
+		setInput({ ...state, busy: true });
+		action(draft, body).then(onClose, () => setInput({ ...state, busy: false }));
 	};
 
 	return (
@@ -55,13 +71,18 @@ export function ReviewComposer({
 				value={text}
 				disabled={busy}
 				onChange={(event) => {
-					setText(event.target.value);
-					grow(event.target);
+					setInput(selectedReviewText(event.currentTarget, state));
+					grow(event.currentTarget);
+				}}
+				onSelect={(event) => {
+					const next = selectedReviewText(event.currentTarget, state);
+					if (next !== state) setInput(next);
 				}}
 				onKeyDown={(event) => {
 					event.stopPropagation();
 					if (event.key === "Escape") onClose();
 					if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+						event.preventDefault();
 						submit(commenting.onSave);
 					}
 				}}

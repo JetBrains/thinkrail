@@ -86,8 +86,13 @@ test("a double click opens the per-file tab and a section's Open as tab does the
 	page,
 }) => {
 	await seedThreeChanges(page);
+	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).click();
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="file"]')).toHaveCount(1);
+	await revealWorkbenchTool(page, "changes");
 
 	await row(page, "script.ts").dblclick();
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="file"]')).toHaveCount(0);
 	await expect(diffTab(page)).toHaveCount(1);
 	await expect(diffTab(page)).toHaveAttribute("data-preview", "false");
 	await expect(reviewTab(page)).toHaveCount(0);
@@ -136,6 +141,21 @@ test("One file mode walks the scope with Prev / Next and V, sharing progress wit
 	await expect(page.getByTestId("changes-review-viewed-count")).toHaveText("1/3 viewed");
 	await expect(section(page, "README.md")).toHaveAttribute("data-viewed", "true");
 	await expect(row(page, "script.ts")).toHaveAttribute("data-active", "true");
+});
+
+test("returning to Stacked restores the first file rather than an earlier reveal anchor", async ({
+	page,
+}) => {
+	await seedThreeChanges(page);
+	await row(page, "script.ts").click();
+	await expect(section(page, "script.ts").getByTestId("hunk-keep")).toBeVisible();
+	await page.getByTestId("changes-review-layout-single").click();
+	await page.getByTestId("changes-review-prev").click();
+	await page.getByTestId("changes-review-prev").click();
+	await expect(page.getByTestId("changes-review-counter")).toHaveText("1 / 3");
+	await page.getByTestId("changes-review-layout-stacked").click();
+	await expect(section(page, "notes.txt").getByTestId("changes-section-header")).toBeInViewport();
+	await expect(row(page, "notes.txt")).toHaveAttribute("data-active", "true");
 });
 
 test("the review tab survives a reload and a large file mounts collapsed behind Expand", async ({
@@ -204,6 +224,22 @@ test("hunk triage: Keep marks hunks, a fully kept file becomes viewed, and the b
 	await expect(page.getByTestId("diff-pane")).toBeVisible();
 	await expect(page.getByTestId("diff-pane").getByTestId("hunk-toolbar")).toBeVisible();
 	await expect(page.getByTestId("diff-pane").getByTestId("hunk-keep")).toHaveCount(0);
+});
+
+test("review shortcuts leave files alone while a scope menu owns keyboard input", async ({
+	page,
+}) => {
+	await seedThreeChanges(page);
+	await row(page, "script.ts").click();
+	await expect(page.getByTestId("changes-review-viewed-count")).toHaveText("0/3 viewed");
+	await page.getByTestId("changes-scope-trigger").click();
+	await expect(page.getByRole("menu")).toBeVisible();
+	await page.keyboard.press("v");
+	await expect(page.getByTestId("changes-review-viewed-count")).toHaveText("0/3 viewed");
+	await page.keyboard.press("Escape");
+	await expect(page.getByRole("menu")).not.toBeVisible();
+	await page.keyboard.press("v");
+	await expect(page.getByTestId("changes-review-viewed-count")).toHaveText("1/3 viewed");
 });
 
 test("an explicitly unviewed fully kept file stays unviewed after its section remounts", async ({
@@ -289,6 +325,10 @@ test("the review guide walks the reviewer's reading order and findings with N", 
 	page,
 }) => {
 	const worktree = await seedThreeChanges(page);
+	writeFileSync(
+		join(worktree, "script.ts"),
+		Array.from({ length: 100 }, (_, i) => `export const value${i + 1} = true;`).join("\n"),
+	);
 	const workspaceId = JSON.parse(readFileSync(join(E2E_DATA_DIR, "workspaces.json"), "utf8")).find(
 		(w: { worktreePath: string }) => w.worktreePath === worktree,
 	).id as string;
@@ -324,7 +364,7 @@ test("the review guide walks the reviewer's reading order and findings with N", 
 					anchor: {
 						path: "script.ts",
 						side: "worktree",
-						selectors: [{ kind: "lineRange", startLine: 1, endLine: 1 }],
+						selectors: [{ kind: "lineRange", startLine: 85, endLine: 85 }],
 					},
 					body: "RISK: the flag is exported without a reader.",
 					status: "draft",
@@ -362,6 +402,7 @@ test("the review guide walks the reviewer's reading order and findings with N", 
 		"data-active",
 		"true",
 	);
+	await expect(page.locator('[data-comment-id="finding-1"]')).toBeInViewport();
 	await expect(guide.getByTestId("changes-review-guide-fix")).toBeVisible();
 	await expect(guide.getByTestId("changes-review-guide-next")).toContainText("Restart");
 
@@ -371,6 +412,40 @@ test("the review guide walks the reviewer's reading order and findings with N", 
 	await expect(page.getByTestId("changes-review-guide")).toBeVisible();
 });
 
+test("revealing a file stays anchored while slow diffs determine the virtual list height", async ({
+	page,
+}) => {
+	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
+		const server = browser.connectToServer();
+		const delayed = new Set<string>();
+		browser.onMessage((message) => {
+			const frame = JSON.parse(String(message));
+			if (frame.method === "git.diffFile") delayed.add(frame.id);
+			server.send(message);
+		});
+		server.onMessage((message) => {
+			const frame = JSON.parse(String(message));
+			if (delayed.delete(frame.id)) {
+				setTimeout(() => browser.send(message), 2_500);
+			} else browser.send(message);
+		});
+	});
+	const worktree = await seedThreeChanges(page);
+	for (let file = 0; file < 60; file += 1) {
+		writeFileSync(
+			join(worktree, `slow-${String(file).padStart(3, "0")}.ts`),
+			Array.from({ length: 100 }, (_, line) => `export const value${line} = ${file};`).join("\n"),
+		);
+	}
+	await expect(page.getByTestId("change-item")).toHaveCount(63);
+	await row(page, "slow-030.ts").click();
+	await expect(section(page, "slow-030.ts").getByTestId("diff-view")).toContainText("value99", {
+		timeout: 15_000,
+	});
+	await expect(section(page, "slow-030.ts").getByTestId("changes-section-header")).toBeInViewport();
+	await expect(row(page, "slow-030.ts")).toHaveAttribute("data-active", "true");
+});
+
 test("a draft written inside a section counts toward the tab's Send review, and review progress keeps the preview tab", async ({
 	page,
 }) => {
@@ -378,17 +453,16 @@ test("a draft written inside a section counts toward the tab's Send review, and 
 	await row(page, "script.ts").click();
 	await expect(reviewTab(page)).toHaveAttribute("data-preview", "true");
 	await expect(page.getByTestId("changes-review-send")).toHaveCount(0);
+	await page.reload();
+	await expect(reviewTab(page)).toHaveAttribute("data-preview", "true");
+	await section(page, "notes.txt").getByTestId("changes-section-viewed").click();
+	await expect(reviewTab(page)).not.toHaveAttribute("data-preview", "true");
 
 	await selectPierreLine(section(page, "script.ts").getByTestId("diff-view"), "edited = true");
 	await expect(page.getByTestId("review-composer")).toBeVisible();
 	await page.getByTestId("review-composer-input").fill("Name this flag after what it gates.");
 	await page.getByTestId("review-composer-save").click();
 	await expect(page.getByTestId("changes-review-send")).toContainText("Send review (1)");
-
-	// marking a file viewed is review progress: the tab stops being a disposable preview, so a
-	// later single-click preview opens beside it instead of replacing it
-	await section(page, "notes.txt").getByTestId("changes-section-viewed").click();
-	await expect(reviewTab(page)).not.toHaveAttribute("data-preview", "true");
 	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).click();
 	await expect(reviewTab(page)).toHaveCount(1);

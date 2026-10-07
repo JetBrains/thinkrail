@@ -106,10 +106,15 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	};
 
 	const openDiff = useCallback(
-		(path: string, intent: TabIntent, navigation?: CenterNavigationStamp | null) => {
+		(
+			path: string,
+			intent: TabIntent,
+			navigation?: CenterNavigationStamp | null,
+			claimPreview = false,
+		) => {
 			setHighlighted(path);
 			if (intent === "keep") {
-				void openDiffInTab(workspaceId, scope, path, intent, navigation);
+				void openDiffInTab(workspaceId, scope, path, intent, navigation, { claimPreview });
 				return;
 			}
 			void openChangesTab(workspaceId, scope, { revealPath: path }, intent, navigation);
@@ -214,7 +219,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				) : changesView === "tree" ? (
 					<ChangesTree
 						changes={status.changes}
-						onOpen={openDiff}
+						onOpen={(path, intent, claimPreview) => openDiff(path, intent, undefined, claimPreview)}
 						isActive={isActive}
 						isViewed={isViewed}
 					/>
@@ -239,7 +244,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 												data-active={isActive(change.path) ? true : undefined}
 												data-viewed={isViewed(change.path) ? true : undefined}
 												onClick={() => openDiff(change.path, "preview")}
-												onDoubleClick={() => openDiff(change.path, "keep")}
+												onDoubleClick={() => openDiff(change.path, "keep", undefined, true)}
 												title={change.path}
 												className="flex min-w-0 flex-1 items-center gap-8 px-4 py-4 text-left tr-text-ui"
 											>

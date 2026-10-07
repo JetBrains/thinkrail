@@ -47,13 +47,20 @@ export function changeBlockContentKeys(
 ): Map<string, string> {
 	const originalLines = original.split("\n");
 	const modifiedLines = modified.split("\n");
-	const seen = new Map<string, number>();
+	const contents = blocks.map(
+		(block) =>
+			`${fnv1a(spanText(originalLines, block.original))}-${fnv1a(spanText(modifiedLines, block.modified))}`,
+	);
+	const counts = new Map<string, number>();
+	for (const content of contents) counts.set(content, (counts.get(content) ?? 0) + 1);
 	return new Map(
-		blocks.map((block) => {
-			const content = `${fnv1a(spanText(originalLines, block.original))}-${fnv1a(spanText(modifiedLines, block.modified))}`;
-			const ordinal = seen.get(content) ?? 0;
-			seen.set(content, ordinal + 1);
-			return [changeBlockId(block), ordinal === 0 ? content : `${content}#${ordinal}`];
+		blocks.map((block, index) => {
+			const content = contents[index] ?? "";
+			const count = counts.get(content) ?? 1;
+			return [
+				changeBlockId(block),
+				count === 1 ? content : `${content}#${count}@${block.original.start}`,
+			];
 		}),
 	);
 }

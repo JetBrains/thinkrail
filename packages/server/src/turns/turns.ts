@@ -1,12 +1,14 @@
 import type { GitDiffScope, PiEvent, TurnChangeSet } from "@thinkrail/contracts";
 import { gitStatus, snapshotWorktree } from "../git";
 import { logger } from "../log";
-import { loadTurns, saveTurns } from "../persistence";
+import { loadTurns, loadWorkspaces, saveTurns } from "../persistence";
 
 const log = logger("turns");
 const TURNS_PER_WORKSPACE = 30;
 
 interface PendingRun {
+	workspaceId: string;
+	worktreePath: string;
 	startedAt: number;
 	baseTree: Promise<string | null>;
 }
@@ -50,6 +52,7 @@ function recordTurn(turn: TurnChangeSet): void {
 
 export class TurnTracker {
 	private readonly pending = new Map<string, PendingRun>();
+	private readonly recording = new Set<Promise<void>>();
 
 	constructor(
 		private readonly resolve: (
@@ -65,31 +68,35 @@ export class TurnTracker {
 			const target = this.resolve(sessionId);
 			if (!target) return Promise.resolve();
 			const baseTree = this.snapshot(target.worktreePath).catch(() => null);
-			this.pending.set(sessionId, { startedAt: this.now(), baseTree });
+			this.pending.set(sessionId, { ...target, startedAt: this.now(), baseTree });
 			return baseTree.then(() => {});
 		}
 		if (event.type !== "agent_settled") return Promise.resolve();
 		const run = this.pending.get(sessionId);
 		this.pending.delete(sessionId);
 		if (!run) return Promise.resolve();
-		const target = this.resolve(sessionId);
-		if (!target) return Promise.resolve();
-		const headTree = this.snapshot(target.worktreePath);
-		return this.settle(sessionId, target, run, headTree).catch((error) => {
+		const headTree = this.snapshot(run.worktreePath);
+		const job = this.settle(sessionId, run, headTree).catch((error) => {
 			log.warn(`turn change set was not recorded for ${sessionId}`, error as Error);
 		});
+		this.recording.add(job);
+		void job.then(() => this.recording.delete(job));
+		return job;
+	}
+
+	async drain(): Promise<void> {
+		await Promise.all(this.recording);
 	}
 
 	private async settle(
 		sessionId: string,
-		target: { workspaceId: string; worktreePath: string },
 		run: PendingRun,
 		head: Promise<string | null>,
 	): Promise<void> {
 		const [baseTree, headTree] = await Promise.all([run.baseTree, head]);
 		if (!baseTree || !headTree || headTree === baseTree) return;
 		const id = `${sessionId}:${run.startedAt}`;
-		const status = await gitStatus(target.workspaceId, {
+		const status = await gitStatus(run.workspaceId, {
 			kind: "turn",
 			id,
 			baseTree,
@@ -97,10 +104,10 @@ export class TurnTracker {
 			startedAt: run.startedAt,
 		});
 		if (status.changes.length === 0) return;
-		if (this.resolve(sessionId)?.workspaceId !== target.workspaceId) return;
+		if (!loadWorkspaces().some((workspace) => workspace.id === run.workspaceId)) return;
 		const turn: TurnChangeSet = {
 			id,
-			workspaceId: target.workspaceId,
+			workspaceId: run.workspaceId,
 			sessionId,
 			startedAt: run.startedAt,
 			settledAt: this.now(),

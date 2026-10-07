@@ -818,6 +818,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		shutdownPromise ??= (async () => {
 			stopHostUpdateChecks();
 			await Promise.allSettled([settleSessionsForShutdown(), shutdownAnalytics()]);
+			await turnTracker.drain();
 			stop();
 		})();
 		return shutdownPromise;

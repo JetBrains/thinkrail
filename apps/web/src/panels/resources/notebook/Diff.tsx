@@ -24,7 +24,7 @@ const NO_THREADS: ReadonlySet<string> = new Set();
 type Side = "base" | "worktree";
 
 interface SelectedCell {
-	cell: NotebookCell;
+	index: number;
 	side: Side;
 }
 
@@ -78,7 +78,7 @@ function CellCommentButton({
 				aria-label={label}
 				data-testid={`notebook-comment-cell-${side}`}
 				className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-				onClick={() => onSelect({ cell, side })}
+				onClick={() => onSelect({ index: cell.index, side })}
 			>
 				<MessageSquarePlus className="size-14" />
 			</button>
@@ -210,11 +210,9 @@ function NotebookDiffSurface({
 					if (!current) return null;
 					const threadEntries = layout.threads.get(key) ?? [];
 					const selection = composer.selection;
-					const composing =
-						composer.composing &&
-						((selection?.side === "base" && selection.cell === cells.original) ||
-							(selection?.side === "worktree" && selection.cell === cells.modified));
-					const draft = selection && composing ? notebookCellDraft(selection.cell) : null;
+					const selectedCell = selection?.side === "base" ? cells.original : cells.modified;
+					const composing = composer.composing && selection?.index === selectedCell?.index;
+					const draft = selectedCell && composing ? notebookCellDraft(selectedCell) : null;
 					const composerSurface = selection ? surfaceFor(selection.side) : undefined;
 					return (
 						<section
@@ -279,6 +277,8 @@ function NotebookDiffSurface({
 							{composing && draft && composerSurface ? (
 								<div className="border-border-muted border-t p-8">
 									<ReviewComposer
+										key={composer.key}
+										input={composer.input}
 										draft={draft}
 										label={draft.label}
 										commenting={composerSurface.commenting}

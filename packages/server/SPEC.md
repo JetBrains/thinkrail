@@ -24,7 +24,7 @@ e2e).
 - **Public surface:** `createServer(options) → Promise<RunningServer>`
   (`{ port, startAttributionClaim, stop, shutdown }`) — saved-choice attribution waits for the launcher's
   explicit UI-readiness call; `stop()` is synchronous resource disposal for low-level tests while `shutdown()` is the idempotent,
-  bounded production lifecycle (settle sessions + drain analytics and dispose sockets/PTYS/watchers)
+  bounded production lifecycle (settle sessions + drain turn receipts/analytics and dispose sockets/PTYS/watchers)
   every launcher must await — the public
   factory starts Central artifact watching and applies the initial current PI runtime before binding a socket
   or exposing handlers—falling back to a plain runtime with closed `load-failed` status when the configured

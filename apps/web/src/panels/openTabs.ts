@@ -49,6 +49,7 @@ async function openReadTab<T>(
 	read: () => Promise<T>,
 	build: (payload: T, loadedTick: number) => EditorTab,
 	requestedNavigation?: CenterNavigationStamp | null,
+	claimPreview = false,
 ): Promise<void> {
 	const navigation =
 		requestedNavigation === undefined
@@ -59,7 +60,7 @@ async function openReadTab<T>(
 	if (intent === "preview" && !isCenterNavigationCurrent(store, workspaceId, navigation)) return;
 	const pending = inFlight.get(id);
 	if (pending) {
-		if (intent === "preview") pending.claimPreview = true;
+		if (intent === "preview" || claimPreview) pending.claimPreview = true;
 		if (intent === "keep") pending.intent = "keep";
 		pending.navigation = navigation;
 		pending.requestedAt = navTick(workspaceId);
@@ -67,7 +68,7 @@ async function openReadTab<T>(
 	}
 	const flight = {
 		intent,
-		claimPreview: intent === "preview",
+		claimPreview: intent === "preview" || claimPreview,
 		navigation,
 		requestedAt: navTick(workspaceId),
 		startedAt: Date.now(),
@@ -182,6 +183,7 @@ export function openDiffInTab(
 	path: string,
 	intent: TabIntent,
 	requestedNavigation?: CenterNavigationStamp | null,
+	options: { claimPreview?: boolean } = {},
 ): Promise<void> {
 	const canonicalPath = projectRelativePath(
 		path,
@@ -216,6 +218,7 @@ export function openDiffInTab(
 			loadedTarget: target,
 		}),
 		requestedNavigation,
+		options.claimPreview,
 	);
 }
 

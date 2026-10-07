@@ -14,7 +14,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { copyText, isPhoneViewport } from "@/lib";
 import type { HunkTriage } from "@/resources";
 import { statusLetter } from "../chat/planView";
@@ -32,6 +32,7 @@ import { DiffSurfaceBody, useDiffSurface } from "./DiffSurface";
 import { HeaderIconButton } from "./HeaderIconButton";
 import { openDiffInTab } from "./openTabs";
 import { rendererImplementationKey, rendererTestId } from "./resourcePane";
+import { ReviewDraftContext } from "./resources/reviewDraftState";
 import type { SectionContent, SectionContentCache } from "./sectionContentCache";
 import { ToggleSegment } from "./ToggleSegment";
 import { useLiveTabContent } from "./useLiveTabContent";
@@ -73,6 +74,12 @@ export function ChangesFileSection({
 	const targetRef = useAppStore((state) => selectDiffTabTargetRef(state, { workspaceId, scope }));
 	const setSectionRenderer = useAppStore((state) => state.setChangesTabSectionRenderer);
 	const setSectionViewState = useAppStore((state) => state.setChangesTabSectionViewState);
+	const setSectionReviewDraft = useAppStore((state) => state.setChangesTabSectionReviewDraft);
+	const updateReviewDraft = useCallback(
+		(key: string, update: (current: unknown) => unknown) =>
+			setSectionReviewDraft(workspaceId, tab.id, path, key, update),
+		[path, setSectionReviewDraft, tab.id, workspaceId],
+	);
 	const setHunkKept = useAppStore((state) => state.setChangesTabHunkKept);
 	const section = tab.sections[path];
 	const keptList = tab.kept[path];
@@ -81,18 +88,13 @@ export function ChangesFileSection({
 	const triage = useMemo<HunkTriage>(
 		() => ({
 			keptKeys,
-			setKept: (key, kept) => setHunkKept(workspaceId, tab.id, path, key, kept),
+			setKept: (key, kept) => setHunkKept(workspaceId, tab.id, path, key, kept, hunkKeys),
 			onHunkKeys: setHunkKeys,
 		}),
-		[keptKeys, path, setHunkKept, tab.id, workspaceId],
+		[hunkKeys, keptKeys, path, setHunkKept, tab.id, workspaceId],
 	);
 	const keptCount = hunkKeys.filter((key) => keptKeys.has(key)).length;
 	const allKept = hunkKeys.length > 0 && keptCount === hunkKeys.length;
-	const wasAllKept = useRef(allKept);
-	useEffect(() => {
-		if (allKept && !wasAllKept.current) onSetViewed(true);
-		wasAllKept.current = allKept;
-	}, [allKept, onSetViewed]);
 
 	const read = useCallback(
 		() => getTransport().request("git.diffFile", { workspaceId, path, scope }),
@@ -126,7 +128,7 @@ export function ChangesFileSection({
 		const tick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
 		cache.load(path, read, tick, targetRef).then(
 			(next) => {
-				if (!cancelled) setContent(next);
+				if (!cancelled) setContent(cache.get(path) ?? next);
 			},
 			(failure: unknown) => {
 				if (!cancelled) setError(errorText(failure));
@@ -159,6 +161,10 @@ export function ChangesFileSection({
 		triage,
 	});
 	const { renderer, candidates, implementationKey, mobile, hunkActions } = surface;
+	const reviewDrafts = useMemo(
+		() => ({ rendererId: renderer.id, values: section?.reviewDrafts, update: updateReviewDraft }),
+		[renderer.id, section?.reviewDrafts, updateReviewDraft],
+	);
 	const view = mobile ? "inline" : (tab.view ?? "split");
 	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
 	const { dir, base } = splitPath(path);
@@ -367,21 +373,23 @@ export function ChangesFileSection({
 					<LoadingRegion rows={4} className="p-12" />
 				</div>
 			) : (
-				<DiffSurfaceBody
-					surface={surface}
-					view={view}
-					ignoreWhitespace={ignoreWhitespace}
-					viewState={section?.viewState}
-					onViewState={saveViewState}
-					onSelectRenderer={selectRenderer}
-					bodyClassName={
-						mode === "single"
-							? "min-h-0 flex-1"
-							: renderer.capabilities.boundedDiff
-								? "h-[60vh]"
-								: ""
-					}
-				/>
+				<ReviewDraftContext value={reviewDrafts}>
+					<DiffSurfaceBody
+						surface={surface}
+						view={view}
+						ignoreWhitespace={ignoreWhitespace}
+						viewState={section?.viewState}
+						onViewState={saveViewState}
+						onSelectRenderer={selectRenderer}
+						bodyClassName={
+							mode === "single"
+								? "min-h-0 flex-1"
+								: renderer.capabilities.boundedDiff
+									? "h-[60vh]"
+									: ""
+						}
+					/>
+				</ReviewDraftContext>
 			)}
 		</section>
 	);
