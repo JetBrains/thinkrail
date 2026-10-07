@@ -70,7 +70,12 @@ The parent owns the route-composition edges; the vibecoding leaf has no sibling 
 src/pages/{vibecoding,agentic-development,agentic-ide}/index.astro ──▶ src/vibecoding (through index.ts)
 src/pages/{vibecoding,agentic-development,agentic-ide}/index.astro ──▶ src/components/Analytics.astro
 landing + blog shells                                              ──▶ src/components/Analytics.astro
+src/main.ts, src/vibecoding                                        ──▶ src/installLinkShare.ts
 ```
+
+`src/installLinkShare.ts` is the one framework-free phone "send link" helper both route families use: phone/tablet
+detection (Android, iPhone/iPad/iPod, or a touch Mac), the share URL, and native-share-then-clipboard delivery. It
+imports nothing, so the vibecoding island can reuse it without reaching the IDE shell.
 
 - **Fonts are self-hosted; the site makes no external font request.** Packages and stacks are copied
   from the app's `typography.json`, not imported — and `src/fonts.test.ts` reads that JSON at test time
@@ -152,6 +157,13 @@ landing + blog shells                                              ──▶ src
   `INSTALL.md` section is one compact platform-row matrix plus one browser-UI-via-command-line disclosure;
   nightly/version examples
   live in release documentation rather than the marketing page.
+- **Phone visitors get a "Send link to my computer" action** above the hero picker. It is in the static DOM
+  but `hidden`, and `main.ts` reveals it only on a detected phone or tablet (the desktop picker stays visible
+  below it; no platform is hidden). Activation opens the native share sheet with the current page URL, its
+  query replaced by `utm_source=send_to_computer&utm_medium=share` and its fragment by the hero anchor, so
+  the later desktop visit records a tagged first touch. Without Web Share, or when sharing fails for any
+  reason except the visitor dismissing the sheet, it copies the link and briefly shows "Link copied". The
+  control carries `data-share-install-link` for analytics delegation and nothing else.
 
 ## Analytics and consent
 
