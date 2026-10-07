@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { basename, dirname } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { resolveBuildRuntimeSources } from "./buildSupport";
 import { resolveExtensionSkillRoots, serverExtensions } from "./extensions";
 
@@ -17,7 +17,7 @@ test("runtime source manifest covers the launcher artifact surface", () => {
 	expect(sources.webAccessIndex).toBe(0);
 	const piPackageSkillRoots = sources.extensions
 		.slice(1)
-		.map((extension) => `${dirname(extension.entry)}/skills`);
+		.map((extension) => join(dirname(extension.entry), "skills"));
 	expect(sources.skillRoots).toEqual([
 		...piPackageSkillRoots,
 		...serverExtensions.flatMap(resolveExtensionSkillRoots),

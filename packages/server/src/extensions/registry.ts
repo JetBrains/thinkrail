@@ -1,5 +1,5 @@
-import type { ServerExtension } from "@thinkrail/extension-api/server";
 import visualize from "@thinkrail/ext-visualize/server";
+import type { ServerExtension } from "@thinkrail/extension-api/server";
 
 export interface ServerExtensionEntry {
 	readonly specifier: string;
