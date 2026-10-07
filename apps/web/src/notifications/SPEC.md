@@ -17,7 +17,8 @@ a collection window, browser permission, format, and the master toggle.
 The trigger is a single signal: the **green attention dot lighting up**
 (`needsInput !== null || completionUnread` rising from false to true, the same predicate
 [[submodule-web-store]] uses). Every reason is covered uniformly — `ask_user_question`, ext-UI dialogs,
-and completion with any outcome (`succeeded` / `failed` / `interrupted` / `cancelled`). The host already
+and an unread completion (`succeeded` / `failed` / `interrupted`). A user-cancelled run never sets
+`completionUnread` on the host, so it never lights the dot and never notifies. The host already
 collapses `agent_end` vs `agent_settled` into `completion`, so this module never listens to raw agent
 events.
 
