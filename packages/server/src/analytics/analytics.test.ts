@@ -23,7 +23,7 @@ import {
 	shutdownAnalytics,
 	track,
 } from "./service";
-import type { OutgoingEvent } from "./sink";
+import { createPostHogSink, type OutgoingEvent } from "./sink";
 
 const TEST_KEY = "phc_test";
 
@@ -69,16 +69,19 @@ function boot(
 	sent: SentPayload[],
 	overrides: Partial<Parameters<typeof initializeAnalytics>[0]> = {},
 ): void {
-	initializeAnalytics({
-		posthogApiKey: TEST_KEY,
-		appVersion: "1.2.3",
-		channel: "stable",
-		build: "binary",
-		additionalEnabled: false,
-		env: {},
-		fetchImpl: makeFetch(sent),
-		...overrides,
-	});
+	initializeAnalyticsWithSinkFactoryForTests(
+		{
+			posthogApiKey: TEST_KEY,
+			appVersion: "1.2.3",
+			channel: "stable",
+			build: "binary",
+			additionalEnabled: false,
+			env: {},
+			fetchImpl: makeFetch(sent),
+			...overrides,
+		},
+		(options) => createPostHogSink({ ...options, retryDelayMs: 10 }),
+	);
 }
 
 const BASIC_EVENTS = {
@@ -430,7 +433,7 @@ test("campaign-enriched basics use the revocable grant sink across 503 retry and
 	const deadline = Date.now() + 2_000;
 	while (!attempts && Date.now() < deadline) await Bun.sleep(5);
 	expect(attempts).toBe(1);
-	await Bun.sleep(3_500);
+	await Bun.sleep(100);
 	getAdditionalAnalyticsCapture()?.(ADDITIONAL_EVENTS.task_completed);
 	await shutdownAnalytics();
 
