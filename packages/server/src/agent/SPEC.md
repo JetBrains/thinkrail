@@ -453,7 +453,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     window is acknowledged only if the real ask returned and `turn_end` contains its result; validation error
     or a missing result rejects the answer RPC rather than hanging or claiming success. Every expected call Pi
     does not execute is cleared at `turn_end`. The answer RPC resolves the phase and acknowledges only after
-    the matching result reaches the persisted `turn_end` boundary.
+    the matching result reaches the persisted `turn_end` boundary. Explicit Stop drains the queue and aborts
+    an unanswered phase with a stable stopped error; after Submit wins, Stop defers Pi abort until the answer
+    persists and then ends only the continuation. Either ordering leaves one terminal provider-valid result.
 
     **Typing instead of answering supersedes the live card, exactly as after a restart.** `steerSession` and
     a streaming-time `promptSession` queue the text in Pi's steering lane first and then `supersede()` every
@@ -464,9 +466,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `answer-accepted-uncommitted` is never superseded (the answer wins and the steering delivers after it).
     Scope is deliberately narrow: only the user's own composer send supersedes — the follow-up lane
     (Cmd+Enter), steering queued *before* the card appeared, `removeQueuedSession`'s internal re-queue, and
-    nudges (which already stop at `needsInput`) all leave the card open. Explicit Stop drains the queue and aborts an unanswered phase with a stable
-    stopped error; after Submit wins, Stop defers Pi abort until the answer persists and then ends only the
-    continuation. Either ordering leaves one terminal provider-valid result.
+    nudges (which already stop at `needsInput`) all leave the card open.
 
     A process restart deliberately changes only the continuation mechanism: attach-time repair writes the
     canonical ack (`details {kind:"ack"}`) only for an eligible dangling ask before `createAgentSession`,
