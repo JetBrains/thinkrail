@@ -548,7 +548,8 @@ const handlers: Record<string, Handler> = {
 			});
 		return listTodos(p);
 	},
-	"todo.add": (params) => {
+	"todo.add": async (params) => {
+		const capture = additionalCapture();
 		const p = params as {
 			workspaceId: string;
 			sessionId: string;
@@ -556,8 +557,8 @@ const handlers: Record<string, Handler> = {
 			note?: string;
 			surface?: "chat" | "page";
 		};
-		const result = addTodo(p);
-		captureAdditional(additionalCapture(), {
+		const result = await addTodo(p);
+		captureAdditional(capture, {
 			name: "plan_item_added",
 			params: { surface: p.surface ?? "chat" },
 		});

@@ -525,6 +525,7 @@ test("plan_opened rides an explicit todo.list open; plan_item_added rides todo.a
 	await handleRequest("todo.add", { ...ref, title: "user step", surface: "chat" }, ctx);
 	await handleRequest("todo.add", { ...ref, title: "page step", surface: "page" }, ctx);
 	await handleRequest("todo.add", { ...ref, title: "defaulted step" }, ctx);
+	await expect(handleRequest("todo.add", { ...ref, title: "   " }, ctx)).rejects.toThrow();
 	await shutdownAnalytics();
 	expect(
 		sent.filter((event) => event.event === "plan_opened").map((event) => event.properties.surface),
