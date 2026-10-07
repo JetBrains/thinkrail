@@ -1,4 +1,4 @@
-import type { SettledRemovalPreview, Workspace } from "@thinkrail/contracts";
+import type { SettledRemovalPreview, SettledRemovalTarget, Workspace } from "@thinkrail/contracts";
 import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -8,22 +8,28 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { SettingsSwitch } from "./SettingsSwitch";
-import { removeSettledWorkspaces } from "./workspaceActions";
+import { removeSettledWorkspaces, settledRemovalTarget } from "./workspaceActions";
 
-type Preview =
+type PreviewResult =
 	| { kind: "checking" }
 	| { kind: "failed" }
 	| { kind: "ready"; rows: SettledRemovalPreview[] };
+
+type Preview = PreviewResult & {
+	key: string;
+	targets: SettledRemovalTarget[];
+};
 
 export type RemovalFlag = "dirty" | "unpushed" | "unchecked";
 
 /** Only a complete, successful preview can clear a row; absent or `null` counts are unsafe, not clean. */
 export function flagSettledRemovals(
 	workspaces: readonly Pick<Workspace, "id">[],
-	preview: Preview,
+	preview: PreviewResult,
 ): Map<string, RemovalFlag> {
 	const flags = new Map<string, RemovalFlag>();
 	const rows = new Map(
@@ -58,33 +64,63 @@ export function RemoveSettledDialog({
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
 }) {
-	const [preview, setPreview] = useState<Preview>({ kind: "checking" });
+	const settleIdleDays = useAppStore((state) => state.settleIdleDays);
+	const idsKey = workspaces
+		.map((workspace) => workspace.id)
+		.sort()
+		.join("\n");
+	const previewKey = `${settleIdleDays ?? "never"}\0${idsKey}`;
+	const latestWorkspaces = useRef(workspaces);
+	const [preview, setPreview] = useState<Preview>(() => ({
+		kind: "checking",
+		key: previewKey,
+		targets: workspaces.map((workspace) => settledRemovalTarget(workspace, settleIdleDays)),
+	}));
 	const [includeFlagged, setIncludeFlagged] = useState(false);
-	const idsKey = workspaces.map((w) => w.id).join("\n");
+
+	useEffect(() => {
+		latestWorkspaces.current = workspaces;
+	}, [workspaces]);
 
 	useEffect(() => {
 		if (!open) return;
-		setPreview({ kind: "checking" });
+		const ids = idsKey ? idsKey.split("\n") : [];
+		const byId = new Map(latestWorkspaces.current.map((workspace) => [workspace.id, workspace]));
+		const targets = ids.flatMap((id) => {
+			const workspace = byId.get(id);
+			return workspace ? [settledRemovalTarget(workspace, settleIdleDays)] : [];
+		});
+		setPreview({ kind: "checking", key: previewKey, targets });
 		setIncludeFlagged(false);
 		let cancelled = false;
 		void getTransport()
-			.request("workspace.settledRemovalPreview", { ids: idsKey ? idsKey.split("\n") : [] })
+			.request("workspace.settledRemovalPreview", { ids })
 			.then((rows) => {
-				if (!cancelled) setPreview({ kind: "ready", rows });
+				if (!cancelled) setPreview({ kind: "ready", key: previewKey, targets, rows });
 			})
 			.catch(() => {
-				if (!cancelled) setPreview({ kind: "failed" });
+				if (!cancelled) setPreview({ kind: "failed", key: previewKey, targets });
 			});
 		return () => {
 			cancelled = true;
 		};
-	}, [open, idsKey]);
+	}, [open, idsKey, previewKey, settleIdleDays]);
 
-	const checking = preview.kind === "checking";
+	const checking = preview.kind === "checking" || preview.key !== previewKey;
 	const flags = checking
 		? new Map<string, RemovalFlag>()
 		: flagSettledRemovals(workspaces, preview);
-	const targets = checking ? [] : workspaces.filter((w) => includeFlagged || !flags.has(w.id));
+	const submittedIds = new Set(
+		checking
+			? []
+			: workspaces
+					.filter((workspace) => includeFlagged || !flags.has(workspace.id))
+					.map((workspace) => workspace.id),
+	);
+	const targets = preview.targets.filter((target) => submittedIds.has(target.id));
+	const allowUnsafeIds = includeFlagged
+		? targets.filter((target) => flags.has(target.id)).map((target) => target.id)
+		: [];
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -136,7 +172,7 @@ export function RemoveSettledDialog({
 						data-testid="confirm-remove-settled"
 						disabled={targets.length === 0}
 						onClick={() => {
-							removeSettledWorkspaces(targets);
+							removeSettledWorkspaces(targets, allowUnsafeIds);
 							onOpenChange(false);
 						}}
 					>

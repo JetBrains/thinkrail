@@ -178,31 +178,26 @@ test("a merged review turns the PULL REQUEST chip info and drops the REMOTE segm
 	expect(remoteCounts(merged)).toBeNull();
 });
 
-test("without a fresh answer the chip falls back to the record's host-kept review snapshot", () => {
-	const merged: Workspace = {
+test("host-kept review fields stay hidden until the host advertises snapshot support", () => {
+	const workspace: Workspace = {
 		...worktree,
 		review: { kind: "pull-request", number: 618, state: "merged", changedAt: 1 },
 	};
-	const html = render(merged, null);
-	expect(html).toContain("Merged #618");
-	expect(testids(html)).toContain("scope-review-segment");
-	expect(testids(render(worktree, null))).not.toContain("scope-review-segment");
+	const html = render(workspace, null);
+	expect(html).not.toContain("Merged #618");
+	expect(testids(html)).not.toContain("scope-review-segment");
 });
 
-test("a settled active workspace announces itself in the WORKSPACE caption", () => {
+test("settled facts stay hidden until the host advertises support", () => {
 	const DAY = 24 * 60 * 60_000;
 	const settled: Workspace = { ...worktree, lastActiveAt: Date.now() - 10 * DAY };
-	expect(testids(render(settled))).toContain("scope-workspace-settled");
-	expect(render(settled)).toContain("· settled");
-	expect(testids(render({ ...settled, settledOverride: "active" }))).not.toContain(
-		"scope-workspace-settled",
-	);
-	expect(testids(render(worktree))).not.toContain("scope-workspace-settled");
+	expect(testids(render(settled))).not.toContain("scope-workspace-settled");
 });
 
-test("remote counts collapse to null when nothing is ahead or behind", () => {
+test("remote counts distinguish an unknown fallback from a known in-sync review", () => {
 	expect(remoteCounts(null)).toBeNull();
-	expect(remoteCounts({ kind: "pull-request", number: 1 })).toBeNull();
+	expect(remoteCounts({ kind: "pull-request", number: 1 }, false)).toBe("unknown");
+	expect(remoteCounts({ kind: "pull-request", number: 1 }, true)).toBeNull();
 	expect(
 		remoteCounts({ kind: "pull-request", number: 1, unpushedCommits: 0, behindCommits: 0 }),
 	).toBeNull();

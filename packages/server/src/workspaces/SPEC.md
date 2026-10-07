@@ -187,23 +187,25 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `workspaces.json` per token — coalescing is only ever allowed when the skipped stamp could not change
   the partition: the clearing of an override is never coalesced away, and neither is a stamp on a row
   whose merged/closed review currently settles it (its previous stamp is not newer than the review's
-  `changedAt`), because that stamp is the one fact that says "worked on since the merge" and losing it to
-  the minute window would leave real work shelved; `backfillWorkspaceActivity(id, at)` — sets the stamp only when the record has none and touches
+  `changedAt`). Every observation also advances an in-memory high-water mark: if work lands while the
+  stored review is still open and a later refresh first reveals that it had already merged, the review
+  writer flushes that coalesced stamp in the same save, so learning the merge cannot put newer work on the
+  shelf; `backfillWorkspaceActivity(id, at)` — sets the stamp only when the record has none and touches
   no override (the upgrade path for records that predate the field); `recordWorkspaceHead(id)` — reads the
   worktree's `HEAD` sha and calls `recordWorkspaceActivity` when it differs from the last sha observed in
   this host lifetime (a HEAD move is the commit/pull/checkout proxy; the raw git-dir watcher fires on
   index refreshes too, which is why the sha, not the event, is the signal), with `seedWorkspaceHead(id)`
-  taking that baseline **when the worktree's watcher starts** — the observed-sha memory is per host
-  lifetime, so without the seed the first event after a restart could only record the sha, and the very
-  commit that should have brought a parked workspace back would pass unnoticed; an unseeded first
-  observation still only seeds. `settleWorkspace(id)` / `unsettleWorkspace(id)` — set `"settled"` / `"active"` with `settledAt`,
+  observing HEAD **whenever a worktree watcher starts**: the first observation in a host lifetime seeds,
+  while watcher recreation compares against the retained baseline and counts work performed while the
+  watcher was absent. `settleWorkspace(id)` / `unsettleWorkspace(id)` — set `"settled"` / `"active"` with `settledAt`,
   **throw on `kind: "default"`** (the project folder is never shelved); `setWorkspaceReview(id, review |
   null, branch)` — persists the snapshot and emits `updated` only when it actually changed, so the periodic
   provider refresh is silent while nothing moves, and **only while the record is still on the branch the
   lookup was made for** — a provider answer is a fact about a branch, and an external worktree can be
-  switched during the seconds a lookup takes; for the same reason `refreshUserOwnedWorkspace` drops the
-  `review` snapshot whenever folder truth moves the branch, since a merged snapshot that outlived its
-  branch would shelve the new branch and, being merged, never be refreshed passively. Every writer emits
+  switched during the seconds a lookup takes; for the same reason every persisted branch transition drops
+  the `review` snapshot — both user-owned folder-truth refresh and the managed workspace's one-time branch
+  rename — since a merged snapshot that outlived its branch would shelve the new branch and, being merged,
+  never be refreshed passively. Every writer emits
   the full-snapshot `updated`.
   `createWorkspace` and `openExistingWorktree` stamp `lastActiveAt` at creation so a brand-new row is
   live by construction. **Migration:** the host backfills records without a stamp from the newest chat's
@@ -246,14 +248,13 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `setWorkspaceSubagentsOverride`, `recordWorkspaceActivity`, `backfillWorkspaceActivity`,
   `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`,
   `settledRemovalPreview`, `forgetQuietWorkspace`, `ForgetQuietOutcome`.
-- `forgetQuietWorkspace({ id, lastActiveAt, reviewState })` — the bulk-remove half of `forgetWorkspace`:
-  one synchronous read-check-write that drops the record **only while the record facts the client judged
-  it settled from still hold** — refused as `"active"` when the user has since pinned it live, as
-  `"changed"` when its `lastActiveAt` is not the stamp the client sent (any real activity since the
-  preview, since activity always writes the stamp of a quiet row) or its `review.state` is not the state
-  the client sent (a PR opened or reopened since — the one partition input that moves without activity),
-  and as `"missing"` for an unknown or Default id. The module does not re-derive the partition — the
-  client's selector stays the one derivation — it checks that the facts it was derived from are unchanged.
+- `forgetQuietWorkspace(target)` — the bulk-remove half of `forgetWorkspace`: one synchronous
+  read-check-write that drops the record **only while the preview-time record facts still hold** — branch,
+  activity stamp, override, and review identity/state/time. It refuses as `"active"` when the user has
+  since pinned the row live, as `"changed"` for any other mismatch, and as `"missing"` for an unknown or
+  Default id. The host separately compares the preview's idle-window setting and safety result. This module
+  does not re-derive the partition — the client's selector stays the one derivation — it checks that the
+  facts it was derived from are unchanged.
   Being synchronous is the point: no writer can interleave between the check and the removal. The
   session-busy check is the host's, since this module has no `agent` edge.
 - `settledRemovalPreview(ids)` (**async**) — per worktree the dirty-file count (tracked `diff --name-only`
@@ -265,9 +266,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   nowhere to push and reports zero); the fan-out is bounded
   to four worktrees at a time, because the motivating shelf holds dozens of rows and an unbounded
   `Promise.all` would spawn hundreds of git processes at once; unreadable worktrees report `null` counts
-  rather than a false clean. It is the preview behind the rail's
-  bulk *Remove all settled…*, which excludes flagged rows unless the user opts them in; the removal itself
-  is the unchanged per-id `removeWorkspace`.
+  rather than a false clean. It is the preview behind the rail's bulk *Remove all settled…*, which excludes
+  flagged rows unless the user opts them in; the guarded removal path is `forgetQuietWorkspace` above.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
   `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

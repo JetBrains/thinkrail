@@ -66,7 +66,9 @@ export function Shell() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const contextProject = useAppStore(selectContextProject);
-	const { review: openReview } = useOpenBranchReview(activeWorkspace, status);
+	const { review: openReview, url: openReviewUrl } = useOpenBranchReview(activeWorkspace, status);
+	const locationReview =
+		openReview && openReviewUrl ? { ...openReview, url: openReviewUrl } : openReview;
 	const hasActiveWorkspace = activeWorkspaceId != null;
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const updates = useUpdates(supportsHostUpdateRun(protocolVersion) ? runHostUpdate : null);
@@ -154,7 +156,7 @@ export function Shell() {
 						<LocationBar
 							project={contextProject}
 							workspace={activeWorkspace}
-							review={activeWorkspace ? openReview : null}
+							review={activeWorkspace ? locationReview : null}
 							onNewWorkspace={() => setNewWorkspaceProjectId(contextProject.id)}
 						/>
 					) : null}

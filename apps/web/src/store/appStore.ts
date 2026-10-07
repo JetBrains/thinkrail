@@ -1226,6 +1226,7 @@ function workspaceActivationPatch(
 		| "workspaceSelectionHistory"
 		| "workspaces"
 		| "sessionStateByWorkspace"
+		| "protocolVersion"
 		| "settleIdleDays"
 		| "activeWorkspaceId"
 		| "activeWorkspaceLiveLatch"

@@ -26,6 +26,7 @@ import {
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useMemo, useState } from "react";
 import { RunningIcon } from "../../components/RunningIcon";
+import { useNow } from "../../components/useNow";
 import { copyText, platformShortcutLabel } from "../../lib";
 import { RemoveWorkspaceDialog } from "../../panels/RemoveWorkspaceDialog";
 import {
@@ -65,6 +66,7 @@ export function WorkspaceSegment({
 	const siblings = useAppStore((s) => s.workspaces[project.id]);
 	const sessionStateByWorkspace = useAppStore((s) => (menuOpen ? s.sessionStateByWorkspace : null));
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	const now = useNow();
 	const activeWorkspaceLiveLatch = useAppStore((s) => s.activeWorkspaceLiveLatch);
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
 	const workspaceSort = useAppStore((s) => s.workspaceSort);
@@ -72,13 +74,14 @@ export function WorkspaceSegment({
 		workspace
 			? selectWorkspaceSettledReason(
 					{
+						protocolVersion: s.protocolVersion,
 						sessionStateByWorkspace: s.sessionStateByWorkspace,
 						activeWorkspaceId: s.activeWorkspaceId,
 						activeWorkspaceLiveLatch: s.activeWorkspaceLiveLatch,
 						settleIdleDays: s.settleIdleDays,
 					},
 					workspace,
-					Date.now(),
+					now,
 				) !== null
 			: false,
 	);
@@ -114,9 +117,9 @@ export function WorkspaceSegment({
 
 	const partition = useMemo(() => {
 		if (!menuOpen || siblings === undefined) return null;
-		const now = Date.now();
 		const projection = {
 			workspaces: { [project.id]: siblings },
+			protocolVersion,
 			sessionStateByWorkspace: sessionStateByWorkspace ?? {},
 			activeWorkspaceId: workspace?.id ?? null,
 			activeWorkspaceLiveLatch,
@@ -134,10 +137,12 @@ export function WorkspaceSegment({
 		siblings,
 		sessionStateByWorkspace,
 		project.id,
+		protocolVersion,
 		workspace?.id,
 		activeWorkspaceLiveLatch,
 		settleIdleDays,
 		workspaceSort,
+		now,
 	]);
 
 	return (

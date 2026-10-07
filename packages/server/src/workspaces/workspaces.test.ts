@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Workspace } from "@thinkrail/contracts";
+import type { SettledRemovalTarget, Workspace } from "@thinkrail/contracts";
 import {
 	backfillWorkspaceActivity,
 	completeInitialTerminalReservation,
@@ -391,11 +391,13 @@ test("createWorkspace marks a user-named workspace renamed; an auto-named one st
 
 test("renameWorkspace moves the branch in place: record + git follow, the worktree dir does not", async () => {
 	const ws = await createWorkspace("p1");
+	setWorkspaceReview(ws.id, { kind: "pull-request", number: 8, state: "merged" }, ws.branch);
 	const renamed = renameWorkspace(ws.id, "add login flow", { branch: "add login flow" });
 
 	expect(renamed.name).toBe("add login flow");
 	expect(renamed.branch).toBe("add-login-flow");
 	expect(renamed.renamed).toBe(true);
+	expect(renamed.review).toBeUndefined();
 	expect(renamed.worktreePath).toBe(ws.worktreePath);
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe("add-login-flow");
 	expect(gitOut(repo, "for-each-ref", "--format=%(refname:short)", "refs/heads")).not.toContain(
@@ -980,6 +982,20 @@ test("recordWorkspaceActivity coalesces within a minute, never moves backwards, 
 	expect(recordWorkspaceActivity("missing")).toBeNull();
 });
 
+test("coalesced activity is reconciled before a later merge snapshot can settle the row", async () => {
+	const ws = await createWorkspace("p1");
+	const t0 = ws.lastActiveAt ?? 0;
+	setWorkspaceReview(ws.id, { kind: "pull-request", number: 4, state: "open" }, ws.branch);
+
+	expect(recordWorkspaceActivity(ws.id, t0 + 30_000)?.lastActiveAt).toBe(t0);
+	const merged = setWorkspaceReview(
+		ws.id,
+		{ kind: "pull-request", number: 4, state: "merged", changedAt: t0 + 20_000 },
+		ws.branch,
+	);
+	expect(merged?.lastActiveAt).toBe(t0 + 30_000);
+});
+
 test("settle and unsettle set the override with a stamp, and the Default workspace refuses both", async () => {
 	const ws = await createWorkspace("p1");
 	const settled = settleWorkspace(ws.id);
@@ -1043,7 +1059,7 @@ test("recordWorkspaceHead stamps activity only when the sha actually moved after
 	).toBeGreaterThan(t0 - 3_600_000);
 });
 
-test("a seeded HEAD baseline lets the very first observed move count as activity", async () => {
+test("watch-start observation compares a retained HEAD baseline after watcher recreation", async () => {
 	const ws = await createWorkspace("p1");
 	const stale = (ws.lastActiveAt ?? 0) - 3_600_000;
 	const all = JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8")) as Workspace[];
@@ -1055,7 +1071,7 @@ test("a seeded HEAD baseline lets the very first observed move count as activity
 	writeFileSync(join(ws.worktreePath, "work.txt"), "work\n");
 	git(ws.worktreePath, "add", "-A");
 	git(ws.worktreePath, "commit", "-m", "work");
-	recordWorkspaceHead(ws.id);
+	seedWorkspaceHead(ws.id);
 	expect(
 		listWorkspaceRecords("p1").find((row) => row.id === ws.id)?.lastActiveAt ?? 0,
 	).toBeGreaterThan(stale);
@@ -1072,28 +1088,57 @@ test("forgetQuietWorkspace removes a row only while the client's settle facts st
 	const def = listWorkspaceRecords("p1").find((row) => row.kind === "default");
 	events.length = 0;
 
-	const seen = (row: Workspace | undefined) => ({
-		id: row?.id ?? "",
-		...(row?.lastActiveAt !== undefined ? { lastActiveAt: row.lastActiveAt } : {}),
-		...(row?.review?.state !== undefined ? { reviewState: row.review.state } : {}),
-	});
+	const seen = (row: Workspace | undefined): SettledRemovalTarget => {
+		const review = row?.review;
+		return {
+			id: row?.id ?? "",
+			branch: row?.branch ?? "",
+			...(row?.lastActiveAt !== undefined ? { lastActiveAt: row.lastActiveAt } : {}),
+			...(row?.settledOverride !== undefined ? { settledOverride: row.settledOverride } : {}),
+			...(review
+				? {
+						review: {
+							kind: review.kind,
+							number: review.number,
+							...(review.state !== undefined ? { state: review.state } : {}),
+							...(review.changedAt !== undefined ? { changedAt: review.changedAt } : {}),
+						},
+					}
+				: {}),
+			settleIdleDays: 3,
+		};
+	};
 	expect(
-		forgetQuietWorkspace({ id: moved.id, lastActiveAt: (moved.lastActiveAt ?? 0) - 1 }),
+		forgetQuietWorkspace({ ...seen(moved), lastActiveAt: (moved.lastActiveAt ?? 0) - 1 }),
 	).toEqual({
 		ok: false,
 		reason: "changed",
 	});
-	expect(forgetQuietWorkspace({ id: moved.id })).toEqual({ ok: false, reason: "changed" });
-	const judgedWithoutReview = seen(moved);
-	setWorkspaceReview(moved.id, { kind: "pull-request", number: 7, state: "open" }, moved.branch);
-	expect(forgetQuietWorkspace(judgedWithoutReview)).toEqual({ ok: false, reason: "changed" });
-	expect(forgetQuietWorkspace({ ...judgedWithoutReview, reviewState: "merged" })).toEqual({
+	expect(forgetQuietWorkspace({ ...seen(moved), branch: "other" })).toEqual({
 		ok: false,
 		reason: "changed",
 	});
+	const judgedWithoutReview = seen(moved);
+	setWorkspaceReview(moved.id, { kind: "pull-request", number: 7, state: "open" }, moved.branch);
+	expect(forgetQuietWorkspace(judgedWithoutReview)).toEqual({ ok: false, reason: "changed" });
+	setWorkspaceReview(
+		moved.id,
+		{ kind: "pull-request", number: 7, state: "merged", changedAt: 20 },
+		moved.branch,
+	);
+	const judgedMerged = seen(listWorkspaceRecords("p1").find((row) => row.id === moved.id));
+	setWorkspaceReview(
+		moved.id,
+		{ kind: "pull-request", number: 7, state: "merged", changedAt: 10 },
+		moved.branch,
+	);
+	expect(forgetQuietWorkspace(judgedMerged)).toEqual({ ok: false, reason: "changed" });
 	setWorkspaceReview(moved.id, null, moved.branch);
 	expect(forgetQuietWorkspace(seen(pinned))).toEqual({ ok: false, reason: "active" });
-	expect(forgetQuietWorkspace({ id: "missing" })).toEqual({ ok: false, reason: "missing" });
+	expect(forgetQuietWorkspace({ id: "missing", branch: "missing", settleIdleDays: 3 })).toEqual({
+		ok: false,
+		reason: "missing",
+	});
 	expect(forgetQuietWorkspace(seen(def))).toEqual({ ok: false, reason: "missing" });
 	expect(listWorkspaceRecords("p1").map((row) => row.id)).toContain(moved.id);
 	expect(events.filter((event) => event.kind === "removed")).toEqual([]);

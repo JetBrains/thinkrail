@@ -224,7 +224,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 	let hostUpdateNotice: HostUpdateNotice | undefined;
 	let hostUpdateTimer: ReturnType<typeof setInterval> | undefined;
 	const reviewRefreshTimer = setInterval(
-		() => void refreshOpenProjectReviews(),
+		() =>
+			void refreshOpenProjectReviews().catch(() =>
+				log.warn("periodic settled lifecycle refresh failed"),
+			),
 		REVIEW_REFRESH_INTERVAL_MS,
 	);
 	reviewRefreshTimer.unref?.();

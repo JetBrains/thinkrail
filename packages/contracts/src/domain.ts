@@ -82,14 +82,23 @@ export interface SettledRemovalPreview {
 	unpushed: number | null;
 }
 
-/** A row the client judged settled, with the record facts it judged from. */
+/** The branch-review fields that can change a workspace's settled partition. */
+export type SettledRemovalReview = Pick<
+	OpenBranchReview,
+	"kind" | "number" | "state" | "changedAt"
+>;
+
+/** A row the client judged settled, with the complete preview-time facts it judged from. */
 export interface SettledRemovalTarget {
 	id: string;
+	branch: string;
 	lastActiveAt?: number;
-	reviewState?: BranchReviewState;
+	settledOverride?: SettledOverride;
+	review?: SettledRemovalReview;
+	settleIdleDays: number | null;
 }
 
-export type SettledRemovalRefusal = "running" | "active" | "changed";
+export type SettledRemovalRefusal = "running" | "active" | "changed" | "unsafe";
 
 /** `kept` rows were no longer quiet when the host got to them and were left untouched. */
 export interface SettledRemovalResult {

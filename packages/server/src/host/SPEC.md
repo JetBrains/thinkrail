@@ -494,30 +494,39 @@ enabled/confirmed choice before entering analytics attribution.
 - **Settled-lifecycle wiring (`settledLifecycle.ts`).** The host is where the three activity sources meet the
   `workspaces` writers: the normalized session-state publisher stamps `recordWorkspaceActivity(record.workspaceId)`
   whenever a record reports `execution: "running"` (a user prompt flips it, so both user and agent turns
-  count — and the writer's one-per-minute coalescing makes a streaming agent cheap), `terminal.write`
-  stamps the tab's workspace (the terminal barrel resolves tab → workspace), and the repo-metadata callback
-  calls `recordWorkspaceHead`, with `watch`'s watch-started nudge wired to `seedWorkspaceHead` so every
-  watcher has a HEAD baseline before its first event. Reading a result, selecting a workspace, or opening
+  count — and the writer's one-per-minute coalescing makes a streaming agent cheap), an accepted
+  `terminal.write` stamps the owning workspace (a displaced/no-op write does not), and the repo-metadata
+  callback calls `recordWorkspaceHead`, with `watch`'s watch-started nudge wired to `seedWorkspaceHead` so
+  first admission seeds and watcher recreation detects a HEAD move made while unwatched. Reading a result, selecting a workspace, or opening
   files never stamps — "looking is not working" is the user-visible rule. `workspace.settle` /
   `workspace.unsettle` / `workspace.settledRemovalPreview` are thin handlers over the module.
-  **`workspace.removeSettled`** is the guarded bulk teardown: per target, `hasBusySession` (agent) then
-  `forgetQuietWorkspace` (workspaces) decide synchronously whether the row is still what the client saw;
-  a refused row is reported in `kept` with its reason and nothing of it is touched, a forgotten row is
+  **`workspace.removeSettled`** is the guarded bulk teardown: up to four targets at a time enter their
+  workspace's change lock, refresh user-owned branch truth, and require a reliable fresh branch-review
+  answer unless the still-matching manual-settle override already wins regardless of PR state. They then
+  drain queued change-artifact writes and recheck dirty/unpushed work (permitting risk only for an id in the dialog's explicit
+  preview-time allowlist). The current idle window, parent/preparation state, active delegation or plan
+  review, and `forgetQuietWorkspace` then compare the frozen preview facts with no intervening await before
+  the synchronous forget. A refused row
+  is reported in `kept` with its reason (`unsafe` included) and nothing of it is touched; a forgotten row is
   released like `workspace.remove` releases one (`releaseForgottenWorkspace`: spec index, reviews, change
-  artifacts, watcher, terminals — synchronously, so every removed row is gone from the UI at once) while
-  the slow halves (session purge + `git worktree remove`) run **one worktree after another**, not forty
-  at once: the reclaim is a synchronous git call, and forty of them resuming in one microtask drain would
-  freeze the host for seconds. The client re-derives its list from every push it receives, but a push
-  is in flight for a moment and a second client may be ahead of it; the host compares against the facts
-  the confirming client actually judged from, so a row that stayed settled under newer facts (a parked
-  row whose PR reopened) is removed as asked, and a row that would have gone live is kept. **Review
-  refresh:** after a
+  artifacts, watcher, terminals — synchronously, so every removed row is gone from the UI at once).
+  Session retirement starts immediately for every accepted row before the reply, closing the stale-client
+  prompt gap; final artifact settlement and synchronous `git worktree remove` remain chained one worktree
+  after another so forty reclaims cannot freeze the host in one microtask drain. The client re-derives membership from every push, but it freezes each
+  target's facts when that id set is previewed; otherwise a same-id push during the dialog would overwrite
+  the compare-and-swap baseline. The host compares against that baseline, so any lifecycle change is kept,
+  and it reruns the work-safety check so a clean row dirtied after the preview is kept unless that exact id
+  was explicitly approved as unsafe. Starting `pr.open` itself stamps activity before its first await and
+  persists any returned PR as an open branch snapshot before replying, closing the reciprocal mutation-vs-
+  removal race. **Review refresh:** after a
   `workspace.list` reply and on a five-minute timer the host refreshes the `review` snapshot of the rows
   whose PR state can still change the partition — live rows on every pass, **idle-settled rows at most
   every 30 minutes** (a PR opened for a dormant branch from outside ThinkRail must still bring it back,
   but dormant branches are the long tail and must stay cheap), and never rows parked by the user (the
-  override wins regardless) or already merged/closed (a reopened review is caught on activation) —
-  bounded to a few concurrent provider calls and riding the module's 60 s cache; a fresh
+  override wins regardless) or a merged/closed snapshot with a valid terminal time (an incomplete settled
+  answer remains live and refreshable; a reopened complete review is caught on activation) — bounded to a
+  few concurrent provider calls and riding the module's 60 s cache. Idle refresh pacing is branch-aware,
+  so switching branches never inherits the old branch's 30-minute delay; a fresh
   `workspace.openReview` for the active workspace also writes the snapshot, so the active row is always
   current. Both writers pass the branch the lookup was made for, and `workspaces` drops an answer whose
   branch has moved underneath it. **Protocol skew:** `RequestContext.protocolVersion` is the socket's
@@ -529,6 +538,8 @@ enabled/confirmed choice before entering analytics attribution.
   stamp from the newest chat's `updatedAt` (`listSessions`), else the worktree's `.git` gitfile mtime
   (managed and external worktrees alike — only the Default row, whose `.git` is the repository itself,
   skips to now), through `backfillWorkspaceActivity` — once per record, since the stamp then exists.
+  Per-row backfill/review failures are logged and detached list/timer passes always catch their terminal
+  rejection; lifecycle maintenance may degrade, but can never become an unhandled host-fatal promise.
 
 ## Get right
 

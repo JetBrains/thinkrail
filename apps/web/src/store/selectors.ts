@@ -14,6 +14,7 @@ import {
 	type SubagentResourceSummary,
 	sameModel,
 	type WireModel,
+	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
 import {
@@ -224,6 +225,11 @@ export function selectSessionState(
 }
 
 export type WorkspaceSort = "recent" | "created" | "name";
+
+export function supportsWorkspaceSettling(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION;
+}
+
 export const SETTLED_SHELF_PAGE = 10;
 export const SETTLED_SHELF_MORE = 25;
 const DAY_MS = 24 * 60 * 60_000;
@@ -269,6 +275,7 @@ export interface WorkspacePartition {
 }
 
 interface PartitionState extends SessionStateProjection {
+	protocolVersion: number | null;
 	activeWorkspaceId: string | null;
 	activeWorkspaceLiveLatch: boolean;
 	settleIdleDays: number | null;
@@ -280,7 +287,8 @@ export function selectWorkspaceSettledReason(
 	workspace: Workspace,
 	now: number,
 ): SettledReason | null {
-	if (isDefaultWorkspace(workspace)) return null;
+	if (!supportsWorkspaceSettling(state.protocolVersion) || isDefaultWorkspace(workspace))
+		return null;
 	if (
 		selectWorkspaceIsRunning(state, workspace.id) ||
 		selectWorkspaceNeedsAttention(state, workspace.id)
@@ -296,10 +304,9 @@ export function selectWorkspaceSettledReason(
 	if (state.activeWorkspaceId === workspace.id && state.activeWorkspaceLiveLatch) return null;
 	const review = workspace.review;
 	if (review?.state === "merged" || review?.state === "closed") {
+		if (review.changedAt === undefined) return null;
 		const workedSince =
-			review.changedAt !== undefined &&
-			workspace.lastActiveAt !== undefined &&
-			workspace.lastActiveAt > review.changedAt;
+			workspace.lastActiveAt !== undefined && workspace.lastActiveAt > review.changedAt;
 		if (!workedSince) return { kind: "review", state: review.state };
 	} else if (review && (review.state === undefined || review.state === "open")) {
 		return null;
@@ -333,6 +340,7 @@ export function selectWorkspacePartition(
 	now: number,
 ): WorkspacePartition {
 	const rows = state.workspaces[projectId] ?? [];
+	if (!supportsWorkspaceSettling(state.protocolVersion)) return { live: rows, settled: [] };
 	const creationIndex = new Map(rows.map((row, index) => [row.id, index]));
 	const compare = compareWorkspaces(state.workspaceSort, creationIndex);
 	const live: Workspace[] = [];

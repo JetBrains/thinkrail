@@ -8,7 +8,12 @@ export {
 	stopBackgroundCommand,
 	stopSubagent,
 } from "./chatResources";
-export { type ReviewSubagentRun, readChildTranscript, runReviewSubagent } from "./delegation";
+export {
+	hasActiveDelegation,
+	type ReviewSubagentRun,
+	readChildTranscript,
+	runReviewSubagent,
+} from "./delegation";
 export {
 	type BundledExtensionFactory,
 	type BundledExtensions,

@@ -234,13 +234,14 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   the response is the updated record and the `workspace.updated` push converges every client) and
   **`workspace.settledRemovalPreview`** (`{ ids }` → per worktree `dirty` file count + `unpushed` commit
   count, so a bulk Remove can name and exclude work that would be lost) and
-  **`workspace.removeSettled`** (`{ targets: [{ id, lastActiveAt, reviewState }] }` → `{ removed, kept }`:
-  the bulk teardown is one guarded host call, not N blind `workspace.remove`s — the client sends the record
-  facts it judged each row settled from (its activity stamp and its review state, the two record fields
-  the partition reads besides the override) and the host **keeps** a row where either moved, that a
-  session is busy in, or that the user pinned live since (`reason: "changed" | "running" | "active"`), so
-  a workspace another client started working in, or whose PR was opened, between preview and confirm is
-  never torn down)),
+  **`workspace.removeSettled`** (`{ targets, allowUnsafeIds }` → `{ removed, kept }`): the bulk teardown is
+  one guarded host call, not N blind `workspace.remove`s. Each target freezes the preview-time partition
+  facts (`branch`, `lastActiveAt`, `settledOverride`, the review identity/state/time, and
+  `settleIdleDays`); `allowUnsafeIds` names only preview-flagged rows the user explicitly included. The host
+  rechecks dirty/unpushed state, busy sessions, current settings, and every frozen fact immediately before
+  forgetting, keeping a row as `"unsafe" | "changed" | "running" | "active"` when any unapproved work or
+  newer state appears, so activity, a PR change, or an external edit between preview and confirm cannot be
+  torn down silently),
   **`OpenBranchReview`** (the review reference for the active branch: PR vs MR + number, plus an optional
   **`state`** — `"open" | "merged" | "closed"`, absent on a pre-v78 host and read as open — and
   **`changedAt`**, the ms time the provider merged or closed it; no actions),

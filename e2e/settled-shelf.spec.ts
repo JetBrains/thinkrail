@@ -1,6 +1,7 @@
-import { writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
+import { WORKSPACE_SETTLE_PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 
 // The Settled shelf: quiet workspaces leave the live list for a collapsed group under the project. Idle
@@ -88,6 +89,73 @@ test("a workspace settles by hand, comes back with Keep active, and the shelf cl
 	await expect(dialog).toBeHidden();
 	await expect(worktreeRows(page)).toHaveCount(0);
 	await expect(shelf).toHaveAttribute("data-count", "0");
+});
+
+test("bulk removal keeps work that appeared after the preview", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const row = worktreeRows(page).filter({ hasText: workspace.name });
+	await row.hover();
+	await row.getByTestId("workspace-settle").click();
+
+	const shelf = page.getByTestId("settled-shelf");
+	await expect(shelf).toHaveAttribute("data-count", "1");
+	await shelf.hover();
+	await page.getByTestId("settled-shelf-menu").click();
+	await page.getByTestId("remove-all-settled").click();
+	const dialog = page.getByTestId("remove-settled-dialog");
+	await expect(dialog.getByTestId("remove-settled-checking")).toHaveCount(0);
+	await expect(dialog.getByTestId("confirm-remove-settled")).toHaveText("Remove 1");
+
+	writeFileSync(join(workspace.worktreePath, "late.txt"), "created after preview\n");
+	await dialog.getByTestId("confirm-remove-settled").click();
+
+	await expect(dialog).toBeHidden();
+	await expect(shelf).toHaveAttribute("data-count", "1");
+	await expect(
+		page.getByTestId("toast").getByText("Kept 1 workspace with new or unchecked work."),
+	).toBeVisible();
+	await expect.poll(() => existsSync(workspace.worktreePath)).toBe(true);
+});
+
+test("a pre-v78 host keeps the legacy workspace list without shelf affordances", async ({
+	page,
+}) => {
+	await page.routeWebSocket(/\/ws(\?|$)/, (socket) => {
+		const server = socket.connectToServer();
+		server.onMessage((message) => {
+			const frame = JSON.parse(String(message)) as {
+				channel?: string;
+				data: { protocolVersion: number };
+			};
+			if (frame.channel === WS_CHANNELS.serverWelcome) {
+				frame.data.protocolVersion = WORKSPACE_SETTLE_PROTOCOL_VERSION - 1;
+				socket.send(JSON.stringify(frame));
+			} else socket.send(message);
+		});
+	});
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await createWorkspaceViaDialog(page);
+
+	const rows = worktreeRows(page);
+	await expect(rows).toHaveCount(2);
+	await expect(rows.nth(0).getByTestId("workspace-name")).toHaveText("workspace-1");
+	await expect(rows.nth(1).getByTestId("workspace-name")).toHaveText("workspace-2");
+	await expect(page.getByTestId("workspace-sort")).toHaveCount(0);
+	await expect(page.getByTestId("settled-shelf")).toHaveCount(0);
+	await rows.nth(0).hover();
+	await expect(rows.nth(0).getByTestId("workspace-settle")).toHaveCount(0);
+
+	await page.getByTestId("scope-workspace").click();
+	const options = page.getByTestId("scope-workspace-option");
+	await expect(options).toHaveCount(2);
+	await expect(options.nth(0)).toContainText("Default");
+	await expect(options.nth(1)).toContainText("workspace-1");
+	await expect(page.getByTestId("scope-workspace-settled-group")).toHaveCount(0);
+	await page.keyboard.press("Escape");
+	await page.getByTestId("open-settings").click();
+	await expect(page.getByTestId("settings-nav-workspaces")).toHaveCount(0);
 });
 
 test("the settle window is a host setting that survives a reload", async ({ page }) => {

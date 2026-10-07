@@ -166,6 +166,32 @@ export function useOpenBranchReview(
 	};
 }
 
+export function resolveBranchReview(
+	lookup: OpenBranchReview | null,
+	snapshot: OpenBranchReview | null | undefined,
+	snapshotAuthoritative = false,
+): { review: OpenBranchReview | null; detailsKnown: boolean } {
+	if (!snapshotAuthoritative) {
+		return { review: lookup, detailsKnown: lookup !== null };
+	}
+	if (!snapshot) return { review: null, detailsKnown: false };
+	const sameReview =
+		lookup !== null &&
+		lookup.kind === snapshot.kind &&
+		lookup.number === snapshot.number &&
+		(lookup.state ?? "open") === (snapshot.state ?? "open");
+	if (!sameReview) return { review: snapshot, detailsKnown: false };
+	return {
+		review: {
+			...snapshot,
+			...(lookup.url ? { url: lookup.url } : {}),
+			...(lookup.unpushedCommits !== undefined ? { unpushedCommits: lookup.unpushedCommits } : {}),
+			...(lookup.behindCommits !== undefined ? { behindCommits: lookup.behindCommits } : {}),
+		},
+		detailsKnown: true,
+	};
+}
+
 /** A pre-v78 host never reported anything but open reviews, so an absent `state` reads as open. */
 export function isOpenBranchReview(review: OpenBranchReview): boolean {
 	return review.state === undefined || review.state === "open";

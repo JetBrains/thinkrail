@@ -139,6 +139,23 @@ test("a client older than the settled protocol never hears about a merged or clo
 	expect(openReviewForClient(null, WORKSPACE_SETTLE_PROTOCOL_VERSION - 1)).toBeNull();
 });
 
+test("starting a PR mutation reactivates a parked workspace before any network await", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "PR work" },
+		CTX,
+	)) as Workspace;
+	await handleRequest("workspace.settle", { id: workspace.id }, CTX);
+
+	await expect(
+		handleRequest("pr.open", { workspaceId: workspace.id, sessionId: "missing" }, CTX),
+	).rejects.toThrow("no 'origin' remote");
+	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+	const after = rows.find((row) => row.id === workspace.id);
+	expect(after?.settledOverride).toBeUndefined();
+	expect(after?.lastActiveAt ?? 0).toBeGreaterThanOrEqual(workspace.lastActiveAt ?? 0);
+});
+
 test("request diagnostics expose only registered method names", async () => {
 	expect(requestMethodDiagnostic("workspace.list")).toBe("workspace.list");
 	expect(requestMethodDiagnostic("host.update")).toBe("host.update");
@@ -428,7 +445,10 @@ test("workspace.removeSettled tears down only rows whose settle facts still matc
 	await handleRequest("workspace.unsettle", { id: pinned.id }, CTX);
 	const seen = (row: Workspace) => ({
 		id: row.id,
+		branch: row.branch,
 		...(row.lastActiveAt !== undefined ? { lastActiveAt: row.lastActiveAt } : {}),
+		...(row.settledOverride !== undefined ? { settledOverride: row.settledOverride } : {}),
+		settleIdleDays: 3,
 	});
 
 	const result = (await handleRequest(
@@ -436,10 +456,11 @@ test("workspace.removeSettled tears down only rows whose settle facts still matc
 		{
 			targets: [
 				seen(quiet),
-				{ id: moved.id, lastActiveAt: (moved.lastActiveAt ?? 0) - 1 },
+				{ ...seen(moved), lastActiveAt: (moved.lastActiveAt ?? 0) - 1 },
 				seen(pinned),
-				{ id: "gone" },
+				{ id: "gone", branch: "gone", settleIdleDays: 3 },
 			],
+			allowUnsafeIds: [],
 		},
 		CTX,
 	)) as SettledRemovalResult;
@@ -458,6 +479,75 @@ test("workspace.removeSettled tears down only rows whose settle facts still matc
 	}
 	expect(existsSync(quiet.worktreePath)).toBe(false);
 	expect(existsSync(moved.worktreePath)).toBe(true);
+});
+
+test("workspace.removeSettled refreshes an external checkout's branch before comparing the preview", async () => {
+	const path = join(dataDir, "external");
+	git(repo, "worktree", "add", "-b", "external-a", path);
+	const workspace = (await handleRequest(
+		"workspace.openExisting",
+		{ projectId: "p1", path },
+		CTX,
+	)) as Workspace;
+	const settled = (await handleRequest("workspace.settle", { id: workspace.id }, CTX)) as Workspace;
+	const target = {
+		id: settled.id,
+		branch: settled.branch,
+		lastActiveAt: settled.lastActiveAt,
+		settledOverride: "settled" as const,
+		settleIdleDays: 3,
+	};
+	git(path, "switch", "-c", "external-b");
+
+	const result = (await handleRequest(
+		"workspace.removeSettled",
+		{ targets: [target], allowUnsafeIds: [] },
+		CTX,
+	)) as SettledRemovalResult;
+	expect(result).toEqual({
+		removed: [],
+		kept: [{ id: workspace.id, reason: "changed" }],
+	});
+	expect(existsSync(path)).toBe(true);
+	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+	expect(rows.find((row) => row.id === workspace.id)?.branch).toBe("external-b");
+});
+
+test("workspace.removeSettled rechecks late work and requires explicit approval to remove it", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Late work" },
+		CTX,
+	)) as Workspace;
+	const target = {
+		id: workspace.id,
+		branch: workspace.branch,
+		lastActiveAt: workspace.lastActiveAt,
+		settleIdleDays: 3,
+	};
+	writeFileSync(join(workspace.worktreePath, "late.txt"), "not previewed\n");
+
+	const kept = (await handleRequest(
+		"workspace.removeSettled",
+		{ targets: [target], allowUnsafeIds: [] },
+		CTX,
+	)) as SettledRemovalResult;
+	expect(kept).toEqual({
+		removed: [],
+		kept: [{ id: workspace.id, reason: "unsafe" }],
+	});
+	expect(existsSync(workspace.worktreePath)).toBe(true);
+
+	const removed = (await handleRequest(
+		"workspace.removeSettled",
+		{ targets: [target], allowUnsafeIds: [workspace.id] },
+		CTX,
+	)) as SettledRemovalResult;
+	expect(removed).toEqual({ removed: [workspace.id], kept: [] });
+	for (let attempt = 0; attempt < 200 && existsSync(workspace.worktreePath); attempt++) {
+		await new Promise((resolve) => setTimeout(resolve, 10));
+	}
+	expect(existsSync(workspace.worktreePath)).toBe(false);
 });
 
 test("workspace mutation handlers reject the Default before any side effect", async () => {

@@ -412,14 +412,14 @@ test("only the attached client may drive a terminal", async () => {
 	await waitForTerminalOutput(attached.id);
 
 	attachTerminal(WS, "tab-a", "client-2");
-	writeTerminal(attached.id, "printf 'TR_%s\\n' FROM_DISPLACED\r", "client-1");
+	expect(writeTerminal(attached.id, "printf 'TR_%s\\n' FROM_DISPLACED\r", "client-1")).toBeNull();
 	resizeTerminal(attached.id, 5, 2, "client-1");
 	writeTerminal(attached.id, "printf 'TR_%s\\n' SYNC\r", "client-2");
 	await waitForTerminalOutput(attached.id, "TR_SYNC");
 	expect(terminalOutput(attached.id)).not.toContain("FROM_DISPLACED");
 
 	attachTerminal(WS, "tab-a", "client-1");
-	writeTerminal(attached.id, "printf 'TR_%s\\n' RECLAIMED\r", "client-1");
+	expect(writeTerminal(attached.id, "printf 'TR_%s\\n' RECLAIMED\r", "client-1")).toBe(WS);
 	await waitForTerminalOutput(attached.id, "TR_RECLAIMED");
 });
 

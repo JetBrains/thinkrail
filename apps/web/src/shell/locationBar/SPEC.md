@@ -63,8 +63,10 @@ branch. It renders what the store and `workspace.openReview` already report; it 
   shared confirm dialog; Default is non-removable and never settles) above *Switch to* (the project's
   **live** siblings in the rail's sort order with `RunningIcon` while an agent works, then a
   **`Settled · N ›`** submenu listing the shelf rows with their reason chips — the same
-  `selectWorkspacePartition` the rail renders, so the menu and the rail never disagree; the list loads on
-  first open when the tree has not) and *New workspace* with the `Mod+N` label, which opens the shell-owned
+  `selectWorkspacePartition` and shared `useNow` clock the rail renders, so the menu, active `· settled`
+  caption, and rail never disagree as the idle boundary passes; below the settled protocol it instead
+  preserves the host's raw legacy order and omits every shelf affordance. The list loads
+  on first open when the tree has not) and *New workspace* with the `Mod+N` label, which opens the shell-owned
   dialog. While the active workspace is settled the caption reads **`WORKSPACE · settled`** (the caption-
   fragment grammar `BRANCH · from base` already uses, in the warning tone), so a parked workspace you opened
   announces itself without a banner. Rename replaces the pill with the
@@ -90,8 +92,11 @@ branch. It renders what the store and `workspace.openReview` already report; it 
   **PULL REQUEST** is the `openReviewLabel` chip — success while the review is open, **info** reading
   *Merged #N* and **neutral** reading *Closed #N* once `OpenBranchReview.state` says so (a pre-v78 host
   omits `state` and the chip stays the open form) — a link when the provider reported a URL. REMOTE chips
-  render only for an open review; divergence against a merged branch is noise. The strip renders the
-  fresh `workspace.openReview` answer when it has one (that is the copy carrying divergence counts) and
-  otherwise the record's host-kept `workspace.review` snapshot, so a `gh` hiccup never blanks a chip the
-  shelf is still acting on — the two surfaces read the same fact. There is deliberately no "Open PR…" affordance: `pr.open` is a plan-session action and
+  render only for an open review; divergence against a merged branch is noise. On v78 the host-kept
+  `workspace.review` snapshot is authoritative for review presence/identity/state; a matching fresh
+  `workspace.openReview` answer overlays only URL and divergence details. Thus a merged/cleared push cannot
+  be masked by a stale hook cache, while a `gh` hiccup never blanks a chip the shelf still acts on. Without
+  matching live details the PR row remains but the Remote summary hides — absent lookup-only counts mean
+  unknown, never "In sync with origin." Pre-v78 hosts use the lookup alone and ignore rollback-stale snapshot
+  fields. There is deliberately no "Open PR…" affordance: `pr.open` is a plan-session action and
   stays on the plan pane.

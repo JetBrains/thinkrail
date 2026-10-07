@@ -72,11 +72,15 @@ selected-log state belong to chat integration, not domain persistence. See
   **Settled shelf.** `selectors.ts` owns **`selectWorkspacePartition(state, projectId, now)`** — the one
   derivation of a project's rows into `live` and `settled` (each settled row carrying its reason:
   `override`, `review merged|closed`, or `idle since`), consumed by the rail, the topbar's *Switch to*
-  menu, and the shelf alike so the three can never disagree. Rules, in order: a row with an agent
+  menu, and the shelf alike so the three can never disagree. Below
+  `WORKSPACE_SETTLE_PROTOCOL_VERSION` it returns the host's raw list as `live`, unsorted, and ignores even
+  stale persisted settle fields; activation uses the same gate, preserving the legacy host's order and
+  behavior. On a capable host, rules in order are: a row with an agent
   working or needing attention, or the Default workspace, is live; `settledOverride: "settled"` settles,
   `"active"` keeps live (the user's word beats the latch below — settling the row you are in must move
   it); the active workspace while **`activeWorkspaceLiveLatch`** holds is live; a `review.state` of
-  `merged`/`closed` with no `lastActiveAt` newer than its `changedAt` settles; an open review keeps live;
+  `merged`/`closed` with a valid `changedAt` and no newer `lastActiveAt` settles (an incomplete settled
+  snapshot stays live and refreshable); an open review keeps live;
   otherwise idle longer than **`settleIdleDays`** (mirrored from `AppConfig`, `null` = never) settles. Both lists share **`workspaceSort`** (`"recent"` — newest `lastActiveAt` first, the
   default — `"created"` newest first, or `"name"`), a per-browser view preference persisted by
   `panels/workspaceSort` exactly like expansion; the Default row stays pinned first outside the sort. The

@@ -73,8 +73,15 @@ test("review refresh covers live rows every pass and idle rows on a 30-minute pa
 	const rows = [
 		row({ id: "default", kind: "default", lastActiveAt: now }),
 		row({ id: "parked", settledOverride: "settled", lastActiveAt: now }),
-		row({ id: "merged", review: { kind: "pull-request", number: 1, state: "merged" } }),
-		row({ id: "closed", review: { kind: "pull-request", number: 2, state: "closed" } }),
+		row({
+			id: "merged",
+			review: { kind: "pull-request", number: 1, state: "merged", changedAt: now - DAY_MS },
+		}),
+		row({
+			id: "closed",
+			review: { kind: "pull-request", number: 2, state: "closed", changedAt: now - DAY_MS },
+		}),
+		row({ id: "incomplete-merged", review: { kind: "pull-request", number: 4, state: "merged" } }),
 		row({ id: "pinned", settledOverride: "active", lastActiveAt: now - 40 * DAY_MS }),
 		row({
 			id: "open-stale",
@@ -85,8 +92,9 @@ test("review refresh covers live rows every pass and idle rows on a 30-minute pa
 		row({ id: "fresh", lastActiveAt: now - 1 * DAY_MS }),
 		row({ id: "unstamped" }),
 	];
-	const never = new Map<string, number>();
+	const never = new Map<string, { branch: string; at: number }>();
 	expect(reviewRefreshRows(rows, now, never).map((r) => r.id)).toEqual([
+		"incomplete-merged",
 		"pinned",
 		"open-stale",
 		"idle",
@@ -94,10 +102,12 @@ test("review refresh covers live rows every pass and idle rows on a 30-minute pa
 		"unstamped",
 	]);
 
-	const justRefreshed = new Map([["idle", now - 5 * 60_000]]);
+	const justRefreshed = new Map([["idle", { branch: "w", at: now - 5 * 60_000 }]]);
 	expect(reviewRefreshRows(rows, now, justRefreshed).map((r) => r.id)).not.toContain("idle");
-	const stale = new Map([["idle", now - 31 * 60_000]]);
+	const stale = new Map([["idle", { branch: "w", at: now - 31 * 60_000 }]]);
 	expect(reviewRefreshRows(rows, now, stale).map((r) => r.id)).toContain("idle");
+	const previousBranch = new Map([["idle", { branch: "old", at: now }]]);
+	expect(reviewRefreshRows(rows, now, previousBranch).map((r) => r.id)).toContain("idle");
 
 	updateConfig({ settleIdleDays: null });
 	expect(reviewRefreshRows(rows, now, justRefreshed).map((r) => r.id)).toContain("idle");

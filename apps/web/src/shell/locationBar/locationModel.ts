@@ -6,8 +6,12 @@ export interface RemoteCounts {
 	behind: number;
 }
 
-export function remoteCounts(review: OpenBranchReview | null): RemoteCounts | null {
+export function remoteCounts(
+	review: OpenBranchReview | null,
+	detailsKnown = true,
+): RemoteCounts | "unknown" | null {
 	if (!review || !isOpenBranchReview(review)) return null;
+	if (!detailsKnown) return "unknown";
 	const unpushed = review.unpushedCommits ?? 0;
 	const behind = review.behindCommits ?? 0;
 	return unpushed > 0 || behind > 0 ? { unpushed, behind } : null;

@@ -459,6 +459,21 @@ test("a GitLab row's web_url is the same url, and a row with none stays a plain 
 	});
 });
 
+test("a settled review without its terminal timestamp is unreliable, never shelf authority", async () => {
+	const cwd = repo("git@github.com:acme/app.git");
+	const outcome = await findBranchReviewOutcomeWithRunner(
+		cwd,
+		"missing-time",
+		async (_cwd, args) => ({
+			ok: true,
+			out: args.includes("open")
+				? "[]"
+				: JSON.stringify([{ number: 8, state: "MERGED", mergedAt: null }]),
+		}),
+	);
+	expect(outcome).toEqual({ value: null, reliable: false });
+});
+
 test("the outcome form tells a provider's 'no review' apart from a failed lookup", async () => {
 	const cwd = repo("git@github.com:acme/app.git");
 	const empty = await findBranchReviewOutcomeWithRunner(cwd, "feature", async () => ({

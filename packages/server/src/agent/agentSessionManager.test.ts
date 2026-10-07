@@ -430,6 +430,39 @@ test("hasBusySession reports a workspace with a running turn and clears once the
 	}
 });
 
+test("hasBusySession includes a background command after its parent turn settles", async () => {
+	const cwd = tmpCwd("trpi-busy-command-");
+	const workspaceId = "ws-busy-command";
+	const startedPath = join(cwd, "started");
+	const releasePath = join(cwd, "release");
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("background_command", {
+				action: "start",
+				command: `touch '${startedPath}'; while ! test -f '${releasePath}'; do sleep 0.02; done`,
+				name: "busy command",
+			}),
+		),
+		fauxAssistantMessage("COMMAND_LAUNCHED"),
+	]);
+	setSessionManagerFactory((sessionCwd) => SessionManager.inMemory(sessionCwd));
+	const session = await createSession({ cwd, workspaceId, model: toWireModel(fauxA.getModel()) });
+	try {
+		await promptSession(session.sessionId, "Start background work.");
+		await waitForPath(startedPath);
+		expect(hasBusySession(workspaceId)).toBe(true);
+		writeFileSync(releasePath, "");
+		for (let attempt = 0; attempt < 200 && hasBusySession(workspaceId); attempt++) {
+			await Bun.sleep(10);
+		}
+		expect(hasBusySession(workspaceId)).toBe(false);
+	} finally {
+		writeFileSync(releasePath, "");
+		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
+		setSessionManagerFactory(() => SessionManager.inMemory());
+	}
+});
+
 test.each([
 	"removeSession",
 	"removeWorkspaceSessions",

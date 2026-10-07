@@ -374,10 +374,17 @@ export function getSessionState(sessionId: string): SessionState {
 
 /** A session in the workspace is running, waiting on the user, or holds queued messages. */
 export function hasBusySession(workspaceId: string): boolean {
+	if ((pendingSessionPreparations.get(workspaceId)?.size ?? 0) > 0) return true;
 	for (const [sessionId, entry] of sessions) {
 		if (entry.workspaceId !== workspaceId || isSessionDeleted(sessionId, workspaceId)) continue;
 		const state = stateFromEntry(entry);
 		if (state.execution === "running" || state.needsInput !== null || state.queuedCount > 0)
+			return true;
+		if (
+			entry.commands
+				.list()
+				.some((command) => command.status === "running" || command.status === "stopping")
+		)
 			return true;
 	}
 	return false;

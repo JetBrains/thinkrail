@@ -3,12 +3,45 @@ import { createOpenBranchReviewState } from "./openBranchReviewState";
 import {
 	isOpenBranchReview,
 	openReviewLabel,
+	resolveBranchReview,
 	startOpenBranchReviewSync,
 } from "./useOpenBranchReview";
 
 test("formats provider-native review references", () => {
 	expect(openReviewLabel({ kind: "pull-request", number: 214 })).toBe("PR #214");
 	expect(openReviewLabel({ kind: "merge-request", number: 73 })).toBe("MR !73");
+});
+
+test("the v78 snapshot owns review state while a matching lookup contributes live details", () => {
+	const snapshot = { kind: "pull-request", number: 1, state: "open" } as const;
+	expect(resolveBranchReview(null, snapshot)).toEqual({ review: null, detailsKnown: false });
+	expect(resolveBranchReview(null, snapshot, true)).toEqual({
+		review: snapshot,
+		detailsKnown: false,
+	});
+	const unrelated = {
+		kind: "pull-request" as const,
+		number: 2,
+		state: "merged" as const,
+		unpushedCommits: 3,
+	};
+	expect(resolveBranchReview(unrelated, snapshot)).toEqual({
+		review: unrelated,
+		detailsKnown: true,
+	});
+	expect(resolveBranchReview(unrelated, snapshot, true)).toEqual({
+		review: snapshot,
+		detailsKnown: false,
+	});
+	const matching = { ...snapshot, url: "https://example.test/1", unpushedCommits: 2 };
+	expect(resolveBranchReview(matching, snapshot, true)).toEqual({
+		review: { ...snapshot, url: "https://example.test/1", unpushedCommits: 2 },
+		detailsKnown: true,
+	});
+	expect(resolveBranchReview(matching, null, true)).toEqual({
+		review: null,
+		detailsKnown: false,
+	});
 });
 
 test("only an open review (or a pre-v78 one without state) is an open review for PR actions", () => {

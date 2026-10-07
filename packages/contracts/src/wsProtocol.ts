@@ -540,7 +540,7 @@ export interface WsMethodMap {
 		result: SettledRemovalPreview[];
 	};
 	"workspace.removeSettled": {
-		params: { targets: SettledRemovalTarget[] };
+		params: { targets: SettledRemovalTarget[]; allowUnsafeIds: string[] };
 		result: SettledRemovalResult;
 	};
 	"workspace.watchReady": {

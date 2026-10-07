@@ -48,6 +48,7 @@ import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
 import { copyText, platformShortcutLabel } from "@/lib";
 import { LoadingRegion } from "../components/Skeleton";
+import { useNow } from "../components/useNow";
 import {
 	isDefaultWorkspace,
 	isExternalWorkspace,
@@ -62,6 +63,7 @@ import {
 	selectWorkspacePartition,
 	settledReasonLabel,
 	settledReasonTitle,
+	supportsWorkspaceSettling,
 	toast,
 	useAppStore,
 	type WorkspaceSort,
@@ -88,7 +90,6 @@ import {
 } from "./workspaceActions";
 
 const CREATE_WORKSPACE_LABEL = `Create workspace (${platformShortcutLabel("N")} or ${platformShortcutLabel("N", { alt: true })})`;
-const MINUTE_MS = 60_000;
 const SORT_LABELS: Record<WorkspaceSort, string> = {
 	recent: "Recent activity",
 	created: "Created",
@@ -96,15 +97,6 @@ const SORT_LABELS: Record<WorkspaceSort, string> = {
 };
 const HOVER_CONTROL_CLASS =
 	"flex size-20 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100 disabled:pointer-events-none disabled:opacity-0";
-
-function useMinuteTick(): number {
-	const [now, setNow] = useState(() => Date.now());
-	useEffect(() => {
-		const timer = setInterval(() => setNow(Date.now()), MINUTE_MS);
-		return () => clearInterval(timer);
-	}, []);
-	return now;
-}
 
 export function ProjectTree() {
 	const projects = useAppStore((s) => s.projects);
@@ -115,12 +107,13 @@ export function ProjectTree() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspaceLiveLatch = useAppStore((s) => s.activeWorkspaceLiveLatch);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	const supportsSettling = supportsWorkspaceSettling(protocolVersion);
 	const sessionStateByWorkspace = useAppStore((s) => s.sessionStateByWorkspace);
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
 	const workspaceSort = useAppStore((s) => s.workspaceSort);
 	const settledShelfExpanded = useAppStore((s) => s.settledShelfExpanded);
 	const settledShelfShown = useAppStore((s) => s.settledShelfShown);
-	const now = useMinuteTick();
+	const now = useNow();
 	const [removeSettledProjectId, setRemoveSettledProjectId] = useState<string | null>(null);
 
 	const editors = useEditors();
@@ -166,6 +159,7 @@ export function ProjectTree() {
 
 	const partitionState = {
 		workspaces,
+		protocolVersion,
 		sessionStateByWorkspace,
 		activeWorkspaceId,
 		activeWorkspaceLiveLatch,
@@ -184,6 +178,10 @@ export function ProjectTree() {
 		store.toggleSettledShelf(activeProjectId, true);
 		store.showMoreSettled(activeProjectId, activeSettledIndex + 1);
 	}, [activeProjectId, activeSettledIndex]);
+
+	useEffect(() => {
+		if (!supportsSettling) setRemoveSettledProjectId(null);
+	}, [supportsSettling]);
 
 	const loadWorkspaces = useCallback(async (projectId: string) => {
 		await loadProjectWorkspaces(projectId);
@@ -308,6 +306,7 @@ export function ProjectTree() {
 							)}
 							{isExpanded && list !== undefined && (
 								<SettledPartition
+									enabled={supportsSettling}
 									projectId={project.id}
 									partition={selectWorkspacePartition(partitionState, project.id, now)}
 									sort={workspaceSort}
@@ -365,7 +364,7 @@ export function ProjectTree() {
 				/>
 			) : null}
 
-			{removeSettledProjectId !== null ? (
+			{supportsSettling && removeSettledProjectId !== null ? (
 				<RemoveSettledDialog
 					open
 					workspaces={selectWorkspacePartition(
@@ -400,6 +399,7 @@ export function ProjectTree() {
 }
 
 function SettledPartition({
+	enabled,
 	projectId,
 	partition,
 	sort,
@@ -408,6 +408,7 @@ function SettledPartition({
 	onRemoveAllSettled,
 	renderRow,
 }: {
+	enabled: boolean;
 	projectId: string;
 	partition: ReturnType<typeof selectWorkspacePartition>;
 	sort: WorkspaceSort;
@@ -417,6 +418,13 @@ function SettledPartition({
 	renderRow: (workspace: Workspace, settled: SettledReason | null) => ReactNode;
 }) {
 	const [shelfMenuOpen, setShelfMenuOpen] = useState(false);
+	if (!enabled) {
+		return (
+			<ul className="mt-4 flex flex-col gap-4 motion-safe:animate-reveal">
+				{partition.live.map((workspace) => renderRow(workspace, null))}
+			</ul>
+		);
+	}
 	const settledCount = partition.settled.length;
 	const shown = partition.settled.slice(0, shelfShown);
 	const remaining = settledCount - shown.length;

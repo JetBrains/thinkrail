@@ -322,9 +322,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     emergency stop, but registers its best-effort child cascades
     in the same pending set; `getSessionWorkspaceId(sessionId)` (the live session→workspace
     lookup the host's `set_title` handler keys on); **`hasBusySession(workspaceId)`** (true while any live
-    session of the workspace is running, waiting on the user, or holds queued messages — the host's
-    synchronous guard before a bulk teardown of rows a client judged quiet, derived from the same
-    `SessionState` the clients see); `removeSession`/`disposeAllSessions`;
+    session of the workspace is running, waiting on the user, holds queued messages or an active background
+    command, or is still being prepared — the host's synchronous guard before a bulk teardown of rows a client judged quiet, derived
+    from the same `SessionState` the clients see plus the pre-registration gap); `removeSession`/`disposeAllSessions`;
     **`removeWorkspaceSessions(workspaceId, cwd?)`** (the **archive teardown**: close session admission for
     the workspace before its first await, capture every registered parent, synchronously close its resource
     owners, and start parent abort/removal while concurrently draining preparations from the retired
@@ -530,7 +530,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     while parents created afterward project the new generation. The host-wide `getPiRuntime` resolver
     is passed as the core's dynamic fallback rather than captured at service creation. One
     `DelegationService` per workspace is cached (`delegationServiceFor`, synchronous — nothing awaits
-    at bind time); `subagentsFor(workspaceId, isEnabled, canDeliverCompletion)` creates one retained portable
+    at bind time); its lifecycle also maintains `hasActiveDelegation(workspaceId)`, including hidden review
+    children and detached subagents after their parent is idle, so destructive workspace removal cannot
+    misclassify them as quiet. `subagentsFor(workspaceId, isEnabled, canDeliverCompletion)` creates one retained portable
     `Subagents` owner per parent; its extension is injected on every resource load. A host-injected
     `setSubagentsEnabledResolver` maps that
     workspace id to its current effective policy without creating an `agent` → settings/workspaces edge.

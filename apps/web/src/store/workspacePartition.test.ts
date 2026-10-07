@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import type { SessionStateRecord, Workspace } from "@thinkrail/contracts";
 import { useAppStore } from "./appStore";
 import {
@@ -47,7 +47,12 @@ function session(
 	};
 }
 
+beforeEach(() => {
+	useAppStore.setState({ protocolVersion: 78 });
+});
+
 const base = {
+	protocolVersion: 78 as number | null,
 	sessionStateByWorkspace: {},
 	activeWorkspaceId: null,
 	activeWorkspaceLiveLatch: false,
@@ -135,6 +140,16 @@ describe("selectWorkspaceSettledReason", () => {
 		expect(
 			selectWorkspaceSettledReason(
 				base,
+				ws("incomplete-merged", {
+					review: { kind: "pull-request", number: 6, state: "merged" },
+					lastActiveAt: NOW - 1 * DAY,
+				}),
+				NOW,
+			),
+		).toBeNull();
+		expect(
+			selectWorkspaceSettledReason(
+				base,
 				ws("stale-open", {
 					review: { kind: "pull-request", number: 8, state: "open" },
 					lastActiveAt: NOW - 40 * DAY,
@@ -213,6 +228,31 @@ describe("selectWorkspacePartition", () => {
 			live: [],
 			settled: [],
 		});
+	});
+
+	test("a pre-v78 host keeps the raw legacy order and ignores stale settled facts", () => {
+		const legacyRows = [
+			ws("home", { kind: "default", name: "Default" }),
+			ws("first", { lastActiveAt: undefined, settledOverride: "settled" }),
+			ws("second", { lastActiveAt: undefined }),
+		];
+		expect(
+			selectWorkspacePartition(
+				{
+					...base,
+					protocolVersion: 77,
+					workspaces: { p1: legacyRows },
+					workspaceSort: "recent",
+				},
+				"p1",
+				NOW,
+			),
+		).toEqual({ live: legacyRows, settled: [] });
+		const staleSettled = legacyRows[1];
+		if (!staleSettled) throw new Error("expected the stale settled fixture");
+		expect(
+			selectWorkspaceSettledReason({ ...base, protocolVersion: 77 }, staleSettled, NOW),
+		).toBeNull();
 	});
 });
 

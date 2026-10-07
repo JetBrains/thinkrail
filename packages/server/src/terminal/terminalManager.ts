@@ -319,10 +319,6 @@ export function listTerminals(workspaceId: string): TerminalTabInfo[] {
 	return tabsFor(workspaceId).map(({ tabKey, title }) => ({ tabKey, title }));
 }
 
-export function terminalWorkspaceId(id: string): string | null {
-	return terminals.get(id)?.workspaceId ?? null;
-}
-
 function attachedEntry(id: string, caller: string): TerminalEntry | undefined {
 	const entry = terminals.get(id);
 	return entry?.attachedClient === caller ? entry : undefined;
@@ -335,14 +331,15 @@ function announceDisplaced(id: string, caller: string): void {
 	pushToClient(caller, WS_CHANNELS.terminalDetached, push);
 }
 
-export function writeTerminal(id: string, data: string, caller: string): void {
+export function writeTerminal(id: string, data: string, caller: string): string | null {
 	assertTerminalData(data);
 	const entry = attachedEntry(id, caller);
 	if (!entry) {
 		announceDisplaced(id, caller);
-		return;
+		return null;
 	}
 	entry.pty.write(data);
+	return entry.workspaceId;
 }
 
 export function resizeTerminal(id: string, cols: number, rows: number, caller: string): void {

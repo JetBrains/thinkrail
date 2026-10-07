@@ -3,7 +3,6 @@ import {
 	type SettledRemovalResult,
 	type SettledRemovalTarget,
 	WORKSPACE_RENAME_PROTOCOL_VERSION,
-	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
 import {
@@ -15,7 +14,7 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { toast, useAppStore } from "../store";
+import { supportsWorkspaceSettling, toast, useAppStore } from "../store";
 import { errorText, getTransport, prewarmWorkspaceSkillLoad } from "../transport";
 
 const PREWARM_WORKSPACE_LIMIT = 8;
@@ -42,11 +41,7 @@ export function canRenameWorkspace(protocolVersion: number | null, workspace: Wo
 }
 
 export function canSettleWorkspace(protocolVersion: number | null, workspace: Workspace): boolean {
-	return (
-		protocolVersion !== null &&
-		protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION &&
-		workspace.kind !== "default"
-	);
+	return supportsWorkspaceSettling(protocolVersion) && workspace.kind !== "default";
 }
 
 export function settleWorkspace(workspaceId: string): void {
@@ -246,24 +241,50 @@ export function removeWorkspace(workspaceId: string): void {
 export function keptSettledRemovalsText(kept: SettledRemovalResult["kept"]): string | null {
 	if (kept.length === 0) return null;
 	const count = kept.length === 1 ? "1 workspace" : `${kept.length} workspaces`;
+	const unsafe = kept.filter((row) => row.reason === "unsafe").length;
+	if (unsafe === kept.length) return `Kept ${count} with new or unchecked work.`;
+	if (unsafe > 0) {
+		const changed = kept.length - unsafe;
+		return `Kept ${count}: ${unsafe} with new or unchecked work, ${changed} that became active.`;
+	}
 	return `Kept ${count} that became active after the preview.`;
 }
 
 export function settledRemovalTarget(
-	workspace: Pick<Workspace, "id" | "lastActiveAt" | "review">,
+	workspace: Pick<Workspace, "id" | "branch" | "lastActiveAt" | "settledOverride" | "review">,
+	settleIdleDays: number | null,
 ): SettledRemovalTarget {
+	const review = workspace.review;
 	return {
 		id: workspace.id,
+		branch: workspace.branch,
 		...(workspace.lastActiveAt !== undefined ? { lastActiveAt: workspace.lastActiveAt } : {}),
-		...(workspace.review?.state !== undefined ? { reviewState: workspace.review.state } : {}),
+		...(workspace.settledOverride !== undefined
+			? { settledOverride: workspace.settledOverride }
+			: {}),
+		...(review
+			? {
+					review: {
+						kind: review.kind,
+						number: review.number,
+						...(review.state !== undefined ? { state: review.state } : {}),
+						...(review.changedAt !== undefined ? { changedAt: review.changedAt } : {}),
+					},
+				}
+			: {}),
+		settleIdleDays,
 	};
 }
 
 export function removeSettledWorkspaces(
-	workspaces: readonly Pick<Workspace, "id" | "lastActiveAt" | "review">[],
+	targets: readonly SettledRemovalTarget[],
+	allowUnsafeIds: readonly string[],
 ): void {
 	void getTransport()
-		.request("workspace.removeSettled", { targets: workspaces.map(settledRemovalTarget) })
+		.request("workspace.removeSettled", {
+			targets: [...targets],
+			allowUnsafeIds: [...allowUnsafeIds],
+		})
 		.then((result) => {
 			const kept = keptSettledRemovalsText(result.kept);
 			if (kept) toast.info(kept);

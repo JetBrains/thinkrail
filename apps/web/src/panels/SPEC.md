@@ -70,26 +70,31 @@ treatment.
   workspace identity changes, so a consumer that is not keyed per workspace cannot misdirect a pending
   name. **Settle** / **Keep active** (`workspace.settle` / `workspace.unsettle`, gated on
   `WORKSPACE_SETTLE_PROTOCOL_VERSION`) ride the same file.
-  **The Settled shelf.** An expanded project renders a **sort row** (`↕` + a native select: Recent activity
+  **The Settled shelf.** It renders only when the host advertises
+  `WORKSPACE_SETTLE_PROTOCOL_VERSION`; an older host retains the raw flat list and order, with no sort,
+  shelf, settle controls, or bulk dialog even if rollback persistence carries stale newer fields. On a
+  capable host, an expanded project renders a **sort row** (`↕` + a native select: Recent activity
   · Created · Name, the store's `workspaceSort`) above its rows, then the **live** rows from
   `selectWorkspacePartition`, then a **`Settled · N`** disclosure header (collapsed by default, store-held
   per browser) whose body lists the settled rows **slim** — single line, name only, a small **reason chip**
   (`merged` / `closed` / `idle 2w` / `by you`, long form in its tooltip), a hover **↩ Keep active** beside the kebab — ten at
   a time with a *Show 25 more* row. Live rows gain a hover **✓ Settle** beside the kebab (also in the menu
   and on right-click); it is disabled while the row's agent works or a result is unread, absent on Default.
-  The partition re-evaluates on a one-minute tick so idle rows cross the window without a click, and
+  The partition re-evaluates on the shared 30-second `useNow` clock so idle rows cross the window without
+  a click and the rail stays in lockstep with the topbar, and
   selecting a settled row expands the shelf and pages far enough to show it. The shelf header's own kebab
   offers **Remove all settled…**, a `RemoveSettledDialog` that first calls
   `workspace.settledRemovalPreview` and names how many settled worktrees hold uncommitted changes or
   unpushed commits — those are **excluded unless the user ticks *Include them***, the confirm button
-  carries the final count, and confirming issues **one `workspace.removeSettled`** carrying each target's
-  `lastActiveAt` and `review.state` as the client judged them (branches kept, as the single-row confirm
-  already promises). The host, not the dialog, has the last word: a row that a session got busy in, that
-  the user pinned live from another client, or whose activity stamp or PR state moved since the preview
-  comes back in `kept` and is left alone. The dialog's target list is re-derived from the store on every
-  push (a row that goes live simply leaves it), but the store can trail the host by a push, and N blind
-  `workspace.remove`s issued in that moment could tear down a workspace someone had just started working
-  in, or whose PR had just been opened — hence the host-side compare. Kept rows surface as one info toast. **Unknown is unsafe, never clean:** a `null` count, a row the
+  carries the final count, and confirming issues **one `workspace.removeSettled`**. The set of ids is
+  re-derived from every push (a row that goes live leaves the dialog), but each set's partition facts are
+  frozen when its preview starts — branch, activity stamp, override, review identity/state/time, and idle
+  window — so a same-id push cannot silently replace the compare-and-swap baseline. *Include them* sends an
+  allowlist containing only rows that preview actually flagged. The host, not the dialog, has the last
+  word: it reruns dirty/unpushed checks, then keeps a row that gained unapproved work, got busy, was pinned
+  live, or changed any frozen fact. This closes both directions of the preview race: a lagging push cannot
+  tear down newly active work, and a clean row dirtied after preview cannot bypass the opt-in. Kept rows
+  surface as one reason-aware info toast. **Unknown is unsafe, never clean:** a `null` count, a row the
   preview did not return, or a failed preview request flags the row as *couldn't be checked* and excludes
   it the same way, so a worktree git could not inspect is never removed without the explicit opt-in, and
   the button stays disabled while the check is still running. Nothing about settling touches disk: the shelf is a list state,
@@ -534,9 +539,10 @@ a project picker, the prompt hero, and the reused
   **`WorkspacesSettings`** (the **Workspaces** section, listed only at
   `protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION`) — one `SettingsRadioCards` group, **Settle idle
   workspaces after**: 1 / 3 (default) / 7 / 14 days / Never, written as `settings.update { settleIdleDays }`
-  (`null` for Never) and converging through `settings.changed`; the copy names the three things that count
-  as activity and the three things that never settle, because the setting is only legible together with
-  those rules;
+  (`null` for Never) and converging through `settings.changed`; a valid host-configured non-preset value
+  leaves the preset cards unselected rather than falsely displaying 3 days. The copy names the three things
+  that count as activity and the three things that never settle, because the setting is only legible
+  together with those rules;
   **`TerminalSettings`** — a **Replayed output** size picker (`store.terminalReplayKb`, five presets from
   Off to 1 MB, `settings.update { terminalReplayKb }`, applies to terminals opened from now on) and, on
   Windows hosts at `protocolVersion >= WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION`, a **Windows shell** picker
@@ -868,15 +874,17 @@ own section. The kebab menu (`plan-menu`, a
   on a generic failure (edits survive the toast), and hands off to `PrSetupDialog` on
   `PUSH_AUTH_FAILED` — whose Try again re-submits the LAST edited title/body (kept in a ref), never
   a re-rendered draft. The header button is primary-filled when the plan is
-  *ready* (all done + all reviews settled) and quiet otherwise; once an open PR exists (the same
-  `workspace.openReview` lookup the shell's scope label uses, via `useOpenBranchReview` — the hook
-  lives in `panels` because nothing may import `shell`) the label flips to **Push updates**
+  *ready* (all done + all reviews settled) and quiet otherwise; once an open PR exists (on v78 the
+  host-kept snapshot owns identity/state and a matching `workspace.openReview` answer overlays live details;
+  older hosts use the lookup alone, all through panels-owned `resolveBranchReview` so shell and Plan cannot
+  disagree) the label flips to
+  **Push updates**
   and the button **bypasses the compose dialog entirely** — pressing it (or the next-action `push`
   arm) calls `pr.open` directly with no `title`/`body`, so the host pushes to the SAME branch/PR and
   silently refreshes its body from the plan (`renderPrBody`) while leaving the PR title untouched
   (no `titleEdited`). Re-editing a PR's description each push read as "set up the PR again"; the modal
-  is only the creation affordance. When the lookup reports
-  **`unpushedCommits`** the label appends the count (`Push updates (N)`), the button turns
+  is only the creation affordance. When the lookup reports **`unpushedCommits`** the label appends the
+  count (`Push updates (N)`), the button turns
   primary-filled, and the next-action banner grows a `push` arm ("N new commits aren't in PR #N
   yet" + Push updates) so new work after the PR never sits silently local — a successful push
   re-reads the authoritative state and clears both when the remote-tracking branch caught up. When the

@@ -22,7 +22,8 @@ const DAY_MS = 24 * 60 * 60_000;
 const IDLE_REVIEW_REFRESH_MS = 30 * 60_000;
 
 const passesInFlight = new Map<string, Promise<void>>();
-const reviewRefreshedAt = new Map<string, number>();
+type ReviewRefreshStamp = { branch: string; at: number };
+const reviewRefreshedAt = new Map<string, ReviewRefreshStamp>();
 
 export function stampSessionActivity(record: SessionStateRecord): void {
 	if (record.state.execution !== "running") return;
@@ -31,26 +32,36 @@ export function stampSessionActivity(record: SessionStateRecord): void {
 
 /**
  * Rows whose review state can still change the partition: live rows every pass, idle-settled rows at
- * most every 30 minutes (a PR opened from outside ThinkRail must still surface), parked and merged/closed
- * rows never — the override wins regardless, and a reopened review is caught on activation.
+ * most every 30 minutes (a PR opened from outside ThinkRail must still surface), parked and complete
+ * merged/closed rows never — the override wins regardless, incomplete terminal facts retry, and a reopened
+ * complete review is caught on activation.
  */
 export function reviewRefreshRows(
 	rows: readonly Workspace[],
 	now = Date.now(),
-	refreshedAt: ReadonlyMap<string, number> = reviewRefreshedAt,
+	refreshedAt: ReadonlyMap<string, ReviewRefreshStamp> = reviewRefreshedAt,
 ): Workspace[] {
 	const idleDays = getConfig().settleIdleDays;
 	return rows.filter((row) => {
 		if (row.kind === "default") return false;
 		if (row.settledOverride === "settled") return false;
-		if (row.review?.state === "merged" || row.review?.state === "closed") return false;
+		if (
+			(row.review?.state === "merged" || row.review?.state === "closed") &&
+			row.review.changedAt !== undefined
+		)
+			return false;
 		if (row.settledOverride === "active" || row.review?.state === "open") return true;
 		const idle =
 			idleDays !== null &&
 			row.lastActiveAt !== undefined &&
 			now - row.lastActiveAt > idleDays * DAY_MS;
 		if (!idle) return true;
-		return now - (refreshedAt.get(row.id) ?? 0) >= IDLE_REVIEW_REFRESH_MS;
+		const refreshed = refreshedAt.get(row.id);
+		return (
+			refreshed === undefined ||
+			refreshed.branch !== row.branch ||
+			now - refreshed.at >= IDLE_REVIEW_REFRESH_MS
+		);
 	});
 }
 
@@ -74,14 +85,20 @@ async function backfillActivity(row: Workspace): Promise<void> {
 			at = undefined;
 		}
 	}
-	backfillWorkspaceActivity(row.id, at ?? Date.now());
+	try {
+		backfillWorkspaceActivity(row.id, at ?? Date.now());
+	} catch {
+		log.warn(`activity backfill failed for workspace ${row.id}`);
+	}
 }
 
 async function refreshReview(row: Workspace, fresh: boolean): Promise<void> {
-	reviewRefreshedAt.set(row.id, Date.now());
 	try {
 		const outcome = await findBranchReviewOutcome(row.worktreePath, row.branch, { fresh });
-		if (outcome.reliable) setWorkspaceReview(row.id, outcome.value, row.branch);
+		if (outcome.reliable) {
+			reviewRefreshedAt.set(row.id, { branch: row.branch, at: Date.now() });
+			setWorkspaceReview(row.id, outcome.value, row.branch);
+		}
 	} catch {
 		log.warn(`review refresh failed for workspace ${row.id}`);
 	}
@@ -121,6 +138,10 @@ export function scheduleLifecyclePass(
 
 export async function refreshOpenProjectReviews(): Promise<void> {
 	for (const project of listProjects()) {
-		await scheduleLifecyclePass(project.id, { fresh: true });
+		try {
+			await scheduleLifecyclePass(project.id, { fresh: true });
+		} catch {
+			log.warn(`settled lifecycle pass failed for project ${project.id}`);
+		}
 	}
 }

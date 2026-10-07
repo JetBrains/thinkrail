@@ -64,6 +64,7 @@ import {
 	selectAgentReviewCommentCount,
 	selectChatTitle,
 	selectWorkspaceById,
+	supportsWorkspaceSettling,
 	useAppStore,
 } from "../store";
 import { errorText, getTransport, supportsPlanReview, wsErrorCode } from "../transport";
@@ -74,7 +75,12 @@ import { PlanCommitsMenu } from "./PlanCommitsMenu";
 import { PrComposeDialog, type PrComposeState } from "./PrComposeDialog";
 import { PrSetupDialog, type PrSetupState } from "./PrSetupDialog";
 import { FileRow } from "./planFileRow";
-import { isOpenBranchReview, openReviewLabel, useOpenBranchReview } from "./useOpenBranchReview";
+import {
+	isOpenBranchReview,
+	openReviewLabel,
+	resolveBranchReview,
+	useOpenBranchReview,
+} from "./useOpenBranchReview";
 
 function ChangeSetBlock({
 	item,
@@ -880,15 +886,26 @@ export default function PlanPane({
 		hydrateSessionRuntime(workspaceId, sessionId).catch(() => {});
 	}, [connection, hasRuntime, workspaceId, sessionId]);
 	const hostPlatform = useAppStore((s) => s.hostPlatform);
-	const canReview = supportsPlanReview(useAppStore((s) => s.protocolVersion));
+	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	const canReview = supportsPlanReview(protocolVersion);
 	const {
 		review: branchReview,
 		url: branchReviewUrl,
 		noteOpenReview,
 		refreshOpenReview,
 	} = useOpenBranchReview(workspace, connection);
-	const openReview = branchReview && isOpenBranchReview(branchReview) ? branchReview : null;
-	const openReviewUrl = openReview ? branchReviewUrl : undefined;
+	const branchReviewWithUrl =
+		branchReview && branchReviewUrl ? { ...branchReview, url: branchReviewUrl } : branchReview;
+	const resolvedBranchReview = resolveBranchReview(
+		branchReviewWithUrl,
+		workspace?.review,
+		supportsWorkspaceSettling(protocolVersion),
+	);
+	const openReview =
+		resolvedBranchReview.review && isOpenBranchReview(resolvedBranchReview.review)
+			? resolvedBranchReview.review
+			: null;
+	const openReviewUrl = openReview?.url;
 	const [prBusy, setPrBusy] = useState(false);
 	const [prSetup, setPrSetup] = useState<PrSetupState | null>(null);
 	const [prCompose, setPrCompose] = useState<PrComposeState | null>(null);

@@ -3,7 +3,7 @@ import { toast, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
 
-type IdleChoice = "1" | "3" | "7" | "14" | "never";
+type IdleChoice = `${number}` | "never";
 
 const IDLE_CHOICES: readonly SettingsRadioChoice<IdleChoice>[] = [
 	{
@@ -39,10 +39,8 @@ const IDLE_CHOICES: readonly SettingsRadioChoice<IdleChoice>[] = [
 	},
 ];
 
-function toChoice(days: number | null): IdleChoice {
-	if (days === null) return "never";
-	const match = IDLE_CHOICES.find((choice) => choice.id === String(days));
-	return match ? match.id : "3";
+export function toChoice(days: number | null): IdleChoice {
+	return days === null ? "never" : (String(days) as IdleChoice);
 }
 
 export function WorkspacesSettings() {

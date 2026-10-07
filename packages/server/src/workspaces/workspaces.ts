@@ -8,6 +8,7 @@ import type {
 	Project,
 	SettledRemovalPreview,
 	SettledRemovalRefusal,
+	SettledRemovalReview,
 	SettledRemovalTarget,
 	SubagentOverride,
 	Workspace,
@@ -389,7 +390,8 @@ export function refreshUserOwnedWorkspace(workspaceId: string): void {
 	if (truth.kind === "default") {
 		if (!applyFolderTruth(workspace, truth)) return;
 	} else {
-		if (!applyFolderTruth(workspace, { branch: truth.branch, baseBranch: workspace.baseBranch })) return;
+		if (!applyFolderTruth(workspace, { branch: truth.branch, baseBranch: workspace.baseBranch }))
+			return;
 	}
 	saveWorkspaces(all);
 	emit({ kind: "updated", workspace });
@@ -434,6 +436,7 @@ export function renameWorkspace(
 		if (target.diffBase === ws.branch) target.diffBase = branch;
 	}
 	target.name = displayName;
+	if (branchChanged) delete target.review;
 	target.branch = branch;
 	target.renamed = true;
 	saveWorkspaces(all);
@@ -492,6 +495,7 @@ export function setWorkspaceDiffBase(id: string, ref: string | null): Workspace 
 }
 
 const ACTIVITY_COALESCE_MS = 60_000;
+const observedActivityAt = new Map<string, number>();
 const observedHeadSha = new Map<string, string>();
 
 export function recordWorkspaceActivity(id: string, at: number = Date.now()): Workspace | null {
@@ -499,14 +503,16 @@ export function recordWorkspaceActivity(id: string, at: number = Date.now()): Wo
 	const ws = all.find((workspace) => workspace.id === id);
 	if (!ws) return null;
 	const previous = ws.lastActiveAt ?? 0;
+	const observed = Math.max(observedActivityAt.get(id) ?? 0, at);
+	observedActivityAt.set(id, observed);
 	const overridden = ws.settledOverride !== undefined;
 	const changedAt =
 		ws.review?.state === "merged" || ws.review?.state === "closed"
 			? ws.review.changedAt
 			: undefined;
 	const reviewSettles = changedAt !== undefined && previous <= changedAt;
-	if (!overridden && !reviewSettles && at - previous < ACTIVITY_COALESCE_MS) return ws;
-	if (at > previous) ws.lastActiveAt = at;
+	if (!overridden && !reviewSettles && observed - previous < ACTIVITY_COALESCE_MS) return ws;
+	if (observed > previous) ws.lastActiveAt = observed;
 	if (overridden) {
 		delete ws.settledOverride;
 		delete ws.settledAt;
@@ -537,10 +543,7 @@ export function recordWorkspaceHead(id: string): void {
 }
 
 export function seedWorkspaceHead(id: string): void {
-	if (observedHeadSha.has(id)) return;
-	if (!loadWorkspaces().some((workspace) => workspace.id === id)) return;
-	const sha = gitHeadSha(id);
-	if (sha) observedHeadSha.set(id, sha);
+	recordWorkspaceHead(id);
 }
 
 function setSettledOverride(id: string, override: "settled" | "active"): Workspace {
@@ -593,7 +596,10 @@ export function setWorkspaceReview(
 	const ws = all.find((workspace) => workspace.id === id);
 	if (!ws || ws.branch !== branch) return null;
 	const next = review ? reviewSnapshot(review) : undefined;
-	if (sameReview(ws.review, next)) return ws;
+	const observed = observedActivityAt.get(id) ?? 0;
+	const activityChanged = observed > (ws.lastActiveAt ?? 0);
+	if (sameReview(ws.review, next) && !activityChanged) return ws;
+	if (activityChanged) ws.lastActiveAt = observed;
 	if (next) ws.review = next;
 	else delete ws.review;
 	saveWorkspaces(all);
@@ -706,6 +712,7 @@ export function listAllWorkspaceRecords(): Workspace[] {
 
 function dropWorkspaceRecord(all: Workspace[], ws: Workspace): void {
 	saveWorkspaces(all.filter((w) => w.id !== ws.id));
+	observedActivityAt.delete(ws.id);
 	observedHeadSha.delete(ws.id);
 	emit({ kind: "removed", projectId: ws.projectId, id: ws.id });
 }
@@ -721,7 +728,20 @@ export function forgetWorkspace(id: string): Workspace | null {
 
 export type ForgetQuietOutcome =
 	| { ok: true; workspace: Workspace }
-	| { ok: false; reason: Exclude<SettledRemovalRefusal, "running"> | "missing" };
+	| { ok: false; reason: Exclude<SettledRemovalRefusal, "running" | "unsafe"> | "missing" };
+
+function sameRemovalReview(
+	current: OpenBranchReview | undefined,
+	previewed: SettledRemovalReview | undefined,
+): boolean {
+	if (!current || !previewed) return current === previewed;
+	return (
+		current.kind === previewed.kind &&
+		current.number === previewed.number &&
+		current.state === previewed.state &&
+		current.changedAt === previewed.changedAt
+	);
+}
 
 /** Forgets the row only while the facts the client judged it settled from still hold. */
 export function forgetQuietWorkspace(target: SettledRemovalTarget): ForgetQuietOutcome {
@@ -729,7 +749,12 @@ export function forgetQuietWorkspace(target: SettledRemovalTarget): ForgetQuietO
 	const ws = all.find((w) => w.id === target.id);
 	if (!ws || ws.kind === "default") return { ok: false, reason: "missing" };
 	if (ws.settledOverride === "active") return { ok: false, reason: "active" };
-	if (ws.lastActiveAt !== target.lastActiveAt || ws.review?.state !== target.reviewState) {
+	if (
+		ws.branch !== target.branch ||
+		ws.lastActiveAt !== target.lastActiveAt ||
+		ws.settledOverride !== target.settledOverride ||
+		!sameRemovalReview(ws.review, target.review)
+	) {
 		return { ok: false, reason: "changed" };
 	}
 	dropWorkspaceRecord(all, ws);

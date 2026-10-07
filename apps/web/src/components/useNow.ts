@@ -28,5 +28,5 @@ function readNow(): number {
 }
 
 export function useNow(): number {
-	return useSyncExternalStore(subscribe, readNow);
+	return useSyncExternalStore(subscribe, readNow, readNow);
 }

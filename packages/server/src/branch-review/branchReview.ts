@@ -284,6 +284,9 @@ function parseReviewRows(output: string, field: "number" | "iid"): ParsedReviewR
 					: state === "closed"
 						? reviewRowTime(row, ["closedAt", "closed_at"])
 						: undefined;
+			if ((state === "merged" || state === "closed") && changedAt === undefined) {
+				return { valid: false };
+			}
 			const createdAt = reviewRowTime(row, ["createdAt", "created_at"]);
 			parsed.push({
 				number: value,

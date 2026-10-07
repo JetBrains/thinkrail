@@ -1,5 +1,6 @@
 const chains = new Map<string, Promise<void>>();
 const active = new Set<string>();
+const activePlansByWorkspace = new Map<string, number>();
 
 const planKey = (workspaceId: string, sessionId: string): string =>
 	JSON.stringify([workspaceId, sessionId]);
@@ -7,6 +8,10 @@ const itemKey = (sessionId: string, itemId: string): string => JSON.stringify([s
 
 export function planReviewRunning(workspaceId: string, sessionId: string): boolean {
 	return chains.has(planKey(workspaceId, sessionId));
+}
+
+export function workspacePlanReviewRunning(workspaceId: string): boolean {
+	return (activePlansByWorkspace.get(workspaceId) ?? 0) > 0;
 }
 
 export function itemReviewActive(sessionId: string, itemId: string): boolean {
@@ -33,14 +38,22 @@ export function onPlanChain<T>(
 	run: () => Promise<T>,
 ): Promise<T> {
 	const plan = planKey(workspaceId, sessionId);
-	const result = (chains.get(plan) ?? Promise.resolve()).then(run);
+	const previous = chains.get(plan);
+	if (!previous) {
+		activePlansByWorkspace.set(workspaceId, (activePlansByWorkspace.get(workspaceId) ?? 0) + 1);
+	}
+	const result = (previous ?? Promise.resolve()).then(run);
 	const next = result
 		.then(
 			() => {},
 			() => {},
 		)
 		.finally(() => {
-			if (chains.get(plan) === next) chains.delete(plan);
+			if (chains.get(plan) !== next) return;
+			chains.delete(plan);
+			const remaining = (activePlansByWorkspace.get(workspaceId) ?? 1) - 1;
+			if (remaining === 0) activePlansByWorkspace.delete(workspaceId);
+			else activePlansByWorkspace.set(workspaceId, remaining);
 		});
 	chains.set(plan, next);
 	return result;

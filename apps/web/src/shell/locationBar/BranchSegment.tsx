@@ -54,16 +54,19 @@ const rowActionClass =
 export function BranchSegment({
 	workspace,
 	review,
+	reviewDetailsKnown,
 }: {
 	workspace: Workspace;
 	review: OpenBranchReview | null;
+	reviewDetailsKnown: boolean;
 }) {
 	const [open, setOpen] = useState(false);
 	const contentRef = useRef<HTMLDivElement>(null);
 	const diffBase = useAppStore((s) => selectDiffBaseRef(s, workspace.id));
 	const { branches, refreshing, refresh } = useBranchList(open ? workspace.projectId : null);
 	const userOwned = isUserOwnedWorkspace(workspace);
-	const remote = remoteCounts(review);
+	const remoteStatus = remoteCounts(review, reviewDetailsKnown);
+	const remote = remoteStatus === "unknown" ? null : remoteStatus;
 
 	const copyBranch = () => {
 		void copyText(workspace.branch).then((ok) => {
@@ -180,7 +183,7 @@ export function BranchSegment({
 				</Row>
 				{review ? (
 					<>
-						{isOpenBranchReview(review) ? (
+						{isOpenBranchReview(review) && remoteStatus !== "unknown" ? (
 							<Row label="Remote">
 								<span
 									data-testid="scope-remote-summary"

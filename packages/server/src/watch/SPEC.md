@@ -98,7 +98,8 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   event can reach the repo-metadata nudge, `setWatchStartedPublisher(workspaceId)` fires once — the host
   uses it to take the worktree's HEAD baseline, so the first git-metadata event of a watcher is judged
   against a known sha instead of being spent on seeding. A re-created watcher (inode change, prewarm
-  re-admission) fires it again; the consumer is idempotent. It runs inside the registration's guarded
+  re-admission) fires it again; the consumer compares with its retained baseline, so a HEAD move made
+  while unwatched still records activity, while an unchanged HEAD is a no-op. It runs inside the registration's guarded
   region, and a throw there — from it or from anything after `entries.set` — tears the fresh entry down
   (`stopWatch`) rather than leaving a registered watcher whose readiness never settles.
 - **Public surface (barrel):** `ensureWatch`, `stopWatch`, `stopAllWatches`, `setWatchPublisher`,
