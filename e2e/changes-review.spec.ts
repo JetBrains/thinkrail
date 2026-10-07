@@ -206,6 +206,27 @@ test("hunk triage: Keep marks hunks, a fully kept file becomes viewed, and the b
 	await expect(page.getByTestId("diff-pane").getByTestId("hunk-keep")).toHaveCount(0);
 });
 
+test("an explicitly unviewed fully kept file stays unviewed after its section remounts", async ({
+	page,
+}) => {
+	await seedThreeChanges(page);
+	await row(page, "script.ts").click();
+	const script = section(page, "script.ts");
+	await script.getByTestId("hunk-keep").click();
+	await expect(script).toHaveAttribute("data-viewed", "true");
+	await script.getByTestId("changes-section-viewed").click();
+	await expect(script).not.toHaveAttribute("data-viewed", "true");
+
+	await page.getByTestId("changes-review-layout-single").click();
+	await expect(script.getByTestId("changes-section-kept")).toHaveText("1/1 kept");
+	await expect(page.getByTestId("changes-review-viewed-count")).toHaveText("0/3 viewed");
+	await expect(script).not.toHaveAttribute("data-viewed", "true");
+
+	await page.getByTestId("changes-review-layout-stacked").click();
+	await expect(script.getByTestId("changes-section-kept")).toHaveText("1/1 kept");
+	await expect(script).not.toHaveAttribute("data-viewed", "true");
+});
+
 test("a round's receipt comes from the host's turn snapshot and Review turn opens the Last-turn scope", async ({
 	page,
 }) => {
