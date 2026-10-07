@@ -319,9 +319,11 @@ unsupported. The repository's independently pinned development/CI runtime is ali
 The package runs the official `electrobun build` / `dev` commands. Configuration reads the same shared
 version module as the launcher, without an environment-version bridge. One documented `preBuild` hook
 builds the shared web artifact and stages the application-specific PTY/trash/skill resources and PI
-runtime. The hook runs under Hutch's Cottontail, so it invokes the real Bun CLI to bundle the separately
-staged `.ts` server runtime rather than changing PI's bundler. Its transient factory entry is removed
-even on failure. Staged resources include the workflow SPEC consumed by the bundled skills. A documented
+runtime. The hook runs under Hutch's Cottontail, so it invokes the real Bun CLI both to read the
+`@thinkrail/server/build-support` manifest (which value-loads the server extension registry and with it
+the pi graph — Cottontail's module runtime cannot evaluate that graph; `typebox`'s `String` export is the
+first casualty) and to bundle the separately staged `.ts` server runtime rather than changing PI's
+bundler. Its transient factory entry is removed even on failure. Staged resources include the workflow SPEC consumed by the bundled skills. A documented
 `postBuild` hook removes staging after the framework has copied it; a failed build's staging is replaced
 at the next pre-build. On Windows that hook also brands the bundled uninstaller after its resource exists
 but before release compression, wrapping, and signing. Builds in one worktree remain sequential.

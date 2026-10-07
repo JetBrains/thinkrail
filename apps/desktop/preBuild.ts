@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
 import type { BundledExtensions } from "@thinkrail/server";
-import { resolveBuildRuntimeSources } from "@thinkrail/server/build-support";
+import type { BuildRuntimeSources } from "@thinkrail/server/build-support";
 import { ptyLibraryName, runtimeTarget } from "./src/runtimeTarget";
 
 const desktopDir = import.meta.dir;
@@ -33,6 +33,22 @@ function runBun(args: string[]): void {
 	}
 }
 
+function resolveRuntimeSources(): BuildRuntimeSources {
+	const result = spawnSync(
+		"bun",
+		[
+			"--print",
+			'JSON.stringify((await import("@thinkrail/server/build-support")).resolveBuildRuntimeSources())',
+		],
+		{ cwd: desktopDir, encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] },
+	);
+	if (result.error) throw result.error;
+	if (result.status !== 0) {
+		throw new Error(`build-support manifest exited ${result.status ?? result.signal}`);
+	}
+	return JSON.parse(result.stdout) as BuildRuntimeSources;
+}
+
 function listFiles(root: string): string[] {
 	const files: string[] = [];
 	for (const name of readdirSync(root)) {
@@ -46,7 +62,7 @@ function listFiles(root: string): string[] {
 runBun(["run", "build:web"]);
 rmSync(stageDir, { recursive: true, force: true });
 mkdirSync(runtimeDir, { recursive: true });
-const sources = resolveBuildRuntimeSources();
+const sources = resolveRuntimeSources();
 const skillRoutes = new Set<string>();
 for (const skillRoot of sources.skillRoots) {
 	for (const source of listFiles(skillRoot).sort()) {
