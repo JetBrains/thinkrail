@@ -262,6 +262,8 @@ export default function CsvDiff({
 			{composer.composing && selection && draft && surfaceFor(selection.side) ? (
 				<div className="shrink-0 border-border-default border-t bg-container-header-bg p-8">
 					<ReviewComposer
+						key={composer.key}
+						input={composer.input}
 						draft={draft}
 						label={draft.label}
 						commenting={(surfaceFor(selection.side) as SurfaceReview).commenting}

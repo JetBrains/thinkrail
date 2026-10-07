@@ -391,15 +391,50 @@ test("re-opening the review tab keeps its review progress and only bumps the rev
 	expect(openedChangesTab().reveal).toEqual({ path: "src/b.ts", tick: 2 });
 });
 
-test("a review-tab preview yields to the per-file keep a double click issues", async () => {
+test("a Changes double click replaces an earlier preview with its kept per-file tab", async () => {
+	useAppStore.getState().openTab(
+		{
+			kind: "file",
+			id: "old-preview",
+			workspaceId: "w1",
+			name: "old.txt",
+			path: "old.txt",
+			content: "old",
+		},
+		"preview",
+	);
 	const preview = openChangesTab("w1", { kind: "branch" }, { revealPath: "README.md" }, "preview");
-	const keep = openDiffInTab("w1", { kind: "branch" }, "README.md", "keep");
+	const keep = openDiffInTab("w1", { kind: "branch" }, "README.md", "keep", undefined, {
+		claimPreview: true,
+	});
 	pending?.resolve(diffResult("old", "new"));
 	await Promise.all([preview, keep]);
 
 	const tabs = useAppStore.getState().tabsByWorkspace.w1 ?? [];
 	expect(tabs.map((tab) => tab.kind)).toEqual(["diff"]);
 	expect(useAppStore.getState().previewTabByWorkspace.w1).toBeUndefined();
+});
+
+test("an explicit Open as tab retains the existing preview", async () => {
+	useAppStore.getState().openTab(
+		{
+			kind: "file",
+			id: "old-preview",
+			workspaceId: "w1",
+			name: "old.txt",
+			path: "old.txt",
+			content: "old",
+		},
+		"preview",
+	);
+	const open = openDiffInTab("w1", { kind: "branch" }, "README.md", "keep");
+	pending?.resolve(diffResult("old", "new"));
+	await open;
+	expect(useAppStore.getState().tabsByWorkspace.w1?.map((tab) => tab.kind)).toEqual([
+		"file",
+		"diff",
+	]);
+	expect(useAppStore.getState().previewTabByWorkspace.w1).toBe("old-preview");
 });
 
 test("a lone review-tab preview lands after the settle window and claims the preview slot", async () => {

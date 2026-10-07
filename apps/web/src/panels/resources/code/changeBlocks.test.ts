@@ -96,6 +96,46 @@ describe("changeBlockContentKeys", () => {
 		);
 	});
 
+	test("removing a kept duplicate never transfers its decision to the remaining hunk", () => {
+		const original = "a\nx\na\ny\na\n";
+		const modified = "A\nx\nA\ny\nA\n";
+		const keys = [
+			...changeBlockContentKeys(
+				computeChangeBlocks(original, modified, false),
+				original,
+				modified,
+			).values(),
+		];
+		expect(new Set(keys).size).toBe(3);
+		const after = "a\nx\nA\ny\nA\n";
+		const remaining = [
+			...changeBlockContentKeys(
+				computeChangeBlocks(original, after, false),
+				original,
+				after,
+			).values(),
+		];
+		expect(remaining).not.toContain(keys[0]);
+		const last = "a\nx\na\ny\nA\n";
+		const final = [
+			...changeBlockContentKeys(
+				computeChangeBlocks(original, last, false),
+				original,
+				last,
+			).values(),
+		];
+		expect(final).not.toContain(keys[0]);
+		const firstPair = "A\nx\nA\ny\na\n";
+		const firstPairKeys = [
+			...changeBlockContentKeys(
+				computeChangeBlocks(original, firstPair, false),
+				original,
+				firstPair,
+			).values(),
+		];
+		expect(remaining).not.toContain(firstPairKeys[0]);
+	});
+
 	test("a different edit at the same place gets a different key", () => {
 		const original = "a\nb\nc\n";
 		const [one] = computeChangeBlocks(original, "a\nB\nc\n", false);

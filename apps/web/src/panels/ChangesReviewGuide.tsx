@@ -5,7 +5,7 @@ import {
 } from "@remixicon/react";
 import type { GitFileChange, ReviewComment, ReviewGuide } from "@thinkrail/contracts";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
-import { type ChangesTab, useAppStore } from "../store";
+import type { ChangesTab } from "../store";
 import { splitPath } from "./changesModel";
 import { sendReviewBatch, sendReviewComment } from "./reviewSend";
 import { ownsReviewShortcut } from "./reviewShortcuts";
@@ -73,7 +73,7 @@ export function ChangesReviewGuide({
 	files: readonly GitFileChange[];
 	guide: ReviewGuide | undefined;
 	comments: readonly ReviewComment[] | undefined;
-	onReveal: (path: string) => void;
+	onReveal: (path: string, commentId?: string) => void;
 }) {
 	const { workspaceId } = tab;
 	const steps = useMemo(() => guideSteps(guide, comments), [guide, comments]);
@@ -103,10 +103,7 @@ export function ChangesReviewGuide({
 		const step = steps[index];
 		if (!step) return;
 		setCursorAt({ key: guideStepKey(step), index });
-		if (step.path) onReveal(step.path);
-		if (step.kind === "finding") {
-			useAppStore.getState().requestReviewFocus(workspaceId, step.comment.id);
-		}
+		if (step.path) onReveal(step.path, step.kind === "finding" ? step.comment.id : undefined);
 	};
 	const stepFrom = (from: number, delta: 1 | -1) => {
 		const index = nextGuideStep(steps, inScope, from, delta);

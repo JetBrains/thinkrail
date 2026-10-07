@@ -295,8 +295,8 @@ export default function ChatView({
 		[sessionId, workspaceTurns],
 	);
 	const chronologicalRows = useMemo(
-		() => deriveRows(turns, toolResults, isStreaming, isSpec, agentTurns),
-		[turns, toolResults, isStreaming, isSpec, agentTurns],
+		() => deriveRows(turns, toolResults, isStreaming, isSpec, agentTurns, workspaceRoot),
+		[turns, toolResults, isStreaming, isSpec, agentTurns, workspaceRoot],
 	);
 	const rows = useMemo(
 		() => projectRows(chronologicalRows, chatMessageOrder),

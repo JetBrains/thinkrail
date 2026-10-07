@@ -397,6 +397,23 @@ test("a host-fired USER message folds into the transcript; the composer's optimi
 	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(2);
 });
 
+test("a matching user echo adopts the host clock while retaining optimistic identity and attachment labels", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "clock", null, "medium");
+	store.appendUserMessage("clock", "fix the tests", [
+		{ name: "screen.png", content: { type: "image", data: "test", mimeType: "image/png" } },
+	]);
+	const optimistic = rt("clock").turns[0];
+	const message = {
+		role: "user" as const,
+		content: [{ type: "text" as const, text: "fix the tests" }],
+		timestamp: 1_000,
+	};
+	store.handlePiEvent({ type: "message_start", message }, "clock");
+	expect(rt("clock").turns).toEqual([{ ...optimistic, message }]);
+	expect(rt("clock").turns[0]).toMatchObject({ attachmentNames: ["screen.png"] });
+});
+
 test("queue_update folds pi's queue into the runtime; the canonical echo lands the turn at its true position", () => {
 	const queueUpdate = (steering: string[], followUp: string[], hasImages = false) =>
 		({
@@ -3824,10 +3841,10 @@ test("changes tabs: one per scope, preview-eligible, and review progress survive
 	s().setChangesTabSectionViewState("ws1", tab.id, "README.md", { scrollTop: 7 });
 	s().setChangesTabView("ws1", tab.id, "inline");
 	s().setChangesTabIgnoreWhitespace("ws1", tab.id, true);
-	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h1", true);
-	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h2", true);
-	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h1", false);
-	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h1", false);
+	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h1", true, ["h1", "h2"]);
+	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h2", true, ["h1", "h2"]);
+	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h1", false, ["h1", "h2"]);
+	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h1", false, ["h1", "h2"]);
 
 	const after = s().tabsByWorkspace.ws1?.[0];
 	if (after?.kind !== "changes") throw new Error("expected a changes tab");

@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { TurnChangeSet } from "@thinkrail/contracts";
+import type { PiEvent, TurnChangeSet } from "@thinkrail/contracts";
+import * as gitModule from "../git";
 import { gitDiffFile, gitStatus, snapshotWorktree } from "../git";
-import { loadTurns } from "../persistence";
+import { loadTurns, saveWorkspaces } from "../persistence";
 import { forgetWorkspaceTurns, listTurns, setTurnPublisher, TurnTracker, turnScope } from "./turns";
 
 let dataDir: string;
@@ -59,8 +60,8 @@ afterEach(() => {
 
 const resolve = () => ({ workspaceId: "w1", worktreePath: repo });
 
-const start = { type: "agent_start" } as never;
-const settle = { type: "agent_settled", messages: [] } as never;
+const start: PiEvent = { type: "agent_start" };
+const settle: PiEvent = { type: "agent_settled", terminal: null };
 
 test("a worktree snapshot captures tracked edits and untracked files without touching the index", async () => {
 	const head = git(repo, "rev-parse", "HEAD^{tree}");
@@ -167,28 +168,80 @@ test("the head is captured the moment the run settles, not after a slow base sna
 	expect(turn?.changes.map((change) => change.path)).toEqual(["run-one.ts"]);
 });
 
-test("a workspace removed while its run is settling records and publishes nothing", async () => {
+test.each([
+	"before",
+	"after",
+] as const)("session membership removed %s settlement does not discard its workspace's receipt", async (when) => {
 	const published: TurnChangeSet[] = [];
 	setTurnPublisher((turn) => published.push(turn));
-	let present = true;
+	let attached = true;
 	const head = deferred<string | null>();
 	let calls = 0;
 	const tracker = new TurnTracker(
-		() => (present ? { workspaceId: "w1", worktreePath: repo } : null),
+		() => (attached ? resolve() : null),
 		Date.now,
-		(cwd) => (++calls === 1 ? Promise.resolve(snapshotNow(cwd)) : head.promise),
+		(cwd) => (++calls === 1 ? snapshotWorktree(cwd) : head.promise),
 	);
 
 	await tracker.observe("s1", start);
 	writeFileSync(join(repo, "feature.ts"), "export const feature = true;\n");
+	if (when === "before") attached = false;
 	const settled = tracker.observe("s1", settle);
-	present = false;
-	head.resolve(snapshotNow(repo));
+	attached = false;
+	head.resolve(await snapshotWorktree(repo));
 	await settled;
 
+	const turns = listTurns("w1");
+	expect(turns).toHaveLength(1);
+	expect(turns[0]?.changes.map((change) => change.path)).toEqual(["feature.ts"]);
+	expect(published).toEqual(turns);
+});
+
+test("a workspace removed while its run is settling records and publishes nothing", async () => {
+	const published: TurnChangeSet[] = [];
+	setTurnPublisher((turn) => published.push(turn));
+	const statusReady = deferred<void>();
+	const releaseStatus = deferred<void>();
+	const realStatus = gitStatus;
+	const statusSpy = spyOn(gitModule, "gitStatus").mockImplementation(async (...args) => {
+		const status = await realStatus(...args);
+		statusReady.resolve();
+		await releaseStatus.promise;
+		return status;
+	});
+	const tracker = new TurnTracker(resolve);
+	try {
+		await tracker.observe("s1", start);
+		writeFileSync(join(repo, "feature.ts"), "export const feature = true;\n");
+		const settled = tracker.observe("s1", settle);
+		await statusReady.promise;
+		saveWorkspaces([]);
+		forgetWorkspaceTurns("w1");
+		releaseStatus.resolve();
+		await settled;
+
+		expect(listTurns("w1")).toEqual([]);
+		expect(published).toEqual([]);
+		expect(existsSync(join(dataDir, "turns.json"))).toBe(false);
+	} finally {
+		releaseStatus.resolve();
+		statusSpy.mockRestore();
+	}
+});
+
+test("attempt-level agent_end does not end a run before agent_settled", async () => {
+	const tracker = new TurnTracker(resolve);
+	await tracker.observe("s1", start);
+	writeFileSync(join(repo, "first.txt"), "first attempt\n");
+	await tracker.observe("s1", { type: "agent_end", messages: [], willRetry: true });
 	expect(listTurns("w1")).toEqual([]);
-	expect(published).toEqual([]);
-	expect(existsSync(join(dataDir, "turns.json"))).toBe(false);
+	await tracker.observe("s1", start);
+	writeFileSync(join(repo, "retry.txt"), "retry\n");
+	await tracker.observe("s1", settle);
+	expect(listTurns("w1")[0]?.changes.map((change) => change.path)).toEqual([
+		"first.txt",
+		"retry.txt",
+	]);
 });
 
 test("turns are kept in start order even when a later-started run settles first", async () => {

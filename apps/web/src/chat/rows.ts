@@ -9,6 +9,7 @@ import {
 	type UserMessage,
 } from "@thinkrail/contracts";
 import { strArg } from "@thinkrail/extension-api/web";
+import { projectRelativePath } from "../lib";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { resolveProminence } from "./toolRegistry";
 import type { ChatTurn, CompactionState, FailureRecovery, ToolResultState } from "./types";
@@ -110,6 +111,7 @@ export function deriveRows(
 	isStreaming: boolean,
 	isSpec?: (path: string) => boolean,
 	agentTurns: readonly TurnChangeSet[] = [],
+	workspaceRoot?: string,
 ): ChatRow[] {
 	const rows: ChatRow[] = [];
 	let run: ActivityStep[] = [];
@@ -216,7 +218,7 @@ export function deriveRows(
 			(turns[i + 1]?.kind === "user" || (i === turns.length - 1 && !isStreaming));
 		if (roundEnded) {
 			flushRun();
-			const data = turnDivider(turns, i, isSpec, agentTurns);
+			const data = turnDivider(turns, i, isSpec, agentTurns, workspaceRoot);
 			if (data) rows.push({ kind: "divider", id: `${turn.id}:divider`, data });
 		}
 	}
@@ -237,8 +239,6 @@ export interface TurnDividerData {
 	receipt: TurnReceipt | null;
 }
 
-const RUN_START_SLACK_MS = 1_000;
-
 export function matchTurnReceipt(
 	agentTurns: readonly TurnChangeSet[],
 	startMs: number | null,
@@ -246,9 +246,7 @@ export function matchTurnReceipt(
 ): TurnReceipt | null {
 	if (startMs === null) return null;
 	const runs = agentTurns.filter(
-		(turn) =>
-			turn.startedAt >= startMs - RUN_START_SLACK_MS &&
-			(nextStartMs === null || turn.startedAt < nextStartMs - RUN_START_SLACK_MS),
+		(turn) => turn.startedAt >= startMs && (nextStartMs === null || turn.startedAt < nextStartMs),
 	);
 	const first = runs[0];
 	const last = runs.at(-1);
@@ -276,6 +274,7 @@ export function turnDivider(
 	endIndex: number,
 	isSpec: (path: string) => boolean = () => false,
 	agentTurns: readonly TurnChangeSet[] = [],
+	workspaceRoot?: string,
 ): TurnDividerData | null {
 	let userIdx = -1;
 	for (let i = endIndex; i >= 0; i--) {
@@ -298,8 +297,9 @@ export function turnDivider(
 				toolCount++;
 				const specWrite = block.name === SPEC_WRITER_TOOL;
 				if (!specWrite && !FILE_WRITER_TOOLS.has(block.name)) continue;
-				const path = strArg(block.arguments, "path");
-				if (!path) continue;
+				const reportedPath = strArg(block.arguments, "path");
+				if (!reportedPath) continue;
+				const path = projectRelativePath(reportedPath, workspaceRoot);
 				if (specWrite || isSpec(path)) written.set(path, true);
 				else if (!written.has(path)) written.set(path, false);
 			}
@@ -321,7 +321,7 @@ export function turnDivider(
 	if (receipt) {
 		changedFiles.length = 0;
 		for (const change of receipt.changes) {
-			if (isSpec(change.path)) {
+			if (written.get(change.path) === true || isSpec(change.path)) {
 				if (!specs.includes(change.path)) specs.push(change.path);
 			} else changedFiles.push(change.path);
 		}

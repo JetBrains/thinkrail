@@ -630,6 +630,37 @@ test("each run belongs to the round whose prompt started it, even across a quick
 	expect(turnDivider(failed, 2, () => false, records)?.receipt?.scope.id).toBe("r2");
 });
 
+test("prompts less than one second apart cannot steal one another's receipts", () => {
+	const turns: ChatTurn[] = [
+		user("u1", 10_000),
+		done("s1", 10_300),
+		user("u2", 10_500),
+		done("s2", 10_900),
+	];
+	const records = [agentTurn("r1", 10_010, ["x.ts"]), agentTurn("r2", 10_510, ["y.ts"], "c")];
+	expect(turnDivider(turns, 1, () => false, records)?.receipt?.scope.id).toBe("r1");
+	expect(turnDivider(turns, 3, () => false, records)?.receipt?.scope.id).toBe("r2");
+});
+
+test("receipt paths and absolute spec-tool paths share one canonical specs entry", () => {
+	const turns: ChatTurn[] = [
+		user("u1", 1_000),
+		assistantWithPaths("a1", [{ name: "spec_create", path: "/worktree/docs/SPEC.md" }], 1_500),
+		done("s1", 3_000),
+	];
+	for (const classified of [false, true]) {
+		const divider = turnDivider(
+			turns,
+			2,
+			() => classified,
+			[agentTurn("r1", 1_200, ["docs/SPEC.md"])],
+			"/worktree",
+		);
+		expect(divider?.specs).toEqual(["docs/SPEC.md"]);
+		expect(divider?.changedFiles).toEqual([]);
+	}
+});
+
 test("receipt paths the spec matcher claims land on the specs side", () => {
 	const turns: ChatTurn[] = [user("u1", 1_000), done("s1", 3_000)];
 	const d = turnDivider(turns, 1, (path) => path.endsWith("SPEC.md"), [

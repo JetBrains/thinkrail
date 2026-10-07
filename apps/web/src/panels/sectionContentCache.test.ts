@@ -14,7 +14,7 @@ test("one in-flight read is shared by every section that asks while it is pendin
 		});
 	};
 	const first = cache.load("src/a.ts", read, 3, "main");
-	const second = cache.load("src/a.ts", read, 4, "main");
+	const second = cache.load("src/a.ts", read, 3, "main");
 	expect(reads).toBe(1);
 	release?.();
 	const [content, shared]: SectionContent[] = await Promise.all([first, second]);
@@ -45,6 +45,53 @@ test("a failed read leaves nothing behind so the next attempt reads again", asyn
 	expect(cache.get("src/c.ts")).toBeUndefined();
 	await expect(cache.load("src/c.ts", read, 1, "main")).rejects.toThrow("boom");
 	expect(reads).toBe(2);
+});
+
+test("a late initial load cannot replace content installed by a live refresh", async () => {
+	const cache = createSectionContentCache();
+	const pending = Promise.withResolvers<typeof fresh>();
+	const initial = cache.load("src/a.ts", () => pending.promise, 1, "main");
+	const refreshed = { ...fresh, modified: "newer", loadedTick: 2, loadedTarget: "main" };
+	cache.set("src/a.ts", refreshed);
+	pending.resolve(fresh);
+	await initial;
+	expect(cache.get("src/a.ts")).toBe(refreshed);
+});
+
+test("a late result for the old target cannot replace the new target", async () => {
+	const cache = createSectionContentCache();
+	const pending = Promise.withResolvers<typeof fresh>();
+	const initial = cache.load("src/a.ts", () => pending.promise, 1, "main");
+	await cache.load(
+		"src/a.ts",
+		() => Promise.resolve({ ...fresh, original: "release" }),
+		1,
+		"release",
+	);
+	pending.resolve(fresh);
+	await initial;
+	expect(cache.get("src/a.ts")).toMatchObject({ original: "release", loadedTarget: "release" });
+});
+
+test("a later filesystem generation reads again instead of adopting an older in-flight diff", async () => {
+	const cache = createSectionContentCache();
+	const pending = Promise.withResolvers<typeof fresh>();
+	const initial = cache.load("src/a.ts", () => pending.promise, 1, "main");
+	let reads = 0;
+	const updated = cache.load(
+		"src/a.ts",
+		async () => {
+			reads += 1;
+			return { ...fresh, modified: "newer" };
+		},
+		2,
+		"main",
+	);
+	expect(reads).toBe(1);
+	await updated;
+	pending.resolve(fresh);
+	await initial;
+	expect(cache.get("src/a.ts")).toMatchObject({ modified: "newer", loadedTick: 2 });
 });
 
 test("a read against a different diff base is never shared with the one in flight", async () => {

@@ -1411,18 +1411,31 @@ own section. The kebab menu (`plan-menu`, a
   `git.diffFile` lazily as they scroll into view and refresh under the same live-refresh contract as a
   `DiffTab`. A double click, or a section's *Open as tab*, opens the per-file **`DiffTab`** *(path,
   scope)* through `openDiffInTab` at the `keep` intent — the deep single-file surface is a promotion,
-  never the first click. The review tab has two **view modes**, chosen by a `Stacked | One file` segment
+  never the first click. Double-click carries its leading click's preview-slot claim; explicit *Open as
+  tab* preserves an existing preview instead. The review tab has two **view modes**, chosen by a `Stacked | One file` segment
   in its toolbar and held app-wide (`store.changesLayout`, like `changesView`): *Stacked* is the
   continuous list; *One file* shows one section at a time with `Prev / Next` and a `n / N` counter
   (`V` marks viewed and advances, `Alt+↓` / `Alt+↑` step files). Both modes read one model —
   the scope's ordered file list, `viewed`, `activePath`, collapse overrides, `Split | Inline`, ¶ — so
   switching never loses review progress; a second tab kind per mode was rejected for exactly that reason.
+  **Transient authoring belongs to the tab section, not its mounted renderer.** An optional scoped
+  review-draft context retains the stamped selection, composer text/caret, pending submission, and
+  unsaved thread edits across virtualization, collapse, renderer and Stacked/One-file switches. The
+  shared `useStampedComposer` and thread card use this policy for code and rich surfaces; renderer,
+  side/page, file, scope and workspace identities isolate their scratch state. Notebook selections retain
+  a stamped side and cell index, never a parsed cell object's identity. Cancel and successful
+  Save/Send retire it; late completions cannot close a newer selection. Restoring scratch never focuses
+  the textarea or sends a host mutation. Existing thread edits retain blur-save and shortcut-save;
+  sending waits for any edited body to be saved, and Escape discards only the local edit.
+  Content-stamp changes still invalidate stale selections.
+  Scratch remains tab-lifetime only, not reload-persistent, and its first write keeps the preview.
   **The Changes sidebar is the review tab's navigator**: its row highlight follows the tab's
   `activePath` (the section whose header has crossed the toolbar's midline, or the single file shown),
   viewed files carry a check glyph, and clicking a row reveals that section (and expands it if it was
-  collapsed) — the reveal re-targets `scrollToIndex` while sections above it are still measuring
-  (`REVEAL_SETTLE_MS`), but the first wheel, touch or pointer on the list ends that window, because a
-  reader who has started scrolling must never be snapped back; `changesView` defaults to **Tree**, and a
+  collapsed) — the reveal remains anchored by path while asynchronous sections determine their heights,
+  until a view-mode change or user wheel, touch, pointer, or keyboard input takes over. A timeout cannot bound remote reads.
+  Finding navigation hands scrolling to the thread only after the section reveal, and disables further
+  header corrections so the thread cannot be scrolled back out of view; `changesView` defaults to **Tree**, and a
   file row is `change-item` in both views because it is the same thing. When the shown file leaves the
   scope (reverted, or the agent removed its change), One-file mode stays at that position rather than
   jumping back to the first file. The list ends in a measured tail the height of the viewport so the last file can
@@ -1431,13 +1444,15 @@ own section. The kebab menu (`plan-menu`, a
   scrolling would replace the Changes navigator in its shared side group mid-read.
   **Hunk triage is an overlay on the same tab, not a second mutation model.** In a mutable scope every
   hunk toolbar gains **Keep** beside the existing Revert and Ask-agent actions; a kept hunk is recorded
-  on the tab (`kept[path]`) under a **content key** — a hash of the hunk's removed + added text, with an
-  ordinal suffix for the second and later hunks of identical content, so twin hunks are kept one at a
-  time — so the decision survives the line shifts a neighbouring revert causes and lapses the moment the
+  on the tab (`kept[path]`) under a **content key** — a hash of the hunk's removed + added text, with the
+  duplicate-group size and original-side position when content is identical, so reverting an earlier
+  twin cannot transfer its decision to an unreviewed twin. Ambiguous groups conservatively lose their
+  decisions when their size changes. Unique keys survive the line shifts a neighbouring revert causes and lapse the moment the
   agent changes that hunk again. A *reverted* hunk needs no state: ThinkRail's revert restores the base
   text, the hunk leaves the diff, and the toast's Undo is the way back. The section header shows `k/n
-  kept` and the moment a file's last hunk is kept it is marked **viewed** — an edge, not a standing rule,
-  so the reader can still un-view a fully kept file — and hunk and file progress are one model; the stacked view's bottom bar shows `n of N reviewed`, **Next unreviewed** (`J`, wraps) and
+  kept` and keeping a file's last hunk atomically marks it **viewed** — an action edge, not a standing
+  render rule, so an explicitly un-viewed file stays un-viewed through virtualization and mode changes.
+  Hunk and file progress are one model; the stacked view's bottom bar shows `n of N reviewed`, **Next unreviewed** (`J`, wraps) and
   **Mark all viewed**, and `V` toggles the active section. There is deliberately no *Revert all*: the
   host has no atomic multi-file discard and a bulk destructive action on a review surface earns its
   keystroke only once it exists server-side. The per-file `DiffTab` passes no triage and is unchanged.
@@ -1457,7 +1472,7 @@ own section. The kebab menu (`plan-menu`, a
   on phone-class viewports — 280px of a 390px
   screen would leave no diff to guide through. Plain-letter shortcuts (`V`, `J`, `N`, `P`) belong to the
   review tab the center is looking at (`ownsReviewShortcut`: the attention group's selected tab, no
-  modal layer open, no text-entry target), so two review scopes split side by side cannot both answer
+  modal or menu layer open, no text-entry target, and no earlier handler consumed the event), so two review scopes split side by side cannot both answer
   one keystroke. **Scale rules**:
   a section whose file changed more than 400 lines, or whose path is a lock/generated file, mounts
   collapsed behind *Expand* / *Open as tab*; a scope with more than 50 files shows a dismissable notice
@@ -1468,9 +1483,10 @@ own section. The kebab menu (`plan-menu`, a
   are only `file` / `diff`, so it cannot host the rendered-markdown, image, SVG, CSV, JSON, notebook, and PDF
   renderers that a section must dispatch exactly like `DiffPane` does. **A section holds its shape
   before it has its diff.** Each section reads `git.diffFile` lazily when its body first becomes
-  visible, through the pane's `SectionContentCache`: one in-flight read per path is shared by whoever asks,
-  and the result is stored even if the section that started it has already scrolled out, so remounting
-  never re-reads (a failed read stores nothing, so *Retry* reads again). While loading, a stacked section's
+  visible, through the pane's `SectionContentCache`: in-flight reads are shared only for the same path,
+  diff target, and filesystem generation. The latest request may populate the cache after its section
+  scrolls out, but an older initial read cannot overwrite a newer target or a live refresh. A failed
+  read stores nothing, so *Retry* reads again. While loading, a stacked section's
   placeholder reserves `estimatedSectionHeight(change)` — `232 + 40 × changed lines` px, capped at
   20 000 — which sits within about 2× of what Pierre renders for the same stats. Without that reservation
   a skeleton a tenth the size of its diff made Virtuoso mount a dozen-plus sections at once (that many

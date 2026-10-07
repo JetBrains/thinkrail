@@ -210,6 +210,8 @@ export default function JsonDiff({
 			<StaleComposerNotice visible={composer.stale} />
 			{composer.composing && selected && draft && surfaceFor(selected.side) ? (
 				<ReviewComposer
+					key={composer.key}
+					input={composer.input}
 					draft={draft}
 					label={draft.label}
 					commenting={(surfaceFor(selected.side) as SurfaceReview).commenting}

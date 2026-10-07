@@ -51,6 +51,7 @@ export function RegionReviewSurface({
 	review,
 	intrinsicSize,
 	contentStamp,
+	selectionKey = "region",
 	children,
 	className,
 	style,
@@ -62,6 +63,7 @@ export function RegionReviewSurface({
 	review?: SurfaceReview | undefined;
 	intrinsicSize: Size | null;
 	contentStamp: string;
+	selectionKey?: string;
 	additionalReviews?: readonly RegionReviewProjection[] | undefined;
 	children: ReactNode;
 	className?: string | undefined;
@@ -71,7 +73,7 @@ export function RegionReviewSurface({
 	draftForRegion?: ((region: Region) => AnchorDraft) | undefined;
 }) {
 	const [drag, setDrag] = useState<DragState | null>(null);
-	const composer = useStampedComposer<Region>(contentStamp);
+	const composer = useStampedComposer<Region>(contentStamp, selectionKey);
 	const cardsRef = useRef(new Map<string, HTMLDivElement>());
 	const mediaRef = useRef<HTMLDivElement>(null);
 	const handledFocusRef = useRef<string | null>(null);
@@ -249,6 +251,8 @@ export function RegionReviewSurface({
 			<StaleComposerNotice visible={composer.stale} />
 			{composer.composing && selectionDraft && review ? (
 				<ReviewComposer
+					key={composer.key}
+					input={composer.input}
 					draft={selectionDraft}
 					label={selectionDraft.label}
 					commenting={review.commenting}

@@ -260,6 +260,7 @@ async function deliverFixToWorker(
 	raw: ReviewFixComment[],
 	record: (autoCycles: number) => { item: Todo },
 	capture: AdditionalAnalyticsCapture | null,
+	recordGuide: () => Promise<void>,
 ): Promise<VerdictOutcome> {
 	let marked: string[] = [];
 	let sent: ReviewComment[] = [];
@@ -277,6 +278,7 @@ async function deliverFixToWorker(
 				throw err;
 			}
 			recorded = true;
+			await recordGuide();
 			const findings: ReviewComment[] = await itemFixFindings(params);
 			const sentIds = findings.map((c) => c.id);
 			const fixPackage =
@@ -326,9 +328,9 @@ async function recordVerdict(
 	const capture = additionalCapture();
 	const decided = (verdict: "approved" | "changes_requested") =>
 		captureAdditional(capture, { name: "review_decided", params: { actor: "agent", verdict } });
-	try {
-		await withReviewLock(params.workspaceId, () =>
-			setReviewGuide(params.workspaceId, {
+	const recordGuide = async (): Promise<void> => {
+		try {
+			await setReviewGuide(params.workspaceId, {
 				summary: result.summary ?? "",
 				readingOrder: result.readingOrder ?? [],
 				verdict: result.verdict,
@@ -336,26 +338,29 @@ async function recordVerdict(
 				sessionId: params.sessionId,
 				reviewedSha,
 				at: Date.now(),
-			}),
-		);
-	} catch (error) {
-		log.warn(`review guide was not recorded for ${params.workspaceId}`, error as Error);
-	}
-	if (result.verdict === "approve") {
-		const open = await itemOpenFindings(params);
-		if (open.length === 0) {
-			approveTodoReview(params, "agent");
-			decided("approved");
-			return { kind: "approved" };
+			});
+		} catch (error) {
+			log.warn(`review guide was not recorded for ${params.workspaceId}`, error as Error);
 		}
-		cancelTodoReview(params);
-		if (deliverFix)
-			notifyExtUi(
-				params.sessionId,
-				`The reviewer approved "${result.itemTitle}", but ${open.length} finding(s) on it are still open in Review — the step stays unreviewed until they are resolved.`,
-				"warning",
-			);
-		return { kind: "approve-blocked", openFindings: open.length };
+	};
+	if (result.verdict === "approve") {
+		return withReviewLock(params.workspaceId, async () => {
+			const open = await itemOpenFindings(params);
+			if (open.length === 0) {
+				approveTodoReview(params, "agent");
+				await recordGuide();
+				decided("approved");
+				return { kind: "approved" };
+			}
+			cancelTodoReview(params);
+			if (deliverFix)
+				notifyExtUi(
+					params.sessionId,
+					`The reviewer approved "${result.itemTitle}", but ${open.length} finding(s) on it are still open in Review — the step stays unreviewed until they are resolved.`,
+					"warning",
+				);
+			return { kind: "approve-blocked", openFindings: open.length };
+		});
 	}
 	decided("changes_requested");
 	const spent = todoReviewAutoCycles(params) ?? 0;
@@ -379,6 +384,7 @@ async function recordVerdict(
 				await unfileFindings(params, filed, false);
 				throw err;
 			}
+			await recordGuide();
 			return filed;
 		});
 		return { kind: "changes", canAutoFix: false, findings };
@@ -408,6 +414,7 @@ async function recordVerdict(
 				await unfileFindings(params, filed, true);
 				throw err;
 			}
+			await recordGuide();
 			return filing;
 		});
 		captureReviewCommentsSent(capture, comments);
@@ -418,7 +425,15 @@ async function recordVerdict(
 	// the cycle itself. If we lost the claim (another fix is in flight) we only file the findings for the
 	// user, under the lock, and record the terminal cycle here. See planReview.SPEC.md.
 	if (claimItemFix(params.sessionId, params.id))
-		return deliverFixToWorker(params, note, reviewedSha, result.findings, record, capture);
+		return deliverFixToWorker(
+			params,
+			note,
+			reviewedSha,
+			result.findings,
+			record,
+			capture,
+			recordGuide,
+		);
 	const findings = await withReviewLock(params.workspaceId, async () => {
 		const { filed } = await fileFindings(params, reviewedSha, result.findings, capture);
 		try {
@@ -427,6 +442,7 @@ async function recordVerdict(
 			await unfileFindings(params, filed, false);
 			throw err;
 		}
+		await recordGuide();
 		return filed;
 	});
 	return { kind: "changes", canAutoFix: false, findings };

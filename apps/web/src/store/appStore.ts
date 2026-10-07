@@ -91,6 +91,7 @@ import {
 	type HistoryTarget,
 	isChatResourceReadCurrent,
 	isChatResourceScopeAlive,
+	isConnectedGeneration,
 	SETTLED_SHELF_PAGE,
 	selectActiveWorkspaceProjectId,
 	selectAttentionCenterTab,
@@ -167,10 +168,12 @@ const TURNS_PER_WORKSPACE = 30;
 export interface ChangesTabReveal {
 	path: string;
 	tick: number;
+	commentId?: string;
 }
 export interface ChangesTabSection {
 	rendererId?: string;
 	viewState?: unknown;
+	reviewDrafts?: Readonly<Record<string, unknown>>;
 }
 export interface ChangesTab {
 	kind: "changes";
@@ -610,12 +613,14 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 				const last = rt.turns[rt.turns.length - 1];
 				if (last?.kind === "user") {
 					const optimisticText = userText(last.message.content);
-					if (optimisticText === text) return rt;
 					const invocation = parseSkillInvocation(text);
-					if (invocation && matchesSkillInvocationCommand(optimisticText, invocation)) {
+					if (
+						optimisticText === text ||
+						(invocation && matchesSkillInvocationCommand(optimisticText, invocation))
+					) {
 						return {
 							...rt,
-							turns: [...rt.turns.slice(0, -1), { kind: "user", id: last.id, message }],
+							turns: [...rt.turns.slice(0, -1), { ...last, message }],
 						};
 					}
 				}
@@ -1051,14 +1056,24 @@ interface AppState {
 		id: string,
 		ignoreWhitespace: boolean,
 	) => void;
-	setChangesTabViewed: (workspaceId: string, id: string, path: string, viewed: boolean) => void;
+	setChangesTabViewed: (
+		workspaceId: string,
+		id: string,
+		paths: string | readonly string[],
+		viewed: boolean,
+	) => void;
 	setChangesTabActivePath: (workspaceId: string, id: string, path: string | null) => void;
 	setChangesTabCollapsed: (
 		workspaceId: string,
 		id: string,
 		overrides: Record<string, boolean | null>,
 	) => void;
-	requestChangesTabReveal: (workspaceId: string, id: string, path: string) => void;
+	requestChangesTabReveal: (
+		workspaceId: string,
+		id: string,
+		path: string,
+		commentId?: string,
+	) => void;
 	clearChangesTabReveal: (workspaceId: string, id: string) => void;
 	setChangesTabSectionRenderer: (
 		workspaceId: string,
@@ -1072,12 +1087,20 @@ interface AppState {
 		path: string,
 		viewState: unknown,
 	) => void;
+	setChangesTabSectionReviewDraft: (
+		workspaceId: string,
+		id: string,
+		path: string,
+		key: string,
+		update: (current: unknown) => unknown,
+	) => void;
 	setChangesTabHunkKept: (
 		workspaceId: string,
 		id: string,
 		path: string,
 		key: string,
 		kept: boolean,
+		hunkKeys: readonly string[],
 	) => void;
 	changesView: "list" | "tree";
 	setChangesView: (view: "list" | "tree") => void;
@@ -1087,7 +1110,12 @@ interface AppState {
 	setDiffScope: (workspaceId: string, scope: GitDiffScope) => void;
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
 	turnsByWorkspace: Record<string, TurnChangeSet[]>;
-	setWorkspaceTurns: (workspaceId: string, turns: TurnChangeSet[]) => void;
+	setWorkspaceTurns: (
+		workspaceId: string,
+		turns: TurnChangeSet[],
+		baseline: readonly TurnChangeSet[],
+		connectionGeneration: number,
+	) => void;
 	applyTurnChanged: (turn: TurnChangeSet) => void;
 	markSkillsSynced: (sessionId: string, syncedTick: number) => void;
 	updateFileTabContent: (
@@ -1234,6 +1262,12 @@ interface AppState {
 
 function sortProjects(projects: Project[]): Project[] {
 	return [...projects].sort((a, b) => b.lastOpened - a.lastOpened);
+}
+
+function normalizeWorkspaceTurns(turns: readonly TurnChangeSet[]): TurnChangeSet[] {
+	return [...new Map(turns.map((turn) => [turn.id, turn])).values()]
+		.sort((a, b) => a.startedAt - b.startedAt)
+		.slice(-TURNS_PER_WORKSPACE);
 }
 
 function configPatch(config: AppConfig) {
@@ -1482,20 +1516,28 @@ function patchChangesTab(
 }
 
 function recordChangesTabProgress(
-	state: Pick<AppState, "tabsByWorkspace" | "previewTabByWorkspace" | "layoutIntents">,
+	state: Pick<
+		AppState,
+		"tabsByWorkspace" | "previewTabByWorkspace" | "layoutIntents" | "layoutDocumentsByWorkspace"
+	>,
 	workspaceId: string,
 	id: string,
 	patch: (tab: ChangesTab) => ChangesTab,
 ): Partial<AppState> {
 	const patched = patchChangesTab(state, workspaceId, id, patch);
-	if (!patched.tabsByWorkspace || state.previewTabByWorkspace[workspaceId] !== id) return patched;
+	const tab = patched.tabsByWorkspace?.[workspaceId]?.find((candidate) => candidate.id === id);
+	if (tab?.kind !== "changes") return patched;
+	const placement = selectLayoutResourcePlacement(state, workspaceId, tab);
 	return {
 		...patched,
-		previewTabByWorkspace: omitKey(state.previewTabByWorkspace, workspaceId),
+		previewTabByWorkspace:
+			state.previewTabByWorkspace[workspaceId] === id
+				? omitKey(state.previewTabByWorkspace, workspaceId)
+				: state.previewTabByWorkspace,
 		layoutIntents: appendLayoutIntent(state.layoutIntents, {
 			kind: "select",
 			workspaceId,
-			tabId: id,
+			tabId: placement?.tabId ?? id,
 			keep: true,
 			focus: false,
 			countNavigation: false,
@@ -2773,15 +2815,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) => patchChangesTab(s, workspaceId, id, (tab) => ({ ...tab, view }))),
 	setChangesTabIgnoreWhitespace: (workspaceId, id, ignoreWhitespace) =>
 		set((s) => patchChangesTab(s, workspaceId, id, (tab) => ({ ...tab, ignoreWhitespace }))),
-	setChangesTabViewed: (workspaceId, id, path, viewed) =>
+	setChangesTabViewed: (workspaceId, id, paths, viewed) =>
 		set((s) =>
 			recordChangesTabProgress(s, workspaceId, id, (tab) => {
-				const has = tab.viewed.includes(path);
-				if (has === viewed) return tab;
-				return {
-					...tab,
-					viewed: viewed ? [...tab.viewed, path] : tab.viewed.filter((p) => p !== path),
-				};
+				const next = new Set(tab.viewed);
+				for (const path of typeof paths === "string" ? [paths] : paths) {
+					if (viewed) next.add(path);
+					else next.delete(path);
+				}
+				return next.size === tab.viewed.length ? tab : { ...tab, viewed: [...next] };
 			}),
 		),
 	setChangesTabActivePath: (workspaceId, id, path) =>
@@ -2801,11 +2843,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 				return { ...tab, collapsed };
 			}),
 		),
-	requestChangesTabReveal: (workspaceId, id, path) =>
+	requestChangesTabReveal: (workspaceId, id, path, commentId) =>
 		set((s) =>
 			patchChangesTab(s, workspaceId, id, (tab) => ({
 				...tab,
-				reveal: { path, tick: (tab.reveal?.tick ?? 0) + 1 },
+				reveal: { path, tick: (tab.reveal?.tick ?? 0) + 1, ...(commentId ? { commentId } : {}) },
 			})),
 		),
 	clearChangesTabReveal: (workspaceId, id) =>
@@ -2816,7 +2858,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((s) =>
 			patchChangesTab(s, workspaceId, id, (tab) => ({
 				...tab,
-				sections: { ...tab.sections, [path]: { rendererId } },
+				sections: {
+					...tab.sections,
+					[path]: { ...tab.sections[path], rendererId, viewState: undefined },
+				},
 			})),
 		),
 	setChangesTabSectionViewState: (workspaceId, id, path, viewState) =>
@@ -2826,13 +2871,44 @@ export const useAppStore = create<AppState>((set, get) => ({
 				sections: { ...tab.sections, [path]: { ...tab.sections[path], viewState } },
 			})),
 		),
-	setChangesTabHunkKept: (workspaceId, id, path, key, kept) =>
+	setChangesTabSectionReviewDraft: (workspaceId, id, path, key, update) =>
+		set((s) => {
+			const current = s.tabsByWorkspace[workspaceId]?.find((tab) => tab.id === id);
+			const hasScratch =
+				current?.kind === "changes" &&
+				Object.values(current.sections).some((section) => section.reviewDrafts !== undefined);
+			return (hasScratch ? patchChangesTab : recordChangesTabProgress)(
+				s,
+				workspaceId,
+				id,
+				(tab) => {
+					const section = tab.sections[path];
+					const previous = section?.reviewDrafts?.[key];
+					const next = update(previous);
+					if (Object.is(previous, next)) return tab;
+					const reviewDrafts = { ...section?.reviewDrafts };
+					if (next === undefined) delete reviewDrafts[key];
+					else reviewDrafts[key] = next;
+					return {
+						...tab,
+						sections: { ...tab.sections, [path]: { ...section, reviewDrafts } },
+					};
+				},
+			);
+		}),
+	setChangesTabHunkKept: (workspaceId, id, path, key, kept, hunkKeys) =>
 		set((s) =>
 			recordChangesTabProgress(s, workspaceId, id, (tab) => {
-				const current = tab.kept[path] ?? [];
-				if (current.includes(key) === kept) return tab;
-				const next = kept ? [...current, key] : current.filter((k) => k !== key);
-				return { ...tab, kept: { ...tab.kept, [path]: next } };
+				const next = new Set(tab.kept[path] ?? []);
+				if (next.has(key) === kept) return tab;
+				if (kept) next.add(key);
+				else next.delete(key);
+				const completed = kept && hunkKeys.length > 0 && hunkKeys.every((hunk) => next.has(hunk));
+				return {
+					...tab,
+					kept: { ...tab.kept, [path]: [...next] },
+					viewed: completed && !tab.viewed.includes(path) ? [...tab.viewed, path] : tab.viewed,
+				};
 			}),
 		),
 	setChangesView: (view) => set({ changesView: view }),
@@ -2843,21 +2919,34 @@ export const useAppStore = create<AppState>((set, get) => ({
 				? {}
 				: { diffScopeByWorkspace: { ...s.diffScopeByWorkspace, [workspaceId]: scope } },
 		),
-	setWorkspaceTurns: (workspaceId, turns) =>
-		set((s) =>
-			s.removedWorkspaceIds[workspaceId]
-				? {}
-				: { turnsByWorkspace: { ...s.turnsByWorkspace, [workspaceId]: turns } },
-		),
+	setWorkspaceTurns: (workspaceId, turns, baseline, connectionGeneration) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId] || !isConnectedGeneration(s, connectionGeneration)) {
+				return {};
+			}
+			const baselineTurns = new Set(baseline);
+			const pushed = (s.turnsByWorkspace[workspaceId] ?? []).filter(
+				(turn) => !baselineTurns.has(turn),
+			);
+			return {
+				turnsByWorkspace: {
+					...s.turnsByWorkspace,
+					[workspaceId]: normalizeWorkspaceTurns([...turns, ...pushed]),
+				},
+			};
+		}),
 	applyTurnChanged: (turn) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[turn.workspaceId]) return {};
-			const current = s.turnsByWorkspace[turn.workspaceId];
-			if (!current) return {};
-			const next = [...current.filter((t) => t.id !== turn.id), turn]
-				.sort((a, b) => a.startedAt - b.startedAt)
-				.slice(-TURNS_PER_WORKSPACE);
-			return { turnsByWorkspace: { ...s.turnsByWorkspace, [turn.workspaceId]: next } };
+			return {
+				turnsByWorkspace: {
+					...s.turnsByWorkspace,
+					[turn.workspaceId]: normalizeWorkspaceTurns([
+						...(s.turnsByWorkspace[turn.workspaceId] ?? []),
+						turn,
+					]),
+				},
+			};
 		}),
 	noteFsChanged: (payload) =>
 		set((s) => {
