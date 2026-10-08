@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore, type Model, type ProviderHeaders } from "@earendil-works/pi-ai";
@@ -1207,6 +1207,93 @@ test("extensions opt-in loads ONLY the embedder-bound curated set — and only w
 		expect(outcome.finalText).toBe("USED_PING");
 	} finally {
 		await curated.disposeChildrenOf(parent.sessionId);
+	}
+});
+
+function pngHeaderOnly(width: number, height: number): Buffer {
+	const ihdr = Buffer.alloc(25);
+	ihdr.writeUInt32BE(13, 0);
+	ihdr.write("IHDR", 4, "ascii");
+	ihdr.writeUInt32BE(width, 8);
+	ihdr.writeUInt32BE(height, 12);
+	ihdr[16] = 8;
+	ihdr[17] = 2;
+	return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), ihdr]);
+}
+
+test("buildChildSettings supplies the settings a child's tools run on", async () => {
+	const calls: string[] = [];
+	const scoped = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-settings",
+		modelRuntime: runtime,
+		buildChildSettings: (cwd) => {
+			calls.push(cwd);
+			return SettingsManager.inMemory({ images: { autoResize: false } });
+		},
+	});
+	writeFileSync(join(parentCwd, "settings-raw.png"), pngHeaderOnly(9000, 10));
+	let toolResult: unknown;
+	faux.setResponses([
+		fauxAssistantMessage(fauxToolCall("read", { path: "settings-raw.png" })),
+		(context) => {
+			toolResult = context.messages.at(-1);
+			return fauxAssistantMessage("READ");
+		},
+	]);
+	const child = await scoped.createChild(
+		subagentSpec({ session: { systemPrompt: "read it", tools: ["read"] } }),
+	);
+	try {
+		expect(calls).toEqual([parentCwd]);
+		expect((await child.runQueued("Read settings-raw.png.")).finalText).toBe("READ");
+		expect(toolResult).toMatchObject({
+			role: "toolResult",
+			content: [{ type: "text" }, { type: "image", mimeType: "image/png" }],
+		});
+	} finally {
+		await scoped.disposeChildrenOf(parent.sessionId);
+	}
+});
+
+test("the base set loads for every child, opted into extensions or not, ahead of the curated set", async () => {
+	const loads: string[] = [];
+	let contextEvents = 0;
+	const scoped = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-base",
+		modelRuntime: runtime,
+		childBaseExtensionFactories: [
+			(pi) => {
+				loads.push("base");
+				pi.on("context", () => {
+					contextEvents++;
+					return undefined;
+				});
+			},
+		],
+		childExtensionFactories: [() => void loads.push("curated")],
+	});
+	faux.setResponses([fauxAssistantMessage("PLAIN")]);
+	const plain = await scoped.createChild(subagentSpec());
+	try {
+		expect(loads).toEqual(["base"]);
+		expect((await plain.runQueued("Go.")).finalText).toBe("PLAIN");
+		expect(contextEvents).toBeGreaterThan(0);
+		await scoped.createChild(
+			subagentSpec({ session: { systemPrompt: "opted", tools: [], extensions: true } }),
+		);
+		expect(loads).toEqual(["base", "base", "curated"]);
+	} finally {
+		await scoped.disposeChildrenOf(parent.sessionId);
 	}
 });
 

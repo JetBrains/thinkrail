@@ -1025,6 +1025,7 @@ export default function PlanPane({
 					...(titleEdited ? { titleEdited: true } : {}),
 					...(prBody !== undefined ? { body: prBody } : {}),
 					...(draft ? { draft: true } : {}),
+					source: "plan_page",
 				},
 				{ timeoutMs: 180_000 },
 			);
@@ -1501,7 +1502,7 @@ export default function PlanPane({
 							showAgentMessage={showAgentMessage}
 						/>
 					)}
-					onAdd={plan.add}
+					onAdd={(title) => plan.add(title, "page")}
 					onOpenChat={() => {
 						useAppStore.getState().noteDirectChatActivation(sessionId);
 						void openChatInTab(workspaceId, sessionId);

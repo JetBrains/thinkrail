@@ -5,6 +5,7 @@ import type {
 	InlineExtension,
 	ModelRegistry,
 	ModelRuntime,
+	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 
 export type RunStatus = "completed" | "error" | "aborted";
@@ -185,7 +186,9 @@ export interface DelegationBindings {
 	scope?: string;
 	modelRuntime?: ModelRuntime | (() => ModelRuntime | Promise<ModelRuntime>);
 	maxConcurrentPerParent?: number;
+	childBaseExtensionFactories?: InlineExtension[];
 	childExtensionFactories?: InlineExtension[];
+	buildChildSettings?: (cwd: string) => SettingsManager;
 }
 
 export type HistoryCaptureSource =

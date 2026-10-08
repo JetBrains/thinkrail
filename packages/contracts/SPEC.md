@@ -671,7 +671,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   **invalidation nudge, not data**: clients re-read via the existing read methods, so a duplicate/replayed
   frame is harmless.
   The `WsMethodMap` typed request/result map +
-  `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. Request ids are also the reconnect idempotency key:
+  `WsParams`/`WsResult` helpers, and `PROTOCOL_VERSION`. A private type check ties `WS_METHODS` to `WsMethodMap`
+  in both directions, so a method in one and not the other fails to compile. Request ids are also the reconnect idempotency key:
   an unresolved client replays the same frame/id, and the host returns the one cached result for
   `(clientKey, requestId)` instead of executing the handler again. Two client→host frames that are *not* requests close
   that loop (hence **`WsClientMessage`**, discriminated on the key): **`WsAck`** (`{ ack: string[] }`) names

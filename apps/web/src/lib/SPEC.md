@@ -50,8 +50,24 @@ not this module; the theme-aware highlighter remains app-local.
   tuple-keyed maps. Also the shared
   Shiki highlighter, **kept out of the barrel** so the eager `@/lib` import stays shiki-free:
   `highlighter.ts` owns the curated grammar/id/file-association catalog shared by chat and the desktop
-  Monaco renderer; its chat subset uses the JS regex engine and `themes`' one generic CSS-variable
-  registration. It is imported per-file (`@/lib/highlighter`) from lazy chunks only; theme
+  Monaco renderer, plus `createChatHighlighter(engine)`: `themes`' one generic CSS-variable registration
+  and each chat grammar loaded on first use. Chat code is highlighted off the main thread:
+  `highlightCode.ts` resolves the language alias (unknown and `mermaid` answer `null` with no worker),
+  then posts to one lazy `highlighter.worker.ts` per page, which uses the Oniguruma WASM engine. Per
+  caller key at most one request is in flight; a newer call replaces the waiting one, which resolves
+  `null`. If no `Worker` exists, the constructor throws, the worker fires `error`/`messageerror` (the
+  host's SPA fallback serves HTML for a chunk deleted by an update), or it cannot build its highlighter
+  (WASM load failed), the client switches for good to in-thread highlighting with the JS regex engine
+  (on WebKit, the desktop webview, ~1 s on a first TS fence) and re-runs pending requests there; these
+  failures never answer `null`. A failed grammar load answers `null` (plain text) for that call and
+  retries on the next. Results live in a bounded LRU (256 entries / 4M chars of code + HTML; a result over
+  a quarter of that is not cached) that answers `cachedHighlight()` synchronously; a key owns one entry,
+  so a streaming fence does not fill it. `useHighlightedCode()` is the one component hook: it reads the
+  cache on the client only (static renders, such as the rendered diff, stay plain), applies replies in
+  request order, and shows the last highlight plus the newer streamed text as plain until the worker
+  catches up. Both files stay out of the barrel and are imported per-file (`@/lib/highlighter`,
+  `@/lib/highlightCode`)
+  from lazy chunks only; theme
   identity/palettes never live in `lib`. Collision-safe browser identity composition lives here too:
   **`tupleKey()`** length-prefixes independent strings, **`parseTupleKey()`** reads only its requested
   namespace, and **`layoutResourceIdentity()`** gives every frontend-local placement/cache alias one

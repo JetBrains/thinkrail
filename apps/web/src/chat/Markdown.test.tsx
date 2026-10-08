@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { cachedHighlight, highlightCode } from "@/lib/highlightCode";
 import { longMarkdown } from "../../../../e2e/perf/longMarkdown";
 import { BlockMarkdown, Markdown } from "./Markdown";
 import { MARKDOWN_EDGE_FIXTURES } from "./markdownFixtures.test";
@@ -51,4 +52,13 @@ describe("BlockMarkdown", () => {
 		expect(blocks).toBe(whole);
 		expect(blocks).toContain("<span>link</span>");
 	});
+});
+
+test("static renders never read the highlight cache", { timeout: 20_000 }, async () => {
+	const code = "const cached = 2;";
+	expect(await highlightCode(code, "ts", "static-seed")).toContain("shiki");
+	expect(cachedHighlight(code, "ts")).toContain("shiki");
+	const html = renderToStaticMarkup(<Markdown text={`\`\`\`ts\n${code}\n\`\`\``} />);
+	expect(html).toContain(code);
+	expect(html).not.toContain("shiki");
 });

@@ -54,9 +54,39 @@ bounded browser-derived strings, never resource identities or arbitrary product 
 | `agent_run_started` | Work-cycle origin, workspace kind and catalog-bucketed provider/model. |
 | `agent_run_settled` | Final outcome, elapsed-time/retry/compaction buckets; only `agent_settled`, never attempt-level `agent_end`. |
 | `task_completed` | Nonempty task-group completion transition after artifact reconciliation, change evidence and whether verification was recorded. |
+| `plan_opened` | The plan surfaced for the user, by `surface` (`page`/`popup`); a deliberate open action, not every plan refetch. |
+| `plan_item_added` | A user-added plan item (`origin:"user"`), by `surface` (`chat`/`page`); the user curating the plan, not agent re-plans. |
 | `review_decided` | Actual user/agent approval or changes-requested decision, not aborted-review cleanup. |
-| `pr_action_finished` | Outcome/category; created PRs remain distinct from updates, pushes and compare-page handoffs. |
+| `review_comment_added` | A review comment created on a file/diff/doc, by `author` (`user`/`agent`) and `kind`; the human draft flow and the reviewer agent's findings, distinguished — not draft edits. |
+| `review_comment_sent` | One event **per comment** delivered to the agent (the value moment), with `outdated` (`yes`/`no`); per-comment so added→sent→resolved is a countable funnel, and `outdated` is the re-anchoring quality signal. Delivery, not proof the agent acted usefully. |
+| `review_comment_resolved` | A comment's terminal outcome, by `actor` (`user`/`agent`) and `outcome` (`resolved`/`dismissed`); the human update and the agent `resolve_comment` tool, not draft deletes or Clear. An agent `resolved` is the agent's claim, never proof the concern was fixed. |
+| `pr_action_finished` | Outcome/category; created PRs remain distinct from updates, pushes and compare-page handoffs; `source` = `plan_page` when driven from the plan page's PR stage, else `other`. |
 | `acquisition_linked` | One successful browser-claim redemption, carrying the transient journey/bridge ids and normalized first/last acquisition fields. |
+
+The review-comment funnel is host-observed off existing wire/tool actions: `review_comment_added`
+off the `review.commentAdd` handler (human, `author:user`) and each plan-review finding the host files
+into the Review tab (`author:agent`, with the persisted `kind`, so an anchor fallback reads as `review`).
+`review_comment_sent` fires once per comment for every delivery to an agent: `review.sendComment` /
+`review.sendBatch`, the plan-review fix delivered to the worker (button path after its acknowledgement,
+tool path when its locked file+mark+record transaction commits), and the user's Request-fix. Per-comment
+keeps added→sent→resolved countable across a personless population (a per-action count bucket would make
+that ratio unrecoverable); `outdated` reports anchor drift in the already-re-anchored send set. It fires on
+**acceptance**, not when a detached prompt starts: a pre-turn rejection (bad model/expired key) rolls the
+comments back to draft, so an early capture would inflate the conversion. `review_comment_resolved` fires
+only on an actual transition into `resolved`/`dismissed` — `review.commentUpdate` (user) and the agent
+`resolve_comment` seam (`agent`/`resolved`) — so an idempotent repeat from a stale client never counts
+twice. No comment body, path, anchor text or line numbers are ever copied — only the closed
+`author`/`kind`/`actor`/`outcome`/`outdated` enums.
+
+The plan/TODO funnel rides existing wire actions, never browser autocapture: the host captures
+`plan_opened` off a deliberate `todo.list { opened }` call (the plan page open or the chat popup open —
+not the automatic refetches), `plan_item_added` off a successful `todo.add` (`surface` names the in-chat add row or
+the plan page's add row), and stamps the `source` discriminator on
+`pr_action_finished` from the `pr.open` caller (`plan_page` when the plan page's PR button drove it). The
+plan page's Review stage runs through pi-subagents delegation ([[submodule-server-host]]'s plan review),
+whose asynchronous verdict is decoupled from the triggering surface, so `review_decided` carries no source
+today. `surface`/`source` are closed enums; absence defaults to `chat`/`other`, so an omitted param never
+fabricates plan-page attribution.
 
 The acquisition touch schema is a strict server-side mirror of [[submodule-website-attribution]]: bounded
 normalized UTM source/medium/campaign/content strings, closed referrer class, timestamp, and policy version.

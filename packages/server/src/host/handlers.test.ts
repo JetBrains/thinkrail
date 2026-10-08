@@ -12,6 +12,7 @@ import type {
 	Workspace,
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
+import { WS_METHODS } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import {
 	type CreateSessionResult,
@@ -107,6 +108,11 @@ afterEach(() => {
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
+});
+
+test("every contract method has a registered handler", () => {
+	const unregistered = Object.values(WS_METHODS).filter((m) => requestMethodDiagnostic(m) !== m);
+	expect(unregistered).toEqual([]);
 });
 
 test("open-review cache reuse is opt-in so older clients remain fresh", () => {

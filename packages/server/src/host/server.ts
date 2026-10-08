@@ -90,6 +90,7 @@ import { trackLoginOutcome } from "./loginAnalytics";
 import {
 	additionalCapture,
 	applyAdditionalAnalyticsSettings,
+	captureReviewCommentResolved,
 	initialAdditionalAnalyticsEnabled,
 	observeCurrentSetup,
 	setupObservation,
@@ -103,7 +104,11 @@ import {
 import { runObservation } from "./runAnalytics";
 import { resolveSubagentsEnabled } from "./subagentPolicy";
 import { taskObservation } from "./taskAnalytics";
-import { terminalDeliveryForSendStatus } from "./terminalSend";
+import {
+	BACKPRESSURE_RECONCILE_MS,
+	drainedClientKeys,
+	terminalDeliveryForSendStatus,
+} from "./terminalSend";
 import { titleToolHost } from "./titleTool";
 import { markClientStale, reconcilePendingReviewsOnBoot } from "./todoReview";
 
@@ -398,6 +403,19 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		},
 	});
 
+	const backpressureReconciler = setInterval(() => {
+		const drained = drainedClientKeys(terminalBackpressured, (clientKey) =>
+			sockets.get(clientKey)?.getBufferedAmount(),
+		);
+		for (const clientKey of drained) {
+			log.warn(
+				`terminal backpressure latch lifted by reconciler, drain never arrived (${clientKey})`,
+			);
+			terminalBackpressured.delete(clientKey);
+			resumeClientTerminals(clientKey);
+		}
+	}, BACKPRESSURE_RECONCILE_MS);
+
 	const publishHostUpdate = (notice: HostUpdateNotice): void => {
 		if (!hostUpdateActive) return;
 		hostUpdateNotice = notice;
@@ -583,9 +601,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			JSON.stringify({ channel: WS_CHANNELS.reviewFailed, data: payload }),
 		);
 	});
-	setReviewCommentHandler((sessionId, commentId, note) => ({
-		resolvedBody: resolveCommentFromAgent(sessionId, commentId, note).body,
-	}));
+	setReviewCommentHandler((sessionId, commentId, note) => {
+		const capture = additionalCapture();
+		const resolved = resolveCommentFromAgent(sessionId, commentId, note);
+		captureReviewCommentResolved(capture, "agent", "resolved");
+		return { resolvedBody: resolved.body };
+	});
 	installRequestReviewSeam();
 	setTitleToolHost(titleToolHost);
 	reconcilePendingReviewsOnBoot();
@@ -726,6 +747,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		for (const timer of reapTimers.values()) clearTimeout(timer);
 		reapTimers.clear();
 		sockets.clear();
+		clearInterval(backpressureReconciler);
 		terminalBackpressured.clear();
 		requestReplays.clear();
 		persistTerminalSessions();

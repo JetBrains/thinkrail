@@ -171,6 +171,9 @@ surface acquires Pierre's module-singleton worker pool; an ordinary workspace th
 nor initializes its pool. Renderer metadata and loaders are the only eager edge. A production build must
 retain distinct Pierre diff, Pierre file, worker-pool, and Monaco chunks, with none of their implementation
 code in the entry chunk.
+Vite emits every worker as an ES module (`worker.format: "es"`), so worker `import()` calls split into
+on-demand chunks instead of inlining; every target webview (Chromium, WebKit/Safari 15+, WebView2) runs
+module workers.
 
 The module set: `transport` / `store` / branded `shell` + its headless `shell/layout` child;
 layout-agnostic Project/File/Specs/Changes/Review renderers; registry-dispatched resource bodies and lazy xterm terminal

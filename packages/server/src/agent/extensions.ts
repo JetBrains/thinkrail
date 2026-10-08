@@ -191,6 +191,10 @@ function webAccessFactory(): BundledExtensionFactory {
 	return devWebAccessFactory;
 }
 
+export function childBaseExtensionFactories(): InlineExtension[] {
+	return [oversizedImageGuard];
+}
+
 export function childExtensionFactories(): InlineExtension[] {
 	return [
 		headlessSearchPolicy,

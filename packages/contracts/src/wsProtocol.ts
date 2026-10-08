@@ -317,7 +317,8 @@ export const WS_CHANNELS = {
 	reviewFailed: "review.failed",
 } as const;
 
-export type WsMethod = (typeof WS_METHODS)[keyof typeof WS_METHODS];
+type SameUnion<A extends B, B extends C, C = A> = A;
+type _MethodsMatchMap = SameUnion<(typeof WS_METHODS)[keyof typeof WS_METHODS], WsMethodName>;
 export type WsChannel = (typeof WS_CHANNELS)[keyof typeof WS_CHANNELS];
 
 export const ASK_USER_ANSWERS_CUSTOM_TYPE = "ask-user-answers";
@@ -547,6 +548,7 @@ export interface WsMethodMap {
 			titleEdited?: boolean;
 			body?: string;
 			draft?: boolean;
+			source?: "plan_page";
 		};
 		result: OpenPrResult;
 	};
@@ -557,11 +559,17 @@ export interface WsMethodMap {
 	};
 	"spec.graph": { params: { workspaceId: string }; result: SpecGraphSnapshot };
 	"todo.list": {
-		params: { workspaceId: string; sessionId: string };
+		params: { workspaceId: string; sessionId: string; opened?: "page" | "popup" };
 		result: TodoPlan;
 	};
 	"todo.add": {
-		params: { workspaceId: string; sessionId: string; title: string; note?: string };
+		params: {
+			workspaceId: string;
+			sessionId: string;
+			title: string;
+			note?: string;
+			surface?: "chat" | "page";
+		};
 		result: TodoItem;
 	};
 	"todo.update": {
