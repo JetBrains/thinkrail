@@ -128,3 +128,20 @@ Applying a preset creates one replacement frame, raises this surface's local sid
 The complete current-layout grammar, including the derived `WorkspaceLayoutDocument` projection consumed by existing shell renderers, is web-local. A pristine surface instantiates Balanced; no host snapshot or prior layout schema is imported.
 
 The terminal visibility gate mounts a body only for a terminal locally selected in an unfolded visible group. Distinct terminal identities may mount concurrently; one identity has one body per browser surface. Inactive/folded/hidden tabs never attach. Global New Terminal targets last local bottom focus, creating a frame slot only through an explicit frame command; center Group Header creation captures that group. Host catalog reconciliation may place an unrepresented terminal locally without selecting it, but cannot change frame geometry.
+
+## Render isolation
+
+The workbench is a mounted-body host, so the renderer protects injected feature bodies from arrangement churn. The root `Workbench` owns all transient view state — drag, resize projection, measured sizes, focus-after-close — and owns every attention transition. Groups never mutate attention: the root hands down stable, ref-reading callbacks (`onSelectTab`, `onFocusGroup`, `onApply`, `onFocusAdjacentGroup`, `onHideSide`, `onRevealTool`, `readAttention`) whose identities survive document and attention changes, so a re-render of the root never invalidates a child's props by identity alone.
+
+The singular `attention` object is not threaded into leaves. Only the region wrappers that enumerate groups (center node/split, the side and bottom stacks) receive it and project each group's `selectedId` as a primitive; leaf group views receive that primitive, never the whole overlay. Leaf group views, the tab strip, the tab, and the stacks are memoized. Two isolation guarantees follow and are the renderer's contract:
+
+- A resize or drag gesture mutates only root-local projection state; because document, attention, and the shared callbacks are all unchanged, the memoized group subtree does not re-render and no feature body re-renders during the gesture. The pointer-up commit that actually changes the document is the only re-render.
+- A selection or focus change in one group re-renders that group's chrome only; sibling groups keep their `selectedId` and skip. Every mounted tab body sits behind the memoized `GroupTabBody` boundary keyed by selected-tab identity and depending only on the stable body renderers, so a body re-renders only when its own selected tab changes — never because a sibling, a resize, or a drag re-rendered.
+
+The memoization assumes the injected render callbacks are referentially stable: the shell host passes `renderTabBody`/`renderToolBody`/`renderTabAdornment`/`renderEmptyCenter`/`renderCenterActions`/`renderSideMenuActions` as memoized identities, so a parent re-render (such as an attention change) does not break a sibling group's chrome memo by prop identity alone.
+
+`e2e/perf/layoutIsolation.perf.ts` pins both guarantees against the render profiler.
+
+## Internal module structure
+
+The renderer is one submodule behind `index.ts`; its files are internal and import each other directly. `workbenchShared` holds the public prop contracts (`WorkbenchProps`, `SharedGroupProps`, `LayoutTabFocusRequest`), the drag-and-drop primitives, the resize/size/overflow hooks, the DOM-id and tab-visual helpers, and the shared leaf primitives (`DropZone`, `CenterSplitTarget`, `PanelWithHandle`, `GroupTabBody`). `workbenchTabs` owns the tab strip and tab; `workbenchCenter`, `workbenchSide`, and `workbenchBottom` own their region view families; `Workbench` is the root that composes them and owns state. `index.ts` re-exports only the component and its public types.
