@@ -17,7 +17,7 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 ## Boundary
 
 - **Owns:** host-side runtime helpers that are neither engine- nor transport-specific.
-- **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `pathLooksComplete()`,
+- **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `mergePath()`,
   `localeRepair()`;
   `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`;
   `@thinkrail/shared/startupMark` → the static recursive wordmark plus the pure responsive/ANSI renderer
@@ -52,9 +52,9 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 
 - **/shellEnv** — `resolveShellEnv()`: make the host's environment safe for the shells it spawns, because a
   GUI-launched host (Finder/Dock, launchd, a systemd unit, a container) inherits a stripped-down one. Three
-  independent repairs, each applied only when needed:
-  - **`PATH`** — ensure it is the user's full login PATH so the in-process agent's bash/tools find
-    `git`/`node`/etc. Skipped when `pathLooksComplete()`.
+  independent repairs:
+  - **`PATH`** — always adopt the user's login PATH so the in-process agent's bash/tools and the git hooks
+    they trigger find `git`/`node`/`bun`/etc., keeping whatever the launching terminal had added on top.
   - **locale** — set `LANG` to a UTF-8 locale when *no* locale is configured at all (`LC_ALL`, `LC_CTYPE`
     and `LANG` all unset). Without one, bash/readline is **byte**-oriented rather than character-oriented,
     so one backspace over a multi-byte character (Cyrillic, umlauts, CJK) deletes half of it and desyncs the
@@ -203,14 +203,15 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 ## Get right (shellEnv)
 
 - Runs **once at startup, before creating any `AgentSession`**.
-- No-op on win32, or when PATH already contains a user dir (`/.nvm/`, `/homebrew/`, `/.bun/`) —
-  `pathLooksComplete()`. A marker must be absent from the OS default PATH, or the probe never runs:
-  `/usr/local/bin` was once a marker, but it heads macOS `/etc/paths` and so is in every GUI-launched
-  process, which left Dock-launched hosts without Homebrew/bun for every session (`command not found`,
-  failing git hooks, subagents) while the check reported the PATH complete.
-- Else spawn a login shell `[$SHELL||/bin/zsh, -l, -i, -c, env -0]` (retry without `-i` on non-zero exit),
-  5s timeout, parse the `\0`-separated entries, overwrite `process.env.PATH`. Never throws — on any
-  failure it leaves PATH untouched.
+- No-op on win32 (GUI processes already inherit the registry PATH). Elsewhere it **always** probes: spawn
+  a login shell `[$SHELL||/bin/zsh, -l, -i, -c, env -0]` (retry without `-i` on non-zero exit), 5s
+  timeout, parse the `\0`-separated entries, then `mergePath(current, login)` — the login PATH, preceded by
+  the current entries it lacks (an activated venv, `nix develop`, direnv) so a terminal launch keeps its
+  explicit additions ahead. Never throws — on any failure it leaves PATH untouched.
+- There is no "PATH already looks complete" short-circuit. One existed, keyed on user-dir markers, and
+  `/usr/local/bin` was among them; it heads macOS `/etc/paths` and every Linux default PATH, so the probe
+  never ran for Dock-launched hosts and every session lost Homebrew/bun (`command not found`, failing git
+  hooks, stuck subagents). The one-time ~100–300 ms probe per app start is cheaper than guessing.
 
 ## Get right (jbcentral)
 
