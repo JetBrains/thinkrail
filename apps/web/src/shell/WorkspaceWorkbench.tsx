@@ -65,6 +65,7 @@ import {
 	findPlacedResource,
 	findTabLocation,
 	type LayoutCenterTab,
+	type LayoutSide,
 	type LayoutTab,
 	type LayoutTabFocusRequest,
 	type LayoutToolId,
@@ -597,6 +598,130 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[changeAttention, workspaceId],
 	);
 
+	const renderTabAdornment = useCallback(
+		(tab: LayoutTab): ReactNode => {
+			if (tab.kind === "tool" && tab.tool === "review" && reviewDraftCount > 0) {
+				return (
+					<span
+						data-testid="review-pending-badge"
+						className="inline-flex min-w-16 items-center justify-center rounded-full bg-primary px-2 tr-text-label-pill text-text-on-primary"
+					>
+						{reviewDraftCount}
+					</span>
+				);
+			}
+			if (tab.kind !== "file" && tab.kind !== "diff") return null;
+			const flag = reviewFlagByPath.get(tab.path);
+			return flag ? (
+				<span
+					data-testid="review-tab-flag"
+					data-flag={flag}
+					className={
+						flag === "draft"
+							? "shrink-0 tr-text-eyebrow text-primary"
+							: "shrink-0 tr-text-eyebrow text-text-subtle"
+					}
+				>
+					Review
+				</span>
+			) : null;
+		},
+		[reviewDraftCount, reviewFlagByPath],
+	);
+
+	const renderEmptyCenter = useCallback(
+		(groupId: string): ReactNode => (
+			<div
+				data-testid="workspace-ready"
+				className="flex h-full flex-col items-center justify-center gap-4 px-16 text-center"
+			>
+				<span className="tr-text-eyebrow text-text-muted">
+					{isDefault ? "Default workspace" : isExternal ? "Existing worktree" : "Workspace ready"}
+				</span>
+				{workspace ? (
+					<>
+						<h2 className="max-w-full truncate tr-title-entity text-text-default">
+							{isDefault ? (contextProject?.name ?? workspace.name) : workspace.name}
+						</h2>
+						<p className="flex max-w-full items-center gap-4 tr-text-metadata text-text-muted">
+							<GitBranch className="size-14 shrink-0" />
+							{isDefault || isExternal ? (
+								<span className="truncate">on {workspace.branch}</span>
+							) : (
+								<>
+									<span className="truncate">{workspace.branch}</span>
+									<span className="shrink-0 text-text-muted">· from {workspace.baseBranch}</span>
+								</>
+							)}
+						</p>
+					</>
+				) : null}
+				<p className="mt-4 tr-text-ui text-text-muted">
+					{isDefault
+						? "Chats, changes, and terminals run directly in your project folder."
+						: "Files, chats, changes, and terminals are scoped to this workspace."}
+				</p>
+				<button
+					type="button"
+					data-testid="start-chat"
+					data-starting={chatStarting || undefined}
+					disabled={chatStarting}
+					onClick={() => startChat(groupId)}
+					className="mt-4 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-text-muted disabled:hover:bg-container-elevated-bg"
+				>
+					{chatStarting ? (
+						<>
+							<Loader2 className="size-14 animate-spin motion-reduce:animate-none" /> Starting chat…
+						</>
+					) : (
+						<>
+							<MessageSquarePlus className="size-14" /> New chat
+						</>
+					)}
+				</button>
+			</div>
+		),
+		[chatStarting, contextProject, isDefault, isExternal, startChat, workspace],
+	);
+
+	const renderCenterActions = useCallback(
+		(groupId: string): ReactNode => (
+			<>
+				<WorkspaceChatHistory
+					key={workspaceId}
+					workspaceId={workspaceId}
+					targetGroupId={groupId}
+					{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
+				/>
+				<IconTooltip label="New terminal in this group">
+					<button
+						type="button"
+						data-testid="new-terminal"
+						aria-label="New terminal in this group"
+						onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
+						className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					>
+						<SquareTerminal className="size-14" />
+					</button>
+				</IconTooltip>
+			</>
+		),
+		[canRenameChat, requestRenameChat, workspaceId],
+	);
+
+	const renderSideMenuActions = useCallback(
+		(side: LayoutSide, groupId: string): ReactNode =>
+			side === "right" ? (
+				<DropdownMenuItem
+					data-testid="side-new-terminal"
+					onSelect={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId, side)}
+				>
+					New terminal
+				</DropdownMenuItem>
+			) : null,
+		[workspaceId],
+	);
+
 	if (!rendered) {
 		return (
 			<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
@@ -616,125 +741,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				{...(focusRequest ? { focusRequest } : {})}
 				subscribeCloseRequest={subscribeCloseRequest}
 				renderTabBody={renderTabBody}
-				renderTabAdornment={(tab) => {
-					if (tab.kind === "tool" && tab.tool === "review" && reviewDraftCount > 0) {
-						return (
-							<span
-								data-testid="review-pending-badge"
-								className="inline-flex min-w-16 items-center justify-center rounded-full bg-primary px-2 tr-text-label-pill text-text-on-primary"
-							>
-								{reviewDraftCount}
-							</span>
-						);
-					}
-					if (tab.kind !== "file" && tab.kind !== "diff") return null;
-					const flag = reviewFlagByPath.get(tab.path);
-					return flag ? (
-						<span
-							data-testid="review-tab-flag"
-							data-flag={flag}
-							className={
-								flag === "draft"
-									? "shrink-0 tr-text-eyebrow text-primary"
-									: "shrink-0 tr-text-eyebrow text-text-subtle"
-							}
-						>
-							Review
-						</span>
-					) : null;
-				}}
+				renderTabAdornment={renderTabAdornment}
 				renderToolBody={renderToolBody}
-				renderEmptyCenter={(groupId) => (
-					<div
-						data-testid="workspace-ready"
-						className="flex h-full flex-col items-center justify-center gap-4 px-16 text-center"
-					>
-						<span className="tr-text-eyebrow text-text-muted">
-							{isDefault
-								? "Default workspace"
-								: isExternal
-									? "Existing worktree"
-									: "Workspace ready"}
-						</span>
-						{workspace ? (
-							<>
-								<h2 className="max-w-full truncate tr-title-entity text-text-default">
-									{isDefault ? (contextProject?.name ?? workspace.name) : workspace.name}
-								</h2>
-								<p className="flex max-w-full items-center gap-4 tr-text-metadata text-text-muted">
-									<GitBranch className="size-14 shrink-0" />
-									{isDefault || isExternal ? (
-										<span className="truncate">on {workspace.branch}</span>
-									) : (
-										<>
-											<span className="truncate">{workspace.branch}</span>
-											<span className="shrink-0 text-text-muted">
-												· from {workspace.baseBranch}
-											</span>
-										</>
-									)}
-								</p>
-							</>
-						) : null}
-						<p className="mt-4 tr-text-ui text-text-muted">
-							{isDefault
-								? "Chats, changes, and terminals run directly in your project folder."
-								: "Files, chats, changes, and terminals are scoped to this workspace."}
-						</p>
-						<button
-							type="button"
-							data-testid="start-chat"
-							data-starting={chatStarting || undefined}
-							disabled={chatStarting}
-							onClick={() => startChat(groupId)}
-							className="mt-4 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-text-muted disabled:hover:bg-container-elevated-bg"
-						>
-							{chatStarting ? (
-								<>
-									<Loader2 className="size-14 animate-spin motion-reduce:animate-none" /> Starting
-									chat…
-								</>
-							) : (
-								<>
-									<MessageSquarePlus className="size-14" /> New chat
-								</>
-							)}
-						</button>
-					</div>
-				)}
-				renderCenterActions={(groupId) => (
-					<>
-						<WorkspaceChatHistory
-							key={workspaceId}
-							workspaceId={workspaceId}
-							targetGroupId={groupId}
-							{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
-						/>
-						<IconTooltip label="New terminal in this group">
-							<button
-								type="button"
-								data-testid="new-terminal"
-								aria-label="New terminal in this group"
-								onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
-								className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-							>
-								<SquareTerminal className="size-14" />
-							</button>
-						</IconTooltip>
-					</>
-				)}
-				renderSideMenuActions={(side, groupId) =>
-					side === "right" ? (
-						<DropdownMenuItem
-							data-testid="side-new-terminal"
-							onSelect={() =>
-								useAppStore.getState().addTerminal(workspaceId, undefined, groupId, side)
-							}
-						>
-							New terminal
-						</DropdownMenuItem>
-					) : null
-				}
+				renderEmptyCenter={renderEmptyCenter}
+				renderCenterActions={renderCenterActions}
+				renderSideMenuActions={renderSideMenuActions}
 				onCommit={commit}
 				onAttentionChange={changeAttention}
 				onUserNavigation={() => useAppStore.getState().noteNavigation(workspaceId)}
