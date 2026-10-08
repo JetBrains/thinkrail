@@ -347,6 +347,34 @@ test("Windows shell updates reject unknown values before persistence or broadcas
 	);
 });
 
+test("replay budget and composer growth updates reject malformed values before persistence or broadcast", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const before = getConfig();
+
+	for (const terminalReplayKb of ["64", Number.NaN, Number.POSITIVE_INFINITY, null, true]) {
+		expect(() => updateConfig({ terminalReplayKb } as unknown as AppConfigUpdate)).toThrow(
+			"terminalReplayKb must be a finite number",
+		);
+	}
+	for (const composerGrowthLimit of ["enormous", 3, { kind: "roomy" }, null]) {
+		expect(() => updateConfig({ composerGrowthLimit } as unknown as AppConfigUpdate)).toThrow(
+			"composerGrowthLimit must be one of compact, roomy, half-chat",
+		);
+	}
+	expect(getConfig()).toEqual(before);
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+
+	const next = updateConfig({ terminalReplayKb: 0, composerGrowthLimit: "compact" });
+	expect(next).toMatchObject({ terminalReplayKb: 0, composerGrowthLimit: "compact" });
+	expect(published).toEqual([next]);
+	expect(JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8"))).toMatchObject({
+		terminalReplayKb: 0,
+		composerGrowthLimit: "compact",
+	});
+});
+
 test("JetBrains quota preferences default, persist, and survive an old partial config", () => {
 	expect(DEFAULT_CONFIG.jbcentralQuotaEnabled).toBe(true);
 	expect(DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds).toBe(30);
@@ -541,6 +569,23 @@ test("a null reviewModel/reviewEffort clears the override back to unset, and it 
 	resetConfigCache();
 	expect(getConfig().reviewModel).toBeUndefined();
 	expect(getConfig().reviewEffort).toBeUndefined();
+});
+
+test("a malformed defaultModel or reviewModel rejects the whole update before persistence or broadcast", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const before = getConfig();
+	for (const model of ["p/m", { provider: "p" }, { provider: "p", id: "m" }, [], 1]) {
+		expect(() => updateConfig({ defaultModel: model } as unknown as AppConfigUpdate)).toThrow(
+			"defaultModel must be a model or null",
+		);
+		expect(() => updateConfig({ reviewModel: model } as unknown as AppConfigUpdate)).toThrow(
+			"reviewModel must be a model or null",
+		);
+	}
+	expect(getConfig()).toEqual(before);
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
 });
 
 test("loadConfig ignores the old layout settings object", () => {

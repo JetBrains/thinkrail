@@ -1,6 +1,8 @@
 import {
 	type AppConfig,
 	type AppConfigUpdate,
+	COMPOSER_GROWTH_LIMITS,
+	isComposerGrowthLimit,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isSystemThemePair,
@@ -148,6 +150,14 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		jbcentralQuotaRefreshSeconds,
 		...rest
 	} = runtimeUpdate;
+	for (const [name, value] of [
+		["defaultModel", defaultModel],
+		["reviewModel", reviewModel],
+	] as const) {
+		if (value !== undefined && value !== null && !isWireModelRef(value)) {
+			throw new Error(`${name} must be a model or null`);
+		}
+	}
 	if (subagentsEnabled !== undefined && typeof subagentsEnabled !== "boolean") {
 		throw new Error("subagentsEnabled must be a boolean");
 	}
@@ -159,6 +169,18 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		!isTerminalWindowsShell(runtimeUpdate.terminalWindowsShell)
 	) {
 		throw new Error("terminalWindowsShell must be auto, pwsh, powershell, or cmd");
+	}
+	if (
+		runtimeUpdate.terminalReplayKb !== undefined &&
+		!Number.isFinite(runtimeUpdate.terminalReplayKb)
+	) {
+		throw new Error("terminalReplayKb must be a finite number");
+	}
+	if (
+		runtimeUpdate.composerGrowthLimit !== undefined &&
+		!isComposerGrowthLimit(runtimeUpdate.composerGrowthLimit)
+	) {
+		throw new Error(`composerGrowthLimit must be one of ${COMPOSER_GROWTH_LIMITS.join(", ")}`);
 	}
 	if (
 		jbcentralQuotaRefreshSeconds !== undefined &&
