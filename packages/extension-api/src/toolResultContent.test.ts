@@ -80,9 +80,13 @@ describe("toolValueText", () => {
 	});
 
 	it("falls back to String when JSON cannot serialize a value", () => {
-		const circular: Record<string, unknown> = {};
-		circular.self = circular;
-		expect(toolValueText(circular)).toBe("[object Object]");
+		// Not a cyclic object: Bun's indented JSON.stringify takes seconds to reject cycles on CI.
+		const unserializable = {
+			toJSON() {
+				throw new TypeError("not serializable");
+			},
+		};
+		expect(toolValueText(unserializable)).toBe("[object Object]");
 		expect(toolValueText(42n)).toBe("42");
 	});
 });
