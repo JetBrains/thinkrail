@@ -2,20 +2,35 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { localeRepair, pathLooksComplete, resolveShellEnv } from "./shellEnv";
+import { localeRepair, mergePath, resolveShellEnv } from "./shellEnv";
 
 const LOCALE_VARS = ["LANG", "LC_ALL", "LC_CTYPE"];
 const LAUNCHD_DEFAULT_PATH = "/Users/x/.pi/agent/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin";
+const LOGIN_PATH =
+	"/opt/homebrew/bin:/Users/x/.bun/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
 
 let originalPath: string | undefined;
 let originalShell: string | undefined;
 let originalLocale: Record<string, string | undefined> = {};
+let shellDir: string;
+
+function fakeShell(script: string): void {
+	const path = join(shellDir, "shell");
+	writeFileSync(path, `#!/bin/sh\n${script}\n`);
+	chmodSync(path, 0o755);
+	process.env.SHELL = path;
+}
+
 beforeEach(() => {
 	originalPath = process.env.PATH;
 	originalShell = process.env.SHELL;
 	originalLocale = Object.fromEntries(LOCALE_VARS.map((key) => [key, process.env[key]]));
+	shellDir = mkdtempSync(join(tmpdir(), "shellenv-"));
+	fakeShell(`printf 'HOME=/Users/x\\0PATH=${LOGIN_PATH}\\0'`);
+	process.env.PATH = LAUNCHD_DEFAULT_PATH;
 });
 afterEach(() => {
+	rmSync(shellDir, { recursive: true, force: true });
 	if (originalPath === undefined) delete process.env.PATH;
 	else process.env.PATH = originalPath;
 	if (originalShell === undefined) delete process.env.SHELL;
@@ -27,41 +42,42 @@ afterEach(() => {
 	}
 });
 
-test("pathLooksComplete detects user dirs", () => {
-	expect(pathLooksComplete("/opt/homebrew/bin:/usr/bin")).toBe(true);
-	expect(pathLooksComplete("/Users/x/.bun/bin:/usr/bin")).toBe(true);
-	expect(pathLooksComplete("/Users/x/.nvm/versions/node/v22/bin:/usr/bin")).toBe(true);
-	expect(pathLooksComplete("/usr/bin:/bin")).toBe(false);
+test("mergePath keeps explicit current entries ahead of the login PATH without duplicates", () => {
+	expect(mergePath("/venv/bin:/usr/bin:/bin", "/opt/homebrew/bin:/usr/bin:/bin")).toBe(
+		"/venv/bin:/opt/homebrew/bin:/usr/bin:/bin",
+	);
+	expect(mergePath("", "/usr/bin")).toBe("/usr/bin");
+	expect(mergePath("/usr/bin::/bin", "/usr/bin:/bin")).toBe("/usr/bin:/bin");
 });
 
-test("pathLooksComplete rejects the macOS launchd default PATH", () => {
-	expect(pathLooksComplete(LAUNCHD_DEFAULT_PATH)).toBe(false);
-});
-
-test("resolveShellEnv adopts the login shell PATH when only the launchd default is present", () => {
-	const dir = mkdtempSync(join(tmpdir(), "shellenv-"));
-	try {
-		const fakeShell = join(dir, "shell");
-		writeFileSync(
-			fakeShell,
-			"#!/bin/sh\nprintf 'HOME=/Users/x\\0PATH=/opt/homebrew/bin:/usr/bin\\0'\n",
-		);
-		chmodSync(fakeShell, 0o755);
-		process.env.SHELL = fakeShell;
-		process.env.PATH = LAUNCHD_DEFAULT_PATH;
-
-		resolveShellEnv();
-
-		expect(process.env.PATH).toBe("/opt/homebrew/bin:/usr/bin");
-	} finally {
-		rmSync(dir, { recursive: true, force: true });
-	}
-});
-
-test("resolveShellEnv leaves PATH alone when it already looks complete", () => {
-	process.env.PATH = "/opt/homebrew/bin:/usr/bin";
+test("resolveShellEnv adopts the login shell PATH from the launchd default", () => {
 	resolveShellEnv();
-	expect(process.env.PATH).toBe("/opt/homebrew/bin:/usr/bin");
+
+	expect(process.env.PATH).toBe(`/Users/x/.pi/agent/bin:${LOGIN_PATH}`);
+});
+
+test("resolveShellEnv keeps a terminal's extra PATH entries in front", () => {
+	process.env.PATH = `/work/.venv/bin:${LOGIN_PATH}`;
+
+	resolveShellEnv();
+
+	expect(process.env.PATH).toBe(`/work/.venv/bin:${LOGIN_PATH}`);
+});
+
+test("resolveShellEnv falls back to a non-interactive login shell", () => {
+	fakeShell(`case "$*" in *-i*) exit 1;; esac\nprintf 'PATH=${LOGIN_PATH}\\0'`);
+
+	resolveShellEnv();
+
+	expect(process.env.PATH).toBe(`/Users/x/.pi/agent/bin:${LOGIN_PATH}`);
+});
+
+test("resolveShellEnv leaves PATH untouched when the login shell fails", () => {
+	fakeShell("exit 1");
+
+	resolveShellEnv();
+
+	expect(process.env.PATH).toBe(LAUNCHD_DEFAULT_PATH);
 });
 
 test("localeRepair supplies a UTF-8 locale only when none is configured", () => {
@@ -76,7 +92,6 @@ test("localeRepair supplies a UTF-8 locale only when none is configured", () => 
 
 test("resolveShellEnv installs LANG when the host has no locale at all", () => {
 	for (const key of LOCALE_VARS) delete process.env[key];
-	process.env.PATH = "/opt/homebrew/bin:/usr/bin";
 
 	resolveShellEnv();
 
@@ -87,18 +102,8 @@ test("resolveShellEnv installs LANG when the host has no locale at all", () => {
 
 test("resolveShellEnv leaves an existing locale untouched", () => {
 	process.env.LANG = "ru_RU.UTF-8";
-	process.env.PATH = "/opt/homebrew/bin:/usr/bin";
 
 	resolveShellEnv();
 
 	expect(process.env.LANG).toBe("ru_RU.UTF-8");
-});
-
-test("a missing locale is repaired even when PATH short-circuits", () => {
-	for (const key of LOCALE_VARS) delete process.env[key];
-	process.env.PATH = "/opt/homebrew/bin:/usr/bin";
-
-	resolveShellEnv();
-
-	expect(process.env.LANG).toBeDefined();
 });
