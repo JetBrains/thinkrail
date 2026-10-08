@@ -456,9 +456,10 @@ run-scoped signal. Non-user paths retain their behavior.
     oversized-image guard, made necessary by decision #31's raw-image settings — PR #657 review:
     custom agents default to no extensions, so an opt-in guard left them unguarded). A tool
     registered there would reach children that never opted in, so keeping the set tool-free is the
-    embedder's contract; the core does not police it. Literal "inherit the parent's extensions" is rejected: interactive tools
-    (ask_user_question) hang a hidden non-interactive child, and blanket loading multiplies heavy
-    extensions per child (gotgenes' documented V8-heap incident class). **Subsessions still ride
+    embedder's contract; the core does not police it. Literal "inherit the parent's extensions" is
+    rejected: interactive tools (ask_user_question) hang a hidden non-interactive child, and blanket
+    loading multiplies heavy extensions per child (gotgenes' documented V8-heap incident class).
+    **Subsessions still ride
     the delegation core** — a subsession IS `createChild({visibility: "listed", interactive: true,
     origin: fresh | fork})`, with the core owning creation, lineage, the registry, and lifecycle
     events exactly as for any child; what the curated-set mechanism does NOT cover is a listed
