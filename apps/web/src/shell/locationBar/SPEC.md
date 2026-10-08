@@ -79,6 +79,8 @@ branch. It renders what the store and `workspace.openReview` already report; it 
   review — *Remote* (`n commits to push · n commits behind origin` or "In sync with origin") and the
   PR/MR row with its link.
 - **REMOTE** renders only while `unpushedCommits` (warning chip) or `behindCommits` (info chip) is non-zero
-  and opens the same card. **PULL REQUEST** is the `openReviewLabel` success chip, a link when the provider
-  reported a URL. There is deliberately no "Open PR…" affordance: `pr.open` is a plan-session action and
-  stays on the plan pane.
+  and opens the same card. Both counts arrive on `OpenBranchReview`, which the host only produces for a
+  branch with an open PR/MR, so REMOTE (and the card's *Remote* row) can appear only alongside a review — a
+  branch without one shows no remote state, not "in sync". **PULL REQUEST** is the `openReviewLabel` success
+  chip, a link when the provider reported a URL. There is deliberately no "Open PR…" affordance: `pr.open` is
+  a plan-session action and stays on the plan pane.

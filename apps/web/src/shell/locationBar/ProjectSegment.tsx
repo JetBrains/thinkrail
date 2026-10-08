@@ -26,7 +26,7 @@ export function ProjectSegment({ project, atHome }: { project: Project; atHome: 
 		<Segment
 			caption="Project"
 			testid="scope-project-segment"
-			className="hidden max-w-[220px] shrink-[3] sm:flex"
+			className="hidden max-w-[220px] shrink-[3] border-l-0 pl-0 sm:flex"
 		>
 			<DropdownMenu>
 				<DropdownMenuTrigger

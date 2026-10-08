@@ -108,6 +108,35 @@ test("project home keeps only the PROJECT and WORKSPACE segments", () => {
 	expect(ids).not.toContain("scope-review-segment");
 });
 
+test("the first segment draws no hairline before the location and later segments do", () => {
+	const html = render(worktree, review);
+	const segmentClasses = [
+		...html.matchAll(/data-testid="(scope-[a-z]+-segment)" class="([^"]*)"/g),
+	].map(([, id, classes]) => [id, classes?.split(/\s+/) ?? []] as const);
+	expect(segmentClasses.map(([id]) => id)).toEqual([
+		"scope-project-segment",
+		"scope-workspace-segment",
+		"scope-branch-segment",
+		"scope-remote-segment",
+		"scope-review-segment",
+	]);
+	for (const [id, classes] of segmentClasses) {
+		if (id === "scope-project-segment") {
+			expect(classes).toContain("border-l-0");
+			expect(classes).toContain("pl-0");
+			expect(classes).not.toContain("border-l");
+			expect(classes).not.toContain("pl-12");
+		} else if (id === "scope-workspace-segment") {
+			expect(classes).toEqual(
+				expect.arrayContaining(["border-l-0", "pl-0", "sm:border-l", "sm:pl-12"]),
+			);
+		} else {
+			expect(classes).toContain("border-l");
+			expect(classes).toContain("pl-12");
+		}
+	}
+});
+
 test("every interactive control in the drag strip opts out of dragging", () => {
 	expect(pillClass.split(/\s+/)).toContain("window-no-drag");
 	expect(chipClass("success", true).split(/\s+/)).toContain("window-no-drag");
