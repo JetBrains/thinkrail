@@ -1,19 +1,15 @@
-import { existsSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { WORKSPACE_SETTLE_PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
 
 // The Settled shelf: quiet workspaces leave the live list for a collapsed group under the project. Idle
 // and merged-PR settling need time or a forge and are pinned by unit tests; this journey covers the
-// manual overrides, the topbar mirror, force-reveal, and the dirty-aware bulk Remove end to end.
+// manual overrides, the topbar mirror, and force-reveal end to end.
 
-test("a workspace settles by hand, comes back with Keep active, and the shelf clears in bulk", async ({
-	page,
-}, testInfo) => {
+test("a workspace settles by hand and comes back with Keep active", async ({ page }, testInfo) => {
 	await openFixtureProject(page);
 	const first = await createWorkspaceViaDialog(page);
-	const second = await createWorkspaceViaDialog(page);
+	await createWorkspaceViaDialog(page);
 
 	const shelf = page.getByTestId("settled-shelf");
 	await expect(page.getByTestId("workspace-sort")).toBeVisible();
@@ -61,61 +57,6 @@ test("a workspace settles by hand, comes back with Keep active, and the shelf cl
 		"data-active",
 		"true",
 	);
-
-	// Park both, dirty one of them, and clear the shelf: the guard leaves dirty work out until included.
-	writeFileSync(join(first.worktreePath, "scratch.txt"), "uncommitted\n");
-	for (const workspace of [first, second]) {
-		const row = worktreeRows(page).filter({ hasText: workspace.name });
-		await row.hover();
-		await row.getByTestId("workspace-settle").click();
-	}
-	await expect(shelf).toHaveAttribute("data-count", "2");
-	await shelf.hover();
-	await page.getByTestId("settled-shelf-menu").click();
-	await page.getByTestId("remove-all-settled").click();
-	const dialog = page.getByTestId("remove-settled-dialog");
-	await expect(dialog).toBeVisible();
-	await expect(dialog.getByTestId("remove-settled-flagged")).toContainText(
-		"1 with uncommitted changes",
-	);
-	await expect(dialog.getByTestId("confirm-remove-settled")).toHaveText("Remove 1");
-	await dialog.getByTestId("remove-settled-include").click();
-	await expect(dialog.getByTestId("confirm-remove-settled")).toHaveText("Remove 2");
-	await testInfo.attach("bulk-remove", {
-		body: await page.screenshot({ path: testInfo.outputPath("bulk-remove.png") }),
-		contentType: "image/png",
-	});
-	await dialog.getByTestId("confirm-remove-settled").click();
-	await expect(dialog).toBeHidden();
-	await expect(worktreeRows(page)).toHaveCount(0);
-	await expect(shelf).toHaveAttribute("data-count", "0");
-});
-
-test("bulk removal keeps work that appeared after the preview", async ({ page }) => {
-	await openFixtureProject(page);
-	const workspace = await createWorkspaceViaDialog(page);
-	const row = worktreeRows(page).filter({ hasText: workspace.name });
-	await row.hover();
-	await row.getByTestId("workspace-settle").click();
-
-	const shelf = page.getByTestId("settled-shelf");
-	await expect(shelf).toHaveAttribute("data-count", "1");
-	await shelf.hover();
-	await page.getByTestId("settled-shelf-menu").click();
-	await page.getByTestId("remove-all-settled").click();
-	const dialog = page.getByTestId("remove-settled-dialog");
-	await expect(dialog.getByTestId("remove-settled-checking")).toHaveCount(0);
-	await expect(dialog.getByTestId("confirm-remove-settled")).toHaveText("Remove 1");
-
-	writeFileSync(join(workspace.worktreePath, "late.txt"), "created after preview\n");
-	await dialog.getByTestId("confirm-remove-settled").click();
-
-	await expect(dialog).toBeHidden();
-	await expect(shelf).toHaveAttribute("data-count", "1");
-	await expect(
-		page.getByTestId("toast").getByText("Kept 1 workspace with new or unchecked work."),
-	).toBeVisible();
-	await expect.poll(() => existsSync(workspace.worktreePath)).toBe(true);
 });
 
 test("a pre-v78 host keeps the legacy workspace list without shelf affordances", async ({

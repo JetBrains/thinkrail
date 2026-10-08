@@ -75,37 +75,6 @@ export interface OpenBranchReview {
 	behindCommits?: number;
 }
 
-/** One settled worktree's would-be-lost work: `null` counts mean git could not answer. */
-export interface SettledRemovalPreview {
-	id: string;
-	dirty: number | null;
-	unpushed: number | null;
-}
-
-/** The branch-review fields that can change a workspace's settled partition. */
-export type SettledRemovalReview = Pick<
-	OpenBranchReview,
-	"kind" | "number" | "state" | "changedAt"
->;
-
-/** A row the client judged settled, with the complete preview-time facts it judged from. */
-export interface SettledRemovalTarget {
-	id: string;
-	branch: string;
-	lastActiveAt?: number;
-	settledOverride?: SettledOverride;
-	review?: SettledRemovalReview;
-	settleIdleDays: number | null;
-}
-
-export type SettledRemovalRefusal = "running" | "active" | "changed" | "unsafe";
-
-/** `kept` rows were no longer quiet when the host got to them and were left untouched. */
-export interface SettledRemovalResult {
-	removed: string[];
-	kept: Array<{ id: string; reason: SettledRemovalRefusal }>;
-}
-
 export type GhSetupProblem = "missing" | "unauthenticated";
 
 export interface PrDraft {

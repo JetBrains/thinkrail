@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
-	SettledRemovalResult,
 	Template,
 	TemplateInfo,
 	WireModel,
@@ -424,130 +423,6 @@ test("todo.requestFix on a chat that isn't on disk rolls the record back and nev
 	const after = (await getReviewSnapshot(workspace.id)).comments.find((c) => c.id === finding.id);
 	expect(after?.status).toBe("draft");
 	expect(after?.sessionId).toBeUndefined();
-});
-
-test("workspace.removeSettled tears down only rows whose settle facts still match the client's snapshot", async () => {
-	const quiet = (await handleRequest(
-		"workspace.create",
-		{ projectId: "p1", name: "Quiet" },
-		CTX,
-	)) as Workspace;
-	const moved = (await handleRequest(
-		"workspace.create",
-		{ projectId: "p1", name: "Moved" },
-		CTX,
-	)) as Workspace;
-	const pinned = (await handleRequest(
-		"workspace.create",
-		{ projectId: "p1", name: "Pinned" },
-		CTX,
-	)) as Workspace;
-	await handleRequest("workspace.unsettle", { id: pinned.id }, CTX);
-	const seen = (row: Workspace) => ({
-		id: row.id,
-		branch: row.branch,
-		...(row.lastActiveAt !== undefined ? { lastActiveAt: row.lastActiveAt } : {}),
-		...(row.settledOverride !== undefined ? { settledOverride: row.settledOverride } : {}),
-		settleIdleDays: 3,
-	});
-
-	const result = (await handleRequest(
-		"workspace.removeSettled",
-		{
-			targets: [
-				seen(quiet),
-				{ ...seen(moved), lastActiveAt: (moved.lastActiveAt ?? 0) - 1 },
-				seen(pinned),
-				{ id: "gone", branch: "gone", settleIdleDays: 3 },
-			],
-			allowUnsafeIds: [],
-		},
-		CTX,
-	)) as SettledRemovalResult;
-	expect(result).toEqual({
-		removed: [quiet.id],
-		kept: [
-			{ id: moved.id, reason: "changed" },
-			{ id: pinned.id, reason: "active" },
-		],
-	});
-	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
-	expect(rows.map((row) => row.id)).toEqual(expect.arrayContaining([moved.id, pinned.id]));
-	expect(rows.map((row) => row.id)).not.toContain(quiet.id);
-	for (let attempt = 0; attempt < 200 && existsSync(quiet.worktreePath); attempt++) {
-		await new Promise((resolve) => setTimeout(resolve, 10));
-	}
-	expect(existsSync(quiet.worktreePath)).toBe(false);
-	expect(existsSync(moved.worktreePath)).toBe(true);
-});
-
-test("workspace.removeSettled refreshes an external checkout's branch before comparing the preview", async () => {
-	const path = join(dataDir, "external");
-	git(repo, "worktree", "add", "-b", "external-a", path);
-	const workspace = (await handleRequest(
-		"workspace.openExisting",
-		{ projectId: "p1", path },
-		CTX,
-	)) as Workspace;
-	const settled = (await handleRequest("workspace.settle", { id: workspace.id }, CTX)) as Workspace;
-	const target = {
-		id: settled.id,
-		branch: settled.branch,
-		lastActiveAt: settled.lastActiveAt,
-		settledOverride: "settled" as const,
-		settleIdleDays: 3,
-	};
-	git(path, "switch", "-c", "external-b");
-
-	const result = (await handleRequest(
-		"workspace.removeSettled",
-		{ targets: [target], allowUnsafeIds: [] },
-		CTX,
-	)) as SettledRemovalResult;
-	expect(result).toEqual({
-		removed: [],
-		kept: [{ id: workspace.id, reason: "changed" }],
-	});
-	expect(existsSync(path)).toBe(true);
-	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
-	expect(rows.find((row) => row.id === workspace.id)?.branch).toBe("external-b");
-});
-
-test("workspace.removeSettled rechecks late work and requires explicit approval to remove it", async () => {
-	const workspace = (await handleRequest(
-		"workspace.create",
-		{ projectId: "p1", name: "Late work" },
-		CTX,
-	)) as Workspace;
-	const target = {
-		id: workspace.id,
-		branch: workspace.branch,
-		lastActiveAt: workspace.lastActiveAt,
-		settleIdleDays: 3,
-	};
-	writeFileSync(join(workspace.worktreePath, "late.txt"), "not previewed\n");
-
-	const kept = (await handleRequest(
-		"workspace.removeSettled",
-		{ targets: [target], allowUnsafeIds: [] },
-		CTX,
-	)) as SettledRemovalResult;
-	expect(kept).toEqual({
-		removed: [],
-		kept: [{ id: workspace.id, reason: "unsafe" }],
-	});
-	expect(existsSync(workspace.worktreePath)).toBe(true);
-
-	const removed = (await handleRequest(
-		"workspace.removeSettled",
-		{ targets: [target], allowUnsafeIds: [workspace.id] },
-		CTX,
-	)) as SettledRemovalResult;
-	expect(removed).toEqual({ removed: [workspace.id], kept: [] });
-	for (let attempt = 0; attempt < 200 && existsSync(workspace.worktreePath); attempt++) {
-		await new Promise((resolve) => setTimeout(resolve, 10));
-	}
-	expect(existsSync(workspace.worktreePath)).toBe(false);
 });
 
 test("workspace mutation handlers reject the Default before any side effect", async () => {

@@ -1,7 +1,5 @@
 import {
 	type EditorInfo,
-	type SettledRemovalResult,
-	type SettledRemovalTarget,
 	WORKSPACE_RENAME_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
@@ -236,60 +234,6 @@ export function removeWorkspace(workspaceId: string): void {
 	void getTransport()
 		.request("workspace.remove", { id: workspaceId })
 		.catch((err) => toast.error(errorText(err, "Failed to remove workspace")));
-}
-
-export function keptSettledRemovalsText(kept: SettledRemovalResult["kept"]): string | null {
-	if (kept.length === 0) return null;
-	const count = kept.length === 1 ? "1 workspace" : `${kept.length} workspaces`;
-	const unsafe = kept.filter((row) => row.reason === "unsafe").length;
-	if (unsafe === kept.length) return `Kept ${count} with new or unchecked work.`;
-	if (unsafe > 0) {
-		const changed = kept.length - unsafe;
-		return `Kept ${count}: ${unsafe} with new or unchecked work, ${changed} that became active.`;
-	}
-	return `Kept ${count} that became active after the preview.`;
-}
-
-export function settledRemovalTarget(
-	workspace: Pick<Workspace, "id" | "branch" | "lastActiveAt" | "settledOverride" | "review">,
-	settleIdleDays: number | null,
-): SettledRemovalTarget {
-	const review = workspace.review;
-	return {
-		id: workspace.id,
-		branch: workspace.branch,
-		...(workspace.lastActiveAt !== undefined ? { lastActiveAt: workspace.lastActiveAt } : {}),
-		...(workspace.settledOverride !== undefined
-			? { settledOverride: workspace.settledOverride }
-			: {}),
-		...(review
-			? {
-					review: {
-						kind: review.kind,
-						number: review.number,
-						...(review.state !== undefined ? { state: review.state } : {}),
-						...(review.changedAt !== undefined ? { changedAt: review.changedAt } : {}),
-					},
-				}
-			: {}),
-		settleIdleDays,
-	};
-}
-
-export function removeSettledWorkspaces(
-	targets: readonly SettledRemovalTarget[],
-	allowUnsafeIds: readonly string[],
-): void {
-	void getTransport()
-		.request("workspace.removeSettled", {
-			targets: [...targets],
-			allowUnsafeIds: [...allowUnsafeIds],
-		})
-		.then((result) => {
-			const kept = keptSettledRemovalsText(result.kept);
-			if (kept) toast.info(kept);
-		})
-		.catch((err) => toast.error(errorText(err, "Failed to remove settled workspaces")));
 }
 
 export function openWorkspaceIn(workspace: Workspace, editor: EditorInfo): void {

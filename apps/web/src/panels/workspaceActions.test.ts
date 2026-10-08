@@ -3,8 +3,6 @@ import { WORKSPACE_RENAME_PROTOCOL_VERSION, type Workspace } from "@thinkrail/co
 import {
 	canRenameWorkspace,
 	createRenameController,
-	keptSettledRemovalsText,
-	settledRemovalTarget,
 	workspaceRenameValue,
 } from "./workspaceActions";
 
@@ -108,60 +106,4 @@ test("reset abandons an open or pending edit so a later capable welcome renames 
 	expect(renamed).toEqual([]);
 	rename.reset();
 	expect(editing).toEqual([true, false]);
-});
-
-test("a bulk remove explains why the host kept rows, and says nothing when every row went", () => {
-	expect(keptSettledRemovalsText([])).toBeNull();
-	expect(keptSettledRemovalsText([{ id: "a", reason: "running" }])).toBe(
-		"Kept 1 workspace that became active after the preview.",
-	);
-	expect(
-		keptSettledRemovalsText([
-			{ id: "a", reason: "changed" },
-			{ id: "b", reason: "active" },
-		]),
-	).toBe("Kept 2 workspaces that became active after the preview.");
-	expect(keptSettledRemovalsText([{ id: "a", reason: "unsafe" }])).toBe(
-		"Kept 1 workspace with new or unchecked work.",
-	);
-	expect(
-		keptSettledRemovalsText([
-			{ id: "a", reason: "unsafe" },
-			{ id: "b", reason: "changed" },
-		]),
-	).toBe("Kept 2 workspaces: 1 with new or unchecked work, 1 that became active.");
-});
-
-test("a bulk-remove target carries every partition fact from the preview snapshot", () => {
-	expect(settledRemovalTarget(managed, 3)).toEqual({
-		id: "w1",
-		branch: "workspace",
-		settleIdleDays: 3,
-	});
-	expect(
-		settledRemovalTarget(
-			{
-				...managed,
-				lastActiveAt: 1_000,
-				settledOverride: "settled",
-				review: { kind: "pull-request", number: 618, state: "merged", changedAt: 900 },
-			},
-			14,
-		),
-	).toEqual({
-		id: "w1",
-		branch: "workspace",
-		lastActiveAt: 1_000,
-		settledOverride: "settled",
-		review: { kind: "pull-request", number: 618, state: "merged", changedAt: 900 },
-		settleIdleDays: 14,
-	});
-	expect(
-		settledRemovalTarget({ ...managed, review: { kind: "pull-request", number: 618 } }, null),
-	).toEqual({
-		id: "w1",
-		branch: "workspace",
-		review: { kind: "pull-request", number: 618 },
-		settleIdleDays: null,
-	});
 });

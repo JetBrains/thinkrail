@@ -63,7 +63,6 @@ import {
 	selectWorkspacePartition,
 	settledReasonLabel,
 	settledReasonTitle,
-	supportsWorkspaceSettling,
 	toast,
 	useAppStore,
 	type WorkspaceSort,
@@ -73,7 +72,6 @@ import { AddProjectMenu } from "./AddProjectMenu";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
-import { RemoveSettledDialog } from "./RemoveSettledDialog";
 import { RemoveWorkspaceDialog } from "./RemoveWorkspaceDialog";
 import { useOpenProject } from "./useOpenProject";
 import {
@@ -114,7 +112,6 @@ export function ProjectTree() {
 	const settledShelfExpanded = useAppStore((s) => s.settledShelfExpanded);
 	const settledShelfShown = useAppStore((s) => s.settledShelfShown);
 	const now = useNow();
-	const [removeSettledProjectId, setRemoveSettledProjectId] = useState<string | null>(null);
 
 	const editors = useEditors();
 
@@ -178,12 +175,6 @@ export function ProjectTree() {
 		store.toggleSettledShelf(activeProjectId, true);
 		store.showMoreSettled(activeProjectId, activeSettledIndex + 1);
 	}, [activeProjectId, activeSettledIndex]);
-
-	useEffect(() => {
-		if (protocolVersion !== null && !supportsWorkspaceSettling(protocolVersion)) {
-			setRemoveSettledProjectId(null);
-		}
-	}, [protocolVersion]);
 
 	const loadWorkspaces = useCallback(async (projectId: string) => {
 		await loadProjectWorkspaces(projectId);
@@ -314,7 +305,6 @@ export function ProjectTree() {
 									sort={workspaceSort}
 									shelfExpanded={settledShelfExpanded[project.id] === true}
 									shelfShown={settledShelfShown[project.id] ?? SETTLED_SHELF_PAGE}
-									onRemoveAllSettled={() => setRemoveSettledProjectId(project.id)}
 									renderRow={(ws, settled) => (
 										<WorkspaceRow
 											key={ws.id}
@@ -366,20 +356,6 @@ export function ProjectTree() {
 				/>
 			) : null}
 
-			{supportsSettling && removeSettledProjectId !== null ? (
-				<RemoveSettledDialog
-					open
-					workspaces={selectWorkspacePartition(
-						partitionState,
-						removeSettledProjectId,
-						now,
-					).settled.map((row) => row.workspace)}
-					onOpenChange={(isOpen) => {
-						if (!isOpen) setRemoveSettledProjectId(null);
-					}}
-				/>
-			) : null}
-
 			{existingDialogProjectId !== null ? (
 				<ExistingWorktreeDialog
 					open
@@ -407,7 +383,6 @@ function SettledPartition({
 	sort,
 	shelfExpanded,
 	shelfShown,
-	onRemoveAllSettled,
 	renderRow,
 }: {
 	enabled: boolean;
@@ -416,10 +391,8 @@ function SettledPartition({
 	sort: WorkspaceSort;
 	shelfExpanded: boolean;
 	shelfShown: number;
-	onRemoveAllSettled: () => void;
 	renderRow: (workspace: Workspace, settled: SettledReason | null) => ReactNode;
 }) {
-	const [shelfMenuOpen, setShelfMenuOpen] = useState(false);
 	if (!enabled) {
 		return (
 			<ul className="mt-4 flex flex-col gap-4 motion-safe:animate-reveal">
@@ -457,10 +430,7 @@ function SettledPartition({
 				data-testid="settled-shelf"
 				data-count={settledCount}
 				data-expanded={shelfExpanded}
-				className={cn(
-					"group/shelf flex h-28 min-w-0 items-center gap-4 rounded-[var(--radius-sm)] pr-4 pl-12 text-text-subtle tr-text-metadata",
-					shelfMenuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered",
-				)}
+				className="flex h-28 min-w-0 items-center gap-4 rounded-[var(--radius-sm)] pr-4 pl-12 text-text-subtle tr-text-metadata hover:bg-control-bg-hovered"
 			>
 				<button
 					type="button"
@@ -477,29 +447,6 @@ function SettledPartition({
 					<RiCheckboxCircleLine className="size-14 shrink-0" />
 					<span className="truncate">Settled · {settledCount}</span>
 				</button>
-				<DropdownMenu open={shelfMenuOpen} onOpenChange={setShelfMenuOpen}>
-					<DropdownMenuTrigger
-						data-testid="settled-shelf-menu"
-						aria-label="Settled shelf actions"
-						className={cn(
-							HOVER_CONTROL_CLASS,
-							"[@media(hover:hover)]:group-hover/shelf:opacity-100",
-						)}
-					>
-						<MoreVertical className="size-14" />
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end">
-						<DropdownMenuItem
-							data-testid="remove-all-settled"
-							disabled={settledCount === 0}
-							className="text-feedback-error focus:bg-feedback-error-subtle [&_svg]:text-feedback-error"
-							onSelect={onRemoveAllSettled}
-						>
-							<Trash2 />
-							Remove all settled…
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
 			</div>
 			{shelfExpanded ? (
 				<ul className="flex flex-col gap-2" data-testid="settled-shelf-rows">

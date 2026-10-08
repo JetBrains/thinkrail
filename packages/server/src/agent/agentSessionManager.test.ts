@@ -51,7 +51,6 @@ import {
 	getSessionMessages,
 	getSessionState,
 	getSessionStats,
-	hasBusySession,
 	hasSession,
 	initializeSessionStates,
 	listAvailableModels,
@@ -392,75 +391,6 @@ test("two sessions in two worktrees stream independently; disposing one leaves t
 
 	expect(seen(b.sessionId)).toContain("BRAVO_AGAIN");
 	expect((events.get(a.sessionId) ?? []).length).toBe(aEventsBefore);
-});
-
-test("hasBusySession reports a workspace with a running turn and clears once the chat settles", async () => {
-	const cwd = tmpCwd("trpi-busy-");
-	const workspaceId = "ws-busy";
-	const startedPath = join(cwd, "started");
-	const releasePath = join(cwd, "release");
-	fauxA.setResponses([
-		fauxAssistantMessage(
-			fauxToolCall("bash", {
-				command: `touch '${startedPath}'; while ! test -f '${releasePath}'; do sleep 0.02; done`,
-			}),
-		),
-		fauxAssistantMessage("BUSY_DONE"),
-		fauxAssistantMessage("FOLLOW_UP_DONE"),
-	]);
-	setSessionManagerFactory((sessionCwd) => SessionManager.inMemory(sessionCwd));
-	const session = await createSession({ cwd, workspaceId, model: toWireModel(fauxA.getModel()) });
-	expect(hasBusySession(workspaceId)).toBe(false);
-	expect(hasBusySession("ws-nobody")).toBe(false);
-	const prompting = promptSession(session.sessionId, "Wait in the native tool.");
-	prompting.catch(() => {});
-	try {
-		await waitForPath(startedPath);
-		expect(hasBusySession(workspaceId)).toBe(true);
-		expect(hasBusySession("ws-nobody")).toBe(false);
-		await followUpSession(session.sessionId, "FOLLOW_UP");
-		writeFileSync(releasePath, "");
-		await prompting;
-		expect(hasBusySession(workspaceId)).toBe(false);
-	} finally {
-		writeFileSync(releasePath, "");
-		await prompting.catch(() => {});
-		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
-		setSessionManagerFactory(() => SessionManager.inMemory());
-	}
-});
-
-test("hasBusySession includes a background command after its parent turn settles", async () => {
-	const cwd = tmpCwd("trpi-busy-command-");
-	const workspaceId = "ws-busy-command";
-	const startedPath = join(cwd, "started");
-	const releasePath = join(cwd, "release");
-	fauxA.setResponses([
-		fauxAssistantMessage(
-			fauxToolCall("background_command", {
-				action: "start",
-				command: `touch '${startedPath}'; while ! test -f '${releasePath}'; do sleep 0.02; done`,
-				name: "busy command",
-			}),
-		),
-		fauxAssistantMessage("COMMAND_LAUNCHED"),
-	]);
-	setSessionManagerFactory((sessionCwd) => SessionManager.inMemory(sessionCwd));
-	const session = await createSession({ cwd, workspaceId, model: toWireModel(fauxA.getModel()) });
-	try {
-		await promptSession(session.sessionId, "Start background work.");
-		await waitForPath(startedPath);
-		expect(hasBusySession(workspaceId)).toBe(true);
-		writeFileSync(releasePath, "");
-		for (let attempt = 0; attempt < 200 && hasBusySession(workspaceId); attempt++) {
-			await Bun.sleep(10);
-		}
-		expect(hasBusySession(workspaceId)).toBe(false);
-	} finally {
-		writeFileSync(releasePath, "");
-		if (hasSession(session.sessionId)) await removeSession(session.sessionId);
-		setSessionManagerFactory(() => SessionManager.inMemory());
-	}
 });
 
 test.each([
@@ -3109,7 +3039,6 @@ test("compactSession rejects an overlapping manual compaction", async () => {
 			if (Date.now() > deadline) throw new Error("first compaction never started");
 			await new Promise((resolve) => setTimeout(resolve, 20));
 		}
-		expect(hasBusySession("ws-compact-lock")).toBe(true);
 
 		overlappingCompaction = compactSession(sessionId, "second");
 		overlappingCompaction.catch(() => {});
@@ -3131,7 +3060,6 @@ test("compactSession rejects an overlapping manual compaction", async () => {
 		});
 		releaseCompaction();
 		await firstCompaction;
-		expect(hasBusySession("ws-compact-lock")).toBe(false);
 	} finally {
 		releaseCompaction();
 		if (sessionId) removeSession(sessionId);

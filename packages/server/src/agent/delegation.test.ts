@@ -27,12 +27,7 @@ import {
 	setSessionPublisher,
 	settleSessionsForShutdown,
 } from "./agentSessionManager";
-import {
-	delegationRootDir,
-	delegationServiceFor,
-	hasActiveDelegation,
-	readChildTranscript,
-} from "./delegation";
+import { delegationRootDir, delegationServiceFor, readChildTranscript } from "./delegation";
 import { configurePiRuntime } from "./piRuntime";
 
 const faux = createFauxCore({
@@ -203,7 +198,6 @@ test("owned children remain inspectable before and during their first provider r
 		visibility: "hidden",
 		session: {},
 	});
-	expect(hasActiveDelegation(workspaceId)).toBe(false);
 	expect(existsSync(child.record.sessionFile)).toBe(false);
 	expect(readChildTranscript(workspaceId, sessionId, child.sessionId)).toEqual({
 		messages: [],
@@ -219,7 +213,6 @@ test("owned children remain inspectable before and during their first provider r
 	const run = child.runQueued("Wait for the provider.");
 	try {
 		await waitFor(() => child.snapshot?.status === "running");
-		expect(hasActiveDelegation(workspaceId)).toBe(true);
 		expect(existsSync(child.record.sessionFile)).toBe(true);
 		expect(readChildTranscript(workspaceId, sessionId, child.sessionId)).toMatchObject({
 			messages: [
@@ -234,7 +227,6 @@ test("owned children remain inspectable before and during their first provider r
 		release();
 		await run;
 	}
-	expect(hasActiveDelegation(workspaceId)).toBe(false);
 	expect(JSON.stringify(readChildTranscript(workspaceId, sessionId, child.sessionId))).toContain(
 		"GATED_DONE",
 	);

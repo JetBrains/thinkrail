@@ -3,9 +3,6 @@ import type {
 	ReviewComment,
 	ReviewFixDetails,
 	ReviewSendResult,
-	SettledRemovalRefusal,
-	SettledRemovalResult,
-	SettledRemovalTarget,
 	TemplateReadLocation,
 	ThinkingLevel,
 	WireModel,
@@ -32,8 +29,6 @@ import {
 	getSessionResources,
 	getSessionStats,
 	getSessionWorkspaceId,
-	hasActiveDelegation,
-	hasBusySession,
 	hasSession,
 	isHostResourceId,
 	isPiSessionId,
@@ -93,7 +88,6 @@ import {
 	listBranches,
 	listCommits,
 	prefetchBranch,
-	tryCurrentBranch,
 } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { clampLimit, getHistoryIndex } from "../history";
@@ -163,7 +157,6 @@ import { ensureWatch, stopWatch } from "../watch";
 import {
 	createWorkspace,
 	ensureWorkspaceScratchDir,
-	forgetQuietWorkspace,
 	forgetWorkspace,
 	getWorkspace,
 	listAllWorkspaceRecords,
@@ -175,7 +168,6 @@ import {
 	recordWorkspaceActivity,
 	refreshUserOwnedWorkspace,
 	renameWorkspace,
-	settledRemovalPreview,
 	settleWorkspace,
 	setWorkspaceDiffBase,
 	setWorkspaceReview,
@@ -191,7 +183,7 @@ import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
 import { resolveNewChatModel } from "./newChatModel";
-import { planReviewRunning, workspacePlanReviewRunning } from "./planReviewQueue";
+import { planReviewRunning } from "./planReviewQueue";
 import {
 	additionalCapture,
 	captureAdditional,
@@ -235,108 +227,14 @@ type WsHandler<M extends WsMethodName> = (
 
 type WsHandlers = { [M in WsMethodName]: WsHandler<M> };
 
-async function archiveTeardown(ws: Workspace, sessionsRemoved?: Promise<void>): Promise<void> {
+async function archiveTeardown(ws: Workspace): Promise<void> {
 	try {
-		await (sessionsRemoved ?? removeWorkspaceSessions(ws.id, ws.worktreePath));
+		await removeWorkspaceSessions(ws.id, ws.worktreePath);
 		await settleChangeArtifacts(ws.id);
 		reclaimWorktree(ws);
 	} catch {
 		log.warn(`workspace archive teardown failed for ${ws.id}`);
 	}
-}
-
-function releaseForgottenWorkspace(ws: Workspace): void {
-	evictSpecIndex(ws.id);
-	removeWorkspaceReviews(ws.id);
-	forgetWorkspaceChanges(ws.id);
-	stopWatch(ws.id);
-	closeWorkspaceTerminals(ws.id);
-}
-
-type SettledRemovalDecision =
-	| { kind: "removed"; id: string }
-	| { kind: "kept"; id: string; reason: SettledRemovalRefusal }
-	| { kind: "missing" };
-
-const REMOVAL_RECHECK_CONCURRENCY = 4;
-
-async function removeSettledWorkspaces(
-	targets: SettledRemovalTarget[],
-	allowUnsafeIds: string[],
-): Promise<SettledRemovalResult> {
-	const result: SettledRemovalResult = { removed: [], kept: [] };
-	const allowedUnsafe = new Set(allowUnsafeIds);
-	let teardowns = Promise.resolve();
-	const decide = (target: SettledRemovalTarget): Promise<SettledRemovalDecision> =>
-		withChangeLock(target.id, async () => {
-			if (!listAllWorkspaceRecords().some((workspace) => workspace.id === target.id)) {
-				return { kind: "missing" };
-			}
-			refreshUserOwnedWorkspace(target.id);
-			const workspace = getWorkspace(target.id);
-			if (target.settledOverride !== "settled") {
-				const review = await findBranchReviewOutcome(workspace.worktreePath, workspace.branch, {
-					fresh: true,
-				});
-				if (!review.reliable) return { kind: "kept", id: target.id, reason: "unsafe" };
-				setWorkspaceReview(target.id, review.value, workspace.branch);
-			}
-			await settleChangeArtifacts(target.id);
-			const [safety] = await settledRemovalPreview([target.id]);
-			if (!listAllWorkspaceRecords().some((workspace) => workspace.id === target.id)) {
-				return { kind: "missing" };
-			}
-			const currentWorkspace = getWorkspace(target.id);
-			if (currentWorkspace.kind === "external") {
-				const branch = tryCurrentBranch(currentWorkspace.worktreePath);
-				if (branch === null) return { kind: "kept", id: target.id, reason: "unsafe" };
-				if (branch !== target.branch) {
-					refreshUserOwnedWorkspace(target.id);
-					return { kind: "kept", id: target.id, reason: "changed" };
-				}
-			}
-			if (target.settleIdleDays !== getConfig().settleIdleDays) {
-				return { kind: "kept", id: target.id, reason: "changed" };
-			}
-			const unsafe = safety === undefined ? true : safety.dirty !== 0 || safety.unpushed !== 0;
-			if (unsafe && !allowedUnsafe.has(target.id)) {
-				return { kind: "kept", id: target.id, reason: "unsafe" };
-			}
-			if (
-				hasBusySession(target.id) ||
-				hasActiveDelegation(target.id) ||
-				workspacePlanReviewRunning(target.id)
-			) {
-				return { kind: "kept", id: target.id, reason: "running" };
-			}
-			const outcome = forgetQuietWorkspace(target);
-			if (!outcome.ok) {
-				return outcome.reason === "missing"
-					? { kind: "missing" }
-					: { kind: "kept", id: target.id, reason: outcome.reason };
-			}
-			releaseForgottenWorkspace(outcome.workspace);
-			const sessionsRemoved = removeWorkspaceSessions(
-				outcome.workspace.id,
-				outcome.workspace.worktreePath,
-			);
-			void sessionsRemoved.catch(() => {});
-			teardowns = teardowns.then(() => archiveTeardown(outcome.workspace, sessionsRemoved));
-			return { kind: "removed", id: target.id };
-		});
-
-	for (let index = 0; index < targets.length; index += REMOVAL_RECHECK_CONCURRENCY) {
-		const decisions = await Promise.all(
-			targets.slice(index, index + REMOVAL_RECHECK_CONCURRENCY).map(decide),
-		);
-		for (const decision of decisions) {
-			if (decision.kind === "removed") result.removed.push(decision.id);
-			else if (decision.kind === "kept") {
-				result.kept.push({ id: decision.id, reason: decision.reason });
-			}
-		}
-	}
-	return result;
 }
 
 async function sendUserMessage(
@@ -571,16 +469,19 @@ const handlers: WsHandlers = {
 	},
 	"workspace.settle": (params) => settleWorkspace(params.id),
 	"workspace.unsettle": (params) => unsettleWorkspace(params.id),
-	"workspace.settledRemovalPreview": (params) => settledRemovalPreview(params.ids),
 	"workspace.remove": (params) => {
-		const ws = forgetWorkspace(params.id);
+		const id = params.id;
+		const ws = forgetWorkspace(id);
 		if (ws) {
-			releaseForgottenWorkspace(ws);
+			evictSpecIndex(ws.id);
+			removeWorkspaceReviews(ws.id);
+			forgetWorkspaceChanges(ws.id);
+			stopWatch(ws.id);
+			closeWorkspaceTerminals(ws.id);
 			void archiveTeardown(ws);
 		}
 		return { ok: true } as const;
 	},
-	"workspace.removeSettled": (p) => removeSettledWorkspaces(p.targets, p.allowUnsafeIds ?? []),
 	"workspace.diffStats": (params) => workspaceDiffStats(params.id),
 	"workspace.openIn": (p) => {
 		openEditor(p.editor, getWorkspace(p.id).worktreePath);

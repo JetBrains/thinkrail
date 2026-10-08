@@ -31,11 +31,6 @@ export function delegationRootDir(): string {
 }
 
 const services = new Map<string, DelegationService>();
-const activeRuns = new Map<string, Set<string>>();
-
-export function hasActiveDelegation(workspaceId: string): boolean {
-	return (activeRuns.get(workspaceId)?.size ?? 0) > 0;
-}
 
 export function delegationServiceFor(workspaceId: string): DelegationService {
 	let service = services.get(workspaceId);
@@ -51,18 +46,6 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 			buildChildSettings: buildSessionSettings,
 		});
 		service.onLifecycle((event) => {
-			if (event.type === "run-queued" || event.type === "run-started") {
-				let running = activeRuns.get(workspaceId);
-				if (!running) {
-					running = new Set();
-					activeRuns.set(workspaceId, running);
-				}
-				running.add(event.sessionId);
-			} else if (event.type === "run-terminal" || event.type === "child-disposed") {
-				const running = activeRuns.get(workspaceId);
-				running?.delete(event.sessionId);
-				if (running?.size === 0) activeRuns.delete(workspaceId);
-			}
 			const parentSessionId =
 				event.type === "child-created" ? event.record.parentSessionId : event.parentSessionId;
 			if (canUseSessionResources(parentSessionId, workspaceId))
@@ -96,7 +79,6 @@ export async function disposeSessionChildren(
 
 export function removeWorkspaceDelegation(workspaceId: string): void {
 	services.delete(workspaceId);
-	activeRuns.delete(workspaceId);
 	rmSync(join(delegationRootDir(), workspaceId), { recursive: true, force: true });
 }
 

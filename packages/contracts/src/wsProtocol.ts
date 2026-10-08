@@ -39,9 +39,6 @@ import type {
 	ReviewSnapshot,
 	SessionResources,
 	SessionStateRecord,
-	SettledRemovalPreview,
-	SettledRemovalResult,
-	SettledRemovalTarget,
 	SpecGraphSnapshot,
 	SubagentOverride,
 	Template,
@@ -196,8 +193,6 @@ export const WS_METHODS = {
 	workspaceSetDiffBase: "workspace.setDiffBase",
 	workspaceSettle: "workspace.settle",
 	workspaceUnsettle: "workspace.unsettle",
-	workspaceSettledRemovalPreview: "workspace.settledRemovalPreview",
-	workspaceRemoveSettled: "workspace.removeSettled",
 	workspaceWatchReady: "workspace.watchReady",
 	workspaceOpenIn: "workspace.openIn",
 	workspaceReveal: "workspace.reveal",
@@ -535,14 +530,6 @@ export interface WsMethodMap {
 	"workspace.setDiffBase": { params: { id: string; ref: string | null }; result: Workspace };
 	"workspace.settle": { params: { id: string }; result: Workspace };
 	"workspace.unsettle": { params: { id: string }; result: Workspace };
-	"workspace.settledRemovalPreview": {
-		params: { ids: string[] };
-		result: SettledRemovalPreview[];
-	};
-	"workspace.removeSettled": {
-		params: { targets: SettledRemovalTarget[]; allowUnsafeIds: string[] };
-		result: SettledRemovalResult;
-	};
 	"workspace.watchReady": {
 		params: { workspaceId: string; prewarm?: boolean };
 		result: WorkspaceWatchReadyResult;

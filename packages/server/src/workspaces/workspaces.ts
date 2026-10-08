@@ -6,10 +6,6 @@ import type {
 	ExistingWorktreeCandidate,
 	OpenBranchReview,
 	Project,
-	SettledRemovalPreview,
-	SettledRemovalRefusal,
-	SettledRemovalReview,
-	SettledRemovalTarget,
 	SubagentOverride,
 	Workspace,
 } from "@thinkrail/contracts";
@@ -18,7 +14,6 @@ import {
 	assertSafeRef,
 	canonicalPath,
 	changedFileArgs,
-	countPushDivergence,
 	currentBranch,
 	git,
 	gitAsync,
@@ -607,67 +602,6 @@ export function setWorkspaceReview(
 	return ws;
 }
 
-async function unpushedCommits(ws: Workspace): Promise<number | null> {
-	const divergence = await countPushDivergence(ws.worktreePath, ws.branch);
-	if (divergence) return divergence.ahead;
-	const tracking = await gitAsync(ws.worktreePath, ["for-each-ref", "--count=1", "refs/remotes"]);
-	if (!tracking.ok) return null;
-	if (!tracking.out) return 0;
-	const counted = await gitAsync(ws.worktreePath, [
-		"rev-list",
-		"--count",
-		"HEAD",
-		"--not",
-		"--remotes",
-		"--",
-	]);
-	if (!counted.ok) return null;
-	const parsed = Number.parseInt(counted.out, 10);
-	return Number.isSafeInteger(parsed) ? parsed : null;
-}
-
-const REMOVAL_PREVIEW_CONCURRENCY = 4;
-
-function nulCount(output: string): number {
-	return output.split("\0").filter((field) => field.length > 0).length;
-}
-
-async function uncommittedCount(ws: Workspace): Promise<number | null> {
-	const [tracked, untracked] = await Promise.all([
-		gitAsync(
-			ws.worktreePath,
-			["diff", "--name-only", "-z", "--no-ext-diff", "--end-of-options", "HEAD", "--"],
-			{ raw: true },
-		),
-		gitAsync(ws.worktreePath, ["ls-files", "-z", "--others", "--exclude-standard"], { raw: true }),
-	]);
-	if (!tracked.ok || !untracked.ok) return null;
-	return nulCount(tracked.out) + nulCount(untracked.out);
-}
-
-export async function settledRemovalPreview(ids: string[]): Promise<SettledRemovalPreview[]> {
-	const byId = new Map(loadWorkspaces().map((workspace) => [workspace.id, workspace]));
-	const results: SettledRemovalPreview[] = new Array(ids.length);
-	const queue = ids.map((id, index) => ({ id, index }));
-	await Promise.all(
-		Array.from({ length: Math.min(REMOVAL_PREVIEW_CONCURRENCY, queue.length) }, async () => {
-			for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
-				const ws = byId.get(next.id);
-				if (!ws) {
-					results[next.index] = { id: next.id, dirty: null, unpushed: null };
-					continue;
-				}
-				const [dirty, unpushed] = await Promise.all([
-					uncommittedCount(ws).catch(() => null),
-					unpushedCommits(ws).catch(() => null),
-				]);
-				results[next.index] = { id: next.id, dirty, unpushed };
-			}
-		}),
-	);
-	return results;
-}
-
 export async function listWorkspaces(
 	projectId: string,
 	opts: { includeDiffStats?: boolean } = {},
@@ -710,55 +644,16 @@ export function listAllWorkspaceRecords(): Workspace[] {
 	return loadWorkspaces();
 }
 
-function dropWorkspaceRecord(all: Workspace[], ws: Workspace): void {
-	saveWorkspaces(all.filter((w) => w.id !== ws.id));
-	observedActivityAt.delete(ws.id);
-	observedHeadSha.delete(ws.id);
-	emit({ kind: "removed", projectId: ws.projectId, id: ws.id });
-}
-
 export function forgetWorkspace(id: string): Workspace | null {
 	const all = loadWorkspaces();
 	const ws = all.find((w) => w.id === id);
 	if (!ws) return null;
 	if (ws.kind === "default") throw new Error("The Default workspace cannot be removed");
-	dropWorkspaceRecord(all, ws);
+	saveWorkspaces(all.filter((w) => w.id !== id));
+	observedActivityAt.delete(id);
+	observedHeadSha.delete(id);
+	emit({ kind: "removed", projectId: ws.projectId, id: ws.id });
 	return ws;
-}
-
-export type ForgetQuietOutcome =
-	| { ok: true; workspace: Workspace }
-	| { ok: false; reason: Exclude<SettledRemovalRefusal, "running" | "unsafe"> | "missing" };
-
-function sameRemovalReview(
-	current: OpenBranchReview | undefined,
-	previewed: SettledRemovalReview | undefined,
-): boolean {
-	if (!current || !previewed) return current === previewed;
-	return (
-		current.kind === previewed.kind &&
-		current.number === previewed.number &&
-		current.state === previewed.state &&
-		current.changedAt === previewed.changedAt
-	);
-}
-
-/** Forgets the row only while the facts the client judged it settled from still hold. */
-export function forgetQuietWorkspace(target: SettledRemovalTarget): ForgetQuietOutcome {
-	const all = loadWorkspaces();
-	const ws = all.find((w) => w.id === target.id);
-	if (!ws || ws.kind === "default") return { ok: false, reason: "missing" };
-	if (ws.settledOverride === "active") return { ok: false, reason: "active" };
-	if (
-		ws.branch !== target.branch ||
-		ws.lastActiveAt !== target.lastActiveAt ||
-		ws.settledOverride !== target.settledOverride ||
-		!sameRemovalReview(ws.review, target.review)
-	) {
-		return { ok: false, reason: "changed" };
-	}
-	dropWorkspaceRecord(all, ws);
-	return { ok: true, workspace: ws };
 }
 
 export function reclaimWorktree(ws: Workspace): void {

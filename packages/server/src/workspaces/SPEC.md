@@ -246,28 +246,7 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,
   `setWorkspaceSubagentsOverride`, `recordWorkspaceActivity`, `backfillWorkspaceActivity`,
-  `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`,
-  `settledRemovalPreview`, `forgetQuietWorkspace`, `ForgetQuietOutcome`.
-- `forgetQuietWorkspace(target)` — the bulk-remove half of `forgetWorkspace`: one synchronous
-  read-check-write that drops the record **only while the preview-time record facts still hold** — branch,
-  activity stamp, override, and review identity/state/time. It refuses as `"active"` when the user has
-  since pinned the row live, as `"changed"` for any other mismatch, and as `"missing"` for an unknown or
-  Default id. The host separately compares the preview's idle-window setting and safety result. This module
-  does not re-derive the partition — the client's selector stays the one derivation — it checks that the
-  facts it was derived from are unchanged.
-  Being synchronous is the point: no writer can interleave between the check and the removal. The
-  session-busy check is the host's, since this module has no `agent` edge.
-- `settledRemovalPreview(ids)` (**async**) — per worktree the dirty-file count (tracked `diff --name-only`
-  + untracked `ls-files --others`, two cheap `gitAsync` reads rather than the Changes panel's full
-  `gitStatus`, which also reads file contents) and the commits its branch has that no remote has
-  (`countPushDivergence` against its upstream; for a never-pushed branch `HEAD --not --remotes`, the
-  commits no remote-tracking ref reaches — never the Changes panel's *Compare to* base, which is a
-  viewing choice and may even be the branch itself; a repository with no remote-tracking refs at all has
-  nowhere to push and reports zero); the fan-out is bounded
-  to four worktrees at a time, because the motivating shelf holds dozens of rows and an unbounded
-  `Promise.all` would spawn hundreds of git processes at once; unreadable worktrees report `null` counts
-  rather than a false clean. It is the preview behind the rail's bulk *Remove all settled…*, which excludes
-  flagged rows unless the user opts them in; the guarded removal path is `forgetQuietWorkspace` above.
+  `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
   `@thinkrail/shared/paths` (the scratch-dir path convention); Node.
 - **Forbidden:** `host`; reaching into another feature's internals (use its barrel).

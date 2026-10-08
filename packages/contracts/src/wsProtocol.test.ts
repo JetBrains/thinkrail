@@ -137,8 +137,6 @@ test("the settled workspace shelf is pinned to v78", () => {
 	expect(WORKSPACE_SETTLE_PROTOCOL_VERSION).toBe(78);
 	expect(WS_METHODS.workspaceSettle).toBe("workspace.settle");
 	expect(WS_METHODS.workspaceUnsettle).toBe("workspace.unsettle");
-	expect(WS_METHODS.workspaceSettledRemovalPreview).toBe("workspace.settledRemovalPreview");
-	expect(WS_METHODS.workspaceRemoveSettled).toBe("workspace.removeSettled");
 	expect(DEFAULT_CONFIG.settleIdleDays).toBe(SETTLE_IDLE_DAYS.default);
 	expect(isSettleIdleDays(null)).toBe(true);
 	expect(isSettleIdleDays(3)).toBe(true);

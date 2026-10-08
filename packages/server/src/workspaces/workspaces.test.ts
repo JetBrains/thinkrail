@@ -11,13 +11,12 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { SettledRemovalTarget, Workspace } from "@thinkrail/contracts";
+import type { Workspace } from "@thinkrail/contracts";
 import {
 	backfillWorkspaceActivity,
 	completeInitialTerminalReservation,
 	createWorkspace,
 	ensureWorkspaceScratchDir,
-	forgetQuietWorkspace,
 	forgetWorkspace,
 	listExistingWorktrees,
 	listWorkspaceRecords,
@@ -30,7 +29,6 @@ import {
 	removeWorkspace,
 	renameWorkspace,
 	seedWorkspaceHead,
-	settledRemovalPreview,
 	settleWorkspace,
 	setWorkspaceDiffBase,
 	setWorkspacePublisher,
@@ -1078,79 +1076,6 @@ test("watch-start observation compares a retained HEAD baseline after watcher re
 	expect(() => seedWorkspaceHead("missing")).not.toThrow();
 });
 
-test("forgetQuietWorkspace removes a row only while the client's settle facts still hold", async () => {
-	const events: WorkspaceLifecycleEvent[] = [];
-	setWorkspacePublisher((event) => events.push(event));
-	const quiet = await createWorkspace("p1", "Quiet");
-	const moved = await createWorkspace("p1", "Moved");
-	const pinned = await createWorkspace("p1", "Pinned");
-	unsettleWorkspace(pinned.id);
-	const def = listWorkspaceRecords("p1").find((row) => row.kind === "default");
-	events.length = 0;
-
-	const seen = (row: Workspace | undefined): SettledRemovalTarget => {
-		const review = row?.review;
-		return {
-			id: row?.id ?? "",
-			branch: row?.branch ?? "",
-			...(row?.lastActiveAt !== undefined ? { lastActiveAt: row.lastActiveAt } : {}),
-			...(row?.settledOverride !== undefined ? { settledOverride: row.settledOverride } : {}),
-			...(review
-				? {
-						review: {
-							kind: review.kind,
-							number: review.number,
-							...(review.state !== undefined ? { state: review.state } : {}),
-							...(review.changedAt !== undefined ? { changedAt: review.changedAt } : {}),
-						},
-					}
-				: {}),
-			settleIdleDays: 3,
-		};
-	};
-	expect(
-		forgetQuietWorkspace({ ...seen(moved), lastActiveAt: (moved.lastActiveAt ?? 0) - 1 }),
-	).toEqual({
-		ok: false,
-		reason: "changed",
-	});
-	expect(forgetQuietWorkspace({ ...seen(moved), branch: "other" })).toEqual({
-		ok: false,
-		reason: "changed",
-	});
-	const judgedWithoutReview = seen(moved);
-	setWorkspaceReview(moved.id, { kind: "pull-request", number: 7, state: "open" }, moved.branch);
-	expect(forgetQuietWorkspace(judgedWithoutReview)).toEqual({ ok: false, reason: "changed" });
-	setWorkspaceReview(
-		moved.id,
-		{ kind: "pull-request", number: 7, state: "merged", changedAt: 20 },
-		moved.branch,
-	);
-	const judgedMerged = seen(listWorkspaceRecords("p1").find((row) => row.id === moved.id));
-	setWorkspaceReview(
-		moved.id,
-		{ kind: "pull-request", number: 7, state: "merged", changedAt: 10 },
-		moved.branch,
-	);
-	expect(forgetQuietWorkspace(judgedMerged)).toEqual({ ok: false, reason: "changed" });
-	setWorkspaceReview(moved.id, null, moved.branch);
-	expect(forgetQuietWorkspace(seen(pinned))).toEqual({ ok: false, reason: "active" });
-	expect(forgetQuietWorkspace({ id: "missing", branch: "missing", settleIdleDays: 3 })).toEqual({
-		ok: false,
-		reason: "missing",
-	});
-	expect(forgetQuietWorkspace(seen(def))).toEqual({ ok: false, reason: "missing" });
-	expect(listWorkspaceRecords("p1").map((row) => row.id)).toContain(moved.id);
-	expect(events.filter((event) => event.kind === "removed")).toEqual([]);
-
-	const outcome = forgetQuietWorkspace(seen(quiet));
-	expect(outcome).toEqual({ ok: true, workspace: expect.objectContaining({ id: quiet.id }) });
-	expect(listWorkspaceRecords("p1").map((row) => row.id)).not.toContain(quiet.id);
-	expect(events.filter((event) => event.kind === "removed")).toEqual([
-		{ kind: "removed", projectId: "p1", id: quiet.id },
-	]);
-});
-
 test("setWorkspaceReview persists a trimmed snapshot and stays silent when nothing changed", async () => {
 	const events: WorkspaceLifecycleEvent[] = [];
 	setWorkspacePublisher((event) => events.push(event));
@@ -1187,45 +1112,4 @@ test("setWorkspaceReview persists a trimmed snapshot and stays silent when nothi
 	expect(setWorkspaceReview(ws.id, review, "some-other-branch")).toBeNull();
 	expect(listWorkspaceRecords("p1").find((row) => row.id === ws.id)?.review).toBeUndefined();
 	expect(events).toHaveLength(3);
-});
-
-test("settledRemovalPreview counts uncommitted files and commits no remote has", async () => {
-	const remoteRepo = join(dataDir, "remote.git");
-	git(repo, "init", "--bare", remoteRepo);
-	git(repo, "remote", "add", "origin", remoteRepo);
-	git(repo, "push", "origin", "main");
-	git(repo, "fetch", "origin");
-	const clean = await createWorkspace("p1", "Clean");
-	const dirty = await createWorkspace("p1", "Dirty");
-	writeFileSync(join(dirty.worktreePath, "a.txt"), "a\n");
-	writeFileSync(join(dirty.worktreePath, "b.txt"), "b\n");
-	const ahead = await createWorkspace("p1", "Ahead");
-	writeFileSync(join(ahead.worktreePath, "c.txt"), "c\n");
-	git(ahead.worktreePath, "add", "-A");
-	git(ahead.worktreePath, "commit", "-m", "local only");
-	setWorkspaceDiffBase(ahead.id, ahead.branch);
-	const pushed = await createWorkspace("p1", "Pushed");
-	writeFileSync(join(pushed.worktreePath, "d.txt"), "d\n");
-	git(pushed.worktreePath, "add", "-A");
-	git(pushed.worktreePath, "commit", "-m", "shared");
-	git(pushed.worktreePath, "push", "-u", "origin", pushed.branch);
-
-	const preview = await settledRemovalPreview([clean.id, dirty.id, ahead.id, pushed.id, "missing"]);
-	expect(preview).toEqual([
-		{ id: clean.id, dirty: 0, unpushed: 0 },
-		{ id: dirty.id, dirty: 2, unpushed: 0 },
-		{ id: ahead.id, dirty: 0, unpushed: 1 },
-		{ id: pushed.id, dirty: 0, unpushed: 0 },
-		{ id: "missing", dirty: null, unpushed: null },
-	]);
-});
-
-test("a repository with no remote-tracking refs has nothing to push, so nothing is unpushed", async () => {
-	const local = await createWorkspace("p1", "Local");
-	writeFileSync(join(local.worktreePath, "e.txt"), "e\n");
-	git(local.worktreePath, "add", "-A");
-	git(local.worktreePath, "commit", "-m", "only here");
-	expect(await settledRemovalPreview([local.id])).toEqual([
-		{ id: local.id, dirty: 0, unpushed: 0 },
-	]);
 });

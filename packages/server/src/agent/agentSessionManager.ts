@@ -372,25 +372,6 @@ export function getSessionState(sessionId: string): SessionState {
 	return stateFromEntry(mustGetEntry(sessionId));
 }
 
-/** The workspace has a preparing/running/compacting session, live input wait/queue, or command. */
-export function hasBusySession(workspaceId: string): boolean {
-	if ((pendingSessionPreparations.get(workspaceId)?.size ?? 0) > 0) return true;
-	for (const [sessionId, entry] of sessions) {
-		if (entry.workspaceId !== workspaceId || isSessionDeleted(sessionId, workspaceId)) continue;
-		if (entry.manualCompactionInProgress || entry.piCompactionInProgress) return true;
-		const state = stateFromEntry(entry);
-		if (state.execution === "running" || state.needsInput !== null || state.queuedCount > 0)
-			return true;
-		if (
-			entry.commands
-				.list()
-				.some((command) => command.status === "running" || command.status === "stopping")
-		)
-			return true;
-	}
-	return false;
-}
-
 function stateRecordForEntry(entry: Entry): SessionStateRecord {
 	const projectId = resolveProjectId(entry.workspaceId);
 	if (!projectId) throw new Error(`Unknown workspace: ${entry.workspaceId}`);

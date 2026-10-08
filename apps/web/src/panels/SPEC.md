@@ -72,7 +72,7 @@ treatment.
   `WORKSPACE_SETTLE_PROTOCOL_VERSION`) ride the same file.
   **The Settled shelf.** It renders only when the host advertises
   `WORKSPACE_SETTLE_PROTOCOL_VERSION`; an older host retains the raw flat list and order, with no sort,
-  shelf, settle controls, or bulk dialog even if rollback persistence carries stale newer fields. On a
+  shelf, or settle controls even if rollback persistence carries stale newer fields. On a
   capable host, an expanded project renders a **sort row** (`↕` + a native select: Recent activity
   · Created · Name, the store's `workspaceSort`) above its rows, then the **live** rows from
   `selectWorkspacePartition`, then a **`Settled · N`** disclosure header (collapsed by default, store-held
@@ -82,23 +82,10 @@ treatment.
   and on right-click); it is disabled while the row's agent works or a result is unread, absent on Default.
   The partition re-evaluates on the shared 30-second `useNow` clock so idle rows cross the window without
   a click and the rail stays in lockstep with the topbar, and
-  selecting a settled row expands the shelf and pages far enough to show it. The shelf header's own kebab
-  offers **Remove all settled…**, a `RemoveSettledDialog` that first calls
-  `workspace.settledRemovalPreview` and names how many settled worktrees hold uncommitted changes or
-  unpushed commits — those are **excluded unless the user ticks *Include them***, the confirm button
-  carries the final count, and confirming issues **one `workspace.removeSettled`**. The set of ids is
-  re-derived from every push (a row that goes live leaves the dialog), but each set's partition facts are
-  frozen when its preview starts — branch, activity stamp, override, review identity/state/time, and idle
-  window — so a same-id push cannot silently replace the compare-and-swap baseline. *Include them* sends an
-  allowlist containing only rows that preview actually flagged. The host, not the dialog, has the last
-  word: it reruns dirty/unpushed checks, then keeps a row that gained unapproved work, got busy, was pinned
-  live, or changed any frozen fact. This closes both directions of the preview race: a lagging push cannot
-  tear down newly active work, and a clean row dirtied after preview cannot bypass the opt-in. Kept rows
-  surface as one reason-aware info toast. **Unknown is unsafe, never clean:** a `null` count, a row the
-  preview did not return, or a failed preview request flags the row as *couldn't be checked* and excludes
-  it the same way, so a worktree git could not inspect is never removed without the explicit opt-in, and
-  the button stays disabled while the check is still running. Nothing about settling touches disk: the shelf is a list state,
-  and *Remove* stays the only teardown. Why this shape (recorded once): an explicit-archive-only rail left
+  selecting a settled row expands the shelf and pages far enough to show it. Nothing about settling touches
+  disk: the shelf is a list state, and each row's own *Remove* stays the only teardown — there is no bulk
+  removal yet, because a safe one needs a non-blocking, crash-safe host teardown first (#688). Why this
+  shape (recorded once): an explicit-archive-only rail left
   the housekeeping to the user (48 rows on the author's machine), a pure recency fold had no way to say
   "done", and a hidden Archived tier made rows disappear without a visible home — the shelf keeps every
   automatic move one disclosure away, with the reason spelled out.
