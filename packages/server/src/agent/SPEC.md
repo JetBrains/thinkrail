@@ -491,7 +491,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `buildSessionContext`; idempotent; appends only missing results from the active tail batch) —
     unit-tested against `SessionManager.inMemory`, including failed-attempt and historical-gap replay.
   - `imageGuard` — the oversized-image guard: an inline extension (`oversizedImageGuard`, one of
-    `buildResourceLoader`'s shared factories) hooked on pi's **`context` event** (fired before every LLM
+    `buildResourceLoader`'s shared factories and the whole delegated-child base set) hooked on pi's **`context` event** (fired before every LLM
     call, live sessions included). **Anthropic-family only**: the caps are Anthropic's model-level rules,
     so the handler gates on the context's active model (`isAnthropicFamilyModel` — native
     `anthropic`/`anthropic-messages`, or a Claude model id through Bedrock/Vertex/aggregators; unknown
@@ -601,14 +601,15 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     Children opting into extensions
     (`extensions: true` in their definition) get the **curated child set**
     (`childExtensionFactories` in `extensions`, pi `InlineExtension`s): the headless-search policy +
-    `pi-web-access` + `pi-spec-graph` + the `oversizedImageGuard` + every registry extension's
-    `childExtensions` (named inline, from [[submodule-server-extensions]]; none today) — deliberately
-    not the parent's full set (rationale + the listed-children carve-out: core decision #25). The guard
-    rides the child set because children now receive raw images (see the `buildSessionSettings`
-    bullet): with `images.autoResize:false` an oversized image an Anthropic child reads would otherwise
-    400 its request. Web-access reaches the child set via a **named bundled-seam field**
-    (`BundledExtensions.webAccessFactory`) in the binary and a Bun `require` in dev — its raw
-    third-party `.ts` must stay out of the strict tsc graph.
+    `pi-web-access` + `pi-spec-graph` + every registry extension's `childExtensions` (named inline,
+    from [[submodule-server-extensions]]; none today) — deliberately not the parent's full set
+    (rationale + the listed-children carve-out: core decision #25). **Every** child, opted in or not,
+    also loads the core's base set (`childBaseExtensionFactories`): just `oversizedImageGuard`. A
+    child's `read` returns raw images under the shared settings (see the `buildSessionSettings`
+    bullet), and custom agents default to no extensions, so an opt-in guard would let one oversized
+    image 400 an Anthropic child's request. Web-access reaches the child set via a **named
+    bundled-seam field** (`BundledExtensions.webAccessFactory`) in the binary and a Bun `require` in
+    dev — its raw third-party `.ts` must stay out of the strict tsc graph.
   - `extensions` — Pi resource wiring. Candidate generation loads the reviewed external Central path once
     through a headless `DefaultResourceLoader` to apply provider registrations, without inspecting it.
     `buildResourceLoader(cwd, settingsManager, getAdmission, excludedPaths, extraFactories?)` then resolves

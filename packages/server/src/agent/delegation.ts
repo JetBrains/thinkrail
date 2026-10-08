@@ -22,7 +22,7 @@ import {
 	liveParentContext,
 } from "./agentSessionManager";
 import { publishSessionResourcesChanged } from "./chatResources";
-import { childExtensionFactories } from "./extensions";
+import { childBaseExtensionFactories, childExtensionFactories } from "./extensions";
 import { getPiRuntime } from "./piRuntime";
 import { isHostResourceId, isPiSessionId } from "./resourceIdentity";
 
@@ -41,6 +41,7 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 			delegationRoot: delegationRootDir(),
 			scope: workspaceId,
 			modelRuntime: getPiRuntime,
+			childBaseExtensionFactories: childBaseExtensionFactories(),
 			childExtensionFactories: childExtensionFactories(),
 			buildChildSettings: buildSessionSettings,
 		});

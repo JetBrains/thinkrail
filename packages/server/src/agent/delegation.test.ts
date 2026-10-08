@@ -1,9 +1,13 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
-import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
+import {
+	createFauxCore,
+	fauxAssistantMessage,
+	fauxToolCall,
+} from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import {
 	SUBAGENT_COMPLETION_CUSTOM_TYPE,
@@ -382,6 +386,64 @@ test("children follow their parent's retained runtime generation across a flip",
 		configurePiRuntime(baseRuntime);
 		await removeSession(oldParent);
 		if (newParent) await removeSession(newParent);
+	}
+});
+
+function pngHeaderOnly(width: number, height: number): Buffer {
+	const ihdr = Buffer.alloc(25);
+	ihdr.writeUInt32BE(13, 0);
+	ihdr.write("IHDR", 4, "ascii");
+	ihdr.writeUInt32BE(width, 8);
+	ihdr.writeUInt32BE(height, 12);
+	ihdr[16] = 8;
+	ihdr[17] = 2;
+	return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), ihdr]);
+}
+
+test("a child without extensions reads images raw and still gets the oversized-image guard", async () => {
+	const cwd = tmpDir("trdel-image-");
+	writeFileSync(join(cwd, "wide.png"), pngHeaderOnly(9000, 10));
+	baseRuntime.registerProvider("faux-claude", {
+		api: faux.api,
+		baseUrl: "http://faux.local",
+		apiKey: "faux",
+		streamSimple: faux.streamSimple,
+		models: [
+			{
+				id: "claude-faux",
+				name: "claude-faux",
+				api: faux.api,
+				reasoning: false,
+				input: ["text", "image"],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow: 100_000,
+				maxTokens: 4096,
+			},
+		],
+	});
+	const { sessionId } = await createSession({ cwd, workspaceId: "ws-image" });
+	let toolResult: unknown;
+	faux.setResponses([
+		fauxAssistantMessage(fauxToolCall("read", { path: "wide.png" })),
+		(context) => {
+			toolResult = context.messages.at(-1);
+			return fauxAssistantMessage("SEEN");
+		},
+	]);
+	try {
+		const child = await delegationServiceFor("ws-image").createChild({
+			parent: sessionId,
+			visibility: "hidden",
+			info: { createdBy: "tool:Agent", roleName: "custom", roleSource: "project" },
+			session: { model: { provider: "faux-claude", id: "claude-faux" }, tools: ["read"] },
+		});
+		expect((await child.runQueued("Read wide.png.")).finalText).toBe("SEEN");
+		const seen = JSON.stringify(toolResult);
+		expect(seen).toContain("9000\u00d710 exceeds the provider's 8000px image-dimension limit");
+		expect(seen).not.toContain("Image omitted");
+	} finally {
+		await removeSession(sessionId);
+		baseRuntime.unregisterProvider("faux-claude");
 	}
 });
 

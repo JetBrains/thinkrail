@@ -6,10 +6,12 @@ import { SettingsManager } from "@earendil-works/pi-coding-agent";
 import { registryInlineExtensions } from "../extensions";
 import {
 	buildResourceLoader,
+	childBaseExtensionFactories,
 	childExtensionFactories,
 	listProjectAliasSkillNames,
 	listSkillCommands,
 } from "./extensions";
+import { oversizedImageGuard } from "./imageGuard";
 import type { SkillAdmissionContext } from "./skillAdmission";
 
 function ctx(trusted: boolean, acknowledged: string[] = []): SkillAdmissionContext {
@@ -376,8 +378,13 @@ describe("registry extensions", () => {
 
 	it("keeps the curated child set and appends registry children", () => {
 		const children = childExtensionFactories();
-		expect(children).toHaveLength(4 + registryInlineExtensions("childExtensions").length);
-		expect(children.slice(0, 4).every((inline) => typeof inline === "function")).toBe(true);
-		expect(children.slice(4)).toEqual(registryInlineExtensions("childExtensions"));
+		expect(children).toHaveLength(3 + registryInlineExtensions("childExtensions").length);
+		expect(children.slice(0, 3).every((inline) => typeof inline === "function")).toBe(true);
+		expect(children.slice(3)).toEqual(registryInlineExtensions("childExtensions"));
+	});
+
+	it("guards every child's images from the base set, not the opt-in curated set", () => {
+		expect(childBaseExtensionFactories()).toEqual([oversizedImageGuard]);
+		expect(childExtensionFactories()).not.toContain(oversizedImageGuard);
 	});
 });
