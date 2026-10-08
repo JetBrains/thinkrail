@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test";
 import type { SessionStateRecord, Workspace } from "@thinkrail/contracts";
 import { useAppStore } from "./appStore";
 import {
+	selectAutoSettledCounts,
 	selectWorkspacePartition,
 	selectWorkspaceSettledReason,
 	settledReasonTitle,
@@ -258,6 +259,30 @@ describe("selectWorkspacePartition", () => {
 			),
 		).toBeNull();
 	});
+});
+
+test("only rows the shelf took on its own count toward the first-move notice", () => {
+	const workspaces = {
+		p1: [
+			ws("home", { kind: "default", lastActiveAt: NOW - 90 * DAY }),
+			ws("idle", { lastActiveAt: NOW - 20 * DAY }),
+			ws("merged", {
+				review: { kind: "pull-request", number: 1, state: "merged", changedAt: NOW - DAY },
+				lastActiveAt: NOW - 2 * DAY,
+			}),
+			ws("parked", { settledOverride: "settled" }),
+			ws("fresh"),
+		],
+		p2: [ws("p2-parked", { projectId: "p2", settledOverride: "settled" })],
+		p3: [ws("p3-idle", { projectId: "p3", lastActiveAt: NOW - 10 * DAY })],
+	};
+	expect(selectAutoSettledCounts({ ...base, workspaces }, NOW)).toEqual([
+		{ projectId: "p1", count: 2 },
+		{ projectId: "p3", count: 1 },
+	]);
+	expect(
+		selectAutoSettledCounts({ ...base, workspaceSettlingSupported: false, workspaces }, NOW),
+	).toEqual([]);
 });
 
 test("settled capability survives reconnect limbo until the next welcome decides", () => {

@@ -1,10 +1,30 @@
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { WORKSPACE_SETTLE_PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import {
+	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+	type Workspace,
+	WS_CHANNELS,
+} from "@thinkrail/contracts";
 import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
+import { E2E_DATA_DIR } from "./fixtures/paths";
 
-// The Settled shelf: quiet workspaces leave the live list for a collapsed group under the project. Idle
-// and merged-PR settling need time or a forge and are pinned by unit tests; this journey covers the
-// manual overrides, the topbar mirror, and force-reveal end to end.
+const DAY_MS = 24 * 60 * 60_000;
+const PAST_NOTICE_QUIET_MS = 3_000;
+
+function ageWorkspace(id: string, days: number): void {
+	const file = join(E2E_DATA_DIR, "workspaces.json");
+	const rows = JSON.parse(readFileSync(file, "utf8")) as Workspace[];
+	const row = rows.find((candidate) => candidate.id === id);
+	if (!row) throw new Error(`workspace ${id} is not persisted`);
+	row.lastActiveAt = Date.now() - days * DAY_MS;
+	writeFileSync(file, JSON.stringify(rows));
+}
+
+// The Settled shelf: quiet workspaces leave the live list for a collapsed group under the project.
+// Merged-PR settling needs a forge and is pinned by unit tests; idle settling is staged by ageing a
+// persisted record. These journeys cover the manual overrides, the topbar mirror, force-reveal, and the
+// one-time first-move notice end to end.
 
 test("a workspace settles by hand and comes back with Keep active", async ({ page }, testInfo) => {
 	await openFixtureProject(page);
@@ -57,6 +77,34 @@ test("a workspace settles by hand and comes back with Keep active", async ({ pag
 		"data-active",
 		"true",
 	);
+});
+
+test("the shelf's first automatic move is announced once, and Show opens it", async ({ page }) => {
+	await openFixtureProject(page);
+	const quiet = await createWorkspaceViaDialog(page);
+	await createWorkspaceViaDialog(page);
+	ageWorkspace(quiet.id, 30);
+	await page.reload();
+	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+
+	const shelf = page.getByTestId("settled-shelf");
+	await expect(shelf).toHaveAttribute("data-count", "1");
+	await expect(shelf).toHaveAttribute("data-expanded", "false");
+	const notice = page
+		.getByTestId("toast")
+		.filter({ hasText: "Moved 1 quiet workspace to Settled" });
+	await expect(notice).toBeVisible();
+	await notice.getByTestId("toast-action").click();
+	await expect(shelf).toHaveAttribute("data-expanded", "true");
+	const idleRow = page.locator('[data-testid="workspace-item"][data-settled="idle"]');
+	await expect(idleRow).toHaveCount(1);
+	await expect(idleRow.getByTestId("workspace-settled-reason")).toHaveText("idle 4w");
+
+	await page.reload();
+	await expect(shelf).toHaveAttribute("data-count", "1");
+	await page.waitForTimeout(PAST_NOTICE_QUIET_MS);
+	await expect(page.getByTestId("toast").filter({ hasText: "quiet workspace" })).toHaveCount(0);
+	await expect(shelf).toHaveAttribute("data-expanded", "false");
 });
 
 test("a pre-v78 host keeps the legacy workspace list without shelf affordances", async ({

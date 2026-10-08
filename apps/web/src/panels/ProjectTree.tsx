@@ -56,6 +56,7 @@ import {
 	SETTLED_SHELF_PAGE,
 	type SettledReason,
 	selectActiveWorkspaceProjectId,
+	selectAutoSettledCounts,
 	selectProjectIsRunning,
 	selectProjectNeedsAttention,
 	selectWorkspaceIsRunning,
@@ -73,6 +74,11 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { ExistingWorktreeDialog } from "./ExistingWorktreeDialog";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
 import { RemoveWorkspaceDialog } from "./RemoveWorkspaceDialog";
+import {
+	announceSettledShelf,
+	SETTLED_NOTICE_QUIET_MS,
+	settledShelfNoticed,
+} from "./settledShelfNotice";
 import { useOpenProject } from "./useOpenProject";
 import {
 	canRenameWorkspace,
@@ -175,6 +181,15 @@ export function ProjectTree() {
 		store.toggleSettledShelf(activeProjectId, true);
 		store.showMoreSettled(activeProjectId, activeSettledIndex + 1);
 	}, [activeProjectId, activeSettledIndex]);
+
+	const autoSettledKey = selectAutoSettledCounts(partitionState, now)
+		.map(({ projectId, count }) => `${projectId}:${count}`)
+		.join(",");
+	useEffect(() => {
+		if (autoSettledKey === "" || settledShelfNoticed()) return;
+		const timer = setTimeout(announceSettledShelf, SETTLED_NOTICE_QUIET_MS);
+		return () => clearTimeout(timer);
+	}, [autoSettledKey]);
 
 	const loadWorkspaces = useCallback(async (projectId: string) => {
 		await loadProjectWorkspaces(projectId);

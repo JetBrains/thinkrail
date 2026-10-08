@@ -356,6 +356,22 @@ export function selectWorkspacePartition(
 	return { live: [...defaults, ...live], settled };
 }
 
+/** Per loaded project, the rows the shelf took on its own (PR merged/closed or idle), never ones parked by hand. */
+export function selectAutoSettledCounts(
+	state: PartitionState & { workspaces: Record<string, Workspace[]> },
+	now: number,
+): { projectId: string; count: number }[] {
+	const counts: { projectId: string; count: number }[] = [];
+	for (const [projectId, rows] of Object.entries(state.workspaces)) {
+		const count = rows.filter((workspace) => {
+			const reason = selectWorkspaceSettledReason(state, workspace, now);
+			return reason !== null && reason.kind !== "override";
+		}).length;
+		if (count > 0) counts.push({ projectId, count });
+	}
+	return counts;
+}
+
 export function selectWorkspaceNeedsAttention(
 	state: SessionStateProjection,
 	workspaceId: string,

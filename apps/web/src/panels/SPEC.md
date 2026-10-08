@@ -82,7 +82,14 @@ treatment.
   and on right-click); it is disabled while the row's agent works or a result is unread, absent on Default.
   The partition re-evaluates on the shared 30-second `useNow` clock so idle rows cross the window without
   a click and the rail stays in lockstep with the topbar, and
-  selecting a settled row expands the shelf and pages far enough to show it. Nothing about settling touches
+  selecting a settled row expands the shelf and pages far enough to show it. **The first automatic move
+  is announced once per browser** (`settledShelfNotice`, a host-qualified localStorage flag like the
+  sibling persistence modules): when `selectAutoSettledCounts` first reports rows the shelf took on its
+  own — a merged/closed PR or the idle window, never a row parked by hand — and the count has held still
+  for two seconds (the upgrade backfill lands as a burst of pushes, and the notice should count the
+  burst, not its first row), an info toast reads *Moved N quiet workspaces to Settled*, names the rules,
+  and offers **Show**, which expands those projects and their shelves. Without it, the first launch after
+  an upgrade empties most of a long rail at once with no explanation. Nothing about settling touches
   disk: the shelf is a list state, and each row's own *Remove* stays the only teardown — there is no bulk
   removal yet, because a safe one needs a non-blocking, crash-safe host teardown first (#688). Why this
   shape (recorded once): an explicit-archive-only rail left
