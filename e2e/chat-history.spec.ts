@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, realpathSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, test, type WebSocketRoute } from "@playwright/test";
 import { TodoStore } from "pi-todos/core";
 import {
 	defaultWorkspaceRow,
@@ -404,31 +404,22 @@ test("a client that misses chat deletion while offline reconciles it after recon
 	await expect(page.getByText("offline doomed transcript")).toBeVisible();
 
 	const context2 = await browser.newContext();
-	await context2.addInitScript(() => {
-		const NativeWebSocket = window.WebSocket;
-		class TrackedWebSocket extends NativeWebSocket {
-			constructor(url: string | URL, protocols?: string | string[]) {
-				super(url, protocols);
-				Object.defineProperty(window, "__thinkrailE2eSocket", {
-					configurable: true,
-					value: this,
-				});
-			}
-		}
-		window.WebSocket = TrackedWebSocket;
-	});
 	const page2 = await context2.newPage();
+	let offline = false;
+	let socket: WebSocketRoute | undefined;
+	await page2.routeWebSocket(/\/ws(\?|$)/, async (ws) => {
+		if (offline) return ws.close();
+		socket = ws;
+		ws.connectToServer();
+	});
 	await page2.goto("/");
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await revealFirstProjectWorkspaces(page2);
 	await defaultWorkspaceRow(page2).click();
 	await expect(page2.getByText("offline doomed transcript")).toBeVisible();
 
-	await context2.setOffline(true);
-	await page2.evaluate(() => {
-		const socket = Object.getOwnPropertyDescriptor(window, "__thinkrailE2eSocket")?.value;
-		if (socket instanceof WebSocket) socket.close();
-	});
+	offline = true;
+	await socket?.close();
 	await expect(page2.getByTestId("connection-status")).toHaveAttribute(
 		"data-status",
 		"disconnected",
@@ -444,8 +435,11 @@ test("a client that misses chat deletion while offline reconciles it after recon
 		.click();
 	await expect.poll(() => existsSync(doomed.path)).toBe(false);
 
-	await context2.setOffline(false);
-	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+	await expect(page2.getByText("offline doomed transcript")).toBeVisible();
+	offline = false;
+	await expect(page2.getByTestId("connection-status")).toHaveAttribute("data-status", "connected", {
+		timeout: 15_000,
+	});
 	await expect(page2.locator('[data-testid="editor-tab"][data-kind="chat"]')).toHaveCount(0);
 	await expect(page2.getByTestId("workspace-ready").first()).toBeVisible();
 	await context2.close();
