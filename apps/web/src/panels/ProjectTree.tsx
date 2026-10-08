@@ -71,7 +71,7 @@ import { useOpenProject } from "./useOpenProject";
 import { canRenameWorkspace, workspaceRenameValue } from "./workspaceActions";
 
 const PREWARM_WORKSPACE_LIMIT = 8;
-const CREATE_WORKSPACE_LABEL = `Create workspace (${platformShortcutLabel("N")} or ${platformShortcutLabel("N", { alt: true })})`;
+const CREATE_WORKSPACE_LABEL = `Start work (${platformShortcutLabel("N")} or ${platformShortcutLabel("N", { alt: true })})`;
 
 export function ProjectTree() {
 	const projects = useAppStore((s) => s.projects);
@@ -496,7 +496,7 @@ function ProjectRow({
 						}}
 					>
 						<Plus />
-						Create workspace
+						Start work
 					</ContextMenuItem>
 					<ContextMenuItem
 						data-testid="project-menu-open-existing-worktree"

@@ -31,7 +31,7 @@ treatment.
   **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
   workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
   project `+`** — both are `Button variant="ghost" size="icon"`, so they render identically and their glyphs
-  line up on one vertical axis (both sit at the row's `pr-xs` right edge). The Create workspace `+` carries a
+  line up on one vertical axis (both sit at the row's `pr-xs` right edge). The Start work `+` carries a
   tooltip and accessible name naming the shell's `Mod+N` chord and its `Mod+Alt+N` browser alias through `lib`'s
   `platformShortcutLabel` (see `submodule-web-shell` global chords); the context-menu item stays plain.
   Long names truncate before the count/action; there is deliberately **no visible Close or overflow icon**.
@@ -39,7 +39,7 @@ treatment.
   Right-click opens that PR-#167-styled menu at the pointer without selecting/navigating; a scroll-cancelled
   ~700ms long press is its touch equivalent. With a project-name button focused, the standard Context Menu
   key or Shift+F10 opens the same menu for keyboard-only use; arrow/activate/Escape keys work normally.
-  The menu is neutral: **Plus Create workspace**, **FolderOpen Open existing worktree…**, separator,
+  The menu is neutral: **Plus Start work**, **FolderOpen Open existing worktree…**, separator,
   **X Close project**. Create is exactly the direct `+` flow. Open existing worktree opens the
   `ExistingWorktreeDialog` chooser fed by `workspace.listExisting` (branch + absolute path per row;
   detached-HEAD rows stay visible but disabled); choosing one calls `workspace.openExisting`, then expands
@@ -233,7 +233,16 @@ treatment.
   `defaultBranch: ""`, **never the literal `HEAD`**: a sentinel that named a ref would be believed — the
   dialog would preselect it and persist it as the workspace's `baseBranch`, and that worktree would forever
   diff against its own head. Empty means "unknown", so `create` omits `baseRef` and the host resolves the
-  real branch. **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
+  real branch. Worktree mode also carries a **Name** field (`ws-name`), prefilled from
+  **`workspace.suggestName`** with the host's next free `workspace-N` so the user sees the name they are
+  about to get instead of guessing it. The prefill is a **placeholder, not a choice**: while it is
+  untouched `create` omits `name` entirely — the host allocates the slot and its prompt-driven auto-rename
+  still applies (the naming hint says so, and disappears the moment the field holds an edit) — and once edited
+  the typed name travels with `workspace.create`, which locks it against that rename. Folder mode has no
+  base to pick, so in the picker's slot it shows the same list's
+  **`current`** as a plain "On {branch}" read-out (`ws-current-branch`) — text, not a control, so nothing
+  in that slot invites a click that folder mode cannot honour — the two modes each name the
+  branch the work will land on, one chosen, one reported. **`WelcomePanel`** is the first-touch surface the shell mounts (centered, left-nav beside it) whenever no
 workspace is active. **One hero heading** (`welcome-title`, the topbar's brand styling — accent font,
 `text-primary` — enlarged): the **shown project's name**, or `PRODUCT_NAME` when no project is shown —
 the wordmark is the empty-state identity, a project's own name is the identity once one is open (so no
@@ -296,14 +305,14 @@ skills' (attacker-controlled) names before trust. The full manager (`chat/Skills
 pre-session half of the user's skill settings; the chat header opens the same dialog in workspace mode
 (with Reload).
 
-**`NewWorkspaceDialog`** is the start-working surface: **a target control** (a two-option segment — a
-native radio group, `fieldset` + sr-only `legend` over visually-hidden radio inputs, so assistive tech
-hears one mutually-exclusive choice — both always visible: the two-mode model in one glance) chooses **where** the work runs, and the header is
-**mode-aware** so it always names the operation truthfully: **Isolated workspace** → title **“Create
-workspace”**, description **“A separate checkout on its own new branch. Files, chats, changes, and
-terminals stay scoped to it.”**; **Project folder** → title **“Work in project folder”**, description
-**“Runs directly in your project folder — no isolation. Changes land on the current branch.”** In folder
-mode the base-branch picker and the naming hint are hidden (nothing is created — submit **enters** the
+**`NewWorkspaceDialog`** is the start-working surface. Its title is the **mode-independent** **“Start
+work”** — the window is one surface, so it does not rename itself under the user. Under it, **a target
+control** (a two-option segment — a native radio group, `fieldset` + sr-only `legend` over
+visually-hidden radio inputs, so assistive tech hears one mutually-exclusive choice — both always
+visible: the two-mode model in one glance) chooses **where** the work runs, and the **one-line
+description directly below it** is the only mode-aware prose, stating just the difference: **Isolated
+workspace** → **“A separate git worktree on its own new branch.”**; **Project folder** → **“Your project
+folder itself. No isolation, work lands on the current branch.”** In folder mode the base-branch picker and the naming hint are hidden (nothing is created — submit **enters** the
 project's Default workspace via the shared **`enterDefaultWorkspace`** helper (`defaultWorkspace.ts`:
 `workspace.list` → fold into the store → activate the `kind === "default"` row, one atomic entry — the
 rail's auto-expand follows activation; error toast + `null` if an older host has none — the same helper
@@ -369,7 +378,7 @@ a project picker, the prompt hero, and the reused
   *Trust project* button — the repo's skills stay withheld until granted (`project.setTrust`, which folds the
   updated project back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter submits** (matching the submit button's
   `↵` affordance) and
-  **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active,
+  **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, name?, baseRef })` → set active,
   and the dialog itself expands the project and refreshes its authoritative `workspace.list` (fire-and-forget;
   the `workspace.created` push is not relied on because an unloaded project list drops it) — there is no
   `onCreated` callback, so every mount site (`ProjectTree`, `WelcomePanel`, the shell's keyboard-opened

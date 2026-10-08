@@ -224,6 +224,25 @@ async function diffStats(ws: Workspace): Promise<DiffStats | undefined> {
 	}
 }
 
+export async function suggestWorkspaceName(projectId: string): Promise<string> {
+	const project = openProjectById(projectId);
+	const listed = await gitAsync(project.path, [
+		"for-each-ref",
+		"--format=%(refname)",
+		"refs/heads",
+	]);
+	const branches = new Set(
+		listed.ok ? listed.out.split("\n").map((ref) => ref.slice("refs/heads/".length)) : [],
+	);
+	let n = 1;
+	while (
+		branches.has(`workspace-${n}`) ||
+		existsSync(join(dataDir(), "worktrees", project.slug, `workspace-${n}`))
+	)
+		n += 1;
+	return `workspace-${n}`;
+}
+
 export async function createWorkspace(
 	projectId: string,
 	name?: string,

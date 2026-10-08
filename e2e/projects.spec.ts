@@ -328,7 +328,7 @@ test("project context actions stay compact and close/reopen is lossless across c
 	const closeFromMenu = page.getByTestId("project-menu-close");
 	const menuParts = projectActions.locator('[role="menuitem"], [role="separator"]');
 	await expect(menuParts).toHaveCount(4);
-	await expect(menuParts.nth(0)).toHaveText("Create workspace");
+	await expect(menuParts.nth(0)).toHaveText("Start work");
 	await expect(menuParts.nth(1)).toHaveText("Open existing worktree…");
 	await expect(menuParts.nth(2)).toHaveAttribute("role", "separator");
 	await expect(menuParts.nth(3)).toHaveText("Close project");

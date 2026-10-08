@@ -126,7 +126,6 @@ test("host-owned new-chat defaults are pinned to v72", () => {
 });
 
 test("picker metadata and host-kept favorites/recents are pinned to v77", () => {
-	expect(PROTOCOL_VERSION).toBe(77);
 	expect(MODEL_PICKER_PROTOCOL_VERSION).toBe(77);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(MODEL_PICKER_PROTOCOL_VERSION);
 	expect(DEFAULT_CONFIG.favoriteModels).toEqual([]);
@@ -268,4 +267,9 @@ test("chat resources introduce scoped reads and cancellation, never browser comm
 	expect(WS_METHODS.subagentStop).toBe("subagent.stop");
 	expect(WS_METHODS.subagentStopAll).toBe("subagent.stopAll");
 	expect(Object.values(WS_METHODS)).not.toContain("backgroundCommand.start");
+});
+
+test("the workspace-name suggestion advances the additive wire shape to v78", () => {
+	expect(PROTOCOL_VERSION).toBe(78);
+	expect(WS_METHODS.workspaceSuggestName).toBe("workspace.suggestName");
 });

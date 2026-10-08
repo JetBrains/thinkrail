@@ -187,6 +187,7 @@ import {
 	setWorkspaceDiffBase,
 	setWorkspaceSkillOverride,
 	setWorkspaceSubagentsOverride,
+	suggestWorkspaceName,
 	workspaceDiffStats,
 } from "../workspaces";
 import { ackSend } from "./ackSend";
@@ -441,6 +442,9 @@ const handlers: Record<string, Handler> = {
 			),
 		);
 	},
+	"workspace.suggestName": async (params) => ({
+		name: await suggestWorkspaceName((params as { projectId: string }).projectId),
+	}),
 	"workspace.listExisting": (params) =>
 		listExistingWorktrees((params as { projectId: string }).projectId),
 	"workspace.openExisting": async (params) => {
