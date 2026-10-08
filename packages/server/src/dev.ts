@@ -1,11 +1,7 @@
 import type { Provider } from "@earendil-works/pi-ai";
 import type { OAuthCredentials, OAuthLoginCallbacks } from "@earendil-works/pi-ai/oauth";
-import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { configurePiRuntimeGenerationInitializer } from "./agent";
-import { initializeJbcentralRuntime } from "./auth";
 import { bootHost } from "./host";
-
-resolveShellEnv();
 
 if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 	const fakeOauth = {
@@ -82,8 +78,6 @@ if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 		runtime.registerNativeProvider(fakeApiKeyProvider);
 	});
 }
-
-await initializeJbcentralRuntime();
 
 const host = process.env.THINKRAIL_HOST ?? "localhost";
 const staticDir = process.env.THINKRAIL_STATIC_DIR;
