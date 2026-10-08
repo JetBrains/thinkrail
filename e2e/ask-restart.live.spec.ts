@@ -25,7 +25,7 @@ import {
 	restoreStagedCentralArtifact,
 	waitForCentralTarget,
 } from "./fixtures/centralAgent";
-import { hermeticE2ePath, resolveBunExecutable } from "./fixtures/executables";
+import { hermeticE2ePath, hermeticE2eShell, resolveBunExecutable } from "./fixtures/executables";
 import { gitQuiet } from "./fixtures/git";
 import {
 	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
@@ -106,6 +106,7 @@ async function startHost(): Promise<void> {
 			PI_CODING_AGENT_DIR: AGENT_DIR,
 			PI_OFFLINE: "1",
 			PATH: hostPath,
+			SHELL: hermeticE2eShell(E2E_FAKE_BIN_DIR),
 			CENTRAL_STUB_STATE: CENTRAL_STATE,
 			CENTRAL_STUB_LOG: CENTRAL_LOG,
 			CENTRAL_STUB_EXTENSION_SOURCE: E2E_CENTRAL_EXTENSION_SOURCE,

@@ -297,10 +297,14 @@ Every concurrent lane derives a distinct data dir, HOME, pi-agent dir, fixture r
 desktop cache/state plus ready/control files, Playwright transform cache, restart artifacts,
 picker/editor/provider control files, host/restart/binary/desktop ports, and Central fixture artifacts. The
 transform cache is lane-local because Playwright's shared cache assumes a single runner process; sharing it
-lets a cold shard consume another shard's partially written transform. The lane's fake executable directory
-lives under `.bun/bin`: this intentionally marks the injected, hermetic host `PATH` as complete to
-`resolveShellEnv()`, preventing login-shell repair from replacing the Central/editor stubs with
-developer-machine executables. Folder selection comes from one picker control file across the source,
+lets a cold shard consume another shard's partially written transform. Every host (source, binary, desktop,
+and the restart spec's own) receives `SHELL` pointing at the lane's fixture `login-shell` next to the
+Central/editor stubs: `resolveShellEnv()` always probes the login shell at boot and merges its PATH in, so the
+fixture answers the probe (`-c env -0`) with the same hermetic PATH the host was given and otherwise execs
+the runner's real shell, keeping terminal specs on a genuine shell. Without it the probe would merge
+developer-machine directories into the hermetic PATH and a spec could reach a real `central`, `pi`, or
+editor. (The `.bun/bin` directory name is historical: it once marked the PATH as complete to a short-circuit
+that no longer exists.) Folder selection comes from one picker control file across the source,
 binary, and desktop hosts: plain content returns a path and an `error:<message>` directive forces a
 platform-independent failure. The source host also receives empty `DISPLAY` and `WAYLAND_DISPLAY`, so a
 broken control cannot reach a developer's Linux display; native Linux preflight stays unit-covered. Port

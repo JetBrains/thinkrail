@@ -14,6 +14,7 @@ import {
 	waitForCentralTarget,
 	writeE2eAgentSettings,
 } from "./fixtures/centralAgent";
+import { writeHermeticE2eShell } from "./fixtures/executables";
 import {
 	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
 	E2E_CENTRAL_EXTENSION_SOURCE,
@@ -70,6 +71,7 @@ export default function globalSetup(config?: FullConfig): void | Promise<void> {
 			copyFileSync(new URL(`./fixtures/bin/${command}`, import.meta.url), target);
 			chmodSync(target, 0o755);
 		}
+		writeHermeticE2eShell(E2E_FAKE_BIN_DIR, process.env.SHELL ?? "/bin/bash");
 		copyFileSync(
 			new URL("./fixtures/central-extension.ts.fixture", import.meta.url),
 			E2E_CENTRAL_EXTENSION_SOURCE,
