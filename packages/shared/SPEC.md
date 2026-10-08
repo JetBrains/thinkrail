@@ -203,8 +203,11 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 ## Get right (shellEnv)
 
 - Runs **once at startup, before creating any `AgentSession`**.
-- No-op on win32, or when PATH already contains a user dir (`/.nvm/`, `/homebrew/`, `/usr/local/bin`,
-  `/.bun/`) — `pathLooksComplete()`.
+- No-op on win32, or when PATH already contains a user dir (`/.nvm/`, `/homebrew/`, `/.bun/`) —
+  `pathLooksComplete()`. A marker must be absent from the OS default PATH, or the probe never runs:
+  `/usr/local/bin` was once a marker, but it heads macOS `/etc/paths` and so is in every GUI-launched
+  process, which left Dock-launched hosts without Homebrew/bun for every session (`command not found`,
+  failing git hooks, subagents) while the check reported the PATH complete.
 - Else spawn a login shell `[$SHELL||/bin/zsh, -l, -i, -c, env -0]` (retry without `-i` on non-zero exit),
   5s timeout, parse the `\0`-separated entries, overwrite `process.env.PATH`. Never throws — on any
   failure it leaves PATH untouched.
