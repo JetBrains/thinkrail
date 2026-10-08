@@ -130,14 +130,14 @@ function assertTerminalTitle(title: string): void {
 	if (!isValidTerminalTitle(title)) throw new Error("Invalid terminal title");
 }
 
-const MAX_TERMINAL_GRID_DIMENSION = 32_767;
+const TERMINAL_GRID_DIMENSION = { min: 1, max: 32_767 } as const;
 
 function assertTerminalGridDimension(value: unknown): void {
 	if (
 		typeof value !== "number" ||
 		!Number.isInteger(value) ||
-		value < 1 ||
-		value > MAX_TERMINAL_GRID_DIMENSION
+		value < TERMINAL_GRID_DIMENSION.min ||
+		value > TERMINAL_GRID_DIMENSION.max
 	) {
 		throw new Error("Invalid terminal size");
 	}
