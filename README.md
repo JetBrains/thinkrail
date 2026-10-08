@@ -14,7 +14,7 @@ create the tools it needs based on how you actually work.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/readme-assets/workbench-dark.png">
-  <img src=".github/readme-assets/workbench-light.png" alt="ThinkRail workbench: worktree workspaces in the left rail, a finished pi conversation with its tool steps in the center, the resulting diff beside it, and the Specs tree and Changes list on the right" width="900">
+  <img src=".github/readme-assets/workbench-light.png" alt="ThinkRail workbench: worktree workspaces in the left rail with quiet ones folded into a Settled shelf, a finished pi conversation with its tool steps in the center, the resulting diff beside it, and the Specs tree and Changes list on the right" width="900">
 </picture>
 
 *A `pi` session and the change it made, scoped to an isolated git-worktree workspace.*
@@ -24,7 +24,9 @@ create the tools it needs based on how you actually work.
 - **Isolated workspaces.** Open any git repo as a project and cut workspaces from it as `git worktree`s,
   each with its own branch and working directory. Agents work in parallel without touching your
   checkout; merge the good branch, delete the rest. You can also attach existing worktrees or explicitly
-  work in the project folder itself.
+  work in the project folder itself. Finished and dormant workspaces settle onto a per-project shelf on
+  their own — when their pull request merges or closes, or after a quiet week — and come back the moment
+  you work in them.
 - **A real IDE around the agent.** A splittable workbench of Monaco editor tabs, a live git Changes view,
   terminals, and documents — all scoped to the active workspace. Leave anchored review comments on files
   and diffs and send them to a chat as structured context, or open the worktree in your installed IDE.
