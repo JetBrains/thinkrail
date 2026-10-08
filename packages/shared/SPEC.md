@@ -204,10 +204,11 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 
 - Runs **once at startup, before creating any `AgentSession`**.
 - No-op on win32 (GUI processes already inherit the registry PATH). Elsewhere it **always** probes: spawn
-  a login shell `[$SHELL||/bin/zsh, -l, -i, -c, env -0]` (retry without `-i` on non-zero exit), 5s
-  timeout, parse the `\0`-separated entries, then `mergePath(current, login)` — the login PATH, preceded by
-  the current entries it lacks (an activated venv, `nix develop`, direnv) so a terminal launch keeps its
-  explicit additions ahead. Never throws — on any failure it leaves PATH untouched.
+  a login shell `[$SHELL||/bin/zsh, -l, -i, -c, env -0]` (retry without `-i` on non-zero exit) with PATH
+  reset to the OS base dirs (so rc files compute their canonical PATH instead of layering onto whatever
+  the launcher passed), 5s timeout, parse the `\0`-separated entries, then `mergePath(current, login)` —
+  the login PATH, preceded by the current entries it lacks (an activated venv, `nix develop`, direnv) so a
+  terminal launch keeps its explicit additions ahead. Never throws — on any failure it leaves PATH untouched.
 - There is no "PATH already looks complete" short-circuit. One existed, keyed on user-dir markers, and
   `/usr/local/bin` was among them; it heads macOS `/etc/paths` and every Linux default PATH, so the probe
   never ran for Dock-launched hosts and every session lost Homebrew/bun (`command not found`, failing git

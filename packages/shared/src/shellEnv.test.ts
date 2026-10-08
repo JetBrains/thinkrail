@@ -56,12 +56,15 @@ test("resolveShellEnv adopts the login shell PATH from the launchd default", () 
 	expect(process.env.PATH).toBe(`/Users/x/.pi/agent/bin:${LOGIN_PATH}`);
 });
 
-test("resolveShellEnv keeps a terminal's extra PATH entries in front", () => {
+test("resolveShellEnv probes from a base PATH and keeps a terminal's extras in front", () => {
+	fakeShell(`printf 'PATH=/Users/x/.local/bin:%s\\0' "$PATH"`);
 	process.env.PATH = `/work/.venv/bin:${LOGIN_PATH}`;
 
 	resolveShellEnv();
 
-	expect(process.env.PATH).toBe(`/work/.venv/bin:${LOGIN_PATH}`);
+	expect(process.env.PATH).toBe(
+		"/work/.venv/bin:/opt/homebrew/bin:/Users/x/.bun/bin:/Users/x/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
+	);
 });
 
 test("resolveShellEnv falls back to a non-interactive login shell", () => {

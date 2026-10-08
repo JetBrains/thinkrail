@@ -1,5 +1,7 @@
 import { delimiter } from "node:path";
 
+const PROBE_BASE_PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+
 export function mergePath(current: string, login: string): string {
 	const loginEntries = login.split(delimiter).filter(Boolean);
 	const known = new Set(loginEntries);
@@ -11,6 +13,7 @@ function probeLoginShellPath(shell: string, interactive: boolean): string | null
 	const args = interactive ? ["-l", "-i", "-c", "env -0"] : ["-l", "-c", "env -0"];
 	try {
 		const result = Bun.spawnSync([shell, ...args], {
+			env: { ...process.env, PATH: PROBE_BASE_PATH },
 			timeout: 5000,
 			stdout: "pipe",
 			stderr: "ignore",
