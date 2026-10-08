@@ -67,6 +67,12 @@ function repo(remote: string): string {
 	return cwd;
 }
 
+/** Remote inspection is asynchronous, so a provider call starts some ticks after the lookup does. */
+async function until(condition: () => boolean): Promise<void> {
+	for (let attempt = 0; attempt < 1_000 && !condition(); attempt++) await Bun.sleep(5);
+	if (!condition()) throw new Error("the provider was never asked");
+}
+
 test("recognizes hosted GitHub and GitLab remote URL forms only", () => {
 	expect(providerFromRemoteUrl("https://github.com/acme/app.git")).toBe("github");
 	expect(providerFromRemoteUrl("git@github.com:acme/app.git")).toBe("github");
@@ -75,11 +81,30 @@ test("recognizes hosted GitHub and GitLab remote URL forms only", () => {
 	expect(providerFromRemoteUrl("/tmp/app.git")).toBeNull();
 });
 
-test("prefers the branch push remote", () => {
+test("prefers the branch push remote", async () => {
 	const cwd = repo("https://github.com/acme/app.git");
 	runGit(cwd, "remote", "add", "mirror", "https://gitlab.com/acme/app.git");
 	runGit(cwd, "config", "branch.feature.pushRemote", "mirror");
-	expect(detectReviewProvider(cwd, "feature")).toBe("gitlab");
+	expect(await detectReviewProvider(cwd, "feature")).toBe("gitlab");
+});
+
+test("remote inspection yields to the event loop before the provider is asked", async () => {
+	const cwd = repo("git@github.com:acme/app.git");
+	let ticked = false;
+	let tickedBeforeProvider = false;
+	setTimeout(() => {
+		ticked = true;
+	}, 0);
+	await findBranchReviewOutcomeWithRunner(
+		cwd,
+		"feature",
+		async () => {
+			tickedBeforeProvider = ticked;
+			return { ok: true, out: "[]" };
+		},
+		{ fresh: true },
+	);
+	expect(tickedBeforeProvider).toBe(true);
 });
 
 test("queries an open GitHub PR for the explicit branch, and only that when one exists", async () => {
@@ -319,6 +344,7 @@ test("concurrent and repeated lookups share one provider call", async () => {
 
 	const first = findOpenBranchReviewWithRunner(cwd, "feature", run);
 	const concurrent = findOpenBranchReviewWithRunner(cwd, "feature", run, { fresh: true });
+	await until(() => release !== undefined);
 	expect(calls).toBe(1);
 	release?.();
 	expect(await first).toEqual({ kind: "pull-request", number: 7 });
@@ -370,6 +396,7 @@ test("settled answers expire exactly one TTL after settlement", async () => {
 
 	const pending = findOpenBranchReviewWithRunner(cwd, "feature", run, options);
 	time += OPEN_BRANCH_REVIEW_CACHE_TTL_MS * 2;
+	await until(() => release !== undefined);
 	release?.({ ok: true, out: '[{"number":1}]' });
 	expect((await pending)?.number).toBe(1);
 	time += OPEN_BRANCH_REVIEW_CACHE_TTL_MS - 1;
@@ -389,8 +416,10 @@ test("a superseded lookup cannot overwrite a newer settled answer", async () => 
 	};
 
 	const stale = findOpenBranchReviewWithRunner(cwd, "feature", run);
+	await until(() => releases.length === 1);
 	forgetOpenBranchReview(cwd);
 	const fresh = findOpenBranchReviewWithRunner(cwd, "feature", run);
+	await until(() => releases.length === 2);
 	releases[1]?.({ ok: true, out: '[{"number":2}]' });
 	expect(await fresh).toEqual({ kind: "pull-request", number: 2 });
 	releases[0]?.({ ok: true, out: '[{"number":1}]' });
@@ -408,8 +437,10 @@ test("a superseded lookup joins the newer in-flight generation", async () => {
 	const run = () => new Promise<{ ok: boolean; out: string }>((resolve) => releases.push(resolve));
 
 	const stale = findOpenBranchReviewWithRunner(cwd, "feature", run);
+	await until(() => releases.length === 1);
 	forgetOpenBranchReview(cwd);
 	const fresh = findOpenBranchReviewWithRunner(cwd, "feature", run);
+	await until(() => releases.length === 2);
 	let staleSettled = false;
 	void stale.then(() => {
 		staleSettled = true;

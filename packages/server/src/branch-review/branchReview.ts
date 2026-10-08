@@ -1,5 +1,5 @@
 import type { BranchReviewState, OpenBranchReview } from "@thinkrail/contracts";
-import { git, nonInteractiveGitEnv } from "../git";
+import { gitAsync, nonInteractiveGitEnv } from "../git";
 import { runBounded } from "../subprocess";
 
 const LOOKUP_TIMEOUT_MS = 8_000;
@@ -21,14 +21,19 @@ type ReviewRow = {
 type ParsedReviewRows = { valid: true; rows: ReviewRow[] } | { valid: false };
 const SETTLED_REVIEW_ROW_LIMIT = "5";
 
-function detectReviewProviderResult(cwd: string, branch: string): ProviderDetection {
-	const configured = [
-		git(cwd, ["config", "--get", `branch.${branch}.pushRemote`]).out,
-		git(cwd, ["config", "--get", "remote.pushDefault"]).out,
-		git(cwd, ["config", "--get", `branch.${branch}.remote`]).out,
-	];
-	const listed = git(cwd, ["remote"]);
+function inspect(cwd: string, args: string[]) {
+	return gitAsync(cwd, args, { timeoutMs: LOOKUP_TIMEOUT_MS });
+}
+
+async function detectReviewProviderResult(cwd: string, branch: string): Promise<ProviderDetection> {
+	const [pushRemote, pushDefault, branchRemote, listed] = await Promise.all([
+		inspect(cwd, ["config", "--get", `branch.${branch}.pushRemote`]),
+		inspect(cwd, ["config", "--get", "remote.pushDefault"]),
+		inspect(cwd, ["config", "--get", `branch.${branch}.remote`]),
+		inspect(cwd, ["remote"]),
+	]);
 	if (!listed.ok) return { provider: null, cacheable: false };
+	const configured = [pushRemote.out, pushDefault.out, branchRemote.out];
 	const listedNames = new Set(listed.out.split("\n").filter(Boolean));
 	const names = [...new Set([...configured, "origin", ...listedNames])];
 	let failedListedRemote = false;
@@ -40,7 +45,7 @@ function detectReviewProviderResult(cwd: string, branch: string): ProviderDetect
 			["remote", "get-url", "--push", name],
 			["remote", "get-url", name],
 		]) {
-			const remote = git(cwd, args);
+			const remote = await inspect(cwd, args);
 			if (!remote.ok) continue;
 			resolved = true;
 			const provider = providerFromRemoteUrl(remote.out);
@@ -51,8 +56,11 @@ function detectReviewProviderResult(cwd: string, branch: string): ProviderDetect
 	return { provider: null, cacheable: !failedListedRemote };
 }
 
-export function detectReviewProvider(cwd: string, branch: string): ReviewProvider | null {
-	return detectReviewProviderResult(cwd, branch).provider;
+export async function detectReviewProvider(
+	cwd: string,
+	branch: string,
+): Promise<ReviewProvider | null> {
+	return (await detectReviewProviderResult(cwd, branch)).provider;
 }
 
 export function providerFromRemoteUrl(remoteUrl: string): ReviewProvider | null {
@@ -200,7 +208,7 @@ async function lookupOpenBranchReview(
 	run: CommandRunner,
 ): Promise<LookupResult> {
 	try {
-		const detection = detectReviewProviderResult(cwd, branch);
+		const detection = await detectReviewProviderResult(cwd, branch);
 		const provider = detection.provider;
 		if (!provider) return { value: null, cacheable: detection.cacheable };
 

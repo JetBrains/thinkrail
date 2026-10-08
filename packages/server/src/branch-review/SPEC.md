@@ -31,6 +31,10 @@ contracts spec pins `state` to `WORKSPACE_SETTLE_PROTOCOL_VERSION` and the host 
 ## Boundary
 
 - **Owns:** remote-host detection and bounded, asynchronous CLI lookup returning an `OpenBranchReview` or `null`, plus the short-lived memory of successful lookup answers.
+- **Remote-host detection is asynchronous too.** Its `git config` / `git remote` reads run through
+  `gitAsync` under `LOOKUP_TIMEOUT_MS`, never a synchronous spawn: the host's settled-lifecycle pass runs
+  this lookup for every candidate row every five minutes, and the synchronous reads blocked the whole host
+  (every chat, agent, and terminal) for ~45 ms per row.
 - **The lookup asks the provider for the review's `url` alongside its number** (`gh … --json number,url`;
   GitLab's row carries `web_url`) and puts it on the `OpenBranchReview`. It is not decoration: the client's
   `PR #N` chip is a link only when a url is known, and before this the url existed ONLY in the session that
