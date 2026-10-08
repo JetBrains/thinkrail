@@ -1,4 +1,4 @@
-const USER_PATH_MARKERS = ["/.nvm/", "/homebrew/", "/usr/local/bin", "/.bun/"];
+const USER_PATH_MARKERS = ["/.nvm/", "/homebrew/", "/.bun/"];
 
 export function pathLooksComplete(path: string): boolean {
 	return USER_PATH_MARKERS.some((marker) => path.includes(marker));
