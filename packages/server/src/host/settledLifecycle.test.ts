@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { SessionStateRecord, Workspace } from "@thinkrail/contracts";
+import { SETTLE_IDLE_DAYS, type SessionStateRecord, type Workspace } from "@thinkrail/contracts";
 import { resetConfigCache, updateConfig } from "../settings";
 import {
 	createWorkspace,
@@ -88,7 +88,7 @@ test("review refresh covers live rows every pass and idle rows on a 30-minute pa
 			review: { kind: "pull-request", number: 3, state: "open" },
 			lastActiveAt: now - 40 * DAY_MS,
 		}),
-		row({ id: "idle", lastActiveAt: now - 4 * DAY_MS }),
+		row({ id: "idle", lastActiveAt: now - (SETTLE_IDLE_DAYS.default + 1) * DAY_MS }),
 		row({ id: "fresh", lastActiveAt: now - 1 * DAY_MS }),
 		row({ id: "unstamped" }),
 	];

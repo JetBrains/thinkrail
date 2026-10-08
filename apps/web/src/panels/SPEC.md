@@ -525,9 +525,12 @@ a project picker, the prompt hero, and the reused
   is rendered and highlighted rather than leaving no active row);
   **`WorkspacesSettings`** (the **Workspaces** section, listed only at
   `protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION`) — one `SettingsRadioCards` group, **Settle idle
-  workspaces after**: 1 / 3 (default) / 7 / 14 days / Never, written as `settings.update { settleIdleDays }`
+  workspaces after**: 1 / 3 / 7 (default) / 14 days / Never, written as `settings.update { settleIdleDays }`
   (`null` for Never) and converging through `settings.changed`; a valid host-configured non-preset value
-  leaves the preset cards unselected rather than falsely displaying 3 days. The copy names the three things
+  leaves the preset cards unselected rather than falsely displaying the default. The default is a week, not
+  a long weekend: merged/closed PRs already settle at once, so the idle rule only catches dormant work and
+  errs toward keeping a paused workspace live (a Thursday's work on the shelf by Monday reads as loss, not
+  tidying). The copy names the three things
   that count as activity and the three things that never settle, because the setting is only legible
   together with those rules;
   **`TerminalSettings`** — a **Replayed output** size picker (`store.terminalReplayKb`, five presets from

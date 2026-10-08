@@ -783,11 +783,11 @@ test("stored favorites and recents survive reload while malformed ones fall back
 	expect(getConfig().favoriteModels.map((m) => m.id)).toEqual(["ok"]);
 });
 
-test("the settle idle window defaults to 3 days, accepts null for never, and rejects fractions", () => {
-	expect(DEFAULT_CONFIG.settleIdleDays).toBe(3);
+test("the settle idle window defaults to 7 days, accepts null for never, and rejects fractions", () => {
+	expect(DEFAULT_CONFIG.settleIdleDays).toBe(7);
 	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ settleIdleDays: "soon" }));
 	resetConfigCache();
-	expect(getConfig().settleIdleDays).toBe(3);
+	expect(getConfig().settleIdleDays).toBe(7);
 
 	const before = getConfig();
 	expect(() => updateConfig({ settleIdleDays: 0 })).toThrow(

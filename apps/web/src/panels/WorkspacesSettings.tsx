@@ -15,13 +15,13 @@ const IDLE_CHOICES: readonly SettingsRadioChoice<IdleChoice>[] = [
 	{
 		id: "3",
 		label: "3 days",
-		hint: "default",
 		description: "A long weekend of silence parks a workspace.",
 		testId: "settle-idle-3",
 	},
 	{
 		id: "7",
 		label: "7 days",
+		hint: "default",
 		description: "A week idle before it settles.",
 		testId: "settle-idle-7",
 	},

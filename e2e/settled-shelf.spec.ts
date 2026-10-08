@@ -103,7 +103,7 @@ test("the settle window is a host setting that survives a reload", async ({ page
 	await openFixtureProject(page);
 	await page.getByTestId("open-settings").click();
 	await page.getByTestId("settings-nav-workspaces").click();
-	await expect(page.getByTestId("settle-idle-3")).toHaveAttribute("data-active", "true");
+	await expect(page.getByTestId("settle-idle-7")).toHaveAttribute("data-active", "true");
 	await page.getByTestId("settle-idle-14").click();
 	await expect(page.getByTestId("settle-idle-14")).toHaveAttribute("data-active", "true");
 	await page.reload();

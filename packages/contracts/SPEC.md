@@ -355,7 +355,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   without sending host paths; older hosts retain a global-only fallback. `themeMode` defaults to `"fixed"`
   and no pair, preserving both legacy configs
   and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
-  behavior), overridden only by `Workspace.subagentsOverride`; **`settleIdleDays`** (default `3`, `null` = never; on the wire
+  behavior), overridden only by `Workspace.subagentsOverride`; **`settleIdleDays`** (default `7`, `null` = never; on the wire
   from `WORKSPACE_SETTLE_PROTOCOL_VERSION` = v78) is the idle window after which a quiet workspace settles
   into its project's shelf — a host-wide number because "how long is quiet" is a habit, not a project fact; `agentReviewEnabled` (default `false`, on the
   wire from `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` = v68) gates the worker's in-session `request_review`

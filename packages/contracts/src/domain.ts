@@ -665,7 +665,7 @@ export function isTerminalWindowsShell(value: unknown): value is TerminalWindows
 	return TERMINAL_WINDOWS_SHELLS.some((shell) => shell === value);
 }
 
-export const SETTLE_IDLE_DAYS = { min: 1, max: 365, default: 3 } as const;
+export const SETTLE_IDLE_DAYS = { min: 1, max: 365, default: 7 } as const;
 
 export function isSettleIdleDays(value: unknown): value is number | null {
 	return (

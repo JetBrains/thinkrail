@@ -37,7 +37,7 @@ interval (`1–3600`, default 30), because those values govern host process cade
 ## Boundary
 
 - `settleIdleDays` — the Settled-shelf idle window: a positive integer number of days (clamped to 1…365) or
-  `null` for never; default `3`. Validated like every other known field; a hand-edited non-number falls
+  `null` for never; default `7`. Validated like every other known field; a hand-edited non-number falls
   back to the default rather than disabling settling.
 - **Owns:** cached current `AppConfig`; `getConfig()`; `updateConfig(partial)` (reject a non-object or unknown key → merge → validate known fields → persist → publish the merged `AppConfig` and successful applied `AppConfigUpdate`); line-width and resource-free custom-preset validation/normalization; custom-preset safety caps; `setSettingsPublisher`; and `resetConfigCache` for tests.
 - **Public surface (barrel):** `getConfig`, `updateConfig`, `noteRecentModel`, `setSettingsPublisher`, `SettingsPublisher`, `resetConfigCache`, plus pure custom-preset normalization used by host startup after persistence load.
