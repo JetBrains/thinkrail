@@ -669,6 +669,8 @@ test("max_turns flows from the definition into the run: the cap steers the wrap-
 });
 
 test("a detached run SURVIVES a parent-turn abort (only awaited runs ride the tool signal)", async () => {
+	const ackStarted = deferred();
+	const releaseChild = deferred();
 	fauxA.setResponses([
 		fauxAssistantMessage(
 			fauxToolCall("Agent", {
@@ -677,26 +679,31 @@ test("a detached run SURVIVES a parent-turn abort (only awaited runs ride the to
 				run_in_background: true,
 			}),
 		),
-		async () => {
-			await Bun.sleep(150);
+		async (_context, options) => {
+			ackStarted.resolve();
+			await new Promise((resolve) =>
+				options?.signal?.addEventListener("abort", resolve, { once: true }),
+			);
 			return fauxAssistantMessage("SLOW_ACK");
 		},
 		fauxAssistantMessage("POST_ABORT_COMPLETION"),
 	]);
 	fauxB.setResponses([
 		async () => {
-			await Bun.sleep(250);
+			await releaseChild.promise;
 			return fauxAssistantMessage("SURVIVED");
 		},
 	]);
 
 	const prompted = parent.prompt("Run it, then get interrupted.");
-	await waitFor(() => transcript().includes("in the background:"));
-	await Bun.sleep(30);
+	await ackStarted.promise;
 	await parent.abort();
 	await prompted;
 
 	const child = service.childrenOf(parent.sessionId).at(-1);
+	expect(child?.snapshot?.status).toBe("running");
+	expect(transcript()).not.toContain("SLOW_ACK");
+	releaseChild.resolve();
 	await waitFor(() => child?.snapshot?.status === "completed");
 	expect(child?.snapshot?.finalText).toBe("SURVIVED");
 	await waitFor(() => transcript().includes("POST_ABORT_COMPLETION"));
