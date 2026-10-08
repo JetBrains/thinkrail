@@ -1,7 +1,10 @@
-const USER_PATH_MARKERS = ["/.nvm/", "/homebrew/", "/.bun/"];
+import { delimiter } from "node:path";
 
-export function pathLooksComplete(path: string): boolean {
-	return USER_PATH_MARKERS.some((marker) => path.includes(marker));
+export function mergePath(current: string, login: string): string {
+	const loginEntries = login.split(delimiter).filter(Boolean);
+	const known = new Set(loginEntries);
+	const extras = current.split(delimiter).filter((entry) => entry && !known.has(entry));
+	return [...extras, ...loginEntries].join(delimiter);
 }
 
 function probeLoginShellPath(shell: string, interactive: boolean): string | null {
@@ -38,11 +41,9 @@ function resolveLocale(): void {
 }
 
 function resolvePath(): void {
-	if (pathLooksComplete(process.env.PATH ?? "")) return;
-
 	const shell = process.env.SHELL ?? "/bin/zsh";
-	const path = probeLoginShellPath(shell, true) ?? probeLoginShellPath(shell, false);
-	if (path) process.env.PATH = path;
+	const login = probeLoginShellPath(shell, true) ?? probeLoginShellPath(shell, false);
+	if (login) process.env.PATH = mergePath(process.env.PATH ?? "", login);
 }
 
 function resolveSshAgentSock(): void {
