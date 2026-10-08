@@ -186,6 +186,7 @@ export interface DelegationBindings {
 	scope?: string;
 	modelRuntime?: ModelRuntime | (() => ModelRuntime | Promise<ModelRuntime>);
 	maxConcurrentPerParent?: number;
+	childBaseExtensionFactories?: InlineExtension[];
 	childExtensionFactories?: InlineExtension[];
 	buildChildSettings?: (cwd: string) => SettingsManager;
 }

@@ -758,7 +758,10 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		const settingsManager = bindings.buildChildSettings?.(cwd) ?? SettingsManager.create(cwd);
 		const skills = options.skills ?? [];
 		const systemPrompt = options.systemPrompt;
-		const childFactories = options.extensions === true ? factories : [];
+		const childFactories = [
+			...(bindings.childBaseExtensionFactories ?? []),
+			...(options.extensions === true ? factories : []),
+		];
 		const resourceLoader = new DefaultResourceLoader({
 			cwd,
 			agentDir: getAgentDir(),

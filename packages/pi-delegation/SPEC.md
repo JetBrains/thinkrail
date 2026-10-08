@@ -151,11 +151,10 @@ shutdown release barriers; and finalized outcomes after a shrinking compaction.
   on (PR #303 review finding); absent → the service self-creates one runtime **per parent lineage**
   and caches it until `disposeChildrenOf(parent)` — a service may resolve parents backed by different
   registries, so one mutable fallback must never synchronize provider state across them),
-  `maxConcurrentPerParent`, `childExtensionFactories` (the curated set a child MAY load — decision
-  #25; pi `InlineExtension`s, so an embedder passes bare factories or `{ name, factory }` and keeps
-  the name in pi diagnostics), `buildChildSettings` (an optional embedder hook `(cwd) =>
-  SettingsManager` the core calls to build each child's settings manager — decision #31; absent →
-  the core self-creates one with `SettingsManager.create(cwd)`).
+  `maxConcurrentPerParent`, `childBaseExtensionFactories` (the hook-only set EVERY child loads) and
+  `childExtensionFactories` (the curated set a child MAY load) — both decision #25, both pi
+  `InlineExtension`s, so an embedder passes bare factories or `{ name, factory }` and keeps the name
+  in pi diagnostics — and `buildChildSettings` (decision #31).
 - Storage helpers: `defaultDelegationRoot` / `delegationSessionDir` / `deriveChildSessionFile`
   (post-restart transcript reads) / `DEFAULT_SCOPE`.
 - The contract types themselves (incl. `DelegationError`/`DelegationErrorCode`) — enumerated and
@@ -273,7 +272,8 @@ to treat lifecycle snapshots as terminal authority.
 
 The child's resource loader is **narrow by default**: no discovered extensions, no prompt
 templates, no themes; context files, skills, and the embedder's curated extension set
-(`extensions: true` — decision #25) are explicit `SessionOptions` opt-ins; `systemPrompt` maps to
+(`extensions: true` — decision #25) are explicit `SessionOptions` opt-ins, and only the embedder's
+hook-only base set loads unconditionally (same decision); `systemPrompt` maps to
 `systemPromptOverride`. Model/thinking default to the live parent's current values; `cwd` is the
 parent's. Runtime precedence is parent `modelRuntime` → service `modelRuntime` → cached self-created
 runtime. The self-created path caches a separate runtime and mirrored-registration set per parent
@@ -449,8 +449,14 @@ run-scoped signal. Non-user paths retain their behavior.
     (user round). `SessionOptions.extensions: true` loads exactly
     `DelegationBindings.childExtensionFactories` (pi's loader loads injected factories even under
     `noExtensions` — verified); the `tools` allowlist gates which of the set's tools are callable;
-    children with extensions are bound `mode: "print"` (headless — `ctx.hasUI` false, dialogs
-    skipped). Literal "inherit the parent's extensions" is rejected: interactive tools
+    a child loading any factory is bound `mode: "print"` (headless — `ctx.hasUI` false, dialogs
+    skipped). The one unconditional set is `DelegationBindings.childBaseExtensionFactories`: every
+    child — ordinary or resource, opted in or not — loads it ahead of the curated set. It carries
+    tool-less infrastructure hooks an embedder needs on every child request (ThinkRail: the
+    oversized-image guard, made necessary by decision #31's raw-image settings — PR #657 review:
+    custom agents default to no extensions, so an opt-in guard left them unguarded). A tool
+    registered there would reach children that never opted in, so keeping the set tool-free is the
+    embedder's contract; the core does not police it. Literal "inherit the parent's extensions" is rejected: interactive tools
     (ask_user_question) hang a hidden non-interactive child, and blanket loading multiplies heavy
     extensions per child (gotgenes' documented V8-heap incident class). **Subsessions still ride
     the delegation core** — a subsession IS `createChild({visibility: "listed", interactive: true,
@@ -487,13 +493,10 @@ run-scoped signal. Non-user paths retain their behavior.
     cleared before successor admission, and cancellation spans preflight through terminal settlement.
     Finalized message events supply stop/text evidence; pi persisted-entry stats supply usage deltas.
 31. **Child settings are an embedder-bound infrastructure hook, never a `SessionOptions` mirror**
-    (issue #604). The core assembles each child with `bindings.buildChildSettings?.(cwd) ??
-    SettingsManager.create(cwd)`, so an embedder injects the same settings manager its own sessions
-    use — for ThinkRail, `buildSessionSettings`, which carries the in-memory `images.autoResize:
-    false` override (re-applied after every `settings.reload()`) the single-file binary needs because
-    it ships no photon/WASM resizer. Without it children ran on pi's default settings and every image
-    a child read or received in a tool result was dropped with pi's `[Image omitted: could not be
-    resized below the inline image size limit.]` note in the compiled binary. The hook lives on
-    `DelegationBindings` beside `childExtensionFactories` (not in `SessionOptions`), keeping the
-    firewall of decision #3 — the settings manager stays infrastructure the consumer cannot shape
-    per child.
+    (issue #604). Each child's settings manager is `buildChildSettings(cwd)` when bound, else
+    `SettingsManager.create(cwd)`, so an embedder's children run on the settings its own sessions
+    do. ThinkRail binds `buildSessionSettings`, whose raw-image override is what lets a child's
+    `read` deliver images in the compiled binary (rationale: [[submodule-server-agent]]); unbound,
+    every child `read` of an image there returned pi's `[Image omitted…]` note. The hook sits on
+    `DelegationBindings` beside the factory sets, keeping decision #3's firewall: the settings
+    manager stays infrastructure no consumer shapes per child.
