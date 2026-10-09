@@ -14,6 +14,7 @@ import {
 	useState,
 } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { useShallow } from "zustand/react/shallow";
 import {
 	EMPTY_RUNTIME,
 	selectReadyCompletionActivation,
@@ -171,8 +172,26 @@ const ChatTranscript = forwardRef<
 	},
 	ref,
 ) {
-	const sessionRuntime = useAppStore((s) => s.sessions[sessionId]);
-	const runtime = sessionRuntime ?? EMPTY_RUNTIME;
+	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
+	// Subscribe only to the runtime fields the transcript renders from, so composer keystrokes
+	// (`draft`), stats/model/extUi churn, etc. no longer re-render the transcript subtree.
+	const runtime = useAppStore(
+		useShallow((s) => {
+			const rt = s.sessions[sessionId] ?? EMPTY_RUNTIME;
+			return {
+				turns: rt.turns,
+				toolResults: rt.toolResults,
+				isStreaming: rt.isStreaming,
+				settlementTick: rt.settlementTick,
+				currentAssistantId: rt.currentAssistantId,
+				askAnswers: rt.askAnswers,
+				hostState: rt.hostState,
+				turnIdByMessageIndex: rt.turnIdByMessageIndex,
+				syncedConnectionGeneration: rt.syncedConnectionGeneration,
+				eventRevision: rt.eventRevision,
+			};
+		}),
+	);
 	const status = useAppStore((s) => s.status);
 	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
 	useTranscriptSync({
@@ -181,7 +200,7 @@ const ChatTranscript = forwardRef<
 		runtime,
 		status,
 		connectionGeneration,
-		enabled: sessionRuntime !== undefined,
+		enabled: sessionExists,
 	});
 	const chatLineWidthBounded = useAppStore((state) => state.chatLineWidthBounded);
 	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);
