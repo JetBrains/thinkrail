@@ -822,7 +822,8 @@ contracts only.
   rewrites or deletes repository content the user has not seen (user scope carries no fingerprint). The
   host validates `scope` itself; anything but `user` / `project` is rejected before any path is chosen. `shareWithRepo` refuses when the project file already defines that name or
   holds an override that is not approved at its current fingerprint.
-- `mcp.login` / `mcp.testConnection` return a `loginId` and reuse the `provider.login` frame family
+- `mcp.login` / `mcp.testConnection` check MCP ownership in the same synchronous step that starts the
+  probe, like the mutations; they return a `loginId` and reuse the `provider.login` frame family
   (`LoginPush.target` identifies the server); those pushes reach only the connection that started the
   operation, and a reply or cancel from another connection fails with `LOGIN_NOT_OWNER`. They and
   `mcp.logout` fail with `MCP_HANDLED_ELSEWHERE` where `handledElsewhere` is set, and with an "already

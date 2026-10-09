@@ -184,11 +184,17 @@ export function setProjectMcpOverride(
 	const projects = getProjects();
 	const project = projects.find((p) => p.id === id);
 	if (!project) throw new Error(`Unknown project: ${id}`);
-	const overrides = { ...project.mcpOverrides };
+	const overrides: Record<string, McpProjectOverride> = { ...project.mcpOverrides };
 	if (override === null || (override.enabled === undefined && override.exposure === undefined)) {
 		delete overrides[name];
 	} else {
-		overrides[name] = override;
+		// A server may be named `__proto__`: store it as an own property, never through the prototype.
+		Object.defineProperty(overrides, name, {
+			value: override,
+			enumerable: true,
+			configurable: true,
+			writable: true,
+		});
 	}
 	if (Object.keys(overrides).length === 0) delete project.mcpOverrides;
 	else project.mcpOverrides = overrides;

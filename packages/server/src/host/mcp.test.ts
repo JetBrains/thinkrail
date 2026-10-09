@@ -541,3 +541,24 @@ test("Test connection judges the effective server of a name, not the shadowed on
 	expect(typeof started.loginId).toBe("string");
 	await request("provider.loginCancel", { loginId: started.loginId });
 });
+
+test("a user server named __proto__ keeps its project setting as an own record entry", async () => {
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({ mcpServers: { ["__proto__"]: { url: "https://proto.example/mcp" } } }),
+	);
+	const listed = await request("mcp.setProjectOverride", {
+		workspaceId: "w1",
+		name: "__proto__",
+		enabled: false,
+	});
+	expect(find(listed, "user", "__proto__")).toMatchObject({
+		enabled: false,
+		projectOverride: { enabled: false },
+	});
+	const stored = JSON.parse(readFileSync(join(root, "data", "projects.json"), "utf8"))[0];
+	expect(Object.hasOwn(stored.mcpOverrides, "__proto__")).toBe(true);
+	expect(find(await request("mcp.list", { workspaceId: "w1" }), "user", "__proto__")?.enabled).toBe(
+		false,
+	);
+});
