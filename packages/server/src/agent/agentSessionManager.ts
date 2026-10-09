@@ -100,6 +100,7 @@ import {
 	cancelExtUiForSession,
 	createWebUiContext,
 	notifyExtensionError,
+	notifyExtUi,
 	pendingExtUiDialog,
 	setExtUiStateChanged,
 } from "./webUiContext";
@@ -672,8 +673,15 @@ function reloadBlockedReason(entry: Entry): string | null {
 
 function reconsiderPendingReload(entry: Entry): void {
 	if (!entry.reloadPending || entry.reloadRunning || reloadBlockedReason(entry)) return;
+	const { sessionId } = entry.session;
 	void runGatedReload(entry).catch((error) => {
-		log.warn(`deferred resource reload failed for ${entry.session.sessionId}`, error as Error);
+		log.warn(`deferred resource reload failed for ${sessionId}`, error as Error);
+		if (sessions.get(sessionId) !== entry || entry.disposed) return;
+		notifyExtUi(
+			sessionId,
+			`This chat could not reload its resources after a settings change and still runs with the previous ones — close or reload it. ${(error as Error).message ?? String(error)}`,
+			"error",
+		);
 	});
 }
 
