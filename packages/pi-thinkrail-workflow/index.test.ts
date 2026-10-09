@@ -37,6 +37,7 @@ function loadHandler(): BeforeAgentStartHandler {
 function promptOptions(): NormalizedBuildSystemPromptOptions {
 	return {
 		selectedTools: ["read"],
+		hiddenTools: [],
 		toolSnippets: { read: "Read a file" },
 		toolGuidelines: {},
 		promptGuidelines: [],

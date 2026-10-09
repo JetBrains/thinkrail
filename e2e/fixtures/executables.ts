@@ -1,5 +1,6 @@
 import { chmodSync, existsSync, writeFileSync } from "node:fs";
 import { delimiter, join } from "node:path";
+import { LOGIN_ENV_MARKER } from "@thinkrail/shared/shellEnv";
 
 export function resolveBunExecutable(env: NodeJS.ProcessEnv = process.env): string {
 	const name = process.platform === "win32" ? "bun.exe" : "bun";
@@ -24,7 +25,7 @@ export function writeHermeticE2eShell(fakeBinDir: string, realShell: string): vo
 	const script = [
 		"#!/bin/sh",
 		'case "$*" in',
-		`\t*"-c env -0"*) printf 'PATH=%s\\0' ${shellQuote(hermeticE2ePath(fakeBinDir))}; exit 0 ;;`,
+		`\t*${shellQuote(LOGIN_ENV_MARKER)}*) printf '%sPATH=%s\\0' ${shellQuote(LOGIN_ENV_MARKER)} ${shellQuote(hermeticE2ePath(fakeBinDir))}; exit 0 ;;`,
 		"esac",
 		`exec ${shellQuote(realShell)} "$@"`,
 		"",

@@ -261,7 +261,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `getSessionMessages(sessionId, workspaceId, cwd)` (re-opens a disk session into the manager if
     not live, first resolving any model named by the transcript exactly in the active process runtime and
     rejecting with a closed error when that named model is unavailable—never accepting PI's silent fallback
-    for an existing model reference; legacy transcripts with no persisted model reference may use the
+    for an existing model reference; the one exception is a provider pi renamed (`RENAMED_PI_PROVIDERS`,
+    today `azure-openai-responses` → `azure` from pi 1.0.3), which is retried under its new id with the same
+    model id; legacy transcripts with no persisted model reference may use the
     configured default—then returns `{ summary, messages }` —
     `TranscriptMessage[]`: the pi-canonical subset **plus
     `custom` messages**, which carry the `ask-user-answers` replies the questionnaire card pairs by tool
@@ -617,7 +619,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     the remaining paths: sessions use the provider objects already owned by their retained generation, so
     arbitrary Central factory/errors/UI cannot reach `pi.extensionUi`. The Central identity is always excluded
     from session discovery—even if the global artifact changes—so a session cannot mutate its generation.
-    All other user extensions
+    That explicit path set is **not frozen at construction**: the loader's public `reload()` is wrapped so
+    every reload first re-resolves the set through the host's own `DefaultPackageManager` (current settings,
+    `builtin:*` entries by name so `-builtin:*` is honoured) and mutates the host-owned array pi
+    reads in place, then relabels discovered-path provenance after the load — pi's `extensionsOverride` is
+    not used because it runs after factories have executed. All other user extensions
     retain normal discovery. The loader then adds
     automatic **portable cross-agent skill aliases**, then loads the four bundled pi packages — **`pi-web-access`**
     (`web_search` + `fetch_content`), **`pi-spec-graph`** (the `spec_*`
@@ -740,7 +746,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`
   (unfiltered, the manager's `skills.state`) / `listProjectAliasSkillNames(cwd)` (present-alias count) /
   `isProjectSkillPath(relativePath)` (watch-classification predicate);
-  `reloadSessionResources(sessionId)` (active-chat reload); the **`setSkillAdmissionResolver`** seam (host
+  `reloadSessionResources(sessionId)` (active-chat reload; throws while the reload gate is blocked) +
+  `requestSessionReload(sessionId)` (the deferring variant: `"reloaded"` now or `"deferred"` until the gate
+  opens — settlement, the release of an admitted prompt, or a compaction's end; requests coalesce); the **`setSkillAdmissionResolver`** seam (host
   wires `workspaceId` → the admission context); the subagent-policy seams
   **`setSubagentsEnabledResolver`** + **`refreshSubagentTools`** (host resolves the effective global default
   plus workspace override; manager owns live-session activation timing);
@@ -843,8 +851,10 @@ tail-only restart repair. Resource inspection and cancellation remain available 
 in the existing portable owners. The native `turn_end` result boundary clears the question phase and
 flushes both owners, as do registration, resource reload and deletion rollback. `closeSessionResources` synchronously disposes
 the subagent owner before child cancellation or any await, including preparation failures. Permanent
-closure survives shutdown-budget expiry and suppresses late outcomes even though Pi disposal does not
-emit extension shutdown. The existing cached resource cascade remains the sole teardown owner. Both
+closure survives shutdown-budget expiry and suppresses late outcomes; Pi disposal does not emit extension
+shutdown, so the cascade emits `session_shutdown` itself after the synchronous owner disposal (see
+[Session lifecycle](#session-lifecycle)). The existing cached resource
+cascade remains the sole teardown owner. Both
 SDK creation and entry preparation failures close the owners. A failure after registration also
 removes that exact entry through the normal teardown path, rather than leaving a disposed session
 advertised as live.
@@ -854,6 +864,29 @@ A restarted host has no control handles or retained command output to reconstruc
 `stopAllSubagents` and `setSessionResourcesPublisher` are public only through this module's barrel.
 Its only new external dependency is `pi-background-commands`; there is no `agent` → `terminal`, `subprocess`,
 settings or workspaces edge. The owning parent graph records this package dependency.
+
+## Session lifecycle
+
+- **Lifecycle.** `AgentSession.dispose()` never emits `session_shutdown`, so the resource cascade
+  (`closeSessionResources`) runs `session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" })`
+  itself — synchronously, after the synchronous owner disposal, so handlers have started before the
+  synchronous teardown path disposes the pi session.
+  Every teardown path goes through this cascade: delete/remove, workspace archive/removal, quit
+  (`settleSessionsForShutdown` + `disposeAllSessions`) and a preparation that fails after binding —
+  including one whose registration is refused because the workspace closed or the host began quitting
+  meanwhile. `disposeSession` defers `session.dispose()` until the emission settles or the budget
+  (`SESSION_SHUTDOWN_BUDGET_MS`, 3 s) elapses, and the host shutdown settle budget is that same 3 s.
+  Reloads go through `session.reload()` behind a per-session reload gate: while a reload runs, every
+  admission seam (`promptSession`, `steerSession`, `followUpSession`, `nudgeSession`, queue requeues,
+  `answerQuestion`, `sendReviewFixToSession`, `compactSession`) refuses with "reloading", and completion
+  delivery waits in its owners through `canDeliverCompletion` and flushes afterwards; the gate opens only
+  when pi is `isIdle`, no admitted prompt is still in preflight (the host reserves the window from
+  admission to `agent_start` — pi reports idle there, and a prompt handled as a slash command never starts
+  a run), no queued-message removal is putting the kept messages back (`removeQueuedSession` holds a
+  reservation `agent_start` does not release from its drain to its last requeue, so a run that settles
+  meanwhile cannot start a reload that would refuse — and lose — the rest), and no manual or automatic
+  compaction is in flight; a pending reload is reconsidered at `agent_settled`, on every reservation release
+  and on compaction end / `compactSession`'s `finally`.
 
 ## Get right
 
