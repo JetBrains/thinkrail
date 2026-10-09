@@ -200,6 +200,30 @@ test("a project's committed skills are gated behind trust, then autocomplete", a
 	await expect(worktreeRows(page)).toHaveCount(0);
 });
 
+test("a project whose only gated resources are subagent definitions still asks for trust and names what it loads", async ({
+	page,
+}) => {
+	const definitions = join(E2E_FIXTURE_REPO, ".pi", "agents");
+	mkdirSync(definitions, { recursive: true });
+	writeFileSync(
+		join(definitions, "e2e-definer.md"),
+		"---\nname: e2e-definer\ndescription: Repo-defined agent\n---\n\nDefine things.\n",
+	);
+	try {
+		await openFixtureProject(page);
+		await page.getByTestId("add-workspace").first().click();
+		const dialog = page.getByTestId("new-workspace-dialog");
+		const notice = dialog.getByTestId("ws-trust-notice");
+		await expect(notice).toContainText("1 skill and its own pi resources");
+		await expect(notice).toContainText("subagent definitions");
+
+		await dialog.getByTestId("ws-trust-project").click();
+		await expect(notice).toBeHidden();
+	} finally {
+		rmSync(join(E2E_FIXTURE_REPO, ".pi"), { recursive: true, force: true });
+	}
+});
+
 test("the start prompt shares template completion and slot behavior without live-only commands", async ({
 	page,
 }) => {

@@ -72,6 +72,7 @@ import {
 	setSessionManagerFactory,
 	setSessionProjectResolver,
 	setSessionPublisher,
+	setSkillAdmissionResolver,
 	setSubagentsEnabledResolver,
 	settleSessionsForShutdown,
 	steerSession,
@@ -79,6 +80,7 @@ import {
 } from "./agentSessionManager";
 import { ASK_ACK_TEXT, ASK_STOPPED_ERROR, assessAnswerability } from "./askUserQuestion";
 import { configurePiRuntime } from "./piRuntime";
+import { admissionContextFor } from "./skillAdmission";
 import { setExtUiPublisher } from "./webUiContext";
 
 function modelDef(id: string) {
@@ -301,6 +303,7 @@ beforeAll(async () => {
 	configurePiRuntime(runtime);
 	setSessionManagerFactory(() => SessionManager.inMemory());
 	setSessionProjectResolver((workspaceId) => `project-${workspaceId}`);
+	setSkillAdmissionResolver(() => admissionContextFor({ piResourceTrust: "granted" }));
 	setSessionPublisher(({ sessionId, event }) => {
 		const list = events.get(sessionId) ?? [];
 		list.push(event);
@@ -310,6 +313,7 @@ beforeAll(async () => {
 
 afterAll(() => {
 	disposeAllSessions();
+	setSkillAdmissionResolver(() => admissionContextFor(undefined));
 	for (const dir of tmpDirs) rmSync(dir, { recursive: true, force: true });
 	if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 	else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
@@ -984,10 +988,14 @@ test("disabling an idle parent lets its running background child finish and deli
 	}
 });
 
-test("buildSessionSettings disables image autoResize, and the override survives a settings.reload()", async () => {
-	const settings = buildSessionSettings(tmpCwd("trpi-settings-"));
+test("buildSessionSettings disables image autoResize, and the override survives a settings.reload() and a trust change", async () => {
+	const settings = buildSessionSettings(tmpCwd("trpi-settings-"), false);
 	expect(settings.getImageAutoResize()).toBe(false);
+	expect(settings.isProjectTrusted()).toBe(false);
 	await settings.reload();
+	expect(settings.getImageAutoResize()).toBe(false);
+	settings.setProjectTrusted(true);
+	expect(settings.isProjectTrusted()).toBe(true);
 	expect(settings.getImageAutoResize()).toBe(false);
 });
 

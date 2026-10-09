@@ -71,6 +71,7 @@ test("a session loader excludes an opaque generation artifact but preserves othe
 			SettingsManager.create(root, agentDir, { projectTrusted: true }),
 			() => ({
 				trusted: true,
+				piResourceTrusted: true,
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: [],
@@ -117,6 +118,7 @@ test("an excluding session loader re-resolves its extension set on every reload 
 			SettingsManager.create(root, agentDir, { projectTrusted: true }),
 			() => ({
 				trusted: true,
+				piResourceTrusted: true,
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: [],

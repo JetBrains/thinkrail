@@ -43,6 +43,7 @@ export {
 	preparePiRuntimeGeneration,
 	settledAvailableModels,
 } from "./piRuntime";
+export { piProjectTrustDecision, projectTrustSummary } from "./projectTrust";
 export { describeProviderAuth, type ProviderAuthFacts } from "./providerAuth";
 export {
 	REQUEST_REVIEW_TOOL_NAME,
@@ -58,7 +59,12 @@ export {
 } from "./reviewTool";
 export * from "./sessionRepair";
 export * from "./sessionState";
-export type { SkillAdmissionContext, SkillDecision, SkillFacts } from "./skillAdmission";
+export {
+	admissionContextFor,
+	type SkillAdmissionContext,
+	type SkillDecision,
+	type SkillFacts,
+} from "./skillAdmission";
 export { isProjectSkillPath } from "./skillSources";
 export {
 	SET_TITLE_TOOL_NAME,

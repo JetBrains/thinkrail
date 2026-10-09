@@ -154,7 +154,10 @@ shutdown release barriers; and finalized outcomes after a shrinking compaction.
   `maxConcurrentPerParent`, `childBaseExtensionFactories` (the hook-only set EVERY child loads) and
   `childExtensionFactories` (the curated set a child MAY load) — both decision #25, both pi
   `InlineExtension`s, so an embedder passes bare factories or `{ name, factory }` and keeps the name
-  in pi diagnostics — and `buildChildSettings` (decision #31).
+  in pi diagnostics — `buildChildSettings` (decision #31), and `projectTrusted` (`(cwd) => boolean`,
+  asked once per child for the pi-level project trust its settings manager receives; hosts own trust,
+  so a child never loads more of the project than its parent — ThinkRail passes the workspace's
+  `Project.piResourceTrust`; absent → trusted, pi's own `SettingsManager` default).
 - Storage helpers: `defaultDelegationRoot` / `delegationSessionDir` / `deriveChildSessionFile`
   (post-restart transcript reads) / `DEFAULT_SCOPE`.
 - The contract types themselves (incl. `DelegationError`/`DelegationErrorCode`) — enumerated and
@@ -494,10 +497,11 @@ run-scoped signal. Non-user paths retain their behavior.
     cleared before successor admission, and cancellation spans preflight through terminal settlement.
     Finalized message events supply stop/text evidence; pi persisted-entry stats supply usage deltas.
 31. **Child settings are an embedder-bound infrastructure hook, never a `SessionOptions` mirror**
-    (issue #604). Each child's settings manager is `buildChildSettings(cwd)` when bound, else
-    `SettingsManager.create(cwd)`, so an embedder's children run on the settings its own sessions
-    do. ThinkRail binds `buildSessionSettings`, whose raw-image override is what lets a child's
-    `read` deliver images in the compiled binary (rationale: [[submodule-server-agent]]); unbound,
-    every child `read` of an image there returned pi's `[Image omitted…]` note. The hook sits on
-    `DelegationBindings` beside the factory sets, keeping decision #3's firewall: the settings
-    manager stays infrastructure no consumer shapes per child.
+    (issue #604). Each child's settings manager is `buildChildSettings(cwd, projectTrusted)` when
+    bound, else `SettingsManager.create(cwd, undefined, { projectTrusted })`, with `projectTrusted`
+    the binding's answer for that child, so an embedder's children run on the settings and trust its
+    own sessions do. ThinkRail binds `buildSessionSettings`, whose raw-image override is what lets a
+    child's `read` deliver images in the compiled binary (rationale: [[submodule-server-agent]]);
+    unbound, every child `read` of an image there returned pi's `[Image omitted…]` note. The hook
+    sits on `DelegationBindings` beside the factory sets, keeping decision #3's firewall: the
+    settings manager stays infrastructure no consumer shapes per child.

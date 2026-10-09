@@ -502,6 +502,7 @@ export function setSessionManagerFactory(factory: (cwd: string) => SessionManage
 
 let skillAdmissionResolver: (workspaceId: string) => SkillAdmissionContext = () => ({
 	trusted: false,
+	piResourceTrusted: false,
 	acknowledged: [],
 	disabled: [],
 	disabledGroups: [],
@@ -511,6 +512,10 @@ export function setSkillAdmissionResolver(
 	resolver: (workspaceId: string) => SkillAdmissionContext,
 ): void {
 	skillAdmissionResolver = resolver;
+}
+
+export function piResourceTrustFor(workspaceId: string): boolean {
+	return skillAdmissionResolver(workspaceId).piResourceTrusted;
 }
 
 let subagentsEnabledResolver: (workspaceId: string) => boolean = () => true;
@@ -711,15 +716,42 @@ function releasePreflights(entry: Entry): void {
 
 const SESSION_SETTINGS_OVERRIDES = { images: { autoResize: false } };
 
-export function buildSessionSettings(cwd: string): SettingsManager {
-	const settings = SettingsManager.create(cwd, undefined, { projectTrusted: true });
+export function buildSessionSettings(cwd: string, projectTrusted: boolean): SettingsManager {
+	const settings = SettingsManager.create(cwd, undefined, { projectTrusted });
 	const reload = settings.reload.bind(settings);
 	settings.reload = async () => {
 		await reload();
 		settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
 	};
+	const setProjectTrusted = settings.setProjectTrusted.bind(settings);
+	settings.setProjectTrusted = (trusted) => {
+		setProjectTrusted(trusted);
+		settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
+	};
 	settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
 	return settings;
+}
+
+export async function applyPiResourceTrust(
+	workspaceIds: readonly string[],
+): Promise<Record<string, SessionReloadDisposition>> {
+	const scope = new Set(workspaceIds);
+	const stale = [...sessions].filter(
+		([, entry]) =>
+			scope.has(entry.workspaceId) &&
+			!entry.disposed &&
+			!entry.resourcesClosing &&
+			entry.session.settingsManager.isProjectTrusted() !== piResourceTrustFor(entry.workspaceId),
+	);
+	const dispositions: Record<string, SessionReloadDisposition> = {};
+	for (const [sessionId] of stale) {
+		try {
+			dispositions[sessionId] = await requestSessionReload(sessionId);
+		} catch (error) {
+			log.warn(`trust reload failed for ${sessionId}`, error as Error);
+		}
+	}
+	return dispositions;
 }
 
 export interface CreateSessionInput {
@@ -1008,7 +1040,10 @@ async function registerSession(
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
 	const lifecycleToken = captureWorkspaceLifecycle(input.workspaceId);
 	const generation = await getPiRuntimeGeneration();
-	const settingsManager = buildSessionSettings(input.cwd);
+	const settingsManager = buildSessionSettings(
+		input.cwd,
+		skillAdmissionResolver(input.workspaceId).piResourceTrusted,
+	);
 	let model: Model<string> | undefined;
 	if (input.model) {
 		try {
@@ -1525,7 +1560,10 @@ async function openDiskSession(
 	if (!info) throw new Error(`Unknown session: ${sessionId}`);
 	if (sessions.has(sessionId)) return;
 	const generation = await getPiRuntimeGeneration();
-	const settingsManager = buildSessionSettings(cwd);
+	const settingsManager = buildSessionSettings(
+		cwd,
+		skillAdmissionResolver(workspaceId).piResourceTrusted,
+	);
 	const sessionManager = SessionManager.open(info.path);
 	const persistedModel = persistedSessionModelRef(sessionManager.buildSessionContext().model);
 	let exactModel: Model<string> | undefined;

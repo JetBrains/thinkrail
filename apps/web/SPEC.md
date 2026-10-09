@@ -124,7 +124,7 @@ compilation of the chat/shell hot paths does not imply coverage of every file/di
   image diff's `ImageContent`, `ImageView`, `PdfView`, `usePdfDocument`.
 - try/finally: `PlanPane` (also a throw inside try), `PlanComposer`, `ReviewPanel`, `SendButtonBase`,
   `NewWorkspaceDialog`, `SkillsDialog`, `TemplateEditorDialog`, `JetBrainsAiCard`, `ProvidersSettings`,
-  `ModelsSettings`, `GithubSettings`, `LayoutSettings`, `ProjectSkillsNotice`, `StarterTemplatesOffer`.
+  `ModelsSettings`, `GithubSettings`, `LayoutSettings`, `ProjectTrustNotice`, `StarterTemplatesOffer`.
 - try without catch: `usePromptImages`, `LineWidthControl`.
 - Manual memo dependencies cannot be preserved: `CsvDiff`, `JsonDiff`, `NotebookDiffSurface`, `PdfDiff`.
 - Other: `useLiveTabContent` (`??=`), `useAnalyticsConsent` (a callback that calls itself), `TemplateRow`

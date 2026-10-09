@@ -3,6 +3,7 @@ import { decideSkill, isSkillLoaded, type SkillAdmissionContext } from "./skillA
 
 const EMPTY: SkillAdmissionContext = {
 	trusted: false,
+	piResourceTrusted: false,
 	acknowledged: [],
 	disabled: [],
 	disabledGroups: [],
@@ -80,6 +81,7 @@ describe("decideSkill — the trust gate is checked before the toggle layer (saf
 		expect(
 			decideSkill(alias("deploy"), {
 				trusted: true,
+				piResourceTrusted: true,
 				acknowledged: ["deploy"],
 				disabled: [],
 				disabledGroups: [],

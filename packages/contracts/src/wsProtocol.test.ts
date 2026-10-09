@@ -25,6 +25,7 @@ import {
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
+	PROJECT_TRUST_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
@@ -137,8 +138,8 @@ test("host-owned new-chat defaults are pinned to v72", () => {
 });
 
 test("per-turn change sets, the turn diff scope and the turn.changed push are pinned to v80", () => {
-	expect(PROTOCOL_VERSION).toBe(80);
 	expect(TURN_CHANGES_PROTOCOL_VERSION).toBe(80);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(TURN_CHANGES_PROTOCOL_VERSION);
 	expect(WS_METHODS.workspaceTurns).toBe("workspace.turns");
 	expect(WS_CHANNELS.turnChanged).toBe("turn.changed");
 });
@@ -176,6 +177,13 @@ test("picker metadata and host-kept favorites/recents are pinned to v77", () => 
 	expect(DEFAULT_CONFIG.favoriteModels).toEqual([]);
 	expect(DEFAULT_CONFIG.recentModels).toEqual([]);
 	expect(RECENT_MODELS_LIMIT).toBe(5);
+});
+
+test("the project trust summary and pi-level resource consent are pinned to v81", () => {
+	expect(PROTOCOL_VERSION).toBe(81);
+	expect(PROJECT_TRUST_PROTOCOL_VERSION).toBe(81);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_TRUST_PROTOCOL_VERSION);
+	expect(WS_METHODS.projectTrustSummary).toBe("project.trustSummary");
 });
 
 test("rich review anchors advance the additive selector union to v74", () => {

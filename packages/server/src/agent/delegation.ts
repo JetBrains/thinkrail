@@ -20,6 +20,7 @@ import {
 	buildSessionSettings,
 	canUseSessionResources,
 	liveParentContext,
+	piResourceTrustFor,
 } from "./agentSessionManager";
 import { publishSessionResourcesChanged } from "./chatResources";
 import { childBaseExtensionFactories, childExtensionFactories } from "./extensions";
@@ -60,6 +61,7 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 			childBaseExtensionFactories: childBaseExtensionFactories(),
 			childExtensionFactories: childExtensionFactories(),
 			buildChildSettings: buildSessionSettings,
+			projectTrusted: () => piResourceTrustFor(workspaceId),
 		});
 		service.onLifecycle((event) => {
 			const parentSessionId =

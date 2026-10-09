@@ -28,6 +28,7 @@ import type {
 	PrDraft,
 	Project,
 	ProjectPathStatus,
+	ProjectTrustSummary,
 	ProviderStatusReport,
 	ResourceMeta,
 	RevertTarget,
@@ -103,7 +104,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 80;
+export const PROTOCOL_VERSION = 81;
+export const PROJECT_TRUST_PROTOCOL_VERSION = 81;
 export const TURN_CHANGES_PROTOCOL_VERSION = 80;
 export const SUBAGENT_CONCURRENCY_PROTOCOL_VERSION = 79;
 export const WORKSPACE_SETTLE_PROTOCOL_VERSION = 78;
@@ -181,6 +183,7 @@ export const WS_METHODS = {
 	projectAcknowledgeSkills: "project.acknowledgeSkills",
 	projectSetSkillEnabled: "project.setSkillEnabled",
 	projectAliasSkills: "project.aliasSkills",
+	projectTrustSummary: "project.trustSummary",
 	projectSetGroupEnabled: "project.setGroupEnabled",
 	projectSkills: "project.skills",
 	workspaceCreate: "workspace.create",
@@ -490,13 +493,17 @@ export interface WsMethodMap {
 	"project.inspect": { params: { path: string }; result: ProjectPathStatus };
 	"project.init": { params: { path: string }; result: Project };
 	"project.hasSpecs": { params: { projectId: string }; result: { hasSpecs: boolean } };
-	"project.setTrust": { params: { id: string; trusted: boolean }; result: Project };
+	"project.setTrust": {
+		params: { id: string; trusted: boolean; resources?: boolean };
+		result: Project;
+	};
 	"project.acknowledgeSkills": { params: { id: string; names: string[] }; result: Project };
 	"project.setSkillEnabled": {
 		params: { id: string; name: string; enabled: boolean };
 		result: Project;
 	};
 	"project.aliasSkills": { params: { projectId: string }; result: string[] };
+	"project.trustSummary": { params: { projectId: string }; result: ProjectTrustSummary };
 	"project.setGroupEnabled": {
 		params: { id: string; group: string; enabled: boolean };
 		result: Project;
