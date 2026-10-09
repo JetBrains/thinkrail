@@ -197,8 +197,23 @@ test("an update never approves a pending or changed repository entry, and carrie
 	expect(reenabled?.approval?.fingerprint).not.toBe(toggled?.approval?.fingerprint);
 
 	writeRepo(["-y", "evil"]);
-	const rewritten = await update({ command: "npx", args: ["-y", "evil"], enabled: false });
+	expect(await codeOf(update({ command: "npx", args: ["-y", "evil"], enabled: false }))).toBe(
+		"MCP_CONFIG_INVALID",
+	);
+	const changed = find(await request("mcp.list", { workspaceId: "w1" }), "project", "repo");
+	const rewritten = await update(
+		{ command: "npx", args: ["-y", "evil"], enabled: false },
+		changed?.approval?.fingerprint,
+	);
 	expect(rewritten).toMatchObject({ enabled: false, approval: { state: "changed" } });
+	for (const method of ["mcp.add", "mcp.update", "mcp.remove"]) {
+		expect(
+			await codeOf(
+				request(method, { workspaceId: "w1", scope: "repo", name: "x", entry: { command: "x" } }),
+			),
+		).toBe("uncoded");
+	}
+	expect(JSON.parse(readFileSync(file, "utf8")).mcpServers.x).toBeUndefined();
 });
 
 test("an update or removal rendered from an entry that changed on disk since is refused and leaves the file as it is", async () => {
@@ -499,4 +514,30 @@ test("an untrusted project refuses writes to the MCP servers its repository defi
 			"linear",
 		)?.enabled,
 	).toBe(true);
+});
+
+test("Test connection judges the effective server of a name, not the shadowed one", async () => {
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({ mcpServers: { docs: { command: "docs-stdio" } } }),
+	);
+	mkdirSync(join(repo, ".pi"));
+	writeFileSync(
+		join(repo, ".pi", "mcp.json"),
+		JSON.stringify({ mcpServers: { docs: { url: "https://docs.example/mcp" } } }),
+	);
+	const test = () =>
+		handleRequest("mcp.testConnection", { workspaceId: "w1", name: "docs" }, CTX) as Promise<{
+			loginId: string;
+		}>;
+	expect(await codeOf(test())).toBe("MCP_CONFIG_INVALID");
+	const pending = find(await request("mcp.list", { workspaceId: "w1" }), "project", "docs");
+	await request("mcp.approve", {
+		workspaceId: "w1",
+		name: "docs",
+		fingerprint: pending?.approval?.fingerprint,
+	});
+	const started = await test();
+	expect(typeof started.loginId).toBe("string");
+	await request("provider.loginCancel", { loginId: started.loginId });
 });

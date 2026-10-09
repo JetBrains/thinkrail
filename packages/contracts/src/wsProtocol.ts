@@ -503,6 +503,14 @@ export function isSharedModelContextTarget(
 	return setting.override === null || isModelContextWindow(setting.override);
 }
 
+/**
+ * A user-scope target, or a repository entry named with the `McpServerSummary.approval.fingerprint` the
+ * client rendered it with: the host refuses the write when the entry on disk no longer has it.
+ */
+export type McpRenderedTarget =
+	| { scope: "user" }
+	| { scope: "project"; expectedFingerprint: string };
+
 export interface WsMethodMap {
 	"project.open": { params: { path: string }; result: Project };
 	"project.list": { params: Record<string, never>; result: Project[] };
@@ -869,22 +877,11 @@ export interface WsMethodMap {
 		result: McpListResult;
 	};
 	"mcp.update": {
-		params: {
-			workspaceId: string;
-			scope: McpServerScope;
-			name: string;
-			entry: McpServerEntryInput;
-			expectedFingerprint?: string;
-		};
+		params: { workspaceId: string; name: string; entry: McpServerEntryInput } & McpRenderedTarget;
 		result: McpListResult;
 	};
 	"mcp.remove": {
-		params: {
-			workspaceId: string;
-			scope: McpServerScope;
-			name: string;
-			expectedFingerprint?: string;
-		};
+		params: { workspaceId: string; name: string } & McpRenderedTarget;
 		result: McpListResult;
 	};
 	"mcp.setProjectOverride": {

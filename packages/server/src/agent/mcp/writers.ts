@@ -48,6 +48,18 @@ export function assertProjectMcpConfigWritable(worktreePath: string, configPath:
 
 type McpServersObject = Record<string, unknown>;
 
+// `__proto__` is a legal server name: read and write it as an own property, never through the prototype.
+const ownEntry = (servers: McpServersObject | undefined, name: string): unknown =>
+	servers && Object.hasOwn(servers, name) ? servers[name] : undefined;
+function setOwnEntry(servers: McpServersObject, name: string, value: unknown): void {
+	Object.defineProperty(servers, name, {
+		value,
+		enumerable: true,
+		configurable: true,
+		writable: true,
+	});
+}
+
 function editMcpServers(
 	path: string,
 	edit: (servers: McpServersObject | undefined, parsed: Record<string, unknown>) => boolean,
@@ -81,10 +93,12 @@ export function updateMcpServerConfig(
 	options: { override?: boolean } = {},
 ): void {
 	editMcpServers(path, (servers, parsed) => {
-		let server = servers?.[name];
+		let server = ownEntry(servers, name);
 		if (server === undefined && options.override) {
 			server = {};
-			parsed.mcpServers = { ...servers, [name]: server };
+			const target = servers ?? {};
+			setOwnEntry(target, name, server);
+			parsed.mcpServers = target;
 		}
 		if (!isRecord(server)) throw new Error(`${path} does not define MCP server "${name}"`);
 		const keepDefaults = isOverrideEntry(server);
@@ -108,8 +122,8 @@ export function addMcpServerConfig(
 	let replaced = false;
 	editMcpServers(path, (servers, parsed) => {
 		const target = servers ?? {};
-		replaced = target[name] !== undefined;
-		target[name] = entry;
+		replaced = ownEntry(target, name) !== undefined;
+		setOwnEntry(target, name, entry);
 		parsed.mcpServers = target;
 		return true;
 	});
@@ -120,7 +134,7 @@ export function removeMcpServerConfig(path: string, name: string): boolean {
 	if (!existsSync(path)) return false;
 	let removed = false;
 	editMcpServers(path, (servers) => {
-		if (!servers || servers[name] === undefined) return false;
+		if (ownEntry(servers, name) === undefined || !servers) return false;
 		delete servers[name];
 		removed = true;
 		return true;

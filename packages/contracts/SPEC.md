@@ -816,16 +816,18 @@ contracts only.
 - A write never approves repository content the user has not reviewed. A project-scope `add` of a new name
   is the user's own entry and is approved as written. A project-scope `update` carries approval to the
   written entry only when the entry on disk was approved at its current fingerprint (otherwise the rewrite
-  stays pending); its optional `expectedFingerprint` — the `McpServerSummary.approval.fingerprint` the
-  client rendered the row with — makes the host refuse, file untouched, when the on-disk entry no longer has
-  it (ignored for user scope); a project-scope `remove` takes the same precondition, so a stale Remove never
-  deletes repository content the user has not seen. `shareWithRepo` refuses when the project file already defines that name or
+  stays pending). A project-scope `update` or `remove` names its target as `McpRenderedTarget`: the
+  `McpServerSummary.approval.fingerprint` the client rendered the row with is required, and the host
+  refuses, file untouched, when the on-disk entry no longer has it — so a stale Edit or Remove never
+  rewrites or deletes repository content the user has not seen (user scope carries no fingerprint). The
+  host validates `scope` itself; anything but `user` / `project` is rejected before any path is chosen. `shareWithRepo` refuses when the project file already defines that name or
   holds an override that is not approved at its current fingerprint.
 - `mcp.login` / `mcp.testConnection` return a `loginId` and reuse the `provider.login` frame family
   (`LoginPush.target` identifies the server); those pushes reach only the connection that started the
   operation, and a reply or cancel from another connection fails with `LOGIN_NOT_OWNER`. They and
   `mcp.logout` fail with `MCP_HANDLED_ELSEWHERE` where `handledElsewhere` is set, and with an "already
-  running" error while a sign-in for that server runs anywhere — another of these operations or a chat's
+  running" error while a sign-in for that server runs anywhere; `mcp.testConnection` judges the transport
+  of the name's effective server (the approved project entry, else the user one) — another of these operations or a chat's
   `/mcp login <name>`. An operation still open after 10 minutes, or whose client the host has reaped after
   the reconnect window, ends with an `error` frame ("Sign-in timed out." / "Sign-in cancelled.").
 - `McpResultSummary` is the host-written, bounded, base64-free presentation summary under

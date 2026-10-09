@@ -31,16 +31,20 @@ function configPath(scope: McpServerScope, worktree: string): string {
 	return path;
 }
 
-function readEntry(path: string, name: string): Record<string, unknown> | undefined {
+function readRawEntry(path: string, name: string): unknown {
 	if (!existsSync(path)) return undefined;
 	try {
 		const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
 		const servers = isRecord(parsed) ? parsed.mcpServers : undefined;
-		const entry = isRecord(servers) ? servers[name] : undefined;
-		return isRecord(entry) ? entry : undefined;
+		return isRecord(servers) && Object.hasOwn(servers, name) ? servers[name] : undefined;
 	} catch {
 		return undefined;
 	}
+}
+
+function readEntry(path: string, name: string): Record<string, unknown> | undefined {
+	const entry = readRawEntry(path, name);
+	return isRecord(entry) ? entry : undefined;
 }
 
 function invalid(message: string): CodedError {
@@ -80,8 +84,8 @@ export function removeMcpServerEntry(options: {
 }
 
 export function projectMcpEntryFingerprint(worktree: string, name: string): string | undefined {
-	const entry = readEntry(projectMcpConfigPath(worktree), name);
-	return entry ? fingerprintMcpEntry(name, entry) : undefined;
+	const entry = readRawEntry(projectMcpConfigPath(worktree), name);
+	return entry === undefined ? undefined : fingerprintMcpEntry(name, entry);
 }
 
 export function shareMcpOverrideWithRepo(options: {

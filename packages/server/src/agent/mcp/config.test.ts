@@ -313,6 +313,19 @@ test("writers keep unknown keys and indentation, drop global defaults, and repla
 	expect(removeMcpServerConfig(path, "missing")).toBe(false);
 	expect(removeMcpServerConfig(path, "a")).toBe(true);
 	expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({ extra: true, mcpServers: {} });
+
+	expect(removeMcpServerConfig(path, "__proto__")).toBe(false);
+	expect(addMcpServerConfig(path, "__proto__", { url: "https://p/mcp" })).toBe(false);
+	expect(readFileSync(path, "utf8")).toContain('"__proto__": {');
+	updateMcpServerConfig(path, "__proto__", { enabled: false });
+	const proto = JSON.parse(readFileSync(path, "utf8")).mcpServers;
+	expect(Object.hasOwn(proto, "__proto__")).toBe(true);
+	expect(Object.getOwnPropertyDescriptor(proto, "__proto__")?.value).toEqual({
+		url: "https://p/mcp",
+		enabled: false,
+	});
+	expect(removeMcpServerConfig(path, "__proto__")).toBe(true);
+	expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({ extra: true, mcpServers: {} });
 });
 
 test("an override entry keeps explicit values instead of dropping defaults", () => {
