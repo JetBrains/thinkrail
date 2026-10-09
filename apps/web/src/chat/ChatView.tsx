@@ -54,7 +54,13 @@ import {
 import { hostSessionGlance, sessionGlance } from "./planView";
 import { QueueStrip } from "./QueueStrip";
 import { deriveRecentPrompts } from "./recentPrompts";
-import { CommandLogView, ResourcesButton, ResourcesDock, ResourcesInspector } from "./resources";
+import {
+	CommandLogView,
+	ResourcesAttention,
+	ResourcesButton,
+	ResourcesDock,
+	ResourcesInspector,
+} from "./resources";
 import { SkillsDialog } from "./SkillsDialog";
 import { SubagentTranscriptDialog, SubagentTranscriptPane } from "./SubagentTranscriptDialog";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
@@ -250,6 +256,10 @@ export default function ChatView({
 	useEffect(
 		() => (watchesMcp && connectionGeneration > 0 ? watchMcpWorkspace(workspaceId) : undefined),
 		[watchesMcp, workspaceId, connectionGeneration],
+	);
+	const openMcpSettings = useCallback(
+		() => useAppStore.getState().openSettings(SettingsSection.Mcp),
+		[],
 	);
 
 	const stillRunning = useMemo(
@@ -676,17 +686,25 @@ export default function ChatView({
 						<ChatHeader
 							resources={
 								resources.visible ? (
-									<ResourcesButton
-										ref={resourcesTrigger}
-										activeCount={
-											resources.authoritative
-												? resources.groups.activeCount + resources.groups.mcpActiveCount
-												: null
-										}
-										working={resources.authoritative && resources.groups.activeCount > 0}
-										open={inspectorOpen}
-										onClick={() => setInspectorOpen(!inspectorOpen)}
-									/>
+									<span className="flex shrink-0 items-center gap-2">
+										<ResourcesButton
+											ref={resourcesTrigger}
+											activeCount={
+												resources.authoritative
+													? resources.groups.activeCount + resources.groups.mcpActiveCount
+													: null
+											}
+											working={resources.authoritative && resources.groups.activeCount > 0}
+											open={inspectorOpen}
+											onClick={() => setInspectorOpen(!inspectorOpen)}
+										/>
+										{resources.groups.mcpAttentionCount > 0 ? (
+											<ResourcesAttention
+												count={resources.groups.mcpAttentionCount}
+												onOpen={openMcpSettings}
+											/>
+										) : null}
+									</span>
 								) : null
 							}
 							stats={stats}
@@ -744,6 +762,7 @@ export default function ChatView({
 							onStopAll={() => setStopAllOpen(true)}
 							onMcpSetEnabled={resources.setMcpEnabled}
 							onMcpReconnect={resources.reconnectMcp}
+							onOpenMcpSettings={openMcpSettings}
 							detail={
 								selectedCommandId ? (
 									<CommandLogView {...commandLog} onRetry={commandLog.retry} />

@@ -311,15 +311,18 @@ test("command logs distinguish loading, empty, retry, permanent unavailability, 
 	expect(html).not.toContain("<strong>");
 });
 
-test("the trigger counts connected MCP servers without breathing", () => {
+test("the trigger counts connected MCP servers without breathing, and the attention marker names what needs the user", () => {
 	const html = renderToStaticMarkup(
 		<TooltipProvider>
 			<resources.ResourcesButton activeCount={2} open={false} working={false} />
+			<resources.ResourcesAttention count={2} onOpen={() => {}} />
 		</TooltipProvider>,
 	);
 	expect(html).toContain('data-active-count="2"');
 	expect(html).not.toContain("data-live");
 	expect(html).not.toContain("animate-working");
+	expect(html).toContain('data-testid="resources-mcp-attention"');
+	expect(html).toContain('aria-label="2 MCP servers need attention — open MCP settings"');
 	expect(
 		renderToStaticMarkup(
 			<TooltipProvider>
@@ -329,7 +332,7 @@ test("the trigger counts connected MCP servers without breathing", () => {
 	).toContain('data-live="true"');
 });
 
-test("MCP rows offer per-chat actions by state: disable, enable, reconnect", () => {
+test("MCP rows offer per-chat actions by state: disable, enable, reconnect, and Settings for sign-in or approval", () => {
 	const actions = (state: McpServerResourceSummary["state"]) =>
 		mcpRowActions({ name: "docs", state, transport: "stdio" }).map((action) => action.id);
 	expect(actions("connected")).toEqual(["disable"]);
@@ -337,8 +340,8 @@ test("MCP rows offer per-chat actions by state: disable, enable, reconnect", () 
 	expect(actions("disabled-in-chat")).toEqual(["enable"]);
 	expect(actions("failed")).toEqual(["reconnect", "disable"]);
 	expect(actions("disconnected")).toEqual(["reconnect", "disable"]);
-	expect(actions("needs-sign-in")).toEqual(["disable"]);
-	expect(actions("pending-approval")).toEqual([]);
+	expect(actions("needs-sign-in")).toEqual(["settings", "disable"]);
+	expect(actions("pending-approval")).toEqual(["settings"]);
 	expect(actions("pending-reload")).toEqual([]);
 	expect(actions("disabled-in-project")).toEqual([]);
 	const registered = (state: McpServerResourceSummary["state"]) =>
@@ -347,7 +350,7 @@ test("MCP rows offer per-chat actions by state: disable, enable, reconnect", () 
 		);
 	expect(registered("connected")).toEqual([]);
 	expect(registered("failed")).toEqual(["reconnect"]);
-	expect(registered("needs-sign-in")).toEqual([]);
+	expect(registered("needs-sign-in")).toEqual(["settings"]);
 });
 
 test("the inspector lists the chat's MCP servers as a third section and hides it for older hosts", () => {
@@ -371,6 +374,7 @@ test("the inspector lists the chat's MCP servers as a third section and hides it
 	expect(html).toContain("Disable in this chat");
 	expect(html).toContain("Disabling applies when the chat is idle — restarts this chat");
 	expect(html).toContain("Disable failed");
+	expect(html).toContain('data-testid="resources-mcp-settings"');
 	expect(html).toContain("stdio · runs on host");
 	const stale = renderToStaticMarkup(
 		<resources.ResourcesInspector

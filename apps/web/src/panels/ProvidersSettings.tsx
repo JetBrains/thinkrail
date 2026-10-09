@@ -31,7 +31,7 @@ export function ProvidersSettings() {
 	const [refreshing, setRefreshing] = useState(false);
 	const [busyProvider, setBusyProvider] = useState<string | null>(null);
 	const [showAllKeys, setShowAllKeys] = useState(false);
-	const activeLogin = useAppStore((s) => s.activeLogin);
+	const activeLogin = useAppStore((s) => (s.activeLogin?.target ? null : s.activeLogin));
 	const providerVersion = useAppStore((s) => s.providerVersion);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const quotaEnabled = useAppStore((s) => s.jbcentralQuotaEnabled);

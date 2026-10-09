@@ -10,10 +10,14 @@ import { foldMcpList, foldMcpSnapshot, isNewerMcpSnapshot, type McpHeldSnapshot 
 import { selectMcpRead } from "./selectMcpServers";
 
 const workspaceId = "mcp-ws";
-const status = (name: string, state: McpServerStatus["state"]): McpServerStatus => ({
+const status = (
+	name: string,
+	state: McpServerStatus["state"],
+	updatedAt = 10,
+): McpServerStatus => ({
 	name,
 	state,
-	updatedAt: 10,
+	updatedAt,
 });
 const snapshot = (
 	sessionId: string,
@@ -37,6 +41,7 @@ beforeEach(() => {
 		status: "connected",
 		connectionGeneration: 3,
 		protocolVersion: MCP_PROTOCOL_VERSION,
+		activeLogin: null,
 	});
 });
 
@@ -47,6 +52,21 @@ test("the generation guard drops a snapshot that is not newer, unless it comes f
 	expect(isNewerMcpSnapshot(current, snapshot("s", 5), 1)).toBe(false);
 	expect(isNewerMcpSnapshot(current, snapshot("s", 4), 1)).toBe(false);
 	expect(isNewerMcpSnapshot(current, snapshot("s", 1), 2)).toBe(true);
+});
+
+test("a server keeps the time it was first seen starting until it leaves that state", () => {
+	const first = held(snapshot("s", 1, [status("docs", "starting", 100)]));
+	const second = foldMcpSnapshot(first, snapshot("s", 2, [status("docs", "starting", 900)]), 1, 1);
+	expect(second?.startingSince).toEqual({ docs: 100 });
+	const connected = foldMcpSnapshot(second ?? undefined, snapshot("s", 3), 1, 2);
+	expect(connected?.startingSince).toEqual({});
+	const restarted = foldMcpSnapshot(
+		first,
+		snapshot("s", 1, [status("docs", "starting", 500)]),
+		2,
+		3,
+	);
+	expect(restarted?.startingSince).toEqual({ docs: 500 });
 });
 
 test("a list replaces the live-chat set but keeps newer pushes and pushes that landed during the read", () => {
@@ -126,4 +146,19 @@ test("an older host has no MCP reads, its welcome clears the slice, and workspac
 	state().applyWorkspaceRemoved("project", workspaceId);
 	expect(state().mcpByWorkspace[workspaceId]).toBeUndefined();
 	expect(selectMcpRead(state(), workspaceId)).toBeNull();
+});
+
+test("an MCP sign-in keeps its target whether the frame or the start response arrives first", () => {
+	const target = { kind: "mcp" as const, workspaceId, serverName: "linear" };
+	state().applyLoginFrame({
+		loginId: "mcplogin_1",
+		providerId: "mcp:linear",
+		frame: { kind: "progress", message: "Contacting the server…" },
+		target,
+	});
+	state().beginLogin("mcplogin_1", "mcp:linear", target);
+	expect(state().activeLogin).toMatchObject({ loginId: "mcplogin_1", target, status: "active" });
+	state().clearLogin();
+	state().beginLogin("provider-1", "anthropic");
+	expect(state().activeLogin?.target).toBeUndefined();
 });

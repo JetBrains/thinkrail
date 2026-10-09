@@ -46,7 +46,7 @@ relax a rule.
   description and pi-equivalent config errors (both through `redactMcpText`). `summarizeMcpConfigErrors()` is the file-level rest (unparsable
   JSON, `mcpServers` not an object, a mistyped `autoEnableCodemode`) as `{ source, message }`, masked, for
   `McpListResult.configErrors`: for the first two pi's loader lists none of that file's servers, so without
-  it `mcp.list` would read "no servers".
+  it Settings would read "no servers".
 - `redact.ts` — the host's one credential mask for text that leaves it. pi redacts nothing in its status
   texts: a connection error, an HTTP error-body snippet and a stdio server's stderr tail (up to 2 000
   chars) arrive verbatim. `redactMcpText` masks, deterministically and idempotently, URL user info and
@@ -62,7 +62,7 @@ relax a rule.
   with the value after a credential-named flag or assignment, URL-shaped arguments (user info, credential-named query values),
   header arguments (any value after `-H` / `--header`, a credential-named `Name: value` anywhere) and
   token-prefixed arguments masked; `${VAR}` references stay, and arguments with spaces, quotes or nothing in
-  them are JSON-quoted so the line is unambiguous (a client shows it as what runs).
+  them are JSON-quoted so the line is unambiguous (the approve dialog shows it as what runs).
 - `status.ts` — parsers for pi's two status texts (`formatStatus` lines `name: state[, N tools] (exposure)`
   with indented errors, and the startup attention notice) and `deriveMcpServerStatuses()`; the formats are
   pinned by fixtures and re-checked on every pi bump; multiline configuration diagnostics do not discard

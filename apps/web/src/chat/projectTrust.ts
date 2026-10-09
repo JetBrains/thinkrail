@@ -93,7 +93,7 @@ export function trustEnablesText(
 			? `Trust loads its ${loads}, and lets its ${code}.`
 			: `Trust lets its ${code}.`;
 	if (notice.mcpServers === 0) return enables;
-	const mcp = `Trust alone does not start its ${plural(notice.mcpServers, "MCP server")}.`;
+	const mcp = `Its ${plural(notice.mcpServers, "MCP server")} still need${notice.mcpServers === 1 ? "s" : ""} your approval one by one.`;
 	return enables ? `${enables} ${mcp}` : mcp;
 }
 

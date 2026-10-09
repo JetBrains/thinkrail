@@ -15,6 +15,7 @@ export type LoginInput = LoginInputSelect | LoginInputPrompt;
 export interface LoginState {
 	loginId: string;
 	providerId: string;
+	target?: { kind: "mcp"; workspaceId: string; serverName: string };
 	status: "active" | "success" | "error";
 	url?: string;
 	instructions?: string;

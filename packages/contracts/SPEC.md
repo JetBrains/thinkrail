@@ -826,7 +826,7 @@ contracts only.
   JSON, `mcpServers` not an object, a mistyped top-level key — that no server row can carry; older hosts
   omit it. `handledElsewhere` marks a host
   where a user-installed extension or `-builtin:mcp` owns MCP and management is read-only; pi settings
-  are read even with no chat open (`by: "pi settings (-builtin:mcp)"` — a client can recognise that exact
+  are read even with no chat open (`by: "pi settings (-builtin:mcp)"` — Settings recognises that exact
   value to say which entry to remove, so it stays stable), a replacing extension is seen through a live
   chat (`by` = its path).
 - Mutations (`add`, `update`, `remove`, `setProjectOverride`, `approve`, `shareWithRepo`) re-check that

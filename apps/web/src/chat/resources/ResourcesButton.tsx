@@ -1,4 +1,4 @@
-import { RiStackFill, RiStackLine } from "@remixicon/react";
+import { RiErrorWarningLine, RiStackFill, RiStackLine } from "@remixicon/react";
 import { Button } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
@@ -40,6 +40,25 @@ export function ResourcesButton({
 				<Icon className={cn("size-14", live && "motion-safe:animate-working")} />
 				<span className="hidden @[480px]:inline">Resources</span>
 				<span className="tabular-nums">{activeCount ?? "—"}</span>
+			</Button>
+		</IconTooltip>
+	);
+}
+
+export function ResourcesAttention({ count, onOpen }: { count: number; onOpen: () => void }) {
+	const label = `${count} MCP server${count === 1 ? " needs" : "s need"} attention — open MCP settings`;
+	return (
+		<IconTooltip label={label}>
+			<Button
+				variant="ghost"
+				size="icon"
+				data-testid="resources-mcp-attention"
+				data-count={count}
+				aria-label={label}
+				onClick={onOpen}
+				className="shrink-0 text-feedback-warning hover:text-feedback-warning"
+			>
+				<RiErrorWarningLine className="size-14" />
 			</Button>
 		</IconTooltip>
 	);

@@ -357,6 +357,7 @@ export type LayoutIntentInput = LayoutIntent extends infer Intent
 export const SettingsSection = {
 	Providers: "providers",
 	Models: "models",
+	Mcp: "mcp",
 	Github: "github",
 	Appearance: "appearance",
 	LineWidth: "line-width",
@@ -1244,7 +1245,7 @@ interface AppState {
 	setChatDraft: (sessionId: string, text: string) => void;
 	clearPendingExtUi: (sessionId: string, id: string) => void;
 	applyExtUi: (request: ExtUiRequest) => void;
-	beginLogin: (loginId: string, providerId: string) => void;
+	beginLogin: (loginId: string, providerId: string, target?: LoginPush["target"]) => void;
 	applyLoginFrame: (push: LoginPush) => void;
 	clearLoginInput: () => void;
 	clearLogin: () => void;
@@ -2038,8 +2039,12 @@ function withRuntime(
 	return next === rt ? {} : { sessions: { ...s.sessions, [sessionId]: next } };
 }
 
-function newLoginState(loginId: string, providerId: string): LoginState {
-	return { loginId, providerId, status: "active" };
+function newLoginState(
+	loginId: string,
+	providerId: string,
+	target: LoginPush["target"] | undefined,
+): LoginState {
+	return { loginId, providerId, status: "active", ...(target ? { target } : {}) };
 }
 
 function foldLoginFrame(state: LoginState, frame: LoginFrame): LoginState {
@@ -4043,16 +4048,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (!s.sessions[request.sessionId]) return bufferExtUiOrphan(s, request);
 			return withRuntime(s, request.sessionId, (rt) => reduceExtUi(rt, request));
 		}),
-	beginLogin: (loginId, providerId) =>
+	beginLogin: (loginId, providerId, target) =>
 		set((s) =>
-			s.activeLogin?.loginId === loginId ? {} : { activeLogin: newLoginState(loginId, providerId) },
+			s.activeLogin?.loginId === loginId
+				? {}
+				: { activeLogin: newLoginState(loginId, providerId, target) },
 		),
 	applyLoginFrame: (push) =>
 		set((s) => {
 			const cur = s.activeLogin;
 			if (cur && cur.loginId !== push.loginId && cur.status === "active") return {};
 			const base =
-				cur && cur.loginId === push.loginId ? cur : newLoginState(push.loginId, push.providerId);
+				cur && cur.loginId === push.loginId
+					? cur
+					: newLoginState(push.loginId, push.providerId, push.target);
 			return { activeLogin: foldLoginFrame(base, push.frame) };
 		}),
 	clearLoginInput: () =>

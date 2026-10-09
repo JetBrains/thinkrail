@@ -10,22 +10,23 @@ tags: [chat, resources, public-surface-checked]
 
 ## Responsibility
 
-The current chat's **Resources** surfaces: a header **trigger**, an ambient **dock** above the composer,
-and an **inspector** over the transcript. Together they make agent-created work — background commands
-and subagents — glanceable while you type, inspectable without scrolling to old tool calls, and
-stoppable, without confusing it with user-owned workspace terminals; and they show the chat's MCP
-servers with their per-chat actions.
+The current chat's **Resources** surfaces: a header **trigger** with its MCP **attention marker**, an
+ambient **dock** above the composer, and an **inspector** over the transcript. Together they make
+agent-created work — background commands and subagents — glanceable while you type, inspectable without
+scrolling to old tool calls, and stoppable, without confusing it with user-owned workspace terminals; and
+they show the chat's MCP servers with their per-chat actions.
 
 All three render one host-reported snapshot through one row grammar; none is a permanent pane or a
 workbench tab. The inspector lives inside the chat column and leaves the composer usable.
 
 ## Boundary
 
-- **Owns:** props-driven `ResourcesButton`, `ResourcesDock`, `ResourcesInspector`, and `CommandLogView`,
-  exported through `index.ts`, plus the private row/state vocabulary they share and the private MCP rows
-  (`mcpRow.tsx`). The inspector renders the roster and a detail *header*; the detail *body* is a slot the
-  parent fills.
-- **Public surface:** `ResourcesButton`, `ResourcesDock`, `ResourcesInspector`, `CommandLogView`.
+- **Owns:** props-driven `ResourcesButton`, `ResourcesAttention`, `ResourcesDock`, `ResourcesInspector`,
+  and `CommandLogView`, exported through `index.ts`, plus the private row/state vocabulary they share and
+  the private MCP rows (`mcpRow.tsx`). The inspector renders the roster and a detail *header*; the detail
+  *body* is a slot the parent fills.
+- **Public surface:** `ResourcesButton`, `ResourcesAttention`, `ResourcesDock`, `ResourcesInspector`,
+  `CommandLogView`.
 - **Allowed external deps:** contracts, React, Remix icons, shared UI primitives and theme utilities, and
   `lib` (the shared MCP state vocabulary). Time arrives as a `now` prop so formatting stays pure.
 - **Forbidden:** store/transport, server/portable extension packages, Pi value imports, process
@@ -61,7 +62,9 @@ Before the first read, during
 reconnect, or after refresh failure it shows an explicit unavailable-count mark and a matching
 accessible label rather than claiming zero. A parent being idle does not hide its resources. At narrow
 widths the label may collapse, but the control/count state and accessible name remain available. The
-trigger toggles the inspector and carries `aria-expanded`.
+trigger toggles the inspector and carries `aria-expanded`. A separate small **attention marker**
+(`ResourcesAttention`, a sibling button, never nested) appears while any of the chat's servers needs
+sign-in, failed, or awaits approval, and opens Settings › MCP servers.
 
 **Dock.** The dock lists live rows only — never finished work — directly above the composer, and
 renders nothing when there is none. Past four rows it collapses to one summary line (live count,
@@ -90,8 +93,10 @@ dock — a server is not work: plug glyph with a state dot · name · the shared
 count when connected) · transport (stdio "runs on host"), attention rows first. Actions follow the state:
 **Disable in this chat** / **Enable in this chat** (applied at the chat's next idle reload, which restarts
 its other servers — a helper line under the list says so; never offered on a `registered` row, a server an
-extension registered, which the host refuses to disable per chat), and **Reconnect** for failed or
-disconnected. There is no PID and no immediate stop: pi offers neither. Controls are disabled without
+extension registered, which the host refuses to disable per chat), **Reconnect** for failed or
+disconnected, and Sign in / Review / Edit for needs-sign-in, pending approval or invalid config, which open
+Settings (`resource-mcp-settings`), like the section header's **Settings** link (`resources-mcp-settings`).
+There is no PID and no immediate stop: pi offers neither. Controls are disabled without
 authority, one request per server is in flight, and errors stay on the row.
 
 **Receipts.** The transcript's turn divider may carry a "N still running" chip supplied by the parent;
@@ -124,7 +129,7 @@ headless), or arbitrary shell-process discovery. Ordinary workspace terminal tab
 
 Cover empty/active/finished/stale/unavailable states, exact live counts, the dock's collapse and
 hidden-while-inspecting rule, the trigger's breathing-only-while-working and unknown-count marks, the MCP
-section's per-state actions and absence for older hosts, keyboard navigation and
+section's per-state actions, absence for older hosts and the attention marker, keyboard navigation and
 focus return, safe plain-text logs, row-specific stop failures and stop-all confirmation.
 Browser coverage must prove current-chat isolation, reload/reconnect rehydration, late completion while
 the inspector is closed, and no cancellation from view closure.

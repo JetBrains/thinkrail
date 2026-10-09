@@ -59,6 +59,7 @@ export interface ResourcesInspectorProps {
 	mcpServers?: McpServerResourceSummary[] | null;
 	onMcpSetEnabled?: (name: string, enabled: boolean) => void;
 	onMcpReconnect?: (name: string) => void;
+	onOpenMcpSettings?: () => void;
 }
 
 function formatAgo(ms: number): string {
@@ -347,6 +348,7 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 							actions={props.actions}
 							onSetEnabled={(name, enabled) => props.onMcpSetEnabled?.(name, enabled)}
 							onReconnect={(name) => props.onMcpReconnect?.(name)}
+							onOpenSettings={() => props.onOpenMcpSettings?.()}
 						/>
 					) : null}
 					<p className="mt-auto flex items-center gap-8 px-8 pt-8 text-text-subtle tr-text-metadata">

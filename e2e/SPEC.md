@@ -107,6 +107,16 @@ browser agent execution. `attention-background-work.live` pins the background-wo
 while a real background command or detached subagent runs after the parent settled, the host never
 publishes an unread completion and the worktree row shows no dot; it lights only after the woken turn.
 
+**MCP servers** coverage (`mcp-settings.spec.ts`) runs the server package's stdio fixture through the
+absolute path of the runner's `bun`, since the host's hermetic `PATH` has none. It adds a user server
+through the Settings form, sees it Not running, Connected · 4 tools once a persisted chat attaches, and
+disabled for that chat from the Resources inspector, then removes it; it opens a chat from a not-running
+server's row, reconnects that server per chat once it fails and shows its masked log, and names an
+unreadable user `mcp.json` with an edit hint; and it proves a repository-defined server flags the chat's
+attention marker, waits for Review & approve, and starts once approved. Each test removes the `mcp.json`
+it wrote (the lane's agent dir or the fixture repository's `.pi/`) in `finally`, so no later scenario
+starts servers.
+
 Native wheel probes target the actual transcript viewport again after clicking a floating Latest
 button; a pointer left at a removed overlay is not evidence of a gesture delivered to the scroller.
 Disclosure-anchor probes place the complete header below the real sticky breadcrumb before asserting

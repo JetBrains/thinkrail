@@ -125,15 +125,15 @@ describe("notice copy", () => {
 		);
 	});
 
-	test("counts repository MCP servers and says trust alone does not start them", () => {
+	test("counts repository MCP servers and says each still needs approval", () => {
 		expect(untrustedNoticeText(untrusted(0, [], 2))).toBe(
 			"This project ships 2 MCP servers — off until you trust it.",
 		);
 		expect(trustEnablesText(untrusted(0, [], 1))).toBe(
-			"Trust alone does not start its 1 MCP server.",
+			"Its 1 MCP server still needs your approval one by one.",
 		);
 		expect(trustEnablesText(untrusted(0, ["extensions"], 2))).toBe(
-			"Trust lets its extensions run code on this machine. Trust alone does not start its 2 MCP servers.",
+			"Trust lets its extensions run code on this machine. Its 2 MCP servers still need your approval one by one.",
 		);
 	});
 });

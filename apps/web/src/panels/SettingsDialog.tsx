@@ -10,6 +10,7 @@ import {
 	RiChat2Line as MessageSquareText,
 	RiNotification3Line as NotificationBell,
 	RiPaletteLine as Palette,
+	RiPlugLine as Plug,
 	RiPuzzle2Line as Puzzle,
 	RiGitRepositoryLine as Repository,
 	RiSearchEyeLine as ScanEye,
@@ -21,6 +22,7 @@ import {
 import {
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
+	MCP_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
@@ -33,6 +35,7 @@ import { ExtensionsSettings } from "./ExtensionsSettings";
 import { FeedbackSettings } from "./FeedbackSettings";
 import { GithubSettings } from "./GithubSettings";
 import { LineWidthSettings } from "./LineWidthSettings";
+import { McpSettings } from "./McpSettings";
 import { ModelsSettings } from "./ModelsSettings";
 import { NotificationsSettings } from "./NotificationsSettings";
 import { PrivacySettings } from "./PrivacySettings";
@@ -55,6 +58,12 @@ const SECTIONS: {
 		label: "Models",
 		icon: Brain,
 		requiresProtocolVersion: DEFAULT_MODEL_PROTOCOL_VERSION,
+	},
+	{
+		id: SettingsSection.Mcp,
+		label: "MCP servers",
+		icon: Plug,
+		requiresProtocolVersion: MCP_PROTOCOL_VERSION,
 	},
 	{ id: SettingsSection.Github, label: "GitHub", icon: GitBranch },
 	{ id: SettingsSection.Appearance, label: "Appearance", icon: Palette },
@@ -176,6 +185,8 @@ export function SettingsDialog({
 							<ProvidersSettings />
 						) : selectedSection === SettingsSection.Models ? (
 							<ModelsSettings />
+						) : selectedSection === SettingsSection.Mcp ? (
+							<McpSettings />
 						) : selectedSection === SettingsSection.Github ? (
 							<GithubSettings />
 						) : selectedSection === SettingsSection.LineWidth ? (
