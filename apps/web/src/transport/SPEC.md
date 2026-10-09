@@ -116,9 +116,10 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   attempts per streak) only while a live chat of that workspace still reports a server `starting` — the
   host pushes no "connected" edge, and a re-read is what makes it refresh status. The streak budget resets
   once nothing is starting; disposal cancels the timer and drops late results. Watchers are independent,
-  but concurrent plain `mcp.list` reads of one workspace share the in-flight request (two reads from the
-  same `selectMcpRead` revision could otherwise land out of order and drop a chat the newer one
-  installed); `McpWatchDeps.onRead` is the watch loop's test hook.
+  but concurrent plain `mcp.list` reads of one workspace on the same connection generation share the
+  in-flight request (two reads from the same `selectMcpRead` revision could otherwise land out of order
+  and drop a chat the newer one installed; a read captured on an earlier connection is not reused, since
+  its answer would be rejected at installation); `McpWatchDeps.onRead` is the watch loop's test hook.
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`,
   `watchMcpWorkspace`, `ConnectionStatus`,
