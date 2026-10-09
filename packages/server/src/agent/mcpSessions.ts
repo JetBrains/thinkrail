@@ -371,6 +371,21 @@ function mcpOwnerElsewhere(
 	return owners.includes(null) ? "pi settings" : undefined;
 }
 
+/** Who manages MCP for this workspace instead of ThinkRail, or `undefined` when ThinkRail does. */
+export async function mcpHandledElsewhereBy(options: {
+	workspaceId: string;
+	cwd: string;
+	projectTrusted: boolean;
+}): Promise<string | undefined> {
+	const owners = liveSessionIdsOf(options.workspaceId).map(
+		(sessionId) => mcpSessionView(sessionId)?.commandOwner ?? null,
+	);
+	return mcpOwnerElsewhere(
+		owners,
+		await isBuiltinExtensionEnabled(options.cwd, options.projectTrusted, "mcp"),
+	);
+}
+
 export async function listMcpServers(options: {
 	workspaceId: string;
 	cwd: string;
@@ -378,13 +393,11 @@ export async function listMcpServers(options: {
 	waitMs: number;
 }): Promise<McpListResult> {
 	const sessionIds = liveSessionIdsOf(options.workspaceId);
-	const owners = sessionIds.map((sessionId) => mcpSessionView(sessionId)?.commandOwner ?? null);
 	const projectTrusted = options.project?.piResourceTrust === "granted";
-	const [snapshots, enabledInSettings] = await Promise.all([
+	const [snapshots, elsewhere] = await Promise.all([
 		Promise.all(sessionIds.map((sessionId) => refreshMcpStatus(sessionId, options.waitMs))),
-		isBuiltinExtensionEnabled(options.cwd, projectTrusted, "mcp"),
+		mcpHandledElsewhereBy({ workspaceId: options.workspaceId, cwd: options.cwd, projectTrusted }),
 	]);
-	const elsewhere = mcpOwnerElsewhere(owners, enabledInSettings);
 	const files = { agentDir: getAgentDir(), cwd: options.cwd, projectTrusted };
 	const configErrors = summarizeMcpConfigErrors(files);
 	return {

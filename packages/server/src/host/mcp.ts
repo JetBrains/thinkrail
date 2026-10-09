@@ -15,6 +15,7 @@ import {
 	listMcpServers,
 	liveSessionIdsOf,
 	type McpProbeAction,
+	mcpHandledElsewhereBy,
 	mcpPolicyOf,
 	projectMcpEntryFingerprint,
 	readMcpServerLog,
@@ -41,6 +42,22 @@ function target(workspaceId: string): { workspace: Workspace; project: Project }
 	const project = getProjects().find((candidate) => candidate.id === workspace.projectId);
 	if (!project) throw new Error(`Unknown project: ${workspace.projectId}`);
 	return { workspace, project };
+}
+
+const handledElsewhere = (): CodedError =>
+	new CodedError("MCP_HANDLED_ELSEWHERE", "MCP is not managed by ThinkRail here.");
+
+async function managedTarget(
+	workspaceId: string,
+): Promise<{ workspace: Workspace; project: Project }> {
+	const found = target(workspaceId);
+	const by = await mcpHandledElsewhereBy({
+		workspaceId: found.workspace.id,
+		cwd: found.workspace.worktreePath,
+		projectTrusted: found.project.piResourceTrust === "granted",
+	});
+	if (by !== undefined) throw handledElsewhere();
+	return found;
 }
 
 function serverName(name: unknown): string {
@@ -86,7 +103,7 @@ export async function mcpWrite(
 	},
 	mode: "add" | "update",
 ): Promise<McpListResult> {
-	const { workspace, project } = target(params.workspaceId);
+	const { workspace, project } = await managedTarget(params.workspaceId);
 	const name = serverName(params.name);
 	const rewrite = mode === "update" && params.scope === "project";
 	const onDisk = rewrite ? projectMcpEntryFingerprint(workspace.worktreePath, name) : undefined;
@@ -123,7 +140,7 @@ export async function mcpRemove(params: {
 	scope: McpServerScope;
 	name: string;
 }): Promise<McpListResult> {
-	const { workspace, project } = target(params.workspaceId);
+	const { workspace, project } = await managedTarget(params.workspaceId);
 	removeMcpServerEntry({
 		scope: params.scope,
 		worktree: workspace.worktreePath,
@@ -143,7 +160,7 @@ export async function mcpSetProjectOverride(params: {
 	enabled?: boolean;
 	exposure?: Exclude<McpExposure, "codemode">;
 }): Promise<McpListResult> {
-	const { project } = target(params.workspaceId);
+	const { project } = await managedTarget(params.workspaceId);
 	const override = {
 		...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
 		...(params.exposure !== undefined ? { exposure: params.exposure } : {}),
@@ -162,7 +179,7 @@ export async function mcpApprove(params: {
 	name: string;
 	fingerprint: string;
 }): Promise<McpListResult> {
-	const { workspace, project } = target(params.workspaceId);
+	const { workspace, project } = await managedTarget(params.workspaceId);
 	const name = serverName(params.name);
 	if (projectMcpEntryFingerprint(workspace.worktreePath, name) !== params.fingerprint) {
 		throw new CodedError(
@@ -179,7 +196,7 @@ export async function mcpShareWithRepo(params: {
 	workspaceId: string;
 	name: string;
 }): Promise<McpListResult> {
-	const { workspace, project } = target(params.workspaceId);
+	const { workspace, project } = await managedTarget(params.workspaceId);
 	const name = serverName(params.name);
 	const override = project.mcpOverrides?.[name];
 	if (!override) {
@@ -236,9 +253,7 @@ async function probe(
 		project,
 		waitMs: 0,
 	});
-	if (listed.handledElsewhere) {
-		throw new CodedError("MCP_HANDLED_ELSEWHERE", "MCP is not managed by ThinkRail here.");
-	}
+	if (listed.handledElsewhere) throw handledElsewhere();
 	if (
 		action === "test" &&
 		listed.servers.find((server) => server.name === name)?.transport !== "http"
