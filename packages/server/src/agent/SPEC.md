@@ -889,7 +889,9 @@ settings or workspaces edge. The owning parent graph records this package depend
   live child of a stale parent (`stopSessionChildren`, reason `"user"`: the parent is told without
   being woken) and waits until those runs have actually ended — a child whose abort fails is disposed —
   before the parent's reload is requested, so the trust change reports success only once nothing runs
-  under the revoked trust; a grant leaves running children alone, since
+  under the revoked trust; a reload that fails is reported as `"failed"` in the returned dispositions and
+  `project.setTrust` then fails after persisting the record, naming the chats still on the previous trust,
+  rather than claiming success; a grant leaves running children alone, since
   they merely lack the project's resources. The pi-level grant is its own consent, separate
   from alias trust: only `project.setTrust` with `resources: true`, sent by a surface that names what it
   loads, grants it ([[submodule-server-projects]]). The trust notice is shown for alias skills, pi's own

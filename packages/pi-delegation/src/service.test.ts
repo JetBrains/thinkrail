@@ -1347,7 +1347,26 @@ test("a child's pi-level project trust comes from the embedder binding, per chil
 		}
 	}
 	expect(seen).toEqual([false, true]);
-	expect(asked).toEqual([parentCwd, parentCwd]);
+	expect(asked).toEqual([parentCwd, parentCwd, parentCwd, parentCwd]);
+});
+
+test("a child whose project trust changed while it was being prepared is disposed, not registered", async () => {
+	const answers = [true, false];
+	const flipping = createDelegationService({
+		resolveParent: (sessionId) =>
+			sessionId === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-trust-flip",
+		modelRuntime: runtime,
+		projectTrusted: () => answers.shift() ?? false,
+	});
+	await expect(flipping.createChild(subagentSpec())).rejects.toMatchObject({
+		code: "unknown-parent",
+		message: expect.stringContaining("trust changed"),
+	});
+	expect(flipping.childrenOf(parent.sessionId)).toHaveLength(0);
 });
 
 test("extensions opt-in is inert when the embedder binds no child factories", async () => {

@@ -357,10 +357,12 @@ accepted cancellation wins, including one with no reason; caller signals, dispos
 participate in that ordering without adding a reason. Terminal runs are unchanged, and each new run
 resets both the cancellation latch and reason. Reasons are metadata, not lifecycle statuses.
 
-Child creation revalidates parent liveness after asynchronous session/extension preparation, before
-registering the handle. If the embedder closed that parent during preparation, the unregistered child
-is disposed and creation fails with `unknown-parent`. This prevents an in-flight birth from escaping
-a parent's already-captured teardown list without introducing a second pending-child registry.
+Child creation revalidates parent liveness — and that the `projectTrusted` binding still answers what the
+child's settings captured — after asynchronous session/extension preparation, before registering the
+handle. If the embedder closed that parent, or the project's trust changed, during preparation, the
+unregistered child is disposed and creation fails with `unknown-parent`. This prevents an in-flight birth
+from escaping a parent's already-captured teardown list, or a revoke's already-captured child list,
+without introducing a second pending-child registry.
 
 The host uses `"user"` for explicit user cancellation; [[module-pi-subagents]] owns its completion
 policy. No UI dependency or second registry is involved. Queued cancellation settles immediately,

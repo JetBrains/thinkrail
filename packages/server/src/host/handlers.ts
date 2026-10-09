@@ -429,7 +429,15 @@ const handlers: WsHandlers = {
 		const updated = setProjectTrust(p.id, p.trusted, acknowledged, {
 			resources: p.resources === true,
 		});
-		await applyPiResourceTrust(listWorkspaceRecords(p.id).map((workspace) => workspace.id));
+		const reloads = await applyPiResourceTrust(
+			listWorkspaceRecords(p.id).map((workspace) => workspace.id),
+		);
+		const failed = Object.values(reloads).filter((disposition) => disposition === "failed").length;
+		if (failed > 0) {
+			throw new Error(
+				`Trust was ${p.trusted ? "granted" : "revoked"}, but ${failed} open ${failed === 1 ? "chat" : "chats"} could not reload and still ${failed === 1 ? "runs" : "run"} with the previous trust — close or reload ${failed === 1 ? "it" : "them"}.`,
+			);
+		}
 		return updated;
 	},
 	"workspace.create": async (p) => {
