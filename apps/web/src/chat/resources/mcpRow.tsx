@@ -5,7 +5,7 @@ import { useId } from "react";
 import { type McpStateTone, mcpStateTone, mcpStatusLabel } from "@/lib";
 import type { ResourceActions } from "./resourceRow";
 
-type McpRowActionId = "disable" | "enable" | "reconnect";
+type McpRowActionId = "disable" | "enable" | "reconnect" | "settings";
 
 const DISABLE = { id: "disable", label: "Disable in this chat" } as const;
 
@@ -22,10 +22,15 @@ function stateActions(
 	switch (state) {
 		case "disabled-in-chat":
 			return [{ id: "enable", label: "Enable in this chat" }];
+		case "needs-sign-in":
+			return [{ id: "settings", label: "Sign in" }, DISABLE];
 		case "failed":
 		case "disconnected":
 			return [{ id: "reconnect", label: "Reconnect" }, DISABLE];
-		case "needs-sign-in":
+		case "pending-approval":
+			return [{ id: "settings", label: "Review" }];
+		case "invalid-config":
+			return [{ id: "settings", label: "Edit" }];
 		case "connected":
 		case "starting":
 		case "unknown":
@@ -139,12 +144,14 @@ export function McpServerSection({
 	actions,
 	onSetEnabled,
 	onReconnect,
+	onOpenSettings,
 }: {
 	servers: McpServerResourceSummary[];
 	authoritative: boolean;
 	actions: ResourceActions;
 	onSetEnabled: (name: string, enabled: boolean) => void;
 	onReconnect: (name: string) => void;
+	onOpenSettings: () => void;
 }) {
 	const hintId = useId();
 	return (
@@ -152,6 +159,15 @@ export function McpServerSection({
 			<div className="flex items-baseline gap-4 px-8 pt-8 pb-2 text-text-subtle">
 				<h3 className="tr-text-eyebrow">MCP servers</h3>
 				<span className="tr-text-metadata">· {servers.length}</span>
+				<span className="flex-1" />
+				<button
+					type="button"
+					data-testid="resources-mcp-settings"
+					onClick={onOpenSettings}
+					className="rounded-[var(--radius-xs)] px-4 text-primary tr-text-metadata outline-none hover:bg-control-bg focus-visible:ring-2 focus-visible:ring-primary"
+				>
+					Settings
+				</button>
 			</div>
 			{servers.length === 0 ? (
 				<p className="px-8 py-4 text-text-subtle tr-text-metadata">No MCP servers in this chat.</p>
@@ -166,7 +182,8 @@ export function McpServerSection({
 								actions={actions}
 								describedBy={hintId}
 								onAction={(id) => {
-									if (id === "reconnect") onReconnect(server.name);
+									if (id === "settings") onOpenSettings();
+									else if (id === "reconnect") onReconnect(server.name);
 									else onSetEnabled(server.name, id === "enable");
 								}}
 							/>

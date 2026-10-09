@@ -15,6 +15,7 @@ export interface McpHeldSnapshot {
 	snapshot: McpStatusSnapshot;
 	connectionGeneration: number;
 	revision: number;
+	startingSince: Record<string, number>;
 }
 
 export interface McpWorkspaceProjection {
@@ -43,6 +44,20 @@ export function isNewerMcpSnapshot(
 	);
 }
 
+function startingSince(
+	held: McpHeldSnapshot | undefined,
+	snapshot: McpStatusSnapshot,
+	connectionGeneration: number,
+): Record<string, number> {
+	const carried =
+		held && held.connectionGeneration === connectionGeneration ? held.startingSince : {};
+	const since: Record<string, number> = {};
+	for (const server of snapshot.servers) {
+		if (server.state === "starting") since[server.name] = carried[server.name] ?? server.updatedAt;
+	}
+	return since;
+}
+
 export function foldMcpSnapshot(
 	held: McpHeldSnapshot | undefined,
 	snapshot: McpStatusSnapshot,
@@ -50,7 +65,12 @@ export function foldMcpSnapshot(
 	revision: number,
 ): McpHeldSnapshot | null {
 	if (!isNewerMcpSnapshot(held, snapshot, connectionGeneration)) return null;
-	return { snapshot, connectionGeneration, revision };
+	return {
+		snapshot,
+		connectionGeneration,
+		revision,
+		startingSince: startingSince(held, snapshot, connectionGeneration),
+	};
 }
 
 export function foldMcpList(

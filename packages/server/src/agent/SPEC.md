@@ -680,8 +680,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
       entries (pi's loader jiti-loads them — no value-import into our typecheck graph), resolved
       **lazily on first use** (never at module load: the resolve requires `node_modules`, which a
       compiled binary lacks). The workspace packages' `pi.skills` manifests aren't auto-discovered for
-      file-path entries — their `skills/` dirs (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`) plus
-      the registry extensions' owner-resolved skill roots are wired via **`additionalSkillPaths`**.
+      file-path entries — their `skills/` dirs (`pi-spec-graph`, `pi-thinkrail-workflow`, `pi-todos`), the
+      host's own skills (`packages/server/skills`: ThinkRail-only guidance such as
+      `managing-mcp-servers`, which would be wrong under vanilla pi and so cannot live in a portable
+      package) plus the registry extensions' owner-resolved skill roots are wired via
+      **`additionalSkillPaths`**; `build-support`'s `skillRoots` lists the same host root for both bundles.
       Registry extensions themselves are never path-loaded: they are the same named inline factories in
       both modes (one composition mode; `{ name, factory }` keeps `<inline:visualize>` in diagnostics).
     - **Bundled launchers (compiled CLI binary and packaged desktop runtime):** the launcher awaits the
@@ -1034,7 +1037,7 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   adds the bounded, base64-free `McpResultSummary` under `details.thinkrail` (`summarizeMcpResult`), and
   `readMcpToolOutput` serves a result's recorded full output (`mcp.readOutput`) from exactly its
   `fullOutputPath` (pi's owner-only temp file; at most 1 MiB, `truncated` beyond) — `unavailable` for a
-  result that recorded none, `expired` once the file is gone. `mcp.readLog` reads `readMcpServerLog`
+  result that recorded none, `expired` once the file is gone. Settings' *Show log* reads `readMcpServerLog`
   ([[submodule-server-agent-mcp]]): pi appends what servers log (`notifications/message`) to one `mcp.log`
   per agent directory for every session, so a server's lines are picked by their entry head and masked.
 - **Sign-in** (`mcpSignIn.ts`; pi ≥ 1.1.0 for cancellable sign-in, #10565). `startMcpProbe({ action:

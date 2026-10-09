@@ -25,6 +25,7 @@ import { ChangesPanel } from "../panels/ChangesPanel";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FileTree } from "../panels/FileTree";
+import { startChatInTab } from "../panels/openChat";
 import { openFileInTab } from "../panels/openTabs";
 import { ProjectTree } from "../panels/ProjectTree";
 import "../panels/resources/register";
@@ -40,7 +41,6 @@ import {
 	isDefaultWorkspace,
 	isExternalWorkspace,
 	type LayoutIntent,
-	layoutOpenOptionsForNavigation,
 	selectCanRenameChat,
 	selectContextProject,
 	selectDiffTabTargetRef,
@@ -51,7 +51,7 @@ import {
 	toast,
 	useAppStore,
 } from "../store";
-import { createSessionWithSkillBaseline, errorText, getTransport } from "../transport";
+import { errorText, getTransport } from "../transport";
 import {
 	currentChatDestination,
 	hydrateChatResource,
@@ -570,30 +570,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			const currentAttention = useAppStore.getState().layoutAttentionByWorkspace[workspaceId];
 			if (!currentAttention) return;
 			changeAttention({ ...currentAttention, lastFocusedCenterGroupId: groupId });
-			const navigation = useAppStore.getState().beginCenterNavigation(workspaceId, groupId);
-			useAppStore.getState().beginChatStart(workspaceId);
-			void createSessionWithSkillBaseline({ workspaceId })
-				.then(({ result: { sessionId, model, thinkingLevel }, syncedTick }) => {
-					const store = useAppStore.getState();
-					store.openChatSession(
-						workspaceId,
-						sessionId,
-						model,
-						thinkingLevel,
-						syncedTick,
-						layoutOpenOptionsForNavigation(store, workspaceId, navigation),
-					);
-				})
-				.catch(() => {
-					const state = useAppStore.getState();
-					if (
-						layoutOpenOptionsForNavigation(state, workspaceId, navigation).activate !== false &&
-						!state.removedWorkspaceIds[workspaceId]
-					) {
-						toast.error("The agent session could not be created.", "Couldn't start the chat");
-					}
-				})
-				.finally(() => useAppStore.getState().endChatStart(workspaceId));
+			void startChatInTab(workspaceId, groupId);
 		},
 		[changeAttention, workspaceId],
 	);

@@ -25,9 +25,9 @@ grouping; the host already bounds recent records. Components do not derive these
 `chatResources.ts` is the store's private implementation file for resource projection/state/scope/read
 types and the `staleChatResources` state transform. A parent settling does not clear its still-running
 resources or change the Projects rail's existing activity contract. The optional `mcpServers` list is part
-of the same resource snapshot; `selectChatResourceGroups(snapshot, includeMcp)` orders it (attention —
-needs sign-in, failed, pending approval — first) and counts its active (connected/starting) servers apart
-from the work count, and hands back `null` for an older protocol.
+of the same resource snapshot; `selectChatResourceGroups(snapshot, includeMcp)` orders it (attention
+first) and counts its active (connected/starting) and attention (needs sign-in, failed, pending approval)
+servers apart from the work count, and hands back `null` for an older protocol.
 
 Resource snapshots are not browser-persisted. Reconnect or an unsupported host removes control
 authority until a fresh read succeeds; failed reads preserve visibly stale data, never fabricate an
@@ -45,13 +45,23 @@ host) and `handledElsewhere` — and the held per-session status snapshots, besi
 protocol, for a live scope (removed workspaces and deleted chats are rejected), and only
 through the **generation guard**: a snapshot replaces the held one when its generation is newer or it
 arrived on a newer connection — a restarted host restarts its counters, so a pure number comparison would
-freeze the view. **`installMcpList(read, result)`** (every `mcp.list` answer) is fenced
+freeze the view. **`installMcpList(read, result)`** (every `mcp.list` and list-returning mutation) is fenced
 by the `selectMcpRead` token captured before the request: a list is the authoritative live-chat set as of
 that read, so held sessions it omits drop unless a push landed after the read began, newer held
-generations survive, and deleted chats never reinstall. An unsupported welcome clears the slice, workspace
-removal drops its entry, and chat deletion drops its snapshot. `selectMcpWorkspaceStarting` drives the
-bounded re-read while a server starts. The state vocabulary and the attention/active predicates live in
-`lib` (`mcpState`) because the props-only chat resources module shares them.
+generations survive, and deleted chats never reinstall. Each held snapshot also carries the time a server
+was first seen `starting` on that connection. An unsupported welcome clears the slice, workspace removal
+drops its entry, and chat deletion drops its snapshot. **`deriveMcpServerRows(projection, now)`** is the
+one aggregation: one row per configured entry; with no live chat the state comes from configuration
+(invalid, pending approval, disabled / disabled in this project, else not running); otherwise a problem in
+any chat wins by a fixed precedence, `connected` counts the chats reporting it ("connected in 2 of 3"),
+`sessions.reporting` names the live chats reporting the row's state (what Settings' per-chat Reconnect and
+Reload now target), an unreported server reads unknown, and `starting` past one minute
+reads unknown (stalled). Of a same-name user/project pair only the effective entry (the
+approved project one, else the user one) takes session status; a replaced user entry reads
+`replaced`. A pending repo override flags its user row for attention. Attention rows sort
+first and disabled/replaced rows last. `selectMcpWorkspaceStarting` drives the bounded
+re-read while a server starts. The state vocabulary and the attention/active predicates live in `lib`
+(`mcpState`) because the props-only chat resources module shares them.
 
 ## Boundary
 
@@ -425,12 +435,14 @@ bounded re-read while a server starts. The state vocabulary and the attention/ac
   **`activeLogin: LoginState | null`** (type from `auth`) is **flat + session-less** (a login runs on the
   Welcome screen before any session exists — routing it through a session runtime would drop its frames):
   the pure **`foldLoginFrame`** reducer lives here (as `reduceExtUi`/`reduceSessionEvent` do — `auth` stays
-  presentational), and **`beginLogin(loginId, providerId)`** opens the login (a no-op if a frame already
-  created it — the frame can beat the `loginStart` response), **`applyLoginFrame(push)`** folds an inbound
-  `provider.login` frame (creating `activeLogin` if the frame arrived first; ignoring frames for a different
-  live login), **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
+  presentational), and **`beginLogin(loginId, providerId, target?)`** opens the login (a no-op if a frame
+  already created it — the frame can beat the `loginStart` / `mcp.login` response),
+  **`applyLoginFrame(push)`** folds an inbound `provider.login` frame (creating `activeLogin`
+  if the frame arrived first; ignoring frames for a different live login); both keep an MCP
+  push's `target`, which is how Providers and MCP settings each open only their own logins,
+  **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Github`/`Appearance`/`LineWidth`/`Chat`/`Layout`/`Updates`/`Terminal`/`Templates`/`Review`/`Notifications`/`Privacy`/`Feedback`) with
+  **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Mcp`/`Github`/`Appearance`/`LineWidth`/`Chat`/`Layout`/`Updates`/`Terminal`/`Templates`/`Review`/`Notifications`/`Privacy`/`Feedback`) with
   **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
   **`setSettingsSection()`** — lives here so the top-bar gear, Welcome provider warning, and update-ready
   shell affordance can deep-link without prop-drilling. The optional Update key is navigation only. Native
@@ -643,8 +655,9 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `selectCatalogModel` (a model ref resolved against the **live** `models` list — a session's own `model`
   is the snapshot it was created with, so host-computed facts on it, today `thinkingLevels`, are read
   through this; callers fall back to the snapshot when the ref has left the catalog);
-  the MCP derivations `selectMcpRead` + `McpRead`, `selectMcpWorkspaceStarting`, `McpWorkspaceProjection`,
-  `selectSupportsMcp`, and the resource helper `orderMcpResources`; `selectSupportsProjectTrust` (the
+  the MCP derivations `deriveMcpServerRows` + `McpServerRow` / `McpRowState`, `MCP_STARTING_BOUND_MS`,
+  `selectMcpRead` + `McpRead`, `selectMcpWorkspaceStarting`, `McpWorkspaceProjection`, `selectSupportsMcp`,
+  and the resource helper `orderMcpResources`; `selectSupportsProjectTrust` (the
   `PROJECT_TRUST_PROTOCOL_VERSION` gate for the trust summary and the pi-level resource grant);
   `toast` (the fire-from-anywhere helper),
   `Toast` (type), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types

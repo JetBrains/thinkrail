@@ -20,12 +20,14 @@ test("runtime source manifest covers the launcher artifact surface", () => {
 		.map((extension) => join(dirname(extension.entry), "skills"));
 	expect(sources.skillRoots).toEqual([
 		...piPackageSkillRoots,
+		join(import.meta.dir, "..", "skills"),
 		...serverExtensions.flatMap(resolveExtensionSkillRoots),
 	]);
 	expect(sources.skillRoots.map((root) => basename(dirname(root)))).toEqual([
 		"spec-graph",
 		"pi-thinkrail-workflow",
 		"pi-todos",
+		"server",
 	]);
 	expect(
 		Object.fromEntries(

@@ -117,7 +117,8 @@ Built-in presets remain web-owned. The Layout section presents built-ins plus th
 ## Long-operation feedback
 
 Starting an agent session is seconds-long (watcher readiness + `session.create`), so it is never silent:
-every chat-start path — the empty-center New-chat button, `NewWorkspaceDialog`'s create-and-kick-off flow,
+every chat-start path — the New-chat buttons (empty center and tab bar) and Settings › MCP servers' *Open a
+chat*, which share `panels/openChat`'s `startChatInTab`, `NewWorkspaceDialog`'s create-and-kick-off flow,
 and reopening a closed chat (`openChatInTab`) — brackets its request with the store's per-workspace
 chat-start counter (`beginChatStart`/`endChatStart`, a counter because starts can overlap); worktree
 creation does the same per-project (`beginWorktreeCreation`/`endWorktreeCreation`), which `ProjectTree`
