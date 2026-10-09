@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	type SubagentOverride,
 	type Workspace,
@@ -23,7 +24,10 @@ test("Chat settings renders one two-handle streaming movement control", () => {
 	expect(markup.match(/type="range"/g)).toHaveLength(2);
 });
 
-function workspace(subagentsOverride?: SubagentOverride): Workspace {
+function workspace(
+	subagentsOverride?: SubagentOverride,
+	subagentMaxConcurrentOverride?: number,
+): Workspace {
 	return {
 		id: "ws1",
 		projectId: "p1",
@@ -32,25 +36,31 @@ function workspace(subagentsOverride?: SubagentOverride): Workspace {
 		worktreePath: "/tmp/checkout-flow",
 		baseBranch: "main",
 		...(subagentsOverride ? { subagentsOverride } : {}),
+		...(subagentMaxConcurrentOverride === undefined ? {} : { subagentMaxConcurrentOverride }),
 	};
 }
 
 function renderSettings({
-	protocolVersion = SUBAGENT_SETTINGS_PROTOCOL_VERSION,
+	protocolVersion = SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	globalEnabled = true,
+	globalLimit = 4,
 	activeWorkspace,
 }: {
 	protocolVersion?: number;
 	globalEnabled?: boolean;
+	globalLimit?: number;
 	activeWorkspace?: Workspace;
 } = {}): string {
 	return renderToStaticMarkup(
 		<SubagentSettings
 			protocolVersion={protocolVersion}
 			globalEnabled={globalEnabled}
+			globalLimit={globalLimit}
 			workspace={activeWorkspace ?? null}
 			onGlobalChange={() => {}}
 			onWorkspaceChange={() => {}}
+			onGlobalLimitChange={() => {}}
+			onWorkspaceLimitChange={() => {}}
 		/>,
 	);
 }
@@ -85,4 +95,40 @@ test("an active workspace shows its named three-state override", () => {
 	expect(markup).toContain('data-testid="subagents-workspace-on"');
 	expect(markup).toContain('data-testid="subagents-workspace-off"');
 	expect(markup).toContain('data-testid="subagents-workspace-off" data-active="true"');
+});
+
+test("subagent limits stay hidden against hosts older than the concurrency protocol", () => {
+	const markup = renderSettings({
+		protocolVersion: SUBAGENT_CONCURRENCY_PROTOCOL_VERSION - 1,
+		activeWorkspace: workspace(undefined, 6),
+	});
+
+	expect(markup).toContain('data-testid="subagents-global-toggle"');
+	expect(markup).not.toContain('data-testid="subagent-limit-global"');
+	expect(markup).not.toContain('data-testid="subagent-limit-workspace"');
+});
+
+test("the global limit shows its current value with the contract bounds", () => {
+	const markup = renderSettings({ globalLimit: 7 });
+
+	expect(markup).toContain('data-testid="subagent-limit-global"');
+	expect(markup).toMatch(
+		/min="1" max="16"[^>]*data-testid="subagent-limit-global-input"[^>]*value="7"/,
+	);
+	expect(markup).not.toContain('data-testid="subagent-limit-workspace"');
+});
+
+test("a workspace without a limit override follows the global one and hides the input", () => {
+	const markup = renderSettings({ globalLimit: 5, activeWorkspace: workspace() });
+
+	expect(markup).toContain('data-testid="subagent-limit-workspace-inherit" data-active="true"');
+	expect(markup).toContain("Currently 5");
+	expect(markup).not.toContain('data-testid="subagent-limit-workspace-input"');
+});
+
+test("a workspace limit override selects Custom and edits its own value", () => {
+	const markup = renderSettings({ globalLimit: 5, activeWorkspace: workspace(undefined, 2) });
+
+	expect(markup).toContain('data-testid="subagent-limit-workspace-custom" data-active="true"');
+	expect(markup).toMatch(/data-testid="subagent-limit-workspace-input"[^>]*value="2"/);
 });

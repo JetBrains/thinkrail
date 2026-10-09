@@ -1,6 +1,7 @@
 import {
 	type AppConfigUpdate,
 	type ComposerGrowthLimit,
+	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	type SubagentOverride,
 	type Workspace,
@@ -16,6 +17,7 @@ import { selectActiveWorkspace, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
 import { SettingsSwitch } from "./SettingsSwitch";
+import { GlobalSubagentLimit, WorkspaceSubagentLimit } from "./SubagentLimitSettings";
 
 const MESSAGE_ORDER_CHOICES: SettingsRadioChoice<ChatMessageOrder>[] = [
 	{
@@ -178,19 +180,26 @@ function saveSetting(config: AppConfigUpdate, errorMessage: string): void {
 export function SubagentSettings({
 	protocolVersion,
 	globalEnabled,
+	globalLimit,
 	workspace,
 	onGlobalChange,
 	onWorkspaceChange,
+	onGlobalLimitChange,
+	onWorkspaceLimitChange,
 }: {
 	protocolVersion: number | null;
 	globalEnabled: boolean;
+	globalLimit: number;
 	workspace: Workspace | null;
 	onGlobalChange: (enabled: boolean) => void;
 	onWorkspaceChange: (choice: WorkspaceSubagentChoice) => void;
+	onGlobalLimitChange: (value: number) => void;
+	onWorkspaceLimitChange: (value: number | null) => void;
 }) {
 	if (protocolVersion === null || protocolVersion < SUBAGENT_SETTINGS_PROTOCOL_VERSION) {
 		return null;
 	}
+	const limitSupported = protocolVersion >= SUBAGENT_CONCURRENCY_PROTOCOL_VERSION;
 	return (
 		<div
 			data-testid="settings-subagents"
@@ -219,6 +228,9 @@ export function SubagentSettings({
 					onChange={onGlobalChange}
 				/>
 			</div>
+			{limitSupported ? (
+				<GlobalSubagentLimit value={globalLimit} onChange={onGlobalLimitChange} />
+			) : null}
 
 			{workspace ? (
 				<div className="flex flex-col gap-8 border-border-default border-t pt-16">
@@ -239,6 +251,14 @@ export function SubagentSettings({
 							onSelect={onWorkspaceChange}
 						/>
 					</div>
+					{limitSupported ? (
+						<WorkspaceSubagentLimit
+							key={workspace.id}
+							workspace={workspace}
+							globalLimit={globalLimit}
+							onChange={onWorkspaceLimitChange}
+						/>
+					) : null}
 				</div>
 			) : null}
 		</div>
@@ -251,6 +271,7 @@ export function ChatSettings() {
 	const streamingResponseMovement = useAppStore((state) => state.streamingResponseMovement);
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const subagentsEnabled = useAppStore((state) => state.subagentsEnabled);
+	const subagentMaxConcurrent = useAppStore((state) => state.subagentMaxConcurrent);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const setChatMessageOrder = useAppStore((state) => state.setChatMessageOrder);
 	const setStreamingResponseMovement = useAppStore((state) => state.setStreamingResponseMovement);
@@ -275,6 +296,13 @@ export function ChatSettings() {
 				override: choice === "inherit" ? null : choice,
 			})
 			.catch(() => toast.error("Couldn't change subagents for this workspace"));
+	};
+
+	const setWorkspaceSubagentLimit = (value: number | null) => {
+		if (!activeWorkspace) return;
+		getTransport()
+			.request("workspace.setSubagentMaxConcurrent", { id: activeWorkspace.id, value })
+			.catch(() => toast.error("Couldn't change the subagent limit for this workspace"));
 	};
 
 	return (
@@ -330,11 +358,16 @@ export function ChatSettings() {
 			<SubagentSettings
 				protocolVersion={protocolVersion}
 				globalEnabled={subagentsEnabled}
+				globalLimit={subagentMaxConcurrent}
 				workspace={activeWorkspace}
 				onGlobalChange={(enabled) =>
 					saveSetting({ subagentsEnabled: enabled }, "Couldn't change the global subagent default")
 				}
 				onWorkspaceChange={selectWorkspaceSubagents}
+				onGlobalLimitChange={(value) =>
+					saveSetting({ subagentMaxConcurrent: value }, "Couldn't change the subagent limit")
+				}
+				onWorkspaceLimitChange={setWorkspaceSubagentLimit}
 			/>
 		</section>
 	);

@@ -442,7 +442,7 @@ selected-log state belong to chat integration, not domain persistence. See
   **`favoriteModels` / `recentModels: WireModel[]`** (defaulting to `[]` so a pre-v77 host reads as "none"),
   **`analyticsEnabled: boolean`**, **`analyticsConsentConfirmed: boolean`**,
   **`notificationsEnabled: boolean`** (the attention-notification master toggle),
-  **`subagentsEnabled: boolean`**, **`jbcentralQuotaEnabled: boolean`**,
+  **`subagentsEnabled: boolean`**, **`subagentMaxConcurrent: number`**, **`jbcentralQuotaEnabled: boolean`**,
   and **`jbcentralQuotaRefreshSeconds: number`** ride the same `applyConfig` fold (host-owned, fieldwise
   defaulted/validated from the contracts helpers so an older or malformed host snapshot cannot poison
   the store). `terminalWindowsShell` narrows through `isTerminalWindowsShell` and otherwise uses

@@ -520,7 +520,12 @@ a project picker, the prompt hero, and the reused
   whole block requires `protocolVersion >= SUBAGENT_SETTINGS_PROTOCOL_VERSION`, so an independently shipped
   client never offers unsupported mutations against an older host.
   Global mutation converges through `settings.changed`, local mutation through `workspace.updated`, and
-  neither is optimistic. `Use global` sends `null`, so later global changes continue to flow through);
+  neither is optimistic. `Use global` sends `null`, so later global changes continue to flow through).
+  From `SUBAGENT_CONCURRENCY_PROTOCOL_VERSION` the block adds the per-chat **Subagents per chat** limit
+  (`SubagentLimitSettings.tsx`): a global number (`settings.update { subagentMaxConcurrent }`) and, in the
+  workspace block, `Use global` / `Custom` (`workspace.setSubagentMaxConcurrent`, `null` = inherit).
+  Inputs validate with `isSubagentMaxConcurrent`, apply on submit, never clamp, and converge through
+  the same broadcasts; choosing `Custom` only reveals the input seeded with the global value until Apply;
   the
   **shell-owned injected Layout
   section** (Balanced/Focus/Review
