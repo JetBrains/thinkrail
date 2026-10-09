@@ -662,6 +662,13 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 		);
 	}, [workspaceId, connected, welcome, trusted, readAttempt]);
 
+	useEffect(() => {
+		if (trusted) return;
+		setEditing(null);
+		setApproving(null);
+		setRemoving((current) => (current?.summary.scope === "project" ? null : current));
+	}, [trusted]);
+
 	const handledElsewhere = projection?.handledElsewhere ?? null;
 	const readOnly = !connected || handledElsewhere !== null;
 	const servers = projection?.servers ?? null;

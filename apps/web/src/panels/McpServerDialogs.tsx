@@ -565,7 +565,8 @@ export function McpAddDialog({
 	onEnableInProject: (name: string) => Promise<string | null>;
 }) {
 	const [tier, setTier] = useState(initialTier);
-	const [scope, setScope] = useState<McpServerScope>("user");
+	const [selectedScope, setSelectedScope] = useState<McpServerScope>("user");
+	const scope: McpServerScope = projectScopeAvailable ? selectedScope : "user";
 	const [draft, setDraft] = useState<McpFormDraft>(emptyMcpDraft);
 	const [submitted, setSubmitted] = useState(false);
 	const [json, setJson] = useState("");
@@ -707,7 +708,7 @@ export function McpAddDialog({
 											disabled: !projectScopeAvailable,
 										},
 									]}
-									onChange={setScope}
+									onChange={setSelectedScope}
 								/>
 							</div>
 							{!projectScopeAvailable ? (
