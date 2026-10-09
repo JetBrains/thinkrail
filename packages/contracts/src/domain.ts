@@ -369,6 +369,8 @@ export type McpContentBlockSummary =
  */
 export interface McpResultSummary {
 	blocks: McpContentBlockSummary[];
+	/** Blocks dropped from the end of `blocks` once the summary's byte budget was spent. */
+	omittedBlocks?: number;
 	structuredContent?: unknown;
 	structuredContentTruncated?: boolean;
 	isError?: boolean;

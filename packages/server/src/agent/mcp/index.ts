@@ -18,7 +18,7 @@ export {
 export { createMcpEngine } from "./engine";
 export {
 	isMcpResultTool,
-	MCP_STRUCTURED_SUMMARY_BYTES,
+	MCP_SUMMARY_BYTES,
 	summarizeMcpResult,
 } from "./results";
 export {
