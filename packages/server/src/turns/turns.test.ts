@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { PiEvent, TurnChangeSet } from "@thinkrail/contracts";
@@ -78,6 +78,22 @@ test("a worktree snapshot captures tracked edits and untracked files without tou
 	expect(git(repo, "status", "--porcelain")).toContain("?? new.txt");
 	expect(git(repo, "diff", "--cached", "--name-only")).toBe("");
 });
+
+test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+	"an unreadable untracked file does not void the snapshot of everything else",
+	async () => {
+		writeFileSync(join(repo, "new.txt"), "new\n");
+		writeFileSync(join(repo, "locked.txt"), "secret\n");
+		chmodSync(join(repo, "locked.txt"), 0o000);
+		try {
+			const tree = await snapshotWorktree(repo);
+			expect(tree).not.toBeNull();
+			expect(git(repo, "ls-tree", "--name-only", tree ?? "").split("\n")).toContain("new.txt");
+		} finally {
+			chmodSync(join(repo, "locked.txt"), 0o644);
+		}
+	},
+);
 
 test("a run that changes files is recorded once with its change set, published, and diffable as a turn scope", async () => {
 	const published: TurnChangeSet[] = [];
