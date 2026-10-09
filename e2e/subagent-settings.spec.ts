@@ -43,6 +43,24 @@ async function restoreSubagentBaseline(page: Page): Promise<void> {
 	await page.keyboard.press("Escape");
 }
 
+async function restoreSubagentLimitBaseline(page: Page): Promise<void> {
+	if (page.isClosed()) return;
+	if (await page.getByTestId("settings-dialog").isVisible()) await page.keyboard.press("Escape");
+	await openChatSettings(page);
+	const inherit = page.getByTestId("subagent-limit-workspace-inherit");
+	if ((await inherit.count()) > 0 && (await inherit.getAttribute("data-active")) !== "true") {
+		await inherit.click();
+		await expect(inherit).toHaveAttribute("data-active", "true");
+	}
+	const input = page.getByTestId("subagent-limit-global-input");
+	if ((await input.inputValue()) !== "4") {
+		await input.fill("4");
+		await input.press("Enter");
+		await expect(inherit).toContainText("Currently 4");
+	}
+	await page.keyboard.press("Escape");
+}
+
 test("a maximal unbroken workspace name stays contained on a phone-sized settings pane", async ({
 	page,
 }) => {
@@ -133,6 +151,64 @@ test("global and workspace subagent choices converge from authoritative pushes",
 		releaseGlobal();
 		releaseWorkspace();
 		await restoreSubagentBaseline(page).catch(() => {});
+		await peer?.close();
+	}
+});
+
+test("global and workspace subagent limits persist, inherit, and converge across clients", async ({
+	page,
+	context,
+}) => {
+	let peer: Page | undefined;
+	const globalInput = (target: Page) => target.getByTestId("subagent-limit-global-input");
+	const workspaceInherit = (target: Page) => target.getByTestId("subagent-limit-workspace-inherit");
+	const workspaceCustom = (target: Page) => target.getByTestId("subagent-limit-workspace-custom");
+	const workspaceInput = (target: Page) => target.getByTestId("subagent-limit-workspace-input");
+	try {
+		await openFixtureProject(page);
+		await enterDefaultWorkspace(page);
+		peer = await context.newPage();
+		await peer.goto(page.url());
+		await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await openChatSettings(page);
+		await openChatSettings(peer);
+
+		await expect(globalInput(page)).toHaveValue("4");
+		await expect(workspaceInherit(page)).toHaveAttribute("data-active", "true");
+		await expect(workspaceInherit(page)).toContainText("Currently 4");
+		await expect(workspaceInput(page)).toHaveCount(0);
+
+		await globalInput(page).fill("0");
+		await expect(page.getByTestId("subagent-limit-global-apply")).toBeDisabled();
+		await expect(page.getByText("Enter a whole number from 1 to 16.")).toBeVisible();
+		await globalInput(page).fill("6");
+		await globalInput(page).press("Enter");
+		await expect(globalInput(peer)).toHaveValue("6");
+		await expect(workspaceInherit(peer)).toContainText("Currently 6");
+
+		await workspaceCustom(page).click();
+		await expect(workspaceInput(page)).toHaveValue("6");
+		await expect(workspaceInherit(peer)).toHaveAttribute("data-active", "true");
+		await workspaceInput(page).fill("2");
+		await page.getByTestId("subagent-limit-workspace-apply").click();
+		await expect(workspaceCustom(peer)).toHaveAttribute("data-active", "true");
+		await expect(workspaceCustom(peer)).toContainText("2 at once");
+		await expect(workspaceInput(peer)).toHaveValue("2");
+		await page.getByTestId("settings-subagents").screenshot({
+			path: test.info().outputPath("subagent-limits.png"),
+		});
+
+		await page.reload();
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await openChatSettings(page);
+		await expect(globalInput(page)).toHaveValue("6");
+		await expect(workspaceInput(page)).toHaveValue("2");
+
+		await workspaceInherit(page).click();
+		await expect(workspaceInherit(peer)).toHaveAttribute("data-active", "true");
+		await expect(workspaceInput(page)).toHaveCount(0);
+	} finally {
+		await restoreSubagentLimitBaseline(page).catch(() => {});
 		await peer?.close();
 	}
 });
