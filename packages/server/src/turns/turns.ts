@@ -5,6 +5,7 @@ import { loadTurns, loadWorkspaces, saveTurns } from "../persistence";
 
 const log = logger("turns");
 const TURNS_PER_WORKSPACE = 30;
+const DRAIN_TIMEOUT_MS = 5_000;
 
 interface PendingRun {
 	workspaceId: string;
@@ -84,8 +85,15 @@ export class TurnTracker {
 		return job;
 	}
 
-	async drain(): Promise<void> {
-		await Promise.all(this.recording);
+	async drain(timeoutMs = DRAIN_TIMEOUT_MS): Promise<void> {
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		await Promise.race([
+			Promise.all(this.recording),
+			new Promise<void>((resolve) => {
+				timer = setTimeout(resolve, timeoutMs);
+			}),
+		]);
+		clearTimeout(timer);
 	}
 
 	private async settle(
