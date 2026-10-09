@@ -7,6 +7,7 @@ import { CodedError } from "@thinkrail/shared/codedError";
 import type { ChildHandle } from "pi-delegation";
 import { withSessionResources } from "./agentSessionManager";
 import { delegationServiceFor, stopSessionChildren } from "./delegation";
+import { mcpResourceSummaries } from "./mcpSessions";
 
 let publish: (payload: { workspaceId: string; sessionId: string }) => void = () => {};
 export function setSessionResourcesPublisher(fn: typeof publish): void {
@@ -76,6 +77,7 @@ export function getSessionResources(
 		sessionId,
 		commands: commands.list(),
 		subagents: subagents(workspaceId, sessionId),
+		mcpServers: mcpResourceSummaries(sessionId),
 	}));
 }
 

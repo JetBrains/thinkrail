@@ -396,10 +396,17 @@ export interface McpProjectPolicy {
 	overrides: Readonly<Record<string, McpProjectOverride>>;
 }
 
+// Null-prototype copies, so a server named `__proto__` never reads Object.prototype as its policy.
+const ownEntries = <T>(record: Record<string, T> | undefined): Record<string, T> =>
+	Object.assign(Object.create(null) as Record<string, T>, record);
+
 export function mcpPolicyOf(
 	project: Pick<Project, "mcpApprovals" | "mcpOverrides"> | undefined,
 ): McpProjectPolicy {
-	return { approvals: project?.mcpApprovals ?? {}, overrides: project?.mcpOverrides ?? {} };
+	return {
+		approvals: ownEntries(project?.mcpApprovals),
+		overrides: ownEntries(project?.mcpOverrides),
+	};
 }
 
 export function loadHostMcpConfig(options: {
@@ -407,8 +414,9 @@ export function loadHostMcpConfig(options: {
 	cwd: string;
 	projectTrusted: boolean;
 	policy: McpProjectPolicy;
+	disabledInChat?: ReadonlySet<string>;
 }): LoadedMcpFiles {
-	const { policy } = options;
+	const { policy, disabledInChat } = options;
 	const loaded = loadMcpConfigFiles({
 		agentDir: options.agentDir,
 		cwd: options.cwd,
@@ -421,6 +429,7 @@ export function loadHostMcpConfig(options: {
 		const config: McpServerConfig = { ...server.config };
 		if (override?.enabled !== undefined) config.enabled = override.enabled;
 		if (override?.exposure !== undefined) config.exposure = override.exposure;
+		if (disabledInChat?.has(server.name)) config.enabled = false;
 		return { ...server, config: normalizeExposureForHost(config) };
 	});
 	return { ...loaded, servers };

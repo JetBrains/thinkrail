@@ -365,6 +365,7 @@ test("persisted parent attachment does not recover command handles from transcri
 		sessionId: p.sessionId,
 		commands: [],
 		subagents: [],
+		mcpServers: [],
 	});
 	expect(await readBackgroundCommandOutput(p.workspaceId, p.sessionId, id, p.cwd)).toEqual({
 		available: false,
@@ -410,6 +411,7 @@ test("resource reads fail closed while a prior parent generation tears down", as
 		sessionId: p.sessionId,
 		commands: [],
 		subagents: [],
+		mcpServers: [],
 	});
 	await removeSession(p.sessionId);
 });

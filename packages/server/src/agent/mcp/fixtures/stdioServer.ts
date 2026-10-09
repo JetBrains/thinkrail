@@ -3,6 +3,7 @@ import { createInterface } from "node:readline";
 
 const pidFile = process.env.MCP_FIXTURE_PID_FILE;
 if (pidFile) appendFileSync(pidFile, `${process.pid}\n`);
+const initializeDelayMs = Number(process.env.MCP_FIXTURE_INITIALIZE_DELAY_MS ?? 0);
 if (process.env.MCP_FIXTURE_STUBBORN === "1") {
 	process.on("SIGTERM", () => {});
 	setInterval(() => {}, 1000);
@@ -23,6 +24,12 @@ const tools = [
 	{
 		name: "rich",
 		description: "Return text, an image, a resource link and structured content",
+		inputSchema: { type: "object", properties: {} },
+		annotations: { readOnlyHint: true },
+	},
+	{
+		name: "big",
+		description: "Return more text than a tool result keeps",
 		inputSchema: { type: "object", properties: {} },
 		annotations: { readOnlyHint: true },
 	},
@@ -47,6 +54,9 @@ function callResult(name: string, text: string): unknown {
 			structuredContent: { rows: [{ id: 1, title: "first" }] },
 		};
 	}
+	if (name === "big") {
+		return { content: [{ type: "text", text: "line of output\n".repeat(20_000) }] };
+	}
 	return { content: [{ type: "text", text: `${name}: ${text}` }] };
 }
 
@@ -64,12 +74,15 @@ lines.on("line", (line) => {
 	}
 	if (message.id === undefined) return;
 	switch (message.method) {
-		case "initialize":
-			return reply(message.id, {
+		case "initialize": {
+			const result = {
 				protocolVersion: message.params?.protocolVersion ?? "2025-06-18",
 				capabilities: { tools: {} },
 				serverInfo: { name: "fixture", version: "1.0.0" },
-			});
+			};
+			setTimeout(() => reply(message.id, result), initializeDelayMs);
+			return;
+		}
 		case "tools/list":
 			return reply(message.id, { tools });
 		case "tools/call": {

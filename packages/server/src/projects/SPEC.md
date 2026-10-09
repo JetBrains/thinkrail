@@ -68,7 +68,8 @@ bootstrap it into one so it can be opened.
   leaving it untouched otherwise; `trusted: false` revokes both.
 - **Public surface (barrel):** `openProject`, `listProjects`, `listRecentProjects`, `closeProject`,
   `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`, `setProjectTrust`,
-  `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`, `setPiTrustSeed`.
+  `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`,
+  `approveProjectMcpServer`, `setProjectMcpOverride`, `setPiTrustSeed`.
 - **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, which now owns the
   environment its children spawn under — this module passes none); `contracts` (`Project`, `ProjectPathStatus`);
   `shared/codedError` (the two named open failures); Node/Bun.

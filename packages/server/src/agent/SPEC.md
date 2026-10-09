@@ -761,7 +761,18 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   opens — settlement, the release of an admitted prompt, or a compaction's end; requests coalesce); the **`setSkillAdmissionResolver`** seam (host
   wires `workspaceId` → the admission context, derived once by `admissionContextFor(project, overrides)`);
   the **`setMcpPolicyResolver`** seam (host wires `workspaceId` → the project's MCP approvals and overrides,
-  derived by `mcpPolicyOf(project)`);
+  derived by `mcpPolicyOf(project)`); the MCP management surface — `listMcpServers`,
+  `mcpOwnershipGuard` (resolves pi settings, then answers synchronously who manages MCP instead of
+  ThinkRail — what `listMcpServers` reports as `handledElsewhere` — so the host checks it in the same call
+  stack as every management mutation), `refreshMcpStatus`,
+  `setMcpStatusPublisher`, `mcpSessionView` / `liveSessionIdsOf`, `dispatchSessionMcpCommand` (with an
+  optional `notify` that takes the dispatch's notifications instead of the chat), `reconnectMcpServer`,
+  `readMcpServerLog` (one server's masked lines from pi's shared `mcp.log`),
+  `setSessionMcpServerEnabled` (the chat-local disable, applied through the reload gate), the config
+  writers `writeMcpServerEntry` / `removeMcpServerEntry` / `projectMcpEntryFingerprint` /
+  `shareMcpOverrideWithRepo` (pi-rule validation, `MCP_CONFIG_INVALID` / `MCP_PATH_UNSAFE`) and the
+  sign-in probe (`startMcpProbe`, `replyMcpProbe`, `cancelMcpProbe`, `cancelMcpProbesOwnedBy`,
+  `cancelAllMcpProbes`, `setMcpLoginPublisher`, `isMcpLoginId`);
   the pi-level trust surface — `piResourceTrustFor(workspaceId)`, `applyPiResourceTrust(workspaceIds)`
   (gated reload of every live session whose trust is stale), `piProjectTrustDecision(path)` (pi's
   `trust.json` decision, nearest ancestor, `null` when it has none and `undefined` when the store is
@@ -902,8 +913,9 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   `loadMcpConfig` + validation (parity tests run the same fixtures through pi's installed loader, re-checked
   on every pi bump) because pi does not export them; it also applies
   the project record's enablement/exposure overrides, drops repo-defined entries the user has not approved,
-  and normalizes `codemode` exposure to `deferred` in memory while codemode is absent. Servers registered
-  by third-party extensions bypass
+  and normalizes `codemode` exposure to `deferred` in memory while codemode is absent. Config writers are
+  ThinkRail's (synchronous temp-file rename, unknown keys kept, only the defining file touched, no symlinked
+  `.pi/` paths, secret literals masked in every UI). Servers registered by third-party extensions bypass
   the loader; the `mcp` descriptor's factory registers its own `session_start` / `mcp_servers_change`
   handlers ahead of pi's so `tool_search` is active before pi checks reachability whenever
   `pi.getMcpServers()` is non-empty (no "neither is active" warning, and nothing to do when another
@@ -913,7 +925,7 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   (`Project.piResourceTrust`, [[submodule-server-projects]]) instead of a forced `true`; the alias-name
   listing alone passes `false` (alias roots are explicit paths, so it never needs project settings). The
   session loader's `reload()` applies the admission context's current trust (`setProjectTrusted`) before
-  every load, so any reload — a grant or a manual reload — loads exactly what the record
+  every load, so any reload — a grant, a config change, a manual reload — loads exactly what the record
   allows; a grant or revoke therefore only asks the gate to reload the sessions whose trust is stale
   (`applyPiResourceTrust`: idle now, busy at settlement). A child session captures the trust at its
   creation and `pi-subagents` retains children across a parent reload, so a revoke also stops every
@@ -946,7 +958,25 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   settle or the budget (`SESSION_SHUTDOWN_BUDGET_MS`, 3 s — pi escalates stdin-close → SIGTERM → SIGKILL
   over 2.5 s) elapses, because `dispose()` invalidates the extension context the handlers are still
   using; the host shutdown settle budget is that same 3 s. Retained sessions keep their servers
-  (no eviction). Reloads go through `session.reload()` behind a per-session reload gate: while a reload runs, every
+  (no eviction); they appear as the third list of `SessionResources` (`mcpServers`: name, state, tool
+  count, transport from the session's latest status snapshot, `registered: true` with the registration's
+  transport for a server an extension registered; a change publishes `session.resourcesChanged`) with
+  a per-chat disable applied at the next idle reload (a deferred one shows the server
+  `pending-reload` at once). The overlay reaches `mcp.json` servers only, so `setSessionMcpServerEnabled`
+  refuses (`MCP_CONFIG_INVALID`) to disable a server the chat did not load from its files — for a
+  registered one the message says it is registered by an extension and can't be disabled per chat — and
+  refuses with `MCP_HANDLED_ELSEWHERE` where `builtin:mcp` does not own `/mcp`.
+  Config or trust changes reload only the affected sessions: the session's `loadConfig` records the
+  per-server effective config pi received at its last start (`McpSessionHost.loaded()`, cleared at the start
+  of every load), and `reconcileMcpSessions` compares it with what the loader would produce now
+  (`pendingMcpReload`) — an unapproved repo entry, for example, changes nothing and reloads nothing. A
+  session whose `/mcp` another extension owns, or none does, has nothing to compare (the built-in's loader
+  never runs there) and is never reconciled. Reconciliation runs after every
+  host mutation, when the user file changes (`watchUserMcpConfig`: one directory watcher on pi's agent dir,
+  300 ms debounce; a missing agent dir is created first — pi creates it on first use anyway — so a file the
+  user adds later is still seen), when a workspace change nudge touches `.pi`, and at each session's
+  `agent_settled` (so an edit the agent made itself applies once the run ends); a deferred reload shows the
+  changed servers as `pending-reload` until it runs. Reloads go through `session.reload()` behind a per-session reload gate: while a reload runs, every
   admission seam (`promptSession`, `steerSession`, `followUpSession`, `nudgeSession`, queue requeues,
   `answerQuestion`, `sendReviewFixToSession`, `compactSession`) refuses with "reloading", and completion
   delivery waits in its owners through `canDeliverCompletion` and flushes afterwards; the gate opens only
@@ -957,11 +987,86 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   meanwhile cannot start a reload that would refuse — and lose — the rest), and no manual or automatic
   compaction is in flight; a pending reload is reconsidered at `agent_settled`, on every reservation release
   and on compaction end / `compactSession`'s `finally`.
+- **Status** (`mcpSessions.ts`). Exposed, not recomputed: connection truth is pi's headless `/mcp` text,
+  obtained by dispatching the session's own command (`dispatchSessionMcpCommand` →
+  `extensionRunner.getCommand("mcp").handler`). The capture goes by provenance, never by format: that
+  dispatch gets `createCommandContext()` with its `ui` getter redefined (`Object.defineProperty`, so pi's
+  other lazy getters stay untouched) to a forwarding proxy of pi's UI whose `notify` alone reports to the
+  capture. It therefore takes exactly its own dispatch's notices, nothing it prints ever reaches the chat,
+  and a user's own `/mcp` (pi's prompt path, pi's context) always prints there, even mid-capture. The
+  reconnects (`reconnectMcpServer`: `mcp.reconnect` and the post-sign-in ones) dispatch the same way:
+  success is silent, pi's error notice becomes the call's rejection (through `redactMcpText`), and a chat
+  where `builtin:mcp` does not own `/mcp` is refused with `MCP_HANDLED_ELSEWHERE`. pi's startup "MCP
+  servers need attention" notice is unsolicited, so it alone is recognised by its fixed prefix through
+  `interceptExtUiNotify` ([`webUiContext`]), installed before `bindExtensions`: it becomes a partial status
+  update plus a full refresh as well as a toast. pi's `/mcp` awaits every startup connection before it
+  answers, so registration and every gated reload first seed the snapshot from what pi was given
+  (`McpSessionHost.loaded()` plus the servers extensions registered): each enabled one reads `starting`, a
+  disabled one its disabled state through the same derivation, and the previous load's report never
+  survives a reload. Then a capture starts; one begun before that (re)start is dropped (a per-session load
+  epoch), so a stale report never replaces the seed. Refreshes also run at `agent_settled`; at most one
+  capture per session is in flight and a caller waits a bounded time. Each snapshot merges pi's report with
+  configuration (`deriveMcpServerStatuses`: disabled by this chat / the project, pending approval, invalid
+  config; the last report stands when pi did not answer), carries a per-session monotonic generation, and
+  is published to the `mcp.status` channel. pi does not redact its status text (connection errors, HTTP
+  error bodies, a stdio server's stderr tail), so every `detail` and `configError` passes the host's
+  `redactMcpText` ([[submodule-server-agent-mcp]]) before it leaves the host. Configuration problems are
+  reported, never dropped: every named entry keeps its summary (one that is not an object reads
+  `server "<name>" must be an object`), and `listMcpServers` adds the two files' file-level problems
+  (unparsable JSON, `mcpServers` not an object, a mistyped key; `summarizeMcpConfigErrors`, masked) as
+  `configErrors` — pi's own report of them is the startup notice the host intercepts. Only a session whose
+  `/mcp` belongs to `builtin:mcp` is queried; another owner makes `listMcpServers` report
+  `handledElsewhere` (`by` = that extension's path, or `pi settings` for a live chat without `/mcp`), and
+  the refresh after the reload that handed `/mcp` over retires that session's statuses and resource rows
+  once (an empty `mcp.status` snapshot, one `session.resourcesChanged`). pi settings that turn the built-in
+  off are known with no chat open: `listMcpServers` resolves them the way the exclusion loader does
+  (`DefaultPackageManager` with the built-in's name, its `builtin:mcp` resource's `enabled`; missing
+  packages are skipped, never installed) and reports `by: "pi settings (-builtin:mcp)"`. Whether an
+  enabled non-built-in extension registers `/mcp` is not knowable without loading it, so a replacement is
+  only seen through a live chat's owner.
 - **Calls.** The per-session host extension ([[submodule-server-agent-mcp]]) asks before any `mcp__*`
   call without `readOnlyHint` (Deny · Allow once · Allow in this chat; session memory only; anything but
   the two affirmative answers blocks, and `steerEntry` cancels pending confirmations once pi accepts a
   steer). Its `tool_result` handler
-  adds the bounded, base64-free `McpResultSummary` under `details.thinkrail` (`summarizeMcpResult`).
+  adds the bounded, base64-free `McpResultSummary` under `details.thinkrail` (`summarizeMcpResult`), and
+  `readMcpToolOutput` serves a result's recorded full output (`mcp.readOutput`) from exactly its
+  `fullOutputPath` (pi's owner-only temp file; at most 1 MiB, `truncated` beyond) — `unavailable` for a
+  result that recorded none, `expired` once the file is gone. `mcp.readLog` reads `readMcpServerLog`
+  ([[submodule-server-agent-mcp]]): pi appends what servers log (`notifications/message`) to one `mcp.log`
+  per agent directory for every session, so a server's lines are picked by their entry head and masked.
+- **Sign-in** (`mcpSignIn.ts`; pi ≥ 1.1.0 for cancellable sign-in, #10565). `startMcpProbe({ action:
+  login | test | logout })` opens a short-lived, unregistered, in-memory pi session whose loader carries only
+  `builtin:mcp` with the one server (forced enabled) and whose UI context is the probe's own, dispatches
+  pi's `/mcp login|logout <name>` or headless `/mcp`, then emits `session_shutdown` (which also aborts a
+  running sign-in) and disposes it. Frames ride the `provider.login` family with `target: { kind: "mcp" }`
+  and `loginId` `mcplogin_*`, to the owning connection only (`setMcpLoginPublisher(push, ownerClientKey)`);
+  replies and cancels from any other connection fail with `LOGIN_NOT_OWNER`. pi's rpc-mode sign-in
+  notification becomes an `authUrl` frame only for `https:` or loopback `http:` addresses, its redirect
+  prompt becomes the paste-back `prompt` frame, and the outcome is derived from pi's captured
+  notifications (signed in / failure text / cancelled), never from the command promise alone. pi's wait for
+  the browser or the paste-back has no overall timeout, so every probe has a deadline (`PROBE_DEADLINE_MS`,
+  10 minutes; `startMcpProbe`'s optional `deadlineMs` is the test seam, which the host never passes) after
+  which it ends exactly like a cancel — `error` frame "Sign-in timed out.",
+  `session_shutdown` (which closes pi's loopback listener), lock released once the session is closed — and
+  the host cancels the probes a client owned when it reaps that client (`cancelMcpProbesOwnedBy`), so a
+  reloaded page or a discarded tab never holds a server until restart. After a successful sign-in, the
+  workspace's live chats that report the server as *needs sign-in* get `/mcp reconnect <name>` instead of
+  waiting for their next turn. Test connection is HTTP-only (a stdio server is verified when a chat starts
+  it) and reports *connected · N tools* or the reason; every `error` frame's message (pi's reason or
+  notice) is redacted like a status detail. A live chat's own `/mcp login` keeps pi's rpc path:
+  the sign-in address arrives as a transcript notice (never auto-opened; `openUrl` is a no-op on the host)
+  next to pi's paste dialog. The probe's loader forces `builtin:mcp`, so the host starts no probe where
+  `listMcpServers` reports `handledElsewhere` (`MCP_HANDLED_ELSEWHERE`, [[submodule-server-host]]).
+- **One sign-in per server, whoever runs it.** pi keeps one client registration and pending PKCE state per
+  server in the shared `mcp-auth.json`, so two concurrent flows for a server break each other. A probe
+  holds the server's lock (`acquireMcpSignInLock`, [[submodule-server-agent-mcp]]) from its start until its
+  session is closed and refuses with "already running" ("… in a chat" when a chat holds it); a live chat's
+  `/mcp login|logout <name>` holds the same lock for the command's duration (the engine's wrapped `/mcp`)
+  and, while anything else holds it, says so in the chat instead of starting pi's flow. A bare
+  `/mcp login` / `/mcp logout` is not locked — the accepted gap: pi picks the server inside its handler
+  (the only OAuth server, the only one needing sign-in, or the answer to its own picker), so there is no
+  name to lock before its flow writes state; pi's status text and hint always name the server
+  (`run /mcp login <name>`).
 
 ## Get right
 

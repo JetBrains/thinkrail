@@ -45,7 +45,10 @@ exercise the bundled factories/skills, run **one scripted provider turn** — th
 pi-ai faux `streamSimple` under its own `api` name that always calls `visualize` with a dangling flowchart
 edge, so the probe asserts the strict mermaid parse error reaches the transcript as an `isError` tool
 result (the packaged host composes the ThinkRail extension registry, never the portable package's
-best-effort probe; [[module-ext-visualize]]) — reach an OAuth URL without a provider turn, verify health/UI
+best-effort probe; [[module-ext-visualize]]) — start pi's bundled MCP engine in a real chat (a written-out
+stdio fixture must report *connected · 1 tool* and an in-probe HTTP server that answers 401 with
+protected-resource metadata *needs sign-in*, read back through `mcp.list`, which proves the lazily imported
+MCP runtime executes inside the artifact), reach an OAuth URL without a provider turn, verify health/UI
 and transcript trash, and shut down. CLI-specific probes also check its exit-only and embedded-cache behavior.
 Native desktop smoke loads the real UI and verifies route/preload messaging plus the production external
 navigation handler. On macOS it also drives the title-bar double-click path end to end: a no-drag

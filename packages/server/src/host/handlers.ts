@@ -19,6 +19,7 @@ import {
 	admissionContextFor,
 	answerQuestion,
 	applyPiResourceTrust,
+	cancelMcpProbe,
 	clampThinkingForModel,
 	clearQueueSession,
 	compactSession,
@@ -33,6 +34,7 @@ import {
 	getSessionWorkspaceId,
 	hasSession,
 	isHostResourceId,
+	isMcpLoginId,
 	isPiSessionId,
 	listAvailableModels,
 	listModelContextSettings,
@@ -54,6 +56,7 @@ import {
 	removeSession,
 	removeWorkspaceSessions,
 	renameSession,
+	replyMcpProbe,
 	resolveExtUi,
 	sendReviewFixToSession,
 	setModelContextWindow,
@@ -185,6 +188,22 @@ import { nudgeBaseRefWorkspaces } from "./fsNudge";
 import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
+import {
+	mcpAdd,
+	mcpApprove,
+	mcpList,
+	mcpLogin,
+	mcpLogout,
+	mcpReadLog,
+	mcpReadOutput,
+	mcpReconnect,
+	mcpRemove,
+	mcpSetProjectOverride,
+	mcpSetSessionOverride,
+	mcpShareWithRepo,
+	mcpTestConnection,
+	mcpUpdate,
+} from "./mcp";
 import { resolveNewChatModel } from "./newChatModel";
 import { planReviewRunning } from "./planReviewQueue";
 import {
@@ -905,6 +924,20 @@ const handlers: WsHandlers = {
 	"session.getMessages": (p) => {
 		return getSessionMessages(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
 	},
+	"mcp.list": (params) => mcpList(params),
+	"mcp.add": (params) => mcpAdd(params),
+	"mcp.update": (params) => mcpUpdate(params),
+	"mcp.remove": (params) => mcpRemove(params),
+	"mcp.setProjectOverride": (params) => mcpSetProjectOverride(params),
+	"mcp.setSessionOverride": (params) => mcpSetSessionOverride(params),
+	"mcp.approve": (params) => mcpApprove(params),
+	"mcp.shareWithRepo": (params) => mcpShareWithRepo(params),
+	"mcp.reconnect": (params) => mcpReconnect(params),
+	"mcp.login": (params, ctx) => mcpLogin(params, ctx.clientKey),
+	"mcp.logout": (params, ctx) => mcpLogout(params, ctx.clientKey),
+	"mcp.readOutput": (params) => mcpReadOutput(params),
+	"mcp.readLog": (params) => mcpReadLog(params),
+	"mcp.testConnection": (params, ctx) => mcpTestConnection(params, ctx.clientKey),
 	"session.resources": (params) => {
 		const p = resourceParams(params, ["workspaceId", "sessionId"]);
 		return getSessionResources(p.workspaceId, p.sessionId, resourceCwd(p.workspaceId));
@@ -997,12 +1030,17 @@ const handlers: WsHandlers = {
 		recordLoginStart(handle.loginId, type, capture);
 		return handle;
 	},
-	"provider.loginReply": (params) => {
-		resolveLogin(params);
+	"provider.loginReply": (reply, ctx) => {
+		if (isMcpLoginId(reply.loginId)) replyMcpProbe(reply.loginId, ctx.clientKey, reply.value);
+		else resolveLogin(reply);
 		return { ok: true } as const;
 	},
-	"provider.loginCancel": (params) => {
+	"provider.loginCancel": (params, ctx) => {
 		const { loginId } = params;
+		if (isMcpLoginId(loginId)) {
+			cancelMcpProbe(loginId, ctx.clientKey);
+			return { ok: true } as const;
+		}
 		dropLogin(loginId);
 		cancelLogin(loginId);
 		return { ok: true } as const;
