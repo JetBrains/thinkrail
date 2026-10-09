@@ -22,7 +22,10 @@ test("summaries cover scope, approval states, replacement, folded overrides, rec
 		JSON.stringify({
 			mcpServers: {
 				docs: { url: "https://docs.example/mcp", headers: { Authorization: `Bearer \${DOCS}` } },
-				linear: { url: "https://linear.example/mcp" },
+				linear: {
+					url: "https://linear.example/mcp",
+					description: "Linear issues; use token=sk-live-secret",
+				},
 				shared: { url: "https://shared.example/mcp" },
 			},
 		}),
@@ -57,6 +60,7 @@ test("summaries cover scope, approval states, replacement, folded overrides, rec
 		"user:linear",
 		"user:shared",
 	]);
+	expect(pending["user:linear"]?.description).toBe("Linear issues; use token=***");
 	expect(pending["user:docs"]).toMatchObject({
 		transport: "http",
 		oauth: false,

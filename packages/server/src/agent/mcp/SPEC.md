@@ -40,8 +40,8 @@ relax a rule.
   keeps its row with pi's `must be an object` error), with scope, defining file,
   transport, masked endpoint (`maskMcpEndpoint`), configured vs effective exposure and enablement (record
   overrides and admitted repo overrides applied), OAuth applicability, replacement of a user-level server,
-  approval state (`approved` / `pending` / `changed` against the current fingerprint) and pi-equivalent
-  config errors (through `redactMcpText`). `summarizeMcpConfigErrors()` is the file-level rest (unparsable
+  approval state (`approved` / `pending` / `changed` against the current fingerprint), the configured
+  description and pi-equivalent config errors (both through `redactMcpText`). `summarizeMcpConfigErrors()` is the file-level rest (unparsable
   JSON, `mcpServers` not an object, a mistyped `autoEnableCodemode`) as `{ source, message }`, masked, for
   `McpListResult.configErrors`: for the first two pi's loader lists none of that file's servers, so without
   it `mcp.list` would read "no servers".

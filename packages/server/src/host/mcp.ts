@@ -160,14 +160,19 @@ export async function mcpAdd(params: {
 	return mcpList(params);
 }
 
-/** A project-scope rewrite or removal runs only against the entry the client rendered. */
-async function renderedEntry(params: { workspaceId: string; name: string }): Promise<{
-	workspace: Workspace;
-	project: Project;
-	name: string;
-	target: McpRenderedTarget;
-	onDisk: string | undefined;
-}> {
+/**
+ * A project-scope rewrite or removal runs only against the entry the client rendered. The fingerprint
+ * comparison and the write share one synchronous section after the last await, so two requests
+ * rendered from the same entry cannot both pass the check and then both write.
+ */
+async function renderedEntry(
+	params: { workspaceId: string; name: string },
+	write: (
+		options: { scope: McpServerScope; worktree: string; name: string },
+		onDisk: string | undefined,
+		project: Project,
+	) => void,
+): Promise<McpListResult> {
 	const target = renderedTarget(params);
 	const { workspace, project } = await managedTarget(params.workspaceId);
 	const name = serverName(params.name);
@@ -177,36 +182,25 @@ async function renderedEntry(params: { workspaceId: string; name: string }): Pro
 		onDisk = projectMcpEntryFingerprint(workspace.worktreePath, name);
 		assertRenderedEntry(name, onDisk, target.expectedFingerprint);
 	}
-	return { workspace, project, name, target, onDisk };
+	write({ scope: target.scope, worktree: workspace.worktreePath, name }, onDisk, project);
+	reloadLiveSessions(target.scope === "user" ? allWorkspaces() : projectWorkspaces(project));
+	return mcpList(params);
 }
 
-export async function mcpUpdate(params: {
+export function mcpUpdate(params: {
 	workspaceId: string;
 	name: string;
 	entry: McpServerEntryInput;
 }): Promise<McpListResult> {
-	const { workspace, project, name, target, onDisk } = await renderedEntry(params);
-	const fingerprint = writeMcpServerEntry({
-		scope: target.scope,
-		worktree: workspace.worktreePath,
-		name,
-		entry: params.entry,
-		mode: "update",
+	return renderedEntry(params, (options, onDisk, project) => {
+		const fingerprint = writeMcpServerEntry({ ...options, entry: params.entry, mode: "update" });
+		if (fingerprint && onDisk !== undefined && project.mcpApprovals?.[options.name] === onDisk)
+			approveProjectMcpServer(project.id, options.name, fingerprint);
 	});
-	if (fingerprint && onDisk !== undefined && project.mcpApprovals?.[name] === onDisk)
-		approveProjectMcpServer(project.id, name, fingerprint);
-	reloadLiveSessions(target.scope === "user" ? allWorkspaces() : projectWorkspaces(project));
-	return mcpList(params);
 }
 
-export async function mcpRemove(params: {
-	workspaceId: string;
-	name: string;
-}): Promise<McpListResult> {
-	const { workspace, project, name, target } = await renderedEntry(params);
-	removeMcpServerEntry({ scope: target.scope, worktree: workspace.worktreePath, name });
-	reloadLiveSessions(target.scope === "user" ? allWorkspaces() : projectWorkspaces(project));
-	return mcpList(params);
+export function mcpRemove(params: { workspaceId: string; name: string }): Promise<McpListResult> {
+	return renderedEntry(params, (options) => removeMcpServerEntry(options));
 }
 
 export async function mcpSetProjectOverride(params: {
