@@ -34,7 +34,7 @@ export {
 } from "./mcp";
 export {
 	listMcpServers,
-	mcpHandledElsewhereBy,
+	mcpOwnershipGuard,
 	readMcpToolOutput,
 	reconcileMcpSessions,
 	reconnectMcpServer,
