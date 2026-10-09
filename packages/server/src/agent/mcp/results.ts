@@ -1,7 +1,7 @@
 import type { McpContentBlockSummary, McpResultSummary } from "@thinkrail/contracts";
 import { isRecord } from "./config";
 
-export const MCP_STRUCTURED_SUMMARY_BYTES = 64 * 1024;
+export const MCP_SUMMARY_BYTES = 64 * 1024;
 const RESOURCE_TOOLS = new Set([
 	"list_mcp_resources",
 	"list_mcp_resource_templates",
@@ -53,13 +53,35 @@ function resourceSummary(resource: unknown): McpContentBlockSummary | null {
 	};
 }
 
-function bounded(
+const bytes = (value: unknown): number => Buffer.byteLength(JSON.stringify(value) ?? "");
+
+function boundedBlocks(
+	all: McpContentBlockSummary[],
+	budget: number,
+): { kept: Pick<McpResultSummary, "blocks" | "omittedBlocks">; remaining: number } {
+	const blocks: McpContentBlockSummary[] = [];
+	let used = bytes([]);
+	for (const block of all) {
+		const size = bytes(block) + 1;
+		if (used + size > budget) break;
+		blocks.push(block);
+		used += size;
+	}
+	const omitted = all.length - blocks.length;
+	return {
+		kept: { blocks, ...(omitted > 0 ? { omittedBlocks: omitted } : {}) },
+		remaining: budget - used,
+	};
+}
+
+function boundedStructured(
 	value: unknown,
+	budget: number,
 ): Pick<McpResultSummary, "structuredContent" | "structuredContentTruncated"> {
 	if (value === undefined) return {};
 	const json = JSON.stringify(value);
 	if (json === undefined) return {};
-	return Buffer.byteLength(json) <= MCP_STRUCTURED_SUMMARY_BYTES
+	return Buffer.byteLength(json) <= budget
 		? { structuredContent: value }
 		: { structuredContentTruncated: true };
 }
@@ -73,16 +95,18 @@ export function summarizeMcpResult(
 	const flag = isError ? { isError: true } : {};
 	if (toolName === "read_mcp_resource") {
 		const contents = Array.isArray(structured.contents) ? structured.contents : [];
-		return {
-			blocks: contents.flatMap((entry) => resourceSummary(entry) ?? []),
-			...flag,
-		};
+		const { kept } = boundedBlocks(
+			contents.flatMap((entry) => resourceSummary(entry) ?? []),
+			MCP_SUMMARY_BYTES,
+		);
+		return { ...kept, ...flag };
 	}
-	if (RESOURCE_TOOLS.has(toolName)) return { blocks: [], ...bounded(structured), ...flag };
-	const blocks = Array.isArray(structured.content) ? structured.content : [];
-	return {
-		blocks: blocks.flatMap((block) => blockSummary(block) ?? []),
-		...bounded(structured.structuredContent),
-		...flag,
-	};
+	if (RESOURCE_TOOLS.has(toolName))
+		return { blocks: [], ...boundedStructured(structured, MCP_SUMMARY_BYTES), ...flag };
+	const content = Array.isArray(structured.content) ? structured.content : [];
+	const { kept, remaining } = boundedBlocks(
+		content.flatMap((block) => blockSummary(block) ?? []),
+		MCP_SUMMARY_BYTES,
+	);
+	return { ...kept, ...boundedStructured(structured.structuredContent, remaining), ...flag };
 }
