@@ -8,7 +8,13 @@ export {
 	stopBackgroundCommand,
 	stopSubagent,
 } from "./chatResources";
-export { type ReviewSubagentRun, readChildTranscript, runReviewSubagent } from "./delegation";
+export {
+	type ReviewSubagentRun,
+	readChildTranscript,
+	refreshSubagentConcurrency,
+	runReviewSubagent,
+	setSubagentConcurrencyResolver,
+} from "./delegation";
 export {
 	type BundledExtensionFactory,
 	type BundledExtensions,
