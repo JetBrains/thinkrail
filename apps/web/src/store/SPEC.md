@@ -24,13 +24,34 @@ canonical owner of Resources selectors and predicates, including active counts a
 grouping; the host already bounds recent records. Components do not derive these independently.
 `chatResources.ts` is the store's private implementation file for resource projection/state/scope/read
 types and the `staleChatResources` state transform. A parent settling does not clear its still-running
-resources or change the Projects rail's existing activity contract.
+resources or change the Projects rail's existing activity contract. The optional `mcpServers` list is part
+of the same resource snapshot; `selectChatResourceGroups(snapshot, includeMcp)` orders it (attention —
+needs sign-in, failed, pending approval — first) and counts its active (connected/starting) servers apart
+from the work count, and hands back `null` for an older protocol.
 
 Resource snapshots are not browser-persisted. Reconnect or an unsupported host removes control
 authority until a fresh read succeeds; failed reads preserve visibly stale data, never fabricate an
 empty catalog. Chat deletion/workspace removal clears the corresponding projections. Popover and
 selected-log state belong to chat integration, not domain persistence. See
 [[submodule-web-chat-resources]] for presentation and [[module-contracts]] for the wire.
+
+## MCP servers
+
+`mcp.ts` is the private slice implementation of the MCP server state: **`mcpByWorkspace`** holds, per
+workspace, the last `mcp.list` answer — `servers`, the file-level `configErrors` (empty from an older
+host) and `handledElsewhere` — and the held per-session status snapshots, beside a monotonic
+**`mcpRevision`**. Two atomic actions write it.
+**`applyMcpStatus(snapshot)`** (the `mcp.status` channel) installs only while connected on an MCP-capable
+protocol, for a live scope (removed workspaces and deleted chats are rejected), and only
+through the **generation guard**: a snapshot replaces the held one when its generation is newer or it
+arrived on a newer connection — a restarted host restarts its counters, so a pure number comparison would
+freeze the view. **`installMcpList(read, result)`** (every `mcp.list` answer) is fenced
+by the `selectMcpRead` token captured before the request: a list is the authoritative live-chat set as of
+that read, so held sessions it omits drop unless a push landed after the read began, newer held
+generations survive, and deleted chats never reinstall. An unsupported welcome clears the slice, workspace
+removal drops its entry, and chat deletion drops its snapshot. `selectMcpWorkspaceStarting` drives the
+bounded re-read while a server starts. The state vocabulary and the attention/active predicates live in
+`lib` (`mcpState`) because the props-only chat resources module shares them.
 
 ## Boundary
 
@@ -622,8 +643,9 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `selectCatalogModel` (a model ref resolved against the **live** `models` list — a session's own `model`
   is the snapshot it was created with, so host-computed facts on it, today `thinkingLevels`, are read
   through this; callers fall back to the snapshot when the ref has left the catalog);
-  `selectSupportsProjectTrust` (the `PROJECT_TRUST_PROTOCOL_VERSION` gate for the trust summary and the
-  pi-level resource grant);
+  the MCP derivations `selectMcpRead` + `McpRead`, `selectMcpWorkspaceStarting`, `McpWorkspaceProjection`,
+  `selectSupportsMcp`, and the resource helper `orderMcpResources`; `selectSupportsProjectTrust` (the
+  `PROJECT_TRUST_PROTOCOL_VERSION` gate for the trust summary and the pi-level resource grant);
   `toast` (the fire-from-anywhere helper),
   `Toast` (type), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types
   (file/diff/virtual-document/plan/chat), `TerminalTab`, `ClosedChat`, `SessionRuntime` +
@@ -633,7 +655,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `DEFAULT_CONFIG` for the pre-welcome default; `PiEvent`/`LoginFrame`, **type-only**); `lib` (the shared
   path + array + canonical-message primitives — `normalizePath`/`isAbsolutePath` for
   `matchesWorktreePath`, `shallowEqualArrays` for the snapshot-identity guard, `userText` plus the skill
-  invocation parser/matcher for user-message echo reconciliation; a leaf, so the edge adds no cycle); `chat`
+  invocation parser/matcher for user-message echo reconciliation, the MCP attention/active predicates; a
+  leaf, so the edge adds no cycle); `chat`
   (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
   (`ConnectionStatus`, **type-only**); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`, shell runtime (the web-local layout state edge is type-only), or transport runtime.

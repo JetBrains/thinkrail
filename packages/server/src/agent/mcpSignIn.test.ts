@@ -286,9 +286,7 @@ test("a chat's /mcp login for a server the host's sign-in probe holds says so in
 	const seen = chatRequests(chat.sessionId);
 	expect(
 		seen.flatMap((request) =>
-			request.kind === "notify" && !request.message.startsWith("MCP servers need attention")
-				? [[request.message, request.level]]
-				: [],
+			request.kind === "notify" ? [[request.message, request.level]] : [],
 		),
 	).toEqual([
 		['A sign-in for "oauthy" is already running in Settings.', "warning"],

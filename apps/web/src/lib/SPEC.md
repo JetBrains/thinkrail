@@ -44,7 +44,11 @@ not this module; the theme-aware highlighter remains app-local.
   — do nothing loud, the text stays visible/selectable), **`randomId()`** (16 random bytes through
   `getRandomValues`, which remains available to a plain-HTTP remote client),
   **`DOUBLE_CLICK_SETTLE_MS`** (the one click→double-click arbitration window shared by cached and
-  host-read tab opens), and the
+  host-read tab opens), **`mcpState.ts`** (the MCP server-state vocabulary — `MCP_STATE_LABEL`,
+  `mcpStateTone` (a connected server reporting zero tools warns), `mcpStatusLabel` / `mcpToolCountLabel`,
+  and the `isMcpAttentionState` (needs sign-in, failed, pending approval) / `isMcpActiveState` (connected,
+  starting) predicates — shared by `store`'s selectors and the props-only chat Resources rows,
+  which may import nothing else in common), and the
   **`LayoutAttention`** device-local overlay shared by store, shell, and the headless layout child, with
   own-property-safe `readLayoutSelection()` / `readLayoutNavigationClock()` accessors for untrusted
   tuple-keyed maps. Also the shared
@@ -79,9 +83,11 @@ not this module; the theme-aware highlighter remains app-local.
   `shallowEqualArrays`, `userText`, `isShellInert` (a value made only of characters that stay literal in POSIX, PowerShell,
   and cmd, so it may be interpolated into a command a human copies and runs), `parseSkillInvocation`, `matchesSkillInvocationCommand`,
   `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
+  `MCP_STATE_LABEL`, `mcpStateTone`, `mcpStatusLabel`, `mcpToolCountLabel`, `isMcpAttentionState`,
+  `isMcpActiveState`, the `McpStateTone` type,
   `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
   `readLayoutSelection`, `readLayoutNavigationClock`, and the `LayoutAttention` type.
 - **Allowed deps:** React (the viewport subscription hook only);
-  `@thinkrail/contracts` (types only for canonical messages; the layout-resource identity input is a local structural type); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
+  `@thinkrail/contracts` (types only for canonical messages and `McpServerState`; the layout-resource identity input is a local structural type); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
   through the barrel).
 - **Forbidden:** every app-internal module — this is a leaf.

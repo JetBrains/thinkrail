@@ -293,7 +293,7 @@ function trackedOf(sessionId: string): Tracked {
 		if (!parsed) return false;
 		apply(sessionId, parsed, true);
 		queueMicrotask(() => scheduleMcpStatusRefresh(sessionId));
-		return false;
+		return true;
 	});
 	return state;
 }

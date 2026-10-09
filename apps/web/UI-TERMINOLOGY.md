@@ -211,8 +211,9 @@ The agent conversation, rendered inside a Chat tab in the Center Tabbed Area.
   - **Status Entries** — inline muted `statusEntries` text (extension status).
   - **Session Stats Bar** — `chat/SessionStatsBar.tsx` → `SessionStatsBar` (token/cost stats).
   - **Resources Trigger** — `chat/resources/ResourcesButton.tsx` → `ResourcesButton`
-    (`data-testid="resources-trigger"`); the live-resource count (or `—` while the count is not
-    authoritative), breathing while anything is live; toggles the **Resources Inspector**.
+    (`data-testid="resources-trigger"`); the active-resource count — live work plus connected/starting MCP
+    servers (or `—` while the count is not authoritative) — breathing while work runs; toggles the
+    **Resources Inspector**.
   - **Skills Button** — `chat/SkillsButton.tsx` → `SkillsButton` (`data-testid="open-skills"`); opens the
     **Skills Dialog** (`chat/SkillsDialog.tsx` → `SkillsDialog`).
 
@@ -225,7 +226,8 @@ surfaces owned by `chat/resources/`.
 |---|---|---|---|
 | Resources Trigger | `resources/ResourcesButton.tsx` → `ResourcesButton` | `resources-trigger` (`data-active-count`) | Header toggle for the inspector; live count |
 | Resources Dock | `resources/ResourcesDock.tsx` → `ResourcesDock` | `resources-dock` (`resources-dock-toggle`) | Live rows above the Composer; hidden while the inspector is open; collapses past four rows |
-| Resources Inspector | `resources/ResourcesInspector.tsx` → `ResourcesInspector` | `resources-inspector` | Non-modal in-place dialog over the Message List: roster (Active / Finished) + detail of the selected row |
+| Resources Inspector | `resources/ResourcesInspector.tsx` → `ResourcesInspector` | `resources-inspector` | Non-modal in-place dialog over the Message List: roster (Active / Finished / MCP servers) + detail of the selected row |
+| MCP Server Row | `resources/mcpRow.tsx` (private) | `resource-mcp` (`data-name`, `data-state`; `resource-mcp-state`, `resource-mcp-disable` / `-enable` / `-reconnect`) | One of the chat's MCP servers in the inspector's third section: state label, tool count, transport, per-chat actions |
 | Resource Row | shared row inside dock and inspector | `resource-command` / `resource-subagent` (`data-resource-id`, `data-status`, `data-state`) | One command or subagent: glyph · name · activity · state · elapsed. In the dock the name and activity are one Inspect button (`resource-inspect`); in the inspector the row wrapper (`data-selected`) holds a listbox option (name · state · elapsed over a truncated activity line; accessible name `name: activity, state`) and its sibling Stop. Stop appears on hover and focus (`resource-stop`) |
 | Command Log View | `resources/CommandLogView.tsx` → `CommandLogView` | `command-log-output` / `command-log-unavailable` | Bounded plain-text output; the inspector's detail body for a command |
 | Subagent Transcript Pane | `chat/SubagentTranscriptDialog.tsx` → `SubagentTranscriptPane` | `subagent-transcript` | Read-only child transcript; the inspector's detail body for a subagent (and the body of the Subagent Transcript Dialog) |

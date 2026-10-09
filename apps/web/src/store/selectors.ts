@@ -3,6 +3,8 @@ import {
 	type BackgroundCommandSummary,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	type GitDiffScope,
+	MCP_PROTOCOL_VERSION,
+	type McpServerResourceSummary,
 	MODEL_PICKER_PROTOCOL_VERSION,
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	type Project,
@@ -21,6 +23,8 @@ import {
 import {
 	compactAge,
 	isAbsolutePath,
+	isMcpActiveState,
+	isMcpAttentionState,
 	type LayoutAttention,
 	layoutResourceIdentity,
 	normalizePath,
@@ -86,6 +90,10 @@ export function selectCanRenameChat(state: ProtocolState): boolean {
 
 export function selectSupportsProjectTrust(state: ProtocolState): boolean {
 	return state.protocolVersion !== null && state.protocolVersion >= PROJECT_TRUST_PROTOCOL_VERSION;
+}
+
+export function selectSupportsMcp(state: ProtocolState): boolean {
+	return state.protocolVersion !== null && state.protocolVersion >= MCP_PROTOCOL_VERSION;
 }
 
 export function supportsChatResources(protocolVersion: number | null): boolean {
@@ -193,7 +201,22 @@ export function isActiveSubagent(child: SubagentResourceSummary): boolean {
 	return child.status === "queued" || child.status === "running";
 }
 
-export function selectChatResourceGroups(snapshot: SessionResources | null | undefined) {
+export function orderMcpResources(
+	servers: readonly McpServerResourceSummary[],
+): McpServerResourceSummary[] {
+	return servers
+		.slice()
+		.sort(
+			(a, b) =>
+				Number(isMcpAttentionState(b.state)) - Number(isMcpAttentionState(a.state)) ||
+				a.name.localeCompare(b.name),
+		);
+}
+
+export function selectChatResourceGroups(
+	snapshot: SessionResources | null | undefined,
+	includeMcp = true,
+) {
 	const commands: BackgroundCommandSummary[] = [];
 	const subagents: SubagentResourceSummary[] = [];
 	const finishedCommands: BackgroundCommandSummary[] = [];
@@ -204,12 +227,16 @@ export function selectChatResourceGroups(snapshot: SessionResources | null | und
 	for (const child of snapshot?.subagents ?? []) {
 		(isActiveSubagent(child) ? subagents : finishedSubagents).push(child);
 	}
+	const mcpServers =
+		includeMcp && snapshot?.mcpServers ? orderMcpResources(snapshot.mcpServers) : null;
 	return {
 		commands,
 		subagents,
 		finishedCommands,
 		finishedSubagents,
 		activeCount: commands.length + subagents.length,
+		mcpServers,
+		mcpActiveCount: mcpServers?.filter((server) => isMcpActiveState(server.state)).length ?? 0,
 	};
 }
 

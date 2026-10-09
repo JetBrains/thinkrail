@@ -45,7 +45,7 @@ import {
 	toast,
 	useAppStore,
 } from "@/store";
-import { errorText, getTransport } from "@/transport";
+import { errorText, getTransport, watchMcpWorkspace } from "@/transport";
 import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
@@ -461,6 +461,11 @@ export default function ChatView({
 		setInspector(null);
 		setStopAllOpen(false);
 	}, [resources.knownUnsupported]);
+	const watchesMcp = inspectorOpen && !!resources.groups.mcpServers?.length;
+	useEffect(
+		() => (watchesMcp ? watchMcpWorkspace(workspaceId) : undefined),
+		[watchesMcp, workspaceId],
+	);
 
 	const virtuosoRef = useRef<VirtuosoHandle>(null);
 	const latestDividerRowId = useMemo(
@@ -1078,7 +1083,12 @@ export default function ChatView({
 										resources.visible ? (
 											<ResourcesButton
 												ref={resourcesTrigger}
-												activeCount={resources.authoritative ? resources.groups.activeCount : null}
+												activeCount={
+													resources.authoritative
+														? resources.groups.activeCount + resources.groups.mcpActiveCount
+														: null
+												}
+												working={resources.authoritative && resources.groups.activeCount > 0}
 												open={inspectorOpen}
 												onClick={() => setInspectorOpen(!inspectorOpen)}
 											/>
@@ -1245,6 +1255,8 @@ export default function ChatView({
 								onStopCommand={resources.stopCommand}
 								onStopSubagent={resources.stopSubagent}
 								onStopAll={() => setStopAllOpen(true)}
+								onMcpSetEnabled={resources.setMcpEnabled}
+								onMcpReconnect={resources.reconnectMcp}
 								detail={
 									selectedCommandId ? (
 										<CommandLogView {...commandLog} onRetry={commandLog.retry} />
