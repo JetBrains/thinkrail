@@ -92,7 +92,9 @@ export function summarizeMcpServers(options: {
 					? live.config.exposure
 					: (projectOverride?.exposure ?? (exposure === "codemode" ? "deferred" : exposure)),
 			enabled: isEffective ? live.config.enabled !== false : raw.enabled !== false,
-			...(typeof raw.description === "string" ? { description: raw.description } : {}),
+			...(typeof raw.description === "string"
+				? { description: redactMcpText(raw.description) }
+				: {}),
 			oauth: transport === "http" && !hasAuthorizationHeader(raw) && raw.auth === undefined,
 			...(entry.scope === "project" && globalNames.has(entry.name) ? { replacesGlobal: true } : {}),
 			...(projectOverride ? { projectOverride } : {}),
