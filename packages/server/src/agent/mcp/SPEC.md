@@ -44,7 +44,7 @@ relax a rule.
   description and pi-equivalent config errors (both through `redactMcpText`). `summarizeMcpConfigErrors()` is the file-level rest (unparsable
   JSON, `mcpServers` not an object, a mistyped `autoEnableCodemode`) as `{ source, message }`, masked, for
   `McpListResult.configErrors`: for the first two pi's loader lists none of that file's servers, so without
-  it `mcp.list` would read "no servers".
+  it Settings would read "no servers".
 - `redact.ts` — the host's one credential mask for text that leaves it. pi redacts nothing in its status
   texts: a connection error, an HTTP error-body snippet and a stdio server's stderr tail (up to 2 000
   chars) arrive verbatim. `redactMcpText` masks, deterministically and idempotently, URL user info and
@@ -60,7 +60,7 @@ relax a rule.
   with the value after a credential-named flag or assignment, URL-shaped arguments (user info, credential-named query values),
   header arguments (any value after `-H` / `--header`, a credential-named `Name: value` anywhere) and
   token-prefixed arguments masked; `${VAR}` references stay, and arguments with spaces, quotes or nothing in
-  them are JSON-quoted so the line is unambiguous (a client shows it as what runs).
+  them are JSON-quoted so the line is unambiguous (the approve dialog shows it as what runs).
 - `status.ts` — parsers for pi's two status texts (`formatStatus` lines `name: state[, N tools] (exposure)`
   with indented errors, and the startup attention notice) and `deriveMcpServerStatuses()`; the formats are
   pinned by fixtures and re-checked on every pi bump; parsed details are redacted before anything else
@@ -132,13 +132,13 @@ relax a rule.
   way pi's runner would; pi's handler (1.1.0: abort the session signal, close the current connections,
   clear the list, await tracked work) is idempotent, so pi's own later call through the regular emission
   closes nothing twice — re-check on every pi bump. Unless the caller passes `lockSignIns: false` (only the
-  host's sign-in probe, which holds the lock itself), `registerCommand` wraps `/mcp`'s handler: `login <name>` /
+  Settings probe, which holds the lock itself), `registerCommand` wraps `/mcp`'s handler: `login <name>` /
   `logout <name>`, parsed the way pi parses them, take `acquireMcpSignInLock(name, "chat")` for the
   command's duration and release it in `finally`; while another holder has it the command posts "A sign-in
   for "<name>" is already running in Settings." (or "in a chat") as a warning and never reaches pi. Status,
   `reconnect`, a bare `login` / `logout` and malformed arguments pass straight through.
 - `signInLock.ts` — `acquireMcpSignInLock(serverName, holder)`: the process-wide lock, keyed by server
-  name, that the host's sign-in probes (`"settings"`) and chats (`"chat"`) share (why and who holds it:
+  name, that Settings probes (`"settings"`) and chats (`"chat"`) share (why and who holds it:
   [[submodule-server-agent]] › MCP servers). It returns `{ release }` (frees only its own hold, so a late
   or repeated call is harmless) or `{ heldBy }`, which callers turn into their refusal.
 - `writers.ts` — `add` / `update` / `remove` with pi's editing semantics (unknown keys and indentation

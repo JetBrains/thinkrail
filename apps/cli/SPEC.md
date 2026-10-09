@@ -198,7 +198,8 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
     registry ([[submodule-server-extensions]]) get no generated entry — `@thinkrail/server` imports them
     statically, so `bun build --compile` carries them (and their deps such as `linkedom`) through the normal
     server graph. Plus every `BuildRuntimeSources.skillRoots` dir (`pi-spec-graph`/`pi-thinkrail-workflow`/
-    `pi-todos` `skills/` and any registry extension's `skillPackages` roots) embedded like web assets
+    `pi-todos` `skills/`, the server's own host skills in `packages/server/skills`, and any registry
+    extension's `skillPackages` roots) embedded like web assets
     (matching what dev wires via `additionalSkillPaths` — parity, not a superset). Its `.d.ts` types the
     factories via the server's exported `BundledExtensionFactory`, so `cli` still never imports
     `@earendil-works/pi-coding-agent`.

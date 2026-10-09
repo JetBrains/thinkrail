@@ -100,6 +100,9 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   `central` CLI ([[submodule-server-auth]], [[central-integration]]).
 - **Agent tools** — web research and inline diagrams and comparisons in chat
   ([[submodule-web-chat-tools-web]], [[module-ext-visualize]]).
+- **MCP servers** — pi's built-in MCP, read from the user's `mcp.json`, managed from Settings and visible
+  per chat next to background commands and subagents; a confirm before calls that may change data
+  ([[submodule-server-agent]], [[submodule-web-panels]]).
 - **Around the workspace** — open a worktree in an installed editor or IDE, and keep the app itself up
   to date ([[submodule-server-editors]], [[submodule-web-updates]]).
 - **Brand** — ThinkRail green accent (bright on dark themes, deepened on light ones so it clears AA on

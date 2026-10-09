@@ -65,7 +65,7 @@ test("notice copy names what is gated and what a grant enables", () => {
 		"This project ships 1 skill and its own pi resources — off until you trust it.",
 	);
 	expect(trustEnablesText(both)).toBe(
-		"Trust loads its skills, prompts, themes, SYSTEM.md and subagent definitions, and lets its extensions and settings run code on this machine. Trust alone does not start its 1 MCP server.",
+		"Trust loads its skills, prompts, themes, SYSTEM.md and subagent definitions, and lets its extensions and settings run code on this machine. Its 1 MCP server still needs your approval one by one.",
 	);
 	expect(trustEnablesText({ ...both, mcpServers: 0 })).toContain(
 		"lets its extensions and settings run code on this machine.",

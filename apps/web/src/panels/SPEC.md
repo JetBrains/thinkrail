@@ -331,7 +331,7 @@ pure `deriveProjectTrustNotice` evaluates the alias grant (`Project.trusted`) an
 (`Project.piResourceTrust`) **separately**, so the notice names only what is still off: "ships N skills and
 its own pi resources → *Trust project*", plus — when pi-level resources are gated — what a grant loads
 (skills, prompts, themes, `SYSTEM.md`, subagent definitions), that its extensions and settings run code on
-this machine, and that trust alone does not start its N MCP servers. *Trust project* sends
+this machine, and that the N MCP servers still need approval one by one. *Trust project* sends
 `project.setTrust` built by `trustGrantParams`: `resources: true` only when the notice names pi-level
 resources (and so said what they load and run); an alias-only notice grants alias trust only. After trust
 it shows a "N new → *Review & enable*" state for skills that appeared later (`project.acknowledgeSkills`),
@@ -444,7 +444,94 @@ a project picker, the prompt hero, and the reused
   create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — a
   **store-driven two-pane shell** (left section rail + scrollable content pane; mobile collapses the rail to
   a horizontal segmented strip): `settingsOpen`/`settingsSection` live in the store so the gear AND the
-  Welcome banner can open it deep-linked to a section. Live sections: **`ProvidersSettings`** (the in-app
+  Welcome banner can open it deep-linked to a section. **`McpSettings`** is the **MCP servers** section
+  (hidden below `MCP_PROTOCOL_VERSION`). It describes the active workspace's project
+  (no active workspace → "Open a workspace to manage its MCP servers") and reads `mcp.list` through
+  `transport`'s `watchMcpWorkspace` — on mount, every welcome, a project-trust change, and with bounded
+  backoff while a live chat still reports a server `starting`, because the host pushes no connected edge.
+  Rows come from the store's `deriveMcpServerRows` and show a status dot + label + one reason line, the name,
+  User/Project and HTTP/stdio chips (stdio: "Runs on host — inherits the host environment"), an exposure
+  menu (`deferred | direct | hidden`; configured codemode reads "treated as deferred (codemode not available
+  yet)"), the enable switch, at most one primary and one secondary action — the status table `mcpRowView`
+  encodes: Sign in (needs sign-in) · Review & approve (pending approval, or a pending repo override)
+  · Edit (an invalid repo entry) · **Reconnect** (failed, with **Show log** beside it; disconnected) ·
+  **Reload now** (pending reload) · **Open a chat** (not running, with Test connection beside it for HTTP)
+  — and an overflow menu (Sign in / Sign out for OAuth servers, Test connection
+  for HTTP, Edit or Review & approve, Share with repo when a user server has a project setting, Details,
+  Remove behind a confirm). Reconnect and Reload now act per chat: they run, one chat after another,
+  for the live chats that report the row's state (`McpServerRow.sessions.reporting`) — `mcp.reconnect`, and
+  `session.reloadResources` through the skills baseline (so the chat's skills badge clears too). Failures
+  stay on the row as the host's text (pi's reconnect failure masked by the host; a busy chat's "Can't
+  reload while the chat is busy", which stays pending and reloads by itself once idle), one line per chat
+  named by its tab title when several were targeted, shown only while the row keeps that state — never a
+  toast. Open a chat closes Settings and starts a chat in the workspace through `openChat`'s
+  `startChatInTab`, the same path as the workbench's New chat. Show log opens `McpLogDialog`: pi's last
+  report for the server (`detail`, with a stdio server's stderr tail) and its lines from pi's `mcp.log`
+  (`mcp.readLog`, masked by the host). Details lists no tools: no payload carries tool names yet (pi's
+  `/mcp` text and `SessionResources` report a count). Attention
+  rows sort first and disabled rows stay listed last; `handledElsewhere` makes the section read-only with a
+  notice (`mcpHandledElsewhereText`): "MCP is handled by <path> in this workspace; ThinkRail's MCP
+  management is read-only." for a replacing extension, and for the host's `by: "pi settings
+  (-builtin:mcp)"` "MCP is turned off in pi settings (-builtin:mcp); remove that entry to manage servers
+  here." A problem with a whole `mcp.json` (`McpListResult.configErrors`: unparsable
+  JSON, `mcpServers` not an object, a mistyped key) renders as one error notice per file
+  (`McpConfigFileErrors`) naming its path, pi's message and "Edit the file directly to fix it", above the
+  list or the empty state alike — so a file pi cannot read never passes for "no servers". Status details
+  (pi's report) arrive already redacted by the host.
+  **Enablement and exposure follow one routing rule (`mcpSettingWrite`):** a user-level server
+  changes for this project only, through `mcp.setProjectOverride` (the record override is replaced whole,
+  so the other field travels along), and the global `mcp.json` is never written; a repo-defined server is
+  rewritten in `.pi/mcp.json` with `mcp.update`, whose whole-entry replacement starts from the entry as
+  written, read through `fs.readFile`. Every repo-entry `mcp.update` (toggle, exposure, Edit) is built by
+  `mcpEntryUpdate` and carries the fingerprint the row was rendered with as `expectedFingerprint`, so the
+  host refuses a write rebuilt from an entry that changed on disk since; the host carries approval forward
+  only from an entry approved as it is on disk. A refused update or share shows the host's error on the row
+  (or in the Edit dialog) and re-reads `mcp.list`. Pending-approval, invalid and replaced rows lock both
+  controls, so a toggle can never approve a repo entry by the back door. Reading the raw entry is for
+  updates and fingerprints only: no dialog shows a plain env, header or OAuth client-secret value from it
+  (`<literal value hidden>` stands in; `${VAR}` / `!command` references are shown, since they are what
+  runs). **Review & approve** lists what will run — the host-masked command line or URL
+  (`summary.endpoint`, credential-looking arguments read `***`), working directory, every `!command`, and
+  the env/header names with their references or the hidden marker — then approves with the summary's
+  fingerprint (the host refuses a file that changed since). **Edit** is for repo entries: the raw entry as
+  JSON with plain values hidden; a marker left in place keeps the file's value under that name
+  (`mcpEditedEntry`), and a new value must be a reference. A user-level server's Edit is a disabled menu
+  item naming its source file (`McpServerSummary.source`): `mcp.update` replaces the whole entry and the
+  host returns no raw user entry, so Settings could only rebuild it lossily — users edit
+  `~/.pi/agent/mcp.json` directly, and the switch and exposure menu keep writing this project's record
+  override. **Add** has three tiers: presets from
+  `mcpPresets.ts` — five, verified and pinned (no `@latest`): Context7 and DeepWiki (`direct`, authless),
+  Linear through its vendor read-only endpoint (`/mcp/readonly`) and Sentry (both OAuth — sign in after
+  adding), and Playwright (`npx -y @playwright/mcp@<pinned>`), which is added as a disabled user entry plus
+  this project's record override (`optInPerProject`), so it runs only where the user opted in and never
+  touches the repository; `modifiesData` (Sentry, Playwright) adds the "this server can modify data in
+  <service>" acknowledgement, and a preset whose name is already configured reads **Added**. GitHub stays a
+  recipe, not a preset (`gh auth token` scopes are unverified): below the presets, *Use recipe* fills the
+  Paste JSON tier with `GITHUB_MCP_RECIPE_JSON` — GitHub's read-only endpoint (`/mcp/readonly`) and an
+  `Authorization` header from `!t=$(gh auth token) && echo "Bearer $t"`, which fails rather than sending an
+  empty token while gh is logged out (the `managing-mcp-servers` skill carries the same entry); a short form (pi's name charset, per-file
+  duplicates and `-`/`_` twins, a stdio command with one argument per line or an http(s) URL, env/header
+  rows, exposure, description, and a scope where Project needs a trusted project); and pasted `mcpServers`
+  JSON (wrapper or bare map, previewed per server; valid entries are added, SSE and malformed ones are
+  flagged). **Settings stores references only** (`mcpSecretIssues`: secret values from the form are never
+  stored): every env/header value of the form must be a `${VAR}` / `$VAR` template or a `!command`
+  (pi's grammar, `isConfigReference`) — anything else, empty included, is a validation error with the
+  rewrite hint — and its URL may carry no user info or credential-named query value (pi sends URLs as
+  written, so the advice is a header); a pasted entry with a plain env, header or OAuth client-secret value
+  or such a URL is flagged with the same hints and not added. There is no plain-text confirm. Any save
+  that runs something first shows a review step listing every command and `!` value; when a `!command` is
+  among them, it and Review & approve add one line: "!commands run on the host each time a chat connects;
+  keep them fast (e.g. read a cached token)." (pi resolves them synchronously on every connect). `mcp.add` runs per
+  server; failures stay in the dialog and a
+  paste keeps only the failed servers. After each mutation a status line says where the change applies:
+  "when a chat starts in this workspace" with no chat open, else "to open chats as they reload; a busy chat
+  waits until it is idle" — the host answers before it reloads them, so the returned snapshots cannot say
+  which already did; the rows' live statuses do. Sign in / Test connection start
+  `mcp.login` / `mcp.testConnection` and reuse `auth/LoginDialog` as Providers does: the login state keeps
+  the push's `target`, so only an MCP login opens this section's dialog (Providers ignores it), and the
+  sign-in page opens only from the dialog's button. A banner reads "ThinkRail asks before MCP calls that may
+  change data (per chat); no saved rules yet"; the empty state offers presets, the form, JSON import and a
+  host notice. Live sections: **`ProvidersSettings`** (the in-app
   provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env /
   models.json auth shows a "Managed" tag instead, since the host can't unset it; a `kind: "central"` row
   is labelled "JetBrains AI" and its Managed tag points at the JetBrains AI card, which owns that
@@ -668,7 +755,7 @@ a project picker, the prompt hero, and the reused
   the props-driven `AgentReviewSettings` and is **hidden until the host negotiates v68**
   (`AGENT_REVIEW_SETTING_PROTOCOL_VERSION`): a pre-v68 host can echo/store the unknown field while still
   registering `request_review`, so the switch would misreport the worker's behavior. A single dimmed "General" nav item ("Soon") still signals the shell is
-  built to grow. `ProvidersSettings`/`AppearanceSettings`/`LineWidthSettings`/`ChatSettings`/`TemplatesSettings`/
+  built to grow. `ProvidersSettings`/`McpSettings`/`AppearanceSettings`/`LineWidthSettings`/`ChatSettings`/`TemplatesSettings`/
   `PrivacySettings`/`ReviewSettings`/`ModelsSettings`/`FeedbackSettings` and the app-wide **`InterviewPromptDialog`** are the
   panels-owned **integration pieces** (store + transport). The prompt renders the shared incentive copy and
   fixed Calendar anchor with `Schedule an interview`, `Not now`, and `Never show again` actions. Primary and
@@ -1034,7 +1121,8 @@ own section. The kebab menu (`plan-menu`, a
   reused by `NewWorkspaceDialog`; `ModelSelector`/`ThinkingSelector`, still mounted by
   `ReviewSettings`/`ModelsSettings`; `modelPicker`'s `AUTH_KIND_LABEL`, the one connection-kind vocabulary
   `ProvidersSettings` shares with the picker; `Markdown`,
-  reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `resources`, `lib`, `themes` (catalog + generic application contract),
+  reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `auth` (`LoginDialog`, mounted by
+  `ProvidersSettings` and `McpSettings`), `resources`, `lib`, `themes` (catalog + generic application contract),
   `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.

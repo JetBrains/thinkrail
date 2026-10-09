@@ -793,7 +793,7 @@ contracts only.
   JSON, `mcpServers` not an object, a mistyped top-level key — that no server row can carry; older hosts
   omit it. `handledElsewhere` marks a host
   where a user-installed extension or `-builtin:mcp` owns MCP and management is read-only; pi settings
-  are read even with no chat open (`by: "pi settings (-builtin:mcp)"` — a client can recognise that exact
+  are read even with no chat open (`by: "pi settings (-builtin:mcp)"` — Settings recognises that exact
   value to say which entry to remove, so it stays stable), a replacing extension is seen through a live
   chat (`by` = its path).
 - Mutations (`add`, `update`, `remove`, `setProjectOverride`, `approve`, `shareWithRepo`) re-check that
@@ -827,10 +827,11 @@ contracts only.
   (`LoginPush.target` identifies the server); those pushes reach only the connection that started the
   operation, and a reply or cancel from another connection fails with `LOGIN_NOT_OWNER`. They and
   `mcp.logout` fail with `MCP_HANDLED_ELSEWHERE` where `handledElsewhere` is set, and with an "already
-  running" error while a sign-in for that server runs anywhere; `mcp.testConnection` judges the transport
-  of the name's effective server (the approved project entry, else the user one) — another of these operations or a chat's
+  running" error while a sign-in for that server runs anywhere — another Settings operation or a chat's
   `/mcp login <name>`. An operation still open after 10 minutes, or whose client the host has reaped after
   the reconnect window, ends with an `error` frame ("Sign-in timed out." / "Sign-in cancelled.").
+  `mcp.testConnection` judges the transport of the name's effective server (the approved project entry,
+  else the user one).
 - `McpResultSummary` is the host-written, bounded, base64-free presentation summary under
   `details.thinkrail` that can be rendered identically live, after reload and on another client.
   `mcp.readOutput` serves a result's recorded `fullOutputPath` only and reports `expired` when the temp

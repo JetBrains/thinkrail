@@ -48,7 +48,7 @@ export function trustEnablesText(
 	if (!notice.nativeResources) return null;
 	const mcp =
 		notice.mcpServers > 0
-			? ` Trust alone does not start its ${plural(notice.mcpServers, "MCP server")}.`
+			? ` Its ${plural(notice.mcpServers, "MCP server")} still need${notice.mcpServers === 1 ? "s" : ""} your approval one by one.`
 			: "";
 	return `Trust loads its skills, prompts, themes, SYSTEM.md and subagent definitions, and lets its extensions and settings run code on this machine.${mcp}`;
 }

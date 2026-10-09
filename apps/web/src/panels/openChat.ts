@@ -6,7 +6,44 @@ import {
 	toast,
 	useAppStore,
 } from "../store";
-import { errorText, getSessionMessagesWithSkillBaseline } from "../transport";
+import {
+	createSessionWithSkillBaseline,
+	errorText,
+	getSessionMessagesWithSkillBaseline,
+} from "../transport";
+
+export async function startChatInTab(
+	workspaceId: string,
+	preferredGroupId?: string,
+): Promise<void> {
+	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId, preferredGroupId);
+	useAppStore.getState().beginChatStart(workspaceId);
+	try {
+		const {
+			result: { sessionId, model, thinkingLevel },
+			syncedTick,
+		} = await createSessionWithSkillBaseline({ workspaceId });
+		const store = useAppStore.getState();
+		store.openChatSession(
+			workspaceId,
+			sessionId,
+			model,
+			thinkingLevel,
+			syncedTick,
+			layoutOpenOptionsForNavigation(store, workspaceId, navigation),
+		);
+	} catch {
+		const state = useAppStore.getState();
+		if (
+			layoutOpenOptionsForNavigation(state, workspaceId, navigation).activate !== false &&
+			!state.removedWorkspaceIds[workspaceId]
+		) {
+			toast.error("The agent session could not be created.", "Couldn't start the chat");
+		}
+	} finally {
+		useAppStore.getState().endChatStart(workspaceId);
+	}
+}
 
 export async function openChatInTab(
 	workspaceId: string,

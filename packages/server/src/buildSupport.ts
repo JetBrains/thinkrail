@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { resolveExtensionSkillRoots, serverExtensions } from "./extensions";
 
 export type DesktopRuntimeTarget =
@@ -45,6 +46,7 @@ export function resolveBuildRuntimeSources(): BuildRuntimeSources {
 		...piPackages
 			.filter((pkg) => pkg.skills)
 			.map((pkg) => requiredPath(join(dirname(pkg.entry), "skills"))),
+		requiredPath(fileURLToPath(new URL("../skills", import.meta.url))),
 		...serverExtensions.flatMap(resolveExtensionSkillRoots).map(requiredPath),
 	];
 	const ptyRelease = join(

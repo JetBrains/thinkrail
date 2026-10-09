@@ -237,6 +237,8 @@ export function selectChatResourceGroups(
 		activeCount: commands.length + subagents.length,
 		mcpServers,
 		mcpActiveCount: mcpServers?.filter((server) => isMcpActiveState(server.state)).length ?? 0,
+		mcpAttentionCount:
+			mcpServers?.filter((server) => isMcpAttentionState(server.state)).length ?? 0,
 	};
 }
 

@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { dirname, join, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
 	createSyntheticSourceInfo,
 	DefaultPackageManager,
@@ -76,6 +77,7 @@ function resolveDevPaths(): { extensionPaths: string[]; skillPaths: string[] } {
 			join(dirname(specGraphPath), "skills"),
 			join(dirname(workflowPath), "skills"),
 			join(dirname(todosPath), "skills"),
+			fileURLToPath(new URL("../../skills", import.meta.url)),
 			...serverExtensions.flatMap(resolveExtensionSkillRoots),
 		],
 	};

@@ -42,6 +42,10 @@ create the tools it needs based on how you actually work.
   pushing the workspace branch and opening or updating its GitHub PR through your own `gh`.
 - **Agent tools beyond the shell.** Web research, and inline diagrams and option comparisons rendered right
   in the chat.
+- **MCP servers.** Connect the MCP servers in your `pi` `mcp.json` (or add them, and a few presets, from
+  Settings): ThinkRail asks before a call that may change data, keeps servers a repository defines off until
+  you approve them, signs you in to OAuth servers from Settings, and shows each chat's servers next to its
+  background commands and subagents.
 - **Your providers, your credentials.** Sign in with [JetBrains AI](https://www.jetbrains.com/ai/) or
   connect any provider through `pi`'s own auth. ThinkRail has no accounts of its own.
 - **Desktop app or browser.** A native desktop app, or the `thinkrail` CLI that opens the same app in your

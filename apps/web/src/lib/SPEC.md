@@ -47,7 +47,7 @@ not this module; the theme-aware highlighter remains app-local.
   host-read tab opens), **`mcpState.ts`** (the MCP server-state vocabulary — `MCP_STATE_LABEL`,
   `mcpStateTone` (a connected server reporting zero tools warns), `mcpStatusLabel` / `mcpToolCountLabel`,
   and the `isMcpAttentionState` (needs sign-in, failed, pending approval) / `isMcpActiveState` (connected,
-  starting) predicates — shared by `store`'s selectors and the props-only chat Resources rows,
+  starting) predicates — shared by `store`'s selectors, Settings, and the props-only chat Resources rows,
   which may import nothing else in common), and the
   **`LayoutAttention`** device-local overlay shared by store, shell, and the headless layout child, with
   own-property-safe `readLayoutSelection()` / `readLayoutNavigationClock()` accessors for untrusted

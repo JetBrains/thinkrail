@@ -109,19 +109,20 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `session.getMessages` wrapper also rejects unless the returned summary exactly matches both requested
   workspace and session, making that untrusted-response identity check one shared installation boundary rather
   than a caller convention).
-- **`mcp.ts`** is the one MCP read path, used by the chat Resources view: its private
-  `requestMcpList(workspaceId)` is a plain `mcp.list` read with the store's `selectMcpRead` token captured
-  first, installed through `installMcpList` (rejecting when the connection cannot read MCP), and
-  **`watchMcpWorkspace(workspaceId)`** reads once and then re-reads with bounded backoff (1 → 13 s, six
-  attempts per streak) only while a live chat of that workspace still reports a server `starting` — the
-  host pushes no "connected" edge, and a re-read is what makes it refresh status. The streak budget resets
-  once nothing is starting; disposal cancels the timer and drops late results. Watchers are independent,
-  but concurrent plain `mcp.list` reads of one workspace on the same connection generation share the
-  in-flight request (two reads from the same `selectMcpRead` revision could otherwise land out of order
-  and drop a chat the newer one installed; a read captured on an earlier connection is not reused, since
-  its answer would be rejected at installation); `McpWatchDeps.onRead` is the watch loop's test hook.
+- **`mcp.ts`** is the one MCP read path shared by Settings and the chat Resources view:
+  **`requestMcpList(method, params)`** sends `mcp.list` or a list-returning mutation with the store's
+  `selectMcpRead` token captured first and installs the answer through `installMcpList` (rejecting when the
+  connection cannot read MCP); **`watchMcpWorkspace(workspaceId, onRead?)`** reads once and then re-reads
+  with bounded backoff (1 → 13 s, six attempts per streak) only while a live chat of that workspace still
+  reports a server `starting` — the host pushes no "connected" edge, and a re-read is what makes it refresh
+  status. The streak budget resets once nothing is starting; disposal cancels the timer and drops late
+  results. Watchers are independent, but concurrent plain `mcp.list` reads of one workspace on the same
+  connection generation share the in-flight request (two reads from the same `selectMcpRead` revision
+  could otherwise land out of order and drop a chat the newer one installed; a read captured on an earlier
+  connection is not reused, since its answer would be rejected at installation); a mutation's list is never
+  shared.
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
-  skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`,
+  skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `requestMcpList`,
   `watchMcpWorkspace`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`. `runHostUpdate` is the typed empty host action
