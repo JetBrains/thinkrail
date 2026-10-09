@@ -149,10 +149,11 @@ separators resize adjacent groups.
 - **`data-testid`:** compatibility wrapper `center-tabs`; leaves are `center-group`, Group Headers are
   `center-tab-strip` (a legacy name), and split separators are `center-split-resize`.
 - **Parent:** Workspace Workbench.
-- **Responsibility:** hosts **File**, **Chat**, **Diff**, rehydratable **Document**, and **Terminal** tabs;
-  owns recursive placement, per-group preview/keep semantics, movement, overflow, and focus recovery.
+- **Responsibility:** hosts **File**, **Chat**, **Diff**, **Changes review**, rehydratable **Document**, and
+  **Terminal** tabs; owns recursive placement, per-group preview/keep semantics, movement, overflow, and
+  focus recovery.
 
-**⚠ Naming note (tab element):** file/chat/diff/document tabs carry `data-testid="editor-tab"`; terminal
+**⚠ Naming note (tab element):** file/chat/diff/changes/document tabs carry `data-testid="editor-tab"`; terminal
 placements carry `terminal-tab`. The resource kind is also available through `data-kind`. "Editor tab" is
 a compatibility test hook, not the kind.
 
@@ -180,6 +181,7 @@ Tab-body components:
 | Diff Pane | `panels/DiffPane.tsx` → `DiffPane` | `DiffTab` | File diff; Split\|Inline or Source\|Rendered toggle |
 | — Source Diff | `panels/resources/code/PierreDiff.tsx` (lazy) | — | Read-only Pierre split/unified source diff with review and hunk actions |
 | — Rendered Diff | `panels/RenderedDiff.tsx` → `RenderedDiff` (lazy) | — | Rich markdown diff (`<ins>`/`<del>`) |
+| Changes Review Pane | `panels/ChangesReviewPane.tsx` → `ChangesReviewPane` | `ChangesTab` | Every changed file of one scope as sections; **Stacked** \| **One file** modes (its own section below) |
 | Chat View | `chat/ChatView.tsx` → `ChatView` (lazy) | `chat` | The agent conversation (its own section below) |
 | Document Pane | `WorkspaceWorkbench` reference renderer | `document` | Rehydratable virtual documents such as TODO plans |
 | Terminal Body | `panels/TerminalWorkbench.tsx` → `TerminalWorkbenchBody` | `terminal` | Visibility-gated xterm surface |
@@ -259,8 +261,9 @@ Row / message renderers (all in `chat/turns.tsx` unless noted):
 | Tool Card | `chat/ToolCard.tsx` → `ToolCard` | `tool-card` (`-toggle`) | `tool` | A primary tool call (collapsible frame) |
 | Activity Group | `chat/ActivityGroup.tsx` → `ActivityGroup` | — | `activity` | Folded run of routine steps ("N steps · …") |
 | Turn Divider | `TurnDivider` | `turn-divider` / `turn-divider-<id>` | `divider` | Round-end summary + artifact chips |
-| — Artifact Chip | `ArtifactChip` | `turn-divider-<id>` | — | "N specs" / "N files changed" deep-link/disclosure |
-| — Artifact List | `ArtifactList` | `<testid>-list` / `-list-item` | — | Expanded per-path list |
+| — Artifact Chip | `ArtifactChip` | `turn-divider-specs` / `turn-divider-files` | — | "N specs" / "N files changed" deep-link/disclosure; with a host turn receipt the files chip reads `N files changed · +a −r` |
+| — Artifact List | `ArtifactList` | `<testid>-list` / `-list-item` | — | Expanded per-path list (per-file `+/−` from the receipt) |
+| — Review-Turn Chip | inline in `TurnDivider` | `turn-divider-review` | — | "Review turn": opens the Changes Review Tab at the turn's scope (receipt only) |
 | Stream Indicator | `chat/StreamIndicator.tsx` → `StreamIndicator` | `stream-indicator` | — | Live streaming status: the Working Badge + phase label ("Thinking…", "Running bash…") |
 
 ## Tool Call
@@ -334,6 +337,57 @@ Children / associated surfaces:
 
 ---
 
+# Changes Review Tab
+
+The continuous review surface for one diff scope: every changed file of the scope as a **File Section** in a
+center tab. A single click on a Changes row, or the chat's **Review-Turn Chip**, opens it; the Changes Tool is
+its navigator.
+
+- **Canonical name:** Changes Review Tab; its body is the **Changes Review Pane**.
+- **Implementation:** `panels/ChangesReviewPane.tsx` → `ChangesReviewPane`, rendering
+  `panels/ChangesFileSection.tsx` → `ChangesFileSection` per file and the `panels/ChangesReviewGuide.tsx` →
+  `ChangesReviewGuide` rail.
+- **`data-testid`:** body `changes-review`; its tab is an `editor-tab` with `data-kind="changes"`.
+- **Parent:** Center Workbench (a selected `changes` tab body; one per workspace + scope).
+- **Position:** Fills the Editor Pane. Vertically: Review Toolbar (top) → sections (middle, scrolls) → Triage
+  Bar (bottom, Stacked only); the Review Guide is a left rail beside the sections.
+- **View modes:** **Stacked** (default; every section in one virtualized list) and **One file** (one section
+  at a time under the Walk Bar), chosen by the toolbar's Stacked\|One file segment and held app-wide.
+- **Responsibility:** lazily read each file's diff as a section, keep the tab's viewed / collapsed / kept
+  state, and walk the reviewer through the scope.
+
+| Canonical name | Implementation | `data-testid` | Responsibility |
+|---|---|---|---|
+| Review Toolbar | inline `role="toolbar"` in `ChangesReviewPane` | `changes-review-toolbar` | Scope + target (`changes-review-scope`), `N files · +N −M · n/N viewed` (`changes-review-summary`, `changes-review-viewed-count`), and the controls below |
+| — Send Review | `SendAllReviewsButton` | `changes-review-send` | "Send review (N)" |
+| — Collapse / Expand All | `HeaderIconButton` | `changes-review-collapse-all` / `changes-review-expand-all` | Every section at once (Stacked only) |
+| — Review Guide Toggle | `HeaderIconButton` | `changes-review-guide-toggle` | Show / hide the Review Guide |
+| — Whitespace Toggle | `HeaderIconButton` (¶) | `changes-review-toggle-whitespace` | Hide whitespace changes |
+| — Diff View Toggle | `ToggleSegment` | `changes-review-toggle-split` / `changes-review-toggle-inline` | Split \| Inline (desktop only) |
+| — Layout Toggle | `ToggleSegment` | `changes-review-layout-stacked` / `changes-review-layout-single` | Stacked \| One file |
+| File Section | `ChangesFileSection` | `changes-section` (`data-path`, `data-status`, `data-collapsed`, `data-viewed`) | One changed file: header + lazily read diff body, dispatched like the Diff Pane |
+| — Section Header | inline; sticky in Stacked | `changes-section-header` | Collapse chevron (`changes-section-toggle`), status, path (`changes-section-path`), `+N −M`, `k/n kept` (`changes-section-kept`), renderer segment, Revert file (`changes-section-revert`), Open as tab (`changes-section-open-tab`), actions menu (`changes-section-menu`) |
+| — Viewed | inline toggle button | `changes-section-viewed` (`aria-pressed`) | Marks the file viewed in this tab |
+| — Collapsed Notice | inline | `changes-section-collapsed` / `changes-section-expand` | Large or generated file collapsed by default: Expand / Open as tab |
+| — Section states | inline | `changes-section-loading` / `changes-section-error` / `changes-section-retry` | Height-reserving placeholder; failed read + Retry |
+| Hunk Toolbar | `HunkToolbar` in `panels/resources/code/PierreDiff.tsx` | `hunk-toolbar` (`data-kept`) | Per-hunk Source Diff actions: Revert (`hunk-revert`), Ask agent (`hunk-ask-agent`) |
+| — Keep | inline toggle button | `hunk-keep` (`aria-pressed`) | "Keep" / "Kept" hunk triage; review tab in a mutable scope only |
+| Triage Bar | inline in `ChangesReviewPane` (Stacked) | `changes-review-triage` | Bottom bar: `n of N reviewed` |
+| — Progress Bar | inline | `changes-review-progress` | Viewed fraction |
+| — Next Unreviewed | inline button | `changes-review-next-unreviewed` | "Next unreviewed" file (`J`, wraps) |
+| — Mark All Viewed | inline button | `changes-review-mark-all` | "Mark all viewed" |
+| Walk Bar | inline in `ChangesReviewPane` (One file) | `changes-review-walk` | Prev / Next file (`changes-review-prev` / `changes-review-next`, `Alt+↑` / `Alt+↓`), `n / N` (`changes-review-counter`), Mark viewed (`changes-review-mark-viewed`, `V`) |
+| Review Guide | `ChangesReviewGuide` | `changes-review-guide` | "Review guide" left rail (Stacked, not on phones) when the review has a guide or an open agent finding: verdict + summary (`changes-review-guide-summary`) |
+| — Guide Step | inline button | `changes-review-guide-step` (`data-active`) | One "Suggested reading order" step; disabled when its file is outside the scope |
+| — Guide Finding | inline card | `changes-review-guide-finding` (`data-active`) | One open agent finding; "Fix this one" (`changes-review-guide-fix`) |
+| — Guide Prev / Next | inline buttons | `changes-review-guide-prev` / `changes-review-guide-next` | Walk the steps: Start / Next / Restart (`N`; `P` back) |
+| — Apply Fixes | inline button | `changes-review-guide-apply` | "Apply fixes": sends every open finding to the agent |
+| Large-Scope Notice | inline | `changes-review-large-notice` | More than 50 files: offers One file; dismissable |
+| End Note | `ReviewListFooter` | `changes-review-end` | "End of changes · N files" tail of the Stacked list |
+| Empty / Error states | inline | `changes-review-empty` / `changes-review-error` / `changes-review-retry` | No changes in this scope; failed read + Retry |
+
+---
+
 # Side Workbench
 
 The left and right sides are independently resizable regions. Each side contains an ordered vertical
@@ -360,7 +414,7 @@ joins that last group. This is startup behavior, not a fixed hierarchy.
 | Projects | `tab-projects`, body `left-nav` | `panels/ProjectTree.tsx`; projects and workspaces |
 | Specs | `tab-specs` | `panels/SpecsPanel.tsx`; automatically refreshed read-only spec graph, with error-only `specs-retry` |
 | Files | `tab-files` | `panels/FileTree.tsx`; worktree file tree |
-| Changes | `tab-changes` | `panels/ChangesPanel.tsx`; scoped git changes and diff opens |
+| Changes | `tab-changes` | `panels/ChangesPanel.tsx`; scoped git changes, Changes Review Tab navigator, diff opens |
 | Review | `tab-review` | `panels/ReviewPanel.tsx`; review accordion and send actions |
 
 `WorkspaceWorkbench` owns the long-lived Specs and Review reads so badges, review flags, and artifact
@@ -376,12 +430,21 @@ the per-file diff tab. `ChangesPanel` remains arrangement-agnostic; only its sid
 
 | Canonical name | Implementation | `data-testid` | Responsibility |
 |---|---|---|---|
-| Changes View Toggle | `panels/ToggleSegment.tsx` | `changes-view-toggle` | List \| Tree |
-| Changes List Row | inline in `ChangesPanel` | `change-item` | Flat changed-file row |
-| Changes Tree | `panels/ChangesTree.tsx` | — | Folder tree of changed files |
+| Changes Header | inline `role="toolbar"` in `ChangesPanel` | `changes-view-toggle` | Scope menu, target-branch picker, List \| Tree |
+| Changes Scope Menu | `panels/ChangesScopeMenu.tsx` → `ChangesScopeMenu` | `changes-scope-trigger` (`changes-scope-label`) | Scope pill: All changes (`changes-scope-all`), Uncommitted changes (`changes-scope-uncommitted`), Last turn, Agent turns, Commits (`changes-scope-commit`) |
+| — Last Turn | menu item | `changes-scope-last-turn` | "Last turn · N files": the newest agent run; disabled until a run changed files |
+| — Agent Turns | menu items under "Agent turns" | `changes-scope-turn` (`data-turn`) | Recent agent runs, newest first (only when there is more than one) |
+| Branch Picker | `panels/BranchPicker.tsx` → `BranchPicker` | `changes-target-picker` | Target branch (`vs <base>`) |
+| Changes View Toggle | `panels/ToggleSegment.tsx` | `changes-toggle-list` / `changes-toggle-tree` | List \| Tree |
+| Changes List Row | inline in `ChangesPanel` | `change-item` (`data-active`, `data-viewed`) | Flat changed-file row |
+| Changes Tree | `panels/ChangesTree.tsx` | file rows `change-item`, folders `change-tree-folder` | Folder tree of changed files |
+| Viewed Mark | `panels/ViewedMark.tsx` → `ViewedMark` | `change-viewed` | Check glyph on a row the review tab marked viewed |
 | Diff-Stat Badge | `panels/DiffStatBadge.tsx` | — | Per-file / per-folder `+N −M` |
 | Empty state | inline | `changes-empty` | No changes in this scope |
 | Error state | inline | `changes-error` / `changes-retry` | Failed read + Retry |
+
+**⚠ Naming note (Changes Header):** `changes-view-toggle` marks the whole header toolbar, not the List\|Tree
+segment (`changes-toggle-list` / `changes-toggle-tree`).
 
 ---
 
@@ -470,7 +533,7 @@ App-level dialog/popover instances built on those primitives:
   but not built; do not use "Drawer" for any current region. The **Resources Inspector** is an in-place
   non-modal **Dialog** (`DialogPanel`), not a drawer.
 - **Toolbar** — there is no `Toolbar` component; the slim per-panel control rows (Changes Header, the
-  Diff Pane header, the view toggles) are inline. Use **Panel Header** / **Panel Toolbar** descriptively,
+  Diff Pane header, the Review Toolbar, the view toggles) are inline. Use **Panel Header** / **Panel Toolbar** descriptively,
   not as component names.
 
 ---
@@ -511,10 +574,12 @@ its alternatives in parentheses.
 
 - **Center Workbench** (alts: Center Tabbed Area, Editor Area).
 - **Center Group**, **Group Header**, **Tab Strip**, **Tab**, **Tab Close**, **Split Separator**.
-- Tab kinds: **File tab**, **Chat tab**, **Diff tab**, **Document tab**, **Terminal tab**.
+- Tab kinds: **File tab**, **Chat tab**, **Diff tab**, **Changes review tab**, **Document tab**,
+  **Terminal tab**.
 - **Editor Pane**, **Workspace-Ready Receipt**.
 - **File Pane** (**Code File** / **Markdown Preview**), **Diff Pane** (**Source Diff** /
-  **Rendered Diff**), **Document Pane**, **Terminal Body**.
+  **Rendered Diff**), **Changes Review Pane** (**Stacked** / **One file**), **Document Pane**,
+  **Terminal Body**.
 - **Chat-History Menu**, **New-Chat Button**.
 
 **Chat**
@@ -526,7 +591,7 @@ its alternatives in parentheses.
 - **Message List** (alt: Transcript). Units: **Turn** (pi message), **Row** (derived render unit).
 - Row renderers: **User Message**, **Assistant Markdown**, **System Notice**, **Error Turn**,
   **Retry Indicator**, **Tool Card**, **Activity Group**, **Turn Divider** (with **Artifact Chip** /
-  **Artifact List**), **Stream Indicator**.
+  **Artifact List** / **Review-Turn Chip**), **Stream Indicator**.
 - **Tool Card** (frame) / **Tool Renderer** (body): **Bash Card**, **Read Card**, **Write Card**,
   **Edit Card**, **Ask-User-Question Card**, **Visualization Card**, **Web Card**, **Default Tool
   Renderer**.
@@ -536,13 +601,25 @@ its alternatives in parentheses.
   **Save-as-Template Action**.
 - **Chat Plan** — **Plan Strip** + **Plan Popover** + **Todo List**.
 
+**Changes review**
+
+- **Changes Review Tab** (body: **Changes Review Pane**) — one per workspace + scope; modes **Stacked** /
+  **One file**.
+- **Review Toolbar**, **File Section** (**Section Header**, **Viewed**, **Collapsed Notice**),
+  **Hunk Toolbar** (**Keep**).
+- **Triage Bar** (**Progress Bar**, **Next Unreviewed**, **Mark All Viewed**), **Walk Bar**.
+- **Review Guide** (**Guide Step**, **Guide Finding**, **Apply Fixes**), **Large-Scope Notice**,
+  **End Note**.
+
 **Sides**
 
 - **Left Side**, **Right Side**, **Side Group**, **Hidden-Side Rail**.
 - Singleton tools: **Projects**, **Specs**, **Files**, **Changes**, **Review**.
 - **Specs Panel**, **Files Panel** (alt: File Tree), **Changes Panel**, **Review Panel**.
-- **Changes Header** (no component): **Changes Scope Menu**, **Branch Picker**, **Changes View Toggle**.
-- **Changes List** / **Changes Tree**, **Change-Row Actions**, **Tree Row**, **Diff-Stat Badge**.
+- **Changes Header** (no component): **Changes Scope Menu** (with **Last Turn** / **Agent Turns**),
+  **Branch Picker**, **Changes View Toggle**.
+- **Changes List** / **Changes Tree**, **Change-Row Actions**, **Tree Row**, **Viewed Mark**,
+  **Diff-Stat Badge**.
 
 **Terminal**
 
