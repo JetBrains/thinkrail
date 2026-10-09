@@ -1,4 +1,4 @@
-import type { AskUserQuestionResult } from "@thinkrail/contracts";
+import type { AskUserQuestionResult, McpReadOutputResult } from "@thinkrail/contracts";
 import { createContext, useContext } from "react";
 import type { RevealBlock } from "./scrollGeometry";
 
@@ -16,6 +16,8 @@ export interface ChatActions {
 	focusComposer: () => void;
 	openSubagentTranscript: (childSessionId: string) => void;
 	revealChatElement: (element: HTMLElement, options: ChatRevealOptions) => void;
+	readMcpOutput?: ((toolCallId: string) => Promise<McpReadOutputResult>) | undefined;
+	openMcpSettings?: (() => void) | undefined;
 }
 
 export const ChatActionsContext = createContext<ChatActions | null>(null);

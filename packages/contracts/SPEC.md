@@ -840,9 +840,8 @@ contracts only.
   `.pi/mcp.json`; `shareWithRepo` is the explicit write into it. `setProjectOverride` merges the fields it
   carries into the latest stored override atomically (a client sends only what changed, so concurrent
   clients do not overwrite each other's setting). Enablement must be boolean and exposure one of
-  `deferred`, `direct`, `hidden`; malformed runtime values fail with `MCP_CONFIG_INVALID`.
-  `setSessionOverride` is the chat-resources "Disable in this chat": it applies to `mcp.json` servers only —
-  a `SessionResources.mcpServers` row with
+  `deferred`, `direct`, `hidden`; malformed runtime values fail with `MCP_CONFIG_INVALID`. `setSessionOverride` is the chat-resources
+  "Disable in this chat": it applies to `mcp.json` servers only — a `SessionResources.mcpServers` row with
   `registered: true` is a server an extension registered (its `transport` is that registration's), and
   disabling it fails with `MCP_CONFIG_INVALID`; where MCP is handled elsewhere it fails with
   `MCP_HANDLED_ELSEWHERE`. `mcp.reconnect` resolves once pi reconnected the server and rejects with pi's
@@ -868,14 +867,15 @@ contracts only.
   (`LoginPush.target` identifies the server); those pushes reach only the connection that started the
   operation, and a reply or cancel from another connection fails with `LOGIN_NOT_OWNER`. They and
   `mcp.logout` fail with `MCP_HANDLED_ELSEWHERE` where `handledElsewhere` is set, and with an "already
-  running" error while a sign-in for that server runs anywhere — another of these operations or a chat's
+  running" error while a sign-in for that server runs anywhere — another Settings operation or a chat's
   `/mcp login <name>`. An operation still open after 10 minutes, or whose client the host has reaped after
   the reconnect window, ends with an `error` frame ("Sign-in timed out." / "Sign-in cancelled.").
   `mcp.testConnection` judges the transport of the actual admitted configuration, not an approved but
   invalid project row that the loader skipped. Mutations and probes reject if workspace identity, cwd or
   project trust changed during async ownership resolution; no stale project grant admits a new operation.
-- `McpResultSummary` is the host-written, bounded, base64-free presentation summary under
-  `details.thinkrail` that can be rendered identically live, after reload and on another client.
+- `McpToolDetails` mirrors pi's result details for `mcp__*` and the three MCP resource tools;
+  `McpResultSummary` is the host-written, bounded, base64-free presentation summary under
+  `details.thinkrail` that lets cards render identically live, after reload and on another client.
   `mcp.readOutput` serves a result's recorded `fullOutputPath` only and reports `expired` when the temp
   file is gone.
 - `mcp.readLog { workspaceId, name }` returns `McpServerLog`: the server's latest lines (at most 200, oldest

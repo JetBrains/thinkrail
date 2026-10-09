@@ -8,6 +8,7 @@ import { ReadCard } from "./ReadCard";
 import { RequestReviewCard, requestReviewSummary } from "./RequestReviewCard";
 import { ResolveCommentCard } from "./ResolveCommentCard";
 import { SpecToolCard, specToolSummary } from "./SpecToolCard";
+import "./mcp/register";
 import "./subagent/register";
 import "./web/register";
 import { WriteCard } from "./WriteCard";

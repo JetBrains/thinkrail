@@ -84,7 +84,7 @@ relax a rule.
   kept in order until it is spent (`omittedBlocks` counts the rest, since a server may return thousands of
   resource links with long URIs), and `structuredContent` is kept only if it fits what remains (else
   `structuredContentTruncated`); a resource read keeps only its contents' URIs and types. pi drops
-  `structuredContent` from finalized messages, so this lets a result be rendered the same live, after
+  `structuredContent` from finalized messages, so this is what lets a card render the same live, after
   reload and on another client.
 - `management.ts` — `effectiveMcpServerConfig` reads the admitted definition through the same loader
   used by sessions, so probes never infer it from a presentation row. The host composes
@@ -150,7 +150,7 @@ relax a rule.
   `tool_search` reaches them. Living inside the replaceable built-in, the activation disappears with it when
   another extension owns MCP, and handling `mcp_servers_change` there does not distort pi's "nobody
   connects registered servers" report. The `mcp` factory hands pi a `Proxy` of the `ExtensionAPI`; every
-  member but `on` and `registerCommand` is forwarded with `Reflect.get` (pi's API object is never spread, so nothing is read
+  member but two is forwarded with `Reflect.get` (pi's API object is never spread, so nothing is read
   eagerly). Each factory load owns a closed flag and one cleanup promise. `on` captures pi's
   `session_shutdown` handlers; both `shutdown(event, ctx)` and the runner's shutdown dispatch close that
   load synchronously and join the same cleanup promise. Pi clears its server list before awaiting
@@ -160,7 +160,7 @@ relax a rule.
   tool-search activation, against a closed load: an earlier async handler can resume the dispatch after
   shutdown has already finished. These guards own only that load's engine resources, not persistent
   session lifecycle state. Re-check these ordering guarantees on every pi bump. Unless the caller passes
-  `lockSignIns: false` (only the host probe, which holds the lock itself), `registerCommand` wraps
+  `lockSignIns: false` (only the Settings probe, which holds the lock itself), `registerCommand` wraps
   `/mcp`'s handler: `login <name>` /
   `logout <name>`, parsed the way pi parses them, take `acquireMcpSignInLock(name, "chat")` for the
   command's duration and release it in `finally`; while another holder has it the command posts "A sign-in
@@ -169,8 +169,7 @@ relax a rule.
   A mutating command's completion triggers the supplied status invalidation, including failure; status
   reads do not, preventing capture recursion.
 - `signInLock.ts` — `acquireMcpSignInLock(serverName, holder)`: the process-wide lock, keyed by pi's
-  normalized server namespace (`-` and `_` aliases share it, matching pi credential identity), that host
-  probes (`"settings"`) and chats (`"chat"`) share (why and who holds it:
+  normalized server namespace (`-` and `_` aliases share it, matching pi credential identity), that Settings probes (`"settings"`) and chats (`"chat"`) share (why and who holds it:
   [[submodule-server-agent]] › MCP servers). It returns `{ release }` (frees only its own hold, so a late
   or repeated call is harmless) or `{ heldBy }`, which callers turn into their refusal.
 - `writers.ts` — `add` / `update` / `remove` with pi's editing semantics (unknown keys and indentation

@@ -27,6 +27,7 @@ import {
 	selectCatalogModel,
 	selectCompactionTurnIds,
 	selectSkillsStale,
+	selectSupportsMcp,
 	selectWorkspaceById,
 	toast,
 	useAppStore,
@@ -119,6 +120,7 @@ export default function ChatView({
 	const status = useAppStore((s) => s.status);
 	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
 	const canRenameChat = useAppStore(selectCanRenameChat);
+	const supportsMcp = useAppStore(selectSupportsMcp);
 	const composerGrowthLimit = useAppStore((state) => state.composerGrowthLimit);
 	const chatLineWidth = useAppStore((state) => state.chatLineWidth);
 	const chatLineWidthBounded = useAppStore((state) => state.chatLineWidthBounded);
@@ -260,6 +262,11 @@ export default function ChatView({
 	const openMcpSettings = useCallback(
 		() => useAppStore.getState().openSettings(SettingsSection.Mcp),
 		[],
+	);
+	const readMcpOutput = useCallback(
+		(toolCallId: string) =>
+			getTransport().request("mcp.readOutput", { workspaceId, sessionId, toolCallId }),
+		[workspaceId, sessionId],
 	);
 
 	const stillRunning = useMemo(
@@ -741,6 +748,8 @@ export default function ChatView({
 				onTryAgain={onTryAgain}
 				historyOpen={historyState.open}
 				stillRunning={stillRunning}
+				readMcpOutput={supportsMcp ? readMcpOutput : undefined}
+				openMcpSettings={supportsMcp ? openMcpSettings : undefined}
 				resourcesOverlay={
 					resources.visible ? (
 						<ResourcesInspector

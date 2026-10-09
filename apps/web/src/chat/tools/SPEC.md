@@ -12,8 +12,9 @@ tags: [chat]
 
 The **app-local presentation halves of bundled tools**, joined to server-side capabilities by tool name
 (the extension model lives in the parent spec). `register.ts` wires these renderers via
-`registerToolRenderer` — renderer + collapsed-header summary + chrome/prominence — as a side-effect
-import of `ChatView`. Extracted extension renderers are registered by the host's `extensions/registry.ts`. Unregistered tools fall back to
+`registerToolRenderer` (and, for `mcp__*` alone, `registerToolRendererPrefix`) — renderer +
+collapsed-header summary + chrome/prominence — as a side-effect import of `ChatView`. Extracted extension
+renderers are registered by the host's `extensions/registry.ts`. Unregistered tools fall back to
 `DefaultToolRenderer` and are treated as **routine** (they fold into activity groups).
 
 ## What's here
@@ -199,6 +200,9 @@ import of `ChatView`. Extracted extension renderers are registered by the host's
   path. `spec_delete` never links its successful deleted path. Routine.
 - **`web/`** — search/fetch/stored-content renderers for `pi-web-access`; own child spec
   ([web/SPEC.md](web/SPEC.md)). Routine.
+- **`mcp/`** — pi's built-in MCP tools: the `mcp__*` card (server / tool, key/value args, ordered text,
+  collapsed JSON tree of the host's structured-content summary, Full output, sign-in action), the
+  resource listing/read cards and `tool_search`; own child spec ([mcp/SPEC.md](mcp/SPEC.md)). Routine.
 - **The five `todo_*` tools** deliberately keep routine fallback receipts: their connected product surface
   is the chat plan, not a second renderer system in this module.
 - **`subagent/`** — delegation renderers for `pi-subagents`: `AgentCard` (the `Agent` tool — **primary**;
@@ -228,5 +232,9 @@ import of `ChatView`. Extracted extension renderers are registered by the host's
   fall back to its text content (`resultText`). Missing structured references remove links, never prose.
 - File actions come only from explicit args/details and only through `ToolRenderProps.onOpenFile`; never
   infer them from arbitrary result text or import app integration into a renderer.
-- Tool names must match the capability exactly — the name is the join key.
+- Tool names must match the capability exactly — the name is the join key. The one sanctioned exception
+  is the `mcp__` prefix: pi names MCP tools `mcp__<server>__<tool>`, so the registry resolves an exact
+  name first and the longest registered prefix second, through **one** resolver shared by renderer,
+  summary, chrome and prominence. Prefix renderers never load code from a server; they render pi's result
+  ([mcp/SPEC.md](mcp/SPEC.md)). The three resource tools and `tool_search` register exactly.
 - Token-utility styling only (no raw hex / inline `style`).

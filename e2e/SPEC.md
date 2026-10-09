@@ -409,8 +409,13 @@ real Settings → Extensions switch through `settings.update`, proves it survive
 historical `visualize` call that must still render its diagram while the extension is off; each test restores
 the switch in `afterEach` because the shard shares one host. The provider-backed counterpart in
 `visualize.live.spec.ts` runs first: with the extension off the agent is never offered `visualize`, and the
-existing diagram/comparison tests that follow re-prove the restored tool in the same chat. Questionnaire paging uses
-canonical persisted tool-call/ack fixtures to pin six-question rounds beyond four, tall-page reveal,
+existing diagram/comparison tests that follow re-prove the restored tool in the same chat. MCP tool-card coverage
+(`mcp-tool-cards.spec.ts`) seeds historical `mcp__*`, resource and `tool_search` results the same way and pins
+the single shared image strip, the collapsed JSON tree, Full output through the real `mcp.readOutput`
+(a recorded file and an expired one), the Sign in deep link into Settings › MCP servers, and the raw-text
+fallback for a truncated listing; its element shots under `e2e/screenshots/mcp-tool-cards/` are review evidence
+only. Questionnaire paging uses canonical persisted tool-call/ack fixtures to pin six-question rounds beyond
+four, tall-page reveal,
 fresh-chat restored-page reveal, visible review focus, and coarse-pointer focus
 without provider variability; desktop package tests separately pin the stable
 backend-profile/window adapter required across dynamic-port restarts. Streaming-band coverage remains
