@@ -17,9 +17,9 @@ import {
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
-import { deriveAskStates } from "../chat/askState";
 import {
 	compactAge,
+	deriveAskStates,
 	isAbsolutePath,
 	type LayoutAttention,
 	layoutResourceIdentity,

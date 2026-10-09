@@ -25,7 +25,11 @@ not this module; the theme-aware highlighter remains app-local.
   store's snapshot-identity guard and `ErrorBoundary`'s reset keys), **`userText()`** (a user
   message's plain text — shared by `chat`'s transcript hydration/renderer and `store`'s live event
   fold, so "same message" means the same thing everywhere; it lives here because `store`'s edge to
-  `chat/` is type-only), **`parseSkillInvocation()`** + **`matchesSkillInvocationCommand()`** (the
+  `chat/` is type-only), **`deriveAskStates()`** / **`readAskResult()`** (+ the `AskState` type) (pure
+  derivation of each `ask_user_question`'s answered/superseded/terminal status from pi turns — shared by
+  `chat`'s ask cards and plan-glance and `store`'s `selectAwaitingAsk`; lives here, like `userText`, to
+  keep `store`'s edge to `chat/` type-only, and only **type**-references `ChatTurn`/`ToolResultState`),
+  **`parseSkillInvocation()`** + **`matchesSkillInvocationCommand()`** (the
   anchored browser-side mirror of Pi's canonical expanded `<skill>` user-message grammar, shared by
   `chat`'s compact renderer and `store`'s optimistic-echo reconciliation; malformed/quoted blocks fail
   closed),
