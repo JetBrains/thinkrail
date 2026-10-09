@@ -737,9 +737,11 @@ export function buildSessionSettings(cwd: string, projectTrusted: boolean): Sett
 	return settings;
 }
 
+export type TrustReloadDisposition = SessionReloadDisposition | "failed";
+
 export async function applyPiResourceTrust(
 	workspaceIds: readonly string[],
-): Promise<Record<string, SessionReloadDisposition>> {
+): Promise<Record<string, TrustReloadDisposition>> {
 	const scope = new Set(workspaceIds);
 	const stale = [...sessions].filter(
 		([, entry]) =>
@@ -748,7 +750,7 @@ export async function applyPiResourceTrust(
 			!entry.resourcesClosing &&
 			entry.session.settingsManager.isProjectTrusted() !== piResourceTrustFor(entry.workspaceId),
 	);
-	const dispositions: Record<string, SessionReloadDisposition> = {};
+	const dispositions: Record<string, TrustReloadDisposition> = {};
 	for (const [sessionId, entry] of stale) {
 		if (!piResourceTrustFor(entry.workspaceId))
 			await stopSessionChildren(entry.workspaceId, sessionId, "user").settled;
@@ -756,6 +758,7 @@ export async function applyPiResourceTrust(
 			dispositions[sessionId] = await requestSessionReload(sessionId);
 		} catch (error) {
 			log.warn(`trust reload failed for ${sessionId}`, error as Error);
+			dispositions[sessionId] = "failed";
 		}
 	}
 	return dispositions;

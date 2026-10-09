@@ -746,6 +746,8 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		};
 	}
 
+	const projectTrustFor = (cwd: string): boolean => bindings.projectTrusted?.(cwd) ?? true;
+
 	async function assemble(
 		options: SessionOptions,
 		cwd: string,
@@ -755,7 +757,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		factories: InlineExtension[],
 		manager: SessionManager,
 	): Promise<AgentSession> {
-		const projectTrusted = bindings.projectTrusted?.(cwd) ?? true;
+		const projectTrusted = projectTrustFor(cwd);
 		const settingsManager =
 			bindings.buildChildSettings?.(cwd, projectTrusted) ??
 			SettingsManager.create(cwd, undefined, { projectTrusted });
@@ -897,10 +899,11 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			bindings.childExtensionFactories ?? [],
 			manager,
 		);
-		if (
+		const parentClosed =
 			parentLifetimes.get(parentSessionId) !== parentLifetime ||
-			!bindings.resolveParent?.(parentSessionId)
-		) {
+			!bindings.resolveParent?.(parentSessionId);
+		const trustChanged = session.settingsManager.isProjectTrusted() !== projectTrustFor(parent.cwd);
+		if (parentClosed || trustChanged) {
 			try {
 				await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
 			} finally {
@@ -908,7 +911,9 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			}
 			throw new DelegationError(
 				"unknown-parent",
-				`Parent session ${parentSessionId} closed during child preparation`,
+				parentClosed
+					? `Parent session ${parentSessionId} closed during child preparation`
+					: `Project trust changed during child preparation for ${parentSessionId}`,
 			);
 		}
 		const record: SpawnRecord = Object.freeze({
