@@ -77,6 +77,7 @@ import {
 	mcpEntryUpdate,
 	mcpExposureLabel,
 	mcpHandledElsewhereText,
+	mcpRenderedTarget,
 	mcpRowView,
 	mcpSaveFeedback,
 	mcpSettingWrite,
@@ -673,7 +674,10 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 	const readOnly = !connected || handledElsewhere !== null;
 	const servers = projection?.servers ?? null;
 	const configErrors = projection?.configErrors ?? [];
-	const mcpLogin = activeLogin?.target?.kind === "mcp" ? activeLogin : null;
+	const mcpLogin =
+		activeLogin?.target?.kind === "mcp" && activeLogin.target.workspaceId === workspaceId
+			? activeLogin
+			: null;
 
 	const run = async (
 		row: McpServerRow,
@@ -999,11 +1003,8 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 						refreshOnFailure(workspaceId, () =>
 							requestMcpList("mcp.remove", {
 								workspaceId,
-								scope: row.summary.scope,
 								name: row.summary.name,
-								...(row.summary.scope === "project" && row.summary.approval
-									? { expectedFingerprint: row.summary.approval.fingerprint }
-									: {}),
+								...mcpRenderedTarget(row.summary),
 							}),
 						),
 					);
