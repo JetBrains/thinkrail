@@ -9,6 +9,7 @@ import {
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
+	type ChildHandle,
 	createDelegationService,
 	type DelegationService,
 	deriveChildSessionFile,
@@ -70,6 +71,25 @@ export function subagentsFor(
 		isEnabled,
 		canDeliverCompletion,
 	});
+}
+
+function liveSessionChildren(workspaceId: string, parentSessionId: string): ChildHandle[] {
+	return (services.get(workspaceId)?.childrenOf(parentSessionId) ?? []).filter(
+		(child) =>
+			child.record.scope === workspaceId &&
+			child.record.parentSessionId === parentSessionId &&
+			(child.snapshot?.status === "queued" || child.snapshot?.status === "running"),
+	);
+}
+
+export function stopSessionChildren(
+	workspaceId: string,
+	parentSessionId: string,
+	reason: string,
+): number {
+	const children = liveSessionChildren(workspaceId, parentSessionId);
+	for (const child of children) void child.abort(reason).catch(() => {});
+	return children.length;
 }
 
 export async function disposeSessionChildren(

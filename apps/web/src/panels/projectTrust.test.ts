@@ -93,7 +93,7 @@ test("a grant asks for pi-level resources only when the notice named them", () =
 test("the stop-trusting confirmation names pi resources and reloads only where pi-level trust applies", () => {
 	const granted = { trusted: true, piResourceTrust: "granted" } as const;
 	expect(stopTrustingText(granted, true)).toBe(
-		"Its project skills and pi resources stop loading; open chats reload when idle.",
+		"Its project skills and pi resources stop loading; running subagents stop and open chats reload when idle.",
 	);
 	expect(stopTrustingText({ ...granted, piResourceTrust: "untrusted" }, true)).toBe(
 		"Its project skills stop loading in new chats.",

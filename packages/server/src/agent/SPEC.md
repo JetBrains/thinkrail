@@ -884,7 +884,11 @@ settings or workspaces edge. The owning parent graph records this package depend
   session loader's `reload()` applies the admission context's current trust (`setProjectTrusted`) before
   every load, so any reload — a grant or a manual reload — loads exactly what the record
   allows; a grant or revoke therefore only asks the gate to reload the sessions whose trust is stale
-  (`applyPiResourceTrust`: idle now, busy at settlement). The pi-level grant is its own consent, separate
+  (`applyPiResourceTrust`: idle now, busy at settlement). A child session captures the trust at its
+  creation and `pi-subagents` retains children across a parent reload, so a revoke also stops every
+  live child of a stale parent (`stopSessionChildren`, reason `"user"`: the parent is told without
+  being woken) before the parent's reload is requested; a grant leaves running children alone, since
+  they merely lack the project's resources. The pi-level grant is its own consent, separate
   from alias trust: only `project.setTrust` with `resources: true`, sent by a surface that names what it
   loads, grants it ([[submodule-server-projects]]). The trust notice is shown for alias skills, pi's own
   trust-requiring resources, and project subagent definitions alike.

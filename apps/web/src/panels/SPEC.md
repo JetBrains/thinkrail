@@ -337,8 +337,8 @@ resources (and so said what they load and run); an alias-only notice grants alia
 it shows a "N new → *Review & enable*" state for skills that appeared later (`project.acknowledgeSkills`),
 else a quiet "trusted" line whose *Stop trusting* (behind a destructive `ConfirmDialog`) sends
 `project.setTrust({ trusted: false })`, revoking both grants; its confirmation (`stopTrustingText`) says pi
-resources stop loading and open chats reload only when `piResourceTrust` is `granted` and the host supports
-project trust, otherwise that project skills stop loading in new chats. It never renders the skills'
+resources stop loading, running subagents stop and open chats reload only when `piResourceTrust` is
+`granted` and the host supports project trust, otherwise that project skills stop loading in new chats. It never renders the skills'
 (attacker-controlled) names before trust. The full manager (`chat/SkillsDialog` in **project mode**
 — trust + group/skill toggles, no session yet) is reached from **New Workspace**, whose opener is the shared
 `chat/SkillsButton` primitive (so it cannot drift from the chat header's Skills trigger). This is the
