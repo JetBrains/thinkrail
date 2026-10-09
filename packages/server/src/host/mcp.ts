@@ -47,6 +47,19 @@ function target(workspaceId: string): { workspace: Workspace; project: Project }
 const handledElsewhere = (): CodedError =>
 	new CodedError("MCP_HANDLED_ELSEWHERE", "MCP is not managed by ThinkRail here.");
 
+function assertRenderedEntry(
+	name: string,
+	onDisk: string | undefined,
+	expectedFingerprint: string | undefined,
+): void {
+	if (expectedFingerprint !== undefined && expectedFingerprint !== onDisk) {
+		throw new CodedError(
+			"MCP_CONFIG_INVALID",
+			`The entry for "${name}" changed since it was opened — review it again.`,
+		);
+	}
+}
+
 function assertRepositoryWritable(project: Project): void {
 	if (project.piResourceTrust !== "granted") {
 		throw new CodedError(
@@ -117,16 +130,7 @@ export async function mcpWrite(
 	const name = serverName(params.name);
 	const rewrite = mode === "update" && params.scope === "project";
 	const onDisk = rewrite ? projectMcpEntryFingerprint(workspace.worktreePath, name) : undefined;
-	if (
-		rewrite &&
-		params.expectedFingerprint !== undefined &&
-		params.expectedFingerprint !== onDisk
-	) {
-		throw new CodedError(
-			"MCP_CONFIG_INVALID",
-			`The entry for "${name}" changed since it was opened — review it again.`,
-		);
-	}
+	if (rewrite) assertRenderedEntry(name, onDisk, params.expectedFingerprint);
 	const fingerprint = writeMcpServerEntry({
 		scope: params.scope,
 		worktree: workspace.worktreePath,
@@ -149,14 +153,19 @@ export async function mcpRemove(params: {
 	workspaceId: string;
 	scope: McpServerScope;
 	name: string;
+	expectedFingerprint?: string;
 }): Promise<McpListResult> {
 	const { workspace, project } = await managedTarget(params.workspaceId);
-	if (params.scope === "project") assertRepositoryWritable(project);
-	removeMcpServerEntry({
-		scope: params.scope,
-		worktree: workspace.worktreePath,
-		name: serverName(params.name),
-	});
+	const name = serverName(params.name);
+	if (params.scope === "project") {
+		assertRepositoryWritable(project);
+		assertRenderedEntry(
+			name,
+			projectMcpEntryFingerprint(workspace.worktreePath, name),
+			params.expectedFingerprint,
+		);
+	}
+	removeMcpServerEntry({ scope: params.scope, worktree: workspace.worktreePath, name });
 	reloadLiveSessions(
 		params.scope === "user"
 			? listAllWorkspaceRecords().map((ws) => ws.id)
@@ -172,15 +181,13 @@ export async function mcpSetProjectOverride(params: {
 	exposure?: Exclude<McpExposure, "codemode">;
 }): Promise<McpListResult> {
 	const { project } = await managedTarget(params.workspaceId);
+	const name = serverName(params.name);
 	const override = {
+		...project.mcpOverrides?.[name],
 		...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
 		...(params.exposure !== undefined ? { exposure: params.exposure } : {}),
 	};
-	setProjectMcpOverride(
-		project.id,
-		serverName(params.name),
-		Object.keys(override).length > 0 ? override : null,
-	);
+	setProjectMcpOverride(project.id, name, Object.keys(override).length > 0 ? override : null);
 	reloadLiveSessions(projectWorkspaces(project));
 	return mcpList(params);
 }

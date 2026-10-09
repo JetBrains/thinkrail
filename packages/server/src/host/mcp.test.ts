@@ -201,7 +201,7 @@ test("an update never approves a pending or changed repository entry, and carrie
 	expect(rewritten).toMatchObject({ enabled: false, approval: { state: "changed" } });
 });
 
-test("an update rendered from an entry that changed on disk since is refused and leaves the file as it is", async () => {
+test("an update or removal rendered from an entry that changed on disk since is refused and leaves the file as it is", async () => {
 	mkdirSync(join(repo, ".pi"));
 	const file = join(repo, ".pi", "mcp.json");
 	await request("mcp.add", {
@@ -233,6 +233,25 @@ test("an update rendered from an entry that changed on disk since is refused and
 	expect(
 		find(await request("mcp.list", { workspaceId: "w1" }), "project", "repo")?.approval?.state,
 	).toBe("changed");
+	expect(
+		await codeOf(
+			request("mcp.remove", {
+				workspaceId: "w1",
+				scope: "project",
+				name: "repo",
+				expectedFingerprint: rendered?.approval?.fingerprint,
+			}),
+		),
+	).toBe("MCP_CONFIG_INVALID");
+	expect(readFileSync(file, "utf8")).toBe(checkedOut);
+	const current = find(await request("mcp.list", { workspaceId: "w1" }), "project", "repo");
+	const removed = await request("mcp.remove", {
+		workspaceId: "w1",
+		scope: "project",
+		name: "repo",
+		expectedFingerprint: current?.approval?.fingerprint,
+	});
+	expect(find(removed, "project", "repo")).toBeUndefined();
 });
 
 test("share refuses a repository entry of that name that is a full definition or an unapproved override", async () => {
@@ -272,11 +291,16 @@ test("share refuses a repository entry of that name that is a full definition or
 	});
 });
 
-test("project settings for a user server stay in the record until shared with the repo", async () => {
+test("project settings for a user server merge into the record field by field until shared with the repo", async () => {
 	writeFileSync(
 		join(agentDir, "mcp.json"),
 		JSON.stringify({ mcpServers: { linear: { url: "https://linear.example/mcp" } } }),
 	);
+	await request("mcp.setProjectOverride", {
+		workspaceId: "w1",
+		name: "linear",
+		exposure: "direct",
+	});
 	const overridden = await request("mcp.setProjectOverride", {
 		workspaceId: "w1",
 		name: "linear",
@@ -284,12 +308,13 @@ test("project settings for a user server stay in the record until shared with th
 	});
 	expect(find(overridden, "user", "linear")).toMatchObject({
 		enabled: false,
-		projectOverride: { enabled: false },
+		projectOverride: { enabled: false, exposure: "direct" },
 	});
 	const shared = await request("mcp.shareWithRepo", { workspaceId: "w1", name: "linear" });
 	expect(JSON.parse(readFileSync(join(repo, ".pi", "mcp.json"), "utf8")).mcpServers.linear).toEqual(
 		{
 			enabled: false,
+			exposure: "direct",
 		},
 	);
 	expect(find(shared, "user", "linear")).toMatchObject({
