@@ -38,6 +38,7 @@ test("resource reads require the current chat's workspace and never recover hand
 			...scope,
 			commands: [],
 			subagents: [],
+			mcpServers: [],
 		});
 		await expect(
 			wire.request("backgroundCommand.output", { ...scope, commandId: "old-command" }),
@@ -76,6 +77,7 @@ test("resource reads require the current chat's workspace and never recover hand
 			...scope,
 			commands: [],
 			subagents: [],
+			mcpServers: [],
 		});
 		await shot(page.getByTestId("chat-toolbar"), "chat-resources", "wire-chat-header");
 	} finally {

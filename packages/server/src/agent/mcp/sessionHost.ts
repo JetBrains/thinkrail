@@ -4,6 +4,8 @@ import {
 	type ExtensionFactory,
 	getAgentDir,
 	type InlineExtension,
+	type McpServerConfig,
+	type RegisteredMcpServer,
 	type SessionShutdownEvent,
 	type ToolCallEvent,
 	type ToolCallEventResult,
@@ -23,6 +25,9 @@ const CONFIRM_OPTIONS = [MCP_CONFIRM_DENY, MCP_CONFIRM_ONCE, MCP_CONFIRM_CHAT];
 
 export interface McpSessionHost {
 	extensions: InlineExtension[];
+	disabledInChat: Set<string>;
+	loaded(): ReadonlyMap<string, McpServerConfig> | null;
+	registered(): RegisteredMcpServer[];
 	shutdownEngine(event: SessionShutdownEvent, ctx: ExtensionContext): Promise<void>;
 	cancelPendingConfirmations(): void;
 }
@@ -39,9 +44,15 @@ function blocked(reason: string): ToolCallEventResult {
 	return { block: true, reason };
 }
 
-export function createMcpSessionHost(policy: () => McpProjectPolicy): McpSessionHost {
+export function createMcpSessionHost(
+	policy: () => McpProjectPolicy,
+	onCommandSettled?: (sessionId: string) => void,
+): McpSessionHost {
 	const allowedInChat = new Set<string>();
+	const disabledInChat = new Set<string>();
 	const pending = new Set<AbortController>();
+	let loaded: Map<string, McpServerConfig> | null = null;
+	let current: ExtensionAPI | null = null;
 
 	const confirm = async (
 		pi: ExtensionAPI,
@@ -80,6 +91,8 @@ export function createMcpSessionHost(policy: () => McpProjectPolicy): McpSession
 	};
 
 	const hostExtension: ExtensionFactory = (pi) => {
+		current = pi;
+		loaded = null;
 		pi.on("tool_call", (event, ctx) => confirm(pi, event, ctx));
 		pi.on("tool_result", (event) => {
 			if (!isMcpResultTool(event.toolName)) return undefined;
@@ -89,17 +102,33 @@ export function createMcpSessionHost(policy: () => McpProjectPolicy): McpSession
 			return { details: { ...details, thinkrail: summary } };
 		});
 	};
-	const loadConfig = (ctx: ExtensionContext) =>
-		loadHostMcpConfig({
+	const loadConfig = (ctx: ExtensionContext) => {
+		const config = loadHostMcpConfig({
 			agentDir: getAgentDir(),
 			cwd: ctx.cwd,
 			projectTrusted: ctx.isProjectTrusted(),
 			policy: policy(),
+			disabledInChat,
 		});
-	const engine = createMcpEngine({ loadConfig });
+		loaded = new Map(config.servers.map((server) => [server.name, server.config]));
+		return config;
+	};
+	const engine = createMcpEngine({
+		loadConfig,
+		...(onCommandSettled ? { onCommandSettled } : {}),
+	});
 
 	return {
 		extensions: [hostExtension, ...engine.extensions],
+		disabledInChat,
+		loaded: () => loaded,
+		registered: () => {
+			try {
+				return current?.getMcpServers() ?? [];
+			} catch {
+				return [];
+			}
+		},
 		shutdownEngine: (event, ctx) => engine.shutdown(event, ctx),
 		cancelPendingConfirmations: () => {
 			for (const cancel of pending) cancel.abort();

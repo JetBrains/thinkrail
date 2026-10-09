@@ -1,14 +1,28 @@
 import { afterAll, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { LoadedMcpConfig } from "@earendil-works/pi-coding-agent";
 import {
+	addMcpServerConfig,
+	assertProjectMcpConfigWritable,
 	fingerprintMcpEntry,
 	loadHostMcpConfig,
 	loadMcpConfigFiles,
+	McpConfigPathUnsafeError,
 	normalizeExposureForHost,
+	removeMcpServerConfig,
+	updateMcpServerConfig,
 	validateMcpServerConfig,
 } from "./index";
 
@@ -236,7 +250,7 @@ test("the host loader admits repo entries only at their approved fingerprint and
 		},
 		{ mcpServers: { repo: repoServer, linear: repoOverride } },
 	);
-	const load = (approvals: Record<string, string>) =>
+	const load = (approvals: Record<string, string>, disabledInChat?: Set<string>) =>
 		loadHostMcpConfig({
 			agentDir,
 			cwd,
@@ -249,6 +263,7 @@ test("the host loader admits repo entries only at their approved fingerprint and
 					repo: { enabled: false },
 				},
 			},
+			...(disabledInChat ? { disabledInChat } : {}),
 		});
 	const byName = (loaded: ReturnType<typeof load>) =>
 		Object.fromEntries(loaded.servers.map((server) => [server.name, server]));
@@ -264,11 +279,12 @@ test("the host loader admits repo entries only at their approved fingerprint and
 		repo: fingerprintMcpEntry("repo", repoServer),
 		linear: fingerprintMcpEntry("linear", repoOverride),
 	};
-	const approved = byName(load(approvals));
+	const approved = byName(load(approvals, new Set(["quiet"])));
 	expect(approved.repo?.scope).toBe("project");
 	expect(approved.repo?.config.enabled).toBeUndefined();
 	expect(approved.repo?.config.exposure).toBe("deferred");
 	expect(approved.linear?.config.exposure).toBe("direct");
+	expect(approved.quiet?.config.enabled).toBe(false);
 
 	const changed = byName(
 		load({
@@ -278,4 +294,61 @@ test("the host loader admits repo entries only at their approved fingerprint and
 	);
 	expect(changed.repo).toBeUndefined();
 	expect(load(approvals).entries.filter((entry) => entry.scope === "project")).toHaveLength(2);
+});
+
+test("writers keep unknown keys and indentation, drop global defaults, and replace the file atomically", () => {
+	const dir = join(root, "writers");
+	mkdirSync(dir, { recursive: true });
+	const path = join(dir, "mcp.json");
+	writeFileSync(path, '{\n    "extra": true,\n    "mcpServers": {}\n}\n');
+	chmodSync(path, 0o600);
+	expect(addMcpServerConfig(path, "a", { url: "https://a/mcp" })).toBe(false);
+	expect(addMcpServerConfig(path, "a", { url: "https://a2/mcp" })).toBe(true);
+	updateMcpServerConfig(path, "a", { enabled: false, exposure: "direct" });
+	updateMcpServerConfig(path, "a", { enabled: true, exposure: "codemode" });
+	const text = readFileSync(path, "utf8");
+	expect(text.startsWith('{\n    "extra": true,')).toBe(true);
+	expect(JSON.parse(text)).toEqual({ extra: true, mcpServers: { a: { url: "https://a2/mcp" } } });
+	expect(statSync(path).mode & 0o777).toBe(0o600);
+	expect(removeMcpServerConfig(path, "missing")).toBe(false);
+	expect(removeMcpServerConfig(path, "a")).toBe(true);
+	expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({ extra: true, mcpServers: {} });
+});
+
+test("an override entry keeps explicit values instead of dropping defaults", () => {
+	const path = join(root, "override", ".pi", "mcp.json");
+	updateMcpServerConfig(
+		path,
+		"linear",
+		{ enabled: true, exposure: "codemode" },
+		{ override: true },
+	);
+	expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
+		mcpServers: { linear: { enabled: true, exposure: "codemode" } },
+	});
+});
+
+test("project config writes refuse symlinked .pi directories and files, and paths outside the worktree", () => {
+	const worktree = join(root, "containment", "wt");
+	const elsewhere = join(root, "containment", "elsewhere");
+	mkdirSync(join(elsewhere, "pi"), { recursive: true });
+	mkdirSync(worktree, { recursive: true });
+	symlinkSync(join(elsewhere, "pi"), join(worktree, ".pi"));
+	expect(() => assertProjectMcpConfigWritable(worktree, join(worktree, ".pi", "mcp.json"))).toThrow(
+		McpConfigPathUnsafeError,
+	);
+	rmSync(join(worktree, ".pi"));
+	mkdirSync(join(worktree, ".pi"));
+	writeFileSync(join(elsewhere, "secrets.json"), "{}");
+	symlinkSync(join(elsewhere, "secrets.json"), join(worktree, ".pi", "mcp.json"));
+	expect(() => assertProjectMcpConfigWritable(worktree, join(worktree, ".pi", "mcp.json"))).toThrow(
+		/non-regular/,
+	);
+	expect(() => assertProjectMcpConfigWritable(worktree, join(elsewhere, "mcp.json"))).toThrow(
+		/outside the worktree/,
+	);
+	rmSync(join(worktree, ".pi", "mcp.json"));
+	expect(() =>
+		assertProjectMcpConfigWritable(worktree, join(worktree, ".pi", "mcp.json")),
+	).not.toThrow();
 });

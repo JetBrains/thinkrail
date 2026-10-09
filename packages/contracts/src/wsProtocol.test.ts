@@ -21,6 +21,7 @@ import {
 	isBackgroundCommandCompletionMessage,
 	isTodoReviewFixMessage,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
+	MCP_PROTOCOL_VERSION,
 	MODEL_PICKER_PROTOCOL_VERSION,
 	normalizeSessionTitle,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
@@ -181,17 +182,29 @@ test("picker metadata and host-kept favorites/recents are pinned to v77", () => 
 });
 
 test("the extension catalog and its on/off setting are pinned to v82", () => {
-	expect(PROTOCOL_VERSION).toBe(82);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(EXTENSION_CATALOG_PROTOCOL_VERSION);
 	expect(EXTENSION_CATALOG_PROTOCOL_VERSION).toBe(82);
 	expect(WS_METHODS.extensionList).toBe("extension.list");
 	expect(DEFAULT_CONFIG.disabledExtensions).toEqual([]);
 });
 
 test("the project trust summary and pi-level resource consent are pinned to v81", () => {
-	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(81);
 	expect(PROJECT_TRUST_PROTOCOL_VERSION).toBe(81);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_TRUST_PROTOCOL_VERSION);
 	expect(WS_METHODS.projectTrustSummary).toBe("project.trustSummary");
+});
+
+test("MCP server management, status and chat resources are pinned to v83", () => {
+	expect(PROTOCOL_VERSION).toBe(83);
+	expect(MCP_PROTOCOL_VERSION).toBe(83);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(MCP_PROTOCOL_VERSION);
+	expect(WS_METHODS.mcpList).toBe("mcp.list");
+	expect(WS_METHODS.mcpSetSessionOverride).toBe("mcp.setSessionOverride");
+	expect(WS_METHODS.mcpLogin).toBe("mcp.login");
+	expect(WS_METHODS.mcpReadOutput).toBe("mcp.readOutput");
+	expect(WS_METHODS.mcpReadLog).toBe("mcp.readLog");
+	expect(WS_CHANNELS.mcpStatus).toBe("mcp.status");
+	expect(WS_METHODS).not.toHaveProperty("mcpStop");
 });
 
 test("rich review anchors advance the additive selector union to v74", () => {

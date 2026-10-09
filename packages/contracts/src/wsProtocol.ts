@@ -24,6 +24,13 @@ import type {
 	JbcentralLoginResult,
 	JbcentralQuotaSnapshot,
 	LoginReply,
+	McpExposure,
+	McpListResult,
+	McpReadOutputResult,
+	McpServerEntryInput,
+	McpServerLog,
+	McpServerScope,
+	McpStatusSnapshot,
 	OpenBranchReview,
 	OpenPrResult,
 	PrDraft,
@@ -105,7 +112,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 82;
+export const PROTOCOL_VERSION = 83;
+export const MCP_PROTOCOL_VERSION = 83;
 export const EXTENSION_CATALOG_PROTOCOL_VERSION = 82;
 export const PROJECT_TRUST_PROTOCOL_VERSION = 81;
 export const TURN_CHANGES_PROTOCOL_VERSION = 80;
@@ -303,6 +311,20 @@ export const WS_METHODS = {
 	templateGet: "template.get",
 	templateSave: "template.save",
 	templateDelete: "template.delete",
+	mcpList: "mcp.list",
+	mcpAdd: "mcp.add",
+	mcpUpdate: "mcp.update",
+	mcpRemove: "mcp.remove",
+	mcpSetProjectOverride: "mcp.setProjectOverride",
+	mcpSetSessionOverride: "mcp.setSessionOverride",
+	mcpApprove: "mcp.approve",
+	mcpShareWithRepo: "mcp.shareWithRepo",
+	mcpLogin: "mcp.login",
+	mcpLogout: "mcp.logout",
+	mcpTestConnection: "mcp.testConnection",
+	mcpReconnect: "mcp.reconnect",
+	mcpReadOutput: "mcp.readOutput",
+	mcpReadLog: "mcp.readLog",
 } as const;
 
 export const WS_CHANNELS = {
@@ -330,6 +352,7 @@ export const WS_CHANNELS = {
 	reviewChanged: "review.changed",
 	reviewFailed: "review.failed",
 	turnChanged: "turn.changed",
+	mcpStatus: "mcp.status",
 } as const;
 
 type SameUnion<A extends B, B extends C, C = A> = A;
@@ -850,7 +873,67 @@ export interface WsMethodMap {
 		params: { workspaceId?: string; scope: TemplateScope; name: string };
 		result: Ack;
 	};
+	"mcp.list": { params: { workspaceId: string }; result: McpListResult };
+	"mcp.add": {
+		params: {
+			workspaceId: string;
+			scope: McpServerScope;
+			name: string;
+			entry: McpServerEntryInput;
+		};
+		result: McpListResult;
+	};
+	"mcp.update": {
+		params: {
+			workspaceId: string;
+			scope: McpServerScope;
+			name: string;
+			entry: McpServerEntryInput;
+			expectedFingerprint?: string;
+		};
+		result: McpListResult;
+	};
+	"mcp.remove": {
+		params: { workspaceId: string; scope: McpServerScope; name: string };
+		result: McpListResult;
+	};
+	"mcp.setProjectOverride": {
+		params: {
+			workspaceId: string;
+			name: string;
+			enabled?: boolean;
+			exposure?: Exclude<McpExposure, "codemode">;
+		};
+		result: McpListResult;
+	};
+	"mcp.setSessionOverride": {
+		params: { workspaceId: string; sessionId: string; name: string; enabled: boolean };
+		result: Ack;
+	};
+	"mcp.approve": {
+		params: { workspaceId: string; name: string; fingerprint: string };
+		result: McpListResult;
+	};
+	"mcp.shareWithRepo": { params: { workspaceId: string; name: string }; result: McpListResult };
+	"mcp.login": { params: { workspaceId: string; name: string }; result: { loginId: string } };
+	"mcp.logout": { params: { workspaceId: string; name: string }; result: Ack };
+	"mcp.testConnection": {
+		params: { workspaceId: string; name: string };
+		result: { loginId: string };
+	};
+	"mcp.reconnect": {
+		params: { workspaceId: string; sessionId: string; name: string };
+		result: Ack;
+	};
+	"mcp.readOutput": {
+		params: { workspaceId: string; sessionId: string; toolCallId: string };
+		result: McpReadOutputResult;
+	};
+	"mcp.readLog": { params: { workspaceId: string; name: string }; result: McpServerLog };
 }
+
+/** Payload of the `mcp.status` channel: one per-session snapshot per publish. */
+export type McpStatusPayload = McpStatusSnapshot;
 
 export type WsMethodName = keyof WsMethodMap;
 export type WsParams<M extends WsMethodName> = WsMethodMap[M]["params"];
@@ -884,7 +967,11 @@ export type WsErrorCode =
 	| "SCOPE_IMMUTABLE"
 	| "RANGE_INVALID"
 	| "RECEIPT_UNKNOWN"
-	| "UNSUPPORTED_CHANGE";
+	| "UNSUPPORTED_CHANGE"
+	| "LOGIN_NOT_OWNER"
+	| "MCP_CONFIG_INVALID"
+	| "MCP_PATH_UNSAFE"
+	| "MCP_HANDLED_ELSEWHERE";
 
 export interface WsResponse {
 	id: string;

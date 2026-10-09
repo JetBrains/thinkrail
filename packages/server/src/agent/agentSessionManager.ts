@@ -7,8 +7,12 @@ import {
 	type AgentSession,
 	type CreateAgentSessionOptions,
 	createAgentSession,
+	type ExtensionCommandContext,
 	type ExtensionError,
+	type ExtensionUIContext,
 	getAgentDir,
+	type McpServerConfig,
+	type RegisteredMcpServer,
 	type SessionInfo,
 	SessionManager,
 	SettingsManager,
@@ -87,6 +91,15 @@ import {
 } from "./delegation";
 import { buildResourceLoader, disabledExtensions, toSkillCommands } from "./extensions";
 import { createMcpSessionHost, type McpProjectPolicy, type McpSessionHost } from "./mcp";
+import {
+	assertMcpServerDisablableInChat,
+	forgetMcpStatus,
+	reconcileMcpSessions,
+	restartMcpStatus,
+	scheduleMcpStatusRefresh,
+	showPendingMcpReload,
+	watchMcpStatus,
+} from "./mcpSessions";
 import {
 	getPiRuntimeGeneration,
 	type PiRuntimeGeneration,
@@ -809,6 +822,7 @@ function runGatedReload(entry: Entry): Promise<void> {
 				entry.subagents.flushCompletions();
 				publishEntryState(entry);
 				reconsiderPendingReload(entry);
+				restartMcpStatus(entry.session.sessionId);
 			}
 		}
 	})();
@@ -1073,6 +1087,8 @@ async function prepareSessionEntry(
 			if (entry.reviewToolRefreshPending) applyReviewTool(entry);
 			if (entry.extensionToolsRefreshPending) applyExtensionTools(entry);
 			reconsiderPendingReload(entry);
+			scheduleMcpStatusRefresh(sessionId);
+			void reconcileMcpSessions([sessionId]);
 		}
 		if (sessions.get(sessionId) === entry) {
 			publish({ sessionId, event: projected });
@@ -1099,6 +1115,7 @@ async function prepareSessionEntry(
 	};
 
 	try {
+		watchMcpStatus(sessionId);
 		await session.bindExtensions({
 			mode: "rpc",
 			uiContext: createWebUiContext(sessionId),
@@ -1125,6 +1142,7 @@ async function prepareSessionEntry(
 function abandonPreparedEntry(entry: Entry): void {
 	const { sessionId } = entry.session;
 	cancelExtUiForSession(sessionId);
+	forgetMcpStatus(sessionId);
 	entry.askUserQuestionWaiters.abandon();
 	entry.unsubscribe();
 	entry.unsubscribeCommands();
@@ -1166,6 +1184,7 @@ async function registerSession(
 	applySubagentTools(prepared.entry);
 	applyReviewTool(prepared.entry);
 	applyExtensionTools(prepared.entry);
+	restartMcpStatus(session.sessionId);
 	commands.flushCompletions();
 	subagents.flushCompletions();
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
@@ -1239,7 +1258,10 @@ async function createParentSessionInternal(
 	const { sessionManager, settingsManager, cwd } = options;
 	const sessionId = sessionManager.getSessionId();
 	const askUserQuestionWaiters = createAskUserQuestionWaiters();
-	const mcpHost = createMcpSessionHost(() => mcpPolicyResolver(workspaceId));
+	const mcpHost = createMcpSessionHost(
+		() => mcpPolicyResolver(workspaceId),
+		scheduleMcpStatusRefresh,
+	);
 	const canDeliverCompletion = () =>
 		canUseSessionResources(sessionId, workspaceId) &&
 		!askUserQuestionWaiters.hasRecoverableCall() &&
@@ -2191,6 +2213,88 @@ export function getSessionStats(sessionId: string): SessionStats {
 	};
 }
 
+export interface McpSessionView {
+	workspaceId: string;
+	cwd: string;
+	projectTrusted: boolean;
+	policy: McpProjectPolicy;
+	disabledInChat: ReadonlySet<string>;
+	loaded: ReadonlyMap<string, McpServerConfig> | null;
+	registered: readonly RegisteredMcpServer[];
+	commandOwner: string | null;
+}
+
+export function mcpSessionView(sessionId: string): McpSessionView | undefined {
+	const entry = sessions.get(sessionId);
+	if (!entry?.registered || entry.disposed || hasDeletionTombstone(sessionId)) return undefined;
+	return {
+		workspaceId: entry.workspaceId,
+		cwd: entry.session.sessionManager.getCwd(),
+		projectTrusted: entry.session.settingsManager.isProjectTrusted(),
+		policy: mcpPolicyResolver(entry.workspaceId),
+		disabledInChat: entry.mcpHost.disabledInChat,
+		loaded: entry.mcpHost.loaded(),
+		registered: entry.mcpHost.registered(),
+		commandOwner: entry.session.extensionRunner.getCommand("mcp")?.sourceInfo.path ?? null,
+	};
+}
+
+export function liveSessionIdsOf(workspaceId?: string): string[] {
+	return [...sessions]
+		.filter(
+			([sessionId, entry]) =>
+				(workspaceId === undefined || entry.workspaceId === workspaceId) &&
+				mcpSessionView(sessionId),
+		)
+		.map(([sessionId]) => sessionId);
+}
+
+type McpCommandNotify = (message: string, level: "info" | "warning" | "error") => void;
+
+function notifyingCommandContext(
+	context: ExtensionCommandContext,
+	notify: McpCommandNotify,
+): ExtensionCommandContext {
+	const ui = Object.getOwnPropertyDescriptor(context, "ui");
+	const capture: ExtensionUIContext["notify"] = (message, type) => notify(message, type ?? "info");
+	return Object.defineProperty(context, "ui", {
+		get: (): ExtensionUIContext =>
+			new Proxy<ExtensionUIContext>(ui?.get ? ui.get.call(context) : ui?.value, {
+				get: (target, key) => (key === "notify" ? capture : Reflect.get(target, key)),
+			}),
+	});
+}
+
+export function dispatchSessionMcpCommand(
+	sessionId: string,
+	args: string,
+	notify?: McpCommandNotify,
+): Promise<void> | null {
+	const entry = sessions.get(sessionId);
+	const command = entry?.session.extensionRunner.getCommand("mcp");
+	if (!entry || !command) return null;
+	const context = entry.session.extensionRunner.createCommandContext();
+	return Promise.resolve(
+		command.handler(args, notify ? notifyingCommandContext(context, notify) : context),
+	);
+}
+
+export async function setSessionMcpServerEnabled(
+	sessionId: string,
+	name: string,
+	enabled: boolean,
+): Promise<SessionReloadDisposition | "unchanged"> {
+	const entry = mustGetEntry(sessionId);
+	const disabled = entry.mcpHost.disabledInChat;
+	assertMcpServerDisablableInChat(sessionId, name);
+	if (disabled.has(name) === !enabled) return "unchanged";
+	if (enabled) disabled.delete(name);
+	else disabled.add(name);
+	const disposition = await requestSessionReload(sessionId);
+	if (disposition === "deferred") showPendingMcpReload(sessionId);
+	return disposition;
+}
+
 export function getSessionCommands(sessionId: string): SlashCommandInfo[] {
 	const session = mustGet(sessionId);
 	const extension = session.extensionRunner.getRegisteredCommands().map((command) => ({
@@ -2361,6 +2465,7 @@ function disposeSession(sessionId: string): Promise<void> {
 	entry.disposed = true;
 	const cascade = trackSessionTeardown(sessionId, closeSessionResources(entry));
 	cancelExtUiForSession(sessionId);
+	forgetMcpStatus(sessionId);
 	entry.askUserQuestionWaiters.abandon();
 	entry.unsubscribe();
 	entry.unsubscribeCommands();
@@ -2395,6 +2500,7 @@ export function disposeAllSessions(): void {
 	}
 	for (const [sessionId, entry] of sessions) {
 		cancelExtUiForSession(sessionId);
+		forgetMcpStatus(sessionId);
 		entry.askUserQuestionWaiters.abandon();
 		entry.unsubscribe();
 		entry.unsubscribeCommands();
