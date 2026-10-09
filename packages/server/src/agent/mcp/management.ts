@@ -91,6 +91,10 @@ export function shareMcpOverrideWithRepo(options: {
 	approvedFingerprint: string | undefined;
 }): string {
 	const { name } = options;
+	const userEntry = readEntry(globalMcpConfigPath(getAgentDir()), name);
+	if (!userEntry || isOverrideEntry(userEntry)) {
+		throw invalid(`"${name}" is no longer defined in your mcp.json — nothing to share.`);
+	}
 	const path = configPath("project", options.worktree);
 	const existing = readEntry(path, name);
 	if (existing && !isOverrideEntry(existing)) {
