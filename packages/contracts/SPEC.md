@@ -808,6 +808,9 @@ contracts only.
   `MCP_HANDLED_ELSEWHERE`. `mcp.reconnect` resolves once pi reconnected the server and rejects with pi's
   failure (masked) — pi's notices for it never appear in the chat — and fails with `MCP_HANDLED_ELSEWHERE`
   likewise.
+- Writes into the repository (`approve`, `shareWithRepo`, and project-scope `add` / `update` / `remove`)
+  need the project's pi-level trust and fail with `MCP_CONFIG_INVALID` without it, since an untrusted
+  project's repository entries are not even listed; `setProjectOverride` is record-only and stays available.
 - A write never approves repository content the user has not reviewed. A project-scope `add` of a new name
   is the user's own entry and is approved as written. A project-scope `update` carries approval to the
   written entry only when the entry on disk was approved at its current fingerprint (otherwise the rewrite
