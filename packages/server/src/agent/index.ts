@@ -27,6 +27,7 @@ export {
 } from "./mcp";
 export {
 	listMcpServers,
+	mcpHandledElsewhereBy,
 	readMcpToolOutput,
 	reconcileMcpSessions,
 	reconnectMcpServer,

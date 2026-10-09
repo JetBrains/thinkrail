@@ -353,7 +353,7 @@ test("project writes refuse a symlinked .pi, and per-chat calls need a session o
 	).toBe("MCP_CONFIG_INVALID");
 });
 
-test("with builtin:mcp turned off in pi settings, sign-in, sign-out and Test connection are refused", async () => {
+test("with builtin:mcp turned off in pi settings, sign-in, sign-out, Test connection and every mutation are refused", async () => {
 	writeFileSync(
 		join(agentDir, "mcp.json"),
 		JSON.stringify({ mcpServers: { docs: { url: "https://docs.example/mcp" } } }),
@@ -367,6 +367,30 @@ test("with builtin:mcp turned off in pi settings, sign-in, sign-out and Test con
 			"MCP_HANDLED_ELSEWHERE",
 		);
 	}
+	const before = readFileSync(join(agentDir, "mcp.json"), "utf8");
+	const mutations: [string, object][] = [
+		["mcp.add", { scope: "user", name: "more", entry: { url: "https://more.example/mcp" } }],
+		["mcp.update", { scope: "user", name: "docs", entry: { url: "https://docs.example/v2" } }],
+		["mcp.remove", { scope: "user", name: "docs" }],
+		["mcp.setProjectOverride", { name: "docs", enabled: false }],
+		["mcp.approve", { name: "docs", fingerprint: "f" }],
+		["mcp.shareWithRepo", { name: "docs" }],
+	];
+	for (const [method, params] of mutations) {
+		expect(await codeOf(request(method, { workspaceId: "w1", ...params }))).toBe(
+			"MCP_HANDLED_ELSEWHERE",
+		);
+	}
+	expect(readFileSync(join(agentDir, "mcp.json"), "utf8")).toBe(before);
+	expect(existsSync(join(repo, ".pi", "mcp.json"))).toBe(false);
+	rmSync(join(agentDir, "settings.json"));
+	expect(
+		find(
+			await request("mcp.setProjectOverride", { workspaceId: "w1", name: "docs", enabled: false }),
+			"user",
+			"docs",
+		)?.enabled,
+	).toBe(false);
 });
 
 test("a server's log is its own masked lines from pi's mcp.log and its rotated copy, empty before anything was logged", async () => {

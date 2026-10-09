@@ -796,7 +796,9 @@ contracts only.
   are read even with no chat open (`by: "pi settings (-builtin:mcp)"` — a client can recognise that exact
   value to say which entry to remove, so it stays stable), a replacing extension is seen through a live
   chat (`by` = its path).
-- Mutations (`add`, `update`, `remove`, `setProjectOverride`, `approve`, `shareWithRepo`) return the fresh
+- Mutations (`add`, `update`, `remove`, `setProjectOverride`, `approve`, `shareWithRepo`) re-check that
+  ownership immediately before writing and fail with `MCP_HANDLED_ELSEWHERE` where `mcp.list` would set
+  `handledElsewhere`, so a stale client cannot write while another manager owns MCP; they return the fresh
   list without waiting for the open chats to reload; `mcp.status` pushes report each reload, so the returned
   snapshots may predate it. `setProjectOverride` writes the project record, never the tracked
   `.pi/mcp.json`; `shareWithRepo` is the explicit write into it. `setSessionOverride` is the per-chat
