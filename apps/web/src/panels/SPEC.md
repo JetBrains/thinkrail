@@ -451,7 +451,9 @@ a project picker, the prompt hero, and the reused
   backoff while a live chat still reports a server `starting`, because the host pushes no connected edge.
   Rows come from the store's `deriveMcpServerRows`; while the project is untrusted, project-scope rows are
   dropped client-side at once, so a revoke never leaves the cached repository rows actionable until the
-  refresh lands (the host omits them anyway, and the banner says so). Rows show a status dot + label + one reason line, the name,
+  refresh lands (the host omits them anyway, and the banner says so); the revoke also closes an open Edit,
+  Review & approve or project-scope Remove dialog, and an open Add dialog falls back to User scope (the
+  host refuses repository writes for an untrusted project regardless). Rows show a status dot + label + one reason line, the name,
   User/Project and HTTP/stdio chips (stdio: "Runs on host — inherits the host environment"), an exposure
   menu (`deferred | direct | hidden`; configured codemode reads "treated as deferred (codemode not available
   yet)"), the enable switch, at most one primary and one secondary action — the status table `mcpRowView`
