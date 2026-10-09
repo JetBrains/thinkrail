@@ -84,6 +84,7 @@ import {
 	subagentsFor,
 } from "./delegation";
 import { buildResourceLoader, toSkillCommands } from "./extensions";
+import { createMcpSessionHost, type McpProjectPolicy, type McpSessionHost } from "./mcp";
 import {
 	getPiRuntimeGeneration,
 	type PiRuntimeGeneration,
@@ -141,6 +142,7 @@ interface Entry {
 	nudgePromptPending: boolean;
 	lastPublishedState: string | null;
 	askUserQuestionWaiters: AskUserQuestionWaiters;
+	mcpHost: McpSessionHost;
 }
 
 const sessions = new Map<string, Entry>();
@@ -520,6 +522,14 @@ export function setSkillAdmissionResolver(
 	skillAdmissionResolver = resolver;
 }
 
+let mcpPolicyResolver: (workspaceId: string) => McpProjectPolicy = () => ({
+	approvals: {},
+	overrides: {},
+});
+export function setMcpPolicyResolver(resolver: (workspaceId: string) => McpProjectPolicy): void {
+	mcpPolicyResolver = resolver;
+}
+
 export function piResourceTrustFor(workspaceId: string): boolean {
 	return skillAdmissionResolver(workspaceId).piResourceTrusted;
 }
@@ -847,6 +857,7 @@ async function prepareSessionEntry(
 	commands: BackgroundCommands,
 	subagents: Subagents,
 	askUserQuestionWaiters: AskUserQuestionWaiters,
+	mcpHost: McpSessionHost,
 	lastSettlement: AgentSettlement | null | undefined = undefined,
 ): Promise<PreparedSessionEntry> {
 	const { sessionId } = session;
@@ -877,6 +888,7 @@ async function prepareSessionEntry(
 		nudgePromptPending: false,
 		lastPublishedState: null,
 		askUserQuestionWaiters,
+		mcpHost,
 	};
 	entry.unsubscribeCommands = commands.onChange(() => {
 		if (canUseSessionResources(sessionId, workspaceId))
@@ -1023,6 +1035,7 @@ async function registerSession(
 	commands: BackgroundCommands,
 	subagents: Subagents,
 	askUserQuestionWaiters: AskUserQuestionWaiters,
+	mcpHost: McpSessionHost,
 	lifecycleToken: WorkspaceLifecycleToken,
 	announceCreation = false,
 ): Promise<CreateSessionResult> {
@@ -1033,6 +1046,7 @@ async function registerSession(
 		commands,
 		subagents,
 		askUserQuestionWaiters,
+		mcpHost,
 	);
 	if (
 		!workspaceAcceptsSessions(workspaceId, lifecycleToken) ||
@@ -1116,6 +1130,7 @@ async function createParentSessionInternal(
 	const { sessionManager, settingsManager, cwd } = options;
 	const sessionId = sessionManager.getSessionId();
 	const askUserQuestionWaiters = createAskUserQuestionWaiters();
+	const mcpHost = createMcpSessionHost(() => mcpPolicyResolver(workspaceId));
 	const canDeliverCompletion = () =>
 		canUseSessionResources(sessionId, workspaceId) &&
 		!askUserQuestionWaiters.hasRecoverableCall() &&
@@ -1152,7 +1167,11 @@ async function createParentSessionInternal(
 				settingsManager,
 				() => skillAdmissionResolver(workspaceId),
 				generation.excludedSessionExtensionPaths,
-				[subagents.extension, createBackgroundCommandsExtension({ service: commands })],
+				[
+					subagents.extension,
+					createBackgroundCommandsExtension({ service: commands }),
+					...mcpHost.extensions,
+				],
 				askUserQuestionWaiters,
 			),
 		});
@@ -1164,6 +1183,7 @@ async function createParentSessionInternal(
 			commands,
 			subagents,
 			askUserQuestionWaiters,
+			mcpHost,
 			lifecycleToken,
 			announceCreation,
 		);
@@ -1839,8 +1859,9 @@ async function steerEntry(
 	const disposition = await queueSessionMessage(entry, "steering", text, images, () =>
 		entry.session.steer(text, images),
 	);
-	if (disposition === "queued" && entry.askUserQuestionWaiters.supersede())
-		publishEntryState(entry);
+	if (disposition !== "queued") return;
+	entry.mcpHost.cancelPendingConfirmations();
+	if (entry.askUserQuestionWaiters.supersede()) publishEntryState(entry);
 }
 
 export async function promptSession(
@@ -2155,20 +2176,33 @@ function trackCascade(workspaceId: string, cascade: Promise<void>): Promise<void
 
 const SESSION_SHUTDOWN_BUDGET_MS = 3000;
 
-function emitSessionShutdown(entry: Entry, timeoutMs = SESSION_SHUTDOWN_BUDGET_MS): Promise<void> {
-	let timer: ReturnType<typeof setTimeout> | undefined;
-	const runner = entry.session.extensionRunner;
-	const event = { type: "session_shutdown", reason: "quit" } as const;
-	// Started synchronously: the synchronous teardown path disposes the pi session right after, and
-	// handlers must have started by then.
-	const emitted = runner.emit(event).then(
+function settleShutdownStep(entry: Entry, step: () => Promise<unknown>): Promise<void> {
+	let running: Promise<unknown>;
+	try {
+		running = step();
+	} catch (error) {
+		running = Promise.reject(error);
+	}
+	return running.then(
 		() => {},
 		(error) => {
 			log.debug(`session ${entry.session.sessionId} shutdown handlers failed`, error as Error);
 		},
 	);
+}
+
+function emitSessionShutdown(entry: Entry, timeoutMs = SESSION_SHUTDOWN_BUDGET_MS): Promise<void> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const runner = entry.session.extensionRunner;
+	const event = { type: "session_shutdown", reason: "quit" } as const;
+	// Started synchronously: the synchronous teardown path disposes the pi session right after, and
+	// handlers must have started (pi's MCP shutdown begins closing connections before its first await).
+	const steps = [
+		settleShutdownStep(entry, () => entry.mcpHost.shutdownEngine(event, runner.createContext())),
+		settleShutdownStep(entry, () => runner.emit(event)),
+	];
 	return Promise.race([
-		emitted,
+		Promise.all(steps).then(() => {}),
 		new Promise<void>((resolve) => {
 			timer = setTimeout(resolve, timeoutMs);
 		}),

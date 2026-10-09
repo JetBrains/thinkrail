@@ -667,7 +667,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     this gate is scoped to the compatibility aliases. pi-native project resources (`.pi/` settings, extensions,
     skills, prompts and themes, `SYSTEM.md`, ancestor `.agents/skills`) follow pi-level trust instead: pi gates
     them on the project-trusted flag ThinkRail derives from `Project.piResourceTrust` and re-applies before
-    every load (Project trust and session lifecycle › Trust).
+    every load (MCP servers › Trust).
     `listSkillCommands(cwd, admission)` reuses the same gated inputs through a short-lived skills-only
     `DefaultResourceLoader` (no model/session/transcript, no extension factories) for pre-workspace
     autocomplete, cached briefly per `(cwd, admission)`; **`listSkillCatalog(cwd, admission)`** is the Skills
@@ -729,7 +729,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     caller's `extraFactories`** — per-session host bindings (the workspace-bound subagents extension),
     value-imported so dev and the compiled binary take the same path. pi's own built-in extensions
     (`llama.cpp`, `codemode`, `tool-search`, `mcp`) are loaded only by pi's CLI; an SDK host opts in per
-    factory, and ThinkRail appends none of them, so MCP servers and codemode are not available here yet.
+    factory. ThinkRail opts into **`mcp` and `tool-search`** with pi's own descriptors
+    (`{ name, factory, replaceable: true, builtin: true }`, so a user-installed `/mcp` extension replaces
+    them and `-builtin:mcp` in pi settings disables them) — registered only once the protections in the MCP
+    section below had landed, so no build ever started servers without them; there is no runtime flag
+    beyond pi's own `-builtin:mcp`. `codemode` and `llama.cpp` are not loaded (codemode needs a
+    QuickJS worker + wasm seam the compiled binary and desktop bundle do not have). See
+    [MCP servers](#mcp-servers).
     Both session paths pass it as `resourceLoader`. `buildResourceLoader` stays internal; the seam +
     its types are on the barrel.
 - **Public surface (barrel):** the manager operations (incl. `answerQuestion` +
@@ -754,12 +760,15 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `requestSessionReload(sessionId)` (the deferring variant: `"reloaded"` now or `"deferred"` until the gate
   opens — settlement, the release of an admitted prompt, or a compaction's end; requests coalesce); the **`setSkillAdmissionResolver`** seam (host
   wires `workspaceId` → the admission context, derived once by `admissionContextFor(project, overrides)`);
+  the **`setMcpPolicyResolver`** seam (host wires `workspaceId` → the project's MCP approvals and overrides,
+  derived by `mcpPolicyOf(project)`);
   the pi-level trust surface — `piResourceTrustFor(workspaceId)`, `applyPiResourceTrust(workspaceIds)`
   (gated reload of every live session whose trust is stale), `piProjectTrustDecision(path)` (pi's
-  `trust.json` decision, nearest ancestor, `null` when it has none and `undefined` when the store is unreadable — the host's migration seed) and
-  `projectTrustSummary(cwd)` (the trust notice's facts: alias names and pi's own
-  `hasTrustRequiringProjectResources` or a project definition from `pi-subagents`' `discoverAgentDefinitions`);
-  the subagent-policy seams
+  `trust.json` decision, nearest ancestor, `null` when it has none and `undefined` when the store is
+  unreadable — the host's migration seed) and
+  `projectTrustSummary(cwd)` (the trust notice's facts: alias names, pi's own
+  `hasTrustRequiringProjectResources` or a project definition from `pi-subagents`' `discoverAgentDefinitions`,
+  and the project `mcp.json` entry count); the subagent-policy seams
   **`setSubagentsEnabledResolver`** + **`refreshSubagentTools`** (host resolves the effective global default
   plus workspace override; manager owns live-session activation timing);
   the `set_title` seam (`setTitleToolHost` + `TitleToolHost`/`SET_TITLE_TOOL_NAME`/`SetTitleParams`);
@@ -863,8 +872,7 @@ flushes both owners, as do registration, resource reload and deletion rollback. 
 the subagent owner before child cancellation or any await, including preparation failures. Permanent
 closure survives shutdown-budget expiry and suppresses late outcomes; Pi disposal does not emit extension
 shutdown, so the cascade emits `session_shutdown` itself after the synchronous owner disposal (see
-[Project trust and session lifecycle](#project-trust-and-session-lifecycle)). The existing cached resource
-cascade remains the sole teardown owner. Both
+[MCP servers](#mcp-servers)). The existing cached resource cascade remains the sole teardown owner. Both
 SDK creation and entry preparation failures close the owners. A failure after registration also
 removes that exact entry through the normal teardown path, rather than leaving a disposed session
 advertised as live.
@@ -875,8 +883,31 @@ A restarted host has no control handles or retained command output to reconstruc
 Its only new external dependency is `pi-background-commands`; there is no `agent` → `terminal`, `subprocess`,
 settings or workspaces edge. The owning parent graph records this package dependency.
 
-## Project trust and session lifecycle
+## MCP servers
 
+pi's built-in MCP is the only MCP engine: connections, OAuth, exposure, resources, result truncation and
+the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes around it.
+
+- **Registration.** The two built-in descriptors above, per parent session only, built by the session's
+  `createMcpSessionHost(() => mcpPolicyResolver(workspaceId))` together with the call guard; the host injects
+  the workspace's project policy (`setMcpPolicyResolver` → `Project.mcpApprovals` / `mcpOverrides`,
+  fail-closed to none). Child (subagent) sessions load neither — the curated child set carries no engine —
+  and the `Agent` tool's description says subagents cannot call MCP tools.
+  pi's `openUrl` is a no-op on the host (a remote client must never get a browser opened on the host
+  machine); pi's rpc-mode `/mcp login` still shows the URL and the paste-back dialog. In the
+  Central-exclusion loader mode both built-ins go through the per-reload path re-resolution described
+  under `extensions`, so `-builtin:*` applies there too.
+- **Configuration** ([[submodule-server-agent-mcp]]). pi's `mcp.json` files are the source of truth
+  (`~/.pi/agent/mcp.json`, trusted `.pi/mcp.json`). The loader ThinkRail supplies is a port of pi's
+  `loadMcpConfig` + validation (parity tests run the same fixtures through pi's installed loader, re-checked
+  on every pi bump) because pi does not export them; it also applies
+  the project record's enablement/exposure overrides, drops repo-defined entries the user has not approved,
+  and normalizes `codemode` exposure to `deferred` in memory while codemode is absent. Servers registered
+  by third-party extensions bypass
+  the loader; the `mcp` descriptor's factory registers its own `session_start` / `mcp_servers_change`
+  handlers ahead of pi's so `tool_search` is active before pi checks reachability whenever
+  `pi.getMcpServers()` is non-empty (no "neither is active" warning, and nothing to do when another
+  extension replaced the built-in).
 - **Trust.** `buildSessionSettings` and every other `SettingsManager.create` site (pre-session loaders,
   child sessions through `pi-delegation`'s `projectTrusted` binding) pass the project's real pi-level trust
   (`Project.piResourceTrust`, [[submodule-server-projects]]) instead of a forced `true`; the alias-name
@@ -895,20 +926,27 @@ settings or workspaces edge. The owning parent graph records this package depend
   user as an `error` notify on that chat asking to close or reload it; a grant leaves running children alone, since
   they merely lack the project's resources. The pi-level grant is its own consent, separate
   from alias trust: only `project.setTrust` with `resources: true`, sent by a surface that names what it
-  loads, grants it ([[submodule-server-projects]]). The trust notice is shown for alias skills, pi's own
-  trust-requiring resources, and project subagent definitions alike.
+  loads, grants it ([[submodule-server-projects]]). Repo-defined MCP entries additionally need a
+  per-entry approval keyed to a fingerprint of the whole original entry object (approval state in the
+  project record). The trust notice is shown for alias skills, pi's own trust-requiring resources, and
+  project subagent definitions alike.
 - **Lifecycle.** `AgentSession.dispose()` never emits `session_shutdown`, so the resource cascade
-  (`closeSessionResources`) runs `session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" })`
-  itself — synchronously, after the synchronous owner disposal, so handlers have started before the
-  synchronous teardown path disposes the pi session.
+  (`closeSessionResources`) runs it itself — synchronously, after the synchronous owner disposal, so handlers
+  have started before the synchronous teardown path disposes the pi session. pi's runner awaits handlers one
+  after another in load order, and file extensions load before `builtin:mcp`, so one that never settles would
+  keep pi's MCP shutdown from ever starting (pi's process-exit hook only sends SIGTERM). The cascade therefore
+  first runs the `mcp` factory's own `session_shutdown` handler directly (`McpSessionHost.shutdownEngine`,
+  with the event and the runner's `createContext()` pi would pass), then
+  `session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" })` for every extension; pi's
+  handler is idempotent, so the emission's later call closes nothing twice ([[submodule-server-agent-mcp]]).
   Every teardown path goes through this cascade: delete/remove, workspace archive/removal, quit
   (`settleSessionsForShutdown` + `disposeAllSessions`) and a preparation that fails after binding —
   including one whose registration is refused because the workspace closed or the host began quitting
-  meanwhile. Every one of them defers `session.dispose()` (`disposePiSessionAfterShutdown`) until the
-  emission settles or the budget (`SESSION_SHUTDOWN_BUDGET_MS`, 3 s) elapses, because `dispose()`
-  invalidates the extension context the handlers are still using; the host shutdown settle budget is
-  that same 3 s.
-  Reloads go through `session.reload()` behind a per-session reload gate: while a reload runs, every
+  meanwhile. Every one of them defers `session.dispose()` (`disposePiSessionAfterShutdown`) until both
+  settle or the budget (`SESSION_SHUTDOWN_BUDGET_MS`, 3 s — pi escalates stdin-close → SIGTERM → SIGKILL
+  over 2.5 s) elapses, because `dispose()` invalidates the extension context the handlers are still
+  using; the host shutdown settle budget is that same 3 s. Retained sessions keep their servers
+  (no eviction). Reloads go through `session.reload()` behind a per-session reload gate: while a reload runs, every
   admission seam (`promptSession`, `steerSession`, `followUpSession`, `nudgeSession`, queue requeues,
   `answerQuestion`, `sendReviewFixToSession`, `compactSession`) refuses with "reloading", and completion
   delivery waits in its owners through `canDeliverCompletion` and flushes afterwards; the gate opens only
@@ -919,6 +957,11 @@ settings or workspaces edge. The owning parent graph records this package depend
   meanwhile cannot start a reload that would refuse — and lose — the rest), and no manual or automatic
   compaction is in flight; a pending reload is reconsidered at `agent_settled`, on every reservation release
   and on compaction end / `compactSession`'s `finally`.
+- **Calls.** The per-session host extension ([[submodule-server-agent-mcp]]) asks before any `mcp__*`
+  call without `readOnlyHint` (Deny · Allow once · Allow in this chat; session memory only; anything but
+  the two affirmative answers blocks, and `steerEntry` cancels pending confirmations once pi accepts a
+  steer). Its `tool_result` handler
+  adds the bounded, base64-free `McpResultSummary` under `details.thinkrail` (`summarizeMcpResult`).
 
 ## Get right
 

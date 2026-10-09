@@ -319,7 +319,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `listProjectAliasSkillNames`, sets the alias grant, grants pi-level trust only when the request carries
   `resources: true` (a revoke clears both; an older client's grant is alias-only), and hands the project's
   workspaces to agent's `applyPiResourceTrust` so live chats reload into the new trust (idle now, busy at
-  settlement); `createServer` injects agent's `piProjectTrustDecision` as the projects migration seed
+  settlement); `createServer` wires `setMcpPolicyResolver` (workspace → its project's `mcpApprovals` /
+  `mcpOverrides`, fail-closed to none) next to the admission resolver, and injects agent's
+  `piProjectTrustDecision` as the projects migration seed
   (`setPiTrustSeed`) before anything reads projects, then reads them once so the grandfathering migration
   runs at startup; `project.acknowledgeSkills` / `project.setSkillEnabled` /
   `project.setGroupEnabled` / `project.aliasSkills` / `workspace.setSkillOverride` mutate/read the persisted

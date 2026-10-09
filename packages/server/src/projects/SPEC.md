@@ -51,11 +51,14 @@ bootstrap it into one so it can be opened.
   beneath any workspace override. The host composes discovery with these mutation operations; this module
   stores no skill catalog and imports no agent code. Project records also carry the pi-level trust state
   `piResourceTrust` (trust for the project's native `.pi/` resources — settings, extensions, skills,
-  prompts, themes, `SYSTEM.md`, subagent definitions — distinct from the alias-skill grant; seeded once for
-  records that predate the field, with an explicit denial in pi's `trust.json` winning; a record whose
-  decision could not be read — the store unreadable or malformed — is left without the field, reads as
-  untrusted meanwhile, and is seeded on a later load, so a read failure never becomes a grant). The
-  migration is idempotent without a marker: a record created since the field exists carries an explicit value
+  prompts, themes, `SYSTEM.md`, subagent definitions — distinct from the alias-skill grant; seeded
+  once for records that predate the field, with an explicit denial in pi's `trust.json` winning
+  and never enabling MCP; a record whose decision could not be read — the store unreadable or
+  malformed — is left without the field, reads as untrusted meanwhile, and is seeded on a later load,
+  so a read failure never becomes a grant), plus `mcpApprovals` (repo-defined MCP server name →
+  fingerprint of the whole original project-file entry) and `mcpOverrides` (per-project
+  enablement/exposure of user-level servers, kept out of the tracked `.pi/mcp.json`). The migration is
+  idempotent without a marker: a record created since the field exists carries an explicit value
   (`untrusted`, or `granted` when pi's trust store already trusts the path), so an absent field only ever
   means "legacy". pi's decision arrives through the host-injected `setPiTrustSeed` (this module imports no
   pi code); until a seed is configured no migration runs. `setProjectTrust(id, trusted, acknowledged?,

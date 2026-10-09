@@ -123,7 +123,7 @@ test("pi's trust store decision is read by nearest ancestor, and an unreadable s
 	rmSync(join(agentDir, "trust.json"), { force: true });
 });
 
-test("the trust summary sees pi's own gated resources and subagent definitions", async () => {
+test("the trust summary sees pi's own gated resources, subagent definitions and project MCP entries", async () => {
 	const project = (files: Record<string, string>): string => {
 		const cwd = mkdtempSync(join(root, "summary-"));
 		for (const [path, content] of Object.entries(files)) {
@@ -135,6 +135,7 @@ test("the trust summary sees pi's own gated resources and subagent definitions",
 	expect(await projectTrustSummary(project({ "README.md": "# plain\n" }))).toEqual({
 		aliasSkills: [],
 		nativeResources: false,
+		mcpServers: 0,
 	});
 	expect(
 		(await projectTrustSummary(project({ ".pi/prompts/kickoff.md": "Go\n" }))).nativeResources,
@@ -146,7 +147,16 @@ test("the trust summary sees pi's own gated resources and subagent definitions",
 					"---\nname: repo-reviewer\ndescription: Reviews\n---\n\nReview.\n",
 			}),
 		),
-	).toEqual({ aliasSkills: [], nativeResources: true });
+	).toEqual({ aliasSkills: [], nativeResources: true, mcpServers: 0 });
+	expect(
+		await projectTrustSummary(
+			project({
+				".pi/mcp.json": JSON.stringify({
+					mcpServers: { docs: { url: "https://docs.example/mcp" }, linear: { enabled: false } },
+				}),
+			}),
+		),
+	).toEqual({ aliasSkills: [], nativeResources: true, mcpServers: 2 });
 });
 
 test("an untrusted project's native resources stay out until a grant reaches the live session", async () => {

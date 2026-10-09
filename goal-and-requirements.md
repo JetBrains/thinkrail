@@ -59,8 +59,9 @@ Durable decisions every feature follows; [[architecture]] carries the structure 
 - **The user's own tools and credentials.** Git, GitHub, and model access go through the user's `git`,
   `gh`, `central` CLI, and pi's provider auth; ThinkRail keeps no accounts or tokens of its own.
 - **Trust is explicit.** What a cloned repository could inject into the agent — its committed skill
-  aliases and pi's own project resources (`.pi/` settings, extensions, skills, prompts, subagent
-  definitions) — loads only after a per-project trust grant.
+  aliases, pi's own project resources (`.pi/` settings, extensions, skills, prompts, subagent definitions),
+  and MCP servers it defines — loads only after a per-project trust grant; a repo-defined MCP server also
+  needs a per-entry approval that lapses when the entry changes.
 - **Spec-first.** ThinkRail is built spec-first and helps the projects it opens work the same way.
 
 ## Capabilities

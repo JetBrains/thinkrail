@@ -176,7 +176,9 @@ The subagent works autonomously and non-interactively: give it one complete, sel
 calls in ONE message to run subagents in parallel; sequence dependent steps yourself across turns.
 Set run_in_background for long tasks — you get the session id immediately, a completion message
 arrives when it finishes, and get_subagent_result fetches the result on demand. Set model to choose
-an available model for an unpinned agent; a definition's pinned model always wins.
+an available model for an unpinned agent; a definition's pinned model always wins. Subagents cannot
+call MCP tools (mcp__*, tool_search, the MCP resource tools): call those yourself and put what the
+subagent needs in the task.
 
 Available subagent types:
 ${known}`,

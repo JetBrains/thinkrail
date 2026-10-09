@@ -6,6 +6,7 @@ import {
 import type { ProjectTrustSummary } from "@thinkrail/contracts";
 import { discoverAgentDefinitions } from "pi-subagents";
 import { listProjectAliasSkillNames } from "./extensions";
+import { loadMcpConfigFiles } from "./mcp";
 
 export function piProjectTrustDecision(path: string): boolean | null | undefined {
 	try {
@@ -22,5 +23,8 @@ export async function projectTrustSummary(cwd: string): Promise<ProjectTrustSumm
 		discoverAgentDefinitions({ cwd, agentDir, includeProject: true }).some(
 			(definition) => definition.source === "project",
 		);
-	return { aliasSkills: await listProjectAliasSkillNames(cwd), nativeResources };
+	const mcpServers = loadMcpConfigFiles({ agentDir, cwd, projectTrusted: true }).entries.filter(
+		(entry) => entry.scope === "project",
+	).length;
+	return { aliasSkills: await listProjectAliasSkillNames(cwd), nativeResources, mcpServers };
 }

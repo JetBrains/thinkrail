@@ -17,6 +17,7 @@ export {
 	listSkillCommands,
 	registerBundledRuntime,
 } from "./extensions";
+export { mcpPolicyOf } from "./mcp";
 export {
 	listModelContextSettings,
 	setModelContextPublisher,

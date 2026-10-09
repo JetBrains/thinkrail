@@ -20,17 +20,25 @@ export interface Project {
 	disabledGroups?: string[];
 	/**
 	 * pi-level trust for the project's native `.pi/` resources, separate from the alias-skill `trusted`
-	 * grant; absent only on a record that predates pi-level trust.
+	 * grant; absent only on a record that predates pi-level trust. Never enables MCP servers by itself.
 	 */
 	piResourceTrust?: "granted" | "untrusted";
+	/** Approved repo-defined MCP entries: server name → fingerprint of the original project-file entry. */
+	mcpApprovals?: Record<string, string>;
+	/** Per-project enablement/exposure of user-level MCP servers (never written to `.pi/mcp.json`). */
+	mcpOverrides?: Record<string, McpProjectOverride>;
 }
 
 export type ProjectPathStatus = { kind: "repo" | "initable" | "missing" | "notDirectory" };
 
-/** What a project's trust grant would load, for the trust notice; alias skill names show only after trust. */
+/**
+ * What a project's trust grant would load, for the trust notice; alias skill names show only after trust.
+ * `mcpServers` counts the entries of the project's `.pi/mcp.json`, each approved separately.
+ */
 export interface ProjectTrustSummary {
 	aliasSkills: string[];
 	nativeResources: boolean;
+	mcpServers: number;
 }
 
 export interface DiffStats {
@@ -325,6 +333,34 @@ export interface SessionResources {
 	sessionId: string;
 	commands: BackgroundCommandSummary[];
 	subagents: SubagentResourceSummary[];
+}
+
+/** Configured exposure; `codemode` is accepted from files and treated as `deferred` while codemode is not shipped. */
+export type McpExposure = "deferred" | "direct" | "hidden" | "codemode";
+
+export interface McpProjectOverride {
+	enabled?: boolean;
+	exposure?: Exclude<McpExposure, "codemode">;
+}
+
+export type McpContentBlockSummary =
+	| { kind: "text"; chars: number }
+	| { kind: "image"; mimeType: string }
+	| { kind: "audio"; mimeType: string }
+	| { kind: "resource_link"; uri: string; name?: string; mimeType?: string }
+	| { kind: "resource"; uri: string; mimeType?: string; chars?: number };
+
+/**
+ * Bounded, base64-free presentation summary written into a tool result's `details.thinkrail` by the
+ * host so it can be rendered the same live, after reload, and on another client.
+ */
+export interface McpResultSummary {
+	blocks: McpContentBlockSummary[];
+	/** Blocks dropped from the end of `blocks` once the summary's byte budget was spent. */
+	omittedBlocks?: number;
+	structuredContent?: unknown;
+	structuredContentTruncated?: boolean;
+	isError?: boolean;
 }
 
 export type BackgroundCommandOutputResult =
