@@ -963,7 +963,7 @@ function abandonPreparedEntry(entry: Entry): void {
 	entry.disposed = true;
 	void closeSessionResources(entry);
 	clearEntryQueue(entry);
-	entry.session.dispose();
+	disposePiSessionAfterShutdown(entry);
 }
 
 async function registerSession(
@@ -1119,15 +1119,13 @@ async function createParentSessionInternal(
 			try {
 				await disposeSession(sessionId);
 			} catch {}
-		} else {
+		} else if (!session) {
 			subagents.dispose();
 			void trackCascade(
 				workspaceId,
 				commands.dispose().catch(() => {}),
 			);
-			session?.clearQueue();
 			askUserQuestionWaiters.abandon();
-			session?.dispose();
 		}
 		throw error;
 	}
@@ -2135,6 +2133,11 @@ function closeSessionResources(entry: Entry, timeoutMs?: number): Promise<void> 
 	return entry.resourceCascade;
 }
 
+// `dispose()` invalidates the extension context the session_shutdown handlers are still using.
+function disposePiSessionAfterShutdown(entry: Entry): void {
+	void (entry.shutdownEmitted ?? Promise.resolve()).then(() => entry.session.dispose());
+}
+
 function trackSessionTeardown(sessionId: string, cascade: Promise<void>): Promise<void> {
 	const current = sessionTeardowns.get(sessionId);
 	if (current) return current;
@@ -2159,9 +2162,7 @@ function disposeSession(sessionId: string): Promise<void> {
 	entry.unsubscribeCommands();
 	clearEntryQueue(entry);
 	sessions.delete(sessionId);
-	// The pi session outlives its registry entry only until the bounded shutdown emission settles:
-	// `dispose()` invalidates the extension runner the shutdown handlers are still using.
-	void (entry.shutdownEmitted ?? Promise.resolve()).then(() => entry.session.dispose());
+	disposePiSessionAfterShutdown(entry);
 	publishSessionResourcesChanged(entry.workspaceId, sessionId);
 	log.debug(`session ${sessionId} disposed`);
 	return cascade;
@@ -2195,7 +2196,7 @@ export function disposeAllSessions(): void {
 		entry.unsubscribeCommands();
 		entry.disposed = true;
 		clearEntryQueue(entry);
-		entry.session.dispose();
+		disposePiSessionAfterShutdown(entry);
 	}
 	sessions.clear();
 	deletedSessions.clear();

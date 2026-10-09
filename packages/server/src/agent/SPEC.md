@@ -874,8 +874,10 @@ settings or workspaces edge. The owning parent graph records this package depend
   Every teardown path goes through this cascade: delete/remove, workspace archive/removal, quit
   (`settleSessionsForShutdown` + `disposeAllSessions`) and a preparation that fails after binding —
   including one whose registration is refused because the workspace closed or the host began quitting
-  meanwhile. `disposeSession` defers `session.dispose()` until the emission settles or the budget
-  (`SESSION_SHUTDOWN_BUDGET_MS`, 3 s) elapses, and the host shutdown settle budget is that same 3 s.
+  meanwhile. Every one of them defers `session.dispose()` (`disposePiSessionAfterShutdown`) until the
+  emission settles or the budget (`SESSION_SHUTDOWN_BUDGET_MS`, 3 s) elapses, because `dispose()`
+  invalidates the extension context the handlers are still using; the host shutdown settle budget is
+  that same 3 s.
   Reloads go through `session.reload()` behind a per-session reload gate: while a reload runs, every
   admission seam (`promptSession`, `steerSession`, `followUpSession`, `nudgeSession`, queue requeues,
   `answerQuestion`, `sendReviewFixToSession`, `compactSession`) refuses with "reloading", and completion

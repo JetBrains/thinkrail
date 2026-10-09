@@ -9,6 +9,7 @@ import {
 	createSession,
 	disposeAllSessions,
 	removeSession,
+	removeWorkspaceSessions,
 	setSessionManagerFactory,
 	settleSessionsForShutdown,
 } from "./agentSessionManager";
@@ -39,18 +40,27 @@ beforeAll(async () => {
 	process.env.THINKRAIL_DATA_DIR = join(root, "data");
 	process.env.PI_OFFLINE = "1";
 	mkdirSync(join(agentDir, "extensions"), { recursive: true });
-	// The handler's delay is what lets the test tell "awaited" from "fired and forgotten".
+	// The handler's delay is what lets the test tell "awaited" from "fired and forgotten"; using the
+	// extension API after the delay tells "still live" from "invalidated by dispose()". The slow load
+	// holds every session in its attach window long enough for a workspace closure to land inside it.
 	writeFileSync(
 		join(agentDir, "extensions", "shutdown-probe.ts"),
 		[
 			'import { appendFileSync, existsSync } from "node:fs";',
 			`const marker = ${JSON.stringify(marker)};`,
 			`const hang = ${JSON.stringify(join(root, "HANG"))};`,
-			"export default function probe(pi) {",
+			"export default async function probe(pi) {",
+			"  await new Promise((resolve) => setTimeout(resolve, 150));",
 			'  pi.on("session_shutdown", async (event) => {',
 			"    if (existsSync(hang)) await new Promise(() => {});",
 			"    await new Promise((resolve) => setTimeout(resolve, 50));",
-			'    appendFileSync(marker, JSON.stringify({ reason: event.reason }) + "\\n");',
+			'    let ctx = "live";',
+			"    try {",
+			'      pi.getFlag("probe");',
+			"    } catch {",
+			'      ctx = "stale";',
+			"    }",
+			'    appendFileSync(marker, JSON.stringify({ reason: event.reason, ctx }) + "\\n");',
 			"  });",
 			"}",
 			"",
@@ -86,15 +96,25 @@ afterAll(async () => {
 	rmSync(root, { recursive: true, force: true });
 });
 
-function shutdownEvents(): { reason: string }[] {
+type ShutdownEvent = { reason: string; ctx: "live" | "stale" };
+
+function shutdownEvents(): ShutdownEvent[] {
 	try {
 		return readFileSync(marker, "utf8")
 			.split("\n")
 			.filter(Boolean)
-			.map((line) => JSON.parse(line) as { reason: string });
+			.map((line) => JSON.parse(line) as ShutdownEvent);
 	} catch {
 		return [];
 	}
+}
+
+async function eventuallyShutdownEvents(from: number, count: number): Promise<ShutdownEvent[]> {
+	const deadline = Date.now() + 2000;
+	while (shutdownEvents().length - from < count && Date.now() < deadline) {
+		await new Promise((resolve) => setTimeout(resolve, 20));
+	}
+	return shutdownEvents().slice(from);
 }
 
 async function parent() {
@@ -108,7 +128,30 @@ test("removing a session emits session_shutdown to extensions and awaits their h
 	const before = shutdownEvents().length;
 	const p = await parent();
 	await removeSession(p.sessionId);
-	expect(shutdownEvents().slice(before)).toEqual([{ reason: "quit" }]);
+	expect(shutdownEvents().slice(before)).toEqual([{ reason: "quit", ctx: "live" }]);
+});
+
+test("an immediate host stop disposes the pi session only after its shutdown handlers settle", async () => {
+	const before = shutdownEvents().length;
+	await parent();
+	await parent();
+	disposeAllSessions();
+	expect(await eventuallyShutdownEvents(before, 2)).toEqual([
+		{ reason: "quit", ctx: "live" },
+		{ reason: "quit", ctx: "live" },
+	]);
+});
+
+test("a session abandoned while attaching emits session_shutdown before its pi session is disposed", async () => {
+	const before = shutdownEvents().length;
+	const workspaceId = `shutdown-${++sequence}`;
+	const cwd = mkdtempSync(join(root, "cwd-"));
+	const creating = createSession({ workspaceId, cwd });
+	await new Promise((resolve) => setTimeout(resolve, 30));
+	const closing = removeWorkspaceSessions(workspaceId);
+	await expect(creating).rejects.toThrow(/Workspace is unavailable|Unknown session/);
+	await closing;
+	expect(await eventuallyShutdownEvents(before, 1)).toEqual([{ reason: "quit", ctx: "live" }]);
 });
 
 test("a shutdown handler that never settles is bounded by the shutdown budget", async () => {
