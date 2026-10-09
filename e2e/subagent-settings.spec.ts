@@ -194,9 +194,17 @@ test("global and workspace subagent limits persist, inherit, and converge across
 		await expect(workspaceCustom(peer)).toHaveAttribute("data-active", "true");
 		await expect(workspaceCustom(peer)).toContainText("2 at once");
 		await expect(workspaceInput(peer)).toHaveValue("2");
-		await page.getByTestId("settings-subagents").screenshot({
-			path: test.info().outputPath("subagent-limits.png"),
-		});
+
+		await workspaceInherit(peer).click();
+		for (const target of [page, peer]) {
+			await expect(workspaceInherit(target)).toHaveAttribute("data-active", "true");
+			await expect(workspaceInput(target)).toHaveCount(0);
+		}
+		await workspaceCustom(peer).click();
+		await workspaceInput(peer).fill("2");
+		await workspaceInput(peer).press("Enter");
+		await expect(workspaceCustom(page)).toHaveAttribute("data-active", "true");
+		await expect(workspaceInput(page)).toHaveValue("2");
 
 		await page.reload();
 		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");

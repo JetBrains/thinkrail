@@ -124,6 +124,9 @@ export function WorkspaceSubagentLimit({
 		? workspace.subagentMaxConcurrentOverride
 		: undefined;
 	const [customDraft, setCustomDraft] = useState(false);
+	useEffect(() => {
+		if (override !== undefined) setCustomDraft(false);
+	}, [override]);
 	const choice: WorkspaceLimitChoice = override !== undefined || customDraft ? "custom" : "inherit";
 	const choices: SettingsRadioChoice<WorkspaceLimitChoice>[] = [
 		{
