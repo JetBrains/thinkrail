@@ -449,7 +449,9 @@ a project picker, the prompt hero, and the reused
   (no active workspace → "Open a workspace to manage its MCP servers") and reads `mcp.list` through
   `transport`'s `watchMcpWorkspace` — on mount, every welcome, a project-trust change, and with bounded
   backoff while a live chat still reports a server `starting`, because the host pushes no connected edge.
-  Rows come from the store's `deriveMcpServerRows` and show a status dot + label + one reason line, the name,
+  Rows come from the store's `deriveMcpServerRows`; while the project is untrusted, project-scope rows are
+  dropped client-side at once, so a revoke never leaves the cached repository rows actionable until the
+  refresh lands (the host omits them anyway, and the banner says so). Rows show a status dot + label + one reason line, the name,
   User/Project and HTTP/stdio chips (stdio: "Runs on host — inherits the host environment"), an exposure
   menu (`deferred | direct | hidden`; configured codemode reads "treated as deferred (codemode not available
   yet)"), the enable switch, at most one primary and one secondary action — the status table `mcpRowView`

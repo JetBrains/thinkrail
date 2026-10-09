@@ -107,8 +107,9 @@ browser agent execution.
 
 **MCP servers** coverage (`mcp-settings.spec.ts`) runs the server package's stdio fixture through the
 absolute path of the runner's `bun`, since the host's hermetic `PATH` has none. It adds a user server
-through the Settings form, sees it Not running, Connected · 4 tools once a persisted chat attaches, and
-disabled for that chat from the Resources inspector, then removes it; it opens a chat from a not-running
+through the Settings form while the workspace's persisted chat is open (entering a workspace auto-opens
+its latest chat, so the test waits for that tab first instead of racing it), sees it Connected · 4 tools
+once that chat reloads, and disabled for that chat from the Resources inspector, then removes it; it opens a chat from a not-running
 server's row, reconnects that server per chat once it fails and shows its masked log, and names an
 unreadable user `mcp.json` with an edit hint; and it proves a repository-defined server flags the chat's
 attention marker, waits for Review & approve, and starts once approved. Each test removes the `mcp.json`
