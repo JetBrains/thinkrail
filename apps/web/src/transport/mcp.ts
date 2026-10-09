@@ -4,12 +4,27 @@ import { getTransport } from "./wireTransport";
 
 export const MCP_STARTING_POLL_MS: readonly number[] = [1_000, 2_000, 3_000, 5_000, 8_000, 13_000];
 
-async function requestMcpList(workspaceId: string): Promise<McpListResult> {
+const inFlightLists = new Map<string, Promise<McpListResult>>();
+
+// Concurrent watchers of one workspace share a single in-flight read, so two lists started from the
+// same revision can never land out of order and drop a chat the newer one installed.
+function requestMcpList(workspaceId: string): Promise<McpListResult> {
+	const pending = inFlightLists.get(workspaceId);
+	if (pending) return pending;
 	const read = selectMcpRead(useAppStore.getState(), workspaceId);
-	if (!read) throw new Error("MCP servers are unavailable until the host reconnects.");
-	const result: McpListResult = await getTransport().request("mcp.list", { workspaceId });
-	useAppStore.getState().installMcpList(read, result);
-	return result;
+	if (!read)
+		return Promise.reject(new Error("MCP servers are unavailable until the host reconnects."));
+	const request: Promise<McpListResult> = getTransport()
+		.request("mcp.list", { workspaceId })
+		.then((result: McpListResult) => {
+			useAppStore.getState().installMcpList(read, result);
+			return result;
+		})
+		.finally(() => {
+			if (inFlightLists.get(workspaceId) === request) inFlightLists.delete(workspaceId);
+		});
+	inFlightLists.set(workspaceId, request);
+	return request;
 }
 
 export interface McpWatchDeps {
