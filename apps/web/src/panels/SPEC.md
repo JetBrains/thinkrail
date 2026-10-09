@@ -456,8 +456,8 @@ a project picker, the prompt hero, and the reused
   and an open Add dialog falls back to User scope — including a review step it had reached for Project
   scope (the host refuses repository writes for an untrusted project regardless). A user-server
   enable/exposure change sends only the changed field (`mcp.setProjectOverride` merges), and a project-scope
-  Remove carries the rendered `approval.fingerprint` like Edit, so a stale row refuses instead of deleting
-  changed repository content; both refresh the list on failure. Rows show a status dot + label + one reason line, the name,
+  Remove and Edit carry the rendered `approval.fingerprint` (`mcpRenderedTarget`), so a stale row refuses
+  instead of rewriting or deleting changed repository content; both refresh the list on failure. Rows show a status dot + label + one reason line, the name,
   User/Project and HTTP/stdio chips (stdio: "Runs on host — inherits the host environment"), an exposure
   menu (`deferred | direct | hidden`; configured codemode reads "treated as deferred (codemode not available
   yet)"), the enable switch, at most one primary and one secondary action — the status table `mcpRowView`
@@ -536,8 +536,9 @@ a project picker, the prompt hero, and the reused
   waits until it is idle" — the host answers before it reloads them, so the returned snapshots cannot say
   which already did; the rows' live statuses do. Sign in / Test connection start
   `mcp.login` / `mcp.testConnection` and reuse `auth/LoginDialog` as Providers does: the login state keeps
-  the push's `target`, so only an MCP login opens this section's dialog (Providers ignores it), and the
-  sign-in page opens only from the dialog's button. A banner reads "ThinkRail asks before MCP calls that may
+  the push's `target`, so only an MCP login for this workspace opens this section's dialog (Providers
+  ignores it, and so does the section shown for another workspace), and the sign-in page opens only from
+  the dialog's button. A banner reads "ThinkRail asks before MCP calls that may
   change data (per chat); no saved rules yet"; the empty state offers presets, the form, JSON import and a
   host notice. Live sections: **`ProvidersSettings`** (the in-app
   provider-auth surface — Connected cards each with a **Sign-out only when `canLogout`** (env /

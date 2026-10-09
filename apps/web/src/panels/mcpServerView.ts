@@ -1,5 +1,6 @@
 import type {
 	McpListResult,
+	McpRenderedTarget,
 	McpServerEntryInput,
 	McpServerSummary,
 	WsParams,
@@ -216,20 +217,19 @@ type McpSettingWrite =
 	| { method: "mcp.setProjectOverride"; params: WsParams<"mcp.setProjectOverride"> }
 	| { method: "mcp.update"; params: WsParams<"mcp.update"> };
 
+/** The row's identity for a rewrite or removal: a repository row carries the fingerprint it rendered. */
+export function mcpRenderedTarget(summary: McpServerSummary): McpRenderedTarget {
+	if (summary.scope === "user") return { scope: "user" };
+	if (!summary.approval) throw new Error(`Read "${summary.name}" from .pi/mcp.json first.`);
+	return { scope: "project", expectedFingerprint: summary.approval.fingerprint };
+}
+
 export function mcpEntryUpdate(
 	workspaceId: string,
 	summary: McpServerSummary,
 	entry: McpServerEntryInput,
 ): WsParams<"mcp.update"> {
-	return {
-		workspaceId,
-		scope: summary.scope,
-		name: summary.name,
-		entry,
-		...(summary.scope === "project" && summary.approval
-			? { expectedFingerprint: summary.approval.fingerprint }
-			: {}),
-	};
+	return { workspaceId, name: summary.name, entry, ...mcpRenderedTarget(summary) };
 }
 
 export function mcpSettingWrite(
