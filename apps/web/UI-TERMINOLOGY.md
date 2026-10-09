@@ -131,7 +131,7 @@ Children:
 |---|---|---|---|
 | Welcome Heading | inline hero heading | `welcome-title` | Project name, or `PRODUCT_NAME` when no project |
 | Provider Warning Banner | `panels/ProviderWarningBanner.tsx` → `ProviderWarningBanner` | — | Gold banner shown only when no provider is connected |
-| Project Skills Notice | `panels/ProjectSkillsNotice.tsx` → `ProjectSkillsNotice` | — | Pre-workspace trust surface for committed skills |
+| Project Trust Notice | `panels/ProjectTrustNotice.tsx` → `ProjectTrustNotice` | `project-trust-notice` | Pre-workspace trust surface that names what a grant loads, with Stop trusting |
 | Primary Card (CTA) | `Card` in `WelcomePanel` | `welcome-cta` | Filled-primary action |
 | Action Card | `Card` in `WelcomePanel` | `welcome-action` | Quiet secondary actions |
 
@@ -502,7 +502,7 @@ its alternatives in parentheses.
 
 - **Welcome Panel** (alt: Welcome Screen) — the no-workspace surface.
 - **Welcome Heading**, **Primary Card (CTA)**, **Action Card**.
-- **Provider Warning Banner**, **Project Skills Notice**.
+- **Provider Warning Banner**, **Project Trust Notice**.
 
 **Center**
 

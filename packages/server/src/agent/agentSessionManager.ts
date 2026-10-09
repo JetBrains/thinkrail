@@ -77,7 +77,12 @@ import {
 	hasQuestionAck,
 } from "./askUserQuestion";
 import { publishSessionResourcesChanged } from "./chatResources";
-import { disposeSessionChildren, removeWorkspaceDelegation, subagentsFor } from "./delegation";
+import {
+	disposeSessionChildren,
+	removeWorkspaceDelegation,
+	stopSessionChildren,
+	subagentsFor,
+} from "./delegation";
 import { buildResourceLoader, toSkillCommands } from "./extensions";
 import {
 	getPiRuntimeGeneration,
@@ -95,6 +100,7 @@ import {
 	cancelExtUiForSession,
 	createWebUiContext,
 	notifyExtensionError,
+	notifyExtUi,
 	pendingExtUiDialog,
 	setExtUiStateChanged,
 } from "./webUiContext";
@@ -502,6 +508,7 @@ export function setSessionManagerFactory(factory: (cwd: string) => SessionManage
 
 let skillAdmissionResolver: (workspaceId: string) => SkillAdmissionContext = () => ({
 	trusted: false,
+	piResourceTrusted: false,
 	acknowledged: [],
 	disabled: [],
 	disabledGroups: [],
@@ -511,6 +518,10 @@ export function setSkillAdmissionResolver(
 	resolver: (workspaceId: string) => SkillAdmissionContext,
 ): void {
 	skillAdmissionResolver = resolver;
+}
+
+export function piResourceTrustFor(workspaceId: string): boolean {
+	return skillAdmissionResolver(workspaceId).piResourceTrusted;
 }
 
 let subagentsEnabledResolver: (workspaceId: string) => boolean = () => true;
@@ -662,8 +673,15 @@ function reloadBlockedReason(entry: Entry): string | null {
 
 function reconsiderPendingReload(entry: Entry): void {
 	if (!entry.reloadPending || entry.reloadRunning || reloadBlockedReason(entry)) return;
+	const { sessionId } = entry.session;
 	void runGatedReload(entry).catch((error) => {
-		log.warn(`deferred resource reload failed for ${entry.session.sessionId}`, error as Error);
+		log.warn(`deferred resource reload failed for ${sessionId}`, error as Error);
+		if (sessions.get(sessionId) !== entry || entry.disposed) return;
+		notifyExtUi(
+			sessionId,
+			`This chat could not reload its resources after a settings change and still runs with the previous ones — close or reload it. ${(error as Error).message ?? String(error)}`,
+			"error",
+		);
 	});
 }
 
@@ -711,15 +729,47 @@ function releasePreflights(entry: Entry): void {
 
 const SESSION_SETTINGS_OVERRIDES = { images: { autoResize: false } };
 
-export function buildSessionSettings(cwd: string): SettingsManager {
-	const settings = SettingsManager.create(cwd, undefined, { projectTrusted: true });
+export function buildSessionSettings(cwd: string, projectTrusted: boolean): SettingsManager {
+	const settings = SettingsManager.create(cwd, undefined, { projectTrusted });
 	const reload = settings.reload.bind(settings);
 	settings.reload = async () => {
 		await reload();
 		settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
 	};
+	const setProjectTrusted = settings.setProjectTrusted.bind(settings);
+	settings.setProjectTrusted = (trusted) => {
+		setProjectTrusted(trusted);
+		settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
+	};
 	settings.applyOverrides(SESSION_SETTINGS_OVERRIDES);
 	return settings;
+}
+
+export type TrustReloadDisposition = SessionReloadDisposition | "failed";
+
+export async function applyPiResourceTrust(
+	workspaceIds: readonly string[],
+): Promise<Record<string, TrustReloadDisposition>> {
+	const scope = new Set(workspaceIds);
+	const stale = [...sessions].filter(
+		([, entry]) =>
+			scope.has(entry.workspaceId) &&
+			!entry.disposed &&
+			!entry.resourcesClosing &&
+			entry.session.settingsManager.isProjectTrusted() !== piResourceTrustFor(entry.workspaceId),
+	);
+	const dispositions: Record<string, TrustReloadDisposition> = {};
+	for (const [sessionId, entry] of stale) {
+		if (!piResourceTrustFor(entry.workspaceId))
+			await stopSessionChildren(entry.workspaceId, sessionId, "user").settled;
+		try {
+			dispositions[sessionId] = await requestSessionReload(sessionId);
+		} catch (error) {
+			log.warn(`trust reload failed for ${sessionId}`, error as Error);
+			dispositions[sessionId] = "failed";
+		}
+	}
+	return dispositions;
 }
 
 export interface CreateSessionInput {
@@ -1008,7 +1058,10 @@ async function registerSession(
 export async function createSession(input: CreateSessionInput): Promise<CreateSessionResult> {
 	const lifecycleToken = captureWorkspaceLifecycle(input.workspaceId);
 	const generation = await getPiRuntimeGeneration();
-	const settingsManager = buildSessionSettings(input.cwd);
+	const settingsManager = buildSessionSettings(
+		input.cwd,
+		skillAdmissionResolver(input.workspaceId).piResourceTrusted,
+	);
 	let model: Model<string> | undefined;
 	if (input.model) {
 		try {
@@ -1525,7 +1578,10 @@ async function openDiskSession(
 	if (!info) throw new Error(`Unknown session: ${sessionId}`);
 	if (sessions.has(sessionId)) return;
 	const generation = await getPiRuntimeGeneration();
-	const settingsManager = buildSessionSettings(cwd);
+	const settingsManager = buildSessionSettings(
+		cwd,
+		skillAdmissionResolver(workspaceId).piResourceTrusted,
+	);
 	const sessionManager = SessionManager.open(info.path);
 	const persistedModel = persistedSessionModelRef(sessionManager.buildSessionContext().model);
 	let exactModel: Model<string> | undefined;

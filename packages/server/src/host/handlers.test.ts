@@ -6,6 +6,7 @@ import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type {
+	Project,
 	Template,
 	TemplateInfo,
 	WireModel,
@@ -279,6 +280,37 @@ test("feedback.respond rejects an action outside the wire union", async () => {
 	await expect(handleRequest("feedback.respond", { action: "later" }, CTX)).rejects.toThrow(
 		"Invalid interview response",
 	);
+});
+
+test("project.setTrust grants pi-level resource trust only when the request asks for resources", async () => {
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{
+				id: "p1",
+				name: "repo",
+				path: repo,
+				slug: "repo",
+				lastOpened: 1,
+				piResourceTrust: "untrusted",
+			},
+		]),
+	);
+	const setTrust = async (params: { trusted: boolean; resources?: boolean }) =>
+		(await handleRequest("project.setTrust", { id: "p1", ...params }, CTX)) as Project;
+
+	expect(await setTrust({ trusted: true })).toMatchObject({
+		trusted: true,
+		piResourceTrust: "untrusted",
+	});
+	expect(await setTrust({ trusted: true, resources: true })).toMatchObject({
+		trusted: true,
+		piResourceTrust: "granted",
+	});
+	expect(await setTrust({ trusted: false })).toMatchObject({
+		trusted: false,
+		piResourceTrust: "untrusted",
+	});
 });
 
 test("workspace.rename locks the display name without changing Git or the worktree path", async () => {

@@ -154,7 +154,10 @@ shutdown release barriers; and finalized outcomes after a shrinking compaction.
   `maxConcurrentPerParent`, `childBaseExtensionFactories` (the hook-only set EVERY child loads) and
   `childExtensionFactories` (the curated set a child MAY load) — both decision #25, both pi
   `InlineExtension`s, so an embedder passes bare factories or `{ name, factory }` and keeps the name
-  in pi diagnostics — and `buildChildSettings` (decision #31).
+  in pi diagnostics — `buildChildSettings` (decision #31), and `projectTrusted` (`(cwd) => boolean`,
+  asked once per child for the pi-level project trust its settings manager receives; hosts own trust,
+  so a child never loads more of the project than its parent — ThinkRail passes the workspace's
+  `Project.piResourceTrust`; absent → trusted, pi's own `SettingsManager` default).
 - Storage helpers: `defaultDelegationRoot` / `delegationSessionDir` / `deriveChildSessionFile`
   (post-restart transcript reads) / `DEFAULT_SCOPE`.
 - The contract types themselves (incl. `DelegationError`/`DelegationErrorCode`) — enumerated and
@@ -354,10 +357,12 @@ accepted cancellation wins, including one with no reason; caller signals, dispos
 participate in that ordering without adding a reason. Terminal runs are unchanged, and each new run
 resets both the cancellation latch and reason. Reasons are metadata, not lifecycle statuses.
 
-Child creation revalidates parent liveness after asynchronous session/extension preparation, before
-registering the handle. If the embedder closed that parent during preparation, the unregistered child
-is disposed and creation fails with `unknown-parent`. This prevents an in-flight birth from escaping
-a parent's already-captured teardown list without introducing a second pending-child registry.
+Child creation revalidates parent liveness — and that the `projectTrusted` binding still answers what the
+child's settings captured — after asynchronous session/extension preparation, before registering the
+handle. If the embedder closed that parent, or the project's trust changed, during preparation, the
+unregistered child is disposed and creation fails with `unknown-parent`. This prevents an in-flight birth
+from escaping a parent's already-captured teardown list, or a revoke's already-captured child list,
+without introducing a second pending-child registry.
 
 The host uses `"user"` for explicit user cancellation; [[module-pi-subagents]] owns its completion
 policy. No UI dependency or second registry is involved. Queued cancellation settles immediately,
@@ -494,10 +499,11 @@ run-scoped signal. Non-user paths retain their behavior.
     cleared before successor admission, and cancellation spans preflight through terminal settlement.
     Finalized message events supply stop/text evidence; pi persisted-entry stats supply usage deltas.
 31. **Child settings are an embedder-bound infrastructure hook, never a `SessionOptions` mirror**
-    (issue #604). Each child's settings manager is `buildChildSettings(cwd)` when bound, else
-    `SettingsManager.create(cwd)`, so an embedder's children run on the settings its own sessions
-    do. ThinkRail binds `buildSessionSettings`, whose raw-image override is what lets a child's
-    `read` deliver images in the compiled binary (rationale: [[submodule-server-agent]]); unbound,
-    every child `read` of an image there returned pi's `[Image omitted…]` note. The hook sits on
-    `DelegationBindings` beside the factory sets, keeping decision #3's firewall: the settings
-    manager stays infrastructure no consumer shapes per child.
+    (issue #604). Each child's settings manager is `buildChildSettings(cwd, projectTrusted)` when
+    bound, else `SettingsManager.create(cwd, undefined, { projectTrusted })`, with `projectTrusted`
+    the binding's answer for that child, so an embedder's children run on the settings and trust its
+    own sessions do. ThinkRail binds `buildSessionSettings`, whose raw-image override is what lets a
+    child's `read` deliver images in the compiled binary (rationale: [[submodule-server-agent]]);
+    unbound, every child `read` of an image there returned pi's `[Image omitted…]` note. The hook
+    sits on `DelegationBindings` beside the factory sets, keeping decision #3's firewall: the
+    settings manager stays infrastructure no consumer shapes per child.

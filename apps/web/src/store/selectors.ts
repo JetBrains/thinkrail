@@ -4,6 +4,7 @@ import {
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	type GitDiffScope,
 	MODEL_PICKER_PROTOCOL_VERSION,
+	PROJECT_TRUST_PROTOCOL_VERSION,
 	type Project,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
@@ -81,6 +82,10 @@ interface ProtocolState {
 
 export function selectCanRenameChat(state: ProtocolState): boolean {
 	return state.protocolVersion !== null && state.protocolVersion >= SESSION_RENAME_PROTOCOL_VERSION;
+}
+
+export function selectSupportsProjectTrust(state: ProtocolState): boolean {
+	return state.protocolVersion !== null && state.protocolVersion >= PROJECT_TRUST_PROTOCOL_VERSION;
 }
 
 export function supportsChatResources(protocolVersion: number | null): boolean {

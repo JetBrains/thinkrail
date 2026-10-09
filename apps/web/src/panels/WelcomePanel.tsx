@@ -13,7 +13,7 @@ import { getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
 import { NewWorkspaceDialog } from "./NewWorkspaceDialog";
-import { ProjectSkillsNotice } from "./ProjectSkillsNotice";
+import { ProjectTrustNotice } from "./ProjectTrustNotice";
 import { ProviderWarningBanner } from "./ProviderWarningBanner";
 import { useOpenProject } from "./useOpenProject";
 
@@ -102,7 +102,7 @@ export function WelcomePanel() {
 			</h1>
 
 			<ProviderWarningBanner />
-			{project ? <ProjectSkillsNotice projectId={project.id} /> : null}
+			{project ? <ProjectTrustNotice projectId={project.id} /> : null}
 
 			<div className="mt-24 flex flex-wrap justify-center gap-12">
 				{noProjects ? (

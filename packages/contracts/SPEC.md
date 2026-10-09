@@ -559,7 +559,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   cache hit while omission preserves the original force-fresh behavior for older independently shipped
   clients; either form still joins a lookup already in flight) /
   **`project.setTrust`** (persist a project's trust grant → the updated `Project`; gates its committed
-  cross-agent skill aliases) /
+  cross-agent skill aliases; `resources: true` also grants pi-level resource trust, see Project trust) /
   **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved from
   that project's current checkout with its **project-scoped aliases gated by trust**; the eventual worktree
   session is authoritative) / the **Skills-manager set** — **`project.aliasSkills`** (present committed alias
@@ -750,6 +750,21 @@ Reconnection invalidates old control authority until hydration completes; transi
 must not become a successful empty snapshot. Unsupported hosts clear earlier resource projections.
 Recent command output is ephemeral; completed-message excerpts and child transcripts have their
 own existing Pi transcript persistence, not a second wire-owned history store.
+
+## Project trust
+
+`PROJECT_TRUST_PROTOCOL_VERSION` (79) gates the generalized project-trust surface: the trust summary and
+the pi-level resource grant. A client talking to an older host sends neither.
+
+- `project.trustSummary { projectId }` returns `ProjectTrustSummary` for the generalized trust notice: the
+  project checkout's alias skill names and whether pi-level trust would load anything (`nativeResources`).
+  An older host only answers `project.aliasSkills`, which the client reads as "aliases only". It reads the
+  project's own checkout and takes no `workspaceId`: both surfaces that show it (the Welcome notice and New
+  Workspace) run before the workspace they lead to exists.
+- `project.setTrust` takes an optional `resources: true`: the grant then also trusts the project's own pi
+  resources (`Project.piResourceTrust` — settings and extensions run code). Without it a grant sets the
+  alias trust only, so a surface that does not name what pi-level trust loads (the Skills dialog, an older
+  client) never enables it; `trusted: false` revokes both.
 
 ## Normalized session state
 

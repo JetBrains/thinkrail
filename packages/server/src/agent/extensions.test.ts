@@ -15,7 +15,14 @@ import { oversizedImageGuard } from "./imageGuard";
 import type { SkillAdmissionContext } from "./skillAdmission";
 
 function ctx(trusted: boolean, acknowledged: string[] = []): SkillAdmissionContext {
-	return { trusted, acknowledged, disabled: [], disabledGroups: [], overrides: {} };
+	return {
+		trusted,
+		piResourceTrusted: trusted,
+		acknowledged,
+		disabled: [],
+		disabledGroups: [],
+		overrides: {},
+	};
 }
 
 function stubSkillEnv(home: string, agentDir: string): () => void {
@@ -184,13 +191,20 @@ describe("listSkillCommands", () => {
 			const untrusted = await listSkillCommands(project, ctx(false));
 			expect(untrusted.some((command) => command.name === "skill:repo-alias")).toBe(false);
 			expect(untrusted.some((command) => command.name === "skill:personal-skill")).toBe(true);
-			expect(untrusted.some((command) => command.name === "skill:repo-native")).toBe(true);
+			expect(untrusted.some((command) => command.name === "skill:repo-native")).toBe(false);
+			const nativeOnly = await listSkillCommands(project, {
+				...ctx(false),
+				piResourceTrusted: true,
+			});
+			expect(nativeOnly.some((command) => command.name === "skill:repo-native")).toBe(true);
+			expect(nativeOnly.some((command) => command.name === "skill:repo-alias")).toBe(false);
 
 			const trusted = await listSkillCommands(
 				project,
 				ctx(true, await listProjectAliasSkillNames(project)),
 			);
 			expect(trusted.some((command) => command.name === "skill:repo-alias")).toBe(true);
+			expect(trusted.some((command) => command.name === "skill:repo-native")).toBe(true);
 		} finally {
 			restoreEnvironment(original);
 			rmSync(root, { recursive: true, force: true });
@@ -212,6 +226,7 @@ describe("listSkillCommands", () => {
 
 			const enabled = await listSkillCommands(project, {
 				trusted: true,
+				piResourceTrusted: true,
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: [],
@@ -221,6 +236,7 @@ describe("listSkillCommands", () => {
 
 			const groupOff = await listSkillCommands(project, {
 				trusted: true,
+				piResourceTrusted: true,
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: ["personal"],
@@ -250,6 +266,7 @@ describe("buildResourceLoader", () => {
 
 			let admission: SkillAdmissionContext = {
 				trusted: true,
+				piResourceTrusted: true,
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: [],
@@ -284,6 +301,7 @@ describe("buildResourceLoader", () => {
 		try {
 			const admission: SkillAdmissionContext = {
 				trusted: true,
+				piResourceTrusted: true,
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: [],
@@ -317,6 +335,7 @@ describe("buildResourceLoader", () => {
 		try {
 			const admission: SkillAdmissionContext = {
 				trusted: false,
+				piResourceTrusted: false,
 				acknowledged: [],
 				disabled: [],
 				disabledGroups: [],

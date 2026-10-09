@@ -17,10 +17,12 @@ import {
 } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
+	admissionContextFor,
 	disposeAllSessions,
 	getSessionWorkspaceId,
 	initializeSessionStates,
 	isProjectSkillPath,
+	piProjectTrustDecision,
 	refreshAgentReviewTool,
 	refreshSubagentTools,
 	setAgentReviewEnabledResolver,
@@ -62,6 +64,7 @@ import {
 	listProjects,
 	listRecentProjects,
 	openProject,
+	setPiTrustSeed,
 	setProjectPublisher,
 } from "../projects";
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
@@ -192,6 +195,8 @@ function sameHostUpdateRelease(
 export async function createServer(options: CreateServerOptions = {}): Promise<RunningServer> {
 	await initializeJbcentralRuntime();
 	getConfig();
+	setPiTrustSeed(piProjectTrustDecision);
+	getProjects();
 	const {
 		port = 24242,
 		host = "localhost",
@@ -532,15 +537,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		try {
 			const { projectId, skillOverrides } = getWorkspace(workspaceId);
 			const project = getProjects().find((p) => p.id === projectId);
-			return {
-				trusted: project?.trusted === true,
-				acknowledged: project?.acknowledgedSkills ?? [],
-				disabled: project?.disabledSkills ?? [],
-				disabledGroups: project?.disabledGroups ?? [],
-				overrides: skillOverrides ?? {},
-			};
+			return admissionContextFor(project, skillOverrides ?? {});
 		} catch {
-			return { trusted: false, acknowledged: [], disabled: [], disabledGroups: [], overrides: {} };
+			return admissionContextFor(undefined);
 		}
 	});
 

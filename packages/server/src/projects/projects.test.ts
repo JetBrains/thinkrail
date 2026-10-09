@@ -12,12 +12,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
 	closeProject,
+	getProjects,
 	initProject,
 	inspectProjectPath,
 	isProjectTrusted,
 	listProjects,
 	listRecentProjects,
 	openProject,
+	setPiTrustSeed,
 	setProjectPublisher,
 	setProjectTrust,
 } from "./projects";
@@ -68,6 +70,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	setProjectPublisher(null);
+	setPiTrustSeed(null);
 	rmSync(dataDir, { recursive: true, force: true });
 	if (savedDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
 	else process.env.THINKRAIL_DATA_DIR = savedDataDir;
@@ -290,7 +293,104 @@ test("setProjectTrust: persists a revocable, fail-closed trust decision", () => 
 	expect(isProjectTrusted(project.id)).toBe(true);
 	expect(listProjects().find((p) => p.id === project.id)?.trusted).toBe(true);
 
-	setProjectTrust(project.id, false);
+	const revoked = setProjectTrust(project.id, false);
+	expect(revoked.piResourceTrust).toBe("untrusted");
 	expect(isProjectTrusted(project.id)).toBe(false);
 	expect(() => setProjectTrust("nope", true)).toThrow();
+});
+
+test("setProjectTrust: pi-level resource trust needs its own explicit grant, and a revoke clears both", () => {
+	const repo = join(dataDir, "repo");
+	makeRepo(repo);
+	const project = initProject(repo);
+	expect(project.piResourceTrust).toBe("untrusted");
+
+	const aliasOnly = setProjectTrust(project.id, true, ["a"]);
+	expect(aliasOnly).toMatchObject({
+		trusted: true,
+		piResourceTrust: "untrusted",
+		acknowledgedSkills: ["a"],
+	});
+
+	const both = setProjectTrust(project.id, true, ["a"], { resources: true });
+	expect(both).toMatchObject({ trusted: true, piResourceTrust: "granted" });
+	expect(setProjectTrust(project.id, true).piResourceTrust).toBe("granted");
+
+	const revoked = setProjectTrust(project.id, false, undefined, { resources: true });
+	expect(revoked).toMatchObject({ trusted: false, piResourceTrust: "untrusted" });
+	expect(storedProjects().find((stored) => stored.id === project.id)).toMatchObject({
+		trusted: false,
+		piResourceTrust: "untrusted",
+	});
+});
+
+function writeProjects(records: object[]): void {
+	writeFileSync(join(dataDir, "projects.json"), JSON.stringify(records));
+}
+
+function storedProjects(): Array<{ id: string; piResourceTrust?: string; trusted?: boolean }> {
+	return JSON.parse(readFileSync(join(dataDir, "projects.json"), "utf8"));
+}
+
+test("pi-level trust migration grandfathers legacy records unless pi's own trust store denies them", () => {
+	writeProjects([
+		{ id: "legacy", name: "a", path: "/repos/a", slug: "a", lastOpened: 1 },
+		{ id: "denied", name: "b", path: "/repos/b", slug: "b", lastOpened: 1 },
+		{ id: "pi-trusted", name: "c", path: "/repos/c", slug: "c", lastOpened: 1 },
+		{
+			id: "explicit",
+			name: "d",
+			path: "/repos/d",
+			slug: "d",
+			lastOpened: 1,
+			piResourceTrust: "untrusted",
+		},
+		{ id: "alias-only", name: "e", path: "/repos/e", slug: "e", lastOpened: 1, trusted: false },
+		{ id: "unreadable", name: "f", path: "/repos/f", slug: "f", lastOpened: 1 },
+	]);
+	const asked: string[] = [];
+	setPiTrustSeed((path) => {
+		asked.push(path);
+		if (path === "/repos/f") return undefined;
+		return path === "/repos/b" ? false : path === "/repos/c" ? true : null;
+	});
+
+	const migrated = getProjects();
+	expect(Object.fromEntries(migrated.map((p) => [p.id, p.piResourceTrust]))).toEqual({
+		legacy: "granted",
+		denied: "untrusted",
+		"pi-trusted": "granted",
+		explicit: "untrusted",
+		"alias-only": "granted",
+		unreadable: undefined,
+	});
+	expect(storedProjects().find((p) => p.id === "unreadable")?.piResourceTrust).toBeUndefined();
+	setPiTrustSeed((path) => (path === "/repos/f" ? false : null));
+	expect(getProjects().find((p) => p.id === "unreadable")?.piResourceTrust).toBe("untrusted");
+	expect(storedProjects().find((p) => p.id === "alias-only")?.trusted).toBe(false);
+	expect(asked).not.toContain("/repos/d");
+
+	asked.length = 0;
+	setPiTrustSeed(() => false);
+	expect(getProjects().find((p) => p.id === "legacy")?.piResourceTrust).toBe("granted");
+	expect(asked).toEqual([]);
+});
+
+test("without a configured seed no migration runs and a legacy record reads as untrusted", () => {
+	writeProjects([{ id: "legacy", name: "a", path: "/repos/a", slug: "a", lastOpened: 1 }]);
+	expect(getProjects()[0]?.piResourceTrust).toBeUndefined();
+	expect(storedProjects()[0]?.piResourceTrust).toBeUndefined();
+});
+
+test("a project added after the migration starts untrusted unless pi already trusts its path", () => {
+	const plain = join(dataDir, "plain");
+	const piTrusted = join(dataDir, "pi-trusted");
+	makeRepo(plain);
+	makeRepo(piTrusted);
+	const trustedRoot = realpathSync(piTrusted);
+	setPiTrustSeed((path) => (realpathSync(path) === trustedRoot ? true : null));
+
+	expect(openProject(plain).piResourceTrust).toBe("untrusted");
+	expect(openProject(piTrusted).piResourceTrust).toBe("granted");
+	expect(initProject(plain).piResourceTrust).toBe("untrusted");
 });
