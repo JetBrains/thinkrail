@@ -177,6 +177,16 @@ export async function enterDefaultWorkspace(page: Page): Promise<void> {
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 }
 
+export async function revealWorkbenchTool(
+	page: Page,
+	tool: "projects" | "specs" | "files" | "changes" | "review",
+): Promise<void> {
+	const control = page.getByTestId(`tool-rail-${tool}`);
+	await expect(control).toBeVisible();
+	if ((await control.getAttribute("aria-pressed")) !== "true") await control.click();
+	await expect(control).toHaveAttribute("aria-pressed", "true");
+}
+
 export async function openPersistedChat(page: Page, title: string): Promise<void> {
 	const chatTab = page
 		.locator('[data-testid="editor-tab"][data-kind="chat"]')

@@ -1,39 +1,27 @@
 import { type CollisionDetection, pointerWithin, useDroppable } from "@dnd-kit/core";
 import {
-	RiFileLine as File,
-	RiGitPullRequestLine as GitCompareArrows,
-	RiListCheck3 as ListTodo,
-	RiLayout2Line as PanelsTopLeft,
-	RiBookOpenFill,
-	RiBookOpenLine,
-	RiChat2Fill,
-	RiChat2Line,
-	RiDiscussFill,
-	RiDiscussLine,
-	RiFileFill,
-	RiFolder2Fill,
-	RiFolder2Line,
-	RiGitPullRequestFill,
-	RiLayout2Fill,
-	RiTerminalBoxFill,
-	RiTerminalBoxLine as SquareTerminal,
-} from "@remixicon/react";
-import { ResizableHandle, ResizablePanel } from "@thinkrail/ui/resizable";
+	type ImperativePanelGroupHandle,
+	ResizableHandle,
+	ResizablePanel,
+} from "@thinkrail/ui/resizable";
 import {
 	memo,
 	type ReactNode,
 	useCallback,
 	useEffect,
 	useInsertionEffect,
+	useLayoutEffect,
 	useRef,
 	useState,
 } from "react";
-import { CustomIcon } from "../../components/CustomIcon";
 import { type LayoutAttention, readLayoutNavigationClock, tupleKey } from "../../lib";
+import type { AuxiliaryRailEntry } from "./auxiliaryPresentation";
 import {
 	type CenterSplitDirection,
+	canJoinAuxiliaryGroup,
 	canPlaceLayoutTab,
 	collectCenterGroups,
+	findAuxiliaryGroup,
 	findCenterGroup,
 	findTabLocation,
 	type LayoutGroupLocation,
@@ -49,7 +37,9 @@ import type {
 	LayoutToolId,
 	WorkspaceLayoutDocument,
 } from "./types";
+
 export interface LayoutTabFocusRequest {
+	workspaceId: string;
 	key: string;
 	location: LayoutGroupLocation;
 	tabId?: string;
@@ -61,6 +51,7 @@ export interface PreparedLayoutClose {
 }
 
 export interface WorkbenchProps {
+	workspaceId: string;
 	document: WorkspaceLayoutDocument;
 	attention: LayoutAttention;
 	maxSideGroups: number;
@@ -73,8 +64,7 @@ export interface WorkbenchProps {
 	renderToolBody: (tool: LayoutToolId) => ReactNode;
 	renderEmptyCenter: (groupId: string) => ReactNode;
 	renderCenterActions: (groupId: string) => ReactNode;
-	renderSideMenuActions: (side: LayoutSide, groupId: string) => ReactNode;
-	onCommit: (document: WorkspaceLayoutDocument) => void;
+	onCommit: (document: WorkspaceLayoutDocument, attention?: LayoutAttention) => void;
 	onAttentionChange: (attention: LayoutAttention) => void;
 	onUserNavigation: () => void;
 	onDirectTabActivation?: (tab: LayoutTab) => void;
@@ -85,7 +75,11 @@ export interface WorkbenchProps {
 	) => void;
 	onRenameChat?: (sessionId: string, titleInput: string, currentTitle: string) => void;
 	onNewChat: (groupId: string) => void;
-	onNewTerminal: (groupId: string, area: "center" | LayoutAuxiliaryRegion) => void;
+	onNewTerminal: (
+		groupId: string,
+		area: "center" | LayoutAuxiliaryRegion,
+		options?: { newPaneBelow?: boolean },
+	) => void;
 	onGestureCanceled?: () => void;
 }
 
@@ -122,13 +116,38 @@ export function sameSizes(
 	);
 }
 
+export function useTopologySettled(topologyKey: string): boolean {
+	const [settledKey, setSettledKey] = useState(topologyKey);
+	const settled = settledKey === topologyKey;
+	useLayoutEffect(() => {
+		if (!settled) setSettledKey(topologyKey);
+	}, [settled, topologyKey]);
+	return settled;
+}
+
+export function useEnforcedLayout(
+	groupRef: React.RefObject<ImperativePanelGroupHandle | null>,
+	sizes: readonly number[],
+	constraints: unknown,
+	tolerance?: number,
+): void {
+	useLayoutEffect(() => {
+		const group = groupRef.current;
+		if (!group) return;
+		const mounted = group.getLayout();
+		if (mounted.length === sizes.length && !sameSizes(mounted, sizes, tolerance))
+			group.setLayout([...sizes]);
+	}, [constraints, groupRef, sizes, tolerance]);
+}
+
 export function isResizeArrowKey(key: string): boolean {
 	return ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(key);
 }
 
 export function useCommittedSizes(
 	current: readonly number[],
-	projectionEpoch: number,
+	projectionEpoch: string,
+	groupRef: React.RefObject<ImperativePanelGroupHandle | null>,
 	commit: (sizes: number[]) => void,
 	onCanceled?: () => void,
 ): {
@@ -139,6 +158,8 @@ export function useCommittedSizes(
 } {
 	const dragging = useRef(false);
 	const keyboard = useRef(false);
+	const canceled = useRef(false);
+	const restoring = useRef(false);
 	const pending = useRef<number[] | null>(null);
 	const startEpoch = useRef(projectionEpoch);
 	const epoch = useRef(projectionEpoch);
@@ -149,32 +170,52 @@ export function useCommittedSizes(
 		currentRef.current = current;
 		commitRef.current = commit;
 	});
-
+	const restore = useCallback(() => {
+		const group = groupRef.current;
+		if (!group || group.getLayout().length !== currentRef.current.length) return;
+		restoring.current = true;
+		try {
+			group.setLayout([...currentRef.current]);
+		} finally {
+			restoring.current = false;
+		}
+	}, [groupRef]);
 	const cancelStaleGesture = useCallback(() => {
 		const active = dragging.current || keyboard.current;
 		if (!active || startEpoch.current === epoch.current) return false;
+		canceled.current = true;
 		dragging.current = false;
 		keyboard.current = false;
 		pending.current = null;
+		restore();
 		onCanceled?.();
 		return true;
-	}, [onCanceled]);
+	}, [onCanceled, restore]);
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		if (startEpoch.current !== projectionEpoch) cancelStaleGesture();
 	}, [cancelStaleGesture, projectionEpoch]);
 
 	const flush = useCallback(() => {
 		const sizes = pending.current;
 		pending.current = null;
-		if (!sizes || startEpoch.current !== epoch.current || sameSizes(sizes, currentRef.current))
+		if (
+			!sizes ||
+			canceled.current ||
+			startEpoch.current !== epoch.current ||
+			sameSizes(sizes, currentRef.current)
+		)
 			return;
 		commitRef.current(sizes);
 	}, []);
-
 	const onLayout = useCallback(
 		(sizes: number[]) => {
-			if (cancelStaleGesture() || sameSizes(sizes, currentRef.current)) return;
+			if (restoring.current || cancelStaleGesture()) return;
+			if (canceled.current) {
+				restore();
+				return;
+			}
+			if (sameSizes(sizes, currentRef.current)) return;
 			if (dragging.current) {
 				pending.current = sizes;
 				return;
@@ -184,31 +225,40 @@ export function useCommittedSizes(
 			pending.current = sizes;
 			flush();
 		},
-		[cancelStaleGesture, flush],
+		[cancelStaleGesture, flush, restore],
 	);
 
 	const onDragging = useCallback(
 		(active: boolean) => {
-			if (!active && cancelStaleGesture()) return;
-			dragging.current = active;
 			if (active) {
+				if (canceled.current) return;
+				dragging.current = true;
 				startEpoch.current = epoch.current;
 				pending.current = null;
 				return;
 			}
+			cancelStaleGesture();
+			dragging.current = false;
+			if (canceled.current) {
+				restore();
+				canceled.current = false;
+				return;
+			}
 			flush();
 		},
-		[cancelStaleGesture, flush],
+		[cancelStaleGesture, flush, restore],
 	);
 	const onKeyboard = useCallback((event: { key: string }) => {
-		if (!isResizeArrowKey(event.key)) return;
+		if (!isResizeArrowKey(event.key) || canceled.current) return;
 		startEpoch.current = epoch.current;
 		keyboard.current = true;
 	}, []);
 	const onKeyboardEnd = useCallback(() => {
 		keyboard.current = false;
 		pending.current = null;
-	}, []);
+		if (canceled.current) restore();
+		canceled.current = false;
+	}, [restore]);
 	return { onLayout, onDragging, onKeyboard, onKeyboardEnd };
 }
 
@@ -233,15 +283,18 @@ export function useSideResizeBinder() {
 }
 
 export function useElementSize(): [
-	React.RefObject<HTMLDivElement | null>,
+	React.RefCallback<HTMLDivElement>,
 	{ width: number; height: number },
 ] {
-	const ref = useRef<HTMLDivElement>(null);
 	const [size, setSize] = useState({ width: 0, height: 0 });
-	useEffect(() => {
-		const element = ref.current;
+	const ref = useCallback<React.RefCallback<HTMLDivElement>>((element) => {
 		if (!element) return;
-		const update = () => setSize({ width: element.clientWidth, height: element.clientHeight });
+		const update = () =>
+			setSize((current) =>
+				current.width === element.clientWidth && current.height === element.clientHeight
+					? current
+					: { width: element.clientWidth, height: element.clientHeight },
+			);
 		update();
 		const observer = new ResizeObserver(update);
 		observer.observe(element);
@@ -314,41 +367,6 @@ export function tabSearchKeywords(tab: LayoutTab): string[] {
 	}
 }
 
-export function tabIcon(tab: LayoutTab, active = false): ReactNode {
-	const cls = "size-14 shrink-0";
-	switch (tab.kind) {
-		case "file":
-			return active ? <RiFileFill className={cls} /> : <File className={cls} />;
-		case "diff":
-			return active ? (
-				<RiGitPullRequestFill className={cls} />
-			) : (
-				<GitCompareArrows className={cls} />
-			);
-		case "chat":
-			return active ? <RiChat2Fill className={cls} /> : <RiChat2Line className={cls} />;
-		case "document":
-			return <ListTodo className={cls} />;
-		case "terminal":
-			return active ? <RiTerminalBoxFill className={cls} /> : <SquareTerminal className={cls} />;
-		case "tool":
-			switch (tab.tool) {
-				case "projects":
-					return active ? <RiFolder2Fill className={cls} /> : <RiFolder2Line className={cls} />;
-				case "specs":
-					return active ? <RiBookOpenFill className={cls} /> : <RiBookOpenLine className={cls} />;
-				case "files":
-					return active ? <RiFileFill className={cls} /> : <File className={cls} />;
-				case "changes":
-					return <CustomIcon name={active ? "file-diff-fill" : "file-diff-line"} className={cls} />;
-				case "review":
-					return active ? <RiDiscussFill className={cls} /> : <RiDiscussLine className={cls} />;
-				default:
-					return active ? <RiLayout2Fill className={cls} /> : <PanelsTopLeft className={cls} />;
-			}
-	}
-}
-
 export function encodedElementId(namespace: string, ...parts: string[]): string {
 	return encodeURIComponent(tupleKey(namespace, ...parts));
 }
@@ -365,11 +383,42 @@ export function groupDomId(location: LayoutGroupLocation): string {
 	return encodedElementId("layout-group", location.area, location.groupId);
 }
 
+export function railGroupDomId(location: LayoutGroupLocation): string {
+	return encodedElementId("layout-rail-group", location.area, location.groupId);
+}
+
+export function railControlId(entry: AuxiliaryRailEntry): string {
+	return entry.kind === "tool" && entry.tab && entry.groupId
+		? tabDomId({ area: entry.region, groupId: entry.groupId }, entry.tab.id)
+		: encodedElementId("layout-rail-control", entry.key);
+}
+
 export function focusLayoutRequest(request: LayoutTabFocusRequest): void {
 	const tab = request.tabId
 		? globalThis.document.getElementById(tabDomId(request.location, request.tabId))
 		: null;
-	(tab ?? globalThis.document.getElementById(groupDomId(request.location)))?.focus();
+	const pane = globalThis.document.getElementById(groupDomId(request.location));
+	const rail = globalThis.document
+		.getElementById(railGroupDomId(request.location))
+		?.querySelector<HTMLButtonElement>("button");
+	[tab, pane, rail].find((element) => element && element.getClientRects().length > 0)?.focus();
+}
+
+export function useLayoutFocus(
+	request: LayoutTabFocusRequest | null | undefined,
+	workspaceId: string,
+	workspaceRef: React.RefObject<string>,
+): void {
+	const consumed = useRef<string | null>(null);
+	useEffect(() => {
+		if (!request || consumed.current === request.key) return;
+		consumed.current = request.key;
+		if (request.workspaceId !== workspaceId) return;
+		const frame = requestAnimationFrame(() => {
+			if (workspaceRef.current === request.workspaceId) focusLayoutRequest(request);
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [request, workspaceId, workspaceRef]);
 }
 
 export function navigationClockSnapshot(attention: LayoutAttention): string {
@@ -390,7 +439,7 @@ export function visibleFocusableGroups(document: WorkspaceLayoutDocument): Array
 			? document.left.groups.map((group) => ({
 					location: { area: "left" as const, groupId: group.id },
 					tabs: group.tabs,
-					tabControlsRendered: true,
+					tabControlsRendered: !group.folded,
 				}))
 			: []),
 		...collectCenterGroups(document.center).map((group) => ({
@@ -402,7 +451,7 @@ export function visibleFocusableGroups(document: WorkspaceLayoutDocument): Array
 			? document.right.groups.map((group) => ({
 					location: { area: "right" as const, groupId: group.id },
 					tabs: group.tabs,
-					tabControlsRendered: true,
+					tabControlsRendered: !group.folded,
 				}))
 			: []),
 		...(document.bottom.visible
@@ -423,7 +472,11 @@ export function canInsertDraggedTab(
 ): boolean {
 	if (!canPlaceLayoutTab(tab, location.area)) return false;
 	const source = findTabLocation(document, tab.id);
-	if (!source || source.area !== location.area || source.groupId !== location.groupId) return true;
+	if (!source || source.area !== location.area || source.groupId !== location.groupId) {
+		if (location.area === "center") return true;
+		const group = findAuxiliaryGroup(document, location.area, location.groupId);
+		return !!group && canJoinAuxiliaryGroup(group, tab);
+	}
 	const sourceTabs = findLayoutGroupTabs(document, source);
 	const sourceIndex = sourceTabs?.findIndex((candidate) => candidate.id === tab.id) ?? -1;
 	if (sourceIndex < 0) return true;
@@ -503,6 +556,7 @@ export function findLayoutGroupTabs(
 }
 
 export interface SharedGroupProps {
+	workspaceId: string;
 	document: WorkspaceLayoutDocument;
 	readAttention: () => LayoutAttention;
 	selectionEpochRef: React.MutableRefObject<number>;
@@ -512,7 +566,8 @@ export interface SharedGroupProps {
 	renderTabBody: WorkbenchProps["renderTabBody"];
 	renderTabAdornment: WorkbenchProps["renderTabAdornment"];
 	renderToolBody: WorkbenchProps["renderToolBody"];
-	renderSideMenuActions: WorkbenchProps["renderSideMenuActions"];
+	onNewTerminal: WorkbenchProps["onNewTerminal"];
+	onUserNavigation: WorkbenchProps["onUserNavigation"];
 	onGestureCanceled: (() => void) | undefined;
 	onApply: (result: LayoutMutationResult) => void;
 	onClose: (tab: LayoutTab) => void;

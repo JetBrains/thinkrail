@@ -325,16 +325,24 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 			await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 			for (let attempt = 0; attempt < 80; attempt += 1) {
 				if ((await toggle.count()) > 0) {
-					const intersection = await readChatViewportIntersection(toggle);
-					if (intersection.intersectionHeight >= intersection.elementHeight - 1) return;
-					await toggle.evaluate((element) => {
+					const unobscured = await toggle.evaluate((element) => {
 						const scroller = element.closest<HTMLElement>("[data-virtuoso-scroller]");
 						if (!scroller) throw new Error("missing Virtuoso scroller");
 						const target = element.getBoundingClientRect();
 						const viewport = scroller.getBoundingClientRect();
+						const trail = element
+							.closest('[data-testid="chat-scroll"]')
+							?.querySelector('[data-testid="activity-breadcrumb-trail"]');
+						const visibleTop = Math.max(
+							viewport.top,
+							trail?.getBoundingClientRect().bottom ?? viewport.top,
+						);
+						if (target.top >= visibleTop && target.bottom <= viewport.bottom) return true;
 						scroller.scrollTop +=
-							target.top + target.height / 2 - (viewport.top + viewport.height / 2);
+							target.top + target.height / 2 - (visibleTop + viewport.bottom) / 2;
+						return false;
 					});
+					if (unobscured) return;
 				} else {
 					await page.mouse.wheel(0, historyDelta);
 				}

@@ -1,7 +1,12 @@
 import { RiChatNewLine as MessageSquarePlus, RiCloseLine as X } from "@remixicon/react";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+import {
+	type ImperativePanelGroupHandle,
+	ResizableHandle,
+	ResizablePanel,
+	ResizablePanelGroup,
+} from "@thinkrail/ui/resizable";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
-import { memo } from "react";
+import { memo, useMemo, useRef } from "react";
 import { type LayoutAttention, readLayoutSelection, tupleKey } from "../../lib";
 import {
 	canPlaceLayoutTab,
@@ -22,8 +27,10 @@ import {
 	tabDomId,
 	useCommittedSizes,
 	useElementSize,
+	useEnforcedLayout,
 } from "./workbenchShared";
 import { TabStrip } from "./workbenchTabs";
+
 export const CenterGroupView = memo(function CenterGroupView({
 	group,
 	selectedId,
@@ -232,10 +239,13 @@ export const CenterSplitView = memo(function CenterSplitView({
 	...shared
 }: Omit<CenterNodeProps, "node"> & { node: LayoutCenterSplit }) {
 	const [sizeRef, size] = useElementSize();
-	const weights = node.weights.map((weight) => weight * 100);
+	const weights = useMemo(() => node.weights.map((weight) => weight * 100), [node.weights]);
+	const groupRef = useRef<ImperativePanelGroupHandle>(null);
+	useEnforcedLayout(groupRef, weights, null);
 	const resize = useCommittedSizes(
 		weights,
-		projectionEpoch,
+		tupleKey(shared.workspaceId, String(projectionEpoch)),
+		groupRef,
 		(sizes) => {
 			const next = resizeCenterSplit(shared.document, node.id, [sizes[0] ?? 50, sizes[1] ?? 50]);
 			if (next !== shared.document) onCommit(next);
@@ -249,7 +259,7 @@ export const CenterSplitView = memo(function CenterSplitView({
 	return (
 		<div ref={sizeRef} className="h-full min-h-0 min-w-0 overflow-hidden">
 			<ResizablePanelGroup
-				key={tupleKey("center-split", node.id, String(projectionEpoch))}
+				ref={groupRef}
 				direction={node.direction}
 				onLayout={resize.onLayout}
 				className="min-h-0 min-w-0"

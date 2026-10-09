@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
 
 test("renders GitHub-style alert callouts in the rendered markdown view", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 
 	const file = page.getByTestId("file-node").filter({ hasText: "ALERTS.md" });
 	await expect(file).toBeVisible();

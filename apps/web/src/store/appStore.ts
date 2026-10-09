@@ -277,6 +277,7 @@ export type LayoutIntent =
 			title: string;
 			targetGroupId?: string;
 			targetArea?: "center" | LayoutAuxiliaryRegion;
+			newPaneBelow?: true;
 			reveal?: false;
 			navigation?: CenterNavigationStamp | null;
 			countNavigation?: boolean;
@@ -1027,6 +1028,7 @@ interface AppState {
 		targetArea?: "center" | LayoutAuxiliaryRegion,
 		reveal?: boolean,
 		requestedTabKey?: string,
+		newPaneBelow?: boolean,
 	) => void;
 	setWorkspaceTerminals: (workspaceId: string, tabs: TerminalTabInfo[]) => void;
 	confirmTerminalReservation: (workspaceId: string, tabKey: string) => void;
@@ -2763,6 +2765,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		targetArea = "center",
 		reveal = true,
 		requestedTabKey,
+		newPaneBelow = false,
 	) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
@@ -2791,6 +2794,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						? {
 								targetGroupId,
 								...(targetArea !== "center" ? { targetArea } : {}),
+								...(targetArea !== "center" && newPaneBelow ? { newPaneBelow: true as const } : {}),
 								...(targetArea === "center" ? { navigation: navigation?.stamp ?? null } : {}),
 							}
 						: {}),

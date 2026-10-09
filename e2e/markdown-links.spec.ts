@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
 
 test("a parent-relative file link cannot escape into browser navigation", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 
 	await page.getByTestId("file-node").filter({ hasText: "styles" }).click();
 	await page.getByTestId("file-node").filter({ hasText: "COLOR.md" }).dblclick();
@@ -38,7 +38,7 @@ test("relative links, images, and heading anchors work in the rendered markdown 
 }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 
 	await page.getByTestId("file-node").filter({ hasText: "LINKS.md" }).dblclick();
 	const preview = page.getByTestId("markdown-preview");

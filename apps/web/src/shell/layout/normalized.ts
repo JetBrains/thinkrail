@@ -4,7 +4,6 @@ import type {
 	LayoutBottomAlignment,
 	LayoutCenterNode,
 	LayoutCenterTab,
-	LayoutTab,
 	LayoutTerminalTab,
 	LayoutToolId,
 	LayoutToolRestoreTarget,
@@ -59,7 +58,6 @@ export interface WorkbenchFrame {
 export interface WorkspaceGroupView {
 	tabs: LayoutCenterTab[];
 	previewTabId?: string;
-	beforeToolByTabId?: Record<string, LayoutToolId>;
 }
 
 export interface WorkspaceViewState {
@@ -134,14 +132,6 @@ export function workbenchFrameFromDocument(document: WorkspaceLayoutDocument): W
 	};
 }
 
-function nextToolAnchor(tabs: readonly LayoutTab[], tabIndex: number): LayoutToolId | undefined {
-	for (let index = tabIndex + 1; index < tabs.length; index += 1) {
-		const candidate = tabs[index];
-		if (candidate?.kind === "tool") return candidate.tool;
-	}
-	return undefined;
-}
-
 export function workspaceViewFromDocument(document: WorkspaceLayoutDocument): WorkspaceViewState {
 	const groups = Object.create(null) as Record<string, WorkspaceGroupView>;
 	const visitCenter = (node: LayoutCenterNode): void => {
@@ -160,20 +150,8 @@ export function workspaceViewFromDocument(document: WorkspaceLayoutDocument): Wo
 	visitCenter(document.center);
 	for (const region of [document.left, document.right, document.bottom]) {
 		for (const group of region.groups) {
-			const tabs: LayoutTerminalTab[] = [];
-			const beforeToolByTabId = Object.create(null) as Record<string, LayoutToolId>;
-			group.tabs.forEach((tab, index) => {
-				if (tab.kind !== "terminal") return;
-				tabs.push(tab);
-				const anchor = nextToolAnchor(group.tabs, index);
-				if (anchor) beforeToolByTabId[tab.id] = anchor;
-			});
-			if (tabs.length > 0) {
-				groups[group.id] = {
-					tabs,
-					...(Object.keys(beforeToolByTabId).length > 0 ? { beforeToolByTabId } : {}),
-				};
-			}
+			const tabs = group.tabs.filter((tab): tab is LayoutTerminalTab => tab.kind === "terminal");
+			if (tabs.length > 0) groups[group.id] = { tabs };
 		}
 	}
 	return { groups };
@@ -208,26 +186,10 @@ function projectedAuxiliaryTabs(
 	group: WorkbenchAuxiliaryGroup,
 	view: WorkspaceViewState,
 ): Array<LayoutToolTab | LayoutTerminalTab> {
-	const workspaceGroup = view.groups[group.id];
-	const terminals = (workspaceGroup?.tabs ?? []).filter(
+	const terminals = (view.groups[group.id]?.tabs ?? []).filter(
 		(tab): tab is LayoutTerminalTab => tab.kind === "terminal",
 	);
-	const anchored = new Map<LayoutToolId, LayoutTerminalTab[]>();
-	const trailing: LayoutTerminalTab[] = [];
-	for (const terminal of terminals) {
-		const tool = workspaceGroup?.beforeToolByTabId?.[terminal.id];
-		if (!tool || !group.tools.some((candidate) => candidate.tool === tool)) {
-			trailing.push(terminal);
-			continue;
-		}
-		const bucket = anchored.get(tool) ?? [];
-		bucket.push(terminal);
-		anchored.set(tool, bucket);
-	}
-	return [
-		...group.tools.flatMap((tool) => [...(anchored.get(tool.tool) ?? []), tool]),
-		...trailing,
-	];
+	return [...group.tools, ...terminals];
 }
 
 export function projectWorkspaceLayout(
@@ -285,6 +247,13 @@ function locationMap(frame: WorkbenchFrame): Map<string, FrameGroupLocation> {
 	return new Map(frameLocations(frame).map((location) => [location.groupId, location]));
 }
 
+function terminalPane(frame: WorkbenchFrame, location: FrameGroupLocation): boolean {
+	return (
+		location.area === "center" ||
+		frame[location.area].groups.find((group) => group.id === location.groupId)?.tools.length === 0
+	);
+}
+
 function compatibleLocation(
 	tab: LayoutCenterTab,
 	oldLocation: FrameGroupLocation | undefined,
@@ -292,7 +261,11 @@ function compatibleLocation(
 	byId: Map<string, FrameGroupLocation>,
 ): FrameGroupLocation {
 	const exact = oldLocation ? byId.get(oldLocation.groupId) : undefined;
-	if (exact && (exact.area === "center" || tab.kind === "terminal")) return exact;
+	if (
+		exact &&
+		(exact.area === "center" || (tab.kind === "terminal" && terminalPane(nextFrame, exact)))
+	)
+		return exact;
 	const locations = frameLocations(nextFrame);
 	if (tab.kind !== "terminal") {
 		const center = locations.filter((location) => location.area === "center");
@@ -300,29 +273,18 @@ function compatibleLocation(
 		if (!selected) throw new Error("The workbench frame requires a center group");
 		return selected;
 	}
+	const terminalPanes = locations.filter((location) => terminalPane(nextFrame, location));
 	if (oldLocation) {
-		const sameArea = locations.filter((location) => location.area === oldLocation.area);
-		const same = sameArea[Math.min(oldLocation.index, sameArea.length - 1)];
+		const sameArea = terminalPanes.filter((location) => location.area === oldLocation.area);
+		const same =
+			sameArea.findLast((location) => location.index <= oldLocation.index) ?? sameArea[0];
 		if (same) return same;
 	}
 	const fallback =
-		locations.find((location) => location.area === "bottom") ??
-		locations.find((location) => location.area === "center");
+		terminalPanes.find((location) => location.area === "bottom") ??
+		terminalPanes.find((location) => location.area === "center");
 	if (!fallback) throw new Error("The workbench frame requires a center group");
 	return fallback;
-}
-
-function toolAnchorSurvives(
-	frame: WorkbenchFrame,
-	location: FrameGroupLocation,
-	tool: LayoutToolId | undefined,
-): tool is LayoutToolId {
-	if (!tool || location.area === "center") return false;
-	return (
-		frame[location.area].groups
-			.find((group) => group.id === location.groupId)
-			?.tools.some((candidate) => candidate.tool === tool) === true
-	);
 }
 
 export function reconcileWorkspaceView(
@@ -345,21 +307,13 @@ export function reconcileWorkspaceView(
 		resourceKeys.add(resourceKey);
 		const destination = compatibleLocation(tab, oldLocation, nextFrame, nextById);
 		const current = groups[destination.groupId] ?? { tabs: [] };
-		const nextTabs = [...current.tabs, tab];
-		const sourceAnchor = source.beforeToolByTabId?.[tab.id];
-		const beforeToolByTabId = toolAnchorSurvives(nextFrame, destination, sourceAnchor)
-			? { ...current.beforeToolByTabId, [tab.id]: sourceAnchor }
-			: current.beforeToolByTabId;
 		const previewTabId =
 			destination.area === "center" && source.previewTabId === tab.id
 				? (current.previewTabId ?? tab.id)
 				: current.previewTabId;
 		groups[destination.groupId] = {
-			tabs: nextTabs,
+			tabs: [...current.tabs, tab],
 			...(previewTabId ? { previewTabId } : {}),
-			...(beforeToolByTabId && Object.keys(beforeToolByTabId).length > 0
-				? { beforeToolByTabId }
-				: {}),
 		};
 	};
 	for (const location of previousLocations) {
@@ -372,6 +326,13 @@ export function reconcileWorkspaceView(
 		for (const tab of source.tabs) append(tab, source, undefined);
 	}
 	return { groups };
+}
+
+export function normalizeWorkspaceView(
+	frame: WorkbenchFrame,
+	view: WorkspaceViewState,
+): WorkspaceViewState {
+	return reconcileWorkspaceView(frame, frame, view);
 }
 
 export function applyProjectedLayoutDocument(

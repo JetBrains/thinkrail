@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat, routineActivityRows, waitForAgentSettled } from "./fixtures/app";
+import {
+	openWorkspaceChat,
+	revealWorkbenchTool,
+	routineActivityRows,
+	waitForAgentSettled,
+} from "./fixtures/app";
 
 test("turn-divider files-changed chip opens the file's diff and highlights its row in Changes", {
 	tag: "@agent",
@@ -109,7 +114,7 @@ test("a spec written while the Specs tab is closed still counts as a spec", {
 	test.setTimeout(150_000);
 	await openWorkspaceChat(page);
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
 
 	await page

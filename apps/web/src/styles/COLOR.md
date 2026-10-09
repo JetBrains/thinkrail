@@ -63,7 +63,7 @@ equals `border-default` is not a second weight, it is a second name).
 | Border | `border-default` · `border-muted` | |
 | Primary | `primary` + `primary-subtle` · `-soft` · `-muted`, `on-primary-soft` | |
 | Feedback | `feedback-{info,success,warning,error}` + the `-subtle` / `-muted` steps in use | a solid border is the solid colour, so there is no `-border` tier |
-| Chat bubble | `bubble-user-bg` · `bubble-user-border` | tinted from the manifest's own `bubbleAccent`, which every bundled theme currently ships **equal to its `accent`** — the user bubble wears the brand colour. The separate key is the knob (per `themes/SPEC.md`): a theme that wants the bubble to read as "you" rather than "the product" re-points it without touching a component |
+| Chat bubble | `bubble-user-bg` · `bubble-user-border` | tinted from the manifest's own `bubbleAccent`. The standard and High Contrast palettes ship it **equal to their `accent`** — the user bubble wears the brand colour; the Minimal palettes re-point it to a neutral grey so user content does not compete with action/attention colours. That separate key is the knob (per `themes/SPEC.md`): a theme decides how the bubble reads without touching a component |
 | Effects | `overlay` · `sunken` | written per light/dark by the theme engine |
 | Strict-consumer editor roles | `editor-selection-bg` · `editor-selection-text` · `editor-selection-highlight-bg` · `editor-find-match-bg` · `widget-shadow` | `publish: false`; Monaco/xterm read them directly and no Tailwind utility is emitted |
 | Media | `media-checker-tile` | `publish: false`; the transparency checkerboard tile that `index.css`'s `.media-backdrop` paints behind every image and vector preview, derived from `text` at the `soft` (20%) step so it is light-on-dark in a dark theme and the conventional `#ccc`-on-white in a light one — a dark logo on a transparent PNG must never read as "no image" |
@@ -134,7 +134,7 @@ Every case is a JSON edit followed by `bun run colors:generate`.
 4. **A new tint** → an `alpha` step from `scale`, never a `/N` at the call site. If the step itself is
    new, add it to `scale` — that is a design decision, and it is made once.
 5. **A role two themes must be able to differ on** → it needs its own manifest key. Add it to
-   `THEME_COLOR_KEYS` and `theme.schema.json`, and to all six manifests, then point a role at it. The
+   `THEME_COLOR_KEYS` and `theme.schema.json`, and to every bundled manifest, then point a role at it. The
    generator refuses to run while a role names a key that does not exist, or a key no role reads.
 
 Never: a raw hex or `rgb()` in a component, an inline `style` object, a `bg-[var(--palette-entry)]`

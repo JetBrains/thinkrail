@@ -1,5 +1,6 @@
 export const SCENARIO_NAMES = [
 	"chat-streaming",
+	"region-toggles",
 	"live-file-edits",
 	"large-diff",
 	"long-stream",
@@ -12,6 +13,7 @@ export type ScenarioName = (typeof SCENARIO_NAMES)[number];
 
 export const DEFAULT_SCENARIOS: readonly ScenarioName[] = [
 	"chat-streaming",
+	"region-toggles",
 	"live-file-edits",
 	"large-diff",
 ];

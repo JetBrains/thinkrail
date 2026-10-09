@@ -38,13 +38,23 @@ const terminal: LayoutTerminalTab = {
 };
 
 describe("recovered terminal placement", () => {
-	test("uses the last-focused surviving bottom group without revealing the region", () => {
+	test("uses the last-focused surviving bottom pane that holds no tools, without revealing the region", () => {
 		const result = placeRecoveredTerminal(document(), attention, terminal);
 		expect(findTabLocation(result.document, terminal.id)).toEqual({
 			area: "bottom",
-			groupId: "bottom-two",
+			groupId: "bottom-one",
 		});
 		expect(result.document.bottom.visible).toBe(false);
+		const preferred = document();
+		const first = preferred.bottom.groups[0];
+		if (!first) throw new Error("missing bottom pane");
+		first.tabs = [];
+		const second = preferred.bottom.groups[1];
+		if (!second) throw new Error("missing bottom pane");
+		second.tabs = [];
+		expect(
+			findTabLocation(placeRecoveredTerminal(preferred, attention, terminal).document, terminal.id),
+		).toEqual({ area: "bottom", groupId: "bottom-two" });
 	});
 
 	test("uses an existing center group without reshaping when bottom has no group", () => {

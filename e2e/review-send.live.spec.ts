@@ -1,7 +1,7 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 import { selectPierreLine } from "./fixtures/pierre";
 
@@ -18,7 +18,7 @@ test("a review send reads back from the chat: summary → file → comment + fra
 		join(worktree(), "script.ts"),
 		"export const one = 1;\nexport const two = 2;\nexport const three = 3;\n",
 	);
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	const changeItem = page.getByTestId("change-item").filter({ hasText: "script.ts" });
 	await expect(async () => {
 		const staleNotification = page

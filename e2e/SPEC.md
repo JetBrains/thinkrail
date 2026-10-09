@@ -107,6 +107,8 @@ browser agent execution.
 
 Native wheel probes target the actual transcript viewport again after clicking a floating Latest
 button; a pointer left at a removed overlay is not evidence of a gesture delivered to the scroller.
+Disclosure-anchor probes place the complete header below the real sticky breadcrumb before asserting
+fixed-position behavior. Intersection with the scroller alone does not prove that a header is unobscured.
 
 ## Render profiling harness
 
@@ -135,9 +137,13 @@ Playwright run writes no output, so the last good file survives.
 - **Scenarios.** Chat streaming seeds a persisted transcript and replays a deterministic Pi event stream
   (`text_delta` chunks, tool calls, `partialResult` updates, `agent_settled`) into the browser at the
   wire seam with fixed pacing; this measures client rendering only and is not evidence of agent behavior.
-  Live file edits rewrite a worktree file under an open file tab. Large diff opens a 3,000-line Pierre diff
-  and wheel-scrolls it. Runs interleave scenarios; the runner reports medians and run-to-run spread.
-- **Heavy scenarios** (only with `--scenario`; the default set is the three above). `long-stream` replays one
+  Region toggles fold and unfold a right tool group, hide and show the right side, and hide and show the
+  bottom over a seeded transcript with a live terminal; it exists to catch a shape change that remounts the
+  center or a neighbouring pane (a regression shows up as `ChatView`/`Markdown`/tool-panel mounts rather
+  than a handful of chrome updates). Live file edits rewrite a worktree file under an open file tab. Large
+  diff opens a 3,000-line Pierre diff and wheel-scrolls it. Runs interleave scenarios; the runner reports
+  medians and run-to-run spread.
+- **Heavy scenarios** (only with `--scenario`; the default set is the four above). `long-stream` replays one
   ~26k-char seeded markdown answer (headings, nested lists, ts/py/bash/json fences, a GFM table, mermaid) in
   10–60-char deltas every 15 ms; `long-stream-xl` is the same at ~100k chars. `parallel-agents` opens 20
   persisted chats as tabs in one workspace and interleaves 20 replays; `background-agents` streams the 19
@@ -268,10 +274,25 @@ file/terminal/chat placement nor misses the peer-created chat's history-only dom
 
 Bottom-workbench coverage retains all four alignments with real side-stack ownership of excluded lower
 corners, live alignment during side resizing and narrow-width compression, pointer/keyboard persistence of
-only the separator-owned side ratio, independent height/group resizing, 27 px folding with `Ctrl+F6` restore
-focus, modal-aware visibility chords, PTY continuity while hidden, and process-free default-terminal
+only the separator-owned side ratio, independent height/group resizing, zero-body-space folding with
+edge-rail and `Ctrl+F6` restoration, modal-aware visibility chords, PTY continuity while hidden, and process-free default-terminal
 reservation. Terminal creation now exercises the host pending-marker handshake plus independent local
-placement, not a layout revision or peer geometry synchronization.
+placement, not a layout revision or peer geometry synchronization. `tool-rails.spec.ts` covers multiple
+sessions per existing pane, independent terminal groups, the pane-cluster rail grammar (clusters mirror
+pane order, boundary drops create panes while entry-half drops join one, a tool paints no target on a
+terminal strip, the pane-header title drags its tool, an unplaced tool sits dimmed in a trailing cluster),
+a terminal pane's selected session surviving fold and reload, linked collapsed regions, keyboard focus without implicit activation, a browser
+history workspace switch during a singleton drag, and DOM continuity across shape changes: it stamps the
+center tabs, chat input, terminal, Projects tree, and Changes toolbar before each fold/hide/show and asserts
+the same nodes survive, which fails if any panel group is remounted. The compressed-resize matrix uses independent cases
+with explicit compression assertions, avoiding accidental collapse caused by the rails' occupied width.
+`rail-layout-regressions.spec.ts` covers node replacement before bottom measurement, explicit drops into
+partially/all-folded destinations (a terminal beside a folded tool pane lands in its own pane), and switch-mid-resize rollback across every resize consumer. It checks
+live geometry during the canceled gesture, unchanged persistence, retained DOM, reload, and subsequent
+resize usability rather than treating a cancellation toast alone as success. `project-home-chrome.spec.ts`
+covers the no-workspace branch: the fresh start screen and Project Home carry the left tool rail and
+plain Projects pane header with no right/bottom rail, the rail entry / Hide / `Mod+B` toggle with their
+focus endpoints, and rail/header geometry that matches the workbench across a workspace round trip.
 
 ## Isolation contract
 

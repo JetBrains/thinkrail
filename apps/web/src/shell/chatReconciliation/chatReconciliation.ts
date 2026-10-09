@@ -167,7 +167,7 @@ export function useDeletedChatPlacementReconciliation(workspaceId: string): void
 		tombstonePruneAttempts.current.add(document);
 		const pruned = deletedPlacedSessions.reduce(removeSessionLayoutTabs, document);
 		if (pruned !== document) {
-			void commitWorkspaceLayout(workspaceId, pruned, document).catch(() => {
+			void commitWorkspaceLayout(workspaceId, pruned, { baseDocument: document }).catch(() => {
 				tombstonePruneAttempts.current.delete(document);
 			});
 		}

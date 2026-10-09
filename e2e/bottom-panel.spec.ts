@@ -7,6 +7,7 @@ import {
 	openFixtureProject,
 	pressPlatformShortcut,
 	revealFirstProjectWorkspaces,
+	revealWorkbenchTool,
 	runInTerminal,
 	visibleTerminal,
 	visibleTerminalScreen,
@@ -235,7 +236,7 @@ test("full-height panel-header actions stay square", async ({ page }) => {
 	];
 	for (const control of controls) await square(control);
 
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	for (const name of ["README.md", "notes.txt", "LINKS.md"])
 		await page.getByTestId("file-node").filter({ hasText: name }).dblclick();
 	await page.setViewportSize({ width: 620, height: 800 });
@@ -264,11 +265,11 @@ test("a new workspace starts with one accessible terminal group in a 30% bottom 
 		.poll(async () => (await size(bottom, "height")) / (await size(workbench, "height")))
 		.toBeCloseTo(0.3, 1);
 
-	await page.getByTestId("tab-changes").getByRole("tab").focus();
+	await page.getByTestId("tool-rail-changes").focus();
 	await page.keyboard.press("Control+F6");
 	await expect(bottom.getByRole("tab", { name: /Terminal 1/ })).toBeFocused();
 	await page.keyboard.press("Control+Shift+F6");
-	await expect(page.getByTestId("tab-changes").getByRole("tab")).toBeFocused();
+	await expect(page.getByTestId("tool-rail-changes")).toBeFocused();
 });
 
 test("a hidden local frame keeps the host terminal reserved without attaching until shown", async ({
@@ -345,6 +346,17 @@ test("a completed initial-terminal handshake never recreates a terminal after ex
 		{ workspaceId: workspace.id },
 	);
 	expect(catalog.tabs).toEqual([]);
+	await pressPlatformShortcut(page, "Shift+j");
+	await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
+	await pressPlatformShortcut(page, "Shift+j");
+	await expect(page.getByTestId("bottom-new-terminal")).toBeVisible();
+	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
+	const afterShow = await requestOverWire<{ tabs: Array<{ tabKey: string }> }>(
+		page,
+		"terminal.list",
+		{ workspaceId: workspace.id },
+	);
+	expect(afterShow.tabs).toEqual([]);
 });
 
 test("Mod+Shift+J works from xterm, preserves its PTY through hide and reload, and is modal-aware", async ({
@@ -446,7 +458,13 @@ test("bottom height, all alignments, and keyboard resizing persist across reload
 	await pressPlatformShortcut(page, "Shift+j");
 	await startTabDrag(page, page.getByTestId("tab-files"));
 	await expect(page.getByTestId("bottom-drop-zone")).toBeVisible();
-	await expectHorizontalSpan(page.getByTestId("bottom-drop-zone"), left, center);
+	await expectHorizontalSpan(page.getByTestId("bottom-tool-rail"), left, center);
+	const railBox = await page.getByTestId("bottom-tool-rail").boundingBox();
+	const dropBox = await page.getByTestId("bottom-drop-zone").boundingBox();
+	if (!railBox || !dropBox) throw new Error("bottom rail or drop target has no bounding box");
+	expect(dropBox.x).toBeGreaterThanOrEqual(railBox.x);
+	expect(dropBox.x + dropBox.width).toBeLessThanOrEqual(railBox.x + railBox.width);
+	expect(dropBox.width).toBeGreaterThan(railBox.width / 2);
 	await cancelTabDrag(page);
 	await pressPlatformShortcut(page, "Shift+j");
 	await expectHorizontalSpan(page.getByTestId("bottom-panel"), left, center);
@@ -512,19 +530,20 @@ test("bottom alignments follow locally compressed side geometry at narrow widths
 	await expectHorizontalSpan(bottom, center, right);
 });
 
-test("narrow side resizing persists only the side whose separator moved", async ({ page }) => {
-	await openDefaultWorkbench(page);
-	const cases = [
-		{ alignment: "Full width", side: "left", input: "pointer" },
-		{ alignment: "Full width", side: "right", input: "keyboard" },
-		{ alignment: "Below center", side: "left", input: "keyboard" },
-		{ alignment: "Below center", side: "right", input: "pointer" },
-	] as const;
-	for (const scenario of cases) {
+for (const scenario of [
+	{ alignment: "Full width", side: "left", input: "pointer" },
+	{ alignment: "Full width", side: "right", input: "keyboard" },
+	{ alignment: "Below center", side: "left", input: "keyboard" },
+	{ alignment: "Below center", side: "right", input: "pointer" },
+] as const) {
+	test(`narrow side resizing commits only ${scenario.side}: ${scenario.alignment}, ${scenario.input}`, async ({
+		page,
+	}) => {
+		await openDefaultWorkbench(page);
 		await page.setViewportSize({ width: 1200, height: 844 });
 		await setBottomAlignment(page, scenario.alignment);
 		const durableBefore = await readPersistedSideWidths(page);
-		await page.setViewportSize({ width: 500, height: 844 });
+		await page.setViewportSize({ width: 640, height: 844 });
 		await expect
 			.poll(async () => {
 				const local = await readLocalSideWidths(page);
@@ -551,16 +570,20 @@ test("narrow side resizing persists only the side whose separator moved", async 
 		}
 		await page.setViewportSize({ width: 1200, height: 844 });
 		await expect
-			.poll(async () =>
-				Math.abs(
-					(await readPersistedSideWidths(page))[scenario.side] - durableBefore[scenario.side],
-				),
+			.poll(
+				async () =>
+					Math.abs(
+						(await readPersistedSideWidths(page))[scenario.side] - durableBefore[scenario.side],
+					),
+				{
+					message: `${scenario.alignment}: ${scenario.side} ${scenario.input} resize must commit its ratio`,
+				},
 			)
 			.toBeGreaterThan(0.001);
 		const durableAfter = await readPersistedSideWidths(page);
 		expect(durableAfter[untouched]).toBeCloseTo(durableBefore[untouched], 2);
-	}
-});
+	});
+}
 
 test("closing a final bottom resource retains its frame groups until explicit removal", async ({
 	page,
@@ -611,7 +634,7 @@ test("bottom alignments follow side geometry while a resize gesture is in progre
 	}
 });
 
-test("bottom groups arrange left-to-right, resize, fold to 27px, restore, and enforce their own limit", async ({
+test("bottom groups arrange left-to-right, resize, fold to the edge rail, restore, and enforce their own limit", async ({
 	page,
 }) => {
 	await openDefaultWorkbench(page);
@@ -622,19 +645,26 @@ test("bottom groups arrange left-to-right, resize, fold to 27px, restore, and en
 	await expect(bottomGroups(page).nth(1)).toContainText("Changes");
 
 	await page.getByTestId("tab-changes").click({ button: "right" });
-	await page.getByRole("menuitem", { name: /Move to bottom group/ }).click();
+	await expect(
+		page.getByRole("menuitem", {
+			name: /Move to bottom pane \(Terminal 1\) — Tools and terminals use separate panes\./,
+		}),
+	).toBeDisabled();
+	await page.getByRole("menuitem", { name: "Remove tool from group", exact: true }).click();
 	await waitForLayoutSettled(page);
 	await expect(bottomGroups(page)).toHaveCount(2);
-	await expect(bottomGroups(page).nth(0)).toContainText("Terminal 1");
-	await expect(bottomGroups(page).nth(0)).toContainText("Changes");
+	await expect(page.getByTestId("terminal-rail-group")).toHaveCount(1);
 	await bottomGroups(page).nth(1).getByTestId("remove-layout-group").click();
 	await expect(bottomGroups(page)).toHaveCount(1);
-	await page.getByTestId("tab-changes").click({ button: "right" });
+	await page.getByTestId("tab-review").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "New bottom group at right", exact: true }).click();
 	await expect(bottomGroups(page)).toHaveCount(2);
 
-	const first = bottomGroups(page).nth(0);
-	const second = bottomGroups(page).nth(1);
+	const firstId = await bottomGroups(page).nth(0).getAttribute("data-group-id");
+	const secondId = await bottomGroups(page).nth(1).getAttribute("data-group-id");
+	const first = bottomGroups(page).and(page.locator(`[data-group-id="${firstId}"]`));
+	const second = bottomGroups(page).and(page.locator(`[data-group-id="${secondId}"]`));
+	const terminalRail = page.getByTestId("terminal-rail-group");
 	const firstBefore = await size(first, "width");
 	const groupHandle = page.getByTestId("bottom-group-resize");
 	await expect(groupHandle).toHaveAttribute("aria-orientation", "vertical");
@@ -644,13 +674,14 @@ test("bottom groups arrange left-to-right, resize, fold to 27px, restore, and en
 	await expect.poll(() => size(first, "width")).toBeGreaterThan(firstBefore + 50);
 
 	await first.getByTestId("bottom-group-fold").click();
-	await expect(first).toHaveAttribute("data-folded", "true");
-	await expect(first.getByTestId("bottom-group-restore")).toBeFocused();
-	expect(await size(first, "width")).toBeCloseTo(27, 0);
+	await expect(first).toHaveCount(0);
+	await expect(terminalRail).toHaveAttribute("aria-pressed", "false");
+	await expect(terminalRail).toBeFocused();
 	await expect(page.getByTestId("terminal-instance")).toHaveCount(0);
-	await second.getByRole("tab", { name: "Changes" }).focus();
+	await expect(second).toBeVisible();
+	await page.getByTestId("tab-review").getByRole("button").first().focus();
 	await page.keyboard.press("Control+Shift+F6");
-	await expect(first.getByTestId("bottom-group-restore")).toBeFocused();
+	await expect(terminalRail).toBeFocused();
 	await page.keyboard.press("Space");
 	await expect(first).toHaveAttribute("data-folded", "false");
 	await expect(first.getByRole("tab", { name: "Terminal 1" })).toBeFocused();
@@ -788,7 +819,7 @@ test("an old host layout stays inert while a pristine surface starts Balanced", 
 
 	await expect(page.getByTestId("left-nav")).toBeVisible();
 	await expect(page.getByTestId("right-stack")).toContainText("Specs");
-	await expect(page.getByTestId("tab-files")).toContainText("Files");
+	await expect(page.getByTestId("tool-rail-files")).toHaveAccessibleName("Files");
 	await expect(page.getByTestId("right-stack")).toContainText("Changes");
 	await expect(page.getByTestId("bottom-panel")).toBeVisible();
 	await expect(page.getByTestId("bottom-new-terminal")).toBeVisible();

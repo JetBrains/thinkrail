@@ -95,7 +95,9 @@ treatment.
   shape (recorded once): an explicit-archive-only rail left
   the housekeeping to the user (48 rows on the author's machine), a pure recency fold had no way to say
   "done", and a hidden Archived tier made rows disappear without a visible home — the shelf keeps every
-  automatic move one disclosure away, with the reason spelled out.
+  automatic move one disclosure away, with the reason spelled out. The reason is an outlined
+  `tr-text-caption` badge: merged in the info tone, settled-by-you in the warning tone, closed and idle
+  as neutral `border-default` / `text-subtle` metadata.
   Rename replaces the row's name span in place with a chrome-less single-line input carrying the same
   typography, colour, and geometry; it is prefilled, focused, and selected. Enter or blur commits, Escape
   cancels, and blank or text unchanged from the edit-start label exits without a request, so an incoming

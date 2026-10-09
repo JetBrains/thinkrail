@@ -1,7 +1,7 @@
 import type { LayoutPreset } from "@thinkrail/contracts";
 import { useEffect, useLayoutEffect } from "react";
 import { getStablePreferenceAdapter, type StablePreferenceAdapter } from "../../clientPreferences";
-import { type LayoutAttention, randomId } from "../../lib";
+import { type LayoutAttention, randomId, sameLayoutAttention } from "../../lib";
 import {
 	DEFAULT_LOCAL_LAYOUT_PREFERENCES,
 	type LocalLayoutPreferences,
@@ -23,6 +23,7 @@ import {
 	LAYOUT_TOOLS,
 	minimumBottomGroupLimit,
 	minimumSideGroupLimit,
+	normalizeWorkspaceView,
 	projectWorkspaceLayout,
 	reconcileAttention,
 	sameWorkbenchFrameShape,
@@ -358,24 +359,25 @@ function isWorkspaceView(value: unknown): value is WorkspaceViewState {
 				return false;
 		}
 	};
-	return Object.values(value.groups).every((candidate) => {
-		if (
-			!isRecord(candidate) ||
-			!hasOnlyKeys(candidate, ["tabs", "previewTabId", "beforeToolByTabId"]) ||
-			!Array.isArray(candidate.tabs) ||
-			candidate.tabs.some((tab) => !validTab(tab)) ||
-			(candidate.previewTabId !== undefined && typeof candidate.previewTabId !== "string") ||
-			(candidate.beforeToolByTabId !== undefined && !isRecord(candidate.beforeToolByTabId))
-		) {
-			return false;
-		}
-		return (
-			candidate.beforeToolByTabId === undefined ||
-			Object.values(candidate.beforeToolByTabId).every(
-				(tool) => typeof tool === "string" && TOOL_IDS.has(tool),
-			)
-		);
-	});
+	return Object.values(value.groups).every(
+		(candidate) =>
+			isRecord(candidate) &&
+			hasOnlyKeys(candidate, ["tabs", "previewTabId", "beforeToolByTabId"]) &&
+			Array.isArray(candidate.tabs) &&
+			candidate.tabs.every((tab) => validTab(tab)) &&
+			(candidate.previewTabId === undefined || typeof candidate.previewTabId === "string"),
+	);
+}
+
+function retainedWorkspaceView(view: WorkspaceViewState): WorkspaceViewState {
+	return {
+		groups: Object.fromEntries(
+			Object.entries(view.groups).map(([groupId, group]) => [
+				groupId,
+				{ tabs: group.tabs, ...(group.previewTabId ? { previewTabId: group.previewTabId } : {}) },
+			]),
+		),
+	};
 }
 
 function frameGroupIds(frame: WorkbenchFrame): Set<string> {
@@ -446,8 +448,9 @@ function decodeLocalLayout(raw: string): LocalLayoutStatePayload | undefined {
 			if (!isWorkspaceView(view) || Object.keys(view.groups).some((id) => !validGroupIds.has(id))) {
 				return undefined;
 			}
-			viewsByWorkspace[workspaceId] = view;
-			const document = projectWorkspaceLayout(frame, view);
+			const normalized = normalizeWorkspaceView(frame, retainedWorkspaceView(view));
+			viewsByWorkspace[workspaceId] = normalized;
+			const document = projectWorkspaceLayout(frame, normalized);
 			if (validateLayoutDocument(document, 32, 32).length > 0) return undefined;
 			documentsByWorkspace[workspaceId] = document;
 			attentionByWorkspace[workspaceId] = reconcileAttention(
@@ -733,16 +736,18 @@ export function applyLayoutAttention(workspaceId: string, next: LayoutAttention)
 	const state = useAppStore.getState();
 	if (state.removedWorkspaceIds[workspaceId]) return;
 	const document = state.layoutDocumentsByWorkspace[workspaceId];
+	const normalized = document ? reconcileAttention(document, next, document) : next;
+	if (sameLayoutAttention(state.layoutAttentionByWorkspace[workspaceId], normalized)) return;
 	const groups = document
-		? changedToolSelections(state.layoutAttentionByWorkspace[workspaceId], next, document)
+		? changedToolSelections(state.layoutAttentionByWorkspace[workspaceId], normalized, document)
 		: new Set<string>();
 	if (!document || groups.size === 0 || !state.workbenchFrame) {
-		state.setLayoutAttention(workspaceId, next);
+		state.setLayoutAttention(workspaceId, normalized);
 		return;
 	}
 	const attentionByWorkspace = {
 		...state.layoutAttentionByWorkspace,
-		[workspaceId]: next,
+		[workspaceId]: normalized,
 	};
 	for (const [id, attention] of Object.entries(state.layoutAttentionByWorkspace)) {
 		if (id === workspaceId || state.removedWorkspaceIds[id]) continue;
@@ -751,7 +756,7 @@ export function applyLayoutAttention(workspaceId: string, next: LayoutAttention)
 		attentionByWorkspace[id] = adoptToolSelections(
 			attention,
 			otherDocument,
-			next,
+			normalized,
 			document,
 			groups,
 		);
@@ -765,11 +770,17 @@ export function applyLayoutAttention(workspaceId: string, next: LayoutAttention)
 	});
 }
 
+export interface LayoutCommitOptions {
+	baseDocument?: WorkspaceLayoutDocument;
+	attention?: LayoutAttention;
+}
+
 export async function commitWorkspaceLayout(
 	workspaceId: string,
 	document: WorkspaceLayoutDocument,
-	baseDocument?: WorkspaceLayoutDocument,
+	options: LayoutCommitOptions = {},
 ): Promise<WorkspaceLayoutDocument> {
+	const { baseDocument } = options;
 	const state = useAppStore.getState();
 	if (state.removedWorkspaceIds[workspaceId]) throw new Error("Workspace has been removed");
 	if (!state.workbenchFrame) throw new Error("The local workbench frame is not ready");
@@ -797,13 +808,24 @@ export async function commitWorkspaceLayout(
 		if (!nextDocument) continue;
 		attentionByWorkspace[id] = reconcileAttention(
 			nextDocument,
-			state.layoutAttentionByWorkspace[id],
-			state.layoutDocumentsByWorkspace[id],
+			id === workspaceId
+				? (options.attention ?? state.layoutAttentionByWorkspace[id])
+				: state.layoutAttentionByWorkspace[id],
+			id === workspaceId && options.attention
+				? effectiveDocument
+				: state.layoutDocumentsByWorkspace[id],
 		);
 	}
-	if (frameChanged) {
-		const committingAttention = attentionByWorkspace[workspaceId];
-		const committingDocument = documentsByWorkspace[workspaceId];
+	const committingAttention = attentionByWorkspace[workspaceId];
+	const committingDocument = documentsByWorkspace[workspaceId];
+	if (!committingAttention || !committingDocument)
+		throw new Error("The committed workspace projection is missing");
+	const toolChanges = changedToolSelections(
+		state.layoutAttentionByWorkspace[workspaceId],
+		committingAttention,
+		committingDocument,
+	);
+	if (frameChanged || toolChanges.size > 0) {
 		if (committingAttention && committingDocument) {
 			for (const [id, attention] of Object.entries(attentionByWorkspace)) {
 				if (id === workspaceId) continue;
@@ -814,6 +836,7 @@ export async function commitWorkspaceLayout(
 					otherDocument,
 					committingAttention,
 					committingDocument,
+					frameChanged ? undefined : toolChanges,
 				);
 			}
 		}

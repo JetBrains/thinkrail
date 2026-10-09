@@ -6,6 +6,7 @@ import {
 	goProjectHome,
 	openFixtureProject,
 	openWorkspaceMenu,
+	revealWorkbenchTool,
 	runInTerminal,
 	visibleTerminalScreen,
 	waitTerminalReady,
@@ -35,10 +36,10 @@ test("the Welcome fork's “Work in project folder” enters the Default workspa
 	await expect(ready).toContainText("on main");
 	await expect(ready).toContainText("run directly in your project folder");
 
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await expect(page.getByTestId("file-node").filter({ hasText: "README.md" })).toBeVisible();
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await expect(page.getByTestId("changes-empty")).toBeVisible();
 
 	await page.getByTestId("terminal-tab").click();

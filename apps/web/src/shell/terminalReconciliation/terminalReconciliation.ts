@@ -4,6 +4,7 @@ import type { LayoutAttention } from "../../lib";
 import { useTerminalCatalog } from "../../panels/TerminalWorkbench";
 import { type TerminalTab, useAppStore } from "../../store";
 import {
+	canJoinAuxiliaryGroup,
 	closeLayoutTab,
 	collectAllGroups,
 	collectCenterGroups,
@@ -28,9 +29,9 @@ export function placeRecoveredTerminal(
 	tab: LayoutTerminalTab,
 ): { document: WorkspaceLayoutDocument } {
 	const preferredBottomId = attention?.lastFocusedSideGroupId.bottom;
+	const terminalPanes = document.bottom.groups.filter((group) => canJoinAuxiliaryGroup(group, tab));
 	const bottomTarget =
-		document.bottom.groups.find((group) => group.id === preferredBottomId) ??
-		document.bottom.groups.at(-1);
+		terminalPanes.find((group) => group.id === preferredBottomId) ?? terminalPanes.at(-1);
 	if (bottomTarget) {
 		const visible = document.bottom.visible;
 		const placed = moveTabToGroup(document, tab, {

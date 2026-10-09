@@ -7,6 +7,7 @@ import {
 	enterDefaultWorkspace,
 	openFixtureProject,
 	openPersistedChat,
+	revealWorkbenchTool,
 } from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
@@ -216,7 +217,7 @@ test("opening a chat from a sent review comment clears its unread result", async
 		).toHaveCount(0);
 		await expectAttentionDot(peerProject);
 
-		await page.getByTestId("tab-review").click();
+		await revealWorkbenchTool(page, "review");
 		await expect(page.getByTestId("review-panel")).toBeVisible();
 		const section = page
 			.getByTestId("review-file-section")

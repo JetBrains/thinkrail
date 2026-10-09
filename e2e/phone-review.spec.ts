@@ -6,6 +6,7 @@ import {
 	hideAuxiliaryWorkbench,
 	openFixtureProject,
 	PHONE_VIEWPORT,
+	revealWorkbenchTool,
 } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 import { pierreLines, selectPierreLine } from "./fixtures/pierre";
@@ -32,7 +33,7 @@ test("a phone-class viewport renders a code file with Pierre, swapping Monaco ou
 }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).dblclick();
 	await expect(page.locator(".monaco-editor").first()).toBeVisible();
 
@@ -57,7 +58,7 @@ test("a phone-class diff is unified only, and a tapped line authors a thread tha
 		join(worktree(), "script.ts"),
 		"export const one = 1;\nexport const two = 2;\nexport const three = 3;\n",
 	);
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
 	const diff = page.getByTestId("diff-view");
 	await expect(diff.getByText("three = 3", { exact: false }).last()).toBeVisible();
@@ -91,11 +92,11 @@ test("a phone-class diff is unified only, and a tapped line authors a thread tha
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await expect(diff.getByTestId("review-thread-card")).toHaveCount(1);
 	await expect(page.getByTestId("diff-toggle-split")).toBeVisible();
-	await page.getByTestId("tab-review").click();
+	await revealWorkbenchTool(page, "review");
 	await expect(page.getByTestId("review-comment")).toHaveCount(1);
 	await expect(page.getByTestId("review-pending-badge")).toHaveText("1");
 
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "script.ts" }).dblclick();
 	await expect(page.locator(".monaco-editor").first()).toBeVisible();
 	await goPhone(page);

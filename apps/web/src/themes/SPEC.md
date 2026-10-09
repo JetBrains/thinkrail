@@ -16,6 +16,14 @@ fixed id plus fixed/system mode and optional light/dark pair; this module owns w
 this client, including operating-system color-scheme observation and same-appearance fallback. **Adding a
 theme = adding one `bundled/*.theme.json` file** (a PR + rebuild) — no code, contract, CSS, or test changes.
 
+Six manifests ship: the standard **Dark** and **Light** (the configured default and its pair, unchanged),
+**Minimal Dark** and **Minimal Light** (the quiet neutral surface hierarchy, restrained green accent and
+neutral `bubbleAccent` of the Minimal interface study, sharing the standard pair's syntax and terminal
+palettes), and the two High Contrast palettes with their stricter accessibility contract. Minimal is a
+palette a user picks in Appearance and nothing more: every theme renders the same roles, so a component
+never branches on the active theme or its contrast metadata to drop a fill or a border. What a palette
+cannot express through the manifest keys is a product decision for all themes, not a theme.
+
 ## Boundary
 
 - **Owns:** the versioned `ThemeManifest` contract + JSON schema; the bundled manifest set; catalog
@@ -60,12 +68,11 @@ to the code canvas in every theme. Every bundled manifest ships `header` equal t
 split changed no pixel — it made a knob exist. The same move is what any future divergence needs: a role
 can only vary between themes if the manifest has a key for it.
 
-`accentHover` is the second instance: the primary button needed a hover *fill* rather than a faded
-resting fill, and the alpha scale cannot express one (a tint of the accent is translucent, not darker).
-The alternative — pinning the primary button to a brand constant outside the palette — would have made
-it the one control a theme cannot restyle, and would have let it drift from `accent` (the same colour it
-had always been) on any theme that tunes its accent. So the accent is a **pair**: `accent` resting,
-`accentHover` hovered, `onAccent` the label on both.
+The primary control has an explicit opaque-fill contract: `accentSolid` is its resting fill,
+`accentHover` its hover fill, and `onAccent` the label on both. The separate `accent` remains the
+foreground/ring/border and tint source. This lets a palette vary opaque controls without silently
+changing every accent tint: the Minimal palettes align their resting fill with their accent, while the
+standard Light keeps its brighter independent solid fill.
 
 **The manifest→variable name is derived, not mapped.** A key writes to its kebab-cased name —
 `borderStrong` → `--border-strong`, `editorSelection` → `--editor-selection`. `runtime.ts` applies that
@@ -84,7 +91,7 @@ resting surface (`background`, `content`, `sidebar`, `header`, `elevated`, `inpu
 floor on the transient `hover` surface — the latter being our line rather than the standard's, so that
 a theme borrowed from elsewhere keeps its signature colours. `accent` and `success` are exempt from
 `input` alone: neither is ever rendered as text on a control. Separately, `onAccent` must clear AA on
-**both** accent fills (`accent` and `accentHover`), so a theme cannot darken its hover step far enough
+**both** primary fills (`accentSolid` and `accentHover`), so a theme cannot darken its hover step far enough
 to swallow the primary button's own label. Legibility alone proved insufficient: High Contrast Light
 once shipped its `hover` fill — the palette source of the selected/hovered control roles — at 1.05:1
 against its own sidebar, an invisible selection with every check green, so the suite also pins

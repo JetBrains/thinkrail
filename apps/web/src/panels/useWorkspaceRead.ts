@@ -52,9 +52,8 @@ export function useWorkspaceRead<T>(
 		};
 	}, [workspaceId, readKey, runRead]);
 
-	return {
-		reload: () => {
-			if (workspaceId) runRead(workspaceId, readKey);
-		},
-	};
+	const reload = useCallback(() => {
+		if (workspaceId) runRead(workspaceId, readKey);
+	}, [readKey, runRead, workspaceId]);
+	return { reload };
 }

@@ -5,6 +5,7 @@ import {
 	openAppFresh,
 	openFixtureProject,
 	pressPlatformShortcut,
+	revealWorkbenchTool,
 	runInTerminal,
 	visibleTerminal,
 	visibleTerminalScreen,
@@ -15,6 +16,7 @@ interface ShortcutsStub {
 	hint(hint: NativeQuitHint): void;
 	command(command: NativeCommand): void;
 	quits: number;
+	closeRequests: number;
 	rejectQuit: boolean;
 }
 
@@ -37,6 +39,7 @@ function installNativeShortcuts(page: Page, platform: string) {
 				for (const listener of commandListeners) listener(command);
 			},
 			quits: 0,
+			closeRequests: 0,
 			rejectQuit: false,
 		};
 		window.__e2eShortcuts = stub;
@@ -75,7 +78,7 @@ async function openTwoFileTabs(page: Page): Promise<void> {
 	await chatTab.hover();
 	await chatTab.getByTestId("editor-tab-close").click();
 	await expect(chatTab).toHaveCount(0);
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
 	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).dblclick();
 	await expect(editorTabs(page)).toHaveCount(2);
@@ -120,6 +123,40 @@ test("native close-item closes the top layer first, then the focused tab", async
 	await closeItem(page);
 	await expect(page.getByTestId("confirm-dialog")).toHaveCount(0);
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+});
+
+test("native close-item never closes a session through a tool-window rail", async ({ page }) => {
+	await installNativeShortcuts(page, "MacIntel");
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await waitTerminalReady(page);
+	await page.getByTestId("tool-rail-files").click({ button: "right" });
+	await page.getByRole("menuitem", { name: "New bottom group at right", exact: true }).click();
+	await waitTerminalReady(page);
+	const terminalKey = await visibleTerminal(page).getAttribute("data-tab-key");
+	await page.evaluate(() => {
+		const send = WebSocket.prototype.send;
+		WebSocket.prototype.send = function (data) {
+			if (typeof data === "string" && JSON.parse(data).method === "terminal.close")
+				window.__e2eShortcuts.closeRequests += 1;
+			send.call(this, data);
+		};
+	});
+	for (const control of [
+		page.getByTestId("tool-rail-files"),
+		page.getByTestId("terminal-rail-group"),
+	]) {
+		await control.focus();
+		await closeItem(page);
+		expect(await page.evaluate(() => window.__e2eShortcuts.closeRequests)).toBe(0);
+		await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
+		await expect(visibleTerminal(page)).toHaveAttribute("data-tab-key", terminalKey ?? "");
+		await expect(page.getByTestId("confirm-dialog")).toHaveCount(0);
+	}
+	await page.getByTestId("terminal-tab").getByRole("tab").focus();
+	await closeItem(page);
+	await expect(page.getByTestId("terminal-tab")).toHaveCount(0);
+	expect(await page.evaluate(() => window.__e2eShortcuts.closeRequests)).toBe(1);
 });
 
 test("Windows Ctrl+W and Ctrl+F4 close the focused tab; a terminal keeps Ctrl+W", async ({

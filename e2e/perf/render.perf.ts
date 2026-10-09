@@ -6,6 +6,9 @@ import {
 	enterDefaultWorkspace,
 	openFixtureProject,
 	openPersistedChat,
+	pressPlatformShortcut,
+	revealWorkbenchTool,
+	waitTerminalReady,
 } from "../fixtures/app";
 import { commitFile } from "../fixtures/git";
 import { E2E_FIXTURE_REPO } from "../fixtures/paths";
@@ -259,6 +262,38 @@ function parallelAgents(includeVisible: boolean) {
 	};
 }
 
+async function regionToggles(page: Page, run: number): Promise<void> {
+	await openFixtureProject(page);
+	await assertProfilingReady(page);
+	const title = `Region toggle fixture ${run}`;
+	seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: title,
+		messages: chatHistory(1_700_900_000_000, 12),
+	});
+	await enterDefaultWorkspace(page);
+	await openPersistedChat(page, title);
+	await expect(page.getByTestId("chat-scroll")).toBeVisible();
+	await waitTerminalReady(page);
+	const specs = page.getByTestId("tool-rail-specs");
+	await expect(specs).toHaveAttribute("aria-pressed", "true");
+
+	await measure(page, "region-toggles", run, async () => {
+		await specs.click();
+		await expect(specs).toHaveAttribute("aria-pressed", "false");
+		await specs.click();
+		await expect(specs).toHaveAttribute("aria-pressed", "true");
+		await pressPlatformShortcut(page, "j");
+		await expect(page.getByTestId("right-stack")).toHaveCount(0);
+		await pressPlatformShortcut(page, "j");
+		await expect(page.getByTestId("right-stack")).toBeVisible();
+		await pressPlatformShortcut(page, "Shift+j");
+		await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
+		await pressPlatformShortcut(page, "Shift+j");
+		await waitTerminalReady(page);
+		return {};
+	});
+}
+
 async function liveFileEdits(page: Page, run: number): Promise<void> {
 	await openFixtureProject(page);
 	await assertProfilingReady(page);
@@ -268,7 +303,7 @@ async function liveFileEdits(page: Page, run: number): Promise<void> {
 		path,
 		numberedSource(400, (line) => (line === 0 ? "// revision 0" : null)),
 	);
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "live-edit.ts" }).dblclick();
 	const editor = page.getByTestId("editor-pane");
 	await expect(editor).toContainText("revision 0");
@@ -307,7 +342,7 @@ async function largeDiff(page: Page, run: number): Promise<void> {
 			line % 7 === 0 ? `export const changed${line} = "${line}"; // changed line ${line}` : null,
 		),
 	);
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-uncommitted").click();
 	const change = page.getByTestId("change-item").filter({ hasText: "large-diff.ts" });
@@ -333,6 +368,7 @@ async function largeDiff(page: Page, run: number): Promise<void> {
 
 const SCENARIOS: Record<ScenarioName, (page: Page, run: number) => Promise<void>> = {
 	"chat-streaming": chatStreaming,
+	"region-toggles": regionToggles,
 	"live-file-edits": liveFileEdits,
 	"large-diff": largeDiff,
 	"long-stream": longStream("long-stream", LONG_STREAM_CHARS),

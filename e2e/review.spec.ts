@@ -2,7 +2,12 @@ import { execSync } from "node:child_process";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { type Browser, expect, type Page, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	openFixtureProject,
+	revealWorkbenchTool,
+	worktreeRows,
+} from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 import { pierreDeletionsSide, selectPierreLine } from "./fixtures/pierre";
 
@@ -17,7 +22,7 @@ async function openDiff(page: Page): Promise<void> {
 		join(worktree(), "script.ts"),
 		"export const one = 1;\nexport const two = 2;\nexport const three = 3;\n",
 	);
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
 	await expect(
 		page.getByTestId("diff-view").getByText("three = 3", { exact: false }).last(),
@@ -31,7 +36,7 @@ async function openReviewClient(browser: Browser): Promise<Page> {
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await page.getByTestId("project-item").first().click();
 	await worktreeRows(page).first().click();
-	await page.getByTestId("tab-review").click();
+	await revealWorkbenchTool(page, "review");
 	return page;
 }
 
@@ -148,13 +153,13 @@ test("selection → icon → inline composer → draft; the tab wears the violet
 	await expect(page.getByTestId("send-review-button")).toHaveText(/Send review \(1\)/);
 	await expect(page.getByTestId("review-pending-badge")).toHaveText("1");
 
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
 	await expect(page.getByTestId("send-review-button")).toHaveCount(0);
 	await expect(
 		page.locator('[data-testid="editor-tab"][data-active="true"] [data-testid="review-tab-flag"]'),
 	).toHaveCount(0);
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
 	await expect(page.getByTestId("send-review-button")).toBeVisible();
 
@@ -163,7 +168,7 @@ test("selection → icon → inline composer → draft; the tab wears the violet
 	await expect(page.getByTestId("review-composer")).toHaveCount(0);
 	await expect(page.getByTestId("review-pending-badge")).toHaveText("1");
 
-	await page.getByTestId("tab-review").click();
+	await revealWorkbenchTool(page, "review");
 	const rows = page.getByTestId("review-comment");
 	await expect(rows).toHaveCount(1);
 	await expect(rows.first()).toHaveAttribute("data-status", "draft");
@@ -192,7 +197,7 @@ test("a region dragged on an SVG is stored as normalized geometry, like a raster
 }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "RENDERERS.svg" }).dblclick();
 	await expect(page.getByTestId("view-toggle-svg")).toHaveAttribute("data-active", "true");
 	const surface = page.getByTestId("svg-region-surface");
@@ -266,12 +271,12 @@ test("sidebar: an accordion — the active reviewed file's section auto-unfolds;
 	await page.getByTestId("review-composer-save").click();
 	await expect(page.getByTestId("review-composer")).toHaveCount(0);
 
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
 	await expect(page.locator('[data-testid="editor-tab"][data-active="true"]')).toContainText(
 		"notes.txt",
 	);
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
 	await expect(page.locator('[data-testid="editor-tab"][data-active="true"]')).toContainText(
 		"script.ts",
@@ -290,7 +295,7 @@ test("sidebar: an accordion — the active reviewed file's section auto-unfolds;
 		.click();
 	await expect(section).toHaveAttribute("data-expanded", "true");
 	await expect(rows).toHaveCount(2);
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
 	await expect(page.locator('[data-testid="editor-tab"][data-active="true"]')).toContainText(
 		"script.ts",
@@ -321,7 +326,7 @@ test("a selection spanning both sides of a unified diff is blocked instead of re
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
 	writeFileSync(join(worktree(), "README.md"), "# renamed\n");
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
 	await page.getByTestId("view-toggle-code").click();
 	await page.getByTestId("diff-toggle-inline").click();
@@ -367,13 +372,13 @@ test("the Review panel carries its own send buttons: per-file at the file level,
 		await expect(page.getByTestId("review-composer")).toHaveCount(0);
 	}
 	writeFileSync(join(worktree(), "notes.txt"), "a fresh remark target\nsecond line\n");
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "notes.txt" }).click();
 	await composeComment(page, "fresh remark", "three");
 	await page.getByTestId("review-composer-save").click();
 	await expect(page.getByTestId("review-composer")).toHaveCount(0);
 
-	await page.getByTestId("tab-review").click();
+	await revealWorkbenchTool(page, "review");
 	const notesSection = page.locator('[data-testid="review-file-section"][data-path="notes.txt"]');
 	const scriptSection = page.locator('[data-testid="review-file-section"][data-path="script.ts"]');
 	await expect(notesSection).toHaveAttribute("data-expanded", "true");
@@ -393,7 +398,7 @@ test("line-anchored comment re-anchors when the file changes (moved → outdated
 	await page.getByTestId("review-composer-save").click();
 	await expect(page.getByTestId("review-composer")).toHaveCount(0);
 
-	await page.getByTestId("tab-review").click();
+	await revealWorkbenchTool(page, "review");
 	const row = page.getByTestId("review-comment");
 	await expect(row).toHaveAttribute("data-status", "draft");
 	await expect(row).toHaveAttribute("data-anchor", "anchored");
@@ -424,7 +429,7 @@ test("preview mode: selecting rendered text comments on the mapped source lines"
 		join(worktree(), "NOTES.md"),
 		"# Notes\n\nA paragraph with **important** words to review.\n\nAnother block entirely.\n",
 	);
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "NOTES.md" }).click();
 	const preview = page.getByTestId("markdown-preview");
 	await expect(preview).toContainText("important words");
@@ -445,7 +450,7 @@ test("preview mode: selecting rendered text comments on the mapped source lines"
 	await expect(page.getByTestId("markdown-preview").locator(".review-region")).toHaveCount(1);
 
 	await expect(page.getByTestId("review-pending-badge")).toHaveText("1");
-	await page.getByTestId("tab-review").click();
+	await revealWorkbenchTool(page, "review");
 	const row = page.getByTestId("review-comment");
 	await expect(row).toHaveAttribute("data-status", "draft");
 	await expect(row).toContainText("L3");
@@ -492,7 +497,7 @@ test("cards drawn in the preview reserve their height in the source view — and
 			"Trailing prose line three.",
 		].join("\n"),
 	);
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "GUIDE.md" }).click();
 	const preview = page.getByTestId("markdown-preview");
 	await expect(preview).toContainText("Filler paragraph number 1.");
@@ -554,7 +559,7 @@ test("preview selection stays honest: a dragged piece stays a piece, and the com
 			"",
 		].join("\n"),
 	);
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "BULLETS.md" }).click();
 	const preview = page.getByTestId("markdown-preview");
 	await expect(preview).toContainText("Owns");
@@ -611,7 +616,7 @@ test("an in-flow card never halves a code fence — the rest of the document sta
 			"",
 		].join("\n"),
 	);
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "FENCE.md" }).click();
 
 	await page.getByTestId("view-toggle-code").click();
@@ -645,7 +650,7 @@ test("a draft card edits in place; a sent comment can't be edited", async ({ pag
 	await edit.click();
 	await edit.fill("Better wording, typed right in the card.");
 	await page.getByTestId("diff-view").getByText("three = 3").last().click();
-	await page.getByTestId("tab-review").click();
+	await revealWorkbenchTool(page, "review");
 	await expect(page.getByTestId("review-comment")).toContainText(
 		"Better wording, typed right in the card.",
 	);
@@ -662,7 +667,7 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
 	writeFileSync(join(worktree(), "README.md"), "# sample-project — renamed\n\nA new intro line.\n");
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
 	await expect(page.getByTestId("rendered-diff")).toContainText("renamed");
 	await page.getByTestId("view-toggle-code").click();
@@ -691,12 +696,12 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 		"# sample-project",
 	);
 
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
 	await expect(page.locator('[data-testid="editor-tab"][data-active="true"]')).toContainText(
 		"notes.txt",
 	);
-	await page.getByTestId("tab-review").click();
+	await revealWorkbenchTool(page, "review");
 	const reviewSection = page
 		.getByTestId("review-file-section")
 		.filter({ has: page.getByTestId("review-file-row").filter({ hasText: "README.md" }) });
@@ -709,12 +714,12 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 	await expect(
 		page.locator('[data-testid="editor-tab"][data-active="true"][data-kind="diff"]'),
 	).toContainText("README.md");
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
 	await expect(page.locator('[data-testid="editor-tab"][data-active="true"]')).toContainText(
 		"notes.txt",
 	);
-	await page.getByTestId("tab-review").click();
+	await revealWorkbenchTool(page, "review");
 	if ((await reviewSection.getAttribute("data-expanded")) !== "true") {
 		await reviewSection.getByTestId("review-file-row").click();
 	}
@@ -733,9 +738,9 @@ test("the diff's ORIGINAL (left) side is its own anchor space — base, never re
 
 	execSync(`git -C "${worktree()}" commit -am "land the rename"`, { stdio: "ignore" });
 	await overWire(page, [{ method: "workspace.setDiffBase", params: { ref: "HEAD" } }]);
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
-	await page.getByTestId("tab-review").click();
+	await revealWorkbenchTool(page, "review");
 	if ((await reviewSection.getAttribute("data-expanded")) !== "true") {
 		await reviewSection.getByTestId("review-file-row").click();
 	}
@@ -765,7 +770,7 @@ test("resolved comments sink into a muted Resolved section (TODO Done style)", a
 	await page.getByTestId("review-composer-save").click();
 	await expect(page.getByTestId("review-composer")).toHaveCount(0);
 
-	await page.getByTestId("tab-review").click();
+	await revealWorkbenchTool(page, "review");
 	await expect(page.getByTestId("review-comment")).toHaveCount(2);
 	const comments = await persistedComments(page);
 	markSentOnDisk(comments.find((c) => c.body.includes("Open remark"))?.id ?? "");
@@ -812,7 +817,8 @@ test("Clear replaces the review for every connected client", async ({ page, brow
 	await openDiff(page);
 	await composeComment(page, "one = 1", "Discard this draft with the review.");
 	await page.getByTestId("review-composer-save").click();
-	await page.getByTestId("tab-review").click();
+	await expect(page.getByTestId("review-composer")).toHaveCount(0);
+	await revealWorkbenchTool(page, "review");
 
 	const page2 = await openReviewClient(browser);
 	await expect(page2.getByTestId("review-file-row")).toHaveCount(1);
@@ -850,7 +856,7 @@ test("a draft is server truth: a second client converges by push, and a cold rel
 	await page.reload();
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
-	await page.getByTestId("tab-review").click();
+	await revealWorkbenchTool(page, "review");
 	await expect(page.getByTestId("review-pending-badge")).toHaveText("2");
 	await expect(page.getByTestId("review-file-row")).toContainText("2 drafts");
 });
@@ -866,16 +872,16 @@ test("Done is undone by a fresh remark: the file re-lists the moment a new comme
 	await overWire(page, [
 		{ method: "review.commentUpdate", params: { id: comments[0]?.id, status: "resolved" } },
 	]);
-	await page.getByTestId("tab-review").click();
+	await revealWorkbenchTool(page, "review");
 	await page.getByTestId("review-file-done").click();
 	await expect(page.getByTestId("review-empty")).toBeVisible();
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
 	await composeComment(page, "three = 3", "One more thing.");
 	await page.getByTestId("review-composer-save").click();
 	await expect(page.getByTestId("review-pending-badge")).toHaveText("1");
-	await page.getByTestId("tab-review").click();
+	await revealWorkbenchTool(page, "review");
 	await expect(page.getByTestId("review-file-row")).toContainText("script.ts");
 	await expect(page.getByTestId("review-file-row")).toContainText("1 draft");
 });

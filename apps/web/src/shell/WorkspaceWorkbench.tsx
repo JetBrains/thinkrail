@@ -4,7 +4,6 @@ import {
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
-import { DropdownMenuItem } from "@thinkrail/ui/dropdown-menu";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import {
 	Fragment,
@@ -65,7 +64,6 @@ import {
 	findPlacedResource,
 	findTabLocation,
 	type LayoutCenterTab,
-	type LayoutSide,
 	type LayoutTab,
 	type LayoutTabFocusRequest,
 	type LayoutToolId,
@@ -316,8 +314,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	);
 
 	const commit = useCallback(
-		(next: WorkspaceLayoutDocument) => {
-			void commitWorkspaceLayout(workspaceId, next, document).catch(() => {});
+		(next: WorkspaceLayoutDocument, nextAttention?: LayoutAttention) => {
+			void commitWorkspaceLayout(workspaceId, next, {
+				...(document ? { baseDocument: document } : {}),
+				...(nextAttention ? { attention: nextAttention } : {}),
+			}).catch(() => {});
 		},
 		[document, workspaceId],
 	);
@@ -521,46 +522,36 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[renderResourceBody, workspaceId],
 	);
 
-	const renderToolBody = useCallback(
-		(tool: LayoutToolId) => {
-			let body: ReactNode;
-			switch (tool) {
-				case "projects":
-					body = (
-						<QuietScrollArea data-testid="left-nav" className="h-full" viewportClassName="p-12">
-							<ProjectTree />
-						</QuietScrollArea>
-					);
-					break;
-				case "specs":
-					body = (
-						<QuietScrollArea className="h-full" viewportClassName="p-12">
-							<SpecsPanel workspaceId={workspaceId} failed={specs.failed} onRetry={specs.reload} />
-						</QuietScrollArea>
-					);
-					break;
-				case "files":
-					body = (
-						<QuietScrollArea className="h-full" viewportClassName="p-12">
-							<FileTree key={workspaceId} workspaceId={workspaceId} />
-						</QuietScrollArea>
-					);
-					break;
-				case "changes":
-					body = <ChangesPanel key={workspaceId} workspaceId={workspaceId} />;
-					break;
-				case "review":
-					body = <ReviewPanel key={workspaceId} workspaceId={workspaceId} failed={review.failed} />;
-					break;
-			}
-			return (
+	const toolBodies = useMemo<Record<LayoutToolId, ReactNode>>(() => {
+		const bodies: Record<LayoutToolId, ReactNode> = {
+			projects: (
+				<QuietScrollArea data-testid="left-nav" className="h-full" viewportClassName="p-12">
+					<ProjectTree />
+				</QuietScrollArea>
+			),
+			specs: (
+				<QuietScrollArea className="h-full" viewportClassName="p-12">
+					<SpecsPanel workspaceId={workspaceId} failed={specs.failed} onRetry={specs.reload} />
+				</QuietScrollArea>
+			),
+			files: (
+				<QuietScrollArea className="h-full" viewportClassName="p-12">
+					<FileTree key={workspaceId} workspaceId={workspaceId} />
+				</QuietScrollArea>
+			),
+			changes: <ChangesPanel key={workspaceId} workspaceId={workspaceId} />,
+			review: <ReviewPanel key={workspaceId} workspaceId={workspaceId} failed={review.failed} />,
+		};
+		for (const tool of Object.keys(bodies) as LayoutToolId[]) {
+			bodies[tool] = (
 				<ErrorBoundary label={`${tool} tool`} resetKeys={[workspaceId, tool]}>
-					{body}
+					{bodies[tool]}
 				</ErrorBoundary>
 			);
-		},
-		[review.failed, specs.failed, specs.reload, workspaceId],
-	);
+		}
+		return bodies;
+	}, [review.failed, specs.failed, specs.reload, workspaceId]);
+	const renderToolBody = useCallback((tool: LayoutToolId) => toolBodies[tool], [toolBodies]);
 
 	const isDefault = workspace != null && isDefaultWorkspace(workspace);
 	const isExternal = workspace != null && isExternalWorkspace(workspace);
@@ -709,19 +700,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[canRenameChat, requestRenameChat, workspaceId],
 	);
 
-	const renderSideMenuActions = useCallback(
-		(side: LayoutSide, groupId: string): ReactNode =>
-			side === "right" ? (
-				<DropdownMenuItem
-					data-testid="side-new-terminal"
-					onSelect={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId, side)}
-				>
-					New terminal
-				</DropdownMenuItem>
-			) : null,
-		[workspaceId],
-	);
-
 	if (!rendered) {
 		return (
 			<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
@@ -733,6 +711,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	return (
 		<div data-testid="workspace-workbench" data-layout-status="settled" className="contents">
 			<Workbench
+				workspaceId={workspaceId}
 				document={rendered.document}
 				attention={rendered.attention}
 				maxSideGroups={layoutPreferences.maxSideGroups}
@@ -745,7 +724,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				renderToolBody={renderToolBody}
 				renderEmptyCenter={renderEmptyCenter}
 				renderCenterActions={renderCenterActions}
-				renderSideMenuActions={renderSideMenuActions}
 				onCommit={commit}
 				onAttentionChange={changeAttention}
 				onUserNavigation={() => useAppStore.getState().noteNavigation(workspaceId)}
@@ -764,7 +742,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							const latest = state.layoutDocumentsByWorkspace[workspaceId];
 							const prepared = prepare(latest);
 							if (!latest || prepared.document !== latest) {
-								void commitWorkspaceLayout(workspaceId, prepared.document, latest).catch(() => {});
+								void commitWorkspaceLayout(
+									workspaceId,
+									prepared.document,
+									latest ? { baseDocument: latest } : {},
+								).catch(() => {});
 							}
 							const finalState = useAppStore.getState();
 							const finalDocument = finalState.layoutDocumentsByWorkspace[workspaceId];
@@ -782,7 +764,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					}
 					const prepared = prepare();
 					const closedIdentity = layoutResourceIdentity(tab);
-					void commitWorkspaceLayout(workspaceId, prepared.document, document)
+					void commitWorkspaceLayout(
+						workspaceId,
+						prepared.document,
+						document ? { baseDocument: document } : {},
+					)
 						.then(() => {
 							const state = useAppStore.getState();
 							const current = state.layoutDocumentsByWorkspace[workspaceId];
@@ -814,8 +800,18 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						.catch(() => {});
 				}}
 				onNewChat={startChat}
-				onNewTerminal={(groupId, area) =>
-					useAppStore.getState().addTerminal(workspaceId, undefined, groupId, area)
+				onNewTerminal={(groupId, area, options) =>
+					useAppStore
+						.getState()
+						.addTerminal(
+							workspaceId,
+							undefined,
+							groupId,
+							area,
+							true,
+							undefined,
+							options?.newPaneBelow === true,
+						)
 				}
 				onGestureCanceled={() => toast.info("The layout changed. Your drag was canceled.")}
 			/>

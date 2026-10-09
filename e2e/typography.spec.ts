@@ -4,6 +4,7 @@ import {
 	openAppFresh,
 	openFixtureProject,
 	openWorkspaceChat,
+	revealWorkbenchTool,
 	visibleTerminalScreen,
 	waitTerminalReady,
 } from "./fixtures/app";
@@ -78,7 +79,7 @@ test("entity rows, branch metadata and eyebrows are proportional", async ({ page
 test("Monaco and xterm render the generated code family and size", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).first().dblclick();
 	const editor = page.locator(".monaco-editor .view-lines").first();
 	await expect(editor).toBeVisible({ timeout: 30_000 });
@@ -96,7 +97,7 @@ test("the chat and document markdown surfaces each wear their own prose system",
 	page,
 }) => {
 	await openWorkspaceChat(page);
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).first().dblclick();
 	await expect(page.getByTestId("markdown-preview")).toContainText("sample-project");
 

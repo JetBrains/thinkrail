@@ -3,19 +3,15 @@ import {
 	RiCircleFill,
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
-import { useEffect, useRef, useState } from "react";
-import { QuietScrollArea } from "../components/QuietScrollArea";
+import { useEffect, useState } from "react";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
-import { ProjectTree } from "../panels/ProjectTree";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
 import { useOpenBranchReview } from "../panels/useOpenBranchReview";
-import { WelcomePanel } from "../panels/WelcomePanel";
 import {
 	SettingsSection,
 	selectActiveWorkspace,
@@ -33,12 +29,12 @@ import { type ConnectionStatus, runHostUpdate, supportsHostUpdateRun } from "../
 import { UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
 import { AppShortcuts } from "./AppShortcuts";
 import { BrandLogo } from "./BrandLogo";
-import { CollapsedPanelRail } from "./CollapsedPanelRail";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
 import { LayoutSettings } from "./LayoutSettings";
 import { useLocalLayoutState } from "./layoutState";
 import { LocationBar } from "./locationBar";
 import { NativeWindowControls } from "./NativeWindowControls";
+import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
 import { SessionSwitcher } from "./SessionSwitcher";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
@@ -76,18 +72,7 @@ export function Shell() {
 	const [newWorkspaceProjectId, setNewWorkspaceProjectId] = useState<string | null>(null);
 	const sessionSwitcherOpen = useAppStore((s) => s.sessionSwitcherOpen);
 
-	const welcomeCenterRef = useRef<HTMLDivElement>(null);
-	const {
-		collapsed: welcomeCollapsed,
-		contentRef: welcomeContentRef,
-		focusOrCollapse: welcomeFocusOrCollapse,
-		onCollapse: welcomeCollapse,
-		onDragging: welcomeDragging,
-		onExpand: welcomeExpand,
-		openAndFocus: welcomeOpenAndFocus,
-		panelRef: welcomePanelRef,
-		railRef: welcomeRailRef,
-	} = useCollapsibleRegion(welcomeCenterRef, "welcome-left");
+	const homeProjects = useCollapsibleRegion<HTMLDivElement>(PROJECT_HOME_PROJECTS_REGION_ID);
 
 	const [themeHint] = useState(readThemeHint);
 	const welcomeGeneration = useAppStore((s) => s.welcomeGeneration);
@@ -114,7 +99,7 @@ export function Shell() {
 						side: "left",
 					});
 				}
-			: welcomeFocusOrCollapse,
+			: homeProjects.toggle,
 		...(hasActiveWorkspace
 			? {
 					onWorkspace: () => {
@@ -231,68 +216,7 @@ export function Shell() {
 					<WorkspaceWorkbench workspaceId={activeWorkspaceId} />
 				</div>
 			) : (
-				<div
-					data-testid="welcome-shell-layout"
-					data-left-collapsed={welcomeCollapsed}
-					className="flex h-full min-h-0 min-w-0"
-				>
-					{welcomeCollapsed ? (
-						<CollapsedPanelRail
-							ref={welcomeRailRef}
-							side="left"
-							label="Projects"
-							shortcutKey="B"
-							onOpen={welcomeOpenAndFocus}
-						/>
-					) : null}
-					<ResizablePanelGroup
-						direction="horizontal"
-						autoSaveId="thinkrail-shell-welcome"
-						className="min-h-0 min-w-0 flex-1"
-					>
-						<ResizablePanel
-							ref={welcomePanelRef}
-							id="left"
-							order={1}
-							defaultSize={18}
-							minSize={12}
-							collapsedSize={0}
-							collapsible
-							onCollapse={welcomeCollapse}
-							onExpand={welcomeExpand}
-						>
-							<aside
-								ref={welcomeContentRef}
-								data-testid="left-nav"
-								tabIndex={-1}
-								aria-hidden={welcomeCollapsed || undefined}
-								inert={welcomeCollapsed ? true : undefined}
-								className="h-full bg-container-sidebar-bg outline-none"
-							>
-								<QuietScrollArea className="h-full" viewportClassName="p-12">
-									<ProjectTree />
-								</QuietScrollArea>
-							</aside>
-						</ResizablePanel>
-						<ResizableHandle
-							direction="horizontal"
-							data-testid="resize-left"
-							aria-hidden={welcomeCollapsed}
-							tabIndex={welcomeCollapsed ? -1 : 0}
-							onDragging={welcomeDragging}
-							{...(welcomeCollapsed ? { className: "hidden" } : {})}
-						/>
-						<ResizablePanel id="welcome" order={2} defaultSize={82} minSize={40}>
-							<div
-								ref={welcomeCenterRef}
-								tabIndex={-1}
-								className="h-full min-h-0 bg-container-content-bg outline-none"
-							>
-								<WelcomePanel />
-							</div>
-						</ResizablePanel>
-					</ResizablePanelGroup>
-				</div>
+				<ProjectHome projects={homeProjects} />
 			)}
 			{analyticsConsentOpen ? <AnalyticsConsentDialog /> : <InterviewPromptDialog />}
 			<SessionSwitcher

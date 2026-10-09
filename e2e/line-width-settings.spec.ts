@@ -7,6 +7,7 @@ import {
 	openFixtureProject,
 	openWorkspaceChat,
 	PHONE_VIEWPORT,
+	revealWorkbenchTool,
 } from "./fixtures/app";
 import { installChannelHold } from "./fixtures/channelHold";
 import { pierreDeletionsSide } from "./fixtures/pierre";
@@ -125,7 +126,7 @@ test("the file width wraps source and updates an already-mounted editor", async 
 	try {
 		await openFixtureProject(page);
 		await createWorkspaceViaDialog(page);
-		await page.getByTestId("tab-files").click();
+		await revealWorkbenchTool(page, "files");
 		await page.getByTestId("file-node").filter({ hasText: "LONG_LINE.txt" }).dblclick();
 
 		const viewLines = page.locator('[data-testid="editor-pane"]:visible .view-lines');
@@ -149,7 +150,7 @@ test("Pierre renders both sides of a long-line diff", async ({ page }) => {
 	const workspace = await createWorkspaceViaDialog(page);
 	writeFileSync(join(workspace.worktreePath, "LONG_LINE.txt"), `changed ${LONG_LINE}`);
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "LONG_LINE.txt" }).click();
 	const diff = page.getByTestId("diff-view");
 	await expect(

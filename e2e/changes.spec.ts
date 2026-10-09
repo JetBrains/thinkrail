@@ -1,7 +1,12 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject, worktreeRows } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	openFixtureProject,
+	revealWorkbenchTool,
+	worktreeRows,
+} from "./fixtures/app";
 import { commitFile, gitQuiet } from "./fixtures/git";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { pierreCollapsedContext, pierreLines } from "./fixtures/pierre";
@@ -18,7 +23,7 @@ test("Changes tab shows the active worktree's diff and swaps per workspace", asy
 	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited by e2e\n");
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	const changed = page.getByTestId("change-item").filter({ hasText: "README.md" });
 	await expect(changed).toHaveAttribute("data-status", "modified");
 
@@ -52,7 +57,7 @@ test("Changes tab shows the active worktree's diff and swaps per workspace", asy
 
 	await createWorkspaceViaDialog(page);
 	await expect(worktreeRows(page)).toHaveCount(2);
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await expect(page.getByTestId("changes-empty")).toBeVisible();
 });
 
@@ -65,7 +70,7 @@ test("Rendered markdown diff of a large repetitive file never blocks the main th
 	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
 	writeFileSync(join(worktree, "LARGE.md"), largeRepetitiveMarkdownEdited());
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 
 	// Markdown diffs render by default, so the htmldiff merge kicks off on open:
 	// install the long-task observer before opening the diff to measure it.
@@ -103,7 +108,7 @@ test("Rendered markdown diff shows an error placeholder when the merge worker fa
 
 	// Rendered is the default view, so abort the merge worker before opening the diff.
 	await page.route(/htmldiff\.worker/, (route) => route.abort());
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
 	await expect(page.getByTestId("rendered-diff-error")).toBeVisible();
 	await expect(page.getByTestId("rendered-diff-error")).toContainText("Source");
@@ -121,7 +126,7 @@ test("Rendered markdown diff follows live edits on disk (stale merge cancelled, 
 	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nfirst edit by e2e\n");
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
 	const renderedDiff = page.getByTestId("rendered-diff");
 	await expect(renderedDiff.locator("ins").filter({ hasText: "first edit by e2e" })).toBeVisible();
@@ -159,7 +164,7 @@ test("Rendered markdown diff collapses unchanged blocks and list items around th
 	commitFile(workspace.worktreePath, "FOCUS.md", focusMarkdown(false), "add focus fixture");
 	writeFileSync(join(workspace.worktreePath, "FOCUS.md"), focusMarkdown(true));
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-uncommitted").click();
 	await page.getByTestId("change-item").filter({ hasText: "FOCUS.md" }).click();
@@ -208,7 +213,7 @@ test("Rendered markdown diff of a front-matter-only change says the preview is i
 	commitFile(workspace.worktreePath, "META.md", doc("draft"), "add front matter fixture");
 	writeFileSync(join(workspace.worktreePath, "META.md"), doc("active"));
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-uncommitted").click();
 	await page.getByTestId("change-item").filter({ hasText: "META.md" }).click();
@@ -264,7 +269,7 @@ test("Rendered markdown diff keeps attribute-only changes visible: a ticked task
 	commitFile(workspace.worktreePath, "ATTR.md", doc(false), "add attribute fixture");
 	writeFileSync(join(workspace.worktreePath, "ATTR.md"), doc(true));
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-uncommitted").click();
 	await page.getByTestId("change-item").filter({ hasText: "ATTR.md" }).click();
@@ -312,7 +317,7 @@ test("Rendered markdown diff aligns identical twin blocks by position, so neithe
 	commitFile(workspace.worktreePath, "SWAP.md", doc(true, false), "add swap fixture");
 	writeFileSync(join(workspace.worktreePath, "SWAP.md"), doc(false, true));
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-uncommitted").click();
 	const renderedDiff = page.getByTestId("rendered-diff");
@@ -341,7 +346,7 @@ test("Changes has a List|Tree toggle; Tree groups files into folders with +/- co
 	mkdirSync(join(worktree, "docs", "guides"), { recursive: true });
 	writeFileSync(join(worktree, "docs", "guides", "notes.md"), "one\ntwo\nthree\n");
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await expect(page.getByTestId("changes-toggle-list")).toHaveAttribute("data-active", "true");
 	await expect(
 		page.getByTestId("change-item").filter({ hasText: "docs/guides/notes.md" }),
@@ -367,8 +372,8 @@ test("Changes has a List|Tree toggle; Tree groups files into folders with +/- co
 	await expect(diffTab).toHaveCount(1);
 	await expect(page.getByTestId("rendered-diff")).toContainText("three");
 
-	await page.getByTestId("tab-files").click();
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "files");
+	await revealWorkbenchTool(page, "changes");
 	await expect(page.getByTestId("changes-toggle-tree")).toHaveAttribute("data-active", "true");
 });
 
@@ -429,7 +434,7 @@ test("Changes scope selector filters by commit / uncommitted; each scope is its 
 	await createWorkspaceViaDialog(page);
 	seedCommitAndDirtyEdit();
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await expect(page.getByTestId("changes-scope-label")).toHaveText("All changes");
 	await expect(page.getByTestId("change-item")).toHaveCount(2);
 
@@ -468,7 +473,7 @@ test("Uncommitted scope converges when HEAD moves out-of-band (a commit in a ter
 	const worktree = seedCommitAndDirtyEdit();
 	writeFileSync(join(worktree, "committed.txt"), "committed by e2e\ndirty line by e2e\n");
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-uncommitted").click();
 	const dirtyRow = page.getByTestId("change-item").filter({ hasText: "committed.txt" });
@@ -506,7 +511,7 @@ test("The scope menu's target-branch picker re-points what the changes are measu
 	await createWorkspaceViaDialog(page);
 	seedCommitAndDirtyEdit();
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await expect(page.getByTestId("change-item")).toHaveCount(2);
 
 	await page.getByTestId("changes-target-picker").click();
@@ -543,7 +548,7 @@ test("A target that advanced past the fork point adds no phantom changes (merge-
 		"upstream work",
 	);
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await expect(page.getByTestId("change-item")).toHaveCount(2);
 
 	await page.getByTestId("changes-target-picker").click();
@@ -568,7 +573,7 @@ test("A change row's action menu opens from the ⌄ button and from right-click;
 	mkdirSync(join(worktree, "docs"), { recursive: true });
 	writeFileSync(join(worktree, "docs", "notes.md"), "one\ntwo\n");
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	const row = page.getByTestId("change-item").filter({ hasText: "docs/notes.md" });
 	await expect(row).toBeVisible();
 
@@ -621,7 +626,7 @@ test("The diff viewer collapses unchanged context and has a per-tab hide-whitesp
 	lines[60] = "export const v60 = 6000;";
 	writeFileSync(join(worktree, "long.ts"), `${lines.join("\n")}\n`);
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-uncommitted").click();
 	await page.getByTestId("change-item").filter({ hasText: "long.ts" }).click();
@@ -646,7 +651,7 @@ test("revert hunk changes only that range and Undo restores it", async ({ page }
 	await createWorkspaceViaDialog(page);
 	const fixture = seedMutableHunks();
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-uncommitted").click();
 	await page.getByTestId("change-item").filter({ hasText: "mutable.ts" }).click();
@@ -678,7 +683,7 @@ test("a stale hunk view refreshes instead of overwriting the newer file", async 
 	await createWorkspaceViaDialog(page);
 	const fixture = seedMutableHunks();
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-uncommitted").click();
 	await page.getByTestId("change-item").filter({ hasText: "mutable.ts" }).click();
@@ -724,7 +729,7 @@ test("Change rows stay one aligned, fully-highlighted row — menu slot included
 		"export const short = 1;\n",
 	);
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	const longRow = page.getByTestId("change-item").filter({ hasText: "ForTheChangesPanel.ts" });
 	await expect(longRow).toHaveCount(1);
 	const rootRow = page.getByTestId("change-item").filter({ hasText: "AtRootLevel" });
@@ -788,7 +793,7 @@ test("The diff header keeps its controls on a narrow pane, however long the file
 		"export const range = 1;\n",
 	);
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "diffScopeResolver" }).click();
 	await expect(page.getByTestId("diff-view")).toBeVisible();
 
@@ -810,7 +815,7 @@ test("A commit scope keeps the header readable: short sha on the pill, subject i
 	await createWorkspaceViaDialog(page);
 	seedCommitAndDirtyEdit();
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-commit").filter({ hasText: "e2e scope commit" }).click();
 
@@ -830,7 +835,7 @@ test("The scope menu is per workspace: its commit rows never carry over to anoth
 	await createWorkspaceViaDialog(page);
 	seedCommitAndDirtyEdit();
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await expect(
 		page.getByTestId("changes-scope-commit").filter({ hasText: "e2e scope commit" }),
@@ -838,7 +843,7 @@ test("The scope menu is per workspace: its commit rows never carry over to anoth
 	await page.keyboard.press("Escape");
 
 	await createWorkspaceViaDialog(page);
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await expect(page.getByTestId("changes-scope-commit")).toHaveCount(0);
 	await expect(page.getByRole("menu")).toContainText("No commits on this branch");
@@ -864,7 +869,7 @@ test("Re-pointing the target branch re-reads an open branch-scope diff tab — a
 	);
 	gitQuiet(worktree, "branch", "e2e-target", "HEAD~1");
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	const committedRow = page.getByTestId("change-item").filter({ hasText: "committed.txt" });
 	await committedRow.dblclick();
 	const sourceDiff = page.getByTestId("diff-view");
@@ -897,7 +902,7 @@ test("A commit scope whose commit is rewritten away falls back to All changes wi
 	await createWorkspaceViaDialog(page);
 	const worktree = seedCommitAndDirtyEdit();
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-commit").filter({ hasText: "e2e scope commit" }).click();
 	await expect(page.getByTestId("changes-scope-label")).toHaveText(/^[0-9a-f]{7,}$/);
@@ -924,7 +929,7 @@ test("A failed read says so — it never renders as an empty (clean) change set"
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited by e2e\n");
 	gitQuiet(worktree, "branch", "doomed");
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-target-picker").click();
 	await page.locator('[data-testid="branch-option"][data-branch="doomed"]').click();
 	await expect(page.getByTestId("change-item").filter({ hasText: "README.md" })).toHaveCount(1);
@@ -959,7 +964,7 @@ test("A source diff keeps its scroll position across a tab switch", async ({ pag
 	commitFile(worktree, "scroll-code.ts", source("base"), "add scroll fixture");
 	writeFileSync(join(worktree, "scroll-code.ts"), source("edited"));
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "scroll-code.ts" }).click();
 	const diff = page.getByTestId("diff-view");
 	await expect(diffText(page, "edited 399")).toBeVisible();
@@ -982,7 +987,7 @@ test("Closing a diff tab removes its Pierre surface", async ({ page }) => {
 	const worktree = worktreeDir();
 	writeFileSync(join(worktree, "script.ts"), "export const edited = true;\n");
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
 	const diffTab = page.locator('[data-testid="editor-tab"][data-kind="diff"]');
 	await expect(diffTab).toHaveCount(1);

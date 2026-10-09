@@ -14,7 +14,7 @@ create the tools it needs based on how you actually work.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/readme-assets/workbench-dark.png">
-  <img src=".github/readme-assets/workbench-light.png" alt="ThinkRail workbench: worktree workspaces in the left rail with quiet ones folded into a Settled shelf, a finished pi conversation with its tool steps in the center, the resulting diff beside it, and the Specs tree and Changes list on the right" width="900">
+  <img src=".github/readme-assets/workbench-light.png" alt="ThinkRail workbench: the Projects pane beside the left tool rail listing worktree workspaces and their Settled shelf, a finished pi conversation with its tool steps in the center, the resulting diff beside it, and the Specs tree above the Changes list on the right with their tools on the edge rail" width="900">
 </picture>
 
 *A `pi` session and the change it made, scoped to an isolated git-worktree workspace.*
@@ -49,7 +49,7 @@ create the tools it needs based on how you actually work.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/readme-assets/specs-dark.png">
-  <img src=".github/readme-assets/specs-light.png" alt="The Specs tool listing the project's spec tree on the right while the product goal spec is rendered in the editor" width="900">
+  <img src=".github/readme-assets/specs-light.png" alt="The Specs tool, opened from the right edge rail, listing the project's spec tree while the product goal spec is rendered in the editor" width="900">
 </picture>
 
 *The project's spec graph as a tree, with the spec itself rendered alongside.*

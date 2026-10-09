@@ -163,7 +163,7 @@ selected-log state belong to chat integration, not domain persistence. See
   generation before reconciliation may prune a local reference.
 
   **Workspace-local attention** is selected tab per stable frame group, last-focused center group,
-  last-focused auxiliary group, and group navigation clocks. Selection/focus never mutates the frame.
+  last-focused auxiliary group, group navigation clocks, and optional last-terminal recall per auxiliary group. Recall is validated history within this same owner, not another active selection, and is never copied across workspaces. Selection/focus never mutates the frame.
   A group's *tool* selection is nevertheless shared: singleton tools are frame placements, so a group
   that shows a tool shows the same tool in every workspace of the window. Selecting a tool (click, reveal,
   or the focus of a tool move) is written into every retained attention whose selection in that group is a

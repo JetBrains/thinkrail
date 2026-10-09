@@ -10,12 +10,14 @@ test("renders the branded shell and, with no workspace, the Welcome screen", asy
 	await expect(page.getByTestId("center-tabs")).toHaveCount(0);
 	await expect(page.getByTestId("right-panel")).toHaveCount(0);
 
-	const primary = await page.evaluate(() =>
-		getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
-	);
+	const { primary, themeId } = await page.evaluate(() => ({
+		primary: getComputedStyle(document.documentElement).getPropertyValue("--primary").trim(),
+		themeId: document.documentElement.getAttribute("data-theme"),
+	}));
+	expect(themeId).toBeTruthy();
 	const manifest = JSON.parse(
 		readFileSync(
-			new URL("../apps/web/src/themes/bundled/dark.theme.json", import.meta.url),
+			new URL(`../apps/web/src/themes/bundled/${themeId}.theme.json`, import.meta.url),
 			"utf8",
 		),
 	) as { colors: { accent: string } };

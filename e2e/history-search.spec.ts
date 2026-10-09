@@ -7,6 +7,7 @@ import {
 	openFixtureProject,
 	openTerminal,
 	openWorkspaceChat,
+	revealWorkbenchTool,
 	visibleTerminal,
 	visibleTerminalScreen,
 } from "./fixtures/app";
@@ -630,7 +631,7 @@ test("Ctrl+R from an active file tab switches to the chat and opens history sear
 	await openWorkspaceChat(page);
 	seedExternalCwdSessions();
 
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	const readme = page.getByTestId("file-node").filter({ hasText: "README.md" });
 	await expect(readme).toBeVisible();
 	await readme.dblclick();

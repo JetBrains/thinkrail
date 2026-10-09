@@ -18,6 +18,8 @@ docs/*
 .playwright-mcp/
 .claude/
 .mockups/
+# Local design studies and mockups — research artefacts with their own tokens/fonts, never shipped or imported
+design/
 .superpowers/
 .gsd/
 

@@ -1,10 +1,8 @@
 import { useDroppable } from "@dnd-kit/core";
 import {
 	RiCheckFill as Check,
-	RiArrowLeftSLine as ChevronLeft,
 	RiMoreLine as MoreHorizontal,
 	RiTerminalBoxLine as SquareTerminal,
-	RiCloseLine as X,
 } from "@remixicon/react";
 import {
 	DropdownMenu,
@@ -15,19 +13,16 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
-import { ResizablePanel, ResizablePanelGroup } from "@thinkrail/ui/resizable";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
-import { memo, type ReactNode } from "react";
+import { type ImperativePanelGroupHandle, ResizablePanelGroup } from "@thinkrail/ui/resizable";
+import { memo, type ReactNode, useMemo, useRef } from "react";
 import { type LayoutAttention, readLayoutSelection, tupleKey } from "../../lib";
+import { resizeVisibleAuxiliaryGroups, visibleAuxiliaryGroups } from "./auxiliaryPresentation";
 import {
 	canCreateAuxiliaryGroup,
-	canPlaceLayoutTab,
 	isLayoutUnavailable,
 	LAYOUT_LIMITS,
 	type LayoutGroupLocation,
 	layoutTabName,
-	removeLayoutGroup,
-	resizeAuxiliaryGroups,
 	setAuxiliaryGroupFolded,
 	setBottomAlignment,
 } from "./model";
@@ -43,8 +38,11 @@ import {
 	tabDomId,
 	useCommittedSizes,
 	useElementSize,
+	useEnforcedLayout,
+	useTopologySettled,
 } from "./workbenchShared";
-import { TabStrip } from "./workbenchTabs";
+import { AuxiliaryGroupHeader } from "./workbenchSide";
+
 export const BOTTOM_ALIGNMENT_LABELS: Record<LayoutBottomAlignment, string> = {
 	center: "Below center",
 	"center-left": "Below center and left",
@@ -150,7 +148,6 @@ export const BottomGroupView = memo(function BottomGroupView({
 	selectedId,
 	showAlignmentMenu,
 	onFold,
-	onNewTerminal,
 	onAlignmentChange,
 	...shared
 }: SharedGroupProps & {
@@ -159,11 +156,9 @@ export const BottomGroupView = memo(function BottomGroupView({
 	selectedId: string | undefined;
 	showAlignmentMenu: boolean;
 	onFold: () => void;
-	onNewTerminal: () => void;
 	onAlignmentChange: (alignment: LayoutBottomAlignment) => void;
 }) {
 	const location: LayoutGroupLocation = { area: "bottom", groupId: group.id };
-	const groupRemoval = removeLayoutGroup(shared.document, location);
 	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
 	const selectedName = selected ? layoutTabName(selected) : undefined;
 	return (
@@ -171,76 +166,32 @@ export const BottomGroupView = memo(function BottomGroupView({
 			id={groupDomId(location)}
 			data-testid="bottom-group"
 			data-group-id={group.id}
+			data-tools={group.tabs.flatMap((tab) => (tab.kind === "tool" ? [tab.tool] : [])).join(" ")}
 			data-folded="false"
 			tabIndex={-1}
 			aria-label={selectedName ? `Bottom group: ${selectedName}` : "Empty bottom group"}
 			className="relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-container-sidebar-bg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
 			onFocusCapture={() => shared.onFocusGroup(location, selected?.id)}
 		>
-			<div className="flex h-panel-header-row shrink-0 items-stretch">
-				<div className="min-w-0 flex-1">
-					<TabStrip
-						document={shared.document}
-						readAttention={shared.readAttention}
-						selectionEpochRef={shared.selectionEpochRef}
-						location={location}
-						tabs={group.tabs}
-						selectedId={selected?.id}
-						maxSideGroups={shared.maxSideGroups}
-						maxBottomGroups={shared.maxBottomGroups}
-						draggingTab={shared.draggingTab}
-						onSelect={(tabId) => shared.onSelectTab(location, tabId)}
-						onClose={shared.onClose}
-						onApply={shared.onApply}
-						onFocusAdjacentGroup={shared.onFocusAdjacentGroup}
-						onHideSide={shared.onHideSide}
-						onRevealTool={shared.onRevealTool}
-						onRenameChat={shared.onRenameChat}
-						canFocusAdjacentGroup={shared.canFocusAdjacentGroup}
-						renderTabAdornment={shared.renderTabAdornment}
-						trailing={
-							showAlignmentMenu ? (
-								<BottomAlignmentMenu
-									alignment={shared.document.bottom.alignment}
-									onChange={onAlignmentChange}
-									onHide={() => shared.onHideSide("bottom")}
-								/>
-							) : null
-						}
-					/>
-				</div>
-				{group.tabs.length === 0 ? (
-					<IconTooltip
-						label={isLayoutUnavailable(groupRemoval) ? groupRemoval.reason : "Remove group"}
-					>
-						<button
-							type="button"
-							data-testid="remove-layout-group"
-							aria-label="Remove group"
-							disabled={isLayoutUnavailable(groupRemoval)}
-							onClick={() => {
-								if (!isLayoutUnavailable(groupRemoval)) shared.onApply(groupRemoval);
-							}}
-							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
-						>
-							<X className="size-14" />
-						</button>
-					</IconTooltip>
-				) : null}
-				<button
-					type="button"
-					data-testid="bottom-group-fold"
-					aria-label="Fold bottom group"
-					aria-expanded="true"
-					onClick={onFold}
-					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-b border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-				>
-					<ChevronLeft className="size-16" />
-				</button>
-			</div>
-			<div
+			<AuxiliaryGroupHeader
+				region="bottom"
+				group={group}
+				selected={selected}
+				shared={shared}
+				onFold={onFold}
+				trailing={
+					showAlignmentMenu ? (
+						<BottomAlignmentMenu
+							alignment={shared.document.bottom.alignment}
+							onChange={onAlignmentChange}
+							onHide={() => shared.onHideSide("bottom")}
+						/>
+					) : null
+				}
+			/>
+			<section
 				id={groupPanelId(location)}
-				role="tabpanel"
+				role={selected?.kind === "terminal" ? "tabpanel" : undefined}
 				aria-labelledby={selected ? tabDomId(location, selected.id) : undefined}
 				className="relative min-h-0 flex-1 overflow-auto"
 			>
@@ -256,7 +207,7 @@ export const BottomGroupView = memo(function BottomGroupView({
 						<button
 							type="button"
 							data-testid="bottom-new-terminal"
-							onClick={onNewTerminal}
+							onClick={() => shared.onNewTerminal(group.id, "bottom")}
 							className="flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 						>
 							<SquareTerminal className="size-16" /> New terminal
@@ -264,93 +215,21 @@ export const BottomGroupView = memo(function BottomGroupView({
 					</div>
 				)}
 				<BottomCreationTargets group={group} groupIndex={groupIndex} shared={shared} />
-			</div>
+			</section>
 		</section>
 	);
 });
 BottomGroupView.displayName = "BottomGroupView";
 
-export function BottomFoldedGroup({
-	group,
-	groupIndex,
-	selectedId,
-	showAlignmentMenu,
-	onExpand,
-	onAlignmentChange,
-	shared,
-}: {
-	group: LayoutBottomGroup;
-	groupIndex: number;
-	selectedId: string | undefined;
-	showAlignmentMenu: boolean;
-	onExpand: () => void;
-	onAlignmentChange: (alignment: LayoutBottomAlignment) => void;
-	shared: SharedGroupProps;
-}) {
-	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
-	const selectedName = selected ? layoutTabName(selected) : undefined;
-	const location: LayoutGroupLocation = { area: "bottom", groupId: group.id };
-	const restoreId = groupDomId(location);
-	const panelId = groupPanelId(location);
-	const dropEnabled = !!shared.draggingTab && canPlaceLayoutTab(shared.draggingTab, "bottom");
-	const { setNodeRef, isOver } = useDroppable({
-		id: tupleKey("dnd-bottom-folded", group.id),
-		data: { target: { kind: "group", location } satisfies DropTarget },
-		disabled: !dropEnabled,
-	});
-	return (
-		<section
-			ref={setNodeRef}
-			data-testid="bottom-group"
-			data-group-id={group.id}
-			data-folded="true"
-			data-drop-active={isOver || undefined}
-			data-drop-hint={(dropEnabled && !isOver) || undefined}
-			aria-label={
-				selectedName ? `Folded bottom group: ${selectedName}` : "Folded empty bottom group"
-			}
-			className="relative flex h-full items-stretch overflow-hidden border-border-default border-r bg-container-sidebar-bg data-[drop-hint]:bg-primary-subtle data-[drop-active]:bg-primary-soft"
-		>
-			<div className="flex min-h-0 w-full flex-col">
-				{showAlignmentMenu ? (
-					<BottomAlignmentMenu
-						alignment={shared.document.bottom.alignment}
-						onChange={onAlignmentChange}
-						onHide={() => shared.onHideSide("bottom")}
-					/>
-				) : null}
-				<button
-					id={restoreId}
-					type="button"
-					data-testid="bottom-group-restore"
-					aria-label={`Expand bottom group${selectedName ? ` ${selectedName}` : ""}`}
-					aria-controls={panelId}
-					aria-expanded="false"
-					onClick={onExpand}
-					className="flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-				>
-					<span className="truncate [writing-mode:vertical-rl]">
-						{selectedName ?? "Empty group"}
-					</span>
-				</button>
-				<div id={panelId} role="tabpanel" aria-labelledby={restoreId} hidden />
-			</div>
-			<BottomCreationTargets group={group} groupIndex={groupIndex} shared={shared} />
-		</section>
-	);
-}
-
 export const BottomStack = memo(function BottomStack({
 	attention,
 	projectionEpoch,
 	onCommit,
-	onNewTerminal,
 	...shared
 }: SharedGroupProps & {
 	attention: LayoutAttention;
 	projectionEpoch: number;
 	onCommit: WorkbenchProps["onCommit"];
-	onNewTerminal: WorkbenchProps["onNewTerminal"];
 }) {
 	const [sizeRef, size] = useElementSize();
 	const region = shared.document.bottom;
@@ -360,34 +239,30 @@ export const BottomStack = memo(function BottomStack({
 		const next = setBottomAlignment(shared.document, alignment);
 		if (next !== shared.document) onCommit(next);
 	};
-	const total = region.groups.reduce((sum, group) => sum + group.weight, 0) || 1;
-	const current = region.groups.map((group) => (group.weight / total) * 100);
+	const visible = useMemo(
+		() => visibleAuxiliaryGroups(shared.document, "bottom"),
+		[shared.document],
+	);
+	const current = useMemo(() => visible.map(({ size }) => size), [visible]);
+	const groupRef = useRef<ImperativePanelGroupHandle>(null);
+	const roomForMinimums = size.width >= visible.length * LAYOUT_LIMITS.minBottomGroupWidth;
+	const settled = useTopologySettled(tupleKey("bottom", ...visible.map(({ group }) => group.id)));
+	const expandedMinimum = !settled
+		? 0
+		: roomForMinimums && size.width > 0
+			? (LAYOUT_LIMITS.minBottomGroupWidth / size.width) * 100
+			: Math.min(4, 100 / Math.max(1, visible.length));
+	useEnforcedLayout(groupRef, current, settled);
 	const resize = useCommittedSizes(
 		current,
-		projectionEpoch,
+		tupleKey(shared.workspaceId, String(projectionEpoch)),
+		groupRef,
 		(sizes) => {
-			const next = resizeAuxiliaryGroups(shared.document, "bottom", sizes);
+			const next = resizeVisibleAuxiliaryGroups(shared.document, "bottom", sizes);
 			if (next !== shared.document) onCommit(next);
 		},
 		shared.onGestureCanceled,
 	);
-	const foldedCount = region.groups.filter((group) => group.folded).length;
-	const expandedCount = region.groups.length - foldedCount;
-	const roomForMinimums =
-		size.width >=
-		foldedCount * LAYOUT_LIMITS.foldedBottomWidth +
-			expandedCount * LAYOUT_LIMITS.minBottomGroupWidth;
-	const equalShare = 100 / Math.max(1, region.groups.length);
-	const requestedFoldedPercent =
-		size.width > 0 ? (LAYOUT_LIMITS.foldedBottomWidth / size.width) * 100 : 4;
-	const foldedPercent = roomForMinimums
-		? requestedFoldedPercent
-		: Math.min(requestedFoldedPercent, equalShare);
-	const expandedMinimum =
-		roomForMinimums && size.width > 0
-			? (LAYOUT_LIMITS.minBottomGroupWidth / size.width) * 100
-			: Math.min(4, equalShare);
-	const foldedSpacerPercent = Math.max(0, 100 - foldedCount * foldedPercent);
 	return (
 		<aside
 			ref={sizeRef}
@@ -395,17 +270,8 @@ export const BottomStack = memo(function BottomStack({
 			data-testid="bottom-panel"
 			className="relative h-full min-h-0 min-w-0 overflow-hidden"
 		>
-			<ResizablePanelGroup
-				key={tupleKey(
-					"bottom-stack",
-					String(projectionEpoch),
-					...region.groups.flatMap((group) => [group.id, String(group.folded)]),
-				)}
-				direction="horizontal"
-				onLayout={(sizes) => resize.onLayout(sizes.slice(0, region.groups.length))}
-			>
-				{region.groups.map((group, index) => {
-					const sizePercent = group.folded ? foldedPercent : current[index];
+			<ResizablePanelGroup ref={groupRef} direction="horizontal" onLayout={resize.onLayout}>
+				{visible.map(({ group, documentIndex, size: sizePercent }, index) => {
 					const fold = () => {
 						const result = setAuxiliaryGroupFolded(
 							shared.document,
@@ -413,14 +279,7 @@ export const BottomStack = memo(function BottomStack({
 							group.id,
 							!group.folded,
 						);
-						if (isLayoutUnavailable(result)) return;
-						const selectedId = readLayoutSelection(attention, group.id);
-						const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
-						shared.onApply({
-							...result,
-							focusGroupId: group.id,
-							...(group.folded && selected ? { focusTabId: selected.id } : {}),
-						});
+						if (!isLayoutUnavailable(result)) shared.onApply({ ...result, focusGroupId: group.id });
 					};
 					return (
 						<PanelWithHandle
@@ -428,52 +287,27 @@ export const BottomStack = memo(function BottomStack({
 							id={tupleKey("bottom-stack-panel", group.id)}
 							order={index + 1}
 							defaultSize={sizePercent}
-							minSize={group.folded ? foldedPercent : expandedMinimum}
-							maxSize={group.folded ? foldedPercent : 100}
-							showHandle={index < region.groups.length - 1}
+							minSize={expandedMinimum}
+							showHandle={index < visible.length - 1}
 							handleDirection="horizontal"
 							handleTestId="bottom-group-resize"
-							handleDisabled={!roomForMinimums || expandedCount < 2}
+							handleDisabled={!roomForMinimums || visible.length < 2}
 							onDragging={resize.onDragging}
 							onKeyboard={resize.onKeyboard}
 							onKeyboardEnd={resize.onKeyboardEnd}
 						>
-							{group.folded ? (
-								<BottomFoldedGroup
-									group={group}
-									groupIndex={index}
-									selectedId={readLayoutSelection(attention, group.id)}
-									showAlignmentMenu={group.id === alignmentMenuGroupId}
-									onExpand={fold}
-									onAlignmentChange={commitAlignment}
-									shared={shared}
-								/>
-							) : (
-								<BottomGroupView
-									group={group}
-									groupIndex={index}
-									selectedId={readLayoutSelection(attention, group.id)}
-									showAlignmentMenu={group.id === alignmentMenuGroupId}
-									onFold={fold}
-									onNewTerminal={() => onNewTerminal(group.id, "bottom")}
-									onAlignmentChange={commitAlignment}
-									{...shared}
-								/>
-							)}
+							<BottomGroupView
+								group={group}
+								groupIndex={documentIndex}
+								selectedId={readLayoutSelection(attention, group.id)}
+								showAlignmentMenu={group.id === alignmentMenuGroupId}
+								onFold={fold}
+								onAlignmentChange={commitAlignment}
+								{...shared}
+							/>
 						</PanelWithHandle>
 					);
 				})}
-				{expandedCount === 0 && foldedSpacerPercent > 0 ? (
-					<ResizablePanel
-						id="bottom-folded-spacer"
-						order={region.groups.length + 1}
-						defaultSize={foldedSpacerPercent}
-						minSize={foldedSpacerPercent}
-						maxSize={foldedSpacerPercent}
-					>
-						<div aria-hidden="true" className="h-full" />
-					</ResizablePanel>
-				) : null}
 			</ResizablePanelGroup>
 		</aside>
 	);
@@ -526,7 +360,7 @@ export function BottomDropZone({
 			}
 			data-drop-active={isOver || undefined}
 			data-drop-hint={!isOver || undefined}
-			className="pointer-events-auto absolute inset-x-0 bottom-0 z-20 h-24 border-primary transition-colors data-[drop-hint]:border-t data-[drop-hint]:bg-primary-subtle data-[drop-active]:border-t-2 data-[drop-active]:bg-primary-soft"
+			className="pointer-events-auto relative z-20 h-24 min-w-32 flex-1 self-center border-primary transition-colors data-[drop-hint]:border-t data-[drop-hint]:bg-primary-subtle data-[drop-active]:border-t-2 data-[drop-active]:bg-primary-soft"
 		/>
 	);
 }

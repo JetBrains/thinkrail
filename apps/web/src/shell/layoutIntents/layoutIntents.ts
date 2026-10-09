@@ -10,6 +10,7 @@ import {
 import { errorText } from "../../transport";
 import { currentChatDestination, hydrateChatResource } from "../chatReconciliation";
 import {
+	canJoinAuxiliaryGroup,
 	closeLayoutTab,
 	collectAllGroups,
 	createAuxiliaryGroup,
@@ -66,10 +67,23 @@ export function placeTerminalForIntent(
 	document: WorkspaceLayoutDocument,
 	attention: LayoutAttention,
 	tab: LayoutTerminalTab,
-	target: LayoutGroupLocation | undefined,
+	target: (LayoutGroupLocation & { newPaneBelow?: boolean }) | undefined,
 	limits: { maxSideGroups: number; maxBottomGroups: number },
 	reveal = true,
 ): LayoutOperationResult {
+	if (target && target.area !== "center" && target.newPaneBelow) {
+		const index = document[target.area].groups.findIndex((group) => group.id === target.groupId);
+		if (index >= 0) {
+			const created = createAuxiliaryGroup(
+				document,
+				target.area,
+				tab,
+				index + 1,
+				target.area === "bottom" ? limits.maxBottomGroups : limits.maxSideGroups,
+			);
+			if (!isLayoutUnavailable(created)) return created;
+		}
+	}
 	if (target?.area === "center") {
 		const groupId =
 			findCenterGroup(document.center, target.groupId)?.id ??
@@ -80,7 +94,7 @@ export function placeTerminalForIntent(
 	}
 	if (target) {
 		const targetGroup = findAuxiliaryGroup(document, target.area, target.groupId);
-		if (targetGroup) {
+		if (targetGroup && canJoinAuxiliaryGroup(targetGroup, tab)) {
 			const moved = moveTabToGroup(document, tab, target);
 			if (isLayoutUnavailable(moved)) return moved;
 			if (!reveal) return preservePassiveAuxiliaryPlacement(document, moved, target);
@@ -96,9 +110,9 @@ export function placeTerminalForIntent(
 		}
 	}
 	const preferredId = attention.lastFocusedSideGroupId.bottom;
+	const terminalPanes = document.bottom.groups.filter((group) => canJoinAuxiliaryGroup(group, tab));
 	const bottomGroup =
-		document.bottom.groups.find((group) => group.id === preferredId) ??
-		document.bottom.groups.at(-1);
+		terminalPanes.find((group) => group.id === preferredId) ?? terminalPanes.at(-1);
 	if (bottomGroup) {
 		const moved = moveTabToGroup(document, tab, {
 			area: "bottom",
@@ -173,7 +187,7 @@ export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
 
 export function useLayoutIntentProcessing(
 	workspaceId: string,
-	commit: (document: WorkspaceLayoutDocument) => void,
+	commit: (document: WorkspaceLayoutDocument, attention?: LayoutAttention) => void,
 	changeAttention: (next: LayoutAttention) => void,
 	requestFocus: (request: LayoutTabFocusRequest) => void,
 ): void {
@@ -228,7 +242,6 @@ export function useLayoutIntentProcessing(
 		let result:
 			| { document: WorkspaceLayoutDocument; focusGroupId?: string; focusTabId?: string }
 			| undefined;
-		let terminalTargetAfterCommit: string | undefined;
 		switch (layoutIntent.kind) {
 			case "open": {
 				const cacheTab = toLayoutTab(layoutIntent.tab);
@@ -306,7 +319,7 @@ export function useLayoutIntentProcessing(
 				);
 				changeAttention(nextAttention);
 				if (layoutIntent.focus !== false) {
-					requestFocus({ key: layoutIntent.id, location, tabId: selectedTabId });
+					requestFocus({ workspaceId, key: layoutIntent.id, location, tabId: selectedTabId });
 				}
 				if (placed.kind === "chat" && layoutIntent.historyRequestId) {
 					const state = useAppStore.getState();
@@ -385,7 +398,11 @@ export function useLayoutIntentProcessing(
 					? "center"
 					: (layoutIntent.targetArea ?? "center");
 				const target = requestedGroupId
-					? { area: requestedArea, groupId: requestedGroupId }
+					? {
+							area: requestedArea,
+							groupId: requestedGroupId,
+							...(layoutIntent.newPaneBelow && !routedCenterGroupId ? { newPaneBelow: true } : {}),
+						}
 					: undefined;
 				const placed = placeTerminalForIntent(
 					document,
@@ -422,12 +439,15 @@ export function useLayoutIntentProcessing(
 				const location = findTabLocation(document, tab.id);
 				if (location) {
 					changeAttention(selectTab(attention, location, tab.id));
-					requestFocus({ key: layoutIntent.id, location, tabId: tab.id });
+					requestFocus({ workspaceId, key: layoutIntent.id, location, tabId: tab.id });
 				}
 				break;
 			}
 			case "toggle-side":
-				if (document[layoutIntent.side].visible) {
+				if (
+					document[layoutIntent.side].visible &&
+					document[layoutIntent.side].groups.some((group) => !group.folded)
+				) {
 					result = hideSide(document, layoutIntent.side, attention);
 				} else {
 					const shown = showSide(document, layoutIntent.side, maxSideGroups, attention);
@@ -435,16 +455,11 @@ export function useLayoutIntentProcessing(
 				}
 				break;
 			case "toggle-bottom":
-				if (document.bottom.visible) {
+				if (document.bottom.visible && document.bottom.groups.some((group) => !group.folded)) {
 					result = hideBottom(document, attention);
 				} else {
 					const shown = showBottom(document, maxSideGroups, maxBottomGroups, attention);
-					if (!isLayoutUnavailable(shown)) {
-						result = shown;
-						if (shown.document.bottom.groups.every((group) => group.tabs.length === 0)) {
-							terminalTargetAfterCommit = shown.focusGroupId ?? shown.document.bottom.groups[0]?.id;
-						}
-					}
+					if (!isLayoutUnavailable(shown)) result = shown;
 				}
 				break;
 		}
@@ -482,19 +497,15 @@ export function useLayoutIntentProcessing(
 					);
 				}
 				requestFocus({
+					workspaceId,
 					key: layoutIntent.id,
 					location,
 					...(result.focusTabId ? { tabId: result.focusTabId } : {}),
 				});
 			}
 		}
-		changeAttention(nextAttention);
-		if (result.document !== document) commit(result.document);
-		if (terminalTargetAfterCommit) {
-			useAppStore
-				.getState()
-				.addTerminal(workspaceId, undefined, terminalTargetAfterCommit, "bottom");
-		}
+		if (result.document !== document) commit(result.document, nextAttention);
+		else changeAttention(nextAttention);
 	}, [
 		attention,
 		changeAttention,

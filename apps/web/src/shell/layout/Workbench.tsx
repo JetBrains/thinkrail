@@ -1,29 +1,3 @@
-import { BottomAlignedRow, BottomDropZone, BottomStack } from "./workbenchBottom";
-import { CenterNodeView } from "./workbenchCenter";
-import type {
-	DragData,
-	DropTarget,
-	LayoutTabFocusRequest,
-	SharedGroupProps,
-	WorkbenchProps,
-} from "./workbenchShared";
-import {
-	findLayoutGroupTabs,
-	focusLayoutRequest,
-	groupDomId,
-	sameSizes,
-	tabDomId,
-	tabIcon,
-	useCommittedSizes,
-	useElementSize,
-	useSideResizeBinder,
-	visibleFocusableGroups,
-	workbenchCollisionDetection,
-} from "./workbenchShared";
-import { HiddenSideRail, SideStack } from "./workbenchSide";
-
-export type { LayoutTabFocusRequest, WorkbenchProps } from "./workbenchShared";
-
 import {
 	DndContext,
 	type DragEndEvent,
@@ -42,12 +16,12 @@ import {
 } from "@thinkrail/ui/resizable";
 import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
 import { readLayoutNavigationClock, readLayoutSelection, tupleKey } from "../../lib";
+import { projectWorkbenchRatio, restoreWorkbenchRatio } from "./auxiliaryPresentation";
 import { closeRequestTarget } from "./closeRequest";
 import {
 	canCreateAuxiliaryGroup,
-	canCreateSideGroup,
+	canJoinAuxiliaryGroup,
 	canPlaceLayoutTab,
-	canShowSide,
 	closePlacedResource,
 	collectAllGroups,
 	createAuxiliaryGroup,
@@ -72,11 +46,46 @@ import {
 	resizeSideRegion,
 	revealTool,
 	selectTab,
-	showSide,
+	setAuxiliaryGroupFolded,
+	setBottomAlignment,
 	splitCenterGroup,
 } from "./model";
+import { tabIcon } from "./tabIcon";
 import type { LayoutAuxiliaryRegion, LayoutTab, LayoutToolId } from "./types";
+import {
+	BottomAlignedRow,
+	BottomAlignmentMenu,
+	BottomDropZone,
+	BottomStack,
+} from "./workbenchBottom";
+import { CenterNodeView } from "./workbenchCenter";
+import { AuxiliaryRegionRail } from "./workbenchRails";
+import type {
+	DragData,
+	DropTarget,
+	LayoutTabFocusRequest,
+	SharedGroupProps,
+	WorkbenchProps,
+} from "./workbenchShared";
+import {
+	findLayoutGroupTabs,
+	groupDomId,
+	tabDomId,
+	useCommittedSizes,
+	useElementSize,
+	useEnforcedLayout,
+	useLayoutFocus,
+	useSideResizeBinder,
+	useTopologySettled,
+	visibleFocusableGroups,
+	workbenchCollisionDetection,
+} from "./workbenchShared";
+import { SideStack } from "./workbenchSide";
+
+export type { LayoutTabFocusRequest, WorkbenchProps } from "./workbenchShared";
+
 export function Workbench({
+	workspaceId,
 	document,
 	attention,
 	maxSideGroups,
@@ -89,7 +98,6 @@ export function Workbench({
 	renderToolBody,
 	renderEmptyCenter,
 	renderCenterActions,
-	renderSideMenuActions,
 	onCommit,
 	onAttentionChange,
 	onUserNavigation,
@@ -106,9 +114,14 @@ export function Workbench({
 	const tabSelectionEpoch = useRef(0);
 	useInsertionEffect(() => {
 		tabSelectionEpoch.current += 1;
-	}, [projectionEpoch]);
+	}, [projectionEpoch, workspaceId]);
 	const [workbenchRef, { width: workbenchWidth, height: workbenchHeight }] = useElementSize();
+	const [columnsRef, { width: columnsWidth }] = useElementSize();
+	const [bottomBodyRef, { height: bottomBodyHeight }] = useElementSize();
+	const gestureContext = tupleKey(workspaceId, String(projectionEpoch));
+	const workspaceRef = useRef(workspaceId);
 	const [focusAfterClose, setFocusAfterClose] = useState<{
+		workspaceId: string;
 		closedTab: LayoutTab;
 		fallbackDomId: string;
 	} | null>(null);
@@ -117,51 +130,34 @@ export function Workbench({
 	useInsertionEffect(() => {
 		documentRef.current = document;
 		attentionRef.current = attention;
+		workspaceRef.current = workspaceId;
 	});
 	const [localFocusRequest, setLocalFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
-	const dragStartEpoch = useRef(projectionEpoch);
+	const dragStartEpoch = useRef(gestureContext);
 	const canceled = useRef(false);
-
-	useEffect(() => {
-		if (!focusRequest) return;
-		const frame = requestAnimationFrame(() => focusLayoutRequest(focusRequest));
-		return () => cancelAnimationFrame(frame);
-	}, [focusRequest]);
-
-	useEffect(() => {
-		if (!localFocusRequest) return;
-		const frame = requestAnimationFrame(() => focusLayoutRequest(localFocusRequest));
-		return () => cancelAnimationFrame(frame);
-	}, [localFocusRequest]);
+	useLayoutFocus(focusRequest, workspaceId, workspaceRef);
+	useLayoutFocus(localFocusRequest, workspaceId, workspaceRef);
 
 	useEffect(() => {
 		if (!draggingTab) return;
 		if (
-			dragStartEpoch.current === projectionEpoch &&
+			dragStartEpoch.current === gestureContext &&
 			findTabLocation(document, draggingTab.id) !== null
 		)
 			return;
 		canceled.current = true;
 		setDraggingTab(null);
 		onGestureCanceled?.();
-	}, [document, draggingTab, onGestureCanceled, projectionEpoch]);
+	}, [document, draggingTab, onGestureCanceled, gestureContext]);
 
-	const updateAttentionForResult = useCallback(
+	const apply = useCallback(
 		(result: LayoutMutationResult) => {
 			let next = reconcileAttention(result.document, attentionRef.current, documentRef.current);
 			if (result.focusGroupId && result.focusTabId) {
 				const location = findTabLocation(result.document, result.focusTabId);
 				if (location) next = selectTab(next, location, result.focusTabId, true, true);
 			}
-			onAttentionChange(next);
-		},
-		[onAttentionChange],
-	);
-
-	const apply = useCallback(
-		(result: LayoutMutationResult) => {
-			updateAttentionForResult(result);
-			onCommit(result.document);
+			onCommit(result.document, next);
 			const focusGroupId = result.focusGroupId;
 			if (focusGroupId) {
 				const location = result.focusTabId
@@ -177,6 +173,7 @@ export function Workbench({
 								.find((candidate) => candidate !== null) ?? null);
 				if (location) {
 					setLocalFocusRequest({
+						workspaceId,
 						key: createLayoutId("focus"),
 						location,
 						...(result.focusTabId ? { tabId: result.focusTabId } : {}),
@@ -184,7 +181,7 @@ export function Workbench({
 				}
 			}
 		},
-		[onCommit, updateAttentionForResult],
+		[onCommit, workspaceId],
 	);
 
 	const selectTabInGroup = useCallback(
@@ -240,6 +237,7 @@ export function Workbench({
 
 	const close = useCallback(
 		(tab: LayoutTab) => {
+			const requestedWorkspaceId = workspaceRef.current;
 			const requestedDocument = documentRef.current;
 			const requestedAttention = attentionRef.current;
 			const requestedSelectionEpoch = tabSelectionEpoch.current;
@@ -265,6 +263,7 @@ export function Workbench({
 				return {
 					document: result.document,
 					onAccepted: (current) => {
+						if (workspaceRef.current !== requestedWorkspaceId) return;
 						const acceptedDocument = current?.document ?? result.document;
 						const latestAttention = current?.attention ?? requestedAttention;
 						let nextAttention = reconcileAttention(
@@ -332,6 +331,7 @@ export function Workbench({
 						}
 						if (countsAsNavigation && focusLocation) {
 							setFocusAfterClose({
+								workspaceId: requestedWorkspaceId,
 								closedTab: tab,
 								fallbackDomId: focusTabId
 									? tabDomId(focusLocation, focusTabId)
@@ -349,9 +349,10 @@ export function Workbench({
 	useEffect(
 		() =>
 			subscribeCloseRequest?.(() => {
+				const activeElement = globalThis.document.activeElement;
+				if (activeElement?.closest("[data-rail-entry]")) return;
 				const focusedGroupId =
-					globalThis.document.activeElement?.closest<HTMLElement>("[data-group-id]")?.dataset
-						.groupId;
+					activeElement?.closest<HTMLElement>("[data-group-id]")?.dataset.groupId;
 				const tab = closeRequestTarget(documentRef.current, attentionRef.current, focusedGroupId);
 				if (tab) close(tab);
 			}),
@@ -360,23 +361,24 @@ export function Workbench({
 
 	useEffect(() => {
 		const pending = focusAfterClose;
-		if (!pending) return;
+		if (!pending || pending.workspaceId !== workspaceId) return;
 		if (findPlacedResource(document, pending.closedTab)) {
 			setFocusAfterClose((current) => (current === pending ? null : current));
 			return;
 		}
 		const frame = requestAnimationFrame(() => {
+			if (workspaceRef.current !== pending.workspaceId) return;
 			globalThis.document.getElementById(pending.fallbackDomId)?.focus();
 			setFocusAfterClose((current) => (current === pending ? null : current));
 		});
 		return () => cancelAnimationFrame(frame);
-	}, [document, focusAfterClose]);
+	}, [document, focusAfterClose, workspaceId]);
 
 	const handleDragStart = (event: DragStartEvent) => {
 		const data = event.active.data.current as DragData | undefined;
 		if (!data?.tab) return;
 		tabSelectionEpoch.current += 1;
-		dragStartEpoch.current = projectionEpoch;
+		dragStartEpoch.current = gestureContext;
 		canceled.current = false;
 		setDraggingTab(data.tab);
 	};
@@ -386,7 +388,7 @@ export function Workbench({
 		if (
 			!tab ||
 			canceled.current ||
-			dragStartEpoch.current !== projectionEpoch ||
+			dragStartEpoch.current !== gestureContext ||
 			findTabLocation(document, tab.id) === null
 		)
 			return;
@@ -430,15 +432,27 @@ export function Workbench({
 						: { reason: "That tab type cannot move to an auxiliary region." };
 				break;
 		}
-		if (!isLayoutUnavailable(result)) apply(result);
+		if (isLayoutUnavailable(result)) return;
+		if (
+			(target.kind === "group" || target.kind === "insert") &&
+			target.location.area !== "center"
+		) {
+			const { area, groupId } = target.location;
+			if (findAuxiliaryGroup(result.document, area, groupId)?.folded) {
+				const unfolded = setAuxiliaryGroupFolded(result.document, area, groupId, false);
+				if (!isLayoutUnavailable(unfolded)) result = { ...result, document: unfolded.document };
+			}
+		}
+		apply(result);
 	};
 
-	const leftVisible = document.left.visible && document.left.groups.length > 0;
-	const rightVisible = document.right.visible && document.right.groups.length > 0;
+	const leftVisible = document.left.visible && document.left.groups.some((group) => !group.folded);
+	const rightVisible =
+		document.right.visible && document.right.groups.some((group) => !group.folded);
 	const visibleSideMinimums = (leftVisible ? 8 : 0) + (rightVisible ? 8 : 0);
 	const centerMinimumPercent = Math.min(
 		Math.max(10, 100 - visibleSideMinimums),
-		workbenchWidth > 0 ? (LAYOUT_LIMITS.minCenterWidth / workbenchWidth) * 100 : 10,
+		columnsWidth > 0 ? (LAYOUT_LIMITS.minCenterWidth / columnsWidth) * 100 : 10,
 	);
 	const leftOwnsBottomCorner =
 		leftVisible &&
@@ -450,8 +464,15 @@ export function Workbench({
 		document.bottom.alignment !== "full";
 	const leftInAlignedRow = leftVisible && !leftOwnsBottomCorner;
 	const rightInAlignedRow = rightVisible && !rightOwnsBottomCorner;
-	const globalLeftCurrent = leftVisible ? document.left.width * 100 : 0;
-	const globalRightCurrent = rightVisible ? document.right.width * 100 : 0;
+	const desiredLeft = leftVisible
+		? projectWorkbenchRatio(document.left.width, workbenchWidth, columnsWidth) * 100
+		: 0;
+	const desiredRight = rightVisible
+		? projectWorkbenchRatio(document.right.width, workbenchWidth, columnsWidth) * 100
+		: 0;
+	const sideCompression = Math.min(1, 90 / Math.max(Number.EPSILON, desiredLeft + desiredRight));
+	const globalLeftCurrent = desiredLeft * sideCompression;
+	const globalRightCurrent = desiredRight * sideCompression;
 	const alignedWidthCurrent =
 		100 -
 		(leftOwnsBottomCorner ? globalLeftCurrent : 0) -
@@ -489,7 +510,12 @@ export function Workbench({
 			const collapsedSides: LayoutSide[] = [];
 			for (const [side, size] of entries) {
 				if (size <= Number.EPSILON) collapsedSides.push(side);
-				else next = resizeSideRegion(next, side, size / 100);
+				else
+					next = resizeSideRegion(
+						next,
+						side,
+						restoreWorkbenchRatio(size / 100, workbenchWidth, columnsWidth),
+					);
 			}
 			if (collapsedSides.length === 0) {
 				if (next !== document) onCommit(next);
@@ -501,16 +527,20 @@ export function Workbench({
 			}
 			apply(result);
 		},
-		[apply, document, onCommit],
+		[apply, document, onCommit, workbenchWidth, columnsWidth],
 	);
+	const outerSettled = useTopologySettled(
+		tupleKey(String(leftOwnsBottomCorner), String(rightOwnsBottomCorner)),
+	);
+	const alignedColumnMinimum = outerSettled
+		? Math.min(100, centerMinimumPercent + (leftInAlignedRow ? 8 : 0) + (rightInAlignedRow ? 8 : 0))
+		: 0;
 	const outerGroupRef = useRef<ImperativePanelGroupHandle>(null);
-	useEffect(() => {
-		const group = outerGroupRef.current;
-		if (group && !sameSizes(group.getLayout(), outerCurrent)) group.setLayout(outerCurrent);
-	}, [outerCurrent]);
+	useEnforcedLayout(outerGroupRef, outerCurrent, outerSettled);
 	const outerResize = useCommittedSizes(
 		outerCurrent,
-		projectionEpoch,
+		gestureContext,
+		outerGroupRef,
 		(sizes) => {
 			const side = activeSideResize.current;
 			if (side === "left" && leftOwnsBottomCorner) {
@@ -556,16 +586,20 @@ export function Workbench({
 		projectedAlignedWidth,
 		rightInAlignedRow,
 	]);
+	const alignedWidth = Math.max(Number.EPSILON, projectedAlignedWidth);
+	const alignedRowSettled = useTopologySettled(
+		tupleKey(String(leftInAlignedRow), String(rightInAlignedRow)),
+	);
+	const alignedSideMinimum = alignedRowSettled ? Math.min(100, (8 / alignedWidth) * 100) : 0;
+	const alignedCenterMinimum = alignedRowSettled
+		? Math.min(100, (centerMinimumPercent / alignedWidth) * 100)
+		: 0;
 	const alignedRowGroupRef = useRef<ImperativePanelGroupHandle>(null);
-	useEffect(() => {
-		const group = alignedRowGroupRef.current;
-		if (group && !sameSizes(group.getLayout(), alignedRowCurrent, 0.01)) {
-			group.setLayout(alignedRowCurrent);
-		}
-	}, [alignedRowCurrent]);
+	useEnforcedLayout(alignedRowGroupRef, alignedRowCurrent, alignedRowSettled, 0.01);
 	const alignedRowResize = useCommittedSizes(
 		alignedRowCurrent,
-		projectionEpoch,
+		gestureContext,
+		alignedRowGroupRef,
 		(sizes) => {
 			const side = activeSideResize.current;
 			if (side === "left" && leftInAlignedRow) {
@@ -581,37 +615,55 @@ export function Workbench({
 	const outerRightResize = bindSideResize("right", outerResize);
 	const alignedLeftResize = bindSideResize("left", alignedRowResize);
 	const alignedRightResize = bindSideResize("right", alignedRowResize);
-	const bottomVisible = document.bottom.visible && document.bottom.groups.length > 0;
-	const hiddenBottomTargetGroupId =
-		document.bottom.groups.find((group) => group.id === attention.lastFocusedSideGroupId.bottom)
-			?.id ?? document.bottom.groups.at(-1)?.id;
-	const bottomCurrent = useMemo(
-		() => [(1 - document.bottom.height) * 100, document.bottom.height * 100],
-		[document.bottom.height],
+	const bottomVisible =
+		document.bottom.visible && document.bottom.groups.some((group) => !group.folded);
+	const hiddenBottomTargetGroupId = (() => {
+		if (!draggingTab) return undefined;
+		const panes = document.bottom.groups.filter((group) =>
+			canJoinAuxiliaryGroup(group, draggingTab),
+		);
+		return (
+			panes.find((group) => group.id === attention.lastFocusedSideGroupId.bottom)?.id ??
+			panes.at(-1)?.id
+		);
+	})();
+	const bottomCurrent = useMemo(() => {
+		if (!bottomVisible) return [100];
+		const height = Math.min(
+			0.9,
+			projectWorkbenchRatio(document.bottom.height, workbenchHeight, bottomBodyHeight),
+		);
+		return [(1 - height) * 100, height * 100];
+	}, [bottomVisible, document.bottom.height, workbenchHeight, bottomBodyHeight]);
+	const bottomMaximumPercent = Math.min(
+		90,
+		projectWorkbenchRatio(LAYOUT_LIMITS.maxBottomHeight, workbenchHeight, bottomBodyHeight) * 100,
 	);
 	const bottomGroupRef = useRef<ImperativePanelGroupHandle>(null);
-	useEffect(() => {
-		const group = bottomGroupRef.current;
-		if (group && !sameSizes(group.getLayout(), bottomCurrent)) group.setLayout(bottomCurrent);
-	}, [bottomCurrent]);
+	useEnforcedLayout(bottomGroupRef, bottomCurrent, null);
 	const bottomResize = useCommittedSizes(
 		bottomCurrent,
-		projectionEpoch,
+		gestureContext,
+		bottomGroupRef,
 		(sizes) => {
 			const bottomSize = sizes[1] ?? bottomCurrent[1] ?? 30;
 			if (bottomSize <= Number.EPSILON) {
 				apply(hideBottom(document, attentionRef.current));
 				return;
 			}
-			const next = resizeBottomRegion(document, bottomSize / 100);
+			const next = resizeBottomRegion(
+				document,
+				restoreWorkbenchRatio(bottomSize / 100, workbenchHeight, bottomBodyHeight),
+			);
 			if (next !== document) onCommit(next);
 		},
 		onGestureCanceled,
 	);
 	const bottomMinimumPercent = Math.min(
-		LAYOUT_LIMITS.maxBottomHeight * 100,
-		workbenchHeight > 0
-			? ((LAYOUT_LIMITS.minBottomBodyHeight + LAYOUT_LIMITS.foldedSideHeight) / workbenchHeight) *
+		bottomMaximumPercent,
+		bottomBodyHeight > 0
+			? ((LAYOUT_LIMITS.minBottomBodyHeight + LAYOUT_LIMITS.auxiliaryHeaderHeight) /
+					bottomBodyHeight) *
 					100
 			: 10,
 	);
@@ -643,6 +695,7 @@ export function Workbench({
 				onDirectTabActivation?.(selected);
 				onAttentionChange(selectTab(currentAttention, target.location, selected.id));
 				setLocalFocusRequest({
+					workspaceId,
 					key: createLayoutId("focus-group"),
 					location: target.location,
 					...(target.tabControlsRendered ? { tabId: selected.id } : {}),
@@ -659,6 +712,7 @@ export function Workbench({
 					),
 				});
 				setLocalFocusRequest({
+					workspaceId,
 					key: createLayoutId("focus-group"),
 					location: target.location,
 				});
@@ -678,11 +732,12 @@ export function Workbench({
 			};
 			onAttentionChange(nextAttention);
 			setLocalFocusRequest({
+				workspaceId,
 				key: createLayoutId("focus-group"),
 				location: target.location,
 			});
 		},
-		[onAttentionChange, onDirectTabActivation, onUserNavigation],
+		[onAttentionChange, onDirectTabActivation, onUserNavigation, workspaceId],
 	);
 	const canFocusAdjacentGroup = focusableGroups.length > 1;
 	const hideSideRegion = useCallback(
@@ -702,6 +757,7 @@ export function Workbench({
 		[apply, maxBottomGroups, maxSideGroups],
 	);
 	const shared: SharedGroupProps = {
+		workspaceId,
 		document,
 		readAttention,
 		selectionEpochRef: tabSelectionEpoch,
@@ -711,7 +767,8 @@ export function Workbench({
 		renderTabBody,
 		renderTabAdornment,
 		renderToolBody,
-		renderSideMenuActions,
+		onNewTerminal,
+		onUserNavigation,
 		onGestureCanceled,
 		onApply: apply,
 		onClose: close,
@@ -723,17 +780,9 @@ export function Workbench({
 		onRenameChat,
 		canFocusAdjacentGroup,
 	};
-	const alignedWidth = Math.max(Number.EPSILON, projectedAlignedWidth);
-	const alignedSideMinimum = Math.min(100, (8 / alignedWidth) * 100);
-	const alignedCenterMinimum = Math.min(100, (centerMinimumPercent / alignedWidth) * 100);
-	const alignedColumnMinimum = Math.min(
-		100,
-		centerMinimumPercent + (leftInAlignedRow ? 8 : 0) + (rightInAlignedRow ? 8 : 0),
-	);
 	const sideStack = (side: LayoutSide) => (
 		<SideStack
 			side={side}
-			region={document[side]}
 			attention={attention}
 			projectionEpoch={projectionEpoch}
 			onCommit={onCommit}
@@ -757,15 +806,9 @@ export function Workbench({
 	const alignedTopRow = (
 		<ResizablePanelGroup
 			ref={alignedRowGroupRef}
-			key={tupleKey(
-				"aligned-workbench-row",
-				String(leftInAlignedRow),
-				String(rightInAlignedRow),
-				String(projectionEpoch),
-			)}
 			direction="horizontal"
 			onLayout={alignedRowResize.onLayout}
-			className="h-full min-h-0 min-w-0 motion-safe:animate-fade-in"
+			className="h-full min-h-0 min-w-0"
 		>
 			{leftInAlignedRow ? (
 				<>
@@ -819,71 +862,99 @@ export function Workbench({
 			) : null}
 		</ResizablePanelGroup>
 	);
-	const alignedColumn = bottomVisible ? (
+	const alignedBody = (
 		<ResizablePanelGroup
 			ref={bottomGroupRef}
-			key={tupleKey("workbench-bottom", String(projectionEpoch))}
 			direction="vertical"
 			onLayout={bottomResize.onLayout}
 			className="min-h-0 min-w-0 flex-1"
 		>
-			<ResizablePanel id="layout-main-row" order={1} defaultSize={bottomCurrent[0]} minSize={30}>
+			<ResizablePanel
+				id="layout-main-row"
+				order={1}
+				defaultSize={bottomCurrent[0]}
+				minSize={100 - bottomMaximumPercent}
+			>
 				{alignedTopRow}
 			</ResizablePanel>
-			<ResizableHandle
-				direction="vertical"
-				data-testid="resize-bottom"
-				onDragging={bottomResize.onDragging}
-				onKeyDownCapture={bottomResize.onKeyboard}
-				onKeyUpCapture={bottomResize.onKeyboardEnd}
-			/>
-			<ResizablePanel
-				id="layout-bottom"
-				order={2}
-				defaultSize={bottomCurrent[1]}
-				minSize={bottomMinimumPercent}
-				maxSize={LAYOUT_LIMITS.maxBottomHeight * 100}
-				collapsedSize={0}
-				collapsible
-			>
-				<BottomAlignedRow document={document}>
-					<BottomStack
-						attention={attention}
-						projectionEpoch={projectionEpoch}
-						onCommit={onCommit}
-						onNewTerminal={onNewTerminal}
-						{...shared}
+			{bottomVisible ? (
+				<>
+					<ResizableHandle
+						direction="vertical"
+						data-testid="resize-bottom"
+						onDragging={bottomResize.onDragging}
+						onKeyDownCapture={bottomResize.onKeyboard}
+						onKeyUpCapture={bottomResize.onKeyboardEnd}
 					/>
-				</BottomAlignedRow>
-			</ResizablePanel>
-		</ResizablePanelGroup>
-	) : (
-		<div className="relative flex h-full min-h-0 min-w-0 flex-col">
-			<div className="min-h-0 min-w-0 flex-1">{alignedTopRow}</div>
-			{draggingTab &&
-			canPlaceLayoutTab(draggingTab, "bottom") &&
-			(hiddenBottomTargetGroupId !== undefined ||
-				canCreateAuxiliaryGroup(
-					document,
-					"bottom",
-					draggingTab,
-					maxBottomGroups,
-					document.bottom.groups.length,
-				)) ? (
-				<BottomDropZone
-					targetGroupId={hiddenBottomTargetGroupId}
-					targetIndex={document.bottom.groups.length}
-				/>
+					<ResizablePanel
+						id="layout-bottom"
+						order={2}
+						defaultSize={bottomCurrent[1]}
+						minSize={bottomMinimumPercent}
+						maxSize={bottomMaximumPercent}
+						collapsedSize={0}
+						collapsible
+					>
+						<BottomAlignedRow document={document}>
+							<BottomStack
+								attention={attention}
+								projectionEpoch={projectionEpoch}
+								onCommit={onCommit}
+								{...shared}
+							/>
+						</BottomAlignedRow>
+					</ResizablePanel>
+				</>
 			) : null}
+		</ResizablePanelGroup>
+	);
+	const alignedColumn = (
+		<div className="flex h-full min-h-0 min-w-0 flex-col">
+			<div ref={bottomBodyRef} className="min-h-0 min-w-0 flex-1">
+				{alignedBody}
+			</div>
+			<AuxiliaryRegionRail
+				region="bottom"
+				shared={shared}
+				attention={attention}
+				trailing={
+					<div className="flex min-w-32 flex-1 self-stretch">
+						{!bottomVisible &&
+						draggingTab &&
+						canPlaceLayoutTab(draggingTab, "bottom") &&
+						(hiddenBottomTargetGroupId !== undefined ||
+							canCreateAuxiliaryGroup(
+								document,
+								"bottom",
+								draggingTab,
+								maxBottomGroups,
+								document.bottom.groups.length,
+							)) ? (
+							<BottomDropZone
+								targetGroupId={hiddenBottomTargetGroupId}
+								targetIndex={document.bottom.groups.length}
+							/>
+						) : (
+							<div className="flex-1" />
+						)}
+						{!bottomVisible ? (
+							<BottomAlignmentMenu
+								alignment={document.bottom.alignment}
+								onChange={(alignment) => onCommit(setBottomAlignment(document, alignment))}
+								onHide={() => hideSideRegion("bottom")}
+							/>
+						) : null}
+					</div>
+				}
+			/>
 		</div>
 	);
 	const workbenchColumns = (
 		<ResizablePanelGroup
 			ref={outerGroupRef}
-			key={outerTopology}
 			direction="horizontal"
 			onLayout={projectOuterLayout}
-			className="h-full min-h-0 min-w-0 flex-1 motion-safe:animate-fade-in"
+			className="h-full min-h-0 min-w-0 flex-1"
 		>
 			{leftOwnsBottomCorner ? (
 				<>
@@ -961,51 +1032,11 @@ export function Workbench({
 					focusAdjacentGroup(event.shiftKey ? -1 : 1);
 				}}
 			>
-				{!leftVisible ? (
-					<HiddenSideRail
-						side="left"
-						onShow={() => {
-							const result = showSide(document, "left", maxSideGroups, attention);
-							if (!isLayoutUnavailable(result)) apply(result);
-						}}
-						showEnabled={canShowSide(document, "left")}
-						dropEnabled={
-							!!draggingTab &&
-							canPlaceLayoutTab(draggingTab, "left") &&
-							canCreateSideGroup(
-								document,
-								"left",
-								draggingTab,
-								maxSideGroups,
-								document.left.groups.length,
-							)
-						}
-						targetIndex={document.left.groups.length}
-					/>
-				) : null}
-				{workbenchColumns}
-				{!rightVisible ? (
-					<HiddenSideRail
-						side="right"
-						onShow={() => {
-							const result = showSide(document, "right", maxSideGroups, attention);
-							if (!isLayoutUnavailable(result)) apply(result);
-						}}
-						showEnabled={canShowSide(document, "right")}
-						dropEnabled={
-							!!draggingTab &&
-							canPlaceLayoutTab(draggingTab, "right") &&
-							canCreateSideGroup(
-								document,
-								"right",
-								draggingTab,
-								maxSideGroups,
-								document.right.groups.length,
-							)
-						}
-						targetIndex={document.right.groups.length}
-					/>
-				) : null}
+				<AuxiliaryRegionRail region="left" shared={shared} attention={attention} />
+				<div ref={columnsRef} className="min-h-0 min-w-0 flex-1">
+					{workbenchColumns}
+				</div>
+				<AuxiliaryRegionRail region="right" shared={shared} attention={attention} />
 			</div>
 			<DragOverlay dropAnimation={null}>
 				{draggingTab ? (

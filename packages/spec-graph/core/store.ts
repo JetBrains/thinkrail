@@ -4,7 +4,17 @@ import { buildGraph, type SpecGraph } from "./graph.ts";
 import { FIELDS, type Frontmatter, isSpec, parseFile, scalar } from "./parse.ts";
 import type { SpecContentEntry } from "./query.ts";
 
-const IGNORED_DIRS = new Set(["node_modules", ".git", "dist", "build"]);
+const IGNORED_DIRS = new Set([
+	"node_modules",
+	".git",
+	"dist",
+	"build",
+	".claude",
+	".superpowers",
+	".gsd",
+	".mockups",
+	".playwright-mcp",
+]);
 
 export const SPEC_FILE_EXTENSION = ".md";
 

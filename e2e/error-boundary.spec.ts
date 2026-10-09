@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
 
 test("a failed editor chunk shows the boundary's reload fallback and keeps the shell alive", async ({
 	page,
@@ -9,7 +9,7 @@ test("a failed editor chunk shows the boundary's reload fallback and keeps the s
 
 	await page.route(/MonacoEditor.*\.js(\?.*)?$/, (route) => route.abort());
 
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	const notes = page.getByTestId("file-node").filter({ hasText: "notes.txt" });
 	await expect(notes).toBeVisible();
 	await notes.dblclick();

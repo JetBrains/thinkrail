@@ -4,6 +4,7 @@ import {
 	defaultWorkspaceRow,
 	openFixtureProject,
 	PHONE_VIEWPORT,
+	revealWorkbenchTool,
 	worktreeRow,
 	worktreeRows,
 } from "./fixtures/app";
@@ -102,7 +103,7 @@ test("the location segments name the active workspace and switch through their m
 	await expect(card.getByTestId("scope-diff-base")).toContainText("workspace-1");
 	await page.keyboard.press("Escape");
 	await expect(card).toBeHidden();
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	await expect(page.getByTestId("changes-target-picker")).toContainText("workspace-1");
 
 	// New workspace from the menu opens the shell-owned dialog.

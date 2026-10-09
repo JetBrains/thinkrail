@@ -46,8 +46,10 @@ not this module; the theme-aware highlighter remains app-local.
   **`DOUBLE_CLICK_SETTLE_MS`** (the one click→double-click arbitration window shared by cached and
   host-read tab opens), and the
   **`LayoutAttention`** device-local overlay shared by store, shell, and the headless layout child, with
-  own-property-safe `readLayoutSelection()` / `readLayoutNavigationClock()` accessors for untrusted
-  tuple-keyed maps. Also the shared
+  own-property-safe `readLayoutSelection()` / `readLayoutNavigationClock()`
+  accessors for untrusted tuple-keyed maps and the key-order-independent `sameLayoutAttention()` equality
+  that lets a no-op attention write be dropped before it reaches the store. Optional terminal recall is workspace-local history, not a second
+  selected-tab authority; the layout owner validates it against current membership. Also the shared
   Shiki highlighter, **kept out of the barrel** so the eager `@/lib` import stays shiki-free:
   `highlighter.ts` owns the curated grammar/id/file-association catalog shared by chat and the desktop
   Monaco renderer, plus `createChatHighlighter(engine)`: `themes`' one generic CSS-variable registration
@@ -80,7 +82,8 @@ not this module; the theme-aware highlighter remains app-local.
   and cmd, so it may be interpolated into a command a human copies and runs), `parseSkillInvocation`, `matchesSkillInvocationCommand`,
   `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
   `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
-  `readLayoutSelection`, `readLayoutNavigationClock`, and the `LayoutAttention` type.
+  `readLayoutSelection`, `readLayoutNavigationClock`, `sameLayoutAttention`, and the
+  `LayoutAttention` type.
 - **Allowed deps:** React (the viewport subscription hook only);
   `@thinkrail/contracts` (types only for canonical messages; the layout-resource identity input is a local structural type); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
   through the barrel).

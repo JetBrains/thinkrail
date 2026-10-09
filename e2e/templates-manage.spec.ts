@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat } from "./fixtures/app";
+import { openWorkspaceChat, revealWorkbenchTool } from "./fixtures/app";
 import { E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { seedExternalCwdSessions } from "./fixtures/sessions";
 import {
@@ -214,7 +214,7 @@ test.describe("templates management", () => {
 			page.locator('[data-testid="editor-tab"]').filter({ hasText: "scoped-note.md" }),
 		).toBeVisible();
 
-		await page.getByTestId("tab-files").click();
+		await revealWorkbenchTool(page, "files");
 		const promptsDir = page
 			.locator('[data-testid="file-node"][data-kind="dir"]')
 			.filter({ hasText: /^\.pi\/prompts$/ });

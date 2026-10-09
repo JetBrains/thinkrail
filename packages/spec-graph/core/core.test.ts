@@ -462,7 +462,7 @@ function withIndexRoot(fn: (root: string) => void): void {
 	}
 }
 
-test("SpecIndex globs specs, ignoring non-specs and node_modules", () => {
+test("SpecIndex globs specs, ignoring non-specs, node_modules, and other assistants' scratch directories", () => {
 	withIndexRoot((root) => {
 		mkdirSync(join(root, "pkg"), { recursive: true });
 		mkdirSync(join(root, "node_modules", "dep"), { recursive: true });
@@ -475,6 +475,13 @@ test("SpecIndex globs specs, ignoring non-specs and node_modules", () => {
 			join(root, "node_modules", "dep", "SPEC.md"),
 			"---\nid: dep\ntype: module-design\ntitle: Dep\n---\n",
 		);
+		for (const scratch of [".claude", ".superpowers", ".gsd", ".mockups", ".playwright-mcp"]) {
+			mkdirSync(join(root, scratch, "nested", "deeper"), { recursive: true });
+			writeFileSync(
+				join(root, scratch, "nested", "deeper", "SPEC.md"),
+				`---\nid: ${scratch.slice(1)}\ntype: module-design\ntitle: Scratch\n---\n`,
+			);
+		}
 
 		const index = new SpecIndex(root);
 		expect([...index.graph().nodes.keys()]).toEqual(["pkg"]);
@@ -703,6 +710,8 @@ test("resolvePathSegment canonicalizes to the on-disk spelling and never guesses
 
 test("resolvePathSegment refuses an ignored directory in any spelling, existing or not", () => {
 	expect(resolvePathSegment(["node_modules"], "node_modules", true)).toHaveProperty("error");
+	expect(resolvePathSegment([".superpowers"], ".superpowers", true)).toHaveProperty("error");
+	expect(resolvePathSegment([], ".gsd", false)).toHaveProperty("error");
 	expect(resolvePathSegment(["node_modules"], "NODE_MODULES", true)).toHaveProperty("error");
 	for (const spelling of [
 		"node_modules",

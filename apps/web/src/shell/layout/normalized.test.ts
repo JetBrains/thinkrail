@@ -46,11 +46,12 @@ function document(): WorkspaceLayoutDocument {
 			visible: true,
 			width: 0.2,
 			groups: [
+				{ id: "left", weight: 1, folded: false, tabs: [toolTab("projects")] },
 				{
-					id: "left",
+					id: "left-terminals",
 					weight: 1,
 					folded: false,
-					tabs: [terminal("before-projects"), toolTab("projects"), terminal("after-projects")],
+					tabs: [terminal("first-shell"), terminal("second-shell")],
 				},
 			],
 		},
@@ -85,8 +86,8 @@ describe("normalized workbench layout", () => {
 		const projected = document();
 		if (projected.center.kind !== "split") throw new Error("expected center split");
 		projected.center.children[0].id = "__proto__";
-		const left = projected.left.groups[0];
-		if (!left) throw new Error("missing left group");
+		const left = projected.left.groups[1];
+		if (!left) throw new Error("missing left terminal group");
 		left.id = "constructor";
 		const frame = workbenchFrameFromDocument(projected);
 		const view = workspaceViewFromDocument(projected);
@@ -218,10 +219,33 @@ describe("normalized workbench layout", () => {
 		const documentAfter = projectWorkspaceLayout(applied.frame, workspaceView);
 
 		expect(documentAfter.bottom.groups.map((group) => group.tabs.map((tab) => tab.id))).toEqual([
-			["before-projects", "third"],
-			["after-projects"],
+			["first-shell", "third"],
+			["second-shell"],
 		]);
 		expect(documentAfter.bottom).toMatchObject({ visible: true, height: 0.4, alignment: "full" });
+
+		const withToolSlot = {
+			...preset,
+			bottom: {
+				...preset.bottom,
+				groups: [
+					{ id: "changes-slot", weight: 0.5, folded: false, tools: ["changes" as const] },
+					{ id: "shells", weight: 0.5, folded: false, tools: [] },
+				],
+			},
+		};
+		const reapplied = applyWorkbenchPreset(
+			{ frame, viewsByWorkspace: { workspace: view } },
+			withToolSlot,
+		);
+		const reappliedView = reapplied.viewsByWorkspace.workspace;
+		if (!reappliedView) throw new Error("missing workspace view");
+		const toolSlotDocument = projectWorkspaceLayout(reapplied.frame, reappliedView);
+		expect(
+			toolSlotDocument.bottom.groups.map((group) =>
+				group.tabs.map((tab) => (tab.kind === "tool" ? tab.tool : tab.id)),
+			),
+		).toEqual([["changes"], ["first-shell", "second-shell", "third"]]);
 	});
 
 	test("a slotless preset keeps its frame slotless and reflows terminals into center", () => {
@@ -245,8 +269,8 @@ describe("normalized workbench layout", () => {
 		expect(documentAfter.center.tabs.map((tab) => tab.id)).toEqual([
 			"a",
 			"b",
-			"before-projects",
-			"after-projects",
+			"first-shell",
+			"second-shell",
 		]);
 	});
 
@@ -254,7 +278,7 @@ describe("normalized workbench layout", () => {
 		const previous = document();
 		const previousFrame = workbenchFrameFromDocument(previous);
 		const view = workspaceViewFromDocument(previous);
-		const next = removeLayoutGroup(previous, { area: "left", groupId: "left" });
+		const next = removeLayoutGroup(previous, { area: "left", groupId: "left-terminals" });
 		expect(next).toEqual({ reason: "Move or hide this group's tabs before removing it." });
 
 		const withoutLeft = {
@@ -263,8 +287,8 @@ describe("normalized workbench layout", () => {
 		};
 		const reconciled = reconcileWorkspaceView(previousFrame, withoutLeft, view);
 		expect(reconciled.groups.bottom?.tabs.map((tab) => tab.id)).toEqual([
-			"before-projects",
-			"after-projects",
+			"first-shell",
+			"second-shell",
 		]);
 	});
 });

@@ -1,7 +1,12 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject, waitForAgentSettled } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	openFixtureProject,
+	revealWorkbenchTool,
+	waitForAgentSettled,
+} from "./fixtures/app";
 
 const SETUP_SKILL = "setting-up-a-project";
 const USER_REQUEST =
@@ -76,7 +81,7 @@ test("`/skill:setting-up-a-project` routes an existing codebase to import and dr
 
 	expect(hasGoalSpec(worktree)).toBe(true);
 
-	await page.getByTestId("tab-specs").click();
+	await revealWorkbenchTool(page, "specs");
 	await expect(page.getByRole("button", { name: "Refresh specs" })).toHaveCount(0);
 	await expect(page.locator('[data-testid="spec-node"][data-spec-id="sample-root"]')).toHaveCount(
 		0,

@@ -266,8 +266,8 @@ export function reflowWorkspaceViewForFrame(
 		const target = index < centerGroups.length ? centerGroups[index] : centerGroups[0];
 		if (tab && target) appendWorkspaceTab(groups, target.id, tab, previewIds.has(tab.id));
 	}
-	const terminalTargets =
-		nextFrame.bottom.groups.length > 0 ? nextFrame.bottom.groups : centerGroups.slice(0, 1);
+	const terminalPanes = nextFrame.bottom.groups.filter((group) => group.tools.length === 0);
+	const terminalTargets = terminalPanes.length > 0 ? terminalPanes : centerGroups.slice(0, 1);
 	for (let index = 0; index < terminals.length; index += 1) {
 		const tab = terminals[index];
 		const target = index < terminalTargets.length ? terminalTargets[index] : terminalTargets[0];

@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
 
 test("skills badge: ignores capped build churn, flags a skill change, and clears per chat", {
 	tag: "@agent",
@@ -15,7 +15,7 @@ test("skills badge: ignores capped build churn, flags a skill change, and clears
 	const skillsBtn = page.getByTestId("open-skills");
 	await expect(skillsBtn).toBeVisible();
 
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await expect(page.getByTestId("file-node").filter({ hasText: "README.md" })).toBeVisible();
 	await page.waitForTimeout(1200);
 	await expect(skillsBtn).not.toHaveAttribute("data-stale", "true");

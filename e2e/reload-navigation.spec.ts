@@ -6,6 +6,7 @@ import {
 	createWorkspaceViaDialog,
 	enterDefaultWorkspace,
 	openFixtureProject,
+	revealWorkbenchTool,
 	worktreeRows,
 } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
@@ -307,7 +308,7 @@ test("reload from a file tab restores its shared placement under the workspace r
 	await enterDefaultWorkspace(page);
 	const projectId = fixtureProjectId();
 
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="file"]')).toHaveCount(1);
 	const hash = await currentHash(page);

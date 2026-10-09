@@ -3,6 +3,7 @@ import {
 	createWorkspaceViaDialog,
 	enterDefaultWorkspace,
 	openFixtureProject,
+	revealWorkbenchTool,
 } from "./fixtures/app";
 
 interface ThemeOption {
@@ -146,7 +147,7 @@ test("Monaco opens files and re-themes under every discovered manifest", async (
 	expect(mountTheme).toBeDefined();
 	await pickTheme(page, mountTheme?.id ?? "");
 
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	const notes = page.getByTestId("file-node").filter({ hasText: "notes.txt" });
 	await expect(notes).toBeVisible();
 	await notes.dblclick();
@@ -171,18 +172,16 @@ test("Monaco opens files and re-themes under every discovered manifest", async (
 	await expect(page.getByTestId("editor-pane")).toContainText("plain-text-fixture");
 });
 
-test("selected workspace tabs keep their surface and edge marker in high contrast", async ({
+test("selected workspace tabs and rail entries keep their surface and edge marker under every manifest", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
 
 	const options = await readThemeOptions(page);
-	const highContrast = options.find((option) => option.contrast === "high");
-	expect(highContrast).toBeDefined();
-	await pickTheme(page, highContrast?.id ?? "");
+	expect(options.length).toBeGreaterThanOrEqual(2);
 
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	const files = page.getByTestId("file-node");
 	await files.filter({ hasText: "README.md" }).dblclick();
 	await files.filter({ hasText: "notes.txt" }).click();
@@ -193,7 +192,6 @@ test("selected workspace tabs keep their surface and edge marker in high contras
 
 	const strips = [
 		page.getByTestId("center-tab-strip"),
-		page.getByTestId("right-tab-strip"),
 		page.getByTestId("bottom-tab-strip").filter({ has: page.getByTestId("terminal-tab") }),
 	];
 	for (const strip of strips) {
@@ -201,44 +199,44 @@ test("selected workspace tabs keep their surface and edge marker in high contras
 		await expect(strip.locator('[role="tab"][aria-selected="true"]')).toHaveCount(1);
 	}
 
-	const state = await page.evaluate(() => {
-		const center = document.querySelector<HTMLElement>(
-			'[data-testid="editor-tab"][data-active="true"]',
-		);
-		const right = document.querySelector<HTMLElement>(
-			'[data-testid="right-tab-strip"] [data-active="true"]',
-		);
-		const terminal = document.querySelector<HTMLElement>(
-			'[data-testid="terminal-tab"][data-active="true"]',
-		);
-		if (!center || !right || !terminal) throw new Error("Missing an active workspace tab surface");
-
-		const resolveColor = (property: string): string => {
-			const probe = document.createElement("div");
-			probe.style.backgroundColor = `var(${property})`;
-			document.body.append(probe);
-			const color = getComputedStyle(probe).backgroundColor;
-			probe.remove();
-			return color;
-		};
-
-		return {
-			expectedFill: resolveColor("--control-bg-selected"),
-			expectedMarker: resolveColor("--primary"),
-			tabs: [center, right, terminal].map((element) => {
-				const marker = getComputedStyle(element, "::after");
-				return {
+	for (const theme of options) {
+		await pickTheme(page, theme.id);
+		const state = await page.evaluate(() => {
+			const tabs = Array.from(
+				document.querySelectorAll<HTMLElement>(
+					'[data-testid="editor-tab"][data-active="true"], [data-testid="terminal-tab"][data-active="true"]',
+				),
+			);
+			const resolveColor = (property: string): string => {
+				const probe = document.createElement("div");
+				probe.style.backgroundColor = `var(${property})`;
+				document.body.append(probe);
+				const color = getComputedStyle(probe).backgroundColor;
+				probe.remove();
+				return color;
+			};
+			return {
+				expectedFill: resolveColor("--control-bg-selected"),
+				expectedMarker: resolveColor("--primary"),
+				tabs: tabs.map((element) => ({
 					fill: getComputedStyle(element).backgroundColor,
-					marker: marker.backgroundColor,
-					markerHeight: marker.height,
-				};
-			}),
-		};
-	});
-
-	for (const tab of state.tabs) {
-		expect(tab.fill).toBe(state.expectedFill);
-		expect(tab.marker).toBe(state.expectedMarker);
-		expect(tab.markerHeight).toBe("2px");
+					marker: getComputedStyle(element, "::after").backgroundColor,
+					markerHeight: getComputedStyle(element, "::after").height,
+				})),
+			};
+		});
+		expect(state.tabs).toHaveLength(2);
+		for (const tab of state.tabs) {
+			expect(tab.fill).toBe(state.expectedFill);
+			expect(tab.marker).toBe(state.expectedMarker);
+			expect(tab.markerHeight).toBe("2px");
+		}
+		const tool = page.getByTestId("tab-files");
+		await expect(page.getByTestId("tool-rail-files")).toHaveAttribute("aria-pressed", "true");
+		await expect(tool).toHaveCSS("background-color", state.expectedFill);
+		const marker = tool.getByTestId("rail-selection-indicator");
+		await expect(marker).toHaveCSS("background-color", state.expectedMarker);
+		await expect(marker).toHaveCSS("width", "2px");
+		await expect(marker).toHaveCSS("height", "16px");
 	}
 });

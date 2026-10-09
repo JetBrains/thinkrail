@@ -16,14 +16,24 @@ import {
 } from "@thinkrail/ui/context-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { cn } from "@thinkrail/ui/utils";
 import { Fragment, memo, type ReactNode, useEffect, useRef, useState } from "react";
 import { DOUBLE_CLICK_SETTLE_MS, type LayoutAttention, tupleKey } from "../../lib";
 import {
+	type AuxiliaryRailControlProps,
+	AuxiliaryRailIndicator,
+	RAIL_ENTRY_BUTTON_CLASS,
+	railEntryFrameClass,
+	railTooltipSide,
+} from "./AuxiliaryRail";
+import {
 	type CenterSplitDirection,
 	canCreateAuxiliaryGroup,
+	canJoinAuxiliaryGroup,
 	collectAllGroups,
 	collectCenterGroups,
 	createAuxiliaryGroup,
+	describeLayoutGroup,
 	isLayoutUnavailable,
 	LAYOUT_LIMITS,
 	type LayoutGroupLocation,
@@ -31,10 +41,12 @@ import {
 	layoutTabName,
 	moveTabToGroup,
 	removeLayoutGroup,
+	SEPARATE_PANES_REASON,
 	splitCenterGroup,
 	toolTab,
 	unplacedTools,
 } from "./model";
+import { tabIcon } from "./tabIcon";
 import type {
 	LayoutAuxiliaryRegion,
 	LayoutTab,
@@ -49,10 +61,10 @@ import {
 	groupPanelId,
 	navigationClockSnapshot,
 	tabDomId,
-	tabIcon,
 	tabSearchKeywords,
 	useHorizontalOverflow,
 } from "./workbenchShared";
+
 export interface TabStripProps {
 	document: WorkspaceLayoutDocument;
 	readAttention: () => LayoutAttention;
@@ -140,21 +152,22 @@ export const TabStrip = memo(function TabStrip({
 		const tab = tabs[index];
 		if (!tab) return;
 		selectTab(tab.id);
-		requestAnimationFrame(() => tabRefs.current.get(tab.id)?.focus());
+		const epoch = selectionEpochRef.current;
+		requestAnimationFrame(() => {
+			if (selectionEpochRef.current === epoch) tabRefs.current.get(tab.id)?.focus();
+		});
 	};
 
-	const compatibilityTestId =
+	const testId =
 		location.area === "center"
 			? "center-tab-strip"
 			: location.area === "bottom"
 				? "bottom-tab-strip"
-				: tabs.some((tab) => tab.kind === "tool" && tab.tool === "specs")
-					? "right-tab-strip"
-					: "workbench-tab-strip";
+				: "workbench-tab-strip";
 	return (
 		<div
 			ref={setGroupDropRef}
-			data-testid={compatibilityTestId}
+			data-testid={testId}
 			data-area={location.area}
 			data-group-id={location.groupId}
 			data-drop-active={groupDropOver || undefined}
@@ -177,6 +190,10 @@ export const TabStrip = memo(function TabStrip({
 							key={tab.id}
 							tab={tab}
 							index={index}
+							reorderIndexes={{
+								previous: index > 0 ? index - 1 : undefined,
+								next: index < tabs.length - 1 ? index + 1 : undefined,
+							}}
 							location={location}
 							readAttention={readAttention}
 							selectionEpochRef={selectionEpochRef}
@@ -317,6 +334,14 @@ TabStrip.displayName = "TabStrip";
 export interface WorkbenchTabProps {
 	tab: LayoutTab;
 	index: number;
+	reorderIndexes?: { previous: number | undefined; next: number | undefined };
+	rail?: AuxiliaryRailControlProps & {
+		entryKey: string;
+		vertical: boolean;
+		beforeIndex: number;
+		afterIndex: number;
+		onActivate: () => void;
+	};
 	location: LayoutGroupLocation;
 	readAttention: () => LayoutAttention;
 	selectionEpochRef: React.MutableRefObject<number>;
@@ -344,6 +369,8 @@ export interface WorkbenchTabProps {
 export const WorkbenchTab = memo(function WorkbenchTab({
 	tab,
 	index,
+	reorderIndexes,
+	rail,
 	location,
 	readAttention,
 	selectionEpochRef,
@@ -393,13 +420,18 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 		});
 		return () => cancelAnimationFrame(frame);
 	}, [editingName]);
+	const focusControl = () => {
+		const epoch = selectionEpochRef.current;
+		requestAnimationFrame(() => {
+			if (selectionEpochRef.current === epoch)
+				globalThis.document.getElementById(tabDomId(location, tab.id))?.focus();
+		});
+	};
 	const closeNameEditor = () => {
 		setEditingName(false);
 		if (!restoreTabFocusRef.current) return;
 		restoreTabFocusRef.current = false;
-		requestAnimationFrame(() =>
-			globalThis.document.getElementById(tabDomId(location, tab.id))?.focus(),
-		);
+		focusControl();
 	};
 	const commitRename = () => {
 		if (cancelNextBlurRef.current) {
@@ -451,18 +483,30 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 		pendingPreviewKeep.current = null;
 		onSelect(tab.id, true);
 	};
+	const beforeIndex = rail?.beforeIndex ?? index;
+	const afterIndex = rail?.afterIndex ?? index + 1;
+	const previousIndex = reorderIndexes
+		? reorderIndexes.previous
+		: index > 0
+			? index - 1
+			: undefined;
+	const nextIndex = reorderIndexes
+		? reorderIndexes.next
+		: index < (findLayoutGroupTabs(document, location)?.length ?? 0) - 1
+			? index + 1
+			: undefined;
 	const acceptsBefore =
-		draggingTab !== null && canInsertDraggedTab(document, draggingTab, location, index);
+		draggingTab !== null && canInsertDraggedTab(document, draggingTab, location, beforeIndex);
 	const acceptsAfter =
-		draggingTab !== null && canInsertDraggedTab(document, draggingTab, location, index + 1);
+		draggingTab !== null && canInsertDraggedTab(document, draggingTab, location, afterIndex);
 	const { setNodeRef: setBeforeRef, isOver: beforeOver } = useDroppable({
-		id: tupleKey("dnd-insert", location.area, location.groupId, String(index), "before"),
-		data: { target: { kind: "insert", location, index } satisfies DropTarget },
+		id: tupleKey(rail ? "dnd-rail-insert" : "dnd-insert", location.area, tab.id, "before"),
+		data: { target: { kind: "insert", location, index: beforeIndex } satisfies DropTarget },
 		disabled: !acceptsBefore,
 	});
 	const { setNodeRef: setAfterRef, isOver: afterOver } = useDroppable({
-		id: tupleKey("dnd-insert", location.area, location.groupId, String(index + 1), "after"),
-		data: { target: { kind: "insert", location, index: index + 1 } satisfies DropTarget },
+		id: tupleKey(rail ? "dnd-rail-insert" : "dnd-insert", location.area, tab.id, "after"),
+		data: { target: { kind: "insert", location, index: afterIndex } satisfies DropTarget },
 		disabled: !acceptsAfter,
 	});
 	const groups = collectAllGroups(document);
@@ -503,11 +547,55 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 	const reorder = (nextIndex: number) => move(location, nextIndex);
 	const focusTab = (keep?: boolean) => {
 		onSelect(tab.id, keep);
-		requestAnimationFrame(() =>
-			globalThis.document.getElementById(tabDomId(location, tab.id))?.focus(),
-		);
+		focusControl();
 	};
 
+	const tabButton = (
+		<button
+			ref={register}
+			type="button"
+			id={tabDomId(location, tab.id)}
+			{...(rail
+				? { "aria-label": name, "aria-pressed": active }
+				: { role: "tab", "aria-selected": active })}
+			aria-keyshortcuts={
+				rail
+					? rail.vertical
+						? "Enter Space Delete Home End ArrowUp ArrowDown Alt+Shift+ArrowUp Alt+Shift+ArrowDown Control+F6 Control+Shift+F6"
+						: "Enter Space Delete Home End ArrowLeft ArrowRight Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6"
+					: "Delete Home End ArrowLeft ArrowRight Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6"
+			}
+			aria-controls={panelId}
+			data-testid={rail && tab.kind === "tool" ? `tool-rail-${tab.tool}` : undefined}
+			data-rail-entry={rail?.entryKey}
+			data-layout-tab-id={tab.id}
+			tabIndex={rail ? rail.tabIndex : active ? 0 : -1}
+			{...dragListeners}
+			title={rail ? undefined : preview ? "Preview — double-click to keep" : name}
+			onFocus={rail?.onFocus}
+			onClick={rail ? rail.onActivate : selectFromClick}
+			onDoubleClick={rail ? undefined : selectFromDoubleClick}
+			onKeyDown={onKeyDown}
+			className={
+				rail
+					? RAIL_ENTRY_BUTTON_CLASS
+					: cn(
+							"relative flex min-w-0 flex-1 items-center gap-4 py-4 pl-8 text-left outline-none",
+							tab.kind === "tool" && "pr-8",
+						)
+			}
+		>
+			{tabIcon(tab, active)}
+			{rail ? null : <span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>}
+			{rail ? (
+				<span className="pointer-events-none absolute top-0 right-0 flex">
+					{renderTabAdornment(tab)}
+				</span>
+			) : (
+				renderTabAdornment(tab)
+			)}
+		</button>
+	);
 	const tabTestId =
 		tab.kind === "terminal"
 			? "terminal-tab"
@@ -525,23 +613,41 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 					data-preview={preview}
 					data-kind={tab.kind === "document" ? "plan" : tab.kind}
 					data-session-id={tab.kind === "chat" ? tab.sessionId : undefined}
-					data-dragging={isDragging || undefined}
-					className="group relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] has-[[role=tab]:focus-visible]:ring-2 has-[[role=tab]:focus-visible]:ring-inset has-[[role=tab]:focus-visible]:ring-primary data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary data-[dragging]:opacity-40"
+					data-dragging={(isDragging && draggingTab?.id === tab.id) || undefined}
+					className={cn(
+						"group data-[dragging]:opacity-40",
+						rail
+							? railEntryFrameClass(location.area)
+							: "relative flex min-w-96 max-w-192 shrink-0 items-center border-border-default border-r text-text-muted after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-10 after:h-[2px] after:rounded-full after:content-[''] has-[[role=tab]:focus-visible]:ring-2 has-[[role=tab]:focus-visible]:ring-inset has-[[role=tab]:focus-visible]:ring-primary data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default data-[active=true]:after:bg-primary",
+					)}
 				>
 					<div
 						ref={setBeforeRef}
 						aria-hidden="true"
 						data-drop-label={acceptsBefore ? `Insert before ${name}` : undefined}
 						data-drop-active={beforeOver || undefined}
-						className="pointer-events-none absolute inset-y-0 left-0 z-10 w-1/2 border-primary data-[drop-active]:border-l-2"
+						className={cn(
+							"pointer-events-none absolute z-10 border-primary",
+							rail?.vertical
+								? "inset-x-0 top-0 h-1/2 data-[drop-active]:border-t-2"
+								: "inset-y-0 left-0 w-1/2 data-[drop-active]:border-l-2",
+						)}
 					/>
 					<div
 						ref={setAfterRef}
 						aria-hidden="true"
 						data-drop-label={acceptsAfter ? `Insert after ${name}` : undefined}
 						data-drop-active={afterOver || undefined}
-						className="pointer-events-none absolute inset-y-0 right-0 z-10 w-1/2 border-primary data-[drop-active]:border-r-2"
+						className={cn(
+							"pointer-events-none absolute z-10 border-primary",
+							rail?.vertical
+								? "inset-x-0 bottom-0 h-1/2 data-[drop-active]:border-b-2"
+								: "inset-y-0 right-0 w-1/2 data-[drop-active]:border-r-2",
+						)}
 					/>
+					{rail && active && location.area !== "center" ? (
+						<AuxiliaryRailIndicator region={location.area} />
+					) : null}
 					{editingName && tab.kind === "chat" ? (
 						<div ref={register} className="flex min-w-0 flex-1 items-center gap-4 py-4 pl-8">
 							{tabIcon(tab, active)}
@@ -557,28 +663,12 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 								className="min-w-0 flex-1 border-0 bg-transparent p-0 tr-text-ui text-text-default outline-none"
 							/>
 						</div>
+					) : rail ? (
+						<IconTooltip label={name} side={railTooltipSide(location.area)}>
+							{tabButton}
+						</IconTooltip>
 					) : (
-						<button
-							ref={register}
-							type="button"
-							id={tabDomId(location, tab.id)}
-							role="tab"
-							aria-selected={active}
-							aria-keyshortcuts="Delete Home End ArrowLeft ArrowRight Alt+Shift+ArrowLeft Alt+Shift+ArrowRight Control+F6 Control+Shift+F6"
-							aria-controls={panelId}
-							data-layout-tab-id={tab.id}
-							tabIndex={active ? 0 : -1}
-							{...dragListeners}
-							title={preview ? "Preview — double-click to keep" : name}
-							onClick={selectFromClick}
-							onDoubleClick={selectFromDoubleClick}
-							onKeyDown={onKeyDown}
-							className={`flex min-w-0 flex-1 items-center gap-4 py-4 pl-8 text-left outline-none ${tab.kind === "tool" ? "pr-8" : ""}`}
-						>
-							{tabIcon(tab, active)}
-							<span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>
-							{renderTabAdornment(tab)}
-						</button>
+						tabButton
 					)}
 					{tab.kind !== "tool" ? (
 						<button
@@ -629,47 +719,66 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 				>
 					{canFocusAdjacentGroup ? "Focus next group" : "Focus next group — no other visible group"}
 				</ContextMenuItem>
-				<ContextMenuItem disabled={!preview} onSelect={() => focusTab(true)}>
-					{preview ? "Keep preview" : "Keep preview — already kept"}
-				</ContextMenuItem>
-				<ContextMenuItem disabled={index === 0} onSelect={() => reorder(index - 1)}>
-					{index === 0 ? "Move left — already first" : "Move left"}
+				{location.area === "center" ? (
+					<ContextMenuItem disabled={!preview} onSelect={() => focusTab(true)}>
+						{preview ? "Keep preview" : "Keep preview — already kept"}
+					</ContextMenuItem>
+				) : null}
+				<ContextMenuItem
+					disabled={previousIndex === undefined}
+					onSelect={() => {
+						if (previousIndex !== undefined) reorder(previousIndex);
+					}}
+				>
+					Move {rail?.vertical ? "up" : "left"}
+					{previousIndex === undefined ? " — already first" : ""}
 				</ContextMenuItem>
 				<ContextMenuItem
-					disabled={index === (findLayoutGroupTabs(document, location)?.length ?? 0) - 1}
-					onSelect={() => reorder(index + 1)}
+					disabled={nextIndex === undefined}
+					onSelect={() => {
+						if (nextIndex !== undefined) reorder(nextIndex);
+					}}
 				>
-					{index === (findLayoutGroupTabs(document, location)?.length ?? 0) - 1
-						? "Move right — already last"
-						: "Move right"}
+					Move {rail?.vertical ? "down" : "right"}
+					{nextIndex === undefined ? " — already last" : ""}
 				</ContextMenuItem>
-				<ContextMenuSeparator />
-				{(["left", "right", "up", "down"] as const).map((direction) => {
-					const unavailable = splitReason(direction);
+				{location.area === "center" ? (
+					<>
+						<ContextMenuSeparator />
+						{(["left", "right", "up", "down"] as const).map((direction) => {
+							const unavailable = splitReason(direction);
+							return (
+								<ContextMenuItem
+									key={direction}
+									disabled={unavailable !== null}
+									title={unavailable ?? undefined}
+									onSelect={() => {
+										if (location.area !== "center" || tab.kind === "tool") return;
+										const result = splitCenterGroup(document, location.groupId, direction, tab);
+										if (!isLayoutUnavailable(result)) onApply(result);
+									}}
+								>
+									{unavailable ? `Split ${direction} — ${unavailable}` : `Split ${direction}`}
+								</ContextMenuItem>
+							);
+						})}
+					</>
+				) : null}
+				{moveTargets.length > 0 ? <ContextMenuSeparator /> : null}
+				{moveTargets.map((group) => {
+					const separate = group.location.area !== "center" && !canJoinAuxiliaryGroup(group, tab);
+					const label = `Move to ${group.location.area} pane ${describeLayoutGroup(group.tabs)}`;
 					return (
 						<ContextMenuItem
-							key={direction}
-							disabled={unavailable !== null}
-							title={unavailable ?? undefined}
-							onSelect={() => {
-								if (location.area !== "center" || tab.kind === "tool") return;
-								const result = splitCenterGroup(document, location.groupId, direction, tab);
-								if (!isLayoutUnavailable(result)) onApply(result);
-							}}
+							key={tupleKey("move-target", group.location.area, group.location.groupId)}
+							disabled={separate}
+							title={separate ? SEPARATE_PANES_REASON : undefined}
+							onSelect={() => move(group.location)}
 						>
-							{unavailable ? `Split ${direction} — ${unavailable}` : `Split ${direction}`}
+							{separate ? `${label} — ${SEPARATE_PANES_REASON}` : label}
 						</ContextMenuItem>
 					);
 				})}
-				{moveTargets.length > 0 ? <ContextMenuSeparator /> : null}
-				{moveTargets.map((group) => (
-					<ContextMenuItem
-						key={tupleKey("move-target", group.location.area, group.location.groupId)}
-						onSelect={() => move(group.location)}
-					>
-						Move to {group.location.area} group {group.location.groupId.slice(-4)}
-					</ContextMenuItem>
-				))}
 				{currentAuxiliary &&
 				currentAuxiliaryGroupIndex >= 0 &&
 				(tab.kind === "terminal" || tab.kind === "tool") ? (
@@ -797,7 +906,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 					onSelect={onClose}
 					className="text-feedback-error focus:text-feedback-error"
 				>
-					Close
+					{rail ? "Remove tool from group" : "Close"}
 				</ContextMenuItem>
 			</ContextMenuContent>
 		</ContextMenu>

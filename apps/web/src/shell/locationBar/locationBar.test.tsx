@@ -153,6 +153,20 @@ test("every interactive control in the drag strip opts out of dragging", () => {
 	}
 });
 
+test("status chips rest on their tone's tinted step and hover to the muted one", () => {
+	for (const tone of ["success", "warning", "info"] as const) {
+		const classes = chipClass(tone, true).split(/\s+/);
+		expect(classes).toContain(`bg-feedback-${tone}-subtle`);
+		expect(classes).toContain(`text-feedback-${tone}`);
+		expect(classes).toContain(`hover:bg-feedback-${tone}-muted`);
+		expect(classes).toContain("window-no-drag");
+	}
+	const neutral = chipClass("neutral").split(/\s+/);
+	expect(neutral).toContain("bg-control-bg-selected");
+	expect(neutral).toContain("text-text-muted");
+	expect(neutral).not.toContain("window-no-drag");
+});
+
 test("the location bar never hard-codes typography or colour outside the token system", () => {
 	for (const file of [
 		"Segment.tsx",

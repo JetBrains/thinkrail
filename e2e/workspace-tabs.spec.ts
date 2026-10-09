@@ -4,6 +4,7 @@ import {
 	defaultWorkspaceRow,
 	openFixtureProject,
 	openTerminal,
+	revealWorkbenchTool,
 	worktreeRow,
 	worktreeRows,
 } from "./fixtures/app";
@@ -16,7 +17,7 @@ test("editor tabs are scoped to the active workspace", async ({ page }) => {
 	await createWorkspaceViaDialog(page);
 	await expect(workspaces).toHaveCount(1);
 	await expect(tabs).toHaveCount(1);
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
 	await expect(tabs).toHaveCount(2);
 
@@ -45,51 +46,37 @@ test("the selected side tool follows workspace switches", async ({ page }) => {
 	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
 
-	const groupInfo = await page.getByTestId("tab-specs").evaluate((tab) => {
-		const group = tab.closest<HTMLElement>("[data-side][data-group-id]");
-		return { side: group?.dataset.side, groupId: group?.dataset.groupId };
-	});
+	const groupInfo = await page.locator('[data-side][data-tools~="specs"]').evaluate((group) => ({
+		side: group.getAttribute("data-side"),
+		groupId: group.getAttribute("data-group-id"),
+	}));
 	if (!groupInfo.side || !groupInfo.groupId) throw new Error("missing Specs side group");
-	const group = page.locator(
-		`[data-side="${groupInfo.side}"][data-group-id="${groupInfo.groupId}"]`,
-	);
+	const projects = page.getByTestId("tool-rail-projects");
 
 	await page.getByTestId("tab-projects").click({ button: "right" });
 	await page
-		.getByRole("menuitem", {
-			name: `Move to ${groupInfo.side} group ${groupInfo.groupId.slice(-4)}`,
-			exact: true,
-		})
+		.getByRole("menuitem", { name: `Move to ${groupInfo.side} pane (Specs, Files)`, exact: true })
 		.click();
-	await group.getByTestId("tab-projects").click();
-	await expect(group.getByTestId("tab-projects").getByRole("tab")).toHaveAttribute(
-		"aria-selected",
-		"true",
-	);
+	await revealWorkbenchTool(page, "projects");
+	await expect(projects).toHaveAttribute("aria-pressed", "true");
+	await expect(
+		page.getByTestId(`${groupInfo.side}-layout-rail`).getByTestId("tool-rail-projects"),
+	).toBeVisible();
 
 	await worktreeRow(page, "workspace-2").getByRole("button").first().click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-2");
-	await expect(group.getByTestId("tab-projects").getByRole("tab")).toHaveAttribute(
-		"aria-selected",
-		"true",
-	);
+	await expect(projects).toHaveAttribute("aria-pressed", "true");
 	await defaultWorkspaceRow(page).getByRole("button").first().click();
 	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
-	await expect(group.getByTestId("tab-projects").getByRole("tab")).toHaveAttribute(
-		"aria-selected",
-		"true",
-	);
+	await expect(projects).toHaveAttribute("aria-pressed", "true");
 
-	const review = page.getByTestId("tab-review").getByRole("tab");
-	await page.getByTestId("tab-review").click();
-	await expect(review).toHaveAttribute("aria-selected", "true");
+	const review = page.getByTestId("tool-rail-review");
+	await revealWorkbenchTool(page, "review");
+	await expect(review).toHaveAttribute("aria-pressed", "true");
 	await worktreeRow(page, "workspace-1").getByRole("button").first().click();
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
-	await expect(review).toHaveAttribute("aria-selected", "true");
-	await expect(group.getByTestId("tab-projects").getByRole("tab")).toHaveAttribute(
-		"aria-selected",
-		"true",
-	);
+	await expect(review).toHaveAttribute("aria-pressed", "true");
+	await expect(projects).toHaveAttribute("aria-pressed", "true");
 });
 
 test("switching workspaces re-targets the mounted workbench instead of remounting it", async ({
@@ -98,7 +85,7 @@ test("switching workspaces re-targets the mounted workbench instead of remountin
 	await openFixtureProject(page);
 
 	await createWorkspaceViaDialog(page);
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
 	await openTerminal(page);
 	const terminalTabs = page.getByTestId("terminal-tab");

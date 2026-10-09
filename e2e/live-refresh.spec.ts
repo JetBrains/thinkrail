@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Locator, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
 import { commitFile } from "./fixtures/git";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -34,7 +34,7 @@ test("a live rendered-diff refresh preserves the reader's scroll position", asyn
 	);
 	writeFileSync(path, longMarkdown("first refresh"));
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	const change = page.getByTestId("change-item").filter({ hasText: "scroll-refresh.md" });
 	await fsExpect(change).toBeVisible();
 	await change.click();
@@ -68,7 +68,7 @@ test("worktree changes on disk appear live in Specs, Files, Changes, and an open
 		page.locator('[data-testid="spec-node"][data-spec-id="sample-live"]'),
 	).toBeVisible();
 
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	const freshFile = page.getByTestId("file-node").filter({ hasText: "fresh-file.txt" });
 	await expect(page.getByTestId("file-node").filter({ hasText: "README.md" })).toBeVisible();
 	writeFileSync(join(worktree, "fresh-file.txt"), "hello\n");
@@ -76,7 +76,7 @@ test("worktree changes on disk appear live in Specs, Files, Changes, and an open
 	rmSync(join(worktree, "fresh-file.txt"));
 	await fsExpect(freshFile).toHaveCount(0);
 
-	await page.getByTestId("tab-changes").click();
+	await revealWorkbenchTool(page, "changes");
 	const readmeRow = page.getByTestId("change-item").filter({ hasText: "README.md" });
 	await expect(
 		page.getByTestId("change-item").filter({ hasText: "SPEC.md" }).first(),
@@ -94,7 +94,7 @@ test("worktree changes on disk appear live in Specs, Files, Changes, and an open
 		page.getByTestId("diff-view").getByText("edited twice by e2e", { exact: false }).last(),
 	).toBeVisible();
 
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await page.getByTestId("file-node").filter({ hasText: "README.md" }).dblclick();
 	await expect(page.getByTestId("editor-pane")).toContainText("edited twice by e2e");
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nlive tab reload\n");
@@ -118,7 +118,7 @@ test("churn canary: a write storm coalesces to a few frames and the host stays r
 	const workspace = await createWorkspaceViaDialog(page);
 	const worktree = workspace.worktreePath;
 
-	await page.getByTestId("tab-files").click();
+	await revealWorkbenchTool(page, "files");
 	await expect(page.getByTestId("file-node").filter({ hasText: "README.md" })).toBeVisible();
 	await sleep(1200);
 	const framesBefore = fsFrameTimes.length;
