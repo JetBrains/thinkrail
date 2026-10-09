@@ -11,7 +11,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { captureBranch, captureSession, forkCaptured } from "./history";
 import { scanReplayTools } from "./replayTools";
-import { Semaphore } from "./semaphore";
+import { assertSlots, Semaphore } from "./semaphore";
 import {
 	assertSegment,
 	DEFAULT_SCOPE,
@@ -271,7 +271,7 @@ function textOf(message: AssistantMessage | undefined): string | undefined {
 export function createDelegationService(bindings: DelegationBindings): DelegationService {
 	const delegationRoot = bindings.delegationRoot ?? defaultDelegationRoot();
 	const scope = bindings.scope ?? DEFAULT_SCOPE;
-	const slotsPerParent = bindings.maxConcurrentPerParent ?? DEFAULT_MAX_CONCURRENT_PER_PARENT;
+	let slotsPerParent = bindings.maxConcurrentPerParent ?? DEFAULT_MAX_CONCURRENT_PER_PARENT;
 
 	const children = new Map<string, ChildEntry>();
 	const resources = new Map<string, ResourceState>();
@@ -1270,6 +1270,11 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			}
 		},
 		createChild,
+		setMaxConcurrentPerParent: (slots) => {
+			assertSlots(slots);
+			slotsPerParent = slots;
+			for (const semaphore of semaphores.values()) semaphore.resize(slots);
+		},
 		findChild: (sessionId) => children.get(sessionId)?.handle,
 		childrenOf: (parentSessionId) => {
 			const ids = byParent.get(parentSessionId);

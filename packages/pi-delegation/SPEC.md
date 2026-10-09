@@ -129,7 +129,7 @@ shutdown release barriers; and finalized outcomes after a shrinking compaction.
 ## Public surface (the barrel, `index.ts`)
 
 - `createDelegationService(bindings)` — the service (`DelegationService`): `createChild` /
-  `findChild` / `childrenOf` / `onLifecycle` / `disposeChildrenOf`, plus `registerResource` /
+  `setMaxConcurrentPerParent` / `findChild` / `childrenOf` / `onLifecycle` / `disposeChildrenOf`, plus `registerResource` /
   `captureHistory`. Resource, birth and captured-history contract types are exported from the
   actual package barrel. `scanReplayTools` is the shared pure replay scanner for capture and host
   transcript repair; repair policy and synthesized tool results remain host-owned.
@@ -224,7 +224,7 @@ stateDiagram-v2
 |---|---|
 | Foreground | `await child.runQueued(task)`. pi executes a batch's tool calls concurrently (verified: `pi-agent-core` `executeToolCallsParallel`), so N `Agent` calls = N children in flight — no `tasks[]`/chain DSL needed. |
 | Per-run outcome | A `RunOutcome`'s `finalText`, `stopReason` and `details.usage` belong to **that run alone**: the run captures a session-stat baseline before `prompt()`, observes finalized assistant `message_end` events for text/stop evidence (never a shrinking message-array index), and reports usage/cost/token **deltas** against the baseline — never the child session's cumulative totals. A reusable child running sequential tasks would otherwise return the previous run's text after a preflight failure and double-count usage (PR #302 review finding). `contextTokens` stays a point-in-time snapshot by design. |
-| Concurrency | Semaphore **per parent session**, default 4; FIFO. Why: the model decides how many spawns to emit — each child is a full LLM session, so unbounded spawn multiplies token spend, provider 429 pressure, and load on the one shared event loop (no crash isolation). Resource governance, not correctness. Host-wide ceiling: config follow-up. |
+| Concurrency | Semaphore **per parent session**, default 4; FIFO. Why: the model decides how many spawns to emit — each child is a full LLM session, so unbounded spawn multiplies token spend, provider 429 pressure, and load on the one shared event loop (no crash isolation). Resource governance, not correctness. The limit is **live**: `setMaxConcurrentPerParent(n)` resizes every existing parent semaphore and the default for later ones — growth admits queued runs at once (FIFO), shrinking never stops running children and only admits below the new limit. Resource semaphores keep their registration-time slots. The embedder owns the policy (ThinkRail: global setting + workspace override). Host-wide ceiling across parents: follow-up. |
 | Background | Don't await the promise. Completion → `run-terminal` event; the subagent tool layer additionally injects a `subagent-completion` custom message into the parent. |
 | Result collection | Registry snapshot via `findChild(id)`: terminal → final output + details, marks `collected`; running → status snapshot (not an error); unknown id → error naming the restart-loss case + the derived transcript path. |
 | Join / wait-all | **Not core.** Engine control flow over `run-terminal` events / run promises: join = `Promise.all` over run outcomes; fan-out = spawns sharing a dependency (the semaphore paces them); fail-fast = one shared `AbortController` across sibling `RunOptions.signal`s. |
