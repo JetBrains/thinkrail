@@ -47,6 +47,15 @@ function target(workspaceId: string): { workspace: Workspace; project: Project }
 const handledElsewhere = (): CodedError =>
 	new CodedError("MCP_HANDLED_ELSEWHERE", "MCP is not managed by ThinkRail here.");
 
+function assertRepositoryWritable(project: Project): void {
+	if (project.piResourceTrust !== "granted") {
+		throw new CodedError(
+			"MCP_CONFIG_INVALID",
+			"This project isn't trusted — trust it before changing the MCP servers its repository defines.",
+		);
+	}
+}
+
 async function managedTarget(
 	workspaceId: string,
 ): Promise<{ workspace: Workspace; project: Project }> {
@@ -104,6 +113,7 @@ export async function mcpWrite(
 	mode: "add" | "update",
 ): Promise<McpListResult> {
 	const { workspace, project } = await managedTarget(params.workspaceId);
+	if (params.scope === "project") assertRepositoryWritable(project);
 	const name = serverName(params.name);
 	const rewrite = mode === "update" && params.scope === "project";
 	const onDisk = rewrite ? projectMcpEntryFingerprint(workspace.worktreePath, name) : undefined;
@@ -141,6 +151,7 @@ export async function mcpRemove(params: {
 	name: string;
 }): Promise<McpListResult> {
 	const { workspace, project } = await managedTarget(params.workspaceId);
+	if (params.scope === "project") assertRepositoryWritable(project);
 	removeMcpServerEntry({
 		scope: params.scope,
 		worktree: workspace.worktreePath,
@@ -180,6 +191,7 @@ export async function mcpApprove(params: {
 	fingerprint: string;
 }): Promise<McpListResult> {
 	const { workspace, project } = await managedTarget(params.workspaceId);
+	assertRepositoryWritable(project);
 	const name = serverName(params.name);
 	if (projectMcpEntryFingerprint(workspace.worktreePath, name) !== params.fingerprint) {
 		throw new CodedError(
@@ -197,6 +209,7 @@ export async function mcpShareWithRepo(params: {
 	name: string;
 }): Promise<McpListResult> {
 	const { workspace, project } = await managedTarget(params.workspaceId);
+	assertRepositoryWritable(project);
 	const name = serverName(params.name);
 	const override = project.mcpOverrides?.[name];
 	if (!override) {

@@ -432,3 +432,46 @@ test("an unreadable mcp.json is listed as a file problem with its path, and an e
 	expect(odd.configErrors).toBeUndefined();
 	expect(find(odd, "user", "bad")?.configError).toBe('server "bad" must be an object');
 });
+
+test("an untrusted project refuses writes to the MCP servers its repository defines", async () => {
+	mkdirSync(join(repo, ".pi"));
+	const file = join(repo, ".pi", "mcp.json");
+	writeFileSync(
+		file,
+		JSON.stringify({ mcpServers: { repo: { command: "npx", args: ["-y", "x"] } } }),
+	);
+	const pending = find(await request("mcp.list", { workspaceId: "w1" }), "project", "repo");
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({ mcpServers: { linear: { url: "https://linear.example/mcp" } } }),
+	);
+	await request("mcp.setProjectOverride", { workspaceId: "w1", name: "linear", enabled: false });
+	await handleRequest("project.setTrust", { id: "p1", trusted: false }, CTX);
+	const before = readFileSync(file, "utf8");
+	const refused: [string, object][] = [
+		["mcp.approve", { name: "repo", fingerprint: pending?.approval?.fingerprint }],
+		[
+			"mcp.update",
+			{ scope: "project", name: "repo", entry: { command: "npx", args: ["-y", "y"] } },
+		],
+		["mcp.add", { scope: "project", name: "fresh", entry: { command: "npx" } }],
+		["mcp.remove", { scope: "project", name: "repo" }],
+		["mcp.shareWithRepo", { name: "linear" }],
+	];
+	for (const [method, params] of refused) {
+		expect(await codeOf(request(method, { workspaceId: "w1", ...params }))).toBe(
+			"MCP_CONFIG_INVALID",
+		);
+	}
+	expect(readFileSync(file, "utf8")).toBe(before);
+	const listed = await request("mcp.list", { workspaceId: "w1" });
+	expect(find(listed, "project", "repo")).toBeUndefined();
+	expect(find(listed, "user", "linear")?.enabled).toBe(false);
+	expect(
+		find(
+			await request("mcp.setProjectOverride", { workspaceId: "w1", name: "linear", enabled: true }),
+			"user",
+			"linear",
+		)?.enabled,
+	).toBe(true);
+});
