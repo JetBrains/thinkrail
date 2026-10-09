@@ -179,6 +179,9 @@ describe("pi's CLI-oriented phrases", () => {
 			stripMcpCliInstruction("MCP servers need attention:\n  docs: failed\nRun /mcp to fix."),
 		).toBe("MCP servers need attention:\n  docs: failed");
 		expect(stripMcpCliInstruction("Run /mcp to fix.")).toBe("Run /mcp to fix.");
+		expect(
+			stripMcpCliInstruction('MCP server "gh" requires sign-in. Run /login github to sign in.'),
+		).toBe('MCP server "gh" requires sign-in.');
 		expect(stripMcpCliInstruction("POST /mcp returned 404")).toBe("POST /mcp returned 404");
 		expect(mcpCliAction("")).toBeNull();
 	});
