@@ -288,3 +288,19 @@ test("a settle without a matching start, or a session the host cannot place, is 
 	await placed.observe("s2", settle);
 	expect(listTurns("w1")).toEqual([]);
 });
+
+test("shutdown's drain waits for a recording only up to its bound", async () => {
+	const head = deferred<string | null>();
+	let calls = 0;
+	const tracker = new TurnTracker(resolve, Date.now, (cwd) =>
+		++calls === 1 ? snapshotWorktree(cwd) : head.promise,
+	);
+	await tracker.observe("s1", start);
+	void tracker.observe("s1", settle);
+	const drained = await Promise.race([
+		tracker.drain(20).then(() => "drained"),
+		Bun.sleep(1_000).then(() => "hung"),
+	]);
+	expect(drained).toBe("drained");
+	head.resolve(null);
+});

@@ -57,9 +57,10 @@ pi's `turn_*` (one assistant message): a receipt per message would fragment one 
   still cannot recreate its entry in `turns.json` (`forgetWorkspaceTurns` only deletes existing records).
   `workspace.turns` likewise rejects an unknown workspace.
 - **Graceful shutdown drains recording after settling sessions, before disposal.** `drain()` awaits
-  the jobs begun at `agent_settled`; it never invents a settle for a pending start. Both snapshots and
-  status calculation finish before the host returns from shutdown. Synchronous `stop()` remains the
-  emergency path, not a recording barrier.
+  the jobs begun at `agent_settled`; it never invents a settle for a pending start. It is bounded
+  (5 s) like the session settle before it: a git stalled on a slow filesystem costs that run's receipt,
+  never a quit that hangs for minutes. Synchronous `stop()` remains the emergency path, not a recording
+  barrier.
 - **Start order is the order.** Turns are stored and capped by `startedAt`, not by settle time, so a
   later-started run that settles first does not become "Last turn" — the client applies the same rule
   to a live `turn.changed`, so a reload never disagrees with the push.
