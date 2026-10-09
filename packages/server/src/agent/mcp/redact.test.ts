@@ -32,6 +32,19 @@ describe("redactMcpText", () => {
 		expect(redactMcpText('"oauth": {"clientId": "x"}')).toBe('"oauth": {"clientId": "x"}');
 	});
 
+	test("masks unquoted name: value pairs the way a server's stderr prints them", () => {
+		expect(redactMcpText("password: hunter2\napi_key: abc123 region: eu")).toBe(
+			"password: ***\napi_key: *** region: eu",
+		);
+		expect(redactMcpText("LINEAR_TOKEN:\t'lin_api_x'")).toBe("LINEAR_TOKEN:\t'***'");
+		expect(redactMcpText("Authorization: Bearer abc rejected")).toBe(
+			"Authorization: Bearer *** rejected",
+		);
+		expect(redactMcpText("MCP servers need attention:\n  linear: needs sign-in")).toBe(
+			"MCP servers need attention:\n  linear: needs sign-in",
+		);
+	});
+
 	test("masks URL user info and credential-named query values, and leaves other URLs exactly as written", () => {
 		expect(redactMcpText("POST https://user:pw@api.example/mcp?token=abc&region=eu failed")).toBe(
 			"POST https://***:***@api.example/mcp?token=***&region=eu failed",

@@ -11,6 +11,10 @@ const QUOTED_PAIR = new RegExp(
 	"gi",
 );
 const KEY_VALUE = new RegExp(String.raw`\b([\w.-]*(?:${SECRET_WORD})[\w.-]*)=[^\s&"'\`,;]+`, "gi");
+const KEY_COLON = new RegExp(
+	String.raw`\b([\w.-]*(?:${SECRET_WORD})[\w.-]*)(:[ \t]*)(?!\*\*\*|bearer\b|basic\b)(?:(["'])(?:\\.|(?!\3)[^\\\n])*\3|[^\s"',;{}[\]]+)`,
+	"gi",
+);
 const TOKEN_IN_TEXT = new RegExp(String.raw`\b${TOKEN_LITERAL}`, "g");
 const LONG_RUN = /(?<![A-Za-z0-9+_-])[A-Za-z0-9+_-]{32,}={0,2}/g;
 
@@ -55,6 +59,9 @@ export function redactMcpText(text: string): string {
 				: `${quote}${key}${quote}${separator}${MASK}`,
 		)
 		.replace(KEY_VALUE, (_match, key: string) => `${key}=${MASK}`)
+		.replace(KEY_COLON, (_match, key: string, separator: string, quote?: string) =>
+			quote ? `${key}${separator}${quote}${MASK}${quote}` : `${key}${separator}${MASK}`,
+		)
 		.replace(TOKEN_IN_TEXT, MASK)
 		.replace(LONG_RUN, (run) => (isTokenRun(run) ? MASK : run));
 }
