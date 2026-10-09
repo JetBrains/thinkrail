@@ -1,10 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import {
+	DefaultToolRenderer,
 	getToolChrome,
 	getToolRenderer,
 	getToolSummary,
 	registerToolRenderer,
+	registerToolRendererPrefix,
 	resolveProminence,
 } from "./toolRegistry";
 
@@ -90,5 +92,53 @@ describe("resolveProminence (the settings seam)", () => {
 			prominence: "routine",
 		});
 		expect(resolveProminence("bare-declared-routine").prominence).toBe("primary");
+	});
+});
+
+describe("prefix registrations (one resolver for every registry read)", () => {
+	const prefixRenderer = () => null;
+	const exactRenderer = () => null;
+	const longerRenderer = () => null;
+	registerToolRendererPrefix("pfx__", prefixRenderer, {
+		summary: () => "from prefix",
+		chrome: "bare",
+		defaultExpanded: true,
+	});
+	registerToolRendererPrefix("pfx__long__", longerRenderer, { summary: () => "from longer" });
+	registerToolRenderer("pfx__exact", exactRenderer, { summary: () => "from exact" });
+
+	it("resolves renderer, summary, chrome and prominence for a prefixed name", () => {
+		expect(getToolRenderer("pfx__server__tool")).toBe(prefixRenderer);
+		expect(getToolSummary("pfx__server__tool", props({}))).toBe("from prefix");
+		expect(getToolChrome("pfx__server__tool")).toBe("bare");
+		expect(resolveProminence("pfx__server__tool")).toEqual({
+			prominence: "primary",
+			defaultExpanded: true,
+		});
+	});
+
+	it("lets an exact registration beat a matching prefix", () => {
+		expect(getToolRenderer("pfx__exact")).toBe(exactRenderer);
+		expect(getToolSummary("pfx__exact", props({}))).toBe("from exact");
+		expect(getToolChrome("pfx__exact")).toBe("card");
+		expect(resolveProminence("pfx__exact").prominence).toBe("routine");
+	});
+
+	it("prefers the longest matching prefix", () => {
+		expect(getToolRenderer("pfx__long__tool")).toBe(longerRenderer);
+		expect(getToolSummary("pfx__long__tool", props({}))).toBe("from longer");
+	});
+
+	it("leaves names the prefix does not start with on the default renderer", () => {
+		for (const name of ["pfx_", "x_pfx__tool", "PFX__tool"]) {
+			expect(getToolRenderer(name)).toBe(DefaultToolRenderer);
+			expect(getToolSummary(name, props({}))).toBe("");
+			expect(resolveProminence(name)).toEqual({ prominence: "routine", defaultExpanded: false });
+		}
+	});
+
+	it("never lets an empty prefix capture every tool", () => {
+		registerToolRendererPrefix("", () => null);
+		expect(getToolRenderer("some-unregistered-tool")).toBe(DefaultToolRenderer);
 	});
 });
