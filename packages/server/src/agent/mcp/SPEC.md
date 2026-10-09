@@ -49,7 +49,8 @@ relax a rule.
   texts: a connection error, an HTTP error-body snippet and a stdio server's stderr tail (up to 2 000
   chars) arrive verbatim. `redactMcpText` masks, deterministically and idempotently, URL user info and
   credential-named query values (`maskUrl`; any other URL is returned exactly as written), `Bearer` /
-  `Basic` credentials (any case), credential-named `key=value` pairs and quoted `"key": value` pairs, the
+  `Basic` credentials (any case), credential-named `key=value` and unquoted `key: value` pairs (as a
+  server's stderr prints them; a `Bearer`/`Basic` value keeps its scheme) and quoted `"key": value` pairs, the
   known token prefixes (`gh[pousr]_`, `github_pat_`, `sk-`, `xox[abprs]-`, `glpat-`, `AKIA`), and runs of
   32+ characters that are hex, or mixed-case with digits in the base64url alphabet — `/` and `.` end a
   run, so paths, URLs and package names survive (a standard-base64 secret split by `/` into short parts is
