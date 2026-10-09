@@ -1,6 +1,4 @@
-import { RiArrowDownLine as ArrowDown, RiArrowUpLine as ArrowUp } from "@remixicon/react";
 import {
-	type AskUserQuestionResult,
 	type PromptHit,
 	type QueueLane,
 	type SessionQueueContent,
@@ -17,40 +15,27 @@ import {
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@thinkrail/ui/popover";
-import { cn } from "@thinkrail/ui/utils";
-import {
-	type RefCallback,
-	useCallback,
-	useEffect,
-	useInsertionEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useNow } from "@/components/useNow";
 import { registerWebExtensions } from "@/extensions";
-import { shallowEqualArrays } from "@/lib";
 import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker } from "@/prompt";
 import {
 	EMPTY_RUNTIME,
 	SettingsSection,
+	selectAwaitingAsk,
 	selectCanRenameChat,
 	selectCatalogModel,
 	selectCompactionTurnIds,
-	selectReadyCompletionActivation,
 	selectSkillsStale,
 	selectWorkspaceById,
-	specPathMatcher,
 	toast,
 	useAppStore,
 } from "@/store";
 import { errorText, getTransport } from "@/transport";
-import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityBreadcrumbs";
-import { AskStatesContext, deriveAskStates } from "./askState";
-import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import { ChatHeader } from "./ChatHeader";
 import { ChatPlanContent, ChatPlanStripContent } from "./ChatPlan";
+import ChatTranscript, { type ChatTranscriptHandle } from "./ChatTranscript";
 import {
 	Composer,
 	type ComposerHandle,
@@ -58,25 +43,20 @@ import {
 	type MentionCandidate,
 	type SubmitBehavior,
 } from "./Composer";
-import type { ChatMessageOrder } from "./chatPreferences";
 import { ExtUiDialog } from "./ExtUiDialog";
-import { FoldGeometryProvider } from "./foldState";
 import { HistoryOverlay } from "./HistoryOverlay";
 import type { ModelSelection } from "./ModelEffortPicker";
-import { deriveMessageActions } from "./messageActions";
 import {
 	compactSubmissionError,
 	mergeNativeChatCommands,
 	parseNativeChatCommand,
 	prepareNameChatCommand,
 } from "./nativeCommands";
-import { hostSessionGlance, planGlance } from "./planView";
+import { hostSessionGlance } from "./planView";
 import { QueueStrip } from "./QueueStrip";
+import { deriveRecentPrompts } from "./recentPrompts";
 import { CommandLogView, ResourcesButton, ResourcesDock, ResourcesInspector } from "./resources";
-import { estimateChatRowHeights } from "./rowHeightEstimates";
-import { type ChatRow, deriveRows, projectRows, rowIndexForTurn } from "./rows";
 import { SkillsDialog } from "./SkillsDialog";
-import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
 import { SubagentTranscriptDialog, SubagentTranscriptPane } from "./SubagentTranscriptDialog";
 import { TemplateEditorDialog } from "./TemplateEditorDialog";
 import { useChatResources, useCommandLog } from "./useChatResources";
@@ -84,128 +64,13 @@ import { useModelCatalog } from "./useModelCatalog";
 import { useModelPreferences } from "./useModelPreferences";
 import { useSessionStats } from "./useSessionStats";
 import "./tools/register";
-import { ChatTurnView } from "./turns";
-import type { ChatAttachment, ChatTurn } from "./types";
-import { useChatScroll } from "./useChatScroll";
+import type { ChatAttachment } from "./types";
 import { useChatTodos } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
-import { useTranscriptSync } from "./useTranscriptSync";
-import { advanceVirtualRows, initialVirtualRows } from "./virtualRows";
 
 registerWebExtensions();
 
 const TRY_AGAIN_PROMPT = "Try again.";
-const CHAT_VIEWPORT_INCREASE = 800;
-const CHAT_MIN_OVERSCAN_ITEMS = 2;
-const chatLocationRevealClaims = new WeakMap<object, object>();
-
-function turnAnchorText(turn: ChatTurn): string {
-	if (turn.kind === "user") {
-		const { content } = turn.message;
-		return typeof content === "string"
-			? content
-			: content
-					.filter((b) => b.type === "text")
-					.map((b) => b.text)
-					.join("\n");
-	}
-	if (turn.kind === "assistant") {
-		return turn.message.content
-			.filter((b) => b.type === "text")
-			.map((b) => b.text)
-			.join("\n");
-	}
-	return "";
-}
-
-type ChatListContext = {
-	messageOrder: ChatMessageOrder;
-	status: StreamStatus | null;
-	runwayActive: boolean;
-	measureClassName: string;
-	headerRef: RefCallback<HTMLDivElement>;
-	streamEdgeRef: RefCallback<HTMLDivElement>;
-	runwayRef: RefCallback<HTMLDivElement>;
-};
-
-function transcriptMeasureClassName(bounded: boolean): string {
-	return cn(
-		"mx-auto box-border",
-		bounded
-			? "w-full max-w-[var(--chat-transcript-width)]"
-			: "w-[var(--chat-transcript-width)] max-w-none",
-	);
-}
-
-function StreamHeader({ context }: { context: ChatListContext }) {
-	const { headerRef, measureClassName, messageOrder, runwayActive, status } = context;
-	const inset =
-		messageOrder === "oldest-first" || runwayActive ? (
-			<div className="h-[clamp(48px,10cqh,80px)]" aria-hidden />
-		) : null;
-	return (
-		<div ref={headerRef}>
-			{inset}
-			{messageOrder === "newest-first" ? (
-				<StreamStatusSlot status={status} measureClassName={measureClassName} />
-			) : null}
-		</div>
-	);
-}
-
-function StreamFooter({ context }: { context: ChatListContext }) {
-	const { measureClassName, messageOrder, runwayActive, runwayRef, status, streamEdgeRef } =
-		context;
-	if (messageOrder === "newest-first") {
-		return (
-			<div
-				ref={runwayRef}
-				data-testid="chat-stream-runway"
-				data-active={runwayActive}
-				className="h-0"
-				aria-hidden
-			/>
-		);
-	}
-	return (
-		<>
-			<StreamStatusSlot status={status} measureClassName={measureClassName} />
-			{runwayActive ? (
-				<div ref={streamEdgeRef} data-testid="chat-stream-edge" className="h-0" />
-			) : null}
-			<div
-				ref={runwayRef}
-				data-testid="chat-stream-runway"
-				data-active={runwayActive}
-				className="h-0"
-				aria-hidden
-			/>
-		</>
-	);
-}
-
-const CHAT_LIST_COMPONENTS = { Header: StreamHeader, Footer: StreamFooter };
-
-function useVirtualRows(
-	rows: ChatRow[],
-	messageOrder: ChatMessageOrder,
-	visibleAnchorRowIdRef: React.RefObject<string | null>,
-) {
-	const [storedVirtualRows, setStoredVirtualRows] = useState(() =>
-		initialVirtualRows(rows, messageOrder),
-	);
-	if (storedVirtualRows.rows === rows && storedVirtualRows.order === messageOrder) {
-		return storedVirtualRows;
-	}
-	const virtualRows = advanceVirtualRows(
-		storedVirtualRows,
-		rows,
-		messageOrder,
-		visibleAnchorRowIdRef.current,
-	);
-	setStoredVirtualRows(virtualRows);
-	return virtualRows;
-}
 
 export default function ChatView({
 	sessionId,
@@ -216,24 +81,40 @@ export default function ChatView({
 	workspaceId: string;
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
-	const sessionRuntime = useAppStore((s) => s.sessions[sessionId]);
-	const runtime = sessionRuntime ?? EMPTY_RUNTIME;
+	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
+	const isStreaming = useAppStore((s) => s.sessions[sessionId]?.isStreaming ?? false);
+	const draft = useAppStore((s) => s.sessions[sessionId]?.draft ?? "");
+	const queue = useAppStore((s) => s.sessions[sessionId]?.queue ?? EMPTY_RUNTIME.queue);
+	const sessionModel = useAppStore((s) => s.sessions[sessionId]?.model ?? null);
+	const thinkingLevel = useAppStore(
+		(s) => s.sessions[sessionId]?.thinkingLevel ?? EMPTY_RUNTIME.thinkingLevel,
+	);
+	const pendingExtUi = useAppStore((s) => s.sessions[sessionId]?.pendingExtUi ?? null);
+	const extUiStatus = useAppStore(
+		(s) => s.sessions[sessionId]?.extUiStatus ?? EMPTY_RUNTIME.extUiStatus,
+	);
+	const extUiWidget = useAppStore(
+		(s) => s.sessions[sessionId]?.extUiWidget ?? EMPTY_RUNTIME.extUiWidget,
+	);
+	const commands = useAppStore((s) => s.sessions[sessionId]?.commands ?? EMPTY_RUNTIME.commands);
+	const stats = useAppStore((s) => s.sessions[sessionId]?.stats ?? null);
+	const statsRefreshTick = useAppStore((s) => s.sessions[sessionId]?.statsRefreshTick ?? 0);
+	const syncedConnectionGeneration = useAppStore(
+		(s) => s.sessions[sessionId]?.syncedConnectionGeneration ?? 0,
+	);
+	const hostState = useAppStore((s) => s.sessions[sessionId]?.hostState ?? null);
+	const awaitingAsk = useAppStore((s) => selectAwaitingAsk(s, sessionId));
+	const recentPrompts = useAppStore(
+		useShallow((s) => deriveRecentPrompts(s.sessions[sessionId]?.turns ?? [])),
+	);
+
 	const status = useAppStore((s) => s.status);
 	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
 	const canRenameChat = useAppStore(selectCanRenameChat);
-	useTranscriptSync({
-		workspaceId,
-		sessionId,
-		runtime,
-		status,
-		connectionGeneration,
-		enabled: sessionRuntime !== undefined,
-	});
 	const composerGrowthLimit = useAppStore((state) => state.composerGrowthLimit);
 	const chatLineWidth = useAppStore((state) => state.chatLineWidth);
 	const chatLineWidthBounded = useAppStore((state) => state.chatLineWidthBounded);
 	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);
-	const streamingResponseMovement = useAppStore((state) => state.streamingResponseMovement);
 	const { models, refreshing: modelsRefreshing, refresh: onRefreshModels } = useModelCatalog();
 	const modelPreferences = useModelPreferences(models);
 	const projectId = useAppStore(
@@ -255,26 +136,6 @@ export default function ChatView({
 		}
 		return map;
 	}, [workspaces]);
-	const specNodes = useAppStore((s) => s.specsByWorkspace[workspaceId]);
-	const isSpec = useMemo(() => specPathMatcher(specNodes ?? []), [specNodes]);
-	const {
-		turns,
-		toolResults,
-		isStreaming,
-		settlementTick,
-		statsRefreshTick,
-		syncedConnectionGeneration,
-		currentAssistantId,
-		stats,
-		commands,
-		draft,
-		queue,
-		pendingExtUi,
-		extUiStatus,
-		extUiWidget,
-		model: sessionModel,
-		thinkingLevel,
-	} = runtime;
 
 	const currentModel = selectCatalogModel(models, sessionModel) ?? sessionModel;
 	const refreshStats = useSessionStats({
@@ -283,87 +144,8 @@ export default function ChatView({
 		syncedConnectionGeneration,
 		status,
 		connectionGeneration,
-		enabled: sessionRuntime !== undefined,
+		enabled: sessionExists,
 	});
-
-	const chronologicalRows = useMemo(
-		() => deriveRows(turns, toolResults, isStreaming, isSpec),
-		[turns, toolResults, isStreaming, isSpec],
-	);
-	const rows = useMemo(
-		() => projectRows(chronologicalRows, chatMessageOrder),
-		[chronologicalRows, chatMessageOrder],
-	);
-	const completionId = runtime.hostState?.completion?.completionId ?? null;
-	const completionAnchorRowId = completionId ? (chronologicalRows.at(-1)?.id ?? null) : null;
-	const readyCompletionId = useAppStore((state) =>
-		selectReadyCompletionActivation(state, workspaceId, sessionId),
-	);
-	const directActivationTick = useAppStore(
-		(state) => state.directChatActivationTickBySession[sessionId] ?? 0,
-	);
-	useEffect(() => {
-		if (!readyCompletionId) return;
-		let cancelled = false;
-		let retry: ReturnType<typeof setTimeout> | undefined;
-		let delay = 250;
-		let attempts = 0;
-		const acknowledge = (): void => {
-			attempts += 1;
-			void getTransport()
-				.request("session.acknowledgeCompletion", {
-					sessionId,
-					completionId: readyCompletionId,
-				})
-				.then(({ record }) => {
-					if (!cancelled) useAppStore.getState().applySessionState(record);
-				})
-				.catch(() => {
-					if (cancelled || attempts >= 5) return;
-					retry = setTimeout(acknowledge, delay);
-					delay = Math.min(delay * 2, 4_000);
-				});
-		};
-		acknowledge();
-		return () => {
-			cancelled = true;
-			if (retry) clearTimeout(retry);
-		};
-	}, [directActivationTick, readyCompletionId, sessionId]);
-	const [rowHeightEstimateCache, setRowHeightEstimateCache] = useState(() => ({
-		messageOrder: chatMessageOrder,
-		heights: new Map<string, number>(),
-	}));
-	if (rowHeightEstimateCache.messageOrder !== chatMessageOrder) {
-		setRowHeightEstimateCache({ messageOrder: chatMessageOrder, heights: new Map() });
-	}
-	const rowHeightEstimates = useMemo(
-		() => estimateChatRowHeights(rows, rowHeightEstimateCache.heights),
-		[rows, rowHeightEstimateCache],
-	);
-	const visibleAnchorRowId = useRef<string | null>(null);
-	const virtualRows = useVirtualRows(rows, chatMessageOrder, visibleAnchorRowId);
-	const firstItemIndex = virtualRows.firstItemIndex;
-
-	const messageActions = useMemo(
-		() => deriveMessageActions(chronologicalRows, isStreaming),
-		[chronologicalRows, isStreaming],
-	);
-
-	const currentStreamStatus = useMemo<StreamStatus | null>(
-		() => (isStreaming ? streamStatus(turns, currentAssistantId) : null),
-		[turns, isStreaming, currentAssistantId],
-	);
-
-	const nextRecentPrompts = useMemo(() => {
-		const texts = turns
-			.filter((t) => t.kind === "user")
-			.map((t) => turnAnchorText(t))
-			.filter(Boolean);
-		return [...new Set(texts.reverse())];
-	}, [turns]);
-	const [recentPrompts, setRecentPrompts] = useState(nextRecentPrompts);
-	if (!shallowEqualArrays(recentPrompts, nextRecentPrompts)) setRecentPrompts(nextRecentPrompts);
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
@@ -388,6 +170,7 @@ export default function ChatView({
 		[workspaceId, sessionId],
 	);
 	const composerRef = useRef<ComposerHandle>(null);
+	const transcriptRef = useRef<ChatTranscriptHandle>(null);
 	const resources = useChatResources(workspaceId, sessionId);
 	const resourcesTrigger = useRef<HTMLButtonElement>(null);
 	const [stopAllOpen, setStopAllOpen] = useState(false);
@@ -462,11 +245,6 @@ export default function ChatView({
 		setStopAllOpen(false);
 	}, [resources.knownUnsupported]);
 
-	const virtuosoRef = useRef<VirtuosoHandle>(null);
-	const latestDividerRowId = useMemo(
-		() => chronologicalRows.findLast((candidate) => candidate.kind === "divider")?.id ?? null,
-		[chronologicalRows],
-	);
 	const stillRunning = useMemo(
 		() =>
 			resources.visible && resources.authoritative && resources.groups.activeCount > 0
@@ -474,50 +252,7 @@ export default function ChatView({
 				: undefined,
 		[resources.visible, resources.authoritative, resources.groups.activeCount, openInspector],
 	);
-	const latestUserRow = useMemo(() => {
-		const row = chronologicalRows.findLast((candidate) => candidate.kind === "user");
-		if (!row) return null;
-		const index = rows.findIndex((candidate) => candidate.id === row.id);
-		return index >= 0 ? { id: row.id, index } : null;
-	}, [chronologicalRows, rows]);
-	const latestRow = useMemo(() => {
-		const index = chatMessageOrder === "newest-first" ? 0 : rows.length - 1;
-		const row = rows[index];
-		return row ? { id: row.id, index } : null;
-	}, [chatMessageOrder, rows]);
-	const {
-		followOutput,
-		handleContentHeight,
-		handleScrollerRef,
-		headerRef,
-		streamEdgeRef,
-		runwayRef,
-		scrollerElement,
-		showScrollButton,
-		scrollButtonLabel,
-		scrollMoving,
-		scrollToLatest,
-		armImmediateTurn,
-		cancelImmediateTurn,
-		cancelAutomaticReveal,
-		revealElement,
-		revealRow,
-		prepareFoldChange,
-		runwayActive,
-		followState,
-		containerProps,
-	} = useChatScroll(
-		virtuosoRef,
-		isStreaming,
-		settlementTick,
-		chatMessageOrder,
-		latestUserRow,
-		latestRow,
-		firstItemIndex,
-		rowHeightEstimates,
-		streamingResponseMovement,
-	);
-	const measureClassName = transcriptMeasureClassName(chatLineWidthBounded);
+
 	const chatViewRef = useCallback(
 		(element: HTMLDivElement | null) => {
 			if (element) {
@@ -529,27 +264,6 @@ export default function ChatView({
 		},
 		[chatLineWidth],
 	);
-	const listContext = useMemo<ChatListContext>(
-		() => ({
-			messageOrder: chatMessageOrder,
-			status: currentStreamStatus,
-			runwayActive,
-			measureClassName,
-			headerRef,
-			streamEdgeRef,
-			runwayRef,
-		}),
-		[
-			chatMessageOrder,
-			currentStreamStatus,
-			headerRef,
-			measureClassName,
-			runwayActive,
-			runwayRef,
-			streamEdgeRef,
-		],
-	);
-	const [askFocusScope] = useState<object>(() => ({}));
 
 	const {
 		state: historyState,
@@ -566,19 +280,6 @@ export default function ChatView({
 		useAppStore.getState().setChatObscured(sessionId, historyState.open);
 		return () => useAppStore.getState().setChatObscured(sessionId, false);
 	}, [historyState.open, sessionId]);
-
-	const chatLocationRequest = useAppStore((s) => s.chatLocationRequest);
-	const activeChatLocationReveal = useRef<typeof chatLocationRequest>(null);
-	const locationRowsRef = useRef(rows);
-	const locationTurnsRef = useRef(turns);
-	const locationTurnMapRef = useRef(runtime.turnIdByMessageIndex);
-	useInsertionEffect(() => {
-		locationRowsRef.current = rows;
-		locationTurnsRef.current = turns;
-		locationTurnMapRef.current = runtime.turnIdByMessageIndex;
-	});
-	const locationRowsReady = rows.length > 0;
-	const [flashRowId, setFlashRowId] = useState<string | null>(null);
 
 	useEffect(() => {
 		getTransport()
@@ -776,7 +477,7 @@ export default function ChatView({
 	) => {
 		const queued = behavior !== "send";
 		if (!queued && (text || attachments.length > 0)) {
-			armImmediateTurn();
+			transcriptRef.current?.armImmediateTurn();
 			useAppStore.getState().appendUserMessage(sessionId, text, attachments);
 		}
 		const images = attachments.map((a) => a.content);
@@ -794,7 +495,7 @@ export default function ChatView({
 				if (queued) restoreTextToDraft(text);
 				else {
 					const streaming = useAppStore.getState().sessions[sessionId]?.isStreaming ?? false;
-					cancelImmediateTurn(streaming);
+					transcriptRef.current?.cancelImmediateTurn(streaming);
 				}
 			});
 	};
@@ -909,69 +610,6 @@ export default function ChatView({
 		onApply: applyTemplate,
 	});
 
-	useEffect(() => {
-		if (
-			!chatLocationRequest ||
-			chatLocationRequest.workspaceId !== workspaceId ||
-			chatLocationRequest.sessionId !== sessionId ||
-			!locationRowsReady
-		) {
-			return;
-		}
-		if (useAppStore.getState().chatLocationRequest !== chatLocationRequest) return;
-		if (activeChatLocationReveal.current === chatLocationRequest) return;
-		const { messageIndex, anchorText } = chatLocationRequest;
-		const currentRows = locationRowsRef.current;
-		const currentTurns = locationTurnsRef.current;
-		const prefix = anchorText.slice(0, 40);
-		const mappedId = locationTurnMapRef.current?.[messageIndex];
-		const mapped = mappedId ? currentTurns.find((t) => t.id === mappedId) : undefined;
-		const target =
-			mapped && turnAnchorText(mapped).includes(prefix)
-				? mapped
-				: currentTurns.findLast((t) => turnAnchorText(t).includes(prefix));
-		const index = target ? rowIndexForTurn(currentRows, target.id) : -1;
-		if (index === -1) {
-			toast.error("couldn't locate the message — the session may have changed");
-			useAppStore.getState().clearChatLocation();
-			return;
-		}
-		const rowId = currentRows[index]?.id;
-		if (!rowId) {
-			useAppStore.getState().clearChatLocation();
-			return;
-		}
-		const revealClaim = {};
-		chatLocationRevealClaims.set(chatLocationRequest, revealClaim);
-		activeChatLocationReveal.current = chatLocationRequest;
-		const cancelReveal = revealRow(
-			rowId,
-			() => locationRowsRef.current.findIndex((row) => row.id === rowId),
-			"center",
-			(result) => {
-				if (activeChatLocationReveal.current !== chatLocationRequest) return;
-				activeChatLocationReveal.current = null;
-				if (useAppStore.getState().chatLocationRequest !== chatLocationRequest) return;
-				if (result === "found") setFlashRowId(rowId);
-				else if (result === "missing")
-					toast.error("couldn't locate the message — the session may have changed");
-				useAppStore.getState().clearChatLocation();
-			},
-		);
-		return () => {
-			if (activeChatLocationReveal.current === chatLocationRequest) {
-				activeChatLocationReveal.current = null;
-			}
-			cancelReveal();
-			queueMicrotask(() => {
-				if (chatLocationRevealClaims.get(chatLocationRequest) !== revealClaim) return;
-				chatLocationRevealClaims.delete(chatLocationRequest);
-				const state = useAppStore.getState();
-				if (state.chatLocationRequest === chatLocationRequest) state.clearChatLocation();
-			});
-		};
-	}, [chatLocationRequest, locationRowsReady, revealRow, sessionId, workspaceId]);
-
 	const historyOpenRequest = useAppStore((s) => s.historyOpenRequest);
 	const historyOverlayOpen = historyState.open;
 	useEffect(() => {
@@ -982,59 +620,13 @@ export default function ChatView({
 		else composerRef.current?.openHistory();
 	}, [historyOpenRequest, sessionId, historyOverlayOpen, cycleScope]);
 
-	useEffect(() => {
-		if (flashRowId === null) return;
-		const timer = setTimeout(() => setFlashRowId(null), 1600);
-		return () => clearTimeout(timer);
-	}, [flashRowId]);
-
-	const onOpenChange = useCallback(
-		(path: string) => {
-			useAppStore.getState().requestChangesView(workspaceId, path);
-		},
-		[workspaceId],
-	);
-
-	const onOpenSpec = useCallback(
-		(path: string) => {
-			useAppStore.getState().requestSpecView(workspaceId, path);
-		},
-		[workspaceId],
-	);
-
-	const onReveal = useCallback(
-		(tool: "specs" | "changes") => {
-			useAppStore.getState().requestToolView(workspaceId, tool);
-		},
-		[workspaceId],
-	);
-
-	const askStates = useMemo(
-		() => deriveAskStates(runtime.turns, runtime.askAnswers, runtime.toolResults),
-		[runtime.turns, runtime.askAnswers, runtime.toolResults],
-	);
-	const askContext = useMemo(
-		() => ({ states: askStates, focusScope: askFocusScope }),
-		[askStates, askFocusScope],
-	);
-
 	const planGlanceState = useMemo(
-		() => hostSessionGlance(runtime.hostState, planGlance(isStreaming, askStates)),
-		[askStates, isStreaming, runtime.hostState],
-	);
-
-	const chatActions = useMemo<ChatActions>(
-		() => ({
-			answerQuestion: (toolCallId: string, result: AskUserQuestionResult) =>
-				getTransport()
-					.request("session.answerQuestion", { sessionId, toolCallId, result })
-					.then(() => undefined),
-			cancelAutomaticReveal,
-			focusComposer: () => composerRef.current?.refocus(),
-			openSubagentTranscript: setTranscriptChildId,
-			revealChatElement: revealElement,
-		}),
-		[cancelAutomaticReveal, revealElement, sessionId, setTranscriptChildId],
+		() =>
+			hostSessionGlance(
+				hostState,
+				awaitingAsk ? "waiting_question" : isStreaming ? "working" : "waiting",
+			),
+		[awaitingAsk, hostState, isStreaming],
 	);
 
 	const onExtUiReply = (value: string | boolean | null) => {
@@ -1047,349 +639,243 @@ export default function ChatView({
 	};
 
 	const widgetEntries = Object.entries(extUiWidget);
+	const focusComposer = useCallback(() => composerRef.current?.refocus(), []);
+	// Keep a stable `onTryAgain` identity (it is passed to every transcript row) while always calling the
+	// latest `performSend` closure.
+	const performSendRef = useRef(performSend);
+	performSendRef.current = performSend;
+	const onTryAgain = useCallback(() => performSendRef.current(TRY_AGAIN_PROMPT, [], "send"), []);
 
 	return (
-		<ChatActionsContext.Provider value={chatActions}>
-			<AskStatesContext.Provider value={askContext}>
-				<div
-					ref={chatViewRef}
-					onPointerDownCapture={(event) => {
-						const target = event.target;
-						if (target instanceof Element && target.closest('[data-testid="history-overlay"]'))
-							return;
-						useAppStore.getState().noteDirectChatActivation(sessionId);
-					}}
-					data-testid="chat-view"
-					data-line-width-bounded={chatLineWidthBounded}
-					data-message-order={chatMessageOrder}
-					className="flex h-full min-h-0 min-w-0 flex-col bg-container-workspace-bg [container-type:size]"
-				>
-					<Popover
-						open={planOpen}
-						onOpenChange={(next) => {
-							if (next && !planOpen) plan.notifyOpened("popup");
-							setPlanOpen(next);
-						}}
-					>
-						<PopoverAnchor asChild>
-							<div className="shrink-0">
-								<ChatHeader
-									resources={
-										resources.visible ? (
-											<ResourcesButton
-												ref={resourcesTrigger}
-												activeCount={resources.authoritative ? resources.groups.activeCount : null}
-												open={inspectorOpen}
-												onClick={() => setInspectorOpen(!inspectorOpen)}
-											/>
-										) : null
-									}
-									stats={stats}
-									statusEntries={Object.entries(extUiStatus)}
-									left={
-										plan.data ? (
-											<PopoverTrigger asChild>
-												<button
-													type="button"
-													data-testid="chat-plan-toggle"
-													data-open={planOpen}
-													className="flex min-w-0 max-w-full items-center gap-4 overflow-clip whitespace-nowrap text-text-muted tr-text-metadata hover:text-text-default"
-												>
-													<ChatPlanStripContent
-														plan={plan}
-														open={planOpen}
-														glance={planGlanceState}
-													/>
-												</button>
-											</PopoverTrigger>
-										) : null
-									}
-									skillsStale={skillsStale}
-									{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
-								/>
-							</div>
-						</PopoverAnchor>
-						<ChatPlanContent plan={plan} glance={planGlanceState} />
-					</Popover>
-					<div
-						data-testid="chat-scroll"
-						data-follow-state={followState}
-						data-latest-edge={chatMessageOrder === "newest-first" ? "top" : "bottom"}
-						data-streaming={isStreaming}
-						data-scroll-moving={scrollMoving}
-						className="relative flex min-h-0 flex-1 flex-col [container-type:size]"
-						{...containerProps}
-					>
-						<div
-							data-testid="chat-transcript-scroll"
-							className={cn(
-								"relative min-h-0 flex-1 overflow-y-hidden",
-								chatLineWidthBounded ? "overflow-x-hidden" : "overflow-x-auto",
-							)}
-						>
-							<Virtuoso<ChatRow, ChatListContext>
-								key={chatMessageOrder}
-								ref={virtuosoRef}
-								data={rows}
-								heightEstimates={rowHeightEstimates}
-								firstItemIndex={firstItemIndex}
-								increaseViewportBy={CHAT_VIEWPORT_INCREASE}
-								minOverscanItemCount={CHAT_MIN_OVERSCAN_ITEMS}
-								skipAnimationFrameInResizeObserver
-								scrollerRef={handleScrollerRef}
-								context={listContext}
-								components={CHAT_LIST_COMPONENTS}
-								className={cn(
-									"h-full min-h-0 overflow-x-hidden [overflow-anchor:none]",
-									chatLineWidthBounded
-										? "w-full"
-										: "w-[var(--chat-transcript-width)] min-w-full max-w-none",
-								)}
-								followOutput={followOutput}
-								rangeChanged={({ startIndex }) => {
-									const localIndex = startIndex - firstItemIndex;
-									visibleAnchorRowId.current = rows[localIndex]?.id ?? null;
-								}}
-								totalListHeightChanged={handleContentHeight}
-								computeItemKey={(_, row) => row.id}
-								itemContent={(index, row) => (
-									<div
-										ref={
-											row.id === completionAnchorRowId && completionId
-												? (element) => {
-														if (element && !historyState.open) {
-															useAppStore
-																.getState()
-																.noteRenderedCompletion(sessionId, completionId);
-														}
-													}
-												: undefined
-										}
-										data-testid="chat-row"
-										data-chat-row-id={row.id}
-										data-chat-row-index={index - firstItemIndex}
-										data-flash={row.id === flashRowId || undefined}
-										className={cn(
-											measureClassName,
-											"rounded-[var(--radius-sm)] px-12 py-4 transition-colors data-[flash]:bg-primary-subtle",
-										)}
-									>
-										<FoldGeometryProvider onBeforeChange={prepareFoldChange}>
-											<ChatTurnView
-												row={row}
-												workspaceRoot={workspaceRoot}
-												onOpenFile={onOpenFile}
-												agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
-												isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
-												onOpenSpec={onOpenSpec}
-												onOpenChange={onOpenChange}
-												onReveal={onReveal}
-												onTryAgain={() => performSend(TRY_AGAIN_PROMPT, [], "send")}
-												stillRunning={row.id === latestDividerRowId ? stillRunning : undefined}
-											/>
-										</FoldGeometryProvider>
-										{chatMessageOrder === "newest-first" &&
-										runwayActive &&
-										index === firstItemIndex ? (
-											<div ref={streamEdgeRef} data-testid="chat-stream-edge" className="h-0" />
-										) : null}
-									</div>
-								)}
-							/>
-							<ActivityBreadcrumbTrail
-								scroller={scrollerElement}
-								measureClassName={measureClassName}
-								onReveal={(node) =>
-									revealElement(node, {
-										block: "start",
-										provenance: "user-navigation",
-										runway: "preserve",
-										stability: "none",
-										topInset: ACTIVITY_BREADCRUMB_HEIGHT,
-									})
-								}
-							/>
-						</div>
-						{showScrollButton ? (
-							<button
-								type="button"
-								data-testid={
-									chatMessageOrder === "newest-first" ? "scroll-to-top" : "scroll-to-bottom"
-								}
-								onClick={scrollToLatest}
-								className="-translate-x-1/2 absolute bottom-12 left-1/2 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
-							>
-								{chatMessageOrder === "newest-first" ? (
-									<ArrowUp className="size-12" />
-								) : (
-									<ArrowDown className="size-12" />
-								)}
-								{scrollButtonLabel}
-							</button>
-						) : null}
-						{resources.visible ? (
-							<ResourcesInspector
-								open={inspectorOpen}
-								onOpenChange={setInspectorOpen}
-								onCloseAutoFocus={returnToResources}
-								{...resources.groups}
-								now={now}
-								authoritative={resources.authoritative}
-								loading={resources.loading}
-								stale={resources.stale}
-								error={resources.projection?.error ?? null}
-								actions={resources.actions}
-								selectedId={inspectorSelectedId}
-								onSelect={selectResource}
-								onRetry={resources.retry}
-								onStopCommand={resources.stopCommand}
-								onStopSubagent={resources.stopSubagent}
-								onStopAll={() => setStopAllOpen(true)}
-								detail={
-									selectedCommandId ? (
-										<CommandLogView {...commandLog} onRetry={commandLog.retry} />
-									) : selectedSubagentId ? (
-										<SubagentTranscriptPane
-											key={selectedSubagentId}
-											workspaceId={workspaceId}
-											parentSessionId={sessionId}
-											childSessionId={selectedSubagentId}
-										/>
-									) : null
-								}
-							/>
-						) : null}
+		<div
+			ref={chatViewRef}
+			onPointerDownCapture={(event) => {
+				const target = event.target;
+				if (target instanceof Element && target.closest('[data-testid="history-overlay"]')) return;
+				useAppStore.getState().noteDirectChatActivation(sessionId);
+			}}
+			data-testid="chat-view"
+			data-line-width-bounded={chatLineWidthBounded}
+			data-message-order={chatMessageOrder}
+			className="flex h-full min-h-0 min-w-0 flex-col bg-container-workspace-bg [container-type:size]"
+		>
+			<Popover
+				open={planOpen}
+				onOpenChange={(next) => {
+					if (next && !planOpen) plan.notifyOpened("popup");
+					setPlanOpen(next);
+				}}
+			>
+				<PopoverAnchor asChild>
+					<div className="shrink-0">
+						<ChatHeader
+							resources={
+								resources.visible ? (
+									<ResourcesButton
+										ref={resourcesTrigger}
+										activeCount={resources.authoritative ? resources.groups.activeCount : null}
+										open={inspectorOpen}
+										onClick={() => setInspectorOpen(!inspectorOpen)}
+									/>
+								) : null
+							}
+							stats={stats}
+							statusEntries={Object.entries(extUiStatus)}
+							left={
+								plan.data ? (
+									<PopoverTrigger asChild>
+										<button
+											type="button"
+											data-testid="chat-plan-toggle"
+											data-open={planOpen}
+											className="flex min-w-0 max-w-full items-center gap-4 overflow-clip whitespace-nowrap text-text-muted tr-text-metadata hover:text-text-default"
+										>
+											<ChatPlanStripContent plan={plan} open={planOpen} glance={planGlanceState} />
+										</button>
+									</PopoverTrigger>
+								) : null
+							}
+							skillsStale={skillsStale}
+							{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
+						/>
 					</div>
-					{widgetEntries.length > 0 ? (
-						<div className="shrink-0 border-border-default border-t bg-container-elevated-bg px-12 py-4 text-text-muted tr-text-metadata">
-							{widgetEntries.map(([key, lines]) => (
-								<div key={key}>{lines.join(" ")}</div>
-							))}
-						</div>
-					) : null}
-					<QueueStrip queue={queue} onEdit={onEditQueued} onRemove={onRemoveQueued} />
-					{resources.visible && !inspectorOpen ? (
-						<ResourcesDock
-							commands={resources.groups.commands}
-							subagents={resources.groups.subagents}
+				</PopoverAnchor>
+				<ChatPlanContent plan={plan} glance={planGlanceState} />
+			</Popover>
+			<ChatTranscript
+				ref={transcriptRef}
+				sessionId={sessionId}
+				workspaceId={workspaceId}
+				onOpenFile={onOpenFile}
+				workspaceRoot={workspaceRoot}
+				focusComposer={focusComposer}
+				openSubagentTranscript={setTranscriptChildId}
+				onTryAgain={onTryAgain}
+				historyOpen={historyState.open}
+				stillRunning={stillRunning}
+				resourcesOverlay={
+					resources.visible ? (
+						<ResourcesInspector
+							open={inspectorOpen}
+							onOpenChange={setInspectorOpen}
+							onCloseAutoFocus={returnToResources}
+							{...resources.groups}
 							now={now}
 							authoritative={resources.authoritative}
+							loading={resources.loading}
+							stale={resources.stale}
+							error={resources.projection?.error ?? null}
 							actions={resources.actions}
-							onInspect={openInspector}
+							selectedId={inspectorSelectedId}
+							onSelect={selectResource}
+							onRetry={resources.retry}
 							onStopCommand={resources.stopCommand}
 							onStopSubagent={resources.stopSubagent}
+							onStopAll={() => setStopAllOpen(true)}
+							detail={
+								selectedCommandId ? (
+									<CommandLogView {...commandLog} onRetry={commandLog.retry} />
+								) : selectedSubagentId ? (
+									<SubagentTranscriptPane
+										key={selectedSubagentId}
+										workspaceId={workspaceId}
+										parentSessionId={sessionId}
+										childSessionId={selectedSubagentId}
+									/>
+								) : null
+							}
 						/>
-					) : null}
-					<div className="relative shrink-0">
-						<HistoryOverlay
-							state={historyState}
-							workspaceNames={workspaceNames}
-							onQueryChange={setQuery}
-							onSetScope={setScope}
-							onToggleStage={toggleStage}
-							onMoveSelection={moveSelection}
-							onClose={onDismissHistory}
-							onInsert={onInsertHit}
-							onInsertAndSend={onInsertAndSendHit}
-							onOpenMessage={openMessage}
-							onSaveAsTemplate={onSaveAsTemplateHit}
-							onDeleteChat={(wsId, id) => void onDeleteHistoryChat(wsId, id)}
-						/>
-						<Composer
-							ref={composerRef}
-							value={draft}
-							onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
-							isStreaming={isStreaming}
-							growthLimit={composerGrowthLimit}
-							commands={mergedCommands}
-							templatePending={templatePending}
-							mentionCandidates={mentionCandidates}
-							recentPrompts={recentPrompts}
-							models={models}
-							modelsRefreshing={modelsRefreshing}
-							onRefreshModels={onRefreshModels}
-							currentModel={currentModel}
-							thinkingLevel={thinkingLevel}
-							modelPreferences={modelPreferences}
-							onMentionQuery={onMentionQuery}
-							onSlashActive={setSlashActive}
-							onSelectModel={onSelectModel}
-							onSelectThinking={onSelectThinking}
-							onSubmit={onSubmit}
-							onAbort={onAbort}
-							onHistoryOpen={onHistoryOpen}
-							onPickTemplate={onPickTemplate}
-							onManageTemplates={onManageTemplates}
-							templatesEmpty={templatesEmpty}
-						/>
-					</div>
-					<TemplateEditorDialog
-						open={saveAsTemplateHit != null}
-						onOpenChange={(open) => {
-							if (!open) setSaveAsTemplateHit(null);
-						}}
-						workspaceId={workspaceId}
-						initialBody={saveAsTemplateHit?.text ?? ""}
-					/>
-					{pendingExtUi ? (
-						<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
-					) : null}
-					<Dialog open={stopAllOpen} onOpenChange={setStopAllOpen}>
-						<DialogContent onCloseAutoFocus={returnToResources}>
-							<DialogTitle>Stop all subagents?</DialogTitle>
-							<DialogDescription>
-								Stop {resources.groups.subagents.length} active subagents in this chat? The main
-								chat and future delegation are unaffected.
-							</DialogDescription>
-							<DialogFooter>
-								<Button variant="ghost" onClick={() => setStopAllOpen(false)}>
-									Cancel
-								</Button>
-								<Button
-									data-testid="resources-stop-all-confirm"
-									disabled={
-										!resources.authoritative ||
-										resources.groups.subagents.length === 0 ||
-										resources.actions.all?.pending
-									}
-									onClick={() => {
-										resources.stopAll();
-										setStopAllOpen(false);
-									}}
-								>
-									Stop {resources.groups.subagents.length} subagents
-								</Button>
-							</DialogFooter>
-						</DialogContent>
-					</Dialog>
-					{transcriptChildId ? (
-						<SubagentTranscriptDialog
-							key={`${workspaceId}:${sessionId}:${transcriptChildId}`}
-							workspaceId={workspaceId}
-							parentSessionId={sessionId}
-							childSessionId={transcriptChildId}
-							onOpenChange={(open) => {
-								if (!open) setTranscriptChildId(null);
-							}}
-						/>
-					) : null}
-					{projectId ? (
-						<SkillsDialog
-							projectId={projectId}
-							workspace={{
-								workspaceId,
-								sessionId,
-								streaming: isStreaming,
-								stale: skillsStale,
-								onReloaded: (syncedTick) =>
-									useAppStore.getState().markSkillsSynced(sessionId, syncedTick),
-							}}
-							open={skillsOpen}
-							onOpenChange={setSkillsOpen}
-						/>
-					) : null}
+					) : null
+				}
+			/>
+			{widgetEntries.length > 0 ? (
+				<div className="shrink-0 border-border-default border-t bg-container-elevated-bg px-12 py-4 text-text-muted tr-text-metadata">
+					{widgetEntries.map(([key, lines]) => (
+						<div key={key}>{lines.join(" ")}</div>
+					))}
 				</div>
-			</AskStatesContext.Provider>
-		</ChatActionsContext.Provider>
+			) : null}
+			<QueueStrip queue={queue} onEdit={onEditQueued} onRemove={onRemoveQueued} />
+			{resources.visible && !inspectorOpen ? (
+				<ResourcesDock
+					commands={resources.groups.commands}
+					subagents={resources.groups.subagents}
+					now={now}
+					authoritative={resources.authoritative}
+					actions={resources.actions}
+					onInspect={openInspector}
+					onStopCommand={resources.stopCommand}
+					onStopSubagent={resources.stopSubagent}
+				/>
+			) : null}
+			<div className="relative shrink-0">
+				<HistoryOverlay
+					state={historyState}
+					workspaceNames={workspaceNames}
+					onQueryChange={setQuery}
+					onSetScope={setScope}
+					onToggleStage={toggleStage}
+					onMoveSelection={moveSelection}
+					onClose={onDismissHistory}
+					onInsert={onInsertHit}
+					onInsertAndSend={onInsertAndSendHit}
+					onOpenMessage={openMessage}
+					onSaveAsTemplate={onSaveAsTemplateHit}
+					onDeleteChat={(wsId, id) => void onDeleteHistoryChat(wsId, id)}
+				/>
+				<Composer
+					ref={composerRef}
+					value={draft}
+					onChange={(v) => useAppStore.getState().setChatDraft(sessionId, v)}
+					isStreaming={isStreaming}
+					growthLimit={composerGrowthLimit}
+					commands={mergedCommands}
+					templatePending={templatePending}
+					mentionCandidates={mentionCandidates}
+					recentPrompts={recentPrompts}
+					models={models}
+					modelsRefreshing={modelsRefreshing}
+					onRefreshModels={onRefreshModels}
+					currentModel={currentModel}
+					thinkingLevel={thinkingLevel}
+					modelPreferences={modelPreferences}
+					onMentionQuery={onMentionQuery}
+					onSlashActive={setSlashActive}
+					onSelectModel={onSelectModel}
+					onSelectThinking={onSelectThinking}
+					onSubmit={onSubmit}
+					onAbort={onAbort}
+					onHistoryOpen={onHistoryOpen}
+					onPickTemplate={onPickTemplate}
+					onManageTemplates={onManageTemplates}
+					templatesEmpty={templatesEmpty}
+				/>
+			</div>
+			<TemplateEditorDialog
+				open={saveAsTemplateHit != null}
+				onOpenChange={(open) => {
+					if (!open) setSaveAsTemplateHit(null);
+				}}
+				workspaceId={workspaceId}
+				initialBody={saveAsTemplateHit?.text ?? ""}
+			/>
+			{pendingExtUi ? (
+				<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
+			) : null}
+			<Dialog open={stopAllOpen} onOpenChange={setStopAllOpen}>
+				<DialogContent onCloseAutoFocus={returnToResources}>
+					<DialogTitle>Stop all subagents?</DialogTitle>
+					<DialogDescription>
+						Stop {resources.groups.subagents.length} active subagents in this chat? The main chat
+						and future delegation are unaffected.
+					</DialogDescription>
+					<DialogFooter>
+						<Button variant="ghost" onClick={() => setStopAllOpen(false)}>
+							Cancel
+						</Button>
+						<Button
+							data-testid="resources-stop-all-confirm"
+							disabled={
+								!resources.authoritative ||
+								resources.groups.subagents.length === 0 ||
+								resources.actions.all?.pending
+							}
+							onClick={() => {
+								resources.stopAll();
+								setStopAllOpen(false);
+							}}
+						>
+							Stop {resources.groups.subagents.length} subagents
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+			{transcriptChildId ? (
+				<SubagentTranscriptDialog
+					key={`${workspaceId}:${sessionId}:${transcriptChildId}`}
+					workspaceId={workspaceId}
+					parentSessionId={sessionId}
+					childSessionId={transcriptChildId}
+					onOpenChange={(open) => {
+						if (!open) setTranscriptChildId(null);
+					}}
+				/>
+			) : null}
+			{projectId ? (
+				<SkillsDialog
+					projectId={projectId}
+					workspace={{
+						workspaceId,
+						sessionId,
+						streaming: isStreaming,
+						stale: skillsStale,
+						onReloaded: (syncedTick) =>
+							useAppStore.getState().markSkillsSynced(sessionId, syncedTick),
+					}}
+					open={skillsOpen}
+					onOpenChange={setSkillsOpen}
+				/>
+			) : null}
+		</div>
 	);
 }

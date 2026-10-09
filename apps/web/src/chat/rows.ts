@@ -280,3 +280,45 @@ export function turnDivider(
 export function rowIndexForTurn(rows: ChatRow[], turnId: string): number {
 	return rows.findIndex((r) => r.id === turnId || r.id.startsWith(`${turnId}:text:`));
 }
+
+function valueEqual(a: unknown, b: unknown): boolean {
+	if (a === b) return true;
+	if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+	if (Array.isArray(a) || Array.isArray(b)) {
+		if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+		for (let i = 0; i < a.length; i++) if (!valueEqual(a[i], b[i])) return false;
+		return true;
+	}
+	const aKeys = Object.keys(a as Record<string, unknown>);
+	const bKeys = Object.keys(b as Record<string, unknown>);
+	if (aKeys.length !== bKeys.length) return false;
+	for (const key of aKeys) {
+		if (!Object.hasOwn(b as Record<string, unknown>, key)) return false;
+		if (!valueEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]))
+			return false;
+	}
+	return true;
+}
+
+/**
+ * Reuse the previous row object for every row whose rendered content is unchanged, so a memoized
+ * `ChatTurnView` bails out for rows that did not change across a streaming delta. Pure: it never mutates
+ * its inputs and preserves the order/shape of `next`; it only swaps unchanged entries for their prior
+ * reference. Row ids are stable across re-derivation (pi appends, never reorders), so matching by id and
+ * then value-comparing the rendered fields is sufficient.
+ */
+export function stabilizeRows(previous: ChatRow[], next: ChatRow[]): ChatRow[] {
+	if (previous.length === 0) return next;
+	const byId = new Map<string, ChatRow>();
+	for (const row of previous) byId.set(row.id, row);
+	let changed = false;
+	const result = next.map((row) => {
+		const prior = byId.get(row.id);
+		if (prior && prior !== row && valueEqual(prior, row)) {
+			changed = true;
+			return prior;
+		}
+		return row;
+	});
+	return changed ? result : next;
+}

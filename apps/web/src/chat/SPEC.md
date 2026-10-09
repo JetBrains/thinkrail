@@ -328,6 +328,12 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 
 ## Interaction seams
 
+- **Transcript/shell split** — `ChatView` (the exported integration component) splits into a churn-isolated
+  `ChatTranscript` child — the sole subscriber to the streaming runtime fields (turns, toolResults,
+  currentAssistantId, askAnswers, turnIdByMessageIndex, eventRevision) that owns the scroll container and
+  rows — plus a chrome shell that reads only granular rarely-changing fields, so text/thinking/tool deltas
+  no longer re-render header/composer/queue/dialogs; completion-ack, location-reveal, and the ask-focus
+  scope live in the child (a private refactor; `ChatActions`/`AskStatesContext` are still provided here).
 - **Structured tool-file navigation** — `ChatView` accepts an optional `onOpenFile(path)` from the shell and
   passes it through every `ToolRenderProps` path (routine, primary, card, or bare). The shared tool-file
   primitive offers that action only for a non-empty relative path or an absolute path contained by
