@@ -53,7 +53,10 @@ standalone render) or a host older than MCP hides them.
   needs no integration state), so a run that scrolls the row out of the virtualized range closes it.
 - **Sign in / Open MCP settings** replaces pi's CLI-oriented instructions (`requires sign-in`,
   `needs sign-in`, `mcp login`, `Run /mcp …`) with one button calling `openMcpSettings`, which opens
-  Settings › MCP servers. Sign-in phrases win over a bare `/mcp` instruction. Detection runs only on a
+  Settings › MCP servers; when the button is offered, the shown failure text (call output and a listing's
+  per-server error alike) drops the `Run /mcp …` / `pi mcp login …` sentence (`stripMcpCliInstruction`,
+  through `useMcpFailureText`) and keeps the server's message, while a standalone render without
+  `ChatActions` keeps pi's text verbatim. Sign-in phrases win over a bare `/mcp` instruction. Detection runs only on a
   failed result and on a listing's per-server `errors`, which is where pi emits those phrases; successful
   server output that merely mentions sign-in stays text.
 

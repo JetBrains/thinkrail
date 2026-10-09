@@ -1,6 +1,6 @@
 import { RiPlugLine } from "@remixicon/react";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
-import { McpActions } from "./McpActions";
+import { McpActions, useMcpFailureText } from "./McpActions";
 import { McpArgs, McpHeader, McpOutput, McpRunning, McpServerTool } from "./McpCardParts";
 import { McpStructuredContent } from "./McpJsonTree";
 import { mcpArgsSummary, mcpCallTitle, mcpText, readMcpResultSummary } from "./mcpResult";
@@ -14,6 +14,7 @@ export function McpToolCard({ toolCallId, toolName, args, result, status }: Tool
 	const summary = readMcpResultSummary(result);
 	const failed = status === "error" || summary?.isError === true;
 	const text = mcpText(result);
+	const shown = useMcpFailureText(text, failed);
 	return (
 		<div
 			data-testid="tool-mcp"
@@ -29,7 +30,7 @@ export function McpToolCard({ toolCallId, toolName, args, result, status }: Tool
 				<McpRunning label={text.trim().split("\n").at(-1) || `Calling ${tool || toolName}…`} />
 			) : (
 				<>
-					<McpOutput id={`${toolCallId}:content`} text={text} result={result} failed={failed} />
+					<McpOutput id={`${toolCallId}:content`} text={shown} result={result} failed={failed} />
 					<McpStructuredContent id={`${toolCallId}:structured`} summary={summary} />
 					<McpActions
 						toolCallId={toolCallId}

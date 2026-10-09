@@ -218,6 +218,8 @@ describe("MCP card", () => {
 		);
 		expect(html).toContain('data-action="sign-in"');
 		expect(html).toContain("Sign in</button>");
+		expect(html).toContain("MCP server &quot;linear&quot; requires sign-in.");
+		expect(html).not.toContain("Run /mcp");
 
 		const standalone = renderTool(
 			props("mcp__linear__search_issues", { query: "bug" }, result, "error"),
