@@ -463,8 +463,8 @@ export default function ChatView({
 	}, [resources.knownUnsupported]);
 	const watchesMcp = inspectorOpen && !!resources.groups.mcpServers?.length;
 	useEffect(
-		() => (watchesMcp ? watchMcpWorkspace(workspaceId) : undefined),
-		[watchesMcp, workspaceId],
+		() => (watchesMcp && connectionGeneration > 0 ? watchMcpWorkspace(workspaceId) : undefined),
+		[watchesMcp, workspaceId, connectionGeneration],
 	);
 
 	const virtuosoRef = useRef<VirtuosoHandle>(null);

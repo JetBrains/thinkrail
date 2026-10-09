@@ -1268,7 +1268,8 @@ MCP-capable protocol (older hosts omit the field; either way there is no list) a
 extends the shared controls with `mcp.setSessionOverride` (Disable / Enable in this chat, applied at the
 next idle reload) and `mcp.reconnect`, keyed `mcp:<name>` beside the stop actions. `ChatView` adds the
 connected/starting servers to the trigger's count without making it breathe. While the inspector is open on a
-chat with servers it runs `watchMcpWorkspace`: the host publishes no edge when a server finishes
+chat with servers it runs `watchMcpWorkspace`, restarted on every connected generation so a reconnect
+gets a fresh bounded read: the host publishes no edge when a server finishes
 connecting, and the `mcp.list` re-read is what makes it refresh status and push `session.resourcesChanged`.
 The divider's "still running" chip and the dock keep counting work only. No PID is shown — pi exposes
 none — and there is no immediate per-server stop.
