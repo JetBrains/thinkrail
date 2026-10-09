@@ -52,8 +52,10 @@ bootstrap it into one so it can be opened.
   stores no skill catalog and imports no agent code. Project records also carry the pi-level trust state
   `piResourceTrust` (trust for the project's native `.pi/` resources — settings, extensions, skills,
   prompts, themes, `SYSTEM.md`, subagent definitions — distinct from the alias-skill grant; seeded once for
-  records that predate the field, with an explicit denial in pi's `trust.json` winning). The migration is
-  idempotent without a marker: a record created since the field exists carries an explicit value
+  records that predate the field, with an explicit denial in pi's `trust.json` winning; a record whose
+  decision could not be read — the store unreadable or malformed — is left without the field, reads as
+  untrusted meanwhile, and is seeded on a later load, so a read failure never becomes a grant). The
+  migration is idempotent without a marker: a record created since the field exists carries an explicit value
   (`untrusted`, or `granted` when pi's trust store already trusts the path), so an absent field only ever
   means "legacy". pi's decision arrives through the host-injected `setPiTrustSeed` (this module imports no
   pi code); until a seed is configured no migration runs. `setProjectTrust(id, trusted, acknowledged?,

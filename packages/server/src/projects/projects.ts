@@ -63,7 +63,8 @@ function ensureSlugs(projects: Project[]): boolean {
 	return changed;
 }
 
-export type PiTrustSeed = (path: string) => boolean | null;
+/** pi's saved decision for a path: trusted, denied, `null` when it has none, `undefined` when unreadable. */
+export type PiTrustSeed = (path: string) => boolean | null | undefined;
 let piTrustSeed: PiTrustSeed | null = null;
 
 export function setPiTrustSeed(seed: PiTrustSeed | null): void {
@@ -74,7 +75,9 @@ export function migratePiResourceTrust(projects: Project[], seed: PiTrustSeed): 
 	let changed = false;
 	for (const project of projects) {
 		if (project.piResourceTrust !== undefined) continue;
-		project.piResourceTrust = seed(project.path) === false ? "untrusted" : "granted";
+		const decision = seed(project.path);
+		if (decision === undefined) continue;
+		project.piResourceTrust = decision === false ? "untrusted" : "granted";
 		changed = true;
 	}
 	return changed;

@@ -7,11 +7,11 @@ import type { ProjectTrustSummary } from "@thinkrail/contracts";
 import { discoverAgentDefinitions } from "pi-subagents";
 import { listProjectAliasSkillNames } from "./extensions";
 
-export function piProjectTrustDecision(path: string): boolean | null {
+export function piProjectTrustDecision(path: string): boolean | null | undefined {
 	try {
 		return new ProjectTrustStore(getAgentDir()).get(path);
 	} catch {
-		return null;
+		return undefined;
 	}
 }
 
