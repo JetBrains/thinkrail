@@ -4,6 +4,7 @@ import type {
 	ExtUiRequest,
 	HostUpdateNotice,
 	LoginPush,
+	McpStatusPayload,
 	Project,
 	ReviewChangedPayload,
 	ServerWelcome,
@@ -242,6 +243,10 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {
 		useAppStore.getState().applyLoginFrame(data as LoginPush);
+	});
+
+	transport.subscribe(WS_CHANNELS.mcpStatus, (data) => {
+		useAppStore.getState().applyMcpStatus(data as McpStatusPayload);
 	});
 
 	transport.subscribe(WS_CHANNELS.providerChanged, () => {

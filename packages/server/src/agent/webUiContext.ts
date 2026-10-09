@@ -7,8 +7,14 @@ import type {
 import type { ExtUiRequest, ExtUiResponse } from "@thinkrail/contracts";
 import { plainTextTheme } from "./plainTextTheme";
 
-let publish: (request: ExtUiRequest) => void = () => {};
-export function setExtUiPublisher(fn: (request: ExtUiRequest) => void): void {
+/** Clients whose protocol version is below `belowProtocol`; absent means every client. */
+export interface ExtUiAudience {
+	belowProtocol: number;
+}
+type ExtUiPublisher = (request: ExtUiRequest, audience?: ExtUiAudience) => void;
+
+let publish: ExtUiPublisher = () => {};
+export function setExtUiPublisher(fn: ExtUiPublisher): void {
 	publish = fn;
 }
 
@@ -73,8 +79,9 @@ export function notifyExtUi(
 	sessionId: string,
 	message: string,
 	level: "info" | "warning" | "error",
+	audience?: ExtUiAudience,
 ): void {
-	publish({ id: nextId(), sessionId, kind: "notify", message, level });
+	publish({ id: nextId(), sessionId, kind: "notify", message, level }, audience);
 }
 
 const MAX_EXTENSION_ERROR_CHARS = 500;

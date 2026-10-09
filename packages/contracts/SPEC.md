@@ -801,10 +801,10 @@ contracts only.
   `mcp.list` would set `handledElsewhere`, so a stale client cannot write while another manager owns MCP; they return the fresh
   list without waiting for the open chats to reload; `mcp.status` pushes report each reload, so the returned
   snapshots may predate it. `setProjectOverride` writes the project record, never the tracked
-  `.pi/mcp.json`; `shareWithRepo` is the explicit write into it. `setProjectOverride` merges the fields it carries into the
-  existing override (a client sends only what changed, so two clients editing one row do not overwrite each
-  other's setting). `setSessionOverride` is the per-chat
-  disable: it applies to `mcp.json` servers only — a `SessionResources.mcpServers` row with
+  `.pi/mcp.json`; `shareWithRepo` is the explicit write into it. `setProjectOverride` merges the fields it
+  carries into the existing override (a client sends only what changed, so two clients editing one row do
+  not overwrite each other's setting). `setSessionOverride` is the chat-resources
+  "Disable in this chat": it applies to `mcp.json` servers only — a `SessionResources.mcpServers` row with
   `registered: true` is a server an extension registered (its `transport` is that registration's), and
   disabling it fails with `MCP_CONFIG_INVALID`; where MCP is handled elsewhere it fails with
   `MCP_HANDLED_ELSEWHERE`. `mcp.reconnect` resolves once pi reconnected the server and rejects with pi's

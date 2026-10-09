@@ -750,11 +750,18 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	});
 
-	setExtUiPublisher((request) => {
-		server.publish(
-			WS_CHANNELS.piExtensionUi,
-			JSON.stringify({ channel: WS_CHANNELS.piExtensionUi, data: request }),
-		);
+	setExtUiPublisher((request, audience) => {
+		const frame = JSON.stringify({ channel: WS_CHANNELS.piExtensionUi, data: request });
+		if (!audience) {
+			server.publish(WS_CHANNELS.piExtensionUi, frame);
+			return;
+		}
+		for (const ws of sockets.values()) {
+			if (ws.data.protocolVersion >= audience.belowProtocol) continue;
+			try {
+				ws.send(frame);
+			} catch {}
+		}
 	});
 
 	setLoginPublisher((push, generation) => {

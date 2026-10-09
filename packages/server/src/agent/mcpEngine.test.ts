@@ -65,6 +65,7 @@ const fixture = join(import.meta.dir, "mcp", "fixtures", "stdioServer.ts");
 const probeMarker = join(root, "probe-starts.log");
 const testExtensions = ["other-mcp.ts", "hang-shutdown.ts", "register-mcp.ts"];
 let requests: ExtUiRequest[] = [];
+let legacyRequests: ExtUiRequest[] = [];
 let sequence = 0;
 
 function writeMcpConfig(
@@ -108,7 +109,7 @@ beforeAll(async () => {
 	});
 	configurePiRuntime(runtime);
 	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd));
-	setExtUiPublisher((request) => requests.push(request));
+	setExtUiPublisher((request, audience) => (audience ? legacyRequests : requests).push(request));
 });
 
 function killFixtures(): void {
@@ -121,6 +122,7 @@ function killFixtures(): void {
 
 beforeEach(() => {
 	requests = [];
+	legacyRequests = [];
 	killFixtures();
 	rmSync(pidFile, { force: true });
 	rmSync(join(agentDir, "settings.json"), { force: true });
@@ -470,7 +472,7 @@ test("disabling a server in one chat stops it at the reload and reads as disable
 	await removeSession(p.sessionId);
 });
 
-test("a server that fails at startup lands in status and its notice still reaches the chat", async () => {
+test("a server that fails at startup lands in status; only clients without mcp.status still get the toast", async () => {
 	writeMcpConfig({}, { broken: { command: join(root, "missing-binary"), exposure: "direct" } });
 	const p = await chat();
 	const snapshot = await waitFor(async () => {
@@ -480,7 +482,11 @@ test("a server that fails at startup lands in status and its notice still reache
 			: undefined;
 	});
 	expect(snapshot).toBeDefined();
-	expect(notices().some((message) => message.startsWith("MCP servers need attention"))).toBe(true);
+	expect(notices().some((message) => message.startsWith("MCP servers need attention"))).toBe(false);
+	const legacy = legacyRequests.find((request) => request.kind === "notify");
+	expect(legacy?.kind === "notify" && legacy.message.startsWith("MCP servers need attention")).toBe(
+		true,
+	);
 	await removeSession(p.sessionId);
 });
 

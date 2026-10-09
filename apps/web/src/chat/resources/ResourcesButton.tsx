@@ -7,11 +7,16 @@ import type { ComponentProps } from "react";
 export function ResourcesButton({
 	activeCount,
 	open,
+	working,
 	className,
 	...props
-}: ComponentProps<typeof Button> & { activeCount: number | null; open: boolean }) {
+}: ComponentProps<typeof Button> & {
+	activeCount: number | null;
+	open: boolean;
+	working?: boolean;
+}) {
 	const Icon = open ? RiStackFill : RiStackLine;
-	const live = activeCount !== null && activeCount > 0;
+	const live = working ?? (activeCount !== null && activeCount > 0);
 	const countLabel = activeCount === null ? "active count unavailable" : `${activeCount} active`;
 	return (
 		<IconTooltip

@@ -9,6 +9,8 @@ import type {
 	LayoutPreset,
 	LoginFrame,
 	LoginPush,
+	McpListResult,
+	McpStatusSnapshot,
 	PiEvent,
 	Project,
 	RefreshedModels,
@@ -86,13 +88,23 @@ import {
 	staleChatResources,
 } from "./chatResources";
 import {
+	EMPTY_MCP_PROJECTION,
+	foldMcpList,
+	foldMcpSnapshot,
+	type McpRead,
+	type McpWorkspaceProjection,
+	withoutMcpSession,
+} from "./mcp";
+import {
 	type HistoryTarget,
 	isChatResourceReadCurrent,
 	isChatResourceScopeAlive,
+	isConnectedGeneration,
 	SETTLED_SHELF_PAGE,
 	selectActiveWorkspaceProjectId,
 	selectAttentionCenterTab,
 	selectLayoutResourcePlacement,
+	selectSupportsMcp,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
 	selectWorkspaceSessionIds,
@@ -819,6 +831,10 @@ interface AppState {
 	installChatResources: (read: ChatResourceRead, snapshot: SessionResources) => void;
 	failChatResources: (read: ChatResourceRead, error: string) => void;
 	clearChatResources: (scope: ChatResourceScope) => void;
+	mcpByWorkspace: Record<string, McpWorkspaceProjection>;
+	mcpRevision: number;
+	installMcpList: (read: McpRead, result: McpListResult) => void;
+	applyMcpStatus: (snapshot: McpStatusSnapshot) => void;
 	status: ConnectionStatus;
 	connectionGeneration: number;
 	welcomeGeneration: number;
@@ -1533,6 +1549,7 @@ function withoutChat(
 	const inHistory = closed.some((chat) => chat.sessionId === sessionId);
 	const hasRuntime = s.sessions[sessionId] !== undefined;
 	const hasResources = s.resourceSnapshots[workspaceId]?.[sessionId] !== undefined;
+	const hasMcpStatus = s.mcpByWorkspace[workspaceId]?.sessions[sessionId] !== undefined;
 	const hasHostState = s.sessionStateByWorkspace[workspaceId]?.[sessionId] !== undefined;
 	const hasStateTick = Object.hasOwn(s.sessionStateTickBySession, sessionId);
 	const hasActivationTick = Object.hasOwn(s.directChatActivationTickBySession, sessionId);
@@ -1556,6 +1573,7 @@ function withoutChat(
 		!inHistory &&
 		!hasRuntime &&
 		!hasResources &&
+		!hasMcpStatus &&
 		!hasHostState &&
 		!hasStateTick &&
 		!hasActivationTick &&
@@ -1635,6 +1653,9 @@ function withoutChat(
 						[workspaceId]: omitKey(s.resourceSnapshots[workspaceId] ?? {}, sessionId),
 					},
 				}
+			: {}),
+		...(hasMcpStatus
+			? { mcpByWorkspace: withoutMcpSession(s.mcpByWorkspace, workspaceId, sessionId) }
 			: {}),
 		...(hasHostState
 			? {
@@ -2003,6 +2024,59 @@ export const useAppStore = create<AppState>((set, get) => ({
 	toasts: [],
 	resourceSnapshots: {},
 	resourceRevision: 0,
+	mcpByWorkspace: {},
+	mcpRevision: 0,
+	installMcpList: (read, result) =>
+		set((state) => {
+			if (
+				!selectSupportsMcp(state) ||
+				!isConnectedGeneration(state, read.connectionGeneration) ||
+				state.removedWorkspaceIds[read.workspaceId]
+			)
+				return {};
+			const deleted = state.deletedSessionsByWorkspace[read.workspaceId] ?? {};
+			return {
+				mcpByWorkspace: {
+					...state.mcpByWorkspace,
+					[read.workspaceId]: foldMcpList(
+						state.mcpByWorkspace[read.workspaceId],
+						{
+							...result,
+							statuses: result.statuses.filter((snapshot) => !deleted[snapshot.sessionId]),
+						},
+						read,
+					),
+				},
+			};
+		}),
+	applyMcpStatus: (snapshot) =>
+		set((state) => {
+			if (
+				!selectSupportsMcp(state) ||
+				state.status !== "connected" ||
+				!isChatResourceScopeAlive(state, snapshot)
+			)
+				return {};
+			const projection = state.mcpByWorkspace[snapshot.workspaceId] ?? EMPTY_MCP_PROJECTION;
+			const revision = state.mcpRevision + 1;
+			const held = foldMcpSnapshot(
+				projection.sessions[snapshot.sessionId],
+				snapshot,
+				state.connectionGeneration,
+				revision,
+			);
+			if (!held) return {};
+			return {
+				mcpRevision: revision,
+				mcpByWorkspace: {
+					...state.mcpByWorkspace,
+					[snapshot.workspaceId]: {
+						...projection,
+						sessions: { ...projection.sessions, [snapshot.sessionId]: held },
+					},
+				},
+			};
+		}),
 	invalidateChatResources: (scope) =>
 		set((state) => {
 			if (
@@ -2105,6 +2179,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				resourceSnapshots: supportsChatResources(protocolVersion)
 					? staleChatResources(state.resourceSnapshots)
 					: {},
+				mcpByWorkspace: selectSupportsMcp({ protocolVersion }) ? state.mcpByWorkspace : {},
 				projects: openProjects,
 				recentProjects: sortProjects(recentProjects),
 				hostPlatform: hostPlatform ?? null,
@@ -2208,6 +2283,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						: state.pendingWorkspaceChatActivation,
 				fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
 				resourceSnapshots: omitKey(state.resourceSnapshots, workspaceId),
+				mcpByWorkspace: omitKey(state.mcpByWorkspace, workspaceId),
 				sessionStateByWorkspace: omitKey(state.sessionStateByWorkspace, workspaceId),
 				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
 				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),

@@ -9,14 +9,15 @@ import {
 } from "node:fs";
 import { isAbsolute } from "node:path";
 import { getAgentDir, type McpServerConfig } from "@earendil-works/pi-coding-agent";
-import type {
-	McpListResult,
-	McpReadOutputResult,
-	McpServerResourceSummary,
-	McpServerStatus,
-	McpStatusSnapshot,
-	McpTransportKind,
-	Project,
+import {
+	MCP_PROTOCOL_VERSION,
+	type McpListResult,
+	type McpReadOutputResult,
+	type McpServerResourceSummary,
+	type McpServerStatus,
+	type McpStatusSnapshot,
+	type McpTransportKind,
+	type Project,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
@@ -42,7 +43,7 @@ import {
 	summarizeMcpConfigErrors,
 	summarizeMcpServers,
 } from "./mcp";
-import { interceptExtUiNotify } from "./webUiContext";
+import { interceptExtUiNotify, notifyExtUi } from "./webUiContext";
 
 const USER_CONFIG_DEBOUNCE_MS = 300;
 const READ_OUTPUT_MAX_BYTES = 1024 * 1024;
@@ -288,12 +289,13 @@ function trackedOf(sessionId: string): Tracked {
 		stopAttention: () => {},
 	};
 	tracked.set(sessionId, state);
-	state.stopAttention = interceptExtUiNotify(sessionId, (message) => {
+	state.stopAttention = interceptExtUiNotify(sessionId, (message, level) => {
 		const parsed = parseMcpAttentionNotice(message);
 		if (!parsed) return false;
 		apply(sessionId, parsed, true);
 		queueMicrotask(() => scheduleMcpStatusRefresh(sessionId));
-		return false;
+		notifyExtUi(sessionId, message, level, { belowProtocol: MCP_PROTOCOL_VERSION });
+		return true;
 	});
 	return state;
 }
