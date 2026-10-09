@@ -635,8 +635,14 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 	const welcome = useAppStore((s) => s.welcomeGeneration);
 	const activeLogin = useAppStore((s) => s.activeLogin);
 	const now = useNow();
-	const rows = useMemo(() => deriveMcpServerRows(projection, now), [projection, now]);
 	const trusted = project?.piResourceTrust === "granted";
+	const rows = useMemo(
+		() =>
+			deriveMcpServerRows(projection, now).filter(
+				(row) => trusted || row.summary.scope !== "project",
+			),
+		[projection, now, trusted],
+	);
 	const [readFailure, setReadFailure] = useState<string | null>(null);
 	const [readAttempt, setReadAttempt] = useState(0);
 	const [busy, setBusy] = useState<Record<string, true>>({});

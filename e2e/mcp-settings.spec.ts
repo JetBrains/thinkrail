@@ -42,6 +42,7 @@ test("a stdio server added through the form connects in a chat, is disabled ther
 			messages: [{ role: "user", text: "Use the fixture server.", timestamp: Date.now() }],
 		});
 		await enterDefaultWorkspace(page);
+		await openPersistedChat(page, "MCP chat");
 
 		await openMcpSettings(page);
 		const settings = page.getByTestId("settings-mcp");
@@ -65,17 +66,12 @@ test("a stdio server added through the form connects in a chat, is disabled ther
 		await dialog.getByTestId("mcp-add-confirm").click();
 		await expect(dialog).toBeHidden();
 		await expect(settings.getByTestId("mcp-feedback")).toHaveText(
-			"Saved — applies when a chat starts in this workspace.",
+			"Saved — applies to open chats as they reload; a busy chat waits until it is idle.",
 		);
 
 		const row = serverRow(page, "fixture");
 		await expect(row.getByTestId("mcp-server-scope")).toHaveText("User");
 		await expect(row.getByTestId("mcp-server-transport")).toContainText("stdio");
-		await expect(row.getByTestId("mcp-server-status")).toHaveText("Not running");
-		await closeSettings(page);
-
-		await openPersistedChat(page, "MCP chat");
-		await openMcpSettings(page);
 		await expect(row.getByTestId("mcp-server-status")).toHaveText("Connected · 4 tools", {
 			timeout: 30_000,
 		});
