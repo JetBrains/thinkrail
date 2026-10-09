@@ -736,15 +736,21 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 			return null;
 		});
 
+	const projectTrustedNow = () =>
+		useAppStore.getState().projects.find((p) => p.id === workspace.projectId)?.piResourceTrust ===
+		"granted";
+
 	const openEdit = async (row: McpServerRow) => {
 		if (row.summary.scope !== "project") return;
 		const read = await settle(() => readProjectEntry(workspaceId, row.summary.name));
+		if (!projectTrustedNow()) return;
 		if (read.ok) setEditing({ summary: row.summary, entry: read.value });
 		else setRowErrors((previous) => ({ ...previous, [row.key]: { text: read.error } }));
 	};
 
 	const openReview = async (row: McpServerRow) => {
 		const read = await settle(() => readProjectEntry(workspaceId, row.summary.name));
+		if (!projectTrustedNow()) return;
 		setApproving({
 			summary: row.summary,
 			entry: read.ok ? read.value : null,
@@ -990,11 +996,16 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 					const row = removing;
 					if (!row) return;
 					void run(row, () =>
-						requestMcpList("mcp.remove", {
-							workspaceId,
-							scope: row.summary.scope,
-							name: row.summary.name,
-						}),
+						refreshOnFailure(workspaceId, () =>
+							requestMcpList("mcp.remove", {
+								workspaceId,
+								scope: row.summary.scope,
+								name: row.summary.name,
+								...(row.summary.scope === "project" && row.summary.approval
+									? { expectedFingerprint: row.summary.approval.fingerprint }
+									: {}),
+							}),
+						),
 					);
 				}}
 			/>

@@ -20,7 +20,7 @@ import {
 } from "@thinkrail/ui/dialog";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { randomId } from "@/lib";
 import type { McpServerRow } from "@/store";
 import {
@@ -575,6 +575,12 @@ export function McpAddDialog({
 	);
 	const [saving, setSaving] = useState(false);
 	const [failures, setFailures] = useState<McpAddResult[]>([]);
+	useEffect(() => {
+		if (projectScopeAvailable) return;
+		setStep((current) =>
+			current.kind === "review" && current.scope === "project" ? { kind: "edit" } : current,
+		);
+	}, [projectScopeAvailable]);
 
 	const issues = validateMcpDraft(draft, scope, existing);
 	const warnings = [
