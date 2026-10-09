@@ -801,7 +801,9 @@ contracts only.
   `handledElsewhere`, so a stale client cannot write while another manager owns MCP; they return the fresh
   list without waiting for the open chats to reload; `mcp.status` pushes report each reload, so the returned
   snapshots may predate it. `setProjectOverride` writes the project record, never the tracked
-  `.pi/mcp.json`; `shareWithRepo` is the explicit write into it. `setSessionOverride` is the per-chat
+  `.pi/mcp.json`; `shareWithRepo` is the explicit write into it. `setProjectOverride` merges the fields it carries into the
+  existing override (a client sends only what changed, so two clients editing one row do not overwrite each
+  other's setting). `setSessionOverride` is the per-chat
   disable: it applies to `mcp.json` servers only — a `SessionResources.mcpServers` row with
   `registered: true` is a server an extension registered (its `transport` is that registration's), and
   disabling it fails with `MCP_CONFIG_INVALID`; where MCP is handled elsewhere it fails with
@@ -816,7 +818,8 @@ contracts only.
   written entry only when the entry on disk was approved at its current fingerprint (otherwise the rewrite
   stays pending); its optional `expectedFingerprint` — the `McpServerSummary.approval.fingerprint` the
   client rendered the row with — makes the host refuse, file untouched, when the on-disk entry no longer has
-  it (ignored for user scope). `shareWithRepo` refuses when the project file already defines that name or
+  it (ignored for user scope); a project-scope `remove` takes the same precondition, so a stale Remove never
+  deletes repository content the user has not seen. `shareWithRepo` refuses when the project file already defines that name or
   holds an override that is not approved at its current fingerprint.
 - `mcp.login` / `mcp.testConnection` return a `loginId` and reuse the `provider.login` frame family
   (`LoginPush.target` identifies the server); those pushes reach only the connection that started the

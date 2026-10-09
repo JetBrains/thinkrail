@@ -879,7 +879,12 @@ export interface WsMethodMap {
 		result: McpListResult;
 	};
 	"mcp.remove": {
-		params: { workspaceId: string; scope: McpServerScope; name: string };
+		params: {
+			workspaceId: string;
+			scope: McpServerScope;
+			name: string;
+			expectedFingerprint?: string;
+		};
 		result: McpListResult;
 	};
 	"mcp.setProjectOverride": {
