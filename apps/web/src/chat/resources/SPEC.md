@@ -2,7 +2,7 @@
 id: submodule-web-chat-resources
 type: submodule-design
 status: active
-title: Chat Resources — trigger, dock and inspector for command and subagent work
+title: Chat Resources — trigger, dock and inspector for command and subagent work and MCP servers
 parent: submodule-web-chat
 depends-on: [module-contracts]
 tags: [chat, resources, public-surface-checked]
@@ -13,7 +13,8 @@ tags: [chat, resources, public-surface-checked]
 The current chat's **Resources** surfaces: a header **trigger**, an ambient **dock** above the composer,
 and an **inspector** over the transcript. Together they make agent-created work — background commands
 and subagents — glanceable while you type, inspectable without scrolling to old tool calls, and
-stoppable, without confusing it with user-owned workspace terminals.
+stoppable, without confusing it with user-owned workspace terminals; and they show the chat's MCP
+servers with their per-chat actions.
 
 All three render one host-reported snapshot through one row grammar; none is a permanent pane or a
 workbench tab. The inspector lives inside the chat column and leaves the composer usable.
@@ -21,11 +22,12 @@ workbench tab. The inspector lives inside the chat column and leaves the compose
 ## Boundary
 
 - **Owns:** props-driven `ResourcesButton`, `ResourcesDock`, `ResourcesInspector`, and `CommandLogView`,
-  exported through `index.ts`, plus the private row/state vocabulary they share. The inspector renders
-  the roster and a detail *header*; the detail *body* is a slot the parent fills.
+  exported through `index.ts`, plus the private row/state vocabulary they share and the private MCP rows
+  (`mcpRow.tsx`). The inspector renders the roster and a detail *header*; the detail *body* is a slot the
+  parent fills.
 - **Public surface:** `ResourcesButton`, `ResourcesDock`, `ResourcesInspector`, `CommandLogView`.
-- **Allowed external deps:** contracts, React, Remix icons, shared UI primitives and theme utilities.
-  Time arrives as a `now` prop so formatting stays pure.
+- **Allowed external deps:** contracts, React, Remix icons, shared UI primitives and theme utilities, and
+  `lib` (the shared MCP state vocabulary). Time arrives as a `now` prop so formatting stays pure.
 - **Forbidden:** store/transport, server/portable extension packages, Pi value imports, process
   execution, log persistence, subagent transcript fetching, and workbench placement. Parent-chat
   integration (what fills the detail slot, where the surfaces mount) and sibling dependency edges
@@ -52,8 +54,10 @@ badge.
 
 ## Presentation
 
-**Trigger.** The header button reads **Resources** plus the count of live rows only while the snapshot
-is authoritative; the icon breathes while that count is positive. Before the first read, during
+**Trigger.** The header button reads **Resources** plus the count of active resources only while the
+snapshot is authoritative: live rows plus MCP servers that are connected or starting. The icon breathes
+only while background work runs (`working`), so an always-connected server never animates the header.
+Before the first read, during
 reconnect, or after refresh failure it shows an explicit unavailable-count mark and a matching
 accessible label rather than claiming zero. A parent being idle does not hide its resources. At narrow
 widths the label may collapse, but the control/count state and accessible name remain available. The
@@ -79,6 +83,16 @@ wrapper, which carries the row's test ids and `data-selected`. **Stop all subage
 header, guarded by the parent's confirmation that names the current active count; it never stops the
 main chat or disables future delegation. Stale/unavailable snapshots show a banner and disable
 controls; read failures stay visible with Retry.
+
+**MCP servers.** When the snapshot carries `mcpServers` (a host at `MCP_PROTOCOL_VERSION`; `null` hides
+the list) the roster adds a third section after Finished. Rows are not listbox options and never in the
+dock — a server is not work: plug glyph with a state dot · name · the shared state label (with the tool
+count when connected) · transport (stdio "runs on host"), attention rows first. Actions follow the state:
+**Disable in this chat** / **Enable in this chat** (applied at the chat's next idle reload, which restarts
+its other servers — a helper line under the list says so; never offered on a `registered` row, a server an
+extension registered, which the host refuses to disable per chat), and **Reconnect** for failed or
+disconnected. There is no PID and no immediate stop: pi offers neither. Controls are disabled without
+authority, one request per server is in flight, and errors stay on the row.
 
 **Receipts.** The transcript's turn divider may carry a "N still running" chip supplied by the parent;
 it opens the inspector and is the only chat-body roster hint — there is no inline list.
@@ -109,7 +123,8 @@ headless), or arbitrary shell-process discovery. Ordinary workspace terminal tab
 ## Verification obligations
 
 Cover empty/active/finished/stale/unavailable states, exact live counts, the dock's collapse and
-hidden-while-inspecting rule, the trigger's breathing-only-when-live and unknown-count marks, keyboard
-navigation and focus return, safe plain-text logs, row-specific stop failures and stop-all confirmation.
+hidden-while-inspecting rule, the trigger's breathing-only-while-working and unknown-count marks, the MCP
+section's per-state actions and absence for older hosts, keyboard navigation and
+focus return, safe plain-text logs, row-specific stop failures and stop-all confirmation.
 Browser coverage must prove current-chat isolation, reload/reconnect rehydration, late completion while
 the inspector is closed, and no cancellation from view closure.

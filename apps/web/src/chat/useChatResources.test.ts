@@ -37,6 +37,10 @@ const snapshot: SessionResources = {
 			createdAt: "2026-01-01",
 		},
 	],
+	mcpServers: [
+		{ name: "docs", state: "connected", toolCount: 2, transport: "stdio" },
+		{ name: "broken", state: "failed", transport: "http" },
+	],
 };
 const state = useAppStore.getState;
 const projection = () => selectChatResourceProjection(state(), scope);
@@ -207,12 +211,30 @@ function controlsFixture() {
 		stopCommand: (id) => request(`command:${id}`),
 		stopSubagent: (id) => request(`subagent:${id}`),
 		stopAll: () => request("all"),
+		setMcpEnabled: (name, enabled) => request(`mcp:${name}:${enabled ? "on" : "off"}`),
+		reconnectMcp: (name) => request(`mcp:${name}:reconnect`),
 		onChange: (next) => {
 			actions = next;
 		},
 	});
 	return { requests, controls, actions: () => actions };
 }
+
+test("MCP controls act only on servers the chat reports and keep one request per server in flight", async () => {
+	const f = controlsFixture();
+	f.controls.setMcpEnabled("docs", false);
+	f.controls.setMcpEnabled("docs", false);
+	f.controls.reconnectMcp("docs");
+	f.controls.reconnectMcp("broken");
+	f.controls.setMcpEnabled("unknown", false);
+	expect(f.requests.map((item) => item.key)).toEqual(["mcp:docs:off", "mcp:broken:reconnect"]);
+	f.requests[1]?.request.reject(new Error("Reconnect failed"));
+	f.requests[0]?.request.resolve({ ok: true });
+	await flush();
+	expect(f.actions()["mcp:broken"]).toEqual({ pending: false, error: "Reconnect failed" });
+	expect(f.actions()["mcp:docs"]).toEqual({ pending: false, error: null });
+	f.controls.dispose();
+});
 
 test("individual controls prevent duplicates, expose row errors and never synthesize terminal state", async () => {
 	const f = controlsFixture();

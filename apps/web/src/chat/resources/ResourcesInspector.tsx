@@ -5,11 +5,16 @@ import {
 	RiLoader4Line,
 	RiStopFill,
 } from "@remixicon/react";
-import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
+import type {
+	BackgroundCommandSummary,
+	McpServerResourceSummary,
+	SubagentResourceSummary,
+} from "@thinkrail/contracts";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogPanel, DialogTitle } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
 import { type KeyboardEvent, type ReactNode, useEffect, useRef } from "react";
+import { McpServerSection } from "./mcpRow";
 import {
 	actionKey,
 	ExitBadge,
@@ -51,6 +56,9 @@ export interface ResourcesInspectorProps {
 	onStopAll: () => void;
 	/** The selected row's body: bounded command output or the read-only subagent transcript. */
 	detail: ReactNode;
+	mcpServers?: McpServerResourceSummary[] | null;
+	onMcpSetEnabled?: (name: string, enabled: boolean) => void;
+	onMcpReconnect?: (name: string) => void;
 }
 
 function formatAgo(ms: number): string {
@@ -332,6 +340,15 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 					) : null}
 					{section("Active", live, "resources-active", "Nothing is running in the background.")}
 					{section("Finished", settled, "resources-finished", "No finished resources yet.")}
+					{props.mcpServers ? (
+						<McpServerSection
+							servers={props.mcpServers}
+							authoritative={props.authoritative}
+							actions={props.actions}
+							onSetEnabled={(name, enabled) => props.onMcpSetEnabled?.(name, enabled)}
+							onReconnect={(name) => props.onMcpReconnect?.(name)}
+						/>
+					) : null}
 					<p className="mt-auto flex items-center gap-8 px-8 pt-8 text-text-subtle tr-text-metadata">
 						<RiInformationLine className="size-14 shrink-0" />
 						Logs and transcripts are kept for this host session only.

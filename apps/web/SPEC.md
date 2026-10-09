@@ -156,7 +156,7 @@ change. `dist/` therefore has no profiler timers (`actualStartTime` is absent fr
   the runtime graph is acyclic), `lib` (plain-HTTP-safe random page identity)
 - `components` → `lib` (`ErrorBoundary`'s `shallowEqualArrays` for its reset keys) and `constants` (`RunningIcon` draws the shared brand monogram) — both leaves, so any region can still wrap in it; presentational controls consume `ui`
 - `resources` → `contracts` (types only), `lib`; it owns no store, transport, shell, or renderer implementation
-- `lib` → `themes` (the lazy highlighter uses the one generic CSS-variable Shiki registration) and React (the phone-viewport hook only)
+- `lib` → `themes` (the lazy highlighter uses the one generic CSS-variable Shiki registration), React (the phone-viewport hook only), and `contracts` (types only, e.g. the MCP state vocabulary's `McpServerState`)
 - `themes` → `constants` (the branding storage prefix scopes the first-paint hint), `clientPreferences` (native-stable hint storage)
 - leaves (`clientPreferences`, `constants`, `utils`, `styles`) → none internal
 

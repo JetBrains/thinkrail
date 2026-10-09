@@ -810,7 +810,7 @@ test("MCP enable and disable validate file provenance even for unchanged request
 	await removeSession(p.sessionId);
 });
 
-test("a server that fails at startup lands in status and its notice still reaches the chat", async () => {
+test("a server that fails at startup lands in status instead of a toast", async () => {
 	writeMcpConfig({}, { broken: { command: join(root, "missing-binary"), exposure: "direct" } });
 	const p = await chat();
 	const snapshot = await waitFor(async () => {
@@ -820,7 +820,7 @@ test("a server that fails at startup lands in status and its notice still reache
 			: undefined;
 	});
 	expect(snapshot).toBeDefined();
-	expect(notices().some((message) => message.startsWith("MCP servers need attention"))).toBe(true);
+	expect(notices().some((message) => message.startsWith("MCP servers need attention"))).toBe(false);
 	await removeSession(p.sessionId);
 });
 

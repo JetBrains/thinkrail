@@ -31,7 +31,7 @@ import {
 	toast,
 	useAppStore,
 } from "@/store";
-import { errorText, getTransport } from "@/transport";
+import { errorText, getTransport, watchMcpWorkspace } from "@/transport";
 import { ChatHeader } from "./ChatHeader";
 import { ChatPlanContent, ChatPlanStripContent } from "./ChatPlan";
 import ChatTranscript, { type ChatTranscriptHandle } from "./ChatTranscript";
@@ -246,6 +246,11 @@ export default function ChatView({
 		setInspector(null);
 		setStopAllOpen(false);
 	}, [resources.knownUnsupported]);
+	const watchesMcp = inspectorOpen && !!resources.groups.mcpServers?.length;
+	useEffect(
+		() => (watchesMcp ? watchMcpWorkspace(workspaceId) : undefined),
+		[watchesMcp, workspaceId],
+	);
 
 	const stillRunning = useMemo(
 		() =>
@@ -673,7 +678,12 @@ export default function ChatView({
 								resources.visible ? (
 									<ResourcesButton
 										ref={resourcesTrigger}
-										activeCount={resources.authoritative ? resources.groups.activeCount : null}
+										activeCount={
+											resources.authoritative
+												? resources.groups.activeCount + resources.groups.mcpActiveCount
+												: null
+										}
+										working={resources.authoritative && resources.groups.activeCount > 0}
 										open={inspectorOpen}
 										onClick={() => setInspectorOpen(!inspectorOpen)}
 									/>
@@ -732,6 +742,8 @@ export default function ChatView({
 							onStopCommand={resources.stopCommand}
 							onStopSubagent={resources.stopSubagent}
 							onStopAll={() => setStopAllOpen(true)}
+							onMcpSetEnabled={resources.setMcpEnabled}
+							onMcpReconnect={resources.reconnectMcp}
 							detail={
 								selectedCommandId ? (
 									<CommandLogView {...commandLog} onRetry={commandLog.retry} />

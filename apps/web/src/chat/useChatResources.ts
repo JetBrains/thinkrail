@@ -16,6 +16,7 @@ import {
 	selectChatResourcesLoading,
 	selectChatResourcesStale,
 	selectChatResourcesVisible,
+	selectSupportsMcp,
 	supportsChatResources,
 	useAppStore,
 } from "@/store";
@@ -92,6 +93,8 @@ export function createChatResourceControls(
 		stopCommand: (id: string) => Promise<unknown>;
 		stopSubagent: (id: string) => Promise<unknown>;
 		stopAll: () => Promise<unknown>;
+		setMcpEnabled: (name: string, enabled: boolean) => Promise<unknown>;
+		reconnectMcp: (name: string) => Promise<unknown>;
 		onChange: (actions: ResourceActionState) => void;
 	},
 ) {
@@ -101,6 +104,10 @@ export function createChatResourceControls(
 	const current = () =>
 		active &&
 		isChatResourceConnectionCurrent(deps.state(), { ...scope, connectionGeneration: generation });
+	const mcpServer = (name: string) =>
+		selectChatResourceProjection(deps.state(), scope)?.snapshot?.mcpServers?.find(
+			(server) => server.name === name,
+		);
 	const run = async (key: string, request: () => Promise<unknown>) => {
 		if (!current() || !selectChatResourceAuthority(deps.state(), scope) || actions[key]?.pending)
 			return;
@@ -138,6 +145,12 @@ export function createChatResourceControls(
 				return;
 			void run("all", deps.stopAll);
 		},
+		setMcpEnabled: (name: string, enabled: boolean) => {
+			if (mcpServer(name)) void run(`mcp:${name}`, () => deps.setMcpEnabled(name, enabled));
+		},
+		reconnectMcp: (name: string) => {
+			if (mcpServer(name)) void run(`mcp:${name}`, () => deps.reconnectMcp(name));
+		},
 		dispose: () => {
 			active = false;
 		},
@@ -158,9 +171,10 @@ export function useChatResources(workspaceId: string, sessionId: string) {
 	const alive = useAppStore((state) => isChatResourceScopeAlive(state, scope));
 	const supported = supportsChatResources(protocol);
 	const knownUnsupported = isChatResourcesKnownUnsupported(protocol);
+	const supportsMcp = selectSupportsMcp({ protocolVersion: protocol });
 	const groups = useMemo(
-		() => selectChatResourceGroups(projection?.snapshot),
-		[projection?.snapshot],
+		() => selectChatResourceGroups(projection?.snapshot, supportsMcp),
+		[projection?.snapshot, supportsMcp],
 	);
 	const sync = useRef<ReturnType<typeof startChatResourceSync> | null>(null);
 	const controls = useRef<ReturnType<typeof createChatResourceControls> | null>(null);
@@ -198,6 +212,9 @@ export function useChatResources(workspaceId: string, sessionId: string) {
 				}),
 			stopAll: () =>
 				transport.request("subagent.stopAll", { workspaceId, parentSessionId: sessionId }),
+			setMcpEnabled: (name, enabled) =>
+				transport.request("mcp.setSessionOverride", { ...scope, name, enabled }),
+			reconnectMcp: (name) => transport.request("mcp.reconnect", { ...scope, name }),
 			onChange: (actions) => setActionState({ scope, generation, actions }),
 		});
 		sync.current = reader;
@@ -223,6 +240,11 @@ export function useChatResources(workspaceId: string, sessionId: string) {
 		stopCommand: useCallback((id: string) => controls.current?.stopCommand(id), []),
 		stopSubagent: useCallback((id: string) => controls.current?.stopSubagent(id), []),
 		stopAll: useCallback(() => controls.current?.stopAll(), []),
+		setMcpEnabled: useCallback(
+			(name: string, enabled: boolean) => controls.current?.setMcpEnabled(name, enabled),
+			[],
+		),
+		reconnectMcp: useCallback((name: string) => controls.current?.reconnectMcp(name), []),
 	};
 }
 

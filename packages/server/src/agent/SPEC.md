@@ -1023,7 +1023,7 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   (no eviction); they appear as the third list of `SessionResources` (`mcpServers`: name, state, tool
   count, transport from the session's latest status snapshot, `registered: true` with the registration's
   transport for a server an extension registered; a change publishes `session.resourcesChanged`) with
-  a per-chat disable applied at the next idle reload (a deferred one shows the server
+  per-chat "Disable in this chat" applied at the next idle reload (a deferred one shows the server
   `pending-reload` at once). The overlay reaches `mcp.json` servers only, so `setSessionMcpServerEnabled`
   refuses (`MCP_CONFIG_INVALID`) to disable a server the chat did not load from its files — for a
   registered one the message says it is registered by an extension and can't be disabled per chat — and

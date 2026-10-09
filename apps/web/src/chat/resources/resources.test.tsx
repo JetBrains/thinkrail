@@ -1,10 +1,15 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
-import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
+import type {
+	BackgroundCommandSummary,
+	McpServerResourceSummary,
+	SubagentResourceSummary,
+} from "@thinkrail/contracts";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import * as resources from "./index";
+import { mcpRowActions } from "./mcpRow";
 import { elapsedLabel, formatElapsed, resourceState, sortLive } from "./resourceRow";
 
 const NOW = 10 * 60_000;
@@ -66,7 +71,9 @@ test("resource primitives keep their props-only import boundary", () => {
 				/^(?:@thinkrail\/contracts|react|@remixicon\/react|@thinkrail\/ui\/|@\/lib$|\.\/)/,
 			);
 		}
-		expect(source).not.toMatch(/store|transport|xterm|dangerouslySetInnerHTML|Markdown/);
+		expect(source).not.toMatch(
+			/(?<![.\w])(?:store|transport)\b|xterm|dangerouslySetInnerHTML|Markdown/,
+		);
 	}
 });
 
@@ -302,4 +309,82 @@ test("command logs distinguish loading, empty, retry, permanent unavailability, 
 	expect(html).toContain("**not markdown**");
 	expect(html).not.toContain("<script>");
 	expect(html).not.toContain("<strong>");
+});
+
+test("the trigger counts connected MCP servers without breathing", () => {
+	const html = renderToStaticMarkup(
+		<TooltipProvider>
+			<resources.ResourcesButton activeCount={2} open={false} working={false} />
+		</TooltipProvider>,
+	);
+	expect(html).toContain('data-active-count="2"');
+	expect(html).not.toContain("data-live");
+	expect(html).not.toContain("animate-working");
+	expect(
+		renderToStaticMarkup(
+			<TooltipProvider>
+				<resources.ResourcesButton activeCount={3} open={false} working />
+			</TooltipProvider>,
+		),
+	).toContain('data-live="true"');
+});
+
+test("MCP rows offer per-chat actions by state: disable, enable, reconnect", () => {
+	const actions = (state: McpServerResourceSummary["state"]) =>
+		mcpRowActions({ name: "docs", state, transport: "stdio" }).map((action) => action.id);
+	expect(actions("connected")).toEqual(["disable"]);
+	expect(actions("starting")).toEqual(["disable"]);
+	expect(actions("disabled-in-chat")).toEqual(["enable"]);
+	expect(actions("failed")).toEqual(["reconnect", "disable"]);
+	expect(actions("disconnected")).toEqual(["reconnect", "disable"]);
+	expect(actions("needs-sign-in")).toEqual(["disable"]);
+	expect(actions("pending-approval")).toEqual([]);
+	expect(actions("pending-reload")).toEqual([]);
+	expect(actions("disabled-in-project")).toEqual([]);
+	const registered = (state: McpServerResourceSummary["state"]) =>
+		mcpRowActions({ name: "ext", state, transport: "http", registered: true }).map(
+			(action) => action.id,
+		);
+	expect(registered("connected")).toEqual([]);
+	expect(registered("failed")).toEqual(["reconnect"]);
+	expect(registered("needs-sign-in")).toEqual([]);
+});
+
+test("the inspector lists the chat's MCP servers as a third section and hides it for older hosts", () => {
+	const mcpServers: McpServerResourceSummary[] = [
+		{ name: "linear", state: "needs-sign-in", transport: "http" },
+		{ name: "fixture", state: "connected", toolCount: 2, transport: "stdio" },
+		{ name: "quiet", state: "disabled-in-chat", transport: "stdio" },
+	];
+	const html = renderToStaticMarkup(
+		<resources.ResourcesInspector
+			{...inspectorProps}
+			mcpServers={mcpServers}
+			actions={{ "mcp:fixture": { pending: false, error: "Disable failed" } }}
+		/>,
+	);
+	expect(html).toContain('data-testid="resources-mcp"');
+	expect(html.match(/data-testid="resource-mcp"/g)).toHaveLength(3);
+	expect(html).toMatch(/data-testid="resource-mcp-state"[^>]*>Connected · 2 tools</);
+	expect(html).toMatch(/data-name="quiet" data-state="disabled-in-chat"/);
+	expect(html).toContain('data-testid="resource-mcp-enable"');
+	expect(html).toContain("Disable in this chat");
+	expect(html).toContain("Disabling applies when the chat is idle — restarts this chat");
+	expect(html).toContain("Disable failed");
+	expect(html).toContain("stdio · runs on host");
+	const stale = renderToStaticMarkup(
+		<resources.ResourcesInspector
+			{...inspectorProps}
+			mcpServers={mcpServers}
+			authoritative={false}
+		/>,
+	);
+	expect(stale).toMatch(/data-testid="resource-mcp-disable"[^>]*disabled=""/);
+	const empty = renderToStaticMarkup(
+		<resources.ResourcesInspector {...inspectorProps} mcpServers={[]} />,
+	);
+	expect(empty).toContain("No MCP servers in this chat.");
+	expect(renderToStaticMarkup(<resources.ResourcesInspector {...inspectorProps} />)).not.toContain(
+		'data-testid="resources-mcp"',
+	);
 });
