@@ -378,8 +378,12 @@ and recommendation, and assistant mermaid fences alongside tool diagrams re-rend
 `--container-elevated-bg` after selecting a discovered opposite appearance in real settings. Malformed
 source is seeded as a successful historical tool result (`isError: false`) so both tool and chat exercise
 the renderer's plain-source fallback, not the tool-error branch. These regressions need no provider,
-prompt submission, route mock, or screenshot. Questionnaire paging uses
-canonical persisted tool-call/ack fixtures to pin six-question rounds beyond four, tall-page reveal,
+prompt submission, route mock, or screenshot. MCP tool-card coverage (`mcp-tool-cards.spec.ts`)
+seeds historical `mcp__*`, resource and `tool_search` results the same way and pins the single shared
+image strip, the collapsed JSON tree, Full output through the real `mcp.readOutput` (a recorded file and an
+expired one), the Sign in deep link into Settings › MCP servers, and the raw-text fallback for a truncated
+listing; its element shots under `e2e/screenshots/mcp-tool-cards/` are review evidence only. Questionnaire
+paging uses canonical persisted tool-call/ack fixtures to pin six-question rounds beyond four, tall-page reveal,
 fresh-chat restored-page reveal, visible review focus, and coarse-pointer focus
 without provider variability; desktop package tests separately pin the stable
 backend-profile/window adapter required across dynamic-port restarts. Streaming-band coverage remains

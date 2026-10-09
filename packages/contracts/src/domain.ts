@@ -419,6 +419,13 @@ export interface McpServerResourceSummary {
 	registered?: true;
 }
 
+/** Mirror of pi's `McpToolDetails` as it arrives in `mcp__*` and the three MCP resource tools' results. */
+export interface McpToolDetails {
+	server: string;
+	tool: string;
+	fullOutputPath?: string;
+}
+
 export type McpContentBlockSummary =
 	| { kind: "text"; chars: number }
 	| { kind: "image"; mimeType: string }
@@ -428,7 +435,7 @@ export type McpContentBlockSummary =
 
 /**
  * Bounded, base64-free presentation summary written into a tool result's `details.thinkrail` by the
- * host so it can be rendered the same live, after reload, and on another client.
+ * host so cards render the same live, after reload, and on another client.
  */
 export interface McpResultSummary {
 	blocks: McpContentBlockSummary[];

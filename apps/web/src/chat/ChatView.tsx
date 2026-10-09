@@ -40,6 +40,7 @@ import {
 	selectCompactionTurnIds,
 	selectReadyCompletionActivation,
 	selectSkillsStale,
+	selectSupportsMcp,
 	selectWorkspaceById,
 	specPathMatcher,
 	toast,
@@ -227,6 +228,7 @@ export default function ChatView({
 	const status = useAppStore((s) => s.status);
 	const connectionGeneration = useAppStore((s) => s.connectionGeneration);
 	const canRenameChat = useAppStore(selectCanRenameChat);
+	const supportsMcp = useAppStore(selectSupportsMcp);
 	useTranscriptSync({
 		workspaceId,
 		sessionId,
@@ -1048,8 +1050,21 @@ export default function ChatView({
 			focusComposer: () => composerRef.current?.refocus(),
 			openSubagentTranscript: setTranscriptChildId,
 			revealChatElement: revealElement,
+			readMcpOutput: supportsMcp
+				? (toolCallId: string) =>
+						getTransport().request("mcp.readOutput", { workspaceId, sessionId, toolCallId })
+				: undefined,
+			openMcpSettings: supportsMcp ? openMcpSettings : undefined,
 		}),
-		[cancelAutomaticReveal, revealElement, sessionId, setTranscriptChildId],
+		[
+			cancelAutomaticReveal,
+			openMcpSettings,
+			revealElement,
+			sessionId,
+			setTranscriptChildId,
+			supportsMcp,
+			workspaceId,
+		],
 	);
 
 	const onExtUiReply = (value: string | boolean | null) => {

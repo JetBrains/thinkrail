@@ -321,6 +321,11 @@ remain app-local. A registration is:
   primary card renders expanded once complete, e.g. `visualize`). Read through the single
   **`resolveProminence`** seam — where a per-user override map (settings) can plug in later.
 
+Every registry read (renderer, summary, chrome, prominence) goes through one resolver: the exact tool
+name, else the longest app-local prefix registration (`registerToolRendererPrefix` — today only `mcp__`,
+because pi names MCP tools per server), else the default. Exact names always win, an empty prefix never
+matches, and extension descriptors stay exact-name only.
+
 Unregistered tools fall back to `DefaultToolRenderer`. Tools needing user input mid-run either route
 through the extension-UI bridge (`pi.extensionUi` → `ExtUiDialog`) or — for a rich inline card — render
 from their `toolCall` args and reply through **`ChatActions`** (see below). Worked example: the
@@ -344,6 +349,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   stranding the history overlay's dismiss refocus avoids). Only the card's own reply path calls it, and
   only while the card still holds focus. Plus `openSubagentTranscript(childSessionId)` — the subagent
   cards' transcript link (no provider → the cards hide the action).
+  The optional MCP pair — `readMcpOutput(toolCallId)` (`mcp.readOutput` for this chat) and
+  `openMcpSettings()` (Settings › MCP servers) — is supplied by `ChatView` only on an MCP-capable host;
+  without it (older host, the plan page's provider, or `null`) the MCP cards hide Full output and Sign in
+  ([tools/mcp/SPEC.md](tools/mcp/SPEC.md)).
 - **Subagent transcript view** (`SubagentTranscriptDialog.tsx` — an integration file, like
   `SkillsDialog`): `SubagentTranscriptPane` renders a hidden child's **read-only** transcript with the
   same primitives (`messagesToRuntime` → `deriveRows` → `ChatTurnView`), fetched via

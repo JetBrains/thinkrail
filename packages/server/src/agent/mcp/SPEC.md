@@ -80,8 +80,9 @@ relax a rule.
   `structuredContent`. One byte budget (`MCP_SUMMARY_BYTES`, 64 KiB) bounds the whole summary: blocks are
   kept in order until it is spent (`omittedBlocks` counts the rest, since a server may return thousands of
   resource links with long URIs), and `structuredContent` is kept only if it fits what remains (else
-  `structuredContentTruncated`); a resource read keeps only its contents' URIs and types. pi drops `structuredContent` from finalized messages, so this is what lets a
-  result be rendered the same live, after reload and on another client.
+  `structuredContentTruncated`); a resource read keeps only its contents' URIs and types. pi drops
+  `structuredContent` from finalized messages, so this is what lets a card render the same live, after
+  reload and on another client.
 - `management.ts` — the config mutations the host composes: `writeMcpServerEntry` (pi validation plus the
   project `auth` ban, add vs update, project containment; returns a project entry's fingerprint),
   `removeMcpServerEntry`, `projectMcpEntryFingerprint`, `shareMcpOverrideWithRepo` (writes pi's override

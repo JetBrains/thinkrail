@@ -832,8 +832,9 @@ contracts only.
   the reconnect window, ends with an `error` frame ("Sign-in timed out." / "Sign-in cancelled.").
   `mcp.testConnection` judges the transport of the name's effective server (the approved project entry,
   else the user one).
-- `McpResultSummary` is the host-written, bounded, base64-free presentation summary under
-  `details.thinkrail` that can be rendered identically live, after reload and on another client.
+- `McpToolDetails` mirrors pi's result details for `mcp__*` and the three MCP resource tools;
+  `McpResultSummary` is the host-written, bounded, base64-free presentation summary under
+  `details.thinkrail` that lets cards render identically live, after reload and on another client.
   `mcp.readOutput` serves a result's recorded `fullOutputPath` only and reports `expired` when the temp
   file is gone.
 - `mcp.readLog { workspaceId, name }` returns `McpServerLog`: the server's latest lines (at most 200, oldest
