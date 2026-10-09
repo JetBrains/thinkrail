@@ -41,6 +41,10 @@ pi's `turn_*` (one assistant message): a receipt per message would fragment one 
   only object storage and `git gc` prunes them after its grace period. The price is that a very old
   turn may stop resolving — the scope then fails with `UNKNOWN_COMMIT` and the client resets to *All
   changes* exactly as for a rewritten commit.
+- **A receipt is the workspace's interval, not the run's authorship.** Both snapshots cover the whole
+  worktree, so a second chat, a user edit, or a revert landing while this run is pending appears in its
+  receipt too. Exclusive attribution would need per-write provenance the host does not have; tool
+  arguments were exactly the unreliable source this module replaces.
 - **Zero-change runs record nothing.** A receipt that says "0 files" is noise, and *Last turn* means
   the last run that changed something.
 - **The first `agent_start` of a run wins.** pi re-emits `agent_start` on retries; a pending run is kept
