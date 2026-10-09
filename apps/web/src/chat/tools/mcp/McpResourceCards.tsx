@@ -2,11 +2,12 @@ import { RiFileTextLine, RiStackLine } from "@remixicon/react";
 import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { cn } from "@thinkrail/ui/utils";
 import { useFold } from "../../foldState";
-import { McpActions, McpCliActionButton } from "./McpActions";
+import { McpActions, McpCliActionButton, useMcpFailureText } from "./McpActions";
 import { McpHeader, McpOutput, McpRunning } from "./McpCardParts";
 import {
 	type McpListedItem,
 	type McpListing,
+	type McpListingError,
 	mcpText,
 	readMcpListing,
 	readMcpToolDetails,
@@ -108,17 +109,23 @@ function ListingView({
 				<span className="text-text-muted">More {noun} on the next page.</span>
 			) : null}
 			{listing.errors.map((entry) => (
-				<div
-					key={`${entry.server}\u0000${entry.error}`}
-					data-testid="mcp-listing-error"
-					className="flex min-w-0 flex-wrap items-baseline gap-x-8 gap-y-2"
-				>
-					<span className="min-w-0 break-words text-feedback-error">
-						{entry.server ? `${entry.server}: ${entry.error}` : entry.error}
-					</span>
-					<McpCliActionButton text={entry.error} />
-				</div>
+				<ListingError key={`${entry.server}\u0000${entry.error}`} entry={entry} />
 			))}
+		</div>
+	);
+}
+
+function ListingError({ entry }: { entry: McpListingError }) {
+	const error = useMcpFailureText(entry.error, true);
+	return (
+		<div
+			data-testid="mcp-listing-error"
+			className="flex min-w-0 flex-wrap items-baseline gap-x-8 gap-y-2"
+		>
+			<span className="min-w-0 break-words text-feedback-error">
+				{entry.server ? `${entry.server}: ${error}` : error}
+			</span>
+			<McpCliActionButton text={entry.error} />
 		</div>
 	);
 }
@@ -133,8 +140,9 @@ export function McpResourceListCard({
 	const server = listingServer(args, result);
 	const noun = toolName === "list_mcp_resource_templates" ? "resource templates" : "resources";
 	const listing = status === "done" ? readMcpListing(toolName, result) : null;
-	const text = mcpText(result);
 	const failed = status === "error";
+	const raw = mcpText(result);
+	const text = useMcpFailureText(raw, failed);
 	return (
 		<div data-testid={`tool-${toolName}`} className="flex min-w-0 flex-col gap-4">
 			<McpHeader icon={<RiStackLine className="size-12 shrink-0 text-text-muted" />}>
@@ -162,7 +170,7 @@ export function McpResourceListCard({
 					toolCallId={toolCallId}
 					title={`${toolName} · ${server || "all servers"}`}
 					result={result}
-					failureText={failed ? text : ""}
+					failureText={failed ? raw : ""}
 				/>
 			)}
 		</div>
@@ -172,8 +180,9 @@ export function McpResourceListCard({
 export function McpReadResourceCard({ toolCallId, args, result, status }: ToolRenderProps) {
 	const server = listingServer(args, result);
 	const uri = strArg(args, "uri");
-	const text = mcpText(result);
 	const failed = status === "error";
+	const raw = mcpText(result);
+	const text = useMcpFailureText(raw, failed);
 	return (
 		<div data-testid="tool-read_mcp_resource" className="flex min-w-0 flex-col gap-4">
 			<McpHeader icon={<RiFileTextLine className="size-12 shrink-0 text-text-muted" />}>
@@ -193,7 +202,7 @@ export function McpReadResourceCard({ toolCallId, args, result, status }: ToolRe
 						toolCallId={toolCallId}
 						title={[server, uri].filter(Boolean).join(" · ") || "read_mcp_resource"}
 						result={result}
-						failureText={failed ? text : ""}
+						failureText={failed ? raw : ""}
 					/>
 				</>
 			)}

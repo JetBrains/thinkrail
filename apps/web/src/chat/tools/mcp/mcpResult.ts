@@ -140,6 +140,17 @@ export function mcpCliAction(text: string): McpCliAction | null {
 	return null;
 }
 
+const CLI_INSTRUCTION = /(?:^|\s)(?:Run \/mcp|pi mcp login)\b[^.\n]*\.?/gi;
+
+/** The failure text without pi's CLI instruction, for when the card offers the in-app action instead. */
+export function stripMcpCliInstruction(text: string): string {
+	const stripped = text
+		.replace(CLI_INSTRUCTION, "")
+		.replace(/[ \t]+\n/g, "\n")
+		.trim();
+	return stripped || text;
+}
+
 export interface McpListedItem {
 	server: string;
 	uri: string;

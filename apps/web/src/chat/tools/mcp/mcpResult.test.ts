@@ -12,6 +12,7 @@ import {
 	readMcpResultSummary,
 	readMcpToolDetails,
 	readToolSearchLoaded,
+	stripMcpCliInstruction,
 	toolSearchDescriptions,
 } from "./mcpResult";
 
@@ -171,6 +172,14 @@ describe("pi's CLI-oriented phrases", () => {
 			mcpCliAction('MCP server "docs" failed to connect: POST https://x.dev/mcp 500'),
 		).toBeNull();
 		expect(mcpCliAction("POST /mcp returned 404")).toBeNull();
+		expect(
+			stripMcpCliInstruction('MCP server "linear" requires sign-in. Run /mcp to sign in.'),
+		).toBe('MCP server "linear" requires sign-in.');
+		expect(
+			stripMcpCliInstruction("MCP servers need attention:\n  docs: failed\nRun /mcp to fix."),
+		).toBe("MCP servers need attention:\n  docs: failed");
+		expect(stripMcpCliInstruction("Run /mcp to fix.")).toBe("Run /mcp to fix.");
+		expect(stripMcpCliInstruction("POST /mcp returned 404")).toBe("POST /mcp returned 404");
 		expect(mcpCliAction("")).toBeNull();
 	});
 });
