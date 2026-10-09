@@ -2,7 +2,7 @@ import type { Project, ProjectTrustSummary, WsParams } from "@thinkrail/contract
 
 export type ProjectTrustNotice =
 	| { kind: "hidden" }
-	| { kind: "untrusted"; aliasSkills: number; nativeResources: boolean }
+	| { kind: "untrusted"; aliasSkills: number; nativeResources: boolean; mcpServers: number }
 	| { kind: "unacknowledged"; names: string[] }
 	| { kind: "trusted"; aliasSkills: number };
 
@@ -20,6 +20,7 @@ export function deriveProjectTrustNotice(
 			kind: "untrusted",
 			aliasSkills: aliasPending ? summary.aliasSkills.length : 0,
 			nativeResources: nativePending,
+			mcpServers: nativePending ? summary.mcpServers : 0,
 		};
 	}
 	if (summary.aliasSkills.length === 0 && !summary.nativeResources) return { kind: "hidden" };
@@ -45,7 +46,11 @@ export function trustEnablesText(
 	notice: Extract<ProjectTrustNotice, { kind: "untrusted" }>,
 ): string | null {
 	if (!notice.nativeResources) return null;
-	return "Trust loads its skills, prompts, themes, SYSTEM.md and subagent definitions, and lets its extensions and settings run code on this machine.";
+	const mcp =
+		notice.mcpServers > 0
+			? ` Trust alone does not start its ${plural(notice.mcpServers, "MCP server")}.`
+			: "";
+	return `Trust loads its skills, prompts, themes, SYSTEM.md and subagent definitions, and lets its extensions and settings run code on this machine.${mcp}`;
 }
 
 export function trustGrantParams(
@@ -68,6 +73,6 @@ export function stopTrustingText(
 	supportsProjectTrust: boolean,
 ): string {
 	return supportsProjectTrust && project?.piResourceTrust === "granted"
-		? "Its project skills and pi resources stop loading; running subagents stop and open chats reload when idle."
+		? "Its project skills, pi resources and MCP servers stop loading; running subagents stop and open chats reload when idle."
 		: "Its project skills stop loading in new chats.";
 }

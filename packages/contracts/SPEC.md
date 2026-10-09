@@ -757,14 +757,26 @@ own existing Pi transcript persistence, not a second wire-owned history store.
 the pi-level resource grant. A client talking to an older host sends neither.
 
 - `project.trustSummary { projectId }` returns `ProjectTrustSummary` for the generalized trust notice: the
-  project checkout's alias skill names and whether pi-level trust would load anything (`nativeResources`).
-  An older host only answers `project.aliasSkills`, which the client reads as "aliases only". It reads the
-  project's own checkout and takes no `workspaceId`: both surfaces that show it (the Welcome notice and New
-  Workspace) run before the workspace they lead to exists.
+  project checkout's alias skill names, whether pi-level trust would load anything (`nativeResources`) and
+  how many `.pi/mcp.json` entries would then await approval (`mcpServers`). An older host only answers
+  `project.aliasSkills`, which the client reads as "aliases only". It reads the project's own checkout and
+  takes no `workspaceId`: both surfaces that show it (the Welcome notice and New Workspace) run before the
+  workspace they lead to exists, and a worktree's repo servers still wait for per-entry approval.
 - `project.setTrust` takes an optional `resources: true`: the grant then also trusts the project's own pi
   resources (`Project.piResourceTrust` — settings and extensions run code). Without it a grant sets the
   alias trust only, so a surface that does not name what pi-level trust loads (the Skills dialog, an older
   client) never enables it; `trusted: false` revokes both.
+
+## MCP servers
+
+The engine is pi's built-in MCP ([[submodule-server-agent]]). The project record carries the per-project
+policy the host applies when a chat loads its servers: `Project.mcpApprovals` maps a repo-defined server
+name to the fingerprint of its whole `.pi/mcp.json` entry (the entry loads only while it still has that
+fingerprint, so an edit lapses the approval), and `Project.mcpOverrides` holds the project's enablement and
+exposure of user-level servers, never written to `.pi/mcp.json`; `ProjectTrustSummary.mcpServers` counts
+the repository's entries (see Project trust). `McpResultSummary` is the host-written, bounded, base64-free
+presentation summary under `details.thinkrail` that lets an MCP result be rendered the same live, after
+reload and on another client.
 
 ## Normalized session state
 

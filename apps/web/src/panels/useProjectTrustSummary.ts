@@ -6,6 +6,7 @@ import { getTransport } from "@/transport";
 const NOTHING_GATED: ProjectTrustSummary = {
 	aliasSkills: [],
 	nativeResources: false,
+	mcpServers: 0,
 };
 
 export function useProjectTrustSummary(
