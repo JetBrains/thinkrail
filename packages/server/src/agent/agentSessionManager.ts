@@ -77,7 +77,12 @@ import {
 	hasQuestionAck,
 } from "./askUserQuestion";
 import { publishSessionResourcesChanged } from "./chatResources";
-import { disposeSessionChildren, removeWorkspaceDelegation, subagentsFor } from "./delegation";
+import {
+	disposeSessionChildren,
+	removeWorkspaceDelegation,
+	stopSessionChildren,
+	subagentsFor,
+} from "./delegation";
 import { buildResourceLoader, toSkillCommands } from "./extensions";
 import {
 	getPiRuntimeGeneration,
@@ -744,7 +749,9 @@ export async function applyPiResourceTrust(
 			entry.session.settingsManager.isProjectTrusted() !== piResourceTrustFor(entry.workspaceId),
 	);
 	const dispositions: Record<string, SessionReloadDisposition> = {};
-	for (const [sessionId] of stale) {
+	for (const [sessionId, entry] of stale) {
+		if (!piResourceTrustFor(entry.workspaceId))
+			stopSessionChildren(entry.workspaceId, sessionId, "user");
 		try {
 			dispositions[sessionId] = await requestSessionReload(sessionId);
 		} catch (error) {

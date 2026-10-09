@@ -68,6 +68,6 @@ export function stopTrustingText(
 	supportsProjectTrust: boolean,
 ): string {
 	return supportsProjectTrust && project?.piResourceTrust === "granted"
-		? "Its project skills and pi resources stop loading; open chats reload when idle."
+		? "Its project skills and pi resources stop loading; running subagents stop and open chats reload when idle."
 		: "Its project skills stop loading in new chats.";
 }

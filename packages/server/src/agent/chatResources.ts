@@ -6,7 +6,7 @@ import type {
 import { CodedError } from "@thinkrail/shared/codedError";
 import type { ChildHandle } from "pi-delegation";
 import { withSessionResources } from "./agentSessionManager";
-import { delegationServiceFor } from "./delegation";
+import { delegationServiceFor, stopSessionChildren } from "./delegation";
 
 let publish: (payload: { workspaceId: string; sessionId: string }) => void = () => {};
 export function setSessionResourcesPublisher(fn: typeof publish): void {
@@ -124,16 +124,7 @@ export function stopAllSubagents(
 	parentSessionId: string,
 	cwd: string,
 ): Promise<number> {
-	return withSessionResources(workspaceId, parentSessionId, cwd, async () => {
-		const children = delegationServiceFor(workspaceId)
-			.childrenOf(parentSessionId)
-			.filter(
-				(child) =>
-					child.record.scope === workspaceId &&
-					child.record.parentSessionId === parentSessionId &&
-					(child.snapshot?.status === "queued" || child.snapshot?.status === "running"),
-			);
-		for (const child of children) void child.abort("user").catch(() => {});
-		return children.length;
-	});
+	return withSessionResources(workspaceId, parentSessionId, cwd, () =>
+		stopSessionChildren(workspaceId, parentSessionId, "user"),
+	);
 }

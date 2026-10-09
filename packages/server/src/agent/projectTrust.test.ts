@@ -17,6 +17,7 @@ import {
 	setSkillAdmissionResolver,
 	settleSessionsForShutdown,
 } from "./agentSessionManager";
+import { delegationServiceFor } from "./delegation";
 import { configurePiRuntime } from "./piRuntime";
 import { piProjectTrustDecision, projectTrustSummary } from "./projectTrust";
 import { admissionContextFor } from "./skillAdmission";
@@ -179,4 +180,41 @@ test("every reload applies the project's current trust, and a busy session takes
 	expect(hasNativeTemplate(busy.sessionId)).toBe(false);
 	await turn;
 	await waitFor(() => hasNativeTemplate(busy.sessionId));
+});
+
+test("revoking trust stops the live subagents that were created under it", async () => {
+	const p = await projectSession();
+	trustedWorkspaces.add(p.workspaceId);
+	await reloadSessionResources(p.sessionId);
+	let release = () => {};
+	faux.setResponses([
+		async () => {
+			await new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			return fauxAssistantMessage("CHILD_DONE");
+		},
+	]);
+	const child = await delegationServiceFor(p.workspaceId).createChild({
+		parent: p.sessionId,
+		visibility: "hidden",
+		info: { createdBy: "test" },
+		session: {},
+	});
+	const run = child.runQueued("Keep going until trust is revoked.");
+	await waitFor(() => child.snapshot?.status === "running");
+
+	trustedWorkspaces.delete(p.workspaceId);
+	let revoked: Record<string, string> = {};
+	try {
+		revoked = await applyPiResourceTrust([p.workspaceId]);
+	} finally {
+		release();
+	}
+	expect(revoked).toEqual({ [p.sessionId]: "reloaded" });
+	const outcome = await run;
+	expect(outcome.status).toBe("aborted");
+	expect(outcome.details.abortReason).toBe("user");
+	expect(hasNativeTemplate(p.sessionId)).toBe(false);
+	expect(await applyPiResourceTrust([p.workspaceId])).toEqual({});
 });
