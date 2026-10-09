@@ -82,14 +82,17 @@ function liveSessionChildren(workspaceId: string, parentSessionId: string): Chil
 	);
 }
 
+/** Cancellation lands synchronously; `settled` resolves once every child's run has actually ended. */
 export function stopSessionChildren(
 	workspaceId: string,
 	parentSessionId: string,
 	reason: string,
-): number {
+): { stopped: number; settled: Promise<void> } {
 	const children = liveSessionChildren(workspaceId, parentSessionId);
-	for (const child of children) void child.abort(reason).catch(() => {});
-	return children.length;
+	const settled = Promise.allSettled(
+		children.map((child) => child.abort(reason).catch(() => child.dispose())),
+	).then(() => {});
+	return { stopped: children.length, settled };
 }
 
 export async function disposeSessionChildren(

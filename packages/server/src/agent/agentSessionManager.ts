@@ -751,7 +751,7 @@ export async function applyPiResourceTrust(
 	const dispositions: Record<string, SessionReloadDisposition> = {};
 	for (const [sessionId, entry] of stale) {
 		if (!piResourceTrustFor(entry.workspaceId))
-			stopSessionChildren(entry.workspaceId, sessionId, "user");
+			await stopSessionChildren(entry.workspaceId, sessionId, "user").settled;
 		try {
 			dispositions[sessionId] = await requestSessionReload(sessionId);
 		} catch (error) {

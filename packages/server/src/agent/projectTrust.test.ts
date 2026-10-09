@@ -182,15 +182,17 @@ test("every reload applies the project's current trust, and a busy session takes
 	await waitFor(() => hasNativeTemplate(busy.sessionId));
 });
 
-test("revoking trust stops the live subagents that were created under it", async () => {
+test("revoking trust stops the live subagents that were created under it before it reports", async () => {
 	const p = await projectSession();
 	trustedWorkspaces.add(p.workspaceId);
 	await reloadSessionResources(p.sessionId);
-	let release = () => {};
 	faux.setResponses([
-		async () => {
+		async (_context, streamOptions) => {
 			await new Promise<void>((resolve) => {
-				release = resolve;
+				const signal = streamOptions?.signal;
+				if (!signal) return;
+				if (signal.aborted) resolve();
+				else signal.addEventListener("abort", () => resolve(), { once: true });
 			});
 			return fauxAssistantMessage("CHILD_DONE");
 		},
@@ -205,16 +207,10 @@ test("revoking trust stops the live subagents that were created under it", async
 	await waitFor(() => child.snapshot?.status === "running");
 
 	trustedWorkspaces.delete(p.workspaceId);
-	let revoked: Record<string, string> = {};
-	try {
-		revoked = await applyPiResourceTrust([p.workspaceId]);
-	} finally {
-		release();
-	}
-	expect(revoked).toEqual({ [p.sessionId]: "reloaded" });
-	const outcome = await run;
-	expect(outcome.status).toBe("aborted");
-	expect(outcome.details.abortReason).toBe("user");
+	expect(await applyPiResourceTrust([p.workspaceId])).toEqual({ [p.sessionId]: "reloaded" });
+	expect(child.snapshot?.status).toBe("aborted");
+	expect(child.snapshot?.details.abortReason).toBe("user");
+	expect((await run).status).toBe("aborted");
 	expect(hasNativeTemplate(p.sessionId)).toBe(false);
 	expect(await applyPiResourceTrust([p.workspaceId])).toEqual({});
 });

@@ -124,7 +124,10 @@ export function stopAllSubagents(
 	parentSessionId: string,
 	cwd: string,
 ): Promise<number> {
-	return withSessionResources(workspaceId, parentSessionId, cwd, () =>
-		stopSessionChildren(workspaceId, parentSessionId, "user"),
+	return withSessionResources(
+		workspaceId,
+		parentSessionId,
+		cwd,
+		() => stopSessionChildren(workspaceId, parentSessionId, "user").stopped,
 	);
 }

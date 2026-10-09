@@ -887,7 +887,9 @@ settings or workspaces edge. The owning parent graph records this package depend
   (`applyPiResourceTrust`: idle now, busy at settlement). A child session captures the trust at its
   creation and `pi-subagents` retains children across a parent reload, so a revoke also stops every
   live child of a stale parent (`stopSessionChildren`, reason `"user"`: the parent is told without
-  being woken) before the parent's reload is requested; a grant leaves running children alone, since
+  being woken) and waits until those runs have actually ended — a child whose abort fails is disposed —
+  before the parent's reload is requested, so the trust change reports success only once nothing runs
+  under the revoked trust; a grant leaves running children alone, since
   they merely lack the project's resources. The pi-level grant is its own consent, separate
   from alias trust: only `project.setTrust` with `resources: true`, sent by a surface that names what it
   loads, grants it ([[submodule-server-projects]]). The trust notice is shown for alias skills, pi's own
