@@ -377,13 +377,16 @@ export async function mcpHandledElsewhereBy(options: {
 	cwd: string;
 	projectTrusted: boolean;
 }): Promise<string | undefined> {
+	const enabledInSettings = await isBuiltinExtensionEnabled(
+		options.cwd,
+		options.projectTrusted,
+		"mcp",
+	);
+	// Sampled after the only await, so a caller's synchronous mutation sees the current owners.
 	const owners = liveSessionIdsOf(options.workspaceId).map(
 		(sessionId) => mcpSessionView(sessionId)?.commandOwner ?? null,
 	);
-	return mcpOwnerElsewhere(
-		owners,
-		await isBuiltinExtensionEnabled(options.cwd, options.projectTrusted, "mcp"),
-	);
+	return mcpOwnerElsewhere(owners, enabledInSettings);
 }
 
 export async function listMcpServers(options: {
