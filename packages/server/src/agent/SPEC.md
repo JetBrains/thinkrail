@@ -369,7 +369,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     (plan summaries, PR drafting) run on — the only place model **dispatch** happens outside a session.
   - `webUiContext` — `createWebUiContext(sessionId)` builds the `ExtensionUIContext` pi calls (dialogs
     round-trip to the browser, fire-and-forget methods push); `setExtUiPublisher`
-    (server→client push seam), `resolveExtUi` (browser reply), `cancelExtUiForSession` (on dispose),
+    (server→client push seam; an optional `ExtUiAudience` narrows a push to clients below a protocol
+    version), `resolveExtUi` (browser reply), `cancelExtUiForSession` (on dispose),
     `notifyExtUi`, `notifyExtensionError` (pi's `ExtensionError` → one client-visible `error` notify
     carrying extension + event + cause — the cause capped at 500 chars because `error.error` is
     remote-shaped, and the extension named by its **directory** when its file is an anonymous
@@ -999,7 +1000,9 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   where `builtin:mcp` does not own `/mcp` is refused with `MCP_HANDLED_ELSEWHERE`. pi's startup "MCP
   servers need attention" notice is unsolicited, so it alone is recognised by its fixed prefix through
   `interceptExtUiNotify` ([`webUiContext`]), installed before `bindExtensions`: it becomes a partial status
-  update plus a full refresh instead of a toast. pi's `/mcp` awaits every startup connection before it
+  update plus a full refresh instead of a toast — except for clients below `MCP_PROTOCOL_VERSION`, which
+  are not subscribed to `mcp.status` and still receive the notice as a toast (`notifyExtUi` with an
+  `ExtUiAudience`, delivered per socket), since the web client and host ship independently. pi's `/mcp` awaits every startup connection before it
   answers, so registration and every gated reload first seed the snapshot from what pi was given
   (`McpSessionHost.loaded()` plus the servers extensions registered): each enabled one reads `starting`, a
   disabled one its disabled state through the same derivation, and the previous load's report never

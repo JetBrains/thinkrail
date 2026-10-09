@@ -73,7 +73,9 @@ beforeAll(async () => {
 	configurePiRuntime(runtime);
 	setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
 	setMcpLoginPublisher((push, owner) => pushes.push({ push, owner }));
-	setExtUiPublisher((request) => requests.push(request));
+	setExtUiPublisher((request, audience) => {
+		if (!audience) requests.push(request);
+	});
 });
 
 beforeEach(() => {
