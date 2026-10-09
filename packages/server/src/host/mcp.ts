@@ -16,7 +16,7 @@ import {
 	listMcpServers,
 	liveSessionIdsOf,
 	type McpProbeAction,
-	mcpHandledElsewhereBy,
+	mcpOwnershipGuard,
 	mcpPolicyOf,
 	projectMcpEntryFingerprint,
 	readMcpServerLog,
@@ -70,17 +70,26 @@ function assertRepositoryWritable(project: Project): void {
 	}
 }
 
-async function managedTarget(
+type Target = { workspace: Workspace; project: Project };
+
+/**
+ * Runs a management mutation. pi settings resolve first; the live-owner check and the mutation then share
+ * one synchronous call stack, so a reload that hands `/mcp` to another extension cannot slip between
+ * them. The mutation returns the workspaces whose chats should reconcile.
+ */
+async function mutateManaged(
 	workspaceId: string,
-): Promise<{ workspace: Workspace; project: Project }> {
+	mutation: (found: Target) => readonly string[],
+): Promise<McpListResult> {
 	const found = target(workspaceId);
-	const by = await mcpHandledElsewhereBy({
+	const ownedElsewhere = await mcpOwnershipGuard({
 		workspaceId: found.workspace.id,
 		cwd: found.workspace.worktreePath,
 		projectTrusted: found.project.piResourceTrust === "granted",
 	});
-	if (by !== undefined) throw handledElsewhere();
-	return found;
+	if (ownedElsewhere() !== undefined) throw handledElsewhere();
+	reloadLiveSessions(mutation(found));
+	return mcpList({ workspaceId });
 }
 
 function serverName(name: unknown): string {
@@ -138,34 +147,30 @@ export function mcpList(params: { workspaceId: string }): Promise<McpListResult>
 	});
 }
 
-export async function mcpAdd(params: {
+export function mcpAdd(params: {
 	workspaceId: string;
 	scope: McpServerScope;
 	name: string;
 	entry: McpServerEntryInput;
 }): Promise<McpListResult> {
-	const { workspace, project } = await managedTarget(params.workspaceId);
 	const scope = serverScope(params.scope);
-	if (scope === "project") assertRepositoryWritable(project);
 	const name = serverName(params.name);
-	const fingerprint = writeMcpServerEntry({
-		scope,
-		worktree: workspace.worktreePath,
-		name,
-		entry: params.entry,
-		mode: "add",
+	return mutateManaged(params.workspaceId, ({ workspace, project }) => {
+		if (scope === "project") assertRepositoryWritable(project);
+		const fingerprint = writeMcpServerEntry({
+			scope,
+			worktree: workspace.worktreePath,
+			name,
+			entry: params.entry,
+			mode: "add",
+		});
+		if (fingerprint) approveProjectMcpServer(project.id, name, fingerprint);
+		return scope === "user" ? allWorkspaces() : projectWorkspaces(project);
 	});
-	if (fingerprint) approveProjectMcpServer(project.id, name, fingerprint);
-	reloadLiveSessions(scope === "user" ? allWorkspaces() : projectWorkspaces(project));
-	return mcpList(params);
 }
 
-/**
- * A project-scope rewrite or removal runs only against the entry the client rendered. The fingerprint
- * comparison and the write share one synchronous section after the last await, so two requests
- * rendered from the same entry cannot both pass the check and then both write.
- */
-async function renderedEntry(
+/** A project-scope rewrite or removal runs only against the entry the client rendered. */
+function renderedEntry(
 	params: { workspaceId: string; name: string },
 	write: (
 		options: { scope: McpServerScope; worktree: string; name: string },
@@ -174,17 +179,17 @@ async function renderedEntry(
 	) => void,
 ): Promise<McpListResult> {
 	const target = renderedTarget(params);
-	const { workspace, project } = await managedTarget(params.workspaceId);
 	const name = serverName(params.name);
-	let onDisk: string | undefined;
-	if (target.scope === "project") {
-		assertRepositoryWritable(project);
-		onDisk = projectMcpEntryFingerprint(workspace.worktreePath, name);
-		assertRenderedEntry(name, onDisk, target.expectedFingerprint);
-	}
-	write({ scope: target.scope, worktree: workspace.worktreePath, name }, onDisk, project);
-	reloadLiveSessions(target.scope === "user" ? allWorkspaces() : projectWorkspaces(project));
-	return mcpList(params);
+	return mutateManaged(params.workspaceId, ({ workspace, project }) => {
+		let onDisk: string | undefined;
+		if (target.scope === "project") {
+			assertRepositoryWritable(project);
+			onDisk = projectMcpEntryFingerprint(workspace.worktreePath, name);
+			assertRenderedEntry(name, onDisk, target.expectedFingerprint);
+		}
+		write({ scope: target.scope, worktree: workspace.worktreePath, name }, onDisk, project);
+		return target.scope === "user" ? allWorkspaces() : projectWorkspaces(project);
+	});
 }
 
 export function mcpUpdate(params: {
@@ -203,64 +208,64 @@ export function mcpRemove(params: { workspaceId: string; name: string }): Promis
 	return renderedEntry(params, (options) => removeMcpServerEntry(options));
 }
 
-export async function mcpSetProjectOverride(params: {
+export function mcpSetProjectOverride(params: {
 	workspaceId: string;
 	name: string;
 	enabled?: boolean;
 	exposure?: Exclude<McpExposure, "codemode">;
 }): Promise<McpListResult> {
-	const { project } = await managedTarget(params.workspaceId);
 	const name = serverName(params.name);
-	const override = {
-		...project.mcpOverrides?.[name],
-		...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
-		...(params.exposure !== undefined ? { exposure: params.exposure } : {}),
-	};
-	setProjectMcpOverride(project.id, name, Object.keys(override).length > 0 ? override : null);
-	reloadLiveSessions(projectWorkspaces(project));
-	return mcpList(params);
+	return mutateManaged(params.workspaceId, ({ project }) => {
+		const override = {
+			...project.mcpOverrides?.[name],
+			...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
+			...(params.exposure !== undefined ? { exposure: params.exposure } : {}),
+		};
+		setProjectMcpOverride(project.id, name, Object.keys(override).length > 0 ? override : null);
+		return projectWorkspaces(project);
+	});
 }
 
-export async function mcpApprove(params: {
+export function mcpApprove(params: {
 	workspaceId: string;
 	name: string;
 	fingerprint: string;
 }): Promise<McpListResult> {
-	const { workspace, project } = await managedTarget(params.workspaceId);
-	assertRepositoryWritable(project);
 	const name = serverName(params.name);
-	if (projectMcpEntryFingerprint(workspace.worktreePath, name) !== params.fingerprint) {
-		throw new CodedError(
-			"MCP_CONFIG_INVALID",
-			`The entry for "${name}" changed since it was reviewed — review it again.`,
-		);
-	}
-	approveProjectMcpServer(project.id, name, params.fingerprint);
-	reloadLiveSessions(projectWorkspaces(project));
-	return mcpList(params);
+	return mutateManaged(params.workspaceId, ({ workspace, project }) => {
+		assertRepositoryWritable(project);
+		if (projectMcpEntryFingerprint(workspace.worktreePath, name) !== params.fingerprint) {
+			throw new CodedError(
+				"MCP_CONFIG_INVALID",
+				`The entry for "${name}" changed since it was reviewed — review it again.`,
+			);
+		}
+		approveProjectMcpServer(project.id, name, params.fingerprint);
+		return projectWorkspaces(project);
+	});
 }
 
-export async function mcpShareWithRepo(params: {
+export function mcpShareWithRepo(params: {
 	workspaceId: string;
 	name: string;
 }): Promise<McpListResult> {
-	const { workspace, project } = await managedTarget(params.workspaceId);
-	assertRepositoryWritable(project);
 	const name = serverName(params.name);
-	const override = project.mcpOverrides?.[name];
-	if (!override) {
-		throw new CodedError("MCP_CONFIG_INVALID", `"${name}" has no project setting to share.`);
-	}
-	const fingerprint = shareMcpOverrideWithRepo({
-		worktree: workspace.worktreePath,
-		name,
-		override,
-		approvedFingerprint: project.mcpApprovals?.[name],
+	return mutateManaged(params.workspaceId, ({ workspace, project }) => {
+		assertRepositoryWritable(project);
+		const override = project.mcpOverrides?.[name];
+		if (!override) {
+			throw new CodedError("MCP_CONFIG_INVALID", `"${name}" has no project setting to share.`);
+		}
+		const fingerprint = shareMcpOverrideWithRepo({
+			worktree: workspace.worktreePath,
+			name,
+			override,
+			approvedFingerprint: project.mcpApprovals?.[name],
+		});
+		approveProjectMcpServer(project.id, name, fingerprint);
+		setProjectMcpOverride(project.id, name, null);
+		return projectWorkspaces(project);
 	});
-	approveProjectMcpServer(project.id, name, fingerprint);
-	setProjectMcpOverride(project.id, name, null);
-	reloadLiveSessions(projectWorkspaces(project));
-	return mcpList(params);
 }
 
 export async function mcpSetSessionOverride(params: {

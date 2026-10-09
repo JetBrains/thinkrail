@@ -762,8 +762,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   wires `workspaceId` → the admission context, derived once by `admissionContextFor(project, overrides)`);
   the **`setMcpPolicyResolver`** seam (host wires `workspaceId` → the project's MCP approvals and overrides,
   derived by `mcpPolicyOf(project)`); the MCP management surface — `listMcpServers`,
-  `mcpHandledElsewhereBy` (the ownership answer `listMcpServers` reports as `handledElsewhere`, so the
-  host re-checks it right before every management mutation), `refreshMcpStatus`,
+  `mcpOwnershipGuard` (resolves pi settings, then answers synchronously who manages MCP instead of
+  ThinkRail — what `listMcpServers` reports as `handledElsewhere` — so the host checks it in the same call
+  stack as every management mutation), `refreshMcpStatus`,
   `setMcpStatusPublisher`, `mcpSessionView` / `liveSessionIdsOf`, `dispatchSessionMcpCommand` (with an
   optional `notify` that takes the dispatch's notifications instead of the chat), `reconnectMcpServer`,
   `readMcpServerLog` (one server's masked lines from pi's shared `mcp.log`),

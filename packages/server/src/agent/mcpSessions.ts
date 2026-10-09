@@ -371,22 +371,28 @@ function mcpOwnerElsewhere(
 	return owners.includes(null) ? "pi settings" : undefined;
 }
 
-/** Who manages MCP for this workspace instead of ThinkRail, or `undefined` when ThinkRail does. */
-export async function mcpHandledElsewhereBy(options: {
+/**
+ * Resolves pi settings, then returns a synchronous answer to "who manages MCP for this workspace instead
+ * of ThinkRail?" (`undefined` when ThinkRail does) that samples the live `/mcp` owners when called, so a
+ * caller can check and mutate in one call stack.
+ */
+export async function mcpOwnershipGuard(options: {
 	workspaceId: string;
 	cwd: string;
 	projectTrusted: boolean;
-}): Promise<string | undefined> {
+}): Promise<() => string | undefined> {
 	const enabledInSettings = await isBuiltinExtensionEnabled(
 		options.cwd,
 		options.projectTrusted,
 		"mcp",
 	);
-	// Sampled after the only await, so a caller's synchronous mutation sees the current owners.
-	const owners = liveSessionIdsOf(options.workspaceId).map(
-		(sessionId) => mcpSessionView(sessionId)?.commandOwner ?? null,
-	);
-	return mcpOwnerElsewhere(owners, enabledInSettings);
+	return () =>
+		mcpOwnerElsewhere(
+			liveSessionIdsOf(options.workspaceId).map(
+				(sessionId) => mcpSessionView(sessionId)?.commandOwner ?? null,
+			),
+			enabledInSettings,
+		);
 }
 
 export async function listMcpServers(options: {
@@ -397,10 +403,11 @@ export async function listMcpServers(options: {
 }): Promise<McpListResult> {
 	const sessionIds = liveSessionIdsOf(options.workspaceId);
 	const projectTrusted = options.project?.piResourceTrust === "granted";
-	const [snapshots, elsewhere] = await Promise.all([
+	const [snapshots, ownership] = await Promise.all([
 		Promise.all(sessionIds.map((sessionId) => refreshMcpStatus(sessionId, options.waitMs))),
-		mcpHandledElsewhereBy({ workspaceId: options.workspaceId, cwd: options.cwd, projectTrusted }),
+		mcpOwnershipGuard({ workspaceId: options.workspaceId, cwd: options.cwd, projectTrusted }),
 	]);
+	const elsewhere = ownership();
 	const files = { agentDir: getAgentDir(), cwd: options.cwd, projectTrusted };
 	const configErrors = summarizeMcpConfigErrors(files);
 	return {
