@@ -239,15 +239,9 @@ export function mcpSettingWrite(
 	projectEntry: McpServerEntryInput | null,
 ): McpSettingWrite {
 	if (summary.scope === "user") {
-		const override = { ...summary.projectOverride, ...change };
 		return {
 			method: "mcp.setProjectOverride",
-			params: {
-				workspaceId,
-				name: summary.name,
-				...(override.enabled !== undefined ? { enabled: override.enabled } : {}),
-				...(override.exposure !== undefined ? { exposure: override.exposure } : {}),
-			},
+			params: { workspaceId, name: summary.name, ...change },
 		};
 	}
 	if (!projectEntry) throw new Error(`Read "${summary.name}" from .pi/mcp.json first.`);

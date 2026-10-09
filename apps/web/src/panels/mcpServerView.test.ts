@@ -143,11 +143,11 @@ test("a pending repository override turns any live row into a review", () => {
 	).toMatchObject({ label: "Connected · 1 tool", action: "review" });
 });
 
-test("enablement and exposure route by scope: user servers write the project record, repo servers their file", () => {
+test("enablement and exposure route by scope: user servers send only the changed field to the project record, repo servers rewrite their file", () => {
 	const user = summary({ projectOverride: { exposure: "direct" } });
 	expect(mcpSettingWrite("ws", user, { enabled: false }, null)).toEqual({
 		method: "mcp.setProjectOverride",
-		params: { workspaceId: "ws", name: "docs", enabled: false, exposure: "direct" },
+		params: { workspaceId: "ws", name: "docs", enabled: false },
 	});
 	expect(mcpSettingWrite("ws", summary(), { exposure: "hidden" }, null)).toEqual({
 		method: "mcp.setProjectOverride",
