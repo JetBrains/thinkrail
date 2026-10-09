@@ -1,5 +1,5 @@
 const MASK = "***";
-const SECRET_WORD = "token|secret|passw(?:or)?d|api[-_]?key|auth|bearer|credential|session";
+const SECRET_WORD = "token|secret|passw(?:or)?d|api[-_ ]?key|auth|bearer|credential|session";
 const SECRET_NAME = new RegExp(SECRET_WORD, "i");
 const TOKEN_LITERAL = "(?:gh[pousr]_|github_pat_|sk-|xox[abprs]-|glpat-|AKIA)[A-Za-z0-9_-]{8,}";
 const SECRET_VALUE = new RegExp(`^${TOKEN_LITERAL}`);

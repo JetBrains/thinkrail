@@ -37,6 +37,8 @@ describe("redactMcpText", () => {
 			"password: ***\napi_key: *** region: eu",
 		);
 		expect(redactMcpText("LINEAR_TOKEN:\t'lin_api_x'")).toBe("LINEAR_TOKEN:\t'***'");
+		expect(redactMcpText("API key: abc123 (expired)")).toBe("API key: *** (expired)");
+		expect(redactMcpText('"API key": "abc123"')).toBe('"API key": "***"');
 		expect(redactMcpText("Authorization: Bearer abc rejected")).toBe(
 			"Authorization: Bearer *** rejected",
 		);
