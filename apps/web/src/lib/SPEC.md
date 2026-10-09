@@ -28,7 +28,8 @@ not this module; the theme-aware highlighter remains app-local.
   `chat/` is type-only), **`deriveAskStates()`** / **`readAskResult()`** (+ the `AskState` type) (pure
   derivation of each `ask_user_question`'s answered/superseded/terminal status from pi turns — shared by
   `chat`'s ask cards and plan-glance and `store`'s `selectAwaitingAsk`; lives here, like `userText`, to
-  keep `store`'s edge to `chat/` type-only, and only **type**-references `ChatTurn`/`ToolResultState`),
+  keep `store`'s edge to `chat/` type-only; its inputs are **structural** (contracts-only: `{ kind }`
+  turns + `{ status, raw }` results), so `lib` stays a leaf and never imports `chat`),
   **`parseSkillInvocation()`** + **`matchesSkillInvocationCommand()`** (the
   anchored browser-side mirror of Pi's canonical expanded `<skill>` user-message grammar, shared by
   `chat`'s compact renderer and `store`'s optimistic-echo reconciliation; malformed/quoted blocks fail

@@ -15,7 +15,7 @@ import {
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
 import { Popover, PopoverAnchor, PopoverTrigger } from "@thinkrail/ui/popover";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useNow } from "@/components/useNow";
 import { registerWebExtensions } from "@/extensions";
@@ -643,7 +643,9 @@ export default function ChatView({
 	// Keep a stable `onTryAgain` identity (it is passed to every transcript row) while always calling the
 	// latest `performSend` closure.
 	const performSendRef = useRef(performSend);
-	performSendRef.current = performSend;
+	useInsertionEffect(() => {
+		performSendRef.current = performSend;
+	});
 	const onTryAgain = useCallback(() => performSendRef.current(TRY_AGAIN_PROMPT, [], "send"), []);
 
 	return (

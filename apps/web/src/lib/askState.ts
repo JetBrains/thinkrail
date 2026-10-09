@@ -1,10 +1,33 @@
-import { type AskUserQuestionResult, assistantToolCallsAreExecutable } from "@thinkrail/contracts";
-import type { ChatTurn, ToolResultState } from "../chat/types";
+import {
+	type AskUserQuestionResult,
+	assistantToolCallsAreExecutable,
+	type StopReason,
+} from "@thinkrail/contracts";
 
 export interface AskState {
 	answer?: AskUserQuestionResult;
 	superseded: boolean;
 	terminal: boolean;
+}
+
+// Structural inputs expressed from `contracts` only: `lib` is a leaf and must not import `chat`'s
+// `ChatTurn`/`ToolResultState`. A caller's richer turn/result types are assignable to these.
+interface AskToolCallBlock {
+	type: string;
+	name?: string;
+	id?: string;
+}
+interface AskAssistantTurn {
+	kind: "assistant";
+	message: { content: readonly AskToolCallBlock[]; stopReason: StopReason };
+}
+interface AskToolResult {
+	status?: string;
+	raw?: unknown;
+}
+
+function isAssistantTurn(turn: { kind: string }): turn is AskAssistantTurn {
+	return turn.kind === "assistant";
 }
 
 export function readAskResult(raw: unknown): AskUserQuestionResult | null {
@@ -28,9 +51,9 @@ function isAckResult(raw: unknown): boolean {
 }
 
 export function deriveAskStates(
-	turns: ChatTurn[],
+	turns: readonly { kind: string }[],
 	askAnswers: Record<string, AskUserQuestionResult>,
-	toolResults: Record<string, ToolResultState> = {},
+	toolResults: Record<string, AskToolResult> = {},
 ): Record<string, AskState> {
 	const calls: Record<string, { turnIndex: number; dead: boolean }> = {};
 	let lastUserIndex = -1;
@@ -39,9 +62,9 @@ export function deriveAskStates(
 		if (!turn) continue;
 		if (turn.kind === "user") {
 			lastUserIndex = i;
-		} else if (turn.kind === "assistant") {
+		} else if (isAssistantTurn(turn)) {
 			for (const block of turn.message.content) {
-				if (block.type === "toolCall" && block.name === "ask_user_question") {
+				if (block.type === "toolCall" && block.name === "ask_user_question" && block.id) {
 					calls[block.id] = {
 						turnIndex: i,
 						dead: !assistantToolCallsAreExecutable(turn.message.stopReason),
