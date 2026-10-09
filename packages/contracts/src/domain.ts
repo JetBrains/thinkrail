@@ -46,6 +46,8 @@ export interface Workspace {
 	diffStats?: DiffStats;
 	skillOverrides?: Record<string, "on" | "off">;
 	subagentsOverride?: SubagentOverride;
+	/** Per-chat concurrent-subagent limit for this workspace; absent = the global `subagentMaxConcurrent`. */
+	subagentMaxConcurrentOverride?: number;
 	/** Newest real activity (chat/agent turn, terminal input, HEAD move) in ms; viewing never counts. */
 	lastActiveAt?: number;
 	settledOverride?: SettledOverride;
@@ -630,6 +632,8 @@ export interface AppConfig extends ThemePreference {
 	/** When false, the worker's in-session `request_review` tool is withheld; the Review button still works. */
 	agentReviewEnabled: boolean;
 	subagentsEnabled: boolean;
+	/** How many subagents one chat may run at once; more spawns queue FIFO. */
+	subagentMaxConcurrent: number;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
 	/** Which shell new workspace terminals start on Windows; ignored on other platforms. */
@@ -677,6 +681,17 @@ export function isSettleIdleDays(value: unknown): value is number | null {
 	);
 }
 
+export const SUBAGENT_MAX_CONCURRENT = { min: 1, max: 16, default: 4 } as const;
+
+export function isSubagentMaxConcurrent(value: unknown): value is number {
+	return (
+		typeof value === "number" &&
+		Number.isInteger(value) &&
+		value >= SUBAGENT_MAX_CONCURRENT.min &&
+		value <= SUBAGENT_MAX_CONCURRENT.max
+	);
+}
+
 export const JBCENTRAL_QUOTA_REFRESH_SECONDS = { min: 1, max: 3600, default: 30 } as const;
 
 export function isJbcentralQuotaRefreshSeconds(value: unknown): value is number {
@@ -707,6 +722,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	reviewAutoFix: false,
 	agentReviewEnabled: false,
 	subagentsEnabled: true,
+	subagentMaxConcurrent: SUBAGENT_MAX_CONCURRENT.default,
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 	settleIdleDays: SETTLE_IDLE_DAYS.default,

@@ -102,7 +102,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 78;
+export const PROTOCOL_VERSION = 79;
+export const SUBAGENT_CONCURRENCY_PROTOCOL_VERSION = 79;
 export const WORKSPACE_SETTLE_PROTOCOL_VERSION = 78;
 export const MODEL_PICKER_PROTOCOL_VERSION = 77;
 export const CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION = 76;
@@ -190,6 +191,7 @@ export const WS_METHODS = {
 	workspaceDiffStats: "workspace.diffStats",
 	workspaceSetSkillOverride: "workspace.setSkillOverride",
 	workspaceSetSubagentsOverride: "workspace.setSubagentsOverride",
+	workspaceSetSubagentMaxConcurrent: "workspace.setSubagentMaxConcurrent",
 	workspaceSetDiffBase: "workspace.setDiffBase",
 	workspaceSettle: "workspace.settle",
 	workspaceUnsettle: "workspace.unsettle",
@@ -525,6 +527,10 @@ export interface WsMethodMap {
 	};
 	"workspace.setSubagentsOverride": {
 		params: { id: string; override: SubagentOverride | null };
+		result: Workspace;
+	};
+	"workspace.setSubagentMaxConcurrent": {
+		params: { id: string; value: number | null };
 		result: Workspace;
 	};
 	"workspace.setDiffBase": { params: { id: string; ref: string | null }; result: Workspace };
