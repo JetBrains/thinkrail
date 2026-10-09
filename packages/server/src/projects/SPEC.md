@@ -56,7 +56,10 @@ bootstrap it into one so it can be opened.
   through the host-injected `setPiTrustSeed` (this module imports no pi code). There is **no
   grandfathering**: a record that predates the field is left as stored and reads as untrusted, so a project
   added before pi-level trust existed asks once through the trust notice instead of keeping code-running
-  resources nobody consented to (user decision, PR #690 review). `setProjectTrust(id, trusted, acknowledged?,
+  resources nobody consented to (user decision, PR #690 review). pi-level trust never enables MCP by itself:
+  the record also carries `mcpApprovals` (repo-defined MCP server name → fingerprint of the whole original
+  project-file entry) and `mcpOverrides` (per-project enablement/exposure of user-level servers, kept out of
+  the tracked `.pi/mcp.json`). `setProjectTrust(id, trusted, acknowledged?,
   { resources? })` keeps the two grants separate because they consent to different things: pi-level
   resources include code (extensions, settings packages), so only a surface that names them asks for them.
   `trusted: true` sets the alias grant and sets `piResourceTrust: "granted"` only with `resources: true`,

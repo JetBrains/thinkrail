@@ -327,14 +327,17 @@ Beneath it, **`ProjectTrustNotice`** is the pre-workspace trust surface (so trus
 workspace yet): **presence-gated** — renders nothing unless the selected project ships something a trust
 grant would load. Presence comes from `chat/useProjectTrustSummary` (`project.trustSummary` on hosts at
 `PROJECT_TRUST_PROTOCOL_VERSION`, gated by the store's `selectSupportsProjectTrust`: alias skill names and
-the kinds of pi's own trust-requiring resources and project subagent definitions; older hosts answer
+the kinds of pi's own trust-requiring resources and project subagent definitions, and the count of
+`.pi/mcp.json` entries; older hosts answer
 `project.aliasSkills` only, read as "aliases only"), and the
 pure `chat/projectTrust` derivation — shared with `chat/SkillsDialog`'s trust banner and New Workspace, so
 the three surfaces cannot disagree about what a grant loads — `deriveProjectTrustNotice` evaluates the alias grant (`Project.trusted`) and pi-level trust
 (`Project.piResourceTrust`) **separately**, so the notice names only what is still off: "ships N skills and
 its own Pi resources → *Trust project*", plus — when pi-level resources are gated — exactly the kinds a
 grant loads (the summary's `piResources`: skills, prompts, themes, system prompt, subagent definitions) and,
-only when `extensions` or `settings` are among them, that those run code on this machine. *Trust project* sends
+only when `extensions` or `settings` are among them, that those run code on this machine, and that trust alone
+does not start its N MCP servers (a repository whose only gated content is `.pi/mcp.json` still shows the
+notice and its grant asks for pi-level trust). *Trust project* sends
 `project.setTrust` built by `trustGrantParams`: `resources: true` only when the notice names pi-level
 resources (and so said what they load and run); an alias-only notice grants alias trust only. After trust
 it shows a "N new → *Review & enable*" state for skills that appeared later (`project.acknowledgeSkills`),

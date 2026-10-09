@@ -22,6 +22,7 @@ import {
 	getSessionWorkspaceId,
 	initializeSessionStates,
 	isProjectSkillPath,
+	mcpPolicyOf,
 	piTrustsProjectPath,
 	refreshAgentReviewTool,
 	refreshExtensionTools,
@@ -30,6 +31,7 @@ import {
 	setAgentReviewEnabledResolver,
 	setDisabledExtensionsResolver,
 	setExtUiPublisher,
+	setMcpPolicyResolver,
 	setModelContextPublisher,
 	setReviewCommentHandler,
 	setSessionCreatedPublisher,
@@ -547,6 +549,15 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			return admissionContextFor(project, skillOverrides ?? {});
 		} catch {
 			return admissionContextFor(undefined);
+		}
+	});
+
+	setMcpPolicyResolver((workspaceId) => {
+		try {
+			const { projectId } = getWorkspace(workspaceId);
+			return mcpPolicyOf(getProjects().find((p) => p.id === projectId));
+		} catch {
+			return mcpPolicyOf(undefined);
 		}
 	});
 

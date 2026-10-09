@@ -13,6 +13,7 @@ import {
 const summary = (over: Partial<ProjectTrustSummary> = {}): ProjectTrustSummary => ({
 	aliasSkills: [],
 	piResources: [],
+	mcpServers: 0,
 	...over,
 });
 
@@ -31,15 +32,36 @@ describe("deriveProjectTrustNotice", () => {
 			kind: "untrusted",
 			aliasSkills: 2,
 			piResources: ["prompts", "extensions"],
+			mcpServers: 0,
 		});
 		expect(deriveProjectTrustNotice({ piResourceTrust: "granted" }, gated)).toEqual({
 			kind: "untrusted",
 			aliasSkills: 2,
 			piResources: [],
+			mcpServers: 0,
 		});
 		expect(
 			deriveProjectTrustNotice({ trusted: true, acknowledgedSkills: ["a", "b"] }, gated),
-		).toEqual({ kind: "untrusted", aliasSkills: 0, piResources: ["prompts", "extensions"] });
+		).toEqual({
+			kind: "untrusted",
+			aliasSkills: 0,
+			piResources: ["prompts", "extensions"],
+			mcpServers: 0,
+		});
+	});
+
+	test("a repository whose only gated content is .pi/mcp.json still asks for pi-level trust", () => {
+		const mcpOnly = summary({ mcpServers: 2 });
+		expect(deriveProjectTrustNotice({}, mcpOnly)).toEqual({
+			kind: "untrusted",
+			aliasSkills: 0,
+			piResources: [],
+			mcpServers: 2,
+		});
+		expect(deriveProjectTrustNotice({ piResourceTrust: "granted" }, mcpOnly)).toEqual({
+			kind: "trusted",
+			aliasSkills: 0,
+		});
 	});
 
 	test("after both grants it asks to review newly arrived aliases, else reads as trusted", () => {
@@ -58,8 +80,11 @@ describe("deriveProjectTrustNotice", () => {
 });
 
 describe("notice copy", () => {
-	const untrusted = (aliasSkills: number, piResources: ProjectTrustSummary["piResources"]) =>
-		({ kind: "untrusted", aliasSkills, piResources }) as const;
+	const untrusted = (
+		aliasSkills: number,
+		piResources: ProjectTrustSummary["piResources"],
+		mcpServers = 0,
+	) => ({ kind: "untrusted", aliasSkills, piResources, mcpServers }) as const;
 
 	test("names what is gated", () => {
 		expect(untrustedNoticeText(untrusted(1, ["prompts"]))).toBe(
@@ -89,13 +114,35 @@ describe("notice copy", () => {
 			"Trust loads its prompts and themes, and lets its extensions and settings run code on this machine.",
 		);
 	});
+
+	test("counts repository MCP servers and says trust alone does not start them", () => {
+		expect(untrustedNoticeText(untrusted(0, [], 2))).toBe(
+			"This project ships 2 MCP servers — off until you trust it.",
+		);
+		expect(trustEnablesText(untrusted(0, [], 1))).toBe(
+			"Trust alone does not start its 1 MCP server.",
+		);
+		expect(trustEnablesText(untrusted(0, ["extensions"], 2))).toBe(
+			"Trust lets its extensions run code on this machine. Trust alone does not start its 2 MCP servers.",
+		);
+	});
 });
 
 test("a grant asks for pi-level resources only when the notice named them", () => {
 	expect(
-		trustGrantParams("p", { kind: "untrusted", aliasSkills: 1, piResources: ["prompts"] }),
+		trustGrantParams("p", {
+			kind: "untrusted",
+			aliasSkills: 1,
+			piResources: ["prompts"],
+			mcpServers: 0,
+		}),
 	).toEqual({ id: "p", trusted: true, resources: true });
-	expect(trustGrantParams("p", { kind: "untrusted", aliasSkills: 1, piResources: [] })).toEqual({
+	expect(
+		trustGrantParams("p", { kind: "untrusted", aliasSkills: 0, piResources: [], mcpServers: 1 }),
+	).toEqual({ id: "p", trusted: true, resources: true });
+	expect(
+		trustGrantParams("p", { kind: "untrusted", aliasSkills: 1, piResources: [], mcpServers: 0 }),
+	).toEqual({
 		id: "p",
 		trusted: true,
 	});
@@ -104,7 +151,7 @@ test("a grant asks for pi-level resources only when the notice named them", () =
 test("the stop-trusting confirmation names pi resources and reloads only where pi-level trust applies", () => {
 	const granted = { trusted: true, piResourceTrust: "granted" } as const;
 	expect(stopTrustingText(granted, true)).toBe(
-		"Its project skills and Pi resources stop loading; running subagents stop and open chats reload when idle.",
+		"Its project skills, Pi resources and MCP servers stop loading; running subagents stop and open chats reload when idle.",
 	);
 	expect(stopTrustingText({ ...granted, piResourceTrust: "untrusted" }, true)).toBe(
 		"Its project skills stop loading in new chats.",

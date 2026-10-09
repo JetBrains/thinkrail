@@ -5,6 +5,7 @@ import { getAgentDir, ProjectTrustStore, SettingsManager } from "@earendil-works
 import type { ProjectResourceKind, ProjectTrustSummary } from "@thinkrail/contracts";
 import { discoverAgentDefinitions } from "pi-subagents";
 import { listProjectAliasSkillNames } from "./extensions";
+import { loadMcpConfigFiles } from "./mcp";
 
 export function piTrustsProjectPath(path: string): boolean {
 	const agentDir = getAgentDir();
@@ -60,5 +61,14 @@ function piResourceKinds(cwd: string): ProjectResourceKind[] {
 }
 
 export async function projectTrustSummary(cwd: string): Promise<ProjectTrustSummary> {
-	return { aliasSkills: await listProjectAliasSkillNames(cwd), piResources: piResourceKinds(cwd) };
+	const mcpServers = loadMcpConfigFiles({
+		agentDir: getAgentDir(),
+		cwd,
+		projectTrusted: true,
+	}).entries.filter((entry) => entry.scope === "project").length;
+	return {
+		aliasSkills: await listProjectAliasSkillNames(cwd),
+		piResources: piResourceKinds(cwd),
+		mcpServers,
+	};
 }

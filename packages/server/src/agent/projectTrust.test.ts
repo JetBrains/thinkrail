@@ -148,7 +148,7 @@ test("pi trusts a path by its nearest saved decision, else by defaultProjectTrus
 	}
 });
 
-test("the trust summary names each kind of the project's own pi resources that pi gates", async () => {
+test("the trust summary names each kind of the project's own pi resources that pi gates, and counts project MCP entries", async () => {
 	const project = (files: Record<string, string>): string => {
 		const cwd = mkdtempSync(join(root, "summary-"));
 		for (const [path, content] of Object.entries(files)) {
@@ -160,6 +160,7 @@ test("the trust summary names each kind of the project's own pi resources that p
 	expect(await projectTrustSummary(project({ "README.md": "# plain\n" }))).toEqual({
 		aliasSkills: [],
 		piResources: [],
+		mcpServers: 0,
 	});
 	const cases: Array<[ProjectResourceKind, Record<string, string>]> = [
 		["extensions", { ".pi/extensions/x.ts": "export default () => {};\n" }],
@@ -185,6 +186,15 @@ test("the trust summary names each kind of the project's own pi resources that p
 		"extensions",
 		"subagents",
 	]);
+	expect(
+		await projectTrustSummary(
+			project({
+				".pi/mcp.json": JSON.stringify({
+					mcpServers: { docs: { url: "https://docs.example/mcp" }, linear: { enabled: false } },
+				}),
+			}),
+		),
+	).toEqual({ aliasSkills: [], piResources: [], mcpServers: 2 });
 });
 
 test("an untrusted project's native resources stay out until a grant reaches the live session", async () => {

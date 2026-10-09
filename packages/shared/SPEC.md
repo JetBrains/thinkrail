@@ -57,13 +57,14 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
     they trigger find `git`/`node`/`bun`/etc., keeping whatever the launching terminal had added on top.
   - **login-shell environment** — import the rest of the user's login-shell environment once at startup,
     VS Code-style, because a GUI-launched host otherwise sees none of the variables that provider API keys
-    and `models.json` `${VAR}` references rely on. Skipped when `TERM` is set (a host launched from a
-    terminal already carries the shell's environment). Variables already set for the process win; `PATH`
-    keeps its own repair above; `PWD`/`OLDPWD`/`SHLVL`/`_` and `PI_*` / `THINKRAIL_*` are never imported.
-    One marker-delimited `env -0` probe of the login shell (`-l -i`, then `-l`) serves both this import and
-    the PATH repair; rc-file chatter before the marker (`LOGIN_ENV_MARKER`) is ignored. Trade-off recorded:
-    the host, every process it spawns (which inherits the host environment) and every `!command` resolution
-    then see the secrets the shell exports — the user's own, as in a terminal, not isolation.
+    and `models.json` / `mcp.json` `${VAR}` references (often copied from vendor docs) rely on. Skipped
+    when `TERM` is set (a host launched from a terminal already carries the shell's environment). Variables
+    already set for the process win; `PATH` keeps its own repair above; `PWD`/`OLDPWD`/`SHLVL`/`_` and
+    `PI_*` / `THINKRAIL_*` are never imported. One marker-delimited `env -0` probe of the login shell
+    (`-l -i`, then `-l`) serves both this import and the PATH repair; rc-file chatter before the marker
+    (`LOGIN_ENV_MARKER`) is ignored. Trade-off recorded: the host, every process it spawns (stdio MCP
+    servers included) and every `!command` resolution then see the secrets the shell exports — the user's
+    own, as in a terminal, not isolation.
   - **locale** — set `LANG` to a UTF-8 locale when *no* locale is configured at all (`LC_ALL`, `LC_CTYPE`
     and `LANG` all unset). Without one, bash/readline is **byte**-oriented rather than character-oriented,
     so one backspace over a multi-byte character (Cyrillic, umlauts, CJK) deletes half of it and desyncs the
