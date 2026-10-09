@@ -407,8 +407,9 @@ export function loadHostMcpConfig(options: {
 	cwd: string;
 	projectTrusted: boolean;
 	policy: McpProjectPolicy;
+	disabledInChat?: ReadonlySet<string>;
 }): LoadedMcpFiles {
-	const { policy } = options;
+	const { policy, disabledInChat } = options;
 	const loaded = loadMcpConfigFiles({
 		agentDir: options.agentDir,
 		cwd: options.cwd,
@@ -421,6 +422,7 @@ export function loadHostMcpConfig(options: {
 		const config: McpServerConfig = { ...server.config };
 		if (override?.enabled !== undefined) config.enabled = override.enabled;
 		if (override?.exposure !== undefined) config.exposure = override.exposure;
+		if (disabledInChat?.has(server.name)) config.enabled = false;
 		return { ...server, config: normalizeExposureForHost(config) };
 	});
 	return { ...loaded, servers };

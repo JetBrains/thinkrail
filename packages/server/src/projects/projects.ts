@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { rmSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
-import type { Project, ProjectPathStatus } from "@thinkrail/contracts";
+import type { McpProjectOverride, Project, ProjectPathStatus } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { canonicalPath, git } from "../git";
 import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
@@ -163,6 +163,35 @@ export function setProjectTrust(
 	if (!trusted) project.piResourceTrust = "untrusted";
 	else if (options.resources === true) project.piResourceTrust = "granted";
 	if (acknowledgedSkills !== undefined) project.acknowledgedSkills = acknowledgedSkills;
+	saveProjects(projects);
+	return project;
+}
+
+export function approveProjectMcpServer(id: string, name: string, fingerprint: string): Project {
+	const projects = getProjects();
+	const project = projects.find((p) => p.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	project.mcpApprovals = { ...project.mcpApprovals, [name]: fingerprint };
+	saveProjects(projects);
+	return project;
+}
+
+export function setProjectMcpOverride(
+	id: string,
+	name: string,
+	override: McpProjectOverride | null,
+): Project {
+	const projects = getProjects();
+	const project = projects.find((p) => p.id === id);
+	if (!project) throw new Error(`Unknown project: ${id}`);
+	const overrides = { ...project.mcpOverrides };
+	if (override === null || (override.enabled === undefined && override.exposure === undefined)) {
+		delete overrides[name];
+	} else {
+		overrides[name] = override;
+	}
+	if (Object.keys(overrides).length === 0) delete project.mcpOverrides;
+	else project.mcpOverrides = overrides;
 	saveProjects(projects);
 	return project;
 }

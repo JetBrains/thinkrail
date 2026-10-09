@@ -190,7 +190,40 @@ channel fan-out, and the process-boot wrapper both launchers share.
   the **Skills-manager set**: `skill.list` / `skills.state` / `project.skills` build
   the admission context from `projects` (+ the
   workspace's `skillOverrides` when workspace-scoped) and pass it into agent's `listSkillCommands`/
-  `listSkillCatalog`; `session.list` decorates agent's `listSessions` summaries with
+  `listSkillCatalog`; the **MCP set** (`mcp.*`, `host/mcp.ts`) composes `agent`'s MCP
+  service with `projects` (approvals, overrides, pi-level trust) and publishes `mcp.status` snapshots (topic
+  subscribed only by clients at `MCP_PROTOCOL_VERSION` or later) plus `session.resourcesChanged`
+  invalidations. Every request resolves its workspace and that workspace's project. No write approves
+  repository content the user has not reviewed: a project-file `mcp.add` (a name the file does not define
+  yet) is the user's own entry, so its fingerprint is approved in the same request; `mcp.update` reads the
+  on-disk entry's fingerprint before writing, refuses when the request's `expectedFingerprint` differs from
+  it, and carries approval to the written fingerprint only when the record approved that on-disk
+  fingerprint — a rewrite of a pending or changed entry stays pending (a toggle rebuilt from a checkout's
+  new entry must not approve it); an edit that arrives from the repo stays pending; `mcp.approve` refuses a
+  fingerprint that is no longer the one on disk; `mcp.shareWithRepo` refuses when the project file already
+  defines that name or holds an override not approved at its current fingerprint, else writes the record
+  override as pi's override entry, approves it and clears the record copy. After a mutation the affected
+  live sessions (all for the user file, the project's for project files and record changes) are
+  reconciled — only those whose effective config changed reload, through the gate. The reconciliation is
+  started, not awaited (a failure is logged): agent reloads idle chats one after another, so the request
+  answers with the fresh list at once and `mcp.status` pushes report each reload. `createServer` starts
+  agent's `watchUserMcpConfig` (stopped with the server) and reconciles a workspace's live chats whenever
+  its change nudge touches `.pi` or is truncated. Per-chat calls
+  (`setSessionOverride`, `reconnect`) require the session to belong to the named workspace; `mcp.reconnect`
+  runs agent's `reconnectMcpServer` (pi's notices stay out of the chat; pi's failure, masked, is the
+  request's error) and refreshes that chat's status either way;
+  `mcp.readOutput` reads agent's `readMcpToolOutput` for a session of that workspace only;
+  `mcp.readLog` resolves the workspace, checks the name against pi's charset and returns agent's
+  `readMcpServerLog` (pi keeps one `mcp.log` per agent directory, so it needs no session);
+  `mcp.login` / `mcp.testConnection` start agent's probe with the caller's `clientKey` as owner and return
+  its `loginId` (`mcp.logout` awaits the probe); all three refuse with `MCP_HANDLED_ELSEWHERE` wherever
+  `mcp.list` would report `handledElsewhere` (the probe's loader forces `builtin:mcp`);
+  `provider.loginReply` / `provider.loginCancel` route `mcplogin_*` ids to the probe with the caller's
+  `clientKey`, and `createServer` sends probe frames to the owner's socket only, cancels the probes of a
+  client when its retention timer finally reaps it (`cancelMcpProbesOwnedBy`, beside `releaseInterview`;
+  never on a mere socket close — a reconnect within the window keeps the key and its sign-in) and cancels
+  every probe on stop — `mcp.login` / `mcp.testConnection` pushes go to the starting
+  connection only (`ws.send`, not the broadcast topic) and foreign replies fail with `LOGIN_NOT_OWNER`; `session.list` decorates agent's `listSessions` summaries with
   `openTodos: countOpenTodos(…)` per session (a host-only composition of `agent` + `todos` — `agent`
   stays todos-free; a failed count omits the field, never fails the list); **`todo.requestFix`** is the
   same kind of composition (`todos` records + renders the fix package, `agent` delivers): the package is

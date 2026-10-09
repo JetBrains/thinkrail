@@ -769,14 +769,75 @@ the pi-level resource grant. A client talking to an older host sends neither.
 
 ## MCP servers
 
-The engine is pi's built-in MCP ([[submodule-server-agent]]). The project record carries the per-project
-policy the host applies when a chat loads its servers: `Project.mcpApprovals` maps a repo-defined server
-name to the fingerprint of its whole `.pi/mcp.json` entry (the entry loads only while it still has that
-fingerprint, so an edit lapses the approval), and `Project.mcpOverrides` holds the project's enablement and
-exposure of user-level servers, never written to `.pi/mcp.json`; `ProjectTrustSummary.mcpServers` counts
-the repository's entries (see Project trust). `McpResultSummary` is the host-written, bounded, base64-free
-presentation summary under `details.thinkrail` that lets an MCP result be rendered the same live, after
-reload and on another client.
+`MCP_PROTOCOL_VERSION` (80) gates the `mcp.*` methods, the `mcp.status` channel and the optional
+`SessionResources.mcpServers` list; a client talking to an older host sends none of them and treats the
+missing list as "no MCP". The engine is pi's built-in MCP ([[submodule-server-agent]]); these DTOs mirror
+what the host reads from pi and from the two `mcp.json` files, never pi's own types — the web depends on
+contracts only.
+
+- The project record carries the per-project policy the host applies when a chat loads its servers:
+  `Project.mcpApprovals` maps a repo-defined server name to the fingerprint of its whole `.pi/mcp.json`
+  entry (the entry loads only while it still has that fingerprint, so an edit lapses the approval), and
+  `Project.mcpOverrides` holds the project's enablement and exposure of user-level servers, never written
+  to `.pi/mcp.json`; `ProjectTrustSummary.mcpServers` counts the repository's entries (see Project trust).
+- Every request names its target: `workspaceId` for configuration (project scope = that workspace's
+  `.pi/mcp.json`; `user` = the global file), plus `sessionId` for per-session actions (`reconnect`,
+  `setSessionOverride`, `readOutput`). The host has no notion of an "active workspace".
+- `mcp.list` returns the configured `McpServerSummary` set (scope, defining file, masked endpoint,
+  configured and effective exposure, enablement, project override, repo-approval state, pi-equivalent
+  config error — one per named entry, an entry that is not an object included) together with the live
+  `McpStatusSnapshot` per session; snapshots carry a monotonic per-session `generation` so a stale push
+  never overwrites a newer one. A live chat has a snapshot from the moment it opens: until pi answers, and
+  again after each reload, the servers it starts read `starting`. `configErrors` (`McpConfigFileError`:
+  the file's path and the pi-equivalent message, masked) lists problems with a whole file — unparsable
+  JSON, `mcpServers` not an object, a mistyped top-level key — that no server row can carry; older hosts
+  omit it. `handledElsewhere` marks a host
+  where a user-installed extension or `-builtin:mcp` owns MCP and management is read-only; pi settings
+  are read even with no chat open (`by: "pi settings (-builtin:mcp)"` — a client can recognise that exact
+  value to say which entry to remove, so it stays stable), a replacing extension is seen through a live
+  chat (`by` = its path).
+- Mutations (`add`, `update`, `remove`, `setProjectOverride`, `approve`, `shareWithRepo`) return the fresh
+  list without waiting for the open chats to reload; `mcp.status` pushes report each reload, so the returned
+  snapshots may predate it. `setProjectOverride` writes the project record, never the tracked
+  `.pi/mcp.json`; `shareWithRepo` is the explicit write into it. `setSessionOverride` is the per-chat
+  disable: it applies to `mcp.json` servers only — a `SessionResources.mcpServers` row with
+  `registered: true` is a server an extension registered (its `transport` is that registration's), and
+  disabling it fails with `MCP_CONFIG_INVALID`; where MCP is handled elsewhere it fails with
+  `MCP_HANDLED_ELSEWHERE`. `mcp.reconnect` resolves once pi reconnected the server and rejects with pi's
+  failure (masked) — pi's notices for it never appear in the chat — and fails with `MCP_HANDLED_ELSEWHERE`
+  likewise.
+- A write never approves repository content the user has not reviewed. A project-scope `add` of a new name
+  is the user's own entry and is approved as written. A project-scope `update` carries approval to the
+  written entry only when the entry on disk was approved at its current fingerprint (otherwise the rewrite
+  stays pending); its optional `expectedFingerprint` — the `McpServerSummary.approval.fingerprint` the
+  client rendered the row with — makes the host refuse, file untouched, when the on-disk entry no longer has
+  it (ignored for user scope). `shareWithRepo` refuses when the project file already defines that name or
+  holds an override that is not approved at its current fingerprint.
+- `mcp.login` / `mcp.testConnection` return a `loginId` and reuse the `provider.login` frame family
+  (`LoginPush.target` identifies the server); those pushes reach only the connection that started the
+  operation, and a reply or cancel from another connection fails with `LOGIN_NOT_OWNER`. They and
+  `mcp.logout` fail with `MCP_HANDLED_ELSEWHERE` where `handledElsewhere` is set, and with an "already
+  running" error while a sign-in for that server runs anywhere — another of these operations or a chat's
+  `/mcp login <name>`. An operation still open after 10 minutes, or whose client the host has reaped after
+  the reconnect window, ends with an `error` frame ("Sign-in timed out." / "Sign-in cancelled.").
+- `McpResultSummary` is the host-written, bounded, base64-free presentation summary under
+  `details.thinkrail` that can be rendered identically live, after reload and on another client.
+  `mcp.readOutput` serves a result's recorded `fullOutputPath` only and reports `expired` when the temp
+  file is gone.
+- `mcp.readLog { workspaceId, name }` returns `McpServerLog`: the server's latest lines (at most 200, oldest
+  first) from pi's shared `mcp.log` and its rotated copy — the `notifications/message` log messages servers
+  send pi, attributed by each entry's `[<server>]` head — masked like `detail`; `text` is empty when the
+  server logged nothing there. It needs no session: pi keeps one log per agent directory.
+- States (`McpServerState`) are one vocabulary for host snapshots and the rows a client derives:
+  `starting`, `connected`, `needs-sign-in`, `failed`, `disconnected`, `disabled`, `disabled-in-project`,
+  `disabled-in-chat`, `pending-approval`, `invalid-config`, `pending-reload`, `not-running`,
+  `handled-elsewhere`, `unknown`; the host never sends `not-running` / `handled-elsewhere`. `detail` is
+  pi's status text for the server and `configError` the pi-equivalent validation message; pi does not
+  redact either (a connection error or a stdio server's stderr tail arrives verbatim), so the host masks
+  credential-looking values in both — and in MCP sign-in `error` frames — before they reach any client.
+- Error codes: `MCP_CONFIG_INVALID` (pi-equivalent validation failed, or a write precondition above does
+  not hold), `MCP_PATH_UNSAFE` (symlinked or non-regular project config path), `MCP_HANDLED_ELSEWHERE`,
+  `LOGIN_NOT_OWNER`.
 
 ## Normalized session state
 

@@ -20,6 +20,29 @@ export function setExtUiStateChanged(fn: (sessionId: string) => void): void {
 let seq = 0;
 const nextId = (): string => `extui_${++seq}`;
 
+type NotifyInterceptor = (message: string, level: "info" | "warning" | "error") => boolean;
+const interceptors = new Map<string, Set<NotifyInterceptor>>();
+
+export function interceptExtUiNotify(
+	sessionId: string,
+	interceptor: NotifyInterceptor,
+): () => void {
+	const set = interceptors.get(sessionId) ?? new Set<NotifyInterceptor>();
+	set.add(interceptor);
+	interceptors.set(sessionId, set);
+	return () => {
+		set.delete(interceptor);
+		if (set.size === 0 && interceptors.get(sessionId) === set) interceptors.delete(sessionId);
+	};
+}
+
+function intercepted(sessionId: string, message: string, level: "info" | "warning" | "error") {
+	for (const interceptor of interceptors.get(sessionId) ?? []) {
+		if (interceptor(message, level)) return true;
+	}
+	return false;
+}
+
 type DialogRequest = Extract<ExtUiRequest, { kind: "select" | "confirm" | "input" | "editor" }>;
 
 interface Pending {
@@ -138,7 +161,9 @@ export function createWebUiContext(sessionId: string): ExtensionUIContext {
 			return typeof v === "string" ? v : undefined;
 		},
 		notify(message, type) {
-			publish({ id: nextId(), sessionId, kind: "notify", message, level: type ?? "info" });
+			const level = type ?? "info";
+			if (intercepted(sessionId, message, level)) return;
+			publish({ id: nextId(), sessionId, kind: "notify", message, level });
 		},
 		setStatus(key, text) {
 			publish({ id: nextId(), sessionId, kind: "setStatus", key, text: text ?? null });

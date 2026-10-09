@@ -505,6 +505,7 @@ test("resource handlers scope every read/control to a registered workspace and a
 			...scope,
 			commands: [],
 			subagents: [],
+			mcpServers: [],
 		});
 		expect(
 			await handleRequest("backgroundCommand.output", { ...scope, commandId: "missing" }, CTX),

@@ -1,5 +1,6 @@
 export {
 	acknowledgeProjectSkills,
+	approveProjectMcpServer,
 	closeProject,
 	getProjects,
 	initProject,
@@ -9,6 +10,7 @@ export {
 	openProject,
 	setPiTrustSeed,
 	setProjectGroupEnabled,
+	setProjectMcpOverride,
 	setProjectPublisher,
 	setProjectSkillEnabled,
 	setProjectTrust,

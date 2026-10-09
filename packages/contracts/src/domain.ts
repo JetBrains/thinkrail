@@ -333,14 +333,90 @@ export interface SessionResources {
 	sessionId: string;
 	commands: BackgroundCommandSummary[];
 	subagents: SubagentResourceSummary[];
+	/** Absent on hosts without MCP support (`MCP_PROTOCOL_VERSION`). */
+	mcpServers?: McpServerResourceSummary[];
 }
+
+export type McpServerScope = "user" | "project";
 
 /** Configured exposure; `codemode` is accepted from files and treated as `deferred` while codemode is not shipped. */
 export type McpExposure = "deferred" | "direct" | "hidden" | "codemode";
 
+export type McpTransportKind = "stdio" | "http";
+
 export interface McpProjectOverride {
 	enabled?: boolean;
 	exposure?: Exclude<McpExposure, "codemode">;
+}
+
+/** The session-independent view of one configured server; secret literal values are masked. */
+export interface McpServerSummary {
+	name: string;
+	scope: McpServerScope;
+	/** Defining `mcp.json` path. */
+	source: string;
+	transport: McpTransportKind;
+	/** Command + args, or URL, with literal credential values masked. */
+	endpoint: string;
+	exposure: McpExposure;
+	effectiveExposure: Exclude<McpExposure, "codemode">;
+	enabled: boolean;
+	description?: string;
+	/** HTTP server without an `Authorization` header: sign-in applies. */
+	oauth: boolean;
+	/** Project entry that shadows a user-level server of the same name. */
+	replacesGlobal?: boolean;
+	projectOverride?: McpProjectOverride;
+	/** Repo-defined entries only. */
+	approval?: { state: "approved" | "pending" | "changed"; fingerprint: string };
+	/** pi-equivalent validation message when the entry is rejected; credential-looking values are masked by the host. */
+	configError?: string;
+}
+
+export type McpServerState =
+	| "starting"
+	| "connected"
+	| "needs-sign-in"
+	| "failed"
+	| "disconnected"
+	| "disabled"
+	| "disabled-in-project"
+	| "disabled-in-chat"
+	| "pending-approval"
+	| "invalid-config"
+	| "pending-reload"
+	| "not-running"
+	| "handled-elsewhere"
+	| "unknown";
+
+export interface McpServerStatus {
+	name: string;
+	state: McpServerState;
+	/** Server-reported count from pi's status text; absent when not connected. */
+	toolCount?: number;
+	/**
+	 * pi's status line(s) for this server. pi does not redact them (connection errors, a stdio server's
+	 * stderr tail), so the host masks credential-looking values before they leave it.
+	 */
+	detail?: string;
+	updatedAt: number;
+}
+
+export interface McpStatusSnapshot {
+	workspaceId: string;
+	sessionId: string;
+	/** Monotonic per session; a stale snapshot never overwrites a newer one. */
+	generation: number;
+	servers: McpServerStatus[];
+}
+
+export interface McpServerResourceSummary {
+	name: string;
+	state: McpServerState;
+	toolCount?: number;
+	transport: McpTransportKind;
+	/** Registered by an extension (`pi.registerMcpServer()`), not an `mcp.json` entry: it cannot be disabled per chat. */
+	registered?: true;
 }
 
 export type McpContentBlockSummary =
@@ -361,6 +437,37 @@ export interface McpResultSummary {
 	structuredContent?: unknown;
 	structuredContentTruncated?: boolean;
 	isError?: boolean;
+}
+
+export type McpReadOutputResult =
+	| { available: true; text: string; truncated: boolean }
+	| { available: false; reason: "expired" | "unavailable" };
+
+/** One server's lines from pi's shared MCP log (the messages servers send it), masked by the host. */
+export interface McpServerLog {
+	/** The file pi appends to: `mcp.log` in pi's agent directory. */
+	path: string;
+	/** The server's latest lines, oldest first and at most 200; empty when it logged nothing there. */
+	text: string;
+}
+
+/** One raw `mcpServers` entry as written in a config file; validated by the host with pi-equivalent rules. */
+export type McpServerEntryInput = Record<string, unknown>;
+
+/** A problem with a whole `mcp.json` (unparsable JSON, `mcpServers` not an object, a mistyped top-level key), masked by the host. */
+export interface McpConfigFileError {
+	/** The file's path. */
+	source: string;
+	message: string;
+}
+
+export interface McpListResult {
+	servers: McpServerSummary[];
+	statuses: McpStatusSnapshot[];
+	/** File-level problems of the files `servers` came from; absent when there are none or the host predates them. */
+	configErrors?: McpConfigFileError[];
+	/** MCP is provided by a user-installed extension or disabled through pi settings; management is read-only. */
+	handledElsewhere?: { by: string };
 }
 
 export type BackgroundCommandOutputResult =
@@ -535,6 +642,8 @@ export interface LoginPush {
 	loginId: string;
 	providerId: string;
 	frame: LoginFrame;
+	/** Present for MCP server sign-ins; such pushes reach only the connection that started the login. */
+	target?: { kind: "mcp"; workspaceId: string; serverName: string };
 }
 
 export interface LoginReply {

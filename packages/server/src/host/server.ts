@@ -12,23 +12,30 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	FEEDBACK_INTERVIEW_PROTOCOL_VERSION,
+	MCP_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	WS_CHANNELS,
 } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
 import {
 	admissionContextFor,
+	cancelAllMcpProbes,
+	cancelMcpProbesOwnedBy,
 	disposeAllSessions,
 	getSessionWorkspaceId,
 	initializeSessionStates,
 	isProjectSkillPath,
+	liveSessionIdsOf,
 	mcpPolicyOf,
 	piProjectTrustDecision,
+	reconcileMcpSessions,
 	refreshAgentReviewTool,
 	refreshSubagentTools,
 	setAgentReviewEnabledResolver,
 	setExtUiPublisher,
+	setMcpLoginPublisher,
 	setMcpPolicyResolver,
+	setMcpStatusPublisher,
 	setModelContextPublisher,
 	setReviewCommentHandler,
 	setSessionCreatedPublisher,
@@ -41,6 +48,7 @@ import {
 	setSubagentsEnabledResolver,
 	setTitleToolHost,
 	settleSessionsForShutdown,
+	watchUserMcpConfig,
 } from "../agent";
 import {
 	type AnalyticsOptions,
@@ -257,6 +265,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					return;
 				}
 				releaseInterview(clientKey);
+				cancelMcpProbesOwnedBy(clientKey);
 			}, CLIENT_REPLAY_RETENTION_MS),
 		);
 	};
@@ -316,6 +325,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				if (hostUpdate) ws.subscribe(WS_CHANNELS.hostUpdateAvailable);
 				ws.subscribe(WS_CHANNELS.reviewChanged);
 				ws.subscribe(WS_CHANNELS.reviewFailed);
+				if (ws.data.protocolVersion >= MCP_PROTOCOL_VERSION) ws.subscribe(WS_CHANNELS.mcpStatus);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -605,7 +615,14 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			JSON.stringify({ channel: WS_CHANNELS.workspaceFsChanged, data: payload }),
 		);
 		reanchorWorkspace(payload.workspaceId);
+		if (
+			payload.truncated ||
+			payload.paths.some((path) => path === ".pi" || path.startsWith(".pi/"))
+		) {
+			void reconcileMcpSessions(liveSessionIdsOf(payload.workspaceId));
+		}
 	};
+	const stopUserMcpWatch = watchUserMcpConfig();
 	setWatchPublisher(publishFsChanged);
 	setSkillPathClassifier(isProjectSkillPath);
 	setFsNudgePublisher(publishFsChanged);
@@ -687,6 +704,21 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		server.publish(
 			WS_CHANNELS.sessionDeleted,
 			JSON.stringify({ channel: WS_CHANNELS.sessionDeleted, data: payload }),
+		);
+	});
+
+	setMcpLoginPublisher((push, ownerClientKey) => {
+		const ws = sockets.get(ownerClientKey);
+		if (!ws) return;
+		try {
+			ws.send(JSON.stringify({ channel: WS_CHANNELS.providerLogin, data: push }));
+		} catch {}
+	});
+
+	setMcpStatusPublisher((snapshot) => {
+		server.publish(
+			WS_CHANNELS.mcpStatus,
+			JSON.stringify({ channel: WS_CHANNELS.mcpStatus, data: snapshot }),
 		);
 	});
 
@@ -776,8 +808,10 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		void shutdownAnalytics();
 		stopHostUpdateChecks();
 		cancelAllLogins();
+		cancelAllMcpProbes();
 		stopJbcentralRuntime();
 		stopAllWatches();
+		stopUserMcpWatch();
 		disposeAllSessions();
 		for (const timer of reapTimers.values()) clearTimeout(timer);
 		reapTimers.clear();

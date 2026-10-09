@@ -302,6 +302,24 @@ export async function buildResourceLoader(
 
 const BUILTIN_EXTENSION_PREFIX = "builtin:";
 
+export async function isBuiltinExtensionEnabled(
+	cwd: string,
+	projectTrusted: boolean,
+	name: string,
+): Promise<boolean> {
+	const agentDir = getAgentDir();
+	const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted });
+	const packageManager = new DefaultPackageManager({
+		cwd,
+		agentDir,
+		settingsManager,
+		builtinExtensions: [name],
+	});
+	const { extensions } = await packageManager.resolve(async () => "skip");
+	const path = `${BUILTIN_EXTENSION_PREFIX}${name}`;
+	return extensions.some((resource) => resource.path === path && resource.enabled);
+}
+
 function builtinExtensionNames(factories: readonly InlineExtension[]): string[] {
 	return factories.flatMap((entry) =>
 		typeof entry !== "function" && entry.builtin ? [entry.name] : [],
