@@ -44,12 +44,22 @@ function escapeRegExp(term: string): string {
 	return term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function Highlight({ text, query }: { text: string; query: string }) {
+type HighlightTerms = { terms: Set<string>; pattern: RegExp } | null;
+
+function highlightTerms(query: string): HighlightTerms {
 	const terms = [...new Set(query.toLowerCase().split(/\s+/).filter(Boolean))].sort(
 		(a, b) => b.length - a.length,
 	);
-	if (terms.length === 0) return <>{text}</>;
-	const pattern = new RegExp(`(${terms.map(escapeRegExp).join("|")})`, "gi");
+	if (terms.length === 0) return null;
+	return {
+		terms: new Set(terms),
+		pattern: new RegExp(`(${terms.map(escapeRegExp).join("|")})`, "gi"),
+	};
+}
+
+function Highlight({ text, highlight }: { text: string; highlight: HighlightTerms }) {
+	if (!highlight) return <>{text}</>;
+	const { terms, pattern } = highlight;
 	let offset = 0;
 	const parts = text.split(pattern).map((part) => {
 		const start = offset;
@@ -59,7 +69,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
 	return (
 		<>
 			{parts.map(({ text: part, key }) =>
-				terms.includes(part.toLowerCase()) ? (
+				terms.has(part.toLowerCase()) ? (
 					<mark key={key} className="rounded-xs bg-primary-soft text-text-default">
 						{part}
 					</mark>
@@ -105,7 +115,7 @@ function DeleteChatButton({
 
 function PromptRow({
 	hit,
-	query,
+	highlight,
 	scope,
 	workspaceName,
 	isSelected,
@@ -115,7 +125,7 @@ function PromptRow({
 	onDeleteChat,
 }: {
 	hit: PromptHit;
-	query: string;
+	highlight: HighlightTerms;
 	scope: HistoryScope;
 	workspaceName: string | undefined;
 	isSelected: boolean;
@@ -125,7 +135,8 @@ function PromptRow({
 	onDeleteChat: (workspaceId: string, sessionId: string) => void;
 }) {
 	const now = useNow();
-	const firstLine = hit.text.split("\n")[0] ?? hit.text;
+	const newline = hit.text.indexOf("\n");
+	const firstLine = newline === -1 ? hit.text : hit.text.slice(0, newline);
 	const showChip = (scope.kind === "project" || scope.kind === "all") && !!hit.workspaceId;
 	const target = jumpTarget(hit);
 	return (
@@ -145,7 +156,7 @@ function PromptRow({
 				className="flex min-w-0 flex-1 items-center gap-8 overflow-hidden text-left"
 			>
 				<span className="min-w-0 flex-1 overflow-hidden whitespace-nowrap text-ellipsis">
-					<Highlight text={firstLine} query={query} />
+					<Highlight text={firstLine} highlight={highlight} />
 				</span>
 				{showChip ? (
 					<span className="shrink-0 rounded-full border border-border-default bg-container-workspace-bg px-4 text-text-muted tr-text-metadata">
@@ -220,13 +231,13 @@ function PromptRow({
 
 function MessageRow({
 	hit,
-	query,
+	highlight,
 	isSelected,
 	onPick,
 	onDeleteChat,
 }: {
 	hit: MessageHit;
-	query: string;
+	highlight: HighlightTerms;
 	isSelected: boolean;
 	onPick: () => void;
 	onDeleteChat: (workspaceId: string, sessionId: string) => void;
@@ -259,7 +270,7 @@ function MessageRow({
 					{unmapped ? <span>· not a ThinkRail workspace</span> : null}
 				</span>
 				<span className="overflow-hidden whitespace-nowrap text-ellipsis">
-					<Highlight text={hit.snippet} query={query} />
+					<Highlight text={hit.snippet} highlight={highlight} />
 				</span>
 			</button>
 			<DeleteChatButton
@@ -290,12 +301,12 @@ function PromptPreviewFooter({
 
 function HistoryPreview({
 	item,
-	query,
+	highlight,
 	workspaceName,
 	className,
 }: {
 	item: HistorySelection | null;
-	query: string;
+	highlight: HighlightTerms;
 	workspaceName: string | undefined;
 	className: string;
 }) {
@@ -305,7 +316,7 @@ function HistoryPreview({
 			{item ? (
 				<>
 					<div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap break-words p-8 tr-text-ui text-text-default">
-						<Highlight text={item.hit.text} query={query} />
+						<Highlight text={item.hit.text} highlight={highlight} />
 					</div>
 					<div className="shrink-0 border-t border-border-default px-8 py-4 text-text-muted tr-text-metadata">
 						{item.kind === "prompt" ? (
@@ -357,6 +368,7 @@ export function HistoryOverlay({
 	const inputRef = useRef<HTMLInputElement>(null);
 	const resultsRef = useRef<HTMLDivElement>(null);
 	const [scopeMenuOpen, setScopeMenuOpen] = useState(false);
+	const highlight = useMemo(() => highlightTerms(query), [query]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -470,7 +482,7 @@ export function HistoryOverlay({
 								<PromptRow
 									key={`${hit.sessionId}:${hit.timestamp}`}
 									hit={hit}
-									query={query}
+									highlight={highlight}
 									scope={scope}
 									workspaceName={hit.workspaceId ? workspaceNames[hit.workspaceId] : undefined}
 									isSelected={i === selected}
@@ -494,7 +506,7 @@ export function HistoryOverlay({
 								<MessageRow
 									key={`${hit.sessionId}:${hit.messageIndex}`}
 									hit={hit}
-									query={query}
+									highlight={highlight}
 									isSelected={result.prompts.length + i === selected}
 									onPick={() => {
 										const target = jumpTarget(hit);
@@ -569,7 +581,7 @@ export function HistoryOverlay({
 					</div>
 					<HistoryPreview
 						item={selectedItem}
-						query={query}
+						highlight={highlight}
 						workspaceName={selectedWorkspaceName}
 						className="max-h-[37.5vh] border-border-default border-t md:max-h-[75vh] md:w-[45%] md:border-t-0 md:border-l"
 					/>
