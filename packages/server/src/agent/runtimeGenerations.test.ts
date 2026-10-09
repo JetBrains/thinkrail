@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
@@ -43,6 +43,13 @@ const faux = createFauxCore({
 	tokensPerSecond: 2_000,
 });
 
+const replacementFaux = createFauxCore({
+	provider: "replacement-faux",
+	api: "replacement-faux",
+	models: [modelDef("other-model"), modelDef("replacement-model")],
+	tokensPerSecond: 2_000,
+});
+
 async function runtimeWithFaux(includeModel = true): Promise<ModelRuntime> {
 	const runtime = await ModelRuntime.create({
 		credentials: new InMemoryCredentialStore(),
@@ -58,6 +65,21 @@ async function runtimeWithFaux(includeModel = true): Promise<ModelRuntime> {
 			models: [{ ...modelDef("generation-model"), api: faux.api }],
 		});
 	}
+	return runtime;
+}
+
+async function runtimeWithReplacement(includeOriginal = false): Promise<ModelRuntime> {
+	const runtime = await runtimeWithFaux(includeOriginal);
+	runtime.registerProvider("replacement-faux", {
+		api: replacementFaux.api,
+		baseUrl: "http://replacement-faux.test",
+		apiKey: "faux",
+		streamSimple: replacementFaux.streamSimple,
+		models: ["other-model", "replacement-model"].map((id) => ({
+			...modelDef(id),
+			api: replacementFaux.api,
+		})),
+	});
 	return runtime;
 }
 
@@ -106,6 +128,17 @@ async function activateRuntime(runtime: ModelRuntime): Promise<void> {
 	const prepared = await preparePiRuntimeGeneration([]);
 	if (prepared.outcome !== "prepared") throw new Error("candidate was not prepared");
 	activatePiRuntimeGeneration(prepared.generation);
+}
+
+async function reopenAfterTeardown(sessionId: string, workspaceId: string, sessionCwd: string) {
+	for (let attempt = 0; ; attempt++) {
+		try {
+			return await getSessionMessages(sessionId, workspaceId, sessionCwd);
+		} catch (error) {
+			if (attempt >= 50) throw error;
+			await Bun.sleep(10);
+		}
+	}
 }
 
 describe("PI runtime generations", () => {
@@ -160,15 +193,69 @@ describe("PI runtime generations", () => {
 		await turn;
 	});
 
-	test("a disk reattach rejects a missing persisted model instead of accepting PI fallback", async () => {
+	test("a disk reattach uses the current provider and persists its model after a message", async () => {
+		setSessionManagerFactory((sessionCwd) => SessionManager.create(sessionCwd));
+		const session = await liveSession();
+		disposeAllSessions();
+		configurePiRuntime(await runtimeWithReplacement());
+		writeFileSync(
+			join(agentDir, "settings.json"),
+			JSON.stringify({ defaultProvider: "replacement-faux", defaultModel: "replacement-model" }),
+		);
+
+		const reopened = await getSessionMessages(session.sessionId, "workspace-generation", cwd);
+		expect(JSON.stringify(reopened.messages)).toContain("BEFORE_GENERATION_SWAP");
+		expect(reopened.summary.model).toMatchObject({
+			provider: "replacement-faux",
+			id: "replacement-model",
+		});
+		replacementFaux.setResponses([fauxAssistantMessage("AFTER_PROVIDER_SWAP")]);
+		await promptSession(session.sessionId, "continue on the new provider");
+		expect(
+			JSON.stringify(
+				(await getSessionMessages(session.sessionId, "workspace-generation", cwd)).messages,
+			),
+		).toContain("AFTER_PROVIDER_SWAP");
+		disposeAllSessions();
+		expect(
+			(await reopenAfterTeardown(session.sessionId, "workspace-generation", cwd)).summary.model,
+		).toMatchObject({
+			provider: "replacement-faux",
+			id: "replacement-model",
+		});
+	});
+
+	test("opening a chat without sending preserves its model when the original provider returns", async () => {
+		setSessionManagerFactory((sessionCwd) => SessionManager.create(sessionCwd));
+		const session = await liveSession();
+		disposeAllSessions();
+		configurePiRuntime(await runtimeWithReplacement());
+		const reopened = await getSessionMessages(session.sessionId, "workspace-generation", cwd);
+		expect(reopened.summary.model?.provider).toBe("replacement-faux");
+		disposeAllSessions();
+		configurePiRuntime(await runtimeWithReplacement(true));
+		expect(
+			(await reopenAfterTeardown(session.sessionId, "workspace-generation", cwd)).summary.model,
+		).toMatchObject({
+			provider: "generation-faux",
+			id: "generation-model",
+		});
+	});
+
+	test("a disk transcript stays readable when no model is available", async () => {
 		setSessionManagerFactory((sessionCwd) => SessionManager.create(sessionCwd));
 		const session = await liveSession();
 		disposeAllSessions();
 		configurePiRuntime(await runtimeWithFaux(false));
 
-		await expect(
-			getSessionMessages(session.sessionId, "workspace-generation", cwd),
-		).rejects.toThrow("The chat's saved model is unavailable.");
+		const reopened = await getSessionMessages(session.sessionId, "workspace-generation", cwd);
+		expect(JSON.stringify(reopened.messages)).toContain("BEFORE_GENERATION_SWAP");
+		const info = (await SessionManager.list(cwd)).find((item) => item.id === session.sessionId);
+		if (!info) throw new Error("session was not persisted");
+		expect(SessionManager.open(info.path).buildSessionContext().model).toEqual({
+			provider: "generation-faux",
+			modelId: "generation-model",
+		});
 	});
 
 	test("a legacy disk transcript with no persisted model may use the current default", async () => {

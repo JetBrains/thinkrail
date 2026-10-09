@@ -1414,14 +1414,10 @@ async function openDiskSession(
 	const settingsManager = buildSessionSettings(cwd);
 	const sessionManager = SessionManager.open(info.path);
 	const persistedModel = persistedSessionModelRef(sessionManager.buildSessionContext().model);
-	let exactModel: Model<string> | undefined;
-	if (persistedModel) {
-		try {
-			exactModel = resolveWireModel(generation.runtime, persistedModel);
-		} catch {
-			throw new Error("The chat's saved model is unavailable.");
-		}
-	}
+	const availableModels = settledAvailableModels(generation.runtime);
+	const exactModel = persistedModel
+		? availableModels.find((model) => sameModel(model, persistedModel))
+		: undefined;
 	repairDanglingToolCalls(sessionManager);
 	await createParentSession(
 		{
