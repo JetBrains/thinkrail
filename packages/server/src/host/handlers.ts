@@ -193,6 +193,7 @@ import { buildHistoryScope } from "./historyScope";
 import { provisionInitialTerminal } from "./initialTerminal";
 import { dropLogin, recordLoginStart } from "./loginAnalytics";
 import {
+	mcpAdd,
 	mcpApprove,
 	mcpList,
 	mcpLogin,
@@ -205,7 +206,7 @@ import {
 	mcpSetSessionOverride,
 	mcpShareWithRepo,
 	mcpTestConnection,
-	mcpWrite,
+	mcpUpdate,
 } from "./mcp";
 import { resolveNewChatModel } from "./newChatModel";
 import { planReviewRunning } from "./planReviewQueue";
@@ -942,8 +943,8 @@ const handlers: WsHandlers = {
 		return getSessionMessages(p.sessionId, p.workspaceId, getWorkspace(p.workspaceId).worktreePath);
 	},
 	"mcp.list": (params) => mcpList(params),
-	"mcp.add": (params) => mcpWrite(params, "add"),
-	"mcp.update": (params) => mcpWrite(params, "update"),
+	"mcp.add": (params) => mcpAdd(params),
+	"mcp.update": (params) => mcpUpdate(params),
 	"mcp.remove": (params) => mcpRemove(params),
 	"mcp.setProjectOverride": (params) => mcpSetProjectOverride(params),
 	"mcp.setSessionOverride": (params) => mcpSetSessionOverride(params),
