@@ -622,6 +622,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   `selectCatalogModel` (a model ref resolved against the **live** `models` list — a session's own `model`
   is the snapshot it was created with, so host-computed facts on it, today `thinkingLevels`, are read
   through this; callers fall back to the snapshot when the ref has left the catalog);
+  `selectSupportsProjectTrust` (the `PROJECT_TRUST_PROTOCOL_VERSION` gate for the trust summary and the
+  pi-level resource grant);
   `toast` (the fire-from-anywhere helper),
   `Toast` (type), web-local frame/workspace-view/attention selectors and atomic actions, resource render-state types
   (file/diff/virtual-document/plan/chat), `TerminalTab`, `ClosedChat`, `SessionRuntime` +

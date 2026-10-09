@@ -313,9 +313,15 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `PlanReviewResult.blockedByOpenFindings` so the card cannot claim the step is done. `resolve_comment`
   stays the WORKER'S tool — `reviews.applyAgentResolution` only resolves a `sent` comment, and only when
   the calling session equals the chat `markCommentsSent` recorded it as delivered to;
+  `project.trustSummary` answers the trust notice from agent's `projectTrustSummary(project.path)`;
   `project.setTrust`
   acknowledges the aliases present at grant via agent's
-  `listProjectAliasSkillNames`; `project.acknowledgeSkills` / `project.setSkillEnabled` /
+  `listProjectAliasSkillNames`, sets the alias grant, grants pi-level trust only when the request carries
+  `resources: true` (a revoke clears both; an older client's grant is alias-only), and hands the project's
+  workspaces to agent's `applyPiResourceTrust` so live chats reload into the new trust (idle now, busy at
+  settlement); `createServer` injects agent's `piProjectTrustDecision` as the projects migration seed
+  (`setPiTrustSeed`) before anything reads projects, then reads them once so the grandfathering migration
+  runs at startup; `project.acknowledgeSkills` / `project.setSkillEnabled` /
   `project.setGroupEnabled` / `project.aliasSkills` / `workspace.setSkillOverride` mutate/read the persisted
   toggles; `session.reloadResources` re-scans a running session — the composition stays here; `agent` never
   imports its sibling. `createServer` also wires **`setSkillAdmissionResolver`**, mapping a session's

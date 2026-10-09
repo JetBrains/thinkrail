@@ -63,9 +63,28 @@ function ensureSlugs(projects: Project[]): boolean {
 	return changed;
 }
 
+export type PiTrustSeed = (path: string) => boolean | null;
+let piTrustSeed: PiTrustSeed | null = null;
+
+export function setPiTrustSeed(seed: PiTrustSeed | null): void {
+	piTrustSeed = seed;
+}
+
+export function migratePiResourceTrust(projects: Project[], seed: PiTrustSeed): boolean {
+	let changed = false;
+	for (const project of projects) {
+		if (project.piResourceTrust !== undefined) continue;
+		project.piResourceTrust = seed(project.path) === false ? "untrusted" : "granted";
+		changed = true;
+	}
+	return changed;
+}
+
 export function getProjects(): Project[] {
 	const projects = loadProjects();
-	if (ensureSlugs(projects)) saveProjects(projects);
+	const slugged = ensureSlugs(projects);
+	const migrated = piTrustSeed ? migratePiResourceTrust(projects, piTrustSeed) : false;
+	if (slugged || migrated) saveProjects(projects);
 	return projects;
 }
 
@@ -98,6 +117,7 @@ export function openProject(inputPath: string): Project {
 		path: root,
 		slug: uniqueSlug(slugify(basename(root)), taken),
 		lastOpened: Date.now(),
+		piResourceTrust: piTrustSeed?.(root) === true ? "granted" : "untrusted",
 	};
 	projects.push(project);
 	saveProjects(projects);
@@ -131,11 +151,14 @@ export function setProjectTrust(
 	id: string,
 	trusted: boolean,
 	acknowledgedSkills?: string[],
+	options: { resources?: boolean } = {},
 ): Project {
 	const projects = getProjects();
 	const project = projects.find((p) => p.id === id);
 	if (!project) throw new Error(`Unknown project: ${id}`);
 	project.trusted = trusted;
+	if (!trusted) project.piResourceTrust = "untrusted";
+	else if (options.resources === true) project.piResourceTrust = "granted";
 	if (acknowledgedSkills !== undefined) project.acknowledgedSkills = acknowledgedSkills;
 	saveProjects(projects);
 	return project;

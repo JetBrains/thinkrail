@@ -188,7 +188,8 @@ export interface DelegationBindings {
 	maxConcurrentPerParent?: number;
 	childBaseExtensionFactories?: InlineExtension[];
 	childExtensionFactories?: InlineExtension[];
-	buildChildSettings?: (cwd: string) => SettingsManager;
+	buildChildSettings?: (cwd: string, projectTrusted: boolean) => SettingsManager;
+	projectTrusted?: (cwd: string) => boolean;
 }
 
 export type HistoryCaptureSource =

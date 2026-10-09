@@ -7,6 +7,7 @@ export {
 	listProjects,
 	listRecentProjects,
 	openProject,
+	setPiTrustSeed,
 	setProjectGroupEnabled,
 	setProjectPublisher,
 	setProjectSkillEnabled,

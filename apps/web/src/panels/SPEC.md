@@ -321,11 +321,25 @@ provider is "connected" iff any `configured`) on mount and re-checks whenever th
 it disappears the moment the user connects one; a transport error degrades to *not* nagging (offline ≠ "no
 provider"). All provider **management** lives in Settings, not here (the always-on strip is gone).
 
-Beneath it, **`ProjectSkillsNotice`** is the pre-workspace trust surface (so trust is reachable with no
-workspace yet): **presence-gated** — renders nothing unless the selected project ships committed skills —
-showing a **count** ("ships N skills → *Trust project*"), a "N new → *Review & enable*" state for skills that
-appeared after trust (`project.acknowledgeSkills`), else a quiet "N trusted" line. It never renders the
-skills' (attacker-controlled) names before trust. The full manager (`chat/SkillsDialog` in **project mode**
+Beneath it, **`ProjectTrustNotice`** is the pre-workspace trust surface (so trust is reachable with no
+workspace yet): **presence-gated** — renders nothing unless the selected project ships something a trust
+grant would load. Presence comes from `useProjectTrustSummary` (`project.trustSummary` on hosts at
+`PROJECT_TRUST_PROTOCOL_VERSION`, gated by the store's `selectSupportsProjectTrust`: alias skill names and
+pi's own trust-requiring resources or project subagent definitions; older hosts answer
+`project.aliasSkills` only, read as "aliases only"), and the
+pure `deriveProjectTrustNotice` evaluates the alias grant (`Project.trusted`) and pi-level trust
+(`Project.piResourceTrust`) **separately**, so the notice names only what is still off: "ships N skills and
+its own pi resources → *Trust project*", plus — when pi-level resources are gated — what a grant loads
+(skills, prompts, themes, `SYSTEM.md`, subagent definitions) and that its extensions and settings run code
+on this machine. *Trust project* sends
+`project.setTrust` built by `trustGrantParams`: `resources: true` only when the notice names pi-level
+resources (and so said what they load and run); an alias-only notice grants alias trust only. After trust
+it shows a "N new → *Review & enable*" state for skills that appeared later (`project.acknowledgeSkills`),
+else a quiet "trusted" line whose *Stop trusting* (behind a destructive `ConfirmDialog`) sends
+`project.setTrust({ trusted: false })`, revoking both grants; its confirmation (`stopTrustingText`) says pi
+resources stop loading and open chats reload only when `piResourceTrust` is `granted` and the host supports
+project trust, otherwise that project skills stop loading in new chats. It never renders the skills'
+(attacker-controlled) names before trust. The full manager (`chat/SkillsDialog` in **project mode**
 — trust + group/skill toggles, no session yet) is reached from **New Workspace**, whose opener is the shared
 `chat/SkillsButton` primitive (so it cannot drift from the chat header's Skills trigger). This is the
 pre-session half of the user's skill settings; the chat header opens the same dialog in workspace mode
@@ -399,10 +413,12 @@ a project picker, the prompt hero, and the reused
   prompt. The first prompt is snapshotted before asynchronous workspace creation begins.
   Listing/get failures preserve the draft and degrade to whichever source remains available. Extension commands and `/compact` stay absent because no live
   session exists. A caption under the prompt marks the catalog as **from the current checkout** (the created
-  worktree's session is authoritative if the selected base branch differs). When the selected project is **untrusted AND ships
-  committed skills** (a count from `project.aliasSkills`, never their names), a **trust notice** shows a
-  *Trust project* button — the repo's skills stay withheld until granted (`project.setTrust`, which folds the
-  updated project back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter submits** (matching the submit button's
+  worktree's session is authoritative if the selected base branch differs). When the selected project ships anything
+  still **untrusted** (the same `useProjectTrustSummary` + `deriveProjectTrustNotice` pair as the Welcome
+  notice — counts and kinds, never names), a **trust notice** shows a *Trust project* button — the repo's
+  skills and pi resources stay withheld until granted (`project.setTrust` from the same `trustGrantParams`,
+  so `resources: true` travels only when the notice named pi-level resources; it folds the updated project
+  back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter submits** (matching the submit button's
   `↵` affordance) and
   **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active,
   and the dialog itself expands the project and refreshes its authoritative `workspace.list` (fire-and-forget;

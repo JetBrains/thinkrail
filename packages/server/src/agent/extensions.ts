@@ -233,6 +233,9 @@ export async function buildResourceLoader(
 		extensionFactories,
 	};
 	const devExtensionPaths = bundled ? [] : resolveDevPaths().extensionPaths;
+	const applyCurrentTrust = (): void => {
+		settingsManager.setProjectTrusted(getAdmission().piResourceTrusted);
+	};
 
 	const excluded = new Set(excludedExtensionPaths.map((path) => resolve(path)));
 	if (excluded.size === 0) {
@@ -240,6 +243,11 @@ export async function buildResourceLoader(
 			...common,
 			additionalExtensionPaths: devExtensionPaths,
 		});
+		const reloadTrusted = loader.reload.bind(loader);
+		loader.reload = async (options) => {
+			applyCurrentTrust();
+			await reloadTrusted(options);
+		};
 		await loader.reload();
 		return loader;
 	}
@@ -283,6 +291,7 @@ export async function buildResourceLoader(
 	});
 	const reloadResolved = loader.reload.bind(loader);
 	loader.reload = async (options) => {
+		applyCurrentTrust();
 		await resolveExclusionPaths();
 		await reloadResolved(options);
 		relabelDiscoveredExtensions(loader, discoveredMetadata);
@@ -316,6 +325,7 @@ function admissionCacheKey(cwd: string, ctx: SkillAdmissionContext): string {
 	return JSON.stringify([
 		cwd,
 		ctx.trusted,
+		ctx.piResourceTrusted,
 		[...ctx.acknowledged].sort(),
 		[...ctx.disabled].sort(),
 		[...ctx.disabledGroups].sort(),
@@ -333,7 +343,9 @@ export async function listSkillCommands(
 	const cacheKey = admissionCacheKey(cwd, admission);
 	const cached = skillListCache.get(cacheKey);
 	if (cached && Date.now() - cached.at < SKILL_LIST_TTL_MS) return cached.value;
-	const settingsManager = SettingsManager.create(cwd, getAgentDir(), { projectTrusted: true });
+	const settingsManager = SettingsManager.create(cwd, getAgentDir(), {
+		projectTrusted: admission.piResourceTrusted,
+	});
 	const loader = new DefaultResourceLoader({
 		cwd,
 		agentDir: getAgentDir(),
@@ -355,7 +367,7 @@ export async function listProjectAliasSkillNames(cwd: string): Promise<string[]>
 		.filter((source) => source.scope === "project")
 		.map((source) => source.path);
 	if (projectPaths.length === 0) return [];
-	const settingsManager = SettingsManager.create(cwd, getAgentDir(), { projectTrusted: true });
+	const settingsManager = SettingsManager.create(cwd, getAgentDir(), { projectTrusted: false });
 	const loader = new DefaultResourceLoader({
 		cwd,
 		agentDir: getAgentDir(),
@@ -381,7 +393,9 @@ export async function listSkillCatalog(
 	const personal = discovered.filter((s) => s.scope === "user");
 	const project = discovered.filter((s) => s.scope === "project");
 	const bundledSkillPaths = bundled ? [bundled.skillsDir] : resolveDevPaths().skillPaths;
-	const settingsManager = SettingsManager.create(cwd, getAgentDir(), { projectTrusted: true });
+	const settingsManager = SettingsManager.create(cwd, getAgentDir(), {
+		projectTrusted: admission.piResourceTrusted,
+	});
 	const loader = new DefaultResourceLoader({
 		cwd,
 		agentDir: getAgentDir(),

@@ -23,6 +23,7 @@ import {
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
+	PROJECT_TRUST_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
@@ -133,8 +134,8 @@ test("host-owned new-chat defaults are pinned to v72", () => {
 });
 
 test("the settled workspace shelf is pinned to v78", () => {
-	expect(PROTOCOL_VERSION).toBe(78);
 	expect(WORKSPACE_SETTLE_PROTOCOL_VERSION).toBe(78);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKSPACE_SETTLE_PROTOCOL_VERSION);
 	expect(WS_METHODS.workspaceSettle).toBe("workspace.settle");
 	expect(WS_METHODS.workspaceUnsettle).toBe("workspace.unsettle");
 	expect(DEFAULT_CONFIG.settleIdleDays).toBe(SETTLE_IDLE_DAYS.default);
@@ -151,6 +152,13 @@ test("picker metadata and host-kept favorites/recents are pinned to v77", () => 
 	expect(DEFAULT_CONFIG.favoriteModels).toEqual([]);
 	expect(DEFAULT_CONFIG.recentModels).toEqual([]);
 	expect(RECENT_MODELS_LIMIT).toBe(5);
+});
+
+test("the project trust summary and pi-level resource consent are pinned to v79", () => {
+	expect(PROTOCOL_VERSION).toBe(79);
+	expect(PROJECT_TRUST_PROTOCOL_VERSION).toBe(79);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_TRUST_PROTOCOL_VERSION);
+	expect(WS_METHODS.projectTrustSummary).toBe("project.trustSummary");
 });
 
 test("rich review anchors advance the additive selector union to v74", () => {

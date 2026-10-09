@@ -18,9 +18,20 @@ export interface Project {
 	acknowledgedSkills?: string[];
 	disabledSkills?: string[];
 	disabledGroups?: string[];
+	/**
+	 * pi-level trust for the project's native `.pi/` resources, separate from the alias-skill `trusted`
+	 * grant; absent only on a record that predates pi-level trust.
+	 */
+	piResourceTrust?: "granted" | "untrusted";
 }
 
 export type ProjectPathStatus = { kind: "repo" | "initable" | "missing" | "notDirectory" };
+
+/** What a project's trust grant would load, for the trust notice; alias skill names show only after trust. */
+export interface ProjectTrustSummary {
+	aliasSkills: string[];
+	nativeResources: boolean;
+}
 
 export interface DiffStats {
 	added: number;

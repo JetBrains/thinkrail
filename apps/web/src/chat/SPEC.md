@@ -709,7 +709,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   grouped by source with **sticky section headers** — the first-party **ThinkRail** and **Pi** groups lead
   (above the All-plugins master, which governs only the plugin groups), then Personal / **a group per
   installed Claude plugin** / the repo's Project skills last — each with its admission verdict,
-  project-trust, re-confirm-new, a per-group track/thumb **switch** + an **All-plugins** master, and per-skill
+  project-trust (alias trust only: its banner names just the skills, so its `project.setTrust` never carries
+  `resources`), re-confirm-new, a per-group track/thumb **switch** + an **All-plugins** master, and per-skill
   switches. Switch position plus semantic colour carries state without visible On/Off text; the switch target
   alone mutates, while unavailable controls keep the existing trust/parent explanation and acknowledgement
   behavior. It runs in **two modes** via an optional `workspace` prop: chat (`skills.state`, per-workspace

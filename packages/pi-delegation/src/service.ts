@@ -755,7 +755,10 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		factories: InlineExtension[],
 		manager: SessionManager,
 	): Promise<AgentSession> {
-		const settingsManager = bindings.buildChildSettings?.(cwd) ?? SettingsManager.create(cwd);
+		const projectTrusted = bindings.projectTrusted?.(cwd) ?? true;
+		const settingsManager =
+			bindings.buildChildSettings?.(cwd, projectTrusted) ??
+			SettingsManager.create(cwd, undefined, { projectTrusted });
 		const skills = options.skills ?? [];
 		const systemPrompt = options.systemPrompt;
 		const childFactories = [

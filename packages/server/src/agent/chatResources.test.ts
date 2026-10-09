@@ -35,6 +35,7 @@ import {
 	setSessionCreatedPublisher,
 	setSessionManagerFactory,
 	setSessionPublisher,
+	setSkillAdmissionResolver,
 	settleSessionsForShutdown,
 } from "./agentSessionManager";
 import { ASK_ACK_TEXT, assessAnswerability } from "./askUserQuestion";
@@ -48,6 +49,7 @@ import {
 } from "./chatResources";
 import { delegationServiceFor, readChildTranscript } from "./delegation";
 import { configurePiRuntime } from "./piRuntime";
+import { admissionContextFor } from "./skillAdmission";
 
 const model = {
 	id: "resources",
@@ -89,8 +91,10 @@ beforeAll(async () => {
 	});
 	configurePiRuntime(runtime);
 	setSessionManagerFactory((cwd) => SessionManager.inMemory(cwd));
+	setSkillAdmissionResolver(() => admissionContextFor({ piResourceTrust: "granted" }));
 });
 afterAll(async () => {
+	setSkillAdmissionResolver(() => admissionContextFor(undefined));
 	await settleSessionsForShutdown();
 	disposeAllSessions();
 	configurePiRuntime(null);

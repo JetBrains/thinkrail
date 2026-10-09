@@ -16,7 +16,9 @@ import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	abortSession,
 	acknowledgeCompletion,
+	admissionContextFor,
 	answerQuestion,
+	applyPiResourceTrust,
 	clampThinkingForModel,
 	clearQueueSession,
 	compactSession,
@@ -41,6 +43,7 @@ import {
 	listSkillCommands,
 	notifyExtUi,
 	nudgeSession,
+	projectTrustSummary,
 	promptSession,
 	readBackgroundCommandOutput,
 	readChildTranscript,
@@ -423,7 +426,11 @@ const handlers: WsHandlers = {
 		const project = listProjects().find((candidate) => candidate.id === p.id);
 		if (!project) throw new Error(`Unknown project: ${p.id}`);
 		const acknowledged = p.trusted ? await listProjectAliasSkillNames(project.path) : undefined;
-		return setProjectTrust(p.id, p.trusted, acknowledged);
+		const updated = setProjectTrust(p.id, p.trusted, acknowledged, {
+			resources: p.resources === true,
+		});
+		await applyPiResourceTrust(listWorkspaceRecords(p.id).map((workspace) => workspace.id));
+		return updated;
 	},
 	"workspace.create": async (p) => {
 		return provisionInitialTerminal(
@@ -703,25 +710,13 @@ const handlers: WsHandlers = {
 		const { projectId } = params;
 		const project = listProjects().find((candidate) => candidate.id === projectId);
 		if (!project) throw new Error(`Unknown project: ${projectId}`);
-		return listSkillCommands(project.path, {
-			trusted: project.trusted === true,
-			acknowledged: project.acknowledgedSkills ?? [],
-			disabled: project.disabledSkills ?? [],
-			disabledGroups: project.disabledGroups ?? [],
-			overrides: {},
-		});
+		return listSkillCommands(project.path, admissionContextFor(project));
 	},
 	"skills.state": (params) => {
 		const { workspaceId } = params;
 		const ws = getWorkspace(workspaceId);
 		const project = listProjects().find((p) => p.id === ws.projectId);
-		return listSkillCatalog(ws.worktreePath, {
-			trusted: project?.trusted === true,
-			acknowledged: project?.acknowledgedSkills ?? [],
-			disabled: project?.disabledSkills ?? [],
-			disabledGroups: project?.disabledGroups ?? [],
-			overrides: ws.skillOverrides ?? {},
-		});
+		return listSkillCatalog(ws.worktreePath, admissionContextFor(project, ws.skillOverrides ?? {}));
 	},
 	"project.acknowledgeSkills": (p) => {
 		return acknowledgeProjectSkills(p.id, p.names);
@@ -735,6 +730,12 @@ const handlers: WsHandlers = {
 		if (!project) throw new Error(`Unknown project: ${projectId}`);
 		return listProjectAliasSkillNames(project.path);
 	},
+	"project.trustSummary": (params) => {
+		const { projectId } = params;
+		const project = listProjects().find((p) => p.id === projectId);
+		if (!project) throw new Error(`Unknown project: ${projectId}`);
+		return projectTrustSummary(project.path);
+	},
 	"project.setGroupEnabled": (p) => {
 		return setProjectGroupEnabled(p.id, p.group, p.enabled);
 	},
@@ -742,13 +743,7 @@ const handlers: WsHandlers = {
 		const { projectId } = params;
 		const project = listProjects().find((p) => p.id === projectId);
 		if (!project) throw new Error(`Unknown project: ${projectId}`);
-		return listSkillCatalog(project.path, {
-			trusted: project.trusted === true,
-			acknowledged: project.acknowledgedSkills ?? [],
-			disabled: project.disabledSkills ?? [],
-			disabledGroups: project.disabledGroups ?? [],
-			overrides: {},
-		});
+		return listSkillCatalog(project.path, admissionContextFor(project));
 	},
 	"workspace.setSkillOverride": (p) => {
 		return setWorkspaceSkillOverride(p.id, p.name, p.override);

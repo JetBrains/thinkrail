@@ -1221,8 +1221,8 @@ function pngHeaderOnly(width: number, height: number): Buffer {
 	return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), ihdr]);
 }
 
-test("buildChildSettings supplies the settings a child's tools run on", async () => {
-	const calls: string[] = [];
+test("buildChildSettings supplies the settings a child's tools run on, with the bound trust", async () => {
+	const calls: [string, boolean][] = [];
 	const scoped = createDelegationService({
 		resolveParent: (id) =>
 			id === parent.sessionId
@@ -1231,9 +1231,10 @@ test("buildChildSettings supplies the settings a child's tools run on", async ()
 		delegationRoot,
 		scope: "ws-settings",
 		modelRuntime: runtime,
-		buildChildSettings: (cwd) => {
-			calls.push(cwd);
-			return SettingsManager.inMemory({ images: { autoResize: false } });
+		projectTrusted: () => false,
+		buildChildSettings: (cwd, projectTrusted) => {
+			calls.push([cwd, projectTrusted]);
+			return SettingsManager.inMemory({ images: { autoResize: false } }, { projectTrusted });
 		},
 	});
 	writeFileSync(join(parentCwd, "settings-raw.png"), pngHeaderOnly(9000, 10));
@@ -1249,7 +1250,7 @@ test("buildChildSettings supplies the settings a child's tools run on", async ()
 		subagentSpec({ session: { systemPrompt: "read it", tools: ["read"] } }),
 	);
 	try {
-		expect(calls).toEqual([parentCwd]);
+		expect(calls).toEqual([[parentCwd, false]]);
 		expect((await child.runQueued("Read settings-raw.png.")).finalText).toBe("READ");
 		expect(toolResult).toMatchObject({
 			role: "toolResult",
@@ -1295,6 +1296,58 @@ test("the base set loads for every child, opted into extensions or not, ahead of
 	} finally {
 		await scoped.disposeChildrenOf(parent.sessionId);
 	}
+});
+
+test("a child's pi-level project trust comes from the embedder binding, per child cwd", async () => {
+	const seen: boolean[] = [];
+	const asked: string[] = [];
+	const trustedService = (trusted: boolean) =>
+		createDelegationService({
+			resolveParent: (id) =>
+				id === parent.sessionId
+					? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+					: undefined,
+			delegationRoot,
+			scope: `ws-trust-${trusted}`,
+			modelRuntime: runtime,
+			projectTrusted: (cwd) => {
+				asked.push(cwd);
+				return trusted;
+			},
+			childExtensionFactories: [
+				(pi) => {
+					pi.registerTool({
+						name: "trust_probe",
+						label: "Trust probe",
+						description: "Reports project trust",
+						parameters: Type.Object({}),
+						execute: async (_id, _params, _signal, _update, ctx) => {
+							seen.push(ctx.isProjectTrusted());
+							return { content: [{ type: "text", text: "OK" }], details: {} };
+						},
+					});
+				},
+			],
+		});
+	for (const trusted of [false, true]) {
+		const scoped = trustedService(trusted);
+		faux.setResponses([
+			fauxAssistantMessage(fauxToolCall("trust_probe", {})),
+			fauxAssistantMessage("DONE"),
+		]);
+		const child = await scoped.createChild(
+			subagentSpec({
+				session: { systemPrompt: "probe", tools: ["trust_probe"], extensions: true },
+			}),
+		);
+		try {
+			expect((await child.runQueued("Probe.")).status).toBe("completed");
+		} finally {
+			await scoped.disposeChildrenOf(parent.sessionId);
+		}
+	}
+	expect(seen).toEqual([false, true]);
+	expect(asked).toEqual([parentCwd, parentCwd]);
 });
 
 test("extensions opt-in is inert when the embedder binds no child factories", async () => {

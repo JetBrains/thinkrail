@@ -72,6 +72,14 @@ import { createSessionWithSkillBaseline, errorText, getTransport } from "@/trans
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
+import {
+	deriveProjectTrustNotice,
+	type ProjectTrustNotice,
+	trustEnablesText,
+	trustGrantParams,
+	untrustedNoticeText,
+} from "./projectTrust";
+import { useProjectTrustSummary } from "./useProjectTrustSummary";
 
 type WorkspaceTarget = "worktree" | "default";
 
@@ -117,7 +125,6 @@ export function NewWorkspaceDialog({
 	const [skillCommands, setSkillCommands] = useState<SlashCommandInfo[]>([]);
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
 	const [slotSession, setSlotSession] = useState<TemplateSlotSessionState | null>(null);
-	const [aliasSkills, setAliasSkills] = useState<string[]>([]);
 	const [model, setModel] = useState<WireModel | null>(null);
 	const [thinkingLevel, setThinkingLevel] = useState<ThinkingLevel>("medium");
 	const [hostDefault, setHostDefault] = useState<ModelDefault | null>(null);
@@ -245,20 +252,7 @@ export function NewWorkspaceDialog({
 		};
 	}, [open, selectedProjectId, slashActive, supportsProjectTemplatePreview]);
 
-	useEffect(() => {
-		if (!open) return;
-		let cancelled = false;
-		setAliasSkills([]);
-		getTransport()
-			.request("project.aliasSkills", { projectId: selectedProjectId })
-			.then((names) => {
-				if (!cancelled) setAliasSkills(names);
-			})
-			.catch(() => {});
-		return () => {
-			cancelled = true;
-		};
-	}, [open, selectedProjectId]);
+	const trustSummary = useProjectTrustSummary(selectedProjectId, open);
 
 	const {
 		models,
@@ -425,14 +419,14 @@ export function NewWorkspaceDialog({
 		}
 	};
 
-	const trustProject = async () => {
+	const trustProject = async (notice: Extract<ProjectTrustNotice, { kind: "untrusted" }>) => {
 		if (trusting) return;
 		setTrusting(true);
 		try {
-			const updated = await getTransport().request("project.setTrust", {
-				id: selectedProjectId,
-				trusted: true,
-			});
+			const updated = await getTransport().request(
+				"project.setTrust",
+				trustGrantParams(selectedProjectId, notice),
+			);
 			useAppStore.getState().applyProjectUpdated(updated);
 			const commands = await slashCommandCatalogOrEmpty(() =>
 				getTransport().request("skill.list", { projectId: selectedProjectId }),
@@ -446,6 +440,8 @@ export function NewWorkspaceDialog({
 	};
 
 	const selectedProject = projects.find((p) => p.id === selectedProjectId);
+	const trustNotice = deriveProjectTrustNotice(selectedProject, trustSummary);
+	const trustEnables = trustNotice.kind === "untrusted" ? trustEnablesText(trustNotice) : null;
 	const isolated = target === "worktree";
 
 	return (
@@ -529,21 +525,24 @@ export function NewWorkspaceDialog({
 					/>
 				</div>
 
-				{selectedProject && selectedProject.trusted !== true && aliasSkills.length > 0 ? (
+				{trustNotice.kind === "untrusted" ? (
 					<div
 						data-testid="ws-trust-notice"
 						className="flex w-full items-center gap-8 rounded-[var(--radius-sm)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8 text-left"
 					>
 						<TriangleAlert className="size-16 shrink-0 text-feedback-warning" />
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
-							This project ships {aliasSkills.length} skill{aliasSkills.length === 1 ? "" : "s"} —
-							off until you trust it. Your personal and ThinkRail's built-in skills are unaffected.
+							{untrustedNoticeText(trustNotice)} Your personal and ThinkRail's built-in skills are
+							unaffected.
+							{trustEnables ? (
+								<span className="block text-text-muted tr-text-metadata">{trustEnables}</span>
+							) : null}
 						</span>
 						<Button
 							size="sm"
 							data-testid="ws-trust-project"
 							disabled={trusting}
-							onClick={() => void trustProject()}
+							onClick={() => void trustProject(trustNotice)}
 							className="shrink-0"
 						>
 							Trust project
