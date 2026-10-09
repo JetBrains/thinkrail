@@ -199,7 +199,11 @@ export function mcpUpdate(params: {
 }): Promise<McpListResult> {
 	return renderedEntry(params, (options, onDisk, project) => {
 		const fingerprint = writeMcpServerEntry({ ...options, entry: params.entry, mode: "update" });
-		if (fingerprint && onDisk !== undefined && project.mcpApprovals?.[options.name] === onDisk)
+		if (
+			fingerprint &&
+			onDisk !== undefined &&
+			mcpPolicyOf(project).approvals[options.name] === onDisk
+		)
 			approveProjectMcpServer(project.id, options.name, fingerprint);
 	});
 }
@@ -217,7 +221,7 @@ export function mcpSetProjectOverride(params: {
 	const name = serverName(params.name);
 	return mutateManaged(params.workspaceId, ({ project }) => {
 		const override = {
-			...project.mcpOverrides?.[name],
+			...mcpPolicyOf(project).overrides[name],
 			...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
 			...(params.exposure !== undefined ? { exposure: params.exposure } : {}),
 		};
@@ -252,7 +256,8 @@ export function mcpShareWithRepo(params: {
 	const name = serverName(params.name);
 	return mutateManaged(params.workspaceId, ({ workspace, project }) => {
 		assertRepositoryWritable(project);
-		const override = project.mcpOverrides?.[name];
+		const { approvals, overrides } = mcpPolicyOf(project);
+		const override = overrides[name];
 		if (!override) {
 			throw new CodedError("MCP_CONFIG_INVALID", `"${name}" has no project setting to share.`);
 		}
@@ -260,7 +265,7 @@ export function mcpShareWithRepo(params: {
 			worktree: workspace.worktreePath,
 			name,
 			override,
-			approvedFingerprint: project.mcpApprovals?.[name],
+			approvedFingerprint: approvals[name],
 		});
 		approveProjectMcpServer(project.id, name, fingerprint);
 		setProjectMcpOverride(project.id, name, null);
@@ -301,13 +306,13 @@ async function probe(
 ): Promise<{ loginId: string; done: Promise<LoginFrame> }> {
 	const { workspace, project } = target(params.workspaceId);
 	const name = serverName(params.name);
-	const listed = await listMcpServers({
-		workspaceId: workspace.id,
-		cwd: workspace.worktreePath,
-		project,
-		waitMs: 0,
-	});
-	if (listed.handledElsewhere) throw handledElsewhere();
+	const projectTrusted = project.piResourceTrust === "granted";
+	const [listed, ownedElsewhere] = await Promise.all([
+		listMcpServers({ workspaceId: workspace.id, cwd: workspace.worktreePath, project, waitMs: 0 }),
+		mcpOwnershipGuard({ workspaceId: workspace.id, cwd: workspace.worktreePath, projectTrusted }),
+	]);
+	// Sampled synchronously right before the probe starts, like the management mutations.
+	if (ownedElsewhere() !== undefined) throw handledElsewhere();
 	const sameName = listed.servers.filter((server) => server.name === name);
 	const effective =
 		sameName.find(
@@ -323,7 +328,7 @@ async function probe(
 		action,
 		workspaceId: workspace.id,
 		cwd: workspace.worktreePath,
-		projectTrusted: project.piResourceTrust === "granted",
+		projectTrusted,
 		policy: mcpPolicyOf(project),
 		serverName: name,
 		ownerClientKey: clientKey,

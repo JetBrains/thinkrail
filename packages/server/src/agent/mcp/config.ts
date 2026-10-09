@@ -396,10 +396,17 @@ export interface McpProjectPolicy {
 	overrides: Readonly<Record<string, McpProjectOverride>>;
 }
 
+// Null-prototype copies, so a server named `__proto__` never reads Object.prototype as its policy.
+const ownEntries = <T>(record: Record<string, T> | undefined): Record<string, T> =>
+	Object.assign(Object.create(null) as Record<string, T>, record);
+
 export function mcpPolicyOf(
 	project: Pick<Project, "mcpApprovals" | "mcpOverrides"> | undefined,
 ): McpProjectPolicy {
-	return { approvals: project?.mcpApprovals ?? {}, overrides: project?.mcpOverrides ?? {} };
+	return {
+		approvals: ownEntries(project?.mcpApprovals),
+		overrides: ownEntries(project?.mcpOverrides),
+	};
 }
 
 export function loadHostMcpConfig(options: {
