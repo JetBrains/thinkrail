@@ -84,8 +84,10 @@ relax a rule.
 - `management.ts` — the config mutations the host composes: `writeMcpServerEntry` (pi validation plus the
   project `auth` ban, add vs update, project containment; returns a project entry's fingerprint),
   `removeMcpServerEntry`, `projectMcpEntryFingerprint`, `shareMcpOverrideWithRepo` (writes pi's override
-  entry from the record; refuses when the project file defines that server itself or holds an override not
-  approved at its current fingerprint, so a share never merges into unreviewed repository content).
+  entry from the record; refuses when the user-level server it overrides no longer exists — an override
+  without a definition would be an invalid entry — when the project file defines that server itself, or
+  when it holds an override not approved at its current fingerprint, so a share never merges into
+  unreviewed repository content).
 - `config.ts` — the port plus the host additions: `loadHostMcpConfig()` is what a session hands pi —
   project-file entries (servers and override-only entries alike) are admitted only when the project
   record's `mcpApprovals[name]` equals their current fingerprint (an unapproved override leaves the global

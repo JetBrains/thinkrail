@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+	symlinkSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { McpListResult, McpServerLog, McpServerSummary } from "@thinkrail/contracts";
@@ -292,6 +300,26 @@ test("project settings for a user server stay in the record until shared with th
 	expect(await codeOf(request("mcp.shareWithRepo", { workspaceId: "w1", name: "linear" }))).toBe(
 		"MCP_CONFIG_INVALID",
 	);
+});
+
+test("share refuses once the user-level server it overrides is gone", async () => {
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({ mcpServers: { linear: { url: "https://linear.example/mcp" } } }),
+	);
+	await request("mcp.setProjectOverride", { workspaceId: "w1", name: "linear", enabled: false });
+	writeFileSync(join(agentDir, "mcp.json"), JSON.stringify({ mcpServers: {} }));
+	expect(await codeOf(request("mcp.shareWithRepo", { workspaceId: "w1", name: "linear" }))).toBe(
+		"MCP_CONFIG_INVALID",
+	);
+	expect(existsSync(join(repo, ".pi", "mcp.json"))).toBe(false);
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({ mcpServers: { linear: { url: "https://linear.example/mcp" } } }),
+	);
+	const linear = find(await request("mcp.list", { workspaceId: "w1" }), "user", "linear");
+	expect(linear).toMatchObject({ enabled: false, projectOverride: { enabled: false } });
+	expect(linear?.approval).toBeUndefined();
 });
 
 test("project writes refuse a symlinked .pi, and per-chat calls need a session of that workspace", async () => {
