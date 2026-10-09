@@ -85,7 +85,8 @@ ref off the workspace-create critical path.
   edits and untracked files, ignored files excluded), written through a scratch copy of the index under
   `GIT_INDEX_FILE` so the user's real index, `HEAD`, and reflog never move — the `turns` module's
   before/after fence around an agent run; it returns `null` instead of throwing because a missed
-  snapshot only costs a receipt;
+  snapshot only costs a receipt. A file git cannot read is skipped, not fatal: `add --ignore-errors`
+  still exits 1 after writing everything else, so only a `fatal:` or a timeout/launch failure voids it;
   **the scope→range resolver** — `resolveDiffRange(ws, scope?)` → `Promise<DiffRange>` (async — and
   deliberately kept the *single* implementation: its `reviews` consumers went async with it rather than
   keeping a drift-prone sync twin) — **the one definition of what

@@ -22,7 +22,7 @@ export async function snapshotWorktree(worktreePath: string): Promise<string | n
 			env,
 			timeoutMs: SNAPSHOT_TIMEOUT_MS,
 		});
-		if (!added.ok) return null;
+		if (!added.ok && (added.failure || /^fatal:/m.test(added.err))) return null;
 		const tree = await gitAsync(worktreePath, ["write-tree"], {
 			env,
 			timeoutMs: SNAPSHOT_TIMEOUT_MS,
