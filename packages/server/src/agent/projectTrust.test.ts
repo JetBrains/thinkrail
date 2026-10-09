@@ -108,7 +108,7 @@ async function projectSession(): Promise<{ workspaceId: string; sessionId: strin
 const hasNativeTemplate = (sessionId: string): boolean =>
 	getSessionCommands(sessionId).some((command) => command.name === "native-kickoff");
 
-test("pi's trust store decision is read by nearest ancestor and fails soft to undecided", () => {
+test("pi's trust store decision is read by nearest ancestor, and an unreadable store is no decision at all", () => {
 	const project = mkdtempSync(join(root, "decided-"));
 	const nested = join(project, "packages", "app");
 	mkdirSync(nested, { recursive: true });
@@ -119,7 +119,7 @@ test("pi's trust store decision is read by nearest ancestor and fails soft to un
 	expect(piProjectTrustDecision(nested)).toBe(false);
 	expect(piProjectTrustDecision(mkdtempSync(join(tmpdir(), "undecided-")))).toBeNull();
 	writeFileSync(join(agentDir, "trust.json"), "{ not json");
-	expect(piProjectTrustDecision(nested)).toBeNull();
+	expect(piProjectTrustDecision(nested)).toBeUndefined();
 	rmSync(join(agentDir, "trust.json"), { force: true });
 });
 

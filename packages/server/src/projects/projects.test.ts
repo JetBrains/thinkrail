@@ -346,10 +346,12 @@ test("pi-level trust migration grandfathers legacy records unless pi's own trust
 			piResourceTrust: "untrusted",
 		},
 		{ id: "alias-only", name: "e", path: "/repos/e", slug: "e", lastOpened: 1, trusted: false },
+		{ id: "unreadable", name: "f", path: "/repos/f", slug: "f", lastOpened: 1 },
 	]);
 	const asked: string[] = [];
 	setPiTrustSeed((path) => {
 		asked.push(path);
+		if (path === "/repos/f") return undefined;
 		return path === "/repos/b" ? false : path === "/repos/c" ? true : null;
 	});
 
@@ -360,7 +362,11 @@ test("pi-level trust migration grandfathers legacy records unless pi's own trust
 		"pi-trusted": "granted",
 		explicit: "untrusted",
 		"alias-only": "granted",
+		unreadable: undefined,
 	});
+	expect(storedProjects().find((p) => p.id === "unreadable")?.piResourceTrust).toBeUndefined();
+	setPiTrustSeed((path) => (path === "/repos/f" ? false : null));
+	expect(getProjects().find((p) => p.id === "unreadable")?.piResourceTrust).toBe("untrusted");
 	expect(storedProjects().find((p) => p.id === "alias-only")?.trusted).toBe(false);
 	expect(asked).not.toContain("/repos/d");
 

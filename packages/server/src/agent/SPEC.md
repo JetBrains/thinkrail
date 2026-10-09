@@ -756,7 +756,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   wires `workspaceId` → the admission context, derived once by `admissionContextFor(project, overrides)`);
   the pi-level trust surface — `piResourceTrustFor(workspaceId)`, `applyPiResourceTrust(workspaceIds)`
   (gated reload of every live session whose trust is stale), `piProjectTrustDecision(path)` (pi's
-  `trust.json` decision, nearest ancestor, `null` on error — the host's migration seed) and
+  `trust.json` decision, nearest ancestor, `null` when it has none and `undefined` when the store is unreadable — the host's migration seed) and
   `projectTrustSummary(cwd)` (the trust notice's facts: alias names and pi's own
   `hasTrustRequiringProjectResources` or a project definition from `pi-subagents`' `discoverAgentDefinitions`);
   the subagent-policy seams
