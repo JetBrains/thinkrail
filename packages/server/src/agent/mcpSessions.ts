@@ -9,14 +9,15 @@ import {
 } from "node:fs";
 import { basename, isAbsolute } from "node:path";
 import { getAgentDir, type McpServerConfig } from "@earendil-works/pi-coding-agent";
-import type {
-	McpListResult,
-	McpReadOutputResult,
-	McpServerResourceSummary,
-	McpServerStatus,
-	McpStatusSnapshot,
-	McpTransportKind,
-	Project,
+import {
+	MCP_PROTOCOL_VERSION,
+	type McpListResult,
+	type McpReadOutputResult,
+	type McpServerResourceSummary,
+	type McpServerStatus,
+	type McpStatusSnapshot,
+	type McpTransportKind,
+	type Project,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { logger } from "../log";
@@ -357,7 +358,7 @@ function trackedOf(sessionId: string): Tracked {
 		if (!parsed) return false;
 		apply(sessionId, parsed, true);
 		queueMicrotask(() => scheduleMcpStatusRefresh(sessionId));
-		notifyExtUi(sessionId, redactMcpText(message), level);
+		notifyExtUi(sessionId, redactMcpText(message), level, { belowProtocol: MCP_PROTOCOL_VERSION });
 		return true;
 	});
 	return state;

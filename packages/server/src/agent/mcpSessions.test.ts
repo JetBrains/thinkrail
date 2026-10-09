@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
 import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ExtUiRequest } from "@thinkrail/contracts";
+import { type ExtUiRequest, MCP_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import {
 	createSession,
 	disposeAllSessions,
@@ -25,7 +25,7 @@ import {
 	watchUserMcpConfig,
 } from "./mcpSessions";
 import { configurePiRuntime } from "./piRuntime";
-import { createWebUiContext, setExtUiPublisher } from "./webUiContext";
+import { createWebUiContext, type ExtUiAudience, setExtUiPublisher } from "./webUiContext";
 
 const root = mkdtempSync(join(tmpdir(), "mcp-status-regressions-"));
 const agentDir = join(root, "agent");
@@ -51,7 +51,7 @@ const faux = createFauxCore({
 		},
 	],
 });
-let notices: { request: ExtUiRequest }[] = [];
+let notices: { request: ExtUiRequest; audience?: ExtUiAudience }[] = [];
 
 function writeConfig(enabled = true): void {
 	mkdirSync(agentDir, { recursive: true });
@@ -84,7 +84,9 @@ beforeAll(async () => {
 	});
 	configurePiRuntime(runtime);
 	setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
-	setExtUiPublisher((request) => notices.push({ request }));
+	setExtUiPublisher((request, audience) =>
+		notices.push({ request, ...(audience ? { audience } : {}) }),
+	);
 });
 
 beforeEach(() => {
@@ -140,17 +142,14 @@ function writeExtension(name: string, lines: string[]): string {
 	return path;
 }
 
-test("startup notifications mask the same credentials as status snapshots", async () => {
+test("legacy startup notifications mask the same credentials as status snapshots", async () => {
 	const { sessionId } = await chat();
 	await refreshMcpStatus(sessionId, 5_000);
 	createWebUiContext(sessionId).notify(
 		"MCP servers need attention:\n  fixture: failed: Authorization: Bearer private-token\nRun /mcp to fix.",
 		"warning",
 	);
-	const legacy = notices.filter(
-		({ request }) =>
-			request.kind === "notify" && request.message.startsWith("MCP servers need attention:"),
-	);
+	const legacy = notices.filter(({ audience }) => audience?.belowProtocol === MCP_PROTOCOL_VERSION);
 	expect(legacy).toHaveLength(1);
 	expect(JSON.stringify(legacy)).toContain("Bearer ***");
 	expect(JSON.stringify(legacy)).not.toContain("private-token");
