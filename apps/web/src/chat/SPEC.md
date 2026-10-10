@@ -418,7 +418,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   store/transport/shiki.
 - **Jump-to-message** (`chatLocationRequest` — set by `useHistorySearch.ts`'s `openMessage` on Enter over
   a mapped message hit; see `store/SPEC.md` for the store-level request/clear contract and
-  the workbench shell integration's open/reopen/hydrate half) — `ChatView` is the sole consumer. Once
+  the workbench shell integration's open/reopen/hydrate half) — `ChatTranscript` is the sole consumer. Once
   `rows.length > 0`,
   it resolves the request's `messageIndex` via `runtime.turnIdByMessageIndex` (present only on a
   *hydrated* runtime — a live/already-open session's runtime, built by the event reducer, never carries
@@ -441,7 +441,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   still-current request; an older effect may not clear a newer jump. Cancellation is the user-wins failure
   path and is intentionally silent rather than restarted against the reader. Effect teardown defers its
   identity-checked clear for one microtask: an immediate StrictMode or replacement mount claims the same
-  request first, while a real unmount terminates it. `ChatView` is its only terminal consumer, so an
+  request first, while a real unmount terminates it. `ChatTranscript` is its only terminal consumer, so an
   unresolved current request must never linger.
 - **Open at the current alignment target** — `ChatMessageOrder` chooses the physical latest edge: bottom
   for oldest-first, top for newest-first. The reading band is the only mount placement owner. It places
@@ -1349,16 +1349,19 @@ Unknown custom messages retain their existing behavior.
   `components/useNow`; `lib`.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
   `store`/`transport` (only the app-integration files enumerated above may — keep the renderers reusable).
-- **`ChatView`** is the primary app-integration file: wires this session's runtime
-  (`store.sessions[sessionId]`), the transport calls, the `ChatActions` + `AskStates` contexts, the
-  divider's deep links (`onOpenChange` → `requestChangesView`, `onOpenSpec` → `requestSpecView`; each
-  receives the single path the user picked) plus its view switch (`onReveal` → the tool-reveal intent), and the
-  `isSpec` classifier it builds from the store's `specsByWorkspace` snapshot (subscribed as the stored array
-  — a stable ref — and memoized into a matcher here, never a fresh Set inside the selector) — together with
+- **`ChatView`** is the primary app-integration file: wires the transport calls and this session's
+  shell-facing store reads (granular per-field selectors off `store.sessions[sessionId]`, plus
+  `recentPrompts` and the plan glance derived through shallow-compared selectors) — together with
   **`useHistorySearch.ts`** (the Ctrl+R history-recall overlay's store/transport edge),
-  **`useSessionStats.ts`** (the guarded read that keeps telemetry live), **`useTranscriptSync.ts`** (the
-  guarded authoritative read that converges an existing runtime), and
-  **`TemplateEditorDialog.tsx`** (the shared template save form), the other integration points. A
+  **`useSessionStats.ts`** (the guarded read that keeps telemetry live), and
+  **`TemplateEditorDialog.tsx`** (the shared template save form), the other shell integration points. Its
+  churn-isolated child **`ChatTranscript`** is the second integration file: it owns the streaming runtime
+  subscription (`store.sessions[sessionId]`), provides the `ChatActions` + `AskStates` contexts, builds the
+  divider's deep links (`onOpenChange` → `requestChangesView`, `onOpenSpec` → `requestSpecView`; each
+  receives the single path the user picked) plus its view switch (`onReveal` → the tool-reveal intent), the
+  `isSpec` classifier from the store's `specsByWorkspace` snapshot (subscribed as the stored array — a
+  stable ref — and memoized into a matcher, never a fresh Set inside the selector), and the guarded
+  **`useTranscriptSync.ts`** authoritative read that converges an existing runtime. A
   **rejected** send (`prompt`/`steer`/`followUp`) lands in the chat via the store's `appendErrorTurn` —
   never swallowed and never given the settlement-only Try again affordance; *streaming* faults arrive as pi
   events instead.
