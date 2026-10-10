@@ -19,7 +19,9 @@
 		"spacing:check": "bun scripts/generate-spacing.ts --check && bun test src/styles/spacingUsage.test.ts",
 		"provider-glyphs:generate": "bun scripts/generate-provider-glyphs.ts",
 		"provider-glyphs:check": "bun scripts/generate-provider-glyphs.ts --check",
-		"compiler:census": "bun scripts/compiler-census.ts"
+		"compiler:census": "bun scripts/compiler-census.ts",
+		"compiler:census:generate": "bun scripts/compiler-census.ts --write",
+		"compiler:census:check": "bun scripts/compiler-census.ts --check"
 	},
 	"dependencies": {
 		"@dnd-kit/core": "6.3.1",
