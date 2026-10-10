@@ -81,7 +81,7 @@ function LineWidthControl({
 									void save();
 								}
 							}}
-							className="w-96 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none focus:border-control-border-active focus:ring-2 focus:ring-primary aria-invalid:border-feedback-error"
+							className="w-96 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none focus:border-control-border-active focus:ring-2 focus:ring-primary aria-invalid:border-feedback-error"
 						/>
 						<span>symbols</span>
 					</span>
@@ -91,7 +91,7 @@ function LineWidthControl({
 					disabled={!canSave}
 					data-testid={`${kind}-line-width-save`}
 					onClick={() => void save()}
-					className="rounded-[var(--radius-sm)] border border-border-default px-12 py-4 tr-text-ui text-text-default outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text"
+					className="rounded-sm border border-border-default px-12 py-4 tr-text-ui text-text-default outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text"
 				>
 					{saving ? "Saving…" : "Save"}
 				</button>
@@ -101,7 +101,7 @@ function LineWidthControl({
 					Enter a whole number from {LINE_WIDTH_COLUMNS.min} to {LINE_WIDTH_COLUMNS.max}.
 				</p>
 			) : null}
-			<div className="flex items-center justify-between gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8">
+			<div className="flex items-center justify-between gap-12 rounded-sm border border-border-default bg-control-bg px-12 py-8">
 				<div className="flex flex-col gap-2">
 					<span className="tr-title-compact text-text-default">No bigger than pane width</span>
 					<span className="text-text-muted tr-text-metadata">

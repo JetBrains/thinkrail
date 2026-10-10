@@ -78,7 +78,7 @@ export function SpecsPanel({
 				<div
 					role="alert"
 					data-testid="specs-error"
-					className="flex items-center gap-8 rounded-[var(--radius-sm)] border border-feedback-error-muted bg-feedback-error-subtle px-8 py-4 tr-text-metadata text-text-default"
+					className="flex items-center gap-8 rounded-sm border border-feedback-error-muted bg-feedback-error-subtle px-8 py-4 tr-text-metadata text-text-default"
 				>
 					<span className="min-w-0 flex-1">
 						{nodes === null ? "Couldn't load specs." : "Couldn't update specs."}
@@ -135,7 +135,7 @@ function SpecNodeRow({
 		<li>
 			<div
 				className={cn(
-					"group flex h-28 min-w-0 items-stretch rounded-[var(--radius-sm)] px-4 transition-colors",
+					"group flex h-28 min-w-0 items-stretch rounded-sm px-4 transition-colors",
 					isActive
 						? "bg-primary-subtle ring-1 ring-primary-muted ring-inset has-[:focus-visible]:ring-0"
 						: "hover:bg-control-bg-hovered",
@@ -148,7 +148,7 @@ function SpecNodeRow({
 						aria-label={expanded ? `Collapse ${node.title}` : `Expand ${node.title}`}
 						aria-expanded={expanded}
 						onClick={() => setExpanded((value) => !value)}
-						className="flex w-20 shrink-0 items-center justify-center self-stretch rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+						className="flex w-20 shrink-0 items-center justify-center self-stretch rounded-sm text-text-muted outline-none transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 					>
 						<Chevron className="size-16" />
 					</button>
@@ -169,7 +169,7 @@ function SpecNodeRow({
 					title={`${node.title}\n${node.id} · ${node.type}`}
 					onClick={() => void openFileInTab(workspaceId, node.path, "preview")}
 					onDoubleClick={() => void openFileInTab(workspaceId, node.path, "keep")}
-					className="flex h-28 min-w-0 flex-1 items-center gap-4 rounded-[var(--radius-sm)] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+					className="flex h-28 min-w-0 flex-1 items-center gap-4 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 				>
 					<DocumentIcon
 						className={cn(

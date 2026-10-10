@@ -99,7 +99,7 @@ export function NotificationsSettings() {
 			</div>
 
 			<div className="flex flex-col gap-8">
-				<div className="flex items-center justify-between gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8">
+				<div className="flex items-center justify-between gap-12 rounded-sm border border-border-default bg-control-bg px-12 py-8">
 					<span className="tr-title-compact text-text-default">Enable notifications</span>
 					<SettingsSwitch
 						checked={enabled}

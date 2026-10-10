@@ -31,7 +31,7 @@ const DOCUMENT_PROSE = [
 	"[&_td]:border [&_td]:border-border-default [&_td]:px-8 [&_td]:py-4 [&_td]:align-top",
 	"[&_tbody_tr:nth-child(2n)]:bg-sunken",
 	"[&_pre]:my-12",
-	"[&_img]:my-12 [&_img]:max-w-full [&_img]:rounded-[var(--radius-sm)]",
+	"[&_img]:my-12 [&_img]:max-w-full [&_img]:rounded-sm",
 ].join(" ");
 
 export function MarkdownDocument({

@@ -17,13 +17,13 @@ export interface AuxiliaryRailControlProps {
 
 export function railEntryFrameClass(region: LayoutAuxiliaryRegion | "center"): string {
 	return cn(
-		"relative flex w-32 shrink-0 items-center rounded-[var(--radius-sm)] text-text-muted data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default",
+		"relative flex w-32 shrink-0 items-center rounded-sm text-text-muted data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default",
 		region === "bottom" ? "h-28" : "h-32",
 	);
 }
 
 export const RAIL_ENTRY_BUTTON_CLASS =
-	"relative flex h-full min-w-0 flex-1 items-center justify-center rounded-[var(--radius-sm)] outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
+	"relative flex h-full min-w-0 flex-1 items-center justify-center rounded-sm outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
 
 export function railTooltipSide(
 	region: LayoutAuxiliaryRegion | "center",

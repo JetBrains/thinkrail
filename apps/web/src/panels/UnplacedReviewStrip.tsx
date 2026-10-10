@@ -91,7 +91,7 @@ export function UnplacedReviewStrip({
 							<button
 								type="button"
 								data-testid="review-show-in-renderer"
-								className="ml-12 rounded-[var(--radius-sm)] px-8 py-4 tr-text-action text-primary hover:bg-control-bg-hovered"
+								className="ml-12 rounded-sm px-8 py-4 tr-text-action text-primary hover:bg-control-bg-hovered"
 								onClick={() => onSelectRenderer(target.id)}
 							>
 								Show in {target.label}

@@ -118,7 +118,7 @@ export function ExistingWorktreeDialog({
 				) : null}
 
 				{loadError ? (
-					<div className="flex flex-col items-start gap-8 rounded-[var(--radius-sm)] bg-feedback-error-subtle p-12 text-feedback-error tr-text-ui">
+					<div className="flex flex-col items-start gap-8 rounded-sm bg-feedback-error-subtle p-12 text-feedback-error tr-text-ui">
 						<p>{loadError}</p>
 						<Button
 							variant="outline"
@@ -134,7 +134,7 @@ export function ExistingWorktreeDialog({
 
 				{candidates?.length === 0 ? (
 					<div
-						className="rounded-[var(--radius-sm)] border border-border-default bg-control-bg p-12 text-text-muted tr-text-ui"
+						className="rounded-sm border border-border-default bg-control-bg p-12 text-text-muted tr-text-ui"
 						data-testid="existing-worktree-empty"
 					>
 						No unattached worktrees found. Create one with Git, then reopen this chooser.
@@ -158,9 +158,9 @@ export function ExistingWorktreeDialog({
 									data-testid="existing-worktree-candidate"
 									data-status={candidate.status}
 									onClick={() => void openCandidate(candidate)}
-									className="flex w-full items-start gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg p-12 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+									className="flex w-full items-start gap-12 rounded-sm border border-border-default bg-control-bg p-12 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 								>
-									<div className="mt-2 flex size-28 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-container-elevated-bg text-text-muted">
+									<div className="mt-2 flex size-28 shrink-0 items-center justify-center rounded-sm bg-container-elevated-bg text-text-muted">
 										{opening ? (
 											<Loader2 className="size-16 animate-spin" />
 										) : (
@@ -188,7 +188,7 @@ export function ExistingWorktreeDialog({
 
 				{openError ? (
 					<p
-						className="rounded-[var(--radius-sm)] bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
+						className="rounded-sm bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
 						data-testid="existing-worktree-error"
 					>
 						{openError}

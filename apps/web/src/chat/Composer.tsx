@@ -83,8 +83,7 @@ const SEND_MAIN = cn(
 	"rounded-full pl-12 @max-md:w-28 @max-md:justify-center @max-md:px-0",
 );
 const SEND_MORE = cn(SEGMENT, "rounded-r-full pr-8 pl-2");
-const KEYCAP =
-	"flex h-16 min-w-16 items-center justify-center rounded-[var(--radius-xs)] bg-on-primary-soft px-2";
+const KEYCAP = "flex h-16 min-w-16 items-center justify-center rounded-xs bg-on-primary-soft px-2";
 
 const STREAMING_SEND_MODES = [
 	{
@@ -134,11 +133,11 @@ function withOffsets(segments: SlotSegment[]): (SlotSegment & { start: number })
 function highlightTint(state: SlotHighlightState): string {
 	switch (state) {
 		case "unfilled":
-			return "rounded-[var(--radius-xs)] bg-primary-soft";
+			return "rounded-xs bg-primary-soft";
 		case "active":
-			return "rounded-[var(--radius-xs)] bg-primary-muted";
+			return "rounded-xs bg-primary-muted";
 		case "filled":
-			return "rounded-[var(--radius-xs)] bg-primary-subtle";
+			return "rounded-xs bg-primary-subtle";
 		case "plain":
 			return "";
 	}
@@ -492,7 +491,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 			{mentionOpen ? (
 				<div
 					data-testid="mention-menu"
-					className="absolute bottom-full left-12 mb-4 max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]"
+					className="absolute bottom-full left-12 mb-4 max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-md border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]"
 				>
 					{mentionCandidates.map((candidate, index) => (
 						<button
@@ -500,7 +499,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							type="button"
 							data-testid="mention-item"
 							onClick={() => pickMention(candidate)}
-							className={`flex w-full items-center gap-8 rounded-[var(--radius-sm)] px-8 py-4 text-left tr-text-ui ${index === mentionActiveIndex ? "bg-control-bg-selected text-text-default" : "text-text-muted"}`}
+							className={`flex w-full items-center gap-8 rounded-sm px-8 py-4 text-left tr-text-ui ${index === mentionActiveIndex ? "bg-control-bg-selected text-text-default" : "text-text-muted"}`}
 						>
 							{candidate.kind === "dir" ? (
 								<FolderIcon className="size-14 shrink-0" />
@@ -526,7 +525,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 									replaceDraft("");
 									onManageTemplates();
 								}}
-								className="flex w-full items-center gap-8 rounded-[var(--radius-sm)] border-border-default border-t px-8 py-4 text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
+								className="flex w-full items-center gap-8 rounded-sm border-border-default border-t px-8 py-4 text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
 							>
 								<Sparkles className="size-12 shrink-0" />
 								<span className="truncate">
@@ -566,7 +565,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				<div
 					data-testid="chat-composer-shell"
 					className={cn(
-						"relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden rounded-[var(--radius-md)] border border-control-border-default bg-control-bg bg-clip-padding p-4 transition-colors focus-within:border-control-border-active",
+						"relative grid grid-cols-[auto_minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto] items-end gap-x-4 gap-y-4 overflow-hidden rounded-md border border-control-border-default bg-control-bg bg-clip-padding p-4 transition-colors focus-within:border-control-border-active",
 						expanded && growthLimit === "half-chat" && "max-h-[50cqh]",
 					)}
 				>
@@ -586,7 +585,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 					</div>
 					<div
 						className={cn(
-							"relative col-span-3 col-start-1 row-start-1 min-h-0 overflow-hidden rounded-[var(--radius-sm)] tr-text-ui",
+							"relative col-span-3 col-start-1 row-start-1 min-h-0 overflow-hidden rounded-sm tr-text-ui",
 							COMPOSER_EDITOR_LIMIT_CLASS[growthLimit],
 						)}
 					>
@@ -603,7 +602,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								ref={attachBackdrop}
 								data-testid="slot-backdrop"
 								aria-hidden
-								className="pointer-events-none absolute inset-0 overflow-hidden rounded-[var(--radius-sm)]"
+								className="pointer-events-none absolute inset-0 overflow-hidden rounded-sm"
 							>
 								<div className="w-full whitespace-pre-wrap break-words px-12 py-8 tr-text-ui">
 									{withOffsets(highlightSegments(value, slots, slotIdx)).map((seg) => (
@@ -652,7 +651,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 										: "Message…"
 							}
 							className={cn(
-								"absolute inset-0 size-full resize-none overflow-x-hidden overflow-y-auto rounded-[var(--radius-sm)] bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted",
+								"absolute inset-0 size-full resize-none overflow-x-hidden overflow-y-auto rounded-sm bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted",
 								expanded ? "whitespace-pre-wrap" : "whitespace-nowrap",
 							)}
 						/>
@@ -736,7 +735,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 														setSendMenuOpen(false);
 														submit(mode.behavior);
 													}}
-													className="group flex w-full flex-col gap-2 rounded-[var(--radius-sm)] px-8 py-4 text-left hover:bg-control-bg-hovered disabled:pointer-events-none"
+													className="group flex w-full flex-col gap-2 rounded-sm px-8 py-4 text-left hover:bg-control-bg-hovered disabled:pointer-events-none"
 												>
 													<span className="flex w-full items-baseline justify-between gap-8">
 														<span className="text-text-default tr-text-ui group-disabled:text-control-disabled-text">

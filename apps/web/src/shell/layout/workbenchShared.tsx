@@ -503,7 +503,7 @@ export function DropZone({
 			data-drop-active={isOver || undefined}
 			data-drop-hint={!isOver || undefined}
 			data-drop-label={label}
-			className={`pointer-events-auto z-20 rounded-[var(--radius-sm)] border border-transparent transition-colors data-[drop-hint]:border-primary-soft data-[drop-hint]:bg-primary-subtle data-[drop-active]:border-primary data-[drop-active]:bg-primary-soft ${className}`}
+			className={`pointer-events-auto z-20 rounded-sm border border-transparent transition-colors data-[drop-hint]:border-primary-soft data-[drop-hint]:bg-primary-subtle data-[drop-active]:border-primary data-[drop-active]:bg-primary-soft ${className}`}
 		/>
 	);
 }
@@ -530,7 +530,7 @@ export function CenterSplitTarget({
 			<div
 				aria-hidden="true"
 				data-drop-active={isOver || undefined}
-				className={`pointer-events-none absolute z-10 rounded-[var(--radius-sm)] border-2 border-transparent transition-colors data-[drop-active]:border-primary data-[drop-active]:bg-primary-soft ${halfClassName}`}
+				className={`pointer-events-none absolute z-10 rounded-sm border-2 border-transparent transition-colors data-[drop-active]:border-primary data-[drop-active]:bg-primary-soft ${halfClassName}`}
 			/>
 			<div
 				ref={setNodeRef}
@@ -538,7 +538,7 @@ export function CenterSplitTarget({
 				data-drop-label={label}
 				data-drop-active={isOver || undefined}
 				data-drop-hint={!isOver || undefined}
-				className={`pointer-events-auto absolute z-20 rounded-[var(--radius-sm)] border border-transparent transition-colors data-[drop-hint]:border-primary-soft data-[drop-hint]:bg-primary-subtle ${edgeClassName}`}
+				className={`pointer-events-auto absolute z-20 rounded-sm border border-transparent transition-colors data-[drop-hint]:border-primary-soft data-[drop-hint]:bg-primary-subtle ${edgeClassName}`}
 			/>
 		</>
 	);

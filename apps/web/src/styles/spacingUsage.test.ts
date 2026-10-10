@@ -83,19 +83,27 @@ function cssRhythmHits(): string[] {
 	});
 }
 
+const RADIUS_UTILITY =
+	/(?<![\w-])rounded(?:-(?:t|r|b|l|s|e|tl|tr|br|bl|ss|se|es|ee))?-([a-z0-9]+)(?![\w-])/g;
+const DECLARED_RADIUS = new Set(
+	[...read(TOKENS).matchAll(/^\s*--radius-([a-z0-9]+)\s*:/gm)].map((m) => m[1] as string),
+);
+
 describe("radius at a call site", () => {
-	it("names a --radius-* token, never a raw length", () => {
-		expect(hits(/\brounded(?:-[a-z]+)?-\[(?!var\(--radius-)[^\]]+\]/g)).toEqual([]);
+	it("never spells a radius as an arbitrary value", () => {
+		expect(hits(/\brounded(?:-[a-z]+)?-\[[^\]]+\]/g)).toEqual([]);
 	});
 
 	it("uses only radius steps the token file declares", () => {
-		const declared = new Set(
-			[...read(TOKENS).matchAll(/^\s*--radius-([a-z0-9]+)\s*:/gm)].map((m) => m[1]),
-		);
-		const unknown = hits(/\brounded(?:-[a-z]+)?-\[var\(--radius-([a-z0-9]+)\)\]/g).filter(
-			(h) => !declared.has(h.slice(h.lastIndexOf("--radius-") + 9, h.lastIndexOf(")"))),
+		const unknown = hits(
+			RADIUS_UTILITY,
+			(m) => !DECLARED_RADIUS.has(m[1] ?? "") && m[1] !== "full" && m[1] !== "none",
 		);
 		expect(unknown).toEqual([]);
+	});
+
+	it("replaces Tailwind's default radius scale with the token family", () => {
+		expect(read(TOKENS)).toMatch(/@theme static \{\s*--radius-\*:\s*initial;/);
 	});
 
 	it("keeps exactly the xs/sm/md/lg primitive family capped at 8px", () => {
@@ -108,11 +116,14 @@ describe("radius at a call site", () => {
 	});
 
 	it("declares no radius step nothing consumes", () => {
-		const used = new Set(
-			FILES.filter((f) => f !== TOKENS).flatMap((f) =>
+		const used = new Set([
+			...FILES.filter((f) => f !== TOKENS).flatMap((f) =>
 				[...sourceWithoutComments(f).matchAll(/--radius-([a-z0-9]+)/g)].map((m) => m[1] as string),
 			),
-		);
+			...TS_FILES.flatMap((f) =>
+				[...sourceWithoutComments(f).matchAll(RADIUS_UTILITY)].map((m) => m[1] as string),
+			),
+		]);
 		const orphans = [...read(TOKENS).matchAll(/^\s*--radius-([a-z0-9]+)\s*:/gm)]
 			.map((m) => m[1] as string)
 			.filter((step) => !used.has(step));

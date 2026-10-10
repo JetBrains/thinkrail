@@ -986,7 +986,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   gaps are visually tinted in the message field itself — a native `<textarea>` can't style text ranges
   inside it, so `Composer` renders a **highlight-backdrop** (a styled mirror layer positioned behind a
   now-`bg-transparent` textarea; the input background moves up to the wrapping container instead, clipped
-  to the same `rounded-[var(--radius-md)]` so nothing changes visually outside a session). That wrapper
+  to the same `rounded-md` so nothing changes visually outside a session). That wrapper
   owns the input border and fill: `bg-clip-padding` keeps the backdrop tint inside the rounded border,
   while `focus-within:border-control-border-active` is the composer's sole focus indicator rather than a
   second accent ring on the textarea. The pure `highlightSegments(value, slots, activeIdx)`
@@ -999,7 +999,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `border border-transparent` of the same width so the content box lines up,
   `whitespace-pre-wrap break-words` — spelled out explicitly since a `<div>`, unlike a `<textarea>`,
   doesn't soft-wrap this way by default) so each `SlotSegment`'s tint span
-  (`data-testid="slot-highlight"` + `data-slot-state`, `rounded-[var(--radius-xs)]` — the text-run radius
+  (`data-testid="slot-highlight"` + `data-slot-state`, `rounded-xs` — the text-run radius
   tier — with `bg-primary-soft`/`-muted`/`-subtle` for
   unfilled/active/filled, no tint for plain, every span `text-transparent` so only the real textarea text
   above shows through) lands exactly under its own characters. **Scroll sync**: the textarea's `onScroll`

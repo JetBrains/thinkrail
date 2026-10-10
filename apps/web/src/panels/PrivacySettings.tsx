@@ -54,7 +54,7 @@ function LegacyPrivacySettings() {
 				<p className="text-text-muted tr-text-metadata">{ANALYTICS_DESCRIPTION}</p>
 			</div>
 
-			<div className="flex items-center justify-between gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8">
+			<div className="flex items-center justify-between gap-12 rounded-sm border border-border-default bg-control-bg px-12 py-8">
 				<span className="tr-title-compact text-text-default">Share anonymous usage analytics</span>
 				<SettingsSwitch
 					checked={enabled}

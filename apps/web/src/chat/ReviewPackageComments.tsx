@@ -25,7 +25,7 @@ function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPacka
 				data-testid="review-package-item-toggle"
 				aria-expanded={expanded}
 				onClick={toggle}
-				className="flex w-full cursor-pointer select-none items-start gap-4 rounded-[var(--radius-sm)] px-4 py-4 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full cursor-pointer select-none items-start gap-4 rounded-sm px-4 py-4 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<ChevronRight
 					className={cn(
@@ -46,7 +46,7 @@ function PackageCommentRow({ foldId, item }: { foldId: string; item: ReviewPacka
 				</span>
 			</button>
 			{expanded && detail && (
-				<pre className="mb-4 ml-16 max-h-128 overflow-auto whitespace-pre-wrap rounded-[var(--radius-sm)] border border-border-muted bg-sunken px-8 py-4 tr-code-text text-text-muted">
+				<pre className="mb-4 ml-16 max-h-128 overflow-auto whitespace-pre-wrap rounded-sm border border-border-muted bg-sunken px-8 py-4 tr-code-text text-text-muted">
 					{detail}
 				</pre>
 			)}

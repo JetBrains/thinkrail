@@ -108,7 +108,7 @@ function KindGlyph({ model, className }: { model: WireModel; className?: string 
 			return (
 				<span
 					className={cn(
-						"inline-flex h-14 shrink-0 items-center rounded-[var(--radius-sm)] border border-control-border-active px-2 tr-code-text-small leading-none",
+						"inline-flex h-14 shrink-0 items-center rounded-sm border border-control-border-active px-2 tr-code-text-small leading-none",
 						className,
 					)}
 				>
@@ -135,11 +135,7 @@ function EffortBars({
 			{EFFORT_BAR_HEIGHTS.map((height, index) => (
 				<span
 					key={height}
-					className={cn(
-						"w-2 rounded-[var(--radius-xs)] bg-current",
-						height,
-						index >= lit && "opacity-30",
-					)}
+					className={cn("w-2 rounded-xs bg-current", height, index >= lit && "opacity-30")}
 				/>
 			))}
 		</span>
@@ -272,7 +268,7 @@ function EffortSlider({
 								aria-pressed={active}
 								onClick={() => onSelectLevel(candidate)}
 								className={cn(
-									"relative rounded-[var(--radius-sm)] px-4 py-2 tr-text-metadata capitalize outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+									"relative rounded-sm px-4 py-2 tr-text-metadata capitalize outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
 									active ? "text-text-default" : "text-text-subtle hover:text-text-muted",
 								)}
 							>
@@ -327,7 +323,7 @@ function RowMeta({ model, withProvider }: { model: WireModel; withProvider: bool
 }
 
 const FOOTER_LINK =
-	"flex items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default disabled:text-text-subtle disabled:hover:bg-transparent";
+	"flex items-center gap-4 rounded-sm px-4 py-2 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default disabled:text-text-subtle disabled:hover:bg-transparent";
 
 export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffortPickerProps>(
 	function ModelEffortPicker(
@@ -419,7 +415,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 								preferences.toggleFavorite(model);
 							}}
 							className={cn(
-								"mt-2 flex size-16 shrink-0 items-center justify-center rounded-[var(--radius-sm)] outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary",
+								"mt-2 flex size-16 shrink-0 items-center justify-center rounded-sm outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary",
 								favorite
 									? "text-feedback-warning"
 									: "text-text-subtle opacity-0 group-hover/row:opacity-100 group-data-[selected=true]/row:opacity-100 focus-visible:opacity-100",
@@ -450,7 +446,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					data-testid="model-selector"
 					data-open={open}
 					className={cn(
-						"flex h-32 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected",
+						"flex h-32 min-w-0 items-center gap-8 rounded-sm px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected",
 						className,
 					)}
 				>

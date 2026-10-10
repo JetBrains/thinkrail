@@ -2,7 +2,7 @@ import { RiFileLine as FileIcon } from "@remixicon/react";
 import type { ReactNode } from "react";
 
 const CHIP_BASE =
-	"flex max-w-full items-center gap-4 rounded-[var(--radius-sm)] border bg-clip-padding px-8 py-4 tr-text-metadata";
+	"flex max-w-full items-center gap-4 rounded-sm border bg-clip-padding px-8 py-4 tr-text-metadata";
 const CHIP_TONE = {
 	default: "border-border-default bg-container-elevated-bg text-text-default",
 	error: "border-feedback-error-muted bg-feedback-error-subtle text-feedback-error",

@@ -70,7 +70,7 @@ export function OpenProjectPathDialog({
 							value={path}
 							onChange={(event) => setPath(event.target.value)}
 							placeholder="~/projects/example"
-							className="w-full rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active"
+							className="w-full rounded-sm border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active"
 						/>
 					</label>
 					<DialogFooter>

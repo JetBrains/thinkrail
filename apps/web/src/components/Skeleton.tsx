@@ -23,10 +23,7 @@ export function SkeletonRows({ rows = 6, label = "Loading" }: { rows?: number; l
 			className="flex flex-col gap-8"
 		>
 			{ROWS.slice(0, Math.min(rows, ROWS.length)).map(({ key, width }) => (
-				<span
-					key={key}
-					className={`h-3 animate-pulse rounded-[var(--radius-sm)] bg-control-bg-hovered ${width}`}
-				/>
+				<span key={key} className={`h-3 animate-pulse rounded-sm bg-control-bg-hovered ${width}`} />
 			))}
 		</div>
 	);

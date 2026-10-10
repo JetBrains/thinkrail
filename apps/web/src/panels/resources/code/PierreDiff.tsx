@@ -130,7 +130,7 @@ function HunkToolbar({
 	return (
 		<div
 			data-testid="hunk-toolbar"
-			className="mx-12 my-2 flex min-h-24 items-center gap-4 rounded-[var(--radius-sm)] border border-border-muted bg-container-header-bg px-4 text-text-muted"
+			className="mx-12 my-2 flex min-h-24 items-center gap-4 rounded-sm border border-border-muted bg-container-header-bg px-4 text-text-muted"
 			onPointerDown={(event) => event.stopPropagation()}
 		>
 			<IconTooltip label="Revert hunk">
@@ -140,7 +140,7 @@ function HunkToolbar({
 					aria-label="Revert hunk"
 					disabled={reverting}
 					onClick={revert}
-					className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text"
+					className="flex size-24 items-center justify-center rounded-sm outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text"
 				>
 					<Revert className="size-14" />
 				</button>
@@ -151,7 +151,7 @@ function HunkToolbar({
 					data-testid="hunk-ask-agent"
 					aria-label="Ask agent about this hunk"
 					onClick={() => onAskAgent(block)}
-					className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+					className="flex size-24 items-center justify-center rounded-sm outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 				>
 					<AskAgent className="size-14" />
 				</button>
@@ -371,7 +371,7 @@ function PierreDiffSurface({
 								event.stopPropagation();
 							}}
 							onClick={() => openGutterComposer(getHoveredLine())}
-							className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] bg-primary text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
+							className="flex size-24 items-center justify-center rounded-sm bg-primary text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
 						>
 							<MessageSquarePlus className="size-14" />
 						</button>

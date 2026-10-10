@@ -109,7 +109,7 @@ function ChangeSetBlock({
 						data-testid="plan-change-set-toggle"
 						aria-expanded={expanded}
 						onClick={() => setExpanded((v) => !v)}
-						className="flex min-h-32 min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 text-left hover:bg-control-bg-hovered"
+						className="flex min-h-32 min-w-0 items-center gap-4 rounded-sm px-4 py-2 text-left hover:bg-control-bg-hovered"
 					>
 						<Chevron className="size-16 shrink-0 text-text-muted" />
 						<span className="shrink-0 tr-text-metadata text-text-subtle">
@@ -124,7 +124,7 @@ function ChangeSetBlock({
 								type="button"
 								data-testid="plan-commit-chip"
 								onClick={() => onOpenCommit(set.sha)}
-								className="flex min-h-32 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 tr-code-text text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
+								className="flex min-h-32 shrink-0 items-center gap-4 rounded-sm px-4 py-2 tr-code-text text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
 							>
 								<GitCommitHorizontal className="size-14" />
 								{set.sha.slice(0, 7)}
@@ -170,10 +170,10 @@ function ChangeSetBlock({
 
 // One card shape for every top-of-plan block (next-action banner, Summary, Now executing).
 const PLAN_CARD_CLASS =
-	"mb-16 rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-12";
+	"mb-16 rounded-md border border-border-default bg-container-elevated-bg p-12";
 const NEXT_ACTION_CLASS = `${PLAN_CARD_CLASS} flex items-center gap-8`;
 const NEXT_ACTION_BUTTON_CLASS =
-	"flex h-28 shrink-0 items-center rounded-[var(--radius-sm)] bg-control-primary-bg px-8 tr-text-ui text-control-primary-text transition-colors hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text";
+	"flex h-28 shrink-0 items-center rounded-sm bg-control-primary-bg px-8 tr-text-ui text-control-primary-text transition-colors hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text";
 
 type StageState = "done" | "active" | "pending";
 
@@ -223,7 +223,7 @@ function RevisionsBlock({
 								type="button"
 								onClick={() => onOpenCommit(rev.sha)}
 								title="Open this revision's commit in the Changes panel"
-								className="flex min-h-8 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 tr-code-text text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
+								className="flex min-h-8 shrink-0 items-center gap-4 rounded-sm px-4 py-2 tr-code-text text-text-subtle hover:bg-control-bg-hovered hover:text-text-default"
 							>
 								<GitCommitHorizontal className="size-14" />
 								{rev.sha.slice(0, 7)}
@@ -302,7 +302,7 @@ function ItemBlock({
 			data-expanded={collapsible ? expanded : undefined}
 			className="group py-2"
 		>
-			<div className="flex items-start gap-8 rounded-[var(--radius-sm)] p-4 transition-colors group-hover:bg-control-bg-hovered">
+			<div className="flex items-start gap-8 rounded-sm p-4 transition-colors group-hover:bg-control-bg-hovered">
 				<span
 					className="flex min-h-24 shrink-0 items-center"
 					title={
@@ -334,7 +334,7 @@ function ItemBlock({
 								aria-expanded={expanded}
 								onClick={() => setExpanded((v) => !v)}
 								title={expanded ? "Hide this step's details" : "Show this step's details"}
-								className="flex min-w-0 flex-1 items-center gap-8 rounded-[var(--radius-sm)] text-left"
+								className="flex min-w-0 flex-1 items-center gap-8 rounded-sm text-left"
 							>
 								<ChevronRight className="size-14 shrink-0 text-text-muted transition-transform group-data-[expanded=true]:rotate-90" />
 								<span className="min-w-0 flex-1 break-words tr-title-section text-text-default">
@@ -380,7 +380,7 @@ function ItemBlock({
 										: undefined
 								}
 								onClick={() => onStartReview(item.id)}
-								className="flex h-24 shrink-0 items-center rounded-[var(--radius-sm)] bg-control-primary-bg px-8 text-control-primary-text tr-text-action opacity-100 transition hover:bg-control-primary-bg-hovered focus-visible:opacity-100 disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
+								className="flex h-24 shrink-0 items-center rounded-sm bg-control-primary-bg px-8 text-control-primary-text tr-text-action opacity-100 transition hover:bg-control-primary-bg-hovered focus-visible:opacity-100 disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
 							>
 								Start review
 							</button>
@@ -408,7 +408,7 @@ function ItemBlock({
 									onClick={() => onRemove(item.id)}
 									disabled={reviewing}
 									aria-label="Remove"
-									className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-container-elevated-bg hover:text-feedback-error focus-visible:opacity-100 group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
+									className="flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted opacity-0 transition-opacity hover:bg-container-elevated-bg hover:text-feedback-error focus-visible:opacity-100 group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
 								>
 									<Trash2 className="size-14" />
 								</button>
@@ -617,7 +617,7 @@ function PlanComposer({
 		}
 	};
 	return (
-		<div className="mt-8 flex items-start gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-12 py-8 transition-colors focus-within:border-control-border-active">
+		<div className="mt-8 flex items-start gap-8 rounded-sm border border-control-border-default bg-control-bg px-12 py-8 transition-colors focus-within:border-control-border-active">
 			<Icon className="mt-2 size-14 shrink-0 text-text-muted" />
 			<textarea
 				ref={inputRef}
@@ -796,7 +796,7 @@ function SessionBlock({
 					data-testid="plan-add-task"
 					onClick={() => setAdding((v) => !v)}
 					title="Add a task to the plan"
-					className="ml-auto flex h-24 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-action text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+					className="ml-auto flex h-24 shrink-0 items-center gap-4 rounded-sm px-8 tr-text-action text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					<Plus className="size-14" />
 					Task
@@ -827,7 +827,7 @@ function SessionBlock({
 						data-glance="waiting"
 						onClick={() => setAdding(true)}
 						title="Add a task"
-						className="group flex w-full items-center gap-8 rounded-[var(--radius-sm)] px-4 py-2 text-left tr-text-ui text-text-subtle transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+						className="group flex w-full items-center gap-8 rounded-sm px-4 py-2 text-left tr-text-ui text-text-subtle transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 					>
 						<span className="min-w-0 flex-1">No steps yet — add one to get started.</span>
 						<span className="flex shrink-0 items-center gap-4 text-text-muted opacity-0 transition-opacity group-hover:opacity-100">
@@ -1294,7 +1294,7 @@ export default function PlanPane({
 							data-testid="plan-review-comments"
 							onClick={onOpenReview}
 							title="Open the Review tab — the reviewer's findings"
-							className="flex h-32 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-ui text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+							className="flex h-32 shrink-0 items-center gap-4 rounded-sm px-8 tr-text-ui text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							<MessageSquare className="size-14" />
 							{agentComments} {agentComments === 1 ? "comment" : "comments"}
@@ -1307,7 +1307,7 @@ export default function PlanPane({
 								href={openReviewUrl}
 								target="_blank"
 								rel="noopener noreferrer"
-								className="flex h-32 shrink-0 items-center rounded-[var(--radius-sm)] px-8 tr-text-ui text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+								className="flex h-32 shrink-0 items-center rounded-sm px-8 tr-text-ui text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 							>
 								{openReviewLabel(openReview)}
 							</a>
@@ -1337,7 +1337,7 @@ export default function PlanPane({
 										? "Push new commits to the open PR and refresh its description from the plan"
 										: "Push the branch and open a PR whose description comes from this plan"
 						}
-						className={`flex h-32 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-ui transition-colors ${
+						className={`flex h-32 shrink-0 items-center gap-4 rounded-sm px-8 tr-text-ui transition-colors ${
 							(planReady && !openReview) || unpushed > 0 || (openReview && diverged)
 								? "bg-control-primary-bg text-control-primary-text hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 								: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
@@ -1362,7 +1362,7 @@ export default function PlanPane({
 						<DropdownMenuTrigger
 							data-testid="plan-menu"
 							aria-label="Plan actions"
-							className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-hovered"
+							className="flex size-32 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-hovered"
 						>
 							<MoreVertical className="size-16" />
 						</DropdownMenuTrigger>
@@ -1455,7 +1455,7 @@ export default function PlanPane({
 							{integrateCommand ? (
 								<code
 									data-testid="plan-integrate-command"
-									className="truncate rounded-[var(--radius-sm)] bg-container-elevated-bg px-4 py-2 tr-code-text text-text-default"
+									className="truncate rounded-sm bg-container-elevated-bg px-4 py-2 tr-code-text text-text-default"
 								>
 									{integrateCommand}
 								</code>

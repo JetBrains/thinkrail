@@ -8,8 +8,8 @@ import { focusSegments } from "./renderedDiffFocus";
 import { useScrollViewState } from "./useScrollViewState";
 
 const DIFF_MARKS = [
-	"[&_ins]:rounded-[var(--radius-sm)] [&_ins]:bg-feedback-success-subtle [&_ins]:text-feedback-success [&_ins]:no-underline",
-	"[&_del]:rounded-[var(--radius-sm)] [&_del]:bg-feedback-error-subtle [&_del]:text-feedback-error",
+	"[&_ins]:rounded-sm [&_ins]:bg-feedback-success-subtle [&_ins]:text-feedback-success [&_ins]:no-underline",
+	"[&_del]:rounded-sm [&_del]:bg-feedback-error-subtle [&_del]:text-feedback-error",
 ].join(" ");
 
 const CHANGE_SELECTOR = "ins, del, [data-diff-node]";
@@ -187,7 +187,7 @@ function HiddenRun({
 			type="button"
 			data-testid="rendered-diff-collapsed"
 			onClick={() => setExpanded(true)}
-			className="my-12 flex w-full items-center gap-8 rounded-[var(--radius-sm)] bg-container-header-bg px-12 py-4 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+			className="my-12 flex w-full items-center gap-8 rounded-sm bg-container-header-bg px-12 py-4 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 		>
 			<Expand className="size-14 shrink-0" />
 			<span className="shrink-0">

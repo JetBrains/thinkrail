@@ -30,7 +30,7 @@ export function Segment({
 }
 
 export const pillClass =
-	"window-no-drag inline-flex h-20 min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-selected data-[state=open]:text-text-default";
+	"window-no-drag inline-flex h-20 min-w-0 items-center gap-4 rounded-sm px-8 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-selected data-[state=open]:text-text-default";
 
 export function PillChevron({ className }: { className?: string | undefined }) {
 	return (

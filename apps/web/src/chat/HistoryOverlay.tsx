@@ -60,7 +60,7 @@ function Highlight({ text, query }: { text: string; query: string }) {
 		<>
 			{parts.map(({ text: part, key }) =>
 				terms.includes(part.toLowerCase()) ? (
-					<mark key={key} className="rounded-[var(--radius-xs)] bg-primary-soft text-text-default">
+					<mark key={key} className="rounded-xs bg-primary-soft text-text-default">
 						{part}
 					</mark>
 				) : (
@@ -93,7 +93,7 @@ function DeleteChatButton({
 					event.stopPropagation();
 					onDeleteChat(workspaceId, sessionId);
 				}}
-				className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 ${
+				className={`flex shrink-0 items-center justify-center rounded-sm p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 ${
 					isSelected ? "opacity-100" : ""
 				}`}
 			>
@@ -133,7 +133,7 @@ function PromptRow({
 			data-testid="history-item"
 			data-kind="prompt"
 			data-selected={isSelected}
-			className={`group flex w-full items-center gap-4 rounded-[var(--radius-sm)] border-l-2 py-4 pl-8 pr-4 text-left tr-text-ui ${
+			className={`group flex w-full items-center gap-4 rounded-sm border-l-2 py-4 pl-8 pr-4 text-left tr-text-ui ${
 				isSelected
 					? "border-l-primary bg-control-bg-selected text-text-default"
 					: "border-l-transparent text-text-muted"
@@ -173,7 +173,7 @@ function PromptRow({
 						e.stopPropagation();
 						onSaveAsTemplate();
 					}}
-					className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 ${
+					className={`flex shrink-0 items-center justify-center rounded-sm p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 ${
 						isSelected ? "opacity-100" : ""
 					}`}
 				>
@@ -199,7 +199,7 @@ function PromptRow({
 								e.stopPropagation();
 								onOpenMessage(target);
 							}}
-							className={`flex shrink-0 items-center justify-center rounded-[var(--radius-sm)] p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 ${
+							className={`flex shrink-0 items-center justify-center rounded-sm p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 ${
 								isSelected ? "opacity-100" : ""
 							}`}
 						>
@@ -238,7 +238,7 @@ function MessageRow({
 			data-testid="history-item"
 			data-kind="message"
 			data-selected={isSelected}
-			className={`group flex w-full items-center gap-4 rounded-[var(--radius-sm)] border-l-2 pr-4 tr-text-ui ${
+			className={`group flex w-full items-center gap-4 rounded-sm border-l-2 pr-4 tr-text-ui ${
 				isSelected
 					? "border-l-primary bg-control-bg-selected text-text-default"
 					: "border-l-transparent text-text-muted"
@@ -518,7 +518,7 @@ export function HistoryOverlay({
 		<div
 			data-testid="history-overlay"
 			data-stage={stage}
-			className="absolute bottom-full left-8 right-8 mb-4 flex flex-col overflow-hidden rounded-[var(--radius-lg)] border border-border-default bg-container-elevated-bg shadow-[var(--shadow-md)]"
+			className="absolute bottom-full left-8 right-8 mb-4 flex flex-col overflow-hidden rounded-lg border border-border-default bg-container-elevated-bg shadow-[var(--shadow-md)]"
 		>
 			<div className="flex items-center gap-8 border-b border-border-default p-8">
 				<input
