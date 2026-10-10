@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import { readFileSync } from "node:fs";
-import { relative, resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { relative, resolve, sep } from "node:path";
 import { type NodePath, parseSync, transformFromAstSync, traverse, type types } from "@babel/core";
 import {
 	type LoggerEvent,
@@ -8,12 +8,14 @@ import {
 	parsePluginOptions,
 } from "babel-plugin-react-compiler";
 import { designSourceFiles } from "./designSources";
+import { type GeneratedFile, normalizeEol, writeOrCheck } from "./generatedFiles";
 
 // Must match `reactCompilerPreset()` in vite.config.ts.
 const COMPILER_OPTIONS: PluginOptions = {};
 const PRESET_FILTER = /\b[A-Z]|\buse/;
 
 const WEB_ROOT = resolve(import.meta.dir, "..");
+const BASELINE = resolve(import.meta.dir, "compiler-census.baseline.txt");
 const EXCLUDED = /\.(test|spec|stories)\.[tj]sx?$/;
 
 interface Bailout {
@@ -178,8 +180,34 @@ function printHuman(census: ReturnType<typeof runCensus>) {
 	}
 }
 
+function baseline(census: ReturnType<typeof runCensus>): GeneratedFile {
+	const functions = new Set(
+		census.bailouts.map(
+			(b) => `${b.file.split(sep).join("/")} ${b.fnName ?? `:${b.fnLine ?? b.line}`}`,
+		),
+	);
+	return { path: BASELINE, content: `${[...functions].sort().join("\n")}\n` };
+}
+
+function reportDrift({ path, content }: GeneratedFile) {
+	const lines = (text: string) => new Set(normalizeEol(text).split("\n").filter(Boolean));
+	const committed = lines(existsSync(path) ? readFileSync(path, "utf8") : "");
+	const current = lines(content);
+	for (const fn of current) {
+		if (!committed.has(fn)) console.error(`compiler-census: new bail-out: ${fn}`);
+	}
+	for (const fn of committed) {
+		if (!current.has(fn)) console.error(`compiler-census: now compiles: ${fn}`);
+	}
+}
+
 if (import.meta.main) {
 	const census = runCensus();
+	const check = process.argv.includes("--check");
 	if (process.argv.includes("--json")) console.log(JSON.stringify(census, null, 2));
-	else printHuman(census);
+	else if (check || process.argv.includes("--write")) {
+		const output = baseline(census);
+		if (check) reportDrift(output);
+		writeOrCheck({ label: "compiler:census", version: "1", outputs: [output], check });
+	} else printHuman(census);
 }

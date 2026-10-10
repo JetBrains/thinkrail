@@ -12,8 +12,8 @@ Build-time tooling for `apps/web`. **Nothing here ships**: these modules run und
 machine or in CI, never in the browser bundle. They read files from `src/`, write generated files back
 into `src/`, and exit with a status code.
 
-The directory holds four pipelines — typography, colour, spacing and provider glyphs — built the same way, plus one
-read-only diagnostic, the React Compiler census. They live here rather than in `src/` because
+The directory holds four pipelines — typography, colour, spacing and provider glyphs — built the same way, plus the
+React Compiler census: a diagnostic whose baseline is a ratchet gate. They live here rather than in `src/` because
 they are *generators*: they use `node:fs` and `node:path`, which must never reach browser-bundled code.
 
 ## What it owns
@@ -33,7 +33,8 @@ they are *generators*: they use `node:fs` and `node:path`, which must never reac
 | `providerGlyphs.test.ts` | pins that every mapped mark exists in the vendored set and that coloured, oddly sized or non-path SVGs are rejected rather than flattened. |
 | `generatedFiles.ts` | what every generate CLI does with a rendered file: `--check` reports drift, otherwise write. The **only** definition of "stale", so the three pipelines and the tests cannot disagree. |
 | `generatedFiles.test.ts` | pins that definition — content drift and a missing file are stale, a CRLF working tree is not. |
-| `compiler-census.ts` | CLI. Runs `babel-plugin-react-compiler` with a logger over app, shared UI, and extension web sources (tests, stories and generated data excluded) and prints every function the compiler bails out on as `file:line: [fn] category: reason`, plus totals; `--json` prints the full census. Run: `bun run --cwd apps/web compiler:census [--json]`. Read-only; not a gate. |
+| `compiler-census.ts` | CLI. Runs `babel-plugin-react-compiler` with a logger over app, shared UI, and extension web sources (tests, stories and generated data excluded) and prints every function the compiler bails out on as `file:line: [fn] category: reason`, plus totals; `--json` prints the full census. Run: `bun run --cwd apps/web compiler:census [--json]`. `--write` renders the bailed-out functions (`file fnName`, line-free so edits above them don't churn it) to `compiler-census.baseline.txt`; `--check` (`bun run check:compiler`, CI) fails on any drift and names each function that newly bails out or now compiles. A new bail-out is fixed, or accepted by regenerating (`bun run compiler:census:generate`). |
+| `compiler-census.baseline.txt` | The committed census baseline. |
 
 `designSources.ts` owns the shared adoption-guard and compiler-census source scan: app source, `packages/ui`, and every
 `thinkrail-extensions/*/web` source tree, excluding tests, generated output, and installed dependencies.
@@ -66,11 +67,11 @@ in agreement about the same functions.
   the real build. Build-time compiler validations differ from the lint rules (for example
   `StaticComponents` is lint-only), so its counts differ from an oxlint React scan by design.
 - **Imported by:** `apps/web/package.json` scripts (`typography:generate` / `:validate` / `:check`,
-  `colors:generate` / `:check`, `spacing:generate` / `:check`, `provider-glyphs:generate` / `:check`, re-exported from the root `package.json`; `compiler:census` is web-only), and
+  `colors:generate` / `:check`, `spacing:generate` / `:check`, `provider-glyphs:generate` / `:check`, `compiler:census:generate`, re-exported from the root `package.json`, plus `compiler:census:check` as the root `check:compiler`; `compiler:census` itself is web-only), and
   `src/styles/typography.test.ts` + `src/styles/typographyUsage.test.ts` +
   `src/styles/colorUsage.test.ts` + `src/styles/spacingUsage.test.ts`. Nothing in the shipped app may import from here — the generated
   CSS is the interface.
-- **Writes:** `src/styles/generated/` and `src/chat/generated/` only (the census writes nothing). Both directories are committed (so every typography, colour, spacing
+- **Writes:** `src/styles/generated/` and `src/chat/generated/`, plus the census's `compiler-census.baseline.txt`. Both directories are committed (so every typography, colour, spacing
   or glyph change is reviewable as a diff) and excluded from biome in `biome.json`.
 
 ## Invariants
