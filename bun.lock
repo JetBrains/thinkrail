@@ -424,6 +424,9 @@
     "esbuild",
     "@biomejs/biome",
   ],
+  "patchedDependencies": {
+    "@pierre/diffs@1.5.1": "patches/@pierre%2Fdiffs@1.5.1.patch",
+  },
   "overrides": {
     "react": "catalog:",
     "react-dom": "catalog:",

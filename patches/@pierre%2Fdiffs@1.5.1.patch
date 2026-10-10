@@ -1,0 +1,36 @@
+diff --git a/dist/managers/InteractionManager.js b/dist/managers/InteractionManager.js
+index 20fe22dfeec141a172a9be6763c4d9cf3c808ea5..2a1c8813cc504b1a67d161e50ab1127f44a76f78 100644
+--- a/dist/managers/InteractionManager.js
++++ b/dist/managers/InteractionManager.js
+@@ -30,6 +30,7 @@ var InteractionManager = class {
+ 	renderedEditorActiveLineState;
+ 	selectionAnchor;
+ 	pointerSession = { mode: "idle" };
++	nativeTextDragActive = false;
+ 	constructor(mode, options) {
+ 		this.mode = mode;
+ 		this.options = options;
+@@ -138,6 +139,7 @@ var InteractionManager = class {
+ 	};
+ 	handlePointerMove = (event) => {
+ 		if (event.pointerType !== "mouse") return;
++		this.nativeTextDragActive = event.buttons !== 0 && this.pointerSession.mode === "idle";
+ 		const { lineHoverHighlight = "disabled", onLineEnter, onLineLeave, onTokenEnter, onTokenLeave, enableGutterUtility = false } = this.options;
+ 		if (lineHoverHighlight === "disabled" && !enableGutterUtility && onLineEnter == null && onLineLeave == null && onTokenEnter == null && onTokenLeave == null) return;
+ 		debugLogIfEnabled(this.options.__debugPointerEvents, "move", "FileDiff.DEBUG.handlePointerMove:", event);
+@@ -293,6 +295,7 @@ var InteractionManager = class {
+ 	}
+ 	handlePointerDown = (event) => {
+ 		if (event.pointerType === "mouse" && event.button !== 0 || this.pre == null || this.pointerSession.mode !== "idle") return;
++		this.nativeTextDragActive = false;
+ 		const path = event.composedPath();
+ 		if (isGutterUtilityPath(path) && this.options.onGutterUtilityClick != null) this.startGutterSelectionFromPointerDown(event);
+ 		else {
+@@ -550,6 +553,7 @@ var InteractionManager = class {
+ 		if (isLinePointerTarget(target) && target.numberColumn) this.showUtilityOnLine(this.toEventBaseProps(target));
+ 	}
+ 	placeUtility() {
++		if (this.nativeTextDragActive) return;
+ 		if (this.placeUtilityFromSelection()) return;
+ 		if (this.hoveredLine != null) {
+ 			this.showUtilityOnLine(this.hoveredLine);

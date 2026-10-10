@@ -1157,6 +1157,23 @@ own section. The kebab menu (`plan-menu`, a
   selections create `side: "base"`, modified-side selections create `side: "worktree"`, and neither is
   remapped to the other side's line numbers.
 
+  **Pierre diff text-selection crash (WebKit) — fixed by a vendored `@pierre/diffs` patch.** Drag-selecting
+  text in a code diff crashed WebKit's web-content process — on the Electrobun desktop (macOS WKWebView)
+  the workspace reloaded into "A problem repeatedly occurred". Cause (found upstream, filed as
+  pierrecomputer/pierre#1184, fixed by pierrecomputer/pierre#1185): with the gutter utility enabled
+  Pierre's `InteractionManager` re-parented the utility button into the hovered line's number cell on
+  **every `pointermove`**, so during a native selection drag that node was moved between line cells
+  *under the in-progress selection*; WebKit asserts on that mid-drag DOM mutation
+  (`EXC_BREAKPOINT` in `WebCore::EventHandler::handleMouseDraggedEvent`). It is not virtualization —
+  freezing Pierre's row rendering does not prevent it — and not the diff's grid layout.
+  Until the fix is released, `patches/@pierre%2Fdiffs@1.5.1.patch` (bun `patchedDependencies`) carries
+  #1185's change: a `nativeTextDragActive` flag that makes gutter-utility placement a no-op while a
+  native text drag is in progress. Drop the patch when a Pierre release contains the fix.
+  Reproduction is WebKit-only (`playwright … --project=webkit`, which this suite does not run):
+  a drag over code lines in a diff longer than ~100 lines. Any check here must assert the controls
+  `selectionLength` grew and `scrollHeight > clientHeight` — otherwise a broken layout reads as a
+  false "no crash". `e2e/diff-selection.spec.ts` keeps the Chromium-side regression. Tracked in #683.
+
   **Monaco renders desktop files only.** `reviewWidgets.ts` keeps its content-widget selection affordance,
   context-menu action, decorations, and view-zone reconciliation for that one surface. It exposes stable
   zone nodes keyed by comment id; `MonacoReviewZones` portals the shared React `ReviewThreadCard` and
