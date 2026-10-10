@@ -85,7 +85,8 @@ manifest only, and the `@babel/core` 7.x pin is load-bearing: `babel-plugin-reac
 destructuring defaults under Babel 8 and silently drops those functions from compilation. Bailouts never
 fail the build — a function the compiler cannot prove safe is skipped whole, not miscompiled — so check it
 ran: a production build's `dist/assets/*.js` carries `react.memo_cache_sentinel` in the hundreds (React's own
-runtime accounts for three). `bun test` transpiles without Vite, so only the browser E2E suite exercises
+runtime accounts for three), and CI's `bun run check:compiler` fails when a function's compiled state drifts
+from `scripts/compiler-census.baseline.txt`. `bun test` transpiles without Vite, so only the browser E2E suite exercises
 compiled output.
 
 The shell, the workbench group views, `ChatView`, `Composer` and `useChatScroll` compile because they keep
