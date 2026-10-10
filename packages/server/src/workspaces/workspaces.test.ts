@@ -33,6 +33,7 @@ import {
 	setWorkspaceDiffBase,
 	setWorkspacePublisher,
 	setWorkspaceReview,
+	setWorkspaceSubagentMaxConcurrent,
 	setWorkspaceSubagentsOverride,
 	unsettleWorkspace,
 	type WorkspaceLifecycleEvent,
@@ -497,6 +498,35 @@ test("setWorkspaceSubagentsOverride rejects unknown workspaces and values outsid
 	expect(() => setWorkspaceSubagentsOverride(ws.id, "sometimes" as "on")).toThrow(
 		"Invalid subagent override",
 	);
+});
+
+test("setWorkspaceSubagentMaxConcurrent persists a limit, null restores inheritance, bad values reject", async () => {
+	const events: WorkspaceLifecycleEvent[] = [];
+	setWorkspacePublisher((event) => events.push(event));
+	const ws = await createWorkspace("p1");
+	const stored = () =>
+		listWorkspaceRecords("p1").find((row) => row.id === ws.id)?.subagentMaxConcurrentOverride;
+
+	expect(setWorkspaceSubagentMaxConcurrent(ws.id, 7).subagentMaxConcurrentOverride).toBe(7);
+	expect(stored()).toBe(7);
+	expect(events.at(-1)).toMatchObject({
+		kind: "updated",
+		workspace: { id: ws.id, subagentMaxConcurrentOverride: 7 },
+	});
+	expect(
+		setWorkspaceSubagentMaxConcurrent(ws.id, null).subagentMaxConcurrentOverride,
+	).toBeUndefined();
+	expect(stored()).toBeUndefined();
+
+	expect(() => setWorkspaceSubagentMaxConcurrent("missing", 2)).toThrow(
+		"Unknown workspace: missing",
+	);
+	for (const value of [0, 17, 1.5]) {
+		expect(() => setWorkspaceSubagentMaxConcurrent(ws.id, value)).toThrow(
+			"Subagent limit must be a whole number from 1 to 16",
+		);
+	}
+	expect(stored()).toBeUndefined();
 });
 
 test("setWorkspaceDiffBase re-points the diff target, leaving creation provenance alone", async () => {

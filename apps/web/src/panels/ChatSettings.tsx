@@ -1,10 +1,4 @@
-import {
-	type AppConfigUpdate,
-	type ComposerGrowthLimit,
-	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
-	type SubagentOverride,
-	type Workspace,
-} from "@thinkrail/contracts";
+import type { AppConfigUpdate, ComposerGrowthLimit, SubagentOverride } from "@thinkrail/contracts";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type ChatMessageOrder,
@@ -15,7 +9,7 @@ import {
 import { selectActiveWorkspace, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
-import { SettingsSwitch } from "./SettingsSwitch";
+import { SubagentSettings } from "./SubagentSettings";
 
 const MESSAGE_ORDER_CHOICES: SettingsRadioChoice<ChatMessageOrder>[] = [
 	{
@@ -36,7 +30,6 @@ const MESSAGE_ORDER_CHOICES: SettingsRadioChoice<ChatMessageOrder>[] = [
 ];
 
 const MOVEMENT_TRACK_SEGMENTS = Array.from({ length: 20 }, (_, index) => index * 5);
-type WorkspaceSubagentChoice = "inherit" | SubagentOverride;
 
 const GROWTH_CHOICES: SettingsRadioChoice<ComposerGrowthLimit>[] = [
 	{
@@ -61,32 +54,6 @@ const GROWTH_CHOICES: SettingsRadioChoice<ComposerGrowthLimit>[] = [
 		testId: "composer-growth-half-chat",
 	},
 ];
-
-function subagentChoices(globalEnabled: boolean): SettingsRadioChoice<WorkspaceSubagentChoice>[] {
-	return [
-		{
-			id: "inherit",
-			label: "Use global",
-			hint: globalEnabled ? "Currently on" : "Currently off",
-			description: "Follows the global default, including later changes.",
-			testId: "subagents-workspace-inherit",
-		},
-		{
-			id: "on",
-			label: "On",
-			hint: "Override",
-			description: "Always allow delegation in this workspace.",
-			testId: "subagents-workspace-on",
-		},
-		{
-			id: "off",
-			label: "Off",
-			hint: "Override",
-			description: "Prevent new subagents in this workspace.",
-			testId: "subagents-workspace-off",
-		},
-	];
-}
 
 function StreamingResponseMovementControl({
 	value,
@@ -175,82 +142,13 @@ function saveSetting(config: AppConfigUpdate, errorMessage: string): void {
 		.catch(() => toast.error(errorMessage));
 }
 
-export function SubagentSettings({
-	protocolVersion,
-	globalEnabled,
-	workspace,
-	onGlobalChange,
-	onWorkspaceChange,
-}: {
-	protocolVersion: number | null;
-	globalEnabled: boolean;
-	workspace: Workspace | null;
-	onGlobalChange: (enabled: boolean) => void;
-	onWorkspaceChange: (choice: WorkspaceSubagentChoice) => void;
-}) {
-	if (protocolVersion === null || protocolVersion < SUBAGENT_SETTINGS_PROTOCOL_VERSION) {
-		return null;
-	}
-	return (
-		<div
-			data-testid="settings-subagents"
-			className="flex flex-col gap-8 border-border-default border-t pt-16"
-		>
-			<div className="flex flex-col gap-4">
-				<h3 className="tr-title-section text-text-default">Subagents</h3>
-				<p className="text-text-muted tr-text-metadata">
-					Choose whether chats may delegate work to specialized agents. Turning this off prevents
-					new subagents; work already running finishes.
-				</p>
-			</div>
-			<div className="flex items-center justify-between gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8">
-				<div className="flex flex-col gap-2">
-					<span className="tr-title-compact text-text-default">Global default</span>
-					<span className="text-text-muted tr-text-metadata">
-						{globalEnabled
-							? "On — workspaces may delegate unless they override it."
-							: "Off — workspaces cannot delegate unless they override it."}
-					</span>
-				</div>
-				<SettingsSwitch
-					checked={globalEnabled}
-					label="Enable subagents by default"
-					testId="subagents-global-toggle"
-					onChange={onGlobalChange}
-				/>
-			</div>
-
-			{workspace ? (
-				<div className="flex flex-col gap-8 border-border-default border-t pt-16">
-					<div className="flex flex-col gap-4">
-						<h4 className="min-w-0 break-words tr-title-compact text-text-default">
-							This workspace — {workspace.name}
-						</h4>
-						<p className="text-text-muted tr-text-metadata">
-							Override the global default only for this workspace.
-						</p>
-					</div>
-					<div data-testid="subagents-workspace-options">
-						<SettingsRadioCards
-							name="workspace-subagents"
-							label={`Subagents in ${workspace.name}`}
-							choices={subagentChoices(globalEnabled)}
-							value={workspace.subagentsOverride ?? "inherit"}
-							onSelect={onWorkspaceChange}
-						/>
-					</div>
-				</div>
-			) : null}
-		</div>
-	);
-}
-
 export function ChatSettings() {
 	const messageOrder = useAppStore((state) => state.chatMessageOrder);
 	const growthLimit = useAppStore((state) => state.composerGrowthLimit);
 	const streamingResponseMovement = useAppStore((state) => state.streamingResponseMovement);
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const subagentsEnabled = useAppStore((state) => state.subagentsEnabled);
+	const subagentMaxConcurrent = useAppStore((state) => state.subagentMaxConcurrent);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const setChatMessageOrder = useAppStore((state) => state.setChatMessageOrder);
 	const setStreamingResponseMovement = useAppStore((state) => state.setStreamingResponseMovement);
@@ -265,16 +163,18 @@ export function ChatSettings() {
 		saveSetting({ composerGrowthLimit }, "Couldn't change message box growth");
 	};
 
-	const selectWorkspaceSubagents = (choice: WorkspaceSubagentChoice) => {
+	const setWorkspaceSubagents = (override: SubagentOverride | null) => {
 		if (!activeWorkspace) return;
-		const current = activeWorkspace.subagentsOverride ?? "inherit";
-		if (choice === current) return;
 		getTransport()
-			.request("workspace.setSubagentsOverride", {
-				id: activeWorkspace.id,
-				override: choice === "inherit" ? null : choice,
-			})
+			.request("workspace.setSubagentsOverride", { id: activeWorkspace.id, override })
 			.catch(() => toast.error("Couldn't change subagents for this workspace"));
+	};
+
+	const setWorkspaceSubagentLimit = (value: number | null) => {
+		if (!activeWorkspace) return;
+		getTransport()
+			.request("workspace.setSubagentMaxConcurrent", { id: activeWorkspace.id, value })
+			.catch(() => toast.error("Couldn't change the subagent limit for this workspace"));
 	};
 
 	return (
@@ -330,11 +230,16 @@ export function ChatSettings() {
 			<SubagentSettings
 				protocolVersion={protocolVersion}
 				globalEnabled={subagentsEnabled}
+				globalLimit={subagentMaxConcurrent}
 				workspace={activeWorkspace}
-				onGlobalChange={(enabled) =>
+				onGlobalEnabledChange={(enabled) =>
 					saveSetting({ subagentsEnabled: enabled }, "Couldn't change the global subagent default")
 				}
-				onWorkspaceChange={selectWorkspaceSubagents}
+				onWorkspaceEnabledChange={setWorkspaceSubagents}
+				onGlobalLimitChange={(value) =>
+					saveSetting({ subagentMaxConcurrent: value }, "Couldn't change the subagent limit")
+				}
+				onWorkspaceLimitChange={setWorkspaceSubagentLimit}
 			/>
 		</section>
 	);

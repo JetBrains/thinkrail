@@ -18,29 +18,45 @@ async function openChatSettings(page: Page): Promise<void> {
 function controls(page: Page) {
 	return {
 		global: page.getByTestId("subagents-global-toggle"),
-		inherit: page.getByTestId("subagents-workspace-inherit"),
-		on: page.getByTestId("subagents-workspace-on"),
-		off: page.getByTestId("subagents-workspace-off"),
+		workspace: page.getByTestId("subagents-workspace-toggle"),
+		source: page.getByTestId("subagents-workspace-source"),
+		globalLimit: page.getByTestId("subagent-limit-global-input"),
+		workspaceLimit: page.getByTestId("subagent-limit-workspace-input"),
+		limitSource: page.getByTestId("subagent-limit-workspace-source"),
 	};
+}
+
+async function closeSettings(page: Page): Promise<void> {
+	const dialog = page.getByTestId("settings-dialog");
+	if (!(await dialog.isVisible())) return;
+	await page.evaluate(() => {
+		if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+	});
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
 }
 
 async function restoreSubagentBaseline(page: Page): Promise<void> {
 	if (page.isClosed()) return;
-	if (await page.getByTestId("settings-dialog").isVisible()) await page.keyboard.press("Escape");
+	await closeSettings(page);
 	await openChatSettings(page);
 	const current = controls(page);
 	if ((await current.global.getAttribute("data-active")) !== "true") {
 		await current.global.click();
 		await expect(current.global).toHaveAttribute("data-active", "true");
 	}
-	if (
-		(await current.inherit.count()) > 0 &&
-		(await current.inherit.getAttribute("data-active")) !== "true"
-	) {
-		await current.inherit.click();
-		await expect(current.inherit).toHaveAttribute("data-active", "true");
+	for (const tag of [current.source, current.limitSource]) {
+		if ((await tag.count()) > 0 && (await tag.getAttribute("data-source")) === "custom") {
+			await tag.click();
+			await expect(tag).toHaveAttribute("data-source", "global");
+		}
 	}
-	await page.keyboard.press("Escape");
+	if ((await current.globalLimit.inputValue()) !== "4") {
+		await current.globalLimit.fill("4");
+		await current.globalLimit.press("Enter");
+		await expect(current.workspaceLimit).toHaveAttribute("placeholder", "4");
+	}
+	await closeSettings(page);
 }
 
 test("a maximal unbroken workspace name stays contained on a phone-sized settings pane", async ({
@@ -60,14 +76,14 @@ test("a maximal unbroken workspace name stays contained on a phone-sized setting
 
 	await page.setViewportSize({ width: 390, height: 780 });
 	await openChatSettings(page);
-	const heading = page.getByRole("heading", { name: `This workspace — ${longName}` });
-	await expect(heading).toBeVisible();
-	expect(await heading.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
-		true,
-	);
+	const heading = page.getByTestId("subagents-workspace-heading");
+	await expect(heading).toContainText(longName);
+	for (const element of [heading, page.getByTestId("settings-subagents")]) {
+		expect(await element.evaluate((node) => node.scrollWidth <= node.clientWidth)).toBe(true);
+	}
 });
 
-test("global and workspace subagent choices converge from authoritative pushes", async ({
+test("global and workspace subagent switches converge from authoritative pushes", async ({
 	page,
 	context,
 }) => {
@@ -88,7 +104,8 @@ test("global and workspace subagent choices converge from authoritative pushes",
 		const source = controls(page);
 		const observer = controls(peer);
 		await expect(source.global).toHaveAttribute("data-active", "true");
-		await expect(source.inherit).toHaveAttribute("data-active", "true");
+		await expect(source.workspace).toHaveAttribute("data-active", "true");
+		await expect(source.source).toHaveAttribute("data-source", "global");
 
 		const globalFrame = channelHold.arm("settings.changed");
 		releaseGlobal = globalFrame.release;
@@ -98,40 +115,109 @@ test("global and workspace subagent choices converge from authoritative pushes",
 		await expect(observer.global).toHaveAttribute("data-active", "false");
 		releaseGlobal();
 		await expect(source.global).toHaveAttribute("data-active", "false");
-		await expect(source.inherit).toContainText("Currently off");
+		await expect(source.workspace).toHaveAttribute("data-active", "false");
+		await expect(source.source).toHaveAttribute("data-source", "global");
 
 		const workspaceFrame = channelHold.arm("workspace.updated");
 		releaseWorkspace = workspaceFrame.release;
-		await source.on.click();
+		await source.workspace.click();
 		await workspaceFrame.held;
-		await expect(source.inherit).toHaveAttribute("data-active", "true");
-		await expect(observer.on).toHaveAttribute("data-active", "true");
+		await expect(source.workspace).toHaveAttribute("data-active", "false");
+		await expect(observer.workspace).toHaveAttribute("data-active", "true");
+		await expect(observer.source).toHaveAttribute("data-source", "custom");
 		releaseWorkspace();
-		await expect(source.on).toHaveAttribute("data-active", "true");
+		await expect(source.workspace).toHaveAttribute("data-active", "true");
+		await expect(source.source).toHaveAttribute("data-source", "custom");
 
 		await source.global.click();
+		await source.workspace.click();
 		for (const current of [source, observer]) {
 			await expect(current.global).toHaveAttribute("data-active", "true");
-			await expect(current.on).toHaveAttribute("data-active", "true");
-		}
-
-		await source.off.click();
-		for (const current of [source, observer]) {
-			await expect(current.off).toHaveAttribute("data-active", "true");
+			await expect(current.workspace).toHaveAttribute("data-active", "false");
+			await expect(current.source).toHaveAttribute("data-source", "custom");
 		}
 
 		await page.reload();
 		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 		await openChatSettings(page);
 		await expect(source.global).toHaveAttribute("data-active", "true");
-		await expect(source.off).toHaveAttribute("data-active", "true");
+		await expect(source.workspace).toHaveAttribute("data-active", "false");
 
-		await source.inherit.click();
-		await expect(source.inherit).toHaveAttribute("data-active", "true");
-		await expect(source.inherit).toContainText("Currently on");
+		await source.source.click();
+		for (const current of [source, observer]) {
+			await expect(current.workspace).toHaveAttribute("data-active", "true");
+			await expect(current.source).toHaveAttribute("data-source", "global");
+		}
 	} finally {
 		releaseGlobal();
 		releaseWorkspace();
+		await restoreSubagentBaseline(page).catch(() => {});
+		await peer?.close();
+	}
+});
+
+test("global and workspace subagent limits persist, inherit, and converge across clients", async ({
+	page,
+	context,
+}) => {
+	let peer: Page | undefined;
+	try {
+		await openFixtureProject(page);
+		await enterDefaultWorkspace(page);
+		await restoreSubagentBaseline(page);
+		peer = await context.newPage();
+		await peer.goto(page.url());
+		await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await openChatSettings(page);
+		await openChatSettings(peer);
+		const source = controls(page);
+		const observer = controls(peer);
+
+		await expect(source.globalLimit).toHaveValue("4");
+		await expect(source.workspaceLimit).toHaveValue("");
+		await expect(source.workspaceLimit).toHaveAttribute("placeholder", "4");
+		await expect(source.limitSource).toHaveAttribute("data-source", "global");
+
+		await source.globalLimit.fill("0");
+		await expect(source.globalLimit).toHaveAttribute("aria-invalid", "true");
+		await expect(page.getByText("Use 1–16")).toBeVisible();
+		await source.globalLimit.press("Escape");
+		await expect(source.globalLimit).toHaveValue("4");
+		await expect(page.getByTestId("settings-dialog")).toBeVisible();
+		await source.globalLimit.fill("6");
+		await source.globalLimit.press("Enter");
+		await expect(observer.globalLimit).toHaveValue("6");
+		await expect(observer.workspaceLimit).toHaveAttribute("placeholder", "6");
+
+		await source.workspaceLimit.fill("2");
+		await source.workspaceLimit.press("Enter");
+		for (const current of [source, observer]) {
+			await expect(current.workspaceLimit).toHaveValue("2");
+			await expect(current.limitSource).toHaveAttribute("data-source", "custom");
+		}
+
+		await observer.limitSource.click();
+		for (const current of [source, observer]) {
+			await expect(current.workspaceLimit).toHaveValue("");
+			await expect(current.limitSource).toHaveAttribute("data-source", "global");
+		}
+		await observer.workspaceLimit.fill("2");
+		await observer.workspaceLimit.press("Enter");
+		await expect(source.workspaceLimit).toHaveValue("2");
+
+		await page.reload();
+		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await openChatSettings(page);
+		await expect(source.globalLimit).toHaveValue("6");
+		await expect(source.workspaceLimit).toHaveValue("2");
+
+		await source.workspaceLimit.fill("");
+		await source.workspaceLimit.press("Enter");
+		for (const current of [source, observer]) {
+			await expect(current.workspaceLimit).toHaveValue("");
+			await expect(current.limitSource).toHaveAttribute("data-source", "global");
+		}
+	} finally {
 		await restoreSubagentBaseline(page).catch(() => {});
 		await peer?.close();
 	}

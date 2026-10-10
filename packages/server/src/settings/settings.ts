@@ -6,6 +6,7 @@ import {
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isSettleIdleDays,
+	isSubagentMaxConcurrent,
 	isSystemThemePair,
 	isTerminalWindowsShell,
 	isThemeMode,
@@ -47,6 +48,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	reviewAutoFix: true,
 	agentReviewEnabled: true,
 	subagentsEnabled: true,
+	subagentMaxConcurrent: true,
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: true,
 	settleIdleDays: true,
@@ -162,6 +164,12 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 	}
 	if (subagentsEnabled !== undefined && typeof subagentsEnabled !== "boolean") {
 		throw new Error("subagentsEnabled must be a boolean");
+	}
+	if (
+		runtimeUpdate.subagentMaxConcurrent !== undefined &&
+		!isSubagentMaxConcurrent(runtimeUpdate.subagentMaxConcurrent)
+	) {
+		throw new Error("subagentMaxConcurrent must be a whole number from 1 to 16");
 	}
 	if (jbcentralQuotaEnabled !== undefined && typeof jbcentralQuotaEnabled !== "boolean") {
 		throw new Error("jbcentralQuotaEnabled must be a boolean");

@@ -22,6 +22,7 @@ import {
 	initializeSessionStates,
 	isProjectSkillPath,
 	refreshAgentReviewTool,
+	refreshSubagentConcurrency,
 	refreshSubagentTools,
 	setAgentReviewEnabledResolver,
 	setExtUiPublisher,
@@ -34,6 +35,7 @@ import {
 	setSessionResourcesPublisher,
 	setSessionStatePublisher,
 	setSkillAdmissionResolver,
+	setSubagentConcurrencyResolver,
 	setSubagentsEnabledResolver,
 	setTitleToolHost,
 	settleSessionsForShutdown,
@@ -114,7 +116,7 @@ import {
 	refreshOpenProjectReviews,
 	stampSessionActivity,
 } from "./settledLifecycle";
-import { resolveSubagentsEnabled } from "./subagentPolicy";
+import { resolveSubagentMaxConcurrent, resolveSubagentsEnabled } from "./subagentPolicy";
 import { taskObservation } from "./taskAnalytics";
 import {
 	BACKPRESSURE_RECONCILE_MS,
@@ -552,6 +554,15 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	});
 
+	setSubagentConcurrencyResolver((workspaceId) => {
+		const globalDefault = getConfig().subagentMaxConcurrent;
+		try {
+			return resolveSubagentMaxConcurrent(globalDefault, getWorkspace(workspaceId));
+		} catch {
+			return resolveSubagentMaxConcurrent(globalDefault, undefined);
+		}
+	});
+
 	setAgentReviewEnabledResolver(() => getConfig().agentReviewEnabled !== false);
 
 	setProjectPublisher((project) => {
@@ -653,6 +664,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			startAttributionClaim();
 		}
 		if (appliedUpdate.subagentsEnabled !== undefined) refreshSubagentTools();
+		if (appliedUpdate.subagentMaxConcurrent !== undefined) refreshSubagentConcurrency();
 		if (appliedUpdate.agentReviewEnabled !== undefined) refreshAgentReviewTool();
 	});
 

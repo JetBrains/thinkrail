@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
-import type {
-	DiffStats,
-	ExistingWorktreeCandidate,
-	OpenBranchReview,
-	Project,
-	SubagentOverride,
-	Workspace,
+import {
+	type DiffStats,
+	type ExistingWorktreeCandidate,
+	isSubagentMaxConcurrent,
+	type OpenBranchReview,
+	type Project,
+	type SubagentOverride,
+	type Workspace,
 } from "@thinkrail/contracts";
 import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import {
@@ -470,6 +471,20 @@ export function setWorkspaceSubagentsOverride(
 	}
 	if (override === null) delete ws.subagentsOverride;
 	else ws.subagentsOverride = override;
+	saveWorkspaces(all);
+	emit({ kind: "updated", workspace: ws });
+	return ws;
+}
+
+export function setWorkspaceSubagentMaxConcurrent(id: string, value: number | null): Workspace {
+	const all = loadWorkspaces();
+	const ws = all.find((workspace) => workspace.id === id);
+	if (!ws) throw new Error(`Unknown workspace: ${id}`);
+	if (value !== null && !isSubagentMaxConcurrent(value)) {
+		throw new Error("Subagent limit must be a whole number from 1 to 16");
+	}
+	if (value === null) delete ws.subagentMaxConcurrentOverride;
+	else ws.subagentMaxConcurrentOverride = value;
 	saveWorkspaces(all);
 	emit({ kind: "updated", workspace: ws });
 	return ws;

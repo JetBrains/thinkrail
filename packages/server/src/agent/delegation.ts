@@ -31,11 +31,27 @@ export function delegationRootDir(): string {
 }
 
 const services = new Map<string, DelegationService>();
+let concurrencyResolver: ((workspaceId: string) => number) | undefined;
+
+export function setSubagentConcurrencyResolver(resolver: (workspaceId: string) => number): void {
+	concurrencyResolver = resolver;
+}
+
+export function refreshSubagentConcurrency(workspaceId?: string): void {
+	if (!concurrencyResolver) return;
+	for (const [id, service] of services) {
+		if (workspaceId === undefined || id === workspaceId) {
+			service.setMaxConcurrentPerParent(concurrencyResolver(id));
+		}
+	}
+}
 
 export function delegationServiceFor(workspaceId: string): DelegationService {
 	let service = services.get(workspaceId);
 	if (!service) {
+		const maxConcurrentPerParent = concurrencyResolver?.(workspaceId);
 		service = createDelegationService({
+			...(maxConcurrentPerParent === undefined ? {} : { maxConcurrentPerParent }),
 			resolveParent: (sessionId) =>
 				canUseSessionResources(sessionId, workspaceId) ? liveParentContext(sessionId) : undefined,
 			delegationRoot: delegationRootDir(),

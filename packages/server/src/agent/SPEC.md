@@ -527,7 +527,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     while parents created afterward project the new generation. The host-wide `getPiRuntime` resolver
     is passed as the core's dynamic fallback rather than captured at service creation. One
     `DelegationService` per workspace is cached (`delegationServiceFor`, synchronous — nothing awaits
-    at bind time); `subagentsFor(workspaceId, isEnabled, canDeliverCompletion)` creates one retained portable
+    at bind time). A host-injected `setSubagentConcurrencyResolver` supplies each service's per-chat
+    limit at creation, and `refreshSubagentConcurrency(workspaceId?)` re-resolves and live-resizes the
+    cached services (core `setMaxConcurrentPerParent`) after a global or workspace limit change; `subagentsFor(workspaceId, isEnabled, canDeliverCompletion)` creates one retained portable
     `Subagents` owner per parent; its extension is injected on every resource load. A host-injected
     `setSubagentsEnabledResolver` maps that
     workspace id to its current effective policy without creating an `agent` → settings/workspaces edge.
@@ -743,7 +745,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `reloadSessionResources(sessionId)` (active-chat reload); the **`setSkillAdmissionResolver`** seam (host
   wires `workspaceId` → the admission context); the subagent-policy seams
   **`setSubagentsEnabledResolver`** + **`refreshSubagentTools`** (host resolves the effective global default
-  plus workspace override; manager owns live-session activation timing);
+  plus workspace override; manager owns live-session activation timing) and the concurrency seams
+  **`setSubagentConcurrencyResolver`** + **`refreshSubagentConcurrency`** (same split; `delegation` owns
+  applying the limit to its cached services);
   the `set_title` seam (`setTitleToolHost` + `TitleToolHost`/`SET_TITLE_TOOL_NAME`/`SetTitleParams`);
   the bundled-artifact seam (`registerBundledRuntime` +
   `BundledExtensions`/`BundledExtensionFactory`).

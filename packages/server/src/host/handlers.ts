@@ -45,6 +45,7 @@ import {
 	readBackgroundCommandOutput,
 	readChildTranscript,
 	refreshAvailableModels,
+	refreshSubagentConcurrency,
 	refreshSubagentTools,
 	reloadSessionResources,
 	removeQueuedSession,
@@ -172,6 +173,7 @@ import {
 	setWorkspaceDiffBase,
 	setWorkspaceReview,
 	setWorkspaceSkillOverride,
+	setWorkspaceSubagentMaxConcurrent,
 	setWorkspaceSubagentsOverride,
 	unsettleWorkspace,
 	workspaceDiffStats,
@@ -756,6 +758,11 @@ const handlers: WsHandlers = {
 	"workspace.setSubagentsOverride": (p) => {
 		const workspace = setWorkspaceSubagentsOverride(p.id, p.override);
 		refreshSubagentTools(p.id);
+		return workspace;
+	},
+	"workspace.setSubagentMaxConcurrent": (p) => {
+		const workspace = setWorkspaceSubagentMaxConcurrent(p.id, p.value);
+		refreshSubagentConcurrency(p.id);
 		return workspace;
 	},
 	"workspace.setDiffBase": (p) => {

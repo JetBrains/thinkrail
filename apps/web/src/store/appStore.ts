@@ -44,6 +44,7 @@ import {
 	isLineWidth,
 	isSettleIdleDays,
 	isSubagentCompletionMessage,
+	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
 	isTodoReviewFixMessage,
 	normalizeThemePreference,
@@ -909,6 +910,7 @@ interface AppState {
 	analyticsConsentConfirmed: boolean;
 	notificationsEnabled: boolean;
 	subagentsEnabled: boolean;
+	subagentMaxConcurrent: number;
 	settleIdleDays: number | null;
 	jbcentralQuotaEnabled: boolean;
 	jbcentralQuotaRefreshSeconds: number;
@@ -1167,6 +1169,9 @@ function configPatch(config: AppConfig) {
 				? config.notificationsEnabled
 				: DEFAULT_CONFIG.notificationsEnabled,
 		subagentsEnabled: config.subagentsEnabled ?? DEFAULT_CONFIG.subagentsEnabled,
+		subagentMaxConcurrent: isSubagentMaxConcurrent(config.subagentMaxConcurrent)
+			? config.subagentMaxConcurrent
+			: DEFAULT_CONFIG.subagentMaxConcurrent,
 		settleIdleDays: isSettleIdleDays(config.settleIdleDays)
 			? config.settleIdleDays
 			: DEFAULT_CONFIG.settleIdleDays,
@@ -1981,6 +1986,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	analyticsConsentConfirmed: DEFAULT_CONFIG.analyticsConsentConfirmed,
 	notificationsEnabled: DEFAULT_CONFIG.notificationsEnabled,
 	subagentsEnabled: DEFAULT_CONFIG.subagentsEnabled,
+	subagentMaxConcurrent: DEFAULT_CONFIG.subagentMaxConcurrent,
 	settleIdleDays: DEFAULT_CONFIG.settleIdleDays,
 	jbcentralQuotaEnabled: DEFAULT_CONFIG.jbcentralQuotaEnabled,
 	jbcentralQuotaRefreshSeconds: DEFAULT_CONFIG.jbcentralQuotaRefreshSeconds,

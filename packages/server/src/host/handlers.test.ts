@@ -369,6 +369,25 @@ test("workspace.setSubagentsOverride persists on/off and null restores the globa
 	expect(inherited.subagentsOverride).toBeUndefined();
 });
 
+test("workspace.setSubagentMaxConcurrent persists a limit and null restores the global one", async () => {
+	const created = (await handleRequest("workspace.create", { projectId: "p1" }, CTX)) as Workspace;
+	const limited = (await handleRequest(
+		"workspace.setSubagentMaxConcurrent",
+		{ id: created.id, value: 2 },
+		CTX,
+	)) as Workspace;
+	expect(limited.subagentMaxConcurrentOverride).toBe(2);
+	const inherited = (await handleRequest(
+		"workspace.setSubagentMaxConcurrent",
+		{ id: created.id, value: null },
+		CTX,
+	)) as Workspace;
+	expect(inherited.subagentMaxConcurrentOverride).toBeUndefined();
+	await expect(
+		handleRequest("workspace.setSubagentMaxConcurrent", { id: created.id, value: 0 }, CTX),
+	).rejects.toThrow("Subagent limit must be a whole number from 1 to 16");
+});
+
 test("workspace.watchReady waits for startup once, then reports an already-ready watcher", async () => {
 	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
 	const workspace = rows[0];

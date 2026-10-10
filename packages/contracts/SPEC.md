@@ -209,6 +209,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   **`Workspace.skillOverrides`** (per-skill on/off) over that baseline;
   **`SubagentOverride`** (`"on" | "off"`) + optional **`Workspace.subagentsOverride`** let a workspace
   force subagents on/off, while absence inherits the host's `AppConfig.subagentsEnabled` default;
+  optional **`Workspace.subagentMaxConcurrentOverride`** likewise overrides `AppConfig.subagentMaxConcurrent`;
   "does it have specs?" is **not** a field — it's the lazy `project.hasSpecs` query, since it's a full-tree
   walk), **`ProjectPathStatus`** (a
   candidate path's kind — `repo` / `initable` / `missing` / `notDirectory` — so the UI opens, offers a
@@ -333,8 +334,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,
-  favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, jbcentralQuotaEnabled,
-  jbcentralQuotaRefreshSeconds }` — an extensible bag; the line-width fields join
+  favoriteModels, recentModels, reviewAutoFix, agentReviewEnabled, subagentsEnabled, subagentMaxConcurrent,
+  jbcentralQuotaEnabled, jbcentralQuotaRefreshSeconds }` — an extensible bag; the line-width fields join
   the wire at protocol v61 and `terminalWindowsShell` at v62. **`DEFAULT_MODEL_PROTOCOL_VERSION`** pins
   v72's AppConfig `defaultModel`/`defaultEffort` and host-side default resolution; the Settings controls are
   hidden against older hosts. `defaultModel` is a full allowlisted `WireModel`, `defaultEffort` is an optional
@@ -355,7 +356,10 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   without sending host paths; older hosts retain a global-only fallback. `themeMode` defaults to `"fixed"`
   and no pair, preserving both legacy configs
   and the explicit Dark default; `subagentsEnabled` is the host-wide subagent default (`true` for current
-  behavior), overridden only by `Workspace.subagentsOverride`; **`settleIdleDays`** (default `7`, `null` = never; on the wire
+  behavior), overridden only by `Workspace.subagentsOverride`; `subagentMaxConcurrent` (whole number in
+  **`SUBAGENT_MAX_CONCURRENT`** = 1–16, default 4, validated by `isSubagentMaxConcurrent`; on the wire from
+  **`SUBAGENT_CONCURRENCY_PROTOCOL_VERSION`** = v79) is how many subagents one chat runs at once — more
+  spawns queue — overridden only by `Workspace.subagentMaxConcurrentOverride`; **`settleIdleDays`** (default `7`, `null` = never; on the wire
   from `WORKSPACE_SETTLE_PROTOCOL_VERSION` = v78) is the idle window after which a quiet workspace settles
   into its project's shelf — a host-wide number because "how long is quiet" is a habit, not a project fact; `agentReviewEnabled` (default `false`, on the
   wire from `AGENT_REVIEW_SETTING_PROTOCOL_VERSION` = v68) gates the worker's in-session `request_review`
@@ -567,7 +571,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   appeared after trust) / **`project.setSkillEnabled`** (project baseline) / **`project.setGroupEnabled`**
   (turn a plugin / source tier / `@plugins` on/off at the baseline) / **`workspace.setSkillOverride`**
   (per-workspace on/off/clear → the `Workspace`) / **`workspace.setSubagentsOverride`**
-  (`"on"` / `"off"` / `null`-to-inherit → the updated `Workspace`) / **`workspace.setDiffBase`** (re-point the diff target,
+  (`"on"` / `"off"` / `null`-to-inherit → the updated `Workspace`) /
+  **`workspace.setSubagentMaxConcurrent`** (a `SUBAGENT_MAX_CONCURRENT` number / `null`-to-inherit → the
+  updated `Workspace`, v79) / **`workspace.setDiffBase`** (re-point the diff target,
   `null` clears it back to the creation base — echoes the updated `Workspace` **and** broadcasts
   `workspace.updated`, so every client converges on the push) / **`workspace.watchReady`** (await the
   fresh watcher's conservative startup nudge before a skill-loading client captures its freshness baseline;
