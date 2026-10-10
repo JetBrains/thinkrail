@@ -19,7 +19,6 @@ import {
 } from "@thinkrail/contracts";
 import {
 	compactAge,
-	deriveAskStates,
 	isAbsolutePath,
 	type LayoutAttention,
 	layoutResourceIdentity,
@@ -447,21 +446,6 @@ export function selectReadyCompletionActivation(
 		return null;
 	}
 	return completion.completionId;
-}
-
-/**
- * Whether the session has an unanswered `ask_user_question` still awaiting the user — the
- * `waiting_question` precondition of `planGlance`, reduced to a primitive so the chat shell can read it
- * without re-rendering per streamed delta. Mirrors `planGlance`'s awaiting predicate over `deriveAskStates`.
- */
-export function selectAwaitingAsk(
-	state: { sessions: Record<string, SessionRuntime> },
-	sessionId: string,
-): boolean {
-	const runtime = state.sessions[sessionId];
-	if (!runtime) return false;
-	const states = deriveAskStates(runtime.turns, runtime.askAnswers, runtime.toolResults);
-	return Object.values(states).some((ask) => !ask.answer && !ask.superseded && !ask.terminal);
 }
 
 interface ActiveWorkspaceState {

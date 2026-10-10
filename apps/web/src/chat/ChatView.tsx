@@ -23,7 +23,6 @@ import { type ParsedTemplate, templateToSlashCommand, useTemplateCommandPicker }
 import {
 	EMPTY_RUNTIME,
 	SettingsSection,
-	selectAwaitingAsk,
 	selectCanRenameChat,
 	selectCatalogModel,
 	selectCompactionTurnIds,
@@ -52,7 +51,7 @@ import {
 	parseNativeChatCommand,
 	prepareNameChatCommand,
 } from "./nativeCommands";
-import { hostSessionGlance } from "./planView";
+import { hostSessionGlance, sessionGlance } from "./planView";
 import { QueueStrip } from "./QueueStrip";
 import { deriveRecentPrompts } from "./recentPrompts";
 import { CommandLogView, ResourcesButton, ResourcesDock, ResourcesInspector } from "./resources";
@@ -103,7 +102,10 @@ export default function ChatView({
 		(s) => s.sessions[sessionId]?.syncedConnectionGeneration ?? 0,
 	);
 	const hostState = useAppStore((s) => s.sessions[sessionId]?.hostState ?? null);
-	const awaitingAsk = useAppStore((s) => selectAwaitingAsk(s, sessionId));
+	const sessionGlanceState = useAppStore((s) => {
+		const rt = s.sessions[sessionId];
+		return rt ? sessionGlance(rt) : "waiting";
+	});
 	const recentPrompts = useAppStore(
 		useShallow((s) => deriveRecentPrompts(s.sessions[sessionId]?.turns ?? [])),
 	);
@@ -621,12 +623,8 @@ export default function ChatView({
 	}, [historyOpenRequest, sessionId, historyOverlayOpen, cycleScope]);
 
 	const planGlanceState = useMemo(
-		() =>
-			hostSessionGlance(
-				hostState,
-				awaitingAsk ? "waiting_question" : isStreaming ? "working" : "waiting",
-			),
-		[awaitingAsk, hostState, isStreaming],
+		() => hostSessionGlance(hostState, sessionGlanceState),
+		[hostState, sessionGlanceState],
 	);
 
 	const onExtUiReply = (value: string | boolean | null) => {

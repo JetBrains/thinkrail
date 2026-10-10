@@ -137,10 +137,12 @@ export type ChatTranscriptHandle = {
 };
 
 /**
- * The churn-isolated transcript: the SOLE subscriber to the streaming runtime fields (turns, toolResults,
- * currentAssistantId, askAnswers, turnIdByMessageIndex, eventRevision via the whole-runtime subscription),
- * so the chat shell (header, composer, queue, dialogs) stops re-rendering on every streamed delta. Owns the
- * chat-scroll → chat-transcript-scroll → Virtuoso block, scroll control, completion acknowledgement,
+ * The churn-isolated transcript: it owns the per-delta transcript rendering, subscribing (via `useShallow`)
+ * to the streaming runtime fields it renders from (turns, toolResults, currentAssistantId, askAnswers,
+ * turnIdByMessageIndex, isStreaming, settlementTick, hostState, syncedConnectionGeneration, eventRevision).
+ * The chat shell reads turns only through shallow-compared derived selectors (recent prompts, plan glance)
+ * that stay stable across streamed deltas, so header/composer/queue/dialogs stop re-rendering on them. Owns
+ * the chat-scroll → chat-transcript-scroll → Virtuoso block, scroll control, completion acknowledgement,
  * location reveal, flash, and the ask-focus scope.
  */
 const ChatTranscript = forwardRef<
@@ -210,13 +212,18 @@ const ChatTranscript = forwardRef<
 
 	const { turns, toolResults, isStreaming, settlementTick, currentAssistantId } = runtime;
 
-	const previousChronologicalRows = useRef<ChatRow[]>([]);
-	const chronologicalRows = useMemo(() => {
-		const derived = deriveRows(turns, toolResults, isStreaming, isSpec);
-		const stable = stabilizeRows(previousChronologicalRows.current, derived);
-		previousChronologicalRows.current = stable;
-		return stable;
-	}, [turns, toolResults, isStreaming, isSpec]);
+	const derivedRows = useMemo(
+		() => deriveRows(turns, toolResults, isStreaming, isSpec),
+		[turns, toolResults, isStreaming, isSpec],
+	);
+	// Keep the stabilized rows in state (never a ref written during render): a render-written ref both
+	// violates apps/web/SPEC.md and makes the React Compiler skip memoizing this component.
+	const [stableRows, setStableRows] = useState(() => ({ derived: derivedRows, rows: derivedRows }));
+	let chronologicalRows = stableRows.rows;
+	if (stableRows.derived !== derivedRows) {
+		chronologicalRows = stabilizeRows(stableRows.rows, derivedRows);
+		setStableRows({ derived: derivedRows, rows: chronologicalRows });
+	}
 	const rows = useMemo(
 		() => projectRows(chronologicalRows, chatMessageOrder),
 		[chronologicalRows, chatMessageOrder],
