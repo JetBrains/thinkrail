@@ -24,37 +24,23 @@ export function ReviewThreadCard({
 	actions: ReviewThreadActions;
 	onActivate?: (() => void) | undefined;
 }) {
-	const [localBusy, setBusy] = useState(false);
-	const [localText, setDraftText] = useState(thread.body);
-	const [edit, changeEdit, scoped] = useReviewDraftState<ReviewTextState | undefined>(
+	const [edit, changeEdit] = useReviewDraftState<ReviewTextState | undefined>(
 		`thread:${thread.id}`,
 		undefined,
 	);
-	const draftText = scoped ? (edit?.text ?? thread.body) : localText;
+	const draftText = edit?.text ?? thread.body;
 	const textState = edit ?? reviewTextState(draftText);
-	const busy = scoped ? textState.busy : localBusy;
+	const busy = textState.busy;
 	const [restored] = useState(edit);
-	const [syncedBody, setSyncedBody] = useState(thread.body);
-	if (syncedBody !== thread.body) {
-		setSyncedBody(thread.body);
-		if (draftText === syncedBody) setDraftText(thread.body);
-	}
 	const editRef = useRef<HTMLTextAreaElement>(null);
 	const cancelledRef = useRef(false);
 	const run = (action: () => Promise<void>) => {
 		if (busy) return;
 		const pending = { ...textState, busy: true };
-		if (scoped) changeEdit(() => pending);
-		else setBusy(true);
+		changeEdit(() => pending);
 		action().then(
-			() => {
-				if (scoped) changeEdit((current) => (current === pending ? undefined : current));
-			},
-			() => {
-				if (scoped)
-					changeEdit((current) => (current === pending ? { ...pending, busy: false } : current));
-				else setBusy(false);
-			},
+			() => changeEdit((current) => (current === pending ? undefined : current)),
+			() => changeEdit((current) => (current === pending ? { ...pending, busy: false } : current)),
 		);
 	};
 	useEffect(() => {
@@ -77,12 +63,10 @@ export function ReviewThreadCard({
 		}
 		const next = draftText.trim();
 		if (!next || next === thread.body) {
-			if (scoped) changeEdit(() => undefined);
-			else setDraftText(thread.body);
+			changeEdit(() => undefined);
 			return;
 		}
-		if (scoped) run(() => actions.onUpdateComment(thread.id, next));
-		else actions.onUpdateComment(thread.id, next).catch(() => setDraftText(thread.body));
+		run(() => actions.onUpdateComment(thread.id, next));
 	};
 	return (
 		<div
@@ -121,10 +105,10 @@ export function ReviewThreadCard({
 								data-testid="review-thread-send"
 								aria-label="Send this comment to the file's review chat"
 								className="review-thread-action disabled:pointer-events-none"
-								disabled={busy || (scoped && !draftText.trim())}
+								disabled={busy || !draftText.trim()}
 								onClick={() =>
 									run(async () => {
-										if (scoped && draftText.trim() !== thread.body) {
+										if (draftText.trim() !== thread.body) {
 											await actions.onUpdateComment(thread.id, draftText.trim());
 										}
 										await actions.onSendComment(thread.id);
@@ -159,31 +143,27 @@ export function ReviewThreadCard({
 					value={draftText}
 					disabled={busy}
 					onChange={(e) => {
-						if (scoped) {
-							const next = selectedReviewText(e.currentTarget, textState);
-							changeEdit(() => next);
-						} else setDraftText(e.target.value);
-						grow(e.target);
+						const next = selectedReviewText(e.currentTarget, textState);
+						changeEdit(() => next);
+						grow(e.currentTarget);
 					}}
 					onSelect={(e) => {
-						if (!scoped) return;
 						const next = selectedReviewText(e.currentTarget, textState);
 						if (next !== textState) changeEdit(() => next);
 					}}
 					onBlur={(event) => {
-						if (scoped && event.currentTarget.parentElement?.contains(event.relatedTarget)) return;
+						if (event.currentTarget.parentElement?.contains(event.relatedTarget)) return;
 						saveEdit();
 					}}
 					onKeyDown={(e) => {
 						e.stopPropagation();
 						if (e.key === "Escape") {
 							cancelledRef.current = true;
-							if (scoped) changeEdit(() => undefined);
-							else setDraftText(thread.body);
+							changeEdit(() => undefined);
 							editRef.current?.blur();
 						}
 						if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-							if (scoped) e.preventDefault();
+							e.preventDefault();
 							editRef.current?.blur();
 						}
 					}}

@@ -1428,7 +1428,9 @@ own section. The kebab menu (`plan-menu`, a
   a stamped side and cell index, never a parsed cell object's identity. Cancel and successful
   Save/Send retire it; late completions cannot close a newer selection. Restoring scratch never focuses
   the textarea or sends a host mutation. Existing thread edits retain blur-save and shortcut-save;
-  sending waits for any edited body to be saved, and Escape discards only the local edit.
+  sending waits for any edited body to be saved, and Escape discards only the local edit. The thread card
+  has one edit-state path on every surface — without a scratch context it falls back to local state, so
+  the per-file tab cannot drift from the review tab.
   Content-stamp changes still invalidate stale selections.
   Scratch remains tab-lifetime only, not reload-persistent, and its first write keeps the preview.
   **The Changes sidebar is the review tab's navigator**: its row highlight follows the tab's
