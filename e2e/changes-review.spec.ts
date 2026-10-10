@@ -189,6 +189,8 @@ test("hunk triage: Keep marks hunks, a fully kept file becomes viewed, and the b
 	await seedThreeChanges(page);
 	await row(page, "notes.txt").click();
 	await expect(sections(page)).toHaveCount(3);
+	await expect(page.getByTestId("changes-section-loading")).toHaveCount(0);
+	await expect(section(page, "README.md")).toContainText("edited by e2e");
 
 	const bar = page.getByTestId("changes-review-triage");
 	await expect(bar).toContainText("0 of 3 reviewed");
