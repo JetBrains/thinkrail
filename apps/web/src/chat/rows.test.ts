@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { AssistantMessage } from "@thinkrail/contracts";
-import { type ChatRow, deriveRows, projectRows, turnDivider } from "./rows";
+import { type ChatRow, deriveRows, projectRows, stabilizeRows, turnDivider } from "./rows";
 import { registerToolRenderer } from "./toolRegistry";
 import type { ChatTurn, ToolResultState } from "./types";
 
@@ -541,6 +541,44 @@ test("turnDivider lets the spec side win a tie — a path reached by both routes
 	const d = turnDivider(turns, 2);
 	expect(d?.specs).toEqual([path]);
 	expect(d?.changedFiles).toEqual([]);
+});
+
+describe("stabilizeRows identity", () => {
+	test("reuses the prior object for unchanged rows and keeps the new one for changed rows", () => {
+		const turns: ChatTurn[] = [
+			user("u1"),
+			assistant("a1", [text("first answer")]),
+			user("u2"),
+			assistant("a2", [text("partial")], { streaming: true }),
+		];
+		const first = deriveRows(turns, {}, true);
+
+		// Next delta only grows the live assistant text; earlier rows are structurally unchanged.
+		const nextTurns: ChatTurn[] = [
+			user("u1"),
+			assistant("a1", [text("first answer")]),
+			user("u2"),
+			assistant("a2", [text("partial answer growing")], { streaming: true }),
+		];
+		const second = deriveRows(nextTurns, {}, true);
+		const stable = stabilizeRows(first, second);
+
+		expect(stable.length).toBe(second.length);
+		for (let i = 0; i < stable.length; i++) {
+			const id = stable[i]?.id;
+			const prior = first.find((r) => r.id === id);
+			if (id === "a2:text:0") {
+				expect(stable[i]).toBe(second[i]); // changed row keeps the fresh object
+			} else {
+				expect(stable[i]).toBe(prior); // unchanged rows reuse the prior reference
+			}
+		}
+	});
+
+	test("returns the new array unchanged when there is no prior", () => {
+		const rows = deriveRows([user("u1"), assistant("a1", [text("hi")])], {}, false);
+		expect(stabilizeRows([], rows)).toBe(rows);
+	});
 });
 
 test("turnDivider treats every written file as a change when no classifier is supplied", () => {

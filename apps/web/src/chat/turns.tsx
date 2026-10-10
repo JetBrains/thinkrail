@@ -16,7 +16,13 @@ import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
-import { type MouseEvent as ReactMouseEvent, type ReactNode, useEffect, useState } from "react";
+import {
+	memo,
+	type MouseEvent as ReactMouseEvent,
+	type ReactNode,
+	useEffect,
+	useState,
+} from "react";
 import { CustomIcon } from "@/components/CustomIcon";
 import { parseSkillInvocation, projectRelativePath, type SkillInvocation, userText } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
@@ -36,7 +42,7 @@ import { getToolChrome, getToolSummary } from "./toolRegistry";
 import { SubagentCompletionCard } from "./tools/subagent/SubagentCompletionCard";
 import type { CompactionState } from "./types";
 
-export function ChatTurnView({
+function ChatTurnViewImpl({
 	row,
 	workspaceRoot,
 	onOpenFile,
@@ -158,6 +164,12 @@ export function ChatTurnView({
 			return null;
 	}
 }
+
+/**
+ * Memoized so unchanged rows skip re-render while the agent streams. Relies on stable row identity for
+ * unchanged rows (`stabilizeRows`) and stable callback/prop identity from the transcript.
+ */
+export const ChatTurnView = memo(ChatTurnViewImpl);
 
 function userAttachments(content: UserMessage["content"], names?: string[]) {
 	if (typeof content === "string") return [];

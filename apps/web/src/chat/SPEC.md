@@ -328,6 +328,17 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
 
 ## Interaction seams
 
+- **Transcript/shell split** — `ChatView` (the exported integration component) splits into a churn-isolated
+  `ChatTranscript` child that owns the per-delta transcript rendering — subscribing (via `useShallow`) to the
+  streaming runtime fields it renders from (turns, toolResults, currentAssistantId, askAnswers,
+  turnIdByMessageIndex, isStreaming, settlementTick, hostState, syncedConnectionGeneration, eventRevision) —
+  and owns the scroll container and
+  rows — plus a chrome shell that reads only granular rarely-changing fields, so text/thinking/tool deltas
+  no longer re-render header/composer/queue/dialogs; completion-ack, location-reveal, and the ask-focus
+  scope live in the child (a private refactor; `ChatActions`/`AskStatesContext` are provided by
+  `ChatTranscript`). The shell still reads `turns`/`askAnswers`/`toolResults`, but only through
+  shallow-compared derived selectors (recent prompts, plan glance) that stay stable across streamed deltas,
+  so it does not re-render on them.
 - **Structured tool-file navigation** — `ChatView` accepts an optional `onOpenFile(path)` from the shell and
   passes it through every `ToolRenderProps` path (routine, primary, card, or bare). The shared tool-file
   primitive offers that action only for a non-empty relative path or an absolute path contained by
@@ -335,7 +346,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   source candidates only from explicit tool args/details — never regex guesses over Bash output, code, or
   prose. A standalone renderer has no callback and therefore stays inert. The callback's preview-slot
   semantics belong to [[submodule-web-panels]].
-- **`ChatActions`** — a React context (provided by `ChatView`, `null` standalone): how a renderer talks
+- **`ChatActions`** — a React context (provided by `ChatTranscript`, `null` standalone): how a renderer talks
   **back** to the agent — or asks the integration layer to open something — without importing
   store/transport. Today: `answerQuestion(toolCallId, result)` —
   it rejects when the host refuses (unknown/answered/superseded call), and the caller owns the failure UX —
@@ -364,7 +375,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   the in-memory registry is lost — and its absence is precisely what stops the polling).
 - **`askState`** — the questionnaire lifecycle seam: the pure
   `deriveAskStates(turns, askAnswers, toolResults)` + `AskStatesContext`/`useAskState` (provided by
-  `ChatView`, and also by the plan page's `PlanAskQuestion` so the SAME `AskUserQuestionCard` can be
+  `ChatTranscript`, and also by the plan page's `PlanAskQuestion` so the SAME `AskUserQuestionCard` can be
   answered from the plan — see `panels/SPEC.md`; `null` standalone). A live blocking ask resolves through its native tool result; a
   restart-repaired eligible ack resolves later through `ask-user-answers`; a live ask the user typed past
   returns that same ack natively, so "superseded" (ack + later user turn) reads identically whether the
@@ -407,7 +418,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   store/transport/shiki.
 - **Jump-to-message** (`chatLocationRequest` — set by `useHistorySearch.ts`'s `openMessage` on Enter over
   a mapped message hit; see `store/SPEC.md` for the store-level request/clear contract and
-  the workbench shell integration's open/reopen/hydrate half) — `ChatView` is the sole consumer. Once
+  the workbench shell integration's open/reopen/hydrate half) — `ChatTranscript` is the sole consumer. Once
   `rows.length > 0`,
   it resolves the request's `messageIndex` via `runtime.turnIdByMessageIndex` (present only on a
   *hydrated* runtime — a live/already-open session's runtime, built by the event reducer, never carries
@@ -430,7 +441,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   still-current request; an older effect may not clear a newer jump. Cancellation is the user-wins failure
   path and is intentionally silent rather than restarted against the reader. Effect teardown defers its
   identity-checked clear for one microtask: an immediate StrictMode or replacement mount claims the same
-  request first, while a real unmount terminates it. `ChatView` is its only terminal consumer, so an
+  request first, while a real unmount terminates it. `ChatTranscript` is its only terminal consumer, so an
   unresolved current request must never linger.
 - **Open at the current alignment target** — `ChatMessageOrder` chooses the physical latest edge: bottom
   for oldest-first, top for newest-first. The reading band is the only mount placement owner. It places
@@ -1310,7 +1321,9 @@ Unknown custom messages retain their existing behavior.
 - **Allowed deps:** `contracts` (pi message/content-block types, **type-only**); the lifecycle-neutral
   `prompt` module; `store` + `transport`
   (**app-integration files only** — a renderer that takes props must never reach for either. Today that
-  is `ChatView.tsx`, `chatPreferences.ts` (the client-local persistence adapter), plus the hooks and dialogs
+  is `ChatView.tsx`, **`ChatTranscript.tsx`** (the churn-isolated transcript child — the Virtuoso list, scroll
+  control, transcript sync, completion-ack, and the `ChatActions`/`AskStatesContext` providers),
+  `chatPreferences.ts` (the client-local persistence adapter), plus the hooks and dialogs
   it composes: `useChatTodos.ts`, `useHistorySearch.ts`,
   `useModelCatalog.ts`, **`useChatResources.ts`** (the Resources hydration/control/log-read seam),
   **`useSessionStats.ts`** (generation/revision-fenced authoritative telemetry reads),
@@ -1336,16 +1349,19 @@ Unknown custom messages retain their existing behavior.
   `components/useNow`; `lib`.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing
   `store`/`transport` (only the app-integration files enumerated above may — keep the renderers reusable).
-- **`ChatView`** is the primary app-integration file: wires this session's runtime
-  (`store.sessions[sessionId]`), the transport calls, the `ChatActions` + `AskStates` contexts, the
-  divider's deep links (`onOpenChange` → `requestChangesView`, `onOpenSpec` → `requestSpecView`; each
-  receives the single path the user picked) plus its view switch (`onReveal` → the tool-reveal intent), and the
-  `isSpec` classifier it builds from the store's `specsByWorkspace` snapshot (subscribed as the stored array
-  — a stable ref — and memoized into a matcher here, never a fresh Set inside the selector) — together with
+- **`ChatView`** is the primary app-integration file: wires the transport calls and this session's
+  shell-facing store reads (granular per-field selectors off `store.sessions[sessionId]`, plus
+  `recentPrompts` and the plan glance derived through shallow-compared selectors) — together with
   **`useHistorySearch.ts`** (the Ctrl+R history-recall overlay's store/transport edge),
-  **`useSessionStats.ts`** (the guarded read that keeps telemetry live), **`useTranscriptSync.ts`** (the
-  guarded authoritative read that converges an existing runtime), and
-  **`TemplateEditorDialog.tsx`** (the shared template save form), the other integration points. A
+  **`useSessionStats.ts`** (the guarded read that keeps telemetry live), and
+  **`TemplateEditorDialog.tsx`** (the shared template save form), the other shell integration points. Its
+  churn-isolated child **`ChatTranscript`** is the second integration file: it owns the streaming runtime
+  subscription (`store.sessions[sessionId]`), provides the `ChatActions` + `AskStates` contexts, builds the
+  divider's deep links (`onOpenChange` → `requestChangesView`, `onOpenSpec` → `requestSpecView`; each
+  receives the single path the user picked) plus its view switch (`onReveal` → the tool-reveal intent), the
+  `isSpec` classifier from the store's `specsByWorkspace` snapshot (subscribed as the stored array — a
+  stable ref — and memoized into a matcher, never a fresh Set inside the selector), and the guarded
+  **`useTranscriptSync.ts`** authoritative read that converges an existing runtime. A
   **rejected** send (`prompt`/`steer`/`followUp`) lands in the chat via the store's `appendErrorTurn` —
   never swallowed and never given the settlement-only Try again affordance; *streaming* faults arrive as pi
   events instead.
@@ -1363,7 +1379,8 @@ session loader, and appends one success/error marker. A successful overflow `com
 indexed by `toolCallId` in `toolResults`; `ask-user-answers` custom messages index into `askAnswers`
 (never the turn list — the questionnaire card is their rendering); `subagent-completion` custom messages
 append a `subagentCompletion` turn (the shared contracts guard narrows both, on the live and read paths). The view re-derives rows each render
-(`deriveRows` is pure; `ChatView` memoizes) — stable row/step ids keep fold state across snapshots.
+(`deriveRows` is pure; `ChatTranscript` memoizes it, then reuses unchanged row objects via `stabilizeRows`
+kept in state) — stable row/step ids keep fold state across snapshots.
 
 **One live indicator, always.** pi splits a run into several assistant messages, so the reducer sweeps
 the per-message `streaming` flag on new-message start and the final `agent_settled` (at most one turn is
@@ -1381,7 +1398,7 @@ the lifecycle assertable.
 
 - Renderers are **theme-only via CSS-var token utilities** (no raw hex / inline `style`) — that's what
   lets the primitives wear any token theme, the key to reuse.
-- Keep presentational components **props-driven** (not store-bound); only `ChatView` wires the app. This
+- Keep presentational components **props-driven** (not store-bound); only `ChatView`/`ChatTranscript` wire the app. This
   is the seam for extracting a standalone `packages/chat-ui` later.
 - Keep this spec at **intent + boundary + invariants**; per-component behavior belongs in the
   components' jsdoc, per-tool detail in [tools/SPEC.md](tools/SPEC.md).
