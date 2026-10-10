@@ -373,7 +373,7 @@ test("re-opening the review tab keeps its review progress and only bumps the rev
 	const tab = openedChangesTab();
 	useAppStore.getState().setChangesTabViewed("w1", tab.id, "src/a.ts", true);
 	useAppStore.getState().setChangesTabCollapsed("w1", tab.id, { "bun.lock": false });
-	useAppStore.getState().clearChangesTabReveal("w1", tab.id);
+	useAppStore.getState().consumeChangesTabReveal("w1", tab.id, null);
 
 	await openChangesTab("w1", { kind: "branch" }, { revealPath: "src/b.ts" }, "keep");
 	expect(

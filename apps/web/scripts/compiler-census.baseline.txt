@@ -5,7 +5,6 @@ src/chat/TemplateEditorDialog.tsx TemplateEditorDialog
 src/chat/promptImages.tsx usePromptImages
 src/chat/resources/ResourcesInspector.tsx ResourcesInspector
 src/chat/tools/AskUserQuestionCard.tsx AskUserQuestionCard
-src/panels/DiffPane.tsx DiffPane
 src/panels/GithubSettings.tsx GithubSettings
 src/panels/JetBrainsAiCard.tsx JetBrainsAiCard
 src/panels/LineWidthSettings.tsx LineWidthControl

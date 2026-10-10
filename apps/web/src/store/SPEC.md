@@ -574,9 +574,10 @@ is not; unlike a `DiffTab` it carries **no content** — the pane reads `git.sta
 tab without a request. What the tab *does* own is review progress: `viewed` paths, `activePath` (the section
 at the top of the viewport, or the file shown in One-file mode; `ChangesPanel` highlights from it), per-path
 collapse overrides over the scale defaults, a one-shot `reveal` (`{ path, tick, commentId? }`, written by
-`openChangesTab` and consumed by the pane), `view` split|inline + `ignoreWhitespace` for all sections, and
-per-path `rendererId` / opaque `viewState` written through the workspace-explicit `setChangesTabSection*`
-actions. Each section also holds opaque `reviewDrafts`, updated by a workspace/tab/path/key-explicit
+`openChangesTab` and consumed by the pane in one `consumeChangesTabReveal` write that also lands
+`activePath`, the section's expansion and a finding's `reviewFocusRequest`), `view` split|inline +
+`ignoreWhitespace` for all sections, and per-path `rendererId` / opaque `viewState` written through the
+workspace-explicit `setChangesTabSection*` actions (an identical view state is not a write). Each section also holds opaque `reviewDrafts`, updated by a workspace/tab/path/key-explicit
 functional action. They survive renderer/view-state changes but not tab close or reload; writes cannot
 recreate a closed tab. The first scratch write keeps the preview without navigation, and no scratch write
 is a host review mutation. Renderers own the scratch shape and stale-selection policy.

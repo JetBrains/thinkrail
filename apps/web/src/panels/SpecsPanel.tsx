@@ -38,7 +38,10 @@ export function SpecsPanel({
 	onRetry: () => void;
 }) {
 	const nodes = useAppStore((s) => s.specsByWorkspace[workspaceId]) ?? null;
-	const activeTab = useAppStore((state) => selectActiveEditorTab(state, workspaceId));
+	const activeFilePath = useAppStore((state) => {
+		const tab = selectActiveEditorTab(state, workspaceId);
+		return tab?.kind === "file" ? tab.path : null;
+	});
 	const specRequest = useAppStore((s) => s.specRequest);
 
 	useEffect(() => {
@@ -66,7 +69,7 @@ export function SpecsPanel({
 						key={root.node.id}
 						tree={root}
 						workspaceId={workspaceId}
-						activeFilePath={activeTab?.kind === "file" ? activeTab.path : null}
+						activeFilePath={activeFilePath}
 						depth={0}
 					/>
 				))}

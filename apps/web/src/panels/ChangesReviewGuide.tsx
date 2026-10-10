@@ -88,15 +88,11 @@ export function ChangesReviewGuide({
 		.map((step) => step.comment.id);
 
 	const [sending, setSending] = useState(false);
-	const send = async (operation: () => Promise<void>) => {
+	const send = (operation: () => Promise<void>) => {
 		if (sending) return;
 		setSending(true);
-		try {
-			await operation();
-		} catch {
-		} finally {
-			setSending(false);
-		}
+		const done = () => setSending(false);
+		void Promise.resolve().then(operation).then(done, done);
 	};
 
 	const go = (index: number) => {
@@ -238,9 +234,7 @@ export function ChangesReviewGuide({
 												type="button"
 												data-testid="changes-review-guide-fix"
 												disabled={sending}
-												onClick={() =>
-													void send(() => sendReviewComment(workspaceId, step.comment.id))
-												}
+												onClick={() => send(() => sendReviewComment(workspaceId, step.comment.id))}
 												className="mt-8 rounded-[var(--radius-sm)] bg-primary px-8 py-2 tr-text-metadata text-text-on-primary hover:bg-control-primary-bg-hovered"
 											>
 												Fix this one
@@ -284,7 +278,7 @@ export function ChangesReviewGuide({
 					type="button"
 					data-testid="changes-review-guide-apply"
 					disabled={sending || openFindingIds.length === 0}
-					onClick={() => void send(() => sendReviewBatch(workspaceId, openFindingIds))}
+					onClick={() => send(() => sendReviewBatch(workspaceId, openFindingIds))}
 					title="Send every open finding to the agent"
 					className="flex h-24 items-center gap-4 rounded-[var(--radius-sm)] border border-control-border-default px-8 tr-text-metadata text-text-muted hover:bg-control-bg-hovered disabled:text-control-disabled-text"
 				>
