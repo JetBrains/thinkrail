@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { AssistantMessage } from "@thinkrail/contracts";
-import { type ChatRow, deriveRows, projectRows, turnDivider } from "./rows";
+import type { AssistantMessage, TurnChangeSet } from "@thinkrail/contracts";
+import { type ChatRow, deriveRows, matchTurnReceipt, projectRows, turnDivider } from "./rows";
 import { registerToolRenderer } from "./toolRegistry";
 import type { ChatTurn, ToolResultState } from "./types";
 
@@ -552,4 +552,120 @@ test("turnDivider treats every written file as a change when no classifier is su
 	const d = turnDivider(turns, 2);
 	expect(d?.specs).toEqual([]);
 	expect(d?.changedFiles).toEqual(["SPEC.md"]);
+});
+
+function agentTurn(id: string, startedAt: number, paths: string[], head = "b"): TurnChangeSet {
+	return {
+		id,
+		workspaceId: "ws",
+		sessionId: "s",
+		startedAt,
+		settledAt: startedAt + 1_000,
+		baseTree: "a".repeat(40),
+		headTree: head.repeat(40),
+		changes: paths.map((path) => ({ path, status: "modified" as const, added: 2, removed: 1 })),
+	};
+}
+
+test("a host turn receipt replaces the tool-argument file list for the round it falls into", () => {
+	const turns: ChatTurn[] = [
+		user("u1", 10_000),
+		assistantWithPaths("a1", [{ name: "write", path: "x.ts" }], 12_000),
+		done("s1", 15_000),
+		user("u2", 20_000),
+		assistantWithPaths("a2", [{ name: "write", path: "y.ts" }], 22_000),
+		done("s2", 25_000),
+	];
+	const records = [
+		agentTurn("r1", 10_400, ["x.ts", "generated.ts"]),
+		agentTurn("r2", 20_300, ["y.ts"], "c"),
+	];
+	const first = turnDivider(turns, 2, () => false, records);
+	expect(first?.changedFiles).toEqual(["generated.ts", "x.ts"]);
+	expect(first?.receipt?.scope).toEqual({
+		kind: "turn",
+		id: "r1",
+		baseTree: "a".repeat(40),
+		headTree: "b".repeat(40),
+		startedAt: 10_400,
+	});
+	const second = turnDivider(turns, 5, () => false, records);
+	expect(second?.changedFiles).toEqual(["y.ts"]);
+	expect(second?.receipt?.scope.id).toBe("r2");
+	// without a record the divider keeps the argument-derived list and offers no receipt
+	expect(turnDivider(turns, 5, () => false, [])?.receipt).toBeNull();
+	expect(turnDivider(turns, 5, () => false, [])?.changedFiles).toEqual(["y.ts"]);
+});
+
+test("several runs inside one round merge into one receipt spanning first base to last head", () => {
+	const receipt = matchTurnReceipt(
+		[agentTurn("r1", 1_000, ["a.ts"]), agentTurn("r2", 4_000, ["a.ts", "b.ts"], "c")],
+		800,
+		null,
+	);
+	expect(receipt?.changes.map((change) => change.path)).toEqual(["a.ts", "b.ts"]);
+	// a merged range is its own scope: it must not share a tab with the last run on its own
+	expect(receipt?.scope).toMatchObject({
+		id: "r1..r2",
+		baseTree: "a".repeat(40),
+		headTree: "c".repeat(40),
+		startedAt: 1_000,
+	});
+	expect(matchTurnReceipt([agentTurn("r1", 1_000, ["a.ts"])], 20_000, 30_000)).toBeNull();
+	expect(matchTurnReceipt([agentTurn("r1", 1_000, ["a.ts"])], null, 30_000)).toBeNull();
+});
+
+test("each run belongs to the round whose prompt started it, even across a quick follow-up", () => {
+	const turns: ChatTurn[] = [
+		user("u1", 10_000),
+		done("s1", 11_500),
+		user("u2", 12_000),
+		done("s2", 25_000),
+	];
+	const records = [agentTurn("r1", 10_200, ["x.ts"]), agentTurn("r2", 12_100, ["y.ts"], "c")];
+	expect(turnDivider(turns, 1, () => false, records)?.receipt?.scope.id).toBe("r1");
+	expect(turnDivider(turns, 3, () => false, records)?.receipt?.scope.id).toBe("r2");
+	// a round that failed before any assistant message still ends at the next prompt
+	const failed: ChatTurn[] = [user("u1", 10_000), user("u2", 12_000), done("s2", 25_000)];
+	expect(turnDivider(failed, 2, () => false, records)?.receipt?.scope.id).toBe("r2");
+});
+
+test("prompts less than one second apart cannot steal one another's receipts", () => {
+	const turns: ChatTurn[] = [
+		user("u1", 10_000),
+		done("s1", 10_300),
+		user("u2", 10_500),
+		done("s2", 10_900),
+	];
+	const records = [agentTurn("r1", 10_010, ["x.ts"]), agentTurn("r2", 10_510, ["y.ts"], "c")];
+	expect(turnDivider(turns, 1, () => false, records)?.receipt?.scope.id).toBe("r1");
+	expect(turnDivider(turns, 3, () => false, records)?.receipt?.scope.id).toBe("r2");
+});
+
+test("receipt paths and absolute spec-tool paths share one canonical specs entry", () => {
+	const turns: ChatTurn[] = [
+		user("u1", 1_000),
+		assistantWithPaths("a1", [{ name: "spec_create", path: "/worktree/docs/SPEC.md" }], 1_500),
+		done("s1", 3_000),
+	];
+	for (const classified of [false, true]) {
+		const divider = turnDivider(
+			turns,
+			2,
+			() => classified,
+			[agentTurn("r1", 1_200, ["docs/SPEC.md"])],
+			"/worktree",
+		);
+		expect(divider?.specs).toEqual(["docs/SPEC.md"]);
+		expect(divider?.changedFiles).toEqual([]);
+	}
+});
+
+test("receipt paths the spec matcher claims land on the specs side", () => {
+	const turns: ChatTurn[] = [user("u1", 1_000), done("s1", 3_000)];
+	const d = turnDivider(turns, 1, (path) => path.endsWith("SPEC.md"), [
+		agentTurn("r1", 1_200, ["src/a.ts", "docs/SPEC.md"]),
+	]);
+	expect(d?.specs).toEqual(["docs/SPEC.md"]);
+	expect(d?.changedFiles).toEqual(["src/a.ts"]);
 });

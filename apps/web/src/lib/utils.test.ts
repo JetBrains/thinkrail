@@ -126,6 +126,40 @@ test("layout resource identity ignores placement ids and separates delimiter-bea
 	);
 });
 
+test("a changes review tab is identified by its scope alone, apart from any file diff", () => {
+	const branch = layoutResourceIdentity({
+		kind: "changes",
+		id: "one",
+		name: "Changes",
+		scope: { kind: "branch" },
+	});
+	expect(branch).toBe(
+		layoutResourceIdentity({
+			kind: "changes",
+			id: "two",
+			name: "Other",
+			scope: { kind: "branch" },
+		}),
+	);
+	expect(branch).not.toBe(
+		layoutResourceIdentity({
+			kind: "changes",
+			id: "one",
+			name: "Changes",
+			scope: { kind: "commit", sha: "abc" },
+		}),
+	);
+	expect(branch).not.toBe(
+		layoutResourceIdentity({
+			kind: "diff",
+			id: "one",
+			name: "a",
+			path: "a",
+			scope: { kind: "branch" },
+		}),
+	);
+});
+
 test("normalizePath brings both separator styles to one form and drops a leading ./", () => {
 	expect(normalizePath("src/foo.ts")).toBe("src/foo.ts");
 	expect(normalizePath("C:\\wt\\src\\foo.ts")).toBe("C:/wt/src/foo.ts");

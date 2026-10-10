@@ -218,7 +218,8 @@ treatment.
   and the chat header, not a value pinned here — that says **what** is being diffed via the
   **`ChangesScopeMenu`** scope pill + the shared **`BranchPicker`** target-branch pill, plus the
   **List | Tree** toggle (`store.changesView`, app-wide) switching a flat list and a folder
-  **`ChangesTree`**; clicking a file in either opens/focuses its **center resource diff tab**, and every file
+  **`ChangesTree`**; a single click on a file in either opens/reveals it in the scope's **Changes review
+  tab** (double-click or *Open as tab*: its own diff tab — the two-presentation rule below), and every file
   row carries the shared **`ChangeRowActions`** menu. The row wrapper paints the complete hover/selected
   band, including the trailing menu slot; its inner open-file button remains transparent so that band
   cannot look clipped before the menu),
@@ -1045,8 +1046,8 @@ own section. The kebab menu (`plan-menu`, a
   phone class, so crossing the breakpoint swaps the code implementation and discards incompatible state.
   Scroll-backed view state goes through the one `useScrollViewState` hook: the offset is saved when the
   scroller detaches and re-applied when a scroller attaches. A renderer may fill its scroller only after
-  mount — the Pierre surfaces render nothing until their shared worker pool, torn down when the last
-  surface unmounts, has re-initialized — so a restore the scroller cannot yet hold stays pending until its
+  mount — the Pierre surfaces render nothing until their shared worker pool has initialized — so a
+  restore the scroller cannot yet hold stays pending until its
   content grows to fit or the user scrolls, and a pending offset is what gets saved if the tab leaves
   first. Without that hold, a tab switch back to a source diff landed at the top and then persisted 0.
   Two or more candidates become one ordered toggle whose ids are the test hooks. Threads whose selectors
@@ -1336,8 +1337,11 @@ own section. The kebab menu (`plan-menu`, a
   only reveals a tool therefore needs no fabricated path or fixed-right-panel assumption.
   `ChangesPanel` watches `changesRequest` (set by a chat turn-divider's "files changed" chip),
   **highlights** the requested file's row (resolved with `matchesWorktreePath` against `git.status`) **and
-  opens its diff tab** in the destination center group's **preview slot** — the chip/list-row click *is* the
-  user's explicit ask to see
+  opens the review tab at that file** in the destination center group's **preview slot** (a request with
+  `path: null` opens the tab without a reveal and without waiting for the panel's own `git.status`, so a
+  just-mounted panel's fallback off a pruned turn cannot redirect it; a request carrying a scope opens that
+  scope's tab) — the
+  chip/list-row click *is* the user's explicit ask to see
   that change, so stopping at a highlight read as broken, and following a chip is browsing, same as clicking
   the row it points at, so it reuses the slot rather than accumulating a kept tab per chip. A path no longer
   in the current diff (a round from days ago) degrades to highlight-only: there is no diff to show. **So does
@@ -1367,7 +1371,16 @@ own section. The kebab menu (`plan-menu`, a
   changes* (the workspace's work since diverging from the target branch — measured from the merge-base,
   so upstream commits landing on the target are never phantom rows here; the default) / *Uncommitted changes* / one **commit** from the
   branch's list — and the shared **`BranchPicker`** pill for the **target branch** (`workspace.setDiffBase`;
-  the panel converges on the broadcast `workspace.updated`, never optimistically). The menu's contents load
+  the panel converges on the broadcast `workspace.updated`, never optimistically). Below the two fixed rows
+  the menu offers **Last turn · N files** — the newest host-recorded agent run (`store.turnsByWorkspace`
+  read through `useWorkspaceTurns`; the shell loads it per connection on hosts at
+  `TURN_CHANGES_PROTOCOL_VERSION`; disabled with "No agent turn changed files yet" until a run changed
+  something) and, when more than one run exists, an **Agent turns** list (newest first, time · files ·
+  relative settle time). Choosing one sets the `turn` scope `{ id, baseTree, headTree, startedAt }`; the
+  review tab and per-file tabs read both sides from the snapshots (`/blob` serves tree-qualified paths),
+  so the scope stays frozen while the worktree moves on, and because its modified side is historical it
+  offers no revert or keep controls. A pruned snapshot is rejected like a rewritten commit. The menu's other
+  contents load
   **lazily on each open**, never on panel mount: `git.listCommits` for the commit rows (subject +
   `shortSha · author · relative time`) and a `git.status` probe under the uncommitted scope, which is what
   lets the *Uncommitted* row say “No uncommitted changes” (disabled) instead of opening an unexplained empty
@@ -1391,16 +1404,115 @@ own section. The kebab menu (`plan-menu`, a
   `server/src/git/SPEC.md`). The **target branch lives beside the scope menu, not inside it**
   (as first designed): a searchable list belongs in a combobox, and a nested Radix submenu closes itself when
   the menu re-renders as those lazy reads land.
-- **The diff is a center resource tab, not an inset inside the Changes tool.** Clicking a Changes row
-  reads `git.diffFile` and opens one `DiffTab` per *(path, scope)* through `openDiffInTab`; preview/keep,
-  navigation-stamp, target-ref, and live-refresh semantics are unchanged. `DiffPane` describes the returned
-  `ResourceMeta`, resolves the registry for `diff`, and lazily mounts the selected renderer. Byte-only
+- **The diff is a center resource tab, not an inset inside the Changes tool, and Changes has two
+  presentations.** A single click on a Changes row opens (or reveals inside) the workspace's **review
+  tab** for the panel's scope — `ChangesReviewPane`, one `ChangesTab` per *(workspace, scope)*
+  (`changesTabId`), preview intent — with every changed file of the scope as a **section** in one
+  scrolling surface: sticky section headers (status, path, `+N −M`, the renderer segment when the
+  registry returns more than one candidate, *Open as tab*, *Revert file*, *Viewed*), bodies that read
+  `git.diffFile` lazily as they scroll into view and refresh under the same live-refresh contract as a
+  `DiffTab`. A double click, or a section's *Open as tab*, opens the per-file **`DiffTab`** *(path,
+  scope)* through `openDiffInTab` at the `keep` intent — the deep single-file surface is a promotion,
+  never the first click. Double-click carries its leading click's preview-slot claim; explicit *Open as
+  tab* preserves an existing preview instead. The review tab has two **view modes**, chosen by a `Stacked | One file` segment
+  in its toolbar and held app-wide (`store.changesLayout`, like `changesView`): *Stacked* is the
+  continuous list; *One file* shows one section at a time with `Prev / Next` and a `n / N` counter
+  (`V` toggles viewed and advances when it marks, `Alt+↓` / `Alt+↑` step files). Both modes read one model —
+  the scope's ordered file list, `viewed`, `activePath`, collapse overrides, `Split | Inline`, ¶ — so
+  switching never loses review progress; a second tab kind per mode was rejected for exactly that reason.
+  **Transient authoring belongs to the tab section, not its mounted renderer.** An optional scoped
+  review-draft context retains the stamped selection, composer text/caret, pending submission, and
+  unsaved thread edits across virtualization, collapse, renderer and Stacked/One-file switches. The
+  shared `useStampedComposer` and thread card use this policy for code and rich surfaces; renderer,
+  side/page, file, scope and workspace identities isolate their scratch state. Notebook selections retain
+  a stamped side and cell index, never a parsed cell object's identity. Cancel and successful
+  Save/Send retire it; late completions cannot close a newer selection. Restoring scratch never focuses
+  the textarea or sends a host mutation. Existing thread edits retain blur-save and shortcut-save;
+  sending waits for any edited body to be saved, and Escape discards only the local edit. The thread card
+  has one edit-state path on every surface — without a scratch context it falls back to local state, so
+  the per-file tab cannot drift from the review tab.
+  Content-stamp changes still invalidate stale selections.
+  Scratch remains tab-lifetime only, not reload-persistent, and its first write keeps the preview.
+  **The Changes sidebar is the review tab's navigator**: its row highlight follows the tab's
+  `activePath` (the section whose header has crossed the toolbar's midline, or the single file shown),
+  viewed files carry a check glyph, and clicking a row reveals that section (and expands it if it was
+  collapsed) — the reveal remains anchored by path while asynchronous sections determine their heights,
+  until a view-mode change or user wheel, touch, pointer, or keyboard input takes over. A timeout cannot bound remote reads.
+  Finding navigation hands scrolling to the thread only after the section reveal, and disables further
+  header corrections so the thread cannot be scrolled back out of view; a reveal the user takes over, a
+  newer reveal, or the pane unmounting withdraws its pending `reviewFocusRequest`, so a thread that mounts
+  later never yanks the viewport to a finding nobody is waiting for. Each section receives only its own
+  path's slice of the tab (scratch, kept keys, flags) behind `memo`, so a keystroke in one section's
+  composer re-renders that section, not its siblings; a stacked section whose body has natural height saves
+  no view state — only One-file and bounded renderers own a scroller; `changesView` defaults to **Tree**, and a
+  file row is `change-item` in both views because it is the same thing. When the shown file leaves the
+  scope (reverted, or the agent removed its change), One-file mode stays at that position rather than
+  jumping back to the first file. The list ends in a measured tail the height of the viewport so the last file can
+  be scrolled to the top and become active, as on GitHub. The scroll-spy never auto-reveals the Review
+  tool: `selectActiveReviewedPath` deliberately ignores the review tab, because a reveal fired by
+  scrolling would replace the Changes navigator in its shared side group mid-read.
+  **Hunk triage is an overlay on the same tab, not a second mutation model.** In a mutable scope every
+  hunk toolbar gains **Keep** beside the existing Revert and Ask-agent actions; a kept hunk is recorded
+  on the tab (`kept[path]`) under a **content key** — a hash of the hunk's removed + added text, with the
+  duplicate-group size and original-side position when content is identical, so reverting an earlier
+  twin cannot transfer its decision to an unreviewed twin. Ambiguous groups conservatively lose their
+  decisions when their size changes. Unique keys survive the line shifts a neighbouring revert causes and lapse the moment the
+  agent changes that hunk again. A *reverted* hunk needs no state: ThinkRail's revert restores the base
+  text, the hunk leaves the diff, and the toast's Undo is the way back. The section header shows `k/n
+  kept` and keeping a file's last hunk atomically marks it **viewed** — an action edge, not a standing
+  render rule, so an explicitly un-viewed file stays un-viewed through virtualization and mode changes.
+  Hunk and file progress are one model; the stacked view's bottom bar shows `n of N reviewed`, **Next unreviewed** (`J`, wraps) and
+  **Mark all viewed**, and `V` toggles the active section. There is deliberately no *Revert all*: the
+  host has no atomic multi-file discard and a bulk destructive action on a review surface earns its
+  keystroke only once it exists server-side. The per-file `DiffTab` passes no triage and is unchanged.
+  **The reviewer's story is a walk, not a report.** When the workspace review carries a `guide` (the newest
+  plan-step verdict's summary and suggested reading order, see [[submodule-server-reviews]]) or any open
+  agent finding, the stacked view grows a left **review guide rail** (`ChangesReviewGuide`, toggled from the
+  toolbar, never shown in One-file mode): verdict badge + summary, the numbered reading order (steps for
+  files outside the scope are disabled rather than hidden, so the order stays legible), and the findings.
+  `guideSteps` is the one derivation — reading steps first, then open agent findings by path — and
+  **Start / Next / Restart** (`N`, `P` back) walk it, skipping steps whose file is not in this scope
+  (`nextGuideStep`; a disabled step is shown for context, never landed on): a step reveals its section
+  through the tab's one-shot reveal, a finding step also fires the store's `reviewFocusRequest`, so the
+  thread card is scrolled to by the same path the Review panel uses. *Fix this one* and *Apply fixes* are
+  the Review panel's send paths (`sendReviewComment`, `sendReviewBatch` over the open finding ids) behind
+  one busy flag, not new mutations. The cursor is the step's identity (path or finding id), so a
+  finding resolved from under it yields to its successor instead of skipping one. The rail never renders
+  on phone-class viewports — 280px of a 390px
+  screen would leave no diff to guide through. Plain-letter shortcuts (`V`, `J`, `N`, `P`) belong to the
+  review tab the center is looking at (`ownsReviewShortcut`: the attention group's selected tab, no
+  modal or menu layer open, no text-entry target, and no earlier handler consumed the event), so two review scopes split side by side cannot both answer
+  one keystroke. **Scale rules**:
+  a section whose file changed more than 400 lines, or whose path is a lock/generated file, mounts
+  collapsed behind *Expand* / *Open as tab*; a scope with more than 50 files shows a dismissable notice
+  offering *One file*; nothing switches mode on its own, because a review surface that re-arranges
+  itself mid-review loses the reader's place. The list is a flat `react-virtuoso` list, one item per file
+  with the header sticky inside its item (no `GroupedVirtuoso`: a group header that outlives its item's
+  content could not host the per-file controls); Pierre `CodeView` was evaluated for the container and rejected because its items
+  are only `file` / `diff`, so it cannot host the rendered-markdown, image, SVG, CSV, JSON, notebook, and PDF
+  renderers that a section must dispatch exactly like `DiffPane` does. **A section holds its shape
+  before it has its diff.** Each section reads `git.diffFile` lazily when its body first becomes
+  visible, through the pane's `SectionContentCache`: in-flight reads are shared only for the same path,
+  diff target, and filesystem generation. The latest request may populate the cache after its section
+  scrolls out, but an older initial read cannot overwrite a newer target or a live refresh. A failed
+  read stores nothing, so *Retry* reads again. While loading, a stacked section's
+  placeholder reserves `estimatedSectionHeight(change)` — `232 + 40 × changed lines` px, capped at
+  20 000 — which sits within about 2× of what Pierre renders for the same stats. Without that reservation
+  a skeleton a tenth the size of its diff made Virtuoso mount a dozen-plus sections at once (that many
+  concurrent reads), then re-estimate the whole list as each one grew, so a jump to a far file landed
+  tens of files away. Both `DiffPane` and a section
+  render the shared **`DiffSurface`**: it describes the returned `ResourceMeta`, resolves the registry
+  for `diff`, lazily mounts the selected renderer, hosts that file's review threads and hunk actions,
+  and shows the unplaced strip. Byte-only
   original sides use the response's resolved original oid with `/blob`; an absent side is explicit, never a
   bytes value with a fabricated URL. The fixed toolbar keeps path and per-file review send, then exposes ¶
   whitespace, modified-side copy, and **Split | Inline** only when the selected renderer advertises the
   corresponding capability. It renders one `view-toggle-<renderer suffix>` segment per candidate when the
   registry returns more than one. Renderer choice replaces the old markdown-only `rendered` state; layout
-  and whitespace remain independent diff state.
+  and whitespace remain independent diff state. The review tab's toolbar carries the same whitespace and
+  `Split | Inline` controls for every section at once, the scope and target as read-only chips (the scope
+  is chosen in the Changes header and is part of the tab's identity), the file / `+ −` totals with the
+  viewed count, *Collapse all* / *Expand all*, and `Send review (N)` over the workspace's drafts.
 
   Bundled candidates are registered once from `panels/resources/register.ts`: `thinkrail/code` renders
   every source diff with Pierre `FileDiff` and supports copy, layout, and whitespace controls;
@@ -1572,11 +1684,17 @@ own section. The kebab menu (`plan-menu`, a
   and disconnects both the moment the card is revealed; it is not a standing listener, so Pierre
   re-rendering on every annotation change costs nothing once focus has settled. A diff whose
   two sides are identical (a file that left the change set after an out-of-band commit) shows an explicit
-  `diff-empty` notice above Pierre's surface instead of a blank pane. The lazy Pierre
-  file/diff modules mount `WorkerPoolContextProvider` only when their surface renders; Pierre's internal
-  module singleton keeps one pool across those providers and creates module workers from
-  `@pierre/diffs/worker/worker.js`. The phone code-file implementation is Pierre `File` with the same theme
-  and review grammar; desktop files alone load Monaco.
+  `diff-empty` notice above Pierre's surface instead of a blank pane. The lazy Pierre file/diff modules
+  mount `PierreProvider` only when their surface renders; it hands Pierre's `WorkerPoolContext` the module
+  singleton (`getOrCreateWorkerPoolSingleton`, four module workers from `@pierre/diffs/worker/worker.js`)
+  and **never terminates it**: the pool is created the first time any code surface renders and then lives
+  for the page. Pierre's own provider tears the pool down the moment its last instance unmounts, and the
+  virtualised review list reaches that moment on every jump or fast scroll into files that have not
+  loaded yet; each rebuild spawned the workers again, re-fetched the WASM, theme and grammars, dropped
+  every highlighted AST, and painted nothing until initialised — the stacked view's "loading forever".
+  Four idle workers are the price of never paying that again; the list mounts a handful of sections at a
+  time, so four keep up. The phone code-file implementation is Pierre `File` with the same theme and
+  review grammar; desktop files alone load Monaco.
 
   Mutable scopes (`branch`, `uncommitted`, `pinned`) receive `hunkActions` only after the current welcome
   advertises `CHANGE_MUTATIONS_PROTOCOL_VERSION` and the diff metadata carrying both hashes has landed.

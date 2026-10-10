@@ -67,6 +67,32 @@ export async function resolveDiffRange(
 			resolvedOriginalOid: resolved.out,
 		};
 	}
+	if (scope.kind === "turn") {
+		if (!OID.test(scope.baseTree) || !OID.test(scope.headTree))
+			throw new Error(`Not a tree id: ${scope.baseTree}..${scope.headTree}`);
+		for (const tree of [scope.baseTree, scope.headTree]) {
+			const resolved = await gitAsync(ws.worktreePath, [
+				"rev-parse",
+				"--verify",
+				"--quiet",
+				`${tree}^{tree}`,
+			]);
+			throwExecutionFailure(resolved);
+			if (!resolved.ok || !resolved.out)
+				throw new CodedError(
+					"UNKNOWN_COMMIT",
+					"That turn's snapshot is no longer in this repository",
+				);
+		}
+		return {
+			listPrefix: ["diff"],
+			listRevs: [scope.baseTree, scope.headTree],
+			untracked: false,
+			originalRef: scope.baseTree,
+			modifiedRef: scope.headTree,
+			resolvedOriginalOid: scope.baseTree,
+		};
+	}
 	if (scope.kind === "commit") {
 		if (!OID.test(scope.sha)) throw new Error(`Not a commit id: ${scope.sha}`);
 		const resolved = await gitAsync(ws.worktreePath, [

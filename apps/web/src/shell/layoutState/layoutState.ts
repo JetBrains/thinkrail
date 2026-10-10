@@ -320,6 +320,14 @@ function isWorkspaceView(value: unknown): value is WorkspaceViewState {
 				return hasOnlyKeys(scope, ["kind", "sha"]) && typeof scope.sha === "string";
 			case "pinned":
 				return hasOnlyKeys(scope, ["kind", "baseRef"]) && typeof scope.baseRef === "string";
+			case "turn":
+				return (
+					hasOnlyKeys(scope, ["kind", "id", "baseTree", "headTree", "startedAt"]) &&
+					typeof scope.id === "string" &&
+					typeof scope.baseTree === "string" &&
+					typeof scope.headTree === "string" &&
+					typeof scope.startedAt === "number"
+				);
 			default:
 				return false;
 		}
@@ -342,6 +350,8 @@ function isWorkspaceView(value: unknown): value is WorkspaceViewState {
 					typeof tab.path === "string" &&
 					validDiffScope(tab.scope)
 				);
+			case "changes":
+				return hasOnlyKeys(tab, ["kind", "id", "name", "scope"]) && validDiffScope(tab.scope);
 			case "chat":
 				return (
 					hasOnlyKeys(tab, ["kind", "id", "name", "sessionId"]) && typeof tab.sessionId === "string"

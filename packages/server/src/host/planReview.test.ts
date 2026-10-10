@@ -10,6 +10,7 @@ import {
 	SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import type { ReviewFailedPayload, Workspace } from "@thinkrail/contracts";
+import { isPlanReviewResult } from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import {
 	configurePiRuntime,
@@ -38,6 +39,7 @@ import {
 	setReviewFailedPublisher,
 	startPlanReview,
 } from "./requestReview";
+import * as reviewLock from "./reviewLock";
 import { withReviewLock } from "./reviewLock";
 import { claimItemFix, isItemUnderActiveReview, releaseItemFix } from "./todoReview";
 
@@ -206,6 +208,140 @@ test("request_changes with auto-fix on files the findings AND delivers the fix t
 	// `sent` is the delivery proof: a rejected send rolls the finding back to `draft`.
 	expect(comments[0]?.status).toBe("sent");
 	expect(comments[0]?.body).toContain("loop bound is wrong");
+});
+
+test("a verdict's summary and reading order land on the workspace review as its guide", async () => {
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const guided = [
+		"```json",
+		'{ "verdict": "approve", "summary": "Small and coherent.",',
+		'  "readingOrder": [ { "path": "a.ts", "why": "the only change" } ], "findings": [] }',
+		"```",
+	].join("\n");
+
+	startPlanReview(WS, sessionId, id, verdictRunner(guided));
+	await settle(sessionId, id);
+
+	const guide = (await getReviewSnapshot(WS)).review.guide;
+	expect(guide).toMatchObject({
+		summary: "Small and coherent.",
+		readingOrder: [{ path: "a.ts", why: "the only change" }],
+		verdict: "approve",
+		todoId: id,
+		sessionId,
+	});
+	expect(typeof guide?.reviewedSha).toBe("string");
+
+	// the next verdict replaces the guide even when it carries no narrative of its own
+	const second = committedItem(sessionId, "second step");
+	startPlanReview(WS, sessionId, second, verdictRunner(requestChanges));
+	await settle(sessionId, second);
+	expect((await getReviewSnapshot(WS)).review.guide).toMatchObject({
+		summary: "off-by-one",
+		readingOrder: [],
+		verdict: "request_changes",
+		todoId: second,
+	});
+	const third = committedItem(sessionId, "third step");
+	startPlanReview(WS, sessionId, third, verdictRunner(approve));
+	await settle(sessionId, third);
+	expect((await getReviewSnapshot(WS)).review.guide).toMatchObject({
+		summary: "",
+		readingOrder: [],
+		verdict: "approve",
+		todoId: third,
+	});
+
+	// a reading order past the cap, or with a malformed step, is not a verdict at all
+	const tooLong = `{ "verdict": "approve", "findings": [], "readingOrder": ${JSON.stringify(
+		Array.from({ length: 13 }, (_, index) => ({ path: `f${index}.ts`, why: "x" })),
+	)} }`;
+	expect(isPlanReviewResult({ ...JSON.parse(tooLong), itemId: id, itemTitle: "step" })).toBe(false);
+	expect(
+		isPlanReviewResult({
+			itemId: id,
+			itemTitle: "step",
+			verdict: "approve",
+			findings: [],
+			readingOrder: [{ path: "a.ts" }],
+		}),
+	).toBe(false);
+});
+
+test.each([
+	"button",
+	"tool",
+	"auto-fix-off",
+] as const)("%s verdict keeps its guide and findings together across queued Clears", async (path) => {
+	if (path === "auto-fix-off") updateConfig({ reviewAutoFix: false });
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const gate = Promise.withResolvers<void>();
+	const queued = Promise.withResolvers<void>();
+	const realLock = withReviewLock;
+	const held = realLock(WS, () => gate.promise);
+	const firstClear = realLock(WS, () => reviews.clearReview(WS));
+	const lockSpy = spyOn(reviewLock, "withReviewLock").mockImplementation(
+		<T>(key: string, operation: () => Promise<T>): Promise<T> => {
+			const result = realLock(key, operation);
+			queued.resolve();
+			return result;
+		},
+	);
+	let reviewed: Promise<unknown> = Promise.resolve();
+	try {
+		if (path === "tool") {
+			installRequestReviewSeam(verdictRunner(requestChanges));
+			const ctx = {
+				sessionManager: { getSessionId: () => sessionId },
+			} as unknown as ExtensionToolContext;
+			reviewed = createRequestReviewTool().execute("tc", { itemId: id }, undefined, undefined, ctx);
+		} else {
+			startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+		}
+		await queued.promise;
+		const lastClear = realLock(WS, async () => {
+			const snapshot = await getReviewSnapshot(WS);
+			await reviews.clearReview(WS);
+			return snapshot;
+		});
+		gate.resolve();
+		await Promise.all([held, firstClear, reviewed]);
+		const cleared = await lastClear;
+		await settle(sessionId, id);
+
+		expect(cleared.comments).toHaveLength(1);
+		expect(cleared.review.guide).toMatchObject({
+			verdict: "request_changes",
+			summary: "off-by-one",
+			todoId: id,
+		});
+		const current = await getReviewSnapshot(WS);
+		expect(current.comments).toEqual([]);
+		expect(current.review.guide).toBeUndefined();
+	} finally {
+		gate.resolve();
+		lockSpy.mockRestore();
+		await Promise.all([held, firstClear, reviewed]);
+		await settle(sessionId, id);
+	}
+});
+
+test("an approve whose record fails does not publish a successful guide", async () => {
+	const sessionId = await workerSession();
+	const id = committedItem(sessionId);
+	const spy = spyOn(todos, "approveTodoReview").mockImplementation(() => {
+		throw new Error("sidecar rename failed");
+	});
+	try {
+		startPlanReview(WS, sessionId, id, verdictRunner(approve));
+		await settle(sessionId, id);
+	} finally {
+		spy.mockRestore();
+	}
+	expect(todoReviewRecord({ workspaceId: WS, sessionId, id })).toBeUndefined();
+	expect((await getReviewSnapshot(WS)).review.guide).toBeUndefined();
 });
 
 test("request_changes with auto-fix OFF files the findings but sends nothing — the user decides", async () => {
@@ -426,6 +562,7 @@ test("a finding whose store write fails cancels the review instead of spending t
 	expect(
 		(await getReviewSnapshot(WS)).comments.filter((c) => c.origin?.todoId === id),
 	).toHaveLength(0);
+	expect((await getReviewSnapshot(WS)).review.guide).toBeUndefined();
 	expect(itemReviewActive(sessionId, id)).toBe(false);
 });
 
@@ -446,6 +583,7 @@ test("a re-review approve does NOT settle the step while an earlier finding is s
 
 	// The plan must not read ready-to-ship over a finding the Review panel still shows as open.
 	expect(todoReviewRecord(ref)?.state).not.toBe("reviewed");
+	expect((await getReviewSnapshot(WS)).review.guide?.verdict).toBe("request_changes");
 	expect((await getReviewSnapshot(WS)).comments.find((c) => c.id === sent?.id)?.status).toBe(
 		"sent",
 	);
@@ -624,6 +762,7 @@ test("the tool path deletes the just-filed drafts when the mark-sent transaction
 	expect(todoReviewRecord(ref)).toBeUndefined();
 	expect(todoReviewAutoCycles(ref)).toBeUndefined();
 	expect(itemReviewActive(sessionId, id)).toBe(false);
+	expect((await getReviewSnapshot(WS)).review.guide).toBeUndefined();
 });
 
 const requestChangesTwo = [
@@ -667,6 +806,7 @@ test("the tool path deletes the first filed draft when a later finding fails to 
 	expect(todoReviewRecord(ref)).toBeUndefined();
 	expect(todoReviewAutoCycles(ref)).toBeUndefined();
 	expect(itemReviewActive(sessionId, id)).toBe(false);
+	expect((await getReviewSnapshot(WS)).review.guide).toBeUndefined();
 });
 
 test("the button path files under the review lock, so an interleaved send cannot strand a finding", async () => {
@@ -707,6 +847,7 @@ test("the button path files under the review lock, so an interleaved send cannot
 	).toHaveLength(0);
 	expect(todoReviewRecord(ref)).toBeUndefined();
 	expect(itemReviewActive(sessionId, id)).toBe(false);
+	expect((await getReviewSnapshot(WS)).review.guide).toBeUndefined();
 });
 
 test("the button path delivers canonical ids even when a Review send races before worker delivery", async () => {
@@ -786,6 +927,7 @@ test("the tool path rolls back and deletes the findings when the cycle record fa
 	expect(todoReviewRecord(ref)).toBeUndefined();
 	expect(todoReviewAutoCycles(ref)).toBeUndefined();
 	expect(itemReviewActive(sessionId, id)).toBe(false);
+	expect((await getReviewSnapshot(WS)).review.guide).toBeUndefined();
 });
 
 test("the button path deletes the filed drafts when the cycle record fails", async () => {
@@ -811,6 +953,7 @@ test("the button path deletes the filed drafts when the cycle record fails", asy
 	expect(todoReviewRecord(ref)).toBeUndefined();
 	expect(todoReviewAutoCycles(ref)).toBeUndefined();
 	expect(isItemUnderActiveReview(sessionId, id)).toBe(false);
+	expect((await getReviewSnapshot(WS)).review.guide).toBeUndefined();
 });
 
 test("the auto-fix-off path deletes the filed drafts when the cycle record fails", async () => {
@@ -834,6 +977,7 @@ test("the auto-fix-off path deletes the filed drafts when the cycle record fails
 	).toHaveLength(0);
 	expect(todoReviewRecord(ref)).toBeUndefined();
 	expect(itemReviewActive(sessionId, id)).toBe(false);
+	expect((await getReviewSnapshot(WS)).review.guide).toBeUndefined();
 });
 
 test("a request_review that fails before the review starts releases its claim, so the retry runs", async () => {

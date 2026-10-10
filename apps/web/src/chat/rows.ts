@@ -2,10 +2,14 @@ import {
 	assistantToolCallsAreExecutable,
 	type BackgroundCommandCompletionDetails,
 	type DelegationRunDetails,
+	type GitDiffScope,
+	type GitFileChange,
 	type ReviewFixDetails,
+	type TurnChangeSet,
 	type UserMessage,
 } from "@thinkrail/contracts";
 import { strArg } from "@thinkrail/extension-api/web";
+import { projectRelativePath } from "../lib";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { resolveProminence } from "./toolRegistry";
 import type { ChatTurn, CompactionState, FailureRecovery, ToolResultState } from "./types";
@@ -106,6 +110,8 @@ export function deriveRows(
 	toolResults: Record<string, ToolResultState>,
 	isStreaming: boolean,
 	isSpec?: (path: string) => boolean,
+	agentTurns: readonly TurnChangeSet[] = [],
+	workspaceRoot?: string,
 ): ChatRow[] {
 	const rows: ChatRow[] = [];
 	let run: ActivityStep[] = [];
@@ -212,7 +218,7 @@ export function deriveRows(
 			(turns[i + 1]?.kind === "user" || (i === turns.length - 1 && !isStreaming));
 		if (roundEnded) {
 			flushRun();
-			const data = turnDivider(turns, i, isSpec);
+			const data = turnDivider(turns, i, isSpec, agentTurns, workspaceRoot);
 			if (data) rows.push({ kind: "divider", id: `${turn.id}:divider`, data });
 		}
 	}
@@ -220,11 +226,43 @@ export function deriveRows(
 	return rows;
 }
 
+export interface TurnReceipt {
+	scope: Extract<GitDiffScope, { kind: "turn" }>;
+	changes: GitFileChange[];
+}
+
 export interface TurnDividerData {
 	elapsedMs: number | null;
 	toolCount: number;
 	specs: string[];
 	changedFiles: string[];
+	receipt: TurnReceipt | null;
+}
+
+export function matchTurnReceipt(
+	agentTurns: readonly TurnChangeSet[],
+	startMs: number | null,
+	nextStartMs: number | null,
+): TurnReceipt | null {
+	if (startMs === null) return null;
+	const runs = agentTurns.filter(
+		(turn) => turn.startedAt >= startMs && (nextStartMs === null || turn.startedAt < nextStartMs),
+	);
+	const first = runs[0];
+	const last = runs.at(-1);
+	if (!first || !last) return null;
+	const byPath = new Map<string, GitFileChange>();
+	for (const run of runs) for (const change of run.changes) byPath.set(change.path, change);
+	return {
+		scope: {
+			kind: "turn",
+			id: first === last ? last.id : `${first.id}..${last.id}`,
+			baseTree: first.baseTree,
+			headTree: last.headTree,
+			startedAt: first.startedAt,
+		},
+		changes: [...byPath.values()].sort((a, b) => a.path.localeCompare(b.path)),
+	};
 }
 
 const SPEC_WRITER_TOOL = "spec_create";
@@ -235,6 +273,8 @@ export function turnDivider(
 	turns: ChatTurn[],
 	endIndex: number,
 	isSpec: (path: string) => boolean = () => false,
+	agentTurns: readonly TurnChangeSet[] = [],
+	workspaceRoot?: string,
 ): TurnDividerData | null {
 	let userIdx = -1;
 	for (let i = endIndex; i >= 0; i--) {
@@ -257,8 +297,9 @@ export function turnDivider(
 				toolCount++;
 				const specWrite = block.name === SPEC_WRITER_TOOL;
 				if (!specWrite && !FILE_WRITER_TOOLS.has(block.name)) continue;
-				const path = strArg(block.arguments, "path");
-				if (!path) continue;
+				const reportedPath = strArg(block.arguments, "path");
+				if (!reportedPath) continue;
+				const path = projectRelativePath(reportedPath, workspaceRoot);
 				if (specWrite || isSpec(path)) written.set(path, true);
 				else if (!written.has(path)) written.set(path, false);
 			}
@@ -271,10 +312,21 @@ export function turnDivider(
 	const startMs = user?.kind === "user" ? user.message.timestamp : null;
 	const elapsedMs = startMs != null && endMs != null ? endMs - startMs : null;
 
+	const nextUser = turns[endIndex + 1];
+	const nextStartMs = nextUser?.kind === "user" ? (nextUser.message.timestamp ?? null) : null;
+	const receipt = matchTurnReceipt(agentTurns, startMs ?? null, nextStartMs);
 	const specs: string[] = [];
 	const changedFiles: string[] = [];
 	for (const [path, isSpecPath] of written) (isSpecPath ? specs : changedFiles).push(path);
-	return { elapsedMs, toolCount, specs, changedFiles };
+	if (receipt) {
+		changedFiles.length = 0;
+		for (const change of receipt.changes) {
+			if (written.get(change.path) === true || isSpec(change.path)) {
+				if (!specs.includes(change.path)) specs.push(change.path);
+			} else changedFiles.push(change.path);
+		}
+	}
+	return { elapsedMs, toolCount, specs, changedFiles, receipt };
 }
 
 export function rowIndexForTurn(rows: ChatRow[], turnId: string): number {

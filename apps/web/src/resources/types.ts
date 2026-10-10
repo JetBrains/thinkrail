@@ -72,6 +72,13 @@ export interface HunkActions {
 		notice?: string;
 	};
 	agentWorking?: boolean;
+	triage?: HunkTriage;
+}
+
+export interface HunkTriage {
+	keptKeys: ReadonlySet<string>;
+	setKept(key: string, kept: boolean): void;
+	onHunkKeys(keys: readonly string[]): void;
 }
 
 export interface ResourceDiffProps {
@@ -110,6 +117,7 @@ export interface ResourceRenderer {
 		copy: boolean;
 		layout: boolean;
 		whitespace: boolean;
+		boundedDiff?: boolean;
 	};
 	loadView?(): Promise<{ default: ComponentType<ResourceViewProps> }>;
 	loadDiff?(): Promise<{ default: ComponentType<ResourceDiffProps> }>;

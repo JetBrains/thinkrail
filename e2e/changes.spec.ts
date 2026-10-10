@@ -27,7 +27,7 @@ test("Changes tab shows the active worktree's diff and swaps per workspace", asy
 	const changed = page.getByTestId("change-item").filter({ hasText: "README.md" });
 	await expect(changed).toHaveAttribute("data-status", "modified");
 
-	await changed.click();
+	await changed.dblclick();
 	const diffTab = page.locator('[data-testid="editor-tab"][data-kind="diff"]');
 	await expect(diffTab).toHaveCount(1);
 	await expect(diffTab).toHaveAttribute("data-active", "true");
@@ -43,11 +43,11 @@ test("Changes tab shows the active worktree's diff and swaps per workspace", asy
 	await expect(page.getByTestId("view-toggle-code")).toHaveAttribute("data-active", "true");
 	await expect(renderedDiff).toHaveCount(0);
 
-	await changed.click();
+	await changed.dblclick();
 	await expect(diffTab).toHaveCount(1);
 
 	writeFileSync(join(worktree, "script.ts"), "export const edited = true;\n");
-	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).dblclick();
 	await expect(diffText(page, "edited = true")).toBeVisible();
 	await expect(page.getByTestId("diff-toggle-split")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("view-toggle-markdown")).toHaveCount(0);
@@ -83,7 +83,7 @@ test("Rendered markdown diff of a large repetitive file never blocks the main th
 		}).observe({ type: "longtask" });
 	});
 
-	await page.getByTestId("change-item").filter({ hasText: "LARGE.md" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "LARGE.md" }).dblclick();
 	await expect(page.getByTestId("rendered-diff-loading")).toBeVisible();
 	const renderedDiff = page.getByTestId("rendered-diff");
 	await expect(renderedDiff.locator("ins").filter({ hasText: "EDITED" }).first()).toBeVisible({
@@ -109,7 +109,7 @@ test("Rendered markdown diff shows an error placeholder when the merge worker fa
 	// Rendered is the default view, so abort the merge worker before opening the diff.
 	await page.route(/htmldiff\.worker/, (route) => route.abort());
 	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "README.md" }).dblclick();
 	await expect(page.getByTestId("rendered-diff-error")).toBeVisible();
 	await expect(page.getByTestId("rendered-diff-error")).toContainText("Source");
 
@@ -127,7 +127,7 @@ test("Rendered markdown diff follows live edits on disk (stale merge cancelled, 
 	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nfirst edit by e2e\n");
 
 	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("change-item").filter({ hasText: "README.md" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "README.md" }).dblclick();
 	const renderedDiff = page.getByTestId("rendered-diff");
 	await expect(renderedDiff.locator("ins").filter({ hasText: "first edit by e2e" })).toBeVisible();
 
@@ -167,7 +167,7 @@ test("Rendered markdown diff collapses unchanged blocks and list items around th
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-uncommitted").click();
-	await page.getByTestId("change-item").filter({ hasText: "FOCUS.md" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "FOCUS.md" }).dblclick();
 	const renderedDiff = page.getByTestId("rendered-diff");
 	await expect(renderedDiff.locator("ins").filter({ hasText: "revised" })).toBeVisible();
 	await expect(page.getByTestId("rendered-diff-empty")).toHaveCount(0);
@@ -216,7 +216,7 @@ test("Rendered markdown diff of a front-matter-only change says the preview is i
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-uncommitted").click();
-	await page.getByTestId("change-item").filter({ hasText: "META.md" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "META.md" }).dblclick();
 	const renderedDiff = page.getByTestId("rendered-diff");
 	await expect(page.getByTestId("rendered-diff-empty")).toContainText("Source");
 	const collapsed = renderedDiff.getByTestId("rendered-diff-collapsed");
@@ -272,7 +272,7 @@ test("Rendered markdown diff keeps attribute-only changes visible: a ticked task
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-uncommitted").click();
-	await page.getByTestId("change-item").filter({ hasText: "ATTR.md" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "ATTR.md" }).dblclick();
 	const renderedDiff = page.getByTestId("rendered-diff");
 	await expect(renderedDiff.locator("ins").filter({ hasText: "edited" })).toBeVisible();
 	await expect(page.getByTestId("rendered-diff-empty")).toHaveCount(0);
@@ -322,12 +322,12 @@ test("Rendered markdown diff aligns identical twin blocks by position, so neithe
 	await page.getByTestId("changes-scope-uncommitted").click();
 	const renderedDiff = page.getByTestId("rendered-diff");
 
-	await page.getByTestId("change-item").filter({ hasText: "VOUCH.md" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "VOUCH.md" }).dblclick();
 	await expect(renderedDiff.locator("details[open]")).toHaveCount(2);
 	await expect(page.getByTestId("rendered-diff-empty")).toHaveCount(0);
 	await expect(renderedDiff.getByTestId("rendered-diff-collapsed")).toHaveCount(0);
 
-	await page.getByTestId("change-item").filter({ hasText: "SWAP.md" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "SWAP.md" }).dblclick();
 	await expect(renderedDiff.locator("details")).toHaveCount(2);
 	await expect(renderedDiff.locator("details[open]")).toHaveCount(1);
 	await expect(renderedDiff.locator("details").first()).not.toHaveAttribute("open");
@@ -336,7 +336,7 @@ test("Rendered markdown diff aligns identical twin blocks by position, so neithe
 	await expect(renderedDiff).toContainText("Tail paragraph.");
 });
 
-test("Changes has a List|Tree toggle; Tree groups files into folders with +/- counts", async ({
+test("Changes has a List|Tree toggle (Tree by default); Tree groups files into folders with +/- counts", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -347,6 +347,8 @@ test("Changes has a List|Tree toggle; Tree groups files into folders with +/- co
 	writeFileSync(join(worktree, "docs", "guides", "notes.md"), "one\ntwo\nthree\n");
 
 	await revealWorkbenchTool(page, "changes");
+	await expect(page.getByTestId("changes-toggle-tree")).toHaveAttribute("data-active", "true");
+	await page.getByTestId("changes-toggle-list").click();
 	await expect(page.getByTestId("changes-toggle-list")).toHaveAttribute("data-active", "true");
 	await expect(
 		page.getByTestId("change-item").filter({ hasText: "docs/guides/notes.md" }),
@@ -358,7 +360,7 @@ test("Changes has a List|Tree toggle; Tree groups files into folders with +/- co
 	const compactFolder = page.getByTestId("change-tree-folder");
 	await expect(compactFolder).toHaveCount(1);
 	await expect(compactFolder).toContainText("docs/guides");
-	const fileNode = page.getByTestId("change-node").filter({ hasText: "notes.md" });
+	const fileNode = page.getByTestId("change-item").filter({ hasText: "notes.md" });
 	await expect(fileNode).toBeVisible();
 	await compactFolder.click();
 	await expect(fileNode).toBeHidden();
@@ -367,7 +369,7 @@ test("Changes has a List|Tree toggle; Tree groups files into folders with +/- co
 	await expect(fileNode).toHaveAttribute("data-status", "untracked");
 	await expect(fileNode).toContainText("+3");
 
-	await fileNode.click();
+	await fileNode.dblclick();
 	const diffTab = page.locator('[data-testid="editor-tab"][data-kind="diff"]');
 	await expect(diffTab).toHaveCount(1);
 	await expect(page.getByTestId("rendered-diff")).toContainText("three");
@@ -574,6 +576,7 @@ test("A change row's action menu opens from the ⌄ button and from right-click;
 	writeFileSync(join(worktree, "docs", "notes.md"), "one\ntwo\n");
 
 	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("changes-toggle-list").click();
 	const row = page.getByTestId("change-item").filter({ hasText: "docs/notes.md" });
 	await expect(row).toBeVisible();
 
@@ -586,11 +589,18 @@ test("A change row's action menu opens from the ⌄ button and from right-click;
 	await row.click({ button: "right" });
 	await expect(page.getByTestId("change-row-actions")).toBeVisible();
 	await page.getByTestId("change-action-view").click();
+	await expect(page.locator('[data-testid="editor-tab"][data-kind="changes"]')).toHaveCount(1);
+	await expect(page.getByTestId("changes-review").getByTestId("rendered-diff")).toContainText(
+		"two",
+	);
+
+	await row.click({ button: "right" });
+	await page.getByTestId("change-action-open-tab").click();
 	await expect(page.locator('[data-testid="editor-tab"][data-kind="diff"]')).toHaveCount(1);
-	await expect(page.getByTestId("rendered-diff")).toContainText("two");
+	await expect(page.getByTestId("diff-pane").getByTestId("rendered-diff")).toContainText("two");
 
 	await page.getByTestId("changes-toggle-tree").click();
-	const fileNode = page.getByTestId("change-node").filter({ hasText: "notes.md" });
+	const fileNode = page.getByTestId("change-item").filter({ hasText: "notes.md" });
 	await fileNode.click({ button: "right" });
 	await expect(page.getByTestId("change-row-actions")).toBeVisible();
 	await page.keyboard.press("Escape");
@@ -629,7 +639,7 @@ test("The diff viewer collapses unchanged context and has a per-tab hide-whitesp
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-uncommitted").click();
-	await page.getByTestId("change-item").filter({ hasText: "long.ts" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "long.ts" }).dblclick();
 	await expect(page.getByTestId("diff-path")).toHaveText("long.ts");
 	const diff = page.getByTestId("diff-view");
 	await expect(pierreCollapsedContext(diff).first()).toHaveText(/\d+ unmodified lines/);
@@ -654,7 +664,7 @@ test("revert hunk changes only that range and Undo restores it", async ({ page }
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-uncommitted").click();
-	await page.getByTestId("change-item").filter({ hasText: "mutable.ts" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "mutable.ts" }).dblclick();
 	await expect(diffText(page, "two = 200")).toBeVisible();
 	await expect(page.getByTestId("hunk-revert")).toHaveCount(2);
 	await expect(page.getByTestId("hunk-ask-agent")).toHaveCount(2);
@@ -686,7 +696,7 @@ test("a stale hunk view refreshes instead of overwriting the newer file", async 
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("changes-scope-trigger").click();
 	await page.getByTestId("changes-scope-uncommitted").click();
-	await page.getByTestId("change-item").filter({ hasText: "mutable.ts" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "mutable.ts" }).dblclick();
 	await expect(diffText(page, "two = 200")).toBeVisible();
 	const revert = page.getByTestId("hunk-revert").first();
 	const revertBox = await revert.boundingBox();
@@ -730,6 +740,7 @@ test("Change rows stay one aligned, fully-highlighted row — menu slot included
 	);
 
 	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("changes-toggle-list").click();
 	const longRow = page.getByTestId("change-item").filter({ hasText: "ForTheChangesPanel.ts" });
 	await expect(longRow).toHaveCount(1);
 	const rootRow = page.getByTestId("change-item").filter({ hasText: "AtRootLevel" });
@@ -768,7 +779,7 @@ test("Change rows stay one aligned, fully-highlighted row — menu slot included
 
 	await page.getByTestId("changes-toggle-tree").click();
 	const folderBadge = page.getByTestId("change-tree-folder").filter({ hasText: "packages" });
-	const fileBadge = page.getByTestId("change-node").filter({ hasText: "ForTheChangesPanel.ts" });
+	const fileBadge = page.getByTestId("change-item").filter({ hasText: "ForTheChangesPanel.ts" });
 	const folderRight = await rightEdge(folderBadge);
 	const fileRight = await rightEdge(fileBadge);
 	expect(Math.abs(folderRight - fileRight)).toBeLessThanOrEqual(1);
@@ -794,7 +805,7 @@ test("The diff header keeps its controls on a narrow pane, however long the file
 	);
 
 	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("change-item").filter({ hasText: "diffScopeResolver" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "diffScopeResolver" }).dblclick();
 	await expect(page.getByTestId("diff-view")).toBeVisible();
 
 	await page.setViewportSize({ width: 620, height: 800 });
@@ -883,12 +894,12 @@ test("Re-pointing the target branch re-reads an open branch-scope diff tab — a
 	await expect(sourceDiff.getByText("committed by e2e", { exact: false }).last()).toBeVisible();
 
 	const readmeTab = page.getByTestId("change-item").filter({ hasText: "README.md" });
-	await readmeTab.click();
+	await readmeTab.dblclick();
 	await expect(page.getByTestId("rendered-diff")).toContainText("dirty edit by e2e");
 	await page.getByTestId("changes-target-picker").click();
 	await page.locator('[data-testid="branch-option"][data-branch="main"]').first().click();
 
-	await committedRow.click();
+	await committedRow.dblclick();
 	await expect(
 		sourceDiff.getByText("revised by the workspace", { exact: false }).last(),
 	).toBeVisible();
@@ -965,7 +976,7 @@ test("A source diff keeps its scroll position across a tab switch", async ({ pag
 	writeFileSync(join(worktree, "scroll-code.ts"), source("edited"));
 
 	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("change-item").filter({ hasText: "scroll-code.ts" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "scroll-code.ts" }).dblclick();
 	const diff = page.getByTestId("diff-view");
 	await expect(diffText(page, "edited 399")).toBeVisible();
 	const top = await diff.evaluate((node) => {
@@ -988,7 +999,7 @@ test("Closing a diff tab removes its Pierre surface", async ({ page }) => {
 	writeFileSync(join(worktree, "script.ts"), "export const edited = true;\n");
 
 	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "script.ts" }).dblclick();
 	const diffTab = page.locator('[data-testid="editor-tab"][data-kind="diff"]');
 	await expect(diffTab).toHaveCount(1);
 	await expect(diffText(page, "edited = true")).toBeVisible();

@@ -1,9 +1,11 @@
 import type { GitStatus } from "@thinkrail/contracts";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
 import { LoadingRegion } from "../components/Skeleton";
 import {
 	type CenterNavigationStamp,
+	type ChangesTab,
+	type EditorTab,
 	isCenterNavigationCurrent,
 	matchesWorktreePath,
 	selectActiveEditorTab,
@@ -21,11 +23,22 @@ import { useBranchList } from "./branches";
 import { ChangeRowActions } from "./ChangeRowActions";
 import { ChangesScopeMenu } from "./ChangesScopeMenu";
 import { ChangesTree } from "./ChangesTree";
-import { scopeKey, splitPath, statusNameClass } from "./changesModel";
+import { changesTabId, scopeKey, splitPath, statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
-import { openDiffInTab } from "./openTabs";
+import { openChangesTab, openDiffInTab } from "./openTabs";
 import { ToggleSegment } from "./ToggleSegment";
 import { useWorkspaceRead } from "./useWorkspaceRead";
+import { ViewedMark } from "./ViewedMark";
+
+function selectReviewTab(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	workspaceId: string,
+	id: string,
+): ChangesTab | undefined {
+	return (state.tabsByWorkspace[workspaceId] ?? []).find(
+		(tab): tab is ChangesTab => tab.id === id && tab.kind === "changes",
+	);
+}
 
 export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	const [status, setStatus] = useState<GitStatus | null>(null);
@@ -43,6 +56,17 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 		const tab = selectActiveEditorTab(state, workspaceId);
 		return tab?.kind === "diff" ? tab : null;
 	});
+	const reviewTabId = changesTabId(workspaceId, scope);
+	const reviewActivePath = useAppStore(
+		(state) => selectReviewTab(state, workspaceId, reviewTabId)?.activePath,
+	);
+	const reviewViewed = useAppStore(
+		(state) => selectReviewTab(state, workspaceId, reviewTabId)?.viewed,
+	);
+	const reviewTabActive = useAppStore(
+		(state) => state.activeTabByWorkspace[workspaceId] === reviewTabId,
+	);
+	const viewed = useMemo(() => new Set(reviewViewed ?? []), [reviewViewed]);
 
 	const { reload } = useWorkspaceRead(
 		workspaceId,
@@ -56,7 +80,11 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 			onFailure: (_id, failure) => {
 				if (wsErrorCode(failure) === "UNKNOWN_COMMIT") {
 					setDiffScope(workspaceId, { kind: "branch" });
-					toast.info("That commit is no longer in this branch — showing all changes.");
+					toast.info(
+						scope.kind === "turn"
+							? "That agent turn's snapshot is no longer in this repository — showing all changes."
+							: "That commit is no longer in this branch — showing all changes.",
+					);
 					return;
 				}
 				if (status && !warnedRef.current) {
@@ -90,35 +118,54 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	};
 
 	const openDiff = useCallback(
-		(path: string, intent: TabIntent, navigation?: CenterNavigationStamp | null) => {
+		(
+			path: string,
+			intent: TabIntent,
+			navigation?: CenterNavigationStamp | null,
+			claimPreview = false,
+		) => {
 			setHighlighted(path);
-			void openDiffInTab(workspaceId, scope, path, intent, navigation);
+			if (intent === "keep") {
+				void openDiffInTab(workspaceId, scope, path, intent, navigation, { claimPreview });
+				return;
+			}
+			void openChangesTab(workspaceId, scope, { revealPath: path }, intent, navigation);
 		},
 		[workspaceId, scope],
 	);
 
 	useEffect(() => {
-		if (!status || changesRequest?.workspaceId !== workspaceId) return;
+		if (changesRequest?.workspaceId !== workspaceId) return;
 		if (useAppStore.getState().changesRequest !== changesRequest) return;
 		const want = changesRequest.path;
-		const match = status.changes.find((c) => matchesWorktreePath(want, c.path));
 		const currentState = useAppStore.getState();
 		const overtaken = changesRequest.navigation
 			? !isCenterNavigationCurrent(currentState, workspaceId, changesRequest.navigation)
 			: selectWorkspaceNavTick(currentState, workspaceId) !== changesRequest.navTick;
-		if (match && !overtaken) openDiff(match.path, "preview", changesRequest.navigation);
-		else setHighlighted(match ? match.path : want);
+		if (want === null) {
+			if (!overtaken) {
+				void openChangesTab(workspaceId, scope, {}, "preview", changesRequest.navigation);
+			}
+		} else {
+			if (!status) return;
+			const match = status.changes.find((c) => matchesWorktreePath(want, c.path));
+			if (match && !overtaken) openDiff(match.path, "preview", changesRequest.navigation);
+			else setHighlighted(match ? match.path : want);
+		}
 		useAppStore.getState().clearChangesRequest();
-	}, [changesRequest, status, workspaceId, openDiff]);
+	}, [changesRequest, status, workspaceId, openDiff, scope]);
 
 	useEffect(() => {
-		if (activeDiffTab) setHighlighted(null);
-	}, [activeDiffTab]);
+		if (activeDiffTab || reviewTabActive) setHighlighted(null);
+	}, [activeDiffTab, reviewTabActive]);
 
 	const isActive = (path: string) =>
-		activeDiffTab
-			? activeDiffTab.path === path && scopeKey(activeDiffTab.scope) === scopeKey(scope)
-			: highlighted === path;
+		reviewTabActive && reviewActivePath !== undefined
+			? reviewActivePath === path
+			: activeDiffTab
+				? activeDiffTab.path === path && scopeKey(activeDiffTab.scope) === scopeKey(scope)
+				: highlighted === path;
+	const isViewed = (path: string) => viewed.has(path);
 
 	return (
 		<div className="flex h-full min-h-0 flex-col">
@@ -183,7 +230,12 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 						No changes in this scope.
 					</p>
 				) : changesView === "tree" ? (
-					<ChangesTree changes={status.changes} onOpen={openDiff} isActive={isActive} />
+					<ChangesTree
+						changes={status.changes}
+						onOpen={(path, intent, claimPreview) => openDiff(path, intent, undefined, claimPreview)}
+						isActive={isActive}
+						isViewed={isViewed}
+					/>
 				) : (
 					<ul className="motion-safe:animate-reveal">
 						{status.changes.map((change) => {
@@ -194,6 +246,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 										path={change.path}
 										active={isActive(change.path)}
 										onView={() => openDiff(change.path, "preview")}
+										onOpenTab={() => openDiff(change.path, "keep")}
 									>
 										{({ onContextMenu }) => (
 											<button
@@ -202,12 +255,15 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 												data-testid="change-item"
 												data-status={change.status}
 												data-active={isActive(change.path) ? true : undefined}
+												data-viewed={isViewed(change.path) ? true : undefined}
 												onClick={() => openDiff(change.path, "preview")}
-												onDoubleClick={() => openDiff(change.path, "keep")}
+												onDoubleClick={() => openDiff(change.path, "keep", undefined, true)}
 												title={change.path}
 												className="flex min-w-0 flex-1 items-center gap-8 px-4 py-4 text-left tr-text-ui"
 											>
-												<span className="flex min-w-0 flex-1 items-baseline">
+												<span
+													className={`flex min-w-0 flex-1 items-baseline ${isViewed(change.path) ? "opacity-60" : ""}`}
+												>
 													{dir ? (
 														<span
 															data-testid="change-path-dir"
@@ -223,6 +279,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 														{base}
 													</span>
 												</span>
+												{isViewed(change.path) ? <ViewedMark /> : null}
 												<DiffStatBadge added={change.added ?? 0} removed={change.removed ?? 0} />
 											</button>
 										)}

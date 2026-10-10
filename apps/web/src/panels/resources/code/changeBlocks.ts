@@ -40,6 +40,45 @@ export function changeBlockId(block: ChangeBlock): string {
 	return `${block.original.start}:${block.original.count}:${block.modified.start}:${block.modified.count}`;
 }
 
+export function changeBlockContentKeys(
+	blocks: readonly ChangeBlock[],
+	original: string,
+	modified: string,
+): Map<string, string> {
+	const originalLines = original.split("\n");
+	const modifiedLines = modified.split("\n");
+	const contents = blocks.map(
+		(block) =>
+			`${fnv1a(spanText(originalLines, block.original))}-${fnv1a(spanText(modifiedLines, block.modified))}`,
+	);
+	const counts = new Map<string, number>();
+	for (const content of contents) counts.set(content, (counts.get(content) ?? 0) + 1);
+	return new Map(
+		blocks.map((block, index) => {
+			const content = contents[index] ?? "";
+			const count = counts.get(content) ?? 1;
+			return [
+				changeBlockId(block),
+				count === 1 ? content : `${content}#${count}@${block.original.start}`,
+			];
+		}),
+	);
+}
+
+function spanText(lines: readonly string[], span: LineSpan): string {
+	if (span.count === 0) return "";
+	return lines.slice(span.start - 1, span.start - 1 + span.count).join("\n");
+}
+
+function fnv1a(text: string): string {
+	let hash = 0x811c9dc5;
+	for (let index = 0; index < text.length; index += 1) {
+		hash ^= text.charCodeAt(index);
+		hash = Math.imul(hash, 0x01000193) >>> 0;
+	}
+	return `${text.length.toString(36)}:${hash.toString(36)}`;
+}
+
 export function createAskAgentRequest(block: ChangeBlock, modifiedText: string): AskAgentRequest {
 	const lineCount = textLineCount(modifiedText);
 	const nearestLine = Math.min(lineCount, Math.max(1, block.modified.start - 1));

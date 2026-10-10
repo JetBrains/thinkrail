@@ -81,6 +81,12 @@ ref off the workspace-create critical path.
   (`currentBranch`/`tryCurrentBranch`/`resolveDefaultBranch`/`resolveCommitOid`/`readBlobAt`/`gitHeadSha`
   — single fast local ref reads), plus `gitUncommittedPaths`, the deliberate lifecycle exception that
   snapshots a TODO work window before the agent can continue past its `in_progress` tool end;
+  **`snapshotWorktree(worktreePath)`** → the tree oid of the worktree as git sees it right now (tracked
+  edits and untracked files, ignored files excluded), written through a scratch copy of the index under
+  `GIT_INDEX_FILE` so the user's real index, `HEAD`, and reflog never move — the `turns` module's
+  before/after fence around an agent run; it returns `null` instead of throwing because a missed
+  snapshot only costs a receipt. A file git cannot read is skipped, not fatal: `add --ignore-errors`
+  still exits 1 after writing everything else, so only a `fatal:` or a timeout/launch failure voids it;
   **the scope→range resolver** — `resolveDiffRange(ws, scope?)` → `Promise<DiffRange>` (async — and
   deliberately kept the *single* implementation: its `reviews` consumers went async with it rather than
   keeping a drift-prone sync twin) — **the one definition of what
@@ -96,7 +102,10 @@ ref off the workspace-create critical path.
   untracked, both sides from history — a **root** commit degrades to `git show --format=` with an empty
   original, the same add-style degradation an absent path already gets; `pinned`: `git diff <oid>` +
   untracked, sides = the given immutable commit ↔ worktree — the review sidebar's base-side
-  navigation, validated exactly like a `commit` sha, same `UNKNOWN_COMMIT` rejection). Both reads build their argv from it
+  navigation, validated exactly like a `commit` sha, same `UNKNOWN_COMMIT` rejection; `turn`: `git diff
+  <baseTree> <headTree>`, no untracked, both sides the **tree** snapshots the `turns` module took around
+  one agent run — each oid shape-checked and verified as `^{tree}`, a pruned snapshot rejected with the
+  same `UNKNOWN_COMMIT` so the client resets the scope the same way). Both reads build their argv from it
   through `changedFileArgs(range, mode)`, so the file list and a file's two sides can never disagree on the
   range — and that argv brackets its revs on **both** sides: **`--end-of-options`** ahead of them (no ref can be
   re-parsed as a git option) and a trailing **`--`** after them (a rev that also names a path on disk — a branch
@@ -278,7 +287,8 @@ ref off the workspace-create critical path.
   `gitCommitPaths`, `gitHeadSha`, `listCommits`, `listCommitsSince`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
-  `canonicalPath`, `resolveListedCommit`, `prefetchBranch`, `countPushDivergence`, `listRemotes`, `remoteNameOf`.
+  `canonicalPath`, `resolveListedCommit`, `prefetchBranch`, `countPushDivergence`, `listRemotes`, `remoteNameOf`,
+  `snapshotWorktree`.
 - **Allowed deps:** `persistence` (workspace + project lookup), `log`; `fs` (`resourceMeta`/`decodeText` —
   the one content classification, so a diff side's metadata cannot disagree with `fs.readFile`'s);
   `contracts` (`Git*`/`BranchList`/`ResourceMeta` types);

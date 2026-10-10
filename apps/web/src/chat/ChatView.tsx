@@ -1,12 +1,14 @@
 import { RiArrowDownLine as ArrowDown, RiArrowUpLine as ArrowUp } from "@remixicon/react";
 import {
 	type AskUserQuestionResult,
+	type GitDiffScope,
 	type PromptHit,
 	type QueueLane,
 	type SessionQueueContent,
 	sameModel,
 	type TemplateInfo,
 	type ThinkingLevel,
+	type TurnChangeSet,
 } from "@thinkrail/contracts";
 import { Button } from "@thinkrail/ui/button";
 import {
@@ -94,6 +96,7 @@ import { advanceVirtualRows, initialVirtualRows } from "./virtualRows";
 
 registerWebExtensions();
 
+const NO_AGENT_TURNS: readonly TurnChangeSet[] = [];
 const TRY_AGAIN_PROMPT = "Try again.";
 const CHAT_VIEWPORT_INCREASE = 800;
 const CHAT_MIN_OVERSCAN_ITEMS = 2;
@@ -286,9 +289,14 @@ export default function ChatView({
 		enabled: sessionRuntime !== undefined,
 	});
 
+	const workspaceTurns = useAppStore((state) => state.turnsByWorkspace[workspaceId]);
+	const agentTurns = useMemo(
+		() => workspaceTurns?.filter((turn) => turn.sessionId === sessionId) ?? NO_AGENT_TURNS,
+		[sessionId, workspaceTurns],
+	);
 	const chronologicalRows = useMemo(
-		() => deriveRows(turns, toolResults, isStreaming, isSpec),
-		[turns, toolResults, isStreaming, isSpec],
+		() => deriveRows(turns, toolResults, isStreaming, isSpec, agentTurns, workspaceRoot),
+		[turns, toolResults, isStreaming, isSpec, agentTurns, workspaceRoot],
 	);
 	const rows = useMemo(
 		() => projectRows(chronologicalRows, chatMessageOrder),
@@ -994,6 +1002,12 @@ export default function ChatView({
 		},
 		[workspaceId],
 	);
+	const onReviewTurn = useCallback(
+		(scope: GitDiffScope) => {
+			useAppStore.getState().requestChangesView(workspaceId, null, scope);
+		},
+		[workspaceId],
+	);
 
 	const onOpenSpec = useCallback(
 		(path: string) => {
@@ -1183,6 +1197,7 @@ export default function ChatView({
 												isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
 												onOpenSpec={onOpenSpec}
 												onOpenChange={onOpenChange}
+												onReviewTurn={onReviewTurn}
 												onReveal={onReveal}
 												onTryAgain={() => performSend(TRY_AGAIN_PROMPT, [], "send")}
 												stillRunning={row.id === latestDividerRowId ? stillRunning : undefined}

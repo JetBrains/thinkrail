@@ -1,6 +1,6 @@
-import { beforeEach, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, expect, mock, test } from "bun:test";
 import type { Workspace } from "@thinkrail/contracts";
-import { diffTabId } from "./changesModel";
+import { changesTabId, diffTabId } from "./changesModel";
 
 let pending: { resolve: (value: unknown) => void } | null = null;
 const requests: { method: string; params: unknown }[] = [];
@@ -30,7 +30,7 @@ const { useAppStore } = await import("../store");
 type WorkspaceLayoutDocument = ReturnType<
 	typeof useAppStore.getState
 >["layoutDocumentsByWorkspace"][string];
-const { openDiffInTab } = await import("./openTabs");
+const { openChangesTab, openDiffInTab } = await import("./openTabs");
 
 const workspace = (overrides: Partial<Workspace> = {}): Workspace => ({
 	id: "w1",
@@ -42,7 +42,7 @@ const workspace = (overrides: Partial<Workspace> = {}): Workspace => ({
 	...overrides,
 });
 
-beforeEach(() => {
+function resetStore(): void {
 	pending = null;
 	requests.length = 0;
 	useAppStore.setState({
@@ -55,8 +55,12 @@ beforeEach(() => {
 		layoutIntents: [],
 		navTickByWorkspace: {},
 		fsChangesByWorkspace: {},
+		previewTabByWorkspace: {},
 	});
-});
+}
+
+beforeEach(resetStore);
+afterAll(resetStore);
 
 const openedDiffTab = () => {
 	const tab = (useAppStore.getState().tabsByWorkspace.w1 ?? [])[0];
@@ -340,4 +344,108 @@ test("an undisturbed open stamps the state it actually read against", async () =
 	const tab = openedDiffTab();
 	expect(tab.loadedTarget).toBe("main");
 	expect(tab.loadedTick).toBe(1);
+});
+
+const openedChangesTab = () => {
+	const tab = (useAppStore.getState().tabsByWorkspace.w1 ?? []).find(
+		(candidate) => candidate.kind === "changes",
+	);
+	if (tab?.kind !== "changes") throw new Error("no changes tab opened");
+	return tab;
+};
+
+test("a review tab opens without a host read and carries the clicked file as a one-shot reveal", async () => {
+	await openChangesTab("w1", { kind: "branch" }, { revealPath: "/wt/w1/src/a.ts" }, "keep");
+	expect(requests).toHaveLength(0);
+	const tab = openedChangesTab();
+	expect(tab).toMatchObject({
+		id: changesTabId("w1", { kind: "branch" }),
+		name: "Changes",
+		scope: { kind: "branch" },
+		reveal: { path: "src/a.ts", tick: 1 },
+		viewed: [],
+	});
+	expect(useAppStore.getState().activeTabByWorkspace.w1).toBe(tab.id);
+});
+
+test("re-opening the review tab keeps its review progress and only bumps the reveal", async () => {
+	await openChangesTab("w1", { kind: "branch" }, { revealPath: "src/a.ts" }, "keep");
+	const tab = openedChangesTab();
+	useAppStore.getState().setChangesTabViewed("w1", tab.id, "src/a.ts", true);
+	useAppStore.getState().setChangesTabCollapsed("w1", tab.id, { "bun.lock": false });
+	useAppStore.getState().consumeChangesTabReveal("w1", tab.id, null);
+
+	await openChangesTab("w1", { kind: "branch" }, { revealPath: "src/b.ts" }, "keep");
+	expect(
+		useAppStore.getState().tabsByWorkspace.w1?.filter((t) => t.kind === "changes"),
+	).toHaveLength(1);
+	expect(openedChangesTab()).toMatchObject({
+		viewed: ["src/a.ts"],
+		collapsed: { "bun.lock": false },
+		reveal: { path: "src/b.ts", tick: 1 },
+	});
+
+	await openChangesTab("w1", { kind: "branch" }, { revealPath: "src/b.ts" }, "keep");
+	expect(openedChangesTab().reveal).toEqual({ path: "src/b.ts", tick: 2 });
+	await openChangesTab("w1", { kind: "branch" }, {}, "keep");
+	expect(openedChangesTab().reveal).toEqual({ path: "src/b.ts", tick: 2 });
+});
+
+test("a Changes double click replaces an earlier preview with its kept per-file tab", async () => {
+	useAppStore.getState().openTab(
+		{
+			kind: "file",
+			id: "old-preview",
+			workspaceId: "w1",
+			name: "old.txt",
+			path: "old.txt",
+			content: "old",
+		},
+		"preview",
+	);
+	const preview = openChangesTab("w1", { kind: "branch" }, { revealPath: "README.md" }, "preview");
+	const keep = openDiffInTab("w1", { kind: "branch" }, "README.md", "keep", undefined, {
+		claimPreview: true,
+	});
+	pending?.resolve(diffResult("old", "new"));
+	await Promise.all([preview, keep]);
+
+	const tabs = useAppStore.getState().tabsByWorkspace.w1 ?? [];
+	expect(tabs.map((tab) => tab.kind)).toEqual(["diff"]);
+	expect(useAppStore.getState().previewTabByWorkspace.w1).toBeUndefined();
+});
+
+test("an explicit Open as tab retains the existing preview", async () => {
+	useAppStore.getState().openTab(
+		{
+			kind: "file",
+			id: "old-preview",
+			workspaceId: "w1",
+			name: "old.txt",
+			path: "old.txt",
+			content: "old",
+		},
+		"preview",
+	);
+	const open = openDiffInTab("w1", { kind: "branch" }, "README.md", "keep");
+	pending?.resolve(diffResult("old", "new"));
+	await open;
+	expect(useAppStore.getState().tabsByWorkspace.w1?.map((tab) => tab.kind)).toEqual([
+		"file",
+		"diff",
+	]);
+	expect(useAppStore.getState().previewTabByWorkspace.w1).toBe("old-preview");
+});
+
+test("a lone review-tab preview lands after the settle window and claims the preview slot", async () => {
+	await openChangesTab("w1", { kind: "uncommitted" }, { revealPath: "README.md" }, "preview");
+	const tab = openedChangesTab();
+	expect(tab.name).toBe("Changes · uncommitted");
+	expect(useAppStore.getState().previewTabByWorkspace.w1).toBe(tab.id);
+});
+
+test("a removed workspace rejects a late review-tab request", async () => {
+	useAppStore.setState({ removedWorkspaceIds: { w1: true } });
+	await openChangesTab("w1", { kind: "branch" }, {}, "keep");
+	expect(useAppStore.getState().tabsByWorkspace.w1 ?? []).toHaveLength(0);
 });

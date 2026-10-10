@@ -30,6 +30,7 @@ import type {
 	ThemeId,
 	ThemeMode,
 	ThinkingLevel,
+	TurnChangeSet,
 	UserMessage,
 	WireModel,
 	Workspace,
@@ -61,6 +62,7 @@ import type {
 	ToolResultState,
 } from "../chat/types";
 import {
+	isPreviewCompatibleTabKind,
 	type LayoutAttention,
 	layoutResourceIdentity,
 	matchesSkillInvocationCommand,
@@ -89,6 +91,7 @@ import {
 	type HistoryTarget,
 	isChatResourceReadCurrent,
 	isChatResourceScopeAlive,
+	isConnectedGeneration,
 	SETTLED_SHELF_PAGE,
 	selectActiveWorkspaceProjectId,
 	selectAttentionCenterTab,
@@ -160,6 +163,33 @@ export interface DiffTab {
 	ignoreWhitespace?: boolean;
 	loadedTick?: number;
 }
+export type ChangesLayout = "stacked" | "single";
+const TURNS_PER_WORKSPACE = 30;
+export interface ChangesTabReveal {
+	path: string;
+	tick: number;
+	commentId?: string;
+}
+export interface ChangesTabSection {
+	rendererId?: string;
+	viewState?: unknown;
+	reviewDrafts?: Readonly<Record<string, unknown>>;
+}
+export interface ChangesTab {
+	kind: "changes";
+	id: string;
+	workspaceId: string;
+	name: string;
+	scope: GitDiffScope;
+	view?: DiffTabView;
+	ignoreWhitespace?: boolean;
+	viewed: string[];
+	activePath: string | null;
+	collapsed: Record<string, boolean>;
+	reveal: ChangesTabReveal | null;
+	sections: Record<string, ChangesTabSection>;
+	kept: Record<string, string[]>;
+}
 export interface PlanTab {
 	kind: "plan";
 	id: string;
@@ -167,10 +197,31 @@ export interface PlanTab {
 	name: string;
 	sessionId: string;
 }
-export type EditorTab = FileTab | ChatTab | DocTab | DiffTab | PlanTab;
+export type EditorTab = FileTab | ChatTab | DocTab | DiffTab | ChangesTab | PlanTab;
 
 export function chatTabId(workspaceId: string, sessionId: string): string {
 	return tupleKey("chat", workspaceId, sessionId);
+}
+
+export function createChangesTab(
+	workspaceId: string,
+	id: string,
+	name: string,
+	scope: GitDiffScope,
+): ChangesTab {
+	return {
+		kind: "changes",
+		id,
+		workspaceId,
+		name,
+		scope,
+		viewed: [],
+		activePath: null,
+		collapsed: {},
+		reveal: null,
+		sections: {},
+		kept: {},
+	};
 }
 
 function editorResourceIdentity(tab: EditorTab): string {
@@ -562,12 +613,14 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 				const last = rt.turns[rt.turns.length - 1];
 				if (last?.kind === "user") {
 					const optimisticText = userText(last.message.content);
-					if (optimisticText === text) return rt;
 					const invocation = parseSkillInvocation(text);
-					if (invocation && matchesSkillInvocationCommand(optimisticText, invocation)) {
+					if (
+						optimisticText === text ||
+						(invocation && matchesSkillInvocationCommand(optimisticText, invocation))
+					) {
 						return {
 							...rt,
-							turns: [...rt.turns.slice(0, -1), { kind: "user", id: last.id, message }],
+							turns: [...rt.turns.slice(0, -1), { ...last, message }],
 						};
 					}
 				}
@@ -879,7 +932,7 @@ interface AppState {
 	modelsFresh: boolean;
 	changesRequest: {
 		workspaceId: string;
-		path: string;
+		path: string | null;
 		navTick: number;
 		navigation: CenterNavigationStamp | null;
 	} | null;
@@ -997,11 +1050,77 @@ interface AppState {
 	setTabViewState: (workspaceId: string, id: string, viewState: unknown) => void;
 	setDiffTabView: (id: string, view: DiffTabView) => void;
 	setDiffTabIgnoreWhitespace: (id: string, ignoreWhitespace: boolean) => void;
+	setChangesTabView: (workspaceId: string, id: string, view: DiffTabView) => void;
+	setChangesTabIgnoreWhitespace: (
+		workspaceId: string,
+		id: string,
+		ignoreWhitespace: boolean,
+	) => void;
+	setChangesTabViewed: (
+		workspaceId: string,
+		id: string,
+		paths: string | readonly string[],
+		viewed: boolean,
+	) => void;
+	setChangesTabActivePath: (workspaceId: string, id: string, path: string | null) => void;
+	setChangesTabCollapsed: (
+		workspaceId: string,
+		id: string,
+		overrides: Record<string, boolean | null>,
+	) => void;
+	requestChangesTabReveal: (
+		workspaceId: string,
+		id: string,
+		path: string,
+		commentId?: string,
+	) => void;
+	consumeChangesTabReveal: (
+		workspaceId: string,
+		id: string,
+		target: { path: string; commentId?: string } | null,
+	) => void;
+	setChangesTabSectionRenderer: (
+		workspaceId: string,
+		id: string,
+		path: string,
+		rendererId: string,
+	) => void;
+	setChangesTabSectionViewState: (
+		workspaceId: string,
+		id: string,
+		path: string,
+		viewState: unknown,
+	) => void;
+	setChangesTabSectionReviewDraft: (
+		workspaceId: string,
+		id: string,
+		path: string,
+		key: string,
+		update: (current: unknown) => unknown,
+	) => void;
+	setChangesTabHunkKept: (
+		workspaceId: string,
+		id: string,
+		path: string,
+		key: string,
+		kept: boolean,
+		hunkKeys: readonly string[],
+	) => void;
 	changesView: "list" | "tree";
 	setChangesView: (view: "list" | "tree") => void;
+	changesLayout: ChangesLayout;
+	setChangesLayout: (layout: ChangesLayout) => void;
 	diffScopeByWorkspace: Record<string, GitDiffScope>;
 	setDiffScope: (workspaceId: string, scope: GitDiffScope) => void;
 	noteFsChanged: (payload: WorkspaceFsChangedPayload) => void;
+	turnsByWorkspace: Record<string, TurnChangeSet[]>;
+	setWorkspaceTurns: (
+		workspaceId: string,
+		turns: TurnChangeSet[],
+		baseline: readonly TurnChangeSet[],
+		connectionGeneration: number,
+	) => void;
+	applyTurnChanged: (turn: TurnChangeSet) => void;
 	markSkillsSynced: (sessionId: string, syncedTick: number) => void;
 	updateFileTabContent: (
 		workspaceId: string,
@@ -1128,7 +1247,7 @@ interface AppState {
 	setChatPreferences: (order: ChatMessageOrder, movement: StreamingResponseMovement) => void;
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
-	requestChangesView: (workspaceId: string, path: string) => void;
+	requestChangesView: (workspaceId: string, path: string | null, scope?: GitDiffScope) => void;
 	clearChangesRequest: () => void;
 	requestChatLocation: (req: ChatLocationRequest) => void;
 	clearChatLocation: () => void;
@@ -1147,6 +1266,12 @@ interface AppState {
 
 function sortProjects(projects: Project[]): Project[] {
 	return [...projects].sort((a, b) => b.lastOpened - a.lastOpened);
+}
+
+function normalizeWorkspaceTurns(turns: readonly TurnChangeSet[]): TurnChangeSet[] {
+	return [...new Map(turns.map((turn) => [turn.id, turn])).values()]
+		.sort((a, b) => a.startedAt - b.startedAt)
+		.slice(-TURNS_PER_WORKSPACE);
 }
 
 function configPatch(config: AppConfig) {
@@ -1376,6 +1501,51 @@ function patchDiffTab(
 			...state.tabsByWorkspace,
 			[wsId]: tabs.map((t) => (t.id === id && t.kind === "diff" ? { ...t, ...patch } : t)),
 		},
+	};
+}
+
+function patchChangesTab(
+	state: Pick<AppState, "tabsByWorkspace">,
+	workspaceId: string,
+	id: string,
+	patch: (tab: ChangesTab) => ChangesTab,
+): Partial<AppState> {
+	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
+	const index = tabs.findIndex((tab) => tab.id === id && tab.kind === "changes");
+	const current = tabs[index];
+	if (current?.kind !== "changes") return {};
+	const next = patch(current);
+	if (next === current) return {};
+	return { tabsByWorkspace: { ...state.tabsByWorkspace, [workspaceId]: tabs.with(index, next) } };
+}
+
+function recordChangesTabProgress(
+	state: Pick<
+		AppState,
+		"tabsByWorkspace" | "previewTabByWorkspace" | "layoutIntents" | "layoutDocumentsByWorkspace"
+	>,
+	workspaceId: string,
+	id: string,
+	patch: (tab: ChangesTab) => ChangesTab,
+): Partial<AppState> {
+	const patched = patchChangesTab(state, workspaceId, id, patch);
+	const tab = patched.tabsByWorkspace?.[workspaceId]?.find((candidate) => candidate.id === id);
+	if (tab?.kind !== "changes") return patched;
+	const placement = selectLayoutResourcePlacement(state, workspaceId, tab);
+	return {
+		...patched,
+		previewTabByWorkspace:
+			state.previewTabByWorkspace[workspaceId] === id
+				? omitKey(state.previewTabByWorkspace, workspaceId)
+				: state.previewTabByWorkspace,
+		layoutIntents: appendLayoutIntent(state.layoutIntents, {
+			kind: "select",
+			workspaceId,
+			tabId: placement?.tabId ?? id,
+			keep: true,
+			focus: false,
+			countNavigation: false,
+		}),
 	};
 }
 
@@ -1961,11 +2131,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 	specsByWorkspace: {},
 	reviewsByWorkspace: {},
 	reviewFocusRequest: null,
-	changesView: "list",
+	changesView: "tree",
+	changesLayout: "stacked",
 	diffScopeByWorkspace: {},
 	chatLocationRequest: null,
 	historyOpenRequest: null,
 	fsChangesByWorkspace: {},
+	turnsByWorkspace: {},
 	skillChangeTickByWorkspace: {},
 	skillsSyncedTickBySession: {},
 	activeLogin: null,
@@ -2209,6 +2381,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						? null
 						: state.pendingWorkspaceChatActivation,
 				fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
+				turnsByWorkspace: omitKey(state.turnsByWorkspace, workspaceId),
 				resourceSnapshots: omitKey(state.resourceSnapshots, workspaceId),
 				sessionStateByWorkspace: omitKey(state.sessionStateByWorkspace, workspaceId),
 				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
@@ -2464,7 +2637,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const tabs = s.tabsByWorkspace[wsId] ?? [];
 			const resolvedId = availableEditorTabId(tabs, tab);
 			const resolvedTab = resolvedId === tab.id ? tab : { ...tab, id: resolvedId };
-			const previewCompatible = resolvedTab.kind === "file" || resolvedTab.kind === "diff";
+			const previewCompatible = isPreviewCompatibleTabKind(resolvedTab.kind);
 			const effectiveIntent = previewCompatible ? intent : "keep";
 			const claimPreview = previewCompatible && options.claimPreview === true;
 			const preview = s.previewTabByWorkspace[wsId];
@@ -2642,13 +2815,161 @@ export const useAppStore = create<AppState>((set, get) => ({
 	setDiffTabView: (id, view) => set((s) => patchDiffTab(s, id, { view })),
 	setDiffTabIgnoreWhitespace: (id, ignoreWhitespace) =>
 		set((s) => patchDiffTab(s, id, { ignoreWhitespace })),
+	setChangesTabView: (workspaceId, id, view) =>
+		set((s) => patchChangesTab(s, workspaceId, id, (tab) => ({ ...tab, view }))),
+	setChangesTabIgnoreWhitespace: (workspaceId, id, ignoreWhitespace) =>
+		set((s) => patchChangesTab(s, workspaceId, id, (tab) => ({ ...tab, ignoreWhitespace }))),
+	setChangesTabViewed: (workspaceId, id, paths, viewed) =>
+		set((s) =>
+			recordChangesTabProgress(s, workspaceId, id, (tab) => {
+				const next = new Set(tab.viewed);
+				for (const path of typeof paths === "string" ? [paths] : paths) {
+					if (viewed) next.add(path);
+					else next.delete(path);
+				}
+				return next.size === tab.viewed.length ? tab : { ...tab, viewed: [...next] };
+			}),
+		),
+	setChangesTabActivePath: (workspaceId, id, path) =>
+		set((s) =>
+			patchChangesTab(s, workspaceId, id, (tab) =>
+				tab.activePath === path ? tab : { ...tab, activePath: path },
+			),
+		),
+	setChangesTabCollapsed: (workspaceId, id, overrides) =>
+		set((s) =>
+			patchChangesTab(s, workspaceId, id, (tab) => {
+				const collapsed = { ...tab.collapsed };
+				for (const [path, value] of Object.entries(overrides)) {
+					if (value === null) delete collapsed[path];
+					else collapsed[path] = value;
+				}
+				return { ...tab, collapsed };
+			}),
+		),
+	requestChangesTabReveal: (workspaceId, id, path, commentId) =>
+		set((s) =>
+			patchChangesTab(s, workspaceId, id, (tab) => ({
+				...tab,
+				reveal: { path, tick: (tab.reveal?.tick ?? 0) + 1, ...(commentId ? { commentId } : {}) },
+			})),
+		),
+	consumeChangesTabReveal: (workspaceId, id, target) =>
+		set((s) => {
+			const patched = patchChangesTab(s, workspaceId, id, (tab) => {
+				if (!target) return tab.reveal ? { ...tab, reveal: null } : tab;
+				return {
+					...tab,
+					reveal: null,
+					activePath: target.path,
+					collapsed:
+						tab.collapsed[target.path] === false
+							? tab.collapsed
+							: { ...tab.collapsed, [target.path]: false },
+				};
+			});
+			return target?.commentId && !s.removedWorkspaceIds[workspaceId]
+				? { ...patched, reviewFocusRequest: { workspaceId, commentId: target.commentId } }
+				: patched;
+		}),
+	setChangesTabSectionRenderer: (workspaceId, id, path, rendererId) =>
+		set((s) =>
+			patchChangesTab(s, workspaceId, id, (tab) => ({
+				...tab,
+				sections: {
+					...tab.sections,
+					[path]: { ...tab.sections[path], rendererId, viewState: undefined },
+				},
+			})),
+		),
+	setChangesTabSectionViewState: (workspaceId, id, path, viewState) =>
+		set((s) =>
+			patchChangesTab(s, workspaceId, id, (tab) =>
+				JSON.stringify(tab.sections[path]?.viewState) === JSON.stringify(viewState)
+					? tab
+					: {
+							...tab,
+							sections: { ...tab.sections, [path]: { ...tab.sections[path], viewState } },
+						},
+			),
+		),
+	setChangesTabSectionReviewDraft: (workspaceId, id, path, key, update) =>
+		set((s) => {
+			const current = s.tabsByWorkspace[workspaceId]?.find((tab) => tab.id === id);
+			const hasScratch =
+				current?.kind === "changes" &&
+				Object.values(current.sections).some((section) => section.reviewDrafts !== undefined);
+			return (hasScratch ? patchChangesTab : recordChangesTabProgress)(
+				s,
+				workspaceId,
+				id,
+				(tab) => {
+					const section = tab.sections[path];
+					const previous = section?.reviewDrafts?.[key];
+					const next = update(previous);
+					if (Object.is(previous, next)) return tab;
+					const reviewDrafts = { ...section?.reviewDrafts };
+					if (next === undefined) delete reviewDrafts[key];
+					else reviewDrafts[key] = next;
+					return {
+						...tab,
+						sections: { ...tab.sections, [path]: { ...section, reviewDrafts } },
+					};
+				},
+			);
+		}),
+	setChangesTabHunkKept: (workspaceId, id, path, key, kept, hunkKeys) =>
+		set((s) =>
+			recordChangesTabProgress(s, workspaceId, id, (tab) => {
+				const next = new Set(tab.kept[path] ?? []);
+				if (next.has(key) === kept) return tab;
+				if (kept) next.add(key);
+				else next.delete(key);
+				const completed = kept && hunkKeys.length > 0 && hunkKeys.every((hunk) => next.has(hunk));
+				return {
+					...tab,
+					kept: { ...tab.kept, [path]: [...next] },
+					viewed: completed && !tab.viewed.includes(path) ? [...tab.viewed, path] : tab.viewed,
+				};
+			}),
+		),
 	setChangesView: (view) => set({ changesView: view }),
+	setChangesLayout: (changesLayout) => set({ changesLayout }),
 	setDiffScope: (workspaceId, scope) =>
 		set((s) =>
 			s.removedWorkspaceIds[workspaceId]
 				? {}
 				: { diffScopeByWorkspace: { ...s.diffScopeByWorkspace, [workspaceId]: scope } },
 		),
+	setWorkspaceTurns: (workspaceId, turns, baseline, connectionGeneration) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[workspaceId] || !isConnectedGeneration(s, connectionGeneration)) {
+				return {};
+			}
+			const baselineTurns = new Set(baseline);
+			const pushed = (s.turnsByWorkspace[workspaceId] ?? []).filter(
+				(turn) => !baselineTurns.has(turn),
+			);
+			return {
+				turnsByWorkspace: {
+					...s.turnsByWorkspace,
+					[workspaceId]: normalizeWorkspaceTurns([...turns, ...pushed]),
+				},
+			};
+		}),
+	applyTurnChanged: (turn) =>
+		set((s) => {
+			if (s.removedWorkspaceIds[turn.workspaceId]) return {};
+			return {
+				turnsByWorkspace: {
+					...s.turnsByWorkspace,
+					[turn.workspaceId]: normalizeWorkspaceTurns([
+						...(s.turnsByWorkspace[turn.workspaceId] ?? []),
+						turn,
+					]),
+				},
+			};
+		}),
 	noteFsChanged: (payload) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[payload.workspaceId]) return {};
@@ -3692,7 +4013,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 						}),
 					},
 		),
-	requestChangesView: (workspaceId, path) =>
+	requestChangesView: (workspaceId, path, scope) =>
 		set((s) => {
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const advanced = advanceCenterNavigation(s, workspaceId);
@@ -3708,6 +4029,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 					navTick: selectWorkspaceNavTick(s, workspaceId) + 1,
 					navigation: advanced.stamp,
 				},
+				...(scope
+					? { diffScopeByWorkspace: { ...s.diffScopeByWorkspace, [workspaceId]: scope } }
+					: {}),
 				...advanced.patch,
 			};
 		}),

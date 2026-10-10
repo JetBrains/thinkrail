@@ -33,7 +33,9 @@ import { SpecsPanel } from "../panels/SpecsPanel";
 import { TerminalWorkbenchBody, useTerminalClose } from "../panels/TerminalWorkbench";
 import { useWorkspaceReview } from "../panels/useWorkspaceReview";
 import { useWorkspaceSpecs } from "../panels/useWorkspaceSpecs";
+import { useLoadWorkspaceTurns } from "../panels/useWorkspaceTurns";
 import {
+	createChangesTab,
 	type EditorTab,
 	isConnectedGeneration,
 	isDefaultWorkspace,
@@ -84,12 +86,62 @@ import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
 
 const ChatView = lazy(() => import("../chat/ChatView"));
 const PlanPane = lazy(() => import("../panels/PlanPane"));
+const ChangesReviewPane = lazy(() =>
+	import("../panels/ChangesReviewPane").then((module) => ({ default: module.ChangesReviewPane })),
+);
 
 const NO_EDITOR_TABS: EditorTab[] = [];
 
 function MissingResource({ label }: { label: string }) {
 	return (
 		<LoadingRegion rows={12} label={`Restoring ${label}`} className="h-full overflow-hidden p-16" />
+	);
+}
+
+type EditorResourceTab = Extract<LayoutCenterTab, { kind: "file" | "diff" | "changes" }>;
+type EditorResource = Extract<EditorTab, { kind: "file" | "diff" | "changes" }>;
+
+function isEditorResource(tab: EditorTab): tab is EditorResource {
+	return tab.kind === "file" || tab.kind === "diff" || tab.kind === "changes";
+}
+
+function findEditorResource(
+	tabs: readonly EditorTab[],
+	id: string,
+	identity: string,
+): EditorResource | undefined {
+	const exact = tabs.find((candidate) => candidate.id === id);
+	if (exact && isEditorResource(exact) && layoutResourceIdentity(exact) === identity) return exact;
+	return tabs.find(
+		(candidate): candidate is EditorResource =>
+			isEditorResource(candidate) && layoutResourceIdentity(candidate) === identity,
+	);
+}
+
+function EditorResourceBody({ workspaceId, tab }: { workspaceId: string; tab: EditorResourceTab }) {
+	const identity = layoutResourceIdentity(tab);
+	const editor = useAppStore((state) =>
+		findEditorResource(state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS, tab.id, identity),
+	);
+	if (!editor) {
+		return (
+			<MissingResource
+				label={tab.kind === "file" ? "file" : tab.kind === "changes" ? "changes" : "diff"}
+			/>
+		);
+	}
+	return (
+		<ErrorBoundary label="editor" resetKeys={[workspaceId, tab.id]}>
+			<Suspense fallback={<MissingResource label="editor" />}>
+				{editor.kind === "file" ? (
+					<FilePane tab={editor} />
+				) : editor.kind === "diff" ? (
+					<DiffPane tab={editor} />
+				) : (
+					<ChangesReviewPane tab={editor} />
+				)}
+			</Suspense>
+		</ErrorBoundary>
 	);
 }
 
@@ -233,6 +285,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const terminalClose = useTerminalClose();
 	const specs = useWorkspaceSpecs(workspaceId);
 	const review = useWorkspaceReview(workspaceId);
+	useLoadWorkspaceTurns(workspaceId);
 	const reviewComments = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.comments);
 	const reviewDraftCount = useAppStore((state) => selectReviewDraftCount(state, workspaceId));
 	const reviewFlagByPath = useMemo(() => reviewFlags(reviewComments), [reviewComments]);
@@ -339,15 +392,24 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		const cachedResources = new Set(
 			cache.flatMap((item) => {
 				const resource = toLayoutTab(item);
-				return resource && (resource.kind === "file" || resource.kind === "diff")
+				return resource &&
+					(resource.kind === "file" || resource.kind === "diff" || resource.kind === "changes")
 					? [layoutResourceIdentity(resource)]
 					: [];
 			}),
 		);
 		for (const tab of collectAllGroups(document).flatMap((group) => group.tabs)) {
-			if (tab.kind !== "file" && tab.kind !== "diff") continue;
+			if (tab.kind !== "file" && tab.kind !== "diff" && tab.kind !== "changes") continue;
 			const identity = layoutResourceIdentity(tab);
 			if (cachedResources.has(identity)) continue;
+			if (tab.kind === "changes") {
+				useAppStore
+					.getState()
+					.openTab(createChangesTab(workspaceId, tab.id, tab.name, tab.scope), "keep", false, {
+						activate: false,
+					});
+				continue;
+			}
 			const cacheArrived = () =>
 				(useAppStore.getState().tabsByWorkspace[workspaceId] ?? []).some((item) => {
 					const resource = toLayoutTab(item);
@@ -423,19 +485,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		};
 	}, [connectionGeneration, document, status, workspaceId]);
 
-	const editorById = useMemo(() => new Map(editorTabs.map((tab) => [tab.id, tab])), [editorTabs]);
-	const editorByResource = useMemo(() => {
-		const resources = new Map<
-			string,
-			Extract<EditorTab, { kind: "file" }> | Extract<EditorTab, { kind: "diff" }>
-		>();
-		for (const tab of editorTabs) {
-			if (tab.kind !== "file" && tab.kind !== "diff") continue;
-			const identity = layoutResourceIdentity(tab);
-			if (!resources.has(identity)) resources.set(identity, tab);
-		}
-		return resources;
-	}, [editorTabs]);
 	const terminalByKey = useMemo(
 		() => new Map(terminals.map((tab) => [tab.tabKey, tab])),
 		[terminals],
@@ -484,36 +533,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					</ErrorBoundary>
 				);
 			}
-			const identity = layoutResourceIdentity(tab);
-			const exact = editorById.get(tab.id);
-			const editor =
-				exact &&
-				(exact.kind === "file" || exact.kind === "diff") &&
-				layoutResourceIdentity(exact) === identity
-					? exact
-					: editorByResource.get(identity);
-			if (!editor) return <MissingResource label={tab.kind === "file" ? "file" : "diff"} />;
-			return (
-				<ErrorBoundary label="editor" resetKeys={[workspaceId, tab.id]}>
-					<Suspense fallback={<MissingResource label="editor" />}>
-						{editor.kind === "file" ? (
-							<FilePane tab={editor} />
-						) : editor.kind === "diff" ? (
-							<DiffPane tab={editor} />
-						) : null}
-					</Suspense>
-				</ErrorBoundary>
-			);
+			return <EditorResourceBody workspaceId={workspaceId} tab={tab} />;
 		},
-		[
-			deletedSessions,
-			document,
-			editorById,
-			editorByResource,
-			openToolFile,
-			terminalByKey,
-			workspaceId,
-		],
+		[deletedSessions, document, openToolFile, terminalByKey, workspaceId],
 	);
 	const renderTabBody = useCallback(
 		(tab: LayoutCenterTab | Extract<LayoutTab, { kind: "terminal" }>) => (
@@ -788,7 +810,12 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 							);
 							if (tab.kind === "chat") {
 								state.closeChatToHistory(tab.sessionId, false, workspaceId, false);
-							} else if (tab.kind === "file" || tab.kind === "diff" || tab.kind === "document") {
+							} else if (
+								tab.kind === "file" ||
+								tab.kind === "diff" ||
+								tab.kind === "changes" ||
+								tab.kind === "document"
+							) {
 								for (const cache of state.tabsByWorkspace[workspaceId] ?? []) {
 									const resource = toLayoutTab(cache);
 									if (resource && layoutResourceIdentity(resource) === closedIdentity) {

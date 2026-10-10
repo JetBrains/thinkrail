@@ -258,7 +258,12 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `Git*`/diff types — incl. **`GitDiffScope`** (what the Changes
   panel is diffing: `branch` → the workspace's work since diverging from its diff base (the range starts at
   their merge-base, never the base's tip) / `uncommitted` → worktree vs `HEAD` /
-  `commit` → one commit, `sha^` vs `sha`; omitted on the wire = `branch`, so an older client is unchanged),
+  `commit` → one commit, `sha^` vs `sha` / `turn` → the two worktree **tree snapshots** the host took
+  around one agent run (`{ id, baseTree, headTree, startedAt }`, both sides immutable, v79); omitted on
+  the wire = `branch`, so an older client is unchanged), **`TurnChangeSet`** (one recorded agent run:
+  `{ id, workspaceId, sessionId, startedAt, settledAt, baseTree, headTree, changes }` — what the run
+  actually left behind, served by **`workspace.turns`** and pushed on **`turn.changed`**,
+  `TURN_CHANGES_PROTOCOL_VERSION` = v79),
   **`GitCommit`** (a commit row of the scope menu's list), and **`BranchList`**: `remote` remains the
   canonical full-ref string list, while optional host-authored `remoteGroups` carries each configured
   remote and its `{ ref, branch }` rows for two-layer presentation. The field is additive so a newer UI
@@ -441,7 +446,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   key's review chat: one chat per file, pinned on first send, the **empty key** being the anchorless
   whole-change-set bucket, pinned the same way so a second overall remark continues one discussion —
   and **`doneFiles`**, same keys: files whose review the user marked finished, so a fully-resolved
-  file leaves the list only on their say-so), **`ReviewComment`** (`kind`
+  file leaves the list only on their say-so; optional **`guide`** — a **`ReviewGuide`**: the newest
+  plan-step verdict's `summary`, its ordered `readingOrder` of `ReviewReadingStep { path, why }`, the
+  verdict and provenance, host-written so the Changes review tab can walk the reviewer's story), **`ReviewComment`** (`kind`
   inline/diff/file/review; `status` draft/sent/resolved/
   dismissed — orthogonal to **`anchorState`** anchored/moved/outdated; per-comment `sessionId` — the
   chat it was sent into), **`ReviewAnchor`** (`path` + `side` + `contentHash` + an ordered **`ReviewSelector`**
@@ -580,7 +587,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   taking an optional **`scope: GitDiffScope`** (an unresolvable scope — a commit a rebase removed — is
   *rejected*, which the panel reads as "reset the scope" instead of staying wedged on a dead sha) /
   **`git.listCommits`** (the workspace branch's own commits, `<diff base>..HEAD`, newest first, capped
-  host-side — the scope menu's lazily-fetched list) / the **`change.*` write path**
+  host-side — the scope menu's lazily-fetched list) / **`workspace.turns`** (`{ workspaceId }` → the
+  workspace's recorded agent runs, oldest first, capped host-side) / the **`change.*` write path**
   (`CHANGE_MUTATIONS_PROTOCOL_VERSION` = v75) — **`change.revert`** (`{ workspaceId, path, scope,
   target, expect: { originalHash, modifiedHash } }` → `{ receipt }`: the client names *what it saw*, the
   host re-derives the change from its own reads under a per-workspace lock, and either side's hash
@@ -676,6 +684,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   pair (`{ projectId, id }` — the record is already gone) / **`review.changed`** — a workspace's review
   state changed (emitted by the server's `reviews` publisher on every mutation — UI edits, agent
   `resolve_comment` calls, re-anchoring — so all clients converge, same pattern as the trio) /
+  **`turn.changed`** — the `TurnChangeSet` the host just recorded for a settled agent run (emitted by the
+  server's `turns` publisher; every client appends it to the workspace's list) /
   **`workspace.fsChanged`** — the worktree
   change-notifier push (**`WorkspaceFsChangedPayload`**: `{ workspaceId, paths, truncated, skillChange }`,
   worktree-relative deduped paths, capped — `truncated` means the generic path list is incomplete and must

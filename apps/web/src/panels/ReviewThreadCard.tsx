@@ -2,6 +2,12 @@ import { RiSendPlaneLine as Send, RiDeleteBin6Line as Trash2 } from "@remixicon/
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useRef, useState } from "react";
 import type { ReviewThread, ReviewThreadActions } from "../resources";
+import {
+	type ReviewTextState,
+	reviewTextState,
+	selectedReviewText,
+	useReviewDraftState,
+} from "./resources/reviewDraftState";
 import { outdatedReason, threadLabel } from "./reviewModel";
 
 function grow(el: HTMLTextAreaElement): void {
@@ -18,19 +24,34 @@ export function ReviewThreadCard({
 	actions: ReviewThreadActions;
 	onActivate?: (() => void) | undefined;
 }) {
-	const [busy, setBusy] = useState(false);
-	const [draftText, setDraftText] = useState(thread.body);
-	const [syncedBody, setSyncedBody] = useState(thread.body);
-	if (syncedBody !== thread.body) {
-		setSyncedBody(thread.body);
-		if (draftText === syncedBody) setDraftText(thread.body);
-	}
+	const [edit, changeEdit] = useReviewDraftState<ReviewTextState | undefined>(
+		`thread:${thread.id}`,
+		undefined,
+	);
+	const draftText = edit?.text ?? thread.body;
+	const textState = edit ?? reviewTextState(draftText);
+	const busy = textState.busy;
+	const [restored] = useState(edit);
 	const editRef = useRef<HTMLTextAreaElement>(null);
 	const cancelledRef = useRef(false);
-	const run = (action: (id: string) => Promise<void>) => {
-		setBusy(true);
-		action(thread.id).catch(() => setBusy(false));
+	const run = (action: () => Promise<void>) => {
+		if (busy) return;
+		const pending = { ...textState, busy: true };
+		changeEdit(() => pending);
+		action().then(
+			() => changeEdit((current) => (current === pending ? undefined : current)),
+			() => changeEdit((current) => (current === pending ? { ...pending, busy: false } : current)),
+		);
 	};
+	useEffect(() => {
+		if (restored)
+			editRef.current?.setSelectionRange(restored.start, restored.end, restored.direction);
+	}, [restored]);
+	useEffect(() => {
+		if (edit && !edit.busy && (thread.status !== "draft" || edit.text === thread.body)) {
+			changeEdit((current) => (current === edit ? undefined : current));
+		}
+	}, [changeEdit, edit, thread.body, thread.status]);
 	useEffect(() => {
 		const el = editRef.current;
 		if (el && el.value === draftText) grow(el);
@@ -42,10 +63,10 @@ export function ReviewThreadCard({
 		}
 		const next = draftText.trim();
 		if (!next || next === thread.body) {
-			setDraftText(thread.body);
+			changeEdit(() => undefined);
 			return;
 		}
-		actions.onUpdateComment(thread.id, next).catch(() => setDraftText(thread.body));
+		run(() => actions.onUpdateComment(thread.id, next));
 	};
 	return (
 		<div
@@ -84,8 +105,15 @@ export function ReviewThreadCard({
 								data-testid="review-thread-send"
 								aria-label="Send this comment to the file's review chat"
 								className="review-thread-action disabled:pointer-events-none"
-								disabled={busy}
-								onClick={() => run(actions.onSendComment)}
+								disabled={busy || !draftText.trim()}
+								onClick={() =>
+									run(async () => {
+										if (draftText.trim() !== thread.body) {
+											await actions.onUpdateComment(thread.id, draftText.trim());
+										}
+										await actions.onSendComment(thread.id);
+									})
+								}
 							>
 								<Send className="size-12" />
 							</button>
@@ -97,7 +125,7 @@ export function ReviewThreadCard({
 								aria-label="Delete draft"
 								className="review-thread-action disabled:pointer-events-none"
 								disabled={busy}
-								onClick={() => run(actions.onDeleteComment)}
+								onClick={() => run(() => actions.onDeleteComment(thread.id))}
 							>
 								<Trash2 className="size-12" />
 							</button>
@@ -115,18 +143,29 @@ export function ReviewThreadCard({
 					value={draftText}
 					disabled={busy}
 					onChange={(e) => {
-						setDraftText(e.target.value);
-						grow(e.target);
+						const next = selectedReviewText(e.currentTarget, textState);
+						changeEdit(() => next);
+						grow(e.currentTarget);
 					}}
-					onBlur={saveEdit}
+					onSelect={(e) => {
+						const next = selectedReviewText(e.currentTarget, textState);
+						if (next !== textState) changeEdit(() => next);
+					}}
+					onBlur={(event) => {
+						if (event.currentTarget.parentElement?.contains(event.relatedTarget)) return;
+						saveEdit();
+					}}
 					onKeyDown={(e) => {
 						e.stopPropagation();
 						if (e.key === "Escape") {
 							cancelledRef.current = true;
-							setDraftText(thread.body);
+							changeEdit(() => undefined);
 							editRef.current?.blur();
 						}
-						if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) editRef.current?.blur();
+						if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+							e.preventDefault();
+							editRef.current?.blur();
+						}
 					}}
 				/>
 			) : (

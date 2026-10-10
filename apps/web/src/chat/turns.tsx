@@ -4,6 +4,7 @@ import {
 	RiArrowRightSLine as ChevronRight,
 	RiArrowUpSLine as ChevronUp,
 	RiTimeLine as Clock,
+	RiEyeLine as Eye,
 	RiFileTextLine as FileText,
 	RiContractUpDownLine as FoldVertical,
 	RiLoopRightLine as RotateCw,
@@ -11,7 +12,12 @@ import {
 	RiAlertLine as TriangleAlert,
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
-import type { ImageContent, ReviewFixDetails, UserMessage } from "@thinkrail/contracts";
+import type {
+	GitDiffScope,
+	ImageContent,
+	ReviewFixDetails,
+	UserMessage,
+} from "@thinkrail/contracts";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
@@ -44,6 +50,7 @@ export function ChatTurnView({
 	isFinalAnswer,
 	onOpenSpec,
 	onOpenChange,
+	onReviewTurn,
 	onReveal,
 	onTryAgain,
 	stillRunning,
@@ -55,6 +62,7 @@ export function ChatTurnView({
 	isFinalAnswer: boolean;
 	onOpenSpec?: ((path: string) => void) | undefined;
 	onOpenChange?: ((path: string) => void) | undefined;
+	onReviewTurn?: ((scope: GitDiffScope) => void) | undefined;
 	onReveal?: ((tab: "specs" | "changes") => void) | undefined;
 	onTryAgain?: (() => void) | undefined;
 	/** Live-resource deep link for this chat's latest turn divider only. */
@@ -150,6 +158,7 @@ export function ChatTurnView({
 					workspaceRoot={workspaceRoot}
 					onOpenSpec={onOpenSpec ?? (() => {})}
 					onOpenChange={onOpenChange ?? (() => {})}
+					onReviewTurn={onReviewTurn}
 					onReveal={onReveal ?? (() => {})}
 					stillRunning={stillRunning}
 				/>
@@ -671,6 +680,7 @@ interface ArtifactGroup {
 	expanded: boolean;
 	onOpen: (path: string) => void;
 	reveal: () => void;
+	stats?: ReadonlyMap<string, { added: number; removed: number }>;
 }
 
 function ArtifactChip({
@@ -727,26 +737,35 @@ function ArtifactList({
 	listId: string;
 	workspaceRoot?: string | undefined;
 }) {
-	const { id, icon: Icon, paths, onOpen } = group;
+	const { id, icon: Icon, paths, onOpen, stats } = group;
 	const testid = `turn-divider-${id}`;
 	return (
 		<ul id={listId} data-testid={`${testid}-list`} className="flex flex-col">
-			{paths.map((path) => (
-				<li key={path}>
-					<button
-						type="button"
-						data-testid={`${testid}-list-item`}
-						onClick={() => onOpen(path)}
-						title={path}
-						className="flex w-full items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 text-left hover:bg-control-bg-hovered"
-					>
-						<Icon className="size-12 shrink-0 text-text-muted" />
-						<span className="min-w-0 flex-1 truncate text-text-muted">
-							{projectRelativePath(path, workspaceRoot)}
-						</span>
-					</button>
-				</li>
-			))}
+			{paths.map((path) => {
+				const stat = stats?.get(path);
+				return (
+					<li key={path}>
+						<button
+							type="button"
+							data-testid={`${testid}-list-item`}
+							onClick={() => onOpen(path)}
+							title={path}
+							className="flex w-full items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 text-left hover:bg-control-bg-hovered"
+						>
+							<Icon className="size-12 shrink-0 text-text-muted" />
+							<span className="min-w-0 flex-1 truncate text-text-muted">
+								{projectRelativePath(path, workspaceRoot)}
+							</span>
+							{stat ? (
+								<span className="shrink-0 tabular-nums">
+									<span className="text-feedback-success">+{stat.added}</span>{" "}
+									<span className="text-feedback-error">−{stat.removed}</span>
+								</span>
+							) : null}
+						</button>
+					</li>
+				);
+			})}
 		</ul>
 	);
 }
@@ -762,6 +781,7 @@ export function TurnDivider({
 	workspaceRoot,
 	onOpenSpec,
 	onOpenChange,
+	onReviewTurn,
 	onReveal,
 	stillRunning,
 }: {
@@ -770,11 +790,32 @@ export function TurnDivider({
 	workspaceRoot?: string | undefined;
 	onOpenSpec: (path: string) => void;
 	onOpenChange: (path: string) => void;
+	onReviewTurn?: ((scope: GitDiffScope) => void) | undefined;
 	onReveal: (tab: "specs" | "changes") => void;
 	stillRunning?: StillRunning | undefined;
 }) {
-	const { elapsedMs, toolCount, specs, changedFiles } = data;
+	const { elapsedMs, toolCount, specs, changedFiles, receipt } = data;
 	const [selected, select] = useSelection(`${id}:artifacts`);
+	const stats = receipt
+		? new Map(
+				receipt.changes.map((change) => [
+					change.path,
+					{ added: change.added ?? 0, removed: change.removed ?? 0 },
+				]),
+			)
+		: undefined;
+	const counted = new Set(changedFiles);
+	const totals = receipt
+		? receipt.changes
+				.filter((change) => counted.has(change.path))
+				.reduce(
+					(sum, change) => ({
+						added: sum.added + (change.added ?? 0),
+						removed: sum.removed + (change.removed ?? 0),
+					}),
+					{ added: 0, removed: 0 },
+				)
+		: null;
 	const allGroups: ArtifactGroup[] = [
 		{
 			id: "specs",
@@ -789,10 +830,14 @@ export function TurnDivider({
 			id: "files",
 			icon: FileDiffGlyph,
 			paths: changedFiles,
-			label: (n) => `${n} ${n === 1 ? "file changed" : "files changed"}`,
+			label: (n) =>
+				`${n} ${n === 1 ? "file changed" : "files changed"}${
+					totals ? ` · +${totals.added} −${totals.removed}` : ""
+				}`,
 			expanded: selected === "files",
 			onOpen: onOpenChange,
 			reveal: () => onReveal("changes"),
+			...(stats ? { stats } : {}),
 		},
 	];
 	const groups = allGroups.filter((group) => group.paths.length > 0);
@@ -828,6 +873,17 @@ export function TurnDivider({
 						onSelect={(event) => select(group.id, event)}
 					/>
 				))}
+				{receipt && onReviewTurn ? (
+					<button
+						type="button"
+						data-testid="turn-divider-review"
+						onClick={() => onReviewTurn(receipt.scope)}
+						className="flex items-center gap-4 rounded-[var(--radius-sm)] px-4 text-primary hover:bg-control-bg-hovered"
+					>
+						<Eye className="size-12 shrink-0" />
+						Review turn
+					</button>
+				) : null}
 				{elapsedMs != null && elapsedMs >= 1000 ? (
 					<span className="flex items-center gap-4">
 						<Clock className="size-12 shrink-0" />

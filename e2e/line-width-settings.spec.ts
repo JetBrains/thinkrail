@@ -151,7 +151,7 @@ test("Pierre renders both sides of a long-line diff", async ({ page }) => {
 	writeFileSync(join(workspace.worktreePath, "LONG_LINE.txt"), `changed ${LONG_LINE}`);
 
 	await revealWorkbenchTool(page, "changes");
-	await page.getByTestId("change-item").filter({ hasText: "LONG_LINE.txt" }).click();
+	await page.getByTestId("change-item").filter({ hasText: "LONG_LINE.txt" }).dblclick();
 	const diff = page.getByTestId("diff-view");
 	await expect(
 		pierreDeletionsSide(diff).getByText(LONG_LINE.trim(), { exact: false }).last(),

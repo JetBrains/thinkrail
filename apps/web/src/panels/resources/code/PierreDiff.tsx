@@ -7,6 +7,7 @@ import {
 import { FileDiff } from "@pierre/diffs/react";
 import {
 	RiRobot2Line as AskAgent,
+	RiCheckLine as Check,
 	RiChatNewLine as MessageSquarePlus,
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
@@ -22,8 +23,15 @@ import type {
 import { ReviewComposer } from "../../ReviewComposer";
 import { ReviewThreadCard } from "../../ReviewThreadCard";
 import { useScrollViewState } from "../../useScrollViewState";
+import { diffContentStamp, useStampedComposer } from "../reviewComposerState";
+import { StaleComposerNotice } from "../StaleComposerNotice";
 import { type AnnotationSlot, reconcileAnnotationSlots } from "./annotationSlots";
-import { type ChangeBlock, changeBlockId, computeActionBlocks } from "./changeBlocks";
+import {
+	type ChangeBlock,
+	changeBlockContentKeys,
+	changeBlockId,
+	computeActionBlocks,
+} from "./changeBlocks";
 import PierreProvider from "./PierreProvider";
 import {
 	type BlockedSelection,
@@ -112,10 +120,12 @@ function useThreadAnnotations(
 
 function HunkToolbar({
 	block,
+	contentKey,
 	actions,
 	onAskAgent,
 }: {
 	block: ChangeBlock;
+	contentKey: string;
 	actions: NonNullable<ResourceDiffProps["hunkActions"]>;
 	onAskAgent: (block: ChangeBlock) => void;
 }) {
@@ -127,12 +137,34 @@ function HunkToolbar({
 			() => setReverting(false),
 		);
 	};
+	const triage = actions.triage;
+	const kept = triage?.keptKeys.has(contentKey) ?? false;
 	return (
 		<div
 			data-testid="hunk-toolbar"
-			className="mx-12 my-2 flex min-h-24 items-center gap-4 rounded-[var(--radius-sm)] border border-border-muted bg-container-header-bg px-4 text-text-muted"
+			data-kept={kept ? true : undefined}
+			className={`mx-12 my-2 flex min-h-24 items-center gap-4 rounded-[var(--radius-sm)] border bg-container-header-bg px-4 text-text-muted ${
+				kept ? "border-feedback-success-muted" : "border-border-muted"
+			}`}
 			onPointerDown={(event) => event.stopPropagation()}
 		>
+			{triage ? (
+				<IconTooltip label={kept ? "Kept — click to undo" : "Keep this hunk"}>
+					<button
+						type="button"
+						data-testid="hunk-keep"
+						aria-label={kept ? "Undo keep" : "Keep hunk"}
+						aria-pressed={kept}
+						onClick={() => triage.setKept(contentKey, !kept)}
+						className={`flex h-24 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+							kept ? "text-feedback-success" : "hover:bg-control-bg-hovered hover:text-text-default"
+						}`}
+					>
+						<Check className="size-14" />
+						{kept ? "Kept" : "Keep"}
+					</button>
+				</IconTooltip>
+			) : null}
 			<IconTooltip label="Revert hunk">
 				<button
 					type="button"
@@ -224,6 +256,19 @@ function PierreDiffSurface({
 		() => new Map(blocks.map((block) => [changeBlockId(block), block])),
 		[blocks],
 	);
+	const triage = hunkActions?.triage;
+	const triageEnabled = triage !== undefined;
+	const contentKeyById = useMemo(
+		() =>
+			triageEnabled
+				? changeBlockContentKeys(blocks, originalText ?? "", modifiedText ?? "")
+				: new Map<string, string>(),
+		[blocks, modifiedText, originalText, triageEnabled],
+	);
+	const onHunkKeys = triage?.onHunkKeys;
+	useEffect(() => {
+		onHunkKeys?.([...contentKeyById.values()]);
+	}, [contentKeyById, onHunkKeys]);
 	const placedThreadIds = useMemo(
 		() => diffPlacedThreadIds(fileDiff, review),
 		[fileDiff, review?.base.threads, review?.worktree.threads],
@@ -237,27 +282,36 @@ function PierreDiffSurface({
 		() => (hunkActions ? blocks.map(actionAnnotation) : []),
 		[blocks, hunkActions],
 	);
-	const [composer, setComposer] = useState<OpenComposer | BlockedSelection | null>(null);
-	const [selectedLines, setSelectedLines] = useState<SelectedLineRange | null>(null);
-	const nextComposerId = useRef(0);
+	const pending = useStampedComposer<{
+		composer: OpenComposer | BlockedSelection;
+		selectedLines: SelectedLineRange | null;
+	}>(diffContentStamp(original, modified));
+	const composer = pending.selection?.composer ?? null;
+	const selectedLines = pending.selection?.selectedLines ?? null;
+	const { select, close: closeComposer } = pending;
+	const nextComposerId = useRef(composer?.id ?? 0);
 	const reviewRef = useRef(review);
 	const hunkActionsRef = useRef(hunkActions);
 	reviewRef.current = review;
 	hunkActionsRef.current = hunkActions;
-	const openSelection = useCallback((range: SelectedLineRange | null) => {
-		if (!range || !reviewRef.current) return;
-		const next = selectionComposer(range, ++nextComposerId.current);
-		setSelectedLines(
-			next.kind === "composer" && next.draft.selectors[0]?.kind === "lineRange"
-				? {
-						start: next.draft.selectors[0].startLine,
-						end: next.draft.selectors[0].endLine,
-						side: next.side,
-					}
-				: range,
-		);
-		setComposer(next);
-	}, []);
+	const openSelection = useCallback(
+		(range: SelectedLineRange | null) => {
+			if (!range || !reviewRef.current) return;
+			const next = selectionComposer(range, ++nextComposerId.current);
+			select({
+				composer: next,
+				selectedLines:
+					next.kind === "composer" && next.draft.selectors[0]?.kind === "lineRange"
+						? {
+								start: next.draft.selectors[0].startLine,
+								end: next.draft.selectors[0].endLine,
+								side: next.side,
+							}
+						: range,
+			});
+		},
+		[select],
+	);
 	const openGutterComposer = useCallback(
 		(line: { lineNumber: number; side: AnnotationSide } | undefined) => {
 			if (!line) return;
@@ -265,40 +319,36 @@ function PierreDiffSurface({
 		},
 		[openSelection],
 	);
-	const openAskAgent = useCallback((block: ChangeBlock) => {
-		const actions = hunkActionsRef.current;
-		if (!actions) return;
-		const request = actions.askAgent(block);
-		const range = request.draft.selectors.find((selector) => selector.kind === "lineRange");
-		const lineNumber = range?.kind === "lineRange" ? range.endLine : 0;
-		const id = ++nextComposerId.current;
-		setSelectedLines(
-			range?.kind === "lineRange"
-				? {
-						start: range.startLine,
-						end: range.endLine,
-						side: "additions",
-					}
-				: null,
-		);
-		setComposer({
-			kind: "composer",
-			id,
-			side: "additions",
-			lineNumber,
-			draft: request.draft,
-			label:
-				range?.kind === "lineRange"
-					? composerLineLabel(range.startLine, range.endLine)
-					: "Changed hunk",
-			initialText: request.initialText,
-			...(request.notice ? { notice: request.notice } : {}),
-		});
-	}, []);
-	const closeComposer = useCallback(() => {
-		setComposer(null);
-		setSelectedLines(null);
-	}, []);
+	const openAskAgent = useCallback(
+		(block: ChangeBlock) => {
+			const actions = hunkActionsRef.current;
+			if (!actions) return;
+			const request = actions.askAgent(block);
+			const range = request.draft.selectors.find((selector) => selector.kind === "lineRange");
+			const lineNumber = range?.kind === "lineRange" ? range.endLine : 0;
+			const id = ++nextComposerId.current;
+			select({
+				selectedLines:
+					range?.kind === "lineRange"
+						? { start: range.startLine, end: range.endLine, side: "additions" }
+						: null,
+				composer: {
+					kind: "composer",
+					id,
+					side: "additions",
+					lineNumber,
+					draft: request.draft,
+					label:
+						range?.kind === "lineRange"
+							? composerLineLabel(range.startLine, range.endLine)
+							: "Changed hunk",
+					initialText: request.initialText,
+					...(request.notice ? { notice: request.notice } : {}),
+				},
+			});
+		},
+		[select],
+	);
 	const composerAnnotation = useMemo<DiffLineAnnotation<DiffAnnotationMetadata>>(
 		() => ({
 			side: composer?.side ?? "additions",
@@ -349,6 +399,7 @@ function PierreDiffSurface({
 			data-testid="diff-view"
 			className="h-full overflow-auto bg-container-content-bg pierre-code-surface pierre-diff-surface"
 		>
+			<StaleComposerNotice visible={pending.stale} />
 			{fileDiff.hunks.length === 0 ? (
 				<p data-testid="diff-empty" className="px-12 py-8 tr-text-ui text-text-muted">
 					No differences between the two sides.
@@ -395,6 +446,7 @@ function PierreDiffSurface({
 							<HunkToolbar
 								key={metadata.id}
 								block={block}
+								contentKey={contentKeyById.get(metadata.id) ?? metadata.id}
 								actions={hunkActions}
 								onAskAgent={openAskAgent}
 							/>
@@ -422,7 +474,8 @@ function PierreDiffSurface({
 					}
 					return (
 						<ReviewComposer
-							key={composer.id}
+							key={pending.key ?? composer.id}
+							input={pending.input}
 							draft={composer.draft}
 							label={composer.label}
 							commenting={surfaceForSide(review, composer.side).commenting}

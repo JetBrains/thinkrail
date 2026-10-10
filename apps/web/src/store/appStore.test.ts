@@ -397,6 +397,23 @@ test("a host-fired USER message folds into the transcript; the composer's optimi
 	expect(rt("a").turns.filter((t) => t.kind === "user")).toHaveLength(2);
 });
 
+test("a matching user echo adopts the host clock while retaining optimistic identity and attachment labels", () => {
+	const store = useAppStore.getState();
+	store.openChatSession("ws1", "clock", null, "medium");
+	store.appendUserMessage("clock", "fix the tests", [
+		{ name: "screen.png", content: { type: "image", data: "test", mimeType: "image/png" } },
+	]);
+	const optimistic = rt("clock").turns[0];
+	const message = {
+		role: "user" as const,
+		content: [{ type: "text" as const, text: "fix the tests" }],
+		timestamp: 1_000,
+	};
+	store.handlePiEvent({ type: "message_start", message }, "clock");
+	expect(rt("clock").turns).toEqual([{ ...optimistic, message }]);
+	expect(rt("clock").turns[0]).toMatchObject({ attachmentNames: ["screen.png"] });
+});
+
 test("queue_update folds pi's queue into the runtime; the canonical echo lands the turn at its true position", () => {
 	const queueUpdate = (steering: string[], followUp: string[], hasImages = false) =>
 		({
@@ -3779,6 +3796,133 @@ test("chat presentation preferences are client-local and cannot be overwritten b
 	useAppStore.getState().applyConfig(legacyConfig);
 	expect(useAppStore.getState().chatMessageOrder).toBe("newest-first");
 	expect(useAppStore.getState().streamingResponseMovement).toEqual({ settle: 60, trigger: 90 });
+});
+
+test("changes tabs: one per scope, preview-eligible, and review progress survives a re-open", () => {
+	const s = () => useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	expect(s().changesView).toBe("tree");
+	expect(s().changesLayout).toBe("stacked");
+	const tab = {
+		kind: "changes" as const,
+		id: "ws1:changes:branch",
+		workspaceId: "ws1",
+		name: "Changes",
+		scope: { kind: "branch" } as const,
+		viewed: [],
+		activePath: null,
+		collapsed: {},
+		reveal: null,
+		sections: {},
+		kept: {},
+	};
+	s().openTab(tab, "preview");
+	expect(s().previewTabByWorkspace.ws1).toBe(tab.id);
+	expect(s().activeTabByWorkspace.ws1).toBe(tab.id);
+
+	s().setChangesTabViewed("ws1", tab.id, "src/a.ts", true);
+	// the first piece of review progress keeps the tab: a later single-click preview must not evict it
+	expect(s().previewTabByWorkspace.ws1).toBeUndefined();
+	expect(s().layoutIntents.at(-1)).toMatchObject({
+		kind: "select",
+		tabId: tab.id,
+		keep: true,
+		focus: false,
+	});
+	s().setChangesTabViewed("ws1", tab.id, "src/a.ts", true);
+	s().setChangesTabViewed("ws1", tab.id, "src/b.ts", true);
+	s().setChangesTabViewed("ws1", tab.id, "src/b.ts", false);
+	s().setChangesTabActivePath("ws1", tab.id, "src/a.ts");
+	s().setChangesTabCollapsed("ws1", tab.id, { "bun.lock": false, "src/a.ts": true });
+	s().setChangesTabCollapsed("ws1", tab.id, { "src/a.ts": null });
+	s().requestChangesTabReveal("ws1", tab.id, "src/b.ts");
+	s().requestChangesTabReveal("ws1", tab.id, "src/b.ts");
+	s().setChangesTabSectionRenderer("ws1", tab.id, "README.md", "thinkrail/markdown");
+	s().setChangesTabSectionViewState("ws1", tab.id, "README.md", { scrollTop: 7 });
+	s().setChangesTabView("ws1", tab.id, "inline");
+	s().setChangesTabIgnoreWhitespace("ws1", tab.id, true);
+	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h1", true, ["h1", "h2"]);
+	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h2", true, ["h1", "h2"]);
+	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h1", false, ["h1", "h2"]);
+	s().setChangesTabHunkKept("ws1", tab.id, "src/a.ts", "h1", false, ["h1", "h2"]);
+
+	const after = s().tabsByWorkspace.ws1?.[0];
+	if (after?.kind !== "changes") throw new Error("expected a changes tab");
+	expect(after.viewed).toEqual(["src/a.ts"]);
+	expect(after.activePath).toBe("src/a.ts");
+	expect(after.collapsed).toEqual({ "bun.lock": false });
+	expect(after.reveal).toEqual({ path: "src/b.ts", tick: 2 });
+	expect(after.sections["README.md"]).toEqual({
+		rendererId: "thinkrail/markdown",
+		viewState: { scrollTop: 7 },
+	});
+	// a renderer switch drops the view state saved for the previous renderer, like setTabRenderer
+	s().setChangesTabSectionRenderer("ws1", tab.id, "README.md", "thinkrail/code");
+	const switched = s().tabsByWorkspace.ws1?.[0];
+	expect(switched?.kind === "changes" && switched.sections["README.md"]).toEqual({
+		rendererId: "thinkrail/code",
+	});
+	expect(after.view).toBe("inline");
+	expect(after.ignoreWhitespace).toBe(true);
+	expect(after.kept).toEqual({ "src/a.ts": ["h2"] });
+
+	s().consumeChangesTabReveal("ws1", tab.id, null);
+	const cleared = s().tabsByWorkspace.ws1?.[0];
+	expect(cleared?.kind === "changes" && cleared.reveal).toBeNull();
+
+	s().openTab(cleared as typeof tab, "keep");
+	expect(s().tabsByWorkspace.ws1).toHaveLength(1);
+	expect(s().previewTabByWorkspace.ws1).toBeUndefined();
+	const kept = s().tabsByWorkspace.ws1?.[0];
+	expect(kept?.kind === "changes" && kept.viewed).toEqual(["src/a.ts"]);
+
+	// a different scope is a different tab
+	s().openTab({ ...tab, id: "ws1:changes:uncommitted", scope: { kind: "uncommitted" } }, "preview");
+	expect(s().tabsByWorkspace.ws1).toHaveLength(2);
+	// actions against a foreign workspace or an unknown id are no-ops
+	const before = s().tabsByWorkspace;
+	s().setChangesTabViewed("ws2", tab.id, "x", true);
+	s().setChangesTabActivePath("ws1", "missing", "x");
+	expect(s().tabsByWorkspace).toBe(before);
+});
+
+test("consuming a changes-tab reveal lands active path, expansion and focus in one write", () => {
+	const s = () => useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const tab = {
+		kind: "changes" as const,
+		id: "ws1:changes:branch",
+		workspaceId: "ws1",
+		name: "Changes",
+		scope: { kind: "branch" } as const,
+		viewed: [],
+		activePath: null,
+		collapsed: { "src/a.ts": true },
+		reveal: null,
+		sections: {},
+		kept: {},
+	};
+	s().openTab(tab, "keep");
+	s().requestChangesTabReveal("ws1", tab.id, "src/a.ts", "c1");
+	let writes = 0;
+	const unsubscribe = useAppStore.subscribe(() => {
+		writes += 1;
+	});
+	s().consumeChangesTabReveal("ws1", tab.id, { path: "src/a.ts", commentId: "c1" });
+	unsubscribe();
+	expect(writes).toBe(1);
+	const after = s().tabsByWorkspace.ws1?.[0];
+	expect(after).toMatchObject({
+		activePath: "src/a.ts",
+		collapsed: { "src/a.ts": false },
+		reveal: null,
+	});
+	expect(s().reviewFocusRequest).toEqual({ workspaceId: "ws1", commentId: "c1" });
+
+	s().setChangesTabSectionViewState("ws1", tab.id, "src/a.ts", { scrollTop: 3 });
+	const saved = s().tabsByWorkspace;
+	s().setChangesTabSectionViewState("ws1", tab.id, "src/a.ts", { scrollTop: 3 });
+	expect(s().tabsByWorkspace).toBe(saved);
 });
 
 test("diff tabs: openTab dedupes by id + activates; renderer, view state, and contents update in place", () => {

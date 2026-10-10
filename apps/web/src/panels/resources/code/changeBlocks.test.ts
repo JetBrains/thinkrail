@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { commentKindForDraft } from "../../useReviewCommenting";
-import { computeActionBlocks, computeChangeBlocks, createAskAgentRequest } from "./changeBlocks";
+import {
+	type ChangeBlock,
+	changeBlockContentKeys,
+	changeBlockId,
+	computeActionBlocks,
+	computeChangeBlocks,
+	createAskAgentRequest,
+} from "./changeBlocks";
 
 describe("computeChangeBlocks", () => {
 	test("returns separate engine-neutral spans for separated edits", () => {
@@ -68,5 +75,83 @@ describe("computeChangeBlocks", () => {
 
 		expect(request.draft.selectors).toEqual([{ kind: "diffHunk", hunkHeader: "@@ -1,1 +1,0 @@" }]);
 		expect(commentKindForDraft("diff", request.draft)).toBe("file");
+	});
+});
+
+function changeBlockContentKey(block: ChangeBlock, original: string, modified: string): string {
+	const key = changeBlockContentKeys([block], original, modified).get(changeBlockId(block));
+	if (!key) throw new Error("expected a key for the block");
+	return key;
+}
+
+describe("changeBlockContentKeys", () => {
+	test("keys a hunk by what it removes and adds, not by where it sits", () => {
+		const original = "a\nb\nc\nd\n";
+		const shifted = "x\ny\na\nb\nc\nd\n";
+		const [block] = computeChangeBlocks(original, "a\nB\nc\nd\n", false);
+		const [shiftedBlock] = computeChangeBlocks(shifted, "x\ny\na\nB\nc\nd\n", false);
+		if (!block || !shiftedBlock) throw new Error("expected one block each");
+		expect(changeBlockContentKey(block, original, "a\nB\nc\nd\n")).toBe(
+			changeBlockContentKey(shiftedBlock, shifted, "x\ny\na\nB\nc\nd\n"),
+		);
+	});
+
+	test("removing a kept duplicate never transfers its decision to the remaining hunk", () => {
+		const original = "a\nx\na\ny\na\n";
+		const modified = "A\nx\nA\ny\nA\n";
+		const keys = [
+			...changeBlockContentKeys(
+				computeChangeBlocks(original, modified, false),
+				original,
+				modified,
+			).values(),
+		];
+		expect(new Set(keys).size).toBe(3);
+		const after = "a\nx\nA\ny\nA\n";
+		const remaining = [
+			...changeBlockContentKeys(
+				computeChangeBlocks(original, after, false),
+				original,
+				after,
+			).values(),
+		];
+		expect(remaining).not.toContain(keys[0]);
+		const last = "a\nx\na\ny\nA\n";
+		const final = [
+			...changeBlockContentKeys(
+				computeChangeBlocks(original, last, false),
+				original,
+				last,
+			).values(),
+		];
+		expect(final).not.toContain(keys[0]);
+		const firstPair = "A\nx\nA\ny\na\n";
+		const firstPairKeys = [
+			...changeBlockContentKeys(
+				computeChangeBlocks(original, firstPair, false),
+				original,
+				firstPair,
+			).values(),
+		];
+		expect(remaining).not.toContain(firstPairKeys[0]);
+	});
+
+	test("a different edit at the same place gets a different key", () => {
+		const original = "a\nb\nc\n";
+		const [one] = computeChangeBlocks(original, "a\nB\nc\n", false);
+		const [two] = computeChangeBlocks(original, "a\nBB\nc\n", false);
+		if (!one || !two) throw new Error("expected one block each");
+		expect(changeBlockContentKey(one, original, "a\nB\nc\n")).not.toBe(
+			changeBlockContentKey(two, original, "a\nBB\nc\n"),
+		);
+	});
+
+	test("a pure deletion and a pure addition of the same text do not collide", () => {
+		const [deletion] = computeChangeBlocks("a\nb\n", "a\n", false);
+		const [addition] = computeChangeBlocks("a\n", "a\nb\n", false);
+		if (!deletion || !addition) throw new Error("expected one block each");
+		expect(changeBlockContentKey(deletion, "a\nb\n", "a\n")).not.toBe(
+			changeBlockContentKey(addition, "a\n", "a\nb\n"),
+		);
 	});
 });

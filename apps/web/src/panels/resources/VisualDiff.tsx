@@ -55,12 +55,14 @@ function EmptyFrame({ label }: { label: string }) {
 
 function SideSurface({
 	label,
+	selectionKey,
 	side,
 	regionLabel,
 	contentStamp,
 	emptyLabel,
 }: {
 	label: string;
+	selectionKey: string;
 	side: VisualDiffSide;
 	regionLabel: string;
 	contentStamp: string;
@@ -73,6 +75,7 @@ function SideSurface({
 				{...(side.present ? { review: side.review } : {})}
 				intrinsicSize={side.intrinsicSize}
 				contentStamp={contentStamp}
+				selectionKey={selectionKey}
 				className={frameClass(side.intrinsicSize, 58)}
 				{...(frameStyle(side.intrinsicSize, 58)
 					? { style: frameStyle(side.intrinsicSize, 58) }
@@ -197,6 +200,7 @@ export function VisualDiff({
 					<div className="grid min-h-full grid-cols-1 gap-12 md:grid-cols-2">
 						<SideSurface
 							label="Old"
+							selectionKey={`${regionLabel}:base`}
 							side={original}
 							regionLabel={regionLabel}
 							contentStamp={contentStamp}
@@ -204,6 +208,7 @@ export function VisualDiff({
 						/>
 						<SideSurface
 							label="New"
+							selectionKey={`${regionLabel}:worktree`}
 							side={modified}
 							regionLabel={regionLabel}
 							contentStamp={contentStamp}
@@ -217,6 +222,7 @@ export function VisualDiff({
 							{...(active.present ? { review: active.review } : {})}
 							intrinsicSize={active.intrinsicSize}
 							contentStamp={contentStamp}
+							selectionKey={`${regionLabel}:${activeSide}`}
 							{...(inactive.present && inactive.review
 								? {
 										additionalReviews: [

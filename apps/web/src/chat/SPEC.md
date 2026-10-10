@@ -244,6 +244,28 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   store's arrangement-agnostic tool-reveal intent) without surfacing any path, which is what makes the pair
   read as switching between Specs and Changes; closing is “never mind” and leaves the tool where the user
   last sent it.
+- **The host's turn receipt beats tool arguments.** `deriveRows` also takes **this chat's** recorded agent
+  runs (`store.turnsByWorkspace` filtered by `sessionId` in `ChatView` — a workspace's other chats write
+  files too); `matchTurnReceipt` joins them to a round by the run's start time, from the
+  prompt up to (excluding) the *next* prompt. Both timestamps come from the host, and pi timestamps
+  the user message before starting the run, so no clock-skew allowance belongs here: shifting the
+  interval backwards steals receipts when prompts are less than a second apart. The canonical user echo
+  replaces the optimistic message while retaining its row identity and attachment labels, so live receipts
+  use the host clock even when the browser clock differs. When a round has a receipt
+  the files chip lists *those* paths with per-file `+/−` counts and reads `N files changed · +a −r` —
+  tool arguments miss shell writes, formatters and renames, while the snapshot is what the agent actually
+  left behind (see the server `turns` SPEC). Tool paths are canonicalized against the workspace before
+  merging receipts; `spec_create` classification survives a pending graph refresh, so one spec can never
+  appear in both chips or twice under absolute and relative paths. Several runs in
+  one round (a steer, a retry) merge into one receipt spanning the first run's base tree to the last run's
+  head tree under its own scope id (`first..last`), so it never shares a review tab with the last run alone. A **Review turn** chip appears beside the files chip and calls `onReviewTurn(scope)`, which
+  `ChatView` routes to `requestChangesView(workspaceId, null, scope)`: the Changes panel adopts the turn
+  scope and opens the review tab for it; the chip's `+a −r` is summed over the files it counts (specs
+  are their own chip), and a multi-run round's per-file stats are the last run's for that path — the
+  review tab shows the true first-base → last-head diff. Without a receipt (older host, zero-change run) the divider
+  behaves exactly as before; a receipt whose snapshot has since been pruned still renders (the client cannot
+  know), and the pruning surfaces only when *Review turn* is clicked — as the review tab's scope-aware
+  `UNKNOWN_COMMIT` notice.
 
 Row/step ids are stable across streaming snapshots (the outer run's first atomic-step id, each thinking
 block's message-anchored index, and each tool's own id — pi appends, never reorders), so fold state survives

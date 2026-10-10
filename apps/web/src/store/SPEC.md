@@ -565,7 +565,49 @@ prior opaque state, and each implementation rejects state it cannot interpret. D
 `view` split|inline via
 `setDiffTabView` (split by default) and `ignoreWhitespace` via `setDiffTabIgnoreWhitespace`. Legacy persisted
 `view` on file documents and `rendered` on diff documents are outside the accepted cache shape and are
-ignored on read; no migration state exists. Opened by `ChangesPanel`.
+ignored on read; no migration state exists. Opened by `ChangesPanel` at the `keep` intent (double click /
+*Open as tab*); a single click opens the **`ChangesTab`** instead. **`ChangesTab`** (`kind: "changes"`, id
+`tupleKey("changes", workspaceId, scopeKey)` computed by `changesTabId` — one per *(workspace, scope)*) is the review surface over
+**every** changed file of one scope. Like a `DiffTab` its scope is part of its identity and the target ref
+is not; unlike a `DiffTab` it carries **no content** — the pane reads `git.status` and each section its own
+`git.diffFile`, so the persisted layout tab is just kind + id + name + scope and reload hydration rebuilds the
+tab without a request. What the tab *does* own is review progress: `viewed` paths, `activePath` (the section
+at the top of the viewport, or the file shown in One-file mode; `ChangesPanel` highlights from it), per-path
+collapse overrides over the scale defaults, a one-shot `reveal` (`{ path, tick, commentId? }`, written by
+`openChangesTab` and consumed by the pane in one `consumeChangesTabReveal` write that also lands
+`activePath`, the section's expansion and a finding's `reviewFocusRequest`), `view` split|inline +
+`ignoreWhitespace` for all sections, and per-path `rendererId` / opaque `viewState` written through the
+workspace-explicit `setChangesTabSection*` actions (an identical view state is not a write). Each section also holds opaque `reviewDrafts`, updated by a workspace/tab/path/key-explicit
+functional action. They survive renderer/view-state changes but not tab close or reload; writes cannot
+recreate a closed tab. The first scratch write keeps the preview without navigation, and no scratch write
+is a host review mutation. Renderers own the scratch shape and stale-selection policy.
+The stacked-vs-one-file mode is **not** on the tab: `changesLayout` (`"stacked"` default |
+`"single"`) is app-wide like `changesView`, a reading preference rather than a property of one review.
+The tab is preview-eligible like `FileTab` and `DiffTab` — until it holds progress: the first `viewed` or
+`kept` write (`recordChangesTabProgress`) also keeps its canonical layout placement, in the same `set`,
+so restored and split-group previews cannot evict the reader's marks just because the legacy preview
+mirror is empty or names another group. Keeping the last hunk records file and hunk progress atomically;
+bulk viewed updates are one write rather than one store notification and array copy per file. Progress is **session-scoped**:
+`viewed`/`kept` live on the tab object only, a reload rebuilds the tab empty, and a viewed file does not
+lapse when the agent rewrites it (kept hunks do, through their content key) — persisting viewed per file
+hash across reloads is the known follow-up, not an accident.
+**`turnsByWorkspace`** holds each workspace's host-recorded agent runs (`TurnChangeSet[]`, oldest first
+by `startedAt`, deduplicated by id and capped at 30 like the host). `applyTurnChanged` seeds an unloaded
+workspace as well as replacing an existing receipt. `setWorkspaceTurns` takes the `workspace.turns`
+answer, the immutable list captured before that read, and its connection generation. It replaces the
+baseline with the snapshot, then overlays current receipts whose object identities were absent from the
+baseline: a push during initial/reconnect hydration wins, including a replacement of the same id, while
+unchanged baseline entries omitted by the host are pruned. Both write paths apply the same ordering,
+deduplication and cap. No separate push buffer or revision map is needed; the single loader retains only
+the bounded baseline beside the bounded store list. Disconnected/old-generation responses are no-ops;
+workspace removal drops the list and its tombstone rejects later snapshots and pushes. The list is read
+by the chat's turn dividers (the round's receipt) and by the Changes scope menu (*Last turn*). The shell
+is the one loader (`useLoadWorkspaceTurns`, re-reading `workspace.turns` on every connection generation
+so a run that settled while the socket was down still arrives); every other consumer only reads through
+`useWorkspaceTurns`.
+**`requestChangesView(workspaceId, path | null, scope?)`** gained two optional dimensions for the chat's
+*Review turn* action: a `scope` lands on `diffScopeByWorkspace` atomically with the reveal intent, and a
+`null` path means "open the review tab for that scope" rather than "reveal this file".
 **`diffScopeByWorkspace`** + **`setDiffScope(workspaceId, scope)`** hold *what* each workspace's Changes
 panel is diffing (read through **`selectDiffScope`**, which defaults to the shared, referentially stable
 `BRANCH_SCOPE`); keyed **per workspace**, not app-wide like `changesView`, because a scope belongs to that
@@ -591,7 +633,7 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   by placement-only minting) still selects semantically. That selection deliberately does not focus the tab,
   because the mounted history query owns focus. The shell updates the group's local attention so the target
   body mounts and consumes the request without publishing a structural snapshot. The `EditorTab` (`FileTab`
-  | `ChatTab` | `DocTab` | `DiffTab` | `PlanTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types.
+  | `ChatTab` | `DocTab` | `DiffTab` | `ChangesTab` | `PlanTab`) + `TerminalTab` + `ClosedChat` + `SessionRuntime` types.
   (Chat *render* types + renderers live in the `chat` module.) The pure context
   selectors in `selectors.ts` resolve the active `Workspace`, its owning project id, and the shell's context
   project from those canonical ids and collections; derived active-project state is never stored separately.

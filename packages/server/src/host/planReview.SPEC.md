@@ -66,7 +66,16 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   anchor resolution and drop the finding silently. Cardinality is enforced too: a `request_changes` with no
   finding is rejected (it would strand the worker with nothing to fix), while an `approve` may carry none.
   Any invalid output is a failed review, not a silent approve: the mark is cleared and the item returns to
-  unreviewed. `parseVerdict` also **constructs the result explicitly** (verdict/summary/findings only) rather
+  unreviewed. `parseVerdict` also **constructs the result explicitly** (verdict/summary/readingOrder/findings only — `readingOrder`
+  is the reviewer's optional ordered `{ path, why }` list, capped at `REVIEW_READING_ORDER_LIMIT` by the
+  contract validator; **every accepted verdict** replaces the workspace review's `guide` through
+  `reviews.setReviewGuide` — summary and order empty when the reviewer gave none — in the SAME
+  `withReviewLock` hold as its findings and successful verdict record. A queued Clear therefore removes
+  guide and findings together, never only the guide before filing resumes. Rejected, filing/record-failed,
+  and open-findings-blocked approvals leave the previous guide unchanged, never a new successful badge.
+  Guide persistence remains best-effort after acceptance; a fix preparation/send failure retains the
+  accepted request-changes guide and existing cycle/mark compensation. Worker delivery stays outside
+  the lock) rather
   than spreading the model object, so a host-only field the model hallucinates — e.g. `blockedByOpenFindings`
   — can never survive to mislead the card; the host sets it solely from its own open-finding check.
 - **The `reviewing` mark is set synchronously** at start/enqueue, so the panel pulses the instant the

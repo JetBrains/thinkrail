@@ -7,6 +7,8 @@ import {
 } from "../lib";
 import {
 	type CenterNavigationStamp,
+	type ChangesTab,
+	createChangesTab,
 	type EditorTab,
 	isCenterNavigationCurrent,
 	layoutOpenOptionsForNavigation,
@@ -18,7 +20,7 @@ import {
 	useAppStore,
 } from "../store";
 import { getTransport } from "../transport";
-import { diffTabId, diffTabName } from "./changesModel";
+import { changesTabId, changesTabName, diffTabId, diffTabName } from "./changesModel";
 
 function baseName(path: string): string {
 	return path.split("/").pop() || path;
@@ -47,6 +49,7 @@ async function openReadTab<T>(
 	read: () => Promise<T>,
 	build: (payload: T, loadedTick: number) => EditorTab,
 	requestedNavigation?: CenterNavigationStamp | null,
+	claimPreview = false,
 ): Promise<void> {
 	const navigation =
 		requestedNavigation === undefined
@@ -57,7 +60,7 @@ async function openReadTab<T>(
 	if (intent === "preview" && !isCenterNavigationCurrent(store, workspaceId, navigation)) return;
 	const pending = inFlight.get(id);
 	if (pending) {
-		if (intent === "preview") pending.claimPreview = true;
+		if (intent === "preview" || claimPreview) pending.claimPreview = true;
 		if (intent === "keep") pending.intent = "keep";
 		pending.navigation = navigation;
 		pending.requestedAt = navTick(workspaceId);
@@ -65,7 +68,7 @@ async function openReadTab<T>(
 	}
 	const flight = {
 		intent,
-		claimPreview: intent === "preview",
+		claimPreview: intent === "preview" || claimPreview,
 		navigation,
 		requestedAt: navTick(workspaceId),
 		startedAt: Date.now(),
@@ -180,6 +183,7 @@ export function openDiffInTab(
 	path: string,
 	intent: TabIntent,
 	requestedNavigation?: CenterNavigationStamp | null,
+	options: { claimPreview?: boolean } = {},
 ): Promise<void> {
 	const canonicalPath = projectRelativePath(
 		path,
@@ -214,5 +218,41 @@ export function openDiffInTab(
 			loadedTarget: target,
 		}),
 		requestedNavigation,
+		options.claimPreview,
 	);
+}
+
+export async function openChangesTab(
+	workspaceId: string,
+	scope: GitDiffScope,
+	options: { revealPath?: string | null } = {},
+	intent: TabIntent = "preview",
+	requestedNavigation?: CenterNavigationStamp | null,
+): Promise<void> {
+	const navigation =
+		requestedNavigation === undefined
+			? useAppStore.getState().beginCenterNavigation(workspaceId)
+			: requestedNavigation;
+	const requestedAt = navTick(workspaceId);
+	if (intent === "preview") {
+		await new Promise((resolve) => setTimeout(resolve, DOUBLE_CLICK_SETTLE_MS));
+	}
+	const state = useAppStore.getState();
+	if (state.removedWorkspaceIds[workspaceId]) return;
+	const overtaken = navigation
+		? !isCenterNavigationCurrent(state, workspaceId, navigation)
+		: navTick(workspaceId) !== requestedAt;
+	if (intent === "preview" && overtaken) return;
+	const id = changesTabId(workspaceId, scope);
+	const revealPath = options.revealPath
+		? projectRelativePath(options.revealPath, selectWorkspaceById(state, workspaceId)?.worktreePath)
+		: null;
+	const existing = (state.tabsByWorkspace[workspaceId] ?? []).find(
+		(tab): tab is ChangesTab => tab.id === id && tab.kind === "changes",
+	);
+	const base = existing ?? createChangesTab(workspaceId, id, changesTabName(scope), scope);
+	const tab: ChangesTab = revealPath
+		? { ...base, reveal: { path: revealPath, tick: (base.reveal?.tick ?? 0) + 1 } }
+		: base;
+	state.openTab(tab, intent, true, layoutOpenOptionsForNavigation(state, workspaceId, navigation));
 }
