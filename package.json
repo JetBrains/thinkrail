@@ -110,5 +110,8 @@
 	"trustedDependencies": [
 		"@biomejs/biome",
 		"esbuild"
-	]
+	],
+	"patchedDependencies": {
+		"@pierre/diffs@1.5.1": "patches/@pierre%2Fdiffs@1.5.1.patch"
+	}
 }
