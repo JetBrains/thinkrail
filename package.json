@@ -76,6 +76,7 @@
 		"check:boundaries": "bun test scripts/checkModuleBoundaries.test.ts && bun scripts/check-module-boundaries.ts",
 		"check:seams": "bun scripts/check-binary-seams.ts",
 		"check:spec-surface": "bun scripts/check-spec-surface.ts",
+		"check:compiler": "bun --filter @thinkrail/web compiler:census:check",
 		"check:pi-packages": "bun scripts/check-pi-packages.ts",
 		"changeset": "changeset",
 		"release:version": "changeset version && bun install --no-frozen-lockfile",
@@ -88,7 +89,8 @@
 		"colors:check": "bun --filter @thinkrail/web colors:check",
 		"spacing:generate": "bun --filter @thinkrail/web spacing:generate",
 		"spacing:check": "bun --filter @thinkrail/web spacing:check",
-		"provider-glyphs:check": "bun --filter @thinkrail/web provider-glyphs:check"
+		"provider-glyphs:check": "bun --filter @thinkrail/web provider-glyphs:check",
+		"compiler:census:generate": "bun --filter @thinkrail/web compiler:census:generate"
 	},
 	"devDependencies": {
 		"@changesets/changelog-github": "catalog:",
