@@ -89,7 +89,8 @@ caused by the requested change, and rerun them without asking for approval at ea
   affect the shipped runtime.
 - Fast gates: `bun run check:deps`, `bun run check:boundaries`, `bun run check:seams`, `bun run lint`,
   and `bun run typecheck`. Unit tests are `bun run test`; `bun run check:spec-surface` validates enrolled
-  spec/barrel public surfaces.
+  spec/barrel public surfaces; `bun run check:compiler` fails when a web function newly bails out of the
+  React Compiler (or starts compiling) against the committed census baseline.
 - `bun run test:workflows` is on-demand: it uses real provider tokens and is not a commit/CI gate.
 - Binary and desktop artifact modes have separate gates; use them when changing those artifacts.
 
