@@ -39,9 +39,16 @@ Red flags — stop, a gate is being rationalized away:
   `.github/PULL_REQUEST_TEMPLATE.md` at the point of drafting and preserve its sections, order, and
   every checklist item; replace prompts with concrete content and tick only checks actually completed.
   Drop a related-issues section only when the PR closes nothing. If the project has no template, use
-  `## Summary` (what and why, plus `Closes #NNN` when issue-driven), `## Changes` (including
-  exclusions or migration steps when material),
-  and `## Testing` (exact commands and results, never a bare "tests pass").
+  the three-section PR-body shape — `## Summary` (what and why, plus `Closes #NNN` when issue-driven),
+  `## Changes` (including exclusions or migration steps when material), and `## Testing` (exact
+  commands and results, never a bare "tests pass"). **When a chat TODO plan drove the work, don't
+  write the body from memory — pull the material from the plan:** `plan.summary` already carries the
+  cross-cutting intent and testing in the same three-section shape (see the `todos` skill — plan
+  summary), each step carries its own `summary` + `verification` + `commitSubject`, and the host-side
+  `renderPrBody` renders the whole plan into the UI's preview body (`server/src/pr/prBody.ts`). With a
+  repo template, reshape the plan material into the template's sections rather than restating it; with
+  no template, the plan summary IS the body shape — take it verbatim and let the auto `## Plan`
+  section cover the per-step detail.
 - **Stabilize the tree, push, then create.** Gates 3–5 may edit the tree gate 1 checked. When they do,
   commit everything, then repeat gates 3–5 against the new head; push only after a pass makes no
   further edits and `git status --porcelain` is empty *now* (the spine's point-of-action rule). Then

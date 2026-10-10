@@ -59,7 +59,7 @@ function planCompleteNudge(plan: TodoPlan): string | undefined {
 	if (existing) {
 		return `plan complete — a summary from an earlier completion is still here; EXTEND it with todo_plan_summary so it keeps covering EVERYTHING done across the whole plan (carry the earlier points forward, add the new work) — do not rewrite it down to only the latest step. Current summary to build on:\n${existing}`;
 	}
-	return "plan complete — write a cumulative overall summary with todo_plan_summary covering EVERYTHING done across all tasks, not just the last step.";
+	return "plan complete — write a cumulative overall summary with todo_plan_summary covering EVERYTHING done across all tasks, not just the last step, in PR-body shape (## Summary / ## Changes / ## Testing).";
 }
 
 export function registerTodoUpdate(pi: ExtensionAPI): void {

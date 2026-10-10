@@ -127,13 +127,30 @@ reviewer, not for yourself.
    step list. It is **cumulative — it covers EVERYTHING done across the whole plan**, not the last step
    alone. When the plan gained new work and finished again, a summary from the earlier completion is
    still there (the done-flip nudge surfaces it): **extend that text — carry every earlier point forward
-   and add the new work — never rewrite it down to only the most recent step.** Include what was verified
-   end-to-end and anything left undone or deferred — an omission here reads as "nothing left", so say it
-   if something is. **The plan view renders this as Markdown, so
-   write it structured, not one dense paragraph:** a lead sentence, then a short bulleted breakdown (e.g.
-   what shipped / what was verified / what's left), using `**bold**`, lists, and `code` where they aid
-   scanning. The per-item `summary` renders as Markdown too — a tight sentence or two, bulleted only
-   when it genuinely has parts. Keep both scannable, never a wall of text.
+   and add the new work — never rewrite it down to only the most recent step.**
+
+   **Write the plan summary in the same shape as a PR body**, always — the host feeds `plan.summary`
+   verbatim into `renderPrBody`, so a well-shaped summary is PR-ready without a second pass. Three H2
+   sections, in this order:
+
+   - `## Summary` — what and why, in prose. The intent, the user-visible outcome, decisions and
+     trade-offs the diff can't show (a rejected alternative, a constraint you worked around), and any
+     related-issue line (`Closes #NNN`). This is the one section the auto-rendered `## Plan` can't
+     speak for.
+   - `## Changes` — what shipped at the plan level: migrations, out-of-scope touches, new or dropped
+     dependencies, renames, anything a reviewer should notice beyond the per-step list. Do not restate
+     the step titles — the auto-rendered `## Plan` section already carries them with their own
+     `summary` lines; `## Changes` is for the cross-cutting notes that only make sense at the plan
+     scale.
+   - `## Testing` — end-to-end verification done beyond per-step checks (e.g. `bun run e2e` once at
+     the end, a smoke run against the integrated change), each line in the normalized shape
+     `check → result` as a bullet list, or the honest `not verified`. Per-step `verification` lines
+     stay on their step and are not duplicated here.
+
+   Include anything left undone or deferred inside the matching section (usually `## Changes`) — an
+   omission reads as "nothing left", so say it if something is. Use `**bold**`, lists, and `code`
+   where they aid scanning. The per-item `summary` renders as Markdown too — a tight sentence or two,
+   bulleted only when it genuinely has parts. Keep every surface scannable, never a wall of text.
 - **Fix requests re-open the SAME item.** When the user asks for a fix on a reviewed step (you'll
    receive the original step, its summary, its change set, and their feedback), flip **that exact item**
    (by id) back to `in_progress`, make the fix, and mark it `done` with a **fresh summary** and a
