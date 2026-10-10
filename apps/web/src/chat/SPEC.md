@@ -1148,7 +1148,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `reviewAll` (`todo.reviewAll`) — both re-read the plan, since the review decoration is host-derived
   and never patched locally; the manual-verdict ops were removed with the plan page's manual mode —
   `todo.review`/`todo.requestFix` remain on the wire, host-side), `planView` (pure derivations over the DTO: `groupProgress`,
-  `planSummary`, `planGlance`/`sessionGlance`, `planSections`, `shouldNudgeOnAdd`, and the review-trail
+  `planSummary`, `planGlance`/`sessionGlance` (memoized on its inputs' identities, so a store selector can
+  return it as a primitive without re-deriving ask states on unrelated updates), `planSections`,
+  `shouldNudgeOnAdd`, and the review-trail
   set — `itemRevisions` (the commit history, 1 TODO = N commits), `reviewableItems`/`reviewProgress`
   (host-gated by `TodoItem.review` presence — the reviewable rule has ONE home, server-side; the set
   spans the plan's items **and** `TodoPlan.adoptedCommits`, so the Review stage/Review All cover
