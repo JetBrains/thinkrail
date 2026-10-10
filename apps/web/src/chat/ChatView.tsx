@@ -1171,7 +1171,7 @@ export default function ChatView({
 										data-flash={row.id === flashRowId || undefined}
 										className={cn(
 											measureClassName,
-											"rounded-sm px-chat-gutter py-2 transition-colors data-[flash]:bg-primary-subtle",
+											"rounded-sm px-chat-gutter py-4 transition-colors data-[flash]:bg-primary-subtle",
 										)}
 									>
 										<FoldGeometryProvider onBeforeChange={prepareFoldChange}>
