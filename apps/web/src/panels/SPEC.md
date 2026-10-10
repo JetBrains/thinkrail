@@ -1338,7 +1338,9 @@ own section. The kebab menu (`plan-menu`, a
   `ChangesPanel` watches `changesRequest` (set by a chat turn-divider's "files changed" chip),
   **highlights** the requested file's row (resolved with `matchesWorktreePath` against `git.status`) **and
   opens the review tab at that file** in the destination center group's **preview slot** (a request with
-  `path: null` opens the tab without a reveal; a request carrying a scope opens that scope's tab) — the
+  `path: null` opens the tab without a reveal and without waiting for the panel's own `git.status`, so a
+  just-mounted panel's fallback off a pruned turn cannot redirect it; a request carrying a scope opens that
+  scope's tab) — the
   chip/list-row click *is* the user's explicit ask to see
   that change, so stopping at a highlight read as broken, and following a chip is browsing, same as clicking
   the row it points at, so it reuses the slot rather than accumulating a kept tab per chip. A path no longer
