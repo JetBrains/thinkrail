@@ -59,7 +59,7 @@ function LimitField({
 	saved,
 	placeholder,
 	allowEmpty,
-	disabled,
+	disabled = false,
 	label,
 	testId,
 	onCommit,
@@ -67,7 +67,7 @@ function LimitField({
 	saved: number | undefined;
 	placeholder?: number;
 	allowEmpty: boolean;
-	disabled: boolean;
+	disabled?: boolean;
 	label: string;
 	testId: string;
 	onCommit: (value: number | null) => void;
@@ -239,7 +239,6 @@ export function SubagentSettings({
 									<LimitField
 										saved={globalLimit}
 										allowEmpty={false}
-										disabled={!globalEnabled}
 										label="Global subagents per chat"
 										testId="subagent-limit-global-input"
 										onCommit={(value) => {

@@ -522,7 +522,8 @@ a project picker, the prompt hero, and the reused
   show the *effective* value with a Global/Custom tag: toggling writes `on`/`off`, a typed limit writes an
   override, an empty limit field (placeholder = global) or the Custom tag (a reset button) sends `null`, so later global
   changes keep flowing through. Limit fields validate with `isSubagentMaxConcurrent`, commit on Enter or
-  blur (an invalid draft reverts), never clamp, and are disabled while their column's subagents are off.
+  blur (an invalid draft reverts), never clamp. A workspace limit is disabled while that workspace's subagents are effectively off; the
+  global limit stays editable even when global is off, because workspaces forced on still inherit it.
   Global mutations converge through `settings.changed`, workspace ones through `workspace.updated`; none
   is optimistic. Inputs carrying `data-settings-draft-input` make Escape revert the draft instead of
   closing the dialog);

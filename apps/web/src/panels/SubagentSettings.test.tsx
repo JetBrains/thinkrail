@@ -92,7 +92,7 @@ test("an inheriting workspace mirrors the global values and marks them Global", 
 	expect(input).toContain('value=""');
 	expect(input).toContain('placeholder="5"');
 	expect(input).toContain('disabled=""');
-	expect(element(markup, "subagent-limit-global-input")).toContain('disabled=""');
+	expect(element(markup, "subagent-limit-global-input")).not.toContain('disabled=""');
 	expect(markup).not.toContain('<button type="button" data-testid="subagents-workspace-source"');
 	expect(element(markup, "subagent-limit-workspace-source")).toMatch(/^<span /);
 });
