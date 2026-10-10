@@ -26,9 +26,19 @@ function controls(page: Page) {
 	};
 }
 
+async function closeSettings(page: Page): Promise<void> {
+	const dialog = page.getByTestId("settings-dialog");
+	if (!(await dialog.isVisible())) return;
+	await page.evaluate(() => {
+		if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+	});
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
+}
+
 async function restoreSubagentBaseline(page: Page): Promise<void> {
 	if (page.isClosed()) return;
-	if (await page.getByTestId("settings-dialog").isVisible()) await page.keyboard.press("Escape");
+	await closeSettings(page);
 	await openChatSettings(page);
 	const current = controls(page);
 	if ((await current.global.getAttribute("data-active")) !== "true") {
@@ -46,7 +56,7 @@ async function restoreSubagentBaseline(page: Page): Promise<void> {
 		await current.globalLimit.press("Enter");
 		await expect(current.workspaceLimit).toHaveAttribute("placeholder", "4");
 	}
-	await page.keyboard.press("Escape");
+	await closeSettings(page);
 }
 
 test("a maximal unbroken workspace name stays contained on a phone-sized settings pane", async ({
