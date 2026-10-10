@@ -48,6 +48,7 @@
 	--tr-line-height-code: 1.4;
 	--tr-line-height-relaxed: 1.4;
 	--tr-line-height-default: 1.3;
+	--tr-line-height-reading: 1.45;
 
 	/* Letter spacing */
 	--tr-letter-spacing-normal: normal;
@@ -157,7 +158,7 @@
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-light);
-	line-height: var(--tr-line-height-default);
+	line-height: var(--tr-line-height-reading);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
@@ -229,7 +230,7 @@
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-light);
-	line-height: var(--tr-line-height-default);
+	line-height: var(--tr-line-height-reading);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
@@ -276,7 +277,7 @@
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-light);
-	line-height: var(--tr-line-height-default);
+	line-height: var(--tr-line-height-reading);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
@@ -357,7 +358,7 @@
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-light);
-	line-height: var(--tr-line-height-default);
+	line-height: var(--tr-line-height-reading);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
@@ -366,7 +367,7 @@
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-light);
-	line-height: var(--tr-line-height-default);
+	line-height: var(--tr-line-height-reading);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
@@ -408,7 +409,7 @@
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-light);
-	line-height: var(--tr-line-height-default);
+	line-height: var(--tr-line-height-reading);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
@@ -489,7 +490,7 @@
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-light);
-	line-height: var(--tr-line-height-default);
+	line-height: var(--tr-line-height-reading);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
@@ -498,7 +499,7 @@
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-light);
-	line-height: var(--tr-line-height-default);
+	line-height: var(--tr-line-height-reading);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;
@@ -507,7 +508,7 @@
 	font-family: var(--tr-font-family-interface);
 	font-size: var(--tr-font-size-s14);
 	font-weight: var(--tr-font-weight-light);
-	line-height: var(--tr-line-height-default);
+	line-height: var(--tr-line-height-reading);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;

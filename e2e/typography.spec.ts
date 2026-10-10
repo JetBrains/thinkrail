@@ -102,7 +102,7 @@ test("the chat and document markdown surfaces each wear their own prose system",
 	await expect(page.getByTestId("markdown-preview")).toContainText("sample-project");
 
 	const doc = page.locator(".tr-prose-doc").first();
-	expect(await typeOf(doc)).toMatchObject({ size: "14px", weight: "370", lineHeight: "18.2px" });
+	expect(await typeOf(doc)).toMatchObject({ size: "14px", weight: "370", lineHeight: "20.3px" });
 	expect(await typeOf(doc.locator("h1").first())).toMatchObject({ size: "24px", weight: "600" });
 
 	expect(await doc.evaluate((el) => el.classList.contains("tr-prose-chat"))).toBe(false);

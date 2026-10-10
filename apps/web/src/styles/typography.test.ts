@@ -71,6 +71,7 @@ describe("typography source", () => {
 			code: 1.4,
 			relaxed: 1.4,
 			default: 1.3,
+			reading: 1.45,
 		});
 		expect(typography.fontWeights).toEqual({
 			light: 370,

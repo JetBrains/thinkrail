@@ -48,13 +48,14 @@ both markdown surfaces, the `<body>` base).
 | `fontFamilies` | `interface` (Geist Variable, all proportional UI + reading text) · `code` (JetBrains Mono Variable, code only) · `brand` → **Orbitron Variable** (self-hosted `@fontsource-variable/orbitron`, a distinct display face for the brand role — `wordmark` + `hero`; it was formerly a `$ref` to `interface`). Orbitron is **latin-only** and `brand.hero` renders a project's own name, so the stack falls back to the *interface* face before any system font — a non-Latin name lands on Geist (cyrillic/latin-ext/vietnamese, already bundled) rather than on whatever the OS supplies |
 | `fontWeights` | `light` 370 · `regular` 400 · `medium` 500 · `semibold` 600 · `brand` 400 |
 | `fontSizes` | `s10` `s11` `s12` `s13` `s14` `s16` `s18` `s20` `s24` `s44` (px) |
-| `lineHeights` | `compact` 1.25 · `metadata` 1.25 (12px→15px) · `ui` 1.3 (14px→18.2px) · `code` 1.4 · `relaxed` 1.4 (13px→18.2px) · `default` 1.3 (14px→18.2px) |
+| `lineHeights` | `compact` 1.25 · `metadata` 1.25 (12px→15px) · `ui` 1.3 (14px→18.2px) · `code` 1.4 · `relaxed` 1.4 (13px→18.2px) · `default` 1.3 (14px→18.2px) · `reading` 1.45 (14px→20.3px) |
 | `letterSpacings` | `normal` · `loose` 0.02em · `wide` 0.05em · `widest` 0.1em · `brand` 0.5px |
 
 The leading scale is deliberately **dense** (1.25–1.4): Geist’s x-height at 14px is 7.4px (cap height 9.9px), so
 the former 1.5–1.6 left an empty band between lines taller than the letters themselves — it read as
-near double spacing. Monaco and the Pierre diff surface read `--tr-line-height-default`, so they tighten with
-prose. Values are short exact decimals on purpose: the production minifier rounds custom properties to
+near double spacing. Reading prose — `body.reading`: chat, user messages, documents — is the deliberate exception at
+`reading` 1.45: at the dense value long replies read as a compressed wall, so reading text keeps more leading
+than UI chrome. Monaco and the Pierre diff surface read `--tr-line-height-default` and stay dense. Values are short exact decimals on purpose: the production minifier rounds custom properties to
 five decimals, so a repeating ratio such as 18/14 can never land on a whole pixel (it shipped as `17.9999px`).
 
 **Semantic styles** are what components use. Each names seven primitive references and nothing else, so
@@ -176,7 +177,7 @@ naming its own type. Two exist:
 | | `chat` (`.tr-prose-chat`) | `doc` (`.tr-prose-doc`) |
 |---|---|---|
 | mounted by | `chat/Markdown.tsx` | `panels/MarkdownPreview.tsx` |
-| body, blockquote, lists | 14 / 370 / 1.3 | 14 / 370 / 1.3 |
+| body, blockquote, lists | 14 / 370 / 1.45 | 14 / 370 / 1.45 |
 | h1 | 18 / 600 | **24 / 600** |
 | h2 | 14 / 600 | **20 / 600** |
 | h3 | 12 / 600 | **18 / 600** |
