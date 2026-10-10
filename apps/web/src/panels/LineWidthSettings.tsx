@@ -69,7 +69,7 @@ function LineWidthControl({
 							aria-invalid={parsed === null}
 							aria-describedby={parsed === null ? errorId : undefined}
 							data-testid={`${kind}-line-width-input`}
-							data-line-width-input
+							data-settings-draft-input
 							onChange={(event) => setDraft(event.currentTarget.value)}
 							onKeyDown={(event) => {
 								if (event.key === "Escape") {
