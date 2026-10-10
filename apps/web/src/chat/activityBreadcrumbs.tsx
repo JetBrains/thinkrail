@@ -95,7 +95,7 @@ export function ActivityBreadcrumbBar({
 			className="pointer-events-auto border-border-default border-b bg-container-header-bg shadow-[var(--shadow-md)]"
 		>
 			<div
-				className={`${measureClassName} flex h-[34px] items-center overflow-hidden px-12 tr-text-metadata`}
+				className={`${measureClassName} flex h-[34px] items-center overflow-hidden px-chat-gutter tr-text-metadata`}
 			>
 				{segments.map((segment, index) => (
 					<div key={segment.id} className="flex min-w-0 items-center">

@@ -72,7 +72,7 @@ export function StreamStatusSlot({
 			data-testid="chat-status-slot"
 			data-active={status !== null}
 			aria-hidden={status === null ? true : undefined}
-			className={`${measureClassName} h-40 overflow-hidden px-12`}
+			className={`${measureClassName} h-40 overflow-hidden px-chat-gutter`}
 		>
 			{status ? <StreamIndicator status={status} /> : null}
 		</div>

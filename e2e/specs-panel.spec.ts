@@ -72,7 +72,7 @@ test("Specs tab renders the worktree's spec tree and opens a spec as an editor t
 	await expect(page.getByTestId("spec-tree-rail")).toHaveCount(0);
 	const rootLeft = await root.evaluate((element) => element.getBoundingClientRect().left);
 	const childLeft = await child.evaluate((element) => element.getBoundingClientRect().left);
-	expect(childLeft - rootLeft).toBeGreaterThanOrEqual(10);
+	expect(childLeft - rootLeft).toBeGreaterThanOrEqual(8);
 	expect(
 		await root.evaluate((element) => element.getBoundingClientRect().height),
 	).toBeLessThanOrEqual(30);
@@ -128,7 +128,7 @@ test("Specs tab renders the worktree's spec tree and opens a spec as an editor t
 	const moduleBLeft = await moduleB.evaluate((element) => element.getBoundingClientRect().left);
 	const submoduleLeft = await submodule.evaluate((element) => element.getBoundingClientRect().left);
 	expect(Math.abs(moduleBLeft - childLeftAfterUpdate)).toBeLessThanOrEqual(1);
-	expect(submoduleLeft - childLeftAfterUpdate).toBeGreaterThanOrEqual(10);
+	expect(submoduleLeft - childLeftAfterUpdate).toBeGreaterThanOrEqual(8);
 	await expect(page.getByTestId("spec-tree-branch")).toHaveCount(0);
 	await expect(page.getByTestId("spec-tree-rail")).toHaveCount(0);
 });

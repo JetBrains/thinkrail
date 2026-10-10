@@ -260,7 +260,7 @@ export default function ChatView({
 			if (element) {
 				element.style.setProperty(
 					"--chat-transcript-width",
-					`calc(${chatLineWidth}ch + var(--space-24))`,
+					`calc(${chatLineWidth}ch + 2 * var(--chat-gutter))`,
 				);
 			}
 		},

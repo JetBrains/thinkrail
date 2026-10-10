@@ -66,11 +66,11 @@ describe("typography source", () => {
 		});
 		expect(typography.lineHeights).toEqual({
 			compact: 1.25,
-			metadata: 1.3333333,
-			ui: 1.4285714,
-			code: 1.5,
-			relaxed: 1.5384615,
-			default: 1.6,
+			metadata: 1.25,
+			ui: 1.3,
+			code: 1.4,
+			relaxed: 1.4,
+			default: 1.3,
 		});
 		expect(typography.fontWeights).toEqual({
 			light: 370,
@@ -428,7 +428,7 @@ describe("generated CSS", () => {
 		expect(GENERATED).toContain("--tr-font-family-code:");
 		expect(GENERATED).toContain("--tr-font-size-s11: 11px;");
 		expect(GENERATED).toContain("--tr-font-size-s13: 13px;");
-		expect(GENERATED).toContain("--tr-line-height-default: 1.6;");
+		expect(GENERATED).toContain("--tr-line-height-default: 1.3;");
 		const monaco = read(join(SRC, "panels/monacoSetup.ts"));
 		const xterm = read(join(SRC, "panels/TerminalInstance.tsx"));
 		expect(monaco).toContain('cssVar("--tr-font-size-s11")');

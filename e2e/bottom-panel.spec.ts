@@ -220,7 +220,7 @@ test("full-height panel-header actions stay square", async ({ page }) => {
 	await openDefaultWorkbench(page);
 
 	const square = async (control: Locator): Promise<void> => {
-		await expect(control).toHaveCSS("width", "32px");
+		await expect(control).toHaveCSS("width", "28px");
 		const box = await control.boundingBox();
 		if (!box) throw new Error("panel-header control has no bounding box");
 		expect(Math.abs(box.width - box.height)).toBeLessThanOrEqual(1);

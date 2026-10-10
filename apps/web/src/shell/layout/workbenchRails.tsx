@@ -213,7 +213,9 @@ export function AuxiliaryRegionRail({
 				label={`New ${region} pane here`}
 				className={cn(
 					"absolute",
-					region === "bottom" ? "-left-6 top-0 h-28 w-12" : "-top-6 left-0 h-12 w-32",
+					region === "bottom"
+						? "-left-6 top-0 h-panel-header-control w-12"
+						: "-top-6 left-0 h-12 w-32",
 				)}
 			/>
 		);

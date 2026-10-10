@@ -154,7 +154,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 					</ConfirmPopover>
 				</div>
 			)}
-			<QuietScrollArea className="min-h-0 flex-1" viewportClassName="p-12">
+			<QuietScrollArea className="min-h-0 flex-1" viewportClassName="p-panel-inset">
 				{files.length === 0 ? (
 					<p data-testid="review-empty" className="px-8 py-4 tr-text-metadata text-text-subtle">
 						{hasComments

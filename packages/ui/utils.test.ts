@@ -14,3 +14,9 @@ test("cn lets callers override conflicting utilities without dropping semantic t
 	);
 	expect(cn("hover:p-8 p-4", "hover:p-12")).toBe("p-4 hover:p-12");
 });
+
+test("cn resolves a named layout role against a numeric step of the same utility", () => {
+	expect(cn("size-28", "size-panel-row")).toBe("size-panel-row");
+	expect(cn("p-8 h-24", "p-panel-inset h-panel-row")).toBe("p-panel-inset h-panel-row");
+	expect(cn("px-chat-gutter", "px-4")).toBe("px-4");
+});

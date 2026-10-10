@@ -6,7 +6,7 @@ import { useHighlightedCode } from "@/lib/highlightCode";
 import { createMarkdownSplitter } from "./markdownBlocks";
 
 const CHAT_PROSE =
-	"tr-prose-chat max-w-none break-words [&_a]:text-primary [&_a]:underline [&_li]:my-2 [&_ol]:my-8 [&_ol]:list-decimal [&_ol]:pl-16 [&_p]:my-8 [&_table]:border-collapse [&_td]:border [&_td]:border-border-muted [&_td]:px-8 [&_td]:py-4 [&_th]:border [&_th]:border-border-muted [&_th]:px-8 [&_th]:py-4 [&_th]:text-left [&_ul]:my-8 [&_ul]:list-disc [&_ul]:pl-16";
+	"tr-prose-chat max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_a]:text-primary [&_a]:underline [&_li]:my-2 [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-16 [&_p]:my-4 [&_table]:border-collapse [&_td]:border [&_td]:border-border-muted [&_td]:px-8 [&_td]:py-4 [&_th]:border [&_th]:border-border-muted [&_th]:px-8 [&_th]:py-4 [&_th]:text-left [&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-16";
 
 type ReactMarkdownProps = ComponentProps<typeof ReactMarkdown>;
 export type MarkdownRehypePlugins = ReactMarkdownProps["rehypePlugins"];

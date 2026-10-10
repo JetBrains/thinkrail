@@ -105,7 +105,7 @@ export const CenterGroupView = memo(function CenterGroupView({
 									onClick={() => {
 										if (!isLayoutUnavailable(groupRemoval)) shared.onApply(groupRemoval);
 									}}
-									className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
+									className="flex w-panel-header-row shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
 								>
 									<X className="size-14" />
 								</button>
@@ -117,7 +117,7 @@ export const CenterGroupView = memo(function CenterGroupView({
 								data-testid="new-chat"
 								aria-label="New chat"
 								onClick={() => onNewChat(group.id)}
-								className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+								className="flex w-panel-header-row shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 							>
 								<MessageSquarePlus className="size-14" />
 							</button>

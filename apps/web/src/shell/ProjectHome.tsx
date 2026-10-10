@@ -105,7 +105,7 @@ export function ProjectHome({ projects }: { projects: CollapsibleRegion<HTMLDivE
 							<QuietScrollArea
 								data-testid="left-nav"
 								className="min-h-0 flex-1"
-								viewportClassName="p-12"
+								viewportClassName="p-panel-inset"
 							>
 								<ProjectTree />
 							</QuietScrollArea>

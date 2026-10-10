@@ -561,7 +561,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 				}
 			/>
 
-			<div className="p-12">
+			<div className="p-chat-gutter">
 				<div
 					data-testid="chat-composer-shell"
 					className={cn(

@@ -192,7 +192,7 @@ function GroupDisclosure({
 				data-activity-node-toggle
 				aria-expanded={expanded}
 				onClick={toggle}
-				className="flex w-full cursor-pointer select-none items-center gap-4 rounded-sm px-4 py-4 text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex w-full cursor-pointer select-none items-center gap-4 rounded-sm px-4 py-2 text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<ChevronRight
 					className={`size-16 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
@@ -374,7 +374,7 @@ function StepHeader({
 			data-activity-node-toggle
 			aria-expanded={expanded}
 			onClick={onToggle}
-			className="flex w-full cursor-pointer select-none items-center gap-4 rounded-sm px-4 py-8 text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary sm:py-2"
+			className="flex w-full cursor-pointer select-none items-center gap-4 rounded-sm px-4 py-2 text-left outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary sm:py-2"
 		>
 			{icon}
 			<span className="shrink-0 text-text-default">{name}</span>

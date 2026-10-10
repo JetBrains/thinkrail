@@ -189,7 +189,10 @@ test("chat uses the selected measure and optionally exceeds a narrow pane", asyn
 					document.body.append(probe);
 					const expectedTextWidth = probe.getBoundingClientRect().width;
 					probe.remove();
-					return Math.abs(element.getBoundingClientRect().width - (expectedTextWidth + 24));
+					const gutter = Number.parseFloat(
+						getComputedStyle(document.documentElement).getPropertyValue("--chat-gutter"),
+					);
+					return Math.abs(element.getBoundingClientRect().width - (expectedTextWidth + 2 * gutter));
 				}),
 			)
 			.toBeLessThanOrEqual(2);

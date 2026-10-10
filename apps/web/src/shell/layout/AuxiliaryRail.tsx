@@ -18,7 +18,7 @@ export interface AuxiliaryRailControlProps {
 export function railEntryFrameClass(region: LayoutAuxiliaryRegion | "center"): string {
 	return cn(
 		"relative flex w-32 shrink-0 items-center rounded-sm text-text-muted data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default",
-		region === "bottom" ? "h-28" : "h-32",
+		region === "bottom" ? "h-panel-header-control" : "h-32",
 	);
 }
 
@@ -106,7 +106,11 @@ export function AuxiliaryRail({
 	const boundary = (paneIndex: number): ReactNode => {
 		const zone = renderBoundary?.(paneIndex);
 		return zone ? (
-			<div className={cn("relative shrink-0", horizontal ? "h-28 w-0" : "h-0 w-32")}>{zone}</div>
+			<div
+				className={cn("relative shrink-0", horizontal ? "h-panel-header-control w-0" : "h-0 w-32")}
+			>
+				{zone}
+			</div>
 		) : null;
 	};
 	return (
