@@ -21,7 +21,6 @@ import { QuietScrollArea } from "../components/QuietScrollArea";
 import { LoadingRegion } from "../components/Skeleton";
 import { type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
-import { ChangesReviewPane } from "../panels/ChangesReviewPane";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FileTree } from "../panels/FileTree";
@@ -87,12 +86,62 @@ import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
 
 const ChatView = lazy(() => import("../chat/ChatView"));
 const PlanPane = lazy(() => import("../panels/PlanPane"));
+const ChangesReviewPane = lazy(() =>
+	import("../panels/ChangesReviewPane").then((module) => ({ default: module.ChangesReviewPane })),
+);
 
 const NO_EDITOR_TABS: EditorTab[] = [];
 
 function MissingResource({ label }: { label: string }) {
 	return (
 		<LoadingRegion rows={12} label={`Restoring ${label}`} className="h-full overflow-hidden p-16" />
+	);
+}
+
+type EditorResourceTab = Extract<LayoutCenterTab, { kind: "file" | "diff" | "changes" }>;
+type EditorResource = Extract<EditorTab, { kind: "file" | "diff" | "changes" }>;
+
+function isEditorResource(tab: EditorTab): tab is EditorResource {
+	return tab.kind === "file" || tab.kind === "diff" || tab.kind === "changes";
+}
+
+function findEditorResource(
+	tabs: readonly EditorTab[],
+	id: string,
+	identity: string,
+): EditorResource | undefined {
+	const exact = tabs.find((candidate) => candidate.id === id);
+	if (exact && isEditorResource(exact) && layoutResourceIdentity(exact) === identity) return exact;
+	return tabs.find(
+		(candidate): candidate is EditorResource =>
+			isEditorResource(candidate) && layoutResourceIdentity(candidate) === identity,
+	);
+}
+
+function EditorResourceBody({ workspaceId, tab }: { workspaceId: string; tab: EditorResourceTab }) {
+	const identity = layoutResourceIdentity(tab);
+	const editor = useAppStore((state) =>
+		findEditorResource(state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS, tab.id, identity),
+	);
+	if (!editor) {
+		return (
+			<MissingResource
+				label={tab.kind === "file" ? "file" : tab.kind === "changes" ? "changes" : "diff"}
+			/>
+		);
+	}
+	return (
+		<ErrorBoundary label="editor" resetKeys={[workspaceId, tab.id]}>
+			<Suspense fallback={<MissingResource label="editor" />}>
+				{editor.kind === "file" ? (
+					<FilePane tab={editor} />
+				) : editor.kind === "diff" ? (
+					<DiffPane tab={editor} />
+				) : (
+					<ChangesReviewPane tab={editor} />
+				)}
+			</Suspense>
+		</ErrorBoundary>
 	);
 }
 
@@ -436,16 +485,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		};
 	}, [connectionGeneration, document, status, workspaceId]);
 
-	const editorById = useMemo(() => new Map(editorTabs.map((tab) => [tab.id, tab])), [editorTabs]);
-	const editorByResource = useMemo(() => {
-		const resources = new Map<string, Extract<EditorTab, { kind: "file" | "diff" | "changes" }>>();
-		for (const tab of editorTabs) {
-			if (tab.kind !== "file" && tab.kind !== "diff" && tab.kind !== "changes") continue;
-			const identity = layoutResourceIdentity(tab);
-			if (!resources.has(identity)) resources.set(identity, tab);
-		}
-		return resources;
-	}, [editorTabs]);
 	const terminalByKey = useMemo(
 		() => new Map(terminals.map((tab) => [tab.tabKey, tab])),
 		[terminals],
@@ -494,44 +533,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					</ErrorBoundary>
 				);
 			}
-			const identity = layoutResourceIdentity(tab);
-			const exact = editorById.get(tab.id);
-			const editor =
-				exact &&
-				(exact.kind === "file" || exact.kind === "diff" || exact.kind === "changes") &&
-				layoutResourceIdentity(exact) === identity
-					? exact
-					: editorByResource.get(identity);
-			if (!editor) {
-				return (
-					<MissingResource
-						label={tab.kind === "file" ? "file" : tab.kind === "changes" ? "changes" : "diff"}
-					/>
-				);
-			}
-			return (
-				<ErrorBoundary label="editor" resetKeys={[workspaceId, tab.id]}>
-					<Suspense fallback={<MissingResource label="editor" />}>
-						{editor.kind === "file" ? (
-							<FilePane tab={editor} />
-						) : editor.kind === "diff" ? (
-							<DiffPane tab={editor} />
-						) : (
-							<ChangesReviewPane tab={editor} />
-						)}
-					</Suspense>
-				</ErrorBoundary>
-			);
+			return <EditorResourceBody workspaceId={workspaceId} tab={tab} />;
 		},
-		[
-			deletedSessions,
-			document,
-			editorById,
-			editorByResource,
-			openToolFile,
-			terminalByKey,
-			workspaceId,
-		],
+		[deletedSessions, document, openToolFile, terminalByKey, workspaceId],
 	);
 	const renderTabBody = useCallback(
 		(tab: LayoutCenterTab | Extract<LayoutTab, { kind: "terminal" }>) => (

@@ -53,6 +53,10 @@ export interface DiffSurfaceInput {
 	triage?: HunkTriage;
 }
 
+function fileRevertMessage(receipt: ChangeReceipt, base: string): string {
+	return receipt.trashed ? `Moved ${base} to the trash` : `Reverted ${base}`;
+}
+
 export interface DiffSurface {
 	resource: ResourceDescriptor;
 	candidates: readonly ResourceRenderer[];
@@ -61,7 +65,6 @@ export interface DiffSurface {
 	mobile: boolean;
 	original: ResourceContent;
 	modified: ResourceContent;
-	modifiedText: string;
 	review: FileReview;
 	reviewable: boolean;
 	hunkActions: HunkActions | undefined;
@@ -232,8 +235,11 @@ export function useDiffSurface({
 	);
 	const revertBlock = useCallback<HunkActions["revert"]>(
 		async (block) => {
+			if (!mutationExpect) {
+				handleMutationError(new Error("Change metadata is not ready"), "Couldn't revert the hunk");
+				return;
+			}
 			try {
-				if (!mutationExpect) throw new Error("Change metadata is not ready");
 				const { receipt } = await getTransport().request("change.revert", {
 					workspaceId,
 					path,
@@ -249,8 +255,11 @@ export function useDiffSurface({
 		[base, handleMutationError, mutationExpect, showUndoToast, path, scope, workspaceId],
 	);
 	const revertFile = useCallback(async () => {
+		if (!mutationExpect) {
+			handleMutationError(new Error("Change metadata is not ready"), "Couldn't revert the file");
+			return;
+		}
 		try {
-			if (!mutationExpect) throw new Error("Change metadata is not ready");
 			const { receipt } = await getTransport().request("change.revert", {
 				workspaceId,
 				path,
@@ -258,7 +267,7 @@ export function useDiffSurface({
 				target: { kind: "file" },
 				expect: mutationExpect,
 			});
-			showUndoToast(receipt, receipt.trashed ? `Moved ${base} to the trash` : `Reverted ${base}`);
+			showUndoToast(receipt, fileRevertMessage(receipt, base));
 		} catch (error) {
 			handleMutationError(error, "Couldn't revert the file");
 		}
@@ -289,7 +298,6 @@ export function useDiffSurface({
 		mobile,
 		original,
 		modified,
-		modifiedText,
 		review,
 		reviewable,
 		hunkActions,
@@ -311,7 +319,7 @@ export function DiffSurfaceBody({
 	view: "split" | "inline";
 	ignoreWhitespace: boolean;
 	viewState: unknown;
-	onViewState: (state: unknown) => void;
+	onViewState?: ((state: unknown) => void) | undefined;
 	onSelectRenderer: (rendererId: string) => void;
 	bodyClassName?: string;
 }) {
@@ -342,7 +350,7 @@ export function DiffSurfaceBody({
 						{...(hunkActions ? { hunkActions } : {})}
 						onPlacedThreadIds={surface.onPlacedThreadIds}
 						viewState={viewState}
-						onViewState={onViewState}
+						{...(onViewState ? { onViewState } : {})}
 					/>
 				</Suspense>
 			</div>

@@ -7,20 +7,21 @@ import {
 	RiExternalLinkLine as OpenAsTab,
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
-import type { GitFileChange } from "@thinkrail/contracts";
+import type { GitDiffScope, GitFileChange } from "@thinkrail/contracts";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { copyText, isPhoneViewport } from "@/lib";
 import type { HunkTriage } from "@/resources";
 import { statusLetter } from "../chat/planView";
 import { LoadingRegion } from "../components/Skeleton";
 import {
-	type ChangesTab,
+	type ChangesTabSection,
+	type DiffTabView,
 	selectDiffTabTargetRef,
 	selectWorkspaceTick,
 	useAppStore,
@@ -44,8 +45,14 @@ const PENDING_CONTENT = {
 	originalOid: undefined,
 } as const;
 
-export function ChangesFileSection({
-	tab,
+export const ChangesFileSection = memo(function ChangesFileSection({
+	workspaceId,
+	tabId,
+	scope,
+	tabView,
+	ignoreWhitespace,
+	section,
+	keptList,
 	change,
 	mode,
 	collapsed,
@@ -55,19 +62,25 @@ export function ChangesFileSection({
 	onToggleCollapsed,
 	onSetViewed,
 }: {
-	tab: ChangesTab;
+	workspaceId: string;
+	tabId: string;
+	scope: GitDiffScope;
+	tabView: DiffTabView | undefined;
+	ignoreWhitespace: boolean;
+	section: ChangesTabSection | undefined;
+	keptList: readonly string[] | undefined;
 	change: GitFileChange;
 	mode: "stacked" | "single";
 	collapsed: boolean;
 	collapsedByDefault: boolean;
 	viewed: boolean;
 	cache: SectionContentCache;
-	onToggleCollapsed: () => void;
-	onSetViewed: (viewed: boolean) => void;
+	onToggleCollapsed: (change: GitFileChange) => void;
+	onSetViewed: (path: string, viewed: boolean) => void;
 }) {
-	const onToggleViewed = () => onSetViewed(!viewed);
-	const { workspaceId, scope } = tab;
 	const path = change.path;
+	const onToggleViewed = () => onSetViewed(path, !viewed);
+	const toggleCollapsed = () => onToggleCollapsed(change);
 	const [content, setContent] = useState<SectionContent | null>(() => cache.get(path) ?? null);
 	const [error, setError] = useState<string | null>(null);
 	const liveTick = useAppStore((state) => selectWorkspaceTick(state, workspaceId));
@@ -77,21 +90,19 @@ export function ChangesFileSection({
 	const setSectionReviewDraft = useAppStore((state) => state.setChangesTabSectionReviewDraft);
 	const updateReviewDraft = useCallback(
 		(key: string, update: (current: unknown) => unknown) =>
-			setSectionReviewDraft(workspaceId, tab.id, path, key, update),
-		[path, setSectionReviewDraft, tab.id, workspaceId],
+			setSectionReviewDraft(workspaceId, tabId, path, key, update),
+		[path, setSectionReviewDraft, tabId, workspaceId],
 	);
 	const setHunkKept = useAppStore((state) => state.setChangesTabHunkKept);
-	const section = tab.sections[path];
-	const keptList = tab.kept[path];
 	const keptKeys = useMemo(() => new Set(keptList ?? []), [keptList]);
 	const [hunkKeys, setHunkKeys] = useState<readonly string[]>([]);
 	const triage = useMemo<HunkTriage>(
 		() => ({
 			keptKeys,
-			setKept: (key, kept) => setHunkKept(workspaceId, tab.id, path, key, kept, hunkKeys),
+			setKept: (key, kept) => setHunkKept(workspaceId, tabId, path, key, kept, hunkKeys),
 			onHunkKeys: setHunkKeys,
 		}),
-		[hunkKeys, keptKeys, path, setHunkKept, tab.id, workspaceId],
+		[hunkKeys, keptKeys, path, setHunkKept, tabId, workspaceId],
 	);
 	const keptCount = hunkKeys.filter((key) => keptKeys.has(key)).length;
 	const allKept = hunkKeys.length > 0 && keptCount === hunkKeys.length;
@@ -165,26 +176,26 @@ export function ChangesFileSection({
 		() => ({ rendererId: renderer.id, values: section?.reviewDrafts, update: updateReviewDraft }),
 		[renderer.id, section?.reviewDrafts, updateReviewDraft],
 	);
-	const view = mobile ? "inline" : (tab.view ?? "split");
-	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
+	const view = mobile ? "inline" : (tabView ?? "split");
 	const { dir, base } = splitPath(path);
 	const openAsTab = () => void openDiffInTab(workspaceId, scope, path, "keep");
 	const selectRenderer = (rendererId: string) =>
-		setSectionRenderer(workspaceId, tab.id, path, rendererId);
+		setSectionRenderer(workspaceId, tabId, path, rendererId);
 	const saveViewState = (state: unknown) => {
 		const current = useAppStore
 			.getState()
-			.tabsByWorkspace[workspaceId]?.find((candidate) => candidate.id === tab.id);
+			.tabsByWorkspace[workspaceId]?.find((candidate) => candidate.id === tabId);
 		if (current?.kind !== "changes") return;
 		const stored = current.sections[path];
 		if (
 			(stored?.rendererId === undefined || stored.rendererId === renderer.id) &&
 			rendererImplementationKey(renderer.id, isPhoneViewport()) === implementationKey
 		) {
-			setSectionViewState(workspaceId, tab.id, path, state);
+			setSectionViewState(workspaceId, tabId, path, state);
 		}
 	};
 	const changedLines = (change.added ?? 0) + (change.removed ?? 0);
+	const ownsScroller = mode === "single" || renderer.capabilities.boundedDiff === true;
 
 	return (
 		<section
@@ -209,7 +220,7 @@ export function ChangesFileSection({
 						data-testid="changes-section-toggle"
 						aria-label={collapsed ? `Expand ${base}` : `Collapse ${base}`}
 						aria-expanded={!collapsed}
-						onClick={onToggleCollapsed}
+						onClick={toggleCollapsed}
 						className="flex size-20 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 					>
 						{collapsed ? <ChevronRight className="size-16" /> : <ChevronDown className="size-16" />}
@@ -336,7 +347,7 @@ export function ChangesFileSection({
 						<button
 							type="button"
 							data-testid="changes-section-expand"
-							onClick={onToggleCollapsed}
+							onClick={toggleCollapsed}
 							className="text-text-muted underline-offset-2 hover:text-text-default hover:underline"
 						>
 							Expand
@@ -378,8 +389,8 @@ export function ChangesFileSection({
 						surface={surface}
 						view={view}
 						ignoreWhitespace={ignoreWhitespace}
-						viewState={section?.viewState}
-						onViewState={saveViewState}
+						viewState={ownsScroller ? section?.viewState : undefined}
+						onViewState={ownsScroller ? saveViewState : undefined}
 						onSelectRenderer={selectRenderer}
 						bodyClassName={
 							mode === "single"
@@ -393,4 +404,4 @@ export function ChangesFileSection({
 			)}
 		</section>
 	);
-}
+});

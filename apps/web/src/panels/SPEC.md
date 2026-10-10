@@ -1415,7 +1415,7 @@ own section. The kebab menu (`plan-menu`, a
   tab* preserves an existing preview instead. The review tab has two **view modes**, chosen by a `Stacked | One file` segment
   in its toolbar and held app-wide (`store.changesLayout`, like `changesView`): *Stacked* is the
   continuous list; *One file* shows one section at a time with `Prev / Next` and a `n / N` counter
-  (`V` marks viewed and advances, `Alt+↓` / `Alt+↑` step files). Both modes read one model —
+  (`V` toggles viewed and advances when it marks, `Alt+↓` / `Alt+↑` step files). Both modes read one model —
   the scope's ordered file list, `viewed`, `activePath`, collapse overrides, `Split | Inline`, ¶ — so
   switching never loses review progress; a second tab kind per mode was rejected for exactly that reason.
   **Transient authoring belongs to the tab section, not its mounted renderer.** An optional scoped
@@ -1435,7 +1435,12 @@ own section. The kebab menu (`plan-menu`, a
   collapsed) — the reveal remains anchored by path while asynchronous sections determine their heights,
   until a view-mode change or user wheel, touch, pointer, or keyboard input takes over. A timeout cannot bound remote reads.
   Finding navigation hands scrolling to the thread only after the section reveal, and disables further
-  header corrections so the thread cannot be scrolled back out of view; `changesView` defaults to **Tree**, and a
+  header corrections so the thread cannot be scrolled back out of view; a reveal the user takes over, a
+  newer reveal, or the pane unmounting withdraws its pending `reviewFocusRequest`, so a thread that mounts
+  later never yanks the viewport to a finding nobody is waiting for. Each section receives only its own
+  path's slice of the tab (scratch, kept keys, flags) behind `memo`, so a keystroke in one section's
+  composer re-renders that section, not its siblings; a stacked section whose body has natural height saves
+  no view state — only One-file and bounded renderers own a scroller; `changesView` defaults to **Tree**, and a
   file row is `change-item` in both views because it is the same thing. When the shown file leaves the
   scope (reverted, or the agent removed its change), One-file mode stays at that position rather than
   jumping back to the first file. The list ends in a measured tail the height of the viewport so the last file can

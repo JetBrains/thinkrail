@@ -1074,7 +1074,11 @@ interface AppState {
 		path: string,
 		commentId?: string,
 	) => void;
-	clearChangesTabReveal: (workspaceId: string, id: string) => void;
+	consumeChangesTabReveal: (
+		workspaceId: string,
+		id: string,
+		target: { path: string; commentId?: string } | null,
+	) => void;
 	setChangesTabSectionRenderer: (
 		workspaceId: string,
 		id: string,
@@ -2850,10 +2854,24 @@ export const useAppStore = create<AppState>((set, get) => ({
 				reveal: { path, tick: (tab.reveal?.tick ?? 0) + 1, ...(commentId ? { commentId } : {}) },
 			})),
 		),
-	clearChangesTabReveal: (workspaceId, id) =>
-		set((s) =>
-			patchChangesTab(s, workspaceId, id, (tab) => (tab.reveal ? { ...tab, reveal: null } : tab)),
-		),
+	consumeChangesTabReveal: (workspaceId, id, target) =>
+		set((s) => {
+			const patched = patchChangesTab(s, workspaceId, id, (tab) => {
+				if (!target) return tab.reveal ? { ...tab, reveal: null } : tab;
+				return {
+					...tab,
+					reveal: null,
+					activePath: target.path,
+					collapsed:
+						tab.collapsed[target.path] === false
+							? tab.collapsed
+							: { ...tab.collapsed, [target.path]: false },
+				};
+			});
+			return target?.commentId && !s.removedWorkspaceIds[workspaceId]
+				? { ...patched, reviewFocusRequest: { workspaceId, commentId: target.commentId } }
+				: patched;
+		}),
 	setChangesTabSectionRenderer: (workspaceId, id, path, rendererId) =>
 		set((s) =>
 			patchChangesTab(s, workspaceId, id, (tab) => ({
@@ -2866,10 +2884,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 		),
 	setChangesTabSectionViewState: (workspaceId, id, path, viewState) =>
 		set((s) =>
-			patchChangesTab(s, workspaceId, id, (tab) => ({
-				...tab,
-				sections: { ...tab.sections, [path]: { ...tab.sections[path], viewState } },
-			})),
+			patchChangesTab(s, workspaceId, id, (tab) =>
+				JSON.stringify(tab.sections[path]?.viewState) === JSON.stringify(viewState)
+					? tab
+					: {
+							...tab,
+							sections: { ...tab.sections, [path]: { ...tab.sections[path], viewState } },
+						},
+			),
 		),
 	setChangesTabSectionReviewDraft: (workspaceId, id, path, key, update) =>
 		set((s) => {

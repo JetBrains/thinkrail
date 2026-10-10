@@ -5,6 +5,7 @@ import { LoadingRegion } from "../components/Skeleton";
 import {
 	type CenterNavigationStamp,
 	type ChangesTab,
+	type EditorTab,
 	isCenterNavigationCurrent,
 	matchesWorktreePath,
 	selectActiveEditorTab,
@@ -29,6 +30,16 @@ import { ToggleSegment } from "./ToggleSegment";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 import { ViewedMark } from "./ViewedMark";
 
+function selectReviewTab(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	workspaceId: string,
+	id: string,
+): ChangesTab | undefined {
+	return (state.tabsByWorkspace[workspaceId] ?? []).find(
+		(tab): tab is ChangesTab => tab.id === id && tab.kind === "changes",
+	);
+}
+
 export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	const [status, setStatus] = useState<GitStatus | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -46,15 +57,16 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 		return tab?.kind === "diff" ? tab : null;
 	});
 	const reviewTabId = changesTabId(workspaceId, scope);
-	const reviewTab = useAppStore((state) =>
-		(state.tabsByWorkspace[workspaceId] ?? []).find(
-			(tab): tab is ChangesTab => tab.id === reviewTabId && tab.kind === "changes",
-		),
+	const reviewActivePath = useAppStore(
+		(state) => selectReviewTab(state, workspaceId, reviewTabId)?.activePath,
+	);
+	const reviewViewed = useAppStore(
+		(state) => selectReviewTab(state, workspaceId, reviewTabId)?.viewed,
 	);
 	const reviewTabActive = useAppStore(
 		(state) => state.activeTabByWorkspace[workspaceId] === reviewTabId,
 	);
-	const viewed = useMemo(() => new Set(reviewTab?.viewed ?? []), [reviewTab?.viewed]);
+	const viewed = useMemo(() => new Set(reviewViewed ?? []), [reviewViewed]);
 
 	const { reload } = useWorkspaceRead(
 		workspaceId,
@@ -147,8 +159,8 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	}, [activeDiffTab, reviewTabActive]);
 
 	const isActive = (path: string) =>
-		reviewTabActive && reviewTab
-			? reviewTab.activePath === path
+		reviewTabActive && reviewActivePath !== undefined
+			? reviewActivePath === path
 			: activeDiffTab
 				? activeDiffTab.path === path && scopeKey(activeDiffTab.scope) === scopeKey(scope)
 				: highlighted === path;

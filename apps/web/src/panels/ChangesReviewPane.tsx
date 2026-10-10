@@ -8,11 +8,17 @@ import {
 	RiParagraph as Pilcrow,
 } from "@remixicon/react";
 import type { GitFileChange, GitStatus } from "@thinkrail/contracts";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { usePhoneViewport } from "@/lib";
 import { LoadingRegion } from "../components/Skeleton";
-import { type ChangesTab, selectDiffBaseRef, toast, useAppStore } from "../store";
+import {
+	type ChangesTab,
+	selectDiffBaseRef,
+	selectDiffTabTargetRef,
+	toast,
+	useAppStore,
+} from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { ChangesFileSection } from "./ChangesFileSection";
 import { ChangesReviewGuide, guideSteps } from "./ChangesReviewGuide";
@@ -48,6 +54,7 @@ function ReviewListFooter({ context }: { context?: ReviewListContext }) {
 }
 
 const REVIEW_LIST_COMPONENTS = { Footer: ReviewListFooter };
+const NOOP_TOGGLE = () => {};
 
 export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const { workspaceId, scope } = tab;
@@ -56,6 +63,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const [error, setError] = useState<string | null>(null);
 	const warnedRef = useRef(false);
 	const baseRef = useAppStore((state) => selectDiffBaseRef(state, workspaceId));
+	const targetRef = useAppStore((state) => selectDiffTabTargetRef(state, { workspaceId, scope }));
 	const layout = useAppStore((state) => state.changesLayout);
 	const setLayout = useAppStore((state) => state.setChangesLayout);
 	const setView = useAppStore((state) => state.setChangesTabView);
@@ -63,10 +71,9 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const setViewed = useAppStore((state) => state.setChangesTabViewed);
 	const setActivePath = useAppStore((state) => state.setChangesTabActivePath);
 	const setCollapsed = useAppStore((state) => state.setChangesTabCollapsed);
-	const clearReveal = useAppStore((state) => state.clearChangesTabReveal);
+	const consumeReveal = useAppStore((state) => state.consumeChangesTabReveal);
 	const requestReveal = useAppStore((state) => state.requestChangesTabReveal);
-	const requestReviewFocus = useAppStore((state) => state.requestReviewFocus);
-	const cache = useRef(createSectionContentCache()).current;
+	const [cache] = useState(createSectionContentCache);
 	const turns = useWorkspaceTurns(workspaceId);
 	const reviewGuide = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.review.guide);
 	const reviewComments = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.comments);
@@ -77,6 +84,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const [guideHidden, setGuideHidden] = useState(false);
 	const guideOpen = guideAvailable && !guideHidden && layout === "stacked" && !mobile;
 	const [largeNoticeDismissed, setLargeNoticeDismissed] = useState(false);
+	const restoredStacked = useRef(false);
 
 	const { reload } = useWorkspaceRead(
 		workspaceId,
@@ -106,9 +114,10 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 				setStatus(null);
 				setError(null);
 				warnedRef.current = false;
+				restoredStacked.current = false;
 			},
 		},
-		`${scopeKey(scope)}:${baseRef}`,
+		`${scopeKey(scope)}:${targetRef}`,
 	);
 
 	const files = useMemo(() => status?.changes ?? [], [status]);
@@ -132,11 +141,11 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const view = mobile ? "inline" : (tab.view ?? "split");
 	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
 
-	const lastIndex = useRef(0);
+	const [lastIndex, setLastIndex] = useState(0);
 	const foundIndex = files.findIndex((change) => change.path === tab.activePath);
+	if (foundIndex >= 0 && foundIndex !== lastIndex) setLastIndex(foundIndex);
 	const currentIndex =
-		foundIndex >= 0 ? foundIndex : Math.min(lastIndex.current, Math.max(0, files.length - 1));
-	lastIndex.current = currentIndex;
+		foundIndex >= 0 ? foundIndex : Math.min(lastIndex, Math.max(0, files.length - 1));
 	const current = files[currentIndex];
 
 	const virtuoso = useRef<VirtuosoHandle>(null);
@@ -144,45 +153,57 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const [tailHeight, setTailHeight] = useState(0);
 	const tailObserver = useRef<ResizeObserver | null>(null);
 	const settling = useRef<{ path: string; commentId?: string } | null>(null);
-	const detachScroller = useRef<(() => void) | null>(null);
-	const attachScroller = useCallback((element: HTMLElement | Window | null) => {
-		detachScroller.current?.();
-		detachScroller.current = null;
-		tailObserver.current?.disconnect();
-		tailObserver.current = null;
-		const scroller = element instanceof HTMLElement ? element : null;
-		scrollerRef.current = scroller;
-		if (!scroller) return;
-		const measure = () => {
-			setTailHeight(Math.max(0, scroller.clientHeight - SECTION_HEADER_HEIGHT - END_NOTE_HEIGHT));
-		};
-		measure();
-		tailObserver.current = new ResizeObserver(measure);
-		tailObserver.current.observe(scroller);
-		const endSettle = () => {
-			settling.current = null;
-		};
-		for (const type of USER_SCROLL_EVENTS)
-			scroller.addEventListener(type, endSettle, { passive: true, capture: true });
-		detachScroller.current = () => {
-			for (const type of USER_SCROLL_EVENTS) scroller.removeEventListener(type, endSettle, true);
-		};
+	const releaseSettling = useCallback(() => {
+		const commentId = settling.current?.commentId;
+		settling.current = null;
+		if (commentId) useAppStore.getState().clearReviewFocus(commentId);
 	}, []);
+	const detachScroller = useRef<(() => void) | null>(null);
+	const attachScroller = useCallback(
+		(element: HTMLElement | Window | null) => {
+			detachScroller.current?.();
+			detachScroller.current = null;
+			tailObserver.current?.disconnect();
+			tailObserver.current = null;
+			const scroller = element instanceof HTMLElement ? element : null;
+			scrollerRef.current = scroller;
+			if (!scroller) return;
+			const measure = () => {
+				setTailHeight(Math.max(0, scroller.clientHeight - SECTION_HEADER_HEIGHT - END_NOTE_HEIGHT));
+			};
+			measure();
+			tailObserver.current = new ResizeObserver(measure);
+			tailObserver.current.observe(scroller);
+			for (const type of USER_SCROLL_EVENTS)
+				scroller.addEventListener(type, releaseSettling, { passive: true, capture: true });
+			detachScroller.current = () => {
+				for (const type of USER_SCROLL_EVENTS)
+					scroller.removeEventListener(type, releaseSettling, true);
+			};
+		},
+		[releaseSettling],
+	);
 	useEffect(
 		() => () => {
 			tailObserver.current?.disconnect();
 			detachScroller.current?.();
+			releaseSettling();
 		},
-		[],
+		[releaseSettling],
 	);
 	const activePathRef = useRef(tab.activePath);
-	activePathRef.current = tab.activePath;
+	useInsertionEffect(() => {
+		activePathRef.current = tab.activePath;
+	});
 	const spyFrame = useRef(0);
-	const restoredStacked = useRef(false);
-	const scrollToSection = useCallback((index: number, path: string) => {
-		settling.current = { path };
-		virtuoso.current?.scrollToIndex({ index, align: "start" });
-	}, []);
+	const scrollToSection = useCallback(
+		(index: number, target: { path: string; commentId?: string }) => {
+			releaseSettling();
+			settling.current = target;
+			virtuoso.current?.scrollToIndex({ index, align: "start" });
+		},
+		[releaseSettling],
+	);
 	const revealComment = useCallback(() => {
 		const commentId = settling.current?.commentId;
 		const scroller = scrollerRef.current;
@@ -221,34 +242,27 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		const reveal = tab.reveal;
 		if (!reveal || !status) return;
 		const index = files.findIndex((change) => change.path === reveal.path);
-		if (index >= 0) {
-			setActivePath(workspaceId, tab.id, reveal.path);
-			if (tab.collapsed[reveal.path] !== false) {
-				setCollapsed(workspaceId, tab.id, { [reveal.path]: false });
-			}
-			if (layout === "stacked") {
-				restoredStacked.current = true;
-				scrollToSection(index, reveal.path);
-				if (reveal.commentId) {
-					settling.current = { path: reveal.path, commentId: reveal.commentId };
-					requestReviewFocus(workspaceId, reveal.commentId);
-				}
-			} else if (reveal.commentId) {
-				settling.current = null;
-				requestReviewFocus(workspaceId, reveal.commentId);
-			}
+		if (index < 0) {
+			consumeReveal(workspaceId, tab.id, null);
+			return;
 		}
-		clearReveal(workspaceId, tab.id);
+		const target = {
+			path: reveal.path,
+			...(reveal.commentId ? { commentId: reveal.commentId } : {}),
+		};
+		releaseSettling();
+		consumeReveal(workspaceId, tab.id, target);
+		if (layout === "stacked") {
+			restoredStacked.current = true;
+			scrollToSection(index, target);
+		}
 	}, [
-		clearReveal,
+		consumeReveal,
 		files,
 		layout,
-		requestReviewFocus,
+		releaseSettling,
 		scrollToSection,
-		setActivePath,
-		setCollapsed,
 		status,
-		tab.collapsed,
 		tab.id,
 		tab.reveal,
 		workspaceId,
@@ -272,7 +286,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		const index = files.findIndex((change) => change.path === activePathRef.current);
 		const change = files[index];
 		if (!change) return;
-		const frame = requestAnimationFrame(() => scrollToSection(index, change.path));
+		const frame = requestAnimationFrame(() => scrollToSection(index, { path: change.path }));
 		return () => cancelAnimationFrame(frame);
 	}, [files, layout, pendingReveal, scrollToSection, status]);
 
@@ -281,9 +295,16 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		[setViewed, tab.id, workspaceId],
 	);
 	const toggleCollapsed = useCallback(
-		(change: GitFileChange) =>
-			setCollapsed(workspaceId, tab.id, { [change.path]: !isCollapsed(change) }),
-		[isCollapsed, setCollapsed, tab.id, workspaceId],
+		(change: GitFileChange) => {
+			const latest = useAppStore
+				.getState()
+				.tabsByWorkspace[workspaceId]?.find((candidate) => candidate.id === tab.id);
+			const collapsed =
+				(latest?.kind === "changes" ? latest.collapsed[change.path] : undefined) ??
+				sectionCollapsedByDefault(change);
+			setCollapsed(workspaceId, tab.id, { [change.path]: !collapsed });
+		},
+		[setCollapsed, tab.id, workspaceId],
 	);
 	const goTo = (change: GitFileChange | undefined) => {
 		if (!change) return;
@@ -526,15 +547,21 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 					<div className="min-h-0 flex-1">
 						<ChangesFileSection
 							key={current.path}
-							tab={tab}
+							workspaceId={workspaceId}
+							tabId={tab.id}
+							scope={scope}
+							tabView={tab.view}
+							ignoreWhitespace={ignoreWhitespace}
+							section={tab.sections[current.path]}
+							keptList={tab.kept[current.path]}
 							change={current}
 							mode="single"
 							collapsed={false}
 							collapsedByDefault={false}
 							viewed={viewedSet.has(current.path)}
 							cache={cache}
-							onToggleCollapsed={() => {}}
-							onSetViewed={(next) => setPathViewed(current.path, next)}
+							onToggleCollapsed={NOOP_TOGGLE}
+							onSetViewed={setPathViewed}
 						/>
 					</div>
 				</>
@@ -590,20 +617,26 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 									virtuoso.current?.scrollToIndex({ index, align: "start" });
 									return;
 								}
-								settling.current = null;
+								releaseSettling();
 								spyActiveSection();
 							}}
 							itemContent={(_index, change) => (
 								<ChangesFileSection
-									tab={tab}
+									workspaceId={workspaceId}
+									tabId={tab.id}
+									scope={scope}
+									tabView={tab.view}
+									ignoreWhitespace={ignoreWhitespace}
+									section={tab.sections[change.path]}
+									keptList={tab.kept[change.path]}
 									change={change}
 									mode="stacked"
 									collapsed={isCollapsed(change)}
 									collapsedByDefault={sectionCollapsedByDefault(change)}
 									viewed={viewedSet.has(change.path)}
 									cache={cache}
-									onToggleCollapsed={() => toggleCollapsed(change)}
-									onSetViewed={(next) => setPathViewed(change.path, next)}
+									onToggleCollapsed={toggleCollapsed}
+									onSetViewed={setPathViewed}
 								/>
 							)}
 							context={{ tailHeight, fileCount: files.length }}
@@ -616,16 +649,13 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 							<span className="shrink-0 tr-text-metadata text-text-muted">
 								{viewedCount} of {files.length} reviewed
 							</span>
-							<span
-								className="h-4 w-120 min-w-0 shrink overflow-hidden rounded-[var(--radius-xs)] bg-control-bg-hovered"
-								aria-hidden="true"
-							>
-								<span
-									data-testid="changes-review-progress"
-									className="block h-full bg-primary"
-									style={{ width: `${files.length ? (viewedCount / files.length) * 100 : 0}%` }}
-								/>
-							</span>
+							<progress
+								data-testid="changes-review-progress"
+								aria-label="Files reviewed"
+								max={Math.max(files.length, 1)}
+								value={viewedCount}
+								className="h-4 w-120 min-w-0 shrink appearance-none overflow-hidden rounded-[var(--radius-xs)] bg-control-bg-hovered accent-primary [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-control-bg-hovered [&::-webkit-progress-value]:bg-primary"
+							/>
 							<span className="ml-auto flex shrink-0 items-center gap-4">
 								<button
 									type="button"

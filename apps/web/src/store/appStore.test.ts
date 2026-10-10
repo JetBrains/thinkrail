@@ -3866,7 +3866,7 @@ test("changes tabs: one per scope, preview-eligible, and review progress survive
 	expect(after.ignoreWhitespace).toBe(true);
 	expect(after.kept).toEqual({ "src/a.ts": ["h2"] });
 
-	s().clearChangesTabReveal("ws1", tab.id);
+	s().consumeChangesTabReveal("ws1", tab.id, null);
 	const cleared = s().tabsByWorkspace.ws1?.[0];
 	expect(cleared?.kind === "changes" && cleared.reveal).toBeNull();
 
@@ -3884,6 +3884,45 @@ test("changes tabs: one per scope, preview-eligible, and review progress survive
 	s().setChangesTabViewed("ws2", tab.id, "x", true);
 	s().setChangesTabActivePath("ws1", "missing", "x");
 	expect(s().tabsByWorkspace).toBe(before);
+});
+
+test("consuming a changes-tab reveal lands active path, expansion and focus in one write", () => {
+	const s = () => useAppStore.getState();
+	useAppStore.setState({ activeWorkspaceId: "ws1" });
+	const tab = {
+		kind: "changes" as const,
+		id: "ws1:changes:branch",
+		workspaceId: "ws1",
+		name: "Changes",
+		scope: { kind: "branch" } as const,
+		viewed: [],
+		activePath: null,
+		collapsed: { "src/a.ts": true },
+		reveal: null,
+		sections: {},
+		kept: {},
+	};
+	s().openTab(tab, "keep");
+	s().requestChangesTabReveal("ws1", tab.id, "src/a.ts", "c1");
+	let writes = 0;
+	const unsubscribe = useAppStore.subscribe(() => {
+		writes += 1;
+	});
+	s().consumeChangesTabReveal("ws1", tab.id, { path: "src/a.ts", commentId: "c1" });
+	unsubscribe();
+	expect(writes).toBe(1);
+	const after = s().tabsByWorkspace.ws1?.[0];
+	expect(after).toMatchObject({
+		activePath: "src/a.ts",
+		collapsed: { "src/a.ts": false },
+		reveal: null,
+	});
+	expect(s().reviewFocusRequest).toEqual({ workspaceId: "ws1", commentId: "c1" });
+
+	s().setChangesTabSectionViewState("ws1", tab.id, "src/a.ts", { scrollTop: 3 });
+	const saved = s().tabsByWorkspace;
+	s().setChangesTabSectionViewState("ws1", tab.id, "src/a.ts", { scrollTop: 3 });
+	expect(s().tabsByWorkspace).toBe(saved);
 });
 
 test("diff tabs: openTab dedupes by id + activates; renderer, view state, and contents update in place", () => {
