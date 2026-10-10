@@ -47,6 +47,11 @@
 
 	--spacing-panel-header-row: var(--panel-header-row-height);
 	--spacing-topbar-row: var(--topbar-row-height);
+	--spacing-panel-header-control: var(--panel-header-control-height);
+	--spacing-panel-row: var(--panel-row-height);
+	--spacing-panel-inset: var(--panel-inset);
+	--spacing-tree-indent: var(--tree-indent);
+	--spacing-chat-gutter: var(--chat-gutter);
 	--spacing-window-chrome-inset-left: var(--window-chrome-inset-left, 0px);
 	--spacing-window-chrome-inset-right: var(--window-chrome-inset-right, 0px);
 

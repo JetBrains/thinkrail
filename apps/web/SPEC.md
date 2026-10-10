@@ -217,7 +217,8 @@ themselves.
   scale** — `0 / 2 / 4 / 8 / 12 / 16 / 24 / 32 / 40 / 64` — where the step name *is* its pixel value, so
   `p-8` / `gap-12` / `py-4` resolve to exactly that many pixels; it is generated from a single JSON source
   (`src/styles/spacing.json` → `src/styles/generated/spacing.css`), so each canonical length is written
-  once in the JSON rather than re-declared at call sites.
+  once in the JSON rather than re-declared at call sites. A value several surfaces must move together is a
+  named **layout role** aliasing a step (`p-panel-inset`, `h-panel-row`), never a repeated literal.
   `src/styles/SPACING.md` (`web-spacing`) is the authoritative system; `src/styles/spacingUsage.test.ts`
   is that adoption guard, and it exists because this class of drift is **invisible**: unlike a colour
   utility, an arbitrary length always renders, so an off-scale value looks correct in review and passes

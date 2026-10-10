@@ -66,7 +66,7 @@ function SendButtonBase({
 			data-testid={testid}
 			disabled={busy}
 			onClick={() => void run()}
-			className="flex h-24 shrink-0 items-center gap-4 rounded-sm bg-control-primary-bg px-8 text-control-primary-text tr-text-action transition-colors hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+			className="flex h-panel-header-control shrink-0 items-center gap-4 rounded-sm bg-control-primary-bg px-8 text-control-primary-text tr-text-action transition-colors hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 		>
 			<Send className="size-12" />
 			{label}

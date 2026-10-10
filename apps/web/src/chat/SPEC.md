@@ -449,7 +449,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   because preserving a pixel position across total reversal has no stable meaning. There is no
   intermediate wrong-edge paint or cross-order animation. Initial virtual geometry is
   **row-aware**: each projected row receives a conservative estimate derived from prose wrapping, block
-  breaks, and physical fenced-code lines without splitting one canonical Markdown block. Bounded pixel and
+  breaks, and physical fenced-code lines without splitting one canonical Markdown block. The estimates mirror the
+  rendered row chrome (row and bubble padding, paragraph gaps, the prose line height, the height floor) and move with it: a density
+  pass once left them stale, which flipped Virtuoso’s measurement corrections from growth to shrink and stranded
+  a newest-first return-to-latest detached (`chat-scroll.spec.ts`). Bounded pixel and
   item overscan lets nearby outliers replace estimates before coarse input exhausts a false range. Native
   wheel physics remain untouched. `chat-history.spec.ts` pins the default latest edge and tall-history
   geometry; `chat-order.spec.ts` pins both projections.
@@ -700,7 +703,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **live catalog** — `ChatView` resolves the session's model through `store`'s `selectCatalogModel`
   before passing it down, so a `model.refresh` that changes what a model supports changes the offered
   levels with it), `SessionStatsBar`, `ChatHeader` (the fixed, single-line **panel-header row** —
-  `h-panel-header-row` (`--panel-header-row-height`, currently 32px), the shared structural geometry with
+  `h-panel-header-row` (`--panel-header-row-height`, currently 28px), the shared structural geometry with
   workbench Group Headers and the Changes toolbar, not a value pinned here; it never scrolls,
   and constrained widths clip/truncate TODO + status/usage text while preserving the trailing Skills
   action. Its `left` slot carries the plan strip; its **Skills** button is the presentational **`SkillsButton`**

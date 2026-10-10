@@ -189,7 +189,7 @@ Pointer is never the sole arrangement path. Keyboard controls and shadcn menus c
 Center resource strips and auxiliary terminal-session strips have bounded readable tab widths and no fixed previous/next controls: wheel, trackpad, touch,
 roving-keyboard navigation, active reveal, and the searchable keyboard overflow list scroll the same list.
 Native scrollbars stay hidden; pointer-transparent edge fades appear only where clipped and update without
-changing the fixed 32 px strip. Full-height strip actions share that width. A control renders only when it can
+changing the fixed 28 px strip. Full-height strip actions share that width. A control renders only when it can
 act: overflow search only while clipped; every expanded auxiliary pane has a Hide action because its rail
 remains available for restoration. Singleton tool icons have no inline close glyph; explicit Remove tool
 from group stays in their menu and on Delete, separate from pane visibility. Terminals and center

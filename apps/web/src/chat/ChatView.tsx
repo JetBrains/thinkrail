@@ -523,7 +523,7 @@ export default function ChatView({
 			if (element) {
 				element.style.setProperty(
 					"--chat-transcript-width",
-					`calc(${chatLineWidth}ch + var(--space-24))`,
+					`calc(${chatLineWidth}ch + 2 * var(--chat-gutter))`,
 				);
 			}
 		},
@@ -1171,7 +1171,7 @@ export default function ChatView({
 										data-flash={row.id === flashRowId || undefined}
 										className={cn(
 											measureClassName,
-											"rounded-sm px-12 py-4 transition-colors data-[flash]:bg-primary-subtle",
+											"rounded-sm px-chat-gutter py-2 transition-colors data-[flash]:bg-primary-subtle",
 										)}
 									>
 										<FoldGeometryProvider onBeforeChange={prepareFoldChange}>

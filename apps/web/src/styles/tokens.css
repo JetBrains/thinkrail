@@ -27,8 +27,13 @@
 	--transition-fast: 120ms ease;
 	--transition-normal: 200ms ease;
 
-	--panel-header-row-height: 32px;
+	--panel-header-row-height: 28px;
 	--topbar-row-height: 40px;
+	--panel-header-control-height: calc(var(--panel-header-row-height) - var(--space-4));
+	--panel-row-height: 22px;
+	--panel-inset: var(--space-8);
+	--tree-indent: var(--space-8);
+	--chat-gutter: var(--space-8);
 }
 
 /*

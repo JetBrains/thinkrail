@@ -27,7 +27,7 @@ treatment.
 
 ## Boundary
 
-- **Owns:** `ProjectTree`. Each top-level project row is a compact 28px IDE-tree row:
+- **Owns:** `ProjectTree`. Each top-level project row is a compact IDE-tree row at the shared `--panel-row-height` (`web-spacing`):
   **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
   workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add
   project `+`** — both are `Button variant="ghost" size="icon"`, so they render identically and their glyphs
@@ -214,7 +214,7 @@ treatment.
   surface to the user, and an authoritative catalog removal dismisses a now-stale confirmation instead of
   leaving a modal for a terminal another client already closed. Also `FileTree`, `SpecsPanel`, `ReviewPanel`,
   `ChangesPanel` (the changed files under a fixed **panel-header row** — `h-panel-header-row`
-  (`--panel-header-row-height`, currently 32px), shared structural geometry with workbench Group Headers
+  (`--panel-header-row-height`, currently 28px), shared structural geometry with workbench Group Headers
   and the chat header, not a value pinned here — that says **what** is being diffed via the
   **`ChangesScopeMenu`** scope pill + the shared **`BranchPicker`** target-branch pill, plus the
   **List | Tree** toggle (`store.changesView`, app-wide) switching a flat list and a folder

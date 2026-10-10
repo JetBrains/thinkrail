@@ -135,7 +135,7 @@ function SpecNodeRow({
 		<li>
 			<div
 				className={cn(
-					"group flex h-28 min-w-0 items-stretch rounded-sm px-4 transition-colors",
+					"group flex h-panel-row min-w-0 items-stretch rounded-sm px-4 transition-colors",
 					isActive
 						? "bg-primary-subtle ring-1 ring-primary-muted ring-inset has-[:focus-visible]:ring-0"
 						: "hover:bg-control-bg-hovered",
@@ -169,7 +169,7 @@ function SpecNodeRow({
 					title={`${node.title}\n${node.id} · ${node.type}`}
 					onClick={() => void openFileInTab(workspaceId, node.path, "preview")}
 					onDoubleClick={() => void openFileInTab(workspaceId, node.path, "keep")}
-					className="flex h-28 min-w-0 flex-1 items-center gap-4 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+					className="flex min-w-0 flex-1 items-center gap-4 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 				>
 					<DocumentIcon
 						className={cn(
@@ -199,7 +199,7 @@ function SpecNodeRow({
 				</button>
 			</div>
 			{children.length > 0 && expanded && (
-				<ul className="flex flex-col pl-12">
+				<ul className="flex flex-col pl-tree-indent">
 					{children.map((child) => (
 						<SpecNodeRow
 							key={child.node.id}

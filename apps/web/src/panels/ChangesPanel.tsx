@@ -161,7 +161,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 					onClick={() => setChangesView("tree")}
 				/>
 			</div>
-			<QuietScrollArea className="min-h-0 flex-1" viewportClassName="p-12">
+			<QuietScrollArea className="min-h-0 flex-1" viewportClassName="p-panel-inset">
 				{status === null && error !== null ? (
 					<div data-testid="changes-error" className="flex flex-col items-start gap-4 px-8 py-4">
 						<p className="tr-text-metadata text-feedback-error">
@@ -205,7 +205,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 												onClick={() => openDiff(change.path, "preview")}
 												onDoubleClick={() => openDiff(change.path, "keep")}
 												title={change.path}
-												className="flex min-w-0 flex-1 items-center gap-8 px-4 py-4 text-left tr-text-ui"
+												className="flex h-panel-row min-w-0 flex-1 items-center gap-8 px-4 text-left tr-text-ui"
 											>
 												<span className="flex min-w-0 flex-1 items-baseline">
 													{dir ? (

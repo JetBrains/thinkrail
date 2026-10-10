@@ -16,10 +16,21 @@ const sourceWithoutComments = (p: string) =>
 const FILES = designSourceFiles();
 const TS_FILES = FILES.filter((f) => /\.tsx?$/.test(f));
 const TOKENS = join(SRC, "styles/tokens.css");
+const INDEX_CSS = join(SRC, "index.css");
 const SPACING_JSON = join(SRC, "styles/spacing.json");
 
 const STEPS = new Set(
 	Object.keys((JSON.parse(read(SPACING_JSON)) as { steps: Record<string, string> }).steps),
+);
+const ROLE_STEP = new Map(
+	[...read(TOKENS).matchAll(/^\s*--([a-z0-9-]+)\s*:\s*var\(--space-(\d+)\);/gm)].map(
+		([, token, step]) => [token as string, step as string],
+	),
+);
+const RHYTHM_ROLES = new Set(
+	[...read(INDEX_CSS).matchAll(/^\s*--spacing-([a-z0-9-]+)\s*:\s*var\(--([a-z0-9-]+)\);/gm)]
+		.filter(([, , token]) => STEPS.has(ROLE_STEP.get(token as string) ?? ""))
+		.map(([, role]) => role as string),
 );
 const SPACING_PREFIX =
 	"px|py|pt|pb|pl|pr|ps|pe|p|mx|my|mt|mb|ml|mr|ms|me|m|gap-x|gap-y|gap|space-x|space-y";
@@ -35,6 +46,7 @@ function allowsSpacingSuffix(prefix: string, suffix: string): boolean {
 	if (/^\d/.test(suffix)) return STEPS.has(suffix);
 	if (suffix === "px") return true;
 	if (suffix === "auto") return prefix.startsWith("m");
+	if (RHYTHM_ROLES.has(suffix)) return true;
 	return suffix === "reverse" && (prefix === "space-x" || prefix === "space-y");
 }
 
@@ -142,9 +154,29 @@ describe("spacing at a call site", () => {
 		expect(allowsSpacingSuffix("gap", "full")).toBe(false);
 	});
 
+	it("names every layout role with two or more kebab words, the shape cn merges as spacing", () => {
+		const roles = [...read(INDEX_CSS).matchAll(/^\s*--spacing-([a-z0-9-]+)\s*:/gm)].map(
+			(m) => m[1],
+		);
+		expect(roles.length).toBeGreaterThan(0);
+		expect(roles.filter((role) => !/^[a-z]+(?:-[a-z]+)+$/.test(role ?? ""))).toEqual([]);
+	});
+
+	it("accepts only declared rhythm roles that alias a canonical step", () => {
+		expect(allowsSpacingSuffix("p", "panel-inset")).toBe(true);
+		expect(allowsSpacingSuffix("pl", "tree-indent")).toBe(true);
+		expect(allowsSpacingSuffix("px", "chat-gutter")).toBe(true);
+		expect(allowsSpacingSuffix("p", "panel-row")).toBe(false);
+		expect(allowsSpacingSuffix("p", "panel-header-row")).toBe(false);
+		expect(allowsSpacingSuffix("pl", "window-chrome-inset-left")).toBe(false);
+	});
+
 	it("names a canonical spacing step or a prefix-appropriate keyword", () => {
 		const bad = hits(
-			new RegExp(String.raw`(?<![\w-])${VARIANT}-?(${SPACING_PREFIX})-([a-z0-9.]+)`, "g"),
+			new RegExp(
+				String.raw`(?<![\w-])${VARIANT}-?(${SPACING_PREFIX})-([a-z0-9.]+(?:-[a-z0-9.]+)*)`,
+				"g",
+			),
 			(match) => !allowsSpacingSuffix(match[1] ?? "", match[2] ?? ""),
 		);
 		expect(bad).toEqual([]);

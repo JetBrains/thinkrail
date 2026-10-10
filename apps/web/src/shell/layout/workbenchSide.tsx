@@ -184,7 +184,7 @@ export function SideGroupMenu({
 				<DropdownMenuTrigger
 					data-testid="side-group-menu"
 					aria-label="Add to this group"
-					className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+					className="flex w-panel-header-row shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					<Plus className="size-16" />
 				</DropdownMenuTrigger>
@@ -263,7 +263,7 @@ export function AuxiliaryGroupHeader({
 						onClick={() => {
 							if (!isLayoutUnavailable(removal)) shared.onApply(removal);
 						}}
-						className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
+						className="flex w-panel-header-row shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
 					>
 						<X className="size-14" />
 					</button>

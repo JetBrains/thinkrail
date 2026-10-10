@@ -178,11 +178,11 @@ const USER_BUBBLE = cn("max-w-[85%]", USER_BUBBLE_BASE);
 
 // In unbounded chat-width mode the transcript row is a fixed measure that can be far wider than the
 // pane; a right-aligned user bubble would otherwise sit off-screen and clip on the left. Cap the
-// user side to the pane's content width (the container-query width minus the row's `px-12` gutters,
-// the same `--space-24` the transcript-width calc uses) only in that mode — so a user bubble matches
+// user side to the pane's content width (the container-query width minus both `--chat-gutter`s,
+// the same terms the transcript-width calc uses) only in that mode — so a user bubble matches
 // its bounded-mode width and stays fully visible. Bounded mode never matches the selector.
 const USER_SIDE_UNBOUNDED_CLAMP =
-	"[[data-line-width-bounded=false]_&]:max-w-[calc(100cqw-var(--space-24))]";
+	"[[data-line-width-bounded=false]_&]:max-w-[calc(100cqw-2*var(--chat-gutter))]";
 
 function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 	const [open, setOpen] = useState(false);
@@ -804,13 +804,13 @@ export function TurnDivider({
 		!running &&
 		(elapsedMs == null || elapsedMs < 1000)
 	) {
-		return <div data-testid="turn-divider" className="my-8 h-px bg-border-muted" />;
+		return <div data-testid="turn-divider" className="my-4 h-px bg-border-muted" />;
 	}
 	return (
 		<div
 			data-testid="turn-divider"
 			data-chat-fold-root
-			className="my-8 flex flex-col gap-4 text-text-muted tr-text-metadata"
+			className="my-4 flex flex-col gap-4 text-text-muted tr-text-metadata"
 		>
 			<div className="flex items-center gap-8">
 				<span className="h-px flex-1 bg-border-muted" />

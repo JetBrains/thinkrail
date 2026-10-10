@@ -525,17 +525,21 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const toolBodies = useMemo<Record<LayoutToolId, ReactNode>>(() => {
 		const bodies: Record<LayoutToolId, ReactNode> = {
 			projects: (
-				<QuietScrollArea data-testid="left-nav" className="h-full" viewportClassName="p-12">
+				<QuietScrollArea
+					data-testid="left-nav"
+					className="h-full"
+					viewportClassName="p-panel-inset"
+				>
 					<ProjectTree />
 				</QuietScrollArea>
 			),
 			specs: (
-				<QuietScrollArea className="h-full" viewportClassName="p-12">
+				<QuietScrollArea className="h-full" viewportClassName="p-panel-inset">
 					<SpecsPanel workspaceId={workspaceId} failed={specs.failed} onRetry={specs.reload} />
 				</QuietScrollArea>
 			),
 			files: (
-				<QuietScrollArea className="h-full" viewportClassName="p-12">
+				<QuietScrollArea className="h-full" viewportClassName="p-panel-inset">
 					<FileTree key={workspaceId} workspaceId={workspaceId} />
 				</QuietScrollArea>
 			),
@@ -690,7 +694,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						data-testid="new-terminal"
 						aria-label="New terminal in this group"
 						onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
-						className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+						className="flex w-panel-header-row shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 					>
 						<SquareTerminal className="size-14" />
 					</button>

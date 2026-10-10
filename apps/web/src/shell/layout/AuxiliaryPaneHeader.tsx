@@ -75,7 +75,7 @@ export function AuxiliaryPaneHideButton({
 				aria-controls={controls}
 				aria-expanded="true"
 				onClick={onClick}
-				className="flex w-32 shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+				className="flex w-panel-header-row shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
 			>
 				<X className="size-14" />
 			</button>

@@ -22,7 +22,7 @@ export function ResourcesButton({
 				variant="ghost"
 				size="sm"
 				className={cn(
-					"shrink-0 gap-4 tr-text-metadata aria-expanded:bg-control-bg-selected",
+					"h-panel-header-control shrink-0 gap-4 tr-text-metadata aria-expanded:bg-control-bg-selected",
 					className,
 				)}
 				data-testid="resources-trigger"

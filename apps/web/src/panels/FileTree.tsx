@@ -111,7 +111,7 @@ function FileNodeRow({
 				onDoubleClick={isDir ? undefined : () => open("keep")}
 			/>
 			{isDir && expanded && children && (
-				<ul className="flex flex-col pl-12">
+				<ul className="flex flex-col pl-tree-indent">
 					{children.map((child) => (
 						<FileNodeRow
 							key={child.path}

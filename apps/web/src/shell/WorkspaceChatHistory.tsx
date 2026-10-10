@@ -36,7 +36,7 @@ export function WorkspaceChatHistory({
 				<PopoverTrigger
 					data-testid="chat-history"
 					aria-label="Reopen a closed chat"
-					className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+					className="flex w-panel-header-row shrink-0 items-center justify-center border-border-default border-l text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 				>
 					{chatStarting ? (
 						<Loader2 className="size-14 animate-spin motion-reduce:animate-none" />
