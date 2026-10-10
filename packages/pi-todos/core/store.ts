@@ -140,7 +140,9 @@ function sanitizeGroup(raw: unknown): TodoGroup | null {
 	const todos = Array.isArray(o.todos)
 		? o.todos.map(sanitize).filter((t): t is Todo => t !== null)
 		: [];
-	if (todos.length === 0) return null;
+	// Empty groups are kept on purpose: a freshly promoted loose item becomes an empty group 
+	// whose steps the agent will add next (see TodoStore.promote). Dropping them here would
+	// erase that "task taken, plan forming" state on the next read.
 	return {
 		id: typeof o.id === "string" ? o.id : freshId("g"),
 		title: flattenTitle(decodeEscapes(o.title)),
@@ -335,6 +337,31 @@ export class TodoStore {
 		return true;
 	}
 
+	/** Promote a loose item into a group of its own: the item disappears from the loose lane and a
+	 * group inherits its id + title (optionally overridden), ready for the agent to decompose. One
+	 * atomic step with no duplicate window 
+ so even a session that dies right after promotion leaves a
+	 * consistent plan ("user's ask, now its own group"). Returns the new/merged group, or `undefined`
+	 * when the id isn't a loose item (grouped steps aren't promoted 
+ they're already in a group). */
+	promote(id: string, titleOverride?: string): TodoGroup | undefined {
+		const plan = this.read();
+		const idx = plan.todos.findIndex((t) => t.id === id);
+		if (idx === -1) return undefined;
+		const item = plan.todos[idx] as Todo;
+		plan.todos.splice(idx, 1);
+		const title = flattenTitle(
+			titleOverride !== undefined ? decodeEscapes(titleOverride) : item.title,
+		);
+		let group = plan.groups.find((g) => g.title === title);
+		if (!group) {
+			group = { id: item.id, title, todos: [] };
+			plan.groups.push(group);
+		}
+		this.write(plan);
+		return group;
+	}
+
 	replaceAll(plan: WritePlan): TodoPlan {
 		const current = this.read();
 		const existingByKey = new Map<string, Todo[]>();
@@ -420,7 +447,9 @@ export class TodoStore {
 		const file: TodoFile = {
 			version: CURRENT_VERSION,
 			todos: plan.todos,
-			groups: plan.groups.filter((g) => g.todos.length > 0),
+			// Keep empty groups: TodoStore.promote parks a loose user ask as an empty group whose
+			// steps the agent decomposes afterward; filtering here would silently undo it.
+			groups: plan.groups,
 		};
 		if (plan.summary) file.summary = plan.summary;
 		mkdirSync(dirname(this.file), { recursive: true });

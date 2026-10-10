@@ -10,9 +10,10 @@ tags: [pi-extension, todos]
 
 ## Responsibility
 
-The six `pi` custom tools that expose the backlog to the agent — `todo_list`, `todo_add`, `todo_update`,
-`todo_remove`, `todo_write`, `todo_plan_summary`. Each is a **thin wrapper** over `core/`: a TypeBox `parameters` schema, an
-`execute` that calls one `TodoStore` method against `ctx.cwd`, and a `textResult`/`errorResult` return.
+The seven `pi` custom tools that expose the backlog to the agent — `todo_list`, `todo_add`,
+`todo_update`, `todo_promote`, `todo_remove`, `todo_write`, `todo_plan_summary`. Each is a **thin
+wrapper** over `core/`: a TypeBox `parameters` schema, an `execute` that calls one `TodoStore` method
+against `ctx.cwd`, and a `textResult`/`errorResult` return.
 The finite-vocabulary `status` param derives its enum from the `core/` tuple via
 `StringEnum`, so the schema and the model move together (pinned by `tools.test.ts`).
 
@@ -20,12 +21,17 @@ The finite-vocabulary `status` param derives its enum from the `core/` tuple via
 and the host wire use loose items, and the agent can author loose too):
 - **Loose authoring is a scratchpad, not a plan surface:** `todo_write`'s schema offers `groups` only,
   so a re-plan never mints or edits loose items. `todo_add` accepts `group`, `after`, or **neither** —
-  omitting both drops a raw loose item into the shared pre-work queue the user and agent share; the
-  skill carries the promote-on-work discipline (take a loose item into work by authoring a group with a
-  proper title + steps, then removing the raw loose item). An `after` anchored to a loose item is
-  **rejected**: loose items are promoted into a group, not grown with siblings, so inheriting the
-  anchor's lane would misrepresent intent. `TodoStore.add` stays permissive because the host writes the
-  user's own loose lane through it.
+  omitting both drops a raw loose item into the shared pre-work queue the user and agent share. An
+  `after` anchored to a loose item is **rejected**: loose items are promoted into a group, not grown
+  with siblings. `TodoStore.add` stays permissive because the host writes the user's own loose lane
+  through it.
+- **Promotion is one atomic tool, not a dance:** `todo_promote` wraps `TodoStore.promote` — one call
+  consumes a loose item and surfaces a group of its own (same id, same title unless overridden), ready
+  for `todo_add` to append the first step. This is the sole supported promotion path for a user-origin
+  loose ask; the tool description scripts the follow-up (`todo_add` first step → flip
+  `in_progress`) and the todos skill carries the "don't go back to the `todo_add group:` +
+  `todo_remove` dance" rule. The empty group right after `todo_promote` is a valid "task taken, plan
+  forming" state (see [[submodule-pi-todos-core]] on empty groups) — no synthetic placeholder step.
 - **`todo_write` reconciles, it never destructively replaces:** the tool forwards its `groups` to
   `TodoStore.replaceAll`, which matches written steps to existing ones by group + step title and keeps
   their progress (see [[submodule-pi-todos-core]]). So a mid-task re-plan is safe and lossless — there is

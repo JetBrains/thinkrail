@@ -42,15 +42,75 @@ function paramEnum(toolName: string, prop: string): readonly string[] {
 	return schema.properties?.[prop]?.enum ?? [];
 }
 
-test("registers the six todo tools", () => {
+test("registers the seven todo tools", () => {
 	expect([...tools.keys()].sort()).toEqual([
 		"todo_add",
 		"todo_list",
 		"todo_plan_summary",
+		"todo_promote",
 		"todo_remove",
 		"todo_update",
 		"todo_write",
 	]);
+});
+
+test("todo_promote turns a loose user ask into a group of its own (same id, same title) in one atomic call", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
+	try {
+		const mine = new TodoStore(cwd, "sess-test").add({ title: "fix auth bug", origin: "user" });
+		const promoted = (await run("todo_promote", { id: mine.id }, cwd)) as AgentToolResult<{
+			group: { id: string; title: string; todos: unknown[] };
+		}>;
+		expect(isError(promoted)).toBe(false);
+		expect(promoted.details.group.id).toBe(mine.id);
+		expect(promoted.details.group.title).toBe("fix auth bug");
+		expect(promoted.details.group.todos).toEqual([]);
+
+		const plan = new TodoStore(cwd, "sess-test").read();
+		expect(plan.todos).toEqual([]);
+		expect(plan.groups).toHaveLength(1);
+		expect(plan.groups[0]?.id).toBe(mine.id);
+
+		// Agent fills the group with its first substantive step and flips it in_progress.
+		const first = (await run(
+			"todo_add",
+			{ title: "reproduce the bug", group: "fix auth bug" },
+			cwd,
+		)) as AgentToolResult<{ todo: { id: string } }>;
+		await run("todo_update", { id: first.details.todo.id, status: "in_progress" }, cwd);
+		const live = new TodoStore(cwd, "sess-test").read();
+		expect(live.groups[0]?.todos).toHaveLength(1);
+		expect(live.groups[0]?.todos[0]?.status).toBe("in_progress");
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("todo_promote accepts a title override and errors on an unknown or already-grouped id", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
+	try {
+		const mine = new TodoStore(cwd, "sess-test").add({ title: "raw ask", origin: "user" });
+		const renamed = (await run(
+			"todo_promote",
+			{ id: mine.id, title: "Fix the auth bug" },
+			cwd,
+		)) as AgentToolResult<{ group: { title: string } }>;
+		expect(renamed.details.group.title).toBe("Fix the auth bug");
+
+		// Unknown id → error, no mutation.
+		expect(isError(await run("todo_promote", { id: "t_nope" }, cwd))).toBe(true);
+
+		// A grouped step isn't a loose item: promotion doesn't apply.
+		const step = (await run(
+			"todo_add",
+			{ title: "step", group: "Fix the auth bug" },
+			cwd,
+		)) as AgentToolResult<{ todo: { id: string } }>;
+		const refused = await run("todo_promote", { id: step.details.todo.id }, cwd);
+		expect(isError(refused)).toBe(true);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
 });
 
 test("finite-vocabulary param schemas derive their enum from the core tuples", () => {
@@ -87,7 +147,8 @@ test("add → list → update → remove round-trips through the store", async (
 			plan: { todos: unknown[]; groups: unknown[] };
 		}>;
 		expect(listedAfter.details.plan.todos).toHaveLength(0);
-		expect(listedAfter.details.plan.groups).toHaveLength(0);
+		// The empty group lingers on purpose (same invariant promote relies on).
+		expect(listedAfter.details.plan.groups).toHaveLength(1);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}

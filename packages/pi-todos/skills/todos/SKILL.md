@@ -21,11 +21,17 @@ description: "Use when the user asks for a shared plan, a task needs at least th
   about to execute. `todo_list` renders them **last**, after every group, on purpose: an item added
   mid-task queues *after* your current work. So **finish (or resume) the task you're on before you pick
   up a loose item** — don't jump to a freshly-added item and abandon a step you had in progress.
-- **Promote a loose item when you take it into work** — never progress the raw text in place. Author a
-  group with an outcome title and its decomposed steps (`todo_add` with `group:`, one call per step),
-  flip its first step to `in_progress`, then `todo_remove` the raw loose item. Size doesn't matter: a
-  pending loose item is already in the plan, so even a 1–2-step one becomes a small group. Don't
-  rewrite or drop a loose item for any other reason.
+- **Promote a loose item the moment you take it into work — with `todo_promote <loose-id>`.** One
+  atomic call: the loose item disappears from the queue and a group inherits its id and title. No
+  duplicate window, no `todo_remove` dance, and if the session dies right after, the plan still
+  honestly shows the user's ask as its own group. Then `todo_add group:"<same title>"` the first
+  substantive step and flip it `in_progress` — even a one-liner like "Investigate the ask and sketch
+  the plan" is a real step, so the user sees her task is being worked on from the first beat. Only
+  pass `title:` to `todo_promote` when the user's wording is unusable as a group title; otherwise keep
+  it verbatim. Size doesn't matter: a pending loose item is already in the plan, so even a 1–2-step
+  one becomes a small group. Don't rewrite or drop a loose item for any other reason, and never
+  author a group via `todo_add group:` + `todo_remove` for a user-origin loose item — that's the old
+  two-step dance `todo_promote` replaces.
 - It is **shared and live**: you maintain it, and the **user edits it while you work** — adding tasks,
   removing ones they've dropped. The stored list is the **source of truth**; what you remember is only
   a snapshot. **Re-read it (`todo_list`)** to stay in sync, don't trust your memory of it.
@@ -139,8 +145,8 @@ reviewer, not for yourself.
 ## Invariants
 
 - **Done stays.** Completing a step = `todo_update` → `done`. **Never delete a done item** — it's the
-  user's history. `todo_remove` is only for when the user explicitly asks to drop something, or for
-  the raw loose item you just promoted into a group.
+  user's history. `todo_remove` is only for when the user explicitly asks to drop something — a user
+  loose item you take into work is consumed by `todo_promote`, not removed by hand.
 - **Edit surgically.** After the first plan, prefer `todo_update` / `todo_add` (they touch one item) for
   a single change — cheaper than restating the whole plan. `todo_write` **reconciles** (it's not a
   destructive replace): it matches your written steps to the existing ones by group + step title and
@@ -160,7 +166,10 @@ reviewer, not for yourself.
   leaves the rest untouched).
 - `todo_update` — progress one step (`in_progress` on start, `done` when finished — with a `summary`
   when the step changed code; done stays).
-- `todo_remove` — delete one item (only when the user asks, or the raw loose item you just promoted).
+- `todo_promote` — turn one loose item into a group of its own (same id, same title) in one atomic
+  call; this is how a user-origin loose ask enters execution.
+- `todo_remove` — delete one item (only when the user asks — a promoted loose item is already gone,
+  `todo_promote` consumed it).
 - `todo_write` — lay out or reconcile the plan (groups only — one per task; matches steps by title and
   keeps their progress; prefer `todo_add`/`todo_update` for a single change).
 - `todo_plan_summary` — after the last item is done: a short overall summary of what the plan
