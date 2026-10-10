@@ -137,13 +137,9 @@ export type ChatTranscriptHandle = {
 };
 
 /**
- * The churn-isolated transcript: it owns the per-delta transcript rendering, subscribing (via `useShallow`)
- * to the streaming runtime fields it renders from (turns, toolResults, currentAssistantId, askAnswers,
- * turnIdByMessageIndex, isStreaming, settlementTick, hostState, syncedConnectionGeneration, eventRevision).
- * The chat shell reads turns only through shallow-compared derived selectors (recent prompts, plan glance)
- * that stay stable across streamed deltas, so header/composer/queue/dialogs stop re-rendering on them. Owns
- * the chat-scroll → chat-transcript-scroll → Virtuoso block, scroll control, completion acknowledgement,
- * location reveal, flash, and the ask-focus scope.
+ * The churn-isolated transcript child: owns the per-delta transcript rendering (the Virtuoso list, scroll
+ * control, completion-ack, location reveal, flash, ask-focus scope) and the streaming-runtime subscription.
+ * See chat/SPEC.md "Transcript/shell split" for the boundary and the subscribed field list.
  */
 const ChatTranscript = forwardRef<
 	ChatTranscriptHandle,
