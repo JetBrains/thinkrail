@@ -52,7 +52,7 @@ export function CommandLogView({
 					) : null}
 					<pre
 						data-testid="command-log-output"
-						className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded-[var(--radius-sm)] bg-container-content-bg p-12 text-text-default tr-code-text"
+						className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words rounded-sm bg-container-content-bg p-12 text-text-default tr-code-text"
 					>
 						{result.output.text}
 					</pre>

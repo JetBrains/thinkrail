@@ -64,7 +64,7 @@ export function BottomAlignmentMenu({
 			<DropdownMenuTrigger
 				aria-label="Bottom panel alignment"
 				title={`Bottom panel alignment: ${BOTTOM_ALIGNMENT_LABELS[alignment]}`}
-				className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+				className="flex w-panel-header-row shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 			>
 				<MoreHorizontal className="size-16" />
 			</DropdownMenuTrigger>
@@ -208,7 +208,7 @@ export const BottomGroupView = memo(function BottomGroupView({
 							type="button"
 							data-testid="bottom-new-terminal"
 							onClick={() => shared.onNewTerminal(group.id, "bottom")}
-							className="flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
+							className="flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 						>
 							<SquareTerminal className="size-16" /> New terminal
 						</button>
@@ -360,7 +360,7 @@ export function BottomDropZone({
 			}
 			data-drop-active={isOver || undefined}
 			data-drop-hint={!isOver || undefined}
-			className="pointer-events-auto relative z-20 h-24 min-w-32 flex-1 self-center border-primary transition-colors data-[drop-hint]:border-t data-[drop-hint]:bg-primary-subtle data-[drop-active]:border-t-2 data-[drop-active]:bg-primary-soft"
+			className="pointer-events-auto relative z-20 h-panel-header-control min-w-32 flex-1 self-center border-primary transition-colors data-[drop-hint]:border-t data-[drop-hint]:bg-primary-subtle data-[drop-active]:border-t-2 data-[drop-active]:bg-primary-soft"
 		/>
 	);
 }

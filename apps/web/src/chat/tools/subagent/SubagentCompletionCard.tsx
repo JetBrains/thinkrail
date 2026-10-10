@@ -41,7 +41,7 @@ export function SubagentCompletionCard({
 			data-testid="subagent-completion"
 			data-chat-fold-root
 			data-status={details.status}
-			className="flex flex-col gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 tr-text-metadata"
+			className="flex flex-col gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-8 py-4 tr-text-metadata"
 		>
 			<div className="flex items-center gap-4">
 				{details.status === "error" ? (

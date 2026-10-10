@@ -70,7 +70,7 @@ export function ChangesScopeMenu({
 				data-open={open}
 				aria-label="Diff scope"
 				title={scopeTitle(scope, commits ?? [])}
-				className="flex h-24 min-w-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected data-[open=true]:text-text-default"
+				className="flex h-panel-header-control min-w-0 items-center gap-4 rounded-sm px-4 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected data-[open=true]:text-text-default"
 			>
 				<GitCompare className="size-14 shrink-0" />
 				<span data-testid="changes-scope-label" className="truncate">

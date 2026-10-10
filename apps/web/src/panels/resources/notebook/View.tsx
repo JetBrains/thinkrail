@@ -95,7 +95,7 @@ export default function NotebookView({
 							}}
 							data-testid="notebook-cell"
 							data-cell-ref={cell.ref}
-							className="overflow-hidden rounded-[var(--radius-md)] border border-border-default bg-container-workspace-bg"
+							className="overflow-hidden rounded-md border border-border-default bg-container-workspace-bg"
 						>
 							<div className="flex min-w-0">
 								<div className="flex w-64 shrink-0 flex-col items-center gap-4 border-border-muted border-r bg-container-header-bg py-8 tr-code-text text-text-subtle">
@@ -108,7 +108,7 @@ export default function NotebookView({
 												type="button"
 												data-testid="notebook-comment-cell"
 												aria-label={`Comment on cell ${cell.index + 1}`}
-												className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+												className="flex size-24 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 												onClick={() => composer.select(cell)}
 											>
 												<MessageSquarePlus className="size-14" />

@@ -171,7 +171,7 @@ function PierreFileSurface({
 								const line = getHoveredLine();
 								if (line) openSelection({ start: line.lineNumber, end: line.lineNumber });
 							}}
-							className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] bg-primary text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
+							className="flex size-24 items-center justify-center rounded-sm bg-primary text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
 						>
 							<MessageSquarePlus className="size-14" />
 						</button>

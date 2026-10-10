@@ -141,7 +141,7 @@ export function AuxiliaryRailButton({
 					{entry.kind === "terminals" && ordinal > 1 ? (
 						<span
 							aria-hidden="true"
-							className="absolute right-0 bottom-0 rounded-[var(--radius-sm)] bg-container-header-bg px-2 tr-text-metadata"
+							className="absolute right-0 bottom-0 rounded-sm bg-container-header-bg px-2 tr-text-metadata"
 						>
 							{ordinal}
 						</span>
@@ -213,7 +213,9 @@ export function AuxiliaryRegionRail({
 				label={`New ${region} pane here`}
 				className={cn(
 					"absolute",
-					region === "bottom" ? "-left-6 top-0 h-28 w-12" : "-top-6 left-0 h-12 w-32",
+					region === "bottom"
+						? "-left-6 top-0 h-panel-header-control w-12"
+						: "-top-6 left-0 h-12 w-32",
 				)}
 			/>
 		);

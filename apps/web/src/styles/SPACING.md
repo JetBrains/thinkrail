@@ -66,15 +66,44 @@ mechanical `lg`→`16` rewrite would collapse a 32rem column to 16px. `spacingUs
 Spacing stays independent of typography, colour and radius: a change to the type scale or a theme never
 moves layout. `tokens.css` (structure) holds no spacing scale; `spacing.json` is its only authored source.
 
+## Layout roles
+
+A value several surfaces must change **together** is a named layout role, not a repeated literal, so a
+density change moves every consumer at once and cannot be half-applied (a missed literal once left the
+Specs rows at 28px after every sibling row moved to 24px). A role is declared in `tokens.css` `:root` and
+mapped into Tailwind by `index.css`'s `@theme inline` — the same shape as `--panel-header-row-height` →
+`h-panel-header-row`:
+
+| Role | Value | Utilities | Keeps equal |
+|---|---|---|---|
+| `--panel-header-row-height` | `28px` | `h-` / `w-panel-header-row` | the height of every header strip (tab strips, pane headers, chat toolbar, bottom tool rail) and the width of its full-height square actions |
+| `--panel-header-control-height` | `calc(var(--panel-header-row-height) - var(--space-4))` | `h-panel-header-control` | every control floating inside a header strip, so it keeps clearing the strip’s 1px border whenever the header height changes |
+| `--panel-row-height` | `22px` | `h-` / `min-h-` / `size-panel-row` | every side-pane row (file, change, spec, project, workspace) and the row-height icon buttons inside them |
+| `--panel-inset` | `var(--space-8)` | `p-panel-inset` | the content inset of every tool pane (Projects, Specs, Files, Changes, Review) |
+| `--tree-indent` | `var(--space-8)` | `pl-tree-indent` | per-depth indentation of the Files, Changes and Specs trees |
+| `--chat-gutter` | `var(--space-8)` | `px-` / `p-chat-gutter` | chat row gutters, the stream-status and activity-breadcrumb strips, the composer inset, and the gutter terms of the transcript-width and unbounded user-bubble calcs |
+
+- A **rhythm role aliases a canonical step** (`var(--space-<n>)`), never a raw length, so `spacing.json`
+  stays the only source of rhythm lengths and `tokens.css` still holds no scale of its own. A sizing role
+  (`--panel-row-height`) is geometry and stays free-form px, like all sizing.
+- Mint a role only for a value with several consumers that must stay equal; a one-off length stays a
+  numeric utility. Roles are not t-shirt aliases and never replace the scale.
+- A role name is kebab-case with **two or more words** (`panel-inset`). `cn` (`@thinkrail/ui/utils`)
+  teaches tailwind-merge that shape as a spacing/sizing value, so a role overrides a step of the same
+  utility (`size-28` + `size-panel-row` → `size-panel-row`) instead of both classes surviving and the
+  stylesheet order silently picking one; the gate fails on a single-word role name.
+
 ## The gate
 
 `styles/spacingUsage.test.ts` enforces the vocabulary at `p`/`m`/`gap` call sites (and on the rhythm
 properties of handwritten CSS), reading the allowed steps from `spacing.json` so the two cannot drift.
 The shared source scanner covers app source, `packages/ui`, and every `thinkrail-extensions/*/web` tree:
 
-- a spacing utility names a **canonical step** — `p-8`, `gap-4`; the retired t-shirt aliases (`p-xs`),
-  unknown alphabetic suffixes (`p-bananas`) and any off-scale number (`p-6`, `py-1`, `gap-0.5`) are
-  rejected; only prefix-appropriate Tailwind keywords such as `ml-auto`, `gap-px`, and
+- a spacing utility names a **canonical step** — `p-8`, `gap-4` — or a **declared rhythm role** —
+  `p-panel-inset`: an `index.css` `--spacing-<role>: var(--<role>)` whose `tokens.css` value is
+  `var(--space-<step>)`; the retired t-shirt aliases (`p-xs`), unknown alphabetic suffixes
+  (`p-bananas`), a sizing role used as rhythm (`p-panel-row`) and any off-scale number (`p-6`, `py-1`,
+  `gap-0.5`) are rejected; only prefix-appropriate Tailwind keywords such as `ml-auto`, `gap-px`, and
   `space-x-reverse` remain valid;
 - a length is **never a raw pixel value** at the call site (`py-[3px]`), and a step is **never re-spelled
   through an arbitrary value** (`p-[8px]`, `p-[var(--space-8)]`) — the numeric utility is the one way;

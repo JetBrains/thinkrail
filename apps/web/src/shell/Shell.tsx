@@ -178,7 +178,7 @@ export function Shell() {
 							data-testid="open-settings"
 							aria-label="Settings"
 							onClick={() => useAppStore.getState().openSettings()}
-							className="flex size-28 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+							className="flex size-28 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 						>
 							<Settings className="size-16" />
 						</button>

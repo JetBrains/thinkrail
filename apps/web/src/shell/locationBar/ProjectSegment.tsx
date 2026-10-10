@@ -36,7 +36,7 @@ export function ProjectSegment({ project, atHome }: { project: Project; atHome: 
 				>
 					<span
 						aria-hidden="true"
-						className="inline-flex size-16 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-primary-soft text-primary tr-text-caption"
+						className="inline-flex size-16 shrink-0 items-center justify-center rounded-sm bg-primary-soft text-primary tr-text-caption"
 					>
 						{projectInitial(project.name)}
 					</span>

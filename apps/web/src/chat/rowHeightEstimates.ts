@@ -2,11 +2,11 @@ import { type ChatRow, LARGE_USER_MESSAGE } from "./rows";
 import { resolveProminence } from "./toolRegistry";
 
 const MAX_ESTIMATED_HEIGHT = 20_000;
-const MIN_ESTIMATED_HEIGHT = 40;
+const MIN_ESTIMATED_HEIGHT = 20;
 const PROSE_COLUMNS = 72;
-const PROSE_LINE_HEIGHT = 22;
+const PROSE_LINE_HEIGHT = 20;
 const CODE_LINE_HEIGHT = 20;
-const BLOCK_GAP = 10;
+const BLOCK_GAP = 8;
 
 export type RowHeightEstimateCache = Map<string, number>;
 
@@ -34,7 +34,7 @@ function fenceEnd(line: string, marker: "`" | "~", length: number): boolean {
 }
 
 export function estimateMarkdownHeight(text: string): number {
-	let height = 16;
+	let height = 8;
 	let blankRun = false;
 	let fence: { marker: "`" | "~"; length: number } | null = null;
 	let codeLines = 0;
@@ -158,13 +158,13 @@ export function estimateChatRowHeight(row: ChatRow): number {
 		case "tool":
 			return estimateToolHeight(row);
 		case "activity":
-			return 48;
+			return 28;
 		case "compaction":
 			return 48;
 		case "retry":
 			return 40;
 		case "divider":
-			return 48;
+			return 32;
 	}
 }
 

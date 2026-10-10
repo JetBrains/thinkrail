@@ -473,7 +473,7 @@ function HeaderIconButton({
 				aria-pressed={active}
 				aria-label={label}
 				onClick={onClick}
-				className={`flex size-24 items-center justify-center rounded-[var(--radius-sm)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
+				className={`flex size-24 items-center justify-center rounded-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary ${
 					active
 						? "bg-container-elevated-bg text-text-default"
 						: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default"

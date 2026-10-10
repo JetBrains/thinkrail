@@ -286,7 +286,7 @@ export const TabStrip = memo(function TabStrip({
 					<IconTooltip label="Search open tabs" wrapTrigger>
 						<PopoverTrigger
 							aria-label="Search open tabs"
-							className="flex w-32 shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+							className="flex w-panel-header-row shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							<Search className="size-14" />
 						</PopoverTrigger>
@@ -580,7 +580,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 				rail
 					? RAIL_ENTRY_BUTTON_CLASS
 					: cn(
-							"relative flex min-w-0 flex-1 items-center gap-4 py-4 pl-8 text-left outline-none",
+							"relative flex min-w-0 flex-1 items-center gap-4 self-stretch pl-8 text-left outline-none",
 							tab.kind === "tool" && "pr-8",
 						)
 			}
@@ -677,7 +677,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 							data-testid={tab.kind === "terminal" ? "terminal-tab-close" : "editor-tab-close"}
 							aria-label={`Close ${name}`}
 							onClick={onClose}
-							className="mr-4 rounded-[var(--radius-sm)] p-2 opacity-0 hover:bg-control-bg-hovered group-hover:opacity-100 focus:opacity-100"
+							className="mr-4 rounded-sm p-2 opacity-0 hover:bg-control-bg-hovered group-hover:opacity-100 focus:opacity-100"
 						>
 							<X className="size-14" />
 						</button>

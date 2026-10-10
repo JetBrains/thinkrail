@@ -100,7 +100,7 @@ const SORT_LABELS: Record<WorkspaceSort, string> = {
 	name: "Name",
 };
 const HOVER_CONTROL_CLASS =
-	"flex size-20 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100 disabled:pointer-events-none disabled:opacity-0";
+	"flex size-20 shrink-0 items-center justify-center rounded-sm text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100 disabled:pointer-events-none disabled:opacity-0";
 
 export function ProjectTree() {
 	const projects = useAppStore((s) => s.projects);
@@ -263,8 +263,8 @@ export function ProjectTree() {
 	};
 
 	return (
-		<nav data-testid="project-tree" className="flex flex-col gap-8">
-			<header className="flex h-28 items-center justify-between pr-4 pl-8">
+		<nav data-testid="project-tree" className="flex flex-col gap-4">
+			<header className="flex h-panel-row items-center justify-between pr-4 pl-8">
 				<span className="tr-text-eyebrow text-text-muted">Projects</span>
 				<AddProjectMenu
 					recentProjects={recentProjects}
@@ -276,6 +276,7 @@ export function ProjectTree() {
 						ref={addProjectButtonRef}
 						variant="ghost"
 						size="icon"
+						className="size-panel-row"
 						data-testid="add-project-menu"
 						aria-label="Add project"
 					>
@@ -348,7 +349,7 @@ export function ProjectTree() {
 									data-testid="worktree-creating-row"
 									className="flex items-center gap-8 py-4 pr-8 pl-16 tr-text-ui text-text-muted"
 								>
-									<Loader2 className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" />
+									<Loader2 className="size-14 shrink-0 animate-spin motion-reduce:animate-none" />
 									Creating worktree…
 								</div>
 							)}
@@ -410,7 +411,7 @@ function SettledPartition({
 }) {
 	if (!enabled) {
 		return (
-			<ul className="mt-4 flex flex-col gap-4 motion-safe:animate-reveal">
+			<ul className="mt-2 flex flex-col gap-2 motion-safe:animate-reveal">
 				{partition.live.map((workspace) => renderRow(workspace, null))}
 			</ul>
 		);
@@ -419,7 +420,7 @@ function SettledPartition({
 	const shown = partition.settled.slice(0, shelfShown);
 	const remaining = settledCount - shown.length;
 	return (
-		<div className="mt-4 flex flex-col gap-4 motion-safe:animate-reveal">
+		<div className="mt-2 flex flex-col gap-2 motion-safe:animate-reveal">
 			<label
 				data-testid="workspace-sort"
 				className="flex h-20 items-center gap-4 pr-4 pl-24 text-text-subtle tr-text-metadata"
@@ -440,12 +441,12 @@ function SettledPartition({
 					))}
 				</select>
 			</label>
-			<ul className="flex flex-col gap-4">{partition.live.map((ws) => renderRow(ws, null))}</ul>
+			<ul className="flex flex-col gap-2">{partition.live.map((ws) => renderRow(ws, null))}</ul>
 			<div
 				data-testid="settled-shelf"
 				data-count={settledCount}
 				data-expanded={shelfExpanded}
-				className="flex h-28 min-w-0 items-center gap-4 rounded-[var(--radius-sm)] pr-4 pl-12 text-text-subtle tr-text-metadata hover:bg-control-bg-hovered"
+				className="flex h-panel-row min-w-0 items-center gap-4 rounded-sm pr-4 pl-12 text-text-subtle tr-text-metadata hover:bg-control-bg-hovered"
 			>
 				<button
 					type="button"
@@ -478,7 +479,7 @@ function SettledPartition({
 								onClick={() =>
 									useAppStore.getState().showMoreSettled(projectId, shelfShown + SETTLED_SHELF_MORE)
 								}
-								className="flex h-24 w-full items-center rounded-[var(--radius-sm)] pl-24 text-left text-text-subtle tr-text-metadata hover:bg-control-bg-hovered hover:text-text-muted"
+								className="flex h-panel-row w-full items-center rounded-sm pl-24 text-left text-text-subtle tr-text-metadata hover:bg-control-bg-hovered hover:text-text-muted"
 							>
 								Show {Math.min(SETTLED_SHELF_MORE, remaining)} more
 							</button>
@@ -538,7 +539,7 @@ function ProjectRow({
 			data-menu-open={menuOpen}
 			data-attention={needsAttention || undefined}
 			data-running={isRunning || undefined}
-			className={`group flex h-28 items-center gap-4 rounded-[var(--radius-sm)] pr-4 pl-4 transition-colors ${
+			className={`group flex h-panel-row items-center gap-4 rounded-sm pr-4 pl-4 transition-colors ${
 				menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"
 			}`}
 		>
@@ -547,7 +548,7 @@ function ProjectRow({
 				data-testid="project-expand"
 				aria-label={isExpanded ? "Collapse project" : "Expand project"}
 				onClick={onToggle}
-				className="flex size-16 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition-colors hover:text-text-default focus-visible:text-text-default"
+				className="flex size-16 shrink-0 items-center justify-center rounded-sm text-text-muted transition-colors hover:text-text-default focus-visible:text-text-default"
 				data-expanded={isExpanded}
 			>
 				<Chevron className="size-16" />
@@ -585,7 +586,7 @@ function ProjectRow({
 				<Button
 					variant="ghost"
 					size="icon"
-					className="shrink-0"
+					className="size-panel-row shrink-0"
 					data-testid="add-workspace"
 					aria-label={CREATE_WORKSPACE_LABEL}
 					onClick={onAddWorkspace}
@@ -820,8 +821,7 @@ function WorkspaceRow({
 				data-running={isRunning || undefined}
 				onContextMenu={openMenuFromContext}
 				className={cn(
-					"group relative flex min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border-0 pr-4 pl-24 transition-colors",
-					isSettled ? "min-h-24 py-2" : "min-h-28 py-4",
+					"group relative flex min-h-panel-row min-w-0 items-center gap-8 rounded-sm border-0 py-2 pr-4 pl-24 transition-colors",
 					isActive || menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered",
 				)}
 			>
@@ -863,7 +863,7 @@ function WorkspaceRow({
 					className={cn(
 						"flex shrink-0 items-center gap-4",
 						isSettled &&
-							"[@media(hover:hover)]:absolute [@media(hover:hover)]:top-1/2 [@media(hover:hover)]:right-4 [@media(hover:hover)]:-translate-y-1/2 [@media(hover:hover)]:rounded-[var(--radius-sm)] [@media(hover:hover)]:pl-4 [@media(hover:hover)]:group-hover:bg-control-bg-hovered",
+							"[@media(hover:hover)]:absolute [@media(hover:hover)]:top-1/2 [@media(hover:hover)]:right-4 [@media(hover:hover)]:-translate-y-1/2 [@media(hover:hover)]:rounded-sm [@media(hover:hover)]:pl-4 [@media(hover:hover)]:group-hover:bg-control-bg-hovered",
 						isSettled &&
 							(isActive || menuOpen) &&
 							"[@media(hover:hover)]:group-hover:bg-control-bg-selected",

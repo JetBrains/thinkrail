@@ -9,7 +9,7 @@ export function ProviderGlyph({ provider, className }: { provider: string; class
 			<span
 				aria-hidden="true"
 				className={cn(
-					"flex size-16 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-control-bg-selected tr-code-text-small uppercase leading-none",
+					"flex size-16 shrink-0 items-center justify-center rounded-sm bg-control-bg-selected tr-code-text-small uppercase leading-none",
 					className,
 				)}
 			>

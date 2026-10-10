@@ -49,7 +49,7 @@ function Row({
 }
 
 const rowActionClass =
-	"flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
+	"flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
 
 export function BranchSegment({
 	workspace,
@@ -176,7 +176,7 @@ export function BranchSegment({
 						refreshing={refreshing}
 						label=""
 						testid="scope-diff-base"
-						triggerClassName="flex h-24 min-w-0 max-w-full items-center gap-4 rounded-[var(--radius-sm)] px-4 outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected"
+						triggerClassName="flex h-24 min-w-0 max-w-full items-center gap-4 rounded-sm px-4 outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected"
 						onSelect={(ref) => void pointDiffBaseAt(ref)}
 						onRefresh={refresh}
 					/>

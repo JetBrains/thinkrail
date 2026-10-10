@@ -53,7 +53,7 @@ export function ToolCard({
 			data-tool={toolName}
 			data-status={status}
 			data-expanded={expanded}
-			className="rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg"
+			className="rounded-sm border border-border-default bg-container-elevated-bg"
 		>
 			<button
 				ref={toggleRef}

@@ -65,7 +65,7 @@ export function JsonTree({
 	return (
 		<div data-json-pointer={node.pointer}>
 			<div
-				className={`relative flex min-h-28 items-start gap-4 rounded-[var(--radius-sm)] px-4 py-2 ${tint(mark)} ${
+				className={`relative flex min-h-28 items-start gap-4 rounded-sm px-4 py-2 ${tint(mark)} ${
 					threads.length > 0 ? "outline-2 -outline-offset-2 outline-text-subtle" : ""
 				}`}
 			>

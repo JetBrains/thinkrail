@@ -154,7 +154,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 					</ConfirmPopover>
 				</div>
 			)}
-			<QuietScrollArea className="min-h-0 flex-1" viewportClassName="p-12">
+			<QuietScrollArea className="min-h-0 flex-1" viewportClassName="p-panel-inset">
 				{files.length === 0 ? (
 					<p data-testid="review-empty" className="px-8 py-4 tr-text-metadata text-text-subtle">
 						{hasComments
@@ -383,7 +383,7 @@ function CommentRow({
 				data-testid="review-comment-open"
 				onClick={() => (comment.sessionId ? onOpenChat(comment.sessionId) : onNavigate())}
 				title={comment.sessionId ? "Open the discussion" : "Show in file"}
-				className="flex w-full items-start gap-8 rounded-[var(--radius-sm)] px-4 py-4 text-left hover:bg-control-bg-hovered"
+				className="flex w-full items-start gap-8 rounded-sm px-4 py-4 text-left hover:bg-control-bg-hovered"
 			>
 				{ordinal !== undefined ? (
 					<span className="w-16 shrink-0 text-center tr-code-text text-text-subtle">
@@ -509,7 +509,7 @@ function ResolvedRow({
 	return (
 		<div
 			data-testid="review-comment-resolved"
-			className="group relative flex items-center gap-8 rounded-[var(--radius-sm)] px-4 py-4"
+			className="group relative flex items-center gap-8 rounded-sm px-4 py-4"
 		>
 			<PlanStatusIcon kind="done" />
 			<span

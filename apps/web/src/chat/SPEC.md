@@ -449,7 +449,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   because preserving a pixel position across total reversal has no stable meaning. There is no
   intermediate wrong-edge paint or cross-order animation. Initial virtual geometry is
   **row-aware**: each projected row receives a conservative estimate derived from prose wrapping, block
-  breaks, and physical fenced-code lines without splitting one canonical Markdown block. Bounded pixel and
+  breaks, and physical fenced-code lines without splitting one canonical Markdown block. The estimates mirror the
+  rendered row chrome (row and bubble padding, paragraph gaps, the prose line height, the height floor) and move with it: a density
+  pass once left them stale, which flipped Virtuoso’s measurement corrections from growth to shrink and stranded
+  a newest-first return-to-latest detached (`chat-scroll.spec.ts`). Bounded pixel and
   item overscan lets nearby outliers replace estimates before coarse input exhausts a false range. Native
   wheel physics remain untouched. `chat-history.spec.ts` pins the default latest edge and tall-history
   geometry; `chat-order.spec.ts` pins both projections.
@@ -700,7 +703,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   **live catalog** — `ChatView` resolves the session's model through `store`'s `selectCatalogModel`
   before passing it down, so a `model.refresh` that changes what a model supports changes the offered
   levels with it), `SessionStatsBar`, `ChatHeader` (the fixed, single-line **panel-header row** —
-  `h-panel-header-row` (`--panel-header-row-height`, currently 32px), the shared structural geometry with
+  `h-panel-header-row` (`--panel-header-row-height`, currently 28px), the shared structural geometry with
   workbench Group Headers and the Changes toolbar, not a value pinned here; it never scrolls,
   and constrained widths clip/truncate TODO + status/usage text while preserving the trailing Skills
   action. Its `left` slot carries the plan strip; its **Skills** button is the presentational **`SkillsButton`**
@@ -986,7 +989,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   gaps are visually tinted in the message field itself — a native `<textarea>` can't style text ranges
   inside it, so `Composer` renders a **highlight-backdrop** (a styled mirror layer positioned behind a
   now-`bg-transparent` textarea; the input background moves up to the wrapping container instead, clipped
-  to the same `rounded-[var(--radius-md)]` so nothing changes visually outside a session). That wrapper
+  to the same `rounded-md` so nothing changes visually outside a session). That wrapper
   owns the input border and fill: `bg-clip-padding` keeps the backdrop tint inside the rounded border,
   while `focus-within:border-control-border-active` is the composer's sole focus indicator rather than a
   second accent ring on the textarea. The pure `highlightSegments(value, slots, activeIdx)`
@@ -999,7 +1002,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `border border-transparent` of the same width so the content box lines up,
   `whitespace-pre-wrap break-words` — spelled out explicitly since a `<div>`, unlike a `<textarea>`,
   doesn't soft-wrap this way by default) so each `SlotSegment`'s tint span
-  (`data-testid="slot-highlight"` + `data-slot-state`, `rounded-[var(--radius-xs)]` — the text-run radius
+  (`data-testid="slot-highlight"` + `data-slot-state`, `rounded-xs` — the text-run radius
   tier — with `bg-primary-soft`/`-muted`/`-subtle` for
   unfilled/active/filled, no tint for plain, every span `text-transparent` so only the real textarea text
   above shows through) lands exactly under its own characters. **Scroll sync**: the textarea's `onScroll`

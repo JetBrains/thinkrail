@@ -11,7 +11,7 @@ export function BackgroundCommandCompletion({
 			data-testid="background-command-completion"
 			data-resource-id={details.id}
 			data-status={details.status}
-			className="flex min-w-0 flex-col gap-8 rounded-[var(--radius-sm)] border border-border-muted p-12"
+			className="flex min-w-0 flex-col gap-8 rounded-sm border border-border-muted p-12"
 		>
 			<div className="flex min-w-0 items-center gap-4 tr-text-ui">
 				<RiTerminalBoxLine className="size-12 shrink-0 text-text-muted" />
@@ -34,7 +34,7 @@ export function BackgroundCommandCompletion({
 				</p>
 			) : null}
 			{details.output.text ? (
-				<pre className="max-h-240 overflow-auto whitespace-pre-wrap break-words rounded-[var(--radius-sm)] bg-container-content-bg p-8 tr-code-text">
+				<pre className="max-h-240 overflow-auto whitespace-pre-wrap break-words rounded-sm bg-container-content-bg p-8 tr-code-text">
 					{details.output.text}
 				</pre>
 			) : (

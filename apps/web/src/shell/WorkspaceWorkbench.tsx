@@ -152,7 +152,7 @@ function ChatResourceBody({
 			<button
 				type="button"
 				onClick={retry}
-				className="rounded-[var(--radius-sm)] border border-border-default px-8 py-4 tr-text-ui hover:bg-control-bg-hovered"
+				className="rounded-sm border border-border-default px-8 py-4 tr-text-ui hover:bg-control-bg-hovered"
 			>
 				Retry
 			</button>
@@ -525,17 +525,21 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const toolBodies = useMemo<Record<LayoutToolId, ReactNode>>(() => {
 		const bodies: Record<LayoutToolId, ReactNode> = {
 			projects: (
-				<QuietScrollArea data-testid="left-nav" className="h-full" viewportClassName="p-12">
+				<QuietScrollArea
+					data-testid="left-nav"
+					className="h-full"
+					viewportClassName="p-panel-inset"
+				>
 					<ProjectTree />
 				</QuietScrollArea>
 			),
 			specs: (
-				<QuietScrollArea className="h-full" viewportClassName="p-12">
+				<QuietScrollArea className="h-full" viewportClassName="p-panel-inset">
 					<SpecsPanel workspaceId={workspaceId} failed={specs.failed} onRetry={specs.reload} />
 				</QuietScrollArea>
 			),
 			files: (
-				<QuietScrollArea className="h-full" viewportClassName="p-12">
+				<QuietScrollArea className="h-full" viewportClassName="p-panel-inset">
 					<FileTree key={workspaceId} workspaceId={workspaceId} />
 				</QuietScrollArea>
 			),
@@ -658,7 +662,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					data-starting={chatStarting || undefined}
 					disabled={chatStarting}
 					onClick={() => startChat(groupId)}
-					className="mt-4 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-text-muted disabled:hover:bg-container-elevated-bg"
+					className="mt-4 flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-text-muted disabled:hover:bg-container-elevated-bg"
 				>
 					{chatStarting ? (
 						<>
@@ -690,7 +694,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						data-testid="new-terminal"
 						aria-label="New terminal in this group"
 						onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
-						className="flex w-32 shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
+						className="flex w-panel-header-row shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 					>
 						<SquareTerminal className="size-14" />
 					</button>

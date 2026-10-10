@@ -104,7 +104,7 @@ function StreamingResponseMovementControl({
 	return (
 		<div
 			data-testid="streaming-response-movement"
-			className="rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-12"
+			className="rounded-sm border border-border-default bg-container-elevated-bg p-12"
 		>
 			<div className="flex items-center justify-between text-text-muted tr-text-metadata">
 				<span>Top</span>
@@ -203,7 +203,7 @@ export function SubagentSettings({
 					new subagents; work already running finishes.
 				</p>
 			</div>
-			<div className="flex items-center justify-between gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8">
+			<div className="flex items-center justify-between gap-12 rounded-sm border border-border-default bg-control-bg px-12 py-8">
 				<div className="flex flex-col gap-2">
 					<span className="tr-title-compact text-text-default">Global default</span>
 					<span className="text-text-muted tr-text-metadata">

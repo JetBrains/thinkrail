@@ -45,7 +45,7 @@ test("the start screen carries the left tool rail and plain Projects pane header
 	const rail = page.getByTestId("left-layout-rail");
 	await expect(rail).toHaveAttribute("aria-label", "Left tools");
 	await expect(rail).toHaveCSS("width", "40px");
-	await expect(page.getByTestId("auxiliary-pane-header")).toHaveCSS("height", "32px");
+	await expect(page.getByTestId("auxiliary-pane-header")).toHaveCSS("height", "28px");
 	const control = page.getByTestId("tool-rail-projects");
 	await expect(control).toHaveAccessibleName("Projects");
 	const paneId = await control.getAttribute("aria-controls");

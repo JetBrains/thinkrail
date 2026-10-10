@@ -233,7 +233,7 @@ export function RegionReviewSurface({
 											type="button"
 											data-testid="review-add-icon"
 											aria-label={`Comment on this ${label}`}
-											className="pointer-events-auto absolute -right-12 -bottom-12 flex size-24 items-center justify-center rounded-[var(--radius-sm)] bg-primary text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
+											className="pointer-events-auto absolute -right-12 -bottom-12 flex size-24 items-center justify-center rounded-sm bg-primary text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
 											onPointerDown={(event) => event.stopPropagation()}
 											onClick={composer.open}
 										>

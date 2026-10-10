@@ -95,7 +95,7 @@ export function ActivityBreadcrumbBar({
 			className="pointer-events-auto border-border-default border-b bg-container-header-bg shadow-[var(--shadow-md)]"
 		>
 			<div
-				className={`${measureClassName} flex h-[34px] items-center overflow-hidden px-12 tr-text-metadata`}
+				className={`${measureClassName} flex h-[34px] items-center overflow-hidden px-chat-gutter tr-text-metadata`}
 			>
 				{segments.map((segment, index) => (
 					<div key={segment.id} className="flex min-w-0 items-center">
@@ -110,13 +110,13 @@ export function ActivityBreadcrumbBar({
 							<div
 								data-testid="activity-breadcrumb-segment"
 								data-kind={segment.kind}
-								className="flex min-w-0 items-center rounded-[var(--radius-sm)] hover:bg-control-bg-hovered"
+								className="flex min-w-0 items-center rounded-sm hover:bg-control-bg-hovered"
 							>
 								<button
 									type="button"
 									aria-label={`${segment.expanded ? "Collapse" : "Expand"} ${segment.label}`}
 									onClick={() => onToggle(segment.id)}
-									className="flex size-20 shrink-0 items-center justify-center rounded-[var(--radius-sm)] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+									className="flex size-20 shrink-0 items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
 								>
 									<ChevronRight
 										aria-hidden
@@ -128,7 +128,7 @@ export function ActivityBreadcrumbBar({
 									aria-label={`Jump to ${segment.label}`}
 									title={segment.meta ? `${segment.label} · ${segment.meta}` : segment.label}
 									onClick={() => onJump(segment.id)}
-									className="flex min-w-0 items-center gap-4 rounded-[var(--radius-sm)] py-2 pr-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+									className="flex min-w-0 items-center gap-4 rounded-sm py-2 pr-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
 								>
 									<SegmentIcon kind={segment.kind} />
 									<span className="shrink-0 text-text-default">{segment.label}</span>

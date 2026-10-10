@@ -6,7 +6,7 @@ import { useHighlightedCode } from "@/lib/highlightCode";
 import { createMarkdownSplitter } from "./markdownBlocks";
 
 const CHAT_PROSE =
-	"tr-prose-chat max-w-none break-words [&_a]:text-primary [&_a]:underline [&_li]:my-2 [&_ol]:my-8 [&_ol]:list-decimal [&_ol]:pl-16 [&_p]:my-8 [&_table]:border-collapse [&_td]:border [&_td]:border-border-muted [&_td]:px-8 [&_td]:py-4 [&_th]:border [&_th]:border-border-muted [&_th]:px-8 [&_th]:py-4 [&_th]:text-left [&_ul]:my-8 [&_ul]:list-disc [&_ul]:pl-16";
+	"tr-prose-chat max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_a]:text-primary [&_a]:underline [&_li]:my-2 [&_ol]:my-8 [&_ol]:list-decimal [&_ol]:pl-16 [&_p]:my-8 [&_table]:border-collapse [&_td]:border [&_td]:border-border-muted [&_td]:px-8 [&_td]:py-4 [&_th]:border [&_th]:border-border-muted [&_th]:px-8 [&_th]:py-4 [&_th]:text-left [&_ul]:my-8 [&_ul]:list-disc [&_ul]:pl-16";
 
 type ReactMarkdownProps = ComponentProps<typeof ReactMarkdown>;
 export type MarkdownRehypePlugins = ReactMarkdownProps["rehypePlugins"];
@@ -113,17 +113,9 @@ function CodeBlock({
 	if (lang === "mermaid") return <MermaidBlock code={code} />;
 	if (!lang) {
 		if (!code.includes("\n")) {
-			return (
-				<code className="rounded-[var(--radius-xs)] bg-container-elevated-bg px-4 py-2">
-					{children}
-				</code>
-			);
+			return <code className="rounded-xs bg-container-elevated-bg px-4 py-2">{children}</code>;
 		}
-		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-elevated-bg p-8">
-				{code}
-			</pre>
-		);
+		return <pre className="overflow-auto rounded-sm bg-container-elevated-bg p-8">{code}</pre>;
 	}
 	return <ShikiBlock code={code} lang={lang} />;
 }
@@ -149,14 +141,14 @@ function ShikiBlock({ code, lang }: { code: string; lang: string }) {
 
 	if (html === null) {
 		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-elevated-bg p-8 text-text-default">
+			<pre className="overflow-auto rounded-sm bg-container-elevated-bg p-8 text-text-default">
 				{code}
 			</pre>
 		);
 	}
 	return (
 		<div
-			className="overflow-auto rounded-[var(--radius-sm)] [&_pre]:!m-0 [&_pre]:!bg-container-elevated-bg [&_pre]:p-8"
+			className="overflow-auto rounded-sm [&_pre]:!m-0 [&_pre]:!bg-container-elevated-bg [&_pre]:p-8"
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>
 	);

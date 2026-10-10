@@ -77,7 +77,7 @@ function ChangeNodeRow({
 				<span className={ROW_MENU_SLOT} />
 			</div>
 			{expanded && (
-				<ul className="flex flex-col pl-12">
+				<ul className="flex flex-col pl-tree-indent">
 					{node.children.map((child) => (
 						<ChangeNodeRow key={child.path} node={child} onOpen={onOpen} isActive={isActive} />
 					))}

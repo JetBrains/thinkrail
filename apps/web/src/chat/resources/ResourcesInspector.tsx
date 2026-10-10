@@ -294,7 +294,7 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 							aria-label="Close resources"
 							data-testid="resources-inspector-close"
 							onClick={() => props.onOpenChange(false)}
-							className="inline-flex size-28 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+							className="inline-flex size-28 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 						>
 							<RiCloseLine className="size-16" />
 						</button>
@@ -308,7 +308,7 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 						<p className="px-8 text-text-muted tr-text-metadata">Loading resources…</p>
 					) : null}
 					{props.stale ? (
-						<p className="mx-8 flex items-center gap-8 rounded-[var(--radius-sm)] bg-feedback-warning-subtle px-8 py-4 text-feedback-warning tr-text-metadata">
+						<p className="mx-8 flex items-center gap-8 rounded-sm bg-feedback-warning-subtle px-8 py-4 text-feedback-warning tr-text-metadata">
 							<RiErrorWarningLine className="size-14 shrink-0" />
 							Snapshot is stale — controls return when the host reconnects.
 						</p>
@@ -316,7 +316,7 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 					{props.error ? (
 						<div
 							role="alert"
-							className="mx-8 flex items-center gap-8 rounded-[var(--radius-sm)] bg-feedback-error-subtle px-8 py-4 text-feedback-error tr-text-metadata"
+							className="mx-8 flex items-center gap-8 rounded-sm bg-feedback-error-subtle px-8 py-4 text-feedback-error tr-text-metadata"
 						>
 							<RiErrorWarningLine className="size-14 shrink-0" />
 							<span className="min-w-0 flex-1 break-words">{props.error}</span>
@@ -358,10 +358,10 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 								? "Read-only transcript; steer from the chat."
 								: "Last 2,000 lines / 50 KB are kept while this host runs."}
 						</span>
-						<kbd className="rounded-[var(--radius-xs)] border border-border-default px-4">↑</kbd>
-						<kbd className="rounded-[var(--radius-xs)] border border-border-default px-4">↓</kbd>
+						<kbd className="rounded-xs border border-border-default px-4">↑</kbd>
+						<kbd className="rounded-xs border border-border-default px-4">↓</kbd>
 						<span>switch</span>
-						<kbd className="rounded-[var(--radius-xs)] border border-border-default px-4">Esc</kbd>
+						<kbd className="rounded-xs border border-border-default px-4">Esc</kbd>
 						<span>close</span>
 					</div>
 				</div>

@@ -77,7 +77,7 @@ function CellCommentButton({
 				type="button"
 				aria-label={label}
 				data-testid={`notebook-comment-cell-${side}`}
-				className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex size-24 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 				onClick={() => onSelect({ cell, side })}
 			>
 				<MessageSquarePlus className="size-14" />
@@ -225,7 +225,7 @@ function NotebookDiffSurface({
 							}}
 							data-testid="notebook-diff-cell"
 							data-state={entry.state}
-							className={`overflow-hidden rounded-[var(--radius-md)] border ${stateClass(entry.state)}`}
+							className={`overflow-hidden rounded-md border ${stateClass(entry.state)}`}
 						>
 							<header className="flex min-h-32 items-center gap-4 border-border-muted border-b bg-container-header-bg px-8">
 								<span className="tr-text-eyebrow text-text-muted">

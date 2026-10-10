@@ -70,11 +70,12 @@
 	},
 	"lineHeights": {
 		"compact": 1.25,
-		"metadata": 1.3333333,
-		"ui": 1.4285714,
-		"code": 1.5,
-		"relaxed": 1.5384615,
-		"default": 1.6
+		"metadata": 1.25,
+		"ui": 1.3,
+		"code": 1.4,
+		"relaxed": 1.4,
+		"default": 1.3,
+		"reading": 1.45
 	},
 	"letterSpacings": {
 		"normal": "normal",
@@ -223,7 +224,7 @@
 				"fontFamily": "interface",
 				"fontSize": "s14",
 				"fontWeight": "light",
-				"lineHeight": "default",
+				"lineHeight": "reading",
 				"letterSpacing": "normal",
 				"textTransform": "none",
 				"fontStyle": "normal"

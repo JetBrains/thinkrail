@@ -173,16 +173,16 @@ function userAttachments(content: UserMessage["content"], names?: string[]) {
 }
 
 const USER_BUBBLE_BASE =
-	"whitespace-pre-wrap break-words rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8 tr-text-reading text-text-muted";
+	"whitespace-pre-wrap break-words rounded-lg border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8 tr-text-reading text-text-muted";
 const USER_BUBBLE = cn("max-w-[85%]", USER_BUBBLE_BASE);
 
 // In unbounded chat-width mode the transcript row is a fixed measure that can be far wider than the
 // pane; a right-aligned user bubble would otherwise sit off-screen and clip on the left. Cap the
-// user side to the pane's content width (the container-query width minus the row's `px-12` gutters,
-// the same `--space-24` the transcript-width calc uses) only in that mode — so a user bubble matches
+// user side to the pane's content width (the container-query width minus both `--chat-gutter`s,
+// the same terms the transcript-width calc uses) only in that mode — so a user bubble matches
 // its bounded-mode width and stays fully visible. Bounded mode never matches the selector.
 const USER_SIDE_UNBOUNDED_CLAMP =
-	"[[data-line-width-bounded=false]_&]:max-w-[calc(100cqw-var(--space-24))]";
+	"[[data-line-width-bounded=false]_&]:max-w-[calc(100cqw-2*var(--chat-gutter))]";
 
 function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 	const [open, setOpen] = useState(false);
@@ -207,7 +207,7 @@ function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 						<img
 							src={`data:${img.mimeType};base64,${img.data}`}
 							alt=""
-							className="max-h-[80vh] max-w-full rounded-[var(--radius-sm)]"
+							className="max-h-[80vh] max-w-full rounded-sm"
 						/>
 					</div>
 				</DialogContent>
@@ -382,7 +382,7 @@ function SkillInvocationCard({
 			data-testid="skill-invocation-card"
 			data-chat-fold-root
 			data-expanded={expanded}
-			className="max-w-[85%] overflow-hidden rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg"
+			className="max-w-[85%] overflow-hidden rounded-lg border border-bubble-user-border bg-clip-padding bg-bubble-user-bg"
 		>
 			<button
 				ref={toggleRef}
@@ -432,7 +432,7 @@ function ReviewFixCard({ id, details }: { id: string; details: ReviewFixDetails 
 	return (
 		<div
 			data-testid="review-fix-card"
-			className="max-w-[85%] overflow-hidden rounded-[var(--radius-lg)] border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8"
+			className="max-w-[85%] overflow-hidden rounded-lg border border-bubble-user-border bg-clip-padding bg-bubble-user-bg px-12 py-8"
 		>
 			<span data-testid="review-fix-summary" className="block tr-text-reading text-text-default">
 				{summary}
@@ -551,7 +551,7 @@ function ErrorTurn({ text, onTryAgain }: { text: string; onTryAgain?: (() => voi
 		<div
 			data-testid="chat-message"
 			data-role="error"
-			className="flex items-start gap-8 rounded-[var(--radius-sm)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
+			className="flex items-start gap-8 rounded-sm border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
 		>
 			<TriangleAlert className="mt-2 size-12 shrink-0" />
 			<span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{text}</span>
@@ -583,7 +583,7 @@ function CompactionNotice({
 			<div
 				data-testid="compaction-notice"
 				data-status="failed"
-				className="flex items-start gap-8 rounded-[var(--radius-md)] border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
+				className="flex items-start gap-8 rounded-md border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
 			>
 				<TriangleAlert className="mt-2 size-12 shrink-0" />
 				<span className="min-w-0 whitespace-pre-wrap break-words">
@@ -642,7 +642,7 @@ function RetryIndicator({
 		<div
 			data-testid="retry-indicator"
 			data-source={source}
-			className="flex flex-col gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata"
+			className="flex flex-col gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata"
 		>
 			<span className="flex items-center gap-4">
 				<RotateCw className="size-12 shrink-0" />
@@ -701,7 +701,7 @@ function ArtifactChip({
 				onSelect(event);
 			}}
 			className={cn(
-				"flex items-center gap-4 rounded-[var(--radius-sm)] px-4 text-primary hover:bg-control-bg-hovered",
+				"flex items-center gap-4 rounded-sm px-4 text-primary hover:bg-control-bg-hovered",
 				many && expanded && "bg-control-bg-selected",
 			)}
 		>
@@ -738,7 +738,7 @@ function ArtifactList({
 						data-testid={`${testid}-list-item`}
 						onClick={() => onOpen(path)}
 						title={path}
-						className="flex w-full items-center gap-4 rounded-[var(--radius-sm)] px-4 py-2 text-left hover:bg-control-bg-hovered"
+						className="flex w-full items-center gap-4 rounded-sm px-4 py-2 text-left hover:bg-control-bg-hovered"
 					>
 						<Icon className="size-12 shrink-0 text-text-muted" />
 						<span className="min-w-0 flex-1 truncate text-text-muted">
@@ -804,13 +804,13 @@ export function TurnDivider({
 		!running &&
 		(elapsedMs == null || elapsedMs < 1000)
 	) {
-		return <div data-testid="turn-divider" className="my-8 h-px bg-border-muted" />;
+		return <div data-testid="turn-divider" className="my-4 h-px bg-border-muted" />;
 	}
 	return (
 		<div
 			data-testid="turn-divider"
 			data-chat-fold-root
-			className="my-8 flex flex-col gap-4 text-text-muted tr-text-metadata"
+			className="my-4 flex flex-col gap-4 text-text-muted tr-text-metadata"
 		>
 			<div className="flex items-center gap-8">
 				<span className="h-px flex-1 bg-border-muted" />

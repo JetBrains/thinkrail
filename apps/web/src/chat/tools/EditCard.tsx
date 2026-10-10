@@ -46,7 +46,7 @@ export function EditCard({
 				lines={oldLines.length + newLines.length}
 				fadeClass="bg-[linear-gradient(to_top,var(--container-elevated-bg),transparent)]"
 			>
-				<div className="overflow-auto rounded-[var(--radius-sm)] border border-border-default tr-code-text leading-relaxed">
+				<div className="overflow-auto rounded-sm border border-border-default tr-code-text leading-relaxed">
 					{oldLines.map((line, i) => {
 						const key = `old-${i}`;
 						return (
