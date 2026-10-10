@@ -135,7 +135,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	);
 
 	useEffect(() => {
-		if (!status || changesRequest?.workspaceId !== workspaceId) return;
+		if (changesRequest?.workspaceId !== workspaceId) return;
 		if (useAppStore.getState().changesRequest !== changesRequest) return;
 		const want = changesRequest.path;
 		const currentState = useAppStore.getState();
@@ -147,6 +147,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 				void openChangesTab(workspaceId, scope, {}, "preview", changesRequest.navigation);
 			}
 		} else {
+			if (!status) return;
 			const match = status.changes.find((c) => matchesWorktreePath(want, c.path));
 			if (match && !overtaken) openDiff(match.path, "preview", changesRequest.navigation);
 			else setHighlighted(match ? match.path : want);
