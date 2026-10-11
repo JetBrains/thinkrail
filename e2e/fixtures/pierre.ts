@@ -5,6 +5,7 @@ const LINE_NUMBER = (line: string, type: string | null) =>
 	`[data-column-number="${line}"]${type === null ? "" : `[data-line-type="${type}"]`}`;
 const COLLAPSED_CONTEXT = "[data-unmodified-lines]";
 const DELETIONS_SIDE = "[data-deletions]";
+const GUTTER_UTILITY_CELL = "[data-column-number]:has([data-gutter-utility-slot])";
 
 export function pierreLines(surface: Locator, text?: string): Locator {
 	return surface.locator(LINE, text === undefined ? {} : { hasText: text });
@@ -16,6 +17,10 @@ export function pierreCollapsedContext(surface: Locator): Locator {
 
 export function pierreDeletionsSide(surface: Locator): Locator {
 	return surface.locator(DELETIONS_SIDE);
+}
+
+export function pierreGutterUtilityCell(surface: Locator): Locator {
+	return surface.locator(GUTTER_UTILITY_CELL);
 }
 
 async function pierreLineRef(

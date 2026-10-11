@@ -9,7 +9,12 @@ import {
 	worktreeRows,
 } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
-import { pierreDeletionsSide, selectPierreLine } from "./fixtures/pierre";
+import {
+	pierreDeletionsSide,
+	pierreGutterUtilityCell,
+	pierreLines,
+	selectPierreLine,
+} from "./fixtures/pierre";
 
 const worktree = () => join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
 
@@ -360,6 +365,33 @@ test("Pierre line selection opens one inline composer", async ({ page }) => {
 	await page.getByTestId("review-composer-save").click();
 	await expect(composer).toHaveCount(0);
 	await expect(page.getByTestId("review-pending-badge")).toHaveText("1");
+});
+
+test("a text-selection drag leaves the comment button on the line it started from", async ({
+	page,
+}) => {
+	await openDiff(page);
+	const diff = page.getByTestId("diff-view");
+	const utility = pierreGutterUtilityCell(diff);
+	const lineCenter = async (text: string) => {
+		const box = await pierreLines(diff, text).last().boundingBox();
+		if (!box) throw new Error(`No Pierre line box for ${JSON.stringify(text)}`);
+		return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+	};
+	const one = await lineCenter("one = 1");
+	const two = await lineCenter("two = 2");
+	const three = await lineCenter("three = 3");
+
+	await page.mouse.move(one.x, one.y);
+	await expect(utility).toHaveAttribute("data-column-number", "1");
+	await page.mouse.down();
+	await page.mouse.move(three.x, three.y, { steps: 5 });
+	expect(await page.evaluate(() => window.getSelection()?.toString())).toContain("two = 2");
+	await expect(utility).toHaveAttribute("data-column-number", "1");
+	await page.mouse.up();
+
+	await page.mouse.move(two.x, two.y);
+	await expect(utility).toHaveAttribute("data-column-number", "2");
 });
 
 test("the Review panel carries its own send buttons: per-file at the file level, Send all at the files level", async ({
