@@ -113,9 +113,13 @@ as a permanently open foreign window and force every sibling chat into the fallb
 - **Commit gate (safety on the user's branch).** A commit may only contain work the item can be *proven*
   to own, so all four must hold — else **no commit**, and the live-diff `change` path-list artifacts stand
   in (branch scope; `change` survives **only** as this fallback):
-  1. **A recorded baseline.** No baseline = no observed window (an item flipped straight to `done`, a plan
-     predating the sidecar), and then every dirty path in the worktree merely *looks* like the item's
-     delta. Reportable, never committable.
+  1. **A recorded baseline.** No baseline = no observed window (an item flipped straight to `done`, a
+     plan predating the sidecar). The reconcile has no honest basis for claiming anything the step
+     did, so **`deltaPaths` is empty**: no commit, **no `change` artifacts**, nothing. The dirty paths
+     surface in `unattributed` instead, which is the correct place for "work the reconcile can't
+     attribute". Before (see `attribution-v2-rfc.md`): the reconcile fell back to `deltaPaths = now`,
+     claiming every dirty path as `change` — which grabbed sibling steps' work and user WIP into a
+     bundled-done step, the exact misattribution this gate now prevents.
   2. **No foreign dirt left** — every path dirty at the baseline is clean again by `done`. This is what
      quietly disables auto-commit in a Default workspace holding the user's WIP, the intended guard.
   3. **A window never shared** (`shared` unset) and no other chat mid-work right now — concurrent windows

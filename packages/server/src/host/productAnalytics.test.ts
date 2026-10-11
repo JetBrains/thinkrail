@@ -446,6 +446,11 @@ test("host handlers exclude Default provisioning and hydration; observing a muta
 	const { root, ctx, workspace, store, item, ref } = await taskFixture();
 	await handleRequest("todo.list", ref, ctx);
 	await handleRequest("todo.update", { ...ref, status: "in_progress" }, ctx);
+	// Mimic the agent-tool flow by letting the host see an in_progress reconcile pass so the baseline
+	// is captured (nothing dirty yet). Without this the item would be "bundled-done" from the
+	// reconcile's point of view and no change artifacts attach (honest unattribution), but the review
+	// step below would then have nothing to review. See `attribution-v2-rfc.md`.
+	await maybeAttachChangeArtifacts(workspace.id, ref.sessionId);
 	writeFileSync(join(root, "README.md"), "changed\n");
 	await handleRequest("todo.update", { ...ref, status: "done" }, ctx);
 	await handleRequest("todo.list", ref, ctx);
