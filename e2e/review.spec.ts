@@ -12,6 +12,7 @@ import { E2E_DATA_DIR } from "./fixtures/paths";
 import {
 	pierreDeletionsSide,
 	pierreGutterUtilityCell,
+	pierreHighlightedTokens,
 	pierreLines,
 	selectPierreLine,
 } from "./fixtures/pierre";
@@ -372,6 +373,7 @@ test("a text-selection drag leaves the comment button on the line it started fro
 }) => {
 	await openDiff(page);
 	const diff = page.getByTestId("diff-view");
+	await expect(pierreHighlightedTokens(diff).first()).toBeVisible();
 	const utility = pierreGutterUtilityCell(diff);
 	const lineCenter = async (text: string) => {
 		const box = await pierreLines(diff, text).last().boundingBox();

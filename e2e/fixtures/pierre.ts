@@ -6,6 +6,7 @@ const LINE_NUMBER = (line: string, type: string | null) =>
 const COLLAPSED_CONTEXT = "[data-unmodified-lines]";
 const DELETIONS_SIDE = "[data-deletions]";
 const GUTTER_UTILITY_CELL = "[data-column-number]:has([data-gutter-utility-slot])";
+const HIGHLIGHTED_TOKEN = `${LINE} [style*="--diffs-token-"]`;
 
 export function pierreLines(surface: Locator, text?: string): Locator {
 	return surface.locator(LINE, text === undefined ? {} : { hasText: text });
@@ -21,6 +22,10 @@ export function pierreDeletionsSide(surface: Locator): Locator {
 
 export function pierreGutterUtilityCell(surface: Locator): Locator {
 	return surface.locator(GUTTER_UTILITY_CELL);
+}
+
+export function pierreHighlightedTokens(surface: Locator): Locator {
+	return surface.locator(HIGHLIGHTED_TOKEN);
 }
 
 async function pierreLineRef(

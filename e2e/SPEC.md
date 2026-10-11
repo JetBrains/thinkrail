@@ -109,6 +109,9 @@ Native wheel probes target the actual transcript viewport again after clicking a
 button; a pointer left at a removed overlay is not evidence of a gesture delivered to the scroller.
 Disclosure-anchor probes place the complete header below the real sticky breadcrumb before asserting
 fixed-position behavior. Intersection with the scroller alone does not prove that a header is unobscured.
+Pierre surfaces paint plain text first and replace their rows when the worker's highlight lands, which
+is late on slower hosts such as the compiled-binary and packaged-desktop artifacts; pointer probes wait
+for highlighted tokens (`pierreHighlightedTokens`) before measuring or dragging rows.
 
 ## Render profiling harness
 
