@@ -428,7 +428,10 @@ const handlers: WsHandlers = {
 	"project.setTrust": async (p) => {
 		const project = listProjects().find((candidate) => candidate.id === p.id);
 		if (!project) throw new Error(`Unknown project: ${p.id}`);
-		const acknowledged = p.trusted ? await listProjectAliasSkillNames(project.path) : undefined;
+		const acknowledged =
+			p.trusted && project.trusted !== true
+				? await listProjectAliasSkillNames(project.path)
+				: undefined;
 		const updated = setProjectTrust(p.id, p.trusted, acknowledged, {
 			resources: p.resources === true,
 		});

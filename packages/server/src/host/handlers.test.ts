@@ -313,6 +313,33 @@ test("project.setTrust grants pi-level resource trust only when the request asks
 	});
 });
 
+test("project.setTrust acknowledges the present aliases only when it grants alias trust", async () => {
+	const writeAlias = (name: string) => {
+		const directory = join(repo, ".claude", "skills", name);
+		mkdirSync(directory, { recursive: true });
+		writeFileSync(
+			join(directory, "SKILL.md"),
+			`---\nname: ${name}\ndescription: ${name} alias\n---\n\n# ${name}\n`,
+		);
+	};
+	const setTrust = async (params: { trusted: boolean; resources?: boolean }) =>
+		(await handleRequest("project.setTrust", { id: "p1", ...params }, CTX)) as Project;
+	writeAlias("first-alias");
+	expect((await setTrust({ trusted: true })).acknowledgedSkills).toEqual(["first-alias"]);
+
+	writeAlias("late-alias");
+	expect(await setTrust({ trusted: true, resources: true })).toMatchObject({
+		piResourceTrust: "granted",
+		acknowledgedSkills: ["first-alias"],
+	});
+
+	await setTrust({ trusted: false });
+	expect((await setTrust({ trusted: true })).acknowledgedSkills?.sort()).toEqual([
+		"first-alias",
+		"late-alias",
+	]);
+});
+
 test("workspace.rename locks the display name without changing Git or the worktree path", async () => {
 	const created = (await handleRequest("workspace.create", { projectId: "p1" }, CTX)) as Workspace;
 

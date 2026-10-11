@@ -316,8 +316,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   the calling session equals the chat `markCommentsSent` recorded it as delivered to;
   `project.trustSummary` answers the trust notice from agent's `projectTrustSummary(project.path)`;
   `project.setTrust`
-  acknowledges the aliases present at grant via agent's
-  `listProjectAliasSkillNames`, sets the alias grant, grants pi-level trust only when the request carries
+  acknowledges the aliases present when it grants alias trust (agent's `listProjectAliasSkillNames`; a grant
+  on an already alias-trusted project — the pi-level grant — keeps the acknowledged set, so aliases that
+  arrived since stay pending review), sets the alias grant, grants pi-level trust only when the request carries
   `resources: true` (a revoke clears both; an older client's grant is alias-only), and hands the project's
   workspaces to agent's `applyPiResourceTrust` so live chats reload into the new trust (idle now, busy at
   settlement); `createServer` injects agent's `piProjectTrustDecision` as the projects migration seed
