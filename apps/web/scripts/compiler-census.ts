@@ -52,10 +52,14 @@ function functionName(path: NodePath<types.Function>) {
 
 function collectFunctionNames(ast: types.File) {
 	const names = new Map<string, string>();
+	const occurrences = new Map<string, number>();
 	traverse(ast, {
 		Function(path) {
 			const name = functionName(path);
-			if (name) names.set(locKey(path.node.loc), name);
+			if (!name) return;
+			const nth = (occurrences.get(name) ?? 0) + 1;
+			occurrences.set(name, nth);
+			names.set(locKey(path.node.loc), nth === 1 ? name : `${name}#${nth}`);
 		},
 	});
 	return names;
@@ -108,7 +112,7 @@ function toBailout(file: string, names: Map<string, string>, event: LoggerEvent)
 	};
 }
 
-function censusFile(absPath: string, code: string): FileResult {
+export function censusFile(absPath: string, code: string): FileResult {
 	const file = relative(WEB_ROOT, absPath);
 	if (!PRESET_FILTER.test(code)) return { compiled: 0, bailouts: [] };
 	const ast = parseSync(code, {
@@ -180,13 +184,11 @@ function printHuman(census: ReturnType<typeof runCensus>) {
 	}
 }
 
-function baseline(census: ReturnType<typeof runCensus>): GeneratedFile {
+export function baselineEntries(bailouts: Bailout[]) {
 	const functions = new Set(
-		census.bailouts.map(
-			(b) => `${b.file.split(sep).join("/")} ${b.fnName ?? `:${b.fnLine ?? b.line}`}`,
-		),
+		bailouts.map((b) => `${b.file.split(sep).join("/")} ${b.fnName ?? `:${b.fnLine ?? b.line}`}`),
 	);
-	return { path: BASELINE, content: `${[...functions].sort().join("\n")}\n` };
+	return [...functions].sort();
 }
 
 function reportDrift({ path, content }: GeneratedFile) {
@@ -206,7 +208,10 @@ if (import.meta.main) {
 	const check = process.argv.includes("--check");
 	if (process.argv.includes("--json")) console.log(JSON.stringify(census, null, 2));
 	else if (check || process.argv.includes("--write")) {
-		const output = baseline(census);
+		const output = {
+			path: BASELINE,
+			content: `${baselineEntries(census.bailouts).join("\n")}\n`,
+		};
 		if (check) reportDrift(output);
 		writeOrCheck({ label: "compiler:census", version: "1", outputs: [output], check });
 	} else printHuman(census);
