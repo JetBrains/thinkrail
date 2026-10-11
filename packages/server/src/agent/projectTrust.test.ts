@@ -97,12 +97,16 @@ async function waitFor(read: () => boolean, ms = 8000): Promise<void> {
 	}
 }
 
-async function projectSession(): Promise<{ workspaceId: string; sessionId: string }> {
-	const workspaceId = `trust-${++sequence}`;
+function projectCwd(): string {
 	const cwd = mkdtempSync(join(root, "cwd-"));
 	mkdirSync(join(cwd, ".pi", "prompts"), { recursive: true });
 	writeFileSync(join(cwd, ".pi", "prompts", "native-kickoff.md"), "---\ndescription: n\n---\nGo\n");
-	const { sessionId } = await createSession({ workspaceId, cwd });
+	return cwd;
+}
+
+async function projectSession(): Promise<{ workspaceId: string; sessionId: string }> {
+	const workspaceId = `trust-${++sequence}`;
+	const { sessionId } = await createSession({ workspaceId, cwd: projectCwd() });
 	return { workspaceId, sessionId };
 }
 
@@ -181,6 +185,25 @@ test("every reload applies the project's current trust, and a busy session takes
 	expect(hasNativeTemplate(busy.sessionId)).toBe(false);
 	await turn;
 	await waitFor(() => hasNativeTemplate(busy.sessionId));
+});
+
+test("a session whose trust changed while it was opening reloads into the new trust before it is returned", async () => {
+	const hook = globalThis as typeof globalThis & { __projectTrustFlip?: () => void };
+	const flipPath = join(agentDir, "extensions", "trust-flip.ts");
+	mkdirSync(join(agentDir, "extensions"), { recursive: true });
+	writeFileSync(
+		flipPath,
+		"export default function flip(pi) { pi.on('session_start', () => { globalThis.__projectTrustFlip?.(); }); }\n",
+	);
+	const workspaceId = `trust-${++sequence}`;
+	hook.__projectTrustFlip = () => trustedWorkspaces.add(workspaceId);
+	try {
+		const { sessionId } = await createSession({ workspaceId, cwd: projectCwd() });
+		expect(hasNativeTemplate(sessionId)).toBe(true);
+	} finally {
+		delete hook.__projectTrustFlip;
+		rmSync(flipPath, { force: true });
+	}
 });
 
 test("a child derives no more trust than its parent has loaded or the project record allows", async () => {

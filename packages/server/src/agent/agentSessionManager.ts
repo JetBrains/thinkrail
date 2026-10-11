@@ -1052,6 +1052,8 @@ async function registerSession(
 		publishCreated(summaryOf(session.sessionId, prepared.entry));
 	}
 	publishEntryState(prepared.entry);
+	if (session.settingsManager.isProjectTrusted() !== piResourceTrustFor(workspaceId))
+		await requestSessionReload(session.sessionId);
 	return prepared.result;
 }
 

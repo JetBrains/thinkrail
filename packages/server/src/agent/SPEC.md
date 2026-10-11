@@ -892,7 +892,9 @@ settings or workspaces edge. The owning parent graph records this package depend
   session loader's `reload()` applies the admission context's current trust (`setProjectTrusted`) before
   every load, so any reload — a grant or a manual reload — loads exactly what the record
   allows; a grant or revoke therefore only asks the gate to reload the sessions whose trust is stale
-  (`applyPiResourceTrust`: idle now, busy at settlement). A child session captures the trust at its
+  (`applyPiResourceTrust`: idle now, busy at settlement). A session still opening when trust changes is
+  not in that scan, so registration re-checks its loaded trust against the record and reloads it before
+  `createSession` returns. A child session captures the trust at its
   creation and `pi-subagents` retains children across a parent reload, so a revoke also stops every
   live child of a stale parent (`stopSessionChildren`, reason `"user"`: the parent is told without
   being woken) and waits until those runs have actually ended — a child whose abort fails is disposed —
