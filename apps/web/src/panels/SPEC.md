@@ -1163,22 +1163,26 @@ own section. The kebab menu (`plan-menu`, a
   selections create `side: "base"`, modified-side selections create `side: "worktree"`, and neither is
   remapped to the other side's line numbers.
 
-  **Pierre diff text-selection crash (WebKit) — fixed by a vendored `@pierre/diffs` patch.** Drag-selecting
-  text in a code diff crashed WebKit's web-content process — on the Electrobun desktop (macOS WKWebView)
-  the workspace reloaded into "A problem repeatedly occurred". Cause (found upstream, filed as
-  pierrecomputer/pierre#1184, fixed by pierrecomputer/pierre#1185): with the gutter utility enabled
-  Pierre's `InteractionManager` re-parented the utility button into the hovered line's number cell on
-  **every `pointermove`**, so during a native selection drag that node was moved between line cells
-  *under the in-progress selection*; WebKit asserts on that mid-drag DOM mutation
-  (`EXC_BREAKPOINT` in `WebCore::EventHandler::handleMouseDraggedEvent`). It is not virtualization —
-  freezing Pierre's row rendering does not prevent it — and not the diff's grid layout.
-  Until the fix is released, `patches/@pierre%2Fdiffs@1.5.1.patch` (bun `patchedDependencies`) carries
-  #1185's change: a `nativeTextDragActive` flag that makes gutter-utility placement a no-op while a
-  native text drag is in progress. Drop the patch when a Pierre release contains the fix.
-  Reproduction is WebKit-only (`playwright … --project=webkit`, which this suite does not run):
-  a drag over code lines in a diff longer than ~100 lines. Any check here must assert the controls
-  `selectionLength` grew and `scrollHeight > clientHeight` — otherwise a broken layout reads as a
-  false "no crash". `e2e/diff-selection.spec.ts` keeps the Chromium-side regression. Tracked in #683.
+  **Pierre diff text-selection crash (WebKit) — a vendored `@pierre/diffs` patch.** Drag-selecting code
+  in a review diff crashed WebKit's web-content process (Electrobun desktop: "A problem repeatedly
+  occurred"; `EXC_BREAKPOINT` in `WebCore::EventHandler::handleMouseDraggedEvent`). Pierre's
+  `InteractionManager` moves the gutter utility into the hovered line's number cell whenever the hovered
+  line changes and removes it on `pointerleave`; with our `renderGutterUtility` that node holds a
+  `<slot>`. WebKit rebuilds the renderers of the whole shadow host on every slot insertion or removal, and
+  doing so synchronously inside a pointer handler of a text drag crashes it: a Pierre-free page reproduces
+  the signature, while a moved plain element, the same slot move deferred to a frame, or a diff under
+  ~100 lines does not. Invariant: a Pierre surface never inserts, removes, or moves a `<slot>`
+  synchronously from a pointer or mouse handler. `patches/@pierre%2Fdiffs@1.5.1.patch` (root
+  `patchedDependencies`) carries the open upstream proposal pierrecomputer/pierre#1185 (issue
+  pierrecomputer/pierre#1184): placement is a no-op while a mouse button is held outside Pierre's own
+  selection session, and resumes on the next hovered-line change. Bun applies a patch only to its exact
+  version and skips a mismatched one silently — install succeeds and the lockfile drops the entry — so
+  the review e2e "a text-selection drag leaves the comment button on the line it started from" is the
+  guard: it fails on Chromium whenever the patched behavior is missing. A Pierre bump keeps it green and,
+  once a release contains the fix, deletes the patch file and its `patchedDependencies` entry. The
+  test's controls (the utility sat on the start line; the selection holds the dragged text) keep an
+  emptied layout from passing — earlier `display:grid` bisections "fixed" the crash only that way. The
+  crash itself reproduces only in WebKit (a temporary Playwright `webkit` project). Tracked in #683.
 
   **Monaco renders desktop files only.** `reviewWidgets.ts` keeps its content-widget selection affordance,
   context-menu action, decorations, and view-zone reconciliation for that one surface. It exposes stable
