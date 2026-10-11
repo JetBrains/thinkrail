@@ -1,6 +1,7 @@
 {
 	"$schema": "https://turbo.build/schema.json",
 	"globalPassThroughEnv": ["THINKRAIL_*", "PI_CODING_AGENT_DIR"],
+	"globalDependencies": ["patches/**"],
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],
