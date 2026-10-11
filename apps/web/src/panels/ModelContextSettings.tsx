@@ -80,7 +80,7 @@ function ContextLimitControl({
 				<div
 					role="radiogroup"
 					aria-label={`Context window for ${controlLabel}`}
-					className="inline-flex shrink-0 overflow-hidden rounded-[var(--radius-sm)] border border-control-border-default"
+					className="inline-flex shrink-0 overflow-hidden rounded-sm border border-control-border-default"
 				>
 					{PRESETS.map((preset) => (
 						<label
@@ -138,7 +138,7 @@ function ContextLimitControl({
 							aria-describedby={!valid ? `${id}-error` : undefined}
 							data-testid={`${testId}-input`}
 							onChange={(event) => setDraft({ ...draft, text: event.currentTarget.value })}
-							className="w-144 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none focus:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text aria-invalid:border-feedback-error"
+							className="w-144 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none focus:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text aria-invalid:border-feedback-error"
 						/>
 						<span className="tr-text-metadata text-text-muted">tokens</span>
 						<Button

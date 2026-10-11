@@ -565,7 +565,7 @@ const ChatTranscript = forwardRef<
 										data-flash={row.id === flashRowId || undefined}
 										className={cn(
 											measureClassName,
-											"rounded-[var(--radius-sm)] px-12 py-4 transition-colors data-[flash]:bg-primary-subtle",
+											"rounded-sm px-12 py-4 transition-colors data-[flash]:bg-primary-subtle",
 										)}
 									>
 										<ChatTurnView
@@ -611,7 +611,7 @@ const ChatTranscript = forwardRef<
 								chatMessageOrder === "newest-first" ? "scroll-to-top" : "scroll-to-bottom"
 							}
 							onClick={scrollToLatest}
-							className="-translate-x-1/2 absolute bottom-12 left-1/2 flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
+							className="-translate-x-1/2 absolute bottom-12 left-1/2 flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							{chatMessageOrder === "newest-first" ? (
 								<ArrowUp className="size-12" />

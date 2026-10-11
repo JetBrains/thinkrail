@@ -7,7 +7,7 @@ export function ViewedMark() {
 			role="img"
 			aria-label="Viewed"
 			title="Viewed"
-			className="flex size-14 shrink-0 items-center justify-center rounded-[var(--radius-xs)] bg-primary text-text-on-primary"
+			className="flex size-14 shrink-0 items-center justify-center rounded-xs bg-primary text-text-on-primary"
 		>
 			<Check className="size-10" />
 		</span>

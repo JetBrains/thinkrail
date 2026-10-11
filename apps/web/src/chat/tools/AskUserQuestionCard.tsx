@@ -571,7 +571,7 @@ export function AskUserQuestionCard({
 				aria-label="Question from agent"
 				aria-keyshortcuts="Shift+Escape"
 				onKeyDown={onCardKeyDown}
-				className="overflow-hidden rounded-[var(--radius-lg)] border border-primary bg-clip-padding bg-container-elevated-bg ring-2 ring-primary-soft"
+				className="overflow-hidden rounded-lg border border-primary bg-clip-padding bg-container-elevated-bg ring-2 ring-primary-soft"
 			>
 				{multipleQuestions ? (
 					<div
@@ -667,7 +667,7 @@ export function AskUserQuestionCard({
 								data-testid="ask-skip"
 								onClick={() => reply({ answers: [], cancelled: true })}
 								disabled={!actions}
-								className="shrink-0 rounded-[var(--radius-sm)] px-4 text-text-muted tr-text-ui outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text"
+								className="shrink-0 rounded-sm px-4 text-text-muted tr-text-ui outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text"
 							>
 								Skip
 							</button>
@@ -676,7 +676,7 @@ export function AskUserQuestionCard({
 									type="button"
 									data-testid="ask-continue"
 									onClick={() => setTab(Math.min(tab + 1, reviewTab))}
-									className="shrink-0 whitespace-nowrap rounded-[var(--radius-sm)] bg-control-primary-bg px-12 py-8 tr-text-action text-control-primary-text outline-none hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+									className="shrink-0 whitespace-nowrap rounded-sm bg-control-primary-bg px-12 py-8 tr-text-action text-control-primary-text outline-none hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 								>
 									Next →
 								</button>
@@ -686,7 +686,7 @@ export function AskUserQuestionCard({
 									data-testid="ask-submit"
 									onClick={() => reply({ answers, cancelled: false })}
 									disabled={!canSubmit}
-									className="shrink-0 whitespace-nowrap rounded-[var(--radius-sm)] bg-control-primary-bg px-12 py-8 tr-text-action text-control-primary-text outline-none hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+									className="shrink-0 whitespace-nowrap rounded-sm bg-control-primary-bg px-12 py-8 tr-text-action text-control-primary-text outline-none hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 								>
 									Submit
 								</button>
@@ -740,7 +740,7 @@ function WaitingCard({ children }: { children: React.ReactNode }) {
 			data-testid="ask-user-question"
 			data-tone="pending"
 			role="status"
-			className="flex items-center gap-4 rounded-[var(--radius-lg)] border border-border-default bg-container-elevated-bg px-12 py-8 text-text-muted tr-text-metadata"
+			className="flex items-center gap-4 rounded-lg border border-border-default bg-container-elevated-bg px-12 py-8 text-text-muted tr-text-metadata"
 		>
 			<MessageCircleQuestion className="size-14 shrink-0" />
 			{children}
@@ -755,15 +755,15 @@ function ComposingCard({ count }: { count: number }) {
 			<div
 				data-testid="ask-user-question"
 				data-tone="pending"
-				className="flex flex-col gap-8 rounded-[var(--radius-lg)] border border-border-default bg-container-elevated-bg px-12 py-8"
+				className="flex flex-col gap-8 rounded-lg border border-border-default bg-container-elevated-bg px-12 py-8"
 			>
 				<div className="flex items-center gap-4 text-text-muted tr-text-metadata">
 					<MessageCircleQuestion className="size-14 shrink-0" />
 					Preparing questions…{count > 0 ? ` (${count} ready)` : ""}
 				</div>
 				<div className="flex animate-pulse flex-col gap-4" aria-hidden="true">
-					<div className="h-32 rounded-[var(--radius-sm)] bg-control-bg-selected" />
-					<div className="h-32 rounded-[var(--radius-sm)] bg-control-bg-selected" />
+					<div className="h-32 rounded-sm bg-control-bg-selected" />
+					<div className="h-32 rounded-sm bg-control-bg-selected" />
 				</div>
 			</div>
 		</div>
@@ -1016,7 +1016,7 @@ function QuestionBody({
 														event.preventDefault();
 														finishNote(index);
 													}}
-													className="w-full resize-none rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 text-text-default tr-text-metadata outline-none focus-visible:border-control-border-active"
+													className="w-full resize-none rounded-sm border border-control-border-default bg-control-bg px-8 py-4 text-text-default tr-text-metadata outline-none focus-visible:border-control-border-active"
 												/>
 											) : (
 												<button
@@ -1024,7 +1024,7 @@ function QuestionBody({
 													data-testid="ask-note-toggle"
 													aria-label={`${noteText ? "Edit" : "Add"} note for ${optionText}`}
 													onClick={() => openNote(option.label, index)}
-													className="flex items-center gap-4 rounded-[var(--radius-sm)] text-text-muted tr-text-metadata outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+													className="flex items-center gap-4 rounded-sm text-text-muted tr-text-metadata outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 												>
 													<Pencil className="size-12" />
 													{noteText ? "Edit note" : "Add note"}
@@ -1058,7 +1058,7 @@ function QuestionBody({
 				{anyPreview && previewSource?.preview ? (
 					<div
 						data-testid="ask-preview"
-						className="min-w-0 overflow-auto rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-8 py-4 tr-text-metadata"
+						className="min-w-0 overflow-auto rounded-sm border border-border-default bg-control-bg px-8 py-4 tr-text-metadata"
 					>
 						<div className="mb-4 text-text-muted tr-text-metadata">
 							Preview · {previewSource.label}
@@ -1116,7 +1116,7 @@ function OptionRow({
 			onKeyDown={onKeyDown}
 			onClick={onClick}
 			className={cn(
-				"flex items-start gap-8 rounded-[var(--radius-sm)] border px-12 py-8 text-left outline-none transition-colors focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary",
+				"flex items-start gap-8 rounded-sm border px-12 py-8 text-left outline-none transition-colors focus-visible:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary",
 				selected
 					? "border-primary bg-primary-subtle"
 					: "border-border-default hover:bg-control-bg-hovered",
@@ -1174,7 +1174,7 @@ function OtherOptionRow({
 			data-testid="ask-custom-row"
 			data-selected={active}
 			className={cn(
-				"flex cursor-text items-center gap-8 rounded-[var(--radius-sm)] border px-12 py-8 transition-colors focus-within:border-control-border-active focus-within:ring-2 focus-within:ring-primary",
+				"flex cursor-text items-center gap-8 rounded-sm border px-12 py-8 transition-colors focus-within:border-control-border-active focus-within:ring-2 focus-within:ring-primary",
 				active
 					? "border-primary bg-primary-subtle"
 					: "border-border-default hover:bg-control-bg-hovered",
@@ -1189,7 +1189,7 @@ function OtherOptionRow({
 						e.preventDefault();
 						onToggle();
 					}}
-					className="flex items-center rounded-[var(--radius-sm)] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+					className="flex items-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
 				>
 					<Indicator selected={active} multi className="mt-0" />
 				</button>
@@ -1250,7 +1250,7 @@ function Indicator({
 		return (
 			<span
 				className={cn(
-					"mt-2 flex size-[18px] shrink-0 items-center justify-center rounded-[var(--radius-sm)] border",
+					"mt-2 flex size-[18px] shrink-0 items-center justify-center rounded-sm border",
 					selected ? "border-primary bg-primary text-text-on-primary" : "border-border-default",
 					className,
 				)}
@@ -1292,7 +1292,7 @@ function ReviewView({
 					data-testid="ask-review-title"
 					data-ask-page-start="true"
 					data-ask-page-focus="true"
-					className="rounded-[var(--radius-sm)] tr-title-dialog text-text-default outline-none focus-visible:ring-2 focus-visible:ring-primary"
+					className="rounded-sm tr-title-dialog text-text-default outline-none focus-visible:ring-2 focus-visible:ring-primary"
 				>
 					Review your answers
 				</p>
@@ -1310,7 +1310,7 @@ function ReviewView({
 					type="button"
 					data-testid="ask-unanswered"
 					onClick={() => onJump(unanswered[0]?.i ?? 0)}
-					className="self-start rounded-[var(--radius-sm)] text-feedback-warning tr-text-metadata outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary"
+					className="self-start rounded-sm text-feedback-warning tr-text-metadata outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary"
 				>
 					⚠ Unanswered: {unanswered.map(({ q, i }) => q.header || `Q${i + 1}`).join(", ")}
 				</button>

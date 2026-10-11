@@ -495,7 +495,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 							onClick={() =>
 								useAppStore.getState().requestChangesView(workspaceId, null, { kind: "branch" })
 							}
-							className="rounded-[var(--radius-sm)] px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+							className="rounded-sm px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							Review all changes
 						</button>
@@ -504,7 +504,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 							type="button"
 							data-testid="changes-review-retry"
 							onClick={reload}
-							className="rounded-[var(--radius-sm)] px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+							className="rounded-sm px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 						>
 							Retry
 						</button>
@@ -549,7 +549,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 							data-testid="changes-review-mark-viewed"
 							aria-pressed={viewedSet.has(current.path)}
 							onClick={markViewedAndAdvance}
-							className={`ml-auto flex h-24 items-center gap-4 rounded-[var(--radius-sm)] border px-8 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+							className={`ml-auto flex h-24 items-center gap-4 rounded-sm border px-8 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary ${
 								viewedSet.has(current.path)
 									? "border-primary text-primary"
 									: "border-control-border-default text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
@@ -557,7 +557,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 						>
 							<Check className="size-14" />
 							{viewedSet.has(current.path) ? "Viewed" : "Mark viewed"}
-							<kbd className="rounded-[var(--radius-xs)] border border-control-border-default px-4 tr-code-text text-text-subtle">
+							<kbd className="rounded-xs border border-control-border-default px-4 tr-code-text text-text-subtle">
 								V
 							</kbd>
 						</button>
@@ -672,7 +672,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 								aria-label="Files reviewed"
 								max={Math.max(files.length, 1)}
 								value={viewedCount}
-								className="h-4 w-120 min-w-0 shrink appearance-none overflow-hidden rounded-[var(--radius-xs)] bg-control-bg-hovered accent-primary [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-control-bg-hovered [&::-webkit-progress-value]:bg-primary"
+								className="h-4 w-120 min-w-0 shrink appearance-none overflow-hidden rounded-xs bg-control-bg-hovered accent-primary [&::-moz-progress-bar]:bg-primary [&::-webkit-progress-bar]:bg-control-bg-hovered [&::-webkit-progress-value]:bg-primary"
 							/>
 							<span className="ml-auto flex shrink-0 items-center gap-4">
 								<button
@@ -680,10 +680,10 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 									data-testid="changes-review-next-unreviewed"
 									disabled={viewedCount >= files.length}
 									onClick={nextUnreviewed}
-									className="flex h-24 items-center gap-4 rounded-[var(--radius-sm)] border border-control-border-default px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
+									className="flex h-24 items-center gap-4 rounded-sm border border-control-border-default px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
 								>
 									Next unreviewed
-									<kbd className="rounded-[var(--radius-xs)] border border-control-border-default px-4 tr-code-text text-text-subtle">
+									<kbd className="rounded-xs border border-control-border-default px-4 tr-code-text text-text-subtle">
 										J
 									</kbd>
 								</button>
@@ -692,7 +692,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 									data-testid="changes-review-mark-all"
 									disabled={viewedCount >= files.length}
 									onClick={markAllViewed}
-									className="flex h-24 items-center gap-4 rounded-[var(--radius-sm)] border border-control-border-default px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
+									className="flex h-24 items-center gap-4 rounded-sm border border-control-border-default px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
 								>
 									<Check className="size-14" />
 									Mark all viewed

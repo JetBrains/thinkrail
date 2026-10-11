@@ -71,7 +71,7 @@ function StreamingResponseMovementControl({
 	return (
 		<div
 			data-testid="streaming-response-movement"
-			className="rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-12"
+			className="rounded-sm border border-border-default bg-container-elevated-bg p-12"
 		>
 			<div className="flex items-center justify-between text-text-muted tr-text-metadata">
 				<span>Top</span>

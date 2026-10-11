@@ -18,14 +18,14 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 					<div
 						key={opt.name}
 						data-recommended={opt.recommended || undefined}
-						className={`flex flex-col gap-4 rounded-[var(--radius-sm)] border p-8 ${
+						className={`flex flex-col gap-4 rounded-sm border p-8 ${
 							opt.recommended ? "border-primary bg-container-elevated-bg" : "border-border-default"
 						}`}
 					>
 						<div className="flex items-center gap-4">
 							<span className="tr-text-ui text-text-default">{opt.name}</span>
 							{opt.recommended ? (
-								<span className="rounded-[var(--radius-sm)] bg-primary px-8 py-2 text-text-on-primary tr-text-metadata">
+								<span className="rounded-sm bg-primary px-8 py-2 text-text-on-primary tr-text-metadata">
 									Recommended
 								</span>
 							) : null}

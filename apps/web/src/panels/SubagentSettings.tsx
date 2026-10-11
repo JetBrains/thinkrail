@@ -33,7 +33,7 @@ function SourceTag({
 			<span
 				data-testid={testId}
 				data-source="global"
-				className="rounded-[var(--radius-sm)] border border-border-default px-4 text-text-subtle tr-text-metadata"
+				className="rounded-sm border border-border-default px-4 text-text-subtle tr-text-metadata"
 			>
 				Global
 			</span>
@@ -47,7 +47,7 @@ function SourceTag({
 			aria-label={resetLabel}
 			title="Use global"
 			onClick={onReset}
-			className="inline-flex items-center gap-2 rounded-[var(--radius-sm)] border border-primary-muted px-4 text-primary tr-text-metadata outline-none hover:bg-primary-subtle focus-visible:ring-2 focus-visible:ring-primary"
+			className="inline-flex items-center gap-2 rounded-sm border border-primary-muted px-4 text-primary tr-text-metadata outline-none hover:bg-primary-subtle focus-visible:ring-2 focus-visible:ring-primary"
 		>
 			Custom
 			<RiArrowGoBackLine aria-hidden className="size-12" />
@@ -114,7 +114,7 @@ function LimitField({
 						setDraft(savedText);
 					}
 				}}
-				className="w-56 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 text-right tr-text-ui text-text-default outline-none placeholder:text-text-subtle focus:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text aria-invalid:border-feedback-error"
+				className="w-56 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 text-right tr-text-ui text-text-default outline-none placeholder:text-text-subtle focus:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text aria-invalid:border-feedback-error"
 			/>
 			{invalid ? (
 				<span id={errorId} className="text-feedback-error tr-text-metadata">
@@ -171,7 +171,7 @@ export function SubagentSettings({
 					Work already running always finishes.
 				</p>
 			</div>
-			<div className="overflow-hidden rounded-[var(--radius-sm)] border border-border-default bg-control-bg">
+			<div className="overflow-hidden rounded-sm border border-border-default bg-control-bg">
 				<table data-testid="subagents-table" className="w-full table-fixed border-collapse">
 					<colgroup>
 						<col />

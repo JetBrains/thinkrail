@@ -32,7 +32,7 @@ export function CopyButton({
 				})();
 			}}
 			className={cn(
-				"flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100 group-hover:opacity-100 data-[copied]:opacity-100",
+				"flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted opacity-0 transition hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100 group-hover:opacity-100 data-[copied]:opacity-100",
 				className,
 			)}
 		>

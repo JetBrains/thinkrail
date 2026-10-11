@@ -11,7 +11,7 @@ export default function BinaryDiff({ original, modified }: ResourceDiffProps) {
 		<div className="flex h-full items-center justify-center bg-container-content-bg p-24">
 			<section
 				data-testid="binary-diff"
-				className="w-full max-w-lg rounded-[var(--radius-md)] border border-border-default bg-container-header-bg p-16 text-center"
+				className="w-full max-w-lg rounded-md border border-border-default bg-container-header-bg p-16 text-center"
 			>
 				<h2 className="tr-title-entity text-text-default">Binary files differ</h2>
 				<div className="mt-12 flex items-center justify-center gap-24 tr-text-metadata text-text-muted">

@@ -126,7 +126,7 @@ export function TodoAddRow({
 						data-testid="todo-open-plan"
 						onClick={onOpenPlan}
 						aria-label="Open the plan page"
-						className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
+						className="flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
 					>
 						<FileText className="size-14" />
 					</button>
@@ -271,7 +271,7 @@ function DoneGroup({
 				data-testid="todo-group-done"
 				data-expanded={expanded}
 				onClick={() => setExpanded((v) => !v)}
-				className="flex w-full items-center gap-8 rounded-[var(--radius-sm)] px-4 py-4 text-left hover:bg-control-bg-hovered"
+				className="flex w-full items-center gap-8 rounded-sm px-4 py-4 text-left hover:bg-control-bg-hovered"
 			>
 				<Chevron className="size-16 shrink-0 text-text-muted" />
 				<Check className="size-12 shrink-0 text-primary" />
@@ -370,7 +370,7 @@ function TodoRow({
 			data-reviewed={reviewed}
 			data-reviewing={reviewing}
 			data-changes-requested={changesRequested}
-			className="group flex items-center gap-8 rounded-[var(--radius-sm)] px-4 py-4 hover:bg-control-bg-hovered"
+			className="group flex items-center gap-8 rounded-sm px-4 py-4 hover:bg-control-bg-hovered"
 		>
 			<span
 				className="shrink-0"
@@ -422,7 +422,7 @@ function TodoRow({
 					onClick={onRemove}
 					disabled={reviewing}
 					aria-label="Remove"
-					className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-0 transition-opacity hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 focus-visible:opacity-100 disabled:pointer-events-none disabled:opacity-0"
+					className="flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted opacity-0 transition-opacity hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 focus-visible:opacity-100 disabled:pointer-events-none disabled:opacity-0"
 				>
 					<Trash2 className="size-14" />
 				</button>

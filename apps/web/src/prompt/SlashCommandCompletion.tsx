@@ -154,7 +154,7 @@ export function TemplateSlotHint({
 			data-testid="slot-hint"
 			onClick={onNext}
 			className={cn(
-				"rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default",
+				"rounded-sm border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default",
 				className,
 			)}
 		>
@@ -180,7 +180,7 @@ export function SlashCommandMenu<T extends SlashCommandItem>({
 		<div
 			data-testid="slash-menu"
 			className={cn(
-				"max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-[var(--radius-md)] border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]",
+				"max-h-[40vh] w-[min(28rem,90%)] overflow-y-auto rounded-md border border-border-default bg-container-elevated-bg p-4 shadow-[var(--shadow-md)]",
 				className,
 			)}
 		>
@@ -192,7 +192,7 @@ export function SlashCommandMenu<T extends SlashCommandItem>({
 					data-source={command.source}
 					onClick={() => onSelect(command)}
 					className={cn(
-						"flex w-full items-center gap-8 rounded-[var(--radius-sm)] px-8 py-4 text-left tr-text-ui",
+						"flex w-full items-center gap-8 rounded-sm px-8 py-4 text-left tr-text-ui",
 						index === activeIndex ? "bg-control-bg-selected text-text-default" : "text-text-muted",
 					)}
 				>

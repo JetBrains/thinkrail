@@ -97,7 +97,7 @@ export function ReviewSettings() {
 					and waits for you.
 				</p>
 			</div>
-			<div className="flex items-center justify-between gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8">
+			<div className="flex items-center justify-between gap-12 rounded-sm border border-border-default bg-control-bg px-12 py-8">
 				<div className="flex flex-col gap-2">
 					<span className="tr-title-compact text-text-default">Auto-fix requested changes</span>
 					<span className="text-text-muted tr-text-metadata">
@@ -142,7 +142,7 @@ export function AgentReviewSettings({
 					the Review button.
 				</p>
 			</div>
-			<div className="flex items-center justify-between gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8">
+			<div className="flex items-center justify-between gap-12 rounded-sm border border-border-default bg-control-bg px-12 py-8">
 				<div className="flex flex-col gap-2">
 					<span className="tr-title-compact text-text-default">Let the agent request review</span>
 					<span className="text-text-muted tr-text-metadata">

@@ -12,7 +12,7 @@ export function LfsCard({
 	return (
 		<section
 			data-testid={testid}
-			className="w-full max-w-lg rounded-[var(--radius-md)] border border-border-default bg-container-header-bg p-16"
+			className="w-full max-w-lg rounded-md border border-border-default bg-container-header-bg p-16"
 		>
 			{label ? <span className="tr-text-metadata text-text-muted">{label}</span> : null}
 			<h2 className="tr-title-entity text-text-default">Stored in Git LFS</h2>

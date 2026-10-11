@@ -86,7 +86,7 @@ export function reconcileModel(
 }
 
 const PILL =
-	"flex h-32 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
+	"flex h-32 min-w-0 items-center gap-8 rounded-sm border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
 
 async function refreshProjectWorkspaces(projectId: string): Promise<void> {
 	useAppStore.getState().expandProject(projectId);
@@ -481,7 +481,7 @@ export function NewWorkspaceDialog({
 
 				<fieldset
 					data-testid="ws-target"
-					className="flex w-fit items-center gap-2 rounded-[var(--radius-md)] border border-control-border-default bg-control-bg p-2"
+					className="flex w-fit items-center gap-2 rounded-md border border-control-border-default bg-control-bg p-2"
 				>
 					<legend className="sr-only">Where the work runs</legend>
 					<TargetOption
@@ -532,7 +532,7 @@ export function NewWorkspaceDialog({
 				{selectedProject && selectedProject.trusted !== true && aliasSkills.length > 0 ? (
 					<div
 						data-testid="ws-trust-notice"
-						className="flex w-full items-center gap-8 rounded-[var(--radius-sm)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8 text-left"
+						className="flex w-full items-center gap-8 rounded-sm border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8 text-left"
 					>
 						<TriangleAlert className="size-16 shrink-0 text-feedback-warning" />
 						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
@@ -555,7 +555,7 @@ export function NewWorkspaceDialog({
 					{promptNote ? (
 						<p
 							data-testid="ws-prompt-note"
-							className="mb-4 flex items-start gap-8 rounded-[var(--radius-sm)] border border-primary-muted bg-clip-padding bg-primary-subtle px-12 py-8 text-left text-text-muted tr-text-metadata leading-snug"
+							className="mb-4 flex items-start gap-8 rounded-sm border border-primary-muted bg-clip-padding bg-primary-subtle px-12 py-8 text-left text-text-muted tr-text-metadata leading-snug"
 						>
 							<Sparkles className="mt-2 size-14 shrink-0 text-primary" />
 							<span>{promptNote}</span>
@@ -663,7 +663,7 @@ export function NewWorkspaceDialog({
 						data-testid="create-workspace"
 						disabled={!submitEnabled}
 						onClick={() => void create()}
-						className="flex h-32 shrink-0 items-center gap-8 rounded-[var(--radius-sm)] bg-control-primary-bg px-12 tr-text-action text-control-primary-text outline-none transition-colors hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+						className="flex h-32 shrink-0 items-center gap-8 rounded-sm bg-control-primary-bg px-12 tr-text-action text-control-primary-text outline-none transition-colors hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 					>
 						{creating ? (
 							<>
@@ -673,7 +673,7 @@ export function NewWorkspaceDialog({
 						) : (
 							<>
 								{isolated ? "Create" : "Start"}
-								<span className="inline-flex h-16 min-w-16 items-center justify-center rounded-[var(--radius-sm)] bg-on-primary-soft px-4 tr-code-text">
+								<span className="inline-flex h-16 min-w-16 items-center justify-center rounded-sm bg-on-primary-soft px-4 tr-code-text">
 									↵
 								</span>
 							</>
@@ -710,7 +710,7 @@ function TargetOption({
 			data-testid={testid}
 			data-active={active}
 			className={cn(
-				"flex h-28 cursor-pointer items-center gap-8 rounded-[var(--radius-sm)] px-12 tr-text-ui transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
+				"flex h-28 cursor-pointer items-center gap-8 rounded-sm px-12 tr-text-ui transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
 				active ? "bg-primary-subtle text-primary" : "text-text-muted hover:text-text-default",
 			)}
 		>
@@ -740,7 +740,7 @@ function ProjectPicker({
 				data-open={open}
 				className={`${PILL} max-w-[180px]`}
 			>
-				<span className="flex size-[18px] shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-primary">
+				<span className="flex size-[18px] shrink-0 items-center justify-center rounded-sm bg-primary">
 					<Box className="size-12 text-text-on-primary" />
 				</span>
 				<span className="truncate">{current}</span>

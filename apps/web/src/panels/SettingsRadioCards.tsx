@@ -34,7 +34,7 @@ export function SettingsRadioCards<T extends string>({
 						data-testid={choice.testId}
 						data-active={active}
 						className={cn(
-							"flex items-center gap-8 rounded-[var(--radius-sm)] border px-12 py-8 text-left transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
+							"flex items-center gap-8 rounded-sm border px-12 py-8 text-left transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary",
 							disabled ? "cursor-default" : "cursor-pointer",
 							active
 								? "border-primary-muted bg-clip-padding bg-primary-subtle"

@@ -19,7 +19,7 @@ export function FileRow({ file, onOpen }: { file: GitFileChange; onOpen: () => v
 				data-testid="plan-file-row"
 				onClick={onOpen}
 				title={file.path}
-				className="flex min-h-8 w-full min-w-0 items-center gap-8 rounded-[var(--radius-sm)] px-4 py-4 text-left hover:bg-control-bg-hovered"
+				className="flex min-h-8 w-full min-w-0 items-center gap-8 rounded-sm px-4 py-4 text-left hover:bg-control-bg-hovered"
 			>
 				<FileStatusLetter status={file.status} />
 				<span

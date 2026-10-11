@@ -21,7 +21,7 @@ export function SkillsButton({
 				data-stale={stale ? "true" : undefined}
 				onClick={onOpen}
 				className={cn(
-					"flex shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-8 py-2 text-text-muted tr-text-metadata outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary",
+					"flex shrink-0 items-center gap-4 rounded-sm px-8 py-2 text-text-muted tr-text-metadata outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary",
 					className,
 				)}
 			>

@@ -52,7 +52,7 @@ function ComposeForm({
 					data-testid="open-pr-compose-title"
 					value={title}
 					onChange={(e) => setTitle(e.target.value)}
-					className="w-full rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active"
+					className="w-full rounded-sm border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active"
 				/>
 			</label>
 			<div className="flex min-h-0 flex-1 flex-col gap-4">

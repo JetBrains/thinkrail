@@ -221,7 +221,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 						aria-label={collapsed ? `Expand ${base}` : `Collapse ${base}`}
 						aria-expanded={!collapsed}
 						onClick={toggleCollapsed}
-						className="flex size-20 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+						className="flex size-20 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 					>
 						{collapsed ? <ChevronRight className="size-16" /> : <ChevronDown className="size-16" />}
 					</button>
@@ -284,7 +284,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 						<DropdownMenuTrigger
 							data-testid="changes-section-menu"
 							aria-label={`Actions for ${path}`}
-							className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-selected"
+							className="flex size-24 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-selected"
 						>
 							<More className="size-14" />
 						</DropdownMenuTrigger>
@@ -318,10 +318,10 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 						data-testid="changes-section-viewed"
 						aria-pressed={viewed}
 						onClick={onToggleViewed}
-						className="flex h-24 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+						className="flex h-24 items-center gap-4 rounded-sm px-8 tr-text-metadata text-text-muted outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 					>
 						<span
-							className={`flex size-14 items-center justify-center rounded-[var(--radius-xs)] border ${
+							className={`flex size-14 items-center justify-center rounded-xs border ${
 								viewed
 									? "border-primary bg-primary text-text-on-primary"
 									: "border-control-border-active"

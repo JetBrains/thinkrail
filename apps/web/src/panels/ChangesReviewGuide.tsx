@@ -140,7 +140,7 @@ export function ChangesReviewGuide({
 						className="px-12 pb-8 tr-text-metadata text-text-muted"
 					>
 						<span
-							className={`mr-4 rounded-[var(--radius-xs)] px-4 ${
+							className={`mr-4 rounded-xs px-4 ${
 								guide.verdict === "approve"
 									? "bg-feedback-success-subtle text-feedback-success"
 									: "bg-feedback-warning-subtle text-feedback-warning"
@@ -208,7 +208,7 @@ export function ChangesReviewGuide({
 									<div
 										data-testid="changes-review-guide-finding"
 										data-active={cursor === index ? true : undefined}
-										className={`rounded-[var(--radius-md)] border p-8 ${
+										className={`rounded-md border p-8 ${
 											cursor === index
 												? "border-feedback-warning bg-feedback-warning-subtle"
 												: "border-control-border-default"
@@ -236,7 +236,7 @@ export function ChangesReviewGuide({
 												data-testid="changes-review-guide-fix"
 												disabled={sending}
 												onClick={() => send(() => sendReviewComment(workspaceId, step.comment.id))}
-												className="mt-8 rounded-[var(--radius-sm)] bg-primary px-8 py-2 tr-text-metadata text-text-on-primary hover:bg-control-primary-bg-hovered"
+												className="mt-8 rounded-sm bg-primary px-8 py-2 tr-text-metadata text-text-on-primary hover:bg-control-primary-bg-hovered"
 											>
 												Fix this one
 											</button>
@@ -255,7 +255,7 @@ export function ChangesReviewGuide({
 					aria-label="Previous step (P)"
 					disabled={steps.length === 0}
 					onClick={previous}
-					className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] border border-control-border-default text-text-muted hover:bg-control-bg-hovered disabled:text-control-disabled-text"
+					className="flex size-24 items-center justify-center rounded-sm border border-control-border-default text-text-muted hover:bg-control-bg-hovered disabled:text-control-disabled-text"
 				>
 					<ChevronLeft className="size-14" />
 				</button>
@@ -264,15 +264,13 @@ export function ChangesReviewGuide({
 					data-testid="changes-review-guide-next"
 					disabled={steps.length === 0}
 					onClick={next}
-					className="flex h-24 flex-1 items-center justify-center gap-4 whitespace-nowrap rounded-[var(--radius-sm)] bg-primary px-8 tr-text-metadata text-text-on-primary hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+					className="flex h-24 flex-1 items-center justify-center gap-4 whitespace-nowrap rounded-sm bg-primary px-8 tr-text-metadata text-text-on-primary hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
 				>
 					{cursor < 0 ? "Start" : cursor + 1 < steps.length ? "Next" : "Restart"}
 					<span className="tabular-nums">
 						{cursor < 0 ? "" : `${cursor + 1} / ${steps.length}`}
 					</span>
-					<kbd className="rounded-[var(--radius-xs)] border border-current px-4 tr-code-text">
-						N
-					</kbd>
+					<kbd className="rounded-xs border border-current px-4 tr-code-text">N</kbd>
 					<ChevronRight className="size-14" />
 				</button>
 				<button
@@ -281,7 +279,7 @@ export function ChangesReviewGuide({
 					disabled={sending || openFindingIds.length === 0}
 					onClick={() => send(() => sendReviewBatch(workspaceId, openFindingIds))}
 					title="Send every open finding to the agent"
-					className="flex h-24 items-center gap-4 rounded-[var(--radius-sm)] border border-control-border-default px-8 tr-text-metadata text-text-muted hover:bg-control-bg-hovered disabled:text-control-disabled-text"
+					className="flex h-24 items-center gap-4 rounded-sm border border-control-border-default px-8 tr-text-metadata text-text-muted hover:bg-control-bg-hovered disabled:text-control-disabled-text"
 				>
 					<Robot className="size-14" />
 					Apply fixes

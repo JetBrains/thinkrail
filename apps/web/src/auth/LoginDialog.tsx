@@ -101,7 +101,7 @@ export function LoginDialog({
 									<ExternalLink className="size-16" />
 									Open sign-in page
 								</Button>
-								<code className="select-all break-all rounded-[var(--radius-sm)] bg-control-bg px-8 py-4 tr-code-text text-text-muted">
+								<code className="select-all break-all rounded-sm bg-control-bg px-8 py-4 tr-code-text text-text-muted">
 									{state.url}
 								</code>
 							</div>
@@ -109,7 +109,7 @@ export function LoginDialog({
 
 						{state.deviceCode ? (
 							<div
-								className="flex flex-col gap-4 rounded-[var(--radius-sm)] border border-border-default bg-control-bg p-12"
+								className="flex flex-col gap-4 rounded-sm border border-border-default bg-control-bg p-12"
 								data-testid="login-device-code"
 							>
 								<span className="text-text-muted tr-text-metadata">
@@ -119,7 +119,7 @@ export function LoginDialog({
 										target="_blank"
 										rel="noopener noreferrer"
 										data-testid="login-device-url"
-										className="inline-flex items-center gap-2 break-all rounded-[var(--radius-sm)] text-primary underline underline-offset-2 outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary"
+										className="inline-flex items-center gap-2 break-all rounded-sm text-primary underline underline-offset-2 outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary"
 									>
 										{state.deviceCode.verificationUri}
 										<ExternalLink className="size-12 shrink-0" />
@@ -143,7 +143,7 @@ export function LoginDialog({
 										data-testid="login-option"
 										data-option={option.id}
 										onClick={() => onReply(option.id)}
-										className="rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-12 py-8 text-left tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+										className="rounded-sm border border-control-border-default bg-control-bg px-12 py-8 text-left tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 									>
 										{option.label}
 									</button>
@@ -169,7 +169,7 @@ export function LoginDialog({
 												submitPrompt();
 											}
 										}}
-										className="min-w-0 flex-1 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active"
+										className="min-w-0 flex-1 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active"
 									/>
 									<Button data-testid="login-submit" onClick={submitPrompt}>
 										Submit

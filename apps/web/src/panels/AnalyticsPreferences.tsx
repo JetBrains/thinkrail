@@ -16,7 +16,7 @@ export function AnalyticsSharingSwitch({
 	description,
 }: AnalyticsPreferenceProps & { description?: string }) {
 	return (
-		<div className="flex items-center justify-between gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8">
+		<div className="flex items-center justify-between gap-12 rounded-sm border border-border-default bg-control-bg px-12 py-8">
 			<div className="flex flex-col gap-4">
 				<span className="tr-title-compact text-text-default">Share additional usage data</span>
 				{description && <span>{description}</span>}

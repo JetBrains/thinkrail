@@ -119,7 +119,7 @@ function JbcentralQuotaSettings({
 					onKeyDown={(event) => {
 						if (event.key === "Enter") event.currentTarget.blur();
 					}}
-					className="w-80 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 text-text-default tr-text-ui outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+					className="w-80 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 text-text-default tr-text-ui outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 				/>
 				<span className="text-text-muted tr-text-metadata">seconds</span>
 				<span className="ml-auto text-text-subtle tr-text-metadata">{QUOTA_INTERVAL_RANGE}</span>
@@ -223,10 +223,10 @@ export function JetBrainsAiCard({
 			data-state={visibleState}
 			data-configured={configured}
 			data-installed={installed}
-			className="flex flex-col gap-8 rounded-[var(--radius-sm)] border border-border-default bg-control-bg p-12"
+			className="flex flex-col gap-8 rounded-sm border border-border-default bg-control-bg p-12"
 		>
 			<div className="flex items-center gap-12">
-				<span className="flex size-32 shrink-0 items-center justify-center rounded-[var(--radius-sm)] bg-primary-subtle text-primary">
+				<span className="flex size-32 shrink-0 items-center justify-center rounded-sm bg-primary-subtle text-primary">
 					<RiBardLine className="size-16" />
 				</span>
 				<div className="flex min-w-0 flex-col">
@@ -566,7 +566,7 @@ function CopyableCommand({ command }: { command: string }) {
 		setTimeout(() => setCopied(false), 1500);
 	};
 	return (
-		<div className="flex items-center gap-8 rounded-[var(--radius-sm)] border border-border-default bg-container-workspace-bg px-8 py-4">
+		<div className="flex items-center gap-8 rounded-sm border border-border-default bg-container-workspace-bg px-8 py-4">
 			<code className="min-w-0 flex-1 select-all break-all tr-code-text text-text-default">
 				{command}
 			</code>
@@ -576,7 +576,7 @@ function CopyableCommand({ command }: { command: string }) {
 				aria-label={`Copy: ${command}`}
 				title="Copy"
 				onClick={() => void copy()}
-				className="flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				{copied ? (
 					<Check className="size-14 text-feedback-success" />

@@ -143,7 +143,7 @@ function HunkToolbar({
 		<div
 			data-testid="hunk-toolbar"
 			data-kept={kept ? true : undefined}
-			className={`mx-12 my-2 flex min-h-24 items-center gap-4 rounded-[var(--radius-sm)] border bg-container-header-bg px-4 text-text-muted ${
+			className={`mx-12 my-2 flex min-h-24 items-center gap-4 rounded-sm border bg-container-header-bg px-4 text-text-muted ${
 				kept ? "border-feedback-success-muted" : "border-border-muted"
 			}`}
 			onPointerDown={(event) => event.stopPropagation()}
@@ -156,7 +156,7 @@ function HunkToolbar({
 						aria-label={kept ? "Undo keep" : "Keep hunk"}
 						aria-pressed={kept}
 						onClick={() => triage.setKept(contentKey, !kept)}
-						className={`flex h-24 items-center gap-4 rounded-[var(--radius-sm)] px-8 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary ${
+						className={`flex h-24 items-center gap-4 rounded-sm px-8 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary ${
 							kept ? "text-feedback-success" : "hover:bg-control-bg-hovered hover:text-text-default"
 						}`}
 					>
@@ -172,7 +172,7 @@ function HunkToolbar({
 					aria-label="Revert hunk"
 					disabled={reverting}
 					onClick={revert}
-					className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text"
+					className="flex size-24 items-center justify-center rounded-sm outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text"
 				>
 					<Revert className="size-14" />
 				</button>
@@ -183,7 +183,7 @@ function HunkToolbar({
 					data-testid="hunk-ask-agent"
 					aria-label="Ask agent about this hunk"
 					onClick={() => onAskAgent(block)}
-					className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+					className="flex size-24 items-center justify-center rounded-sm outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 				>
 					<AskAgent className="size-14" />
 				</button>
@@ -422,7 +422,7 @@ function PierreDiffSurface({
 								event.stopPropagation();
 							}}
 							onClick={() => openGutterComposer(getHoveredLine())}
-							className="flex size-24 items-center justify-center rounded-[var(--radius-sm)] bg-primary text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
+							className="flex size-24 items-center justify-center rounded-sm bg-primary text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
 						>
 							<MessageSquarePlus className="size-14" />
 						</button>

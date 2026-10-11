@@ -49,7 +49,7 @@ export function QueueStrip({
 						data-testid="queue-item-edit"
 						aria-label={`Edit queued message: ${item.text}`}
 						onClick={() => onEdit(item.kind, item.index)}
-						className="flex size-20 shrink-0 items-center justify-center rounded-[var(--radius-xs)] hover:bg-control-bg-hovered hover:text-text-default"
+						className="flex size-20 shrink-0 items-center justify-center rounded-xs hover:bg-control-bg-hovered hover:text-text-default"
 					>
 						<Pencil className="size-12" />
 					</button>
@@ -58,7 +58,7 @@ export function QueueStrip({
 						data-testid="queue-item-remove"
 						aria-label={`Remove queued message: ${item.text}`}
 						onClick={() => onRemove(item.kind, item.index)}
-						className="flex size-20 shrink-0 items-center justify-center rounded-[var(--radius-xs)] hover:bg-control-bg-hovered hover:text-text-default"
+						className="flex size-20 shrink-0 items-center justify-center rounded-xs hover:bg-control-bg-hovered hover:text-text-default"
 					>
 						<X className="size-12" />
 					</button>

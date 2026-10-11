@@ -182,7 +182,7 @@ export function UpdateSettings({ updates }: UpdateSettingsProps) {
 				data-testid="update-status"
 				data-source={updates.source}
 				data-status={updates.source === "native" ? nativeStatus : (hostStatus ?? "legacy")}
-				className="flex flex-col gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg p-12"
+				className="flex flex-col gap-12 rounded-sm border border-border-default bg-control-bg p-12"
 			>
 				<div className="flex items-start gap-8">
 					<DownloadCloud aria-hidden="true" className={`mt-2 size-16 shrink-0 ${toneClass}`} />
@@ -217,7 +217,7 @@ export function UpdateSettings({ updates }: UpdateSettingsProps) {
 				{showHostManualGuidance ? (
 					<p
 						data-testid="update-command-guidance"
-						className="rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-8 text-text-default tr-text-ui"
+						className="rounded-sm border border-border-default bg-container-elevated-bg p-8 text-text-default tr-text-ui"
 					>
 						Run <code className="tr-code-text text-primary">thinkrail update</code> on the machine
 						running the host, then restart ThinkRail.
@@ -227,7 +227,7 @@ export function UpdateSettings({ updates }: UpdateSettingsProps) {
 				{hostSucceeded ? (
 					<p
 						data-testid="update-host-restart-guidance"
-						className="rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-8 text-text-default tr-text-ui"
+						className="rounded-sm border border-border-default bg-container-elevated-bg p-8 text-text-default tr-text-ui"
 					>
 						Restart the ThinkRail host manually to start using version {availableVersion}.
 					</p>

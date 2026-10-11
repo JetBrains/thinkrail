@@ -194,7 +194,7 @@ export function ExitBadge({ exitCode }: { exitCode: number }) {
 	return (
 		<span
 			className={cn(
-				"shrink-0 rounded-[var(--radius-xs)] border px-4 tr-code-text-small",
+				"shrink-0 rounded-xs border px-4 tr-code-text-small",
 				exitCode === 0
 					? "border-feedback-success-muted text-feedback-success"
 					: "border-feedback-error-muted text-feedback-error",
@@ -258,7 +258,7 @@ function RowActionButton({
 				onClick();
 			}}
 			className={cn(
-				"inline-flex size-24 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted outline-none hover:bg-control-bg hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text",
+				"inline-flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none hover:bg-control-bg hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text",
 				danger && "hover:bg-feedback-error-subtle hover:text-feedback-error",
 			)}
 		>
@@ -366,7 +366,7 @@ export function ResourceRow({
 		"data-state": state,
 	};
 	const rowClass =
-		"group grid min-h-32 min-w-0 items-center gap-8 rounded-[var(--radius-sm)] px-8 py-4 hover:bg-control-bg-hovered";
+		"group grid min-h-32 min-w-0 items-center gap-8 rounded-sm px-8 py-4 hover:bg-control-bg-hovered";
 
 	if (role === "option") {
 		return (
@@ -387,7 +387,7 @@ export function ResourceRow({
 					tabIndex={0}
 					onClick={onSelect}
 					onKeyDown={onKeyDown}
-					className="grid min-w-0 cursor-default grid-cols-[auto_minmax(0,1fr)] items-center gap-8 rounded-[var(--radius-sm)] outline-none focus-visible:ring-2 focus-visible:ring-primary"
+					className="grid min-w-0 cursor-default grid-cols-[auto_minmax(0,1fr)] items-center gap-8 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
 				>
 					<KindGlyph resource={resource} state={state} />
 					<span className="flex min-w-0 flex-col">
@@ -416,7 +416,7 @@ export function ResourceRow({
 					data-testid="resource-inspect"
 					title={`Inspect ${name}`}
 					onClick={onSelect}
-					className="flex min-w-0 items-baseline gap-8 rounded-[var(--radius-xs)] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
+					className="flex min-w-0 items-baseline gap-8 rounded-xs text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
 				>
 					<span className={cn("min-w-0 max-w-[60%] shrink-0 truncate", nameClass)}>{name}</span>
 					<span className={cn(activityClass, "flex-1")}>{activity}</span>

@@ -677,7 +677,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 							data-testid={tab.kind === "terminal" ? "terminal-tab-close" : "editor-tab-close"}
 							aria-label={`Close ${name}`}
 							onClick={onClose}
-							className="mr-4 rounded-[var(--radius-sm)] p-2 opacity-0 hover:bg-control-bg-hovered group-hover:opacity-100 focus:opacity-100"
+							className="mr-4 rounded-sm p-2 opacity-0 hover:bg-control-bg-hovered group-hover:opacity-100 focus:opacity-100"
 						>
 							<X className="size-14" />
 						</button>

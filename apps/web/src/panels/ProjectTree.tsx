@@ -100,7 +100,7 @@ const SORT_LABELS: Record<WorkspaceSort, string> = {
 	name: "Name",
 };
 const HOVER_CONTROL_CLASS =
-	"flex size-20 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100 disabled:pointer-events-none disabled:opacity-0";
+	"flex size-20 shrink-0 items-center justify-center rounded-sm text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100 disabled:pointer-events-none disabled:opacity-0";
 
 export function ProjectTree() {
 	const projects = useAppStore((s) => s.projects);
@@ -445,7 +445,7 @@ function SettledPartition({
 				data-testid="settled-shelf"
 				data-count={settledCount}
 				data-expanded={shelfExpanded}
-				className="flex h-28 min-w-0 items-center gap-4 rounded-[var(--radius-sm)] pr-4 pl-12 text-text-subtle tr-text-metadata hover:bg-control-bg-hovered"
+				className="flex h-28 min-w-0 items-center gap-4 rounded-sm pr-4 pl-12 text-text-subtle tr-text-metadata hover:bg-control-bg-hovered"
 			>
 				<button
 					type="button"
@@ -478,7 +478,7 @@ function SettledPartition({
 								onClick={() =>
 									useAppStore.getState().showMoreSettled(projectId, shelfShown + SETTLED_SHELF_MORE)
 								}
-								className="flex h-24 w-full items-center rounded-[var(--radius-sm)] pl-24 text-left text-text-subtle tr-text-metadata hover:bg-control-bg-hovered hover:text-text-muted"
+								className="flex h-24 w-full items-center rounded-sm pl-24 text-left text-text-subtle tr-text-metadata hover:bg-control-bg-hovered hover:text-text-muted"
 							>
 								Show {Math.min(SETTLED_SHELF_MORE, remaining)} more
 							</button>
@@ -538,7 +538,7 @@ function ProjectRow({
 			data-menu-open={menuOpen}
 			data-attention={needsAttention || undefined}
 			data-running={isRunning || undefined}
-			className={`group flex h-28 items-center gap-4 rounded-[var(--radius-sm)] pr-4 pl-4 transition-colors ${
+			className={`group flex h-28 items-center gap-4 rounded-sm pr-4 pl-4 transition-colors ${
 				menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered"
 			}`}
 		>
@@ -547,7 +547,7 @@ function ProjectRow({
 				data-testid="project-expand"
 				aria-label={isExpanded ? "Collapse project" : "Expand project"}
 				onClick={onToggle}
-				className="flex size-16 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-text-muted transition-colors hover:text-text-default focus-visible:text-text-default"
+				className="flex size-16 shrink-0 items-center justify-center rounded-sm text-text-muted transition-colors hover:text-text-default focus-visible:text-text-default"
 				data-expanded={isExpanded}
 			>
 				<Chevron className="size-16" />
@@ -820,7 +820,7 @@ function WorkspaceRow({
 				data-running={isRunning || undefined}
 				onContextMenu={openMenuFromContext}
 				className={cn(
-					"group relative flex min-w-0 items-center gap-8 rounded-[var(--radius-sm)] border-0 pr-4 pl-24 transition-colors",
+					"group relative flex min-w-0 items-center gap-8 rounded-sm border-0 pr-4 pl-24 transition-colors",
 					isSettled ? "min-h-24 py-2" : "min-h-28 py-4",
 					isActive || menuOpen ? "bg-control-bg-selected" : "hover:bg-control-bg-hovered",
 				)}
@@ -863,7 +863,7 @@ function WorkspaceRow({
 					className={cn(
 						"flex shrink-0 items-center gap-4",
 						isSettled &&
-							"[@media(hover:hover)]:absolute [@media(hover:hover)]:top-1/2 [@media(hover:hover)]:right-4 [@media(hover:hover)]:-translate-y-1/2 [@media(hover:hover)]:rounded-[var(--radius-sm)] [@media(hover:hover)]:pl-4 [@media(hover:hover)]:group-hover:bg-control-bg-hovered",
+							"[@media(hover:hover)]:absolute [@media(hover:hover)]:top-1/2 [@media(hover:hover)]:right-4 [@media(hover:hover)]:-translate-y-1/2 [@media(hover:hover)]:rounded-sm [@media(hover:hover)]:pl-4 [@media(hover:hover)]:group-hover:bg-control-bg-hovered",
 						isSettled &&
 							(isActive || menuOpen) &&
 							"[@media(hover:hover)]:group-hover:bg-control-bg-selected",

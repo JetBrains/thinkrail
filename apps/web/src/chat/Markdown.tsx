@@ -113,17 +113,9 @@ function CodeBlock({
 	if (lang === "mermaid") return <MermaidBlock code={code} />;
 	if (!lang) {
 		if (!code.includes("\n")) {
-			return (
-				<code className="rounded-[var(--radius-xs)] bg-container-elevated-bg px-4 py-2">
-					{children}
-				</code>
-			);
+			return <code className="rounded-xs bg-container-elevated-bg px-4 py-2">{children}</code>;
 		}
-		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-elevated-bg p-8">
-				{code}
-			</pre>
-		);
+		return <pre className="overflow-auto rounded-sm bg-container-elevated-bg p-8">{code}</pre>;
 	}
 	return <ShikiBlock code={code} lang={lang} />;
 }
@@ -149,14 +141,14 @@ function ShikiBlock({ code, lang }: { code: string; lang: string }) {
 
 	if (html === null) {
 		return (
-			<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-elevated-bg p-8 text-text-default">
+			<pre className="overflow-auto rounded-sm bg-container-elevated-bg p-8 text-text-default">
 				{code}
 			</pre>
 		);
 	}
 	return (
 		<div
-			className="overflow-auto rounded-[var(--radius-sm)] [&_pre]:!m-0 [&_pre]:!bg-container-elevated-bg [&_pre]:p-8"
+			className="overflow-auto rounded-sm [&_pre]:!m-0 [&_pre]:!bg-container-elevated-bg [&_pre]:p-8"
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>
 	);

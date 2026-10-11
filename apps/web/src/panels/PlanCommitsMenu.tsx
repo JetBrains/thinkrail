@@ -51,7 +51,7 @@ export function PlanCommitsMenu({
 				data-testid="plan-commits-trigger"
 				data-open={open}
 				title="Commits on this branch"
-				className="flex h-24 shrink-0 items-center gap-4 rounded-[var(--radius-sm)] px-4 tr-text-metadata text-text-subtle outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected data-[open=true]:text-text-default"
+				className="flex h-24 shrink-0 items-center gap-4 rounded-sm px-4 tr-text-metadata text-text-subtle outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected data-[open=true]:text-text-default"
 			>
 				<GitCommitHorizontal className="size-12 shrink-0" />
 				<span>

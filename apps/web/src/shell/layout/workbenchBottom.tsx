@@ -208,7 +208,7 @@ export const BottomGroupView = memo(function BottomGroupView({
 							type="button"
 							data-testid="bottom-new-terminal"
 							onClick={() => shared.onNewTerminal(group.id, "bottom")}
-							className="flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
+							className="flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 						>
 							<SquareTerminal className="size-16" /> New terminal
 						</button>

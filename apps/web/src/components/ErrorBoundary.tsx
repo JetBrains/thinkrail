@@ -93,7 +93,7 @@ function PanelErrorFallback({
 						type="button"
 						data-testid="error-reload"
 						onClick={() => window.location.reload()}
-						className="flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
+						className="flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
 						<RefreshCw className="size-16" /> Reload page
 					</button>
@@ -102,7 +102,7 @@ function PanelErrorFallback({
 						type="button"
 						data-testid="error-retry"
 						onClick={reset}
-						className="flex items-center gap-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
+						className="flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
 						<RotateCcw className="size-16" /> Try again
 					</button>

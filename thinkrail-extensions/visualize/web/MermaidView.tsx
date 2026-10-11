@@ -47,7 +47,7 @@ export function MermaidView({
 				<span className="text-feedback-error tr-text-metadata">
 					Diagram failed to render: {error}
 				</span>
-				<pre className="overflow-auto rounded-[var(--radius-sm)] bg-container-header-bg p-8 tr-code-text text-text-default">
+				<pre className="overflow-auto rounded-sm bg-container-header-bg p-8 tr-code-text text-text-default">
 					{source}
 				</pre>
 			</div>
@@ -69,7 +69,7 @@ export function MermaidView({
 				aria-label="View diagram full screen"
 				title="Full screen"
 				onClick={() => setOpen(true)}
-				className="absolute top-4 right-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-4 text-text-muted transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				className="absolute top-4 right-4 rounded-sm border border-border-default bg-container-elevated-bg p-4 text-text-muted transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<Maximize2 className="size-14" />
 			</button>

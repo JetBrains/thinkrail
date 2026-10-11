@@ -141,7 +141,7 @@ export function AuxiliaryRailButton({
 					{entry.kind === "terminals" && ordinal > 1 ? (
 						<span
 							aria-hidden="true"
-							className="absolute right-0 bottom-0 rounded-[var(--radius-sm)] bg-container-header-bg px-2 tr-text-metadata"
+							className="absolute right-0 bottom-0 rounded-sm bg-container-header-bg px-2 tr-text-metadata"
 						>
 							{ordinal}
 						</span>

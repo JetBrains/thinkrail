@@ -15,7 +15,7 @@ function ToolResultImage({ image, label }: { image: ImageContent; label: string 
 	return (
 		<div
 			data-testid="tool-result-image-preview"
-			className="relative flex min-h-64 w-full items-center justify-center overflow-hidden rounded-[var(--radius-sm)] border border-border-default bg-sunken"
+			className="relative flex min-h-64 w-full items-center justify-center overflow-hidden rounded-sm border border-border-default bg-sunken"
 		>
 			<img
 				data-testid="tool-result-image-thumbnail"
@@ -32,7 +32,7 @@ function ToolResultImage({ image, label }: { image: ImageContent; label: string 
 						data-testid="tool-result-image-fullscreen"
 						aria-label={`View ${label} full screen`}
 						title="Full screen"
-						className="absolute top-4 right-4 rounded-[var(--radius-sm)] border border-border-default bg-container-elevated-bg p-4 text-text-muted transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+						className="absolute top-4 right-4 rounded-sm border border-border-default bg-container-elevated-bg p-4 text-text-muted transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 					>
 						<Maximize2 className="size-14" />
 					</button>

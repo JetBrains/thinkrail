@@ -72,7 +72,7 @@ export function ResourcesDock({
 				data-testid="resources-dock-toggle"
 				aria-expanded={!collapsed}
 				onClick={() => setCollapsedChoice(!collapsed)}
-				className="flex min-h-28 w-full items-center gap-8 rounded-[var(--radius-sm)] px-8 text-text-muted tr-text-metadata outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+				className="flex min-h-28 w-full items-center gap-8 rounded-sm px-8 text-text-muted tr-text-metadata outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				{authoritative ? (
 					<span
