@@ -1482,7 +1482,7 @@ own section. The kebab menu (`plan-menu`, a
   through the tab's one-shot reveal, a finding step also fires the store's `reviewFocusRequest`, so the
   thread card is scrolled to by the same path the Review panel uses. *Fix this one* and *Apply fixes* are
   the Review panel's send paths (`sendReviewComment`, `sendReviewBatch` over the open finding ids) behind
-  one busy flag, not new mutations. The cursor is the step's identity (path or finding id), so a
+  one busy flag, not new mutations. The cursor is the step's identity (a reading step's position in the order — the contract allows one file twice — or a finding id), so a
   finding resolved from under it yields to its successor instead of skipping one. The rail never renders
   on phone-class viewports — 280px of a 390px
   screen would leave no diff to guide through. Plain-letter shortcuts (`V`, `J`, `N`, `P`) belong to the

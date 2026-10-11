@@ -11,17 +11,18 @@ import { sendReviewBatch, sendReviewComment } from "./reviewSend";
 import { ownsReviewShortcut } from "./reviewShortcuts";
 
 export type GuideStep =
-	| { kind: "read"; path: string; why: string }
+	| { kind: "read"; path: string; why: string; order: number }
 	| { kind: "finding"; comment: ReviewComment; path: string | null };
 
 export function guideSteps(
 	guide: ReviewGuide | undefined,
 	comments: readonly ReviewComment[] | undefined,
 ): GuideStep[] {
-	const steps: GuideStep[] = (guide?.readingOrder ?? []).map((step) => ({
+	const steps: GuideStep[] = (guide?.readingOrder ?? []).map((step, order) => ({
 		kind: "read",
 		path: step.path,
 		why: step.why,
+		order,
 	}));
 	const findings = (comments ?? [])
 		.filter(
@@ -36,7 +37,7 @@ export function guideSteps(
 }
 
 export function guideStepKey(step: GuideStep): string {
-	return step.kind === "read" ? `read:${step.path}` : `finding:${step.comment.id}`;
+	return step.kind === "read" ? `read:${step.order}:${step.path}` : `finding:${step.comment.id}`;
 }
 
 export function guideCursorIndex(
@@ -160,7 +161,7 @@ export function ChangesReviewGuide({
 						<ol className="flex flex-col">
 							{steps.map((step, index) =>
 								step.kind === "read" ? (
-									<li key={`read:${step.path}:${index}`}>
+									<li key={guideStepKey(step)}>
 										<button
 											type="button"
 											data-testid="changes-review-guide-step"

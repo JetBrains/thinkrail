@@ -90,3 +90,19 @@ test("the cursor follows its step by identity, and a step resolved from under it
 	expect(nextGuideStep(shrunk, new Set(["src/a.ts", "src/b.ts"]), after, 1)).toBe(2);
 	expect(guideCursorIndex(steps, null)).toBe(-1);
 });
+
+test("two reading steps on one file are two cursor positions", () => {
+	const steps = guideSteps(
+		{
+			...guide,
+			readingOrder: [
+				{ path: "src/a.ts", why: "the contract" },
+				{ path: "src/a.ts", why: "its consumer, further down" },
+			],
+		},
+		[],
+	);
+	const second = steps[1] as (typeof steps)[number];
+	expect(guideStepKey(second)).not.toBe(guideStepKey(steps[0] as (typeof steps)[number]));
+	expect(guideCursorIndex(steps, { key: guideStepKey(second), index: 1 })).toBe(1);
+});
