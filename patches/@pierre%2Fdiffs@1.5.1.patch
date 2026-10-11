@@ -1,5 +1,5 @@
 diff --git a/dist/managers/InteractionManager.js b/dist/managers/InteractionManager.js
-index 20fe22dfeec141a172a9be6763c4d9cf3c808ea5..2a1c8813cc504b1a67d161e50ab1127f44a76f78 100644
+index 20fe22dfeec141a172a9be6763c4d9cf3c808ea5..60b243631a367ef5c1c905a129c630ceda569b89 100644
 --- a/dist/managers/InteractionManager.js
 +++ b/dist/managers/InteractionManager.js
 @@ -30,6 +30,7 @@ var InteractionManager = class {
@@ -10,15 +10,27 @@ index 20fe22dfeec141a172a9be6763c4d9cf3c808ea5..2a1c8813cc504b1a67d161e50ab1127f
  	constructor(mode, options) {
  		this.mode = mode;
  		this.options = options;
-@@ -138,6 +139,7 @@ var InteractionManager = class {
+@@ -138,6 +139,8 @@ var InteractionManager = class {
  	};
  	handlePointerMove = (event) => {
  		if (event.pointerType !== "mouse") return;
++		const wasNativeTextDragActive = this.nativeTextDragActive;
 +		this.nativeTextDragActive = event.buttons !== 0 && this.pointerSession.mode === "idle";
  		const { lineHoverHighlight = "disabled", onLineEnter, onLineLeave, onTokenEnter, onTokenLeave, enableGutterUtility = false } = this.options;
  		if (lineHoverHighlight === "disabled" && !enableGutterUtility && onLineEnter == null && onLineLeave == null && onTokenEnter == null && onTokenLeave == null) return;
  		debugLogIfEnabled(this.options.__debugPointerEvents, "move", "FileDiff.DEBUG.handlePointerMove:", event);
-@@ -293,6 +295,7 @@ var InteractionManager = class {
+@@ -145,8 +148,10 @@ var InteractionManager = class {
+ 			eventType: "move",
+ 			event
+ 		});
++		if (wasNativeTextDragActive && !this.nativeTextDragActive) this.placeUtility();
+ 	};
+ 	handlePointerLeave = (event) => {
++		if (event.pointerType === "mouse" && event.buttons !== 0 && this.pointerSession.mode === "idle") this.nativeTextDragActive = true;
+ 		const { __debugPointerEvents } = this.options;
+ 		debugLogIfEnabled(__debugPointerEvents, "move", "FileDiff.DEBUG.handlePointerLeave: no event");
+ 		if (this.hoveredLine == null && this.hoveredToken == null) {
+@@ -293,6 +298,7 @@ var InteractionManager = class {
  	}
  	handlePointerDown = (event) => {
  		if (event.pointerType === "mouse" && event.button !== 0 || this.pre == null || this.pointerSession.mode !== "idle") return;
@@ -26,7 +38,7 @@ index 20fe22dfeec141a172a9be6763c4d9cf3c808ea5..2a1c8813cc504b1a67d161e50ab1127f
  		const path = event.composedPath();
  		if (isGutterUtilityPath(path) && this.options.onGutterUtilityClick != null) this.startGutterSelectionFromPointerDown(event);
  		else {
-@@ -550,6 +553,7 @@ var InteractionManager = class {
+@@ -550,6 +556,7 @@ var InteractionManager = class {
  		if (isLinePointerTarget(target) && target.numberColumn) this.showUtilityOnLine(this.toEventBaseProps(target));
  	}
  	placeUtility() {
