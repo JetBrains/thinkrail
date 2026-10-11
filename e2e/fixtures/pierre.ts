@@ -28,6 +28,15 @@ export function pierreHighlightedTokens(surface: Locator): Locator {
 	return surface.locator(HIGHLIGHTED_TOKEN);
 }
 
+export async function pierreLineCenter(
+	surface: Locator,
+	text: string,
+): Promise<{ x: number; y: number }> {
+	const box = await pierreLines(surface, text).last().boundingBox();
+	if (!box) throw new Error(`No Pierre line box for ${JSON.stringify(text)}`);
+	return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+}
+
 async function pierreLineRef(
 	surface: Locator,
 	text: string,
