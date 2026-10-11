@@ -40,10 +40,10 @@ export default function PlanRailPane({
 	const empty = plan.data.todos.length === 0 && plan.data.groups.length === 0;
 
 	return (
-		<div
-			data-testid="plan-rail-pane"
-			className="flex h-full flex-col overflow-hidden bg-container-content-bg"
-		>
+		// Background is inherited from the rail panel chrome (same as Review / Changes / Files). An
+		// explicit `bg-container-content-bg` here would paint the lighter editor-tab surface over the
+		// darker rail background and the panel would stand out from its neighbours.
+		<div data-testid="plan-rail-pane" className="flex h-full min-h-0 flex-col overflow-hidden">
 			<div className="shrink-0 border-border-muted border-b">
 				<TodoAddRow onAdd={plan.add} onOpenPlan={plan.openPlan} />
 			</div>
@@ -53,12 +53,7 @@ export default function PlanRailPane({
 						No TODOs yet \u2014 the agent adds its plan here, or add one above.
 					</p>
 				) : (
-					<TodoRows
-						plan={plan.data}
-						onRemove={plan.remove}
-						glance={glance}
-						onOpenChanges={plan.openChanges}
-					/>
+					<TodoRows plan={plan.data} glance={glance} onOpenChanges={plan.openChanges} />
 				)}
 			</div>
 		</div>

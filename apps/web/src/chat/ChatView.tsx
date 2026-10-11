@@ -14,7 +14,6 @@ import {
 	DialogFooter,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
-import { Popover, PopoverAnchor, PopoverTrigger } from "@thinkrail/ui/popover";
 import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useNow } from "@/components/useNow";
@@ -35,7 +34,6 @@ import {
 } from "@/store";
 import { errorText, getTransport, watchMcpWorkspace } from "@/transport";
 import { ChatHeader } from "./ChatHeader";
-import { ChatPlanContent, ChatPlanStripContent } from "./ChatPlan";
 import ChatTranscript, { type ChatTranscriptHandle } from "./ChatTranscript";
 import {
 	Composer,
@@ -53,7 +51,6 @@ import {
 	parseNativeChatCommand,
 	prepareNameChatCommand,
 } from "./nativeCommands";
-import { hostSessionGlance, sessionGlance } from "./planView";
 import { QueueStrip } from "./QueueStrip";
 import { deriveRecentPrompts } from "./recentPrompts";
 import {
@@ -72,7 +69,6 @@ import { useModelPreferences } from "./useModelPreferences";
 import { useSessionStats } from "./useSessionStats";
 import "./tools/register";
 import type { ChatAttachment } from "./types";
-import { useChatTodos } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
 
 registerWebExtensions();
@@ -109,11 +105,6 @@ export default function ChatView({
 	const syncedConnectionGeneration = useAppStore(
 		(s) => s.sessions[sessionId]?.syncedConnectionGeneration ?? 0,
 	);
-	const hostState = useAppStore((s) => s.sessions[sessionId]?.hostState ?? null);
-	const sessionGlanceState = useAppStore((s) => {
-		const rt = s.sessions[sessionId];
-		return rt ? sessionGlance(rt) : "waiting";
-	});
 	const recentPrompts = useAppStore(
 		useShallow((s) => deriveRecentPrompts(s.sessions[sessionId]?.turns ?? [])),
 	);
@@ -173,8 +164,6 @@ export default function ChatView({
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
-	const plan = useChatTodos(workspaceId, sessionId);
-	const [planOpen, setPlanOpen] = useState(false);
 	const [slashActive, setSlashActive] = useState(false);
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
 	const [templatesEmpty, setTemplatesEmpty] = useState(false);
@@ -662,11 +651,6 @@ export default function ChatView({
 		else composerRef.current?.openHistory();
 	}, [historyOpenRequest, sessionId, historyOverlayOpen, cycleScope]);
 
-	const planGlanceState = useMemo(
-		() => hostSessionGlance(hostState, sessionGlanceState),
-		[hostState, sessionGlanceState],
-	);
-
 	const onExtUiReply = (value: string | boolean | null) => {
 		if (!pendingExtUi) return;
 		const id = pendingExtUi.id;
@@ -694,62 +678,37 @@ export default function ChatView({
 			data-message-order={chatMessageOrder}
 			className="flex h-full min-h-0 min-w-0 flex-col bg-container-workspace-bg [container-type:size]"
 		>
-			<Popover
-				open={planOpen}
-				onOpenChange={(next) => {
-					if (next && !planOpen) plan.notifyOpened("popup");
-					setPlanOpen(next);
-				}}
-			>
-				<PopoverAnchor asChild>
-					<div className="shrink-0">
-						<ChatHeader
-							resources={
-								resources.visible ? (
-									<span className="flex shrink-0 items-center gap-2">
-										<ResourcesButton
-											ref={resourcesTrigger}
-											activeCount={
-												resources.authoritative
-													? resources.groups.activeCount + resources.groups.mcpActiveCount
-													: null
-											}
-											working={resources.authoritative && resources.groups.activeCount > 0}
-											open={inspectorOpen}
-											onClick={() => setInspectorOpen(!inspectorOpen)}
-										/>
-										{resources.groups.mcpAttentionCount > 0 ? (
-											<ResourcesAttention
-												count={resources.groups.mcpAttentionCount}
-												onOpen={openMcpSettings}
-											/>
-										) : null}
-									</span>
-								) : null
-							}
-							stats={stats}
-							statusEntries={Object.entries(extUiStatus)}
-							left={
-								plan.data ? (
-									<PopoverTrigger asChild>
-										<button
-											type="button"
-											data-testid="chat-plan-toggle"
-											data-open={planOpen}
-											className="flex min-w-0 max-w-full items-center gap-4 overflow-clip whitespace-nowrap text-text-muted tr-text-metadata hover:text-text-default"
-										>
-											<ChatPlanStripContent plan={plan} open={planOpen} glance={planGlanceState} />
-										</button>
-									</PopoverTrigger>
-								) : null
-							}
-							skillsStale={skillsStale}
-							{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
-						/>
-					</div>
-				</PopoverAnchor>
-				<ChatPlanContent plan={plan} glance={planGlanceState} />
-			</Popover>
+			<div className="shrink-0">
+				<ChatHeader
+					resources={
+						resources.visible ? (
+							<span className="flex shrink-0 items-center gap-2">
+								<ResourcesButton
+									ref={resourcesTrigger}
+									activeCount={
+										resources.authoritative
+											? resources.groups.activeCount + resources.groups.mcpActiveCount
+											: null
+									}
+									working={resources.authoritative && resources.groups.activeCount > 0}
+									open={inspectorOpen}
+									onClick={() => setInspectorOpen(!inspectorOpen)}
+								/>
+								{resources.groups.mcpAttentionCount > 0 ? (
+									<ResourcesAttention
+										count={resources.groups.mcpAttentionCount}
+										onOpen={openMcpSettings}
+									/>
+								) : null}
+							</span>
+						) : null
+					}
+					stats={stats}
+					statusEntries={Object.entries(extUiStatus)}
+					skillsStale={skillsStale}
+					{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
+				/>
+			</div>
 			<ChatTranscript
 				ref={transcriptRef}
 				sessionId={sessionId}

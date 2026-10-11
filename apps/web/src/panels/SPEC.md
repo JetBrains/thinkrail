@@ -965,16 +965,11 @@ a project picker, the prompt hero, and the reused
   **auto-growing textarea** (`plan-add-input`) — plain **Enter adds**, **Shift+Enter** inserts a newline
   (multi-line like the composer), Esc closes — wired to the SAME `useChatTodos.add` as the popup's
   `TodoAddRow` — a loose **user** item plus the agent nudge — so the two entry points stay one flow.
-  Every plan item carries a **hover Remove affordance** (`plan-item-remove` — `useChatTodos.remove`,
-  disabled while the row is under review) that opens a **`ConfirmPopover`** before deleting — a direct
-  click used to drop the item without a prompt, which users hit by accident; the confirm reshapes its
-  copy by origin (user items read `Cancel this task?` with the "the agent will stop working on it"
-  explanation; agent items read `Remove this step?` with the "the agent may re-add it" explanation;
-  done items read `Remove this done step?` with the "its history drops from the plan" explanation) so
-  the user knows which consequence the destructive action carries. The confirm action lands under
-  `plan-item-remove-confirm`. Adopted commits (host-derived) get no remove. (The chat popover's
-  `TodoList.tsx:TodoRow` uses a native `window.confirm` with the same copy because a nested in-page
-  Popover inside the chat popover is clipped by the outer popover's bounds.)
+  **Plan items carry no UI Remove affordance.** The agent still manages the plan through its
+  `todo.remove` tool when it needs to drop a step, but the user never does — removing a step from the
+  UI confused users («when would I want this?»), so the hover trash button + its confirm popover
+  were removed. User items added from the TODO rail stay on the plan until the agent finishes them or
+  the user explicitly asks the agent to cancel.
   Items keep a **scan-first item
   anatomy**: the item TITLE is
   the only full-size text (`tr-text-ui font-medium`), every detail is a step down (`tr-text-metadata`,

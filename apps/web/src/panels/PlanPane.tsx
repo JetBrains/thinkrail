@@ -16,7 +16,6 @@ import {
 	RiChat1Line as MessageSquare,
 	RiMore2Line as MoreVertical,
 	RiAddLine as Plus,
-	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
 import {
@@ -26,7 +25,6 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
-import { PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { AskStatesContext, deriveAskStates } from "../chat/askState";
@@ -68,7 +66,6 @@ import {
 	useAppStore,
 } from "../store";
 import { errorText, getTransport, supportsPlanReview, wsErrorCode } from "../transport";
-import { ConfirmPopover } from "./ConfirmPopover";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openChatInTab } from "./openChat";
 import { openDiffInTab } from "./openTabs";
@@ -252,7 +249,6 @@ function ItemBlock({
 	onOpenCommit,
 	onStartReview,
 	onOpenReview,
-	onRemove,
 	reviewComments,
 	startDisabled,
 	focusRequest,
@@ -263,7 +259,6 @@ function ItemBlock({
 	onOpenCommit: (sha: string) => void;
 	onStartReview: (id: string) => Promise<void>;
 	onOpenReview: () => void;
-	onRemove?: ((id: string) => void) | undefined;
 	reviewComments: ReviewComment[] | undefined;
 	startDisabled: boolean;
 	focusRequest: { id: string; tick: number } | null;
@@ -293,7 +288,6 @@ function ItemBlock({
 		setExpanded(true);
 	}, [focusRequest, item.id, collapsible]);
 	const detailsClass = collapsible ? "hidden group-data-[expanded=true]:flex" : "flex";
-	const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
 	return (
 		<li
 			id={`plan-item-${item.id}`}
@@ -396,48 +390,6 @@ function ItemBlock({
 								<CircleCheck className="size-14" />
 								Checked
 							</span>
-						) : null}
-						{onRemove ? (
-							<ConfirmPopover
-								open={confirmRemoveOpen}
-								onOpenChange={setConfirmRemoveOpen}
-								title={item.origin === "user" ? "Cancel this task?" : "Remove this step?"}
-								description={
-									item.origin === "user"
-										? "You added this. Cancelling tells the agent to stop working on it — it won't come back on its own."
-										: item.status === "done"
-											? "This step is already done — removing it drops its history from the plan."
-											: "The agent planned this step. Removing it may make the agent re-add it on its next pass."
-								}
-								confirmLabel={item.origin === "user" ? "Cancel task" : "Remove"}
-								destructive
-								confirmTestId="plan-item-remove-confirm"
-								onConfirm={() => onRemove(item.id)}
-								align="end"
-							>
-								<IconTooltip
-									label={
-										reviewing
-											? "Checking… — wait for the check to finish before removing"
-											: item.origin === "user"
-												? "Cancel task"
-												: "Remove"
-									}
-									wrapTrigger
-								>
-									<PopoverTrigger asChild>
-										<button
-											type="button"
-											data-testid="plan-item-remove"
-											disabled={reviewing}
-											aria-label={item.origin === "user" ? "Cancel task" : "Remove"}
-											className="flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted opacity-0 transition-opacity hover:bg-container-elevated-bg hover:text-feedback-error focus-visible:opacity-100 group-hover:opacity-100 disabled:pointer-events-none disabled:opacity-0"
-										>
-											<Trash2 className="size-14" />
-										</button>
-									</PopoverTrigger>
-								</IconTooltip>
-							</ConfirmPopover>
 						) : null}
 					</div>
 					{collapsible && (item.summary || item.verification || set) ? (
@@ -570,7 +522,6 @@ function GroupSection({
 	onOpenCommit,
 	onStartReview,
 	onOpenReview,
-	onRemove,
 	reviewComments,
 	startDisabled,
 	focusRequest,
@@ -581,7 +532,6 @@ function GroupSection({
 	onOpenCommit: (sha: string) => void;
 	onStartReview: (id: string) => Promise<void>;
 	onOpenReview: () => void;
-	onRemove?: ((id: string) => void) | undefined;
 	reviewComments: ReviewComment[] | undefined;
 	startDisabled: boolean;
 	focusRequest: { id: string; tick: number } | null;
@@ -615,7 +565,6 @@ function GroupSection({
 						onOpenCommit={onOpenCommit}
 						onStartReview={onStartReview}
 						onOpenReview={onOpenReview}
-						onRemove={onRemove}
 						reviewComments={reviewComments}
 						startDisabled={startDisabled}
 						focusRequest={focusRequest}
@@ -1229,7 +1178,6 @@ export default function PlanPane({
 			onOpenCommit={onOpenCommit}
 			onStartReview={startReview}
 			onOpenReview={onOpenReview}
-			onRemove={plan.remove}
 			reviewComments={reviewComments}
 			startDisabled={reviewingAny || !canReview}
 			focusRequest={focusRequest}
@@ -1244,7 +1192,6 @@ export default function PlanPane({
 			onOpenCommit={onOpenCommit}
 			onStartReview={startReview}
 			onOpenReview={onOpenReview}
-			onRemove={plan.remove}
 			reviewComments={reviewComments}
 			startDisabled={reviewingAny || !canReview}
 			focusRequest={focusRequest}

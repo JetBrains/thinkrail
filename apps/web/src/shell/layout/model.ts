@@ -91,7 +91,10 @@ const LAYOUT_TOOL_NAMES: Record<LayoutToolId, string> = {
 	files: "Files",
 	changes: "Changes",
 	review: "Review",
-	plan: "Plan",
+	// Display label is "TODO List", not "Plan": the rail tool is a compact TODO list (same primitives
+	// the chat popover uses); the document-scale "Plan" page is a separate center-tab resource opened
+	// via `openPlan`. The internal id stays `plan` to avoid a contract churn across LayoutToolId.
+	plan: "TODO List",
 };
 
 export function layoutTabName(tab: LayoutTab): string {

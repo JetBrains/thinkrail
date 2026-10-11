@@ -11,7 +11,6 @@ import {
 	RiLoaderLine as LoaderCircle,
 	RiQuestionnaireLine as MessageCircleQuestion,
 	RiAddLine as Plus,
-	RiDeleteBin6Line as Trash2,
 	RiUser3Line as UserRound,
 } from "@remixicon/react";
 import type { TodoGroupItem, TodoItem, TodoPlan, TodoStatus } from "@thinkrail/contracts";
@@ -116,7 +115,7 @@ export function TodoAddRow({
 				onKeyDown={(e) => {
 					if (e.key === "Enter") void submit();
 				}}
-				placeholder="Add a TODO for the agent…"
+				placeholder="Add a task in queue"
 				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 			/>
 			{onOpenPlan ? (
@@ -139,12 +138,10 @@ export function TodoAddRow({
 function GroupBlock({
 	group,
 	glance,
-	onRemove,
 	onOpenChanges,
 }: {
 	group: TodoGroupItem;
 	glance: PlanGlance;
-	onRemove: (id: string) => void;
 	onOpenChanges?: ((target: ChangeTarget) => void) | undefined;
 }) {
 	const status = group.status;
@@ -191,13 +188,7 @@ function GroupBlock({
 			) : null}
 			<ul className="ml-12 flex flex-col border-border-default border-l pl-8">
 				{group.todos.map((todo) => (
-					<TodoRow
-						key={todo.id}
-						todo={todo}
-						glance={glance}
-						onRemove={() => onRemove(todo.id)}
-						onOpenChanges={onOpenChanges}
-					/>
+					<TodoRow key={todo.id} todo={todo} glance={glance} onOpenChanges={onOpenChanges} />
 				))}
 			</ul>
 		</div>
@@ -207,25 +198,17 @@ function GroupBlock({
 function LooseList({
 	items,
 	glance,
-	onRemove,
 	onOpenChanges,
 }: {
 	items: TodoItem[];
 	glance: PlanGlance;
-	onRemove: (id: string) => void;
 	onOpenChanges?: ((target: ChangeTarget) => void) | undefined;
 }) {
 	if (items.length === 0) return null;
 	return (
 		<ul className="flex flex-col">
 			{items.map((todo) => (
-				<TodoRow
-					key={todo.id}
-					todo={todo}
-					glance={glance}
-					onRemove={() => onRemove(todo.id)}
-					onOpenChanges={onOpenChanges}
-				/>
+				<TodoRow key={todo.id} todo={todo} glance={glance} onOpenChanges={onOpenChanges} />
 			))}
 		</ul>
 	);
@@ -233,12 +216,10 @@ function LooseList({
 
 export function TodoRows({
 	plan,
-	onRemove,
 	glance = "working",
 	onOpenChanges,
 }: {
 	plan: TodoPlan;
-	onRemove: (id: string) => void;
 	glance?: PlanGlance;
 	onOpenChanges?: ((target: ChangeTarget) => void) | undefined;
 }) {
@@ -249,19 +230,19 @@ export function TodoRows({
 	return (
 		<>
 			{s.activeGroups.map((group) => (
-				<GroupBlock key={group.id} group={group} onRemove={onRemove} {...rowProps} />
+				<GroupBlock key={group.id} group={group} {...rowProps} />
 			))}
-			<LooseList items={s.activeLoose} onRemove={onRemove} {...rowProps} />
+			<LooseList items={s.activeLoose} {...rowProps} />
 			{hasTodo ? <SectionLabel label="Up next" /> : null}
 			{s.pendingGroups.map((group) => (
-				<GroupBlock key={group.id} group={group} onRemove={onRemove} {...rowProps} />
+				<GroupBlock key={group.id} group={group} {...rowProps} />
 			))}
-			<LooseList items={s.pendingLoose} onRemove={onRemove} {...rowProps} />
+			<LooseList items={s.pendingLoose} {...rowProps} />
 			{hasDone ? <SectionLabel label="Done" /> : null}
 			{s.doneGroups.map((group) => (
-				<DoneGroup key={group.id} group={group} onRemove={onRemove} {...rowProps} />
+				<DoneGroup key={group.id} group={group} {...rowProps} />
 			))}
-			<LooseList items={s.doneLoose} onRemove={onRemove} {...rowProps} />
+			<LooseList items={s.doneLoose} {...rowProps} />
 		</>
 	);
 }
@@ -269,12 +250,10 @@ export function TodoRows({
 function DoneGroup({
 	group,
 	glance,
-	onRemove,
 	onOpenChanges,
 }: {
 	group: TodoGroupItem;
 	glance: PlanGlance;
-	onRemove: (id: string) => void;
 	onOpenChanges?: ((target: ChangeTarget) => void) | undefined;
 }) {
 	const [expanded, setExpanded] = useState(false);
@@ -290,21 +269,16 @@ function DoneGroup({
 			>
 				<Chevron className="size-16 shrink-0 text-text-muted" />
 				<Check className="size-12 shrink-0 text-primary" />
-				<span className="min-w-0 flex-1 truncate tr-text-ui text-text-muted line-through">
-					{group.title}
+				<span className="min-w-0 flex-1 truncate tr-text-ui text-text-muted">{group.title}</span>
+				<span className="shrink-0 tr-text-eyebrow text-text-muted">
+					{group.todos.length}
+					{group.todos.length === 1 ? " step" : " steps"}
 				</span>
-				<span className="shrink-0 tr-text-eyebrow text-text-muted">{group.todos.length} done</span>
 			</button>
 			{expanded ? (
 				<ul className="ml-12 flex flex-col border-border-default border-l pl-8">
 					{group.todos.map((todo) => (
-						<TodoRow
-							key={todo.id}
-							todo={todo}
-							glance={glance}
-							onRemove={() => onRemove(todo.id)}
-							onOpenChanges={onOpenChanges}
-						/>
+						<TodoRow key={todo.id} todo={todo} glance={glance} onOpenChanges={onOpenChanges} />
 					))}
 				</ul>
 			) : null}
@@ -366,12 +340,10 @@ function ChangeSetChip({
 function TodoRow({
 	todo,
 	glance,
-	onRemove,
 	onOpenChanges,
 }: {
 	todo: TodoItem;
 	glance: PlanGlance;
-	onRemove: () => void;
 	onOpenChanges?: ((target: ChangeTarget) => void) | undefined;
 }) {
 	const changeSet = onOpenChanges ? itemChangeSet(todo) : null;
@@ -411,7 +383,7 @@ function TodoRow({
 				<div
 					className={cn(
 						"truncate tr-text-ui",
-						todo.status === "done" ? "text-text-muted line-through" : "text-text-default",
+						todo.status === "done" ? "text-text-muted" : "text-text-default",
 					)}
 				>
 					{todo.title}
@@ -429,34 +401,6 @@ function TodoRow({
 					<UserRound className="size-14" />
 				</span>
 			) : null}
-			<IconTooltip
-				label={
-					reviewing
-						? "Checking… — wait for the check to finish before removing"
-						: todo.origin === "user"
-							? "Cancel task"
-							: "Remove"
-				}
-			>
-				<button
-					type="button"
-					onClick={() => {
-						const message =
-							todo.origin === "user"
-								? "Cancel this task? The agent will stop working on it — it won't come back on its own."
-								: todo.status === "done"
-									? "Remove this done step? Its history drops from the plan."
-									: "Remove this step? The agent may re-add it on its next pass.";
-						if (typeof window !== "undefined" && !window.confirm(message)) return;
-						onRemove();
-					}}
-					disabled={reviewing}
-					aria-label={todo.origin === "user" ? "Cancel task" : "Remove"}
-					className="flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted opacity-0 transition-opacity hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 focus-visible:opacity-100 disabled:pointer-events-none disabled:opacity-0"
-				>
-					<Trash2 className="size-14" />
-				</button>
-			</IconTooltip>
 		</li>
 	);
 }

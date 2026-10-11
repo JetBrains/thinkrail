@@ -132,8 +132,9 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 	);
 
 	// Open the plan page through the popup.
-	await page.getByTestId("chat-plan-toggle").click();
-	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	await page.getByTestId("tool-rail-plan").click();
+	await page.getByTestId("tool-rail-plan").click();
+	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
 
@@ -254,8 +255,9 @@ test("a branch commit no step owns shows under 'Committed outside the plan' and 
 		"chore: unplanned commit",
 	);
 
-	await page.getByTestId("chat-plan-toggle").click();
-	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	await page.getByTestId("tool-rail-plan").click();
+	await page.getByTestId("tool-rail-plan").click();
+	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
 
@@ -343,8 +345,9 @@ test("the plan page groups items into a Now block and Done, and adds a task inli
 		}),
 	);
 
-	await page.getByTestId("chat-plan-toggle").click();
-	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	await page.getByTestId("tool-rail-plan").click();
+	await page.getByTestId("tool-rail-plan").click();
+	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
 
@@ -402,8 +405,9 @@ test("plan items can be removed, and the add box takes multi-line input (Enter a
 		}),
 	);
 
-	await page.getByTestId("chat-plan-toggle").click();
-	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	await page.getByTestId("tool-rail-plan").click();
+	await page.getByTestId("tool-rail-plan").click();
+	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
 
@@ -418,16 +422,12 @@ test("plan items can be removed, and the add box takes multi-line input (Enter a
 	await input.press("Enter");
 	await expect(pane.getByTestId("plan-item").filter({ hasText: "second line" })).toBeVisible();
 
-	// Remove: the hover affordance opens a confirm popover (user items read as "Cancel this task?");
-	// confirming completes the removal.
+	// The hover Remove affordance is intentionally gone: removing a plan item from the UI was
+	// confusing ("when would I want this?"); the agent still controls todo.remove through its tool.
+	// The item just stays on the plan.
 	const item = pane.getByTestId("plan-item").filter({ hasText: "A task I added" });
 	await item.hover();
-	await item.getByTestId("plan-item-remove").click();
-	const confirm = page.getByTestId("confirm-popover");
-	await expect(confirm).toBeVisible();
-	await expect(confirm).toContainText("Cancel this task?");
-	await confirm.getByTestId("plan-item-remove-confirm").click();
-	await expect(pane.getByTestId("plan-item").filter({ hasText: "A task I added" })).toHaveCount(0);
+	await expect(item.getByTestId("plan-item-remove")).toHaveCount(0);
 });
 
 test("an empty plan's idle line is a click target that opens the add input", async ({ page }) => {
@@ -445,8 +445,9 @@ test("an empty plan's idle line is a click target that opens the add input", asy
 		JSON.stringify({ version: 6, todos: [], groups: [] }),
 	);
 
-	await page.getByTestId("chat-plan-toggle").click();
-	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	await page.getByTestId("tool-rail-plan").click();
+	await page.getByTestId("tool-rail-plan").click();
+	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
 	const idle = pane.getByTestId("plan-now-idle");
@@ -486,8 +487,9 @@ test("a completed plan turns the Now block into a chat composer instead of an id
 		}),
 	);
 
-	await page.getByTestId("chat-plan-toggle").click();
-	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	await page.getByTestId("tool-rail-plan").click();
+	await page.getByTestId("tool-rail-plan").click();
+	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
 	await expect(pane.getByTestId("plan-session-chat")).toBeVisible();
@@ -551,8 +553,9 @@ test("a re-opened plan keeps the completion note on the page, marked stale, but 
 		}),
 	);
 
-	await page.getByTestId("chat-plan-toggle").click();
-	await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+	await page.getByTestId("tool-rail-plan").click();
+	await page.getByTestId("tool-rail-plan").click();
+	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
 

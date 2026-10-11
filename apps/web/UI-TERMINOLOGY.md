@@ -208,8 +208,10 @@ The agent conversation, rendered inside a Chat tab in the Center Tabbed Area.
 - **Parent:** Chat View.
 - **Position:** Slim top bar of the Chat View.
 - **Children / slots:**
-  - **Plan Strip** — `ChatPlanStripContent` (from `chat/ChatPlan.tsx`), passed into the header's `left`
-    slot; opens the **Plan Popover** (`ChatPlanContent`) over the chat.
+  - **TODO List Strip** — `ChatPlanStripContent` (from `chat/ChatPlan.tsx`), passed into the
+    header's `left` slot; click focuses the right-rail **TODO List** tool via
+    `requestToolView(workspaceId, "plan")`. The former inline popover is gone (the rail is the
+    always-on surface now).
   - **Status Entries** — inline muted `statusEntries` text (extension status).
   - **Session Stats Bar** — `chat/SessionStatsBar.tsx` → `SessionStatsBar` (token/cost stats).
   - **Resources Trigger** — `chat/resources/ResourcesButton.tsx` → `ResourcesButton`
@@ -334,7 +336,7 @@ Children / associated surfaces:
 
 - **Canonical name:** Chat Plan.
 - **Implementation:** `chat/ChatPlan.tsx` (`ChatPlanStripContent` = the Plan Strip in the Chat Header;
-  `ChatPlanContent` = the Plan Popover body) + `chat/TodoList.tsx` → `TodoList`.
+  `chat/TodoList.tsx` → `TodoList` + `panels/PlanRailPane.tsx` → `PlanRailPane` (rail body).
 - **Parent:** Chat Header (strip) → Popover (body).
 - **Responsibility:** surface the chat's `pi-todos` plan (group-first, status-ordered). There is no
   side-tool Todo tab — the plan lives in the conversation.
@@ -604,7 +606,7 @@ its alternatives in parentheses.
   **Send Button**, **History-Open Button**, **Slot Hint Chip**.
 - **History Overlay** — **Results List**, **Preview Pane**, **Scope Picker**, **Jump Action**,
   **Save-as-Template Action**.
-- **Chat Plan** — **Plan Strip** + **Plan Popover** + **Todo List**.
+- **Chat Plan** — **TODO List Strip** (chat header chip) + **TODO List** (right-rail tool, `PlanRailPane`) + **Plan Page** (center-tab, `PlanPane`, opened via `openPlan`).
 
 **Changes review**
 

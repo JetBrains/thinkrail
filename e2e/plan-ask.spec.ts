@@ -53,8 +53,9 @@ test("a pending ask_user_question is answerable from the plan page", async ({ pa
 		await enterDefaultWorkspace(page);
 		await hideAuxiliaryWorkbench(page);
 		await openPersistedChat(page, "plan ask question");
-		await page.getByTestId("chat-plan-toggle").click();
-		await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+		await page.getByTestId("tool-rail-plan").click();
+		await page.getByTestId("tool-rail-plan").click();
+		await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 		const pane = page.getByTestId("plan-pane");
 		await expect(pane).toBeVisible();
 		const card = pane.getByTestId("plan-ask");
@@ -113,8 +114,9 @@ test("the plan shows the agent's latest message when it isn't asking or on a ste
 		await enterDefaultWorkspace(page);
 		await hideAuxiliaryWorkbench(page);
 		await openPersistedChat(page, "agent activity");
-		await page.getByTestId("chat-plan-toggle").click();
-		await page.getByTestId("chat-plan-popover").getByTestId("todo-open-plan").click();
+		await page.getByTestId("tool-rail-plan").click();
+		await page.getByTestId("tool-rail-plan").click();
+		await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 		const pane = page.getByTestId("plan-pane");
 		await expect(pane).toBeVisible();
 		await expect(pane.getByTestId("plan-agent-message")).toContainText("day_of_visit avalanche");

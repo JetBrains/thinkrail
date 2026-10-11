@@ -15,8 +15,8 @@ test("the agent maintains the chat's TODO plan live, and picks up a user-added i
 	await page.getByTestId("chat-send").click();
 	await waitForAgentSettled(page, 150_000);
 
-	await page.getByTestId("chat-plan-toggle").click();
-	const popover = page.getByTestId("chat-plan-popover");
+	await page.getByTestId("tool-rail-plan").click();
+	const popover = page.getByTestId("plan-rail-pane");
 	const doneGroup = popover.getByTestId("todo-group-done").filter({ hasText: "Demo" });
 	await expect(doneGroup).toBeVisible({ timeout: 15_000 });
 	await doneGroup.click();

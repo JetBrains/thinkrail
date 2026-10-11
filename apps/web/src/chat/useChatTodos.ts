@@ -43,7 +43,6 @@ export interface ChatTodos {
 	data: TodoPlan | null;
 	failed: boolean;
 	add: (title: string, surface?: "chat" | "page") => Promise<void>;
-	remove: (id: string) => Promise<void>;
 	openPlan: () => void;
 	notifyOpened: (surface: "popup") => void;
 	openChanges: (target: { sha: string } | { path: string }) => void;
@@ -221,29 +220,6 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		return true;
 	};
 
-	const remove = async (id: string) => {
-		const requestIdentity = identity;
-		setData((current) =>
-			current
-				? {
-						todos: current.todos.filter((t) => t.id !== id),
-						groups: current.groups
-							.map((g) => ({ ...g, todos: g.todos.filter((t) => t.id !== id) }))
-							.filter((g) => g.todos.length > 0),
-					}
-				: current,
-		);
-		try {
-			await getTransport().request("todo.remove", { workspaceId, sessionId, id });
-			if (live(requestIdentity)) {
-				await reloadPlan();
-			}
-		} catch (err) {
-			if (live(requestIdentity)) await reloadPlan();
-			console.warn("todo remove failed:", errorText(err));
-		}
-	};
-
 	const notifyOpened = (surface: "page" | "popup") => {
 		void getTransport()
 			.request("todo.list", { workspaceId, sessionId, opened: surface })
@@ -296,7 +272,6 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		data,
 		failed,
 		add,
-		remove,
 		openPlan,
 		notifyOpened: (surface: "popup") => notifyOpened(surface),
 		openChanges,
