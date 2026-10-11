@@ -245,7 +245,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   read as switching between Specs and Changes; closing is “never mind” and leaves the tool where the user
   last sent it.
 - **The host's turn receipt beats tool arguments.** `deriveRows` also takes **this chat's** recorded agent
-  runs (`store.turnsByWorkspace` filtered by `sessionId` in `ChatView` — a workspace's other chats write
+  runs (`store.turnsByWorkspace` filtered by `sessionId` in `ChatTranscript` — a workspace's other chats write
   files too); `matchTurnReceipt` joins them to a round by the run's start time, from the
   prompt up to (excluding) the *next* prompt. Both timestamps come from the host, and pi timestamps
   the user message before starting the run, so no clock-skew allowance belongs here: shifting the
@@ -259,7 +259,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   appear in both chips or twice under absolute and relative paths. Several runs in
   one round (a steer, a retry) merge into one receipt spanning the first run's base tree to the last run's
   head tree under its own scope id (`first..last`), so it never shares a review tab with the last run alone. A **Review turn** chip appears beside the files chip and calls `onReviewTurn(scope)`, which
-  `ChatView` routes to `requestChangesView(workspaceId, null, scope)`: the Changes panel adopts the turn
+  `ChatTranscript` routes to `requestChangesView(workspaceId, null, scope)`: the Changes panel adopts the turn
   scope and opens the review tab for it; the chip's `+a −r` is summed over the files it counts (specs
   are their own chip), and a multi-run round's per-file stats are the last run's for that path — the
   review tab shows the true first-base → last-head diff. Without a receipt (older host, zero-change run) the divider
@@ -1253,8 +1253,9 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   static markdown `doc` tab with a custom `thinkrail-diff:` link scheme — replaced: a snapshot lies the
   moment the agent flips a status, and markdown can't carry the Changes-panel affordances; the page is live
   and markdown is demoted to its export.)
-  **The glance state** keeps the plan honest as the user's status window: `planGlance(isStreaming,
-  askStates)` — derived from session state in `ChatView`, **never stored**, so the agent can't make it
+  **The glance state** keeps the plan honest as the user's status window: the memoized `sessionGlance(runtime)`
+  selector (which runs `planGlance` over the session's streaming flag + ask-state), read in `ChatView`'s shell
+  and layered over the host `SessionState` via `hostSessionGlance`, **never stored**, so the agent can't make it
   lie — renders the `in_progress` step as working (dot), **waiting for your answer**
   (`MessageCircleQuestion` — the same glyph as the `ask_user_question` card, while a live tool blocks or a
   restart-repaired session awaits), or **paused** (`CirclePause`, any other stop: turn ended, error). A stop with no
