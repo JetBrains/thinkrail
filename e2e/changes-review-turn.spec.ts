@@ -64,4 +64,12 @@ test("Review turn on a pruned snapshot opens that turn's review tab even when th
 	);
 	await expect(reviewTab(page)).toHaveCount(1);
 	await expect(page.getByTestId("changes-review-scope")).toContainText("Last turn");
+	await expect(page.getByTestId("changes-review-retry")).toHaveCount(0);
+
+	await page.getByTestId("changes-review-all-changes").click();
+	await expect(page.getByTestId("changes-review-scope")).toContainText("All changes");
+	await expect(page.getByTestId("changes-review-error")).toHaveCount(0);
+	await expect(
+		page.locator('[data-testid="changes-section"][data-path="feature.ts"]'),
+	).toBeVisible();
 });

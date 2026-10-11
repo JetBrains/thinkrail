@@ -61,6 +61,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const mobile = usePhoneViewport();
 	const [status, setStatus] = useState<GitStatus | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [scopeGone, setScopeGone] = useState(false);
 	const warnedRef = useRef(false);
 	const baseRef = useAppStore((state) => selectDiffBaseRef(state, workspaceId));
 	const targetRef = useAppStore((state) => selectDiffTabTargetRef(state, { workspaceId, scope }));
@@ -93,10 +94,13 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 			onResult: (result) => {
 				setStatus(result);
 				setError(null);
+				setScopeGone(false);
 				warnedRef.current = false;
 			},
 			onFailure: (_id, failure) => {
 				if (wsErrorCode(failure) === "UNKNOWN_COMMIT") {
+					setStatus(null);
+					setScopeGone(true);
 					setError(
 						scope.kind === "turn"
 							? "That agent turn's snapshot is no longer in this repository."
@@ -113,6 +117,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 			onSwitch: () => {
 				setStatus(null);
 				setError(null);
+				setScopeGone(false);
 				warnedRef.current = false;
 				restoredStacked.current = false;
 			},
@@ -481,16 +486,29 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 			{status === null && error !== null ? (
 				<div data-testid="changes-review-error" className="flex flex-col items-start gap-4 p-12">
 					<p className="tr-text-metadata text-feedback-error">
-						Could not read the changes: {error}
+						{scopeGone ? error : `Could not read the changes: ${error}`}
 					</p>
-					<button
-						type="button"
-						data-testid="changes-review-retry"
-						onClick={reload}
-						className="rounded-[var(--radius-sm)] px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
-					>
-						Retry
-					</button>
+					{scopeGone ? (
+						<button
+							type="button"
+							data-testid="changes-review-all-changes"
+							onClick={() =>
+								useAppStore.getState().requestChangesView(workspaceId, null, { kind: "branch" })
+							}
+							className="rounded-[var(--radius-sm)] px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+						>
+							Review all changes
+						</button>
+					) : (
+						<button
+							type="button"
+							data-testid="changes-review-retry"
+							onClick={reload}
+							className="rounded-[var(--radius-sm)] px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+						>
+							Retry
+						</button>
+					)}
 				</div>
 			) : status === null ? (
 				<LoadingRegion rows={8} className="p-12" />

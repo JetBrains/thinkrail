@@ -39,8 +39,9 @@ pi's `turn_*` (one assistant message): a receipt per message would fragment one 
   line counts. A tree snapshot is what the agent actually left behind.
 - **Trees, not commits.** A snapshot must not touch HEAD, the index, or the reflog; dangling trees cost
   only object storage and `git gc` prunes them after its grace period. The price is that a very old
-  turn may stop resolving — the scope then fails with `UNKNOWN_COMMIT` and the client resets to *All
-  changes* exactly as for a rewritten commit.
+  turn may stop resolving — the scope then fails with `UNKNOWN_COMMIT`: the Changes sidebar resets to
+  *All changes* exactly as for a rewritten commit, and an open review tab for that turn says so and
+  offers *All changes*.
 - **A receipt is the workspace's interval, not the run's authorship.** Both snapshots cover the whole
   worktree, so a second chat, a user edit, or a revert landing while this run is pending appears in its
   receipt too. Exclusive attribution would need per-write provenance the host does not have; tool

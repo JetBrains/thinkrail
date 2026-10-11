@@ -384,7 +384,7 @@ its navigator.
 | — Apply Fixes | inline button | `changes-review-guide-apply` | "Apply fixes": sends every open finding to the agent |
 | Large-Scope Notice | inline | `changes-review-large-notice` | More than 50 files: offers One file; dismissable |
 | End Note | `ReviewListFooter` | `changes-review-end` | "End of changes · N files" tail of the Stacked list |
-| Empty / Error states | inline | `changes-review-empty` / `changes-review-error` / `changes-review-retry` | No changes in this scope; failed read + Retry |
+| Empty / Error states | inline | `changes-review-empty` / `changes-review-error` / `changes-review-retry` / `changes-review-all-changes` | No changes in this scope; failed read + Retry; a scope whose commit or turn snapshot is gone + Review all changes |
 
 ---
 

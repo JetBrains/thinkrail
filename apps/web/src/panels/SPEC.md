@@ -1397,6 +1397,9 @@ own section. The kebab menu (`plan-menu`, a
   a sentence in a rail header squeezes the sibling target-branch pill down to an ellipsis. A scope naming a commit the repo no longer has (rebase, branch reset) makes
   the host reject `git.status` with the **named** code `UNKNOWN_COMMIT` (`wsErrorCode`), and *that* rejection —
   and only that one — **resets to the branch scope with a toast** rather than staying wedged on a dead sha.
+  A review tab's scope is its identity, so the same code on *its* read never repoints the tab: it drops the
+  stale list, names what is gone (commit or turn snapshot) and offers *Review all changes*, which goes
+  through `requestChangesView` to the branch tab the sidebar reset lands on — never a useless *Retry*.
   Every other failure (timeout, prolonged network outage, git error) leaves the user's chosen scope alone, keeps the
   last good list, and says so once per failing streak: silently swapping the scope on a network blip is a
   worse lie than a stale list. The code exists precisely because "the read failed" cannot distinguish the two.
