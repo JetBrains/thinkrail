@@ -458,58 +458,51 @@ function ItemBlock({
 	);
 }
 
+// Plan summary (and per-item summary) render through Markdown; the agent writes them in PR-body
+// shape (`## Summary` / `## Changes` / `## Testing`) per `todos` SKILL.md, so we need to actually
+// style headings, code, and quotes (not just paragraphs). Scaled smaller than `DOCUMENT_PROSE`
+// (which is for the full MarkdownPreview page) to fit a card inside the Plan page.
 const SUMMARY_PROSE = [
 	"max-w-none break-words text-text-muted",
 	"[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+	"[&_h1]:mt-12 [&_h1]:mb-8 [&_h1]:tr-title-dialog [&_h1]:text-text-default",
+	"[&_h2]:mt-12 [&_h2]:mb-8 [&_h2]:tr-title-dialog [&_h2]:text-text-default",
+	"[&_h3]:mt-12 [&_h3]:mb-4 [&_h3]:tr-title-section [&_h3]:text-text-default",
+	"[&_h4]:mt-8 [&_h4]:mb-4 [&_h4]:tr-title-section [&_h4]:text-text-default",
 	"[&_p]:my-4 [&_strong]:text-text-default",
 	"[&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2",
 	"[&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-16 [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-16 [&_li]:my-2",
+	"[&_li>ul]:my-2 [&_li>ol]:my-2 [&_li_p]:my-2",
+	"[&_code]:rounded-xs [&_code]:bg-container-elevated-bg [&_code]:px-4 [&_code]:py-2 [&_code]:tr-code-text [&_code]:text-text-default",
+	"[&_pre]:my-8 [&_pre]:overflow-x-auto [&_pre]:rounded-sm [&_pre]:border [&_pre]:border-border-default [&_pre]:bg-container-elevated-bg [&_pre]:p-8",
+	"[&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_pre_code]:tr-code-text",
+	"[&_blockquote]:my-8 [&_blockquote]:border-primary-muted [&_blockquote]:border-l-2 [&_blockquote]:pl-8 [&_blockquote]:text-text-muted",
+	"[&_hr]:my-12 [&_hr]:h-px [&_hr]:border-0 [&_hr]:bg-border-default",
 ].join(" ");
 
 function PlanSummary({ summary, stale = false }: { summary: string; stale?: boolean }) {
-	const [open, setOpen] = useState(false);
-	const clampable = summary.length > 160;
-	const header = (
-		<>
-			<span className="tr-text-eyebrow text-text-subtle">Summary</span>
-			{stale ? (
-				<span
-					data-testid="plan-summary-stale"
-					title="Showing the last completed recap until the plan finishes again"
-					className="flex items-center gap-4 tr-text-metadata text-text-muted"
-				>
-					<Loader2 className="size-14 shrink-0 animate-spin text-text-muted" />
-					Updating…
-				</span>
-			) : null}
-		</>
-	);
+	// The summary is written in PR-body shape (## Summary / ## Changes / ## Testing) — render it in
+	// full, no clamp or disclosure. If the user opened the plan page, they want to see the recap.
 	return (
 		<div className={`${PLAN_CARD_CLASS} flex flex-col gap-8`}>
-			{clampable ? (
-				<button
-					type="button"
-					data-testid="plan-overall-summary-toggle"
-					aria-expanded={open}
-					title={open ? "Collapse the summary" : "Expand the summary"}
-					onClick={() => setOpen((v) => !v)}
-					className="flex w-full flex-wrap items-center gap-x-8 gap-y-2 text-left"
-				>
-					{header}
-					<ChevronRight
-						className={`ml-auto size-16 shrink-0 text-text-muted transition-transform ${
-							open ? "rotate-90" : ""
-						}`}
-					/>
-				</button>
-			) : (
-				<div className="flex flex-wrap items-center gap-x-8 gap-y-2">{header}</div>
-			)}
-			<div data-testid="plan-overall-summary">
-				<Markdown
-					text={summary}
-					className={`tr-text-ui ${SUMMARY_PROSE} ${clampable && !open ? "line-clamp-2" : ""}`}
-				/>
+			<div className="flex flex-wrap items-center gap-x-8 gap-y-2">
+				<span className="tr-text-eyebrow text-text-subtle">Summary</span>
+				{stale ? (
+					<span
+						data-testid="plan-summary-stale"
+						title="Showing the last completed recap until the plan finishes again"
+						className="flex items-center gap-4 tr-text-metadata text-text-muted"
+					>
+						<Loader2 className="size-14 shrink-0 animate-spin text-text-muted" />
+						Updating…
+					</span>
+				) : null}
+			</div>
+			{/* Bounded scroll area 
+ a long PR-body summary (## Summary / ## Changes / ## Testing with
+			    bullets) shouldn't push the plan items below the fold. 40vh keeps it visible but capped. */}
+			<div data-testid="plan-overall-summary" className="max-h-[40vh] overflow-y-auto">
+				<Markdown text={summary} className={`tr-text-ui ${SUMMARY_PROSE}`} />
 			</div>
 		</div>
 	);

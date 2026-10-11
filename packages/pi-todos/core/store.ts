@@ -73,10 +73,26 @@ function freshId(prefix: string): string {
 	return `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
 
+// Agent-authored text often arrives with JSON escape sequences left literal rather than decoded:
+// an LLM provider may emit `\n` (two characters: backslash + n) inside a tool-call string arg when
+// it means a newline, especially for Markdown bodies. The user's own input is stored verbatim
+// (`decodeIfAgent` gates on origin), so a hand-typed `\n` inside a code snippet stays untouched.
+// Known cost: a Markdown fenced ``` code block ``` with a literal "\n" in agent-authored text
+// collapses to a real newline (accepted trade-off for the readable-markdown-in-99%-of-cases win).
+const ESCAPE_MAP: Record<string, string> = {
+	n: "\n",
+	r: "\r",
+	t: "\t",
+};
+
 function decodeEscapes(s: string): string {
-	return s.includes("\\u")
-		? s.replace(/\\u([0-9a-fA-F]{4})/g, (_m, hex) => String.fromCharCode(Number.parseInt(hex, 16)))
-		: s;
+	let out = s;
+	if (out.includes("\\u"))
+		out = out.replace(/\\u([0-9a-fA-F]{4})/g, (_m, hex) =>
+			String.fromCharCode(Number.parseInt(hex, 16)),
+		);
+	if (/\\[nrt]/.test(out)) out = out.replace(/\\([nrt])/g, (_m, k) => ESCAPE_MAP[k] ?? _m);
+	return out;
 }
 
 function decodeIfAgent(s: string, origin: TodoOrigin): string {

@@ -327,6 +327,24 @@ test("literal \\uXXXX escapes in titles/notes/group names are decoded, not shown
 	}
 });
 
+test("literal \\n/\\r/\\t in agent-authored summary/note is decoded to real whitespace (markdown render fix)", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		// Agent-origin plan-level summary with literal \n sequences (LLM providers often leave them
+		// un-decoded in tool-call strings) must come back out as real newlines so Markdown renders.
+		s.setSummary("## Summary\\n\\nFirst line.\\n\\n- bullet\\n- bullet two");
+		expect(s.read().summary).toBe("## Summary\n\nFirst line.\n\n- bullet\n- bullet two");
+		// Also agent-origin per-item summary + note.
+		const todo = s.add({ title: "step", note: "line one\\nline two" });
+		expect(s.get(todo.id)?.note).toBe("line one\nline two");
+		s.update(todo.id, { status: "done", summary: "Shipped.\\n\\nDetails." });
+		expect(s.get(todo.id)?.summary).toBe("Shipped.\n\nDetails.");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 test("user-authored text is stored verbatim — \\uXXXX is NOT decoded for user input", () => {
 	const root = tempRoot();
 	try {
