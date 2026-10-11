@@ -45,6 +45,7 @@ export function createWebNotificationChannel(): NotificationChannel {
 		kind: "browser",
 		permission: notificationPermission,
 		requestPermission: requestNotificationPermission,
+		isWindowFocused,
 		show: (spec, onClick) => {
 			const body = spec.subtitle ? `${spec.subtitle} · ${spec.body}` : spec.body;
 			showBrowserNotification({ title: spec.title, body, tag: spec.tag, onClick });

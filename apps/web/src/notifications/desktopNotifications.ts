@@ -1,5 +1,6 @@
 import type { NativeNotificationBridge } from "@thinkrail/contracts";
 import type { NotificationChannel } from "./channel";
+import { isWindowFocused } from "./webNotifications";
 
 const NATIVE_NOTIFICATIONS_GLOBAL = "__THINKRAIL_NATIVE_NOTIFICATIONS__";
 
@@ -32,6 +33,7 @@ export function createDesktopNotificationChannel(
 		kind: "os",
 		permission: () => "granted",
 		requestPermission: async () => "granted",
+		isWindowFocused: bridge.isWindowFocused ?? isWindowFocused,
 		show: (spec) => {
 			bridge.show({
 				title: spec.title,

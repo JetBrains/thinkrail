@@ -37,6 +37,7 @@ export type DesktopRpc = {
 			updateStateChanged: NativeUpdateState;
 			windowChromeChanged: WindowChromeGeometry;
 			windowStateChanged: NativeWindowState;
+			windowFocusChanged: { focused: boolean };
 			quitHintChanged: { hint: NativeQuitHint };
 			nativeCommand: { command: NativeCommand };
 		};

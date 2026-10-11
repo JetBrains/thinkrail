@@ -143,13 +143,21 @@ as the frozen non-enumerable `__THINKRAIL_NATIVE_SHORTCUTS__` `NativeShortcutsBr
 Linux the web shell owns Ctrl+W / Ctrl+F4 (close item) through its command table.
 
 The preload also exposes the frozen non-enumerable `__THINKRAIL_NATIVE_NOTIFICATIONS__`
-`NativeNotificationBridge` ([[module-contracts]]) on every desktop platform: its one `show({ title,
-subtitle?, body, silent? })` method forwards a `showNotification` RPC request to the main process, which
-calls Electrobun `Utils.showNotification` (native OS notification center); delivery is best-effort, so a
-failed request is dropped rather than surfacing an unhandled rejection. The web client detects this
-bridge by capability and routes its attention notifications through it instead of the page Notifications
-API — the web shell keeps no desktop branch. Electrobun click callbacks are not landed yet, so the native
-notification carries no click action.
+`NativeNotificationBridge` ([[module-contracts]]) on every desktop platform. It has two capabilities:
+`show({ title, subtitle?, body, silent? })` forwards a `showNotification` RPC request to the main
+process, which calls Electrobun `Utils.showNotification` (native OS notification center); delivery is
+best-effort, so a failed request is dropped rather than surfacing an unhandled rejection.
+`isWindowFocused()` returns whether the native window holds OS-level focus; the main process tracks this
+via `BrowserWindow` `focus`/`blur` events and pushes the state to the renderer through a
+`windowFocusChanged` RPC message, which the preload caches synchronously. This correctly reports `true`
+when DevTools or other in-window chrome has renderer focus, unlike `document.hasFocus()` which returns
+`false` in that case. **Platform caveat:** on Windows, DevTools is a separate native window; focusing it
+fires `blur` on the main `BrowserWindow`, so `isWindowFocused()` falls back to the same limitation as
+the browser channel. On macOS, DevTools is docked and the main-window focus is preserved. Electrobun
+2.0.1 has no application-level activation signal; a cross-window solution requires a future API. The web
+client detects this bridge by capability and routes its attention notifications through it instead of the
+page Notifications API — the web shell keeps no desktop branch.
+Electrobun click callbacks are not landed yet, so the native notification carries no click action.
 
 Each chord has exactly one owner: a native menu accelerator (forwarded as a `NativeCommand`) or web
 keydown, never both, because the webview still receives keydown for accelerator chords. Native owns chords

@@ -57,4 +57,24 @@ describe("desktop notification channel", () => {
 			silent: false,
 		});
 	});
+
+	test("isWindowFocused delegates to bridge when provided", () => {
+		const bridge: NativeNotificationBridge = {
+			show: () => {},
+			isWindowFocused: () => true,
+		};
+		const channel = createDesktopNotificationChannel(bridge);
+		expect(channel.isWindowFocused()).toBe(true);
+	});
+
+	test("isWindowFocused falls back to document.hasFocus when bridge lacks it", () => {
+		const savedDoc = (globalThis as Record<string, unknown>).document;
+		(globalThis as Record<string, unknown>).document = { hasFocus: () => true };
+		try {
+			const { channel } = harness();
+			expect(channel.isWindowFocused()).toBe(true);
+		} finally {
+			(globalThis as Record<string, unknown>).document = savedDoc;
+		}
+	});
 });

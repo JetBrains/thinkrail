@@ -6,7 +6,6 @@ import { selectNotificationChannel } from "./channel";
 import { type AttentionCandidate, isLit } from "./detectAttention";
 import type { NotificationSpec } from "./formatNotification";
 import { isPromptSnoozed } from "./notificationPrompt";
-import { isWindowFocused } from "./webNotifications";
 
 /** Collection-window length: enqueued edges accumulate this long, then flush as one batch. */
 export const ATTENTION_WINDOW_MS = 1000;
@@ -57,7 +56,7 @@ export function useAttentionNotifications(): void {
 			windowMs: ATTENTION_WINDOW_MS,
 			isEnabled: () => useAppStore.getState().notificationsEnabled,
 			permission: channel.permission,
-			isWindowFocused,
+			isWindowFocused: channel.isWindowFocused,
 			isStillLit: (sessionId) => {
 				const state = useAppStore.getState();
 				for (const records of Object.values(state.sessionStateByWorkspace)) {

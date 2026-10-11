@@ -78,6 +78,19 @@ permission (and click callbacks) is deferred.
 One rule: **window focused ⇒ never notify.** If the window holds focus the user is in ThinkRail and sees
 the dot regardless of which workspace/chat is open, so no per-chat visibility check is needed.
 
+The focus signal is **channel-aware**: `NotificationChannel.isWindowFocused()` lets each channel use the
+best available API. The desktop channel receives OS-level window focus from the native bridge
+(`__THINKRAIL_NATIVE_NOTIFICATIONS__.isWindowFocused()`), which correctly reports `true` when DevTools
+or other in-window chrome has renderer focus — the native window is still focused at the OS level. The
+browser channel falls back to `document.hasFocus()`, which returns `false` in that scenario; this is a
+known browser-API limitation that does not affect end users (only developers with DevTools open).
+
+**Platform caveat (Windows):** on Windows, DevTools opens as a separate native window; focusing it fires
+`blur` on the main `BrowserWindow`, so `isWindowFocused()` returns `false` — the same limitation as the
+browser channel. On macOS, DevTools is docked inside the same native window and the main-window focus is
+preserved. Electrobun 2.0.1 exposes only per-window `focus`/`blur` events with no application-level
+activation signal, so a cross-window solution requires a future Electrobun API.
+
 ## Permission
 
 Permission is requested at the clearest user gesture. The primary, visible path is the Settings panel

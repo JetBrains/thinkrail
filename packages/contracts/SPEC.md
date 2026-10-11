@@ -69,9 +69,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   the minimize / toggle-maximize / close actions a frameless native window delegates to HTML controls;
   `NativeQuitHint`, `NativeCommand`, and `NativeShortcutsBridge` push the confirmed-quit hint and forwarded
   native menu commands, and offer `quit()` for a client that confirms the quit gesture itself;
-  `NativeNotificationInput` and `NativeNotificationBridge` carry one fire-and-forget `show({ title,
-  subtitle?, body, silent? })` that raises an OS notification (no callback or id — the native API has no
-  click event). The
+  `NativeNotificationInput` and `NativeNotificationBridge` carry `show({ title, subtitle?, body,
+  silent? })` (fire-and-forget OS notification, no callback or id) and an optional `isWindowFocused()`
+  that reports OS-level window focus (true even when DevTools has renderer focus). The
   same web bundle discovers these capabilities without importing a native SDK. An optional
   `HostUpdateNotice` carries a closed CLI-host update lifecycle; protocol-gated `host.update` is an empty
   request that can start only the launcher's pre-bound updater. The browser never supplies a command, path,
@@ -489,8 +489,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   snapshot/action/subscription shape for window state. The shortcuts bridge pushes quit-hint changes
   (`hidden` / `armed` / `release` / `quitting`) and `NativeCommand` ids (today `close-item`, close the
   focused in-app item), and its one action `quit()` asks the host for an ordinary coordinated quit. The
-  notification bridge exposes one fire-and-forget `show({ title, subtitle?, body, silent? })` that raises an
-  OS notification; it returns nothing and the native API surfaces no click event or id. A browser
+  notification bridge exposes `show({ title, subtitle?, body, silent? })` (fire-and-forget OS notification,
+  no callback or id) and an optional `isWindowFocused()` that reports OS-level window focus — true even
+  when DevTools has renderer focus, unlike `document.hasFocus()`. A browser
   connection has none of these bridges and renders none of their affordances.
 - **quitConfirmation.ts** — the single home of the quit-confirmation gesture shared by the desktop main
   process (macOS Cmd+Q, key state polled through CoreGraphics) and the web shell (Linux Ctrl+Q, key state

@@ -367,6 +367,8 @@ async function start(): Promise<void> {
 		},
 	);
 	mainWindow.on("close", removeNavigationListeners);
+	mainWindow.on("focus", () => rpc.send.windowFocusChanged({ focused: true }));
+	mainWindow.on("blur", () => rpc.send.windowFocusChanged({ focused: false }));
 	updateController.subscribe((state) => rpc.send.updateStateChanged(state));
 	menuTarget = {
 		hintVisible: () => !mainWindow.isMinimized(),

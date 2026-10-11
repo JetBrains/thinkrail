@@ -40,6 +40,10 @@ windowChromeStyle.update(initialWindowChrome);
 
 const updateListeners = new Set<(state: NativeUpdateState) => void>();
 const windowStateListeners = new Set<(state: NativeWindowState) => void>();
+let nativeWindowFocused = document.hasFocus();
+window.addEventListener("focus", () => {
+	nativeWindowFocused = true;
+});
 const shortcuts = createShortcutsBridge(() => rpc.request.quitApp());
 const rpc = Electroview.defineRPC<DesktopRpc>({
 	maxRequestTime: 5000,
@@ -52,6 +56,9 @@ const rpc = Electroview.defineRPC<DesktopRpc>({
 			windowChromeChanged: windowChromeStyle.update,
 			windowStateChanged: (state) => {
 				for (const listener of windowStateListeners) listener(state);
+			},
+			windowFocusChanged: ({ focused }) => {
+				nativeWindowFocused = focused;
 			},
 			quitHintChanged: ({ hint }) => shortcuts.emitQuitHint(hint),
 			nativeCommand: ({ command }) => shortcuts.emitCommand(command),
@@ -95,6 +102,7 @@ const notificationBridge: NativeNotificationBridge = Object.freeze({
 	show: (input: NativeNotificationInput) => {
 		rpc.request.showNotification(input).catch(() => undefined);
 	},
+	isWindowFocused: () => nativeWindowFocused,
 });
 Object.defineProperty(globals, "__THINKRAIL_NATIVE_NOTIFICATIONS__", {
 	value: notificationBridge,

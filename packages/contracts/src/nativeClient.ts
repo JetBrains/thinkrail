@@ -50,6 +50,8 @@ export interface NativeNotificationInput {
 
 export interface NativeNotificationBridge {
 	show(input: NativeNotificationInput): void;
+	/** Whether the native window holds OS-level focus (true even when DevTools is focused). */
+	isWindowFocused?: () => boolean;
 }
 
 export type NativeQuitHint = "hidden" | "armed" | "release" | "quitting";
