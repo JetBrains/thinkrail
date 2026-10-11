@@ -4,31 +4,44 @@ import { baselineEntries, censusFile } from "./compiler-census";
 
 const FIXTURE = join(import.meta.dir, "fixture.tsx");
 
-const row = (bails: boolean) => `memo(() => {
-	const ref = useRef(0);
-	${bails ? "ref.current = 1;" : ""}
-	return <p />;
-})`;
+const body = (bails: boolean) =>
+	`{ const ref = useRef(0); ${bails ? "ref.current = 1;" : ""} return <p />; }`;
+const memoRow = (bails: boolean) => `memo(() => ${body(bails)})`;
 
-const entries = (firstBails: boolean, secondBails: boolean) =>
-	baselineEntries(
-		censusFile(
-			FIXTURE,
-			`import { memo, useRef } from "react";
-export const First = ${row(firstBails)};
-export const Second = ${row(secondBails)};
-`,
-		).bailouts,
-	);
+const census = (source: string[]) =>
+	censusFile(FIXTURE, ['import { memo, useRef } from "react";', ...source].join("\n"));
+const entries = (source: string[]) => baselineEntries(census(source).bailouts);
 
-describe("baselineEntries", () => {
-	it("keeps same-named functions in one file apart", () => {
-		expect(entries(true, false)).toEqual(["scripts/fixture.tsx memo(…)"]);
-		expect(entries(false, true)).toEqual(["scripts/fixture.tsx memo(…)#2"]);
-		expect(entries(true, true)).toEqual([
-			"scripts/fixture.tsx memo(…)",
-			"scripts/fixture.tsx memo(…)#2",
+describe("compiler census identities", () => {
+	it("names a wrapped function after its binding, so an inserted sibling cannot take its key", () => {
+		expect(entries([`export const First = ${memoRow(true)};`])).toEqual([
+			"scripts/fixture.tsx First",
 		]);
-		expect(entries(false, false)).toEqual([]);
+		expect(
+			entries([
+				`export const Second = ${memoRow(true)};`,
+				`export const First = ${memoRow(false)};`,
+			]),
+		).toEqual(["scripts/fixture.tsx Second"]);
+	});
+
+	it("qualifies a nested function by its lexical owners", () => {
+		const factory = (owner: string, bails: boolean) =>
+			`export function ${owner}() { function Row() ${body(bails)} return Row; }`;
+		expect(entries([factory("first", false), factory("second", true)])).toEqual([
+			"scripts/fixture.tsx second.Row",
+		]);
+	});
+
+	it("keys an unnamed function without its line", () => {
+		const unnamed = `register(React.memo(() => ${body(true)}));`;
+		expect(entries([unnamed])).toEqual(["scripts/fixture.tsx <anonymous>"]);
+		expect(entries(["", unnamed])).toEqual(["scripts/fixture.tsx <anonymous>"]);
+	});
+
+	it("refuses compiler units it cannot tell apart", () => {
+		expect(() => census([`export const rows = [${memoRow(true)}, ${memoRow(false)}];`])).toThrow(
+			"two compiler units named memo(…)",
+		);
 	});
 });

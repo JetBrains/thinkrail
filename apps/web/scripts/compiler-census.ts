@@ -38,31 +38,63 @@ function locKey(loc: types.SourceLocation | null | undefined) {
 	return loc ? `${loc.start.line}:${loc.start.column}` : "";
 }
 
-function functionName(path: NodePath<types.Function>) {
-	const { node, parent } = path;
-	if ("id" in node && node.id) return node.id.name;
+function bindingName(path: NodePath): string | null {
+	const { node, parent, parentPath } = path;
 	if (parent.type === "VariableDeclarator" && parent.id.type === "Identifier")
 		return parent.id.name;
+	if (parent.type === "ObjectProperty" && !parent.computed && parent.key.type === "Identifier")
+		return parent.key.name;
 	if (parent.type === "ExportDefaultDeclaration") return "default";
+	if (parent.type === "CallExpression" && parent.callee !== node && parentPath) {
+		return bindingName(parentPath);
+	}
+	return null;
+}
+
+function ownName(path: NodePath<types.Function>) {
+	const { node, parent } = path;
+	if (node.type === "FunctionDeclaration" && node.id) return node.id.name;
+	const binding = bindingName(path);
+	if (binding) return binding;
+	if ("id" in node && node.id) return node.id.name;
 	if (parent.type === "CallExpression" && parent.callee.type === "Identifier") {
 		return `${parent.callee.name}(…)`;
 	}
 	return null;
 }
 
+function functionName(path: NodePath<types.Function>) {
+	const names = [ownName(path) ?? "<anonymous>"];
+	for (let owner = path.getFunctionParent(); owner; owner = owner.getFunctionParent()) {
+		const name = ownName(owner);
+		if (name) names.unshift(name);
+	}
+	return names.join(".");
+}
+
 function collectFunctionNames(ast: types.File) {
 	const names = new Map<string, string>();
-	const occurrences = new Map<string, number>();
 	traverse(ast, {
 		Function(path) {
-			const name = functionName(path);
-			if (!name) return;
-			const nth = (occurrences.get(name) ?? 0) + 1;
-			occurrences.set(name, nth);
-			names.set(locKey(path.node.loc), nth === 1 ? name : `${name}#${nth}`);
+			names.set(locKey(path.node.loc), functionName(path));
 		},
 	});
 	return names;
+}
+
+function assertDistinctUnits(file: string, names: Map<string, string>, events: LoggerEvent[]) {
+	const units = new Map<string, string>();
+	for (const event of events) {
+		const loc = "fnLoc" in event ? locKey(event.fnLoc) : "";
+		const name = names.get(loc);
+		if (!name) continue;
+		if ((units.get(name) ?? loc) !== loc) {
+			throw new Error(
+				`compiler-census: ${file} has two compiler units named ${name}; rename one so the baseline can tell them apart`,
+			);
+		}
+		units.set(name, loc);
+	}
 }
 
 function toBailout(file: string, names: Map<string, string>, event: LoggerEvent): Bailout | null {
@@ -136,6 +168,7 @@ export function censusFile(absPath: string, code: string): FileResult {
 		cloneInputAst: false,
 		plugins: [["babel-plugin-react-compiler", options]],
 	});
+	assertDistinctUnits(file, names, events);
 	return {
 		compiled: events.filter((e) => e.kind === "CompileSuccess").length,
 		bailouts: events.flatMap((e) => toBailout(file, names, e) ?? []),
