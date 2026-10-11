@@ -20,7 +20,7 @@ export interface Project {
 	disabledGroups?: string[];
 	/**
 	 * pi-level trust for the project's native `.pi/` resources, separate from the alias-skill `trusted`
-	 * grant; absent only on a record that predates pi-level trust.
+	 * grant; absent (a record that predates pi-level trust) reads as untrusted.
 	 */
 	piResourceTrust?: "granted" | "untrusted";
 }

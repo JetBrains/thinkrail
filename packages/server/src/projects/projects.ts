@@ -63,31 +63,17 @@ function ensureSlugs(projects: Project[]): boolean {
 	return changed;
 }
 
-/** pi's saved decision for a path: trusted, denied, `null` when it has none, `undefined` when unreadable. */
-export type PiTrustSeed = (path: string) => boolean | null | undefined;
+/** Whether pi itself already trusts a path; seeds a newly added project's pi-level trust. */
+export type PiTrustSeed = (path: string) => boolean;
 let piTrustSeed: PiTrustSeed | null = null;
 
 export function setPiTrustSeed(seed: PiTrustSeed | null): void {
 	piTrustSeed = seed;
 }
 
-export function migratePiResourceTrust(projects: Project[], seed: PiTrustSeed): boolean {
-	let changed = false;
-	for (const project of projects) {
-		if (project.piResourceTrust !== undefined) continue;
-		const decision = seed(project.path);
-		if (decision === undefined) continue;
-		project.piResourceTrust = decision === false ? "untrusted" : "granted";
-		changed = true;
-	}
-	return changed;
-}
-
 export function getProjects(): Project[] {
 	const projects = loadProjects();
-	const slugged = ensureSlugs(projects);
-	const migrated = piTrustSeed ? migratePiResourceTrust(projects, piTrustSeed) : false;
-	if (slugged || migrated) saveProjects(projects);
+	if (ensureSlugs(projects)) saveProjects(projects);
 	return projects;
 }
 
@@ -120,7 +106,7 @@ export function openProject(inputPath: string): Project {
 		path: root,
 		slug: uniqueSlug(slugify(basename(root)), taken),
 		lastOpened: Date.now(),
-		piResourceTrust: piTrustSeed?.(root) === true ? "granted" : "untrusted",
+		piResourceTrust: piTrustSeed?.(root) ? "granted" : "untrusted",
 	};
 	projects.push(project);
 	saveProjects(projects);

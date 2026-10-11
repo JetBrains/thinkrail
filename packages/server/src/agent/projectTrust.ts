@@ -2,16 +2,21 @@ import {
 	getAgentDir,
 	hasTrustRequiringProjectResources,
 	ProjectTrustStore,
+	SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type { ProjectTrustSummary } from "@thinkrail/contracts";
 import { discoverAgentDefinitions } from "pi-subagents";
 import { listProjectAliasSkillNames } from "./extensions";
 
-export function piProjectTrustDecision(path: string): boolean | null | undefined {
+export function piTrustsProjectPath(path: string): boolean {
+	const agentDir = getAgentDir();
 	try {
-		return new ProjectTrustStore(getAgentDir()).get(path);
+		const decision = new ProjectTrustStore(agentDir).get(path);
+		if (decision !== null) return decision;
+		const settings = SettingsManager.create(path, agentDir, { projectTrusted: false });
+		return settings.getDefaultProjectTrust() === "always";
 	} catch {
-		return undefined;
+		return false;
 	}
 }
 

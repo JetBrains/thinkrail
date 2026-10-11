@@ -757,8 +757,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   opens — settlement, the release of an admitted prompt, or a compaction's end; requests coalesce); the **`setSkillAdmissionResolver`** seam (host
   wires `workspaceId` → the admission context, derived once by `admissionContextFor(project, overrides)`);
   the pi-level trust surface — `applyPiResourceTrust(workspaceIds)`
-  (gated reload of every live session whose trust is stale), `piProjectTrustDecision(path)` (pi's
-  `trust.json` decision, nearest ancestor, `null` when it has none and `undefined` when the store is unreadable — the host's migration seed) and
+  (gated reload of every live session whose trust is stale), `piTrustsProjectPath(path)` (whether pi already
+  trusts a path: its `trust.json` decision by nearest ancestor, else its global `defaultProjectTrust` is
+  `always`; an unreadable store answers `false` — the host's seed for a newly added project) and
   `projectTrustSummary(cwd)` (the trust notice's facts: alias names and pi's own
   `hasTrustRequiringProjectResources` or a project definition from `pi-subagents`' `discoverAgentDefinitions`);
   the subagent-policy seams

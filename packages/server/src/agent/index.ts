@@ -43,7 +43,7 @@ export {
 	preparePiRuntimeGeneration,
 	settledAvailableModels,
 } from "./piRuntime";
-export { piProjectTrustDecision, projectTrustSummary } from "./projectTrust";
+export { piTrustsProjectPath, projectTrustSummary } from "./projectTrust";
 export { describeProviderAuth, type ProviderAuthFacts } from "./providerAuth";
 export {
 	REQUEST_REVIEW_TOOL_NAME,

@@ -22,7 +22,7 @@ import {
 	getSessionWorkspaceId,
 	initializeSessionStates,
 	isProjectSkillPath,
-	piProjectTrustDecision,
+	piTrustsProjectPath,
 	refreshAgentReviewTool,
 	refreshSubagentConcurrency,
 	refreshSubagentTools,
@@ -198,8 +198,7 @@ function sameHostUpdateRelease(
 export async function createServer(options: CreateServerOptions = {}): Promise<RunningServer> {
 	await initializeJbcentralRuntime();
 	getConfig();
-	setPiTrustSeed(piProjectTrustDecision);
-	getProjects();
+	setPiTrustSeed(piTrustsProjectPath);
 	const {
 		port = 24242,
 		host = "localhost",

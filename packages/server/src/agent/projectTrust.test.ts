@@ -20,7 +20,7 @@ import {
 } from "./agentSessionManager";
 import { delegationServiceFor } from "./delegation";
 import { configurePiRuntime } from "./piRuntime";
-import { piProjectTrustDecision, projectTrustSummary } from "./projectTrust";
+import { piTrustsProjectPath, projectTrustSummary } from "./projectTrust";
 import { admissionContextFor } from "./skillAdmission";
 
 const model = {
@@ -113,22 +113,37 @@ async function projectSession(): Promise<{ workspaceId: string; sessionId: strin
 const hasNativeTemplate = (sessionId: string): boolean =>
 	getSessionCommands(sessionId).some((command) => command.name === "native-kickoff");
 
-test("pi's trust store decision is read by nearest ancestor, and an unreadable store is no decision at all", () => {
+test("pi trusts a path by its nearest saved decision, else by defaultProjectTrust, and never through an unreadable store", () => {
 	const project = mkdtempSync(join(root, "decided-"));
 	const nested = join(project, "packages", "app");
+	const undecided = mkdtempSync(join(tmpdir(), "undecided-"));
+	const trusted = mkdtempSync(join(tmpdir(), "pi-trusted-"));
 	mkdirSync(nested, { recursive: true });
-	writeFileSync(
-		join(agentDir, "trust.json"),
-		JSON.stringify({ [realpathSync(project)]: false, [realpathSync(root)]: null }),
-	);
-	expect(piProjectTrustDecision(nested)).toBe(false);
-	expect(piProjectTrustDecision(mkdtempSync(join(tmpdir(), "undecided-")))).toBeNull();
-	writeFileSync(join(agentDir, "trust.json"), "{ not json");
-	expect(piProjectTrustDecision(nested)).toBeUndefined();
-	rmSync(join(agentDir, "trust.json"), { force: true });
+	const settings = join(agentDir, "settings.json");
+	try {
+		writeFileSync(
+			join(agentDir, "trust.json"),
+			JSON.stringify({ [realpathSync(project)]: false, [realpathSync(trusted)]: true }),
+		);
+		expect(piTrustsProjectPath(nested)).toBe(false);
+		expect(piTrustsProjectPath(trusted)).toBe(true);
+		expect(piTrustsProjectPath(undecided)).toBe(false);
+
+		writeFileSync(settings, JSON.stringify({ defaultProjectTrust: "always" }));
+		expect(piTrustsProjectPath(undecided)).toBe(true);
+		expect(piTrustsProjectPath(nested)).toBe(false);
+
+		writeFileSync(join(agentDir, "trust.json"), "{ not json");
+		expect(piTrustsProjectPath(trusted)).toBe(false);
+	} finally {
+		rmSync(join(agentDir, "trust.json"), { force: true });
+		rmSync(settings, { force: true });
+		rmSync(undecided, { recursive: true, force: true });
+		rmSync(trusted, { recursive: true, force: true });
+	}
 });
 
-test("the trust summary sees pi's own gated resources and subagent definitions", async () => {
+test("the trust summary names each kind of the project's own pi resources that pi gates", async () => {
 	const project = (files: Record<string, string>): string => {
 		const cwd = mkdtempSync(join(root, "summary-"));
 		for (const [path, content] of Object.entries(files)) {
