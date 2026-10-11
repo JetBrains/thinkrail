@@ -1,4 +1,4 @@
-src/chat/ChatView.tsx useVirtualRows
+src/chat/ChatTranscript.tsx useVirtualRows
 src/chat/HistoryOverlay.tsx Highlight
 src/chat/SkillsDialog.tsx SkillsDialog
 src/chat/TemplateEditorDialog.tsx TemplateEditorDialog

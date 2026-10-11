@@ -178,19 +178,21 @@ test("chat uses the selected measure and optionally exceeds a narrow pane", asyn
 		const userMessage = page.locator('[data-testid="chat-message"][data-role="user"]').last();
 		await expect(userMessage).toBeVisible();
 		const row = userMessage.locator('xpath=ancestor::*[@data-testid="chat-row"][1]');
-		const measure = await row.evaluate((element) => {
-			const probe = document.createElement("div");
-			probe.style.position = "fixed";
-			probe.style.width = "40ch";
-			document.body.append(probe);
-			const expectedTextWidth = probe.getBoundingClientRect().width;
-			probe.remove();
-			return {
-				actual: element.getBoundingClientRect().width,
-				expected: expectedTextWidth + 24,
-			};
-		});
-		expect(Math.abs(measure.actual - measure.expected)).toBeLessThanOrEqual(2);
+		// Poll the measure: the `--chat-transcript-width` custom property is applied via a ref callback and a
+		// native webview can flush its layout a frame later, so a single synchronous read is racy.
+		await expect
+			.poll(() =>
+				row.evaluate((element) => {
+					const probe = document.createElement("div");
+					probe.style.position = "fixed";
+					probe.style.width = "40ch";
+					document.body.append(probe);
+					const expectedTextWidth = probe.getBoundingClientRect().width;
+					probe.remove();
+					return Math.abs(element.getBoundingClientRect().width - (expectedTextWidth + 24));
+				}),
+			)
+			.toBeLessThanOrEqual(2);
 
 		await openLineWidthSettings(page);
 		await saveWidth(controls.chatInput, controls.chatSave, 240);

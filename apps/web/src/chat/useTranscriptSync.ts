@@ -66,7 +66,7 @@ export function transcriptSyncRetryDelay(failureCount: number): number | null {
 }
 
 export function transcriptSyncNeed(
-	runtime: SessionRuntime,
+	runtime: Pick<SessionRuntime, "turns" | "syncedConnectionGeneration">,
 	connectionGeneration: number,
 ): TranscriptSyncNeed | null {
 	const compaction = runtime.turns.findLast(
@@ -92,7 +92,10 @@ export function useTranscriptSync({
 }: {
 	workspaceId: string;
 	sessionId: string;
-	runtime: SessionRuntime;
+	runtime: Pick<
+		SessionRuntime,
+		"turns" | "syncedConnectionGeneration" | "eventRevision" | "isStreaming"
+	>;
 	status: ConnectionStatus;
 	connectionGeneration: number;
 	enabled?: boolean;
