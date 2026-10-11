@@ -882,32 +882,37 @@ settings or workspaces edge. The owning parent graph records this package depend
 
 ## Project trust and session lifecycle
 
-- **Trust.** `buildSessionSettings` and every other `SettingsManager.create` site (pre-session loaders,
-  child sessions) pass the project's real pi-level trust (`Project.piResourceTrust`,
-  [[submodule-server-projects]]) instead of a forced `true`. A child's trust comes from its parent
-  context: `liveParentContext.isProjectTrusted` answers the parent's *loaded* trust AND the current
-  record, so a child never holds more than its parent (a grant deferred on a busy parent does not reach
-  its new children before the parent reloads) nor more than the record (a revoke reaches new children at
-  once, even before a busy parent reloads); the alias-name
-  listing alone passes `false` (alias roots are explicit paths, so it never needs project settings). The
-  session loader's `reload()` applies the admission context's current trust (`setProjectTrusted`) before
-  every load, so any reload — a grant or a manual reload — loads exactly what the record
-  allows; a grant or revoke therefore only asks the gate to reload the sessions whose trust is stale
-  (`applyPiResourceTrust`: idle now, busy at settlement). A session still opening when trust changes is
-  not in that scan, so registration re-checks its loaded trust against the record and reloads it before
-  `createSession` returns. A child session captures the trust at its
-  creation and `pi-subagents` retains children across a parent reload, so a revoke also stops every
-  live child of a stale parent (`stopSessionChildren`, reason `"user"`: the parent is told without
-  being woken) and waits until those runs have actually ended — a child whose abort fails is disposed —
-  before the parent's reload is requested, so the trust change reports success only once nothing runs
-  under the revoked trust; a reload that fails is reported as `"failed"` in the returned dispositions and
-  `project.setTrust` then fails after persisting and publishing the record, naming the chats still on the previous trust,
-  rather than claiming success, and a deferred reload that fails later (the chat was busy) reaches the
-  user as an `error` notify on that chat asking to close or reload it; a grant leaves running children alone, since
-  they merely lack the project's resources. The pi-level grant is its own consent, separate
-  from alias trust: only `project.setTrust` with `resources: true`, sent by a surface that names what it
-  loads, grants it ([[submodule-server-projects]]). The trust notice is shown for alias skills, pi's own
-  trust-requiring resources, and project subagent definitions alike.
+- **Trust.** Every `SettingsManager` the host builds for a project passes its real pi-level trust
+  (`Project.piResourceTrust`, [[submodule-server-projects]]) instead of a forced `true`.
+  - **Sites.** Sessions (`buildSessionSettings`), pre-session loaders and child sessions. The alias-name
+    listing alone passes `false`: alias roots are explicit paths, so it never needs project settings.
+  - **Every load.** The session loader's `reload()` applies the admission context's current trust
+    (`setProjectTrusted`) before every load, so any reload — a grant or a manual reload — loads exactly
+    what the record allows. A grant or revoke therefore only asks the gate to reload the sessions whose
+    trust is stale (`applyPiResourceTrust`: idle now, busy at settlement). A session still opening when
+    trust changes is not in that scan, so registration re-checks its loaded trust against the record and
+    reloads it before `createSession` returns.
+  - **Children.** A child's trust comes from its parent context: `liveParentContext.isProjectTrusted`
+    answers the parent's *loaded* trust AND the current record. A child therefore never holds more than
+    its parent (a grant deferred on a busy parent does not reach its new children before the parent
+    reloads) nor more than the record (a revoke reaches new children at once).
+  - **Revoke.** A child captures its trust at creation and `pi-subagents` retains children across a
+    parent reload, so a revoke also stops every live child of a stale parent (`stopSessionChildren`,
+    reason `"user"`: the revoke is the user's own action, and the parent is told without being woken). It
+    waits until those runs have actually ended — a child whose abort fails is disposed — before the
+    parent's reload is requested. A **busy** parent is not interrupted: its current turn finishes with the
+    resources it already loaded and it reloads at settlement (`"deferred"`), which the Stop-trusting
+    confirmation discloses ("open chats reload when idle"). So when `project.setTrust` returns, no child
+    and no idle chat runs under the revoked trust, and a busy chat stops at the end of its turn.
+  - **Failures.** A reload that fails is reported as `"failed"` in the returned dispositions, and
+    `project.setTrust` then fails after persisting and publishing the record, naming the chats still on
+    the previous trust. A deferred reload that fails later reaches the user as an `error` notify on that
+    chat asking to close or reload it. A grant leaves running children alone, since they merely lack the
+    project's resources.
+  - **Consent.** The pi-level grant is its own consent, separate from alias trust: only
+    `project.setTrust` with `resources: true`, sent by a surface that names what it loads, grants it
+    ([[submodule-server-projects]]). The trust notice is shown for alias skills, pi's own
+    trust-requiring resources, and project subagent definitions alike.
 - **Lifecycle.** `AgentSession.dispose()` never emits `session_shutdown`, so the resource cascade
   (`closeSessionResources`) runs `session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" })`
   itself — synchronously, after the synchronous owner disposal, so handlers have started before the
