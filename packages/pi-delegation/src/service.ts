@@ -75,6 +75,7 @@ interface PreparedContext {
 	runtime: ModelRuntime;
 	model?: SessionOptions["model"];
 	thinkingLevel?: SessionOptions["thinkingLevel"];
+	isProjectTrusted?: () => boolean;
 	unsupportedProviders: Set<string>;
 }
 
@@ -746,18 +747,19 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		};
 	}
 
-	const projectTrustFor = (cwd: string): boolean => bindings.projectTrusted?.(cwd) ?? true;
+	const trustOf = (context: { isProjectTrusted?: () => boolean }): boolean =>
+		context.isProjectTrusted?.() ?? true;
 
 	async function assemble(
 		options: SessionOptions,
 		cwd: string,
+		projectTrusted: boolean,
 		runtime: ModelRuntime,
 		model: AgentSession["model"],
 		thinkingLevel: SessionOptions["thinkingLevel"],
 		factories: InlineExtension[],
 		manager: SessionManager,
 	): Promise<AgentSession> {
-		const projectTrusted = projectTrustFor(cwd);
 		const settingsManager =
 			bindings.buildChildSettings?.(cwd, projectTrusted) ??
 			SettingsManager.create(cwd, undefined, { projectTrusted });
@@ -893,16 +895,17 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		const session = await assemble(
 			options,
 			parent.cwd,
+			trustOf(parent),
 			runtime,
 			model,
 			options.thinkingLevel ?? parent.thinkingLevel,
 			bindings.childExtensionFactories ?? [],
 			manager,
 		);
-		const parentClosed =
-			parentLifetimes.get(parentSessionId) !== parentLifetime ||
-			!bindings.resolveParent?.(parentSessionId);
-		const trustChanged = session.settingsManager.isProjectTrusted() !== projectTrustFor(parent.cwd);
+		const current = bindings.resolveParent?.(parentSessionId);
+		const parentClosed = parentLifetimes.get(parentSessionId) !== parentLifetime || !current;
+		const trustChanged =
+			current !== undefined && session.settingsManager.isProjectTrusted() !== trustOf(current);
 		if (parentClosed || trustChanged) {
 			try {
 				await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
@@ -966,6 +969,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			cwd: input.cwd,
 			...(input.model ? { model: { ...input.model } } : {}),
 			...(input.thinkingLevel !== undefined ? { thinkingLevel: input.thinkingLevel } : {}),
+			...(input.isProjectTrusted ? { isProjectTrusted: input.isProjectTrusted } : {}),
 		};
 		if (typeof defaults.cwd !== "string" || !defaults.cwd)
 			throw new DelegationError("invalid-combination", "Resource cwd is required");
@@ -1116,6 +1120,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		const session = await assemble(
 			options,
 			context.cwd,
+			trustOf(context),
 			context.runtime,
 			model,
 			options.thinkingLevel ?? context.thinkingLevel,

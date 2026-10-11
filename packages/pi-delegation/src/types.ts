@@ -177,10 +177,11 @@ export interface DelegationService {
 	disposeChildrenOf(parentSessionId: string): Promise<void>;
 }
 
-export type ParentContext = Pick<ExtensionContext, "cwd" | "model" | "thinkingLevel"> & {
-	modelRuntime?: ModelRuntime;
-	modelRegistry?: ExtensionContext["modelRegistry"];
-};
+export type ParentContext = Pick<ExtensionContext, "cwd" | "model" | "thinkingLevel"> &
+	Partial<Pick<ExtensionContext, "isProjectTrusted">> & {
+		modelRuntime?: ModelRuntime;
+		modelRegistry?: ExtensionContext["modelRegistry"];
+	};
 
 export interface DelegationBindings {
 	resolveParent?: (sessionId: string) => ParentContext | undefined;
@@ -191,7 +192,6 @@ export interface DelegationBindings {
 	childBaseExtensionFactories?: InlineExtension[];
 	childExtensionFactories?: InlineExtension[];
 	buildChildSettings?: (cwd: string, projectTrusted: boolean) => SettingsManager;
-	projectTrusted?: (cwd: string) => boolean;
 }
 
 export type HistoryCaptureSource =
@@ -218,6 +218,7 @@ export type ResourceContextInput = {
 	cwd: string;
 	model?: SessionOptions["model"];
 	thinkingLevel?: SessionOptions["thinkingLevel"];
+	isProjectTrusted?: () => boolean;
 } & (
 	| { kind: "runtime"; modelRuntime: ModelRuntime }
 	| { kind: "registry"; modelRegistry: ModelRegistry }

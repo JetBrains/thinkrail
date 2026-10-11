@@ -520,7 +520,7 @@ export function setSkillAdmissionResolver(
 	skillAdmissionResolver = resolver;
 }
 
-export function piResourceTrustFor(workspaceId: string): boolean {
+function piResourceTrustFor(workspaceId: string): boolean {
 	return skillAdmissionResolver(workspaceId).piResourceTrusted;
 }
 
@@ -2125,12 +2125,14 @@ export function isSessionStreaming(sessionId: string): boolean {
 export function liveParentContext(sessionId: string): ParentContext | undefined {
 	const entry = sessions.get(sessionId);
 	if (!entry || !canUseSessionResources(sessionId, entry.workspaceId)) return undefined;
-	const { session } = entry;
+	const { session, workspaceId } = entry;
 	return {
 		cwd: session.sessionManager.getCwd(),
 		model: session.model,
 		thinkingLevel: session.thinkingLevel,
 		modelRuntime: session.modelRuntime,
+		isProjectTrusted: () =>
+			session.settingsManager.isProjectTrusted() && piResourceTrustFor(workspaceId),
 	};
 }
 

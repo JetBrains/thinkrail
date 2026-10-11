@@ -135,7 +135,12 @@ shutdown release barriers; and finalized outcomes after a shrinking compaction.
   transcript repair; repair policy and synthesized tool results remain host-owned.
 - `DelegationBindings` — everything host-specific: `resolveParent` (optional for resource-only services; parent creation requires it and a live result; returns
   `ParentContext` — `Pick<ExtensionContext, "cwd" | "model" | "thinkingLevel">` plus optional
-  `modelRuntime` and `modelRegistry` fields. The parent's own retained `modelRuntime` is preferred
+  `isProjectTrusted`, `modelRuntime` and `modelRegistry` fields. `isProjectTrusted` is the pi-level
+  project trust a child's settings manager receives (asked at creation and again at the revalidation
+  below): trust is part of the context a child derives from its parent, so a child never loads more of
+  the project than its parent — pure pi's `ctx` carries the session's own trust, ThinkRail answers its
+  parent's loaded trust AND the current `Project.piResourceTrust`; absent → trusted, pi's own
+  `SettingsManager` default. A resource context (`ResourceContextInput`) takes the same optional field. The parent's own retained `modelRuntime` is preferred
   over every fallback: an embedder whose sessions each retain their creation-time runtime generation
   (ThinkRail) must give a child its *parent's* generation, or a parent kept alive on a Central-only
   model after a disconnect would delegate into a runtime lacking its provider (PR #303 review
@@ -154,10 +159,7 @@ shutdown release barriers; and finalized outcomes after a shrinking compaction.
   `maxConcurrentPerParent`, `childBaseExtensionFactories` (the hook-only set EVERY child loads) and
   `childExtensionFactories` (the curated set a child MAY load) — both decision #25, both pi
   `InlineExtension`s, so an embedder passes bare factories or `{ name, factory }` and keeps the name
-  in pi diagnostics — `buildChildSettings` (decision #31), and `projectTrusted` (`(cwd) => boolean`,
-  asked once per child for the pi-level project trust its settings manager receives; hosts own trust,
-  so a child never loads more of the project than its parent — ThinkRail passes the workspace's
-  `Project.piResourceTrust`; absent → trusted, pi's own `SettingsManager` default).
+  in pi diagnostics — and `buildChildSettings` (decision #31).
 - Storage helpers: `defaultDelegationRoot` / `delegationSessionDir` / `deriveChildSessionFile`
   (post-restart transcript reads) / `DEFAULT_SCOPE`.
 - The contract types themselves (incl. `DelegationError`/`DelegationErrorCode`) — enumerated and
@@ -357,12 +359,13 @@ accepted cancellation wins, including one with no reason; caller signals, dispos
 participate in that ordering without adding a reason. Terminal runs are unchanged, and each new run
 resets both the cancellation latch and reason. Reasons are metadata, not lifecycle statuses.
 
-Child creation revalidates parent liveness — and that the `projectTrusted` binding still answers what the
-child's settings captured — after asynchronous session/extension preparation, before registering the
-handle. If the embedder closed that parent, or the project's trust changed, during preparation, the
-unregistered child is disposed and creation fails with `unknown-parent`. This prevents an in-flight birth
-from escaping a parent's already-captured teardown list, or a revoke's already-captured child list,
-without introducing a second pending-child registry.
+Child creation revalidates the parent context after asynchronous session/extension preparation, before
+registering the handle: the parent must still resolve, and its `isProjectTrusted` must still answer what the
+child's settings captured. If the embedder closed that parent, or its trust changed, during preparation, the
+unregistered child is disposed and creation fails with `unknown-parent` — the context the child was
+prepared for no longer exists. This prevents an in-flight birth from escaping a parent's already-captured
+teardown list, or a revoke's already-captured child list, without introducing a second pending-child
+registry.
 
 The host uses `"user"` for explicit user cancellation; [[module-pi-subagents]] owns its completion
 policy. No UI dependency or second registry is involved. Queued cancellation settles immediately,
@@ -501,8 +504,8 @@ run-scoped signal. Non-user paths retain their behavior.
 31. **Child settings are an embedder-bound infrastructure hook, never a `SessionOptions` mirror**
     (issue #604). Each child's settings manager is `buildChildSettings(cwd, projectTrusted)` when
     bound, else `SettingsManager.create(cwd, undefined, { projectTrusted })`, with `projectTrusted`
-    the binding's answer for that child, so an embedder's children run on the settings and trust its
-    own sessions do. ThinkRail binds `buildSessionSettings`, whose raw-image override is what lets a
+    the parent (or resource) context's `isProjectTrusted`, so an embedder's children run on the
+    settings and trust its own sessions do. ThinkRail binds `buildSessionSettings`, whose raw-image override is what lets a
     child's `read` deliver images in the compiled binary (rationale: [[submodule-server-agent]]);
     unbound, every child `read` of an image there returned pi's `[Image omitted…]` note. The hook
     sits on `DelegationBindings` beside the factory sets, keeping decision #3's firewall: the

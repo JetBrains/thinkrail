@@ -1260,17 +1260,21 @@ function pngHeaderOnly(width: number, height: number): Buffer {
 	return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), ihdr]);
 }
 
-test("buildChildSettings supplies the settings a child's tools run on, with the bound trust", async () => {
+test("buildChildSettings supplies the settings a child's tools run on, with the parent's trust", async () => {
 	const calls: [string, boolean][] = [];
 	const scoped = createDelegationService({
 		resolveParent: (id) =>
 			id === parent.sessionId
-				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				? {
+						cwd: parentCwd,
+						model: parent.model,
+						thinkingLevel: parent.thinkingLevel,
+						isProjectTrusted: () => false,
+					}
 				: undefined,
 		delegationRoot,
 		scope: "ws-settings",
 		modelRuntime: runtime,
-		projectTrusted: () => false,
 		buildChildSettings: (cwd, projectTrusted) => {
 			calls.push([cwd, projectTrusted]);
 			return SettingsManager.inMemory({ images: { autoResize: false } }, { projectTrusted });
@@ -1337,22 +1341,22 @@ test("the base set loads for every child, opted into extensions or not, ahead of
 	}
 });
 
-test("a child's pi-level project trust comes from the embedder binding, per child cwd", async () => {
+test("a child's pi-level project trust is its parent context's, trusted when the parent states none", async () => {
 	const seen: boolean[] = [];
-	const asked: string[] = [];
-	const trustedService = (trusted: boolean) =>
+	const trustedService = (trusted: boolean | undefined) =>
 		createDelegationService({
 			resolveParent: (id) =>
 				id === parent.sessionId
-					? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+					? {
+							cwd: parentCwd,
+							model: parent.model,
+							thinkingLevel: parent.thinkingLevel,
+							...(trusted === undefined ? {} : { isProjectTrusted: () => trusted }),
+						}
 					: undefined,
 			delegationRoot,
 			scope: `ws-trust-${trusted}`,
 			modelRuntime: runtime,
-			projectTrusted: (cwd) => {
-				asked.push(cwd);
-				return trusted;
-			},
 			childExtensionFactories: [
 				(pi) => {
 					pi.registerTool({
@@ -1368,7 +1372,7 @@ test("a child's pi-level project trust comes from the embedder binding, per chil
 				},
 			],
 		});
-	for (const trusted of [false, true]) {
+	for (const trusted of [false, true, undefined]) {
 		const scoped = trustedService(trusted);
 		faux.setResponses([
 			fauxAssistantMessage(fauxToolCall("trust_probe", {})),
@@ -1385,8 +1389,7 @@ test("a child's pi-level project trust comes from the embedder binding, per chil
 			await scoped.disposeChildrenOf(parent.sessionId);
 		}
 	}
-	expect(seen).toEqual([false, true]);
-	expect(asked).toEqual([parentCwd, parentCwd, parentCwd, parentCwd]);
+	expect(seen).toEqual([false, true, true]);
 });
 
 test("a child whose project trust changed while it was being prepared is disposed, not registered", async () => {
@@ -1394,12 +1397,16 @@ test("a child whose project trust changed while it was being prepared is dispose
 	const flipping = createDelegationService({
 		resolveParent: (sessionId) =>
 			sessionId === parent.sessionId
-				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				? {
+						cwd: parentCwd,
+						model: parent.model,
+						thinkingLevel: parent.thinkingLevel,
+						isProjectTrusted: () => answers.shift() ?? false,
+					}
 				: undefined,
 		delegationRoot,
 		scope: "ws-trust-flip",
 		modelRuntime: runtime,
-		projectTrusted: () => answers.shift() ?? false,
 	});
 	await expect(flipping.createChild(subagentSpec())).rejects.toMatchObject({
 		code: "unknown-parent",

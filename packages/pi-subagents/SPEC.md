@@ -24,6 +24,8 @@ choice was settled: the decision log below.
   `ExtensionContext` at spawn time. The projection includes the public `modelRegistry`, allowing
   the core's self-created runtime to mirror provider registrations made by other extensions before
   each child spawn without inspecting their configuration or relying on pi's private runtime field.
+  It also carries `isProjectTrusted`, so a pure-pi child inherits its session's project trust
+  instead of pi's trusted default.
   **The fallback service is session-scoped in lifetime**: on `session_shutdown` the extension
   awaits `disposeChildrenOf(parent)` and drops the service, so a
   vanilla-pi background child never outlives its parent session burning tokens with an

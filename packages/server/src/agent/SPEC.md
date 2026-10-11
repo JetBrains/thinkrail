@@ -134,8 +134,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     pi 0.87 the same setting also governs prompt-attached and tool-result images, so the override is what keeps
     pi from rewriting user text with `[Image omitted…]` hints (which would defeat the client's optimistic-echo
     dedup). Delegated children run on the same settings: `delegation` binds `buildSessionSettings` as the
-    core's `buildChildSettings`, which receives the trust its `projectTrusted` binding answers
-    (`piResourceTrustFor(workspaceId)`; pi-delegation decision #31, issue #604). A shared `registerSession`
+    core's `buildChildSettings`, which receives the trust the parent context's `isProjectTrusted`
+    answers (`liveParentContext`; pi-delegation decision #31, issue #604). A shared `registerSession`
     publishes each event
     tagged with its id + `bindExtensions({ mode:'rpc', uiContext })`. The event projection retains the
     final `agent_end` assistant's reported terminal metadata and attaches it to `agent_settled`, so the
@@ -756,7 +756,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `requestSessionReload(sessionId)` (the deferring variant: `"reloaded"` now or `"deferred"` until the gate
   opens — settlement, the release of an admitted prompt, or a compaction's end; requests coalesce); the **`setSkillAdmissionResolver`** seam (host
   wires `workspaceId` → the admission context, derived once by `admissionContextFor(project, overrides)`);
-  the pi-level trust surface — `piResourceTrustFor(workspaceId)`, `applyPiResourceTrust(workspaceIds)`
+  the pi-level trust surface — `applyPiResourceTrust(workspaceIds)`
   (gated reload of every live session whose trust is stale), `piProjectTrustDecision(path)` (pi's
   `trust.json` decision, nearest ancestor, `null` when it has none and `undefined` when the store is unreadable — the host's migration seed) and
   `projectTrustSummary(cwd)` (the trust notice's facts: alias names and pi's own
@@ -882,8 +882,12 @@ settings or workspaces edge. The owning parent graph records this package depend
 ## Project trust and session lifecycle
 
 - **Trust.** `buildSessionSettings` and every other `SettingsManager.create` site (pre-session loaders,
-  child sessions through `pi-delegation`'s `projectTrusted` binding) pass the project's real pi-level trust
-  (`Project.piResourceTrust`, [[submodule-server-projects]]) instead of a forced `true`; the alias-name
+  child sessions) pass the project's real pi-level trust (`Project.piResourceTrust`,
+  [[submodule-server-projects]]) instead of a forced `true`. A child's trust comes from its parent
+  context: `liveParentContext.isProjectTrusted` answers the parent's *loaded* trust AND the current
+  record, so a child never holds more than its parent (a grant deferred on a busy parent does not reach
+  its new children before the parent reloads) nor more than the record (a revoke reaches new children at
+  once, even before a busy parent reloads); the alias-name
   listing alone passes `false` (alias roots are explicit paths, so it never needs project settings). The
   session loader's `reload()` applies the admission context's current trust (`setProjectTrusted`) before
   every load, so any reload — a grant or a manual reload — loads exactly what the record

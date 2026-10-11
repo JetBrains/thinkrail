@@ -11,6 +11,7 @@ import {
 	disposeAllSessions,
 	getSessionCommands,
 	getSessionState,
+	liveParentContext,
 	promptSession,
 	reloadSessionResources,
 	setSessionManagerFactory,
@@ -180,6 +181,24 @@ test("every reload applies the project's current trust, and a busy session takes
 	expect(hasNativeTemplate(busy.sessionId)).toBe(false);
 	await turn;
 	await waitFor(() => hasNativeTemplate(busy.sessionId));
+});
+
+test("a child derives no more trust than its parent has loaded or the project record allows", async () => {
+	const childTrust = (sessionId: string) => liveParentContext(sessionId)?.isProjectTrusted?.();
+	const busy = await projectSession();
+	faux.setResponses([fauxAssistantMessage("word ".repeat(60))]);
+	const turn = promptSession(busy.sessionId, "Say many words.");
+	await waitFor(() => getSessionState(busy.sessionId).execution === "running");
+	trustedWorkspaces.add(busy.workspaceId);
+	expect(await applyPiResourceTrust([busy.workspaceId])).toEqual({ [busy.sessionId]: "deferred" });
+	expect(childTrust(busy.sessionId)).toBe(false);
+	await turn;
+	await waitFor(() => hasNativeTemplate(busy.sessionId));
+	expect(childTrust(busy.sessionId)).toBe(true);
+
+	trustedWorkspaces.delete(busy.workspaceId);
+	expect(childTrust(busy.sessionId)).toBe(false);
+	expect(await applyPiResourceTrust([busy.workspaceId])).toEqual({ [busy.sessionId]: "reloaded" });
 });
 
 test("revoking trust stops the live subagents that were created under it before it reports", async () => {
