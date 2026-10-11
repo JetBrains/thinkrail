@@ -2,18 +2,19 @@ import { RiShieldCheckLine as ShieldCheck, RiAlertLine as TriangleAlert } from "
 import type { Project } from "@thinkrail/contracts";
 import { Button } from "@thinkrail/ui/button";
 import { useState } from "react";
-import { selectSupportsProjectTrust, toast, useAppStore } from "@/store";
-import { errorText, getTransport } from "@/transport";
-import { ConfirmDialog } from "./ConfirmDialog";
 import {
+	canStopTrusting,
 	deriveProjectTrustNotice,
 	stopTrustingText,
 	trustEnablesText,
 	trustedNoticeText,
 	trustGrantParams,
 	untrustedNoticeText,
-} from "./projectTrust";
-import { useProjectTrustSummary } from "./useProjectTrustSummary";
+} from "@/chat/projectTrust";
+import { useProjectTrustSummary } from "@/chat/useProjectTrustSummary";
+import { selectSupportsProjectTrust, toast, useAppStore } from "@/store";
+import { errorText, getTransport } from "@/transport";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 	const project = useAppStore((s) => s.projects.find((p) => p.id === projectId));
@@ -37,6 +38,36 @@ export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 		}
 	};
 
+	const stopTrusting = canStopTrusting(project) ? (
+		<>
+			<Button
+				variant="ghost"
+				size="sm"
+				data-testid="project-untrust-button"
+				disabled={busy}
+				onClick={() => setConfirmingRevoke(true)}
+				className="shrink-0"
+			>
+				Stop trusting
+			</Button>
+			<ConfirmDialog
+				open={confirmingRevoke}
+				onOpenChange={setConfirmingRevoke}
+				title="Stop trusting this project?"
+				description={stopTrustingText(project, supportsProjectTrust)}
+				confirmLabel="Stop trusting"
+				destructive
+				confirmTestId="project-untrust-confirm"
+				onConfirm={() =>
+					void run(
+						() => getTransport().request("project.setTrust", { id: projectId, trusted: false }),
+						"Couldn't stop trusting project",
+					)
+				}
+			/>
+		</>
+	) : null;
+
 	if (notice.kind === "trusted") {
 		return (
 			<div
@@ -46,30 +77,7 @@ export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 			>
 				<ShieldCheck className="size-14 shrink-0 text-feedback-warning" />
 				{trustedNoticeText(notice)}
-				<Button
-					variant="ghost"
-					size="sm"
-					data-testid="project-untrust-button"
-					disabled={busy}
-					onClick={() => setConfirmingRevoke(true)}
-				>
-					Stop trusting
-				</Button>
-				<ConfirmDialog
-					open={confirmingRevoke}
-					onOpenChange={setConfirmingRevoke}
-					title="Stop trusting this project?"
-					description={stopTrustingText(project, supportsProjectTrust)}
-					confirmLabel="Stop trusting"
-					destructive
-					confirmTestId="project-untrust-confirm"
-					onConfirm={() =>
-						void run(
-							() => getTransport().request("project.setTrust", { id: projectId, trusted: false }),
-							"Couldn't stop trusting project",
-						)
-					}
-				/>
+				{stopTrusting}
 			</div>
 		);
 	}
@@ -95,6 +103,7 @@ export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 					</span>
 				) : null}
 			</span>
+			{stopTrusting}
 			<Button
 				size="sm"
 				data-testid={pending ? "project-ack-button" : "project-trust-button"}
@@ -112,6 +121,7 @@ export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 						pending ? "Couldn't confirm skills" : "Couldn't trust project",
 					)
 				}
+				className="shrink-0"
 			>
 				{pending ? "Review & enable" : "Trust project"}
 			</Button>

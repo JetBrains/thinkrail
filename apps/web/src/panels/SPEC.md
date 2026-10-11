@@ -326,11 +326,12 @@ provider"). All provider **management** lives in Settings, not here (the always-
 
 Beneath it, **`ProjectTrustNotice`** is the pre-workspace trust surface (so trust is reachable with no
 workspace yet): **presence-gated** — renders nothing unless the selected project ships something a trust
-grant would load. Presence comes from `useProjectTrustSummary` (`project.trustSummary` on hosts at
+grant would load. Presence comes from `chat/useProjectTrustSummary` (`project.trustSummary` on hosts at
 `PROJECT_TRUST_PROTOCOL_VERSION`, gated by the store's `selectSupportsProjectTrust`: alias skill names and
-pi's own trust-requiring resources or project subagent definitions; older hosts answer
+the kinds of pi's own trust-requiring resources and project subagent definitions; older hosts answer
 `project.aliasSkills` only, read as "aliases only"), and the
-pure `deriveProjectTrustNotice` evaluates the alias grant (`Project.trusted`) and pi-level trust
+pure `chat/projectTrust` derivation — shared with `chat/SkillsDialog`'s trust banner and New Workspace, so
+the three surfaces cannot disagree about what a grant loads — `deriveProjectTrustNotice` evaluates the alias grant (`Project.trusted`) and pi-level trust
 (`Project.piResourceTrust`) **separately**, so the notice names only what is still off: "ships N skills and
 its own Pi resources → *Trust project*", plus — when pi-level resources are gated — exactly the kinds a
 grant loads (the summary's `piResources`: skills, prompts, themes, system prompt, subagent definitions) and,
@@ -338,7 +339,9 @@ only when `extensions` or `settings` are among them, that those run code on this
 `project.setTrust` built by `trustGrantParams`: `resources: true` only when the notice names pi-level
 resources (and so said what they load and run); an alias-only notice grants alias trust only. After trust
 it shows a "N new → *Review & enable*" state for skills that appeared later (`project.acknowledgeSkills`),
-else a quiet "trusted" line whose *Stop trusting* (behind a destructive `ConfirmDialog`) sends
+else a quiet "trusted" line. *Stop trusting* (behind a destructive `ConfirmDialog`) shows in every state
+where either grant is held (`canStopTrusting`), not only the fully trusted one — a project pi already
+trusted when it was added, or one trusted only partly, keeps a revoke path — and sends
 `project.setTrust({ trusted: false })`, revoking both grants; its confirmation (`stopTrustingText`) says pi
 resources stop loading, running subagents stop and open chats reload only when `piResourceTrust` is
 `granted` and the host supports project trust, otherwise that project skills stop loading in new chats. It never renders the skills'

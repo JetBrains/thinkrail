@@ -40,6 +40,13 @@ import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { type DefaultPairOption, ModelEffortPicker } from "@/chat/ModelEffortPicker";
 import {
+	deriveProjectTrustNotice,
+	type ProjectTrustNotice,
+	trustEnablesText,
+	trustGrantParams,
+	untrustedNoticeText,
+} from "@/chat/projectTrust";
+import {
 	imagePasteDropHandlers,
 	PROMPT_IMAGE_CHIPS_PADDING,
 	PromptImageChips,
@@ -49,6 +56,7 @@ import { SkillsButton } from "@/chat/SkillsButton";
 import { SkillsDialog } from "@/chat/SkillsDialog";
 import { useModelCatalog } from "@/chat/useModelCatalog";
 import { useModelPreferences } from "@/chat/useModelPreferences";
+import { useProjectTrustSummary } from "@/chat/useProjectTrustSummary";
 import {
 	applyTemplateSlotEdit,
 	beginTemplateSlotSession,
@@ -72,14 +80,6 @@ import { createSessionWithSkillBaseline, errorText, getTransport } from "@/trans
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
 import { enterDefaultWorkspace } from "./defaultWorkspace";
-import {
-	deriveProjectTrustNotice,
-	type ProjectTrustNotice,
-	trustEnablesText,
-	trustGrantParams,
-	untrustedNoticeText,
-} from "./projectTrust";
-import { useProjectTrustSummary } from "./useProjectTrustSummary";
 
 type WorkspaceTarget = "worktree" | "default";
 

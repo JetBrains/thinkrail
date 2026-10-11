@@ -745,8 +745,10 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   grouped by source with **sticky section headers** — the first-party **ThinkRail** and **Pi** groups lead
   (above the All-plugins master, which governs only the plugin groups), then Personal / **a group per
   installed Claude plugin** / the repo's Project skills last — each with its admission verdict,
-  project-trust (alias trust only: its banner names just the skills, so its `project.setTrust` never carries
-  `resources`), re-confirm-new, a per-group track/thumb **switch** + an **All-plugins** master, and per-skill
+  project-trust (the same `projectTrust` derivation and copy as the Welcome notice — `useProjectTrustSummary`
+  plus this catalog's untrusted aliases, so a worktree-only alias still shows — so in a chat it is the place
+  to grant pi-level trust, and its `project.setTrust` carries `resources: true` exactly when it named the
+  project's Pi resources), re-confirm-new, a per-group track/thumb **switch** + an **All-plugins** master, and per-skill
   switches. Switch position plus semantic colour carries state without visible On/Off text; the switch target
   alone mutates, while unavailable controls keep the existing trust/parent explanation and acknowledgement
   behavior. It runs in **two modes** via an optional `workspace` prop: chat (`skills.state`, per-workspace
@@ -1357,7 +1359,9 @@ Unknown custom messages retain their existing behavior.
   `useModelCatalog.ts`, **`useChatResources.ts`** (the Resources hydration/control/log-read seam),
   **`useSessionStats.ts`** (generation/revision-fenced authoritative telemetry reads),
   **`useTranscriptSync.ts`** (successful-compaction + connection-generation canonical transcript
-  reconciliation), `SkillsDialog.tsx`, `TemplateEditorDialog.tsx`,
+  reconciliation), `SkillsDialog.tsx`, **`useProjectTrustSummary.ts`** (the trust-summary read the Skills
+  dialog shares with `panels/ProjectTrustNotice` and New Workspace; its pure derivation and copy live in the
+  store-free `projectTrust.ts`), `TemplateEditorDialog.tsx`,
   `SubagentTranscriptDialog.tsx`, and **`useModelPreferences.ts`** (favorites / recents / default pair:
   the store read plus the `settings.update` writes every picker mount shares). `useModelCatalog` is the shared
   models-catalog seam `panels/NewWorkspaceDialog` also imports per-file, so the two pickers cannot

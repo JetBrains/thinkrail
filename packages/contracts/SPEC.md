@@ -777,12 +777,13 @@ the pi-level resource grant. A client talking to an older host sends neither.
   (`piResources: ProjectResourceKind[]`, empty when none), so the notice names exactly what is there and
   says it runs code only when `extensions` or `settings` are among them.
   An older host only answers `project.aliasSkills`, which the client reads as "aliases only". It reads the
-  project's own checkout and takes no `workspaceId`: both surfaces that show it (the Welcome notice and New
-  Workspace) run before the workspace they lead to exists.
+  project's own checkout and takes no `workspaceId`: trust is per project, and two of the surfaces that show
+  it (the Welcome notice and New Workspace) run before the workspace they lead to exists; the Skills dialog
+  adds its worktree catalog's untrusted aliases client-side.
 - `project.setTrust` takes an optional `resources: true`: the grant then also trusts the project's own pi
   resources (`Project.piResourceTrust` — settings and extensions run code). Without it a grant sets the
-  alias trust only, so a surface that does not name what pi-level trust loads (the Skills dialog, an older
-  client) never enables it; `trusted: false` revokes both.
+  alias trust only, so a surface that does not name what pi-level trust loads (an older client) never
+  enables it; `trusted: false` revokes both.
 
 ## Normalized session state
 

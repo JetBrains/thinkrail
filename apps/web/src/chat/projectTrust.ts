@@ -99,6 +99,10 @@ export function trustedNoticeText(
 		: "Project resources trusted.";
 }
 
+export function canStopTrusting(project: TrustRecord | undefined): boolean {
+	return project?.trusted === true || project?.piResourceTrust === "granted";
+}
+
 export function stopTrustingText(
 	project: TrustRecord | undefined,
 	supportsProjectTrust: boolean,

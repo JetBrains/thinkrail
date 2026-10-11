@@ -13,6 +13,13 @@ import { useCallback, useEffect, useState } from "react";
 import { LoadingRegion } from "@/components/Skeleton";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport, reloadSessionResourcesWithSkillBaseline } from "@/transport";
+import {
+	deriveProjectTrustNotice,
+	trustEnablesText,
+	trustGrantParams,
+	untrustedNoticeText,
+} from "./projectTrust";
+import { useProjectTrustSummary } from "./useProjectTrustSummary";
 
 const TIER_META: Record<string, { label: string; hint: string; rank: number }> = {
 	bundled: { label: "ThinkRail", hint: "Bundled with the app.", rank: 0 },
@@ -78,6 +85,7 @@ export function SkillsDialog({
 	const [entries, setEntries] = useState<SkillCatalogEntry[] | null>(null);
 	const [busy, setBusy] = useState(false);
 	const workspaceId = workspace?.workspaceId;
+	const trustSummary = useProjectTrustSummary(projectId, open);
 
 	const refresh = useCallback(async () => {
 		try {
@@ -148,7 +156,17 @@ export function SkillsDialog({
 
 	const disabledGroups = new Set(project?.disabledGroups ?? []);
 	const pluginsDisabled = disabledGroups.has("@plugins");
-	const untrustedCount = entries?.filter((e) => e.decision === "untrusted").length ?? 0;
+	const catalogAliases = (entries ?? [])
+		.filter((entry) => entry.decision === "untrusted")
+		.map((entry) => entry.name);
+	const trustNotice = deriveProjectTrustNotice(
+		project,
+		trustSummary && {
+			...trustSummary,
+			aliasSkills: [...new Set([...trustSummary.aliasSkills, ...catalogAliases])],
+		},
+	);
+	const trustEnables = trustNotice.kind === "untrusted" ? trustEnablesText(trustNotice) : null;
 	const groups = groupCatalog(entries ?? []);
 	const hasPlugins = groups.some((g) => g.isPlugin);
 	const isLeadingKey = (key: string) => key === "bundled" || key === "pi";
@@ -254,14 +272,18 @@ export function SkillsDialog({
 					</div>
 				) : null}
 
-				{untrustedCount > 0 ? (
+				{trustNotice.kind === "untrusted" ? (
 					<div
 						data-testid="skills-trust-all"
 						className="flex items-center gap-8 rounded-sm border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8"
 					>
-						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
-							{untrustedCount} project skill{untrustedCount === 1 ? "" : "s"} off until you trust
-							this repo.
+						<span className="flex min-w-0 flex-1 flex-col gap-2">
+							<span className="tr-text-ui text-text-default">
+								{untrustedNoticeText(trustNotice)}
+							</span>
+							{trustEnables ? (
+								<span className="text-text-muted tr-text-metadata">{trustEnables}</span>
+							) : null}
 						</span>
 						<Button
 							size="sm"
@@ -269,10 +291,14 @@ export function SkillsDialog({
 							onClick={() =>
 								void mutate(
 									() =>
-										getTransport().request("project.setTrust", { id: projectId, trusted: true }),
+										getTransport().request(
+											"project.setTrust",
+											trustGrantParams(projectId, trustNotice),
+										),
 									"Couldn't trust project",
 								)
 							}
+							className="shrink-0"
 						>
 							Trust project
 						</Button>

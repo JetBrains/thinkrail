@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ProjectTrustSummary } from "@thinkrail/contracts";
 import {
+	canStopTrusting,
 	deriveProjectTrustNotice,
 	stopTrustingText,
 	trustEnablesText,
@@ -109,4 +110,11 @@ test("the stop-trusting confirmation names pi resources and reloads only where p
 		"Its project skills stop loading in new chats.",
 	);
 	expect(stopTrustingText(granted, false)).toBe("Its project skills stop loading in new chats.");
+});
+
+test("Stop trusting is offered whenever either grant is held", () => {
+	expect(canStopTrusting(undefined)).toBe(false);
+	expect(canStopTrusting({ piResourceTrust: "untrusted" })).toBe(false);
+	expect(canStopTrusting({ trusted: true, piResourceTrust: "untrusted" })).toBe(true);
+	expect(canStopTrusting({ piResourceTrust: "granted" })).toBe(true);
 });
