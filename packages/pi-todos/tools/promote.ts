@@ -21,7 +21,7 @@ export function registerTodoPromote(pi: ExtensionAPI): void {
 		name: "todo_promote",
 		label: "Todo Promote",
 		description:
-			"Promote one loose item into a group of its own in a single atomic step. The item disappears from the loose lane and a group inherits its id (and its title, unless you pass `title`). No duplicate window and no `todo_remove` dance — this IS the promotion. Use it the moment you take a loose item into work (typically a user-authored ask): one `todo_promote`, then `todo_add` the first step and flip it `in_progress`. The empty group is a valid \"task taken, plan forming\" state — don't backfill it with a synthetic placeholder.",
+			'Promote one loose item into a group of its own in a single atomic step. The item disappears from the loose lane and a group inherits its id (and its title, unless you pass `title`). No duplicate window and no `todo_remove` dance — this IS the promotion. Use it the moment you take a loose item into work (typically a user-authored ask): one `todo_promote`, then `todo_add` the first step and flip it `in_progress`. The empty group is a valid "task taken, plan forming" state — don\'t backfill it with a synthetic placeholder.',
 		promptSnippet:
 			"todo_promote — turn one loose item into a group of its own (same id, same title), ready for todo_add to append its steps.",
 		parameters,

@@ -32,8 +32,8 @@ import {
 export type ChangeTarget = { sha: string } | { path: string };
 
 const STATUS_LABEL: Record<TodoStatus, string> = {
-	in_progress: "In progress",
-	pending: "To do",
+	in_progress: "Working on this",
+	pending: "Up next",
 	done: "Done",
 };
 
@@ -45,7 +45,7 @@ export function glanceIcon(glance: PlanGlance): {
 	if (glance === "waiting_question")
 		return {
 			Icon: MessageCircleQuestion,
-			label: "Waiting for your answer",
+			label: "Needs your answer",
 			className: "text-primary",
 		};
 	if (glance === "waiting")
@@ -149,8 +149,14 @@ function GroupBlock({
 }) {
 	const status = group.status;
 	const { done, total } = groupProgress(group);
+	const empty = group.todos.length === 0;
 	return (
-		<div className="mb-8" data-testid="todo-group" data-status={status}>
+		<div
+			className="mb-8"
+			data-testid="todo-group"
+			data-status={status}
+			data-empty={empty || undefined}
+		>
 			<div className="flex items-center gap-8 px-4 py-4">
 				{status === "active" ? (
 					<StatusIcon status="in_progress" glance={glance} />
@@ -171,9 +177,18 @@ function GroupBlock({
 					data-testid="todo-group-progress"
 					className="shrink-0 tr-text-eyebrow text-text-muted"
 				>
-					{done}/{total}
+					{empty ? "planning\u2026" : `${done}/${total}`}
 				</span>
 			</div>
+			{empty ? (
+				<p
+					data-testid="todo-group-planning"
+					className="ml-12 flex items-center gap-8 border-border-default border-l pl-8 py-4 tr-text-metadata text-text-subtle"
+				>
+					<LoaderCircle className="size-12 shrink-0 animate-spin text-primary" />
+					The plan for this task is forming
+				</p>
+			) : null}
 			<ul className="ml-12 flex flex-col border-border-default border-l pl-8">
 				{group.todos.map((todo) => (
 					<TodoRow
@@ -237,7 +252,7 @@ export function TodoRows({
 				<GroupBlock key={group.id} group={group} onRemove={onRemove} {...rowProps} />
 			))}
 			<LooseList items={s.activeLoose} onRemove={onRemove} {...rowProps} />
-			{hasTodo ? <SectionLabel label="To do" /> : null}
+			{hasTodo ? <SectionLabel label="Up next" /> : null}
 			{s.pendingGroups.map((group) => (
 				<GroupBlock key={group.id} group={group} onRemove={onRemove} {...rowProps} />
 			))}
@@ -376,11 +391,11 @@ function TodoRow({
 				className="shrink-0"
 				title={
 					reviewing
-						? "Reviewing…"
+						? "Checking…"
 						: changesRequested && todo.status === "done"
-							? "Changes requested"
+							? "Needs a fix"
 							: reviewed
-								? "Verified"
+								? "Checked"
 								: statusLabel(todo.status, glance)
 				}
 			>
@@ -415,13 +430,28 @@ function TodoRow({
 				</span>
 			) : null}
 			<IconTooltip
-				label={reviewing ? "Reviewing… — wait for the review to finish before removing" : "Remove"}
+				label={
+					reviewing
+						? "Checking… — wait for the check to finish before removing"
+						: todo.origin === "user"
+							? "Cancel task"
+							: "Remove"
+				}
 			>
 				<button
 					type="button"
-					onClick={onRemove}
+					onClick={() => {
+						const message =
+							todo.origin === "user"
+								? "Cancel this task? The agent will stop working on it — it won't come back on its own."
+								: todo.status === "done"
+									? "Remove this done step? Its history drops from the plan."
+									: "Remove this step? The agent may re-add it on its next pass.";
+						if (typeof window !== "undefined" && !window.confirm(message)) return;
+						onRemove();
+					}}
 					disabled={reviewing}
-					aria-label="Remove"
+					aria-label={todo.origin === "user" ? "Cancel task" : "Remove"}
 					className="flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted opacity-0 transition-opacity hover:bg-container-elevated-bg hover:text-feedback-error group-hover:opacity-100 focus-visible:opacity-100 disabled:pointer-events-none disabled:opacity-0"
 				>
 					<Trash2 className="size-14" />

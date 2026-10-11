@@ -140,7 +140,7 @@ function sanitizeGroup(raw: unknown): TodoGroup | null {
 	const todos = Array.isArray(o.todos)
 		? o.todos.map(sanitize).filter((t): t is Todo => t !== null)
 		: [];
-	// Empty groups are kept on purpose: a freshly promoted loose item becomes an empty group 
+	// Empty groups are kept on purpose: a freshly promoted loose item becomes an empty group
 	// whose steps the agent will add next (see TodoStore.promote). Dropping them here would
 	// erase that "task taken, plan forming" state on the next read.
 	return {

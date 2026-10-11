@@ -106,7 +106,10 @@ completed item.
 freshly promoted ask lives as an empty group until the agent decomposes it, and dropping it on read or
 write would silently undo `promote`. `groupStatus` returns `pending` for an empty group; the skill tells
 the agent to immediately add the first substantive step and flip it `in_progress`, so an empty group is
-only ever a transient state between `promote` and the first `add`.
+only ever a transient state between `promote` and the first `add`. The host UI renders this transient
+state as a visible "planning…" line under the group heading (`plan-group-planning` /
+`todo-group-planning` in `apps/web/src/panels/PlanPane.tsx` and `apps/web/src/chat/TodoList.tsx`)
+instead of an empty header, so a reader never sees the group as a broken half-rendered row.
 
 **Titles are one-line, normalized at the write boundary.** Item titles and group titles are the item
 bullets and `##` group headings of the markdown export, which is a shipped artifact (the plan page's

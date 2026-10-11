@@ -28,15 +28,20 @@ export function PlanStatusIcon({ kind }: { kind: "pending" | "active" | "done" }
 export function VerificationGlyph({ verification }: { verification: string }) {
 	const status = verificationStatus(verification);
 	const Icon = status === "claimed" ? ShieldCheck : CircleAlert;
+	// Native title on the wrapper gives a visible hover tooltip with the full verification text, so
+	// users can read what was actually checked without expanding the item. The in-page tooltip
+	// component would trap focus and interfere with the row's click-to-expand behavior.
 	return (
-		<Icon
-			data-testid="todo-verification-glyph"
-			data-status={status}
-			aria-label={verification}
-			className={`size-14 shrink-0 ${
-				status === "claimed" ? "text-feedback-success" : "text-feedback-warning"
-			}`}
-		/>
+		<span title={verification} className="inline-flex">
+			<Icon
+				data-testid="todo-verification-glyph"
+				data-status={status}
+				aria-label={verification}
+				className={`size-14 shrink-0 ${
+					status === "claimed" ? "text-feedback-success" : "text-feedback-warning"
+				}`}
+			/>
+		</span>
 	);
 }
 

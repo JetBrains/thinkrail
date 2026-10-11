@@ -896,22 +896,25 @@ a project picker, the prompt hero, and the reused
   registered **`plan`** tabs (`PlanTab`) via the lazy **`PlanPane`** — the chat plan's **live review-map
   page**. Frontend-local placement stores only the `todo-plan` resolver kind + session identity, never inline
   plan content; another client can explicitly reopen the same host-owned page without inheriting placement. It renders the session's TODO plan document-scale,
-  **status-grouped** (`planSections`): a single **`Session` block** (`plan-now-executing`) holds the
+  **status-grouped** (`planSections`): a single **`Now` block** (`plan-now-executing`) holds the
   current work — the active group(s)/loose items followed by the pending ones (no separate To-do
   section; item status glyphs distinguish in-progress from pending). Its **live status is a clickable chip
   in the header, right of the `Session` title** (`plan-now-status`, `data-glance`, off `sessionGlance`)
   that **opens the chat** (`openChatInTab`) so you can jump from the plan into the conversation: `working`
-  → a `Working…` spinner, `waiting_question` → a `Question` chip. The awaiting question is ALSO
+  → a `Working on this` spinner, `waiting_question` → a `Question` chip. The awaiting question is ALSO
   **answerable in place**: the Session body's **live slot** (`PlanSessionLive`, which subscribes to the
   session runtime so its re-renders stay off the heavy PlanPane) hosts the SAME **`AskUserQuestionCard`**
   as the chat (`plan-ask`, found via `planView.pendingAsk`) inside a minimal `ChatActionsContext` (a real
   `session.answerQuestion`; the chat-only actions — reveal/focus/subagent — are no-ops) plus a derived
   `AskStatesContext`, so an answer submitted from the plan flows through the identical path as the chat.
-  When there's no pending question AND no step is in progress, the same slot instead shows the **agent's
+  When there's no pending question, the same slot instead shows the **agent's
   latest message** (`plan-agent-message`, `planView.lastAgentText` rendered Markdown inside a bounded
   scroll area — `max-h-[12rem] overflow-y-auto` so the full message stays readable without pushing
-  the plan items down — live while it streams) — so the plan stays transparent about what the agent is doing when it isn't asking or on a
-  step; it renders nothing when a step is in progress or there's no message. Below the items the Session ends in a **chat/steer
+  the plan items down — live while it streams) — **always, including while a step is in progress**,
+  so the plan stays honest about what the agent is doing right now (the earlier variant that gated this
+  on "no active step" left the live slot blank precisely while the agent was most active, which read
+  as "frozen" to users); it renders nothing only when the pending-ask case takes the slot or there is
+  no agent message yet. Below the items the Session ends in a **chat/steer
   composer** (`plan-session-chat`, a `PlanComposer` textarea that works like the chat composer — Enter
   sends, Shift+Enter newlines) whose send adapts to the run: while the agent is streaming it **steers**
   (`session.steer`, "Steer the agent…"), otherwise it **starts a turn** (`session.prompt`, "Message the
@@ -926,7 +929,7 @@ a project picker, the prompt hero, and the reused
   draft stays in the plan. **A send from the plan stays on the plan** — it never auto-switches to the
   chat tab (an earlier version did via `openChatInTab` on the success path; dropped because the plan is
   itself a working surface and the agent's reply streams into the live `plan-agent-message` block right
-  below). To jump to the chat you click the Session status chip (`Working…` / `Question`) or the
+  below). To jump to the chat you click the Now status chip (`Working on this` / `Question`) or the
   explicit Open-chat affordances — those are the only `openChatInTab` call sites in the plan now.
   `PlanComposer` ignores a submit while the previous one is in flight,
   so a repeated Enter can't add or send the same draft twice. So a completed
@@ -939,13 +942,21 @@ a project picker, the prompt hero, and the reused
   (`CircleDot`), Done (`CircleCheck`, via `PlanCardSection`) — so the plan reads as one consistent card
   stack. **Heading scale (top-down, no inversion):** page title `tr-heading-sm` → card + group-task
   headings `tr-title-dialog` (14/600) → item titles `tr-title-section` (14/500) → metadata
-  `tr-text-metadata` — a group heading is never smaller than the items it holds. The Session block header carries the plan page's **add-task control**
+  `tr-text-metadata` — a group heading is never smaller than the items it holds. The Now block header carries the plan page's **add-task control**
   (the plan page's only in-page way to add): a `+ Task` button (`plan-add-task`) toggles an inline
   **auto-growing textarea** (`plan-add-input`) — plain **Enter adds**, **Shift+Enter** inserts a newline
   (multi-line like the composer), Esc closes — wired to the SAME `useChatTodos.add` as the popup's
   `TodoAddRow` — a loose **user** item plus the agent nudge — so the two entry points stay one flow.
   Every plan item carries a **hover Remove affordance** (`plan-item-remove` — `useChatTodos.remove`,
-  disabled while the row is under review); adopted commits (host-derived) get no remove.
+  disabled while the row is under review) that opens a **`ConfirmPopover`** before deleting — a direct
+  click used to drop the item without a prompt, which users hit by accident; the confirm reshapes its
+  copy by origin (user items read `Cancel this task?` with the "the agent will stop working on it"
+  explanation; agent items read `Remove this step?` with the "the agent may re-add it" explanation;
+  done items read `Remove this done step?` with the "its history drops from the plan" explanation) so
+  the user knows which consequence the destructive action carries. The confirm action lands under
+  `plan-item-remove-confirm`. Adopted commits (host-derived) get no remove. (The chat popover's
+  `TodoList.tsx:TodoRow` uses a native `window.confirm` with the same copy because a nested in-page
+  Popover inside the chat popover is clipped by the outer popover's bounds.)
   Items keep a **scan-first item
   anatomy**: the item TITLE is
   the only full-size text (`tr-text-ui font-medium`), every detail is a step down (`tr-text-metadata`,
@@ -953,16 +964,24 @@ a project picker, the prompt hero, and the reused
   long title is revealed in full, not clipped. A **done item carries no leading status glyph**
   (`hideStatusGlyph` — its section already says "done"; only an active review or a `changes_requested`
   warning keeps a leading glyph; the slot holds a ghost spacer so titles stay aligned). A **done item
-  collapses to a compact two-line
-  block**: line 1 is a LEADING chevron (matching the change-set disclosure's anatomy; non-collapsible
-  rows reserve the chevron's width with a ghost spacer so every title in the list aligns) + the title,
-  with the **review slot at its right edge**; line 2 is a quiet meta strip UNDER the title (the
-  verification glyph — `ShieldCheck`/`CircleAlert` off `verificationStatus`, `N files`, and — hidden
-  below `sm` so the title keeps its width on phones — short sha + `DiffStatBadge`), aligned to the
-  title via the same ghost-chevron spacer. The meta lives on its own line precisely so the title row's
-  right edge is free for the review slot — the reveal-on-hover action never collides with the title or
-  the meta. **The whole row is the hover target** (`group` on the `<li>`, ProjectTree's pattern):
-  hovering the row tints it and **reveals `Start review` — WITHOUT changing the row's height** (the
+  collapses to a compact block that always carries a `summary` preview inline when the agent wrote one**
+  (`plan-item-meta` / `plan-item-summary-preview`): line 1 is a LEADING chevron (matching the
+  change-set disclosure's anatomy; non-collapsible rows reserve the chevron's width with a ghost
+  spacer so every title in the list aligns) + the title, with the **review slot at its right edge**;
+  line 2 (when the item has a `summary`) is the summary's first line rendered as Markdown and
+  `line-clamp-1`'d so a scan reveals what was done without clicking; line 3 (when a `verification`
+  and/or change set exists) is the quiet meta strip — the verification glyph (`ShieldCheck` /
+  `CircleAlert` off `verificationStatus`, with the full verification text as its native hover tooltip
+  so a mouse-over reads the exact checks — the in-page tooltip component would trap focus and fight
+  the row's click-to-expand), `N files`, and — hidden below `sm` so the title keeps its width on
+  phones — short sha + `DiffStatBadge`. The two meta rows are both aligned to the title via the same
+  ghost-chevron spacer. The meta lives on its own line(s) precisely so the title row's right edge is
+  free for the review slot — the reveal-on-hover action never collides with the title, the summary
+  preview, or the meta. Rationale (direct user feedback: "не понятно что сделано"): a done item used to show only
+  `title + icon + file count`, with `summary` and `verification` hidden behind the chevron — so a
+  reader scanning the plan had to click every single done item to see what actually shipped; the
+  always-on preview + hoverable verification removes that cost. **The whole row is the hover target** (`group` on the `<li>`, ProjectTree's pattern):
+  hovering the row tints it and **reveals `Check it` — WITHOUT changing the row's height** (the
   button reserves its slot in-flow and only fades in; hover never resizes the row). **Expansion is a
   click, not a hover** (`plan-item-toggle` → `data-expanded`): the detail block is always mounted but
   CSS-hidden (`hidden` → `group-data-[expanded=true]:flex`), so a click persists it (and it works on
@@ -984,13 +1003,13 @@ a project picker, the prompt hero, and the reused
   file rows open registry-dispatched diff tabs at the item's `commit:{sha}` scope (`openDiffInTab`, preview intent; the
   path-list fallback opens at branch scope, no counts because they would drift), **and the review verdict
   ON the item row itself**: the row's right edge is ONE review slot rendering exactly one of, in
-  precedence order, the non-clickable pulsing `Reviewing…` status (`plan-item-reviewing`, off the
+  precedence order, the non-clickable pulsing `Checking…` status (`plan-item-reviewing`, off the
   host-derived `review.reviewing` — the review runs as a hidden subagent, so there is no chat to open),
-  the warning `Changes requested · N` chip, or the
-  primary-filled `Start review` button (`plan-start-review` — the standard **small** action button:
+  the warning `Needs a fix · N` chip, or the
+  primary-filled `Check it` button (`plan-start-review` — the standard **small** action button:
   `h-6`/`tr-text-action`/`control-primary-bg`, the same size as `SendReviewButton`, not an oversized
   `min-h-8` block) for an unsettled reviewable item. The two **status**
-  readouts stay always visible (state, not an action); the **`Start review` action reveals on the
+  readouts stay always visible (state, not an action); the **`Check it` action reveals on the
   row's hover / keyboard focus**, exactly like the ProjectTree kebab: `[@media(hover:hover)]:opacity-0`
   + `[@media(hover:hover)]:group-hover:opacity-100` + `focus-visible:opacity-100` — so a wall of
   primary buttons never paints across every reviewable row on desktop, yet on a **touch** device (no
@@ -998,8 +1017,8 @@ a project picker, the prompt hero, and the reused
   button on the title line (the meta on line 2 frees that right edge, so the title simply shrinks for
   it — no overlap, no empty reserved slot). Still one slot, no duplicates — the change-set disclosure
   row carries NO review affordance.
-  `Start review` fires the AGENT review (`todo.startReview` — a hidden review subagent) and STAYS on
-  the plan page: the row's `Reviewing…` pulse and a toast are the only signals, success AND failure —
+  `Check it` fires the AGENT review (`todo.startReview` — a hidden review subagent) and STAYS on
+  the plan page: the row's `Checking…` pulse and a toast are the only signals, success AND failure —
   the review runs with no chat of its own, so the toast must carry the error. The verdict lands via the
   `review.changed` broadcast (`useChatTodos` refetches the plan on it), not a `pi.event` for this
   session — the subagent's events are hidden; a post-ack failure lands via the `review.failed` broadcast
@@ -1009,7 +1028,7 @@ a project picker, the prompt hero, and the reused
   `transport.supportsPlanReview` (v67).** `reviewables`/`unsettledReviewables`/`planReady` come from
   `TodoItem.review` regardless of host version — gating them to empty would let `planReady` read ship-ready
   over an unreviewed step. Against an older host that serves no `todo.startReview`/`reviewAll`, `PlanPane`
-  only disables the mutating affordances (per-row `Start review`, both `Review All` triggers), so an
+  only disables the mutating affordances (per-row `Check it`, both `Check All` triggers), so an
   independently-shipped newer client never *calls* a capability the host cannot honour while still reflecting
   the review state the host does report.
   Row controls (`plan-item-toggle`, the change-set toggle, the sha chip, the review slot, `FileRow`)
@@ -1022,12 +1041,12 @@ a project picker, the prompt hero, and the reused
   panel badged `agent` (`review-comment-agent`), and an agent-settled card reads `Reviewed · agent`;
   a **changes_requested** verdict marks the item loudly: the status glyph flips to the warning
   `CircleAlert` (`StatusIcon changesRequested`, `data-changes-requested` — popup row and plan page
-  alike), the plan page's title row grows a warning **`Changes requested · N`** chip
+  alike), the plan page's title row grows a warning **`Needs a fix · N`** chip
   (`plan-item-changes-requested`; N = `planView.itemOpenFindings`, the reviewer's open comments
   matched by `origin` provenance (path-join fallback for provenance-less ones) — the Review tab is
   the truth; the chip
   `requestToolView`s the Review tab) and the verdict's `feedback` note renders inline
-  (`plan-item-review-feedback`); approving settles the item — the plan page shows a **`Verified` label**
+  (`plan-item-review-feedback`); approving settles the item — the plan page shows a **`Checked` label**
   in the row's review slot, right of the title (`plan-item-verified`, `CircleCheck` + text, success tone),
   and `data-reviewed` on the row (the popup keeps the circled `StatusIcon reviewed` glyph); `planView.reviewSettled` is the
   one derivation — approved AND no unreviewed delta, so a fresh revision drops the item back out of both

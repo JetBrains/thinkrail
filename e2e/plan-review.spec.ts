@@ -6,13 +6,13 @@ import { commitFile, gitAs } from "./fixtures/git";
 
 // The TODO → review workflow's user-visible half, no agent: a seeded plan whose done steps carry
 // completion summaries + real commit artifacts (the host's change-set shape) renders on the plan page
-// with the separate reviewed counter; an unsettled step wears the primary Start review button ON its
+// with the separate reviewed counter; an unsettled step wears the primary Check it button ON its
 // collapsed row, and a step whose review sidecar records `reviewed` (the state a settled review leaves
-// behind) wears the circled Verified glyph and no affordance. There is no in-page manual verdict UI
+// behind) wears the circled Checked glyph and no affordance. There is no in-page manual verdict UI
 // (the `manually` toggle + Approve/Ask-to-fix pair was removed) and no separate summary-first "Review
 // mode" page (task-plan-review-kebab): findings live in the right-panel Review tab, header actions are
 // a kebab menu. Actually settling a review (the review subagent's verdict, ask-to-fix's fix cycle,
-// Review All's pass) is @agent territory; the seeded JSON here is exactly the shape those leave behind.
+// Check All's pass) is @agent territory; the seeded JSON here is exactly the shape those leave behind.
 
 test("reviewable steps show the reviewed counter, Start review, and the settled Verified state", async ({
 	page,
@@ -158,7 +158,7 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 		.filter({ hasText: "add the retry policy" })
 		.click();
 	await expect(page.getByTestId("changes-scope-label")).toContainText(shaDone.slice(0, 7));
-	// The next-action banner picks the most urgent state — the flagged step wins over Review All —
+	// The next-action banner picks the most urgent state — the flagged step wins over Check All —
 	// and its action scrolls to that step and auto-expands it.
 	const nextAction = pane.getByTestId("plan-next-action");
 	await expect(nextAction).toHaveAttribute("data-kind", "fix");
@@ -176,7 +176,7 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 	await expect(openItem).toHaveAttribute("data-expanded", "false");
 	await expect(openItem.getByTestId("todo-verification-glyph")).toBeVisible();
 	await expect(openItem.getByTestId("plan-item-summary")).not.toBeVisible();
-	// The review slot renders Start review on the row (revealed on hover).
+	// The review slot renders Check it on the row (revealed on hover).
 	await expect(openItem.getByTestId("plan-start-review")).toHaveCount(1);
 	await openItem.getByTestId("plan-item-toggle").click();
 	await expect(openItem).toHaveAttribute("data-expanded", "true");
@@ -188,7 +188,7 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 	await expect(verification).toContainText("bun test — 12 pass");
 	await expect(verification).toHaveAttribute("data-status", "claimed");
 
-	// The header kebab holds the export + Review All actions (portaled to the body). Review All is enabled
+	// The header kebab holds the export + Check All actions (portaled to the body). Check All is enabled
 	// while an unsettled reviewable item exists (clicking it asks the worker to run request_review).
 	await pane.getByTestId("plan-menu").click();
 	await expect(page.getByTestId("plan-copy-markdown")).toBeVisible();
@@ -196,7 +196,7 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 	await expect(page.getByTestId("plan-review-all")).not.toHaveAttribute("data-disabled", "");
 	await page.keyboard.press("Escape");
 
-	// The unsettled step: the row's review slot holds the primary Start review button (clicking it asks the
+	// The unsettled step: the row's review slot holds the primary Check it button (clicking it asks the
 	// worker to run request_review — an @agent concern); the change-set disclosure carries no second one.
 	// No manual verdict UI exists beside it.
 	await expect(openItem).toHaveAttribute("data-reviewed", "false");
@@ -204,21 +204,19 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 	await expect(openItem.getByTestId("plan-start-review")).toHaveCount(1);
 	await expect(openItem.getByTestId("plan-review-manually")).toHaveCount(0);
 
-	// The settled step: circled Verified glyph, no review affordance anywhere on the row.
+	// The settled step: circled Checked glyph, no review affordance anywhere on the row.
 	const reviewedItem = pane.getByTestId("plan-item").filter({ hasText: "Implement retry policy" });
 	await expect(reviewedItem).toHaveAttribute("data-reviewed", "true");
-	// The settled step wears a "Verified" label to the right of its title (no leading status glyph).
-	await expect(reviewedItem.getByTestId("plan-item-verified")).toContainText("Verified");
+	// The settled step wears a "Checked" label to the right of its title (no leading status glyph).
+	await expect(reviewedItem.getByTestId("plan-item-verified")).toContainText("Checked");
 	await expect(reviewedItem.getByTestId("plan-start-review")).toHaveCount(0);
 
 	// The changes-requested step wears the warning ON the collapsed row: alert glyph + the
-	// "Changes requested" chip; the reviewer's note is a detail (expand to read it).
+	// "Needs a fix" chip; the reviewer's note is a detail (expand to read it).
 	const flaggedItem = pane.getByTestId("plan-item").filter({ hasText: "Implement parser" });
 	await expect(flaggedItem).toHaveAttribute("data-changes-requested", "true");
-	await expect(flaggedItem.getByTestId("plan-item-changes-requested")).toContainText(
-		"Changes requested",
-	);
-	// The review slot renders exactly one state — the chip displaces Start review.
+	await expect(flaggedItem.getByTestId("plan-item-changes-requested")).toContainText("Needs a fix");
+	// The review slot renders exactly one state — the chip displaces Check it.
 	await expect(flaggedItem.getByTestId("plan-start-review")).toHaveCount(0);
 	// The banner's Show step already scrolled here and auto-expanded the flagged row.
 	await expect(flaggedItem).toHaveAttribute("data-expanded", "true");
@@ -272,7 +270,7 @@ test("a branch commit no step owns shows under 'Committed outside the plan' and 
 	await expect(pane.getByTestId("plan-review-progress")).toContainText("0/1 reviewed");
 });
 
-test("the plan page groups items into a Session block and Done, and adds a task inline", async ({
+test("the plan page groups items into a Now block and Done, and adds a task inline", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -350,10 +348,10 @@ test("the plan page groups items into a Session block and Done, and adds a task 
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
 
-	// The Session block holds both the active and the pending items; done lives under Done. There is no
-	// separate To-do section anymore.
+	// The Now block holds both the active and the pending items (with an "Up next" divider between);
+	// done lives under Done. There is no separate To-do section anymore.
 	const now = pane.getByTestId("plan-now-executing");
-	await expect(now).toContainText("Session");
+	await expect(now).toContainText("Now");
 	await expect(pane.getByTestId("plan-todo-section")).toHaveCount(0);
 	await expect(now.getByTestId("plan-item").filter({ hasText: "Wire the API" })).toBeVisible();
 	await expect(now.getByTestId("plan-item").filter({ hasText: "Empty states" })).toBeVisible();
@@ -420,10 +418,15 @@ test("plan items can be removed, and the add box takes multi-line input (Enter a
 	await input.press("Enter");
 	await expect(pane.getByTestId("plan-item").filter({ hasText: "second line" })).toBeVisible();
 
-	// Remove: the hover affordance deletes the item.
+	// Remove: the hover affordance opens a confirm popover (user items read as "Cancel this task?");
+	// confirming completes the removal.
 	const item = pane.getByTestId("plan-item").filter({ hasText: "A task I added" });
 	await item.hover();
 	await item.getByTestId("plan-item-remove").click();
+	const confirm = page.getByTestId("confirm-popover");
+	await expect(confirm).toBeVisible();
+	await expect(confirm).toContainText("Cancel this task?");
+	await confirm.getByTestId("plan-item-remove-confirm").click();
 	await expect(pane.getByTestId("plan-item").filter({ hasText: "A task I added" })).toHaveCount(0);
 });
 
@@ -453,7 +456,7 @@ test("an empty plan's idle line is a click target that opens the add input", asy
 	await expect(idle).toHaveCount(0);
 });
 
-test("a completed plan turns the Session into a chat composer instead of an idle line", async ({
+test("a completed plan turns the Now block into a chat composer instead of an idle line", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
