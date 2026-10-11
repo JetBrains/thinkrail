@@ -4,7 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore, fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
-import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import {
+	hasTrustRequiringProjectResources,
+	ModelRuntime,
+	SessionManager,
+} from "@earendil-works/pi-coding-agent";
+import type { ProjectResourceKind } from "@thinkrail/contracts";
 import {
 	applyPiResourceTrust,
 	createSession,
@@ -154,19 +159,32 @@ test("the trust summary names each kind of the project's own pi resources that p
 	};
 	expect(await projectTrustSummary(project({ "README.md": "# plain\n" }))).toEqual({
 		aliasSkills: [],
-		nativeResources: false,
+		piResources: [],
 	});
-	expect(
-		(await projectTrustSummary(project({ ".pi/prompts/kickoff.md": "Go\n" }))).nativeResources,
-	).toBe(true);
-	expect(
-		await projectTrustSummary(
-			project({
-				".agents/agents/repo-reviewer.md":
-					"---\nname: repo-reviewer\ndescription: Reviews\n---\n\nReview.\n",
-			}),
-		),
-	).toEqual({ aliasSkills: [], nativeResources: true });
+	const cases: Array<[ProjectResourceKind, Record<string, string>]> = [
+		["extensions", { ".pi/extensions/x.ts": "export default () => {};\n" }],
+		["settings", { ".pi/settings.json": "{}\n" }],
+		["skills", { ".pi/skills/s/SKILL.md": "---\nname: s\ndescription: d\n---\n" }],
+		["skills", { ".agents/skills/s/SKILL.md": "---\nname: s\ndescription: d\n---\n" }],
+		["prompts", { ".pi/prompts/kickoff.md": "Go\n" }],
+		["themes", { ".pi/themes/t.json": "{}\n" }],
+		["systemPrompt", { ".pi/SYSTEM.md": "You are.\n" }],
+		["systemPrompt", { ".pi/APPEND_SYSTEM.md": "Also.\n" }],
+	];
+	for (const [kind, files] of cases) {
+		const cwd = project(files);
+		expect(hasTrustRequiringProjectResources(cwd)).toBe(true);
+		expect((await projectTrustSummary(cwd)).piResources).toEqual([kind]);
+	}
+	const definitions = project({
+		".agents/agents/repo-reviewer.md":
+			"---\nname: repo-reviewer\ndescription: Reviews\n---\n\nReview.\n",
+		".pi/extensions/x.ts": "export default () => {};\n",
+	});
+	expect((await projectTrustSummary(definitions)).piResources.sort()).toEqual([
+		"extensions",
+		"subagents",
+	]);
 });
 
 test("an untrusted project's native resources stay out until a grant reaches the live session", async () => {

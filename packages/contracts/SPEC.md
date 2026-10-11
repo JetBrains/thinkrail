@@ -773,7 +773,9 @@ own existing Pi transcript persistence, not a second wire-owned history store.
 the pi-level resource grant. A client talking to an older host sends neither.
 
 - `project.trustSummary { projectId }` returns `ProjectTrustSummary` for the generalized trust notice: the
-  project checkout's alias skill names and whether pi-level trust would load anything (`nativeResources`).
+  project checkout's alias skill names and the kinds of its own pi resources a pi-level grant would load
+  (`piResources: ProjectResourceKind[]`, empty when none), so the notice names exactly what is there and
+  says it runs code only when `extensions` or `settings` are among them.
   An older host only answers `project.aliasSkills`, which the client reads as "aliases only". It reads the
   project's own checkout and takes no `workspaceId`: both surfaces that show it (the Welcome notice and New
   Workspace) run before the workspace they lead to exists.

@@ -5,7 +5,7 @@ import { getTransport } from "@/transport";
 
 const NOTHING_GATED: ProjectTrustSummary = {
 	aliasSkills: [],
-	nativeResources: false,
+	piResources: [],
 };
 
 export function useProjectTrustSummary(

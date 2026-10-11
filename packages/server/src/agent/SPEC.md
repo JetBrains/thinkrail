@@ -760,8 +760,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   (gated reload of every live session whose trust is stale), `piTrustsProjectPath(path)` (whether pi already
   trusts a path: its `trust.json` decision by nearest ancestor, else its global `defaultProjectTrust` is
   `always`; an unreadable store answers `false` — the host's seed for a newly added project) and
-  `projectTrustSummary(cwd)` (the trust notice's facts: alias names and pi's own
-  `hasTrustRequiringProjectResources` or a project definition from `pi-subagents`' `discoverAgentDefinitions`);
+  `projectTrustSummary(cwd)` (the trust notice's facts: alias names and the `ProjectResourceKind`s present —
+  the `.pi/` entries pi's `hasTrustRequiringProjectResources` gates, ancestor `.agents/skills`, and project
+  definitions from `pi-subagents`' `discoverAgentDefinitions`; the entry list mirrors pi's private one, minus
+  `mcp.json`, which no ThinkRail session loads yet, so a pi upgrade that gates a new entry must extend it);
   the subagent-policy seams
   **`setSubagentsEnabledResolver`** + **`refreshSubagentTools`** (host resolves the effective global default
   plus workspace override; manager owns live-session activation timing) and the concurrency seams

@@ -214,7 +214,7 @@ test("a project whose only gated resources are subagent definitions still asks f
 		await page.getByTestId("add-workspace").first().click();
 		const dialog = page.getByTestId("new-workspace-dialog");
 		const notice = dialog.getByTestId("ws-trust-notice");
-		await expect(notice).toContainText("1 skill and its own pi resources");
+		await expect(notice).toContainText("1 skill and its own Pi resources");
 		await expect(notice).toContainText("subagent definitions");
 
 		await dialog.getByTestId("ws-trust-project").click();

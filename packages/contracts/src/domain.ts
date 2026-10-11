@@ -27,10 +27,21 @@ export interface Project {
 
 export type ProjectPathStatus = { kind: "repo" | "initable" | "missing" | "notDirectory" };
 
+/** A kind of the project's own pi resources; `extensions` and `settings` run code on the host. */
+export type ProjectResourceKind =
+	| "extensions"
+	| "settings"
+	| "skills"
+	| "prompts"
+	| "themes"
+	| "systemPrompt"
+	| "subagents";
+
 /** What a project's trust grant would load, for the trust notice; alias skill names show only after trust. */
 export interface ProjectTrustSummary {
 	aliasSkills: string[];
-	nativeResources: boolean;
+	/** The kinds of the project's own pi resources a pi-level grant would load; empty when none. */
+	piResources: ProjectResourceKind[];
 }
 
 export interface DiffStats {

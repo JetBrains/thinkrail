@@ -332,9 +332,9 @@ pi's own trust-requiring resources or project subagent definitions; older hosts 
 `project.aliasSkills` only, read as "aliases only"), and the
 pure `deriveProjectTrustNotice` evaluates the alias grant (`Project.trusted`) and pi-level trust
 (`Project.piResourceTrust`) **separately**, so the notice names only what is still off: "ships N skills and
-its own pi resources → *Trust project*", plus — when pi-level resources are gated — what a grant loads
-(skills, prompts, themes, `SYSTEM.md`, subagent definitions) and that its extensions and settings run code
-on this machine. *Trust project* sends
+its own Pi resources → *Trust project*", plus — when pi-level resources are gated — exactly the kinds a
+grant loads (the summary's `piResources`: skills, prompts, themes, system prompt, subagent definitions) and,
+only when `extensions` or `settings` are among them, that those run code on this machine. *Trust project* sends
 `project.setTrust` built by `trustGrantParams`: `resources: true` only when the notice names pi-level
 resources (and so said what they load and run); an alias-only notice grants alias trust only. After trust
 it shows a "N new → *Review & enable*" state for skills that appeared later (`project.acknowledgeSkills`),

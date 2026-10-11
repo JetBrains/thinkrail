@@ -1,8 +1,13 @@
-import type { Project, ProjectTrustSummary, WsParams } from "@thinkrail/contracts";
+import type {
+	Project,
+	ProjectResourceKind,
+	ProjectTrustSummary,
+	WsParams,
+} from "@thinkrail/contracts";
 
 export type ProjectTrustNotice =
 	| { kind: "hidden" }
-	| { kind: "untrusted"; aliasSkills: number; nativeResources: boolean }
+	| { kind: "untrusted"; aliasSkills: number; piResources: ProjectResourceKind[] }
 	| { kind: "unacknowledged"; names: string[] }
 	| { kind: "trusted"; aliasSkills: number };
 
@@ -14,15 +19,16 @@ export function deriveProjectTrustNotice(
 ): ProjectTrustNotice {
 	if (!project || !summary) return { kind: "hidden" };
 	const aliasPending = summary.aliasSkills.length > 0 && project.trusted !== true;
-	const nativePending = summary.nativeResources && project.piResourceTrust !== "granted";
+	const nativePending = summary.piResources.length > 0 && project.piResourceTrust !== "granted";
 	if (aliasPending || nativePending) {
 		return {
 			kind: "untrusted",
 			aliasSkills: aliasPending ? summary.aliasSkills.length : 0,
-			nativeResources: nativePending,
+			piResources: nativePending ? summary.piResources : [],
 		};
 	}
-	if (summary.aliasSkills.length === 0 && !summary.nativeResources) return { kind: "hidden" };
+	if (summary.aliasSkills.length === 0 && summary.piResources.length === 0)
+		return { kind: "hidden" };
 	const acknowledged = new Set(project.acknowledgedSkills ?? []);
 	const names = summary.aliasSkills.filter((name) => !acknowledged.has(name));
 	if (names.length > 0) return { kind: "unacknowledged", names };
@@ -31,12 +37,34 @@ export function deriveProjectTrustNotice(
 
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+const LOADED_KINDS: ReadonlyArray<[ProjectResourceKind, string]> = [
+	["skills", "skills"],
+	["prompts", "prompts"],
+	["themes", "themes"],
+	["systemPrompt", "system prompt"],
+	["subagents", "subagent definitions"],
+];
+const CODE_KINDS: ReadonlyArray<[ProjectResourceKind, string]> = [
+	["extensions", "extensions"],
+	["settings", "settings"],
+];
+
+function namesOf(
+	kinds: ReadonlyArray<[ProjectResourceKind, string]>,
+	present: ReadonlySet<ProjectResourceKind>,
+): string {
+	const words = kinds.filter(([kind]) => present.has(kind)).map(([, word]) => word);
+	return words.length < 2
+		? (words[0] ?? "")
+		: `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`;
+}
+
 export function untrustedNoticeText(
 	notice: Extract<ProjectTrustNotice, { kind: "untrusted" }>,
 ): string {
 	const parts = [
 		...(notice.aliasSkills > 0 ? [plural(notice.aliasSkills, "skill")] : []),
-		...(notice.nativeResources ? ["its own pi resources"] : []),
+		...(notice.piResources.length > 0 ? ["its own Pi resources"] : []),
 	];
 	return `This project ships ${parts.join(" and ")} — off until you trust it.`;
 }
@@ -44,15 +72,23 @@ export function untrustedNoticeText(
 export function trustEnablesText(
 	notice: Extract<ProjectTrustNotice, { kind: "untrusted" }>,
 ): string | null {
-	if (!notice.nativeResources) return null;
-	return "Trust loads its skills, prompts, themes, SYSTEM.md and subagent definitions, and lets its extensions and settings run code on this machine.";
+	const present = new Set(notice.piResources);
+	const loads = namesOf(LOADED_KINDS, present);
+	const runs = namesOf(CODE_KINDS, present);
+	if (!runs) return loads ? `Trust loads its ${loads}.` : null;
+	const code = `${runs} run code on this machine`;
+	return loads ? `Trust loads its ${loads}, and lets its ${code}.` : `Trust lets its ${code}.`;
 }
 
 export function trustGrantParams(
 	projectId: string,
 	notice: Extract<ProjectTrustNotice, { kind: "untrusted" }>,
 ): WsParams<"project.setTrust"> {
-	return { id: projectId, trusted: true, ...(notice.nativeResources ? { resources: true } : {}) };
+	return {
+		id: projectId,
+		trusted: true,
+		...(notice.piResources.length > 0 ? { resources: true } : {}),
+	};
 }
 
 export function trustedNoticeText(
@@ -68,6 +104,6 @@ export function stopTrustingText(
 	supportsProjectTrust: boolean,
 ): string {
 	return supportsProjectTrust && project?.piResourceTrust === "granted"
-		? "Its project skills and pi resources stop loading; running subagents stop and open chats reload when idle."
+		? "Its project skills and Pi resources stop loading; running subagents stop and open chats reload when idle."
 		: "Its project skills stop loading in new chats.";
 }
