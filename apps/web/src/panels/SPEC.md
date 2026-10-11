@@ -1174,15 +1174,20 @@ own section. The kebab menu (`plan-menu`, a
   ~100 lines does not. Invariant: a Pierre surface never inserts, removes, or moves a `<slot>`
   synchronously from a pointer or mouse handler. `patches/@pierre%2Fdiffs@1.5.1.patch` (root
   `patchedDependencies`) carries the open upstream proposal pierrecomputer/pierre#1185 (issue
-  pierrecomputer/pierre#1184): placement is a no-op while a mouse button is held outside Pierre's own
-  selection session, and resumes on the next hovered-line change. Bun applies a patch only to its exact
-  version and skips a mismatched one silently — install succeeds and the lockfile drops the entry — so
-  the review e2e "a text-selection drag leaves the comment button on the line it started from" is the
-  guard: it fails on Chromium whenever the patched behavior is missing. A Pierre bump keeps it green and,
-  once a release contains the fix, deletes the patch file and its `patchedDependencies` entry. The
-  test's controls (the utility sat on the start line; the selection holds the dragged text) keep an
-  emptied layout from passing — earlier `display:grid` bisections "fixed" the crash only that way. The
-  crash itself reproduces only in WebKit (a temporary Playwright `webkit` project). Tracked in #683.
+  pierrecomputer/pierre#1184) plus two additions it lacks: placement is a no-op while a mouse button is
+  held outside Pierre's own selection session — armed by `pointermove` and by `pointerleave`, so a drag
+  whose first move already exits the diff cannot remove the slot — and the first button-free move
+  re-places the utility, even on the row where the drag ended. Bun applies a patch only to its exact
+  version and skips a mismatched one silently (install succeeds and the lockfile drops the entry), so
+  the review e2e tests "a text-selection drag leaves the comment button on the line it started from"
+  and "… that leaves the diff on its first move keeps the comment button" are the guard: they fail on
+  Chromium whenever the patched behavior is missing, including a Pierre release that carries only
+  #1185. A Pierre bump keeps them green and, once a release contains the fix, deletes the patch file and
+  its `patchedDependencies` entry. Turbo hashes `patches/**`, so an edited patch rebuilds the web
+  bundle instead of restoring a stale one from cache. The tests' controls (the utility sat on the start
+  line; the selection holds the dragged text) keep an emptied layout from passing — earlier
+  `display:grid` bisections "fixed" the crash only that way. The crash itself reproduces only in WebKit
+  (a temporary Playwright `webkit` project). Tracked in #683.
 
   **Monaco renders desktop files only.** `reviewWidgets.ts` keeps its content-widget selection affordance,
   context-menu action, decorations, and view-zone reconciliation for that one surface. It exposes stable
