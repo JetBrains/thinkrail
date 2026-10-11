@@ -45,6 +45,7 @@ import {
 	selectCanRenameChat,
 	selectContextProject,
 	selectDiffTabTargetRef,
+	selectRailPlanSessionId,
 	selectReviewDraftCount,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
@@ -89,6 +90,7 @@ const PlanPane = lazy(() => import("../panels/PlanPane"));
 const ChangesReviewPane = lazy(() =>
 	import("../panels/ChangesReviewPane").then((module) => ({ default: module.ChangesReviewPane })),
 );
+const PlanRailPane = lazy(() => import("../panels/PlanRailPane"));
 
 const NO_EDITOR_TABS: EditorTab[] = [];
 
@@ -287,6 +289,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const review = useWorkspaceReview(workspaceId);
 	useLoadWorkspaceTurns(workspaceId);
 	const reviewComments = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.comments);
+	const railPlanSessionId = useAppStore((state) => selectRailPlanSessionId(state, workspaceId));
 	const reviewDraftCount = useAppStore((state) => selectReviewDraftCount(state, workspaceId));
 	const reviewFlagByPath = useMemo(() => reviewFlags(reviewComments), [reviewComments]);
 	const [focusRequest, setFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
@@ -567,6 +570,24 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			),
 			changes: <ChangesPanel key={workspaceId} workspaceId={workspaceId} />,
 			review: <ReviewPanel key={workspaceId} workspaceId={workspaceId} failed={review.failed} />,
+			// Plan rail body: shows the plan of the workspace's currently-active chat (or the last chat
+			// tab); when there is no chat tab at all, renders an empty state inviting the user to open
+			// one. The selector mirrors `selectHistoryTarget`'s rule, so the Plan and the history pane
+			// point at the same chat.
+			plan: railPlanSessionId ? (
+				<ErrorBoundary label="plan rail" resetKeys={[workspaceId, railPlanSessionId]}>
+					<Suspense fallback={<MissingResource label="plan" />}>
+						<PlanRailPane workspaceId={workspaceId} sessionId={railPlanSessionId} />
+					</Suspense>
+				</ErrorBoundary>
+			) : (
+				<div
+					data-testid="plan-rail-empty"
+					className="flex h-full items-center justify-center p-16 text-text-subtle tr-text-ui"
+				>
+					Open a chat to see its plan here.
+				</div>
+			),
 		};
 		for (const tool of Object.keys(bodies) as LayoutToolId[]) {
 			bodies[tool] = (
@@ -576,7 +597,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			);
 		}
 		return bodies;
-	}, [review.failed, specs.failed, specs.reload, workspaceId]);
+	}, [railPlanSessionId, review.failed, specs.failed, specs.reload, workspaceId]);
 	const renderToolBody = useCallback((tool: LayoutToolId) => toolBodies[tool], [toolBodies]);
 
 	const isDefault = workspace != null && isDefaultWorkspace(workspace);

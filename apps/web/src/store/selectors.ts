@@ -692,6 +692,24 @@ export function selectHistoryTarget(state: {
 	return chat ? { workspaceId, tabId: chat.id, sessionId: chat.sessionId } : null;
 }
 
+/** Pick the chat session whose plan the workspace's side-rail Plan tool should show.
+ * Prefers the currently-active chat tab; falls back to the most recently appended chat tab;
+ * returns `null` when the workspace has no chat tab at all (callers render a "start a chat" state).
+ * Mirrors `selectHistoryTarget`'s rule 
+ keep both selectors in step. */
+export function selectRailPlanSessionId(
+	state: {
+		tabsByWorkspace: Record<string, EditorTab[]>;
+		activeTabByWorkspace: Record<string, string | null>;
+	},
+	workspaceId: string,
+): string | null {
+	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
+	const active = selectActiveEditorTab(state, workspaceId);
+	const chat = active?.kind === "chat" ? active : tabs.findLast((t) => t.kind === "chat");
+	return chat?.sessionId ?? null;
+}
+
 export interface KnownChatLocation {
 	workspaceId: string;
 	title: string;

@@ -251,6 +251,10 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	};
 
 	const openPlan = () => {
+		// "Open plan" opens the document-scale Plan page in a center tab. The compact TODO list in the
+		// right rail (PlanRailPane) is the always-on glance surface; the Plan page is the deep-review
+		// surface (PlanSessionLive, PR actions, next-action banners, adopted commits, unattributed).
+		// They complement each other — rail for the task list, page for the review trail.
 		const state = useAppStore.getState();
 		const title = selectChatTitle(state, workspaceId, sessionId);
 		notifyOpened("page");

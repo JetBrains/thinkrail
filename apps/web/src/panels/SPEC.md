@@ -895,7 +895,25 @@ a project picker, the prompt hero, and the reused
   after the last tab closes without introducing onboarding state. The workbench resource renderer handles
   registered **`plan`** tabs (`PlanTab`) via the lazy **`PlanPane`** — the chat plan's **live review-map
   page**. Frontend-local placement stores only the `todo-plan` resolver kind + session identity, never inline
-  plan content; another client can explicitly reopen the same host-owned page without inheriting placement. It renders the session's TODO plan document-scale,
+  plan content; another client can explicitly reopen the same host-owned page without inheriting placement.
+
+  **TODO list is also a right-rail tool.** `LAYOUT_TOOLS` carries `"plan"`;
+  `WorkspaceWorkbench.toolBodies.plan` renders the lazy **`PlanRailPane`** (new file,
+  `apps/web/src/panels/PlanRailPane.tsx`) which is **not** `PlanPane` — it imports the SAME compact
+  `TodoAddRow` + `TodoRows` the chat popover uses (`apps/web/src/chat/TodoList.tsx`), so visual
+  changes to one surface land on the other. `data-testid="plan-rail-pane"` on its outer div
+  (distinct from the center-tab `plan-pane`) so e2e can address either surface unambiguously. The
+  rail picks the workspace's currently-active chat via `selectRailPlanSessionId` and shows that
+  chat's TODOs; when the workspace has no chat tab at all, the `plan-rail-empty` placeholder invites
+  "Open a chat to see its plan here." The chat strip's `todo-open-plan` button inside `TodoAddRow`
+  still opens the document-scale **center-tab Plan** (`openPlan` → `openDoc({kind:"plan", ...})`),
+  reachable from both the chat popover and from the rail's own `TodoAddRow` — the rail is the
+  always-on glance surface, the center-tab Plan is the deep-review surface (`PlanSessionLive`, PR
+  actions, next-action banners, adopted commits, unattributed). They complement each other — rail for
+  the task list, page for the review trail. No layout migration: existing center-tab Plans keep
+  working alongside the new rail tool.
+
+  Center-tab Plan renders the session's TODO plan document-scale,
   **status-grouped** (`planSections`): a single **`Now` block** (`plan-now-executing`) holds the
   current work — the active group(s)/loose items followed by the pending ones (no separate To-do
   section; item status glyphs distinguish in-progress from pending). Its **live status is a clickable chip

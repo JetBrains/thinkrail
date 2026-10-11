@@ -73,6 +73,7 @@ export const LAYOUT_TOOLS: readonly LayoutToolId[] = [
 	"files",
 	"changes",
 	"review",
+	"plan",
 ];
 
 export const LAYOUT_TOOL_DEFAULT_SIDES: Record<LayoutToolId, LayoutSide> = {
@@ -81,6 +82,7 @@ export const LAYOUT_TOOL_DEFAULT_SIDES: Record<LayoutToolId, LayoutSide> = {
 	files: "right",
 	changes: "right",
 	review: "right",
+	plan: "right",
 };
 
 const LAYOUT_TOOL_NAMES: Record<LayoutToolId, string> = {
@@ -89,6 +91,7 @@ const LAYOUT_TOOL_NAMES: Record<LayoutToolId, string> = {
 	files: "Files",
 	changes: "Changes",
 	review: "Review",
+	plan: "Plan",
 };
 
 export function layoutTabName(tab: LayoutTab): string {
