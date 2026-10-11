@@ -169,6 +169,8 @@ export interface DelegationService {
 		options?: ResourceDelegationOptions,
 	): Promise<ResourceDelegation>;
 	createChild(spec: CreateChildSpec): Promise<ChildHandle>;
+	/** Live per-parent limit: queued runs start at once on growth; shrinking never stops running ones. */
+	setMaxConcurrentPerParent(slots: number): void;
 	findChild(sessionId: string): ChildHandle | undefined;
 	childrenOf(parentSessionId: string): ChildHandle[];
 	onLifecycle(l: (e: LifecycleEvent) => void): () => void;

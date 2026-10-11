@@ -541,7 +541,7 @@ test("notice delivery waits for idle, wakes on agent_settled only, and stays pas
 	await Bun.sleep(30);
 	expect(controller.state.callCount).toBe(calls);
 	await shutdown(session, "resume");
-	await session.extensionRunner.emit({ type: "agent_settled" });
+	await session.extensionRunner.emit({ type: "agent_settled", aborted: false });
 	expect(ready).toHaveBeenCalledTimes(1);
 	expect(binding.signal.aborted).toBe(true);
 	expect(sink.tryDeliver(notice)).toBe("deferred");

@@ -113,6 +113,8 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   or delete `Workspace.subagentsOverride` for `null` (inherit), then emit the authoritative full
   `workspace.updated` snapshot. It validates the closed value but never reads the global default or
   resolves effective agent policy; the host composes that across sibling boundaries;
+  **`setWorkspaceSubagentMaxConcurrent(id, value | null)`** — the same contract for the numeric
+  `Workspace.subagentMaxConcurrentOverride` (a `SUBAGENT_MAX_CONCURRENT` whole number, `null` deletes);
   **`setWorkspaceDiffBase(id, ref | null)`** — re-point the ref this workspace's diff is
   measured against (`Workspace.diffBase`), `null` (or the creation base itself, which would be a redundant
   override) clearing it; persists + **broadcasts the updated record** so every client converges on the push,
@@ -245,7 +247,7 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   `workspaceDiffStats`, `workspaceDiffKey`, `getWorkspace`, `renameWorkspace`, `refreshUserOwnedWorkspace`,
   `completeInitialTerminalReservation`, `ensureWorkspaceScratchDir`, `setWorkspacePublisher`,
   `WorkspaceLifecycleEvent`, `setWorkspaceDiffBase`, `setWorkspaceSkillOverride`,
-  `setWorkspaceSubagentsOverride`, `recordWorkspaceActivity`, `backfillWorkspaceActivity`,
+  `setWorkspaceSubagentsOverride`, `setWorkspaceSubagentMaxConcurrent`, `recordWorkspaceActivity`, `backfillWorkspaceActivity`,
   `recordWorkspaceHead`, `seedWorkspaceHead`, `settleWorkspace`, `unsettleWorkspace`, `setWorkspaceReview`.
 - **Allowed deps:** `projects` (repo lookup), `git` (the runner), `persistence`, `log`; `contracts`;
   `@thinkrail/shared/paths` (the scratch-dir path convention); Node.

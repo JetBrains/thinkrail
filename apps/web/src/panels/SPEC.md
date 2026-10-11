@@ -515,12 +515,18 @@ a project picker, the prompt hero, and the reused
   backend-profile/window adapter. Another browser, native window, or host is unaffected. Composer growth
   remains a top-level `AppConfig` field and converges on `settings.changed`, with a toast on rejection.
   Labels use “message box” rather than the internal “composer” name when explaining where the user types.
-  The final **Subagents** block pairs the host-wide `subagentsEnabled` switch with a named **This workspace**
-  `Use global` / `On` / `Off` control when a workspace is active; no workspace means no local block. The
-  whole block requires `protocolVersion >= SUBAGENT_SETTINGS_PROTOCOL_VERSION`, so an independently shipped
-  client never offers unsupported mutations against an older host.
-  Global mutation converges through `settings.changed`, local mutation through `workspace.updated`, and
-  neither is optimistic. `Use global` sends `null`, so later global changes continue to flow through);
+  The final **Subagents** block (`SubagentSettings.tsx`) is one table: rows **Allow subagents** and, from
+  `SUBAGENT_CONCURRENCY_PROTOCOL_VERSION`, **Per chat at once**; columns **Global** and, when a workspace is
+  active, that workspace by name. The whole block requires `SUBAGENT_SETTINGS_PROTOCOL_VERSION`, so an
+  independently shipped client never offers unsupported mutations against an older host. Workspace cells
+  show the *effective* value with a Global/Custom tag: toggling writes `on`/`off`, a typed limit writes an
+  override, an empty limit field (placeholder = global) or the Custom tag (a reset button) sends `null`, so later global
+  changes keep flowing through. Limit fields validate with `isSubagentMaxConcurrent`, commit on Enter or
+  blur (an invalid draft reverts), never clamp. A workspace limit is disabled while that workspace's subagents are effectively off; the
+  global limit stays editable even when global is off, because workspaces forced on still inherit it.
+  Global mutations converge through `settings.changed`, workspace ones through `workspace.updated`; none
+  is optimistic. Inputs carrying `data-settings-draft-input` make Escape revert the draft instead of
+  closing the dialog);
   the
   **shell-owned injected Layout
   section** (Balanced/Focus/Review

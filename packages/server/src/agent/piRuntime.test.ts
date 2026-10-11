@@ -89,6 +89,71 @@ test("a session loader excludes an opaque generation artifact but preserves othe
 	}
 });
 
+test("an excluding session loader re-resolves its extension set on every reload and honours -builtin:* settings", async () => {
+	const root = mkdtempSync(join(tmpdir(), "trpi-session-extension-reload-"));
+	const agentDir = join(root, "agent");
+	const extensionsDir = join(agentDir, "extensions");
+	const centralPath = join(extensionsDir, "jetbrains-central.ts");
+	const latePath = join(extensionsDir, "late.ts");
+	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;
+	const counters = globalThis as typeof globalThis & {
+		__thinkrailExcludedExtensionLoads?: number;
+		__thinkrailLateExtensionLoads?: number;
+	};
+	mkdirSync(extensionsDir, { recursive: true });
+	writeFileSync(
+		centralPath,
+		"export default function excluded() { globalThis.__thinkrailExcludedExtensionLoads = (globalThis.__thinkrailExcludedExtensionLoads ?? 0) + 1; }\n",
+	);
+	writeFileSync(
+		join(agentDir, "settings.json"),
+		JSON.stringify({ extensions: ["-builtin:probe"] }),
+	);
+	process.env.PI_CODING_AGENT_DIR = agentDir;
+	let probeLoads = 0;
+	try {
+		const loader = await buildResourceLoader(
+			root,
+			SettingsManager.create(root, agentDir, { projectTrusted: true }),
+			() => ({
+				trusted: true,
+				acknowledged: [],
+				disabled: [],
+				disabledGroups: [],
+				overrides: {},
+			}),
+			[centralPath],
+			[
+				{
+					name: "probe",
+					builtin: true,
+					factory: () => {
+						probeLoads += 1;
+					},
+				},
+			],
+		);
+		expect(probeLoads).toBe(0);
+		expect(counters.__thinkrailLateExtensionLoads).toBeUndefined();
+
+		writeFileSync(
+			latePath,
+			"export default function late() { globalThis.__thinkrailLateExtensionLoads = (globalThis.__thinkrailLateExtensionLoads ?? 0) + 1; }\n",
+		);
+		writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ extensions: [] }));
+		await loader.reload();
+		expect(counters.__thinkrailLateExtensionLoads).toBe(1);
+		expect(probeLoads).toBe(1);
+		expect(counters.__thinkrailExcludedExtensionLoads).toBeUndefined();
+	} finally {
+		delete counters.__thinkrailExcludedExtensionLoads;
+		delete counters.__thinkrailLateExtensionLoads;
+		if (priorAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = priorAgentDir;
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 test("the process-local initializer applies to every fresh runtime generation", async () => {
 	const agentDir = mkdtempSync(join(tmpdir(), "trpi-generation-initializer-"));
 	const priorAgentDir = process.env.PI_CODING_AGENT_DIR;

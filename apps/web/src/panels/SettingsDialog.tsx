@@ -111,7 +111,7 @@ export function SettingsDialog({
 				onEscapeKeyDown={(event) => {
 					if (
 						document.activeElement instanceof HTMLElement &&
-						document.activeElement.hasAttribute("data-line-width-input")
+						document.activeElement.hasAttribute("data-settings-draft-input")
 					) {
 						event.preventDefault();
 					}

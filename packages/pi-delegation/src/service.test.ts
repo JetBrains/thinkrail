@@ -702,6 +702,45 @@ test("the per-parent semaphore paces runs FIFO", async () => {
 	}
 });
 
+test("raising the per-parent limit starts a queued run while its sibling still runs", async () => {
+	const paced = createDelegationService({
+		resolveParent: (id) =>
+			id === parent.sessionId
+				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+				: undefined,
+		delegationRoot,
+		scope: "ws-resized",
+		modelRuntime: runtime,
+		maxConcurrentPerParent: 1,
+	});
+	const slow = gate();
+	faux.setResponses([
+		async () => {
+			await slow.opened;
+			return fauxAssistantMessage("A_DONE");
+		},
+		fauxAssistantMessage("B_DONE"),
+	]);
+	const childA = await paced.createChild(subagentSpec());
+	const childB = await paced.createChild(subagentSpec());
+	try {
+		const runA = childA.runQueued("Slow.");
+		const runB = childB.runQueued("Queued.");
+		await Bun.sleep(20);
+		expect(childB.snapshot?.status).toBe("queued");
+
+		paced.setMaxConcurrentPerParent(2);
+		expect((await runB).status).toBe("completed");
+		expect(childA.snapshot?.status).toBe("running");
+		slow.open();
+		expect((await runA).status).toBe("completed");
+		expect(() => paced.setMaxConcurrentPerParent(0)).toThrow();
+	} finally {
+		slow.open();
+		await paced.disposeChildrenOf(parent.sessionId);
+	}
+});
+
 test("an abort while QUEUED releases immediately — not after a slot frees", async () => {
 	const paced = createDelegationService({
 		resolveParent: (id) =>

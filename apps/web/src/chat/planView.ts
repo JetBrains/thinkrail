@@ -251,13 +251,35 @@ export function hostSessionGlance(
 	return state.execution === "running" ? "working" : "waiting";
 }
 
-export function sessionGlance(rt: {
+interface GlanceInputs {
 	isStreaming: boolean;
 	turns: ChatTurn[];
 	askAnswers: Record<string, AskUserQuestionResult>;
 	toolResults: Record<string, ToolResultState>;
-}): PlanGlance {
-	return planGlance(rt.isStreaming, deriveAskStates(rt.turns, rt.askAnswers, rt.toolResults));
+}
+
+const glanceByTurns = new WeakMap<
+	ChatTurn[],
+	Omit<GlanceInputs, "turns"> & { glance: PlanGlance }
+>();
+
+export function sessionGlance({
+	isStreaming,
+	turns,
+	askAnswers,
+	toolResults,
+}: GlanceInputs): PlanGlance {
+	const cached = glanceByTurns.get(turns);
+	if (
+		cached?.isStreaming === isStreaming &&
+		cached.askAnswers === askAnswers &&
+		cached.toolResults === toolResults
+	) {
+		return cached.glance;
+	}
+	const glance = planGlance(isStreaming, deriveAskStates(turns, askAnswers, toolResults));
+	glanceByTurns.set(turns, { isStreaming, askAnswers, toolResults, glance });
+	return glance;
 }
 
 export function shouldNudgeOnAdd(glance: PlanGlance): boolean {

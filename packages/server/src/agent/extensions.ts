@@ -209,7 +209,7 @@ export async function buildResourceLoader(
 	settingsManager: SettingsManager,
 	getAdmission: () => SkillAdmissionContext,
 	excludedExtensionPaths: readonly string[] = [],
-	extraFactories: ExtensionFactory[] = [],
+	extraFactories: InlineExtension[] = [],
 	askUserQuestionWaiters: AskUserQuestionWaiters = createAskUserQuestionWaiters(),
 ): Promise<ResourceLoader> {
 	const sharedFactories: InlineExtension[] = [
@@ -222,6 +222,7 @@ export async function buildResourceLoader(
 		oversizedImageGuard,
 		...extraFactories,
 	];
+	const extensionFactories = bundled ? [...bundled.factories, ...sharedFactories] : sharedFactories;
 	const skillInputs = resolveSkillInputs(cwd, getAdmission);
 	const agentDir = getAgentDir();
 	const common = {
@@ -229,45 +230,79 @@ export async function buildResourceLoader(
 		agentDir,
 		settingsManager,
 		...skillInputs,
+		extensionFactories,
 	};
+	const devExtensionPaths = bundled ? [] : resolveDevPaths().extensionPaths;
 
 	const excluded = new Set(excludedExtensionPaths.map((path) => resolve(path)));
-	const discoveredExtensionPaths: string[] = [];
-	const discoveredMetadata = new Map<string, PathMetadata>();
-	if (excluded.size > 0) {
-		await settingsManager.reload();
-		const resolvedResources = await new DefaultPackageManager({
-			cwd,
-			agentDir,
-			settingsManager,
-		}).resolve();
-		for (const resource of resolvedResources.extensions) {
-			if (!resource.enabled || excluded.has(resolve(resource.path))) continue;
-			discoveredExtensionPaths.push(resource.path);
-			discoveredMetadata.set(resolve(resource.path), resource.metadata);
-		}
+	if (excluded.size === 0) {
+		const loader = new DefaultResourceLoader({
+			...common,
+			additionalExtensionPaths: devExtensionPaths,
+		});
+		await loader.reload();
+		return loader;
 	}
 
-	const additionalExtensionPaths = [
-		...(bundled ? [] : resolveDevPaths().extensionPaths),
-		...discoveredExtensionPaths,
-	];
-	const loader = new DefaultResourceLoader(
-		bundled
-			? {
-					...common,
-					...(excluded.size > 0 ? { noExtensions: true, additionalExtensionPaths } : {}),
-					extensionFactories: [...bundled.factories, ...sharedFactories],
-				}
-			: {
-					...common,
-					...(excluded.size > 0 ? { noExtensions: true } : {}),
-					additionalExtensionPaths,
-					extensionFactories: sharedFactories,
-				},
-	);
+	// pi keeps a reference to this array and reads it on every reload, so it is rebuilt in place.
+	const additionalExtensionPaths: string[] = [...devExtensionPaths];
+	const packageManager = new DefaultPackageManager({
+		cwd,
+		agentDir,
+		settingsManager,
+		builtinExtensions: builtinExtensionNames(extensionFactories),
+	});
+	let discoveredMetadata = new Map<string, PathMetadata>();
+	const resolveExclusionPaths = async (): Promise<void> => {
+		await settingsManager.reload();
+		const resolvedResources = await packageManager.resolve();
+		const next: string[] = [];
+		const metadata = new Map<string, PathMetadata>();
+		for (const resource of resolvedResources.extensions) {
+			if (!resource.enabled) continue;
+			if (resource.path.startsWith(BUILTIN_EXTENSION_PREFIX)) {
+				next.push(resource.path);
+				continue;
+			}
+			if (excluded.has(resolve(resource.path))) continue;
+			next.push(resource.path);
+			metadata.set(resolve(resource.path), resource.metadata);
+		}
+		additionalExtensionPaths.splice(
+			0,
+			additionalExtensionPaths.length,
+			...devExtensionPaths,
+			...next,
+		);
+		discoveredMetadata = metadata;
+	};
+	const loader = new DefaultResourceLoader({
+		...common,
+		noExtensions: true,
+		additionalExtensionPaths,
+	});
+	const reloadResolved = loader.reload.bind(loader);
+	loader.reload = async (options) => {
+		await resolveExclusionPaths();
+		await reloadResolved(options);
+		relabelDiscoveredExtensions(loader, discoveredMetadata);
+	};
 	await loader.reload();
+	return loader;
+}
 
+const BUILTIN_EXTENSION_PREFIX = "builtin:";
+
+function builtinExtensionNames(factories: readonly InlineExtension[]): string[] {
+	return factories.flatMap((entry) =>
+		typeof entry !== "function" && entry.builtin ? [entry.name] : [],
+	);
+}
+
+function relabelDiscoveredExtensions(
+	loader: DefaultResourceLoader,
+	discoveredMetadata: ReadonlyMap<string, PathMetadata>,
+): void {
 	for (const extension of loader.getExtensions().extensions) {
 		const metadata = discoveredMetadata.get(resolve(extension.resolvedPath));
 		if (!metadata) continue;
@@ -275,7 +310,6 @@ export async function buildResourceLoader(
 		for (const command of extension.commands.values()) command.sourceInfo = extension.sourceInfo;
 		for (const tool of extension.tools.values()) tool.sourceInfo = extension.sourceInfo;
 	}
-	return loader;
 }
 
 function admissionCacheKey(cwd: string, ctx: SkillAdmissionContext): string {

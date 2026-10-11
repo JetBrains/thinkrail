@@ -18,7 +18,7 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 
 - **Owns:** host-side runtime helpers that are neither engine- nor transport-specific.
 - **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `mergePath()`,
-  `localeRepair()`;
+  `loginShellImports()`, `parseLoginShellEnv()`, `LOGIN_ENV_MARKER`, `localeRepair()`;
   `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`;
   `@thinkrail/shared/startupMark` → the static recursive wordmark plus the pure responsive/ANSI renderer
   and interactive-output gate used by every launcher;
@@ -51,10 +51,19 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 ## Contents
 
 - **/shellEnv** — `resolveShellEnv()`: make the host's environment safe for the shells it spawns, because a
-  GUI-launched host (Finder/Dock, launchd, a systemd unit, a container) inherits a stripped-down one. Three
+  GUI-launched host (Finder/Dock, launchd, a systemd unit, a container) inherits a stripped-down one. Four
   independent repairs:
   - **`PATH`** — always adopt the user's login PATH so the in-process agent's bash/tools and the git hooks
     they trigger find `git`/`node`/`bun`/etc., keeping whatever the launching terminal had added on top.
+  - **login-shell environment** — import the rest of the user's login-shell environment once at startup,
+    VS Code-style, because a GUI-launched host otherwise sees none of the variables that provider API keys
+    and `models.json` `${VAR}` references rely on. Skipped when `TERM` is set (a host launched from a
+    terminal already carries the shell's environment). Variables already set for the process win; `PATH`
+    keeps its own repair above; `PWD`/`OLDPWD`/`SHLVL`/`_` and `PI_*` / `THINKRAIL_*` are never imported.
+    One marker-delimited `env -0` probe of the login shell (`-l -i`, then `-l`) serves both this import and
+    the PATH repair; rc-file chatter before the marker (`LOGIN_ENV_MARKER`) is ignored. Trade-off recorded:
+    the host, every process it spawns (which inherits the host environment) and every `!command` resolution
+    then see the secrets the shell exports — the user's own, as in a terminal, not isolation.
   - **locale** — set `LANG` to a UTF-8 locale when *no* locale is configured at all (`LC_ALL`, `LC_CTYPE`
     and `LANG` all unset). Without one, bash/readline is **byte**-oriented rather than character-oriented,
     so one backspace over a multi-byte character (Cyrillic, umlauts, CJK) deletes half of it and desyncs the
@@ -204,11 +213,12 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 
 - Runs **once at startup, before creating any `AgentSession`**.
 - No-op on win32 (GUI processes already inherit the registry PATH). Elsewhere it **always** probes: spawn
-  a login shell `[$SHELL||/bin/zsh, -l, -i, -c, env -0]` (retry without `-i` on non-zero exit) with PATH
-  reset to the OS base dirs (so rc files compute their canonical PATH instead of layering onto whatever
-  the launcher passed), 5s timeout, parse the `\0`-separated entries, then `mergePath(current, login)` —
-  the login PATH, preceded by the current entries it lacks (an activated venv, `nix develop`, direnv) so a
-  terminal launch keeps its explicit additions ahead. Never throws — on any failure it leaves PATH untouched.
+  a login shell `[$SHELL||/bin/zsh, -l, -i, -c, <print LOGIN_ENV_MARKER>; env -0]` (retry without `-i` on
+  non-zero exit) with PATH reset to the OS base dirs (so rc files compute their canonical PATH instead of
+  layering onto whatever the launcher passed), 5s timeout, parse the `\0`-separated entries after the
+  marker, then `mergePath(current, login)` — the login PATH, preceded by the current entries it lacks (an
+  activated venv, `nix develop`, direnv) so a terminal launch keeps its explicit additions ahead. Never
+  throws — on any failure it leaves PATH untouched.
 - There is no "PATH already looks complete" short-circuit. One existed, keyed on user-dir markers, and
   `/usr/local/bin` was among them; it heads macOS `/etc/paths` and every Linux default PATH, so the probe
   never ran for Dock-launched hosts and every session lost Homebrew/bun (`command not found`, failing git

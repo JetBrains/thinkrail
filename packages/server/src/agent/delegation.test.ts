@@ -27,7 +27,13 @@ import {
 	setSessionPublisher,
 	settleSessionsForShutdown,
 } from "./agentSessionManager";
-import { delegationRootDir, delegationServiceFor, readChildTranscript } from "./delegation";
+import {
+	delegationRootDir,
+	delegationServiceFor,
+	readChildTranscript,
+	refreshSubagentConcurrency,
+	setSubagentConcurrencyResolver,
+} from "./delegation";
 import { configurePiRuntime } from "./piRuntime";
 
 const faux = createFauxCore({
@@ -444,6 +450,34 @@ test("a child without extensions reads images raw and still gets the oversized-i
 	} finally {
 		await removeSession(sessionId);
 		baseRuntime.unregisterProvider("faux-claude");
+	}
+});
+
+test("the host concurrency resolver binds new services and live-resizes only the refreshed workspace", () => {
+	const limits: Record<string, number> = { "ws-limit-a": 2, "ws-limit-b": 5 };
+	const resolved: string[] = [];
+	setSubagentConcurrencyResolver((workspaceId) => {
+		resolved.push(workspaceId);
+		return limits[workspaceId] ?? 4;
+	});
+	try {
+		const a = delegationServiceFor("ws-limit-a");
+		const b = delegationServiceFor("ws-limit-b");
+		expect(resolved).toEqual(["ws-limit-a", "ws-limit-b"]);
+		const applied: Array<[string, number]> = [];
+		a.setMaxConcurrentPerParent = (slots) => applied.push(["ws-limit-a", slots]);
+		b.setMaxConcurrentPerParent = (slots) => applied.push(["ws-limit-b", slots]);
+
+		limits["ws-limit-a"] = 9;
+		refreshSubagentConcurrency("ws-limit-a");
+		expect(applied).toEqual([["ws-limit-a", 9]]);
+
+		limits["ws-limit-b"] = 1;
+		refreshSubagentConcurrency();
+		expect(applied).toContainEqual(["ws-limit-a", 9]);
+		expect(applied).toContainEqual(["ws-limit-b", 1]);
+	} finally {
+		setSubagentConcurrencyResolver(() => 4);
 	}
 });
 

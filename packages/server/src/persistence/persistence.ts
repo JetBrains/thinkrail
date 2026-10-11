@@ -9,6 +9,7 @@ import {
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
 	isSettleIdleDays,
+	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
 	normalizeThemePreference,
 	type Project,
@@ -293,6 +294,9 @@ export function loadConfig(): AppConfig {
 			typeof value.subagentsEnabled === "boolean"
 				? value.subagentsEnabled
 				: DEFAULT_CONFIG.subagentsEnabled,
+		subagentMaxConcurrent: isSubagentMaxConcurrent(value.subagentMaxConcurrent)
+			? value.subagentMaxConcurrent
+			: DEFAULT_CONFIG.subagentMaxConcurrent,
 		jbcentralQuotaEnabled:
 			typeof value.jbcentralQuotaEnabled === "boolean"
 				? value.jbcentralQuotaEnabled

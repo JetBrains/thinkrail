@@ -389,6 +389,31 @@ test("subagents default on; an old config inherits that default; toggling off ro
 	expect(getConfig().subagentsEnabled).toBe(false);
 });
 
+test("the subagent limit defaults to 4, round-trips, and a malformed stored value falls back", () => {
+	expect(DEFAULT_CONFIG.subagentMaxConcurrent).toBe(4);
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ subagentMaxConcurrent: 40 }));
+	resetConfigCache();
+	expect(getConfig().subagentMaxConcurrent).toBe(4);
+	expect(updateConfig({ subagentMaxConcurrent: 8 }).subagentMaxConcurrent).toBe(8);
+	resetConfigCache();
+	expect(getConfig().subagentMaxConcurrent).toBe(8);
+});
+
+test("an out-of-range subagent limit is rejected before persistence or broadcast", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const before = getConfig();
+	for (const value of [0, 17, 2.5, "4"]) {
+		const invalid = { subagentMaxConcurrent: value } as unknown as AppConfigUpdate;
+		expect(() => updateConfig(invalid)).toThrow(
+			"subagentMaxConcurrent must be a whole number from 1 to 16",
+		);
+	}
+	expect(getConfig()).toEqual(before);
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+});
+
 test("Windows shell updates reject unknown values before persistence or broadcast", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));

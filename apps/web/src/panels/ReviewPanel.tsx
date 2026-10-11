@@ -346,10 +346,10 @@ function CommentRow({
 	const isDraft = comment.status === "draft";
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const ref = lineRef(comment);
-	const runtime = useAppStore((s) =>
-		comment.sessionId ? s.sessions[comment.sessionId] : undefined,
-	);
-	const glance = runtime ? sessionGlance(runtime) : "waiting";
+	const glance = useAppStore((s) => {
+		const runtime = comment.sessionId ? s.sessions[comment.sessionId] : undefined;
+		return runtime ? sessionGlance(runtime) : "waiting";
+	});
 
 	const update = async (patch: { status?: ReviewComment["status"] }) => {
 		try {

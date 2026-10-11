@@ -21,7 +21,7 @@ export const PROVIDER_GLYPH_SLUGS: Readonly<Record<string, string>> = {
 	"ant-ling": "claude",
 	openai: "openai",
 	"openai-codex": "openai",
-	"azure-openai-responses": "azure",
+	azure: "azure",
 	google: "gemini",
 	"google-vertex": "vertexai",
 	"amazon-bedrock": "bedrock",

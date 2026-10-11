@@ -3752,6 +3752,13 @@ test("applyConfig projects the host-wide subagent default", () => {
 	expect(useAppStore.getState()).toHaveProperty("subagentsEnabled", true);
 });
 
+test("applyConfig projects the per-chat subagent limit and rejects a malformed one", () => {
+	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, subagentMaxConcurrent: 9 });
+	expect(useAppStore.getState()).toHaveProperty("subagentMaxConcurrent", 9);
+	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, subagentMaxConcurrent: 99 });
+	expect(useAppStore.getState()).toHaveProperty("subagentMaxConcurrent", 4);
+});
+
 test("applyConfig projects JetBrains quota display and cadence", () => {
 	expect(useAppStore.getState()).toMatchObject({
 		jbcentralQuotaEnabled: true,

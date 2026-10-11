@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
@@ -169,6 +169,53 @@ describe("PI runtime generations", () => {
 		await expect(
 			getSessionMessages(session.sessionId, "workspace-generation", cwd),
 		).rejects.toThrow("The chat's saved model is unavailable.");
+	});
+
+	test("a transcript saved under a provider pi renamed reattaches to the renamed provider", async () => {
+		const runtime = await ModelRuntime.create({
+			credentials: new InMemoryCredentialStore(),
+			modelsPath: null,
+			allowModelNetwork: false,
+		});
+		runtime.registerProvider("azure", {
+			api: faux.api,
+			baseUrl: "http://azure.test",
+			apiKey: "faux",
+			streamSimple: faux.streamSimple,
+			models: [{ ...modelDef("azure-deployment"), api: faux.api }],
+		});
+		configurePiRuntime(runtime);
+		const sessionId = `sess-${crypto.randomUUID()}`;
+		const dir = defaultSessionDirFor(agentDir, cwd);
+		mkdirSync(dir, { recursive: true });
+		const at = new Date(1_700_000_000_000).toISOString();
+		writeFileSync(
+			join(dir, `1700000000000_${sessionId}.jsonl`),
+			`${[
+				{ type: "session", version: 3, id: sessionId, timestamp: at, cwd },
+				{
+					type: "model_change",
+					id: "model",
+					parentId: null,
+					timestamp: at,
+					provider: "azure-openai-responses",
+					modelId: "azure-deployment",
+				},
+				{
+					type: "message",
+					id: "user",
+					parentId: "model",
+					timestamp: at,
+					message: { role: "user", content: "azure transcript", timestamp: 1_700_000_000_000 },
+				},
+			]
+				.map((line) => JSON.stringify(line))
+				.join("\n")}\n`,
+		);
+
+		const hydrated = await getSessionMessages(sessionId, "workspace-generation", cwd);
+		expect(JSON.stringify(hydrated.messages)).toContain("azure transcript");
+		expect(hydrated.summary.model).toMatchObject({ provider: "azure", id: "azure-deployment" });
 	});
 
 	test("a legacy disk transcript with no persisted model may use the current default", async () => {

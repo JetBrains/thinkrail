@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test";
 import {
 	DEFAULT_CONFIG,
 	isSettleIdleDays,
+	isSubagentMaxConcurrent,
 	RECENT_MODELS_LIMIT,
 	type ReviewFixDetails,
 	SETTLE_IDLE_DAYS,
+	SUBAGENT_MAX_CONCURRENT,
 } from "./domain";
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
@@ -29,6 +31,7 @@ import {
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
+	SUBAGENT_CONCURRENCY_PROTOCOL_VERSION,
 	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
@@ -132,8 +135,22 @@ test("host-owned new-chat defaults are pinned to v72", () => {
 	expect(WS_METHODS).not.toHaveProperty("modelSetDefault");
 });
 
+test("the subagent concurrency limit is pinned to v79", () => {
+	expect(PROTOCOL_VERSION).toBe(79);
+	expect(SUBAGENT_CONCURRENCY_PROTOCOL_VERSION).toBe(79);
+	expect(WS_METHODS.workspaceSetSubagentMaxConcurrent).toBe("workspace.setSubagentMaxConcurrent");
+	expect(DEFAULT_CONFIG.subagentMaxConcurrent).toBe(SUBAGENT_MAX_CONCURRENT.default);
+	expect(SUBAGENT_MAX_CONCURRENT).toEqual({ min: 1, max: 16, default: 4 });
+	expect(isSubagentMaxConcurrent(1)).toBe(true);
+	expect(isSubagentMaxConcurrent(16)).toBe(true);
+	expect(isSubagentMaxConcurrent(0)).toBe(false);
+	expect(isSubagentMaxConcurrent(17)).toBe(false);
+	expect(isSubagentMaxConcurrent(2.5)).toBe(false);
+	expect(isSubagentMaxConcurrent("4")).toBe(false);
+});
+
 test("the settled workspace shelf is pinned to v78", () => {
-	expect(PROTOCOL_VERSION).toBe(78);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(78);
 	expect(WORKSPACE_SETTLE_PROTOCOL_VERSION).toBe(78);
 	expect(WS_METHODS.workspaceSettle).toBe("workspace.settle");
 	expect(WS_METHODS.workspaceUnsettle).toBe("workspace.unsettle");

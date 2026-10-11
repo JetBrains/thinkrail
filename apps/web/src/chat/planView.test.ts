@@ -191,6 +191,30 @@ test("sessionGlance derives the glance straight from a runtime (deriveAskStates 
 	).toBe("waiting");
 });
 
+test("sessionGlance recomputes when any input changes identity under the same turns array", () => {
+	const turns: ChatTurn[] = [
+		{
+			kind: "assistant",
+			id: "a1",
+			streaming: false,
+			message: {
+				role: "assistant",
+				content: [{ type: "toolCall", id: "q1", name: "ask_user_question", arguments: {} }],
+			} as unknown as AssistantMessage,
+		},
+	];
+	const pending = { isStreaming: false, turns, askAnswers: {}, toolResults: {} };
+	expect(sessionGlance(pending)).toBe("waiting_question");
+	expect(sessionGlance({ ...pending, toolResults: { q1: { status: "error", raw: {} } } })).toBe(
+		"waiting",
+	);
+	expect(sessionGlance({ ...pending, askAnswers: { q1: { answers: [], cancelled: false } } })).toBe(
+		"waiting",
+	);
+	expect(sessionGlance(pending)).toBe("waiting_question");
+	expect(sessionGlance({ ...pending, turns: [] })).toBe("waiting");
+});
+
 test("itemChangeSet: the LATEST resolvable commit wins; live change paths (a fallback redo) win over commits", () => {
 	const done: TodoItem = {
 		...item("step", "done"),

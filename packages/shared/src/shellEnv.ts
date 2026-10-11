@@ -9,8 +9,25 @@ export function mergePath(current: string, login: string): string {
 	return [...extras, ...loginEntries].join(delimiter);
 }
 
-function probeLoginShellPath(shell: string, interactive: boolean): string | null {
-	const args = interactive ? ["-l", "-i", "-c", "env -0"] : ["-l", "-c", "env -0"];
+export const LOGIN_ENV_MARKER = "__THINKRAIL_LOGIN_ENV__";
+const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+export function parseLoginShellEnv(stdout: string): Map<string, string> | null {
+	const marker = stdout.lastIndexOf(LOGIN_ENV_MARKER);
+	if (marker === -1) return null;
+	const env = new Map<string, string>();
+	for (const entry of stdout.slice(marker + LOGIN_ENV_MARKER.length).split("\0")) {
+		const eq = entry.indexOf("=");
+		if (eq <= 0) continue;
+		const name = entry.slice(0, eq);
+		if (ENV_NAME.test(name)) env.set(name, entry.slice(eq + 1));
+	}
+	return env.size > 0 ? env : null;
+}
+
+function probeLoginShellEnv(shell: string, interactive: boolean): Map<string, string> | null {
+	const script = `printf '%s' '${LOGIN_ENV_MARKER}'; env -0`;
+	const args = interactive ? ["-l", "-i", "-c", script] : ["-l", "-c", script];
 	try {
 		const result = Bun.spawnSync([shell, ...args], {
 			env: { ...process.env, PATH: PROBE_BASE_PATH },
@@ -19,15 +36,34 @@ function probeLoginShellPath(shell: string, interactive: boolean): string | null
 			stderr: "ignore",
 		});
 		if (!result.success) return null;
-		const text = new TextDecoder().decode(result.stdout);
-		for (const entry of text.split("\0")) {
-			const eq = entry.indexOf("=");
-			if (eq !== -1 && entry.slice(0, eq) === "PATH") return entry.slice(eq + 1);
-		}
-		return null;
+		return parseLoginShellEnv(new TextDecoder().decode(result.stdout));
 	} catch {
 		return null;
 	}
+}
+
+export type LoginShellEnvProbe = () => Map<string, string> | null;
+
+function defaultLoginShellProbe(): Map<string, string> | null {
+	const shell = process.env.SHELL ?? "/bin/zsh";
+	return probeLoginShellEnv(shell, true) ?? probeLoginShellEnv(shell, false);
+}
+
+const NEVER_IMPORTED_PREFIXES = ["PI_", "THINKRAIL_"];
+const NEVER_IMPORTED = new Set(["PATH", "PWD", "OLDPWD", "SHLVL", "_"]);
+
+export function loginShellImports(
+	processEnv: Record<string, string | undefined>,
+	loginEnv: ReadonlyMap<string, string>,
+): Record<string, string> {
+	const imports: Record<string, string> = {};
+	for (const [name, value] of loginEnv) {
+		if (processEnv[name] !== undefined) continue;
+		if (NEVER_IMPORTED.has(name)) continue;
+		if (NEVER_IMPORTED_PREFIXES.some((prefix) => name.startsWith(prefix))) continue;
+		imports[name] = value;
+	}
+	return imports;
 }
 
 export function localeRepair(
@@ -43,9 +79,15 @@ function resolveLocale(): void {
 	if (lang) process.env.LANG = lang;
 }
 
-function resolvePath(): void {
-	const shell = process.env.SHELL ?? "/bin/zsh";
-	const login = probeLoginShellPath(shell, true) ?? probeLoginShellPath(shell, false);
+function resolveLoginShellImports(loginEnv: () => Map<string, string> | null): void {
+	if (process.env.TERM !== undefined) return;
+	const env = loginEnv();
+	if (!env) return;
+	Object.assign(process.env, loginShellImports(process.env, env));
+}
+
+function resolvePath(loginEnv: () => Map<string, string> | null): void {
+	const login = loginEnv()?.get("PATH");
 	if (login) process.env.PATH = mergePath(process.env.PATH ?? "", login);
 }
 
@@ -62,9 +104,15 @@ function resolveSshAgentSock(): void {
 	} catch {}
 }
 
-export function resolveShellEnv(): void {
+export function resolveShellEnv(options: { probe?: LoginShellEnvProbe } = {}): void {
 	if (process.platform === "win32") return;
+	let probed: Map<string, string> | null | undefined;
+	const loginEnv = () => {
+		if (probed === undefined) probed = (options.probe ?? defaultLoginShellProbe)();
+		return probed;
+	};
+	resolveLoginShellImports(loginEnv);
 	resolveLocale();
-	resolvePath();
+	resolvePath(loginEnv);
 	resolveSshAgentSock();
 }

@@ -112,6 +112,7 @@ interface Entry {
 	commands: BackgroundCommands;
 	unsubscribeCommands: () => void;
 	resourceCascade?: Promise<void>;
+	shutdownEmitted?: Promise<void>;
 	resourcesClosing: boolean;
 	session: AgentSession;
 	generation: PiRuntimeGeneration;
@@ -123,6 +124,10 @@ interface Entry {
 	nextQueuedMessageId: number;
 	manualCompactionInProgress: boolean;
 	piCompactionInProgress: boolean;
+	reloadPending: boolean;
+	reloadRunning: Promise<void> | null;
+	preflightReleases: Set<() => void>;
+	heldReservations: Set<() => void>;
 	disposed: boolean;
 	registered: boolean;
 	subagentToolsRefreshPending: boolean;
@@ -617,15 +622,91 @@ function transcriptMessages(session: AgentSession): TranscriptMessage[] {
 
 export async function reloadSessionResources(sessionId: string): Promise<void> {
 	const entry = mustGetEntry(sessionId);
-	const { session } = entry;
-	if (session.isStreaming) {
-		throw new Error(
-			"Can't reload skills while the session is streaming — try again after the turn.",
-		);
+	if (entry.reloadRunning) {
+		await entry.reloadRunning;
+		return;
 	}
-	await session.reload();
-	entry.commands.flushCompletions();
-	entry.subagents.flushCompletions();
+	const blocked = reloadBlockedReason(entry);
+	if (blocked) throw new Error(`Can't reload while ${blocked} — try again after the turn.`);
+	await runGatedReload(entry);
+}
+
+export type SessionReloadDisposition = "reloaded" | "deferred";
+
+export async function requestSessionReload(sessionId: string): Promise<SessionReloadDisposition> {
+	const entry = mustGetEntry(sessionId);
+	if (entry.reloadRunning) {
+		entry.reloadPending = true;
+		await entry.reloadRunning;
+		return "reloaded";
+	}
+	if (reloadBlockedReason(entry)) {
+		entry.reloadPending = true;
+		return "deferred";
+	}
+	await runGatedReload(entry);
+	return "reloaded";
+}
+
+function reloadBlockedReason(entry: Entry): string | null {
+	if (entry.disposed || entry.resourcesClosing) return "the chat is closing";
+	if (entry.session.isStreaming || !entry.session.isIdle) return "the chat is busy";
+	if (entry.preflightReleases.size > 0 || entry.heldReservations.size > 0) {
+		return "a message is being admitted";
+	}
+	if (entry.manualCompactionInProgress || entry.piCompactionInProgress) {
+		return "compaction is in progress";
+	}
+	return null;
+}
+
+function reconsiderPendingReload(entry: Entry): void {
+	if (!entry.reloadPending || entry.reloadRunning || reloadBlockedReason(entry)) return;
+	void runGatedReload(entry).catch((error) => {
+		log.warn(`deferred resource reload failed for ${entry.session.sessionId}`, error as Error);
+	});
+}
+
+function runGatedReload(entry: Entry): Promise<void> {
+	if (entry.reloadRunning) return entry.reloadRunning;
+	entry.reloadPending = false;
+	entry.reloadRunning = (async () => {
+		try {
+			await entry.session.reload();
+		} finally {
+			// Open the gate before flushing: completion delivery is refused while it is held.
+			entry.reloadRunning = null;
+			entry.commands.flushCompletions();
+			entry.subagents.flushCompletions();
+			publishEntryState(entry);
+			reconsiderPendingReload(entry);
+		}
+	})();
+	return entry.reloadRunning;
+}
+
+function admitRun(entry: Entry): void {
+	if (entry.reloadRunning) {
+		throw new Error("The chat is reloading its resources — try again in a moment.");
+	}
+}
+
+function admitPreflight(entry: Entry, held = false): () => void {
+	admitRun(entry);
+	const reservations = held ? entry.heldReservations : entry.preflightReleases;
+	let released = false;
+	const release = () => {
+		if (released) return;
+		released = true;
+		reservations.delete(release);
+		reconsiderPendingReload(entry);
+	};
+	reservations.add(release);
+	return release;
+}
+
+function releasePreflights(entry: Entry): void {
+	for (const release of [...entry.preflightReleases]) release();
 }
 
 const SESSION_SETTINGS_OVERRIDES = { images: { autoResize: false } };
@@ -687,6 +768,23 @@ function resolveWireModel(
 	return match as unknown as Model<string>;
 }
 
+const RENAMED_PI_PROVIDERS: Readonly<Record<string, string>> = {
+	"azure-openai-responses": "azure",
+};
+
+function resolvePersistedModel(
+	runtime: PiRuntimeGeneration["runtime"],
+	ref: Pick<WireModel, "provider" | "id">,
+): Model<string> {
+	try {
+		return resolveWireModel(runtime, ref);
+	} catch (error) {
+		const renamed = RENAMED_PI_PROVIDERS[ref.provider];
+		if (!renamed) throw error;
+		return resolveWireModel(runtime, { provider: renamed, id: ref.id });
+	}
+}
+
 interface PreparedSessionEntry {
 	entry: Entry;
 	result: CreateSessionResult;
@@ -718,6 +816,10 @@ async function prepareSessionEntry(
 		nextQueuedMessageId: 1,
 		manualCompactionInProgress: false,
 		piCompactionInProgress: false,
+		reloadPending: false,
+		reloadRunning: null,
+		preflightReleases: new Set(),
+		heldReservations: new Set(),
 		disposed: false,
 		registered: false,
 		subagentToolsRefreshPending: false,
@@ -762,9 +864,13 @@ async function prepareSessionEntry(
 			synchronizeQueuedLane(entry, "followUp", displayedLane(entry, "followUp", event.followUp));
 		}
 		if (event.type === "compaction_start") entry.piCompactionInProgress = true;
-		if (event.type === "compaction_end") entry.piCompactionInProgress = false;
+		if (event.type === "compaction_end") {
+			entry.piCompactionInProgress = false;
+			reconsiderPendingReload(entry);
+		}
 		if (event.type === "agent_start") {
 			entry.lastSettlement = null;
+			releasePreflights(entry);
 		}
 		if (event.type === "agent_end") {
 			const assistant = [...event.messages]
@@ -798,6 +904,7 @@ async function prepareSessionEntry(
 			}
 			if (entry.subagentToolsRefreshPending) applySubagentTools(entry);
 			if (entry.reviewToolRefreshPending) applyReviewTool(entry);
+			reconsiderPendingReload(entry);
 		}
 		if (sessions.get(sessionId) === entry) {
 			publish({ sessionId, event: projected });
@@ -831,14 +938,7 @@ async function prepareSessionEntry(
 		});
 		if (!sessionCanAttach(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
 	} catch (error) {
-		cancelExtUiForSession(sessionId);
-		entry.askUserQuestionWaiters.abandon();
-		entry.unsubscribe();
-		entry.unsubscribeCommands();
-		entry.disposed = true;
-		void closeSessionResources(entry);
-		clearEntryQueue(entry);
-		session.dispose();
+		abandonPreparedEntry(entry);
 		throw error;
 	}
 
@@ -852,6 +952,18 @@ async function prepareSessionEntry(
 			thinkingLevel: session.thinkingLevel,
 		},
 	};
+}
+
+function abandonPreparedEntry(entry: Entry): void {
+	const { sessionId } = entry.session;
+	cancelExtUiForSession(sessionId);
+	entry.askUserQuestionWaiters.abandon();
+	entry.unsubscribe();
+	entry.unsubscribeCommands();
+	entry.disposed = true;
+	void closeSessionResources(entry);
+	clearEntryQueue(entry);
+	disposePiSessionAfterShutdown(entry);
 }
 
 async function registerSession(
@@ -875,8 +987,10 @@ async function registerSession(
 	if (
 		!workspaceAcceptsSessions(workspaceId, lifecycleToken) ||
 		sessionIsTearingDown(session.sessionId)
-	)
+	) {
+		abandonPreparedEntry(prepared.entry);
 		throw new Error(`Workspace is unavailable: ${workspaceId}`);
+	}
 	prepared.entry.registered = true;
 	sessions.set(session.sessionId, prepared.entry);
 	applySubagentTools(prepared.entry);
@@ -950,7 +1064,9 @@ async function createParentSessionInternal(
 	const sessionId = sessionManager.getSessionId();
 	const askUserQuestionWaiters = createAskUserQuestionWaiters();
 	const canDeliverCompletion = () =>
-		canUseSessionResources(sessionId, workspaceId) && !askUserQuestionWaiters.hasRecoverableCall();
+		canUseSessionResources(sessionId, workspaceId) &&
+		!askUserQuestionWaiters.hasRecoverableCall() &&
+		!sessions.get(sessionId)?.reloadRunning;
 	let session: AgentSession | undefined;
 	const subagents = subagentsFor(
 		workspaceId,
@@ -1003,15 +1119,13 @@ async function createParentSessionInternal(
 			try {
 				await disposeSession(sessionId);
 			} catch {}
-		} else {
+		} else if (!session) {
 			subagents.dispose();
 			void trackCascade(
 				workspaceId,
 				commands.dispose().catch(() => {}),
 			);
-			session?.clearQueue();
 			askUserQuestionWaiters.abandon();
-			session?.dispose();
 		}
 		throw error;
 	}
@@ -1417,7 +1531,7 @@ async function openDiskSession(
 	let exactModel: Model<string> | undefined;
 	if (persistedModel) {
 		try {
-			exactModel = resolveWireModel(generation.runtime, persistedModel);
+			exactModel = resolvePersistedModel(generation.runtime, persistedModel);
 		} catch {
 			throw new Error("The chat's saved model is unavailable.");
 		}
@@ -1517,9 +1631,14 @@ export async function answerQuestion(
 	if (!hasQuestionAck(entry.session.messages, toolCallId)) {
 		throw new Error(`${ANSWERABILITY_ERRORS.not_awaiting}: ${toolCallId}`);
 	}
-	await entry.session.sendCustomMessage(buildAnswersMessage(toolCallId, verdict.args, result), {
-		triggerTurn: true,
-	});
+	const release = admitPreflight(entry);
+	try {
+		await entry.session.sendCustomMessage(buildAnswersMessage(toolCallId, verdict.args, result), {
+			triggerTurn: true,
+		});
+	} finally {
+		release();
+	}
 }
 
 function synchronizeQueuedLane(entry: Entry, kind: QueueLane, texts: readonly string[]): void {
@@ -1674,11 +1793,17 @@ export async function promptSession(
 	images?: ImageContent[],
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
+	admitRun(entry);
 	if (entry.session.isStreaming) {
 		await steerEntry(entry, text, images);
 		return;
 	}
-	await entry.session.prompt(text, images ? { images } : undefined);
+	const release = admitPreflight(entry);
+	try {
+		await entry.session.prompt(text, images ? { images } : undefined);
+	} finally {
+		release();
+	}
 }
 
 export async function steerSession(
@@ -1686,7 +1811,9 @@ export async function steerSession(
 	text: string,
 	images?: ImageContent[],
 ): Promise<void> {
-	await steerEntry(mustGetEntry(sessionId), text, images);
+	const entry = mustGetEntry(sessionId);
+	admitRun(entry);
+	await steerEntry(entry, text, images);
 }
 
 export async function followUpSession(
@@ -1695,13 +1822,19 @@ export async function followUpSession(
 	images?: ImageContent[],
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
+	admitRun(entry);
 	if (entry.session.isStreaming) {
 		await queueSessionMessage(entry, "followUp", text, images, () =>
 			entry.session.followUp(text, images),
 		);
 		return;
 	}
-	await entry.session.prompt(text, images ? { images } : undefined);
+	const release = admitPreflight(entry);
+	try {
+		await entry.session.prompt(text, images ? { images } : undefined);
+	} finally {
+		release();
+	}
 }
 
 // Callers MUST `ackSend`-wrap this: a pre-turn rejection has to roll the review record back — see submodule-server-todos.
@@ -1711,14 +1844,20 @@ export async function sendReviewFixToSession(
 	details: ReviewFixDetails,
 ): Promise<void> {
 	const entry = mustGetEntry(sessionId);
-	await entry.session.sendCustomMessage(
-		{ customType: TODO_REVIEW_FIX_CUSTOM_TYPE, content, display: true, details },
-		{ deliverAs: "followUp", triggerTurn: true },
-	);
+	const release = admitPreflight(entry);
+	try {
+		await entry.session.sendCustomMessage(
+			{ customType: TODO_REVIEW_FIX_CUSTOM_TYPE, content, display: true, details },
+			{ deliverAs: "followUp", triggerTurn: true },
+		);
+	} finally {
+		release();
+	}
 }
 
 export async function compactSession(sessionId: string, instructions?: string): Promise<void> {
 	const entry = mustGetEntry(sessionId);
+	admitRun(entry);
 	if (entry.manualCompactionInProgress || entry.piCompactionInProgress) {
 		throw new Error("Compaction is already in progress for this session");
 	}
@@ -1727,6 +1866,7 @@ export async function compactSession(sessionId: string, instructions?: string): 
 		await entry.session.compact(instructions);
 	} finally {
 		entry.manualCompactionInProgress = false;
+		reconsiderPendingReload(entry);
 	}
 }
 
@@ -1759,35 +1899,40 @@ export async function removeQueuedSession(
 	index: number,
 ): Promise<RemovedQueuedMessage> {
 	const entry = mustGetEntry(sessionId);
-	const { session } = entry;
-	const drained = clearQueueSession(sessionId);
-	const lane = [...drained[kind]];
-	const removed = index >= 0 && index < lane.length ? (lane.splice(index, 1)[0] ?? null) : null;
-	const keep = { ...drained, [kind]: lane };
-	for (const message of keep.steering) {
-		const images = message.images ? [...message.images] : undefined;
-		await queueSessionMessage(entry, "steering", message.text, images, () =>
-			session.steer(message.text, images),
-		);
-	}
-	for (const message of keep.followUp) {
-		await followUpSession(
-			sessionId,
-			message.text,
-			message.images ? [...message.images] : undefined,
-		);
-	}
-	if (!session.isStreaming && session.pendingMessageCount > 0) {
-		const parked = clearQueueSession(sessionId);
-		for (const message of [...parked.steering, ...parked.followUp]) {
+	const release = admitPreflight(entry, true);
+	try {
+		const { session } = entry;
+		const drained = clearQueueSession(sessionId);
+		const lane = [...drained[kind]];
+		const removed = index >= 0 && index < lane.length ? (lane.splice(index, 1)[0] ?? null) : null;
+		const keep = { ...drained, [kind]: lane };
+		for (const message of keep.steering) {
+			const images = message.images ? [...message.images] : undefined;
+			await queueSessionMessage(entry, "steering", message.text, images, () =>
+				session.steer(message.text, images),
+			);
+		}
+		for (const message of keep.followUp) {
 			await followUpSession(
 				sessionId,
 				message.text,
 				message.images ? [...message.images] : undefined,
 			);
 		}
+		if (!session.isStreaming && session.pendingMessageCount > 0) {
+			const parked = clearQueueSession(sessionId);
+			for (const message of [...parked.steering, ...parked.followUp]) {
+				await followUpSession(
+					sessionId,
+					message.text,
+					message.images ? [...message.images] : undefined,
+				);
+			}
+		}
+		return { removed, queue: queueStateOf(entry) };
+	} finally {
+		release();
 	}
-	return { removed, queue: queueStateOf(entry) };
 }
 
 const ACCEPTED_ANSWER_STOP_GRACE_MS = 1_000;
@@ -1952,17 +2097,45 @@ function trackCascade(workspaceId: string, cascade: Promise<void>): Promise<void
 	return tracked;
 }
 
+const SESSION_SHUTDOWN_BUDGET_MS = 3000;
+
+function emitSessionShutdown(entry: Entry, timeoutMs = SESSION_SHUTDOWN_BUDGET_MS): Promise<void> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const runner = entry.session.extensionRunner;
+	const event = { type: "session_shutdown", reason: "quit" } as const;
+	// Started synchronously: the synchronous teardown path disposes the pi session right after, and
+	// handlers must have started by then.
+	const emitted = runner.emit(event).then(
+		() => {},
+		(error) => {
+			log.debug(`session ${entry.session.sessionId} shutdown handlers failed`, error as Error);
+		},
+	);
+	return Promise.race([
+		emitted,
+		new Promise<void>((resolve) => {
+			timer = setTimeout(resolve, timeoutMs);
+		}),
+	]).finally(() => clearTimeout(timer));
+}
+
 function closeSessionResources(entry: Entry, timeoutMs?: number): Promise<void> {
 	if (entry.resourceCascade) return entry.resourceCascade;
 	entry.resourcesClosing = true;
 	entry.subagents.dispose();
 	const closing = entry.commands.dispose(timeoutMs === undefined ? undefined : { timeoutMs });
 	const children = disposeSessionChildren(entry.workspaceId, entry.session.sessionId);
+	entry.shutdownEmitted = emitSessionShutdown(entry, timeoutMs);
 	entry.resourceCascade = trackCascade(
 		entry.workspaceId,
-		Promise.allSettled([closing, children]).then(() => {}),
+		Promise.allSettled([closing, children, entry.shutdownEmitted]).then(() => {}),
 	);
 	return entry.resourceCascade;
+}
+
+// `dispose()` invalidates the extension context the session_shutdown handlers are still using.
+function disposePiSessionAfterShutdown(entry: Entry): void {
+	void (entry.shutdownEmitted ?? Promise.resolve()).then(() => entry.session.dispose());
 }
 
 function trackSessionTeardown(sessionId: string, cascade: Promise<void>): Promise<void> {
@@ -1988,8 +2161,8 @@ function disposeSession(sessionId: string): Promise<void> {
 	entry.unsubscribe();
 	entry.unsubscribeCommands();
 	clearEntryQueue(entry);
-	entry.session.dispose();
 	sessions.delete(sessionId);
+	disposePiSessionAfterShutdown(entry);
 	publishSessionResourcesChanged(entry.workspaceId, sessionId);
 	log.debug(`session ${sessionId} disposed`);
 	return cascade;
@@ -2023,13 +2196,15 @@ export function disposeAllSessions(): void {
 		entry.unsubscribeCommands();
 		entry.disposed = true;
 		clearEntryQueue(entry);
-		entry.session.dispose();
+		disposePiSessionAfterShutdown(entry);
 	}
 	sessions.clear();
 	deletedSessions.clear();
 }
 
-export async function settleSessionsForShutdown(timeoutMs = 2000): Promise<void> {
+export async function settleSessionsForShutdown(
+	timeoutMs = SESSION_SHUTDOWN_BUDGET_MS,
+): Promise<void> {
 	const settling = new Set<Promise<unknown>>();
 	for (const entry of sessions.values()) settling.add(closeSessionResources(entry, timeoutMs));
 	for (const [sessionId, entry] of sessions) {
