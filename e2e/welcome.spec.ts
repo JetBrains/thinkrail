@@ -1,4 +1,4 @@
-import { rmSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { expect, test } from "@playwright/test";
 import {
@@ -134,6 +134,36 @@ test("Settings → Providers offers JetBrains AI with host-authoritative Central
 		await expect(page.getByTestId("jetbrains-disconnect")).toBeVisible();
 	} else {
 		await expect(page.getByTestId("jetbrains-connect")).toBeVisible();
+	}
+});
+
+test("the Welcome trust notice names a project's Pi resources, grants them, and revokes on confirmation", async ({
+	page,
+}) => {
+	const prompts = join(E2E_FIXTURE_REPO, ".pi", "prompts");
+	mkdirSync(prompts, { recursive: true });
+	writeFileSync(join(prompts, "e2e-kickoff.md"), "---\ndescription: Kick off\n---\nGo\n");
+	try {
+		await openFixtureProject(page);
+		const notice = page.getByTestId("project-trust-notice");
+		await expect(notice).toHaveAttribute("data-state", "untrusted");
+		await expect(notice).toContainText("1 skill and its own Pi resources");
+		await expect(page.getByTestId("project-trust-enables")).toHaveText("Trust loads its prompts.");
+		await expect(page.getByTestId("project-untrust-button")).toHaveCount(0);
+
+		await page.getByTestId("project-trust-button").click();
+		await expect(notice).toHaveAttribute("data-state", "trusted");
+		await expect(notice).toContainText("1 project skill trusted.");
+
+		await page.getByTestId("project-untrust-button").click();
+		await expect(page.getByRole("alertdialog")).toContainText(
+			"Its project skills and Pi resources stop loading",
+		);
+		await page.getByTestId("project-untrust-confirm").click();
+		await expect(notice).toHaveAttribute("data-state", "untrusted");
+		await expect(page.getByTestId("project-untrust-button")).toHaveCount(0);
+	} finally {
+		rmSync(join(E2E_FIXTURE_REPO, ".pi"), { recursive: true, force: true });
 	}
 });
 

@@ -1,5 +1,8 @@
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, PHONE_VIEWPORT } from "./fixtures/app";
+import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 
 test("Skills renders existing controls as explicit switches without making rows interactive", async ({
 	page,
@@ -65,4 +68,40 @@ test("Skills renders existing controls as explicit switches without making rows 
 	await page.setViewportSize(PHONE_VIEWPORT);
 	await expect(dialog).toBeVisible();
 	expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+});
+
+test("a chat's Skills dialog names the project's Pi resources and grants them with its trust", async ({
+	page,
+}) => {
+	const trustRequests: Array<Record<string, unknown>> = [];
+	page.on("websocket", (socket) => {
+		socket.on("framesent", ({ payload }) => {
+			if (typeof payload !== "string") return;
+			try {
+				const request = JSON.parse(payload) as {
+					method?: string;
+					params?: Record<string, unknown>;
+				};
+				if (request.method === "project.setTrust" && request.params)
+					trustRequests.push(request.params);
+			} catch {}
+		});
+	});
+	const prompts = join(E2E_FIXTURE_REPO, ".pi", "prompts");
+	mkdirSync(prompts, { recursive: true });
+	writeFileSync(join(prompts, "e2e-kickoff.md"), "---\ndescription: Kick off\n---\nGo\n");
+	try {
+		await openFixtureProject(page);
+		await createWorkspaceViaDialog(page);
+		await page.getByTestId("open-skills").click();
+
+		const banner = page.getByTestId("skills-trust-all");
+		await expect(banner).toContainText("1 skill and its own Pi resources");
+		await expect(banner).toContainText("Trust loads its prompts.");
+		await banner.getByRole("button", { name: "Trust project" }).click();
+		await expect(banner).toHaveCount(0);
+		expect(trustRequests.at(-1)).toMatchObject({ trusted: true, resources: true });
+	} finally {
+		rmSync(join(E2E_FIXTURE_REPO, ".pi"), { recursive: true, force: true });
+	}
 });

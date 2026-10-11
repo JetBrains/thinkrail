@@ -251,6 +251,55 @@ describe("listSkillCommands", () => {
 });
 
 describe("buildResourceLoader", () => {
+	for (const excluding of [false, true]) {
+		it(`runs a project's .pi/extensions code only under pi-level trust (exclusion branch: ${excluding})`, async () => {
+			const root = mkdtempSync(join(tmpdir(), "thinkrail-project-extension-"));
+			const project = join(root, "project");
+			const home = join(root, "home");
+			const agentDir = join(root, "pi-agent");
+			const generationArtifact = join(agentDir, "extensions", "generation.ts");
+			const loads = `__thinkrailProjectExtensionLoads_${excluding}`;
+			const counters = globalThis as typeof globalThis & Record<string, number | undefined>;
+			mkdirSync(join(project, ".pi", "extensions"), { recursive: true });
+			mkdirSync(join(agentDir, "extensions"), { recursive: true });
+			mkdirSync(home, { recursive: true });
+			writeFileSync(generationArtifact, "export default function generation() {}\n");
+			writeFileSync(
+				join(project, ".pi", "extensions", "repo-code.ts"),
+				`export default function repoCode() { globalThis.${loads} = (globalThis.${loads} ?? 0) + 1; }\n`,
+			);
+			const restore = stubSkillEnv(home, agentDir);
+			let piResourceTrusted = false;
+			try {
+				const loader = await buildResourceLoader(
+					project,
+					SettingsManager.create(project, agentDir, { projectTrusted: false }),
+					() => ({ ...ctx(false), piResourceTrusted }),
+					excluding ? [generationArtifact] : [],
+				);
+				const loadsRepoCode = () =>
+					loader
+						.getExtensions()
+						.extensions.some((extension) => extension.path.endsWith("repo-code.ts"));
+				expect(counters[loads]).toBeUndefined();
+				expect(loadsRepoCode()).toBe(false);
+
+				piResourceTrusted = true;
+				await loader.reload();
+				expect(counters[loads]).toBe(1);
+				expect(loadsRepoCode()).toBe(true);
+
+				piResourceTrusted = false;
+				await loader.reload();
+				expect(loadsRepoCode()).toBe(false);
+			} finally {
+				delete counters[loads];
+				restore();
+				rmSync(root, { recursive: true, force: true });
+			}
+		});
+	}
+
 	it("reload re-reads admission so a mid-session group toggle applies", async () => {
 		const root = mkdtempSync(join(tmpdir(), "thinkrail-skill-reload-"));
 		const project = join(root, "project");
