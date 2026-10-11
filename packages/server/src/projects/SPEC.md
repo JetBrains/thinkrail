@@ -62,7 +62,9 @@ bootstrap it into one so it can be opened.
   { resources? })` keeps the two grants separate because they consent to different things: pi-level
   resources include code (extensions, settings packages), so only a surface that names them asks for them.
   `trusted: true` sets the alias grant and sets `piResourceTrust: "granted"` only with `resources: true`,
-  leaving it untouched otherwise; `trusted: false` revokes both.
+  leaving it untouched otherwise; `trusted: false` revokes both. A trust change persists and publishes the
+  record, so every client shows the persisted trust even when the host request that made it then fails
+  (an open chat could not reload).
 - **Public surface (barrel):** `openProject`, `listProjects`, `listRecentProjects`, `closeProject`,
   `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`, `setProjectTrust`,
   `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`, `setPiTrustSeed`.

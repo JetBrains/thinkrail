@@ -303,6 +303,11 @@ test("setProjectTrust: pi-level resource trust needs its own explicit grant, and
 	const repo = join(dataDir, "repo");
 	makeRepo(repo);
 	const project = initProject(repo);
+	const published: Array<{ trusted: boolean | undefined; piResourceTrust: string | undefined }> =
+		[];
+	setProjectPublisher(({ trusted, piResourceTrust }) =>
+		published.push({ trusted, piResourceTrust }),
+	);
 	expect(project.piResourceTrust).toBe("untrusted");
 
 	const aliasOnly = setProjectTrust(project.id, true, ["a"]);
@@ -322,6 +327,12 @@ test("setProjectTrust: pi-level resource trust needs its own explicit grant, and
 		trusted: false,
 		piResourceTrust: "untrusted",
 	});
+	expect(published).toEqual([
+		{ trusted: true, piResourceTrust: "untrusted" },
+		{ trusted: true, piResourceTrust: "granted" },
+		{ trusted: true, piResourceTrust: "granted" },
+		{ trusted: false, piResourceTrust: "untrusted" },
+	]);
 });
 
 function writeProjects(records: object[]): void {

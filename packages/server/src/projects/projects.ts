@@ -164,6 +164,7 @@ export function setProjectTrust(
 	else if (options.resources === true) project.piResourceTrust = "granted";
 	if (acknowledgedSkills !== undefined) project.acknowledgedSkills = acknowledgedSkills;
 	saveProjects(projects);
+	emit(project);
 	return project;
 }
 
