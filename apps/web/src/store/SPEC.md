@@ -85,9 +85,11 @@ selected-log state belong to chat integration, not domain persistence. See
   it); the active workspace while **`activeWorkspaceLiveLatch`** holds is live; a `review.state` of
   `merged`/`closed` with a valid `changedAt` and no newer `lastActiveAt` settles (an incomplete settled
   snapshot stays live and refreshable); an open review keeps live;
-  otherwise idle longer than **`settleIdleDays`** (mirrored from `AppConfig`, `null` = never) settles. Both lists share **`workspaceSort`** (`"recent"` — newest `lastActiveAt` first, the
-  default — `"created"` newest first, or `"name"`), a per-browser view preference persisted by
-  `panels/workspaceSort` exactly like expansion; the Default row stays pinned first outside the sort. The
+  otherwise idle longer than **`settleIdleDays`** (mirrored from `AppConfig`, `null` = never) settles. The caller picks the **`order`** (`WorkspaceOrder`): `"host"` (the default) keeps the host's
+  list order in both lists — the rail's order, so a row never jumps while you work — and `"recent"` sorts
+  newest `lastActiveAt` first (host order breaks ties) for the topbar's switcher; the Default row stays
+  pinned first either way. A user-selectable sort was tried and dropped: auto-reordering the rail moved
+  rows under the pointer, and a switcher wants recency without a picker. The
   latch is the "selection never moves a row" rule made state: `workspaceActivationPatch` sets it to whether
   the destination was live at that moment (so a settled workspace you open stays on the shelf, force-
   revealed) and **carries it through unchanged when the destination is already the active workspace** (a

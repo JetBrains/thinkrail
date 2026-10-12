@@ -71,11 +71,10 @@ treatment.
   name. **Settle** / **Keep active** (`workspace.settle` / `workspace.unsettle`, gated on
   `WORKSPACE_SETTLE_PROTOCOL_VERSION`) ride the same file.
   **The Settled shelf.** It renders only when the host advertises
-  `WORKSPACE_SETTLE_PROTOCOL_VERSION`; an older host retains the raw flat list and order, with no sort,
-  shelf, or settle controls even if rollback persistence carries stale newer fields. On a
-  capable host, an expanded project renders a **sort row** (`↕` + a native select: Recent activity
-  · Created · Name, the store's `workspaceSort`) above its rows, then the **live** rows from
-  `selectWorkspacePartition`, then a **`Settled · N`** disclosure header (collapsed by default, store-held
+  `WORKSPACE_SETTLE_PROTOCOL_VERSION`; an older host retains the raw flat list and order, with no
+  shelf or settle controls even if rollback persistence carries stale newer fields. On a
+  capable host, an expanded project renders its **live** rows from `selectWorkspacePartition` in the
+  host's order (never re-sorted by activity, so rows stay put while agents work), then a **`Settled · N`** disclosure header (collapsed by default, store-held
   per browser) whose body lists the settled rows **slim** — single line, name only, a small **reason chip**
   (`merged` / `closed` / `idle 2w` / `by you`, long form in its tooltip), a hover **↩ Keep active** beside the kebab — ten at
   a time with a *Show 25 more* row. Live rows gain a hover **✓ Settle** beside the kebab (also in the menu
@@ -154,8 +153,8 @@ treatment.
   (`store.expandedProjectIds`), not component state: it survives the Project-Home/workspace remount
   boundary and, via the `projectExpansion` persistence module (localStorage under a host-qualified key,
   hydrated at boot from `main.tsx`, best-effort writes, untrusted reads), a page reload — the rail
-  looks the same after reloading; the sibling `workspaceSort` module persists the sort row's choice the
-  same way (the shelf's disclosure is deliberately not persisted — collapsed is the right default). Rows whose persisted expansion outlives this client's fetched lists
+  looks the same after reloading (the shelf's disclosure is deliberately not persisted — collapsed is the
+  right default). Rows whose persisted expansion outlives this client's fetched lists
   (a fresh reload) fetch their missing `workspace.list` lazily; an already-fetched list is refreshed on
   an explicit expand gesture and by transport after a new welcome/reconnect generation, never refetched in
   a loop. The active workspace must

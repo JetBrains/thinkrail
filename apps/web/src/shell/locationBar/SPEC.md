@@ -68,7 +68,8 @@ branch. It renders what the store and `workspace.openReview` already report; it 
 - **Workspace** shows the active workspace's actions (Open in, Rename, Copy path, Reveal, **Settle** or
   **Keep active** — whichever applies, through the shared `workspaceActions` — and Remove through the
   shared confirm dialog; Default is non-removable and never settles) above *Switch to* (the project's
-  **live** siblings in the rail's sort order with `RunningIcon` while an agent works, then a
+  **live** siblings, most recently active first — unlike the rail's stable host order, since a switcher
+  serves "go back to what I was just in" — with `RunningIcon` while an agent works, then a
   **`Settled · N ›`** submenu listing the shelf rows with their reason chips — the same
   `selectWorkspacePartition` and shared `useNow` clock the rail renders, so the menu, active `· settled`
   caption, and rail never disagree as the idle boundary passes; below the settled protocol it instead
