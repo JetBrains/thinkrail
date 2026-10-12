@@ -11,18 +11,24 @@ import {
 import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { ExtUiRequest } from "@thinkrail/contracts";
 import {
+	applyPiResourceTrust,
 	createSession,
+	deleteSession,
 	disposeAllSessions,
 	getSessionCommands,
 	getSessionMessages,
 	promptSession,
 	removeSession,
+	removeWorkspaceSessions,
+	requestSessionReload,
 	setSessionManagerFactory,
+	setSkillAdmissionResolver,
 	setSubagentsEnabledResolver,
 	settleSessionsForShutdown,
 } from "./agentSessionManager";
 import { MCP_CONFIRM_ONCE } from "./mcp";
 import { configurePiRuntime } from "./piRuntime";
+import { admissionContextFor } from "./skillAdmission";
 import { resolveExtUi, setExtUiPublisher } from "./webUiContext";
 
 const model = {
@@ -49,11 +55,21 @@ const root = mkdtempSync(join(tmpdir(), "mcp-engine-"));
 const agentDir = join(root, "agent");
 const pidFile = join(root, "fixture.pids");
 const fixture = join(import.meta.dir, "mcp", "fixtures", "stdioServer.ts");
-const testExtensions = ["other-mcp.ts", "hang-shutdown.ts"];
+const probeMarker = join(root, "probe-starts.log");
+const testExtensions = [
+	"other-mcp.ts",
+	"hang-shutdown.ts",
+	"hang-reload.ts",
+	"reload-pause.ts",
+	"closing-probe.ts",
+];
 let requests: ExtUiRequest[] = [];
 let sequence = 0;
 
-function writeMcpConfig(env: Record<string, string> = {}): void {
+function writeMcpConfig(
+	env: Record<string, string> = {},
+	extra: Record<string, unknown> = {},
+): void {
 	writeFileSync(
 		join(agentDir, "mcp.json"),
 		JSON.stringify({
@@ -64,6 +80,7 @@ function writeMcpConfig(env: Record<string, string> = {}): void {
 					env: { MCP_FIXTURE_PID_FILE: pidFile, ...env },
 					exposure: "direct",
 				},
+				...extra,
 			},
 		}),
 	);
@@ -104,6 +121,7 @@ beforeEach(() => {
 	requests = [];
 	killFixtures();
 	rmSync(pidFile, { force: true });
+	rmSync(probeMarker, { force: true });
 	rmSync(join(agentDir, "settings.json"), { force: true });
 	for (const name of testExtensions) rmSync(join(agentDir, "extensions", name), { force: true });
 	writeMcpConfig();
@@ -167,8 +185,33 @@ async function waitFor<T>(
 async function chat() {
 	const workspaceId = `engine-${++sequence}`;
 	const cwd = mkdtempSync(join(root, "cwd-"));
-	const { sessionId } = await createSession({ workspaceId, cwd });
+	const { sessionId } = await createSession({
+		workspaceId,
+		cwd,
+		model: { ...faux.getModel(), thinkingLevels: ["off"] },
+	});
 	return { workspaceId, cwd, sessionId };
+}
+
+async function connected(sessionId: string): Promise<void> {
+	const from = requests.length;
+	await promptSession(sessionId, "/mcp");
+	expect(
+		requests
+			.slice(from)
+			.some(
+				(request) =>
+					request.sessionId === sessionId &&
+					request.kind === "notify" &&
+					request.message.startsWith("fixture: connected"),
+			),
+	).toBe(true);
+}
+
+function probeStarts(): string[] {
+	return existsSync(probeMarker)
+		? readFileSync(probeMarker, "utf8").split("\n").filter(Boolean)
+		: [];
 }
 
 async function toolTexts(p: Awaited<ReturnType<typeof chat>>): Promise<string[]> {
@@ -238,6 +281,285 @@ test("quitting stops pi's MCP servers within the budget even when another extens
 	await settleSessionsForShutdown();
 	disposeAllSessions();
 	await waitFor(() => !alive(pid as number), untilDeadline(started));
+}, 15_000);
+
+test("a reload finishes stubborn MCP cleanup before the replacement process starts", async () => {
+	writeMcpConfig({ MCP_FIXTURE_STUBBORN: "1" });
+	const p = await chat();
+	try {
+		await connected(p.sessionId);
+		const [oldPid] = pids();
+		const replacement = join(p.cwd, "replacement.ts");
+		writeFileSync(
+			replacement,
+			[
+				'import { appendFileSync } from "node:fs";',
+				"let alive = false;",
+				`try { process.kill(${oldPid}, 0); alive = true; } catch {}`,
+				`appendFileSync(${JSON.stringify(probeMarker)}, alive ? "old-alive\\n" : "old-dead\\n");`,
+				`await import(${JSON.stringify(fixture)});`,
+			].join("\n"),
+		);
+		writeMcpConfig(
+			{},
+			{
+				fixture: {
+					command: process.execPath,
+					args: [replacement],
+					env: { MCP_FIXTURE_PID_FILE: pidFile },
+					exposure: "direct",
+				},
+			},
+		);
+		expect(await requestSessionReload(p.sessionId)).toBe("reloaded");
+		await connected(p.sessionId);
+		expect(probeStarts()).toEqual(["old-dead"]);
+		expect(pids()).toHaveLength(2);
+		expect(alive(oldPid as number)).toBe(false);
+		expect(alive(pids()[1] as number)).toBe(true);
+	} finally {
+		await removeSession(p.sessionId);
+	}
+}, 15_000);
+
+test("runner-emitted shutdown joins the captured MCP cleanup instead of observing an empty server list", async () => {
+	writeMcpConfig({ MCP_FIXTURE_STUBBORN: "1" });
+	const originalBind = AgentSession.prototype.bindExtensions;
+	let binding: AgentSession | undefined;
+	AgentSession.prototype.bindExtensions = async function (bindings) {
+		binding = this;
+		await originalBind.call(this, bindings);
+	};
+	try {
+		const p = await chat();
+		await connected(p.sessionId);
+		if (!binding) throw new Error("Missing pi session");
+		const runner = binding.extensionRunner;
+		const [pid] = pids();
+		const closing = removeSession(p.sessionId);
+		await runner.emit({ type: "session_shutdown", reason: "quit" });
+		expect(alive(pid as number)).toBe(false);
+		await closing;
+	} finally {
+		AgentSession.prototype.bindExtensions = originalBind;
+		disposeAllSessions();
+	}
+}, 15_000);
+
+for (const reason of ["resource", "trust"] as const) {
+	test(`a ${reason} reload stops MCP within budget even when an earlier extension's shutdown hangs`, async () => {
+		writeExtension("hang-reload.ts", [
+			'import { appendFileSync } from "node:fs";',
+			"export default function hangReload(pi) {",
+			'  pi.on("session_shutdown", (event) => {',
+			'    if (event.reason !== "reload") return;',
+			`    appendFileSync(${JSON.stringify(probeMarker)}, "reload\\n");`,
+			"    return new Promise(() => {});",
+			"  });",
+			"}",
+		]);
+		writeMcpConfig({ MCP_FIXTURE_STUBBORN: "1" });
+		setSkillAdmissionResolver(() => admissionContextFor({ piResourceTrust: "granted" }));
+		const p = await chat();
+		try {
+			await connected(p.sessionId);
+			const [pid] = pids();
+			setSkillAdmissionResolver(() => admissionContextFor(undefined));
+			let settled = false;
+			const started = Date.now();
+			const reloading =
+				reason === "resource"
+					? requestSessionReload(p.sessionId)
+					: applyPiResourceTrust([p.workspaceId]);
+			void reloading.then(
+				() => {
+					settled = true;
+				},
+				() => {
+					settled = true;
+				},
+			);
+			await waitFor(() => probeStarts().includes("reload"));
+			await expect(promptSession(p.sessionId, "Stay quiescent.")).rejects.toThrow(/reloading/);
+			await waitFor(() => !alive(pid as number), untilDeadline(started));
+			expect(settled).toBe(false);
+			expect(pids()).toHaveLength(1);
+		} finally {
+			setSkillAdmissionResolver(() => admissionContextFor(undefined));
+			await removeSession(p.sessionId);
+		}
+	}, 15_000);
+}
+
+const closures = [
+	["removing the chat", (p: Awaited<ReturnType<typeof chat>>) => removeSession(p.sessionId)],
+	[
+		"deleting the chat",
+		(p: Awaited<ReturnType<typeof chat>>) => deleteSession(p.sessionId, p.workspaceId, p.cwd),
+	],
+	[
+		"removing the workspace",
+		(p: Awaited<ReturnType<typeof chat>>) => removeWorkspaceSessions(p.workspaceId, p.cwd),
+	],
+	["polite host shutdown", () => settleSessionsForShutdown()],
+	["emergency host disposal", () => disposeAllSessions()],
+] as const;
+
+for (const [label, close] of closures) {
+	test(`${label} during a pending resource load prevents MCP restart and cleans up the new runner`, async () => {
+		const p = await chat();
+		await connected(p.sessionId);
+		const before = pids();
+		const entered = join(p.cwd, "reload-entered");
+		const released = join(p.cwd, "reload-released");
+		writeExtension("reload-pause.ts", [
+			'import { appendFileSync, existsSync, writeFileSync } from "node:fs";',
+			"export default async function pause(pi) {",
+			`  writeFileSync(${JSON.stringify(entered)}, "");`,
+			`  while (!existsSync(${JSON.stringify(released)})) await new Promise(resolve => setTimeout(resolve, 10));`,
+			`  pi.on("session_start", () => appendFileSync(${JSON.stringify(probeMarker)}, "started\\n"));`,
+			'  pi.on("session_shutdown", async () => {',
+			"    await new Promise(resolve => setTimeout(resolve, 50));",
+			'    pi.getFlag("probe");',
+			`    appendFileSync(${JSON.stringify(probeMarker)}, "shutdown\\n");`,
+			"  });",
+			"}",
+		]);
+		const reloading = requestSessionReload(p.sessionId).then(
+			() => "reloaded",
+			(error: Error) => error.message,
+		);
+		try {
+			await waitFor(() => existsSync(entered));
+			const started = Date.now();
+			await close(p);
+			expect(Date.now() - started).toBeLessThan(SHUTDOWN_DEADLINE_MS);
+			await waitFor(() => before.every((pid) => !alive(pid)));
+			writeFileSync(released, "");
+			expect(await reloading).toBe("The chat is closing.");
+			expect(probeStarts()).toEqual(["shutdown"]);
+			await Bun.sleep(100);
+			expect(pids()).toEqual(before);
+		} finally {
+			writeFileSync(released, "");
+			await reloading;
+			disposeAllSessions();
+		}
+	}, 15_000);
+}
+
+for (const [label, close] of closures) {
+	test(`${label} during a paused session_start prevents late MCP startup after shutdown`, async () => {
+		const p = await chat();
+		await connected(p.sessionId);
+		const before = pids();
+		const entered = join(p.cwd, "start-entered");
+		const released = join(p.cwd, "start-released");
+		writeExtension("reload-pause.ts", [
+			'import { appendFileSync, existsSync, writeFileSync } from "node:fs";',
+			"export default function pause(pi) {",
+			'  pi.on("session_start", async () => {',
+			`    writeFileSync(${JSON.stringify(entered)}, "");`,
+			`    while (!existsSync(${JSON.stringify(released)})) await new Promise(resolve => setTimeout(resolve, 10));`,
+			`    appendFileSync(${JSON.stringify(probeMarker)}, "resumed\\n");`,
+			"  });",
+			'  pi.on("session_shutdown", () => {',
+			`    appendFileSync(${JSON.stringify(probeMarker)}, "shutdown\\n");`,
+			"  });",
+			'  pi.on("resources_discover", async () => {',
+			"    await new Promise(resolve => setTimeout(resolve, 100));",
+			`    appendFileSync(${JSON.stringify(probeMarker)}, "discovered\\n");`,
+			"  });",
+			"}",
+		]);
+		const reloading = requestSessionReload(p.sessionId).then(
+			() => "reloaded",
+			(error: Error) => error.message,
+		);
+		try {
+			await waitFor(() => existsSync(entered));
+			const started = Date.now();
+			await close(p);
+			expect(Date.now() - started).toBeLessThan(SHUTDOWN_DEADLINE_MS);
+			await waitFor(() => probeStarts().includes("shutdown"));
+			expect(before.every((pid) => !alive(pid))).toBe(true);
+			writeFileSync(released, "");
+			const outcome = await reloading;
+			expect(probeStarts()).toEqual(["shutdown", "resumed", "discovered"]);
+			await Bun.sleep(100);
+			expect(pids()).toEqual(before);
+			expect(outcome).toBe("The chat is closing.");
+			disposeAllSessions();
+			await Bun.sleep(100);
+			expect(pids()).toEqual(before);
+		} finally {
+			writeFileSync(released, "");
+			await reloading;
+			disposeAllSessions();
+		}
+	}, 15_000);
+}
+
+test("emergency disposal during graceful closure waits for the replacement runner's own shutdown", async () => {
+	const oldEntered = join(root, "old-shutdown-entered");
+	const oldReleased = join(root, "old-shutdown-released");
+	const loadEntered = join(root, "overlap-load-entered");
+	const loadReleased = join(root, "overlap-load-released");
+	const newEntered = join(root, "new-shutdown-entered");
+	const newReleased = join(root, "new-shutdown-released");
+	writeExtension("closing-probe.ts", [
+		'import { existsSync, writeFileSync } from "node:fs";',
+		"export default function closing(pi) {",
+		'  pi.on("session_shutdown", async (event) => {',
+		'    if (event.reason !== "quit") return;',
+		`    writeFileSync(${JSON.stringify(oldEntered)}, "");`,
+		`    while (!existsSync(${JSON.stringify(oldReleased)})) await new Promise(resolve => setTimeout(resolve, 10));`,
+		"  });",
+		"}",
+	]);
+	const p = await chat();
+	await connected(p.sessionId);
+	const before = pids();
+	rmSync(join(agentDir, "extensions", "closing-probe.ts"));
+	writeExtension("reload-pause.ts", [
+		'import { appendFileSync, existsSync, writeFileSync } from "node:fs";',
+		"export default async function pause(pi) {",
+		`  writeFileSync(${JSON.stringify(loadEntered)}, "");`,
+		`  while (!existsSync(${JSON.stringify(loadReleased)})) await new Promise(resolve => setTimeout(resolve, 10));`,
+		`  pi.on("session_start", () => appendFileSync(${JSON.stringify(probeMarker)}, "started\\n"));`,
+		'  pi.on("session_shutdown", async () => {',
+		`    writeFileSync(${JSON.stringify(newEntered)}, "");`,
+		`    while (!existsSync(${JSON.stringify(newReleased)})) await new Promise(resolve => setTimeout(resolve, 10));`,
+		'    pi.getFlag("probe");',
+		`    appendFileSync(${JSON.stringify(probeMarker)}, "shutdown\\n");`,
+		"  });",
+		"}",
+	]);
+	const reloading = requestSessionReload(p.sessionId).then(
+		() => "reloaded",
+		(error: Error) => error.message,
+	);
+	let closing: Promise<void> | undefined;
+	try {
+		await waitFor(() => existsSync(loadEntered));
+		closing = settleSessionsForShutdown();
+		await waitFor(() => existsSync(oldEntered));
+		writeFileSync(loadReleased, "");
+		await waitFor(() => existsSync(newEntered));
+		disposeAllSessions();
+		writeFileSync(oldReleased, "");
+		await closing;
+		writeFileSync(newReleased, "");
+		expect(await reloading).toBe("The chat is closing.");
+		expect(probeStarts()).toEqual(["shutdown"]);
+		expect(pids()).toEqual(before);
+		expect(before.every((pid) => !alive(pid))).toBe(true);
+	} finally {
+		for (const file of [oldReleased, loadReleased, newReleased]) writeFileSync(file, "");
+		await reloading;
+		await closing;
+		disposeAllSessions();
+	}
 }, 15_000);
 
 test("a chat whose preparation fails after pi started its servers still stops them", async () => {
@@ -310,7 +632,11 @@ test("a subagent run starts no MCP server of its own", async () => {
 	await waitFor(() => (pids().length > 0 ? pids() : undefined));
 	faux.setResponses([
 		fauxAssistantMessage(
-			fauxToolCall("Agent", { subagent_type: "scout", task: "Look around." }, { id: "agent" }),
+			fauxToolCall(
+				"Agent",
+				{ subagent_type: "scout", task: "Look around.", model: "engine/engine" },
+				{ id: "agent" },
+			),
 		),
 		fauxAssistantMessage("CHILD_REPORT"),
 		fauxAssistantMessage("DONE"),

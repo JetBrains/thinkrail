@@ -121,7 +121,7 @@ interface Entry {
 	commands: BackgroundCommands;
 	unsubscribeCommands: () => void;
 	resourceCascade?: Promise<void>;
-	shutdownEmitted?: Promise<void>;
+	shutdown?: { runner: AgentSession["extensionRunner"]; settled: Promise<void> };
 	resourcesClosing: boolean;
 	session: AgentSession;
 	generation: PiRuntimeGeneration;
@@ -781,17 +781,35 @@ function reconsiderPendingReload(entry: Entry): void {
 function runGatedReload(entry: Entry): Promise<void> {
 	if (entry.reloadRunning) return entry.reloadRunning;
 	entry.reloadPending = false;
+	const runner = entry.session.extensionRunner;
+	const beforeSessionStart = () => {
+		if (entry.disposed || entry.resourcesClosing) throw new Error("The chat is closing.");
+	};
 	entry.reloadRunning = (async () => {
 		try {
-			await entry.session.reload();
+			await entry.mcpHost.shutdownEngine(
+				{ type: "session_shutdown", reason: "reload" },
+				runner.createContext(),
+			);
+			beforeSessionStart();
+			await entry.session.reload({ beforeSessionStart });
+			beforeSessionStart();
 		} finally {
-			// Open the gate before flushing: completion delivery is refused while it is held.
-			entry.reloadRunning = null;
-			if (!entry.disposed) applyExtensionTools(entry, { allowReload: false });
-			entry.commands.flushCompletions();
-			entry.subagents.flushCompletions();
-			publishEntryState(entry);
-			reconsiderPendingReload(entry);
+			if (entry.disposed || entry.resourcesClosing) {
+				if (entry.session.extensionRunner !== runner) {
+					await emitSessionShutdown(entry);
+					entry.session.dispose();
+				}
+				entry.reloadRunning = null;
+				entry.reloadPending = false;
+			} else {
+				entry.reloadRunning = null;
+				applyExtensionTools(entry, { allowReload: false });
+				entry.commands.flushCompletions();
+				entry.subagents.flushCompletions();
+				publishEntryState(entry);
+				reconsiderPendingReload(entry);
+			}
 		}
 	})();
 	return entry.reloadRunning;
@@ -2283,21 +2301,22 @@ function settleShutdownStep(entry: Entry, step: () => Promise<unknown>): Promise
 }
 
 function emitSessionShutdown(entry: Entry, timeoutMs = SESSION_SHUTDOWN_BUDGET_MS): Promise<void> {
-	let timer: ReturnType<typeof setTimeout> | undefined;
 	const runner = entry.session.extensionRunner;
+	if (entry.shutdown?.runner === runner) return entry.shutdown.settled;
+	let timer: ReturnType<typeof setTimeout> | undefined;
 	const event = { type: "session_shutdown", reason: "quit" } as const;
-	// Started synchronously: the synchronous teardown path disposes the pi session right after, and
-	// handlers must have started (pi's MCP shutdown begins closing connections before its first await).
 	const steps = [
 		settleShutdownStep(entry, () => entry.mcpHost.shutdownEngine(event, runner.createContext())),
 		settleShutdownStep(entry, () => runner.emit(event)),
 	];
-	return Promise.race([
+	const settled = Promise.race([
 		Promise.all(steps).then(() => {}),
 		new Promise<void>((resolve) => {
 			timer = setTimeout(resolve, timeoutMs);
 		}),
 	]).finally(() => clearTimeout(timer));
+	entry.shutdown = { runner, settled };
+	return settled;
 }
 
 function closeSessionResources(entry: Entry, timeoutMs?: number): Promise<void> {
@@ -2306,17 +2325,21 @@ function closeSessionResources(entry: Entry, timeoutMs?: number): Promise<void> 
 	entry.subagents.dispose();
 	const closing = entry.commands.dispose(timeoutMs === undefined ? undefined : { timeoutMs });
 	const children = disposeSessionChildren(entry.workspaceId, entry.session.sessionId);
-	entry.shutdownEmitted = emitSessionShutdown(entry, timeoutMs);
+	const shutdown = emitSessionShutdown(entry, timeoutMs);
 	entry.resourceCascade = trackCascade(
 		entry.workspaceId,
-		Promise.allSettled([closing, children, entry.shutdownEmitted]).then(() => {}),
+		Promise.allSettled([closing, children, shutdown]).then(() => {}),
 	);
 	return entry.resourceCascade;
 }
 
 // `dispose()` invalidates the extension context the session_shutdown handlers are still using.
 function disposePiSessionAfterShutdown(entry: Entry): void {
-	void (entry.shutdownEmitted ?? Promise.resolve()).then(() => entry.session.dispose());
+	const shutdown = entry.shutdown;
+	if (!shutdown) return;
+	void shutdown.settled.then(() => {
+		if (entry.session.extensionRunner === shutdown.runner) entry.session.dispose();
+	});
 }
 
 function trackSessionTeardown(sessionId: string, cascade: Promise<void>): Promise<void> {

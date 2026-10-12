@@ -76,11 +76,15 @@ relax a rule.
   another extension owns MCP, and handling `mcp_servers_change` there does not distort pi's "nobody
   connects registered servers" report. The `mcp` factory hands pi a `Proxy` of the `ExtensionAPI`; every
   member but `on` is forwarded with `Reflect.get` (pi's API object is never spread, so nothing is read
-  eagerly). `on` records the `session_shutdown` handlers pi's factory registers — a fresh list per load —
-  and forwards them unchanged, so `shutdown(event, ctx)` can run the latest load's directly, in order, the
-  way pi's runner would; pi's handler (1.1.0: abort the session signal, close the current connections,
-  clear the list, await tracked work) is idempotent, so pi's own later call through the regular emission
-  closes nothing twice — re-check on every pi bump.
+  eagerly). Each factory load owns a closed flag and one cleanup promise. `on` captures pi's
+  `session_shutdown` handlers; both `shutdown(event, ctx)` and the runner's shutdown dispatch close that
+  load synchronously and join the same cleanup promise. Pi 1.1.0 clears its server list before awaiting
+  transport closure, so a second raw dispatch would return early: idempotence alone does not preserve
+  completion ordering. Reload must await actual cleanup before admitting a replacement, not the bounded
+  quit wait. The proxy guards the actual `session_start` and `mcp_servers_change` callbacks, including
+  tool-search activation, against a closed load: an earlier async handler can resume the dispatch after
+  shutdown has already finished. These guards own only that load's engine resources, not persistent
+  session lifecycle state. Re-check these ordering guarantees on every pi bump.
 
 ## Boundary
 

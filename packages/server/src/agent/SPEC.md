@@ -984,8 +984,21 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   keep pi's MCP shutdown from ever starting (pi's process-exit hook only sends SIGTERM). The cascade therefore
   first runs the `mcp` factory's own `session_shutdown` handler directly (`McpSessionHost.shutdownEngine`,
   with the event and the runner's `createContext()` pi would pass), then
-  `session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" })` for every extension; pi's
-  handler is idempotent, so the emission's later call closes nothing twice ([[submodule-server-agent-mcp]]).
+  `session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" })` for every extension. The
+  captured and runner-emitted MCP shutdown share one per-load cleanup promise, so clearing pi's server
+  list early cannot make a second dispatch lose the first dispatch's completion ([[submodule-server-agent-mcp]]).
+  Gated reloads await that actual MCP cleanup with reason `reload` before calling pi's `session.reload()`;
+  they never use the bounded quit wait to admit a replacement while old resources still live. A hanging
+  unrelated shutdown handler may delay the reload, but cannot keep MCP processes alive through a trust
+  or resource change. Closure checks before reload, in the public `beforeSessionStart` hook, and after
+  dispatch reject when the entry is disposed or its resources are closing. The hook alone is insufficient:
+  an earlier async `session_start` handler can pause the dispatch through closure, so the engine guards
+  its actual startup/change callbacks with the load's synchronously closed flag. Closure does not await
+  an unbounded resource loader or startup dispatch. If pi later builds a replacement
+  runner, the reload owner gives that runner its own bounded shutdown and disposes it. Shutdown is
+  single-flight per runner, including when emergency disposal follows graceful closure mid-reload;
+  each disposal continuation may dispose only the runner whose shutdown it awaited. Closed reloads never
+  flush completions or schedule another reload.
   Every teardown path goes through this cascade: delete/remove, workspace archive/removal, quit
   (`settleSessionsForShutdown` + `disposeAllSessions`) and a preparation that fails after binding —
   including one whose registration is refused because the workspace closed or the host began quitting

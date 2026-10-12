@@ -120,7 +120,11 @@ async function eventuallyShutdownEvents(from: number, count: number): Promise<Sh
 async function parent() {
 	const workspaceId = `shutdown-${++sequence}`;
 	const cwd = mkdtempSync(join(root, "cwd-"));
-	const { sessionId } = await createSession({ workspaceId, cwd });
+	const { sessionId } = await createSession({
+		workspaceId,
+		cwd,
+		model: { ...model, provider: "shutdown", thinkingLevels: ["off"] },
+	});
 	return { workspaceId, cwd, sessionId };
 }
 
@@ -146,7 +150,11 @@ test("a session abandoned while attaching emits session_shutdown before its pi s
 	const before = shutdownEvents().length;
 	const workspaceId = `shutdown-${++sequence}`;
 	const cwd = mkdtempSync(join(root, "cwd-"));
-	const creating = createSession({ workspaceId, cwd });
+	const creating = createSession({
+		workspaceId,
+		cwd,
+		model: { ...model, provider: "shutdown", thinkingLevels: ["off"] },
+	});
 	await new Promise((resolve) => setTimeout(resolve, 30));
 	const closing = removeWorkspaceSessions(workspaceId);
 	await expect(creating).rejects.toThrow(/Workspace is unavailable|Unknown session/);

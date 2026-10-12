@@ -128,7 +128,11 @@ const selects = () => requests.filter((request) => request.kind === "select");
 async function chat() {
 	const workspaceId = `confirm-${++sequence}`;
 	const cwd = mkdtempSync(join(root, "cwd-"));
-	const { sessionId } = await createSession({ workspaceId, cwd });
+	const { sessionId } = await createSession({
+		workspaceId,
+		cwd,
+		model: { ...model, provider: "confirm", thinkingLevels: ["off"] },
+	});
 	return { workspaceId, cwd, sessionId };
 }
 

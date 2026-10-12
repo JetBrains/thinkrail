@@ -138,7 +138,11 @@ async function waitFor(read: () => boolean, ms = 8000): Promise<void> {
 async function parent() {
 	const workspaceId = `gate-${++sequence}`;
 	const cwd = mkdtempSync(join(root, "cwd-"));
-	const { sessionId } = await createSession({ workspaceId, cwd });
+	const { sessionId } = await createSession({
+		workspaceId,
+		cwd,
+		model: { ...model, provider: "gate", thinkingLevels: ["off"] },
+	});
 	return { workspaceId, cwd, sessionId };
 }
 

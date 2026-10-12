@@ -3,6 +3,7 @@ import {
 	createToolSearchExtension,
 	type ExtensionAPI,
 	type ExtensionContext,
+	type ExtensionEvent,
 	type ExtensionHandler,
 	type InlineExtension,
 	type LoadedMcpConfig,
@@ -26,21 +27,43 @@ function activateToolSearchForRegisteredServers(pi: ExtensionAPI): void {
 	pi.setActiveTools([...active, TOOL_SEARCH]);
 }
 
-function engineApi(pi: ExtensionAPI, shutdownHandlers: ShutdownHandler[]): ExtensionAPI {
-	const on = (event: string, handler: ShutdownHandler): (() => void) => {
-		if (event === "session_shutdown") shutdownHandlers.push(handler);
-		return Reflect.apply(pi.on, pi, [event, handler]);
+function engineApi(pi: ExtensionAPI): { api: ExtensionAPI; shutdown: McpEngine["shutdown"] } {
+	const shutdownHandlers: ShutdownHandler[] = [];
+	let closed = false;
+	let cleanup: Promise<void> | undefined;
+	const shutdown: McpEngine["shutdown"] = (event, ctx) => {
+		closed = true;
+		cleanup ??= (async () => {
+			for (const handler of shutdownHandlers) await handler(event, ctx);
+		})();
+		return cleanup;
 	};
-	return new Proxy(pi, {
-		get: (target, key) => (key === "on" ? on : Reflect.get(target, key)),
-	});
+	const on = (event: string, handler: ExtensionHandler<ExtensionEvent>): (() => void) => {
+		if (event === "session_shutdown") {
+			shutdownHandlers.push(handler);
+			return pi.on("session_shutdown", shutdown);
+		}
+		const guarded: typeof handler = (event, ctx) => {
+			if (!closed) return handler(event, ctx);
+		};
+		return Reflect.apply(pi.on, pi, [
+			event,
+			event === "session_start" || event === "mcp_servers_change" ? guarded : handler,
+		]);
+	};
+	return {
+		api: new Proxy(pi, {
+			get: (target, key) => (key === "on" ? on : Reflect.get(target, key)),
+		}),
+		shutdown,
+	};
 }
 
 export function createMcpEngine(options: {
 	loadConfig: (ctx: ExtensionContext) => LoadedMcpConfig;
 }): McpEngine {
 	const mcp = createMcpExtension({ loadConfig: options.loadConfig, openUrl: () => {} });
-	let shutdownHandlers: ShutdownHandler[] = [];
+	let shutdown: McpEngine["shutdown"] = async () => {};
 	return {
 		extensions: [
 			{
@@ -48,10 +71,11 @@ export function createMcpEngine(options: {
 				replaceable: true,
 				builtin: true,
 				factory: (pi) => {
-					shutdownHandlers = [];
-					pi.on("session_start", () => activateToolSearchForRegisteredServers(pi));
-					pi.on("mcp_servers_change", () => activateToolSearchForRegisteredServers(pi));
-					return mcp(engineApi(pi, shutdownHandlers));
+					const load = engineApi(pi);
+					shutdown = load.shutdown;
+					load.api.on("session_start", () => activateToolSearchForRegisteredServers(pi));
+					load.api.on("mcp_servers_change", () => activateToolSearchForRegisteredServers(pi));
+					return mcp(load.api);
 				},
 			},
 			{
@@ -61,8 +85,6 @@ export function createMcpEngine(options: {
 				factory: createToolSearchExtension(),
 			},
 		],
-		shutdown: async (event, ctx) => {
-			for (const handler of shutdownHandlers) await handler(event, ctx);
-		},
+		shutdown: (event, ctx) => shutdown(event, ctx),
 	};
 }
