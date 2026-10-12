@@ -391,7 +391,12 @@ and recommendation, and assistant mermaid fences alongside tool diagrams re-rend
 `--container-elevated-bg` after selecting a discovered opposite appearance in real settings. Malformed
 source is seeded as a successful historical tool result (`isError: false`) so both tool and chat exercise
 the renderer's plain-source fallback, not the tool-error branch. These regressions need no provider,
-prompt submission, route mock, or screenshot. Questionnaire paging uses
+prompt submission, route mock, or screenshot. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
+real Settings → Extensions switch through `settings.update`, proves it survives a reload, and seeds a
+historical `visualize` call that must still render its diagram while the extension is off; each test restores
+the switch in `afterEach` because the shard shares one host. The provider-backed counterpart in
+`visualize.live.spec.ts` runs first: with the extension off the agent is never offered `visualize`, and the
+existing diagram/comparison tests that follow re-prove the restored tool in the same chat. Questionnaire paging uses
 canonical persisted tool-call/ack fixtures to pin six-question rounds beyond four, tall-page reveal,
 fresh-chat restored-page reveal, visible review focus, and coarse-pointer focus
 without provider variability; desktop package tests separately pin the stable

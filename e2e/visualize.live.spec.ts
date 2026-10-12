@@ -1,11 +1,21 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { openWorkspaceChat } from "./fixtures/app";
+import { openWorkspaceChat, waitForAgentSettled } from "./fixtures/app";
 
 async function openChatAndSend(page: Page, prompt: string): Promise<void> {
 	await openWorkspaceChat(page);
 	await page.getByTestId("chat-input").fill(prompt);
 	await page.getByTestId("chat-send").click();
+}
+
+async function setVisualizeEnabled(page: Page, enabled: boolean): Promise<void> {
+	await page.getByTestId("open-settings").click();
+	await page.getByTestId("settings-nav-extensions").click();
+	const toggle = page.getByTestId("extension-toggle-visualize");
+	if ((await toggle.getAttribute("data-active")) !== String(enabled)) await toggle.click();
+	await expect(toggle).toHaveAttribute("data-active", String(enabled));
+	await page.keyboard.press("Escape");
+	await expect(page.getByTestId("settings-dialog")).toBeHidden();
 }
 
 async function awaitExpandedCard(page: Page, tool: string): Promise<Locator> {
@@ -14,6 +24,29 @@ async function awaitExpandedCard(page: Page, tool: string): Promise<Locator> {
 	await expect(card).toHaveAttribute("data-expanded", "true", { timeout: 90_000 });
 	return card;
 }
+
+test("a disabled visualize extension is not offered to the agent", { tag: "@agent" }, async ({
+	page,
+}) => {
+	test.setTimeout(150_000);
+	await openWorkspaceChat(page);
+	await setVisualizeEnabled(page, false);
+	try {
+		await page
+			.getByTestId("chat-input")
+			.fill(
+				"If you have a tool named visualize, call it with type='diagram' and mermaid `flowchart TD; A --> B`. If you do not have it, reply with exactly NO_VISUALIZE_TOOL and call no tools.",
+			);
+		await page.getByTestId("chat-send").click();
+		await waitForAgentSettled(page);
+		await expect(page.locator('[data-testid="tool-card"][data-tool="visualize"]')).toHaveCount(0);
+		await expect(
+			page.locator('[data-testid="chat-message"][data-role="assistant"]').last(),
+		).toContainText("NO_VISUALIZE_TOOL");
+	} finally {
+		if (!page.isClosed()) await setVisualizeEnabled(page, true);
+	}
+});
 
 test("visualize (diagram) renders mermaid as an SVG", { tag: "@agent" }, async ({ page }) => {
 	test.setTimeout(150_000);
