@@ -280,7 +280,9 @@ follows is only the rationale the skill bodies don't state:
   assumed.
   **Bugs** take the `fixing-a-bug.md` branch: a bug is a gap between recorded intent and behavior, so
   the branch first classifies what the specs say — silent, wrong, right with only the code wrong, or
-  the "bug" is really a new feature (back to the main flow) — and fixes the spec half before the code.
+  the "bug" is really a new feature (back to the main flow) — and settles the intended behavior in
+  the task-spec before the code. Like every change, the durable spec is amended after the build, so it
+  records what was built; the task-spec is what leads the fix.
   **Spec amendment** (`amending-specs.md`, the shared tail of both paths) is the agent's own job, not
   a user approval round — by user decision: it works top-down (goal → architecture → modules), then
   checks the result against what was actually built, and reports it in a line or two; the Changes

@@ -3,8 +3,10 @@
 Entry: a bug report, with the task-spec open (spine step 3). Saves: the task-spec's **Bug**
 section. Next: spine step 8 (Build) — or spine step 5 when the "bug" turns out to be a feature.
 
-A bug is a gap between what the product is meant to do and what it does. What it is meant to do
-lives in the specs, so settle the spec side before touching the code.
+A bug is a gap between what the product is meant to do and what it does. Settle the intended
+behavior before touching the code: it is confirmed and recorded in the task-spec here, which leads
+the fix the way a design leads a feature. The durable specs are amended at spine step 9, as for
+every change, so they describe what was actually built.
 
 1. **Pin the report.** Symptom (what happens), expected behavior (what should happen instead), and
    how to trigger it. Infer them from the request; ask only what is missing, in one round per the
@@ -14,9 +16,9 @@ lives in the specs, so settle the spec side before touching the code.
 3. **Locate** the code that produces the behavior and the specs that govern that area (spec-graph).
 4. **Classify** by what those specs say about the expected behavior:
    - **Silent** — no spec covers it. The intended behavior is a product decision: confirm it with
-     the user as an inference, and step 9 adds it to the spec that should have stated it.
+     the user as an inference; spine step 9 adds it to the spec that should have stated it.
    - **Wrong** — a spec states the buggy or an outdated behavior. Confirm the correction with the
-     user; step 9 fixes that spec.
+     user; spine step 9 corrects that spec.
    - **Right** — the spec already states the expected behavior; only the code is wrong. No question
      needed.
    - **Feature** — the code does what the specs intend, and the expected behavior was never
