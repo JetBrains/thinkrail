@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { McpServerStatus, McpServerSummary } from "@thinkrail/contracts";
+import { validateMcpServerConfig } from "./config";
 import { deriveMcpServerStatuses, parseMcpAttentionNotice, parseMcpStatusText } from "./status";
 
 describe("pi's headless /mcp text", () => {
@@ -33,6 +34,21 @@ describe("pi's headless /mcp text", () => {
 		expect(state("broken")?.detail).toContain("stderr: command not found");
 		expect(parsed?.configErrors).toHaveLength(1);
 		expect(parsed?.servers.has("jira")).toBe(false);
+	});
+
+	test("multiline config diagnostics keep healthy server rows and remain redacted", () => {
+		const error = validateMcpServerConfig("bad\nname", { command: "unused" });
+		expect(typeof error).toBe("string");
+		const parsed = parseMcpStatusText(
+			[
+				"first: connected, 1 tools (deferred)",
+				`config error: /fixture/mcp.json: ${error}`,
+				"    token=private-value",
+				"second: connected, 2 tools (direct)",
+			].join("\n"),
+		);
+		expect([...(parsed?.servers.keys() ?? [])]).toEqual(["first", "second"]);
+		expect(parsed?.configErrors).toEqual([`/fixture/mcp.json: ${error}\n    token=***`]);
 	});
 
 	test("the empty report parses; anything else is not status text", () => {

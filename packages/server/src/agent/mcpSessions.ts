@@ -7,7 +7,7 @@ import {
 	readSync,
 	watch,
 } from "node:fs";
-import { isAbsolute } from "node:path";
+import { basename, isAbsolute } from "node:path";
 import { getAgentDir, type McpServerConfig } from "@earendil-works/pi-coding-agent";
 import type {
 	McpListResult,
@@ -19,6 +19,7 @@ import type {
 	Project,
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
+import { logger } from "../log";
 import {
 	dispatchSessionMcpCommand,
 	getSessionMessages,
@@ -42,8 +43,9 @@ import {
 	summarizeMcpConfigErrors,
 	summarizeMcpServers,
 } from "./mcp";
-import { interceptExtUiNotify } from "./webUiContext";
+import { interceptExtUiNotify, notifyExtUi } from "./webUiContext";
 
+const log = logger("mcp");
 const USER_CONFIG_DEBOUNCE_MS = 300;
 const READ_OUTPUT_MAX_BYTES = 1024 * 1024;
 
@@ -58,6 +60,7 @@ interface Tracked {
 	registered: Set<string>;
 	resourcesKey: string;
 	inFlight: Promise<void> | null;
+	reloadFailed: boolean;
 	stopAttention: () => void;
 }
 
@@ -101,8 +104,9 @@ const configKey = (config: McpServerConfig | undefined): string | undefined =>
 
 export function pendingMcpReload(sessionId: string): Set<string> {
 	const view = mcpSessionView(sessionId);
-	if (!ownsMcp(view) || !view.loaded) return new Set();
-	const { loaded } = view;
+	const failed = tracked.get(sessionId)?.reloadFailed === true;
+	if (!ownsMcp(view) || (!view.loaded && !failed)) return new Set();
+	const loaded = view.loaded ?? new Map<string, McpServerConfig>();
 	const current = new Map(
 		loadHostMcpConfig({
 			agentDir: getAgentDir(),
@@ -114,7 +118,9 @@ export function pendingMcpReload(sessionId: string): Set<string> {
 	);
 	const names = new Set([...current.keys(), ...loaded.keys()]);
 	return new Set(
-		[...names].filter((name) => configKey(current.get(name)) !== configKey(loaded.get(name))),
+		[...names].filter(
+			(name) => failed || configKey(current.get(name)) !== configKey(loaded.get(name)),
+		),
 	);
 }
 
@@ -202,6 +208,7 @@ export function restartMcpStatus(sessionId: string): void {
 	const state = trackedOf(sessionId);
 	state.load++;
 	state.inFlight = null;
+	state.reloadFailed = false;
 	if (ownsMcp(view)) apply(sessionId, startingReport(view), false);
 	scheduleMcpStatusRefresh(sessionId);
 }
@@ -237,39 +244,72 @@ export async function reconcileMcpSessions(
 ): Promise<Record<string, SessionReloadDisposition>> {
 	const dispositions: Record<string, SessionReloadDisposition> = {};
 	for (const sessionId of sessionIds) {
-		if (pendingMcpReload(sessionId).size === 0) continue;
+		if (!tracked.get(sessionId)?.reloadFailed && pendingMcpReload(sessionId).size === 0) continue;
 		try {
 			const disposition = await requestSessionReload(sessionId);
 			dispositions[sessionId] = disposition;
 			if (disposition === "deferred") showPendingMcpReload(sessionId);
-		} catch {}
+		} catch (error) {
+			const detail = redactMcpText(error instanceof Error ? error.message : String(error));
+			log.warn(`MCP configuration reload failed for ${sessionId}: ${detail}`);
+			const state = tracked.get(sessionId);
+			if (!state || !mcpSessionView(sessionId)) continue;
+			state.reloadFailed = true;
+			showPendingMcpReload(sessionId);
+			notifyExtUi(
+				sessionId,
+				`This chat could not apply its MCP configuration — reload it to retry. ${detail}`,
+				"error",
+			);
+		}
 	}
 	return dispositions;
 }
 
 export function watchUserMcpConfig(): () => void {
+	const agentDir = getAgentDir();
 	let timer: ReturnType<typeof setTimeout> | undefined;
+	let retry: ReturnType<typeof setTimeout> | undefined;
 	let watcher: FSWatcher | undefined;
-	try {
-		const agentDir = getAgentDir();
-		mkdirSync(agentDir, { recursive: true });
-		watcher = watch(agentDir, (_event, filename) => {
-			if (filename !== null && filename !== "mcp.json") return;
-			clearTimeout(timer);
-			timer = setTimeout(
-				() => void reconcileMcpSessions(liveSessionIdsOf()),
-				USER_CONFIG_DEBOUNCE_MS,
-			);
-		});
-		watcher.on("error", () => {
-			clearTimeout(timer);
-			watcher?.close();
-		});
-	} catch {
-		return () => {};
-	}
+	let stopped = false;
+	let retryMs = USER_CONFIG_DEBOUNCE_MS;
+	const restart = () => {
+		watcher?.close();
+		watcher = undefined;
+		if (stopped || retry !== undefined) return;
+		retry = setTimeout(() => {
+			retry = undefined;
+			start();
+		}, retryMs);
+		retryMs = Math.min(retryMs * 2, 5_000);
+	};
+	const start = () => {
+		if (stopped) return;
+		try {
+			mkdirSync(agentDir, { recursive: true });
+			watcher = watch(agentDir, (event, filename) => {
+				if (filename !== null && filename !== "mcp.json" && filename !== basename(agentDir)) {
+					return;
+				}
+				if (event === "rename") restart();
+				clearTimeout(timer);
+				timer = setTimeout(
+					() => void reconcileMcpSessions(liveSessionIdsOf()),
+					USER_CONFIG_DEBOUNCE_MS,
+				);
+			});
+			watcher.on("error", restart);
+			retryMs = USER_CONFIG_DEBOUNCE_MS;
+			void reconcileMcpSessions(liveSessionIdsOf());
+		} catch {
+			restart();
+		}
+	};
+	start();
 	return () => {
+		stopped = true;
 		clearTimeout(timer);
+		clearTimeout(retry);
 		watcher?.close();
 	};
 }
@@ -289,15 +329,17 @@ function trackedOf(sessionId: string): Tracked {
 		registered: new Set(),
 		resourcesKey: "[]",
 		inFlight: null,
+		reloadFailed: false,
 		stopAttention: () => {},
 	};
 	tracked.set(sessionId, state);
-	state.stopAttention = interceptExtUiNotify(sessionId, (message) => {
+	state.stopAttention = interceptExtUiNotify(sessionId, (message, level) => {
 		const parsed = parseMcpAttentionNotice(message);
 		if (!parsed) return false;
 		apply(sessionId, parsed, true);
 		queueMicrotask(() => scheduleMcpStatusRefresh(sessionId));
-		return false;
+		notifyExtUi(sessionId, redactMcpText(message), level);
+		return true;
 	});
 	return state;
 }

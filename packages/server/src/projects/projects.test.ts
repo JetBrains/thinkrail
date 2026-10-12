@@ -385,14 +385,22 @@ test("MCP approvals and per-project overrides persist in the project record and 
 		linear: "fp-2",
 	});
 
+	const before = readFileSync(join(dataDir, "projects.json"), "utf8");
+	expect(setProjectMcpOverride(project.id, "missing", {}).mcpOverrides).toBeUndefined();
+	expect(readFileSync(join(dataDir, "projects.json"), "utf8")).toBe(before);
 	setProjectMcpOverride(project.id, "context7", { enabled: false });
 	const exposed = setProjectMcpOverride(project.id, "sentry", { exposure: "direct" });
 	expect(exposed.mcpOverrides).toEqual({
 		context7: { enabled: false },
 		sentry: { exposure: "direct" },
 	});
+	setProjectMcpOverride(project.id, "context7", { exposure: "hidden" });
+	expect(setProjectMcpOverride(project.id, "context7", {}).mcpOverrides?.context7).toEqual({
+		enabled: false,
+		exposure: "hidden",
+	});
 	setProjectMcpOverride(project.id, "context7", null);
-	const cleared = setProjectMcpOverride(project.id, "sentry", {});
+	const cleared = setProjectMcpOverride(project.id, "sentry", null);
 	expect(cleared.mcpOverrides).toBeUndefined();
 	expect(storedProjects()[0]).not.toHaveProperty("mcpOverrides");
 	expect(() => approveProjectMcpServer("nope", "x", "y")).toThrow();

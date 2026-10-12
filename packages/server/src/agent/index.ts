@@ -25,6 +25,7 @@ export {
 	setDisabledExtensionsResolver,
 } from "./extensions";
 export {
+	effectiveMcpServerConfig,
 	mcpPolicyOf,
 	projectMcpEntryFingerprint,
 	readMcpServerLog,

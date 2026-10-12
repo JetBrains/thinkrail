@@ -1,6 +1,5 @@
 export {
 	fingerprintMcpEntry,
-	getMcpToolExposure,
 	globalMcpConfigPath,
 	isOverrideEntry,
 	type LoadedMcpFiles,
@@ -18,6 +17,7 @@ export {
 export { createMcpEngine } from "./engine";
 export { readMcpServerLog } from "./log";
 export {
+	effectiveMcpServerConfig,
 	projectMcpEntryFingerprint,
 	removeMcpServerEntry,
 	shareMcpOverrideWithRepo,

@@ -32,14 +32,6 @@ export function mcpNamespace(server: string): string {
 	return `mcp__${server.replace(/-/g, "_")}`;
 }
 
-function toolPatternRegExp(pattern: string): RegExp {
-	const source = pattern
-		.split("*")
-		.map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
-		.join(".*");
-	return new RegExp(`^${source}$`);
-}
-
 export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -145,16 +137,6 @@ function resolveExposureAliases(value: Record<string, unknown>): Record<string, 
 		);
 	}
 	return resolved;
-}
-
-export function getMcpToolExposure(config: McpServerConfig, toolName: string): McpExposure {
-	const overrides = config.toolExposure ?? {};
-	const exact = overrides[toolName];
-	if (exact !== undefined) return exact;
-	for (const [pattern, exposure] of Object.entries(overrides)) {
-		if (pattern.includes("*") && toolPatternRegExp(pattern).test(toolName)) return exposure;
-	}
-	return config.exposure ?? "codemode";
 }
 
 export function validateMcpServerConfig(name: string, raw: unknown): McpServerConfig | string {

@@ -1,16 +1,20 @@
 import { afterAll, expect, test } from "bun:test";
 import {
 	chmodSync,
+	existsSync,
+	lstatSync,
 	mkdirSync,
 	mkdtempSync,
+	readdirSync,
 	readFileSync,
+	readlinkSync,
 	rmSync,
 	statSync,
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { LoadedMcpConfig } from "@earendil-works/pi-coding-agent";
 import {
@@ -125,6 +129,25 @@ const PARITY_CASES: { name: string; global: unknown; project?: unknown }[] = [
 				local: { command: "./bin/server", cwd: "tools" },
 			},
 			autoEnableCodemode: false,
+		},
+	},
+	{
+		name: "invalid project override fields leave the global definition intact",
+		global: {
+			mcpServers: {
+				enabled: { command: "unused" },
+				exposure: { url: "https://docs.example/mcp" },
+				tools: { command: "unused" },
+				extra: { command: "unused" },
+			},
+		},
+		project: {
+			mcpServers: {
+				enabled: { enabled: "false" },
+				exposure: { exposure: "invalid" },
+				tools: { toolExposure: { read: "invalid" } },
+				extra: { enabled: false, headers: {} },
+			},
 		},
 	},
 	{
@@ -364,4 +387,99 @@ test("project config writes refuse symlinked .pi directories and files, and path
 	expect(() =>
 		assertProjectMcpConfigWritable(worktree, join(worktree, ".pi", "mcp.json")),
 	).not.toThrow();
+});
+
+for (const linkKind of ["absolute", "relative", "chain"]) {
+	test(`writers preserve a user config's ${linkKind} symlink and atomically replace its private target`, () => {
+		const dir = join(root, `symlink-${linkKind}`);
+		const targetDir = join(dir, "private");
+		const agentDir = join(dir, "agent");
+		mkdirSync(targetDir, { recursive: true });
+		mkdirSync(agentDir);
+		const target = join(targetDir, "config.json");
+		const path = join(agentDir, "mcp.json");
+		writeFileSync(target, '{\n\t"extra": true,\n\t"mcpServers": {}\n}\n');
+		chmodSync(target, 0o600);
+		const link = linkKind === "absolute" ? target : relative(agentDir, target);
+		if (linkKind === "chain") symlinkSync(link, join(agentDir, "intermediate.json"));
+		const linkText = linkKind === "chain" ? "intermediate.json" : link;
+		symlinkSync(linkText, path);
+		const linkInode = lstatSync(path).ino;
+		const assertLink = (previousInode: number) => {
+			expect(lstatSync(path).isSymbolicLink()).toBe(true);
+			expect(lstatSync(path).ino).toBe(linkInode);
+			expect(readlinkSync(path)).toBe(linkText);
+			expect(statSync(target).mode & 0o777).toBe(0o600);
+			expect(statSync(target).ino).not.toBe(previousInode);
+			expect(readFileSync(path, "utf8")).toBe(readFileSync(target, "utf8"));
+			expect(readFileSync(target, "utf8").startsWith('{\n\t"extra": true,')).toBe(true);
+			expect(readdirSync(targetDir)).toEqual(["config.json"]);
+		};
+		let before = statSync(target).ino;
+		expect(addMcpServerConfig(path, "docs", { url: "https://docs.example/mcp" })).toBe(false);
+		assertLink(before);
+		before = statSync(target).ino;
+		updateMcpServerConfig(path, "docs", { enabled: false });
+		assertLink(before);
+		expect(JSON.parse(readFileSync(target, "utf8")).mcpServers.docs.enabled).toBe(false);
+		before = statSync(target).ino;
+		expect(removeMcpServerConfig(path, "docs")).toBe(true);
+		assertLink(before);
+		expect(JSON.parse(readFileSync(target, "utf8"))).toEqual({ extra: true, mcpServers: {} });
+	});
+}
+
+test("writers leave dangling, looping, directory and malformed user config symlinks untouched on errors", () => {
+	const dir = join(root, "symlink-errors");
+	mkdirSync(dir);
+	const missing = join(dir, "missing.json");
+	const dangling = join(dir, "dangling.json");
+	const loop = join(dir, "loop.json");
+	const directory = join(dir, "directory.json");
+	const malformed = join(dir, "malformed.json");
+	const broken = join(dir, "broken.json");
+	symlinkSync("missing.json", dangling);
+	symlinkSync("loop.json", loop);
+	symlinkSync(".", directory);
+	writeFileSync(broken, "{ invalid json");
+	chmodSync(broken, 0o600);
+	symlinkSync("broken.json", malformed);
+	const files = readdirSync(dir);
+	for (const path of [dangling, loop, directory, malformed]) {
+		const link = readlinkSync(path);
+		expect(() => addMcpServerConfig(path, "docs", { command: "unused" })).toThrow();
+		expect(() => updateMcpServerConfig(path, "docs", { enabled: false })).toThrow();
+		expect(() => removeMcpServerConfig(path, "docs")).toThrow();
+		expect(readlinkSync(path)).toBe(link);
+		expect(lstatSync(path).isSymbolicLink()).toBe(true);
+	}
+	expect(existsSync(missing)).toBe(false);
+	expect(readFileSync(broken, "utf8")).toBe("{ invalid json");
+	expect(statSync(broken).mode & 0o777).toBe(0o600);
+	expect(readdirSync(dir)).toEqual(files);
+});
+
+test("an approved invalid project entry cannot replace the valid effective user config", () => {
+	const invalid = { url: "https://project.example/mcp", enabled: "false" };
+	const { agentDir, cwd } = fixture(
+		{ mcpServers: { docs: { command: "unused-test-server", exposure: "direct" } } },
+		{ mcpServers: { docs: invalid } },
+	);
+	const loaded = loadHostMcpConfig({
+		agentDir,
+		cwd,
+		projectTrusted: true,
+		policy: { approvals: { docs: fingerprintMcpEntry("docs", invalid) }, overrides: {} },
+	});
+	expect(loaded.servers).toEqual([
+		{
+			name: "docs",
+			source: join(agentDir, "mcp.json"),
+			scope: "global",
+			config: { command: "unused-test-server", exposure: "direct" },
+		},
+	]);
+	expect(loaded.errors).toEqual([
+		`${join(cwd, ".pi", "mcp.json")}: server "docs": enabled must be a boolean`,
+	]);
 });

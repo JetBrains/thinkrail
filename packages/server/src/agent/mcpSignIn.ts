@@ -24,7 +24,6 @@ import { createWebUiContext } from "./webUiContext";
 
 const PROBE_SHUTDOWN_MS = 3_000;
 const PROBE_DEADLINE_MS = 10 * 60_000;
-const SIGN_IN_URL = /^Sign in to MCP server "[^"]+" in your browser:\n(\S+)$/;
 const SIGNED_IN = /^Signed in to MCP server "/;
 const PASTE_HINT =
 	"Open the sign-in page. If the browser runs on another device, the localhost page it ends on will fail to load — paste that page's address here.";
@@ -87,14 +86,6 @@ function probeUi(probe: Probe, notices: { message: string; level: string }[]): E
 		...createWebUiContext(`probe:${probe.loginId}`),
 		notify(message, type) {
 			notices.push({ message, level: type ?? "info" });
-			const url = SIGN_IN_URL.exec(message)?.[1];
-			if (!url) return;
-			if (isAllowedSignInUrl(url)) frame(probe, { kind: "authUrl", url, instructions: PASTE_HINT });
-			else
-				frame(probe, {
-					kind: "error",
-					message: "The server sent a sign-in address that is not https.",
-				});
 		},
 		async input(_title, placeholder, opts) {
 			if (probe.settled) return undefined;
@@ -154,7 +145,16 @@ async function openProbe(
 		noThemes: true,
 		noContextFiles: true,
 		additionalExtensionPaths: ["builtin:mcp"],
-		extensionFactories: createMcpEngine({ loadConfig, lockSignIns: false }).extensions,
+		extensionFactories: createMcpEngine({
+			loadConfig,
+			lockSignIns: false,
+			openUrl: (url) => {
+				if (!isAllowedSignInUrl(url)) {
+					throw new Error("The server sent a sign-in address that is not https or loopback.");
+				}
+				frame(probe, { kind: "authUrl", url, instructions: PASTE_HINT });
+			},
+		}).extensions,
 	});
 	await resourceLoader.reload();
 	const { session } = await createAgentSession({

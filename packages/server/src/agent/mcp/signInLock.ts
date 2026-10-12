@@ -1,3 +1,5 @@
+import { mcpNamespace } from "./config";
+
 type McpSignInHolder = "settings" | "chat";
 
 const locks = new Map<string, { holder: McpSignInHolder }>();
@@ -6,13 +8,14 @@ export function acquireMcpSignInLock(
 	serverName: string,
 	holder: McpSignInHolder,
 ): { release: () => void } | { heldBy: McpSignInHolder } {
-	const current = locks.get(serverName);
+	const key = mcpNamespace(serverName);
+	const current = locks.get(key);
 	if (current) return { heldBy: current.holder };
 	const lock = { holder };
-	locks.set(serverName, lock);
+	locks.set(key, lock);
 	return {
 		release: () => {
-			if (locks.get(serverName) === lock) locks.delete(serverName);
+			if (locks.get(key) === lock) locks.delete(key);
 		},
 	};
 }

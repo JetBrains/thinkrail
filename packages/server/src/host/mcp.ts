@@ -12,6 +12,7 @@ import type {
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
+	effectiveMcpServerConfig,
 	getSessionWorkspaceId,
 	listMcpServers,
 	liveSessionIdsOf,
@@ -72,24 +73,40 @@ function assertRepositoryWritable(project: Project): void {
 
 type Target = { workspace: Workspace; project: Project };
 
-/**
- * Runs a management mutation. pi settings resolve first; the live-owner check and the mutation then share
- * one synchronous call stack, so a reload that hands `/mcp` to another extension cannot slip between
- * them. The mutation returns the workspaces whose chats should reconcile.
- */
-async function mutateManaged(
+async function admitManaged<T>(
+	workspaceId: string,
+	admit: (found: Target) => T | Promise<T>,
+): Promise<T> {
+	const before = target(workspaceId);
+	const ownedElsewhere = await mcpOwnershipGuard({
+		workspaceId: before.workspace.id,
+		cwd: before.workspace.worktreePath,
+		projectTrusted: before.project.piResourceTrust === "granted",
+	});
+	const current = target(workspaceId);
+	if (
+		current.project.id !== before.project.id ||
+		current.workspace.worktreePath !== before.workspace.worktreePath ||
+		(current.project.piResourceTrust === "granted") !==
+			(before.project.piResourceTrust === "granted")
+	) {
+		throw new CodedError(
+			"MCP_CONFIG_INVALID",
+			"The workspace or project trust changed — retry with its current settings.",
+		);
+	}
+	if (ownedElsewhere() !== undefined) throw handledElsewhere();
+	return admit(current);
+}
+
+function mutateManaged(
 	workspaceId: string,
 	mutation: (found: Target) => readonly string[],
 ): Promise<McpListResult> {
-	const found = target(workspaceId);
-	const ownedElsewhere = await mcpOwnershipGuard({
-		workspaceId: found.workspace.id,
-		cwd: found.workspace.worktreePath,
-		projectTrusted: found.project.piResourceTrust === "granted",
+	return admitManaged(workspaceId, (found) => {
+		reloadLiveSessions(mutation(found));
+		return mcpList({ workspaceId });
 	});
-	if (ownedElsewhere() !== undefined) throw handledElsewhere();
-	reloadLiveSessions(mutation(found));
-	return mcpList({ workspaceId });
 }
 
 function serverName(name: unknown): string {
@@ -97,6 +114,13 @@ function serverName(name: unknown): string {
 		throw new CodedError("MCP_CONFIG_INVALID", "MCP server names use letters, digits, - and _");
 	}
 	return name;
+}
+
+function serverEnabled(enabled: unknown): boolean {
+	if (typeof enabled !== "boolean") {
+		throw new CodedError("MCP_CONFIG_INVALID", "MCP server enabled must be a boolean");
+	}
+	return enabled;
 }
 
 function serverScope(scope: unknown): McpServerScope {
@@ -220,12 +244,10 @@ export function mcpSetProjectOverride(params: {
 }): Promise<McpListResult> {
 	const name = serverName(params.name);
 	return mutateManaged(params.workspaceId, ({ project }) => {
-		const override = {
-			...mcpPolicyOf(project).overrides[name],
+		setProjectMcpOverride(project.id, name, {
 			...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
 			...(params.exposure !== undefined ? { exposure: params.exposure } : {}),
-		};
-		setProjectMcpOverride(project.id, name, Object.keys(override).length > 0 ? override : null);
+		});
 		return projectWorkspaces(project);
 	});
 }
@@ -279,8 +301,9 @@ export async function mcpSetSessionOverride(params: {
 	name: string;
 	enabled: boolean;
 }): Promise<{ ok: true }> {
+	const enabled = serverEnabled(params.enabled);
 	ownedSession(params.workspaceId, params.sessionId);
-	await setSessionMcpServerEnabled(params.sessionId, serverName(params.name), params.enabled);
+	await setSessionMcpServerEnabled(params.sessionId, serverName(params.name), enabled);
 	return { ok: true };
 }
 
@@ -304,34 +327,34 @@ async function probe(
 	params: { workspaceId: string; name: string },
 	clientKey: string,
 ): Promise<{ loginId: string; done: Promise<LoginFrame> }> {
-	const { workspace, project } = target(params.workspaceId);
 	const name = serverName(params.name);
-	const projectTrusted = project.piResourceTrust === "granted";
-	const [listed, ownedElsewhere] = await Promise.all([
-		listMcpServers({ workspaceId: workspace.id, cwd: workspace.worktreePath, project, waitMs: 0 }),
-		mcpOwnershipGuard({ workspaceId: workspace.id, cwd: workspace.worktreePath, projectTrusted }),
-	]);
-	// Sampled synchronously right before the probe starts, like the management mutations.
-	if (ownedElsewhere() !== undefined) throw handledElsewhere();
-	const sameName = listed.servers.filter((server) => server.name === name);
-	const effective =
-		sameName.find(
-			(server) => server.scope === "project" && server.approval?.state === "approved",
-		) ?? sameName.find((server) => server.scope === "user");
-	if (action === "test" && effective?.transport !== "http") {
-		throw new CodedError(
-			"MCP_CONFIG_INVALID",
-			"Test connection applies to HTTP servers; a stdio server is verified when a chat starts it.",
-		);
-	}
-	return startMcpProbe({
-		action,
-		workspaceId: workspace.id,
-		cwd: workspace.worktreePath,
-		projectTrusted,
-		policy: mcpPolicyOf(project),
-		serverName: name,
-		ownerClientKey: clientKey,
+	return admitManaged(params.workspaceId, ({ workspace, project }) => {
+		const projectTrusted = project.piResourceTrust === "granted";
+		const policy = mcpPolicyOf(project);
+		const effective = effectiveMcpServerConfig({
+			cwd: workspace.worktreePath,
+			projectTrusted,
+			policy,
+			name,
+		});
+		if (!effective) {
+			throw new CodedError("MCP_CONFIG_INVALID", `No admitted MCP server named "${name}".`);
+		}
+		if (action === "test" && !("url" in effective)) {
+			throw new CodedError(
+				"MCP_CONFIG_INVALID",
+				"Test connection applies to HTTP servers; a stdio server is verified when a chat starts it.",
+			);
+		}
+		return startMcpProbe({
+			action,
+			workspaceId: workspace.id,
+			cwd: workspace.worktreePath,
+			projectTrusted,
+			policy,
+			serverName: name,
+			ownerClientKey: clientKey,
+		});
 	});
 }
 

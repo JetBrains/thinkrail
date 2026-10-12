@@ -79,6 +79,8 @@ test("summaries cover scope, approval states, replacement, folded overrides, rec
 		approval: { state: "pending", fingerprint: fingerprintMcpEntry("repo", repo) },
 	});
 	expect(pending["project:shared"]?.replacesGlobal).toBe(true);
+	expect(pending["project:shared"]?.effective).toBe(false);
+	expect(pending["user:shared"]?.effective).toBe(true);
 	expect(pending["project:broken"]?.configError).toBeDefined();
 
 	const approved = byName({
@@ -87,6 +89,7 @@ test("summaries cover scope, approval states, replacement, folded overrides, rec
 		shared: "stale-fingerprint",
 	});
 	expect(approved["project:repo"]?.approval?.state).toBe("approved");
+	expect(approved["project:repo"]?.effective).toBe(true);
 	expect(approved["user:linear"]).toMatchObject({
 		effectiveExposure: "direct",
 		approval: { state: "approved" },
@@ -118,4 +121,70 @@ test("an entry that is not an object keeps its row, and an unreadable file is li
 	expect(errors[0]?.message).toBeTruthy();
 	expect(JSON.stringify(errors)).not.toContain("abcdefghijklmnopqrstuvwx1234");
 	expect(summarizeMcpConfigErrors({ ...files, projectTrusted: false })).toEqual([]);
+});
+
+test("folded project overrides retain validation errors regardless of approval", () => {
+	const agentDir = join(root, "invalid-override-agent");
+	const cwd = join(root, "invalid-override-project");
+	mkdirSync(agentDir, { recursive: true });
+	mkdirSync(join(cwd, ".pi"), { recursive: true });
+	const overrides = {
+		enabled: { enabled: "false" },
+		exposure: { exposure: "invalid" },
+		tools: { toolExposure: { "token=fixture-secret": "invalid" } },
+		extra: { enabled: false, headers: {} },
+		invalidBase: { enabled: false },
+	};
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({
+			mcpServers: {
+				enabled: { url: "https://docs.example/mcp" },
+				exposure: { command: "unused" },
+				tools: { command: "unused" },
+				extra: { command: "unused" },
+				invalidBase: null,
+			},
+		}),
+	);
+	writeFileSync(join(cwd, ".pi", "mcp.json"), JSON.stringify({ mcpServers: overrides }));
+	for (const approved of [false, true]) {
+		const approvals = approved
+			? Object.fromEntries(
+					Object.entries(overrides).map(([name, entry]) => [
+						name,
+						fingerprintMcpEntry(name, entry),
+					]),
+				)
+			: {};
+		const rows = summarizeMcpServers({
+			agentDir,
+			cwd,
+			projectTrusted: true,
+			policy: { approvals, overrides: {} },
+		});
+		expect(rows).toHaveLength(5);
+		for (const row of rows) {
+			expect(row.scope).toBe("user");
+			expect(row.effective).toBe(row.name !== "invalidBase");
+			expect(row.approval?.state).toBe(approved ? "approved" : "pending");
+			expect(row.configError).toBeTruthy();
+			expect(row.enabled).toBe(true);
+			expect(row.effectiveExposure).toBe("deferred");
+		}
+		expect(rows.find((row) => row.name === "enabled")?.configError).toBe(
+			'server "enabled": enabled must be a boolean',
+		);
+		expect(rows.find((row) => row.name === "exposure")?.configError).toContain(
+			"exposure must be one of",
+		);
+		expect(rows.find((row) => row.name === "tools")?.configError).toContain("toolExposure");
+		expect(rows.find((row) => row.name === "extra")?.configError).toContain(
+			"an override can only set enabled, exposure, toolExposure",
+		);
+		expect(rows.find((row) => row.name === "invalidBase")?.configError).toBe(
+			'server "invalidBase" must be an object\nserver "invalidBase" needs "command" or "url", or a global server to override',
+		);
+		expect(JSON.stringify(rows)).not.toContain("fixture-secret");
+	}
 });

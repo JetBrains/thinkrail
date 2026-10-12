@@ -11,6 +11,12 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { McpListResult, McpServerLog, McpServerSummary } from "@thinkrail/contracts";
+import {
+	approveProjectMcpServer,
+	getProjects,
+	setProjectMcpOverride,
+	setProjectTrust,
+} from "../projects";
 import { handleRequest } from "./handlers";
 
 const CTX = { clientKey: "test-client" };
@@ -524,7 +530,7 @@ test("Test connection judges the effective server of a name, not the shadowed on
 	mkdirSync(join(repo, ".pi"));
 	writeFileSync(
 		join(repo, ".pi", "mcp.json"),
-		JSON.stringify({ mcpServers: { docs: { url: "https://docs.example/mcp" } } }),
+		JSON.stringify({ mcpServers: { docs: { url: "http://127.0.0.1:1/mcp" } } }),
 	);
 	const test = () =>
 		handleRequest("mcp.testConnection", { workspaceId: "w1", name: "docs" }, CTX) as Promise<{
@@ -561,4 +567,294 @@ test("a user server named __proto__ keeps its project setting as an own record e
 	expect(find(await request("mcp.list", { workspaceId: "w1" }), "user", "__proto__")?.enabled).toBe(
 		false,
 	);
+});
+
+test("concurrent project override patches preserve both fields and unrelated settings", async () => {
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({ mcpServers: { docs: { url: "http://127.0.0.1:1/mcp" } } }),
+	);
+	await request("mcp.setProjectOverride", { workspaceId: "w1", name: "other", enabled: false });
+	await Promise.all([
+		request("mcp.setProjectOverride", { workspaceId: "w1", name: "docs", enabled: false }),
+		request("mcp.setProjectOverride", { workspaceId: "w1", name: "docs", exposure: "direct" }),
+	]);
+	expect(getProjects()[0]?.mcpOverrides).toEqual({
+		other: { enabled: false },
+		docs: { enabled: false, exposure: "direct" },
+	});
+	expect(find(await request("mcp.list", { workspaceId: "w1" }), "user", "docs")).toMatchObject({
+		enabled: false,
+		effectiveExposure: "direct",
+	});
+});
+
+test("sharing uses the latest project override after ownership resolves", async () => {
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({ mcpServers: { docs: { command: "unused-test-server" } } }),
+	);
+	setProjectMcpOverride("p1", "docs", { enabled: false });
+	const pending = request("mcp.shareWithRepo", { workspaceId: "w1", name: "docs" });
+	setProjectMcpOverride("p1", "docs", { exposure: "direct" });
+	const result = await pending;
+	expect(JSON.parse(readFileSync(join(repo, ".pi", "mcp.json"), "utf8")).mcpServers.docs).toEqual({
+		enabled: false,
+		exposure: "direct",
+	});
+	expect(find(result, "user", "docs")).toMatchObject({
+		enabled: false,
+		effectiveExposure: "direct",
+		approval: { state: "approved" },
+	});
+	expect(getProjects()[0]?.mcpOverrides).toBeUndefined();
+});
+
+test("trust revoked during ownership resolution refuses every repository mutation", async () => {
+	const added = await request("mcp.add", {
+		workspaceId: "w1",
+		scope: "project",
+		name: "repo",
+		entry: { command: "unused-test-server" },
+	});
+	const fingerprint = find(added, "project", "repo")?.approval?.fingerprint;
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({ mcpServers: { docs: { url: "http://127.0.0.1:1/mcp" } } }),
+	);
+	await request("mcp.setProjectOverride", { workspaceId: "w1", name: "docs", enabled: false });
+	const file = join(repo, ".pi", "mcp.json");
+	const before = readFileSync(file, "utf8");
+	const approvals = getProjects()[0]?.mcpApprovals;
+	const mutations: [string, object][] = [
+		["mcp.add", { scope: "project", name: "new", entry: { command: "unused-test-server" } }],
+		[
+			"mcp.update",
+			{
+				scope: "project",
+				name: "repo",
+				entry: { command: "changed-test-server" },
+				expectedFingerprint: fingerprint,
+			},
+		],
+		["mcp.remove", { scope: "project", name: "repo", expectedFingerprint: fingerprint }],
+		["mcp.approve", { name: "repo", fingerprint }],
+		["mcp.shareWithRepo", { name: "docs" }],
+	];
+	for (const [method, params] of mutations) {
+		setProjectTrust("p1", true, undefined, { resources: true });
+		const pending = request(method, { workspaceId: "w1", ...params });
+		setProjectTrust("p1", false);
+		expect(await codeOf(pending)).toBe("MCP_CONFIG_INVALID");
+		expect(readFileSync(file, "utf8")).toBe(before);
+		expect(getProjects()[0]).toMatchObject({
+			piResourceTrust: "untrusted",
+			mcpApprovals: approvals,
+			mcpOverrides: { docs: { enabled: false } },
+		});
+	}
+});
+
+test("ownership resolved for a previous cwd or project cannot admit a mutation", async () => {
+	const path = join(root, "data", "workspaces.json");
+	const original = readFileSync(path, "utf8");
+	const workspace = JSON.parse(original)[0];
+	const otherRepo = join(root, "other-repo");
+	mkdirSync(otherRepo);
+	writeFileSync(
+		join(root, "data", "projects.json"),
+		JSON.stringify([...getProjects(), { ...getProjects()[0], id: "p2" }]),
+	);
+	for (const replacement of [
+		{ ...workspace, worktreePath: otherRepo },
+		{ ...workspace, projectId: "p2" },
+	]) {
+		writeFileSync(path, original);
+		const pending = request("mcp.add", {
+			workspaceId: "w1",
+			scope: "user",
+			name: "docs",
+			entry: { command: "unused-test-server" },
+		});
+		writeFileSync(path, JSON.stringify([replacement]));
+		expect(await codeOf(pending)).toBe("MCP_CONFIG_INVALID");
+		expect(existsSync(join(agentDir, "mcp.json"))).toBe(false);
+	}
+});
+
+test("an update carries only the approval current at synchronous admission", async () => {
+	const added = await request("mcp.add", {
+		workspaceId: "w1",
+		scope: "project",
+		name: "repo",
+		entry: { command: "unused-test-server" },
+	});
+	const pending = request("mcp.update", {
+		workspaceId: "w1",
+		scope: "project",
+		name: "repo",
+		expectedFingerprint: find(added, "project", "repo")?.approval?.fingerprint,
+		entry: { command: "unused-test-server", enabled: false },
+	});
+	const projects = getProjects();
+	for (const project of projects) delete project.mcpApprovals;
+	writeFileSync(join(root, "data", "projects.json"), JSON.stringify(projects));
+	expect(find(await pending, "project", "repo")?.approval?.state).toBe("pending");
+	expect(getProjects()[0]?.mcpApprovals).toBeUndefined();
+});
+
+test("wire overrides reject invalid enablement and exposure before changing project or session state", async () => {
+	await request("mcp.setProjectOverride", { workspaceId: "w1", name: "docs", enabled: false });
+	const projectsPath = join(root, "data", "projects.json");
+	const before = readFileSync(projectsPath, "utf8");
+	for (const enabled of ["false", 0, 1, null, {}, []]) {
+		expect(
+			await codeOf(request("mcp.setProjectOverride", { workspaceId: "w1", name: "docs", enabled })),
+		).toBe("MCP_CONFIG_INVALID");
+		expect(
+			await codeOf(
+				request("mcp.setSessionOverride", {
+					workspaceId: "w1",
+					sessionId: "01a11840-3318-7548-baaf-c5a7a0729057",
+					name: "docs",
+					enabled,
+				}),
+			),
+		).toBe("MCP_CONFIG_INVALID");
+		expect(readFileSync(projectsPath, "utf8")).toBe(before);
+	}
+	for (const exposure of ["codemode", "codemode-deferred", "DIRECT", "", true, 0, null, {}, []]) {
+		expect(
+			await codeOf(
+				request("mcp.setProjectOverride", {
+					workspaceId: "w1",
+					name: "docs",
+					enabled: true,
+					exposure,
+				}),
+			),
+		).toBe("MCP_CONFIG_INVALID");
+		expect(readFileSync(projectsPath, "utf8")).toBe(before);
+	}
+	expect(
+		await codeOf(
+			request("mcp.setSessionOverride", { workspaceId: "w1", sessionId: "missing", name: "docs" }),
+		),
+	).toBe("MCP_CONFIG_INVALID");
+});
+
+test("probes refuse trust revoked while ownership is resolving", async () => {
+	await request("mcp.add", {
+		workspaceId: "w1",
+		scope: "project",
+		name: "docs",
+		entry: { url: "http://127.0.0.1:1/mcp" },
+	});
+	for (const method of ["mcp.login", "mcp.logout", "mcp.testConnection"]) {
+		setProjectTrust("p1", true, undefined, { resources: true });
+		const pending = request(method, { workspaceId: "w1", name: "docs" });
+		setProjectTrust("p1", false);
+		expect(await codeOf(pending)).toBe("MCP_CONFIG_INVALID");
+	}
+});
+
+test("probes reject ownership resolved for a previous cwd or project", async () => {
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({ mcpServers: { docs: { url: "http://127.0.0.1:1/mcp" } } }),
+	);
+	const path = join(root, "data", "workspaces.json");
+	const original = readFileSync(path, "utf8");
+	const workspace = JSON.parse(original)[0];
+	const otherRepo = join(root, "other-repo");
+	mkdirSync(otherRepo);
+	writeFileSync(
+		join(root, "data", "projects.json"),
+		JSON.stringify([...getProjects(), { ...getProjects()[0], id: "p2" }]),
+	);
+	for (const replacement of [
+		{ ...workspace, worktreePath: otherRepo },
+		{ ...workspace, projectId: "p2" },
+	]) {
+		for (const method of ["mcp.login", "mcp.logout", "mcp.testConnection"]) {
+			writeFileSync(path, original);
+			const pending = request(method, { workspaceId: "w1", name: "docs" });
+			writeFileSync(path, JSON.stringify([replacement]));
+			await expect(pending).rejects.toThrow("workspace or project trust changed");
+		}
+	}
+});
+
+test("Test connection reads the current approval rather than a pre-ownership snapshot", async () => {
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({ mcpServers: { docs: { command: "unused-test-server" } } }),
+	);
+	await request("mcp.add", {
+		workspaceId: "w1",
+		scope: "project",
+		name: "docs",
+		entry: { url: "http://127.0.0.1:1/mcp" },
+	});
+	const pending = request("mcp.testConnection", { workspaceId: "w1", name: "docs" });
+	approveProjectMcpServer("p1", "docs", "revoked-fingerprint");
+	expect(await codeOf(pending)).toBe("MCP_CONFIG_INVALID");
+});
+
+test("Test connection ignores an approved invalid HTTP project entry over a valid user stdio server", async () => {
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({ mcpServers: { docs: { command: "unused-test-server" } } }),
+	);
+	mkdirSync(join(repo, ".pi"));
+	writeFileSync(
+		join(repo, ".pi", "mcp.json"),
+		JSON.stringify({ mcpServers: { docs: { url: "http://127.0.0.1:1/mcp", enabled: "false" } } }),
+	);
+	const invalid = find(await request("mcp.list", { workspaceId: "w1" }), "project", "docs");
+	await request("mcp.approve", {
+		workspaceId: "w1",
+		name: "docs",
+		fingerprint: invalid?.approval?.fingerprint,
+	});
+	expect(await codeOf(request("mcp.testConnection", { workspaceId: "w1", name: "docs" }))).toBe(
+		"MCP_CONFIG_INVALID",
+	);
+});
+
+test("Test connection admits the user HTTP server beneath an approved invalid project stdio entry", async () => {
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({ mcpServers: { fallback: { url: "http://127.0.0.1:1/mcp" } } }),
+	);
+	mkdirSync(join(repo, ".pi"));
+	writeFileSync(
+		join(repo, ".pi", "mcp.json"),
+		JSON.stringify({ mcpServers: { fallback: { command: "unused-test-server", args: false } } }),
+	);
+	const invalid = find(await request("mcp.list", { workspaceId: "w1" }), "project", "fallback");
+	await request("mcp.approve", {
+		workspaceId: "w1",
+		name: "fallback",
+		fingerprint: invalid?.approval?.fingerprint,
+	});
+	const started = (await handleRequest(
+		"mcp.testConnection",
+		{ workspaceId: "w1", name: "fallback" },
+		CTX,
+	)) as { loginId: string };
+	expect(typeof started.loginId).toBe("string");
+	await request("provider.loginCancel", { loginId: started.loginId });
+});
+
+test("probes refuse names with no admitted valid config", async () => {
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({ mcpServers: { invalid: { url: "not-http" } } }),
+	);
+	for (const name of ["missing", "invalid"]) {
+		for (const method of ["mcp.login", "mcp.logout", "mcp.testConnection"]) {
+			expect(await codeOf(request(method, { workspaceId: "w1", name }))).toBe("MCP_CONFIG_INVALID");
+		}
+	}
 });

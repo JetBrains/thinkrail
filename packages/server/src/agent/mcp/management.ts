@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, type McpServerConfig } from "@earendil-works/pi-coding-agent";
 import type { McpProjectOverride, McpServerScope } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
@@ -7,6 +7,8 @@ import {
 	globalMcpConfigPath,
 	isOverrideEntry,
 	isRecord,
+	loadHostMcpConfig,
+	type McpProjectPolicy,
 	projectMcpConfigPath,
 	validateMcpServerConfig,
 } from "./config";
@@ -17,6 +19,17 @@ import {
 	removeMcpServerConfig,
 	updateMcpServerConfig,
 } from "./writers";
+
+export function effectiveMcpServerConfig(options: {
+	cwd: string;
+	projectTrusted: boolean;
+	policy: McpProjectPolicy;
+	name: string;
+}): McpServerConfig | undefined {
+	return loadHostMcpConfig({ ...options, agentDir: getAgentDir() }).servers.find(
+		(server) => server.name === options.name,
+	)?.config;
+}
 
 function configPath(scope: McpServerScope, worktree: string): string {
 	if (scope === "user") return globalMcpConfigPath(getAgentDir());

@@ -195,7 +195,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `listSkillCatalog`; the **MCP set** (`mcp.*`, `host/mcp.ts`) composes `agent`'s MCP
   service with `projects` (approvals, overrides, pi-level trust) and publishes `mcp.status` snapshots (topic
   subscribed only by clients at `MCP_PROTOCOL_VERSION` or later) plus `session.resourcesChanged`
-  invalidations. Every request resolves its workspace and that workspace's project. No write approves
+  invalidations. Every request resolves its workspace and that workspace's project. Management mutations
+  and probes re-read both after asynchronous ownership resolution, then check ownership and admit work
+  in one synchronous call stack. A changed project identity, cwd or pi-level trust rejects the request
+  for retry; approvals and overrides come from the latest record, not the pre-await snapshot. Project
+  override patches merge atomically against the latest stored override. Wire enablement must be a boolean
+  and record exposure must be `deferred`, `direct` or `hidden`; invalid values are rejected before record
+  or per-chat disabled-set mutations. No write approves
   repository content the user has not reviewed: a project-file `mcp.add` (a name the file does not define
   yet) is the user's own entry, so its fingerprint is approved in the same request; `mcp.update` reads the
   on-disk entry's fingerprint before writing, refuses when the request's `expectedFingerprint` differs from
@@ -218,7 +224,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `mcp.readLog` resolves the workspace, checks the name against pi's charset and returns agent's
   `readMcpServerLog` (pi keeps one `mcp.log` per agent directory, so it needs no session);
   `mcp.login` / `mcp.testConnection` start agent's probe with the caller's `clientKey` as owner and return
-  its `loginId` (`mcp.logout` awaits the probe); all three refuse with `MCP_HANDLED_ELSEWHERE` wherever
+  its `loginId` (`mcp.logout` awaits the probe). Probe admission resolves the valid effective server from
+  agent's host config loader with the current trust and policy; missing or invalid targets are refused,
+  and Test connection requires that admitted config to be HTTP. An approved but invalid project entry
+  never shadows a valid user target merely because its summary looks approved. All three refuse with
+  `MCP_HANDLED_ELSEWHERE` wherever
   `mcp.list` would report `handledElsewhere` (the probe's loader forces `builtin:mcp`);
   `provider.loginReply` / `provider.loginCancel` route `mcplogin_*` ids to the probe with the caller's
   `clientKey`, and `createServer` sends probe frames to the owner's socket only, cancels the probes of a

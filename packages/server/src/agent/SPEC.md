@@ -798,6 +798,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   optional `notify` that takes the dispatch's notifications instead of the chat), `reconnectMcpServer`,
   `readMcpServerLog` (one server's masked lines from pi's shared `mcp.log`),
   `setSessionMcpServerEnabled` (the chat-local disable, applied through the reload gate), the config
+  effective-config read `effectiveMcpServerConfig` and the config
   writers `writeMcpServerEntry` / `removeMcpServerEntry` / `projectMcpEntryFingerprint` /
   `shareMcpOverrideWithRepo` (pi-rule validation, `MCP_CONFIG_INVALID` / `MCP_PATH_UNSAFE`) and the
   sign-in probe (`startMcpProbe`, `replyMcpProbe`, `cancelMcpProbe`, `cancelMcpProbesOwnedBy`,
@@ -936,11 +937,11 @@ pi's built-in MCP is the only MCP engine: connections, OAuth, exposure, resource
 the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes around it.
 
 - **Registration.** The two built-in descriptors above, per parent session only, built by the session's
-  `createMcpSessionHost(() => mcpPolicyResolver(workspaceId))` together with the call guard; the host injects
+  `createMcpSessionHost` together with the call guard and a status invalidation callback; the host injects
   the workspace's project policy (`setMcpPolicyResolver` → `Project.mcpApprovals` / `mcpOverrides`,
   fail-closed to none). Child (subagent) sessions load neither — the curated child set carries no engine —
   and the `Agent` tool's description says subagents cannot call MCP tools.
-  pi's `openUrl` is a no-op on the host (a remote client must never get a browser opened on the host
+  Parent chats make pi's `openUrl` a no-op (a remote client must never get a browser opened on the host
   machine); pi's rpc-mode `/mcp login` still shows the URL and the paste-back dialog. In the
   Central-exclusion loader mode both built-ins go through the per-reload path re-resolution described
   under `extensions`, so `-builtin:*` applies there too.
@@ -1010,7 +1011,7 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   runner, the reload owner gives that runner its own bounded shutdown and disposes it. Shutdown is
   single-flight per runner, including when emergency disposal follows graceful closure mid-reload;
   each disposal continuation may dispose only the runner whose shutdown it awaited. Closed reloads never
-  flush completions or schedule another reload.
+  flush completions, restart MCP status, or schedule another reload.
   Every teardown path goes through this cascade: delete/remove, workspace archive/removal, quit
   (`settleSessionsForShutdown` + `disposeAllSessions`) and a preparation that fails after binding —
   including one whose registration is refused because the workspace closed or the host began quitting
@@ -1025,7 +1026,9 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   `pending-reload` at once). The overlay reaches `mcp.json` servers only, so `setSessionMcpServerEnabled`
   refuses (`MCP_CONFIG_INVALID`) to disable a server the chat did not load from its files — for a
   registered one the message says it is registered by an extension and can't be disabled per chat — and
-  refuses with `MCP_HANDLED_ELSEWHERE` where `builtin:mcp` does not own `/mcp`.
+  refuses with `MCP_HANDLED_ELSEWHERE` where `builtin:mcp` does not own `/mcp`. Ownership and file
+  provenance are validated before both enable and disable, even for no-op requests; a disabled entry
+  retained across a reload that replaces `/mcp` cannot be re-enabled through the host.
   Config or trust changes reload only the affected sessions: the session's `loadConfig` records the
   per-server effective config pi received at its last start (`McpSessionHost.loaded()`, cleared at the start
   of every load), and `reconcileMcpSessions` compares it with what the loader would produce now
@@ -1034,10 +1037,12 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   never runs there) and is never reconciled. Reconciliation runs after every
   host mutation, when the user file changes (`watchUserMcpConfig`: one directory watcher on pi's agent dir,
   300 ms debounce; a missing agent dir is created first — pi creates it on first use anyway — so a file the
-  user adds later is still seen; a watcher error closes the watcher instead of crashing the host, leaving
-  the other triggers), when a workspace change nudge touches `.pi`, and at each session's
+  user adds later is still seen; a rename or watcher error retires the old watch and rearms it with
+  capped retry backoff, including after the agent directory is recreated; stopping cancels retries), when a workspace change nudge touches `.pi`, and at each session's
   `agent_settled` (so an edit the agent made itself applies once the run ends); a deferred reload shows the
-  changed servers as `pending-reload` until it runs. Reloads go through `session.reload()` behind a per-session reload gate: while a reload runs, every
+  changed servers as `pending-reload` until it runs. A reconciliation failure is logged and notified with
+  redacted details, and retained as retryable even if the failed load already replaced its config snapshot.
+  A successful reload clears that failure. Reloads go through `session.reload()` behind a per-session reload gate: while a reload runs, every
   admission seam (`promptSession`, `steerSession`, `followUpSession`, `nudgeSession`, queue requeues,
   `answerQuestion`, `sendReviewFixToSession`, `compactSession`) refuses with "reloading", and completion
   delivery waits in its owners through `canDeliverCompletion` and flushes afterwards; the gate opens only
@@ -1061,12 +1066,15 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   where `builtin:mcp` does not own `/mcp` is refused with `MCP_HANDLED_ELSEWHERE`. pi's startup "MCP
   servers need attention" notice is unsolicited, so it alone is recognised by its fixed prefix through
   `interceptExtUiNotify` ([`webUiContext`]), installed before `bindExtensions`: it becomes a partial status
-  update plus a full refresh as well as a toast. pi's `/mcp` awaits every startup connection before it
+  update plus a full refresh as well as a redacted toast. pi's `/mcp` awaits every startup connection before it
   answers, so registration and every gated reload first seed the snapshot from what pi was given
   (`McpSessionHost.loaded()` plus the servers extensions registered): each enabled one reads `starting`, a
   disabled one its disabled state through the same derivation, and the previous load's report never
   survives a reload. Then a capture starts; one begun before that (re)start is dropped (a per-session load
-  epoch), so a stale report never replaces the seed. Refreshes also run at `agent_settled`; at most one
+  epoch), so a stale report never replaces the seed. Refreshes also run at `agent_settled` and after a
+  chat's own MCP login/logout/reconnect settles, including failures; status reads never invalidate
+  themselves. The capture continues after a read caller's wait budget and publishes its eventual answer.
+  At most one
   capture per session is in flight and a caller waits a bounded time. Each snapshot merges pi's report with
   configuration (`deriveMcpServerStatuses`: disabled by this chat / the project, pending approval, invalid
   config; the last report stands when pi did not answer), carries a per-session monotonic generation, and
@@ -1102,8 +1110,8 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   pi's `/mcp login|logout <name>` or headless `/mcp`, then emits `session_shutdown` (which also aborts a
   running sign-in) and disposes it. Frames ride the `provider.login` family with `target: { kind: "mcp" }`
   and `loginId` `mcplogin_*`, to the owning connection only (`setMcpLoginPublisher(push, ownerClientKey)`);
-  replies and cancels from any other connection fail with `LOGIN_NOT_OWNER`. pi's rpc-mode sign-in
-  notification becomes an `authUrl` frame only for `https:` or loopback `http:` addresses, its redirect
+  replies and cancels from any other connection fail with `LOGIN_NOT_OWNER`. Pi's public `openUrl`
+  callback supplies the `authUrl` frame directly, only for `https:` or loopback `http:` addresses; its redirect
   prompt becomes the paste-back `prompt` frame, and the outcome is derived from pi's captured
   notifications (signed in / failure text / cancelled), never from the command promise alone. pi's wait for
   the browser or the paste-back has no overall timeout, so every probe has a deadline (`PROBE_DEADLINE_MS`,

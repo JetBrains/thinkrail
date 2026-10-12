@@ -34,28 +34,35 @@ export function parseMcpStatusText(text: string): ParsedMcpStatus | null {
 	const configErrors: string[] = [];
 	if (text.startsWith(NO_SERVERS_PREFIX)) return { servers, configErrors };
 	let current: ParsedMcpServerStatus | undefined;
+	let diagnostic: number | undefined;
 	for (const line of text.split("\n")) {
 		if (line.startsWith("    ") && current) {
 			current.detail += `\n${line.trim()}`;
 			continue;
 		}
 		if (line.startsWith("config error: ")) {
-			configErrors.push(redactMcpText(line.slice("config error: ".length)));
+			diagnostic = configErrors.push(line.slice("config error: ".length)) - 1;
 			current = undefined;
 			continue;
 		}
 		if (line.startsWith("overridden: ")) {
 			current = undefined;
+			diagnostic = undefined;
 			continue;
 		}
 		const match = SERVER_LINE.exec(line);
-		if (!match?.[1] || match[2] === undefined || !EXPOSURE_SUFFIX.test(match[2])) return null;
+		if (!match?.[1] || match[2] === undefined || !EXPOSURE_SUFFIX.test(match[2])) {
+			if (diagnostic === undefined) return null;
+			configErrors[diagnostic] += `\n${line}`;
+			continue;
+		}
+		diagnostic = undefined;
 		const body = match[2].replace(EXPOSURE_SUFFIX, "");
 		current = { ...stateOf(body), detail: line };
 		servers.set(match[1], current);
 	}
 	for (const server of servers.values()) server.detail = redactMcpText(server.detail);
-	return { servers, configErrors };
+	return { servers, configErrors: configErrors.map(redactMcpText) };
 }
 
 export function parseMcpAttentionNotice(text: string): ParsedMcpStatus | null {

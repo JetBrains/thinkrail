@@ -373,6 +373,7 @@ export interface McpServerSummary {
 	endpoint: string;
 	exposure: McpExposure;
 	effectiveExposure: Exclude<McpExposure, "codemode">;
+	effective?: boolean;
 	enabled: boolean;
 	description?: string;
 	/** HTTP server without an `Authorization` header: sign-in applies. */

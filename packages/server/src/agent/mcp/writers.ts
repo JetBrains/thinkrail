@@ -1,9 +1,12 @@
+import { randomUUID } from "node:crypto";
 import {
-	existsSync,
+	chmodSync,
 	lstatSync,
 	mkdirSync,
 	readFileSync,
+	realpathSync,
 	renameSync,
+	rmSync,
 	type Stats,
 	writeFileSync,
 } from "node:fs";
@@ -19,8 +22,9 @@ export class McpConfigPathUnsafeError extends Error {
 function lstatOrNull(path: string): Stats | null {
 	try {
 		return lstatSync(path);
-	} catch {
-		return null;
+	} catch (error) {
+		if (error instanceof Error && "code" in error && error.code === "ENOENT") return null;
+		throw error;
 	}
 }
 
@@ -64,7 +68,10 @@ function editMcpServers(
 	path: string,
 	edit: (servers: McpServersObject | undefined, parsed: Record<string, unknown>) => boolean,
 ): void {
-	const text = existsSync(path) ? readFileSync(path, "utf8") : undefined;
+	const file = lstatOrNull(path);
+	const target = file?.isSymbolicLink() ? realpathSync(path) : path;
+	const mode = (target === path ? file : lstatSync(target))?.mode;
+	const text = file ? readFileSync(target, "utf8") : undefined;
 	const parsed: unknown = text === undefined ? {} : JSON.parse(text);
 	if (!isRecord(parsed) || (parsed.mcpServers !== undefined && !isRecord(parsed.mcpServers))) {
 		throw new Error(`${path}: expected an object with an "mcpServers" object`);
@@ -72,13 +79,18 @@ function editMcpServers(
 	const servers = isRecord(parsed.mcpServers) ? parsed.mcpServers : undefined;
 	if (!edit(servers, parsed)) return;
 	const indent = (text && /^([ \t]+)\S/m.exec(text)?.[1]) || "  ";
-	mkdirSync(dirname(path), { recursive: true });
-	const mode = lstatOrNull(path)?.mode;
-	const temporary = `${path}.${process.pid}.${Date.now().toString(36)}.tmp`;
-	writeFileSync(temporary, `${JSON.stringify(parsed, null, indent)}\n`, {
-		...(mode !== undefined ? { mode: mode & 0o777 } : {}),
-	});
-	renameSync(temporary, path);
+	mkdirSync(dirname(target), { recursive: true });
+	const temporary = `${target}.${randomUUID()}.tmp`;
+	try {
+		writeFileSync(temporary, `${JSON.stringify(parsed, null, indent)}\n`, {
+			flag: "wx",
+			...(mode !== undefined ? { mode: mode & 0o777 } : {}),
+		});
+		if (mode !== undefined) chmodSync(temporary, mode & 0o777);
+		renameSync(temporary, target);
+	} finally {
+		rmSync(temporary, { force: true });
+	}
 }
 
 export interface McpServerConfigPatch {
@@ -131,7 +143,6 @@ export function addMcpServerConfig(
 }
 
 export function removeMcpServerConfig(path: string, name: string): boolean {
-	if (!existsSync(path)) return false;
 	let removed = false;
 	editMcpServers(path, (servers) => {
 		if (ownEntry(servers, name) === undefined || !servers) return false;

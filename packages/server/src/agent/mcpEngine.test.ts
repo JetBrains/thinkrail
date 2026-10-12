@@ -19,6 +19,7 @@ import {
 	getSessionCommands,
 	getSessionMessages,
 	getSessionState,
+	mcpSessionView,
 	promptSession,
 	removeSession,
 	removeWorkspaceSessions,
@@ -72,9 +73,9 @@ const testExtensions = [
 	"other-mcp.ts",
 	"hang-shutdown.ts",
 	"hang-reload.ts",
+	"register-mcp.ts",
 	"reload-pause.ts",
 	"closing-probe.ts",
-	"register-mcp.ts",
 ];
 let requests: ExtUiRequest[] = [];
 let sequence = 0;
@@ -135,8 +136,8 @@ beforeEach(() => {
 	requests = [];
 	killFixtures();
 	rmSync(pidFile, { force: true });
-	rmSync(probeMarker, { force: true });
 	rmSync(join(agentDir, "settings.json"), { force: true });
+	rmSync(probeMarker, { force: true });
 	for (const name of testExtensions) rmSync(join(agentDir, "extensions", name), { force: true });
 	writeMcpConfig();
 });
@@ -202,30 +203,9 @@ async function chat() {
 	const { sessionId } = await createSession({
 		workspaceId,
 		cwd,
-		model: { ...faux.getModel(), thinkingLevels: ["off"] },
+		model: { ...model, provider: "engine", thinkingLevels: ["off"] },
 	});
 	return { workspaceId, cwd, sessionId };
-}
-
-async function connected(sessionId: string): Promise<void> {
-	const from = requests.length;
-	await promptSession(sessionId, "/mcp");
-	expect(
-		requests
-			.slice(from)
-			.some(
-				(request) =>
-					request.sessionId === sessionId &&
-					request.kind === "notify" &&
-					request.message.startsWith("fixture: connected"),
-			),
-	).toBe(true);
-}
-
-function probeStarts(): string[] {
-	return existsSync(probeMarker)
-		? readFileSync(probeMarker, "utf8").split("\n").filter(Boolean)
-		: [];
 }
 
 async function toolTexts(p: Awaited<ReturnType<typeof chat>>): Promise<string[]> {
@@ -301,7 +281,7 @@ test("a reload finishes stubborn MCP cleanup before the replacement process star
 	writeMcpConfig({ MCP_FIXTURE_STUBBORN: "1" });
 	const p = await chat();
 	try {
-		await connected(p.sessionId);
+		await waitFor(async () => (await stateOf(p.sessionId, "fixture")) === "connected");
 		const [oldPid] = pids();
 		const replacement = join(p.cwd, "replacement.ts");
 		writeFileSync(
@@ -326,7 +306,7 @@ test("a reload finishes stubborn MCP cleanup before the replacement process star
 			},
 		);
 		expect(await requestSessionReload(p.sessionId)).toBe("reloaded");
-		await connected(p.sessionId);
+		await waitFor(async () => (await stateOf(p.sessionId, "fixture")) === "connected");
 		expect(probeStarts()).toEqual(["old-dead"]);
 		expect(pids()).toHaveLength(2);
 		expect(alive(oldPid as number)).toBe(false);
@@ -346,7 +326,7 @@ test("runner-emitted shutdown joins the captured MCP cleanup instead of observin
 	};
 	try {
 		const p = await chat();
-		await connected(p.sessionId);
+		await waitFor(async () => (await stateOf(p.sessionId, "fixture")) === "connected");
 		if (!binding) throw new Error("Missing pi session");
 		const runner = binding.extensionRunner;
 		const [pid] = pids();
@@ -376,7 +356,7 @@ for (const reason of ["resource", "trust"] as const) {
 		setSkillAdmissionResolver(() => admissionContextFor({ piResourceTrust: "granted" }));
 		const p = await chat();
 		try {
-			await connected(p.sessionId);
+			await waitFor(async () => (await stateOf(p.sessionId, "fixture")) === "connected");
 			const [pid] = pids();
 			setSkillAdmissionResolver(() => admissionContextFor(undefined));
 			let settled = false;
@@ -422,7 +402,7 @@ const closures = [
 for (const [label, close] of closures) {
 	test(`${label} during a pending resource load prevents MCP restart and cleans up the new runner`, async () => {
 		const p = await chat();
-		await connected(p.sessionId);
+		await waitFor(async () => (await stateOf(p.sessionId, "fixture")) === "connected");
 		const before = pids();
 		const entered = join(p.cwd, "reload-entered");
 		const released = join(p.cwd, "reload-released");
@@ -465,7 +445,7 @@ for (const [label, close] of closures) {
 for (const [label, close] of closures) {
 	test(`${label} during a paused session_start prevents late MCP startup after shutdown`, async () => {
 		const p = await chat();
-		await connected(p.sessionId);
+		await waitFor(async () => (await stateOf(p.sessionId, "fixture")) === "connected");
 		const before = pids();
 		const entered = join(p.cwd, "start-entered");
 		const released = join(p.cwd, "start-released");
@@ -532,7 +512,7 @@ test("emergency disposal during graceful closure waits for the replacement runne
 		"}",
 	]);
 	const p = await chat();
-	await connected(p.sessionId);
+	await waitFor(async () => (await stateOf(p.sessionId, "fixture")) === "connected");
 	const before = pids();
 	rmSync(join(agentDir, "extensions", "closing-probe.ts"));
 	writeExtension("reload-pause.ts", [
@@ -787,6 +767,46 @@ test("disabling a server in one chat stops it at the reload and reads as disable
 		"disabled-in-chat",
 	);
 	expect(await setSessionMcpServerEnabled(p.sessionId, "fixture", false)).toBe("unchanged");
+	expect(await setSessionMcpServerEnabled(p.sessionId, "fixture", true)).toBe("reloaded");
+	await waitFor(async () => (await stateOf(p.sessionId, "fixture")) === "connected");
+	await removeSession(p.sessionId);
+});
+
+test("MCP enable and disable refuse a replacement owner, including a previously disabled server", async () => {
+	const p = await chat();
+	await waitFor(async () => (await stateOf(p.sessionId, "fixture")) === "connected");
+	expect(await setSessionMcpServerEnabled(p.sessionId, "fixture", false)).toBe("reloaded");
+	writeExtension("other-mcp.ts", [
+		"export default function otherMcp(pi) {",
+		'  pi.registerCommand("mcp", { description: "another MCP manager", handler: async () => {} });',
+		"}",
+	]);
+	await requestSessionReload(p.sessionId);
+	const before = pids();
+	for (const enabled of [true, false]) {
+		await expect(setSessionMcpServerEnabled(p.sessionId, "fixture", enabled)).rejects.toMatchObject(
+			{
+				code: "MCP_HANDLED_ELSEWHERE",
+			},
+		);
+	}
+	expect(mcpSessionView(p.sessionId)?.disabledInChat.has("fixture")).toBe(true);
+	expect(mcpCommands(p.sessionId).map((command) => command.description)).toEqual([
+		"another MCP manager",
+	]);
+	expect(pids()).toEqual(before);
+	await removeSession(p.sessionId);
+});
+
+test("MCP enable and disable validate file provenance even for unchanged requests", async () => {
+	const p = await chat();
+	for (const enabled of [true, false]) {
+		await expect(setSessionMcpServerEnabled(p.sessionId, "missing", enabled)).rejects.toMatchObject(
+			{
+				code: "MCP_CONFIG_INVALID",
+			},
+		);
+	}
 	await removeSession(p.sessionId);
 });
 

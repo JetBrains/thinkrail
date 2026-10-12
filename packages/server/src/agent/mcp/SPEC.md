@@ -36,9 +36,11 @@ relax a rule.
 ## What's here
 
 - `summaries.ts` — `summarizeMcpServers()`: one `McpServerSummary` per entry as written (an override-only
-  project entry folds into its user-level server as that server's `approval`; an entry that is not an object
+  project entry folds into its user-level server with both its `approval` and its validation error;
+  an entry that is not an object
   keeps its row with pi's `must be an object` error), with scope, defining file,
-  transport, masked endpoint (`maskMcpEndpoint`), configured vs effective exposure and enablement (record
+  transport, masked endpoint (`maskMcpEndpoint`), whether this row is the admitted effective definition,
+  configured vs effective exposure and enablement (record
   overrides and admitted repo overrides applied), OAuth applicability, replacement of a user-level server,
   approval state (`approved` / `pending` / `changed` against the current fingerprint), the configured
   description and pi-equivalent config errors (both through `redactMcpText`). `summarizeMcpConfigErrors()` is the file-level rest (unparsable
@@ -56,15 +58,15 @@ relax a rule.
   run, so paths, URLs and package names survive (a standard-base64 secret split by `/` into short parts is
   the accepted miss). It is applied where pi's text becomes a host DTO: both status parsers (every
   `detail` and parsed config error), `summarizeMcpServers` (`configError`), `summarizeMcpConfigErrors`,
-  `readMcpServerLog` and the sign-in probe's error frames. `maskMcpEndpoint` is the command-line form: the URL, or the command
+  `readMcpServerLog`, legacy-client startup notifications and the sign-in probe's error frames. `maskMcpEndpoint` is the command-line form: the URL, or the command
   with the value after a credential-named flag or assignment, URL-shaped arguments (user info, credential-named query values),
   header arguments (any value after `-H` / `--header`, a credential-named `Name: value` anywhere) and
   token-prefixed arguments masked; `${VAR}` references stay, and arguments with spaces, quotes or nothing in
   them are JSON-quoted so the line is unambiguous (a client shows it as what runs).
 - `status.ts` — parsers for pi's two status texts (`formatStatus` lines `name: state[, N tools] (exposure)`
   with indented errors, and the startup attention notice) and `deriveMcpServerStatuses()`; the formats are
-  pinned by fixtures and re-checked on every pi bump; parsed details are redacted before anything else
-  sees them.
+  pinned by fixtures and re-checked on every pi bump; multiline configuration diagnostics do not discard
+  valid server rows, and parsed details are redacted before anything else sees them.
 - `log.ts` — `readMcpServerLog(name)` → `McpServerLog`: pi appends every `notifications/message` a
   server sends to one `mcp.log` in the agent dir (rotated to `mcp.log.1` past 5 MiB), one entry per
   message as `<ISO time> [<server>] <level>[ <logger>:] <text>` with continuation lines indented four
@@ -80,9 +82,12 @@ relax a rule.
   `structuredContent`. One byte budget (`MCP_SUMMARY_BYTES`, 64 KiB) bounds the whole summary: blocks are
   kept in order until it is spent (`omittedBlocks` counts the rest, since a server may return thousands of
   resource links with long URIs), and `structuredContent` is kept only if it fits what remains (else
-  `structuredContentTruncated`); a resource read keeps only its contents' URIs and types. pi drops `structuredContent` from finalized messages, so this is what lets a
-  result be rendered the same live, after reload and on another client.
-- `management.ts` — the config mutations the host composes: `writeMcpServerEntry` (pi validation plus the
+  `structuredContentTruncated`); a resource read keeps only its contents' URIs and types. pi drops
+  `structuredContent` from finalized messages, so this lets a result be rendered the same live, after
+  reload and on another client.
+- `management.ts` — `effectiveMcpServerConfig` reads the admitted definition through the same loader
+  used by sessions, so probes never infer it from a presentation row. The config mutations the host
+  composes are `writeMcpServerEntry` (pi validation plus the
   project `auth` ban, add vs update, project containment; returns a project entry's fingerprint),
   `removeMcpServerEntry`, `projectMcpEntryFingerprint`, `shareMcpOverrideWithRepo` (writes pi's override
   entry from the record; refuses when the user-level server it overrides no longer exists — an override
@@ -116,10 +121,13 @@ relax a rule.
   it clears `loaded()` (each server's effective config as pi received it, set again only when the built-in
   starts — a load where another extension owns `/mcp`, or `-builtin:mcp`, leaves it `null`) and keeps that load's `ExtensionAPI` for `registered()` (pi's
   `getMcpServers()`: the servers extensions registered, `[]` once the load is stale). `shutdownEngine(event,
-  ctx)` runs the engine's captured shutdown.
-- `engine.ts` — `createMcpEngine({ loadConfig, lockSignIns? })` → `{ extensions, shutdown }`: pi's two
-  built-in descriptors (`mcp` = `createMcpExtension({ loadConfig, openUrl: no-op })`, `tool-search`), both
-  `replaceable: true, builtin: true` exactly like pi's CLI. The `mcp` factory first registers its own
+  ctx)` runs the engine's captured shutdown. The optional command-completion callback is supplied by the
+  session manager; this child module never imports the status coordinator.
+- `engine.ts` — `createMcpEngine({ loadConfig, lockSignIns?, openUrl?, onCommandSettled? })` →
+  `{ extensions, shutdown }`: pi's two built-in descriptors (`mcp` = `createMcpExtension`, `tool-search`),
+  `replaceable: true, builtin: true` exactly like pi's CLI. Optional host callbacks deliver Settings
+  authorization URLs through `openUrl` and invalidate status after mutating commands. Ordinary chats
+  never open a browser on the host. The `mcp` factory first registers its own
   `session_start` / `mcp_servers_change` handlers that activate `tool_search` whenever
   `pi.getMcpServers()` is non-empty, so they run before pi's reachability check: extension-registered
   servers bypass the loader's normalization (pi defaults them to codemode, which is not shipped) and
@@ -136,20 +144,25 @@ relax a rule.
   tool-search activation, against a closed load: an earlier async handler can resume the dispatch after
   shutdown has already finished. These guards own only that load's engine resources, not persistent
   session lifecycle state. Re-check these ordering guarantees on every pi bump. Unless the caller passes
-  `lockSignIns: false` (only the
-  host's sign-in probe, which holds the lock itself), `registerCommand` wraps `/mcp`'s handler: `login <name>` /
+  `lockSignIns: false` (only the host probe, which holds the lock itself), `registerCommand` wraps
+  `/mcp`'s handler: `login <name>` /
   `logout <name>`, parsed the way pi parses them, take `acquireMcpSignInLock(name, "chat")` for the
   command's duration and release it in `finally`; while another holder has it the command posts "A sign-in
   for "<name>" is already running in Settings." (or "in a chat") as a warning and never reaches pi. Status,
-  `reconnect`, a bare `login` / `logout` and malformed arguments pass straight through.
-- `signInLock.ts` — `acquireMcpSignInLock(serverName, holder)`: the process-wide lock, keyed by server
-  name, that the host's sign-in probes (`"settings"`) and chats (`"chat"`) share (why and who holds it:
+  `reconnect`, a bare `login` / `logout` and malformed arguments retain pi's dispatch behavior.
+  A mutating command's completion triggers the supplied status invalidation, including failure; status
+  reads do not, preventing capture recursion.
+- `signInLock.ts` — `acquireMcpSignInLock(serverName, holder)`: the process-wide lock, keyed by pi's
+  normalized server namespace (`-` and `_` aliases share it, matching pi credential identity), that host
+  probes (`"settings"`) and chats (`"chat"`) share (why and who holds it:
   [[submodule-server-agent]] › MCP servers). It returns `{ release }` (frees only its own hold, so a late
   or repeated call is harmless) or `{ heldBy }`, which callers turn into their refusal.
 - `writers.ts` — `add` / `update` / `remove` with pi's editing semantics (unknown keys and indentation
   kept; a global server's `enabled: true` / `exposure: "codemode"` defaults are removed rather than
   written; an override entry keeps explicit values), replacing the file atomically (temp file + rename)
-  with its mode preserved. `assertProjectMcpConfigWritable(worktree, path)` is the containment rule for
+  with its mode preserved. A user-file symlink stays a symlink: the writer resolves and atomically
+  replaces its real target with that target's permissions, never the link's permissive mode.
+  `assertProjectMcpConfigWritable(worktree, path)` is the containment rule for
   project files: the target stays inside the worktree, an existing `.pi/` is a real directory and an
   existing `mcp.json` a regular file — never a symlink, because pi's reader follows links and a
   read-modify-write would copy a foreign file into the repository (`McpConfigPathUnsafeError`,
@@ -160,14 +173,14 @@ relax a rule.
 
 ## Boundary
 
-- **Public surface (barrel):** `loadMcpConfigFiles`, `validateMcpServerConfig`, `getMcpToolExposure`,
+- **Public surface (barrel):** `loadMcpConfigFiles`, `validateMcpServerConfig`,
   `mcpNamespace`, `isOverrideEntry`, `fingerprintMcpEntry`, `normalizeExposureForHost`,
   `globalMcpConfigPath`, `projectMcpConfigPath`, `addMcpServerConfig`, `updateMcpServerConfig`,
   `removeMcpServerConfig`, `assertProjectMcpConfigWritable`, `McpConfigPathUnsafeError`,
   `createMcpSessionHost` + `McpSessionHost` and the option labels `MCP_CONFIRM_DENY` / `MCP_CONFIRM_ONCE` /
-  `MCP_CONFIRM_CHAT`, `createMcpEngine` (`{ loadConfig, lockSignIns? }`), `acquireMcpSignInLock`,
+  `MCP_CONFIRM_CHAT`, `createMcpEngine` (`{ loadConfig, lockSignIns?, openUrl?, onCommandSettled? }`), `acquireMcpSignInLock`,
   `loadHostMcpConfig` + `McpProjectPolicy` + `mcpPolicyOf`, `summarizeMcpServers`, `maskMcpEndpoint` /
-  `redactMcpText`, `readMcpServerLog`, the `management.ts` mutations (`writeMcpServerEntry`,
+  `redactMcpText`, `readMcpServerLog`, `effectiveMcpServerConfig`, the `management.ts` mutations (`writeMcpServerEntry`,
   `removeMcpServerEntry`, `projectMcpEntryFingerprint`, `shareMcpOverrideWithRepo`),
   `summarizeMcpConfigErrors`, the status parsers (`parseMcpStatusText`, `parseMcpAttentionNotice`,
   `MCP_ATTENTION_PREFIX`, `deriveMcpServerStatuses`, `ParsedMcpStatus`), `summarizeMcpResult` /

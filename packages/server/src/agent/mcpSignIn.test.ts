@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { createFauxCore } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ExtUiRequest, LoginFrame, LoginPush } from "@thinkrail/contracts";
+import type { ExtUiRequest, LoginFrame, LoginPush, McpStatusSnapshot } from "@thinkrail/contracts";
 import {
 	createSession,
 	dispatchSessionMcpCommand,
@@ -15,7 +15,7 @@ import {
 	settleSessionsForShutdown,
 } from "./agentSessionManager";
 import { startOAuthMcpFixture } from "./mcp/fixtures/oauthServer";
-import { refreshMcpStatus } from "./mcpSessions";
+import { refreshMcpStatus, setMcpStatusPublisher } from "./mcpSessions";
 import {
 	cancelMcpProbe,
 	cancelMcpProbesOwnedBy,
@@ -48,6 +48,7 @@ const cwd = join(root, "project");
 const fixture = startOAuthMcpFixture();
 let pushes: { push: LoginPush; owner: string }[] = [];
 let requests: ExtUiRequest[] = [];
+let statuses: McpStatusSnapshot[] = [];
 
 beforeAll(async () => {
 	process.env.PI_CODING_AGENT_DIR = agentDir;
@@ -73,12 +74,14 @@ beforeAll(async () => {
 	configurePiRuntime(runtime);
 	setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
 	setMcpLoginPublisher((push, owner) => pushes.push({ push, owner }));
+	setMcpStatusPublisher((snapshot) => statuses.push(snapshot));
 	setExtUiPublisher((request) => requests.push(request));
 });
 
 beforeEach(() => {
 	pushes = [];
 	requests = [];
+	statuses = [];
 });
 
 afterAll(async () => {
@@ -86,6 +89,7 @@ afterAll(async () => {
 	disposeAllSessions();
 	fixture.stop();
 	setMcpLoginPublisher(() => {});
+	setMcpStatusPublisher(() => {});
 	setExtUiPublisher(() => {});
 	configurePiRuntime(null);
 	setSessionManagerFactory((dir) => SessionManager.create(dir));
@@ -262,6 +266,50 @@ test("reaping the owning client cancels its sign-in and frees the server", async
 
 const chatRequests = (sessionId: string) =>
 	requests.filter((request) => request.sessionId === sessionId);
+
+test("chat login and logout publish their new status without another model turn or list read", async () => {
+	const chat = await createSession({
+		workspaceId: "ws-signin",
+		cwd,
+		model: { ...faux.getModel(), thinkingLevels: ["off"] },
+	});
+	await refreshMcpStatus(chat.sessionId, 5_000);
+	statuses = [];
+	const login = dispatchSessionMcpCommand(chat.sessionId, "login oauthy");
+	const asked = await waitFor(() =>
+		chatRequests(chat.sessionId).find((request) => request.kind === "input"),
+	);
+	const notification = chatRequests(chat.sessionId).find(
+		(request) => request.kind === "notify" && request.message.startsWith("Sign in to MCP server"),
+	);
+	if (notification?.kind !== "notify") throw new Error("missing pi authorization URL");
+	const authorization = new URL(notification.message.split("\n")[1] ?? "");
+	const redirect = new URL(authorization.searchParams.get("redirect_uri") ?? "");
+	redirect.searchParams.set("code", "fixture-code");
+	redirect.searchParams.set("state", authorization.searchParams.get("state") ?? "");
+	resolveExtUi({ id: asked.id, value: redirect.href });
+	await login;
+	await waitFor(() =>
+		statuses.find(
+			(snapshot) =>
+				snapshot.sessionId === chat.sessionId &&
+				snapshot.servers.some((server) => server.state === "connected"),
+		),
+	);
+	statuses = [];
+	await dispatchSessionMcpCommand(chat.sessionId, "logout oauthy");
+	await waitFor(() =>
+		statuses.find(
+			(snapshot) =>
+				snapshot.sessionId === chat.sessionId &&
+				snapshot.servers.some((server) => server.state === "needs-sign-in"),
+		),
+	);
+	const count = statuses.length;
+	await Bun.sleep(30);
+	expect(statuses).toHaveLength(count);
+	await removeSession(chat.sessionId);
+});
 
 test("a chat's own /mcp login holds the server's sign-in lock until it ends", async () => {
 	const chat = await createSession({ workspaceId: "ws-signin", cwd });

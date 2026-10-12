@@ -59,7 +59,10 @@ bootstrap it into one so it can be opened.
   resources nobody consented to (user decision, PR #690 review). pi-level trust never enables MCP by itself:
   the record also carries `mcpApprovals` (repo-defined MCP server name → fingerprint of the whole original
   project-file entry) and `mcpOverrides` (per-project enablement/exposure of user-level servers, kept out of
-  the tracked `.pi/mcp.json`). `setProjectTrust(id, trusted, acknowledged?,
+  the tracked `.pi/mcp.json`). `setProjectMcpOverride` synchronously merges only supplied fields into the
+  latest stored override, so overlapping enablement and exposure patches do not lose each other. An empty
+  patch is a no-op; `null` clears the override. It rejects non-boolean enablement and exposure outside
+  `deferred`, `direct`, `hidden` before persistence. `setProjectTrust(id, trusted, acknowledged?,
   { resources? })` keeps the two grants separate because they consent to different things: pi-level
   resources include code (extensions, settings packages), so only a surface that names them asks for them.
   `trusted: true` sets the alias grant and sets `piResourceTrust: "granted"` only with `resources: true`,

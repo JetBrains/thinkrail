@@ -79,13 +79,19 @@ export function summarizeMcpServers(options: {
 		const exposure = configuredExposure(raw);
 		const repoOverride = entry.scope === "global" ? overrides.get(entry.name) : undefined;
 		const transport = typeof raw.url === "string" || raw.type === "http" ? "http" : "stdio";
-		const configError = configErrorFor(entry, written.errors);
+		const configError = [
+			configErrorFor(entry, written.errors),
+			repoOverride ? configErrorFor(repoOverride, written.errors) : undefined,
+		]
+			.filter(Boolean)
+			.join("\n");
 		summaries.push({
 			name: entry.name,
 			scope: entry.scope === "global" ? "user" : "project",
 			source: entry.path,
 			transport,
 			endpoint: maskMcpEndpoint(raw),
+			effective: isEffective,
 			exposure,
 			effectiveExposure:
 				isEffective && live.config.exposure && live.config.exposure !== "codemode"

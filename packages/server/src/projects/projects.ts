@@ -166,16 +166,37 @@ export function approveProjectMcpServer(id: string, name: string, fingerprint: s
 export function setProjectMcpOverride(
 	id: string,
 	name: string,
-	override: McpProjectOverride | null,
+	patch: McpProjectOverride | null,
 ): Project {
+	if (patch !== null) {
+		if (patch.enabled !== undefined && typeof patch.enabled !== "boolean") {
+			throw new CodedError("MCP_CONFIG_INVALID", "MCP server enabled must be a boolean");
+		}
+		if (
+			patch.exposure !== undefined &&
+			patch.exposure !== "deferred" &&
+			patch.exposure !== "direct" &&
+			patch.exposure !== "hidden"
+		) {
+			throw new CodedError(
+				"MCP_CONFIG_INVALID",
+				"MCP server exposure must be deferred, direct or hidden",
+			);
+		}
+	}
 	const projects = getProjects();
 	const project = projects.find((p) => p.id === id);
 	if (!project) throw new Error(`Unknown project: ${id}`);
 	const overrides: Record<string, McpProjectOverride> = { ...project.mcpOverrides };
-	if (override === null || (override.enabled === undefined && override.exposure === undefined)) {
+	if (patch === null) {
 		delete overrides[name];
 	} else {
-		// A server may be named `__proto__`: store it as an own property, never through the prototype.
+		if (patch.enabled === undefined && patch.exposure === undefined) return project;
+		const override = {
+			...(Object.hasOwn(overrides, name) ? overrides[name] : {}),
+			...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
+			...(patch.exposure !== undefined ? { exposure: patch.exposure } : {}),
+		};
 		Object.defineProperty(overrides, name, {
 			value: override,
 			enumerable: true,

@@ -797,7 +797,7 @@ the pi-level resource grant. A client talking to an older host sends neither.
 
 ## MCP servers
 
-`MCP_PROTOCOL_VERSION` (82) gates the `mcp.*` methods, the `mcp.status` channel and the optional
+`MCP_PROTOCOL_VERSION` (83, after the extension catalog at 82) gates the `mcp.*` methods, the `mcp.status` channel and the optional
 `SessionResources.mcpServers` list; a client talking to an older host sends none of them and treats the
 missing list as "no MCP". The engine is pi's built-in MCP ([[submodule-server-agent]]); these DTOs mirror
 what the host reads from pi and from the two `mcp.json` files, never pi's own types — the web depends on
@@ -813,7 +813,11 @@ contracts only.
   `setSessionOverride`, `readOutput`). The host has no notion of an "active workspace".
 - `mcp.list` returns the configured `McpServerSummary` set (scope, defining file, masked endpoint,
   configured and effective exposure, enablement, project override, repo-approval state, pi-equivalent
-  config error — one per named entry, an entry that is not an object included) together with the live
+  config error — one per named entry, an entry that is not an object included). The additive optional
+  `effective` flag identifies the definition actually admitted by the host loader, independently of
+  displayed override diagnostics; login/logout/test actions belong only to that row. Older hosts may
+  omit it, in which case clients must not infer authority for ambiguous same-name rows. Together with
+  the configured set the response carries the live
   `McpStatusSnapshot` per session; snapshots carry a monotonic per-session `generation` so a stale push
   never overwrites a newer one. A live chat has a snapshot from the moment it opens: until pi answers, and
   again after each reload, the servers it starts read `starting`. `configErrors` (`McpConfigFileError`:
@@ -825,14 +829,16 @@ contracts only.
   value to say which entry to remove, so it stays stable), a replacing extension is seen through a live
   chat (`by` = its path).
 - Mutations (`add`, `update`, `remove`, `setProjectOverride`, `approve`, `shareWithRepo`) re-check that
-  ownership in the same synchronous step as the write and fail with `MCP_HANDLED_ELSEWHERE` where
+  ownership and the current project policy in the same synchronous step as the write and fail with `MCP_HANDLED_ELSEWHERE` where
   `mcp.list` would set `handledElsewhere`, so a stale client cannot write while another manager owns MCP; they return the fresh
   list without waiting for the open chats to reload; `mcp.status` pushes report each reload, so the returned
   snapshots may predate it. `setProjectOverride` writes the project record, never the tracked
-  `.pi/mcp.json`; `shareWithRepo` is the explicit write into it. `setProjectOverride` merges the fields it carries into the
-  existing override (a client sends only what changed, so two clients editing one row do not overwrite each
-  other's setting). `setSessionOverride` is the per-chat
-  disable: it applies to `mcp.json` servers only — a `SessionResources.mcpServers` row with
+  `.pi/mcp.json`; `shareWithRepo` is the explicit write into it. `setProjectOverride` merges the fields it
+  carries into the latest stored override atomically (a client sends only what changed, so concurrent
+  clients do not overwrite each other's setting). Enablement must be boolean and exposure one of
+  `deferred`, `direct`, `hidden`; malformed runtime values fail with `MCP_CONFIG_INVALID`.
+  `setSessionOverride` is the per-chat disable: it applies to `mcp.json` servers only — a
+  `SessionResources.mcpServers` row with
   `registered: true` is a server an extension registered (its `transport` is that registration's), and
   disabling it fails with `MCP_CONFIG_INVALID`; where MCP is handled elsewhere it fails with
   `MCP_HANDLED_ELSEWHERE`. `mcp.reconnect` resolves once pi reconnected the server and rejects with pi's
@@ -855,10 +861,12 @@ contracts only.
   (`LoginPush.target` identifies the server); those pushes reach only the connection that started the
   operation, and a reply or cancel from another connection fails with `LOGIN_NOT_OWNER`. They and
   `mcp.logout` fail with `MCP_HANDLED_ELSEWHERE` where `handledElsewhere` is set, and with an "already
-  running" error while a sign-in for that server runs anywhere; `mcp.testConnection` judges the transport
-  of the name's effective server (the approved project entry, else the user one) — another of these operations or a chat's
+  running" error while a sign-in for that server runs anywhere — another of these operations or a chat's
   `/mcp login <name>`. An operation still open after 10 minutes, or whose client the host has reaped after
   the reconnect window, ends with an `error` frame ("Sign-in timed out." / "Sign-in cancelled.").
+  `mcp.testConnection` judges the transport of the actual admitted configuration, not an approved but
+  invalid project row that the loader skipped. Mutations and probes reject if workspace identity, cwd or
+  project trust changed during async ownership resolution; no stale project grant admits a new operation.
 - `McpResultSummary` is the host-written, bounded, base64-free presentation summary under
   `details.thinkrail` that can be rendered identically live, after reload and on another client.
   `mcp.readOutput` serves a result's recorded `fullOutputPath` only and reports `expired` when the temp
