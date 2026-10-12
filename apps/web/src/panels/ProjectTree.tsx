@@ -13,7 +13,6 @@ import {
 	RiPencilLine as Pencil,
 	RiAddLine as Plus,
 	RiCheckboxCircleLine,
-	RiExpandUpDownLine,
 	RiFolderFill,
 	RiFolderLine,
 	RiFolderOpenFill,
@@ -66,7 +65,6 @@ import {
 	settledReasonTitle,
 	toast,
 	useAppStore,
-	type WorkspaceSort,
 } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
@@ -94,11 +92,6 @@ import {
 } from "./workspaceActions";
 
 const CREATE_WORKSPACE_LABEL = `Create workspace (${platformShortcutLabel("N")} or ${platformShortcutLabel("N", { alt: true })})`;
-const SORT_LABELS: Record<WorkspaceSort, string> = {
-	recent: "Recent activity",
-	created: "Created",
-	name: "Name",
-};
 const HOVER_CONTROL_CLASS =
 	"flex size-20 shrink-0 items-center justify-center rounded-sm text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100 disabled:pointer-events-none disabled:opacity-0";
 
@@ -114,7 +107,6 @@ export function ProjectTree() {
 	const supportsSettling = useAppStore((s) => s.workspaceSettlingSupported);
 	const sessionStateByWorkspace = useAppStore((s) => s.sessionStateByWorkspace);
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
-	const workspaceSort = useAppStore((s) => s.workspaceSort);
 	const settledShelfExpanded = useAppStore((s) => s.settledShelfExpanded);
 	const settledShelfShown = useAppStore((s) => s.settledShelfShown);
 	const now = useNow();
@@ -167,7 +159,6 @@ export function ProjectTree() {
 		activeWorkspaceId,
 		activeWorkspaceLiveLatch,
 		settleIdleDays,
-		workspaceSort,
 	};
 	const activeSettledIndex =
 		activeProjectId && activeWorkspaceId
@@ -318,7 +309,6 @@ export function ProjectTree() {
 									enabled={supportsSettling}
 									projectId={project.id}
 									partition={selectWorkspacePartition(partitionState, project.id, now)}
-									sort={workspaceSort}
 									shelfExpanded={settledShelfExpanded[project.id] === true}
 									shelfShown={settledShelfShown[project.id] ?? SETTLED_SHELF_PAGE}
 									renderRow={(ws, settled) => (
@@ -396,7 +386,6 @@ function SettledPartition({
 	enabled,
 	projectId,
 	partition,
-	sort,
 	shelfExpanded,
 	shelfShown,
 	renderRow,
@@ -404,7 +393,6 @@ function SettledPartition({
 	enabled: boolean;
 	projectId: string;
 	partition: ReturnType<typeof selectWorkspacePartition>;
-	sort: WorkspaceSort;
 	shelfExpanded: boolean;
 	shelfShown: number;
 	renderRow: (workspace: Workspace, settled: SettledReason | null) => ReactNode;
@@ -421,26 +409,6 @@ function SettledPartition({
 	const remaining = settledCount - shown.length;
 	return (
 		<div className="mt-2 flex flex-col gap-2 motion-safe:animate-reveal">
-			<label
-				data-testid="workspace-sort"
-				className="flex h-20 items-center gap-4 pr-4 pl-24 text-text-subtle tr-text-metadata"
-			>
-				<RiExpandUpDownLine className="size-12 shrink-0" aria-hidden="true" />
-				<select
-					aria-label="Sort workspaces"
-					value={sort}
-					onChange={(event) =>
-						useAppStore.getState().setWorkspaceSort(event.target.value as WorkspaceSort)
-					}
-					className="min-w-0 cursor-pointer appearance-none truncate border-0 bg-transparent p-0 text-text-subtle tr-text-metadata outline-none hover:text-text-muted focus-visible:text-text-default"
-				>
-					{(Object.keys(SORT_LABELS) as WorkspaceSort[]).map((option) => (
-						<option key={option} value={option}>
-							{SORT_LABELS[option]}
-						</option>
-					))}
-				</select>
-			</label>
 			<ul className="flex flex-col gap-2">{partition.live.map((ws) => renderRow(ws, null))}</ul>
 			<div
 				data-testid="settled-shelf"

@@ -104,7 +104,6 @@ import {
 	selectWorkspaceTick,
 	supportsChatResources,
 	supportsWorkspaceSettling,
-	type WorkspaceSort,
 } from "./selectors";
 
 export interface StreamingResponseMovement {
@@ -886,7 +885,6 @@ interface AppState {
 	workspaces: Record<string, Workspace[]>;
 	removedWorkspaceIds: Record<string, true>;
 	expandedProjectIds: Record<string, true>;
-	workspaceSort: WorkspaceSort;
 	workspaceSettlingSupported: boolean;
 	settledShelfExpanded: Record<string, true>;
 	settledShelfShown: Record<string, number>;
@@ -1007,7 +1005,6 @@ interface AppState {
 	applyWorkspaceRemoved: (projectId: string, workspaceId: string) => void;
 	selectProject: (projectId: string, opts?: { reveal?: boolean }) => void;
 	toggleProjectExpanded: (projectId: string) => void;
-	setWorkspaceSort: (sort: WorkspaceSort) => void;
 	toggleSettledShelf: (projectId: string, expanded?: boolean) => void;
 	showMoreSettled: (projectId: string, count: number) => void;
 	expandProject: (projectId: string) => void;
@@ -2091,7 +2088,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 	workspaces: {},
 	removedWorkspaceIds: Object.create(null) as Record<string, true>,
 	expandedProjectIds: Object.create(null) as Record<string, true>,
-	workspaceSort: "recent",
 	workspaceSettlingSupported: false,
 	settledShelfExpanded: Object.create(null) as Record<string, true>,
 	settledShelfShown: Object.create(null) as Record<string, number>,
@@ -2443,8 +2439,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const expandedProjectIds = withExpandedProject(state.expandedProjectIds, projectId);
 			return expandedProjectIds === state.expandedProjectIds ? {} : { expandedProjectIds };
 		}),
-	setWorkspaceSort: (workspaceSort) =>
-		set((state) => (state.workspaceSort === workspaceSort ? {} : { workspaceSort })),
 	toggleSettledShelf: (projectId, expanded) =>
 		set((state) => {
 			const next = expanded ?? !state.settledShelfExpanded[projectId];

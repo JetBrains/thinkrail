@@ -197,35 +197,31 @@ describe("selectWorkspacePartition", () => {
 	];
 	const state = { ...base, workspaces: { p1: rows } };
 
-	test("recent order: Default first, then newest activity; settled rows sort the same way", () => {
-		const partition = selectWorkspacePartition({ ...state, workspaceSort: "recent" }, "p1", NOW);
-		expect(partition.live.map((w) => w.id)).toEqual(["home", "a-new", "b-old"]);
+	test("host order by default: Default first, then the host's list order in both lists", () => {
+		const partition = selectWorkspacePartition(state, "p1", NOW);
+		expect(partition.live.map((w) => w.id)).toEqual(["home", "b-old", "a-new"]);
 		expect(partition.settled.map((row) => row.workspace.id)).toEqual(["merged", "idle"]);
 		expect(partition.settled.map((row) => row.reason.kind)).toEqual(["review", "idle"]);
 	});
 
-	test("created order is newest first; name order is alphabetical", () => {
+	test("recent order: Default stays first, then newest activity; settled rows sort the same way", () => {
+		const reversed = { ...state, workspaces: { p1: [rows[0], ...rows.slice(1).reverse()] } };
+		const partition = selectWorkspacePartition(reversed, "p1", NOW, "recent");
+		expect(partition.live.map((w) => w.id)).toEqual(["home", "a-new", "b-old"]);
+		expect(partition.settled.map((row) => row.workspace.id)).toEqual(["merged", "idle"]);
+	});
+
+	test("recent order breaks activity ties by host order", () => {
+		const tied = [ws("first", { lastActiveAt: NOW }), ws("second", { lastActiveAt: NOW })];
 		expect(
-			selectWorkspacePartition({ ...state, workspaceSort: "created" }, "p1", NOW).live.map(
+			selectWorkspacePartition({ ...base, workspaces: { p1: tied } }, "p1", NOW, "recent").live.map(
 				(w) => w.id,
 			),
-		).toEqual(["home", "a-new", "b-old"]);
-		expect(
-			selectWorkspacePartition({ ...state, workspaceSort: "name" }, "p1", NOW).live.map(
-				(w) => w.id,
-			),
-		).toEqual(["home", "a-new", "b-old"]);
-		expect(
-			selectWorkspacePartition(
-				{ ...state, workspaceSort: "name", workspaces: { p1: [...rows].reverse() } },
-				"p1",
-				NOW,
-			).live.map((w) => w.name),
-		).toEqual(["Default", "Alpha", "Bravo"]);
+		).toEqual(["first", "second"]);
 	});
 
 	test("an unknown project partitions to nothing", () => {
-		expect(selectWorkspacePartition({ ...state, workspaceSort: "recent" }, "nope", NOW)).toEqual({
+		expect(selectWorkspacePartition(state, "nope", NOW)).toEqual({
 			live: [],
 			settled: [],
 		});
@@ -243,7 +239,6 @@ describe("selectWorkspacePartition", () => {
 					...base,
 					workspaceSettlingSupported: false,
 					workspaces: { p1: legacyRows },
-					workspaceSort: "recent",
 				},
 				"p1",
 				NOW,
@@ -365,7 +360,5 @@ describe("the active-workspace live latch", () => {
 		expect(useAppStore.getState().settledShelfShown.p1).toBe(35);
 		store.showMoreSettled("p1", 5);
 		expect(useAppStore.getState().settledShelfShown.p1).toBe(35);
-		store.setWorkspaceSort("name");
-		expect(useAppStore.getState().workspaceSort).toBe("name");
 	});
 });

@@ -6,7 +6,6 @@ import { initChatPreferencesPersistence } from "./chat/chatPreferences";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { initNavigation } from "./navigation";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
-import { initWorkspaceSortPersistence } from "./panels/workspaceSort";
 import { Shell } from "./shell/Shell";
 import { applyThemePreference, initializeBundledThemes, readThemeHint } from "./themes";
 import { initTransport } from "./transport";
@@ -16,7 +15,6 @@ applyThemePreference(readThemeHint());
 initTransport();
 initChatPreferencesPersistence();
 initProjectExpansionPersistence();
-initWorkspaceSortPersistence();
 initNavigation();
 
 const root = document.getElementById("root");

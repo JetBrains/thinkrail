@@ -69,7 +69,6 @@ export function WorkspaceSegment({
 	const now = useNow();
 	const activeWorkspaceLiveLatch = useAppStore((s) => s.activeWorkspaceLiveLatch);
 	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
-	const workspaceSort = useAppStore((s) => s.workspaceSort);
 	const activeSettled = useAppStore((s) =>
 		workspace
 			? selectWorkspaceSettledReason(
@@ -124,9 +123,8 @@ export function WorkspaceSegment({
 			activeWorkspaceId: workspace?.id ?? null,
 			activeWorkspaceLiveLatch,
 			settleIdleDays,
-			workspaceSort,
 		};
-		const split = selectWorkspacePartition(projection, project.id, now);
+		const split = selectWorkspacePartition(projection, project.id, now, "recent");
 		return {
 			now,
 			live: split.live.filter((candidate) => candidate.id !== workspace?.id),
@@ -140,7 +138,6 @@ export function WorkspaceSegment({
 		workspace?.id,
 		activeWorkspaceLiveLatch,
 		settleIdleDays,
-		workspaceSort,
 		workspaceSettlingSupported,
 		now,
 	]);

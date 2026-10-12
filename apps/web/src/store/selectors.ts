@@ -229,7 +229,7 @@ export function selectSessionState(
 	return state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.state ?? null;
 }
 
-export type WorkspaceSort = "recent" | "created" | "name";
+export type WorkspaceOrder = "host" | "recent";
 
 export function supportsWorkspaceSettling(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION;
@@ -322,31 +322,15 @@ export function selectWorkspaceSettledReason(
 	return null;
 }
 
-function compareWorkspaces(
-	sort: WorkspaceSort,
-	creationIndex: ReadonlyMap<string, number>,
-): (a: Workspace, b: Workspace) => number {
-	const created = (w: Workspace) => creationIndex.get(w.id) ?? 0;
-	switch (sort) {
-		case "recent":
-			return (a, b) => (b.lastActiveAt ?? 0) - (a.lastActiveAt ?? 0) || created(b) - created(a);
-		case "created":
-			return (a, b) => created(b) - created(a);
-		case "name":
-			return (a, b) => a.name.localeCompare(b.name) || created(b) - created(a);
-	}
-}
-
-/** The Default row stays first; every other row sorts by `sort` and splits into live and settled. */
+/** The Default row stays first; every other row splits into live and settled, in host order or by `order`. */
 export function selectWorkspacePartition(
-	state: PartitionState & { workspaces: Record<string, Workspace[]>; workspaceSort: WorkspaceSort },
+	state: PartitionState & { workspaces: Record<string, Workspace[]> },
 	projectId: string,
 	now: number,
+	order: WorkspaceOrder = "host",
 ): WorkspacePartition {
 	const rows = state.workspaces[projectId] ?? [];
 	if (!state.workspaceSettlingSupported) return { live: rows, settled: [] };
-	const creationIndex = new Map(rows.map((row, index) => [row.id, index]));
-	const compare = compareWorkspaces(state.workspaceSort, creationIndex);
 	const live: Workspace[] = [];
 	const settled: SettledRow[] = [];
 	for (const workspace of rows) {
@@ -355,8 +339,11 @@ export function selectWorkspacePartition(
 		if (reason) settled.push({ workspace, reason });
 		else live.push(workspace);
 	}
-	live.sort(compare);
-	settled.sort((a, b) => compare(a.workspace, b.workspace));
+	if (order === "recent") {
+		const byRecent = (a: Workspace, b: Workspace) => (b.lastActiveAt ?? 0) - (a.lastActiveAt ?? 0);
+		live.sort(byRecent);
+		settled.sort((a, b) => byRecent(a.workspace, b.workspace));
+	}
 	const defaults = rows.filter(isDefaultWorkspace);
 	return { live: [...defaults, ...live], settled };
 }
