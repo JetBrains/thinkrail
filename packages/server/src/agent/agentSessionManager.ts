@@ -80,6 +80,7 @@ import {
 import { publishSessionResourcesChanged } from "./chatResources";
 import {
 	disposeSessionChildren,
+	hasLiveSessionChildren,
 	removeWorkspaceDelegation,
 	stopSessionChildren,
 	subagentsFor,
@@ -336,12 +337,22 @@ function persistedCompletion(sessionId: string) {
 		: undefined;
 }
 
+function backgroundWorkActive(entry: Entry): boolean {
+	return (
+		entry.commands
+			.list()
+			.some((command) => command.status === "running" || command.status === "stopping") ||
+		hasLiveSessionChildren(entry.workspaceId, entry.session.sessionId)
+	);
+}
+
 function stateFromEntry(entry: Entry): SessionState {
 	const sessionId = entry.session.sessionId;
 	return deriveSessionState({
 		entries: entry.session.sessionManager.getBranch(),
 		isStreaming: entry.session.isStreaming,
 		pendingMessageCount: effectivePendingCount(entry),
+		backgroundWorkActive: backgroundWorkActive(entry),
 		lastSettlement: entry.lastSettlement,
 		lifecycleCompletion:
 			entry.lastSettlement === undefined ? persistedCompletion(sessionId) : undefined,
@@ -368,11 +379,28 @@ function publishEntryState(entry: Entry): void {
 	});
 }
 
+const scheduledStatePublishes = new Set<Entry>();
+
+function scheduleEntryStatePublish(entry: Entry): void {
+	if (scheduledStatePublishes.has(entry)) return;
+	scheduledStatePublishes.add(entry);
+	setImmediate(() => {
+		scheduledStatePublishes.delete(entry);
+		publishEntryState(entry);
+	});
+}
+
+export function scheduleSessionStatePublish(sessionId: string): void {
+	const entry = sessions.get(sessionId);
+	if (entry) scheduleEntryStatePublish(entry);
+}
+
 function stateFromDisk(sessionId: string, manager: SessionManager, legacy = false): SessionState {
 	return deriveSessionState({
 		entries: manager.getBranch(),
 		isStreaming: false,
 		pendingMessageCount: 0,
+		backgroundWorkActive: false,
 		lastSettlement: undefined,
 		lifecycleCompletion: legacy ? undefined : persistedCompletion(sessionId),
 		liveQuestion: null,
@@ -461,6 +489,7 @@ function recordSettlement(entry: Entry, terminal: AgentSettlement | null): void 
 		entries: entry.session.sessionManager.getBranch(),
 		isStreaming: false,
 		pendingMessageCount: effectivePendingCount(entry),
+		backgroundWorkActive: false,
 		lastSettlement: terminal,
 		lifecycleCompletion: undefined,
 		liveQuestion: entry.askUserQuestionWaiters.currentQuestion(),
@@ -938,6 +967,7 @@ async function prepareSessionEntry(
 	entry.unsubscribeCommands = commands.onChange(() => {
 		if (canUseSessionResources(sessionId, workspaceId))
 			publishSessionResourcesChanged(workspaceId, sessionId);
+		scheduleEntryStatePublish(entry);
 	});
 	entry.unsubscribe = session.subscribe((event) => {
 		if (

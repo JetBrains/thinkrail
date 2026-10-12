@@ -17,6 +17,7 @@ export interface SessionStateInputs {
 	entries: readonly SessionEntry[];
 	isStreaming: boolean;
 	pendingMessageCount: number;
+	backgroundWorkActive: boolean;
 	lastSettlement: AgentSettlement | null | undefined;
 	lifecycleCompletion: { runId: string; completion: SessionCompletion } | null | undefined;
 	liveQuestion: LiveQuestionState | null;
@@ -165,6 +166,7 @@ export function deriveSessionState(inputs: SessionStateInputs): SessionState {
 		needsInput: null,
 		completion,
 		completionUnread:
+			!inputs.backgroundWorkActive &&
 			completion !== null &&
 			completion.outcome !== "cancelled" &&
 			completion.completionId !== inputs.handledCompletionId,

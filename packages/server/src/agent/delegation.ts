@@ -21,6 +21,7 @@ import {
 	buildSessionSettings,
 	canUseSessionResources,
 	liveParentContext,
+	scheduleSessionStatePublish,
 } from "./agentSessionManager";
 import { publishSessionResourcesChanged } from "./chatResources";
 import { childBaseExtensionFactories, childExtensionFactories } from "./extensions";
@@ -65,8 +66,10 @@ export function delegationServiceFor(workspaceId: string): DelegationService {
 		service.onLifecycle((event) => {
 			const parentSessionId =
 				event.type === "child-created" ? event.record.parentSessionId : event.parentSessionId;
-			if (canUseSessionResources(parentSessionId, workspaceId))
+			if (canUseSessionResources(parentSessionId, workspaceId)) {
 				publishSessionResourcesChanged(workspaceId, parentSessionId);
+				scheduleSessionStatePublish(parentSessionId);
+			}
 		});
 		services.set(workspaceId, service);
 	}
@@ -94,6 +97,10 @@ function liveSessionChildren(workspaceId: string, parentSessionId: string): Chil
 			child.record.parentSessionId === parentSessionId &&
 			(child.snapshot?.status === "queued" || child.snapshot?.status === "running"),
 	);
+}
+
+export function hasLiveSessionChildren(workspaceId: string, parentSessionId: string): boolean {
+	return liveSessionChildren(workspaceId, parentSessionId).length > 0;
 }
 
 /** Cancellation lands synchronously; `settled` resolves once every child's run has actually ended. */
