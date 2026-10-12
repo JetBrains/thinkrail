@@ -14,16 +14,20 @@ A **ThinkRail extension** is a workspace package `thinkrail-extensions/<name>/` 
 private) that composes a pi capability — usually a [[module-pi-extensions]] package, possibly a
 third-party pi package — with its ThinkRail-specific halves: what the host bundles into sessions and how
 the web client presents the capability's tools. The host composes extensions from **one registry file per
-side**; how a user would install, enable or discover an extension is deliberately not designed.
+side**. A user sees the server registry in Settings → Extensions and can switch each extension off (a
+host-level setting keyed on the descriptor `name`; the extension declares nothing for it); how a user would
+install or discover a new extension is deliberately not designed.
 
 The first extension (`visualize`, [[module-ext-visualize]]) ships both halves; the host composes them from
 the two registry files below ([[submodule-server-extensions]], [[submodule-web-extensions]]). Install UX,
-marketplace, per-extension settings, wire methods, panels and store contributions are explicit deferrals,
-not gaps.
+marketplace, per-extension settings, a per-workspace on/off override, extension-contributed wire methods,
+panels and store contributions are explicit deferrals, not gaps. The on/off switch does not yet cover an
+extension's `skillPackages` — they keep staging and loading until an extension with skills exists.
 
 ## Shape — two entrypoints, no root barrel
 
-- `./server` — default export `defineServerExtension({ name, extensions, childExtensions?, skillPackages? })`.
+- `./server` — default export `defineServerExtension({ name, title?, description?, extensions, childExtensions?, skillPackages? })`
+  (`title` / `description` are Settings display copy).
   `extensions` / `childExtensions` are pi `ExtensionFactory`s the host composes into every parent session /
   the curated child set, registered as named `InlineExtension`s so pi diagnostics keep an identity.
   `skillPackages` are **package specifiers** whose `pi.skills` directories the host stages — explicit module

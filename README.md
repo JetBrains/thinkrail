@@ -41,7 +41,8 @@ create the tools it needs based on how you actually work.
   place, and bundled workflows guide project setup, design brainstorming, and shipping a pull request —
   pushing the workspace branch and opening or updating its GitHub PR through your own `gh`.
 - **Agent tools beyond the shell.** Web research, and inline diagrams and option comparisons rendered right
-  in the chat.
+  in the chat. Settings → Extensions lists the ThinkRail extensions the agent gets and lets you switch
+  each one off.
 - **Your providers, your credentials.** Sign in with [JetBrains AI](https://www.jetbrains.com/ai/) or
   connect any provider through `pi`'s own auth. ThinkRail has no accounts of its own.
 - **Desktop app or browser.** A native desktop app, or the `thinkrail` CLI that opens the same app in your

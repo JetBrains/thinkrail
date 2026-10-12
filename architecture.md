@@ -345,8 +345,13 @@ dependency. This keeps test process drivers outside both launchers and the serve
     until a second consumer exists. Decision 1's browser-only dependency rule is enforced with
     source-half and public-subpath checks, including the SDK's separate `./web` and `./server` contracts. **Delivery rule:** every extension arrives as three independently shippable
     PRs — new pi package beside the old, web half moved, server half + wiring with the old package
-    deleted — none of which changes anything a user can observe. Install UX, marketplace, per-extension
-    settings and runtime-loaded third-party extensions are explicit deferrals. Rejected: runtime-loaded
+    deleted — none of which changes anything a user can observe. **Enable/disable has shipped:** Settings →
+    Extensions lists the server registry (`extension.list`) with a switch per extension; the global
+    `AppConfig.disabledExtensions` reaches `agent` through a host-injected resolver (no `agent` → settings
+    edge), which filters registry factories at every loader (re)load and withholds a disabled extension's
+    tools from live sessions through pi's active-tool API, while web renderers stay registered so past
+    transcripts render. Install UX, marketplace, per-extension settings, a per-workspace on/off override
+    and runtime-loaded third-party extensions remain explicit deferrals. Rejected: runtime-loaded
     bundles now (React singleton, versioned UI API, security story first), a logical extension inside
     the apps (three physical homes, no boundary), generated factory lists derived from descriptors
     (functions yield no import specifiers); keeping path-based dev loading beside the inline composition
