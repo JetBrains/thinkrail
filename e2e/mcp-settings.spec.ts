@@ -201,7 +201,7 @@ test("a repository-defined server flags the chat, waits for approval and starts 
 		await openFixtureProject(page);
 		const notice = page.getByTestId("project-trust-notice");
 		await expect(notice.getByTestId("project-trust-enables")).toContainText(
-			"run code on this machine",
+			"Its 1 MCP server still needs your approval one by one.",
 		);
 		await notice.getByTestId("project-trust-button").click();
 		await expect(notice).toHaveAttribute("data-state", "trusted");
