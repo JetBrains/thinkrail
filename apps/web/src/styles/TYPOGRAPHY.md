@@ -85,8 +85,8 @@ The rules, all enforced by `typography:validate`:
 artwork) · **heading** (`xl`, `lg`, `md`, `sm` — the shared document heading scale) · **title**
 (`dialog`, `card`→dialog, `section`, `compact`, `entity`→body.reading)
 · **ui** (`default`, `metadata`, `eyebrow`, `labelPill`→eyebrow, `caption` — the 10px/compact uppercase
-field caption the topbar location segments stack above a 22px value row, where `eyebrow`'s 18px line would not
-fit the 40px strip, `action`→title.compact, `emphasis`→title.compact) · **body** (`reading`) · **code** (`text` — the base 13px code style, `document`, `otp`, `textSmall` — an 11px code style for
+badge and tile-initial style (row status badges, the topbar project initial), where `eyebrow`'s 18px line would
+not fit, `action`→title.compact, `emphasis`→title.compact) · **body** (`reading`) · **code** (`text` — the base 13px code style, `document`, `otp`, `textSmall` — an 11px code style for
 inline code in table cells). `proseSystems` holds one entry per markdown surface, almost entirely aliases
 into the above. Dead aliases are not retained: prose points directly to the semantic style it uses.
 

@@ -71,8 +71,8 @@ without a capability, neither renders. Panels receive optional React content, ne
 checks. The topbar identity is the icon-only ThinkRail mark—the same
 vector served as `public/favicon.svg`, inlined at 32×32 and rendered
 through semantic `text-primary`—with no divider before location. With a context project the mark is followed
-by the `locationBar` strip: captioned segments **PROJECT · WORKSPACE · BRANCH · from base · REMOTE · PULL
-REQUEST** whose values are controls (project switcher, workspace actions + sibling switcher, branch card,
+by the `locationBar` strip: captioned segments **Project · Workspace · Branch · from base · Remote · Pull
+request** whose values are controls (project switcher, workspace actions + sibling switcher, branch card,
 remote/PR status chips), with the drop order and grammar owned by [[submodule-web-shell-location-bar]]. Shell
 passes it the context project, the active workspace (or `null` for Project Home), the open review from
 `useOpenBranchReview`, and the callback that opens the shell-owned New workspace dialog. No selected project

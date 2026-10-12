@@ -11,16 +11,16 @@ tags: [ui, topbar, public-surface-checked]
 ## Responsibility
 
 The persistent "where am I / what state is it in" strip after the ThinkRail mark: one row of captioned
-segments — **PROJECT · WORKSPACE · BRANCH · from base · REMOTE · PULL REQUEST** — whose values are the
+segments — **Project · Workspace · Branch · from base · Remote · Pull request** — whose values are the
 controls for switching project or workspace, acting on the workspace, and reading or retargeting the
 branch. It renders what the store and `workspace.openReview` already report; it owns no host state.
 
 ## Boundary
 
-- **Owns:** the segment grammar (caption over a 22px value row, full-height hairlines between segments),
+- **Owns:** the segment grammar (caption over a 20px value row, segments separated by space alone),
   the pill/chip classes every value uses, the project switcher menu, the workspace menu (actions + sibling
   switcher + New workspace), the branch card (copy, based-on, compare-to picker, remote and review rows),
-  the REMOTE and PULL REQUEST chips, and the responsive drop order.
+  the Remote and Pull request chips, and the responsive drop order.
 - **Public surface (`index.ts`):**
   - `LocationBar`
 - **Allowed deps:** `store` (projects, workspaces, session state, diff base selector, toasts), `transport`
@@ -34,18 +34,21 @@ branch. It renders what the store and `workspace.openReview` already report; it 
 
 ## Grammar
 
-- A segment is `h-topbar-row`, `border-l` from the second segment on, and its vertical rhythm is spent
-  explicitly on the spacing scale — `py-4`, a 10px caption row (`tr-text-caption leading-none` in
-  `text-subtle`), `gap-2`, a 20px value row — so the 40px strip keeps a visible margin above the caption and
-  below the pill instead of whatever `justify-center` leaves over. The caption can carry a lowercase code
-  fragment (`· from <base>` as `tr-code-text-small leading-none`), which is why the uppercase caption style
-  exists at 10px: eyebrow's 18px line would not fit above a 20px value.
-- Values are pills (`pillClass`: 20px, `window-no-drag`, resting chevron in `text-subtle`, hover
-  `control-bg-hovered`, open `control-bg-selected`) or status chips (`chipClass`: 20px, rounded-full,
-  `tr-text-emphasis`, feedback-tinted `-subtle` fill with the solid feedback text; interactive chips hover to
-  the `-muted` step). Project names are `tr-text-ui`, the workspace name `tr-title-section`, branch names
-  `tr-code-text` — the typeface change is what separates identity from git state.
-- Captions and hairlines stay part of the header drag region; every pill, chip, link, and the inline rename
+- A segment is `h-topbar-row` and its vertical rhythm is spent explicitly on the spacing scale — `py-4`, a
+  12px sentence-case caption row (`tr-text-metadata leading-none` in `text-subtle`), a 20px value row — so
+  the 40px strip keeps a margin above the caption and below the pill. Segments carry no hairlines: the
+  segment padding plus the pill's own padding is the separation, because full-height rules read as a table
+  and never line up with the tab strip's dividers below. A caption fragment (`· from <base>`,
+  `· settled`) uses the caption's own face — never a second typeface inside the caption.
+- Values are pills (`pillClass`: 20px, `window-no-drag`, hover `control-bg-hovered`, open
+  `control-bg-selected`; the chevron is hidden at rest and appears on hover, keyboard focus, or while open)
+  or status chips (`chipClass`: 20px, rounded-full, `tr-text-emphasis`, feedback-tinted `-subtle` fill with
+  the solid feedback text; interactive chips hover to the `-muted` step). Every pill value is one style,
+  `tr-title-section`; hierarchy is colour alone — the workspace name in `text-default`, project and branch
+  in `text-muted`. The project initial is a neutral tile (`control-bg-selected` / `text-muted`) so the
+  least important glyph is not the only coloured one. Monospace stays inside the branch card, where the
+  ref is the content, not in the strip.
+- Captions stay part of the header drag region; every pill, chip, link, and the inline rename
   input opts out with `window-no-drag` (unit-tested), which is the deliberate relaxation of the shell's
   "buttons only in `topbar-actions`" rule for this strip alone.
 - Drop order as the window narrows: project segment below `sm`, review chip below `sm`, branch and remote
@@ -55,10 +58,10 @@ branch. It renders what the store and `workspace.openReview` already report; it 
 
 ## Behaviour
 
-- **PROJECT** lists every open project (check on the current one), *Project home* (disabled while there),
+- **Project** lists every open project (check on the current one), *Project home* (disabled while there),
   and *Add project…* (the shared `useOpenProject` picker + its dialogs). Choosing a project selects it with
   `reveal` and loads its workspace list, i.e. the same transition as the Projects tree.
-- **WORKSPACE** shows the active workspace's actions (Open in, Rename, Copy path, Reveal, **Settle** or
+- **Workspace** shows the active workspace's actions (Open in, Rename, Copy path, Reveal, **Settle** or
   **Keep active** — whichever applies, through the shared `workspaceActions` — and Remove through the
   shared confirm dialog; Default is non-removable and never settles) above *Switch to* (the project's
   **live** siblings in the rail's sort order with `RunningIcon` while an agent works, then a
@@ -67,8 +70,8 @@ branch. It renders what the store and `workspace.openReview` already report; it 
   caption, and rail never disagree as the idle boundary passes; below the settled protocol it instead
   preserves the host's raw legacy order and omits every shelf affordance. The list loads
   on first open when the tree has not) and *New workspace* with the `Mod+N` label, which opens the shell-owned
-  dialog. While the active workspace is settled the caption reads **`WORKSPACE · settled`** (the caption-
-  fragment grammar `BRANCH · from base` already uses, in the warning tone), so a parked workspace you opened
+  dialog. While the active workspace is settled the caption reads **`Workspace · settled`** (the caption-
+  fragment grammar `Branch · from base` already uses, in the warning tone), so a parked workspace you opened
   announces itself without a banner. Rename replaces the pill with the
   chrome-less inline input used elsewhere and runs on the tree's shared `useWorkspaceRename` controller:
   Enter/blur commit, Escape cancels, unchanged or blank never requests, and a commit made while the socket's
@@ -80,18 +83,18 @@ branch. It renders what the store and `workspace.openReview` already report; it 
   Remove was chosen and dismisses itself if the active workspace changes underneath it (browser Back, a
   remote removal fallback), so confirming can never delete a workspace other than the one it names. At
   Project home the pill reads "Project home" and offers only the switcher and creation.
-- **BRANCH · from base** opens the git card, moving focus onto the card itself (not its first button, which
+- **Branch · from base** opens the git card, moving focus onto the card itself (not its first button, which
   would pop the copy tooltip) so one Tab reaches the actions: branch (copy → success toast), *Based on* (hidden for
-  user-owned workspaces, whose caption is plain "BRANCH"), *Compare to* (the Changes panel's `BranchPicker`
+  user-owned workspaces, whose caption is plain "Branch"), *Compare to* (the Changes panel's `BranchPicker`
   bound to `workspace.setDiffBase`, so the two controls can never disagree), and — only when the host has a
   review — *Remote* (`n commits to push · n commits behind origin` or "In sync with origin") and the
   PR/MR row with its link.
-- **REMOTE** renders only while `unpushedCommits` (warning chip) or `behindCommits` (info chip) is non-zero
-  and opens the same card. Both counts arrive on `OpenBranchReview`, so REMOTE (and the card's *Remote*
+- **Remote** renders only while `unpushedCommits` (warning chip) or `behindCommits` (info chip) is non-zero
+  and opens the same card. Both counts arrive on `OpenBranchReview`, so Remote (and the card's *Remote*
   row) can appear only alongside a review — a branch without one shows no remote state, not "in sync".
-  **PULL REQUEST** is the `openReviewLabel` chip — success while the review is open, **info** reading
+  **Pull request** is the `openReviewLabel` chip — success while the review is open, **info** reading
   *Merged #N* and **neutral** reading *Closed #N* once `OpenBranchReview.state` says so (a pre-v78 host
-  omits `state` and the chip stays the open form) — a link when the provider reported a URL. REMOTE chips
+  omits `state` and the chip stays the open form) — a link when the provider reported a URL. Remote chips
   render only for an open review; divergence against a merged branch is noise. On v78 the host-kept
   `workspace.review` snapshot is authoritative for review presence/identity/state; a matching fresh
   `workspace.openReview` answer overlays only URL and divergence details. Thus a merged/cleared push cannot
