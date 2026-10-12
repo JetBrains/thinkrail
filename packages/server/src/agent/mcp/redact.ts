@@ -25,7 +25,7 @@ const HEADER_FLAGS = new Set(["-H", "--header", "--headers"]);
 
 function isTokenRun(run: string): boolean {
 	const body = run.replace(/=+$/, "");
-	if (/^[0-9a-f]+$/i.test(body)) return /\d/.test(body);
+	if (/^[0-9a-f]+$/i.test(body)) return true;
 	return /[a-z]/.test(body) && /[A-Z]/.test(body) && /\d/.test(body);
 }
 

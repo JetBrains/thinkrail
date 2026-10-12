@@ -68,6 +68,7 @@ describe("redactMcpText", () => {
 			"glpat-abcdefghijklmnopqrst",
 			"AKIAIOSFODNN7EXAMPLE",
 			"0123456789abcdef0123456789abcdef",
+			"abcdefabcdefabcdefabcdefabcdefab",
 			"Zm9vYmFyYmF6cXV4MTIzNDU2Nzg5MGFiY2RlZg==",
 		]) {
 			expect(redactMcpText(`stderr: ${token} rejected`)).toBe("stderr: *** rejected");
