@@ -129,22 +129,24 @@ export function mcpArgsSummary(args: Record<string, unknown>): string {
 	return pairs.length > ARGS_SUMMARY_CHARS ? `${pairs.slice(0, ARGS_SUMMARY_CHARS - 1)}…` : pairs;
 }
 
-export type McpCliAction = "sign-in" | "settings";
+export type McpCliAction = "sign-in" | "provider-sign-in" | "settings";
 
 const SIGN_IN_PHRASE = /\b(?:requires|needs) sign-in\b|\bmcp login\b/i;
 const MCP_COMMAND_PHRASE = /\brun \/mcp\b/i;
 
 export function mcpCliAction(text: string): McpCliAction | null {
+	if (/\brun \/login\s+\S+/i.test(text)) return "provider-sign-in";
 	if (SIGN_IN_PHRASE.test(text)) return "sign-in";
 	if (MCP_COMMAND_PHRASE.test(text)) return "settings";
 	return null;
 }
 
-const CLI_INSTRUCTION = /(?:^|\s)(?:Run \/(?:mcp|login)|pi mcp login)\b[^.\n]*\.?/gi;
+const CLI_INSTRUCTION = /(?:^|\s)(?:Run \/mcp|pi mcp login)\b[^.\n]*\.?/gi;
 
 /** The failure text without pi's CLI instruction, for when the card offers the in-app action instead. */
 export function stripMcpCliInstruction(text: string): string {
 	const stripped = text
+		.replace(/\bRun \/login (\S+) to sign in\./gi, 'Sign in to provider "$1" in Settings.')
 		.replace(CLI_INSTRUCTION, "")
 		.replace(/[ \t]+\n/g, "\n")
 		.trim();

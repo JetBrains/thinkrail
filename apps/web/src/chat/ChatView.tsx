@@ -263,6 +263,10 @@ export default function ChatView({
 		() => useAppStore.getState().openSettings(SettingsSection.Mcp),
 		[],
 	);
+	const openProviderSettings = useCallback(
+		() => useAppStore.getState().openSettings(SettingsSection.Providers),
+		[],
+	);
 	const readMcpOutput = useCallback(
 		(toolCallId: string) =>
 			getTransport().request("mcp.readOutput", { workspaceId, sessionId, toolCallId }),
@@ -750,6 +754,7 @@ export default function ChatView({
 				stillRunning={stillRunning}
 				readMcpOutput={supportsMcp ? readMcpOutput : undefined}
 				openMcpSettings={supportsMcp ? openMcpSettings : undefined}
+				openProviderSettings={supportsMcp ? openProviderSettings : undefined}
 				resourcesOverlay={
 					resources.visible ? (
 						<ResourcesInspector

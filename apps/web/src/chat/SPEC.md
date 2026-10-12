@@ -382,10 +382,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   stranding the history overlay's dismiss refocus avoids). Only the card's own reply path calls it, and
   only while the card still holds focus. Plus `openSubagentTranscript(childSessionId)` — the subagent
   cards' transcript link (no provider → the cards hide the action).
-  The optional MCP pair — `readMcpOutput(toolCallId)` (`mcp.readOutput` for this chat) and
-  `openMcpSettings()` (Settings › MCP servers) — is supplied by `ChatView` (through `ChatTranscript`'s provider)
+  The optional MCP actions — `readMcpOutput(toolCallId)` (`mcp.readOutput` for this chat),
+  `openMcpSettings()` (Settings › MCP servers) and `openProviderSettings()` (Settings › Providers for
+  provider-backed authentication) — are supplied by `ChatView` (through `ChatTranscript`'s provider)
   only on an MCP-capable host;
-  without it (older host, the plan page's provider, or `null`) the MCP cards hide Full output and Sign in
+  without them (older host, the plan page's provider, or `null`) the MCP cards hide Full output and Sign in
   ([tools/mcp/SPEC.md](tools/mcp/SPEC.md)).
 - **Subagent transcript view** (`SubagentTranscriptDialog.tsx` — an integration file, like
   `SkillsDialog`): `SubagentTranscriptPane` renders a hidden child's **read-only** transcript with the

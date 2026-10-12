@@ -229,6 +229,18 @@ describe("MCP card", () => {
 		expect(standalone).not.toContain('data-testid="mcp-cli-action"');
 	});
 
+	it("routes provider-backed errors to Providers and keeps the provider name", () => {
+		const text = 'MCP server "gh" requires sign-in. Run /login github to sign in.';
+		const tool = props("mcp__gh__lookup", {}, { content: [{ type: "text", text }] }, "error");
+		const html = renderTool(tool, actions({ openProviderSettings: () => {} }));
+		expect(html).toContain('data-action="provider-sign-in"');
+		expect(html).toContain("Sign in to provider &quot;github&quot; in Settings.");
+		expect(html).not.toContain("Run /login");
+		const withoutProviderAction = renderTool(tool);
+		expect(withoutProviderAction).toContain("Run /login github");
+		expect(withoutProviderAction).not.toContain('data-testid="mcp-cli-action"');
+	});
+
 	it("offers no sign-in action on a successful result that happens to mention sign-in", () => {
 		const html = renderTool(
 			props(

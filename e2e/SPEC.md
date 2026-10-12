@@ -350,6 +350,9 @@ worktrees: the registry claim distinguishes
 a lane's logical key while checking staleness against the real worktree path. Legacy plain-path claims are
 still valid.
 
+Cross-window placement probes wait for the peer's initial chat hydration before changing its layout;
+creating a terminal can legitimately supersede an in-flight passive restore, which is not placement leakage.
+
 Different worktrees may run concurrently. Two complete E2E invocations in one worktree remain sequential;
 the lane ids are deliberately stable across runs so interrupted state is reclaimed rather than leaked.
 No path may fall back to `~/.thinkrail`, the developer's HOME/config trees, or the real pi agent dir. The
@@ -412,8 +415,8 @@ the switch in `afterEach` because the shard shares one host. The provider-backed
 existing diagram/comparison tests that follow re-prove the restored tool in the same chat. MCP tool-card coverage
 (`mcp-tool-cards.spec.ts`) seeds historical `mcp__*`, resource and `tool_search` results the same way and pins
 the single shared image strip, the collapsed JSON tree, Full output through the real `mcp.readOutput`
-(a recorded file and an expired one), the Sign in deep link into Settings › MCP servers, and the raw-text
-fallback for a truncated listing; its element shots under `e2e/screenshots/mcp-tool-cards/` are review evidence
+(a recorded file and an expired one), Sign in deep links into Settings › MCP servers or Providers according
+to pi's reported authentication kind (provider identity remains visible), and the raw-text fallback for a truncated listing; its element shots under `e2e/screenshots/mcp-tool-cards/` are review evidence
 only. Questionnaire paging uses canonical persisted tool-call/ack fixtures to pin six-question rounds beyond
 four, tall-page reveal,
 fresh-chat restored-page reveal, visible review focus, and coarse-pointer focus

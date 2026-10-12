@@ -18,6 +18,7 @@ export interface ChatActions {
 	revealChatElement: (element: HTMLElement, options: ChatRevealOptions) => void;
 	readMcpOutput?: ((toolCallId: string) => Promise<McpReadOutputResult>) | undefined;
 	openMcpSettings?: (() => void) | undefined;
+	openProviderSettings?: (() => void) | undefined;
 }
 
 export const ChatActionsContext = createContext<ChatActions | null>(null);

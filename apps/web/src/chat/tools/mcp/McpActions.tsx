@@ -9,7 +9,7 @@ import {
 	DialogTrigger,
 } from "@thinkrail/ui/dialog";
 import { useState } from "react";
-import { useChatActions } from "../../ChatActions";
+import { type ChatActions, useChatActions } from "../../ChatActions";
 import {
 	type McpCliAction,
 	mcpCliAction,
@@ -20,6 +20,14 @@ import {
 const ACTION_CLASS =
 	"flex items-center gap-4 rounded-xs text-primary tr-text-metadata outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary";
 
+function actionHandler(actions: ChatActions | null, action: McpCliAction | null) {
+	return action === "provider-sign-in"
+		? actions?.openProviderSettings
+		: action
+			? actions?.openMcpSettings
+			: undefined;
+}
+
 function CliActionButton({ action, onOpen }: { action: McpCliAction; onOpen: () => void }) {
 	return (
 		<button
@@ -29,26 +37,31 @@ function CliActionButton({ action, onOpen }: { action: McpCliAction; onOpen: () 
 			onClick={onOpen}
 			className={ACTION_CLASS}
 		>
-			{action === "sign-in" ? (
+			{action !== "settings" ? (
 				<RiLoginBoxLine className="size-12 shrink-0" />
 			) : (
 				<RiSettings3Line className="size-12 shrink-0" />
 			)}
-			{action === "sign-in" ? "Sign in" : "Open MCP settings"}
+			{action === "provider-sign-in"
+				? "Sign in to provider"
+				: action === "sign-in"
+					? "Sign in"
+					: "Open MCP settings"}
 		</button>
 	);
 }
 
 export function McpCliActionButton({ text }: { text: string }) {
-	const openSettings = useChatActions()?.openMcpSettings;
+	const actions = useChatActions();
 	const action = mcpCliAction(text);
+	const openSettings = actionHandler(actions, action);
 	return action && openSettings ? <CliActionButton action={action} onOpen={openSettings} /> : null;
 }
 
 /** A failure's text as the card shows it: pi's CLI instruction is dropped once the button replaces it. */
 export function useMcpFailureText(text: string, failed: boolean): string {
-	const openSettings = useChatActions()?.openMcpSettings;
-	return failed && openSettings && mcpCliAction(text) ? stripMcpCliInstruction(text) : text;
+	const actions = useChatActions();
+	return failed && actionHandler(actions, mcpCliAction(text)) ? stripMcpCliInstruction(text) : text;
 }
 
 type McpFullOutputState =
@@ -178,7 +191,7 @@ export function McpActions({
 	const readOutput = actions?.readMcpOutput;
 	const fullOutput = readOutput && mcpFullOutputPath(result) !== null ? readOutput : null;
 	const cli = failureText ? mcpCliAction(failureText) : null;
-	const openSettings = cli ? actions?.openMcpSettings : undefined;
+	const openSettings = actionHandler(actions, cli);
 	if (!fullOutput && !(cli && openSettings)) return null;
 	return (
 		<div className="flex flex-wrap items-center gap-x-12 gap-y-4">

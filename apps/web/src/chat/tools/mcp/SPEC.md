@@ -56,7 +56,9 @@ standalone render) or a host older than MCP hides them.
   Settings › MCP servers; when the button is offered, the shown failure text (call output and a listing's
   per-server error alike) drops the `Run /mcp …` / `Run /login <provider> …` / `pi mcp login …` sentence (`stripMcpCliInstruction`,
   through `useMcpFailureText`) and keeps the server's message, while a standalone render without
-  `ChatActions` keeps pi's text verbatim. Sign-in phrases win over a bare `/mcp` instruction. Detection runs only on a
+  `ChatActions` keeps pi's text verbatim. Provider-backed errors (`Run /login <provider>`) are distinct:
+  their action opens Settings › Providers, never MCP OAuth, and their text retains the provider identity
+  in a non-CLI instruction. Without that provider action the original instruction remains visible. Sign-in phrases win over a bare `/mcp` instruction. Detection runs only on a
   failed result and on a listing's per-server `errors`, which is where pi emits those phrases; successful
   server output that merely mentions sign-in stays text.
 

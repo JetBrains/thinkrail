@@ -18,6 +18,8 @@ guards calls and the per-server lock that keeps two sign-ins for one server from
 reading one server's lines from pi's shared MCP log. The engine (connections, OAuth, tools) stays pi's;
 this module never opens a connection.
 
+Upgrade removal gates live in [[pi-compatibility]]; the contracts below own the implementation detail.
+
 ## pi facts (`@earendil-works/pi-coding-agent`, the catalog-pinned version)
 
 pi does not export `loadMcpConfig` / `validateMcpServerConfig` / its writers, and a host-supplied

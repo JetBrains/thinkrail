@@ -1087,10 +1087,11 @@ test("frontend windows keep chat and file placement independent", async ({ page,
 	await defaultWorkspaceRow(peer).click();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
 	await expect(peer.getByTestId("terminal-tab")).toHaveCount(1);
+	const peerChat = peer.locator('[data-testid="editor-tab"][data-kind="chat"]');
+	await expect(peerChat).toHaveCount(1);
 	await peer.getByTestId("new-terminal").first().click();
 	await expect(peer.getByTestId("terminal-tab")).toHaveCount(2);
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(1);
-	const peerChat = peer.locator('[data-testid="editor-tab"][data-kind="chat"]');
 	await expect(peerChat).toHaveCount(1);
 	await expect(chat).toHaveCount(1);
 	await peerChat.hover();

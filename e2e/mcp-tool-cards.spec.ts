@@ -185,6 +185,40 @@ test("MCP results render as cards with structured content, Full output and a sig
 	}
 });
 
+test("provider-backed MCP failures open Providers rather than MCP OAuth", async ({ page }) => {
+	await openSeededCalls(page, "MCP provider authentication", [
+		{
+			id: "mcp-provider-context",
+			name: "mcp__docs__lookup",
+			args: {},
+			content: [{ type: "text", text: "Lookup completed." }],
+			details: {},
+		},
+		{
+			id: "mcp-provider-login",
+			name: "mcp__gh__lookup",
+			args: {},
+			content: [
+				{ type: "text", text: 'MCP server "gh" requires sign-in. Run /login github to sign in.' },
+			],
+			details: {},
+			isError: true,
+		},
+	]);
+	const step = await expandStep(page, "mcp-provider-login");
+	await expect(step.getByTestId("mcp-output")).toContainText('provider "github"');
+	await expect(step.getByTestId("mcp-output")).not.toContainText("Run /login");
+	await expect(step.getByTestId("mcp-cli-action")).toHaveAttribute(
+		"data-action",
+		"provider-sign-in",
+	);
+	await shot(step, "mcp-tool-cards", "provider-sign-in");
+	await step.getByTestId("mcp-cli-action").click();
+	await expect(page.getByTestId("settings-providers")).toBeVisible();
+	await expect(page.getByTestId("settings-nav-providers")).toHaveAttribute("data-active", "true");
+	await shot(page.getByTestId("settings-dialog"), "mcp-tool-cards", "provider-sign-in-destination");
+});
+
 test("resource listings, resource reads and tool_search render as their own cards", async ({
 	page,
 }) => {

@@ -153,12 +153,19 @@ describe("pi's CLI-oriented phrases", () => {
 	it("turns sign-in instructions into a Sign in action", () => {
 		for (const text of [
 			'MCP server "linear" requires sign-in. Run /mcp to sign in.',
-			'MCP server "gh" requires sign-in. Run /login github to sign in.',
 			"linear: needs sign-in, run /mcp login linear (deferred)",
 			"If it requires sign-in: pi mcp login linear",
 		]) {
 			expect(mcpCliAction(text)).toBe("sign-in");
 		}
+	});
+
+	it("distinguishes provider authentication and retains its provider identity", () => {
+		const text = 'MCP server "gh" requires sign-in. Run /login github to sign in.';
+		expect(mcpCliAction(text)).toBe("provider-sign-in");
+		expect(stripMcpCliInstruction(text)).toBe(
+			'MCP server "gh" requires sign-in. Sign in to provider "github" in Settings.',
+		);
 	});
 
 	it("turns other /mcp instructions into an Open MCP settings action", () => {
@@ -181,7 +188,7 @@ describe("pi's CLI-oriented phrases", () => {
 		expect(stripMcpCliInstruction("Run /mcp to fix.")).toBe("Run /mcp to fix.");
 		expect(
 			stripMcpCliInstruction('MCP server "gh" requires sign-in. Run /login github to sign in.'),
-		).toBe('MCP server "gh" requires sign-in.');
+		).toBe('MCP server "gh" requires sign-in. Sign in to provider "github" in Settings.');
 		expect(stripMcpCliInstruction("POST /mcp returned 404")).toBe("POST /mcp returned 404");
 		expect(mcpCliAction("")).toBeNull();
 	});
