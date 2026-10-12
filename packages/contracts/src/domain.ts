@@ -49,7 +49,7 @@ export interface ProjectTrustSummary {
 	aliasSkills: string[];
 	/** The kinds of the project's own pi resources a pi-level grant would load; empty when none. */
 	piResources: ProjectResourceKind[];
-	mcpServers: number;
+	mcpServers?: number;
 }
 
 export interface DiffStats {

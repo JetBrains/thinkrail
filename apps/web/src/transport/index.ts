@@ -1,5 +1,5 @@
 export { errorText } from "./errorText";
-export { watchMcpWorkspace } from "./mcp";
+export { requestMcpList, watchMcpWorkspace } from "./mcp";
 export { RequestError, wsErrorCode } from "./requestError";
 export {
 	createSessionWithSkillBaseline,

@@ -109,20 +109,28 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   `session.getMessages` wrapper also rejects unless the returned summary exactly matches both requested
   workspace and session, making that untrusted-response identity check one shared installation boundary rather
   than a caller convention).
-- **`mcp.ts`** is the one MCP read path, used by the chat Resources view: its private
-  `requestMcpList(workspaceId)` is a plain `mcp.list` read with the store's `selectMcpRead` token captured
-  first, installed through `installMcpList` (rejecting when the connection cannot read MCP), and
-  **`watchMcpWorkspace(workspaceId)`** reads once and then re-reads with bounded backoff (1 → 13 s, six
-  attempts per streak) only while a live chat of that workspace still reports a server `starting` — the
-  host pushes no "connected" edge, and a re-read is what makes it refresh status. The streak budget resets
-  once nothing is starting; disposal cancels the timer and drops late results. Watchers are independent,
-  but concurrent plain `mcp.list` reads of one workspace on the same connection generation share the
-  in-flight request (two reads from the same `selectMcpRead` revision could otherwise land out of order
-  and drop a chat the newer one installed; a read captured on an earlier connection is not reused, since
-  its answer would be rejected at installation); `McpWatchDeps.onRead` is the watch loop's test hook.
+- **`mcp.ts`** is the one MCP read path shared by Settings and the chat Resources view:
+  **`requestMcpList(method, params)`** serializes `mcp.list` and every list-returning mutation per workspace
+  and connection generation, including installation through `installMcpList` before dispatching the next
+  request. This prevents an older list or mutation reply from overwriting newer configuration or live-chat
+  membership. Only a plain read at the queue's tail is shared: a read requested after a queued mutation
+  must wait for that mutation and issue a fresh read, never reuse a pre-mutation read. Mutations are never
+  shared. The store's `selectMcpRead` installation token is captured at actual dispatch, not enqueue time,
+  preserving authoritative session omission while retaining pushes that arrive during the request. Queued
+  requests recheck MCP availability, workspace removal and their captured connection generation before
+  dispatch; stale queued work rejects without sending, and already-dispatched replies retain the store's
+  connection and deletion fences. A new connection starts independently of an older generation's tail,
+  workspaces do not block one another, and failed requests reject their callers without poisoning the queue
+  or preventing a retry. This queue is transient transport coordination, not a second state owner.
+  **`watchMcpWorkspace(workspaceId, onRead?)`** reads once and then re-reads with bounded backoff
+  (1 → 13 s, six attempts per streak) only while a live chat of that workspace still reports a server
+  `starting`. The host's `mcpSessions.capture` continues after its caller times out and eventually publishes
+  the settled status, including a connected edge; the bounded browser poll remains a refresh helper, not
+  the sole completion path. The streak budget resets once nothing is starting; disposal cancels the timer
+  and suppresses late watcher callbacks. Independent watchers share reads only under the tail rule above.
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`,
-  `watchMcpWorkspace`, `ConnectionStatus`,
+  `requestMcpList`, `watchMcpWorkspace`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`. `runHostUpdate` is the typed empty host action
   and `supportsHostUpdateRun` lets `Shell` inject it only for protocol v70+; `supportsPlanReview` is exported

@@ -808,6 +808,7 @@ contracts only.
   entry (the entry loads only while it still has that fingerprint, so an edit lapses the approval), and
   `Project.mcpOverrides` holds the project's enablement and exposure of user-level servers, never written
   to `.pi/mcp.json`; `ProjectTrustSummary.mcpServers` counts the repository's entries (see Project trust).
+  That count is optional because project-trust hosts predating MCP omit it; clients interpret absence as zero.
 - Every request names its target: `workspaceId` for configuration (project scope = that workspace's
   `.pi/mcp.json`; `user` = the global file), plus `sessionId` for per-session actions (`reconnect`,
   `setSessionOverride`, `readOutput`). The host has no notion of an "active workspace".

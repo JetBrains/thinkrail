@@ -26,6 +26,16 @@ describe("deriveProjectTrustNotice", () => {
 		expect(deriveProjectTrustNotice({}, summary())).toEqual({ kind: "hidden" });
 	});
 
+	test("protocol 81 summaries without an MCP count keep their original trust meaning", () => {
+		expect(deriveProjectTrustNotice({}, { aliasSkills: [], piResources: [] })).toEqual({
+			kind: "hidden",
+		});
+		const notice = deriveProjectTrustNotice({}, { aliasSkills: [], piResources: ["settings"] });
+		expect(notice).toMatchObject({ kind: "untrusted", mcpServers: 0 });
+		if (notice.kind !== "untrusted") throw new Error("expected trust notice");
+		expect(trustEnablesText(notice)).toBe("Trust lets its settings run code on this machine.");
+	});
+
 	test("evaluates alias and native trust separately and reports only what is still off", () => {
 		const gated = summary({ aliasSkills: ["a", "b"], piResources: ["prompts", "extensions"] });
 		expect(deriveProjectTrustNotice({ piResourceTrust: "untrusted" }, gated)).toEqual({

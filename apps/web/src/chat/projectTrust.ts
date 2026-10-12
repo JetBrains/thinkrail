@@ -23,23 +23,19 @@ export function deriveProjectTrustNotice(
 	summary: ProjectTrustSummary | null,
 ): ProjectTrustNotice {
 	if (!project || !summary) return { kind: "hidden" };
+	const mcpServers = summary.mcpServers ?? 0;
 	const aliasPending = summary.aliasSkills.length > 0 && project.trusted !== true;
 	const nativePending =
-		(summary.piResources.length > 0 || summary.mcpServers > 0) &&
-		project.piResourceTrust !== "granted";
+		(summary.piResources.length > 0 || mcpServers > 0) && project.piResourceTrust !== "granted";
 	if (aliasPending || nativePending) {
 		return {
 			kind: "untrusted",
 			aliasSkills: aliasPending ? summary.aliasSkills.length : 0,
 			piResources: nativePending ? summary.piResources : [],
-			mcpServers: nativePending ? summary.mcpServers : 0,
+			mcpServers: nativePending ? mcpServers : 0,
 		};
 	}
-	if (
-		summary.aliasSkills.length === 0 &&
-		summary.piResources.length === 0 &&
-		summary.mcpServers === 0
-	)
+	if (summary.aliasSkills.length === 0 && summary.piResources.length === 0 && mcpServers === 0)
 		return { kind: "hidden" };
 	const acknowledged = new Set(project.acknowledgedSkills ?? []);
 	const names = summary.aliasSkills.filter((name) => !acknowledged.has(name));

@@ -1,31 +1,47 @@
-import type { McpListResult } from "@thinkrail/contracts";
-import { type McpRead, selectMcpRead, selectMcpWorkspaceStarting, useAppStore } from "../store";
+import type { McpListResult, WsParams } from "@thinkrail/contracts";
+import { selectMcpRead, selectMcpWorkspaceStarting, useAppStore } from "../store";
 import { getTransport } from "./wireTransport";
+
+export type McpListMethod =
+	| "mcp.list"
+	| "mcp.add"
+	| "mcp.update"
+	| "mcp.remove"
+	| "mcp.setProjectOverride"
+	| "mcp.approve"
+	| "mcp.shareWithRepo";
 
 export const MCP_STARTING_POLL_MS: readonly number[] = [1_000, 2_000, 3_000, 5_000, 8_000, 13_000];
 
-const inFlightLists = new Map<string, { read: McpRead; request: Promise<McpListResult> }>();
+const listTails = new Map<
+	string,
+	{ connectionGeneration: number; method: McpListMethod; request: Promise<McpListResult> }
+>();
 
-// Concurrent watchers of one workspace share a single in-flight read, so two lists started from the
-// same revision can never land out of order and drop a chat the newer one installed. A read captured
-// on an earlier connection is never reused: its result would be rejected at installation.
-function requestMcpList(workspaceId: string): Promise<McpListResult> {
-	const read = selectMcpRead(useAppStore.getState(), workspaceId);
-	if (!read)
+export function requestMcpList<M extends McpListMethod>(
+	method: M,
+	params: WsParams<M>,
+): Promise<McpListResult> {
+	const { workspaceId } = params;
+	const scope = selectMcpRead(useAppStore.getState(), workspaceId);
+	if (!scope)
 		return Promise.reject(new Error("MCP servers are unavailable until the host reconnects."));
-	const pending = inFlightLists.get(workspaceId);
-	if (pending && pending.read.connectionGeneration === read.connectionGeneration)
-		return pending.request;
-	const request: Promise<McpListResult> = getTransport()
-		.request("mcp.list", { workspaceId })
-		.then((result: McpListResult) => {
-			useAppStore.getState().installMcpList(read, result);
-			return result;
-		})
-		.finally(() => {
-			if (inFlightLists.get(workspaceId)?.request === request) inFlightLists.delete(workspaceId);
-		});
-	inFlightLists.set(workspaceId, { read, request });
+	const { connectionGeneration } = scope;
+	const tail = listTails.get(workspaceId);
+	const pending = tail?.connectionGeneration === connectionGeneration ? tail : undefined;
+	if (method === "mcp.list" && pending?.method === "mcp.list") return pending.request;
+	const dispatch = async (): Promise<McpListResult> => {
+		const read = selectMcpRead(useAppStore.getState(), workspaceId);
+		if (!read || read.connectionGeneration !== connectionGeneration)
+			throw new Error("MCP servers are unavailable until the host reconnects.");
+		const result = await getTransport().request(method, params);
+		useAppStore.getState().installMcpList(read, result);
+		return result;
+	};
+	const request = (pending ? pending.request.then(dispatch, dispatch) : dispatch()).finally(() => {
+		if (listTails.get(workspaceId)?.request === request) listTails.delete(workspaceId);
+	});
+	listTails.set(workspaceId, { connectionGeneration, method, request });
 	return request;
 }
 
@@ -78,12 +94,16 @@ export function startMcpWorkspaceWatch(deps: McpWatchDeps): () => void {
 	};
 }
 
-export function watchMcpWorkspace(workspaceId: string): () => void {
+export function watchMcpWorkspace(
+	workspaceId: string,
+	onRead?: (error: unknown) => void,
+): () => void {
 	return startMcpWorkspaceWatch({
-		read: () => requestMcpList(workspaceId),
+		read: () => requestMcpList("mcp.list", { workspaceId }),
 		starting: () => selectMcpWorkspaceStarting(useAppStore.getState(), workspaceId),
 		subscribe: (listener) => useAppStore.subscribe(listener),
 		setTimer: (run, ms) => setTimeout(run, ms),
 		clearTimer: (timer) => clearTimeout(timer),
+		...(onRead ? { onRead } : {}),
 	});
 }
