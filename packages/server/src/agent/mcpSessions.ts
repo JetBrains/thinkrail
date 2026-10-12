@@ -261,6 +261,10 @@ export function watchUserMcpConfig(): () => void {
 				USER_CONFIG_DEBOUNCE_MS,
 			);
 		});
+		watcher.on("error", () => {
+			clearTimeout(timer);
+			watcher?.close();
+		});
 	} catch {
 		return () => {};
 	}

@@ -1034,7 +1034,8 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   never runs there) and is never reconciled. Reconciliation runs after every
   host mutation, when the user file changes (`watchUserMcpConfig`: one directory watcher on pi's agent dir,
   300 ms debounce; a missing agent dir is created first — pi creates it on first use anyway — so a file the
-  user adds later is still seen), when a workspace change nudge touches `.pi`, and at each session's
+  user adds later is still seen; a watcher error closes the watcher instead of crashing the host, leaving
+  the other triggers), when a workspace change nudge touches `.pi`, and at each session's
   `agent_settled` (so an edit the agent made itself applies once the run ends); a deferred reload shows the
   changed servers as `pending-reload` until it runs. Reloads go through `session.reload()` behind a per-session reload gate: while a reload runs, every
   admission seam (`promptSession`, `steerSession`, `followUpSession`, `nudgeSession`, queue requeues,
