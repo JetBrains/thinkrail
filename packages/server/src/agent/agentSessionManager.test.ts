@@ -60,6 +60,7 @@ import {
 	promptSession,
 	refreshAgentReviewTool,
 	refreshAvailableModels,
+	refreshExtensionTools,
 	refreshSubagentTools,
 	reloadSessionResources,
 	removeQueuedSession,
@@ -79,6 +80,7 @@ import {
 	toWireModel,
 } from "./agentSessionManager";
 import { ASK_ACK_TEXT, ASK_STOPPED_ERROR, assessAnswerability } from "./askUserQuestion";
+import { setDisabledExtensionsResolver } from "./extensions";
 import { configurePiRuntime } from "./piRuntime";
 import { admissionContextFor } from "./skillAdmission";
 import { setExtUiPublisher } from "./webUiContext";
@@ -861,6 +863,149 @@ test("a streaming chat defers its tool-set change until agent_settled", async ()
 		setSubagentsEnabledResolver(() => true);
 		if (sessionId) removeSession(sessionId);
 		runtime.unregisterProvider("faux-subagent-policy");
+	}
+});
+
+function visualizeToolState(context: TranscriptContext): string {
+	const toolActive = getCurrentTools(context.messages).some((tool) => tool.name === "visualize");
+	const guidanceInPrompt = getCurrentSystemPrompt(context.messages).includes("visualize");
+	if (toolActive && guidanceInPrompt) return "VISUALIZE_ON";
+	if (!toolActive && !guidanceInPrompt) return "VISUALIZE_OFF";
+	return "VISUALIZE_INCONSISTENT";
+}
+
+test("an idle chat drops a disabled extension's tool and guidance live and restores it", async () => {
+	let disabled = new Set<string>();
+	setDisabledExtensionsResolver(() => disabled);
+	let sessionId: string | undefined;
+	try {
+		const session = await createSession({
+			cwd: tmpCwd("trpi-extension-idle-toggle-"),
+			workspaceId: "ws-extension-idle-toggle",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		fauxA.setResponses([(context) => fauxAssistantMessage(visualizeToolState(context))]);
+		await promptSession(sessionId, "Check enabled extension.");
+		expect(seen(sessionId)).toContain("VISUALIZE_ON");
+
+		disabled = new Set(["visualize"]);
+		refreshExtensionTools();
+		fauxA.setResponses([(context) => fauxAssistantMessage(`OFF_${visualizeToolState(context)}`)]);
+		await promptSession(sessionId, "Check disabled extension.");
+		expect(seen(sessionId)).toContain("OFF_VISUALIZE_OFF");
+
+		disabled = new Set();
+		refreshExtensionTools();
+		fauxA.setResponses([(context) => fauxAssistantMessage(`BACK_${visualizeToolState(context)}`)]);
+		await promptSession(sessionId, "Check re-enabled extension.");
+		expect(seen(sessionId)).toContain("BACK_VISUALIZE_ON");
+	} finally {
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
+test("a chat created with an extension off never loads it and reloads to adopt it when re-enabled", async () => {
+	let disabled = new Set(["visualize"]);
+	setDisabledExtensionsResolver(() => disabled);
+	let sessionId: string | undefined;
+	try {
+		const session = await createSession({
+			cwd: tmpCwd("trpi-extension-new-off-"),
+			workspaceId: "ws-extension-new-off",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		fauxA.setResponses([(context) => fauxAssistantMessage(`NEW_${visualizeToolState(context)}`)]);
+		await promptSession(sessionId, "Check a new chat.");
+		expect(seen(sessionId)).toContain("NEW_VISUALIZE_OFF");
+
+		const originalReload = AgentSession.prototype.reload;
+		let reloads = 0;
+		AgentSession.prototype.reload = async function (this: AgentSession, ...args) {
+			await originalReload.apply(this, args);
+			reloads++;
+		};
+		try {
+			disabled = new Set();
+			refreshExtensionTools();
+			for (let waited = 0; reloads === 0 && waited < 200; waited++) await Bun.sleep(10);
+		} finally {
+			AgentSession.prototype.reload = originalReload;
+		}
+		expect(reloads).toBe(1);
+		fauxA.setResponses([
+			(context) => fauxAssistantMessage(`ADOPTED_${visualizeToolState(context)}`),
+		]);
+		await promptSession(sessionId, "Check the adopted extension.");
+		expect(seen(sessionId)).toContain("ADOPTED_VISUALIZE_ON");
+	} finally {
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
+test("a streaming chat drops a disabled extension's tool only at agent_settled", async () => {
+	const slow = createFauxCore({
+		provider: "faux-extension-policy",
+		api: "faux-extension-policy",
+		models: [modelDef("faux-extension-policy")],
+		tokensPerSecond: 2000,
+	});
+	runtime.registerProvider("faux-extension-policy", cfg(slow, "faux-extension-policy"));
+	let disabled = new Set<string>();
+	setDisabledExtensionsResolver(() => disabled);
+	let release = () => {};
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	let started = () => {};
+	const requestStarted = new Promise<void>((resolve) => {
+		started = resolve;
+	});
+	let firstState = "";
+	let automaticContinuationState = "";
+	let sessionId: string | undefined;
+	try {
+		const cwd = tmpCwd("trpi-extension-streaming-toggle-");
+		writeFileSync(join(cwd, "probe.txt"), "probe\n");
+		slow.setResponses([
+			async (context) => {
+				firstState = visualizeToolState(context);
+				started();
+				await gate;
+				return fauxAssistantMessage(fauxToolCall("read", { path: join(cwd, "probe.txt") }));
+			},
+			(context) => {
+				automaticContinuationState = visualizeToolState(context);
+				return fauxAssistantMessage("AUTOMATIC_WORK_DONE");
+			},
+			(context) => fauxAssistantMessage(`NEXT_TURN_${visualizeToolState(context)}`),
+		]);
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-extension-streaming-toggle",
+			model: toWireModel(slow.getModel()),
+		});
+		sessionId = session.sessionId;
+		const firstTurn = promptSession(sessionId, "Start the gated turn.");
+		await requestStarted;
+
+		disabled = new Set(["visualize"]);
+		refreshExtensionTools();
+		expect(firstState).toBe("VISUALIZE_ON");
+		release();
+		await firstTurn;
+		expect(automaticContinuationState).toBe("VISUALIZE_ON");
+		await promptSession(sessionId, "Check the next turn.");
+
+		expect(seen(sessionId)).toContain("NEXT_TURN_VISUALIZE_OFF");
+	} finally {
+		release();
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+		runtime.unregisterProvider("faux-extension-policy");
 	}
 });
 

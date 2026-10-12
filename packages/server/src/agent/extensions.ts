@@ -8,6 +8,7 @@ import {
 	type ExtensionFactory,
 	getAgentDir,
 	type InlineExtension,
+	type LoadExtensionsResult,
 	type PathMetadata,
 	type ResourceDiagnostic,
 	type ResourceLoader,
@@ -17,6 +18,7 @@ import {
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
 import specGraphExtension from "pi-spec-graph";
 import {
+	omitDisabledRegistryExtensions,
 	registryInlineExtensions,
 	resolveExtensionSkillRoots,
 	serverExtensions,
@@ -191,6 +193,21 @@ function webAccessFactory(): BundledExtensionFactory {
 	return devWebAccessFactory;
 }
 
+let disabledExtensionsResolver: () => ReadonlySet<string> = () => new Set();
+export function setDisabledExtensionsResolver(resolver: () => ReadonlySet<string>): void {
+	disabledExtensionsResolver = resolver;
+}
+
+export function disabledExtensions(): ReadonlySet<string> {
+	try {
+		return disabledExtensionsResolver();
+	} catch {
+		return new Set();
+	}
+}
+
+const isExtensionDisabled = (name: string): boolean => disabledExtensions().has(name);
+
 export function childBaseExtensionFactories(): InlineExtension[] {
 	return [oversizedImageGuard];
 }
@@ -200,7 +217,7 @@ export function childExtensionFactories(): InlineExtension[] {
 		headlessSearchPolicy,
 		webAccessFactory(),
 		specGraphExtension,
-		...registryInlineExtensions("childExtensions"),
+		...registryInlineExtensions("childExtensions", isExtensionDisabled),
 	];
 }
 
@@ -212,8 +229,10 @@ export async function buildResourceLoader(
 	extraFactories: InlineExtension[] = [],
 	askUserQuestionWaiters: AskUserQuestionWaiters = createAskUserQuestionWaiters(),
 ): Promise<ResourceLoader> {
+	let disabledAtReload = disabledExtensions();
+	const isDisabledAtReload = (name: string): boolean => disabledAtReload.has(name);
 	const sharedFactories: InlineExtension[] = [
-		...registryInlineExtensions("extensions"),
+		...registryInlineExtensions("extensions", isDisabledAtReload),
 		headlessSearchPolicy,
 		askUserQuestionExtension(askUserQuestionWaiters),
 		reviewToolExtension,
@@ -231,10 +250,13 @@ export async function buildResourceLoader(
 		settingsManager,
 		...skillInputs,
 		extensionFactories,
+		extensionsOverride: (result: LoadExtensionsResult) =>
+			omitDisabledRegistryExtensions(result, isDisabledAtReload),
 	};
 	const devExtensionPaths = bundled ? [] : resolveDevPaths().extensionPaths;
-	const applyCurrentTrust = (): void => {
+	const applyCurrentPolicy = (): void => {
 		settingsManager.setProjectTrusted(getAdmission().piResourceTrusted);
+		disabledAtReload = disabledExtensions();
 	};
 
 	const excluded = new Set(excludedExtensionPaths.map((path) => resolve(path)));
@@ -245,7 +267,7 @@ export async function buildResourceLoader(
 		});
 		const reloadTrusted = loader.reload.bind(loader);
 		loader.reload = async (options) => {
-			applyCurrentTrust();
+			applyCurrentPolicy();
 			await reloadTrusted(options);
 		};
 		await loader.reload();
@@ -291,7 +313,7 @@ export async function buildResourceLoader(
 	});
 	const reloadResolved = loader.reload.bind(loader);
 	loader.reload = async (options) => {
-		applyCurrentTrust();
+		applyCurrentPolicy();
 		await resolveExclusionPaths();
 		await reloadResolved(options);
 		relabelDiscoveredExtensions(loader, discoveredMetadata);

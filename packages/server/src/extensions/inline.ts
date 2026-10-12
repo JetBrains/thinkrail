@@ -31,23 +31,27 @@ export function registryInlineExtensions(
 	});
 }
 
+export function registryExtensionName(
+	path: string,
+	entries: readonly ServerExtensionEntry[] = serverExtensions,
+): string | undefined {
+	const match = /^<inline:(.+)>$/.exec(path);
+	if (!match) return undefined;
+	return entries.find((entry) =>
+		(["extensions", "childExtensions"] as const).some((kind) =>
+			inlineNames(entry, kind).includes(match[1] ?? ""),
+		),
+	)?.extension.name;
+}
+
 export function omitDisabledRegistryExtensions(
 	result: LoadExtensionsResult,
 	isDisabled: ExtensionDisabled,
 	entries: readonly ServerExtensionEntry[] = serverExtensions,
 ): LoadExtensionsResult {
-	const omitted = new Set(
-		entries
-			.filter((entry) => isDisabled(entry.extension.name))
-			.flatMap((entry) =>
-				(["extensions", "childExtensions"] as const).flatMap((kind) =>
-					inlineNames(entry, kind).map((name) => `<inline:${name}>`),
-				),
-			),
-	);
-	if (omitted.size === 0) return result;
-	return {
-		...result,
-		extensions: result.extensions.filter((extension) => !omitted.has(extension.path)),
-	};
+	const kept = result.extensions.filter((extension) => {
+		const name = registryExtensionName(extension.path, entries);
+		return name === undefined || !isDisabled(name);
+	});
+	return kept.length === result.extensions.length ? result : { ...result, extensions: kept };
 }

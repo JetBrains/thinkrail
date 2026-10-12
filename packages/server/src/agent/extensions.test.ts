@@ -8,8 +8,10 @@ import {
 	buildResourceLoader,
 	childBaseExtensionFactories,
 	childExtensionFactories,
+	disabledExtensions,
 	listProjectAliasSkillNames,
 	listSkillCommands,
+	setDisabledExtensionsResolver,
 } from "./extensions";
 import { oversizedImageGuard } from "./imageGuard";
 import type { SkillAdmissionContext } from "./skillAdmission";
@@ -441,6 +443,53 @@ describe("registry extensions", () => {
 		} finally {
 			restore();
 			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("omits a disabled extension from a new loader and re-decides on reload", async () => {
+		const root = mkdtempSync(join(tmpdir(), "thinkrail-registry-off-"));
+		const project = join(root, "project");
+		const home = join(root, "home");
+		const agentDir = join(root, "pi-agent");
+		mkdirSync(project, { recursive: true });
+		mkdirSync(home, { recursive: true });
+		mkdirSync(agentDir, { recursive: true });
+		const restore = stubSkillEnv(home, agentDir);
+		let disabled = new Set(["visualize"]);
+		setDisabledExtensionsResolver(() => disabled);
+		try {
+			const settingsManager = SettingsManager.create(project, agentDir, { projectTrusted: true });
+			const loader = await buildResourceLoader(project, settingsManager, () => ctx(true));
+			const paths = () => loader.getExtensions().extensions.map((extension) => extension.path);
+			const tools = () =>
+				loader.getExtensions().extensions.flatMap((extension) => [...extension.tools.keys()]);
+			expect(paths()).not.toContain("<inline:visualize>");
+			expect(tools()).not.toContain("visualize");
+
+			disabled = new Set();
+			expect(paths()).not.toContain("<inline:visualize>");
+			await loader.reload();
+			expect(paths()).toContain("<inline:visualize>");
+			expect(tools()).toContain("visualize");
+
+			disabled = new Set(["visualize", "retired-extension"]);
+			await loader.reload();
+			expect(paths()).not.toContain("<inline:visualize>");
+		} finally {
+			setDisabledExtensionsResolver(() => new Set());
+			restore();
+			rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("treats a throwing resolver as nothing disabled", () => {
+		setDisabledExtensionsResolver(() => {
+			throw new Error("settings unavailable");
+		});
+		try {
+			expect([...disabledExtensions()]).toEqual([]);
+		} finally {
+			setDisabledExtensionsResolver(() => new Set());
 		}
 	});
 

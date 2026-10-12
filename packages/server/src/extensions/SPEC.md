@@ -26,6 +26,8 @@ list for registry extensions.
   without rebuilding the loader), `omitDisabledRegistryExtensions(result, isDisabled)` (drops a disabled
   extension's `<inline:…>` entries from a pi `LoadExtensionsResult`, for the parent loader's
   `extensionsOverride`, so a disabled extension is absent rather than present-and-empty),
+  `registryExtensionName(path)` (maps an `<inline:name>` / `<inline:name#n>` path — an extension's or its
+  tools' `sourceInfo.path` — back to the registry extension that owns it, `undefined` otherwise),
   `listExtensionCatalog(disabled)` (the Settings catalog: per entry `name`, `title` — falling back to
   `name` — optional `description`, `hasChildExtensions`, `enabled = !disabled.has(name)`, and the tool names
   its **parent** factories register against a recording stub `ExtensionAPI` whose every other member is
@@ -35,7 +37,8 @@ list for registry extensions.
   returning its `pi.skills` directories; a named package with no skills fails loudly). The specifier is kept
   as a string precisely because a descriptor holds functions, which yield no module identity.
 - **Public surface (barrel):** `serverExtensions`, `ServerExtensionEntry`, `registryInlineExtensions`,
-  `RegistryExtensionKind`, `ExtensionDisabled`, `omitDisabledRegistryExtensions`, `listExtensionCatalog`,
+  `RegistryExtensionKind`, `ExtensionDisabled`, `omitDisabledRegistryExtensions`, `registryExtensionName`,
+  `listExtensionCatalog`,
   `resolveExtensionSkillRoots`.
 - **Allowed deps:** `@thinkrail/extension-api/server` (types), every `@thinkrail/ext-*/server`,
   `@earendil-works/pi-coding-agent` (types only), `@thinkrail/contracts` (the `ExtensionCatalogEntry` type),

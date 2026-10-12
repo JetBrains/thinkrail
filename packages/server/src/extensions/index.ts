@@ -3,6 +3,7 @@ export {
 	type ExtensionDisabled,
 	omitDisabledRegistryExtensions,
 	type RegistryExtensionKind,
+	registryExtensionName,
 	registryInlineExtensions,
 } from "./inline";
 export { type ServerExtensionEntry, serverExtensions } from "./registry";

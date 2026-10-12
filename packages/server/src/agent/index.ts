@@ -22,6 +22,7 @@ export {
 	listSkillCatalog,
 	listSkillCommands,
 	registerBundledRuntime,
+	setDisabledExtensionsResolver,
 } from "./extensions";
 export {
 	listModelContextSettings,

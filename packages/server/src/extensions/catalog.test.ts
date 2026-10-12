@@ -48,7 +48,13 @@ describe("listExtensionCatalog", () => {
 			{ specifier: "@acme/bare/server", extension: { name: "bare", extensions: [] } },
 		];
 		expect(await listExtensionCatalog(new Set(["bare"]), entries)).toEqual([
-			{ name: "demo", title: "demo", enabled: true, tools: ["alpha", "beta"], hasChildExtensions: true },
+			{
+				name: "demo",
+				title: "demo",
+				enabled: true,
+				tools: ["alpha", "beta"],
+				hasChildExtensions: true,
+			},
 			{ name: "bare", title: "bare", enabled: false, tools: [], hasChildExtensions: false },
 		]);
 		expect(child).not.toHaveBeenCalled();

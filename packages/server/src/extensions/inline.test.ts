@@ -5,7 +5,11 @@ import type {
 	InlineExtension,
 	LoadExtensionsResult,
 } from "@earendil-works/pi-coding-agent";
-import { omitDisabledRegistryExtensions, registryInlineExtensions } from "./inline";
+import {
+	omitDisabledRegistryExtensions,
+	registryExtensionName,
+	registryInlineExtensions,
+} from "./inline";
 import type { ServerExtensionEntry } from "./registry";
 
 function entry(name: string, parents: number, children = 0): ServerExtensionEntry {
@@ -88,5 +92,18 @@ describe("omitDisabledRegistryExtensions", () => {
 
 	it("returns the result untouched when nothing is disabled", () => {
 		expect(omitDisabledRegistryExtensions(result, () => false, entries)).toBe(result);
+	});
+});
+
+describe("registryExtensionName", () => {
+	const entries = [entry("solo", 1), entry("multi", 2, 1)];
+
+	it("maps a registry inline path back to its extension and ignores everything else", () => {
+		expect(registryExtensionName("<inline:solo>", entries)).toBe("solo");
+		expect(registryExtensionName("<inline:multi#2>", entries)).toBe("multi");
+		expect(registryExtensionName("<inline:multi>", entries)).toBe("multi");
+		expect(registryExtensionName("<inline:headless>", entries)).toBeUndefined();
+		expect(registryExtensionName("<inline:3>", entries)).toBeUndefined();
+		expect(registryExtensionName("/disk/solo.ts", entries)).toBeUndefined();
 	});
 });

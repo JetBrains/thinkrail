@@ -552,6 +552,21 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     streaming-deferred to `agent_settled`, exactly like the subagent tools. Because `setActiveToolsByName`
     rebuilds the system prompt from active tools' guidelines, dropping the tool drops its guidance too. Only
     the tool is gated — the `startPlanReview` button path is a separate host seam. See `submodule-server-host-plan-review`.
+    **Registry extensions** follow the same shape, keyed by extension name instead of workspace. A
+    host-injected `setDisabledExtensionsResolver(() => ReadonlySet<string>)` (global — no `agent` →
+    settings edge; a throwing resolver means nothing disabled) is read by `buildResourceLoader` at **every
+    loader reload** (snapshotted beside project trust), so the gated registry factories skip a disabled
+    extension and `extensionsOverride` omits its `<inline:…>` entry — new parents never load it — and by
+    `childExtensionFactories()` when a hidden child's loader runs. `refreshExtensionTools()` updates live
+    sessions: tools whose `sourceInfo.path` belongs to a disabled registry extension leave the active set
+    (remembered per entry so re-enabling restores exactly the withheld tools, never ones that were inactive
+    by default) idle-sync / streaming-deferred to `agent_settled`, latest policy wins, and
+    `setActiveToolsByName` drops their guidance with them. Hooks of a disabled extension keep running in an
+    open session until its next resource reload — pi cannot unload an extension, and reloading on every
+    disable would bust the prompt cache. The reverse is the one reload: an enabled extension the session
+    never loaded (created while it was off) and that did not fail to load triggers a gated
+    `requestSessionReload`. Registration applies the same reconciliation, and a completed reload reapplies
+    it without requesting another reload, so a toggle that lands mid-reload converges.
     The **`set_title`** tool (`titleTool.ts`) is how chats and workspaces get named: the main agent calls it
     with `chat_title?` / `workspace_name?` / `branch?` (English kebab slug). It is always registered and
     active, and listed via `promptSnippet`; toggling it off after naming would rebuild the system prompt
@@ -771,6 +786,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   plus workspace override; manager owns live-session activation timing) and the concurrency seams
   **`setSubagentConcurrencyResolver`** + **`refreshSubagentConcurrency`** (same split; `delegation` owns
   applying the limit to its cached services);
+  the extension on/off seams **`setDisabledExtensionsResolver`** + **`refreshExtensionTools`** (host owns the
+  set; this module owns compose-time filtering and live activation timing);
   the `set_title` seam (`setTitleToolHost` + `TitleToolHost`/`SET_TITLE_TOOL_NAME`/`SetTitleParams`);
   the bundled-artifact seam (`registerBundledRuntime` +
   `BundledExtensions`/`BundledExtensionFactory`).

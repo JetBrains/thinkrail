@@ -54,6 +54,7 @@ import {
 } from "pi-background-commands";
 import type { ParentContext } from "pi-delegation";
 import { RECURSION_GUARD_TOOLS, type Subagents } from "pi-subagents";
+import { registryExtensionName, serverExtensions } from "../extensions";
 import { logger } from "../log";
 import {
 	dataDir,
@@ -83,7 +84,7 @@ import {
 	stopSessionChildren,
 	subagentsFor,
 } from "./delegation";
-import { buildResourceLoader, toSkillCommands } from "./extensions";
+import { buildResourceLoader, disabledExtensions, toSkillCommands } from "./extensions";
 import {
 	getPiRuntimeGeneration,
 	type PiRuntimeGeneration,
@@ -138,6 +139,8 @@ interface Entry {
 	registered: boolean;
 	subagentToolsRefreshPending: boolean;
 	reviewToolRefreshPending: boolean;
+	extensionToolsRefreshPending: boolean;
+	withheldExtensionTools: Set<string>;
 	nudgePromptPending: boolean;
 	lastPublishedState: string | null;
 	askUserQuestionWaiters: AskUserQuestionWaiters;
@@ -598,6 +601,57 @@ export function refreshAgentReviewTool(workspaceId?: string): void {
 	}
 }
 
+function applyExtensionTools(entry: Entry, { allowReload = true } = {}): void {
+	entry.extensionToolsRefreshPending = false;
+	const { session } = entry;
+	const disabled = disabledExtensions();
+	const owners = new Map<string, string>();
+	for (const tool of session.getAllTools()) {
+		const owner = registryExtensionName(tool.sourceInfo.path);
+		if (owner !== undefined) owners.set(tool.name, owner);
+	}
+	const isOff = (tool: string): boolean => disabled.has(owners.get(tool) ?? "");
+	const active = session.getActiveToolNames();
+	for (const tool of active.filter(isOff)) entry.withheldExtensionTools.add(tool);
+	const restored: string[] = [];
+	for (const tool of entry.withheldExtensionTools) {
+		if (owners.has(tool) && isOff(tool)) continue;
+		entry.withheldExtensionTools.delete(tool);
+		if (owners.has(tool) && !active.includes(tool)) restored.push(tool);
+	}
+	const kept = active.filter((tool) => !isOff(tool));
+	if (kept.length !== active.length || restored.length > 0) {
+		session.setActiveToolsByName([...kept, ...restored]);
+	}
+	if (allowReload && enabledExtensionMissing(session, disabled)) {
+		void requestSessionReload(session.sessionId).catch((error) => {
+			log.warn(`extension reload failed for ${session.sessionId}`, error as Error);
+		});
+	}
+}
+
+function enabledExtensionMissing(session: AgentSession, disabled: ReadonlySet<string>): boolean {
+	const { extensions, errors } = session.resourceLoader.getExtensions();
+	const present = new Set(
+		[...extensions.map((extension) => extension.path), ...errors.map((error) => error.path)].map(
+			(path) => registryExtensionName(path),
+		),
+	);
+	return serverExtensions.some(
+		({ extension }) =>
+			extension.extensions.length > 0 &&
+			!disabled.has(extension.name) &&
+			!present.has(extension.name),
+	);
+}
+
+export function refreshExtensionTools(): void {
+	for (const entry of sessions.values()) {
+		if (entry.session.isStreaming) entry.extensionToolsRefreshPending = true;
+		else applyExtensionTools(entry);
+	}
+}
+
 function hasDeletionTombstone(sessionId: string): boolean {
 	return deletedSessions.has(sessionId);
 }
@@ -694,6 +748,7 @@ function runGatedReload(entry: Entry): Promise<void> {
 		} finally {
 			// Open the gate before flushing: completion delivery is refused while it is held.
 			entry.reloadRunning = null;
+			if (!entry.disposed) applyExtensionTools(entry, { allowReload: false });
 			entry.commands.flushCompletions();
 			entry.subagents.flushCompletions();
 			publishEntryState(entry);
@@ -874,6 +929,8 @@ async function prepareSessionEntry(
 		registered: false,
 		subagentToolsRefreshPending: false,
 		reviewToolRefreshPending: false,
+		extensionToolsRefreshPending: false,
+		withheldExtensionTools: new Set(),
 		nudgePromptPending: false,
 		lastPublishedState: null,
 		askUserQuestionWaiters,
@@ -954,6 +1011,7 @@ async function prepareSessionEntry(
 			}
 			if (entry.subagentToolsRefreshPending) applySubagentTools(entry);
 			if (entry.reviewToolRefreshPending) applyReviewTool(entry);
+			if (entry.extensionToolsRefreshPending) applyExtensionTools(entry);
 			reconsiderPendingReload(entry);
 		}
 		if (sessions.get(sessionId) === entry) {
@@ -1045,6 +1103,7 @@ async function registerSession(
 	sessions.set(session.sessionId, prepared.entry);
 	applySubagentTools(prepared.entry);
 	applyReviewTool(prepared.entry);
+	applyExtensionTools(prepared.entry);
 	commands.flushCompletions();
 	subagents.flushCompletions();
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
