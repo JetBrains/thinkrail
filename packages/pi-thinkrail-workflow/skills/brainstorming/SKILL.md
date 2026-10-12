@@ -1,58 +1,77 @@
 ---
 name: brainstorming
-description: "Use before implementation when a request requires choosing product scope, user-visible behavior, or architecture. Not for fully specified fixes, mechanical refactors, documentation, or configuration-only changes."
+description: "Use before implementing a feature, a change in behavior, or a bug fix — however small. Not for questions, checks, or edits that change no behavior (typos, documentation or configuration only, mechanical refactors)."
 ---
 
 # Brainstorming
 
-## Brainstorm before you build
+## Interview before you build
 
-- Run this workflow only when implementation depends on an unresolved product or design choice.
-- The aim is a validated design, recorded as a spec-graph `task-spec`, not a speculative
-  implementation.
-- Do not implement until the design is accepted. Acceptance criteria or an explicit design already
-  supplied by the user count as approval; do not ask them to approve the same decision again.
+- Every feature, behavior change, or bug fix goes through this workflow. Depth scales with the
+  change and never drops to zero: a small change gets one short round and a few lines of task-spec.
+- The aim is a design the user understands and has accepted, recorded in a spec-graph `task-spec`,
+  built, and then reflected in the durable specs — not a speculative implementation.
+- Do not implement until the design is accepted. An explicit design or acceptance criteria in the
+  request count as approval of what they cover; build on them and never re-ask them.
+
+## Doc map
+
+- `fixing-a-bug.md` — the bug branch (step 4).
+- `amending-specs.md` — bringing the durable specs in line with what was built (step 9); the tail of
+  both paths and where this workflow ends.
 
 ## The workflow
 
-1. **Orient.** Use the spec-graph skill to find relevant recorded boundaries, contracts, invariants,
-   and decisions; read code second to confirm implementation details. Do not read unrelated specs.
-2. **Scope check.** If the request bundles independent product decisions or subsystems, separate them
-   rather than blending unrelated decisions into one task-spec.
-3. **Open a task-spec.** Once the decision to make is understood, `spec_create` a `task-spec` at
-   **`.thinkrail/context/TASK-<slug>.md`** (id, title, status: draft, parent: the nearest relevant
-   module). This gitignored file is the one temporary design artifact; update it as decisions land.
-4. **Interview the open decisions.** Ask via `ask_user_question` about every decision whose answer
-   changes observable behavior or scope and that the request or specs have not already settled; look
-   facts up instead of asking them. Interview in rounds per the **asking-user-questions** concept skill
-   until no such decision is left assumed. Skipped questions or a host with no UI are not blockers:
-   record the best assumption as unconfirmed and continue.
-5. **Draft the design.** Record the request, recommended design, trade-offs that matter, and explicit
-   deferrals. Compare alternatives only when more than one viable approach remains; do not invent
-   options after the constraints already select one.
-6. **Self-review.** Remove placeholders, contradictions, accidental scope expansion, and ambiguous
-   requirements before presenting the design.
-7. **Review once.** Present one cohesive design scaled to the decision. Ask for one approval only when
-   the user has not already approved the same design through their request or acceptance criteria.
-   Revise the task-spec if they adjust it.
-8. **Promote.** Read the **writing-specs** concept skill, then move any settled boundary, contract, or
-   decision into the relevant durable `SPEC.md`; use `spec_create` for a new module, `spec_update` for
-   frontmatter, and `edit` for prose. Run `spec_validate` after structural changes.
-9. **Build.** Implement directly against the accepted design. Before handoff, self-review the task
-   diff: no silent lint/type suppressions, duplicated nontrivial derivations, rationale left as code
-   comments, or remnants of a replaced pattern. Keep durable specs honest and retire the task-spec
-   once the work itself is done.
+1. **Orient.** Use the spec-graph skill to find the specs that govern the area; read code second to
+   confirm implementation details. Do not read unrelated specs. Note any non-obvious decision the
+   change touches whose *why* is not recorded — it becomes a question in step 6.
+2. **Scope check.** If the request bundles independent product decisions or subsystems, separate
+   them rather than blending unrelated decisions into one task-spec.
+3. **Open a task-spec.** `spec_create` a `task-spec` at **`.thinkrail/context/TASK-<slug>.md`** (id,
+   title, status: draft, parent: the nearest relevant module). This gitignored file is the one
+   temporary design artifact; update it as answers land.
+4. **Bug?** When the request reports something that behaves wrongly, follow `fixing-a-bug.md` now;
+   it returns here at step 5 (the "bug" is really a feature) or step 8.
+5. **Product phase.** Interview what the change is for before how to build it: why it is needed,
+   for whom, what the user will see and do — including empty, error, and edge states — and how we
+   will know it is done. Ask in rounds per the **asking-user-questions** concept skill until no such
+   decision is left assumed; look facts up instead of asking them. Record the answers in the
+   task-spec's **Product** section, then confirm that understanding with one inference-confirmation
+   question before any technical choice — skip only when the request itself supplied all of it.
+6. **Technical phase.** Interview the technical decisions that the product answers leave open:
+   constraints, compatibility, how the change will be verified, and the *why* of any decision noted
+   in step 1. Compare approaches only when more than one viable approach remains — do not invent
+   options once the constraints select one. Record the **Design** section: the chosen approach and
+   why, trade-offs that matter, explicit deferrals.
+7. **Self-review, then review once.** Remove placeholders, contradictions, accidental scope
+   expansion, and ambiguous requirements; then present one cohesive design scaled to the change.
+   Ask for approval only when the request has not already approved it; revise the task-spec if the
+   user adjusts it.
+8. **Build.** Implement against the accepted design. Before handoff, self-review the task diff: no
+   silent lint/type suppressions, duplicated nontrivial derivations, rationale left as code
+   comments, or remnants of a replaced pattern.
+9. **Amend specs.** Follow `amending-specs.md`.
+
+Skipped questions or a host with no question UI are not blockers: record the best assumption in the
+task-spec as unconfirmed and continue.
 
 ## What a good task-spec looks like
 
-- Scoped to one decision-bearing piece of work.
-- States the request, chosen design and why, real alternatives considered, assumptions, and explicit
-  deferrals.
-- Promotes settled decisions instead of copying them: durable rationale lives once in the owning
-  spec.
+- Scoped to one piece of work, sized to it — a few lines for a small change.
+- **Request**, **Product** (or **Bug** for the bug branch), **Design**, unconfirmed assumptions, and
+  explicit deferrals.
+- Temporary: its durable content moves into the owning specs at step 9 instead of being copied.
+
+## Red flags — stop
+
+- You are editing source code before the design is accepted.
+- "It's small" or "the request already says what to do" — the workflow scales down, it does not
+  switch off.
+- You offered technical options before the product phase was settled.
+- You are about to hand off without step 9 — the specs drift from the code one skipped change at a
+  time.
 
 ## Ending
 
-Once the accepted design is implemented, verified, reflected in durable specs, and its task-spec is
-retired, this workflow ends with no successor. PR lifecycle work, if requested, then enters
+`amending-specs.md` ends this workflow. PR lifecycle work, if requested, then enters
 **shipping-a-pr** separately.
