@@ -21,8 +21,8 @@ and process-boot logic lives in `packages/server`.
 2. Resolve the static dir (`THINKRAIL_STATIC_DIR`, else the built web app shipped beside the bin) and
    warn if it is missing.
 3. Await `bootHost({ portMode: "free", resolveShellEnv: true, … })`. The shared boot path installs crash
-   logging, repairs the login-shell environment, initializes the current PI runtime/Central watcher, resolves a free serving
-   port at or above the requested one, and embeds the host in this Bun process. Another CLI or desktop
+   logging, repairs the login-shell environment, initializes the current PI runtime/Central watcher,
+   resolves a free serving port at or above the requested one, and embeds the host in this Bun process. Another CLI or desktop
    host using the same data directory does not block startup; each process serves its own endpoint.
 4. On interactive stdout render the shared recursive ThinkRail startup mark with honest `host ready`
    status + the resolved endpoint, retain the parse-stable `thinkrail → <url>` line, and open the browser
