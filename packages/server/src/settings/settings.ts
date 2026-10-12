@@ -52,6 +52,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	jbcentralQuotaEnabled: true,
 	jbcentralQuotaRefreshSeconds: true,
 	settleIdleDays: true,
+	disabledExtensions: true,
 	chatMessageOrder: true,
 	layout: true,
 	recentModels: true,
@@ -83,6 +84,16 @@ function validateFavoriteModels(value: unknown): WireModel[] {
 		throw new Error("favoriteModels must be a list of models");
 	}
 	return value.filter((model, index) => value.findIndex((m) => sameModel(m, model)) === index);
+}
+
+function validateDisabledExtensions(value: unknown): string[] {
+	if (
+		!Array.isArray(value) ||
+		!value.every((name) => typeof name === "string" && name.trim().length > 0)
+	) {
+		throw new Error("disabledExtensions must be a list of extension names");
+	}
+	return [...new Set(value as string[])];
 }
 
 let publishSettings: SettingsPublisher | null = null;
@@ -152,8 +163,11 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		systemThemePair,
 		jbcentralQuotaEnabled,
 		jbcentralQuotaRefreshSeconds,
+		disabledExtensions,
 		...rest
 	} = runtimeUpdate;
+	const nextDisabledExtensions =
+		disabledExtensions === undefined ? undefined : validateDisabledExtensions(disabledExtensions);
 	for (const [name, value] of [
 		["defaultModel", defaultModel],
 		["reviewModel", reviewModel],
@@ -242,6 +256,9 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		...(favoriteModels === undefined
 			? {}
 			: { favoriteModels: validateFavoriteModels(favoriteModels) }),
+		...(nextDisabledExtensions === undefined
+			? {}
+			: { disabledExtensions: nextDisabledExtensions }),
 	};
 	if (defaultModel !== undefined) {
 		if (defaultModel === null) delete next.defaultModel;

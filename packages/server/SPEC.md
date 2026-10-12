@@ -178,6 +178,12 @@ Subagent availability is also host-mediated: `settings` owns the global default,
 optional local override, and `host` injects their effective value into `agent` plus requests live-session
 reevaluation after either mutation. No feature imports a sibling to derive the policy.
 
+Extension on/off is host-mediated the same way: `settings` owns `disabledExtensions`, `extensions` owns the
+registry and its catalog derivation, and `host` injects the set into `agent` through
+`setDisabledExtensionsResolver`, answers `extension.list` by joining the registry catalog with the setting,
+and calls `refreshExtensionTools()` after an applied update that contains `disabledExtensions`. There is no
+`agent` → `settings` or `extensions` → `settings` edge.
+
 ## Get right
 
 - **No process isolation** — a fatal agent/provider fault takes the whole host down (accepted tradeoff).

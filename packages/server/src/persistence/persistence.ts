@@ -311,6 +311,15 @@ function storedModels(value: unknown): WireModel[] {
 	);
 }
 
+function storedExtensionNames(value: unknown): string[] {
+	if (!Array.isArray(value)) return [];
+	return [
+		...new Set(
+			value.filter((name): name is string => typeof name === "string" && name.trim().length > 0),
+		),
+	];
+}
+
 export function loadConfig(): AppConfig {
 	const raw = readJson<unknown>("config.json", {});
 	if (!raw || typeof raw !== "object" || Array.isArray(raw)) return structuredClone(DEFAULT_CONFIG);
@@ -384,6 +393,7 @@ export function loadConfig(): AppConfig {
 		settleIdleDays: isSettleIdleDays(value.settleIdleDays)
 			? value.settleIdleDays
 			: DEFAULT_CONFIG.settleIdleDays,
+		disabledExtensions: storedExtensionNames(value.disabledExtensions),
 	};
 }
 

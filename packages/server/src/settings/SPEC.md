@@ -13,7 +13,8 @@ The server-synchronized app config: opaque fixed-theme selection, fixed/system m
 pair, additional-analytics preference and first-run dialog completion marker, host-owned new-chat model and
 effort defaults, terminal replay budget and Windows shell preference, chat composer growth preset, chat/file
 visual line widths plus independent pane bounds, bounded custom layout-preset catalog, JetBrains quota
-display/cadence, the host-wide subagent default, and plan-review policy. `defaultModel` / `defaultEffort`
+display/cadence, the host-wide subagent default, plan-review policy, and the host-registry extensions the
+user turned off. `defaultModel` / `defaultEffort`
 select the defaults every new chat receives (unset model means first available; unset effort means medium);
 `reviewModel` / `reviewEffort`
 select the reviewer runtime (unset means that same new-chat default); `reviewAutoFix: false` records a `request_changes`
@@ -55,6 +56,12 @@ interval (`1–3600`, default 30), because those values govern host process cade
 - `chatLineWidth` / `fileLineWidth` independently default to 120 and accept only finite integers from 40 through 240; their `Bounded` switches independently default to `true`. A malformed stored field falls back without discarding valid siblings; any invalid supplied field rejects the complete mutation before cache, persistence, or broadcast changes.
 - `subagentsEnabled` defaults to `true` when absent so old config preserves current behavior; a present non-boolean update is rejected before cache, persistence, or broadcast changes. Settings owns only that global default; workspace override and effective-value resolution stay outside this module.
 - `subagentMaxConcurrent` (per-chat concurrent subagents) defaults to 4 when absent or malformed on disk; a wire update outside `isSubagentMaxConcurrent` (whole 1–16) rejects the complete mutation — never clamped. Like `subagentsEnabled`, settings owns only the global value.
+- `disabledExtensions` lists host-registry extension `name`s the user switched off; absent means `[]` (every
+  extension on). A wire update must be a list of non-blank strings or the whole mutation is rejected;
+  duplicates are deduped, and **unknown names are kept** — the registry, not settings, decides what a name
+  means, so a stale entry for a removed extension never breaks boot or a later update. A malformed stored
+  list keeps its valid names. Settings owns only the list; `host` turns it into the agent's resolver and the
+  live tool refresh ([[module-server]] § host-mediated policy).
 - JetBrains quota display defaults on and its interval defaults to 30 seconds when either stored field is absent/invalid. Wire updates reject a non-boolean flag or a non-integer/out-of-range interval atomically; they never clamp a caller's value into a different persisted choice.
 - Theme availability/labels/palettes, operating-system appearance, and the effective theme are not server concerns. `theme` remains the opaque fixed choice; `themeMode` defaults to `"fixed"`, and `systemThemePair` remains absent until first use. A persisted pair is retained only when both slots are strings; malformed pairs are dropped, and system mode without a retained pair normalizes to fixed without replacing a valid fixed id. A missing/invalid mode also normalizes to fixed while an independently valid dormant pair may survive. Entering system mode requires a complete valid-shaped existing-or-incoming pair; a pair mutation replaces both slots atomically. Unknown ids remain persisted for each independently shipped frontend to resolve by required appearance.
 - A `settings.update` carrying `theme` without explicit `themeMode` is a legacy-compatible fixed-theme action and sets mode to `"fixed"`. Thus an old client connected to a system-configured host can never appear to change only itself: its deliberate theme choice exits system mode through the ordinary persist-before-broadcast path.

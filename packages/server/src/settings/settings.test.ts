@@ -399,6 +399,44 @@ test("the subagent limit defaults to 4, round-trips, and a malformed stored valu
 	expect(getConfig().subagentMaxConcurrent).toBe(8);
 });
 
+test("disabled extensions default empty, round-trip deduped, and keep unknown names", () => {
+	expect(DEFAULT_CONFIG.disabledExtensions).toEqual([]);
+	const published: AppConfigUpdate[] = [];
+	setSettingsPublisher((_config, applied) => published.push(applied));
+	expect(getConfig().disabledExtensions).toEqual([]);
+	const next = updateConfig({ disabledExtensions: ["visualize", "retired", "visualize"] });
+	expect(next.disabledExtensions).toEqual(["visualize", "retired"]);
+	expect(published.at(-1)?.disabledExtensions).toEqual(["visualize", "retired", "visualize"]);
+	resetConfigCache();
+	expect(getConfig().disabledExtensions).toEqual(["visualize", "retired"]);
+	expect(updateConfig({ disabledExtensions: [] }).disabledExtensions).toEqual([]);
+});
+
+test("a malformed disabled-extensions update is rejected; a malformed stored list keeps valid names", () => {
+	const published: AppConfig[] = [];
+	setSettingsPublisher((config) => published.push(config));
+	const before = getConfig();
+	for (const value of ["visualize", [""], ["  "], [1], null]) {
+		const invalid = { disabledExtensions: value } as unknown as AppConfigUpdate;
+		expect(() => updateConfig(invalid)).toThrow(
+			"disabledExtensions must be a list of extension names",
+		);
+	}
+	expect(getConfig()).toEqual(before);
+	expect(published).toEqual([]);
+	expect(existsSync(join(dataDir, "config.json"))).toBe(false);
+
+	writeFileSync(
+		join(dataDir, "config.json"),
+		JSON.stringify({ disabledExtensions: ["visualize", 3, "", "visualize"] }),
+	);
+	resetConfigCache();
+	expect(getConfig().disabledExtensions).toEqual(["visualize"]);
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ disabledExtensions: "visualize" }));
+	resetConfigCache();
+	expect(getConfig().disabledExtensions).toEqual([]);
+});
+
 test("an out-of-range subagent limit is rejected before persistence or broadcast", () => {
 	const published: AppConfig[] = [];
 	setSettingsPublisher((config) => published.push(config));
