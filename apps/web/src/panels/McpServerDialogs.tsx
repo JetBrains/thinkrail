@@ -51,7 +51,7 @@ import { type McpRowView, mcpConfiguredExposureText, mcpExposureLabel } from "./
 import { ToggleSegment } from "./ToggleSegment";
 
 const MCP_INPUT_CLASS =
-	"w-full min-w-0 rounded-[var(--radius-sm)] border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
+	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
 
 const NAME_REFERENCE = `\${NAME}`;
 
@@ -59,7 +59,7 @@ function CodeBlock({ testId, children }: { testId?: string; children: ReactNode 
 	return (
 		<code
 			data-testid={testId}
-			className="block whitespace-pre-wrap break-words rounded-[var(--radius-sm)] bg-control-bg px-8 py-4 tr-code-text text-text-default"
+			className="block whitespace-pre-wrap break-words rounded-sm bg-control-bg px-8 py-4 tr-code-text text-text-default"
 		>
 			{children}
 		</code>
@@ -416,7 +416,7 @@ function McpImport({
 								data-testid="mcp-json-server"
 								data-name={server.name}
 								data-valid={issues.length === 0}
-								className="flex flex-col gap-2 rounded-[var(--radius-sm)] border border-border-default px-8 py-4"
+								className="flex flex-col gap-2 rounded-sm border border-border-default px-8 py-4"
 							>
 								<span className="flex min-w-0 items-center gap-8">
 									<span className="truncate tr-title-compact text-text-default">{server.name}</span>
@@ -464,7 +464,7 @@ function PresetList({
 						key={preset.id}
 						data-testid="mcp-preset"
 						data-preset={preset.id}
-						className="flex items-center gap-8 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8"
+						className="flex items-center gap-8 rounded-sm border border-border-default bg-control-bg px-12 py-8"
 					>
 						<span className="flex min-w-0 flex-1 flex-col gap-2">
 							<span className="tr-title-compact text-text-default">{preset.title}</span>
@@ -499,7 +499,7 @@ function GithubRecipe({
 	return (
 		<div
 			data-testid="mcp-github-recipe"
-			className="flex items-center gap-8 rounded-[var(--radius-sm)] border border-border-default px-12 py-8"
+			className="flex items-center gap-8 rounded-sm border border-border-default px-12 py-8"
 		>
 			<span className="flex min-w-0 flex-1 flex-col gap-2">
 				<span className="tr-title-compact text-text-default">GitHub (read-only)</span>

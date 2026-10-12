@@ -164,7 +164,7 @@ export function McpServerSection({
 					type="button"
 					data-testid="resources-mcp-settings"
 					onClick={onOpenSettings}
-					className="rounded-[var(--radius-xs)] px-4 text-primary tr-text-metadata outline-none hover:bg-control-bg focus-visible:ring-2 focus-visible:ring-primary"
+					className="rounded-xs px-4 text-primary tr-text-metadata outline-none hover:bg-control-bg focus-visible:ring-2 focus-visible:ring-primary"
 				>
 					Settings
 				</button>

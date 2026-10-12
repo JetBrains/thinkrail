@@ -114,7 +114,7 @@ const ACTION_LABEL: Record<McpRowAction, string> = {
 };
 
 const CHIP_CLASS =
-	"shrink-0 rounded-[var(--radius-xs)] border border-border-default px-4 tr-text-label-pill text-text-muted";
+	"shrink-0 rounded-xs border border-border-default px-4 tr-text-label-pill text-text-muted";
 
 type Settled<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -236,7 +236,7 @@ export function McpServerRowView({
 			data-scope={summary.scope}
 			data-state={row.state}
 			data-attention={row.attention || undefined}
-			className="flex flex-col gap-4 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-12 py-8"
+			className="flex flex-col gap-4 rounded-sm border border-border-default bg-control-bg px-12 py-8"
 		>
 			<div className="flex flex-wrap items-center gap-8">
 				<div className="flex min-w-[12rem] flex-1 flex-col gap-2">
@@ -517,7 +517,7 @@ export function McpConfigFileErrors({ errors }: { errors: readonly McpConfigFile
 					role="alert"
 					data-testid="mcp-config-error"
 					data-source={source}
-					className="flex items-start gap-8 rounded-[var(--radius-sm)] border border-border-default border-l-[3px] border-l-feedback-error bg-feedback-error-subtle px-12 py-8 text-text-default tr-text-metadata"
+					className="flex items-start gap-8 rounded-sm border border-border-default border-l-[3px] border-l-feedback-error bg-feedback-error-subtle px-12 py-8 text-text-default tr-text-metadata"
 				>
 					<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-error" />
 					<span className="flex min-w-0 flex-col gap-2">
@@ -541,7 +541,7 @@ export function McpConfirmBanner() {
 	return (
 		<p
 			data-testid="mcp-confirm-banner"
-			className="flex items-center gap-8 rounded-[var(--radius-sm)] border border-border-default bg-feedback-info-subtle px-12 py-8 text-text-default tr-text-metadata"
+			className="flex items-center gap-8 rounded-sm border border-border-default bg-feedback-info-subtle px-12 py-8 text-text-default tr-text-metadata"
 		>
 			<ShieldCheck className="size-14 shrink-0 text-feedback-info" />
 			ThinkRail asks before MCP calls that may change data (per chat); no saved rules yet.
@@ -563,7 +563,7 @@ export function McpEmptyState({
 	return (
 		<div
 			data-testid="mcp-empty"
-			className="flex flex-col items-start gap-12 rounded-[var(--radius-sm)] border border-border-default bg-control-bg px-16 py-16"
+			className="flex flex-col items-start gap-12 rounded-sm border border-border-default bg-control-bg px-16 py-16"
 		>
 			<p className="tr-text-ui text-text-default">No MCP servers yet.</p>
 			{MCP_PRESETS.length > 0 ? (
@@ -848,7 +848,7 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 			{handledElsewhere ? (
 				<p
 					data-testid="mcp-handled-elsewhere"
-					className="flex items-start gap-8 rounded-[var(--radius-sm)] border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8 text-text-default tr-text-metadata"
+					className="flex items-start gap-8 rounded-sm border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8 text-text-default tr-text-metadata"
 				>
 					<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" />
 					{mcpHandledElsewhereText(handledElsewhere.by)}
