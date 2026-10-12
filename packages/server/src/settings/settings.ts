@@ -256,9 +256,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		...(favoriteModels === undefined
 			? {}
 			: { favoriteModels: validateFavoriteModels(favoriteModels) }),
-		...(nextDisabledExtensions === undefined
-			? {}
-			: { disabledExtensions: nextDisabledExtensions }),
+		...(nextDisabledExtensions === undefined ? {} : { disabledExtensions: nextDisabledExtensions }),
 	};
 	if (defaultModel !== undefined) {
 		if (defaultModel === null) delete next.defaultModel;

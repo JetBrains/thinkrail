@@ -83,6 +83,7 @@ import { findBranchReviewOutcome } from "../branch-review";
 import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
+import { listExtensionCatalog } from "../extensions";
 import { recordAcceptedMessage, respondToInterview } from "../feedback";
 import { readDir, readFile } from "../fs";
 import {
@@ -737,6 +738,7 @@ const handlers: WsHandlers = {
 		const project = listProjects().find((p) => p.id === ws.projectId);
 		return listSkillCatalog(ws.worktreePath, admissionContextFor(project, ws.skillOverrides ?? {}));
 	},
+	"extension.list": () => listExtensionCatalog(new Set(getConfig().disabledExtensions)),
 	"project.acknowledgeSkills": (p) => {
 		return acknowledgeProjectSkills(p.id, p.names);
 	},

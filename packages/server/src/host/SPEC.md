@@ -332,8 +332,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `Workspace.subagentsOverride` when present and otherwise use `AppConfig.subagentsEnabled` (unknown
   workspace fails closed), the settings
   publisher asks `refreshSubagentTools()` to reevaluate all live sessions after a global update that
-  carries `subagentsEnabled` (likewise `refreshAgentReviewTool()` for `agentReviewEnabled`, and
-  `refreshSubagentConcurrency()` for `subagentMaxConcurrent`) — not after
+  carries `subagentsEnabled` (likewise `refreshAgentReviewTool()` for `agentReviewEnabled`,
+  `refreshSubagentConcurrency()` for `subagentMaxConcurrent`, and `refreshExtensionTools()` for
+  `disabledExtensions`) — not after
   every publish, since `recentModels` now publishes on each model switch and a tool-set rebuild per idle
   session would be pure churn — and
   `workspace.setSubagentsOverride` persists through `workspaces` then refreshes only that workspace. The
@@ -341,7 +342,10 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `Workspace.subagentMaxConcurrentOverride`, else a valid `AppConfig.subagentMaxConcurrent`, else the
   contracts default (`resolveSubagentMaxConcurrent`; an unknown workspace uses the global value — a limit
   has no fail-closed meaning), and `workspace.setSubagentMaxConcurrent` persists then resizes only that
-  workspace's service. The
+  workspace's service. Extension on/off is global only: `setDisabledExtensionsResolver` returns
+  `AppConfig.disabledExtensions` as a set (unknown names are inert), and `extension.list` answers with the
+  `extensions` catalog joined with that same setting — the switch itself writes through `settings.update`,
+  so there is no extension write method. The
   two authoritative publishers remain the clients' convergence path; the host-to-agent refresh changes
   runtime capability, not frontend state;
   **Review marks are memory-plus-disk, and only the disk half survives a restart.** The serial chain and

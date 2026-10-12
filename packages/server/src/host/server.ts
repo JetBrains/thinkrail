@@ -24,9 +24,11 @@ import {
 	isProjectSkillPath,
 	piTrustsProjectPath,
 	refreshAgentReviewTool,
+	refreshExtensionTools,
 	refreshSubagentConcurrency,
 	refreshSubagentTools,
 	setAgentReviewEnabledResolver,
+	setDisabledExtensionsResolver,
 	setExtUiPublisher,
 	setModelContextPublisher,
 	setReviewCommentHandler,
@@ -565,6 +567,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 
 	setAgentReviewEnabledResolver(() => getConfig().agentReviewEnabled !== false);
 
+	setDisabledExtensionsResolver(() => new Set(getConfig().disabledExtensions));
+
 	setProjectPublisher((project) => {
 		const capture = additionalCapture();
 		if (capture) {
@@ -666,6 +670,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		if (appliedUpdate.subagentsEnabled !== undefined) refreshSubagentTools();
 		if (appliedUpdate.subagentMaxConcurrent !== undefined) refreshSubagentConcurrency();
 		if (appliedUpdate.agentReviewEnabled !== undefined) refreshAgentReviewTool();
+		if (appliedUpdate.disabledExtensions !== undefined) refreshExtensionTools();
 	});
 
 	setSessionCreatedPublisher((payload: SessionCreatedPayload) => {

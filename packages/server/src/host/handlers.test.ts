@@ -255,6 +255,31 @@ test("model.default and new session creation share the AppConfig default resolut
 	}
 });
 
+test("extension.list reflects disabledExtensions written through settings.update", async () => {
+	expect(await handleRequest("extension.list", {}, CTX)).toEqual([
+		{
+			name: "visualize",
+			title: "Visualize",
+			description: expect.any(String),
+			enabled: true,
+			tools: ["visualize"],
+			hasChildExtensions: false,
+		},
+	]);
+	await handleRequest(
+		"settings.update",
+		{ config: { disabledExtensions: ["visualize", "retired"] } },
+		CTX,
+	);
+	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
+		{ name: "visualize", enabled: false },
+	]);
+	await handleRequest("settings.update", { config: { disabledExtensions: [] } }, CTX);
+	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
+		{ name: "visualize", enabled: true },
+	]);
+});
+
 test("disabled JetBrains quota returns hidden through its handler", async () => {
 	await handleRequest("settings.update", { config: { jbcentralQuotaEnabled: false } }, CTX);
 	expect(await handleRequest("provider.jbcentralQuota", { force: true }, CTX)).toEqual({
