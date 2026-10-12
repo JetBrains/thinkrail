@@ -16,9 +16,9 @@ export function Segment({
 	return (
 		<div
 			data-testid={testid}
-			className={cn("flex h-topbar-row min-w-0 flex-col py-2 pr-8 pl-12", className)}
+			className={cn("flex min-w-0 flex-col justify-center pl-8", className)}
 		>
-			<span className="flex h-16 min-w-0 items-center gap-4 truncate pl-8 text-text-subtle tr-text-metadata">
+			<span className="flex h-14 min-w-0 items-center gap-4 truncate pl-8 text-text-subtle tr-text-metadata">
 				{caption}
 			</span>
 			<div className="flex h-20 min-w-0 items-center gap-4">{children}</div>

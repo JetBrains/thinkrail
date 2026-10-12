@@ -23,7 +23,7 @@ export function LocationBar({
 		<div
 			data-testid="scope-context"
 			data-context={workspace ? "workspace" : "project-home"}
-			className="flex h-topbar-row min-w-0 flex-1 items-stretch overflow-hidden"
+			className="flex min-w-0 flex-1 items-stretch self-stretch overflow-hidden"
 		>
 			<ProjectSegment project={project} atHome={workspace === null} />
 			<WorkspaceSegment project={project} workspace={workspace} onNewWorkspace={onNewWorkspace} />

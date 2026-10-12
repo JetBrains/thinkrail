@@ -34,18 +34,22 @@ branch. It renders what the store and `workspace.openReview` already report; it 
 
 ## Grammar
 
-- A segment is `h-topbar-row` and its vertical rhythm is spent explicitly on the spacing scale — `py-2`, a
-  16px row holding the 12px sentence-case caption (`tr-text-metadata` in `text-subtle`, at its own 15px
-  leading: `leading-none` lets the glyph box overflow the truncating row), a 20px value row — 40px in all. Segments carry no hairlines: the
-  segment padding plus the pill's own padding is the separation, because full-height rules read as a table
-  and never line up with the tab strip's dividers below. A caption fragment (`· from <base>`,
+- The strip and every segment stretch to the header's content box (39px: the 40px row minus its bottom
+  border), never a fixed `h-topbar-row` — a 40px child in a 39px box centres on half pixels, blurring text
+  on 1x screens and overlapping the border. A segment centres a 14px caption row (12px sentence-case
+  `tr-text-metadata` in `text-subtle`, at its own 15px leading: `leading-none` lets the glyph box overflow
+  the truncating row) over a 20px value row, leaving 2.5px above the caption row and below the value's hover
+  fill. Segments carry no hairlines: `pl-8` plus the
+  pills' own padding (≈42px text to text, 8px between hover fills) is the separation, because full-height
+  rules read as a table and never line up with the tab strip's dividers below. A caption fragment (`· from <base>`,
   `· settled`) uses the caption's own face — never a second typeface inside the caption.
 - Values are pills (`pillClass`: 20px, `window-no-drag`, hover `control-bg-hovered`, open
   `control-bg-selected`; the chevron is hidden at rest and appears on hover, keyboard focus, or while open)
   or status chips (`chipClass`: 20px, rounded-full, `tr-text-emphasis`, feedback-tinted `-subtle` fill with
-  the solid feedback text; interactive chips hover to the `-muted` step). Every pill value is one style,
-  `tr-title-section`; hierarchy is colour alone — the workspace name in `text-default`, project and branch
-  in `text-muted`. The project initial is a neutral tile (`control-bg-selected` / `text-muted`) so the
+  the solid feedback text; interactive chips hover to the `-muted` step). Every pill value is one style and one
+  resting colour, `tr-title-section` in `text-muted` — the colour of workspace names in the Projects tree —
+  brightening to `text-default` only on hover or while open: mixed resting greys read as accidental, so the
+  only resting tonal step in the strip is caption (`text-subtle`) versus value. The project initial is a neutral tile (`control-bg-selected` / `text-muted`) so the
   least important glyph is not the only coloured one. Monospace stays inside the branch card, where the
   ref is the content, not in the strip.
 - Captions stay part of the header drag region; every pill, chip, link, and the inline rename

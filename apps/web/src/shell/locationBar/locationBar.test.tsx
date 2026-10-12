@@ -130,11 +130,11 @@ test("segments are separated by space alone and the first one starts flush", () 
 		expect(classes.filter((c) => /(^|:)border/.test(c))).toEqual([]);
 		if (id === "scope-project-segment") {
 			expect(classes).toContain("pl-0");
-			expect(classes).not.toContain("pl-12");
+			expect(classes).not.toContain("pl-8");
 		} else if (id === "scope-workspace-segment") {
-			expect(classes).toEqual(expect.arrayContaining(["pl-0", "sm:pl-12"]));
+			expect(classes).toEqual(expect.arrayContaining(["pl-0", "sm:pl-8"]));
 		} else {
-			expect(classes).toContain("pl-12");
+			expect(classes).toContain("pl-8");
 		}
 	}
 });
@@ -145,6 +145,8 @@ test("every strip value shares one text style and no caption switches typeface",
 		expect(html).toMatch(new RegExp(`data-testid="${id}" class="[^"]*\\btr-title-section\\b`));
 	}
 	expect(html).not.toContain("tr-code-text");
+	const pill = pillClass.split(/\s+/);
+	expect(pill.filter((c) => /^text-text-/.test(c))).toEqual(["text-text-muted"]);
 });
 
 test("every interactive control in the drag strip opts out of dragging", () => {

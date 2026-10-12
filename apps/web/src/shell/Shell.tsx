@@ -135,7 +135,7 @@ export function Shell() {
 					data-testid="window-chrome-inset-left"
 					className="w-window-chrome-inset-left shrink-0"
 				/>
-				<div className="flex min-w-0 flex-1 items-center gap-12 pr-12">
+				<div className="flex min-w-0 flex-1 items-center gap-12 self-stretch pr-12">
 					<BrandLogo />
 					{contextProject ? (
 						<LocationBar

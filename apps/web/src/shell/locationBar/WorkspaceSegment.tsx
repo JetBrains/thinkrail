@@ -23,7 +23,6 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
-import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useMemo, useState } from "react";
 import { RunningIcon } from "../../components/RunningIcon";
 import { useNow } from "../../components/useNow";
@@ -159,7 +158,7 @@ export function WorkspaceSegment({
 				</>
 			}
 			testid="scope-workspace-segment"
-			className="max-w-[460px] pr-0 pl-0 sm:pr-8 sm:pl-12"
+			className="max-w-[460px] pl-0 sm:pl-8"
 		>
 			{editing && workspace ? (
 				<input
@@ -178,7 +177,7 @@ export function WorkspaceSegment({
 					<DropdownMenuTrigger
 						data-testid="scope-workspace"
 						aria-label={`Workspace ${name}`}
-						className={cn(pillClass, "text-text-default")}
+						className={pillClass}
 					>
 						<span data-testid="scope-name" className="truncate tr-title-section">
 							{name}
