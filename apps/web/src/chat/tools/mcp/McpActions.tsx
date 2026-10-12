@@ -18,7 +18,7 @@ import {
 } from "./mcpResult";
 
 const ACTION_CLASS =
-	"flex items-center gap-4 rounded-[var(--radius-xs)] text-primary tr-text-metadata outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary";
+	"flex items-center gap-4 rounded-xs text-primary tr-text-metadata outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary";
 
 function CliActionButton({ action, onOpen }: { action: McpCliAction; onOpen: () => void }) {
 	return (
@@ -111,7 +111,7 @@ export function McpFullOutputBody({
 			) : null}
 			<pre
 				data-testid="mcp-full-output-text"
-				className="min-h-0 overflow-auto whitespace-pre-wrap break-words rounded-[var(--radius-sm)] bg-container-content-bg p-8 tr-code-text text-text-default"
+				className="min-h-0 overflow-auto whitespace-pre-wrap break-words rounded-sm bg-container-content-bg p-8 tr-code-text text-text-default"
 			>
 				{result.text}
 			</pre>

@@ -87,7 +87,7 @@ export function McpOutput({
 				data-testid="mcp-output"
 				data-failed={failed || undefined}
 				className={cn(
-					"overflow-auto whitespace-pre-wrap break-words rounded-[var(--radius-sm)] bg-container-header-bg px-8 py-4 tr-code-text",
+					"overflow-auto whitespace-pre-wrap break-words rounded-sm bg-container-header-bg px-8 py-4 tr-code-text",
 					failed ? "text-feedback-error" : "text-text-default",
 				)}
 			>

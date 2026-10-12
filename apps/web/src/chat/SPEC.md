@@ -383,7 +383,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   only while the card still holds focus. Plus `openSubagentTranscript(childSessionId)` — the subagent
   cards' transcript link (no provider → the cards hide the action).
   The optional MCP pair — `readMcpOutput(toolCallId)` (`mcp.readOutput` for this chat) and
-  `openMcpSettings()` (Settings › MCP servers) — is supplied by `ChatView` only on an MCP-capable host;
+  `openMcpSettings()` (Settings › MCP servers) — is supplied by `ChatView` (through `ChatTranscript`'s provider)
+  only on an MCP-capable host;
   without it (older host, the plan page's provider, or `null`) the MCP cards hide Full output and Sign in
   ([tools/mcp/SPEC.md](tools/mcp/SPEC.md)).
 - **Subagent transcript view** (`SubagentTranscriptDialog.tsx` — an integration file, like

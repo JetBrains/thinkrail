@@ -100,7 +100,7 @@ function ListingView({
 					type="button"
 					aria-expanded={all}
 					onClick={toggleAll}
-					className="self-start rounded-[var(--radius-xs)] text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary"
+					className="self-start rounded-xs text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary"
 				>
 					{all ? "Show fewer" : `Show all ${listing.items.length} ${noun}`}
 				</button>
