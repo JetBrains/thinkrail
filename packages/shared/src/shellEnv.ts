@@ -50,7 +50,7 @@ function defaultLoginShellProbe(): Map<string, string> | null {
 }
 
 const NEVER_IMPORTED_PREFIXES = ["PI_", "THINKRAIL_"];
-const NEVER_IMPORTED = new Set(["PATH", "PWD", "OLDPWD", "SHLVL", "_"]);
+const NEVER_IMPORTED = new Set(["PATH", "PWD", "OLDPWD", "SHLVL", "_", "HISTFILE", "HISTSIZE"]);
 
 export function loginShellImports(
 	processEnv: Record<string, string | undefined>,

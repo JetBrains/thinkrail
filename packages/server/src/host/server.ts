@@ -74,6 +74,7 @@ import {
 import { reanchorWorkspace, resolveCommentFromAgent, setReviewPublisher } from "../reviews";
 import { getConfig, setSettingsPublisher } from "../settings";
 import {
+	clearTerminalClient,
 	closeAllTerminals,
 	persistTerminalSessions,
 	resumeClientTerminals,
@@ -258,6 +259,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					armClientReap(clientKey);
 					return;
 				}
+				clearTerminalClient(clientKey);
 				releaseInterview(clientKey);
 			}, CLIENT_REPLAY_RETENTION_MS),
 		);

@@ -22,8 +22,8 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   recorder replayed on attach.
 - **Public surface (barrel):** `reserveTerminal`, `attachTerminal`, `listTerminals`, `writeTerminal`,
   `resizeTerminal`, `closeTerminalTab`, `resumeClientTerminals`, `closeWorkspaceTerminals`,
-  `persistTerminalSessions`, `reviveTerminalSessions`, `closeAllTerminals`, `resetTerminalState` (test seam),
-  `setTerminalPublisher`,
+  `persistTerminalSessions`, `reviveTerminalSessions`, `closeAllTerminals`, `clearTerminalClient`,
+  `resetTerminalState` (test seam), `setTerminalPublisher`,
   `setTerminalTabsPublisher`; an accepted `writeTerminal` returns its owning workspace id (a displaced
   caller returns `null`), so the host counts only input that actually reached a PTY as workspace activity;
   the `TerminalDeliveryResult` type shared with the host publisher adapter.

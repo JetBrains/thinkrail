@@ -441,6 +441,10 @@ export function reviveTerminalSessions(): void {
 	}
 }
 
+export function clearTerminalClient(clientKey: string): void {
+	completions.clearClient(clientKey);
+}
+
 export function resetTerminalState(): void {
 	closeAllTerminals();
 	terminals.clear();
