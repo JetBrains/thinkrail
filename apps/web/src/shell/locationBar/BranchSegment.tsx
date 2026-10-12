@@ -91,7 +91,7 @@ export function BranchSegment({
 					<>
 						Branch
 						{userOwned ? null : (
-							<span className="truncate text-text-subtle tr-code-text-small leading-none">
+							<span className="truncate">
 								· from <span data-testid="scope-base">{workspace.baseBranch}</span>
 							</span>
 						)}
@@ -104,7 +104,7 @@ export function BranchSegment({
 					className={pillClass}
 				>
 					<GitBranch aria-hidden="true" className="size-14 shrink-0" />
-					<span data-testid="scope-branch" className="truncate tr-code-text">
+					<span data-testid="scope-branch" className="truncate tr-title-section">
 						{workspace.branch}
 					</span>
 					<PillChevron />

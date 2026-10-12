@@ -114,7 +114,7 @@ test("project home keeps only the PROJECT and WORKSPACE segments", () => {
 	expect(ids).not.toContain("scope-review-segment");
 });
 
-test("the first segment draws no hairline before the location and later segments do", () => {
+test("segments are separated by space alone and the first one starts flush", () => {
 	const html = render(worktree, review);
 	const segmentClasses = [
 		...html.matchAll(/data-testid="(scope-[a-z]+-segment)" class="([^"]*)"/g),
@@ -127,20 +127,24 @@ test("the first segment draws no hairline before the location and later segments
 		"scope-review-segment",
 	]);
 	for (const [id, classes] of segmentClasses) {
+		expect(classes.filter((c) => /(^|:)border/.test(c))).toEqual([]);
 		if (id === "scope-project-segment") {
-			expect(classes).toContain("border-l-0");
 			expect(classes).toContain("pl-0");
-			expect(classes).not.toContain("border-l");
 			expect(classes).not.toContain("pl-12");
 		} else if (id === "scope-workspace-segment") {
-			expect(classes).toEqual(
-				expect.arrayContaining(["border-l-0", "pl-0", "sm:border-l", "sm:pl-12"]),
-			);
+			expect(classes).toEqual(expect.arrayContaining(["pl-0", "sm:pl-12"]));
 		} else {
-			expect(classes).toContain("border-l");
 			expect(classes).toContain("pl-12");
 		}
 	}
+});
+
+test("every strip value shares one text style and no caption switches typeface", () => {
+	const html = render(worktree, review);
+	for (const id of ["scope-project-name", "scope-name", "scope-branch"]) {
+		expect(html).toMatch(new RegExp(`data-testid="${id}" class="[^"]*\\btr-title-section\\b`));
+	}
+	expect(html).not.toContain("tr-code-text");
 });
 
 test("every interactive control in the drag strip opts out of dragging", () => {

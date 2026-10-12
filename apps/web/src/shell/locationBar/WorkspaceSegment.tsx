@@ -159,7 +159,7 @@ export function WorkspaceSegment({
 				</>
 			}
 			testid="scope-workspace-segment"
-			className="max-w-[460px] border-l-0 pr-0 pl-0 sm:border-l sm:pr-8 sm:pl-12"
+			className="max-w-[460px] pr-0 pl-0 sm:pr-8 sm:pl-12"
 		>
 			{editing && workspace ? (
 				<input

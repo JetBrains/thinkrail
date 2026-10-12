@@ -16,12 +16,9 @@ export function Segment({
 	return (
 		<div
 			data-testid={testid}
-			className={cn(
-				"flex h-topbar-row min-w-0 flex-col gap-2 border-border-default border-l py-4 pr-8 pl-12",
-				className,
-			)}
+			className={cn("flex h-topbar-row min-w-0 flex-col py-2 pr-8 pl-12", className)}
 		>
-			<span className="flex h-10 min-w-0 items-baseline gap-4 truncate pl-8 text-text-subtle tr-text-caption leading-none">
+			<span className="flex h-16 min-w-0 items-center gap-4 truncate pl-8 text-text-subtle tr-text-metadata">
 				{caption}
 			</span>
 			<div className="flex h-20 min-w-0 items-center gap-4">{children}</div>
@@ -30,13 +27,16 @@ export function Segment({
 }
 
 export const pillClass =
-	"window-no-drag inline-flex h-20 min-w-0 items-center gap-4 rounded-sm px-8 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-selected data-[state=open]:text-text-default";
+	"group/pill window-no-drag inline-flex h-20 min-w-0 items-center gap-4 rounded-sm px-8 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:bg-control-bg-selected data-[state=open]:text-text-default";
 
 export function PillChevron({ className }: { className?: string | undefined }) {
 	return (
 		<ChevronDown
 			aria-hidden="true"
-			className={cn("size-14 shrink-0 text-text-subtle", className)}
+			className={cn(
+				"size-14 shrink-0 text-text-subtle opacity-0 transition-opacity group-hover/pill:opacity-100 group-focus-visible/pill:opacity-100 group-data-[state=open]/pill:opacity-100",
+				className,
+			)}
 		/>
 	);
 }

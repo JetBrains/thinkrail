@@ -26,7 +26,7 @@ export function ProjectSegment({ project, atHome }: { project: Project; atHome: 
 		<Segment
 			caption="Project"
 			testid="scope-project-segment"
-			className="hidden max-w-[220px] shrink-[3] border-l-0 pl-0 sm:flex"
+			className="hidden max-w-[220px] shrink-[3] pl-0 sm:flex"
 		>
 			<DropdownMenu>
 				<DropdownMenuTrigger
@@ -36,11 +36,11 @@ export function ProjectSegment({ project, atHome }: { project: Project; atHome: 
 				>
 					<span
 						aria-hidden="true"
-						className="inline-flex size-16 shrink-0 items-center justify-center rounded-sm bg-primary-soft text-primary tr-text-caption"
+						className="inline-flex size-16 shrink-0 items-center justify-center rounded-sm bg-control-bg-selected text-text-muted tr-text-caption"
 					>
 						{projectInitial(project.name)}
 					</span>
-					<span data-testid="scope-project-name" className="truncate tr-text-ui">
+					<span data-testid="scope-project-name" className="truncate tr-title-section">
 						{project.name}
 					</span>
 					<PillChevron />
