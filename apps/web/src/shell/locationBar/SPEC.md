@@ -34,9 +34,9 @@ branch. It renders what the store and `workspace.openReview` already report; it 
 
 ## Grammar
 
-- A segment is `h-topbar-row` and its vertical rhythm is spent explicitly on the spacing scale — `py-4`, a
-  12px sentence-case caption row (`tr-text-metadata leading-none` in `text-subtle`), a 20px value row — so
-  the 40px strip keeps a margin above the caption and below the pill. Segments carry no hairlines: the
+- A segment is `h-topbar-row` and its vertical rhythm is spent explicitly on the spacing scale — `py-2`, a
+  16px row holding the 12px sentence-case caption (`tr-text-metadata` in `text-subtle`, at its own 15px
+  leading: `leading-none` lets the glyph box overflow the truncating row), a 20px value row — 40px in all. Segments carry no hairlines: the
   segment padding plus the pill's own padding is the separation, because full-height rules read as a table
   and never line up with the tab strip's dividers below. A caption fragment (`· from <base>`,
   `· settled`) uses the caption's own face — never a second typeface inside the caption.
