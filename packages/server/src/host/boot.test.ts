@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
@@ -708,3 +708,36 @@ test("shutdown clears periodic checks and makes a late result inert", async () =
 		collector.frames.filter((frame) => frame.channel === WS_CHANNELS.hostUpdateAvailable),
 	).toHaveLength(0);
 });
+
+async function withFakeLoginShell(run: () => Promise<void>): Promise<void> {
+	const saved = { ...process.env };
+	const dir = mkdtempSync(join(tmpdir(), "thinkrail-boot-shell-"));
+	tmpDirs.push(dir);
+	const shell = join(dir, "login-shell");
+	writeFileSync(
+		shell,
+		'#!/bin/sh\nfor last; do :; done\nBOOT_LOGIN_CANARY=imported exec /bin/sh -c "$last"\n',
+	);
+	chmodSync(shell, 0o755);
+	process.env.SHELL = shell;
+	delete process.env.TERM;
+	delete process.env.BOOT_LOGIN_CANARY;
+	try {
+		await run();
+	} finally {
+		for (const name of Object.keys(process.env)) if (!(name in saved)) delete process.env[name];
+		Object.assign(process.env, saved);
+	}
+}
+
+test.skipIf(process.platform === "win32")(
+	"boot leaves the process environment alone unless the launcher opts in to the login shell",
+	async () => {
+		await withFakeLoginShell(async () => {
+			await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
+			expect(process.env.BOOT_LOGIN_CANARY).toBeUndefined();
+			await boot({ port: 0, host: "127.0.0.1", portMode: "exact", resolveShellEnv: true });
+			expect(process.env.BOOT_LOGIN_CANARY).toBe("imported");
+		});
+	},
+);
