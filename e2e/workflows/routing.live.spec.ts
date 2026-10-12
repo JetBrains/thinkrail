@@ -64,6 +64,57 @@ workflowTest(
 
 workflowTest(
 	defineScenario({
+		name: "root router: a small, explicitly specified behavior change still routes to brainstorming",
+		skill: "choosing-a-workflow",
+		workspace: "code-only",
+		entry: {
+			prompt:
+				"Add a --quiet flag to the CLI that suppresses all output. Exit codes stay exactly as they are.",
+		},
+		stopWhen: [signals.skillRead("brainstorming")],
+		forbid: SETUP_WORKERS.map((name) => signals.skillRead(name)),
+		expect: [
+			checks.expectSkillRead("choosing-a-workflow"),
+			checks.expectOrdering("choosing-a-workflow", "brainstorming"),
+			checks.expectToolNotCalled("edit"),
+		],
+		judge: {
+			rubric: [
+				"The agent treated a small, already-specified behavior change as workflow work and routed to brainstorming instead of implementing directly.",
+			],
+		},
+	}),
+);
+
+workflowTest(
+	defineScenario({
+		name: "root router: a bug report routes to brainstorming's bug branch before any fix",
+		skill: "choosing-a-workflow",
+		workspace: "code-only",
+		entry: {
+			prompt:
+				"Bug: running the CLI with no image paths silently does nothing. It should print a usage " +
+				"message and exit with code 1.",
+		},
+		stopWhen: [signals.toolCall("read", { pathEndsWith: "brainstorming/fixing-a-bug.md" })],
+		forbid: SETUP_WORKERS.map((name) => signals.skillRead(name)),
+		expect: [
+			checks.expectSkillRead("choosing-a-workflow"),
+			checks.expectOrdering("choosing-a-workflow", "brainstorming"),
+			checks.expectToolCalled("read", { pathEndsWith: "brainstorming/fixing-a-bug.md" }),
+			checks.expectToolNotCalled("edit", { pathEndsWith: "src/cli/index.ts" }),
+			checks.expectToolNotCalled("write", { pathEndsWith: "src/cli/index.ts" }),
+		],
+		judge: {
+			rubric: [
+				"The agent routed the bug report through brainstorming into its bug branch before changing any source code.",
+			],
+		},
+	}),
+);
+
+workflowTest(
+	defineScenario({
 		name: "root router: PR checks route to shipping-a-pr",
 		skill: "choosing-a-workflow",
 		workspace: "code-only",

@@ -110,7 +110,9 @@ Dependency direction is one-way: `scenario` → everything; `dialog`/`signals`/`
 - `routing.live.spec.ts` — the routing suite (slice 2): one scenario per route of the two routers'
   classification tables — workflow-eligible root routes are reached through the always-on rule; the
   dispatcher is force-loaded via the app's exact `/skill:` seed (which injects the skill content, so
-  no read of its own SKILL.md is expected). Pass = the routed worker's skill-load signal; direct-work
+  no read of its own SKILL.md is expected). The brainstorming route is pinned from both edges of its
+  default entry: a small, explicitly specified behavior change and a bug report (which must reach the
+  bug branch before any source edit). Pass = the routed worker's skill-load signal; direct-work
   rows bypass worker skills and produce a grounded outcome. Direct-edit assertions pin the resulting
   worktree, not incidental report vocabulary or which valid mutation tool the agent chose.
 - `smoke.live.spec.ts` — the infra-proving live scenarios: a mid-flow `brainstorming` round-trip that
