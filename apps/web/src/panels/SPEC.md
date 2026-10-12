@@ -549,8 +549,16 @@ a project picker, the prompt hero, and the reused
   that runs something first shows a review step listing every command and `!` value; when a `!command` is
   among them, it and Review & approve add one line: "!commands run on the host each time a chat connects;
   keep them fast (e.g. read a cached token)." (pi resolves them synchronously on every connect). `mcp.add` runs per
-  server; failures stay in the dialog and a
-  paste keeps only the failed servers. After each mutation a status line says where the change applies:
+  server; add failures stay in the dialog and a paste keeps only the failed adds. A successful add is
+  committed independently of the preset's subsequent project opt-in: only successful adds call
+  `onEnableInProject`, whose `Promise<void>` contract leaves enable-failure presentation with Settings.
+  Add waits for that callback to settle (even on rejection), never converts a committed add to an add
+  failure, and never retries that add. If the opt-in cannot be confirmed, Add closes (unless other adds
+  failed) and Settings' existing `user:<name>` row error says
+  "Added, couldn't confirm enabling for this project; use its switch to retry." It does not assert that
+  the server is disabled after an ambiguous response. Retrying the row switch sends only
+  `mcp.setProjectOverride`; no new flow or state owner is introduced. After each mutation a status line
+  says where the change applies:
   "when a chat starts in this workspace" with no chat open, else "to open chats as they reload; a busy chat
   waits until it is idle" — the host answers before it reloads them, so the returned snapshots cannot say
   which already did; the rows' live statuses do. Sign in / Test connection start

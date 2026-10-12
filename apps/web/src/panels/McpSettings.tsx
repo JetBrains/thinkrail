@@ -958,9 +958,15 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 						const outcome = await settle(() =>
 							requestMcpList("mcp.setProjectOverride", { workspaceId, name, enabled: true }),
 						);
-						if (!outcome.ok) return outcome.error;
-						setFeedback(mcpSaveFeedback(outcome.value));
-						return null;
+						if (!outcome.ok) {
+							const key = `user:${name}`;
+							setRowErrors((previous) => ({
+								...previous,
+								[key]: {
+									text: `Added, couldn't confirm enabling for this project; use its switch to retry. ${outcome.error}`,
+								},
+							}));
+						} else setFeedback(mcpSaveFeedback(outcome.value));
 					}}
 				/>
 			) : null}

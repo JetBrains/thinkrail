@@ -2,6 +2,7 @@ import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
+import type { WsRequest } from "@thinkrail/contracts";
 import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
 import { resolveBunExecutable } from "./fixtures/executables";
 import { E2E_FIXTURE_REPO, E2E_PI_AGENT_DIR } from "./fixtures/paths";
@@ -30,6 +31,162 @@ async function closeSettings(page: Page): Promise<void> {
 function serverRow(page: Page, name: string) {
 	return page.locator(`[data-testid="mcp-server-row"][data-name="${name}"]`);
 }
+
+type McpWrite = WsRequest<"mcp.add"> | WsRequest<"mcp.setProjectOverride">;
+
+async function interceptMcpWrites(
+	page: Page,
+	intercept: (write: McpWrite) => McpWrite | string,
+): Promise<void> {
+	await page.routeWebSocket(/\/ws(\?|$)/, (browser) => {
+		const server = browser.connectToServer();
+		browser.onMessage((message) => {
+			let frame: McpWrite | null;
+			try {
+				frame = JSON.parse(message.toString()) as McpWrite | null;
+			} catch {
+				server.send(message);
+				return;
+			}
+			if (frame?.id && (frame.method === "mcp.add" || frame.method === "mcp.setProjectOverride")) {
+				const result = intercept(frame);
+				if (typeof result === "string") {
+					browser.send(JSON.stringify({ id: frame.id, ok: false, error: result }));
+				} else server.send(JSON.stringify(result));
+				return;
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => browser.send(message));
+	});
+}
+
+test("a preset's failed project opt-in closes Add and retries from its row without adding again", async ({
+	page,
+}) => {
+	rmSync(USER_CONFIG, { force: true });
+	const writes: McpWrite[] = [];
+	await interceptMcpWrites(page, (write) => {
+		writes.push(write);
+		if (write.method === "mcp.add" && write.params.name === "playwright") {
+			return {
+				...write,
+				params: {
+					...write.params,
+					entry: { ...write.params.entry, command: BUN, args: [STDIO_SERVER] },
+				},
+			};
+		}
+		if (
+			write.method === "mcp.setProjectOverride" &&
+			writes.filter((request) => request.method === "mcp.setProjectOverride").length === 1
+		) {
+			return "Project enable response unavailable";
+		}
+		return write;
+	});
+	try {
+		await openFixtureProject(page);
+		seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+			name: "Preset MCP chat",
+			messages: [{ role: "user", text: "Use the fixture server.", timestamp: Date.now() }],
+		});
+		await enterDefaultWorkspace(page);
+		await openPersistedChat(page, "Preset MCP chat");
+		await openMcpSettings(page);
+		await page.getByTestId("mcp-empty-add").click();
+		const dialog = page.getByTestId("mcp-add-dialog");
+		await dialog.locator('[data-preset="playwright"]').getByTestId("mcp-preset-add").click();
+		await expect(dialog.getByTestId("mcp-run-review")).toContainText("@playwright/mcp@");
+		await dialog.getByTestId("mcp-add-confirm").click();
+		await expect(dialog).toBeHidden();
+		await expect(page.getByTestId("mcp-add-errors")).toHaveCount(0);
+
+		const row = serverRow(page, "playwright");
+		await expect(row).toHaveAttribute("data-scope", "user");
+		await expect(row.getByRole("alert")).toHaveText(
+			"Added, couldn't confirm enabling for this project; use its switch to retry. Project enable response unavailable",
+		);
+		const toggle = row.getByTestId("mcp-server-toggle");
+		await expect(toggle).toBeEnabled();
+		await expect(toggle).toHaveAttribute("aria-checked", "false");
+		expect(writes.map((write) => write.method)).toEqual(["mcp.add", "mcp.setProjectOverride"]);
+		expect(writes[0]?.params).toMatchObject({
+			name: "playwright",
+			scope: "user",
+			entry: { command: "npx", enabled: false },
+		});
+
+		await toggle.click();
+		await expect(row.getByRole("alert")).toHaveCount(0);
+		await expect(toggle).toHaveAttribute("aria-checked", "true");
+		await expect(row.getByTestId("mcp-server-status")).toHaveText("Connected · 4 tools", {
+			timeout: 30_000,
+		});
+		expect(writes.map((write) => write.method)).toEqual([
+			"mcp.add",
+			"mcp.setProjectOverride",
+			"mcp.setProjectOverride",
+		]);
+		expect(writes[2]?.params).toEqual({
+			workspaceId: expect.any(String),
+			name: "playwright",
+			enabled: true,
+		});
+		expect(writes[2]?.params).toEqual(writes[1]?.params);
+	} finally {
+		rmSync(USER_CONFIG, { force: true });
+	}
+});
+
+test("a partially successful JSON import keeps only failed adds for retry and never opts in", async ({
+	page,
+}) => {
+	rmSync(USER_CONFIG, { force: true });
+	const writes: McpWrite[] = [];
+	await interceptMcpWrites(page, (write) => {
+		writes.push(write);
+		if (
+			write.method === "mcp.add" &&
+			write.params.name === "retry-fixture" &&
+			writes.filter((request) => request.params.name === "retry-fixture").length === 1
+		) {
+			return "Add refused for fixture";
+		}
+		return write;
+	});
+	try {
+		await openFixtureProject(page);
+		await enterDefaultWorkspace(page);
+		await openMcpSettings(page);
+		await page.getByTestId("mcp-empty-import").click();
+		const dialog = page.getByTestId("mcp-add-dialog");
+		const entry = { command: BUN, args: [STDIO_SERVER], enabled: false };
+		await dialog
+			.getByTestId("mcp-json-input")
+			.fill(JSON.stringify({ mcpServers: { "saved-fixture": entry, "retry-fixture": entry } }));
+		await dialog.getByTestId("mcp-add-submit").click();
+		await dialog.getByTestId("mcp-add-confirm").click();
+		await expect(dialog.getByTestId("mcp-add-errors")).toHaveText(
+			"retry-fixture: Add refused for fixture",
+		);
+		await expect(dialog.getByTestId("mcp-json-input")).toHaveValue(
+			JSON.stringify({ mcpServers: { "retry-fixture": entry } }, null, 2),
+		);
+		await dialog.getByTestId("mcp-add-submit").click();
+		await dialog.getByTestId("mcp-add-confirm").click();
+		await expect(dialog).toBeHidden();
+		await expect(serverRow(page, "saved-fixture")).toBeVisible();
+		await expect(serverRow(page, "retry-fixture")).toBeVisible();
+		expect(writes.map((write) => [write.method, write.params.name])).toEqual([
+			["mcp.add", "saved-fixture"],
+			["mcp.add", "retry-fixture"],
+			["mcp.add", "retry-fixture"],
+		]);
+	} finally {
+		rmSync(USER_CONFIG, { force: true });
+	}
+});
 
 test("a stdio server added through the form connects in a chat, is disabled there, and is removed", async ({
 	page,

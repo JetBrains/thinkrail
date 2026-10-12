@@ -76,6 +76,23 @@ type McpAddServers = (
 	scope: McpServerScope,
 ) => Promise<McpAddResult[]>;
 
+export async function addMcpServersWithProjectOptIn(
+	servers: { name: string; entry: McpServerEntryInput }[],
+	scope: McpServerScope,
+	onAdd: McpAddServers,
+	onEnableInProject?: (name: string) => Promise<void>,
+): Promise<McpAddResult[]> {
+	const added = await onAdd(servers, scope);
+	if (onEnableInProject) {
+		await Promise.allSettled(
+			added
+				.filter((result) => result.error === null)
+				.map(async (result) => onEnableInProject(result.name)),
+		);
+	}
+	return added;
+}
+
 function DialogBody({ children }: { children: ReactNode }) {
 	return (
 		<div className="-mx-16 flex min-h-0 flex-1 flex-col gap-12 overflow-y-auto px-16">
@@ -562,7 +579,7 @@ export function McpAddDialog({
 	projectScopeAvailable: boolean;
 	onOpenChange: (open: boolean) => void;
 	onAdd: McpAddServers;
-	onEnableInProject: (name: string) => Promise<string | null>;
+	onEnableInProject: (name: string) => Promise<void>;
 }) {
 	const [tier, setTier] = useState(initialTier);
 	const [selectedScope, setSelectedScope] = useState<McpServerScope>("user");
@@ -608,16 +625,12 @@ export function McpAddDialog({
 		optInPerProject = false,
 	) => {
 		setSaving(true);
-		const added = await onAdd(servers, targetScope);
-		const results = optInPerProject
-			? await Promise.all(
-					added.map(async (result) =>
-						result.error === null
-							? { name: result.name, error: await onEnableInProject(result.name) }
-							: result,
-					),
-				)
-			: added;
+		const results = await addMcpServersWithProjectOptIn(
+			servers,
+			targetScope,
+			onAdd,
+			optInPerProject ? onEnableInProject : undefined,
+		);
 		setSaving(false);
 		const failed = results.filter((result) => result.error !== null);
 		setFailures(failed);
