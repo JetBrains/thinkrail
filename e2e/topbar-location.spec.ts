@@ -9,8 +9,8 @@ import {
 	worktreeRows,
 } from "./fixtures/app";
 
-// The topbar location strip is a row of captioned segments (PROJECT · WORKSPACE · BRANCH · from base ·
-// REMOTE · PULL REQUEST). Every value is a control: the project pill switches projects, the workspace pill
+// The topbar location strip is a row of captioned segments (Project · Workspace · Branch · from base ·
+// Remote · Pull request). Every value is a control: the project pill switches projects, the workspace pill
 // carries the workspace actions plus a sibling switcher, the branch pill opens the git card. Review/remote
 // facts need a forge, so those chips are pinned by unit tests; this journey covers the rest end to end.
 

@@ -78,7 +78,7 @@ test("a worktree renders project, workspace and branch · from base segments", (
 	expect(html).toMatch(caption);
 });
 
-test("an open PR adds the REMOTE chips and the PULL REQUEST chip link", () => {
+test("an open PR adds the Remote chips and the Pull request chip link", () => {
 	const html = render(worktree, review);
 	const ids = testids(html);
 	expect(ids).toEqual(
@@ -96,7 +96,7 @@ test("an open PR adds the REMOTE chips and the PULL REQUEST chip link", () => {
 	expect(html).toContain("PR #648");
 });
 
-test("a user-owned workspace shows a plain BRANCH caption; a URL-less review stays a static chip", () => {
+test("a user-owned workspace shows a plain Branch caption; a URL-less review stays a static chip", () => {
 	const html = render(userOwned, { kind: "pull-request", number: 1, behindCommits: 3 });
 	expect(html).not.toContain("scope-base");
 	expect(html).not.toContain("· from");
@@ -105,7 +105,7 @@ test("a user-owned workspace shows a plain BRANCH caption; a URL-less review sta
 	expect(html).toMatch(/<span data-testid="scope-review" data-kind="pull-request"/);
 });
 
-test("project home keeps only the PROJECT and WORKSPACE segments", () => {
+test("project home keeps only the Project and Workspace segments", () => {
 	const html = render(null);
 	expect(html).toContain('data-context="project-home"');
 	expect(html).toContain(">Project home<");
@@ -185,7 +185,7 @@ test("the location bar never hard-codes typography or colour outside the token s
 	}
 });
 
-test("a merged review turns the PULL REQUEST chip info and drops the REMOTE segment", () => {
+test("a merged review turns the Pull request chip info and drops the Remote segment", () => {
 	const merged: OpenBranchReview = { ...review, state: "merged", changedAt: 1 };
 	const html = render(worktree, merged);
 	expect(html).toContain("Merged #648");
