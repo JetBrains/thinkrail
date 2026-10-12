@@ -6,8 +6,8 @@ description: "Use when the workspace is empty, has no code, and the user brings 
 # Starting a new project
 
 The workspace is empty: no code, no decisions. Turn the user's idea into one clear, living product
-document — `goal-and-requirements.md` — then use `brainstorming` only for later features that still
-require a product or design choice.
+document — `goal-and-requirements.md`. Later features, behavior changes, and bug fixes go through
+`brainstorming`.
 
 **Hold the writing-specs bar.** Read that concept skill before saving anything — it carries the
 short / honest / on-rails rules and the goal-doc shape every section you save must meet.
@@ -88,6 +88,5 @@ binary Success Conditions instead of metrics). Reject vague goals inline: "'Bett
 ## Next
 
 State plainly that the spec is saved and evolves with the project. Suggest the natural next step —
-sketch `architecture.md`, then use `brainstorming` only when a feature still requires choosing scope,
-user-visible behavior, or architecture. Fully specified work proceeds directly. There is no board/ticket hand-off — say it and
-stop: **this workflow ends here**.
+sketch `architecture.md`, then build each feature through `brainstorming`. There is no board/ticket
+hand-off — say it and stop: **this workflow ends here**.
