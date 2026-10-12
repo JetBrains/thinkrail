@@ -60,7 +60,7 @@ export default function PlanRailPane({
 			<div className="min-h-0 flex-1 overflow-auto p-4">
 				{empty ? (
 					<p className="px-4 py-4 text-text-muted tr-text-metadata">
-						No TODOs yet \u2014 the agent adds its plan here, or add one above.
+						No TODOs yet — the agent adds its plan here, or add one above.
 					</p>
 				) : (
 					<TodoRows plan={plan.data} glance={glance} onOpenChanges={plan.openChanges} />
