@@ -36,6 +36,7 @@ function inputs(overrides: Partial<Parameters<typeof deriveSessionState>[0]> = {
 		entries: [user(), assistant("a1", "stop")],
 		isStreaming: false,
 		pendingMessageCount: 0,
+		backgroundWorkActive: false,
 		lastSettlement: undefined,
 		lifecycleCompletion: undefined,
 		liveQuestion: null,
@@ -190,6 +191,26 @@ describe("deriveSessionState", () => {
 			outcome: "cancelled",
 		});
 		expect(cancelled.completionUnread).toBe(false);
+	});
+
+	test("background work holds an idle completion unread until it ends, never a blocker", () => {
+		const held = deriveSessionState(
+			inputs({ backgroundWorkActive: true, lastSettlement: { stopReason: "stop" } }),
+		);
+		expect(held.execution).toBe("idle");
+		expect(held.completion).toEqual({ completionId: "completion:a1", outcome: "succeeded" });
+		expect(held.completionUnread).toBe(false);
+
+		const released = deriveSessionState(inputs({ lastSettlement: { stopReason: "stop" } }));
+		expect(released.completionUnread).toBe(true);
+
+		const blocked = deriveSessionState(
+			inputs({
+				backgroundWorkActive: true,
+				liveQuestion: { interactionId: "q1", needsInput: true },
+			}),
+		);
+		expect(blocked.needsInput).toEqual({ interactionId: "question:q1", kind: "question" });
 	});
 
 	test("reconstruction reads the complete active branch instead of capping oversized transcripts", () => {

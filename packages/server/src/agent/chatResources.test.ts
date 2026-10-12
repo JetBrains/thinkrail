@@ -17,7 +17,7 @@ import {
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { AgentSession, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { AskUserQuestionResult, SessionResources } from "@thinkrail/contracts";
+import type { AskUserQuestionResult, SessionResources, SessionState } from "@thinkrail/contracts";
 import type { ChildHandle } from "pi-delegation";
 import { setTrashImplementationForTests } from "../trash";
 import {
@@ -27,6 +27,7 @@ import {
 	deleteSession,
 	disposeAllSessions,
 	getSessionMessages,
+	getSessionState,
 	hasSession,
 	promptSession,
 	reloadSessionResources,
@@ -34,7 +35,9 @@ import {
 	removeWorkspaceSessions,
 	setSessionCreatedPublisher,
 	setSessionManagerFactory,
+	setSessionProjectResolver,
 	setSessionPublisher,
+	setSessionStatePublisher,
 	setSkillAdmissionResolver,
 	settleSessionsForShutdown,
 } from "./agentSessionManager";
@@ -696,6 +699,105 @@ test("user stop of a detached Agent child does not wake its idle parent", async 
 	} finally {
 		gate.resolve();
 		setSessionPublisher(() => {});
+	}
+});
+
+function recordStates(sessionId: string): { states: SessionState[]; stop: () => void } {
+	const states: SessionState[] = [];
+	setSessionProjectResolver(() => "resources-project");
+	setSessionStatePublisher((record) => {
+		if (record.sessionId === sessionId) states.push(record.state);
+	});
+	return {
+		states,
+		stop: () => {
+			setSessionStatePublisher(() => {});
+			setSessionProjectResolver(() => null);
+		},
+	};
+}
+
+test("a running background command holds the idle parent's completion unread until it stops", async () => {
+	const p = await parent();
+	const commandId = await launch(p);
+	const recorder = recordStates(p.sessionId);
+	try {
+		expect(getSessionState(p.sessionId)).toMatchObject({
+			execution: "idle",
+			completion: { outcome: "succeeded" },
+			completionUnread: false,
+		});
+		await stopBackgroundCommand(p.workspaceId, p.sessionId, commandId, p.cwd);
+		await waitFor(async () => recorder.states.at(-1)?.completionUnread === true);
+		expect(getSessionState(p.sessionId)).toMatchObject({
+			execution: "idle",
+			completionUnread: true,
+		});
+	} finally {
+		recorder.stop();
+		await removeSession(p.sessionId);
+	}
+});
+
+test("a waking command completion never publishes an unread idle state before the woken turn", async () => {
+	const p = await parent();
+	const gate = join(p.cwd, "finish");
+	await launch(p, `while ! test -f '${gate}'; do sleep 0.02; done`);
+	const recorder = recordStates(p.sessionId);
+	try {
+		faux.setResponses([fauxAssistantMessage("WOKEN_TURN")]);
+		writeFileSync(gate, "done");
+		await waitFor(async () => {
+			const last = recorder.states.at(-1);
+			return last?.execution === "idle" && last.completionUnread;
+		});
+		const firstUnread = recorder.states.findIndex((state) => state.completionUnread);
+		const firstRunning = recorder.states.findIndex((state) => state.execution === "running");
+		expect(firstRunning).toBeGreaterThan(-1);
+		expect(firstUnread).toBeGreaterThan(firstRunning);
+	} finally {
+		writeFileSync(gate, "done");
+		recorder.stop();
+		await removeSession(p.sessionId);
+	}
+});
+
+test("a running detached Agent child holds the idle parent's completion unread until it ends", async () => {
+	const p = await parent();
+	const gate = deferred();
+	faux.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("Agent", {
+				subagent_type: "worker",
+				task: "Do background work",
+				run_in_background: true,
+			}),
+		),
+		async () => {
+			await gate.promise;
+			return fauxAssistantMessage("CHILD_DONE");
+		},
+		fauxAssistantMessage("PARENT_ACK"),
+	]);
+	const recorder = recordStates(p.sessionId);
+	try {
+		await promptSession(p.sessionId, "Delegate in the background.");
+		const child = (await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents[0];
+		if (!child) throw new Error("missing child");
+		expect(getSessionState(p.sessionId)).toMatchObject({
+			execution: "idle",
+			completionUnread: false,
+		});
+		await stopSubagent(p.workspaceId, p.sessionId, child.childSessionId, p.cwd);
+		gate.resolve();
+		await waitFor(async () => recorder.states.at(-1)?.completionUnread === true);
+		expect(getSessionState(p.sessionId)).toMatchObject({
+			execution: "idle",
+			completionUnread: true,
+		});
+	} finally {
+		gate.resolve();
+		recorder.stop();
 	}
 });
 
