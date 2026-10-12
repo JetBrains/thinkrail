@@ -10,6 +10,7 @@ import {
 	RiChat2Line as MessageSquareText,
 	RiNotification3Line as NotificationBell,
 	RiPaletteLine as Palette,
+	RiPuzzle2Line as Puzzle,
 	RiGitRepositoryLine as Repository,
 	RiSearchEyeLine as ScanEye,
 	RiShieldCheckLine as ShieldCheck,
@@ -19,6 +20,7 @@ import {
 } from "@remixicon/react";
 import {
 	DEFAULT_MODEL_PROTOCOL_VERSION,
+	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
@@ -27,6 +29,7 @@ import type { ReactNode } from "react";
 import { SettingsSection, useAppStore } from "@/store";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
+import { ExtensionsSettings } from "./ExtensionsSettings";
 import { FeedbackSettings } from "./FeedbackSettings";
 import { GithubSettings } from "./GithubSettings";
 import { LineWidthSettings } from "./LineWidthSettings";
@@ -73,6 +76,12 @@ const SECTIONS: {
 	},
 	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
 	{ id: SettingsSection.Review, label: "Review", icon: ScanEye },
+	{
+		id: SettingsSection.Extensions,
+		label: "Extensions",
+		icon: Puzzle,
+		requiresProtocolVersion: EXTENSION_CATALOG_PROTOCOL_VERSION,
+	},
 	{ id: SettingsSection.Notifications, label: "Notifications", icon: NotificationBell },
 	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
 	{ id: SettingsSection.Feedback, label: "Feedback", icon: Feedback },
@@ -185,6 +194,8 @@ export function SettingsDialog({
 							<TemplatesSettings />
 						) : selectedSection === SettingsSection.Review ? (
 							<ReviewSettings />
+						) : selectedSection === SettingsSection.Extensions ? (
+							<ExtensionsSettings />
 						) : selectedSection === SettingsSection.Notifications ? (
 							<NotificationsSettings />
 						) : selectedSection === SettingsSection.Privacy ? (

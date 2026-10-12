@@ -3776,6 +3776,14 @@ test("applyConfig projects the per-chat subagent limit and rejects a malformed o
 	expect(useAppStore.getState()).toHaveProperty("subagentMaxConcurrent", 4);
 });
 
+test("applyConfig projects disabled extensions and an older host's missing list as none", () => {
+	useAppStore.getState().applyConfig({ ...DEFAULT_CONFIG, disabledExtensions: ["visualize"] });
+	expect(useAppStore.getState().disabledExtensions).toEqual(["visualize"]);
+	const { disabledExtensions: _omitted, ...olderHost } = DEFAULT_CONFIG;
+	useAppStore.getState().applyConfig(olderHost as typeof DEFAULT_CONFIG);
+	expect(useAppStore.getState().disabledExtensions).toEqual([]);
+});
+
 test("applyConfig projects JetBrains quota display and cadence", () => {
 	expect(useAppStore.getState()).toMatchObject({
 		jbcentralQuotaEnabled: true,

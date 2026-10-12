@@ -360,6 +360,7 @@ export const SettingsSection = {
 	Notifications: "notifications",
 	Privacy: "privacy",
 	Feedback: "feedback",
+	Extensions: "extensions",
 } as const;
 export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSection];
 
@@ -984,6 +985,7 @@ interface AppState {
 	recentModels: WireModel[];
 	reviewAutoFix: boolean;
 	agentReviewEnabled: boolean;
+	disabledExtensions: string[];
 	customLayoutPresets: LayoutPreset[];
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
@@ -1331,6 +1333,9 @@ function configPatch(config: AppConfig) {
 		recentModels: config.recentModels ?? DEFAULT_CONFIG.recentModels,
 		reviewAutoFix: config.reviewAutoFix ?? DEFAULT_CONFIG.reviewAutoFix,
 		agentReviewEnabled: config.agentReviewEnabled ?? DEFAULT_CONFIG.agentReviewEnabled,
+		disabledExtensions: Array.isArray(config.disabledExtensions)
+			? config.disabledExtensions
+			: DEFAULT_CONFIG.disabledExtensions,
 	};
 }
 
@@ -2180,6 +2185,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	recentModels: DEFAULT_CONFIG.recentModels,
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
+	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
 	toasts: [],
 	resourceSnapshots: {},
 	resourceRevision: 0,

@@ -679,9 +679,21 @@ a project picker, the prompt hero, and the reused
   (the host live-toggles the tool's active set on it, see `submodule-server-host-plan-review`). It lives in
   the props-driven `AgentReviewSettings` and is **hidden until the host negotiates v68**
   (`AGENT_REVIEW_SETTING_PROTOCOL_VERSION`): a pre-v68 host can echo/store the unknown field while still
-  registering `request_review`, so the switch would misreport the worker's behavior. A single dimmed "General" nav item ("Soon") still signals the shell is
+  registering `request_review`, so the switch would misreport the worker's behavior.
+  **`ExtensionsSettings`** (the **Extensions** section, nav `settings-nav-extensions`, listed only at
+  `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) fetches the host-registry catalog with
+  `extension.list` each time the section mounts — the catalog is static per host process, so it is
+  section-local state, not a store slice — and renders it through the props-driven `ExtensionsCatalog`:
+  per row the title, description, tool-name chips and a `@thinkrail/ui/switch` (`extension-toggle-<name>`).
+  The switch state comes from **`store.disabledExtensions`**, not the catalog's `enabled` snapshot, so it
+  follows `settings.changed` from any client; a toggle writes the whole list through
+  `settings.update { disabledExtensions }` and, like every settings switch, converges on that broadcast
+  rather than rendering optimistically (`submodule-server-settings` § Get right). Unknown names already in
+  the list are carried through untouched. An empty registry renders `extensions-empty`; a failed fetch
+  renders `extensions-failed`. Disabling never unregisters a tool renderer
+  ([[submodule-web-extensions]]), so past transcripts still render. A single dimmed "General" nav item ("Soon") still signals the shell is
   built to grow. `ProvidersSettings`/`AppearanceSettings`/`LineWidthSettings`/`ChatSettings`/`TemplatesSettings`/
-  `PrivacySettings`/`ReviewSettings`/`ModelsSettings`/`FeedbackSettings` and the app-wide **`InterviewPromptDialog`** are the
+  `PrivacySettings`/`ReviewSettings`/`ModelsSettings`/`FeedbackSettings`/`ExtensionsSettings` and the app-wide **`InterviewPromptDialog`** are the
   panels-owned **integration pieces** (store + transport). The prompt renders the shared incentive copy and
   fixed Calendar anchor with `Schedule an interview`, `Not now`, and `Never show again` actions. Primary and
   middle-button booking activation open Calendar immediately and record `book`; close, Escape, and backdrop record `postpone`; permanent

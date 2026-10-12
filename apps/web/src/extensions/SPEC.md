@@ -15,6 +15,10 @@ invokes registration at module load, after the app-local tool registrations. Eac
 entries feed the existing chat registry in order, preserving its last-registration-wins behavior and
 fallback renderer. Re-registering the same list replaces entries rather than accumulating them.
 
+Registration ignores the host's extension on/off setting: a web extension's renderers stay registered while
+its server half is disabled, so a transcript that already contains its tool calls keeps rendering them. The
+switch only decides what the host gives the agent next.
+
 ## Boundary
 
 `index.ts` exports `webExtensions` and `registerWebExtensions` only. Imports reach public extension
