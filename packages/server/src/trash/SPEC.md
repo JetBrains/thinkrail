@@ -24,7 +24,9 @@ compiled artifact. The one way anything in the host destroys a user's file.
   swaps the whole implementation for tests that must not touch a real recycle bin.
 - **Public surface (barrel):** `trashFile`, `setBundledTrashHelpers`, `setTrashImplementationForTests`,
   `TrashImplementation`, `BundledTrashHelpers`.
-- **Allowed deps:** `trash` + `@stroncium/procfs` (external); Node `child_process`/`util`.
+- **Allowed deps:** `trash` + `@stroncium/procfs` (external — its deep imports name their `.js` files,
+  since Node ESM, which hosts the workflow harness, rejects directory and extensionless specifiers);
+  Node `child_process`/`util`.
 - **Forbidden:** `host`; sibling features; any permanent-`unlink` fallback.
 
 ## Consumers

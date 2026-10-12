@@ -801,9 +801,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   capability, likewise value-imported by its host embedding); `pi-web-access` + `pi-spec-graph` +
   `pi-thinkrail-workflow` + `pi-todos` (the bundled pi packages — parent sessions load the set through
   resource-loader paths or launcher factories; delegated children value-import `pi-spec-graph` and receive
-  the named `pi-web-access` factory through the bundled runtime seam, with source-mode Bun `require` as the
-  dev equivalent); the sibling `extensions` registry module (the ThinkRail extensions' inline factories and
-  skill roots — `agent` never imports an `@thinkrail/ext-*` package or its pi package directly); `typebox` (the `ask_user_question` parameter schema); `jsonc-parser` (targeted
+  the named `pi-web-access` factory through the bundled runtime seam; the source-mode equivalent loads it
+  lazily through `jiti` — the loader pi uses for extension paths — so a parent never pays for it and the
+  barrel stays Node-loadable for the workflow harness ([[module-workflow-tests]])); the sibling `extensions` registry module (the ThinkRail extensions' inline factories and
+  skill roots — `agent` never imports an `@thinkrail/ext-*` package or its pi package directly); `jiti` (the source-mode child `pi-web-access` load above); `typebox` (the `ask_user_question` parameter schema); `jsonc-parser` (targeted
   `models.json` edits in `modelContext`); `trash` (reached only through the
   sibling **`trash` module** — see [[submodule-server-trash]]: one path, globbing disabled, allowed to
   throw, never degraded to `unlink`; the launcher's staged-helper and procfs-parser seams live there too,

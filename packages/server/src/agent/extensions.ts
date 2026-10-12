@@ -16,7 +16,6 @@ import {
 	type Skill,
 } from "@earendil-works/pi-coding-agent";
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
-import { createJiti } from "jiti";
 import specGraphExtension from "pi-spec-graph";
 import {
 	omitDisabledRegistryExtensions,
@@ -185,9 +184,10 @@ export function toSkillCommands(skills: readonly Skill[]): SlashCommandInfo[] {
 
 let devWebAccessFactory: Promise<BundledExtensionFactory> | undefined;
 const devWebAccess: BundledExtensionFactory = async (pi) => {
-	devWebAccessFactory ??= createJiti(import.meta.url).import<BundledExtensionFactory>(
-		"pi-web-access/index.ts",
-		{ default: true },
+	devWebAccessFactory ??= import("jiti").then(({ createJiti }) =>
+		createJiti(import.meta.url).import<BundledExtensionFactory>("pi-web-access/index.ts", {
+			default: true,
+		}),
 	);
 	await (await devWebAccessFactory)(pi);
 };

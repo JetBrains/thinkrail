@@ -102,6 +102,11 @@ Dependency direction is one-way: `scenario` → everything; `dialog`/`signals`/`
 - **Forbidden:** `@thinkrail/server`'s root export (evaluates the Bun-only `host`), `apps/*`, any
   browser/page fixture, model selection (`setModel` would persist a default into the shared isolated
   agent dir mid-run).
+- **Node-loadable server barrel.** The harness runs in Playwright's Node process, so the module graph
+  behind `@thinkrail/server/agent` must load without Bun-only resolution: no directory or extensionless
+  deep imports, no raw `require` of TypeScript under `node_modules`. A violation fails every live
+  scenario at session creation, before any skill runs — the suite was silently unrunnable this way
+  until 2026-10.
 
 ## Suites
 
