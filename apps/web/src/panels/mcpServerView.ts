@@ -133,7 +133,7 @@ function baseView(row: McpServerRow, now: number): McpRowView {
 				label: MCP_STATE_LABEL["needs-sign-in"],
 				tone: "warning",
 				reason: "Sign in to let chats use this server.",
-				...(summary.oauth ? { action: "sign-in" as const } : {}),
+				...(row.effective && summary.oauth ? { action: "sign-in" as const } : {}),
 			};
 		case "failed":
 			return {
@@ -198,7 +198,7 @@ function baseView(row: McpServerRow, now: number): McpRowView {
 				tone: "neutral",
 				reason: "Starts when a chat opens in this workspace.",
 				action: "open-chat",
-				...(http ? { secondary: "test-connection" as const } : {}),
+				...(row.effective && http ? { secondary: "test-connection" as const } : {}),
 			};
 		case "unknown":
 			return {

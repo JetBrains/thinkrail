@@ -18,7 +18,7 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import { LoginDialog } from "@/auth";
 import { AUTH_KIND_LABEL } from "@/chat/modelPicker";
 import { SkeletonRows } from "@/components/Skeleton";
-import { toast, useAppStore } from "@/store";
+import { selectLoginBusy, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { JetBrainsAiCard } from "./JetBrainsAiCard";
 
@@ -32,6 +32,7 @@ export function ProvidersSettings() {
 	const [busyProvider, setBusyProvider] = useState<string | null>(null);
 	const [showAllKeys, setShowAllKeys] = useState(false);
 	const activeLogin = useAppStore((s) => (s.activeLogin?.target ? null : s.activeLogin));
+	const loginBusy = useAppStore(selectLoginBusy);
 	const providerVersion = useAppStore((s) => s.providerVersion);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const quotaEnabled = useAppStore((s) => s.jbcentralQuotaEnabled);
@@ -71,6 +72,7 @@ export function ProvidersSettings() {
 	}, [activeLogin?.status, load]);
 
 	const startLogin = useCallback(async (providerId: string, type: "oauth" | "api_key") => {
+		if (!useAppStore.getState().reserveLogin()) return;
 		setBusyProvider(providerId);
 		try {
 			const { loginId } = await getTransport().request("provider.loginStart", { providerId, type });
@@ -78,6 +80,7 @@ export function ProvidersSettings() {
 		} catch (err) {
 			toast.error(errorText(err), "Couldn't start the connection");
 		} finally {
+			useAppStore.getState().finishLoginStart();
 			setBusyProvider(null);
 		}
 	}, []);
@@ -128,7 +131,7 @@ export function ProvidersSettings() {
 	const noInApp = unconfigured.filter((p) => !p.canOAuth && !p.canApiKey);
 	const loginProviderName =
 		providers.find((p) => p.id === activeLogin?.providerId)?.name ?? activeLogin?.providerId ?? "";
-	const rowBusy = (id: string) => busyProvider === id || activeLogin !== null;
+	const rowBusy = (id: string) => busyProvider === id || loginBusy;
 
 	return (
 		<div data-testid="settings-providers" className="flex flex-col gap-16">

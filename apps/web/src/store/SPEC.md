@@ -56,9 +56,11 @@ one aggregation: one row per configured entry; with no live chat the state comes
 any chat wins by a fixed precedence, `connected` counts the chats reporting it ("connected in 2 of 3"),
 `sessions.reporting` names the live chats reporting the row's state (what Settings' per-chat Reconnect and
 Reload now target), an unreported server reads unknown, and `starting` past one minute
-reads unknown (stalled). Of a same-name user/project pair only the effective entry (the
-approved project one, else the user one) takes session status; a replaced user entry reads
-`replaced`. A pending repo override flags its user row for attention. Attention rows sort
+reads unknown (stalled). The host's optional `summary.effective` identifies the admitted entry that
+receives session status and can offer name-only login/logout/test actions; a replaced user entry reads
+`replaced`. For older hosts, status projection retains the valid-approved-project/user fallback, but
+runtime actions are withheld for ambiguous same-name rows. A folded invalid project override does not
+revoke a valid user row's explicitly reported authority. A pending repo override flags its user row for attention. Attention rows sort
 first and disabled/replaced rows last. `selectMcpWorkspaceStarting` drives the bounded
 re-read while a server starts. The state vocabulary and the attention/active predicates live in `lib`
 (`mcpState`) because the props-only chat resources module shares them.
@@ -437,8 +439,13 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   **`activeLogin: LoginState | null`** (type from `auth`) is **flat + session-less** (a login runs on the
   Welcome screen before any session exists — routing it through a session runtime would drop its frames):
   the pure **`foldLoginFrame`** reducer lives here (as `reduceExtUi`/`reduceSessionEvent` do — `auth` stays
-  presentational), and **`beginLogin(loginId, providerId, target?)`** opens the login (a no-op if a frame
-  already created it — the frame can beat the `loginStart` / `mcp.login` response),
+  presentational). **`reserveLogin()`** synchronously claims the global startup slot only while neither
+  `loginStarting` nor a dialog is held; **`finishLoginStart()`** releases it on completion or failure.
+  Providers and MCP share that slot; only the owning request's completion releases it, not a late
+  `beginLogin` response. **`beginLogin(loginId, providerId, target?)`** opens the login, preserving a
+  matching frame-created dialog (the frame can beat the response) and refusing to overwrite a different
+  active login. Workspace removal retires its targeted MCP dialog; late start responses and frames for
+  tombstoned workspaces cannot recreate it or strand the global login slot.
   **`applyLoginFrame(push)`** folds an inbound `provider.login` frame (creating `activeLogin`
   if the frame arrived first; ignoring frames for a different live login); both keep an MCP
   push's `target`, which is how Providers and MCP settings each open only their own logins,

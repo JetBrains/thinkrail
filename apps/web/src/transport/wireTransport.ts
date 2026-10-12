@@ -248,7 +248,15 @@ export function initTransport(): WsTransport {
 	});
 
 	transport.subscribe(WS_CHANNELS.providerLogin, (data) => {
-		useAppStore.getState().applyLoginFrame(data as LoginPush);
+		const push = data as LoginPush;
+		const state = useAppStore.getState();
+		if (push.target && state.removedWorkspaceIds[push.target.workspaceId]) {
+			void getTransport()
+				.request("provider.loginCancel", { loginId: push.loginId })
+				.catch(() => {});
+			return;
+		}
+		state.applyLoginFrame(push);
 	});
 
 	transport.subscribe(WS_CHANNELS.mcpStatus, (data) => {
@@ -286,7 +294,14 @@ export function initTransport(): WsTransport {
 
 	transport.subscribe(WS_CHANNELS.workspaceRemoved, (data) => {
 		const { projectId, id } = data as WorkspaceRemoved;
-		useAppStore.getState().applyWorkspaceRemoved(projectId, id);
+		const state = useAppStore.getState();
+		const login = state.activeLogin;
+		state.applyWorkspaceRemoved(projectId, id);
+		if (login?.target?.workspaceId === id) {
+			void getTransport()
+				.request("provider.loginCancel", { loginId: login.loginId })
+				.catch(() => {});
+		}
 	});
 
 	transport.subscribe(WS_CHANNELS.reviewChanged, (data) => {

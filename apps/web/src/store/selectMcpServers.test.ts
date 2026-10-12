@@ -228,6 +228,102 @@ test("a same-name pair runs the approved project entry and replaces the user one
 	]);
 });
 
+test("host authority follows the admitted endpoint for pending, invalid and approved replacements", () => {
+	for (const replacement of ["pending", "invalid", "approved"] as const) {
+		const projectEffective = replacement === "approved";
+		const user = summary("docs", {
+			transport: "http",
+			endpoint: "https://user.example/mcp",
+			oauth: true,
+			effective: !projectEffective,
+		});
+		const project = summary("docs", {
+			scope: "project",
+			transport: "http",
+			endpoint: "https://repo.example/mcp",
+			oauth: true,
+			effective: projectEffective,
+			approval: { state: replacement === "pending" ? "pending" : "approved", fingerprint: "f" },
+			...(replacement === "invalid" ? { configError: "Invalid repository definition" } : {}),
+		});
+		for (const sessions of [[], [session("a", [{ state: "needs-sign-in" }])]]) {
+			const rows = deriveMcpServerRows(projection([user, project], sessions), NOW);
+			const active = rows.find((row) => row.effective);
+			expect(active?.summary.endpoint).toBe(projectEffective ? project.endpoint : user.endpoint);
+			expect(active?.state).toBe(sessions.length > 0 ? "needs-sign-in" : "not-running");
+			expect(active?.sessions.reporting).toEqual(sessions.length > 0 ? ["a"] : []);
+			const inactive = rows.find((row) => !row.effective);
+			expect(inactive?.sessions.reporting).toEqual([]);
+			expect(inactive?.state).toBe(
+				projectEffective
+					? "replaced"
+					: replacement === "invalid"
+						? "invalid-config"
+						: "pending-approval",
+			);
+		}
+	}
+});
+
+test("effective=true is authoritative despite folded invalid repository override diagnostics", () => {
+	const user = summary("docs", {
+		effective: true,
+		transport: "http",
+		endpoint: "https://user.example/mcp",
+		oauth: true,
+		configError: "Invalid repository override",
+		approval: { state: "approved", fingerprint: "override" },
+	});
+	const skipped = summary("docs", {
+		scope: "project",
+		effective: false,
+		approval: { state: "approved", fingerprint: "skipped" },
+	});
+	for (const servers of [[user], [user, skipped]]) {
+		const rows = deriveMcpServerRows(
+			projection(servers, [session("a", [{ state: "needs-sign-in" }])]),
+			NOW,
+		);
+		expect(byName(rows, "user:docs")).toMatchObject({
+			effective: true,
+			state: "needs-sign-in",
+			sessions: { reporting: ["a"] },
+		});
+		expect(rows.filter((row) => row.effective)).toHaveLength(1);
+	}
+	const [idle] = deriveMcpServerRows(projection([user]), NOW);
+	expect(idle).toMatchObject({ effective: true, state: "invalid-config" });
+});
+
+test("older hosts grant name-only actions only to unique valid rows, never same-name pairs", () => {
+	const user = summary("docs", { transport: "http", endpoint: "https://user.example/mcp" });
+	for (const state of ["pending", "approved", "changed"] as const) {
+		const project = summary("docs", {
+			scope: "project",
+			transport: "http",
+			endpoint: "https://repo.example/mcp",
+			approval: { state, fingerprint: "f" },
+		});
+		for (const configError of [undefined, "Invalid repository definition"]) {
+			const rows = deriveMcpServerRows(projection([user, { ...project, configError }]), NOW);
+			expect(rows.every((row) => !row.effective)).toBe(true);
+		}
+		expect(deriveMcpServerRows(projection([project]), NOW)[0]?.effective).toBe(
+			state === "approved",
+		);
+	}
+	expect(deriveMcpServerRows(projection([user]), NOW)[0]?.effective).toBe(true);
+	expect(
+		deriveMcpServerRows(projection([{ ...user, configError: "Invalid config" }]), NOW)[0]
+			?.effective,
+	).toBe(false);
+	expect(deriveMcpServerRows(projection([{ ...user, effective: false }]), NOW)[0]).toMatchObject({
+		effective: false,
+		state: "not-running",
+		sessions: { reporting: [] },
+	});
+});
+
 test("a pending repository override flags its user row for attention without hiding the live state", () => {
 	const [row] = deriveMcpServerRows(
 		projection(

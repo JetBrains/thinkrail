@@ -52,6 +52,62 @@ test(`config references follow pi's grammar: \${VAR}, $VAR and !command, with $$
 	expect(isConfigReference("")).toBe(false);
 });
 
+test("complete malformed braced fragments stay literal, while later references still count", () => {
+	for (const value of [
+		"$$TOKEN",
+		`$\${TOKEN}`,
+		`\${literal $TOKEN}`,
+		`\${literal \${TOKEN}}`,
+		`\${literal $! $TOKEN}`,
+		`\${TOKEN:-$FALLBACK}`,
+		`\${}\${9TOKEN}\${TOKEN-NAME}`,
+		`\${TOKEN`,
+		"$",
+	]) {
+		expect(isConfigReference(value)).toBe(false);
+	}
+	for (const value of [
+		"$$$TOKEN",
+		"$!$TOKEN",
+		`\${literal $TOKEN} $LATER`,
+		`\${literal \${TOKEN}} \${LATER}`,
+		`\${TOKEN:-$FALLBACK}$LATER`,
+		`\${unclosed $TOKEN`,
+		`\${unclosed \${TOKEN} $LATER`,
+	]) {
+		expect(isConfigReference(value)).toBe(true);
+	}
+});
+
+test("malformed and escaped references are hidden and rejected in env, headers and OAuth secrets", () => {
+	for (const literal of [`\${literal $TOKEN}`, `\${literal \${TOKEN}}`, `$\${TOKEN}`, `\${TOKEN`]) {
+		const entry = {
+			url: "https://example.com/mcp",
+			env: { TOKEN: literal },
+			headers: { Authorization: literal },
+			oauth: { clientSecret: literal },
+		};
+		expect(hideMcpLiterals(entry)).toEqual({
+			...entry,
+			env: { TOKEN: MCP_HIDDEN_VALUE },
+			headers: { Authorization: MCP_HIDDEN_VALUE },
+			oauth: { clientSecret: MCP_HIDDEN_VALUE },
+		});
+		expect(mcpSecretIssues(entry)).toEqual([
+			`env TOKEN, header Authorization and oauth clientSecret are not references. ${HINT}`,
+		]);
+	}
+	const reference = `\${literal $TOKEN} \${LATER}`;
+	const entry = {
+		command: "x",
+		env: { TOKEN: reference },
+		headers: { Authorization: reference },
+		oauth: { clientSecret: reference },
+	};
+	expect(hideMcpLiterals(entry)).toEqual(entry);
+	expect(mcpSecretIssues(entry)).toEqual([]);
+});
+
 test("literal values are found in env, headers, oauth secrets and URL credentials", () => {
 	expect(
 		mcpLiteralValues({

@@ -106,7 +106,10 @@ export function isConfigReference(value: string): boolean {
 		}
 		if (next === "{") {
 			const end = value.indexOf("}", index + 2);
-			if (end >= 0 && ENV_NAME.test(value.slice(index + 2, end))) return true;
+			if (end >= 0) {
+				if (ENV_NAME.test(value.slice(index + 2, end))) return true;
+				index = end;
+			}
 			continue;
 		}
 		if (ENV_NAME_PREFIX.test(value.slice(index + 1))) return true;

@@ -39,8 +39,11 @@ not here — `auth` stays presentational + types, so nothing here imports `store
 
 ## Integration (owned by the caller, not here)
 
-- The **store** holds the single `activeLogin: LoginState | null` (flat, session-less) and owns the frame
+- The **store** holds the single `activeLogin: LoginState | null` (flat, session-less), reserves login
+  startup synchronously across Providers and MCP before either sends a request, and owns the frame
   reducer (`foldLoginFrame`) — never under a session runtime (that path drops frames pre-session).
+  A failed start releases the reservation; a frame may still create the matching dialog before the
+  start response. A late response never replaces a different active login.
 - The **`provider.login` channel** is routed to `store.applyLoginFrame` in `transport/wireTransport`.
 - `panels/ProvidersSettings` (the Providers section of the Settings dialog) is the integration piece: it
   starts a login (`provider.loginStart` with `type` `"oauth"` or `"api_key"` — both auth routes ride the

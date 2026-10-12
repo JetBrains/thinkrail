@@ -1,10 +1,13 @@
-import { expect, test } from "bun:test";
-import type { McpServerSummary } from "@thinkrail/contracts";
+import { expect, spyOn, test } from "bun:test";
+import type { McpListResult, McpServerSummary } from "@thinkrail/contracts";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
+import { Children, isValidElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import type { McpServerRow } from "@/store";
+import { deriveMcpServerRows, type McpServerRow } from "@/store";
+import * as transport from "@/transport";
 import { McpRunReview } from "./McpServerDialogs";
 import {
+	approveMcpServer,
 	McpConfigFileErrors,
 	McpConfirmBanner,
 	McpEmptyState,
@@ -30,6 +33,7 @@ function row(overrides: Partial<McpServerRow> = {}, summary: Partial<McpServerSu
 			...summary,
 		},
 		state: "connected",
+		effective: true,
 		toolCount: 2,
 		sessions: { total: 1, reporting: ["s1"], connected: 1 },
 		startingStalled: false,
@@ -103,6 +107,156 @@ test("rows offer the status table's per-state actions: Reconnect and Show log, R
 	const http = render(row(idle, { transport: "http" }));
 	expect(actions(http)).toEqual(["secondary:test-connection", "action:open-chat"]);
 	expect(http).toContain("Open a chat");
+});
+
+function menuItems(value: McpServerRow): string[] {
+	const items: string[] = [];
+	const visit = (node: ReactNode) => {
+		Children.forEach(node, (child) => {
+			if (!isValidElement<{ children?: ReactNode; "data-testid"?: string }>(child)) return;
+			const id = child.props["data-testid"];
+			if (id?.startsWith("mcp-menu-")) items.push(id);
+			visit(child.props.children);
+		});
+	};
+	visit(
+		McpServerRowView({
+			row: value,
+			view: mcpRowView(value, 0),
+			readOnly: false,
+			busy: false,
+			error: undefined,
+			onCommand: () => {},
+		}),
+	);
+	return items;
+}
+
+test("runtime menus follow row authority while scope-specific review, edit and remove remain", () => {
+	for (const admission of ["user", "project", "legacy"] as const) {
+		const user = row(
+			{},
+			{
+				transport: "http",
+				endpoint: "https://user.example/mcp",
+				oauth: true,
+				...(admission !== "legacy" ? { effective: admission === "user" } : {}),
+			},
+		).summary;
+		const project = {
+			...user,
+			scope: "project" as const,
+			endpoint: "https://repo.example/mcp",
+			approval: {
+				state: admission === "project" ? ("approved" as const) : ("pending" as const),
+				fingerprint: "f",
+			},
+			...(admission !== "legacy" ? { effective: admission === "project" } : {}),
+		};
+		const rows = deriveMcpServerRows(
+			{
+				servers: [user, project],
+				configErrors: [],
+				handledElsewhere: null,
+				sessions: {},
+			},
+			0,
+		);
+		for (const value of rows) {
+			const items = menuItems(value);
+			for (const id of ["sign-in", "sign-out", "test-connection"]) {
+				expect(items.includes(`mcp-menu-${id}`)).toBe(value.summary.scope === admission);
+			}
+			expect(items).toContain("mcp-menu-remove");
+			expect(items).toContain(
+				value.state === "pending-approval" ? "mcp-menu-review" : "mcp-menu-edit",
+			);
+			if (!value.effective) expect(render(value)).not.toContain('data-action="test-connection"');
+		}
+	}
+});
+
+test("an effective user server keeps runtime menus despite an invalid folded override", () => {
+	const [value] = deriveMcpServerRows(
+		{
+			servers: [
+				row(
+					{},
+					{
+						effective: true,
+						transport: "http",
+						oauth: true,
+						configError: "Invalid repository override",
+						approval: { state: "approved", fingerprint: "f" },
+					},
+				).summary,
+			],
+			configErrors: [],
+			handledElsewhere: null,
+			sessions: {},
+		},
+		0,
+	);
+	if (!value) throw new Error("Missing user row");
+	expect(menuItems(value)).toEqual([
+		"mcp-menu-sign-in",
+		"mcp-menu-sign-out",
+		"mcp-menu-test-connection",
+		"mcp-menu-edit",
+		"mcp-menu-details",
+		"mcp-menu-remove",
+	]);
+});
+
+test("a stale approval refreshes the summary without approving changed content under the old confirmation", async () => {
+	const original = row(
+		{},
+		{
+			scope: "project",
+			approval: { state: "pending", fingerprint: "old" },
+		},
+	).summary;
+	const changed: McpServerSummary = {
+		...original,
+		endpoint: "bun changed.ts",
+		approval: { state: "changed", fingerprint: "new" },
+	};
+	const refreshed: McpListResult = { servers: [changed], statuses: [] };
+	let cached = original;
+	const request = spyOn(transport, "requestMcpList").mockImplementation(async (method, params) => {
+		if (method === "mcp.list") {
+			cached = changed;
+			return refreshed;
+		}
+		if (method === "mcp.approve" && "fingerprint" in params && params.fingerprint === "new") {
+			return refreshed;
+		}
+		throw new Error("The repository entry changed — review it again.");
+	});
+	try {
+		const openReview = { summary: cached };
+		await expect(approveMcpServer("ws", openReview.summary)).rejects.toThrow("review it again");
+		expect(request.mock.calls).toEqual([
+			["mcp.approve", { workspaceId: "ws", name: "fixture", fingerprint: "old" }],
+			["mcp.list", { workspaceId: "ws" }],
+		]);
+		expect(cached).toBe(changed);
+		expect(openReview.summary.approval?.fingerprint).toBe("old");
+		await expect(approveMcpServer("ws", openReview.summary)).rejects.toThrow("review it again");
+		expect(request.mock.calls[2]).toEqual([
+			"mcp.approve",
+			{ workspaceId: "ws", name: "fixture", fingerprint: "old" },
+		]);
+		const reopened = { summary: cached };
+		await expect(approveMcpServer("ws", reopened.summary)).resolves.toBe(refreshed);
+		expect(request.mock.calls[4]).toEqual([
+			"mcp.approve",
+			{ workspaceId: "ws", name: "fixture", fingerprint: "new" },
+		]);
+		expect(request).toHaveBeenCalledTimes(5);
+	} finally {
+		request.mockRestore();
+	}
 });
 
 test("read-only rows disable every control and row errors render as alerts", () => {

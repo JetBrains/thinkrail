@@ -34,6 +34,7 @@ function row(overrides: Partial<McpServerRow> = {}, summaryOverrides = {}): McpS
 		key: "user:docs",
 		summary: summary(summaryOverrides),
 		state: "connected",
+		effective: true,
 		sessions: { total: 1, reporting: ["s1"], connected: 1 },
 		startingStalled: false,
 		approvalPending: false,
@@ -129,6 +130,30 @@ test("each non-green state has one reason line, at most one action and one secon
 	});
 	expect(view({ state: "replaced" }).label).toBe("Replaced by project");
 	expect(view({ state: "handled-elsewhere" }).action).toBeUndefined();
+});
+
+test("name-only primary and secondary probes require effective row authority", () => {
+	const http = { transport: "http", oauth: true };
+	for (const effective of [false, true]) {
+		expect(mcpRowView(row({ state: "needs-sign-in", effective }, http), NOW).action).toBe(
+			effective ? "sign-in" : undefined,
+		);
+		expect(mcpRowView(row({ state: "not-running", effective }, http), NOW).secondary).toBe(
+			effective ? "test-connection" : undefined,
+		);
+	}
+	expect(
+		mcpRowView(
+			row({ state: "pending-approval", effective: false }, { ...http, scope: "project" }),
+			NOW,
+		).action,
+	).toBe("review");
+	expect(
+		mcpRowView(
+			row({ state: "invalid-config", effective: false }, { ...http, scope: "project" }),
+			NOW,
+		).action,
+	).toBe("edit");
 });
 
 test("a pending repository override turns any live row into a review", () => {

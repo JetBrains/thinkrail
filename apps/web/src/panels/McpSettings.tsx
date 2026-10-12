@@ -11,6 +11,7 @@ import type {
 	McpListResult,
 	McpServerEntryInput,
 	McpServerScope,
+	McpServerSummary,
 	Workspace,
 } from "@thinkrail/contracts";
 import { Button } from "@thinkrail/ui/button";
@@ -38,6 +39,7 @@ import {
 	type McpServerRow,
 	selectActiveWorkspace,
 	selectChatTitle,
+	selectLoginBusy,
 	toast,
 	useAppStore,
 } from "@/store";
@@ -176,6 +178,17 @@ async function refreshOnFailure(
 		void requestMcpList("mcp.list", { workspaceId }).catch(() => {});
 		throw error;
 	}
+}
+
+export async function approveMcpServer(
+	workspaceId: string,
+	summary: McpServerSummary,
+): Promise<McpListResult> {
+	const fingerprint = summary.approval?.fingerprint;
+	if (!fingerprint) throw new Error("Nothing to approve.");
+	return refreshOnFailure(workspaceId, () =>
+		requestMcpList("mcp.approve", { workspaceId, name: summary.name, fingerprint }),
+	);
 }
 
 function writeSetting(
@@ -329,7 +342,7 @@ export function McpServerRowView({
 							</DropdownMenuTrigger>
 						</IconTooltip>
 						<DropdownMenuContent align="end">
-							{summary.oauth ? (
+							{row.effective && summary.oauth ? (
 								<>
 									<DropdownMenuItem
 										data-testid="mcp-menu-sign-in"
@@ -347,7 +360,7 @@ export function McpServerRowView({
 									</DropdownMenuItem>
 								</>
 							) : null}
-							{summary.transport === "http" ? (
+							{row.effective && summary.transport === "http" ? (
 								<DropdownMenuItem
 									data-testid="mcp-menu-test-connection"
 									disabled={inert}
@@ -635,6 +648,7 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 	const connected = useAppStore((s) => s.status === "connected");
 	const welcome = useAppStore((s) => s.welcomeGeneration);
 	const activeLogin = useAppStore((s) => s.activeLogin);
+	const loginBusy = useAppStore(selectLoginBusy);
 	const now = useNow();
 	const trusted = project?.piResourceTrust === "granted";
 	const rows = useMemo(
@@ -730,15 +744,35 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 		);
 	};
 
-	const startProbe = (row: McpServerRow, method: "mcp.login" | "mcp.testConnection") =>
-		run(row, async () => {
-			const name = row.summary.name;
-			const { loginId } = await getTransport().request(method, { workspaceId, name });
-			useAppStore
-				.getState()
-				.beginLogin(loginId, `mcp:${name}`, { kind: "mcp", workspaceId, serverName: name });
-			return null;
-		});
+	const startProbe = (
+		row: McpServerRow,
+		method: "mcp.login" | "mcp.testConnection" | "mcp.logout",
+	) => {
+		if (!useAppStore.getState().reserveLogin()) return;
+		return run(row, () =>
+			Promise.resolve()
+				.then(async () => {
+					const name = row.summary.name;
+					if (method === "mcp.logout") {
+						await getTransport().request(method, { workspaceId, name });
+						toast.success(`Signed out of ${name}.`);
+						return requestMcpList("mcp.list", { workspaceId });
+					}
+					const { loginId } = await getTransport().request(method, { workspaceId, name });
+					if (useAppStore.getState().removedWorkspaceIds[workspaceId]) {
+						void getTransport()
+							.request("provider.loginCancel", { loginId })
+							.catch(() => {});
+						return null;
+					}
+					useAppStore
+						.getState()
+						.beginLogin(loginId, `mcp:${name}`, { kind: "mcp", workspaceId, serverName: name });
+					return null;
+				})
+				.finally(() => useAppStore.getState().finishLoginStart()),
+		);
+	};
 
 	const projectTrustedNow = () =>
 		useAppStore.getState().projects.find((p) => p.id === workspace.projectId)?.piResourceTrust ===
@@ -798,11 +832,7 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 				void openLog(row);
 				return;
 			case "sign-out":
-				void run(row, async () => {
-					await getTransport().request("mcp.logout", { workspaceId, name });
-					toast.success(`Signed out of ${name}.`);
-					return requestMcpList("mcp.list", { workspaceId });
-				});
+				void startProbe(row, "mcp.logout");
 				return;
 			case "share":
 				void run(row, () =>
@@ -899,7 +929,7 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 							row={row}
 							view={mcpRowView(row, now)}
 							readOnly={readOnly}
-							busy={!!busy[row.key]}
+							busy={!!busy[row.key] || loginBusy}
 							error={rowErrorText(rowErrors[row.key], row.state)}
 							onCommand={(command) => onCommand(row, command)}
 						/>
@@ -957,15 +987,7 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 					target={approving}
 					onClose={() => setApproving(null)}
 					onApprove={async () => {
-						const fingerprint = approving.summary.approval?.fingerprint;
-						if (!fingerprint) return "Nothing to approve.";
-						const outcome = await settle(() =>
-							requestMcpList("mcp.approve", {
-								workspaceId,
-								name: approving.summary.name,
-								fingerprint,
-							}),
-						);
+						const outcome = await settle(() => approveMcpServer(workspaceId, approving.summary));
 						if (!outcome.ok) return outcome.error;
 						setFeedback(mcpSaveFeedback(outcome.value));
 						return null;

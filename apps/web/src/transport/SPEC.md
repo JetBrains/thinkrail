@@ -128,9 +128,14 @@ batches high-frequency Pi events without allowing later wire messages to overtak
   the settled status, including a connected edge; the bounded browser poll remains a refresh helper, not
   the sole completion path. The streak budget resets once nothing is starting; disposal cancels the timer
   and suppresses late watcher callbacks. Independent watchers share reads only under the tail rule above.
+Workspace removal cancels its active MCP login through `provider.loginCancel` after retiring the local
+modal. Late login frames for tombstoned workspaces are cancelled instead of installed; the MCP start
+response path does the same if removal preceded its acknowledgement. Cancellation is best-effort over
+the existing reconnect-safe request transport; the host's bounded probe lifetime remains the final cleanup.
+
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
-  skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`,
-  `requestMcpList`, `watchMcpWorkspace`, `ConnectionStatus`,
+  skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `requestMcpList`,
+  `watchMcpWorkspace`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
   `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`. `runHostUpdate` is the typed empty host action
   and `supportsHostUpdateRun` lets `Shell` inject it only for protocol v70+; `supportsPlanReview` is exported

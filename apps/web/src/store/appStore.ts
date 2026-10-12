@@ -966,6 +966,7 @@ interface AppState {
 	skillChangeTickByWorkspace: Record<string, number>;
 	skillsSyncedTickBySession: Record<string, number>;
 	activeLogin: LoginState | null;
+	loginStarting: boolean;
 	settingsOpen: boolean;
 	settingsSection: SettingsSection;
 	interviewPromptOpen: boolean;
@@ -1245,6 +1246,8 @@ interface AppState {
 	setChatDraft: (sessionId: string, text: string) => void;
 	clearPendingExtUi: (sessionId: string, id: string) => void;
 	applyExtUi: (request: ExtUiRequest) => void;
+	reserveLogin: () => boolean;
+	finishLoginStart: () => void;
 	beginLogin: (loginId: string, providerId: string, target?: LoginPush["target"]) => void;
 	applyLoginFrame: (push: LoginPush) => void;
 	clearLoginInput: () => void;
@@ -2172,6 +2175,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	skillChangeTickByWorkspace: {},
 	skillsSyncedTickBySession: {},
 	activeLogin: null,
+	loginStarting: false,
 	settingsOpen: false,
 	settingsSection: SettingsSection.Providers,
 	interviewPromptOpen: false,
@@ -2471,6 +2475,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 				turnsByWorkspace: omitKey(state.turnsByWorkspace, workspaceId),
 				resourceSnapshots: omitKey(state.resourceSnapshots, workspaceId),
 				mcpByWorkspace: omitKey(state.mcpByWorkspace, workspaceId),
+				activeLogin:
+					state.activeLogin?.target?.workspaceId === workspaceId ? null : state.activeLogin,
 				sessionStateByWorkspace: omitKey(state.sessionStateByWorkspace, workspaceId),
 				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
 				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
@@ -4048,14 +4054,26 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (!s.sessions[request.sessionId]) return bufferExtUiOrphan(s, request);
 			return withRuntime(s, request.sessionId, (rt) => reduceExtUi(rt, request));
 		}),
+	reserveLogin: () => {
+		const state = get();
+		if (state.loginStarting || state.activeLogin !== null) return false;
+		set({ loginStarting: true });
+		return true;
+	},
+	finishLoginStart: () => set({ loginStarting: false }),
 	beginLogin: (loginId, providerId, target) =>
-		set((s) =>
-			s.activeLogin?.loginId === loginId
-				? {}
-				: { activeLogin: newLoginState(loginId, providerId, target) },
-		),
+		set((s) => {
+			if (target && s.removedWorkspaceIds[target.workspaceId]) return {};
+			return {
+				activeLogin:
+					s.activeLogin?.loginId === loginId || s.activeLogin?.status === "active"
+						? s.activeLogin
+						: newLoginState(loginId, providerId, target),
+			};
+		}),
 	applyLoginFrame: (push) =>
 		set((s) => {
+			if (push.target && s.removedWorkspaceIds[push.target.workspaceId]) return {};
 			const cur = s.activeLogin;
 			if (cur && cur.loginId !== push.loginId && cur.status === "active") return {};
 			const base =

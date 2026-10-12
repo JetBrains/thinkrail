@@ -457,7 +457,13 @@ a project picker, the prompt hero, and the reused
   (no active workspace → "Open a workspace to manage its MCP servers") and reads `mcp.list` through
   `transport`'s `watchMcpWorkspace` — on mount, every welcome, a project-trust change, and with bounded
   backoff while a live chat still reports a server `starting`, because the host pushes no connected edge.
-  Rows come from the store's `deriveMcpServerRows`; while the project is untrusted, project-scope rows are
+  Rows come from the store's `deriveMcpServerRows`. Its row `effective` flag gates name-only Sign in,
+  Sign out and Test connection actions, in both the status actions and overflow menu: the host's optional
+  `summary.effective` is authoritative even when a valid user server carries an invalid folded repository
+  override diagnostic. Only that admitted definition takes live session status. For older hosts, status
+  retains the scope/approval heuristic, but name-only actions are allowed only for a unique valid user or
+  approved project definition, never ambiguous same-name rows. Review, Edit and Remove remain
+  scope-specific. While the project is untrusted, project-scope rows are
   dropped client-side at once, so a revoke never leaves the cached repository rows actionable until the
   refresh lands (the host omits them anyway, and the banner says so); the revoke also closes an open Edit,
   Review & approve or project-scope Remove dialog, drops an Edit / Review read that was still in flight,
@@ -495,8 +501,8 @@ a project picker, the prompt hero, and the reused
   list or the empty state alike — so a file pi cannot read never passes for "no servers". Status details
   (pi's report) arrive already redacted by the host.
   **Enablement and exposure follow one routing rule (`mcpSettingWrite`):** a user-level server
-  changes for this project only, through `mcp.setProjectOverride` (the record override is replaced whole,
-  so the other field travels along), and the global `mcp.json` is never written; a repo-defined server is
+  changes for this project only, through `mcp.setProjectOverride` (the host merges fields atomically,
+  so only the changed field travels), and the global `mcp.json` is never written; a repo-defined server is
   rewritten in `.pi/mcp.json` with `mcp.update`, whose whole-entry replacement starts from the entry as
   written, read through `fs.readFile`. Every repo-entry `mcp.update` (toggle, exposure, Edit) is built by
   `mcpEntryUpdate` and carries the fingerprint the row was rendered with as `expectedFingerprint`, so the
@@ -509,7 +515,10 @@ a project picker, the prompt hero, and the reused
   runs). **Review & approve** lists what will run — the host-masked command line or URL
   (`summary.endpoint`, credential-looking arguments read `***`), working directory, every `!command`, and
   the env/header names with their references or the hidden marker — then approves with the summary's
-  fingerprint (the host refuses a file that changed since). **Edit** is for repo entries: the raw entry as
+  fingerprint (the host refuses a file that changed since). A refused approval also refreshes `mcp.list`;
+  the open review retains its original fingerprint and never retries changed content automatically.
+  Closing and reopening review reads the refreshed summary and re-reads the entry before a new confirmation.
+  **Edit** is for repo entries: the raw entry as
   JSON with plain values hidden; a marker left in place keeps the file's value under that name
   (`mcpEditedEntry`), and a new value must be a reference. A user-level server's Edit is a disabled menu
   item naming its source file (`McpServerSummary.source`): `mcp.update` replaces the whole entry and the
@@ -531,7 +540,9 @@ a project picker, the prompt hero, and the reused
   JSON (wrapper or bare map, previewed per server; valid entries are added, SSE and malformed ones are
   flagged). **Settings stores references only** (`mcpSecretIssues`: secret values from the form are never
   stored): every env/header value of the form must be a `${VAR}` / `$VAR` template or a `!command`
-  (pi's grammar, `isConfigReference`) — anything else, empty included, is a validation error with the
+  (pi's grammar, `isConfigReference`: `$$` / `$!` escape the next character, a complete malformed
+  `${...}` is consumed as a literal without rescanning dollars inside it, and later references still count)
+  — anything else, empty included, is a validation error with the
   rewrite hint — and its URL may carry no user info or credential-named query value (pi sends URLs as
   written, so the advice is a header); a pasted entry with a plain env, header or OAuth client-secret value
   or such a URL is flagged with the same hints and not added. There is no plain-text confirm. Any save

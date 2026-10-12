@@ -20,6 +20,7 @@ import {
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
+import type { LoginState } from "../auth";
 import {
 	compactAge,
 	isAbsolutePath,
@@ -45,6 +46,13 @@ import type {
 	TerminalTab,
 } from "./appStore";
 import type { ChatResourceRead, ChatResourceScope, ChatResourceState } from "./chatResources";
+
+export function selectLoginBusy(state: {
+	activeLogin: LoginState | null;
+	loginStarting: boolean;
+}): boolean {
+	return state.loginStarting || state.activeLogin !== null;
+}
 
 interface AnalyticsConsentState {
 	protocolVersion: number | null;

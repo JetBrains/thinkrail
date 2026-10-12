@@ -16,6 +16,7 @@ export interface McpServerRow {
 	key: string;
 	summary: McpServerSummary;
 	state: McpRowState;
+	effective: boolean;
 	toolCount?: number;
 	detail?: string;
 	sessions: { total: number; reporting: string[]; connected: number };
@@ -55,11 +56,15 @@ function configuredState(summary: McpServerSummary): McpServerState {
 	return "not-running";
 }
 
-function effectiveScope(summaries: readonly McpServerSummary[]): McpServerScope {
+function effectiveSummary(summaries: readonly McpServerSummary[]): McpServerSummary | undefined {
+	if (summaries.some((summary) => summary.effective !== undefined)) {
+		return summaries.find((summary) => summary.effective);
+	}
 	const project = summaries.find((summary) => summary.scope === "project");
-	if (!project) return "user";
-	if (!summaries.some((summary) => summary.scope === "user")) return "project";
-	return project.approval?.state === "approved" && !project.configError ? "project" : "user";
+	const user = summaries.find((summary) => summary.scope === "user");
+	return project?.approval?.state === "approved" && !project.configError
+		? project
+		: (user ?? project);
 }
 
 function strongest(states: readonly McpServerState[]): McpServerState {
@@ -70,7 +75,7 @@ function aggregate(
 	summary: McpServerSummary,
 	sessions: readonly McpHeldSnapshot[],
 	now: number,
-): Omit<McpServerRow, "key" | "summary" | "approvalPending" | "attention"> {
+): Omit<McpServerRow, "key" | "summary" | "effective" | "approvalPending" | "attention"> {
 	const reports = sessions.map((held) => ({
 		held,
 		status: held.snapshot.servers.find((server) => server.name === summary.name),
@@ -132,7 +137,12 @@ export function deriveMcpServerRows(
 		.map(([, held]) => held);
 	const rows = summaries.map((summary): McpServerRow => {
 		const sameName = summaries.filter((candidate) => candidate.name === summary.name);
-		const effective = effectiveScope(sameName) === summary.scope;
+		const admitted = effectiveSummary(sameName);
+		const effective =
+			summary.effective ??
+			(sameName.length === 1 &&
+				!summary.configError &&
+				(summary.scope === "user" || summary.approval?.state === "approved"));
 		const approvalPending = !!summary.approval && summary.approval.state !== "approved";
 		const base = projection?.handledElsewhere
 			? {
@@ -140,10 +150,13 @@ export function deriveMcpServerRows(
 					sessions: { total: sessions.length, reporting: [], connected: 0 },
 					startingStalled: false,
 				}
-			: effective
+			: admitted === summary
 				? aggregate(summary, sessions, now)
 				: {
-						state: summary.scope === "user" ? ("replaced" as const) : configuredState(summary),
+						state:
+							summary.scope === "user" && admitted
+								? ("replaced" as const)
+								: configuredState(summary),
 						sessions: { total: sessions.length, reporting: [], connected: 0 },
 						startingStalled: false,
 						...(summary.configError ? { detail: summary.configError } : {}),
@@ -151,6 +164,7 @@ export function deriveMcpServerRows(
 		return {
 			key: `${summary.scope}:${summary.name}`,
 			summary,
+			effective,
 			...base,
 			approvalPending,
 			attention:
