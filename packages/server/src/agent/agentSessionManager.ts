@@ -94,7 +94,9 @@ import { createMcpSessionHost, type McpProjectPolicy, type McpSessionHost } from
 import {
 	assertMcpServerDisablableInChat,
 	forgetMcpStatus,
+	hasFailedMcpReload,
 	reconcileMcpSessions,
+	recordMcpReloadFailure,
 	restartMcpStatus,
 	scheduleMcpStatusRefresh,
 	showPendingMcpReload,
@@ -677,7 +679,9 @@ function applyExtensionTools(entry: Entry, { allowReload = true } = {}): void {
 	}
 	if (allowReload && enabledExtensionMissing(session, disabled)) {
 		void requestSessionReload(session.sessionId).catch((error) => {
-			log.warn(`extension reload failed for ${session.sessionId}`, error as Error);
+			if (!entry.disposed && !entry.resourcesClosing && !hasFailedMcpReload(session.sessionId)) {
+				log.warn(`extension reload failed for ${session.sessionId}`, error as Error);
+			}
 		});
 	}
 }
@@ -781,8 +785,14 @@ function reconsiderPendingReload(entry: Entry): void {
 	if (!entry.reloadPending || entry.reloadRunning || reloadBlockedReason(entry)) return;
 	const { sessionId } = entry.session;
 	void runGatedReload(entry).catch((error) => {
+		if (
+			sessions.get(sessionId) !== entry ||
+			entry.disposed ||
+			entry.resourcesClosing ||
+			hasFailedMcpReload(sessionId)
+		)
+			return;
 		log.warn(`deferred resource reload failed for ${sessionId}`, error as Error);
-		if (sessions.get(sessionId) !== entry || entry.disposed) return;
 		notifyExtUi(
 			sessionId,
 			`This chat could not reload its resources after a settings change and still runs with the previous ones — close or reload it. ${(error as Error).message ?? String(error)}`,
@@ -795,10 +805,12 @@ function runGatedReload(entry: Entry): Promise<void> {
 	if (entry.reloadRunning) return entry.reloadRunning;
 	entry.reloadPending = false;
 	const runner = entry.session.extensionRunner;
+	const mcpWasLoaded = entry.mcpHost.loaded() !== null;
 	const beforeSessionStart = () => {
 		if (entry.disposed || entry.resourcesClosing) throw new Error("The chat is closing.");
 	};
 	entry.reloadRunning = (async () => {
+		let reloaded = false;
 		try {
 			await entry.mcpHost.shutdownEngine(
 				{ type: "session_shutdown", reason: "reload" },
@@ -807,6 +819,12 @@ function runGatedReload(entry: Entry): Promise<void> {
 			beforeSessionStart();
 			await entry.session.reload({ beforeSessionStart });
 			beforeSessionStart();
+			reloaded = true;
+		} catch (error) {
+			if (!entry.disposed && !entry.resourcesClosing) {
+				recordMcpReloadFailure(entry.session.sessionId, error, mcpWasLoaded);
+			}
+			throw error;
 		} finally {
 			if (entry.disposed || entry.resourcesClosing) {
 				if (entry.session.extensionRunner !== runner) {
@@ -821,8 +839,10 @@ function runGatedReload(entry: Entry): Promise<void> {
 				entry.commands.flushCompletions();
 				entry.subagents.flushCompletions();
 				publishEntryState(entry);
-				reconsiderPendingReload(entry);
-				restartMcpStatus(entry.session.sessionId);
+				if (reloaded) {
+					restartMcpStatus(entry.session.sessionId);
+					reconsiderPendingReload(entry);
+				}
 			}
 		}
 	})();
@@ -891,7 +911,9 @@ export async function applyPiResourceTrust(
 		try {
 			dispositions[sessionId] = await requestSessionReload(sessionId);
 		} catch (error) {
-			log.warn(`trust reload failed for ${sessionId}`, error as Error);
+			if (!entry.disposed && !entry.resourcesClosing && !hasFailedMcpReload(sessionId)) {
+				log.warn(`trust reload failed for ${sessionId}`, error as Error);
+			}
 			dispositions[sessionId] = "failed";
 		}
 	}
@@ -2226,7 +2248,13 @@ export interface McpSessionView {
 
 export function mcpSessionView(sessionId: string): McpSessionView | undefined {
 	const entry = sessions.get(sessionId);
-	if (!entry?.registered || entry.disposed || hasDeletionTombstone(sessionId)) return undefined;
+	if (
+		!entry?.registered ||
+		entry.disposed ||
+		entry.resourcesClosing ||
+		hasDeletionTombstone(sessionId)
+	)
+		return undefined;
 	return {
 		workspaceId: entry.workspaceId,
 		cwd: entry.session.sessionManager.getCwd(),
@@ -2287,7 +2315,7 @@ export async function setSessionMcpServerEnabled(
 	const entry = mustGetEntry(sessionId);
 	const disabled = entry.mcpHost.disabledInChat;
 	assertMcpServerDisablableInChat(sessionId, name);
-	if (disabled.has(name) === !enabled) return "unchanged";
+	if (disabled.has(name) === !enabled && !hasFailedMcpReload(sessionId)) return "unchanged";
 	if (enabled) disabled.delete(name);
 	else disabled.add(name);
 	const disposition = await requestSessionReload(sessionId);

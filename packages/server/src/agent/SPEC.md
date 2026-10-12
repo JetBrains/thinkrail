@@ -1028,21 +1028,34 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   registered one the message says it is registered by an extension and can't be disabled per chat — and
   refuses with `MCP_HANDLED_ELSEWHERE` where `builtin:mcp` does not own `/mcp`. Ownership and file
   provenance are validated before both enable and disable, even for no-op requests; a disabled entry
-  retained across a reload that replaces `/mcp` cannot be re-enabled through the host.
+  retained across a reload that replaces `/mcp` cannot be re-enabled through the host. A failed reload
+  never rolls back the chat-local disable intent; repeating the same value retries while its MCP reload
+  failure remains, rather than returning unchanged. If that failure cleared the loaded snapshot, a retry
+  validates file provenance against the currently admitted configuration; unknown or extension-only names
+  remain refused and a replacement command owner still makes the control read-only.
   Config or trust changes reload only the affected sessions: the session's `loadConfig` records the
   per-server effective config pi received at its last start (`McpSessionHost.loaded()`, cleared at the start
   of every load), and `reconcileMcpSessions` compares it with what the loader would produce now
   (`pendingMcpReload`) — an unapproved repo entry, for example, changes nothing and reloads nothing. A
   session whose `/mcp` another extension owns, or none does, has nothing to compare (the built-in's loader
-  never runs there) and is never reconciled. Reconciliation runs after every
+  never runs there) and is not reconciled unless an earlier failed MCP reload remains retryable.
+  Reconciliation runs after every
   host mutation, when the user file changes (`watchUserMcpConfig`: one directory watcher on pi's agent dir,
   300 ms debounce; a missing agent dir is created first — pi creates it on first use anyway — so a file the
   user adds later is still seen; a rename or watcher error retires the old watch and rearms it with
   capped retry backoff, including after the agent directory is recreated; stopping cancels retries), when a workspace change nudge touches `.pi`, and at each session's
   `agent_settled` (so an edit the agent made itself applies once the run ends); a deferred reload shows the
-  changed servers as `pending-reload` until it runs. A reconciliation failure is logged and notified with
-  redacted details, and retained as retryable even if the failed load already replaced its config snapshot.
-  A successful reload clears that failure. Reloads go through `session.reload()` behind a per-session reload gate: while a reload runs, every
+  changed servers as `pending-reload` until it runs. Every MCP-affecting gated reload (immediate,
+  deferred, manual, trust/settings, or chat-local override) shares one failure recorder in `mcpSessions`:
+  the existing tracked status object retains the retry marker even if the failed load already replaced
+  or cleared its config snapshot. The gate captures whether the built-in engine was loaded before
+  replacement; that provenance, a newly loaded engine, or an existing failure makes the reload
+  MCP-affecting. Hosts where MCP was never managed acquire no MCP failure marker. Each failed attempt
+  logs and notifies once with redacted details; deferred and reconciliation callers do not report it again.
+  Failure does not restart authoritative status or immediately drain another pending reload; a later
+  reconciliation or explicit retry can recover without any config delta. Only a successful reload clears
+  the marker and restarts status. Closing or disposed entries neither report failures nor restart.
+  Reloads go through `session.reload()` behind a per-session reload gate: while a reload runs, every
   admission seam (`promptSession`, `steerSession`, `followUpSession`, `nudgeSession`, queue requeues,
   `answerQuestion`, `sendReviewFixToSession`, `compactSession`) refuses with "reloading", and completion
   delivery waits in its owners through `canDeliverCompletion` and flushes afterwards; the gate opens only
@@ -1067,7 +1080,7 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   servers need attention" notice is unsolicited, so it alone is recognised by its fixed prefix through
   `interceptExtUiNotify` ([`webUiContext`]), installed before `bindExtensions`: it becomes a partial status
   update plus a full refresh as well as a redacted toast. pi's `/mcp` awaits every startup connection before it
-  answers, so registration and every gated reload first seed the snapshot from what pi was given
+  answers, so registration and every successful gated reload first seed the snapshot from what pi was given
   (`McpSessionHost.loaded()` plus the servers extensions registered): each enabled one reads `starting`, a
   disabled one its disabled state through the same derivation, and the previous load's report never
   survives a reload. Then a capture starts; one begun before that (re)start is dropped (a per-session load

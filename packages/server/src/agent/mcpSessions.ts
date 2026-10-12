@@ -102,20 +102,22 @@ const ownsMcp = (view: McpSessionView | undefined): view is McpSessionView =>
 const configKey = (config: McpServerConfig | undefined): string | undefined =>
 	config === undefined ? undefined : JSON.stringify(config);
 
+function configuredServers(view: McpSessionView) {
+	return loadHostMcpConfig({
+		agentDir: getAgentDir(),
+		cwd: view.cwd,
+		projectTrusted: view.projectTrusted,
+		policy: view.policy,
+		disabledInChat: view.disabledInChat,
+	}).servers;
+}
+
 export function pendingMcpReload(sessionId: string): Set<string> {
 	const view = mcpSessionView(sessionId);
 	const failed = tracked.get(sessionId)?.reloadFailed === true;
 	if (!ownsMcp(view) || (!view.loaded && !failed)) return new Set();
 	const loaded = view.loaded ?? new Map<string, McpServerConfig>();
-	const current = new Map(
-		loadHostMcpConfig({
-			agentDir: getAgentDir(),
-			cwd: view.cwd,
-			projectTrusted: view.projectTrusted,
-			policy: view.policy,
-			disabledInChat: view.disabledInChat,
-		}).servers.map((server) => [server.name, server.config]),
-	);
+	const current = new Map(configuredServers(view).map((server) => [server.name, server.config]));
 	const names = new Set([...current.keys(), ...loaded.keys()]);
 	return new Set(
 		[...names].filter(
@@ -219,6 +221,12 @@ export function assertMcpServerDisablableInChat(sessionId: string, name: string)
 		throw new CodedError("MCP_HANDLED_ELSEWHERE", "MCP is not managed by ThinkRail here.");
 	}
 	if (view.loaded?.has(name)) return;
+	if (
+		view.loaded === null &&
+		hasFailedMcpReload(sessionId) &&
+		configuredServers(view).some((server) => server.name === name)
+	)
+		return;
 	throw new CodedError(
 		"MCP_CONFIG_INVALID",
 		view.registered.some((server) => server.name === name)
@@ -239,29 +247,40 @@ export function mcpResourceSummaries(sessionId: string): McpServerResourceSummar
 	}));
 }
 
+export function hasFailedMcpReload(sessionId: string): boolean {
+	return tracked.get(sessionId)?.reloadFailed === true;
+}
+
+export function recordMcpReloadFailure(
+	sessionId: string,
+	error: unknown,
+	wasLoaded: boolean,
+): void {
+	const state = tracked.get(sessionId);
+	const view = mcpSessionView(sessionId);
+	if (!state || !view || (!wasLoaded && view.loaded === null && !state.reloadFailed)) return;
+	state.reloadFailed = true;
+	const detail = redactMcpText(error instanceof Error ? error.message : String(error));
+	log.warn(`MCP configuration reload failed for ${sessionId}: ${detail}`);
+	showPendingMcpReload(sessionId);
+	notifyExtUi(
+		sessionId,
+		`This chat could not apply its MCP configuration — reload it to retry. ${detail}`,
+		"error",
+	);
+}
+
 export async function reconcileMcpSessions(
 	sessionIds: readonly string[],
 ): Promise<Record<string, SessionReloadDisposition>> {
 	const dispositions: Record<string, SessionReloadDisposition> = {};
 	for (const sessionId of sessionIds) {
-		if (!tracked.get(sessionId)?.reloadFailed && pendingMcpReload(sessionId).size === 0) continue;
+		if (!hasFailedMcpReload(sessionId) && pendingMcpReload(sessionId).size === 0) continue;
 		try {
 			const disposition = await requestSessionReload(sessionId);
 			dispositions[sessionId] = disposition;
 			if (disposition === "deferred") showPendingMcpReload(sessionId);
-		} catch (error) {
-			const detail = redactMcpText(error instanceof Error ? error.message : String(error));
-			log.warn(`MCP configuration reload failed for ${sessionId}: ${detail}`);
-			const state = tracked.get(sessionId);
-			if (!state || !mcpSessionView(sessionId)) continue;
-			state.reloadFailed = true;
-			showPendingMcpReload(sessionId);
-			notifyExtUi(
-				sessionId,
-				`This chat could not apply its MCP configuration — reload it to retry. ${detail}`,
-				"error",
-			);
-		}
+		} catch {}
 	}
 	return dispositions;
 }

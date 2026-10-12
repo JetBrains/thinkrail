@@ -121,7 +121,12 @@ relax a rule.
   it clears `loaded()` (each server's effective config as pi received it, set again only when the built-in
   starts — a load where another extension owns `/mcp`, or `-builtin:mcp`, leaves it `null`) and keeps that load's `ExtensionAPI` for `registered()` (pi's
   `getMcpServers()`: the servers extensions registered, `[]` once the load is stale). `shutdownEngine(event,
-  ctx)` runs the engine's captured shutdown. The optional command-completion callback is supplied by the
+  ctx)` runs the engine's captured shutdown. The manager captures whether `loaded()` was non-null
+  before a gated reload: a failed replacement can clear or update that snapshot without successfully
+  applying the runtime. Together with any newly loaded engine, that provenance allows the parent
+  `mcpSessions` tracked object to retain one retryable failure for immediate, deferred, manual and
+  chat-local override reloads, even with no remaining config delta. Only successful reloads clear it;
+  this host owns no second failure marker. The optional command-completion callback is supplied by the
   session manager; this child module never imports the status coordinator.
 - `engine.ts` — `createMcpEngine({ loadConfig, lockSignIns?, openUrl?, onCommandSettled? })` →
   `{ extensions, shutdown }`: pi's two built-in descriptors (`mcp` = `createMcpExtension`, `tool-search`),
