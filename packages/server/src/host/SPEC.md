@@ -165,7 +165,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   faults. It renders the throw via the `log` module's `describeError`, so crash reports and log lines
   agree, but keeps its own sync append — the death path must not depend on the logger's state);
   `boot.ts` (`bootHost` → await `initLogging` — debug level when the launcher passed `verbose` — then
-  install the crash report, resolve the login-shell PATH, pre-warm the same Central watcher/runtime
+  install the crash report, resolve the login-shell environment when the launcher passed
+  `resolveShellEnv: true`, pre-warm the same Central watcher/runtime
   initialization before choosing the serving port, await `createServer` (which idempotently enforces
   runtime bootstrap for low-level embedders), and write the `listening on` info line (see
   `submodule-server-log`). Its
@@ -573,6 +574,12 @@ enabled/confirmed choice before entering analytics attribution.
   buffered bytes stays latched, and a latch whose socket is already gone is left to `close`/`open`.
   Reloading the client always recovered (open clears the flag and resumes), which is why this hid so long.
 - The host is the single place features are wired together — features never reach back into it.
+- **Login-shell environment import is opt-in at boot** (`resolveShellEnv: true`, passed by the dev,
+  CLI and desktop launchers). Post-mortem: with it on by default, `boot.test.ts` copied the developer's
+  login environment — provider API keys included — into the shared `bun test` process (`bun test`
+  drops `TERM=dumb`, so the terminal guard never fired). Later faux-model suites then resolved a real
+  provider, timed out, and hung the server suite while spending real tokens. Any embedder or test that
+  does not pass the flag keeps the environment it was given.
 - Separate host processes do not coordinate mutable state or events. They may use the same data directory,
   but each owns independent in-memory sessions, terminals, watchers, and connected clients; persistence
   conflicts are accepted rather than serialized by the host.

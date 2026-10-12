@@ -30,7 +30,7 @@ e2e).
   or exposing handlers—falling back to a plain runtime with closed `load-failed` status when the configured
   Central extension fails—so every embedder gets the same bootstrap invariant — and
   `bootHost(options) → BootedHost` (the process-boot wrapper: installs crash logging, resolves the
-  login-shell PATH, pre-warms the same initialization before choosing a port, awaits `createServer`, and
+  login-shell environment only when the launcher opts in with `resolveShellEnv: true`, pre-warms the same initialization before choosing a port, awaits `createServer`, and
   installs SIGINT/SIGTERM graceful-shutdown handlers), both re-exported from
   `host/`; plus `registerBundledRuntime` (+ its types, re-exported from `agent/`) — the compiled-binary
   seam by which a launcher that cannot path-load the bundled pi extensions (no `node_modules` inside a

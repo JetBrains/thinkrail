@@ -69,7 +69,7 @@ another.
    registry ([[submodule-server-extensions]]) need no generated entry: their factories reach the bundle
    through `@thinkrail/server`'s static import graph. The generator's key map must satisfy every key of the server-owned
    `BundledExtensions` contract, so adding a required launcher field fails desktop typecheck instead of
-   producing a packaged-only `undefined`. It then calls `bootHost()` on loopback port `0` with the staged web
+   producing a packaged-only `undefined`. It then calls `bootHost({ resolveShellEnv: true, … })` on loopback port `0` with the staged web
    directory, baked version and release-only analytics key, `desktop` analytics provenance, and, only when packaged, the launcher-supplied
    `Utils.openExternal` callback used by the host's one-shot browser attribution claim. The callback passes through
    `DesktopHostOptions` and the generated runtime. The first native-window `dom-ready` explicitly calls the
