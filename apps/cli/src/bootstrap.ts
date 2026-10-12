@@ -64,6 +64,7 @@ async function bootstrap(build: BuildKind): Promise<void> {
 		port: options.port,
 		host: options.host,
 		portMode: "free",
+		resolveShellEnv: true,
 		staticDir,
 		appVersion: version,
 		...(options.verbose ? { verbose: true } : {}),

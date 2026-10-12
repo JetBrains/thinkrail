@@ -87,6 +87,7 @@ const { port } = await bootHost({
 	port: envPort ? Number(envPort) : 24242,
 	host,
 	portMode: envPort ? "exact" : "free",
+	resolveShellEnv: true,
 	...(staticDir ? { staticDir } : {}),
 	analytics: { channel: "dev", build: "source" },
 });

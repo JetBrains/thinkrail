@@ -101,6 +101,7 @@ export async function startDesktopHost(options) {
     port: 0,
     host: "127.0.0.1",
     portMode: "exact",
+    resolveShellEnv: true,
     staticDir: options.staticDir,
     appVersion: options.appVersion,
     analytics: {
