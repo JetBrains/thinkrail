@@ -30,7 +30,7 @@ function probeLoginShellEnv(shell: string, interactive: boolean): Map<string, st
 	const args = interactive ? ["-l", "-i", "-c", script] : ["-l", "-c", script];
 	try {
 		const result = Bun.spawnSync([shell, ...args], {
-			env: { ...process.env, PATH: PROBE_BASE_PATH },
+			env: { ...process.env, PATH: PROBE_BASE_PATH, HISTFILE: "/dev/null", HISTSIZE: "0" },
 			timeout: 5000,
 			stdout: "pipe",
 			stderr: "ignore",
