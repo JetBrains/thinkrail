@@ -117,10 +117,12 @@ flowchart LR
 
 **Discovery & entry**
 4. At the start of a new piece of work, one always-on entry rule names the workflow-eligible classes —
-   project onboarding and PR lifecycle work take precedence regardless of whether they edit code; other
-   changes enter only when they require product or design decisions. The rule points only those classes
-   at the root router. Work already routed resumes its active workflow; all other work proceeds directly
-   without loading or announcing one.
+   project onboarding and PR lifecycle work take precedence regardless of whether they edit code; every
+   other change to what the product does — a feature, a behavior change, or a bug fix, however small —
+   enters too. Only questions, explanations, checks, and edits that change no behavior (typos,
+   documentation or configuration only, mechanical refactors) proceed directly. The rule points only
+   the eligible classes at the root router. Work already routed resumes its active workflow; all other
+   work proceeds directly without loading or announcing one.
    Skills are otherwise reached by routing/handoff, or — when the trigger is unmistakable — by a narrow
    self-trigger `description`: alongside a route (as `setting-up-a-project` does) or, for skills outside
    the router's work classification (meta/authoring skills), self-trigger alone (as
@@ -191,17 +193,17 @@ flowchart LR
 
 | Skill | Role — purpose | Routed from | Status |
 |---|---|---|---|
-| `brainstorming` | worker — decision-bearing change → validated task-spec | `choosing-a-workflow` (root) | active; revised trigger and single-review flow unverified by use; the previous route-in, a mid-flow round-trip, and a full run were observed (2026-07) |
+| `brainstorming` | worker — feature, behavior change, or bug fix → interviewed design (product, then technical) → amended specs → implementation; sibling docs `fixing-a-bug.md` (bug branch) and `amending-specs.md` (shared tail) | `choosing-a-workflow` (root) | active; the default-entry trigger, two-phase interview, bug branch, and self-driven amendment are unverified by use; the earlier route-in, a mid-flow round-trip, and a full run were observed (2026-07) |
 | `setting-up-a-project` | router (sub) — dispatcher: detect the workspace's state (specs present / empty / code-only) and route | `choosing-a-workflow` (root) + self-trigger + the app's `/skill:setting-up-a-project` seed | active; empty → starting and code → importing were observed green; the revised specced → review/extend offer is unverified by use |
 | `starting-a-new-project` | worker — inception interview (empty repo → goal-and-requirements) | `setting-up-a-project` + narrow self-trigger | active; route-in observed by the routing suite; the interview itself and its living-doc template (2026-09) unverified by use (rule 14 suspended — a slice-3 candidate via the user simulator) |
-| `importing-a-codebase` | worker — existing codebase → first spec graph (derive + adopt existing docs + minimal interview) | `setting-up-a-project` + narrow self-trigger | active; covered by a tagged `@agent` e2e; route-in also observed by the routing suite; the doc-adoption offer observed green by the harness's importing suite (2026-07: adoption + no-candidates regression scenarios; the pre-change skill run red against the same scenario as the before/after control) |
+| `importing-a-codebase` | worker — existing codebase → first spec graph (derive + adopt existing docs + minimal interview) | `setting-up-a-project` + narrow self-trigger | active; covered by a tagged `@agent` e2e; route-in also observed by the routing suite; the doc-adoption offer observed green by the harness's importing suite (2026-07: adoption + no-candidates regression scenarios; the pre-change skill run red against the same scenario as the before/after control); the rationale ("why") and known-limitation questions are unverified by use |
 | `asking-user-questions` | concept — multi-round interviews (design tree / frontier), question quality, options, inference confirmation, degradation | — (reached by name, rule 4) | active; the multi-round interview model unverified by use; the earlier single-round norm was observed (2026-07 manual: loaded through brainstorming's reference, a round composed + resolved) |
 | `writing-specs` | concept — the spec quality bar (short / honest / on-rails) for every spec-producing flow | — (reached by name, rule 4) | active; observed by use (2026-07 manual: self-triggered for a spec revision and applied) |
-| `choosing-a-workflow` | router (root) — classification + routing for workflow-eligible work | — (conditional pointer from the always-on rule, rule 4) | active; revised narrow-entry behavior unverified by use; previous onboarding, PR/change, and direct-work classifications were observed |
+| `choosing-a-workflow` | router (root) — classification + routing for workflow-eligible work | — (conditional pointer from the always-on rule, rule 4) | active; the default entry for every behavior change is unverified by use; onboarding, PR, decision-bearing-change, and direct-work classifications were observed |
 | `writing-workflow-skills` | worker — authoring checklist for adding workflows | — (self-trigger only, rule 4) | active |
 | `shipping-a-pr` | worker — PR lifecycle (create with gates / body or screenshot maintenance / up-to-date sync / checks / review comments — phases as sibling docs) | `choosing-a-workflow` (root) + narrow self-trigger | active; snapshot-by-default completion and verification reuse unverified by use (rule 14 suspended) |
 
-The family is open and grows from real use; candidates (research/spike, refactor, bug-fix, a composing
+The family is open and grows from real use; candidates (research/spike, refactor, a composing
 skill in the composer pattern with its stage workers, and **extending an existing spec graph** — the
 dispatcher's accepted review/extend offer, today a declared no-workflow path) each get their own
 task-spec when they earn their place. The concept role has two instances: `asking-user-questions`,
@@ -244,9 +246,13 @@ fix:
   grows into the home for the family's spec and spec-graph rules, the spec-graph skill's guidance
   should slim to mechanics — or the drift the extraction fixed returns one package up.
 - **Most of the family's candidates are unbuilt** (the candidates list above) — deliberate, since
-  each earns its place through real use. Until then, work outside an existing route proceeds directly
-  on agent judgment; complex decision-bearing work still enters `brainstorming`, while a future
-  composer may own multi-stage pipelines.
+  each earns its place through real use. Until then, every behavior change enters `brainstorming`
+  and work with no behavior change proceeds directly; a future composer may own multi-stage
+  pipelines.
+- **The design is approved as a whole, not section by section.** Confirming each section as it is
+  drafted would make the user a co-author of the design, but it needs an in-app review surface for
+  proposed spec sections that the UI does not have yet. Until it does, the product-phase checkpoint
+  and the single design review stand in for it.
 
 ## Per-skill design notes
 
@@ -255,16 +261,30 @@ also carries its own degradation behavior (headless host with no `ask_user_quest
 declined answers, a workspace with no pre-existing spec graph); nothing is configured here. What
 follows is only the rationale the skill bodies don't state:
 
-- **`brainstorming`** mirrors the discipline this repo applies to itself ("the spec leads the code")
-  only when a change requires choosing scope, user-visible behavior, or architecture: request →
-  validated design in a spec-graph `task-spec` → promotion into module SPECs → implementation. A
-  fully specified fix, mechanical refactor, documentation edit, or configuration-only change bypasses
-  the workflow. One cohesive review settles the design; acceptance criteria or an explicit design in
-  the request already count as approval, and alternatives are compared only when more than one viable
-  approach remains. There is deliberately no separate plan artifact; the spec is the plan. Before
-  promotion the workflow loads `writing-specs`, closing the earlier observed quality-bar gap.
+- **`brainstorming`** applies the discipline this repo holds itself to ("the spec leads the code")
+  to every change in what the product does: request → interviewed design in a spec-graph `task-spec`
+  → amended durable specs → implementation. It is the default for a feature, a behavior change, or a
+  bug fix, however small; only work that changes no behavior bypasses it. The default exists because
+  users valued being questioned before anything was built — the interview was demanding, but it is
+  what made the resulting specs understood and trusted. A gate the agent judged for itself ("is this
+  already specified?") let most work skip both the interview and the spec update, and the graph
+  drifted away from the code over time. Depth scales with the change and never drops to zero: a
+  small change gets one short round and a few lines of task-spec.
+  The interview runs in two phases — **product first** (why, for whom, what the user will see, how
+  we know it is done), then **technical** (approaches, constraints, verification) — with one
+  checkpoint between them that confirms the product understanding before any technical choice is
+  made. Explicit answers in the request are not re-asked, and an explicit design or acceptance
+  criteria still count as approval. Alternatives are compared only when more than one viable
+  approach remains. There is deliberately no separate plan artifact; the spec is the plan.
   Open user decisions are interviewed in rounds through `asking-user-questions` until none is left
-  assumed; work with none gets no questions.
+  assumed.
+  **Bugs** take the `fixing-a-bug.md` branch: a bug is a gap between recorded intent and behavior, so
+  the branch first classifies what the specs say — silent, wrong, right with only the code wrong, or
+  the "bug" is really a new feature (back to the main flow) — and fixes the spec half before the code.
+  **Spec amendment** (`amending-specs.md`, the shared tail of both paths) is the agent's own job, not
+  a user approval round — by user decision: it works top-down (goal → architecture → modules), then
+  checks the result against what was actually built, and reports it in a line or two; the Changes
+  review is where the user sees the diff. It loads `writing-specs` first.
 - **the setting-up-a-project trio** arrived with the Welcome-screen work (as `project-setup` /
   `project-new` / `project-import`; renamed under rule 15) and was adapted to this system in place.
   `setting-up-a-project` is a **sub-router** (dispatcher): it inspects the workspace to classify
@@ -277,7 +297,10 @@ follows is only the rationale the skill bodies don't state:
   working-model inference, personal-vs-PRD routing, MVP-first elicitation, alternatives research,
   incremental save; board/progress-tracker mechanics dropped (no equivalent here). `importing-a-codebase`
   (net-new) reverse-engineers a first spec graph from code + agent files, interviewing only for the
-  intent the code can't reveal. Its doc-adoption offer (2026-07) exists because well-documented
+  intent the code can't reveal. That intent always includes the *why* behind each non-obvious
+  decision and the known limitations: without them a spec records what the code does but not what a
+  later change must preserve, so the interview asks them (inferred answers offered for correction)
+  instead of leaving rationale to chance. Its doc-adoption offer (2026-07) exists because well-documented
   un-specced repos were losing their own docs at import: durable declarative docs (never plans or
   process files) are offered in the interview round and adopted **in place** — frontmatter only, so
   say-it-once holds, the user's words stay theirs, and the diff is reviewable in Changes — rather

@@ -17,9 +17,11 @@ model *is*; `visualize` is a rendering tool.) It contributes exactly two things,
 `package.json` pi manifest (`pi: { extensions: ["./index.ts"], skills: ["./skills"] }`):
 
 - **`index.ts`** — an `ExtensionFactory` registering one always-on `before_agent_start` rule that,
-  at the start of a new piece of work, sends project onboarding and PR lifecycle work, plus other changes
-  with unresolved product/design decisions, to the root router skill (`choosing-a-workflow`). Work already
-  routed resumes its active workflow; all other work proceeds directly without loading or announcing one.
+  at the start of a new piece of work, sends project onboarding, PR lifecycle work, and every change to
+  what the product does (a feature, a behavior change, or a bug fix) to the root router skill
+  (`choosing-a-workflow`); the entry model and its rationale live in [[submodule-workflow-skills]]
+  (rule 4). Work already routed resumes its active workflow; work that changes no behavior proceeds
+  directly without loading or announcing one.
 - **`skills/`** — the workflow skill family: the root router that classifies workflow-eligible
   work, plus the worker and concept skills reached from it. The **authoritative roster is the
   family table in [[submodule-workflow-skills]]**, alongside the system's design — concept model,
