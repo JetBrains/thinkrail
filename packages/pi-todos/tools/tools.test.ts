@@ -147,8 +147,10 @@ test("add → list → update → remove round-trips through the store", async (
 			plan: { todos: unknown[]; groups: unknown[] };
 		}>;
 		expect(listedAfter.details.plan.todos).toHaveLength(0);
-		// The empty group lingers on purpose (same invariant promote relies on).
-		expect(listedAfter.details.plan.groups).toHaveLength(1);
+		// A group that LOSES its last item in a remove is pruned (no ghost "planning\u2026" row), so an
+		// end-to-end round-trip leaves nothing behind. A `promote`-born group that was ALREADY empty
+		// before the remove is preserved \u2014 that invariant is covered in core/core.test.ts.
+		expect(listedAfter.details.plan.groups).toHaveLength(0);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}

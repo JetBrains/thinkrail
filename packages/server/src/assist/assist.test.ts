@@ -7,12 +7,17 @@ function fakeRunner(fn: OneShotRunner): void {
 
 afterEach(() => setOneShotRunner(null));
 
-test("suggestPlanSummary feeds the finished steps to the runner and returns markdown prose", async () => {
+test("suggestPlanSummary feeds the finished steps to the runner and returns the PR-body it emits verbatim", async () => {
 	let seen = "";
+	let seenSystem = "";
 	fakeRunner(async (req) => {
 		seen = req.prompt;
+		seenSystem = req.system ?? "";
 		return {
-			text: "Shipped the ranker rework.\n\n- EV ranking\n- feature logging",
+			text:
+				"## Summary\n\nShipped the ranker rework.\n\n" +
+				"## Changes\n\n_no cross-cutting notes_\n\n" +
+				"## Testing\n\n- pytest \u2192 3 pass",
 			model: { provider: "p", id: "m" },
 		};
 	});
@@ -24,19 +29,29 @@ test("suggestPlanSummary feeds the finished steps to the runner and returns mark
 		},
 		{ title: "Add logging" },
 	]);
-	expect(out).toBe("Shipped the ranker rework.\n\n- EV ranking\n- feature logging");
+	expect(out).toBe(
+		"## Summary\n\nShipped the ranker rework.\n\n" +
+			"## Changes\n\n_no cross-cutting notes_\n\n" +
+			"## Testing\n\n- pytest \u2192 3 pass",
+	);
 	expect(seen).toContain("Rework ranking");
 	expect(seen).toContain("note: EV = P_accept");
 	expect(seen).toContain("verified: pytest");
 	expect(seen).toContain("Add logging");
+	// The system prompt steers the model into PR-body shape so `renderPrBody` can prepend it as-is.
+	expect(seenSystem).toContain("## Summary");
+	expect(seenSystem).toContain("## Changes");
+	expect(seenSystem).toContain("## Testing");
 });
 
-test("suggestPlanSummary strips a code fence / 'Summary:' label and degrades to null", async () => {
+test("suggestPlanSummary preserves H2 headings when stripping a code fence / 'Summary:' label; degrades to null on empty", async () => {
 	fakeRunner(async () => ({
-		text: "```md\nSummary: All done.\n```",
+		text: "```md\nSummary: ## Summary\n\nAll done.\n\n## Changes\n\n_no cross-cutting notes_\n\n## Testing\n\n_not verified_\n```",
 		model: { provider: "p", id: "m" },
 	}));
-	expect(await suggestPlanSummary([{ title: "Do it" }])).toBe("All done.");
+	expect(await suggestPlanSummary([{ title: "Do it" }])).toBe(
+		"## Summary\n\nAll done.\n\n## Changes\n\n_no cross-cutting notes_\n\n## Testing\n\n_not verified_",
+	);
 	fakeRunner(async () => ({ text: "   ", model: { provider: "p", id: "m" } }));
 	expect(await suggestPlanSummary([{ title: "Do it" }])).toBeNull();
 	fakeRunner(async () => {

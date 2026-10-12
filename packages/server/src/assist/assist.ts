@@ -8,11 +8,21 @@ export function setOneShotRunner(fn: OneShotRunner | null): void {
 	runOneShot = fn ?? completeOnce;
 }
 
+// This fallback runs when the agent did NOT call `todo_plan_summary`, and the host persists its
+// output as the plan's summary. The UI renders that summary verbatim AND `renderPrBody` prepends
+// it to the generated PR body, so the fallback must emit the same PR-body shape the agent-authored
+// contract requires: three H2 sections in order \u2014 `## Summary`, `## Changes`, `## Testing`. If the
+// model has nothing to say under a section it should still write the heading with `_not verified_`
+// (Testing) or `_no cross-cutting notes_` (Changes), so renderPrBody keeps the structure intact.
 const PLAN_SUMMARY_SYSTEM =
 	"Summarize a COMPLETED work plan for a reviewer, from its finished steps (each step's title and the " +
-	"agent's own note/verification). Write a short handoff in GitHub Markdown: a one-sentence lead, then a " +
-	"compact bullet list of what shipped across the WHOLE plan \u2014 not a single step. No headings, no " +
-	"'Summary:' label, no preamble; never claim anything the steps don't state. Keep it under ~120 words.";
+	"agent's own note/verification), as the body of a pull request. Output GitHub Markdown with exactly " +
+	"three H2 sections in order and nothing before them: '## Summary' (what shipped and why in short " +
+	"prose), '## Changes' (plan-scale cross-cutting notes \u2014 migrations, scope drift, new/dropped deps, " +
+	"renames; write '_no cross-cutting notes_' if none), '## Testing' (end-to-end checks beyond " +
+	"per-step verification, each as a bullet in the shape 'check \u2192 result', or the honest " +
+	"'_not verified_'). No preamble before `## Summary`; never claim anything the steps don't state. " +
+	"Keep the whole body under ~160 words.";
 
 const PLAN_SUMMARY_TIMEOUT_MS = 20_000;
 const PLAN_SUMMARY_MAX_TOKENS = 400;
@@ -65,6 +75,9 @@ function buildPlanSummaryPrompt(steps: PlanSummaryStep[]): string | null {
 }
 
 export function toPlanSummary(raw: string): string | null {
+	// Normalize what the model sometimes wraps the response in \u2014 a stray fenced block or a leading
+	// 'Summary:' label \u2014 but leave the three H2 headings in place: they are the whole point of the
+	// PR-body shape and `renderPrBody` prepends this verbatim.
 	const text = raw
 		.trim()
 		.replace(/^```[a-z]*\n?/i, "")

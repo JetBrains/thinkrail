@@ -478,8 +478,10 @@ export class TodoStore {
 		const file: TodoFile = {
 			version: CURRENT_VERSION,
 			todos: plan.todos,
-			// Keep empty groups: TodoStore.promote parks a loose user ask as an empty group whose
-			// steps the agent decomposes afterward; filtering here would silently undo it.
+			// Keep empty groups at the write boundary: `TodoStore.promote` parks a loose user ask as an
+			// empty group whose steps the agent decomposes afterward; filtering here would silently undo
+			// it. The ghost-group case (a group that LOSES its last item in `remove`) is handled at the
+			// remove call site, not here, so that we only prune a group the caller actually drained.
 			groups: plan.groups,
 		};
 		if (plan.summary) file.summary = plan.summary;

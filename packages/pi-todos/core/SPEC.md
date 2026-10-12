@@ -94,22 +94,39 @@ single atomic step with `TodoStore.promote(id, titleOverride?)`: the loose item 
 lane and a group with the **same id** (and the item's title, unless overridden) appears in the groups
 list, ready for `add` to append decomposition. One write, no duplicate window — a session that dies
 right after promotion still leaves a consistent plan (the user's ask shown as its own group). The group
-is intentionally created empty (an empty-group state is first-class, see below), and when a group with
-the same title already exists `promote` merges into it instead of creating a second one. `promote`
-returns `undefined` for an unknown id and for a grouped step (promotion applies only to loose-lane
-items). The structural guards that still hold: `WritePlan` has no `todos` field (`todo_write`
+is intentionally created empty (an empty-group state is first-class, see below). `promote` returns
+`undefined` and leaves the loose item in place in four cases — together these cover the
+«ask that cannot become its own addressable group»; the caller can always retry with a disambiguating
+override:
+
+1. the id is unknown;
+2. the id is a grouped step (promotion applies only to loose-lane items);
+3. the normalized title is empty (after `decodeEscapes` + `flattenTitle` — a blank group has no
+   addressable task for `todo_add group:` to target);
+4. the normalized title collides with an existing group — silently merging the loose item into the
+   pre-existing group would add no step, so a second identical ask would just vanish; reject instead
+   and let the caller supply a unique override.
+
+The structural guards that still hold: `WritePlan` has no `todos` field (`todo_write`
 reconciles `groups` only, so a re-plan never mints or edits loose items); a loose item that reaches
 `done` on a re-plan is carried out of the loose lane into `"Completed"` so the lane never retains a
 completed item.
 
-**Empty groups are first-class.** `sanitizeGroup` and `write` keep groups whose `todos[]` is empty — a
-freshly promoted ask lives as an empty group until the agent decomposes it, and dropping it on read or
-write would silently undo `promote`. `groupStatus` returns `pending` for an empty group; the skill tells
-the agent to immediately add the first substantive step and flip it `in_progress`, so an empty group is
-only ever a transient state between `promote` and the first `add`. The host UI renders this transient
-state as a visible "planning…" line under the group heading (`plan-group-planning` /
-`todo-group-planning` in `apps/web/src/panels/PlanPane.tsx` and `apps/web/src/chat/TodoList.tsx`)
-instead of an empty header, so a reader never sees the group as a broken half-rendered row.
+**Empty groups are first-class — for promotion, not as a landing pad after `remove`.** `sanitizeGroup`
+and `write` keep groups whose `todos[]` is empty — a freshly promoted ask lives as an empty group
+until the agent decomposes it, and dropping it on read or write would silently undo `promote`.
+`groupStatus` returns `pending` for an empty group; the skill tells the agent to immediately add the
+first substantive step and flip it `in_progress`, so an empty group is only ever a transient state
+between `promote` and the first `add`. The host UI renders this transient state as a visible
+"planning…" line under the group heading (`plan-group-planning` / `todo-group-planning` in
+`apps/web/src/panels/PlanPane.tsx` and `apps/web/src/chat/TodoList.tsx`) instead of an empty header,
+so a reader never sees the group as a broken half-rendered row.
+
+`remove` keeps that promotion-only invariant without leaving a `remove`-born ghost: it snapshots
+per-group item counts before the delete and prunes a group iff its count went from `>0` to `0` in
+this very call. A promote-born group that was ALREADY empty before `remove` is preserved
+(parked-user-ask invariant); a group that LOSES its last item in `remove` is pruned, so the user is
+never stuck with a permanent "planning…" row and no tool to delete it.
 
 **Titles are one-line, normalized at the write boundary.** Item titles and group titles are the item
 bullets and `##` group headings of the markdown export, which is a shipped artifact (the plan page's
