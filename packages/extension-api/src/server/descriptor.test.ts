@@ -32,6 +32,21 @@ describe("defineServerExtension", () => {
 		expect(extension).toBe(descriptor);
 		expect(extension).not.toHaveProperty("childExtensions");
 		expect(extension).not.toHaveProperty("skillPackages");
+		expect(extension).not.toHaveProperty("title");
+		expect(extension).not.toHaveProperty("description");
+	});
+
+	it("keeps display copy beside the identity", () => {
+		const extension = defineServerExtension({
+			name: "shown",
+			title: "Shown",
+			description: "Shows up in Settings.",
+			extensions: [],
+		});
+
+		expect(extension.name).toBe("shown");
+		expect(extension.title).toBe("Shown");
+		expect(extension.description).toBe("Shows up in Settings.");
 	});
 
 	it("erases the pi type dependency from its runtime entry", async () => {

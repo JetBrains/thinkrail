@@ -25,6 +25,8 @@ function loadTool(): CapturedTool {
 describe("visualize server half", () => {
 	test("composes one parent extension named visualize and no children or skills", () => {
 		expect(extension.name).toBe("visualize");
+		expect(extension.title).toBe("Visualize");
+		expect(extension.description).toBeTruthy();
 		expect(extension.extensions).toHaveLength(1);
 		expect(extension).not.toHaveProperty("childExtensions");
 		expect(extension).not.toHaveProperty("skillPackages");

@@ -23,8 +23,9 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   optional `ToolRegistrationOptions` under `options`. `defineWebExtension` is a typed identity helper:
   it preserves the descriptor and its inferred tool keys without registration or default injection.
 - `./server` exposes `ServerExtension` and `defineServerExtension`, with pi `ExtensionFactory` types
-  only. Descriptors carry `name`, `extensions`, optional `childExtensions` and optional `skillPackages`
-  specifiers. Its identity helper preserves factories, order and optional-field absence; loading and
+  only. Descriptors carry `name` (the identity — the Settings on/off switch and `disabledExtensions` key
+  on it), optional display copy `title` / `description` for the Settings catalog, `extensions`, optional
+  `childExtensions` and optional `skillPackages` specifiers. Its identity helper preserves factories, order and optional-field absence; loading and
   skill resolution remain host responsibilities.
 - The root is browser-safe and exposes only the web contract; it never re-exports the server half.
 - The only workspace dependency is `contracts`. React and pi are type-only contract dependencies;
