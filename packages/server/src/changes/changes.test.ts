@@ -106,6 +106,7 @@ beforeEach(() => {
 	git("config", "user.email", "t@thinkrail.test");
 	git("config", "user.name", "test");
 	git("config", "commit.gpgsign", "false");
+	git("config", "core.autocrlf", "false");
 	write("a.ts", "one\ntwo\nthree\n");
 	commitAll("init");
 	workspaceId = `w${++nextWorkspace}`;

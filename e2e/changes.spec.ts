@@ -978,7 +978,7 @@ test("A source diff keeps its scroll position across a tab switch", async ({ pag
 	await revealWorkbenchTool(page, "changes");
 	await page.getByTestId("change-item").filter({ hasText: "scroll-code.ts" }).dblclick();
 	const diff = page.getByTestId("diff-view");
-	await expect(diffText(page, "edited 399")).toBeVisible();
+	await expect(diffText(page, "edited 0")).toBeVisible();
 	const top = await diff.evaluate((node) => {
 		node.scrollTop = (node.scrollHeight - node.clientHeight) * 0.6;
 		return node.scrollTop;
@@ -988,8 +988,8 @@ test("A source diff keeps its scroll position across a tab switch", async ({ pag
 	await page.locator('[data-testid="editor-tab"][data-kind="chat"]').click();
 	await expect(diff).toHaveCount(0);
 	await page.locator('[data-testid="editor-tab"][data-kind="diff"]').click();
-	await expect(diffText(page, "edited 399")).toBeVisible();
 	await expect.poll(() => diff.evaluate((node) => node.scrollTop)).toBe(top);
+	await expect(diffText(page, "edited 238")).toBeVisible();
 });
 
 test("Closing a diff tab removes its Pierre surface", async ({ page }) => {
@@ -1007,4 +1007,91 @@ test("Closing a diff tab removes its Pierre surface", async ({ page }) => {
 	await diffTab.getByTestId("editor-tab-close").click();
 	await expect(diffTab).toHaveCount(0);
 	await expect(page.getByTestId("diff-view")).toHaveCount(0);
+});
+
+test("large diffs render virtualized and wide rewrites wait behind a notice", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const lines = (count: number, mark: string) =>
+		Array.from({ length: count }, (_, index) => `${mark} line ${index + 1}`).join("\n");
+	writeFileSync(join(workspace.worktreePath, "ADDED.txt"), `${lines(20_000, "added")}\n`);
+
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("change-item").filter({ hasText: "ADDED.txt" }).dblclick();
+	const diffView = page.getByTestId("diff-view");
+	await expect(pierreLines(diffView, "added line 1").first()).toBeVisible();
+	expect(await pierreLines(diffView).count()).toBeLessThan(1_000);
+	expect(await diffView.evaluate((node) => node.scrollTop)).toBe(0);
+
+	commitFile(workspace.worktreePath, "REWRITE.txt", `${lines(3_000, "before")}\n`, "add rewrite");
+	writeFileSync(join(workspace.worktreePath, "REWRITE.txt"), `${lines(3_000, "after")}\n`);
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	await page.getByTestId("change-item").filter({ hasText: "REWRITE.txt" }).dblclick();
+	await expect(page.getByTestId("diff-too-large").locator("p")).toHaveText(
+		"This diff is too expensive to show automatically. Rendering it can freeze the app for a while.",
+	);
+	await page.getByTestId("diff-show-anyway").click();
+	await expect(page.getByTestId("diff-too-large")).toHaveCount(0);
+	await expect(pierreLines(diffView, "after line 1").first()).toBeVisible();
+
+	const reordered = lines(1_500, "same");
+	commitFile(workspace.worktreePath, "REORDER.txt", reordered, "add reorder");
+	writeFileSync(
+		join(workspace.worktreePath, "REORDER.txt"),
+		reordered.split("\n").reverse().join("\n"),
+	);
+	await page.getByTestId("change-item").filter({ hasText: "REORDER.txt" }).dblclick();
+	await expect(page.getByTestId("diff-too-large").locator("p")).toHaveText(
+		"This diff is too expensive to show automatically. Rendering it can freeze the app for a while.",
+	);
+	await expect(diffView).toHaveCount(0);
+});
+
+test("a large source diff in the stacked review renders virtualized in a bounded viewport", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const lines = Array.from({ length: 20_000 }, (_, index) => `stacked line ${index + 1}`);
+	writeFileSync(join(workspace.worktreePath, "STACKED.txt"), `${lines.join("\n")}\n`);
+
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("change-item").filter({ hasText: "STACKED.txt" }).click();
+	const section = page.getByTestId("changes-section").filter({ hasText: "STACKED.txt" });
+	const diffView = section.getByTestId("diff-view");
+	await expect(pierreLines(diffView, "stacked line 1").first()).toBeVisible();
+	expect(await pierreLines(diffView).count()).toBeLessThan(1_000);
+	const { clientHeight, scrollHeight } = await diffView.evaluate((node) => ({
+		clientHeight: node.clientHeight,
+		scrollHeight: node.scrollHeight,
+	}));
+	expect(clientHeight).toBeLessThan(scrollHeight);
+});
+
+test("a small edit in a large stacked file stays virtualized when context expands", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const lines = Array.from({ length: 3_000 }, (_, index) => `context line ${index + 1}`);
+	commitFile(workspace.worktreePath, "CONTEXT.txt", `${lines.join("\n")}\n`, "add context");
+	lines[1_500] = "edited context line 1501";
+	writeFileSync(join(workspace.worktreePath, "CONTEXT.txt"), `${lines.join("\n")}\n`);
+
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("changes-scope-trigger").click();
+	await page.getByTestId("changes-scope-uncommitted").click();
+	await page.getByTestId("change-item").filter({ hasText: "CONTEXT.txt" }).click();
+	const section = page.getByTestId("changes-section").filter({ hasText: "CONTEXT.txt" });
+	const diffView = section.getByTestId("diff-view");
+	await expect(pierreLines(diffView, "edited context line 1501").first()).toBeVisible();
+	const height = await diffView.evaluate((node) => node.clientHeight);
+	await pierreCollapsedContext(diffView)
+		.filter({ visible: true })
+		.first()
+		.click({ modifiers: ["Shift"] });
+	await expect.poll(() => diffView.evaluate((node) => node.scrollHeight)).toBeGreaterThan(height);
+	expect(await diffView.evaluate((node) => node.clientHeight)).toBe(height);
+	expect(await pierreLines(diffView).count()).toBeLessThan(1_000);
 });

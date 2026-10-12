@@ -27,7 +27,12 @@ import {
 	useAppStore,
 } from "../store";
 import { errorText, getTransport } from "../transport";
-import { estimatedSectionHeight, splitPath, statusNameClass } from "./changesModel";
+import {
+	estimatedSectionHeight,
+	splitPath,
+	stackedDiffBounded,
+	statusNameClass,
+} from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { DiffSurfaceBody, useDiffSurface } from "./DiffSurface";
 import { HeaderIconButton } from "./HeaderIconButton";
@@ -195,7 +200,8 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 		}
 	};
 	const changedLines = (change.added ?? 0) + (change.removed ?? 0);
-	const ownsScroller = mode === "single" || renderer.capabilities.boundedDiff === true;
+	const bounded = stackedDiffBounded(renderer.capabilities.boundedDiff, surface.lineCount);
+	const ownsScroller = mode === "single" || bounded;
 
 	return (
 		<section
@@ -392,13 +398,7 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 						viewState={ownsScroller ? section?.viewState : undefined}
 						onViewState={ownsScroller ? saveViewState : undefined}
 						onSelectRenderer={selectRenderer}
-						bodyClassName={
-							mode === "single"
-								? "min-h-0 flex-1"
-								: renderer.capabilities.boundedDiff
-									? "h-[60vh]"
-									: ""
-						}
+						bodyClassName={mode === "single" ? "min-h-0 flex-1" : bounded ? "h-[60vh]" : ""}
 					/>
 				</ReviewDraftContext>
 			)}

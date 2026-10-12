@@ -13,8 +13,10 @@ import {
 	scopeTitle,
 	sectionCollapsedByDefault,
 	splitPath,
+	stackedDiffBounded,
 	turnScope,
 } from "./changesModel";
+import { VIRTUALIZED_DIFF_LINES } from "./largeDiff";
 
 function change(path: string, over: Partial<GitFileChange> = {}): GitFileChange {
 	return { path, status: "modified", added: 1, removed: 0, ...over };
@@ -193,4 +195,11 @@ test("a loading section reserves a height in the order of its eventual diff", ()
 	expect(medium).toBeGreaterThan(1500);
 	expect(medium).toBeLessThan(4000);
 	expect(huge).toBe(20_000);
+});
+
+test("a stacked section bounds its diff only when the renderer needs a viewport", () => {
+	expect(stackedDiffBounded("always", 1)).toBe(true);
+	expect(stackedDiffBounded("large", VIRTUALIZED_DIFF_LINES)).toBe(false);
+	expect(stackedDiffBounded("large", VIRTUALIZED_DIFF_LINES + 1)).toBe(true);
+	expect(stackedDiffBounded(undefined, 1_000_000)).toBe(false);
 });

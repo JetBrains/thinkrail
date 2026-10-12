@@ -1,6 +1,6 @@
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
 	openFixtureProject,
@@ -67,6 +67,14 @@ async function seedChanges(page: Page) {
 	return mutations;
 }
 
+async function scrollDiffUntilVisible(page: Page, path: string, target: Locator, deltaY: number) {
+	await expect(async () => {
+		await section(page, path).getByTestId("diff-view").hover();
+		await page.mouse.wheel(0, deltaY);
+		await expect(target).toBeInViewport({ timeout: 500 });
+	}).toPass();
+}
+
 async function wheelAway(page: Page, path: string) {
 	await section(page, path).getByTestId("changes-section-header").hover();
 	await page.mouse.wheel(0, 80000);
@@ -105,11 +113,15 @@ test("Changes keeps unsaved composer selection and text through virtualization a
 	await page.getByTestId("changes-review-prev").click();
 	await expect(first.getByTestId("review-composer-input")).toHaveValue("Unsaved hunk question");
 	expect(mutations).toEqual([]);
-	await first.getByTestId("review-composer-cancel").click();
+	const cancel = first.getByTestId("review-composer-cancel");
+	await scrollDiffUntilVisible(page, "draft-00.ts", cancel, 80000);
+	await cancel.click();
 	await page.getByTestId("changes-review-next").click();
 	await page.getByTestId("changes-review-prev").click();
 	await expect(first.getByTestId("review-composer-input")).toHaveCount(0);
-	await first.getByTestId("hunk-ask-agent").click();
+	const askAgent = first.getByTestId("hunk-ask-agent");
+	await scrollDiffUntilVisible(page, "draft-00.ts", askAgent, -80000);
+	await askAgent.click();
 	await expect(first.getByTestId("review-composer-input")).not.toHaveValue("Unsaved hunk question");
 	await first.getByTestId("review-composer-input").fill("Saved hunk question");
 	await first.getByTestId("review-composer-save").click();
@@ -138,25 +150,29 @@ test("Changes retains unsaved draft-thread edits through virtualization and hono
 	await page.getByTestId("changes-review-prev").click();
 	await expect(first.getByTestId("review-thread-edit")).toHaveValue("Unsaved thread edit");
 	expect(mutations).toEqual(savedMutations);
-	await first.getByTestId("review-thread-edit").press("Escape");
+	const threadEdit = first.getByTestId("review-thread-edit");
+	await scrollDiffUntilVisible(page, "draft-00.ts", threadEdit, 80000);
+	await threadEdit.press("Escape");
 	await page.getByTestId("changes-review-next").click();
 	await page.getByTestId("changes-review-prev").click();
-	await expect(first.getByTestId("review-thread-edit")).toHaveValue("Original saved draft");
-	await first.getByTestId("review-thread-edit").fill("Explicitly saved edit");
+	await expect(threadEdit).toHaveValue("Original saved draft");
+	await scrollDiffUntilVisible(page, "draft-00.ts", threadEdit, 80000);
+	await threadEdit.fill("Explicitly saved edit");
 	await pressPlatformShortcut(page, "Enter");
 	await expect
 		.poll(() => mutations.filter((method) => method === "review.commentUpdate").length)
 		.toBe(1);
 	await page.getByTestId("changes-review-next").click();
 	await page.getByTestId("changes-review-prev").click();
-	await expect(first.getByTestId("review-thread-edit")).toHaveValue("Explicitly saved edit");
-	await first.getByTestId("review-thread-edit").fill("Saved on blur");
+	await expect(threadEdit).toHaveValue("Explicitly saved edit");
+	await scrollDiffUntilVisible(page, "draft-00.ts", threadEdit, 80000);
+	await threadEdit.fill("Saved on blur");
 	await page.getByTestId("changes-review-next").click();
 	await expect
 		.poll(() => mutations.filter((method) => method === "review.commentUpdate").length)
 		.toBe(2);
 	await page.getByTestId("changes-review-prev").click();
-	await expect(first.getByTestId("review-thread-edit")).toHaveValue("Saved on blur");
+	await expect(threadEdit).toHaveValue("Saved on blur");
 });
 
 test("notebook drafts remain attached to their cell after the renderer reparses on remount", async ({

@@ -935,3 +935,36 @@ test("Done is undone by a fresh remark: the file re-lists the moment a new comme
 	await expect(page.getByTestId("review-file-row")).toContainText("script.ts");
 	await expect(page.getByTestId("review-file-row")).toContainText("1 draft");
 });
+
+test("opening a comment far outside the virtualized window scrolls its card into view", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const lines = Array.from({ length: 3_000 }, (_, index) => `far line ${index + 1}`);
+	writeFileSync(join(worktree(), "FAR.txt"), `${lines.join("\n")}\n`);
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("change-item").filter({ hasText: "FAR.txt" }).dblclick();
+	const diff = page.getByTestId("diff-view");
+	await expect(diff.getByText("far line 1", { exact: false }).first()).toBeVisible();
+
+	await diff.evaluate((node) => node.scrollTo({ top: node.scrollHeight }));
+	await expect(diff.getByText("far line 2990", { exact: false }).last()).toBeVisible();
+	await composeComment(page, "far line 2990", "Far-off remark.");
+	await page.getByTestId("review-composer-save").click();
+	const card = diff.getByTestId("review-thread-card");
+	await expect(card).toBeVisible();
+
+	await diff.evaluate((node) => node.scrollTo({ top: 0 }));
+	await expect(card).not.toBeInViewport();
+	await revealWorkbenchTool(page, "review");
+	const reviewSection = page
+		.getByTestId("review-file-section")
+		.filter({ has: page.getByTestId("review-file-row").filter({ hasText: "FAR.txt" }) });
+	if ((await reviewSection.getAttribute("data-expanded")) !== "true") {
+		await reviewSection.getByTestId("review-file-row").click();
+	}
+	await reviewSection.getByTestId("review-comment-open").first().click();
+	await expect(card).toBeInViewport();
+	await expect(card).toContainText("Far-off remark.");
+});

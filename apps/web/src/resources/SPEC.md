@@ -15,9 +15,10 @@ ranked, and followed by the required text or byte fallback. MIME matching uses t
 fallback as resource description when host MIME metadata is absent. The resulting ordered list is both
 dispatch policy and the pane's view-toggle grammar. Renderer capabilities also state whether the selected
 surface supports copying its modified source, split/unified layout, and ignore-whitespace recomputation; the
-pane exposes only those applicable controls. `boundedDiff` marks a diff renderer that manages its own
-viewport (virtualized table, paged PDF, sandboxed HTML frame) and therefore needs a bounded height; every
-other diff lays out at its natural height, which is what lets the continuous Changes review stack sections
+pane exposes only those applicable controls. `boundedDiff: "always"` marks a diff renderer that manages its
+own viewport (virtualized table, paged PDF, sandboxed HTML frame) and therefore needs a bounded height;
+`"large"` marks one that lays out naturally but virtualizes once bounded, so a host bounds it when the diff
+is large; a host passes `virtualize` only for a diff large enough to need it. Every other diff lays out at its natural height, which is what lets the continuous Changes review stack sections
 in one scroll. `HunkActions.triage` is optional: a surface that tracks kept hunks supplies the kept keys,
 a setter, and a sink for the renderer's hunk content keys; a renderer without it shows no Keep control.
 
