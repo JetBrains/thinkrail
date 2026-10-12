@@ -29,12 +29,16 @@ function ageWorkspace(id: string, days: number): void {
 test("a workspace settles by hand and comes back with Keep active", async ({ page }, testInfo) => {
 	await openFixtureProject(page);
 	const first = await createWorkspaceViaDialog(page);
-	await createWorkspaceViaDialog(page);
+	const second = await createWorkspaceViaDialog(page);
 
 	const shelf = page.getByTestId("settled-shelf");
-	await expect(page.getByTestId("workspace-sort")).toBeVisible();
 	await expect(shelf).toHaveAttribute("data-count", "0");
 	await expect(worktreeRows(page)).toHaveCount(2);
+	// The rail keeps the host's order even though the newer workspace is the most recently active.
+	await expect(worktreeRows(page).getByTestId("workspace-name")).toHaveText([
+		first.name,
+		second.name,
+	]);
 
 	// Hover ✓ on the quiet sibling parks it; the collapsed shelf hides the row and counts it.
 	const firstRow = worktreeRows(page).filter({ hasText: first.name });
@@ -77,6 +81,10 @@ test("a workspace settles by hand and comes back with Keep active", async ({ pag
 		"data-active",
 		"true",
 	);
+	await expect(worktreeRows(page).getByTestId("workspace-name")).toHaveText([
+		first.name,
+		second.name,
+	]);
 });
 
 test("the shelf's first automatic move is announced once, and Show opens it", async ({ page }) => {
@@ -131,7 +139,6 @@ test("a pre-v78 host keeps the legacy workspace list without shelf affordances",
 	await expect(rows).toHaveCount(2);
 	await expect(rows.nth(0).getByTestId("workspace-name")).toHaveText("workspace-1");
 	await expect(rows.nth(1).getByTestId("workspace-name")).toHaveText("workspace-2");
-	await expect(page.getByTestId("workspace-sort")).toHaveCount(0);
 	await expect(page.getByTestId("settled-shelf")).toHaveCount(0);
 	await rows.nth(0).hover();
 	await expect(rows.nth(0).getByTestId("workspace-settle")).toHaveCount(0);
