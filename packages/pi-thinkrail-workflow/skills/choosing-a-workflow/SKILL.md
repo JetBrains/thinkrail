@@ -24,7 +24,7 @@ For a new piece of work, read the request and use what is already known to answe
    shortens the interview; it never skips it.
 
 If none applies, no workflow is needed: proceed directly without a workflow announcement. Only work
-that changes no behavior belongs here: a question, explanation, or check; a typo, documentation, or
+that changes no behavior belongs here: a non-PR question, explanation, or check; a typo, documentation, or
 configuration-only edit; a mechanical refactor such as a rename.
 
 If the route is genuinely ambiguous from the request alone, ask one short clarifying question

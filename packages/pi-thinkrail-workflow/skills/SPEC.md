@@ -119,7 +119,7 @@ flowchart LR
 4. At the start of a new piece of work, one always-on entry rule names the workflow-eligible classes —
    project onboarding and PR lifecycle work take precedence regardless of whether they edit code; every
    other change to what the product does — a feature, a behavior change, or a bug fix, however small —
-   enters too. Only questions, explanations, checks, and edits that change no behavior (typos,
+   enters too. Only non-PR questions, explanations, and checks, and edits that change no behavior (typos,
    documentation or configuration only, mechanical refactors) proceed directly. The rule points only
    the eligible classes at the root router. Work already routed resumes its active workflow; all other
    work proceeds directly without loading or announcing one.
