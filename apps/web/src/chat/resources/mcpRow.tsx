@@ -77,7 +77,7 @@ function McpRow({
 			data-testid="resource-mcp"
 			data-name={server.name}
 			data-state={server.state}
-			className="grid min-h-32 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-8 rounded-[var(--radius-sm)] px-8 py-4 hover:bg-control-bg-hovered"
+			className="grid min-h-32 min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-8 rounded-sm px-8 py-4 hover:bg-control-bg-hovered"
 		>
 			<span className="relative mt-2 inline-flex size-16 shrink-0 items-center justify-center">
 				<RiPlugLine className="size-14 text-text-muted" />
@@ -117,7 +117,7 @@ function McpRow({
 							aria-describedby={item.id === "disable" ? describedBy : undefined}
 							disabled={!authoritative || !!action?.pending}
 							onClick={() => onAction(item.id)}
-							className="rounded-[var(--radius-xs)] px-4 text-primary outline-none hover:bg-control-bg focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
+							className="rounded-xs px-4 text-primary outline-none hover:bg-control-bg focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
 						>
 							{item.label}
 						</button>
