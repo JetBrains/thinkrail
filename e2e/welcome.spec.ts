@@ -157,7 +157,7 @@ test("the Welcome trust notice names a project's Pi resources, grants them, and 
 
 		await page.getByTestId("project-untrust-button").click();
 		await expect(page.getByRole("alertdialog")).toContainText(
-			"Its project skills and Pi resources stop loading",
+			"Its project skills, Pi resources and MCP servers stop loading",
 		);
 		await page.getByTestId("project-untrust-confirm").click();
 		await expect(notice).toHaveAttribute("data-state", "untrusted");
