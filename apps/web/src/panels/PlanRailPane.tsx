@@ -5,7 +5,7 @@
 // FileText button inside `TodoAddRow`) and will land in center as before \u2014 see
 // `plan-as-side-rail-rfc.md` for placement + `plan-chatless-work-surface-rfc.md` for the Now-block
 // direction.
-import { planGlance } from "../chat/planView";
+import { hostSessionGlance, planGlance } from "../chat/planView";
 import { TodoAddRow, TodoRows } from "../chat/TodoList";
 import { useChatTodos } from "../chat/useChatTodos";
 import { useAppStore } from "../store";
@@ -18,12 +18,16 @@ export default function PlanRailPane({
 	sessionId: string;
 }) {
 	const plan = useChatTodos(workspaceId, sessionId);
-	// Glance drives the status glyph on in-progress rows. Mirror the chat strip's derivation so the
-	// rail and the popover stay in lockstep.
+	// Glance drives the status glyph on in-progress rows. The rail is now the ONLY compact plan
+	// surface (the chat popover is gone), so it must be able to show \u201cNeeds your answer\u201d while
+	// `ask_user_question` is pending \u2014 otherwise the active row reads as paused and the user has
+	// no cue that an answer is expected. Prefer the authoritative `hostState` (same path the full
+	// Plan page uses) and fall back to the local isStreaming-only `planGlance` when no host state
+	// has arrived yet.
 	const glance = useAppStore((s) => {
 		const runtime = s.sessions[sessionId];
 		if (!runtime) return "waiting" as const;
-		return planGlance(runtime.isStreaming, {});
+		return hostSessionGlance(runtime.hostState, planGlance(runtime.isStreaming, {}));
 	});
 
 	if (plan.data === null) {
@@ -43,7 +47,13 @@ export default function PlanRailPane({
 		// Background is inherited from the rail panel chrome (same as Review / Changes / Files). An
 		// explicit `bg-container-content-bg` here would paint the lighter editor-tab surface over the
 		// darker rail background and the panel would stand out from its neighbours.
-		<div data-testid="plan-rail-pane" className="flex h-full min-h-0 flex-col overflow-hidden">
+		<div
+			data-testid="plan-rail-pane"
+			// Exposed so tests can lock the pending-ask glance without needing an in_progress item
+			// mounted (StatusIcon's `data-glance` only renders for in-progress rows).
+			data-glance={glance}
+			className="flex h-full min-h-0 flex-col overflow-hidden"
+		>
 			<div className="shrink-0 border-border-muted border-b">
 				<TodoAddRow onAdd={plan.add} onOpenPlan={plan.openPlan} />
 			</div>

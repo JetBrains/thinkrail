@@ -14,6 +14,65 @@ import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const BASE_TS = 1_700_800_000_000;
 
+test("a pending ask surfaces on the rail as waiting_question glance, not paused", async ({
+	page,
+}) => {
+	// Regression for the rail (now the ONLY compact plan surface after the chat popover was removed):
+	// an `ask_user_question` must light the rail up with `waiting_question` glance, otherwise the
+	// user sees \u201cpaused\u201d and loses the cue that an answer is expected. Driven by the host-side
+	// `sessionState.needsInput` through `hostSessionGlance` \u2014 the same path the Plan page uses.
+	await openFixtureProject(page);
+	const askArgs: AskUserQuestionArgs = {
+		questions: [
+			{
+				question: "Is this blocking?",
+				header: "Blocking",
+				options: [
+					{ label: "Yes", description: "stop and ask" },
+					{ label: "No", description: "keep going" },
+				],
+			},
+		],
+	};
+	const ack: AskUserQuestionAckDetails = { kind: "ack" };
+	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "rail glance on pending ask",
+		messages: [
+			{ role: "user", text: "Ping.", timestamp: BASE_TS },
+			{
+				role: "assistant",
+				content: [
+					{ type: "toolCall", id: "ask-rail", name: "ask_user_question", arguments: askArgs },
+				],
+				stopReason: "toolUse",
+				timestamp: BASE_TS + 1000,
+			},
+			{
+				role: "toolResult",
+				toolCallId: "ask-rail",
+				toolName: "ask_user_question",
+				content: [{ type: "text", text: "awaiting" }],
+				details: ack,
+				isError: false,
+				timestamp: BASE_TS + 2000,
+			},
+		],
+	});
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openPersistedChat(page, "rail glance on pending ask");
+		await revealWorkbenchTool(page, "plan");
+		const rail = page.getByTestId("plan-rail-pane");
+		await expect(rail).toBeVisible();
+		// `waiting_question` is the glance that drives the \u201cNeeds your answer\u201d label on the
+		// in-progress StatusIcon; without the hostState wiring this used to read as `waiting` (paused).
+		await expect(rail).toHaveAttribute("data-glance", "waiting_question");
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
 test("a pending ask_user_question is answerable from the plan page", async ({ page }) => {
 	await openFixtureProject(page);
 	const args: AskUserQuestionArgs = {

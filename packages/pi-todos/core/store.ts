@@ -347,7 +347,18 @@ export class TodoStore {
 		const plan = this.read();
 		const before = countItems(plan);
 		plan.todos = plan.todos.filter((t) => t.id !== id);
+		// A `promote`-born empty group is kept on purpose (it parks a user ask the agent is about to
+		// decompose, see TodoStore.promote). An `in situ` group that LOSES its last item is a
+		// different story \u2014 without pruning it we'd leave a ghost "planning\u2026" task the user has
+		// no tool to remove. Prune only groups the removal itself emptied: carry forward the
+		// pre-remove todo counts and drop a group iff its count went from >0 to 0 in this call.
+		const prevCounts = new Map<string, number>();
+		for (const group of plan.groups) prevCounts.set(group.id, group.todos.length);
 		for (const group of plan.groups) group.todos = group.todos.filter((t) => t.id !== id);
+		plan.groups = plan.groups.filter((group) => {
+			if (group.todos.length > 0) return true;
+			return (prevCounts.get(group.id) ?? 0) === 0; // never pre-emptied by this call \u21d2 keep
+		});
 		if (countItems(plan) === before) return false;
 		this.write(plan);
 		return true;
@@ -357,23 +368,27 @@ export class TodoStore {
 	 * group inherits its id + title (optionally overridden), ready for the agent to decompose. One
 	 * atomic step with no duplicate window 
  so even a session that dies right after promotion leaves a
-	 * consistent plan ("user's ask, now its own group"). Returns the new/merged group, or `undefined`
-	 * when the id isn't a loose item (grouped steps aren't promoted 
- they're already in a group). */
+	 * consistent plan ("user's ask, now its own group"). Returns the new group, or `undefined` when
+	 * the id isn't a loose item (grouped steps aren't promoted 
+ they're already in a group), when
+	 * the resolved title is empty (a blank group has no addressable task for `todo_add group:`), or
+	 * when a group with that title already exists (silently merging the loose item in would make the
+	 * ask vanish 
+ same-title merge adds no step). In the reject cases the loose item is left in
+	 * place so the caller can retry with a disambiguating override. */
 	promote(id: string, titleOverride?: string): TodoGroup | undefined {
 		const plan = this.read();
 		const idx = plan.todos.findIndex((t) => t.id === id);
 		if (idx === -1) return undefined;
 		const item = plan.todos[idx] as Todo;
-		plan.todos.splice(idx, 1);
 		const title = flattenTitle(
 			titleOverride !== undefined ? decodeEscapes(titleOverride) : item.title,
 		);
-		let group = plan.groups.find((g) => g.title === title);
-		if (!group) {
-			group = { id: item.id, title, todos: [] };
-			plan.groups.push(group);
-		}
+		if (!title) return undefined; // empty / whitespace-only override after normalization
+		if (plan.groups.some((g) => g.title === title)) return undefined; // title collides with existing group
+		plan.todos.splice(idx, 1);
+		const group: TodoGroup = { id: item.id, title, todos: [] };
+		plan.groups.push(group);
 		this.write(plan);
 		return group;
 	}

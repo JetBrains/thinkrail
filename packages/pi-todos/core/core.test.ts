@@ -425,7 +425,7 @@ test("add defaults origin to agent; the caller can mark it user", () => {
 	}
 });
 
-test("update/remove find items inside a group by id", () => {
+test("update/remove find items inside a group by id, pruning a group that just lost its last item", () => {
 	const root = tempRoot();
 	try {
 		const s = store(root);
@@ -433,10 +433,45 @@ test("update/remove find items inside a group by id", () => {
 		expect(s.get(todo.id)?.title).toBe("grouped");
 		expect(s.update(todo.id, { status: "in_progress" })?.todo.status).toBe("in_progress");
 		expect(s.remove(todo.id)).toBe(true);
-		// An empty group is kept on purpose: a freshly promoted loose ask lives as an empty group
-		// until the agent decomposes it; remove follows the same rule for consistency.
+		// A group that LOSES its last item in a remove is pruned: otherwise the user is stuck with a
+		// ghost "planning\u2026" task they have no tool to delete. A promote-born empty group that was
+		// ALREADY empty before this remove is left alone (covered by the next test).
+		expect(s.read().groups).toEqual([]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("remove preserves a promote-born empty group that was already empty before the call", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const parked = s.add({ title: "parked ask", origin: "user" });
+		const grouped = s.add({ title: "other step", group: "Other" });
+		s.promote(parked.id); // creates an empty group named "parked ask"
+		expect(
+			s
+				.read()
+				.groups.map((g) => g.title)
+				.sort(),
+		).toEqual(["Other", "parked ask"]);
+		expect(s.remove(grouped.id)).toBe(true);
+		// "Other" lost its last item \u2192 pruned; "parked ask" was already empty \u2192 preserved.
+		expect(s.read().groups.map((g) => g.title)).toEqual(["parked ask"]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("remove of one item in a multi-item group leaves the group with its remaining items", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const first = s.add({ title: "a", group: "G" });
+		const second = s.add({ title: "b", group: "G" });
+		expect(s.remove(first.id)).toBe(true);
 		expect(s.read().groups).toHaveLength(1);
-		expect(s.read().groups[0]?.todos).toEqual([]);
+		expect(s.read().groups[0]?.todos.map((t) => t.id)).toEqual([second.id]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -804,19 +839,39 @@ test("promote accepts a title override, flattens it, and decodes agent escapes",
 	}
 });
 
-test("promote merges into an existing group with the same title (keeps the existing group id)", () => {
+test("promote refuses when its title collides with an existing group \u2014 the loose item is left in place", () => {
 	const root = tempRoot();
 	try {
 		const s = store(root);
 		const existing = s.add({ title: "step", group: "Fix auth" });
 		const loose = s.add({ title: "fix auth", origin: "user" });
-		const group = s.promote(loose.id, "Fix auth");
-		// Merged into the existing group, not a new one; existing steps preserved.
-		expect(s.read().groups).toHaveLength(1);
-		expect(group?.id).not.toBe(loose.id); // kept the pre-existing group id
-		expect(group?.todos.map((t) => t.id)).toEqual([existing.id]);
-		// Loose lane cleaned up.
-		expect(s.read().todos).toEqual([]);
+		// Silently merging the loose item into the pre-existing group would make the ask vanish
+		// (same-title merge adds no step), so promote must reject and leave the loose item untouched
+		// so the caller can retry with a disambiguating override.
+		expect(s.promote(loose.id, "Fix auth")).toBeUndefined();
+		const plan = s.read();
+		expect(plan.todos.map((t) => t.id)).toEqual([loose.id]);
+		expect(plan.groups).toHaveLength(1);
+		expect(plan.groups[0]?.todos.map((t) => t.id)).toEqual([existing.id]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("promote refuses an empty or whitespace-only override \u2014 a blank group is unaddressable", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const loose = s.add({ title: "ask", origin: "user" });
+		// A blank group would have no title for `todo_add group:` to target. The loose item stays
+		// put so a follow-up promote with a real title still works.
+		expect(s.promote(loose.id, "")).toBeUndefined();
+		expect(s.promote(loose.id, "   \n\t  ")).toBeUndefined();
+		expect(s.read().todos.map((t) => t.id)).toEqual([loose.id]);
+		expect(s.read().groups).toEqual([]);
+		// A real override still works afterwards.
+		const group = s.promote(loose.id, "Real title");
+		expect(group?.title).toBe("Real title");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
