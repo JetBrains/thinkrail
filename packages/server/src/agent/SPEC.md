@@ -188,6 +188,16 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     Explicit Stop records its current run id as cancelled before abort and stays quiet; an unfinished run
     found after restart becomes interrupted.
 
+    **Background work holds unread.** While an idle chat still owns a running/stopping background command
+    or a queued/running delegation child, its completion is reported but `completionUnread` stays false,
+    so neither the attention dot nor an out-of-app notification fires while the agent's work is still in
+    flight; needs-input is never held. The command change listener and the delegation lifecycle listener
+    republish the parent's state on a coalesced `setImmediate`, after the same-tick completion delivery
+    that wakes the parent has already flipped it to running — so the last finishing child never flashes
+    the dot before the woken turn. A completion that does not wake the parent (user stop) releases the hold
+    on that republish; a delivery gated by a reload or trash hold also releases first, and its later wake
+    clears the unread again. Disk-only sessions have no live work and never hold.
+
     State ids come from Pi's active session-entry chain: run/interruption from the latest user entry,
     completion from the decisive assistant entry, questions/dialogs from their interaction ids. Disk state
     is reconstructed from the complete active branch; a file read/parse failure fails the all-workspace

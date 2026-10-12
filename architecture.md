@@ -137,7 +137,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
    and the latest completion as orthogonal facts. Needs-input is level-triggered and cannot be cleared by
    viewing; a completion is created only by `agent_settled` or restart reconstruction. Success,
    failure/length, and interruption remain owner-globally unread until the exact result renders in an
-   unobscured chat reached by deliberate frontend navigation; explicit Stop is quiet. Every client
+   unobscured chat reached by deliberate frontend navigation; explicit Stop is quiet, and an idle chat's
+   completion becomes unread only once its background commands and subagents have ended. Every client
    hydrates the same state and exact completion receipts from the host, while chat/tab selection and
    workspace entry remain frontend-local activation evidence. Background restoration alone is not a read.
 

@@ -800,7 +800,8 @@ the pi-level resource grant. A client talking to an older host sends neither.
 `needsInput` (stable `interactionId`, `question | dialog`; a pending dialog also carries its exact replayable
 request), nullable latest `completion` (stable id and explicit
 `succeeded | failed(error|length) | interrupted | cancelled` outcome), Pi's queue count, and the
-owner-global `completionUnread` receipt projection. `SessionStateRecord` adds session/workspace/project
+owner-global `completionUnread` receipt projection (held false while the idle session still runs background
+commands or subagents). `SessionStateRecord` adds session/workspace/project
 attribution; `SessionSummary.state` carries the exact attached session's state.
 
 `session.stateList` is an authoritative all-workspace snapshot of every top-level live or disk session and
