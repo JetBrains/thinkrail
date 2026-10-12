@@ -10,6 +10,7 @@ import type {
 	DiffStats,
 	EditorInfo,
 	ExistingWorktreeCandidate,
+	ExtensionCatalogEntry,
 	FileNode,
 	GitCommit,
 	GitDiffScope,
@@ -104,7 +105,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 81;
+export const PROTOCOL_VERSION = 82;
+export const EXTENSION_CATALOG_PROTOCOL_VERSION = 82;
 export const PROJECT_TRUST_PROTOCOL_VERSION = 81;
 export const TURN_CHANGES_PROTOCOL_VERSION = 80;
 export const SUBAGENT_CONCURRENCY_PROTOCOL_VERSION = 79;
@@ -237,6 +239,7 @@ export const WS_METHODS = {
 	dialogSelectDirectory: "dialog.selectDirectory",
 	skillList: "skill.list",
 	skillsState: "skills.state",
+	extensionList: "extension.list",
 	sessionCreate: "session.create",
 	sessionPrompt: "session.prompt",
 	sessionSteer: "session.steer",
@@ -670,6 +673,7 @@ export interface WsMethodMap {
 	"dialog.selectDirectory": { params: Record<string, never>; result: { path: string | null } };
 	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
 	"skills.state": { params: { workspaceId: string }; result: SkillCatalogEntry[] };
+	"extension.list": { params: Record<string, never>; result: ExtensionCatalogEntry[] };
 	"session.create": {
 		params: { workspaceId: string; model?: WireModel; thinkingLevel?: ThinkingLevel };
 		result: { sessionId: string; model: WireModel | null; thinkingLevel: ThinkingLevel };

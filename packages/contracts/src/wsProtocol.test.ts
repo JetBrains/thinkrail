@@ -16,6 +16,7 @@ import {
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
+	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
 	isTodoReviewFixMessage,
@@ -179,8 +180,15 @@ test("picker metadata and host-kept favorites/recents are pinned to v77", () => 
 	expect(RECENT_MODELS_LIMIT).toBe(5);
 });
 
+test("the extension catalog and its on/off setting are pinned to v82", () => {
+	expect(PROTOCOL_VERSION).toBe(82);
+	expect(EXTENSION_CATALOG_PROTOCOL_VERSION).toBe(82);
+	expect(WS_METHODS.extensionList).toBe("extension.list");
+	expect(DEFAULT_CONFIG.disabledExtensions).toEqual([]);
+});
+
 test("the project trust summary and pi-level resource consent are pinned to v81", () => {
-	expect(PROTOCOL_VERSION).toBe(81);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(81);
 	expect(PROJECT_TRUST_PROTOCOL_VERSION).toBe(81);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_TRUST_PROTOCOL_VERSION);
 	expect(WS_METHODS.projectTrustSummary).toBe("project.trustSummary");
