@@ -14,7 +14,7 @@ import {
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNow } from "@/components/useNow";
-import { fileName, platformShortcutLabel, relativeTime } from "@/lib";
+import { fileName, firstNonBlankLine, platformShortcutLabel, relativeTime } from "@/lib";
 import {
 	type ChatLocationRequest,
 	type HistorySearchState,
@@ -135,8 +135,7 @@ function PromptRow({
 	onDeleteChat: (workspaceId: string, sessionId: string) => void;
 }) {
 	const now = useNow();
-	const newline = hit.text.indexOf("\n");
-	const firstLine = newline === -1 ? hit.text : hit.text.slice(0, newline);
+	const firstLine = firstNonBlankLine(hit.text) ?? "";
 	const showChip = (scope.kind === "project" || scope.kind === "all") && !!hit.workspaceId;
 	const target = jumpTarget(hit);
 	return (
