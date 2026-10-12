@@ -2,8 +2,8 @@
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import procfsParsers from "@stroncium/procfs/lib/parsers";
-import processMountinfo from "@stroncium/procfs/lib/parsers/processMountinfo";
+import procfsParsers from "@stroncium/procfs/lib/parsers.js";
+import processMountinfo from "@stroncium/procfs/lib/parsers/processMountinfo.js";
 import trash from "trash";
 
 if (!Object.hasOwn(procfsParsers, "processMountinfo")) {
