@@ -6,6 +6,7 @@ import {
 	createWorkspaceViaDialog,
 	enterDefaultWorkspace,
 	openFixtureProject,
+	revealWorkbenchTool,
 } from "./fixtures/app";
 import { gitAs } from "./fixtures/git";
 
@@ -25,8 +26,7 @@ test("Open PR: no origin errors, with origin pushes, re-press follows the same b
 	await openFixtureProject(page);
 	const workspace = await createWorkspaceViaDialog(page);
 
-	await page.getByTestId("tool-rail-plan").click();
-	await page.getByTestId("tool-rail-plan").click();
+	await revealWorkbenchTool(page, "plan");
 	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
@@ -91,8 +91,7 @@ test("Open PR is disabled in the Default workspace, whose branch is its own base
 	await page.getByTestId("new-chat").first().click();
 	await expect(page.getByTestId("chat-input")).toBeVisible();
 
-	await page.getByTestId("tool-rail-plan").click();
-	await page.getByTestId("tool-rail-plan").click();
+	await revealWorkbenchTool(page, "plan");
 	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();

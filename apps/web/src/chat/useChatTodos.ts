@@ -28,6 +28,38 @@ export function shouldRefreshTodos(event: PiEvent): boolean {
 	return event.type === "tool_execution_end" || event.type === "agent_settled";
 }
 
+// Cross-instance refetch bus for `useChatTodos`.
+//
+// Multiple surfaces (the rail `PlanRailPane`, the center `PlanPane`, the chat strip) each call
+// `useChatTodos(workspaceId, sessionId)` and hold their OWN React state. The server-driven refetch
+// only fires on agent events (`tool_execution_end` / `agent_settled`), so a user-initiated edit
+// (todo.add from the rail) stayed invisible to the already-open Plan page until the agent happened
+// to tick \u2014 fine on fast runs, deterministically broken on binary/desktop. This module-local
+// bus lets a successful local write signal every other hook for the same chat key to reload.
+const todoRefetchBus = new Map<string, Set<() => void>>();
+export function subscribeTodoRefetch(key: string, listener: () => void): () => void {
+	let set = todoRefetchBus.get(key);
+	if (!set) {
+		set = new Set();
+		todoRefetchBus.set(key, set);
+	}
+	set.add(listener);
+	return () => {
+		const current = todoRefetchBus.get(key);
+		current?.delete(listener);
+		if (current && current.size === 0) todoRefetchBus.delete(key);
+	};
+}
+export function signalTodoRefetch(key: string): void {
+	const listeners = todoRefetchBus.get(key);
+	if (!listeners) return;
+	// Snapshot the Set before dispatch: a Set that gains entries mid-iteration would visit the newly
+	// added ones in the same loop (per JS spec), which would run a listener for a signal it wasn't
+	// subscribed to yet \u2014 a double-work hazard when a React render-time subscribe coincides with
+	// a sibling's write.
+	for (const listener of [...listeners]) listener();
+}
+
 // The content eligibility for an auto-drafted plan summary: every step done and no summary yet (agent- or
 // previously auto-authored). The host-capability gate (`supportsPlanSummaryGeneration`) is applied
 // separately, so the request fires only when this holds AND the connected host advertises v69+.
@@ -122,6 +154,9 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			if (event.sessionId !== sessionId) return;
 			if (shouldRefreshTodos(event.event)) scheduleRefetch();
 		});
+		// Cross-instance refetch bus: a sibling hook (rail or page) wrote to this chat's plan and now
+		// signals every other mounted hook to reload. Debounces through the same `scheduleRefetch`.
+		const unsubscribeBus = subscribeTodoRefetch(identity, scheduleRefetch);
 		// A plan review runs as a hidden subagent (no piEvent for this session) and writes its verdict to the
 		// review record; the host re-broadcasts reviewChanged when it lands, so refetch the plan to show it.
 		// The same broadcast fires for any review edit (a finding deleted/resolved can clear a step's
@@ -144,6 +179,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			readGeneration.current += 1;
 			if (refetch) clearTimeout(refetch);
 			unsubscribe();
+			unsubscribeBus();
 			unsubscribeReview();
 			unsubscribeReviewFailed();
 		};
@@ -193,6 +229,10 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 				? { ...prev, todos: [...prev.todos, todo] }
 				: prev,
 		);
+		// Tell sibling hooks for the SAME chat (rail \u2194 page \u2194 strip) to reload so a user add
+		// is visible on every surface, not only the one that invoked it. The local optimistic patch
+		// above keeps our own render instant; siblings pick up the real plan from `todo.list`.
+		signalTodoRefetch(requestIdentity);
 		void nudgeAgent(workspaceId, sessionId, title);
 	};
 
@@ -257,6 +297,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	const startReview = async (id: string) => {
 		await getTransport().request("todo.startReview", { workspaceId, sessionId, id });
 		await reloadPlan(); // the `reviewing` mark is host-derived — never patched locally
+		signalTodoRefetch(identity); // and tell sibling hooks about it
 	};
 
 	const reviewAll = async () => {
@@ -265,6 +306,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			sessionId,
 		});
 		await reloadPlan(); // the first item's `reviewing` mark is host-derived — re-read to show it
+		signalTodoRefetch(identity);
 		return { total, ...(alreadyRunning ? { alreadyRunning } : {}) };
 	};
 

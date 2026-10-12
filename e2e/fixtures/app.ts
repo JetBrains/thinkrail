@@ -179,9 +179,12 @@ export async function enterDefaultWorkspace(page: Page): Promise<void> {
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 }
 
+// Idempotent rail opener: a bare `tool-rail-*.click()` is a toggler, so calling it twice in a row
+// closes the rail you just opened — the exact copy-paste bug that silently broke the plan specs.
+// Always route through this helper when a test needs the pane visible.
 export async function revealWorkbenchTool(
 	page: Page,
-	tool: "projects" | "specs" | "files" | "changes" | "review",
+	tool: "projects" | "specs" | "files" | "changes" | "review" | "plan",
 ): Promise<void> {
 	const control = page.getByTestId(`tool-rail-${tool}`);
 	await expect(control).toBeVisible();

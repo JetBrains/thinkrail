@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
+import { createWorkspaceViaDialog, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
 import { commitFile, gitAs } from "./fixtures/git";
 
 // The TODO → review workflow's user-visible half, no agent: a seeded plan whose done steps carry
@@ -132,8 +132,7 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 	);
 
 	// Open the plan page through the popup.
-	await page.getByTestId("tool-rail-plan").click();
-	await page.getByTestId("tool-rail-plan").click();
+	await revealWorkbenchTool(page, "plan");
 	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
@@ -255,8 +254,7 @@ test("a branch commit no step owns shows under 'Committed outside the plan' and 
 		"chore: unplanned commit",
 	);
 
-	await page.getByTestId("tool-rail-plan").click();
-	await page.getByTestId("tool-rail-plan").click();
+	await revealWorkbenchTool(page, "plan");
 	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
@@ -345,8 +343,7 @@ test("the plan page groups items into a Now block and Done, and adds a task inli
 		}),
 	);
 
-	await page.getByTestId("tool-rail-plan").click();
-	await page.getByTestId("tool-rail-plan").click();
+	await revealWorkbenchTool(page, "plan");
 	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
@@ -405,8 +402,7 @@ test("plan items can be removed, and the add box takes multi-line input (Enter a
 		}),
 	);
 
-	await page.getByTestId("tool-rail-plan").click();
-	await page.getByTestId("tool-rail-plan").click();
+	await revealWorkbenchTool(page, "plan");
 	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
@@ -445,8 +441,7 @@ test("an empty plan's idle line is a click target that opens the add input", asy
 		JSON.stringify({ version: 6, todos: [], groups: [] }),
 	);
 
-	await page.getByTestId("tool-rail-plan").click();
-	await page.getByTestId("tool-rail-plan").click();
+	await revealWorkbenchTool(page, "plan");
 	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
@@ -487,8 +482,7 @@ test("a completed plan turns the Now block into a chat composer instead of an id
 		}),
 	);
 
-	await page.getByTestId("tool-rail-plan").click();
-	await page.getByTestId("tool-rail-plan").click();
+	await revealWorkbenchTool(page, "plan");
 	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();
@@ -553,8 +547,7 @@ test("a re-opened plan keeps the completion note on the page, marked stale, but 
 		}),
 	);
 
-	await page.getByTestId("tool-rail-plan").click();
-	await page.getByTestId("tool-rail-plan").click();
+	await revealWorkbenchTool(page, "plan");
 	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
 	await expect(pane).toBeVisible();

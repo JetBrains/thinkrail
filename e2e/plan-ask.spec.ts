@@ -7,6 +7,7 @@ import {
 	hideAuxiliaryWorkbench,
 	openFixtureProject,
 	openPersistedChat,
+	revealWorkbenchTool,
 } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
@@ -53,8 +54,7 @@ test("a pending ask_user_question is answerable from the plan page", async ({ pa
 		await enterDefaultWorkspace(page);
 		await hideAuxiliaryWorkbench(page);
 		await openPersistedChat(page, "plan ask question");
-		await page.getByTestId("tool-rail-plan").click();
-		await page.getByTestId("tool-rail-plan").click();
+		await revealWorkbenchTool(page, "plan");
 		await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 		const pane = page.getByTestId("plan-pane");
 		await expect(pane).toBeVisible();
@@ -114,8 +114,7 @@ test("the plan shows the agent's latest message when it isn't asking or on a ste
 		await enterDefaultWorkspace(page);
 		await hideAuxiliaryWorkbench(page);
 		await openPersistedChat(page, "agent activity");
-		await page.getByTestId("tool-rail-plan").click();
-		await page.getByTestId("tool-rail-plan").click();
+		await revealWorkbenchTool(page, "plan");
 		await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 		const pane = page.getByTestId("plan-pane");
 		await expect(pane).toBeVisible();
