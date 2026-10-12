@@ -291,7 +291,7 @@ file/terminal/chat placement nor misses the peer-created chat's history-only dom
 
 Bottom-workbench coverage retains all four alignments with real side-stack ownership of excluded lower
 corners, live alignment during side resizing and narrow-width compression, pointer/keyboard persistence of
-only the separator-owned side ratio, independent height/group resizing, zero-body-space folding with
+only the separator-owned side ratio, separator hit areas that leave the preceding panel's scrollbar edge alone, independent height/group resizing, zero-body-space folding with
 edge-rail and `Ctrl+F6` restoration, modal-aware visibility chords, PTY continuity while hidden, and process-free default-terminal
 reservation. Terminal creation now exercises the host pending-marker handshake plus independent local
 placement, not a layout revision or peer geometry synchronization. `tool-rails.spec.ts` covers multiple

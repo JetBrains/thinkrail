@@ -52,6 +52,9 @@ The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-
 - Toast exposes `ToastProvider`/`Toast`/`ToastViewport`/`ToastTitle`/`ToastDescription`/`ToastAction`/
   `ToastClose` and `toastVariants` (`error`/`success`/`info`). Severity is a presentational left accent;
   queue ownership and notification lifetimes stay in the app (`panels/Toaster` composes the primitives).
+- Resizable handles paint a 1 px line at their leading edge; the pointer hit area extends only into the
+  following panel (fine-pointer margin 1 px), so the preceding panel's trailing-edge scrollbar stays
+  usable. There is no grip variant.
 - Primitives use only the host's token utilities, never shadcn's default oklch palette.
 
 Code highlighting is deliberately absent: `CodeBlock` and shiki depend on the app's theme registration
