@@ -103,7 +103,9 @@ agent resource execution. Tagged provider-backed probes launch real commands and
 children through agent tools, inspect bounded plain-text logs/transcripts in the inspector, verify chat
 isolation, reload and closed-inspector completion, and exercise individual Stop and confirmed Stop all. They never
 select a model or seed a running-resource catalog. SDK faux-provider unit tests are not evidence of
-browser agent execution.
+browser agent execution. `attention-background-work.live` pins the background-work unread hold end to end:
+while a real background command or detached subagent runs after the parent settled, the host never
+publishes an unread completion and the worktree row shows no dot; it lights only after the woken turn.
 
 Native wheel probes target the actual transcript viewport again after clicking a floating Latest
 button; a pointer left at a removed overlay is not evidence of a gesture delivered to the scroller.
