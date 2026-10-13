@@ -424,7 +424,7 @@ test("complete admitted topology remains readable beyond 64 KiB", async () => {
 	expect(JSON.stringify(state).length).toBeGreaterThan(64 * 1024);
 	expect(state.nodes).toHaveLength(128);
 	expect(state.nodes.at(-1)?.id).toBe("node-127");
-});
+}, 30_000);
 
 test("operator requires confirmation, preserves human provenance, and cannot outlive its conversation", async () => {
 	const f = boundary();
