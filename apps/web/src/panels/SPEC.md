@@ -73,8 +73,8 @@ treatment.
   **The Settled shelf.** It renders only when the host advertises
   `WORKSPACE_SETTLE_PROTOCOL_VERSION`; an older host retains the raw flat list and order, with no
   shelf or settle controls even if rollback persistence carries stale newer fields. On a
-  capable host, an expanded project renders its **live** rows from `selectWorkspacePartition` in the
-  host's order (never re-sorted by activity, so rows stay put while agents work), then a **`Settled · N`** disclosure header (collapsed by default, store-held
+  capable host, an expanded project renders its **live** rows from `selectWorkspacePartition` newest
+  created first (never re-sorted by activity, so rows stay put while agents work), then a **`Settled · N`** disclosure header (collapsed by default, store-held
   per browser) whose body lists the settled rows **slim** — single line, name only, a small **reason chip**
   (`merged` / `closed` / `idle 2w` / `by you`, long form in its tooltip), a hover **↩ Keep active** beside the kebab — ten at
   a time with a *Show 25 more* row. Live rows gain a hover **✓ Settle** beside the kebab (also in the menu

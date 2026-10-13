@@ -118,9 +118,10 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   it); the active workspace while **`activeWorkspaceLiveLatch`** holds is live; a `review.state` of
   `merged`/`closed` with a valid `changedAt` and no newer `lastActiveAt` settles (an incomplete settled
   snapshot stays live and refreshable); an open review keeps live;
-  otherwise idle longer than **`settleIdleDays`** (mirrored from `AppConfig`, `null` = never) settles. The caller picks the **`order`** (`WorkspaceOrder`): `"host"` (the default) keeps the host's
-  list order in both lists — the rail's order, so a row never jumps while you work — and `"recent"` sorts
-  newest `lastActiveAt` first (host order breaks ties) for the topbar's switcher; the Default row stays
+  otherwise idle longer than **`settleIdleDays`** (mirrored from `AppConfig`, `null` = never) settles. The caller picks the **`order`** (`WorkspaceOrder`): `"created"` (the default) reverses the host's
+  list — its registry insertion order, oldest created first — so both lists run newest created first: the
+  rail's order, where a new workspace lands on top and a row never jumps while you work; `"recent"` sorts
+  newest `lastActiveAt` first (newest created breaks ties) for the topbar's switcher; the Default row stays
   pinned first either way. A user-selectable sort was tried and dropped: auto-reordering the rail moved
   rows under the pointer, and a switcher wants recency without a picker. The
   latch is the "selection never moves a row" rule made state: `workspaceActivationPatch` sets it to whether

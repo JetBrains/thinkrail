@@ -34,10 +34,10 @@ test("a workspace settles by hand and comes back with Keep active", async ({ pag
 	const shelf = page.getByTestId("settled-shelf");
 	await expect(shelf).toHaveAttribute("data-count", "0");
 	await expect(worktreeRows(page)).toHaveCount(2);
-	// The rail keeps the host's order even though the newer workspace is the most recently active.
+	// The rail lists the newest created workspace first.
 	await expect(worktreeRows(page).getByTestId("workspace-name")).toHaveText([
-		first.name,
 		second.name,
+		first.name,
 	]);
 
 	// Hover ✓ on the quiet sibling parks it; the collapsed shelf hides the row and counts it.
@@ -82,8 +82,8 @@ test("a workspace settles by hand and comes back with Keep active", async ({ pag
 		"true",
 	);
 	await expect(worktreeRows(page).getByTestId("workspace-name")).toHaveText([
-		first.name,
 		second.name,
+		first.name,
 	]);
 });
 

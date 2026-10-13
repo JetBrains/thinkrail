@@ -266,7 +266,7 @@ export function selectSessionState(
 	return state.sessionStateByWorkspace[workspaceId]?.[sessionId]?.state ?? null;
 }
 
-export type WorkspaceOrder = "host" | "recent";
+export type WorkspaceOrder = "created" | "recent";
 
 export function supportsWorkspaceSettling(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= WORKSPACE_SETTLE_PROTOCOL_VERSION;
@@ -359,18 +359,18 @@ export function selectWorkspaceSettledReason(
 	return null;
 }
 
-/** The Default row stays first; every other row splits into live and settled, in host order or by `order`. */
+/** The Default row stays first; every other row splits into live and settled, newest created first or by `order`. */
 export function selectWorkspacePartition(
 	state: PartitionState & { workspaces: Record<string, Workspace[]> },
 	projectId: string,
 	now: number,
-	order: WorkspaceOrder = "host",
+	order: WorkspaceOrder = "created",
 ): WorkspacePartition {
 	const rows = state.workspaces[projectId] ?? [];
 	if (!state.workspaceSettlingSupported) return { live: rows, settled: [] };
 	const live: Workspace[] = [];
 	const settled: SettledRow[] = [];
-	for (const workspace of rows) {
+	for (const workspace of rows.toReversed()) {
 		if (isDefaultWorkspace(workspace)) continue;
 		const reason = selectWorkspaceSettledReason(state, workspace, now);
 		if (reason) settled.push({ workspace, reason });
