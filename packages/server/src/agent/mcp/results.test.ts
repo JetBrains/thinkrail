@@ -58,6 +58,12 @@ test("structured content is bounded, resource reads drop blobs, listings keep th
 		structuredContent: listing,
 	});
 	expect(summarizeMcpResult("mcp__s__t", undefined, false)).toBeNull();
+	for (const structuredContent of [[1, "two"], null, 3, "text", false]) {
+		expect(summarizeMcpResult("mcp__s__t", { content: [], structuredContent }, false)).toEqual({
+			blocks: [],
+			structuredContent,
+		});
+	}
 });
 
 test("one byte budget bounds blocks and structured content together", () => {

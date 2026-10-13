@@ -87,8 +87,9 @@ describe("pi's headless /mcp text", () => {
 
 	test("the startup attention notice has its own format", () => {
 		const notice = parseMcpAttentionNotice(
-			"MCP servers need attention:\n  config: bad file\n  linear: needs sign-in\n  broken: failed: spawn ENOENT\nRun /mcp to fix.",
+			"MCP servers need attention:\n  config: bad file\n  linear: needs sign-in\n  broken: failed: spawn ENOENT\n  docs: connected · 3 tools · resources\nRun /mcp to fix.",
 		);
+		expect(notice?.servers.get("docs")).toMatchObject({ state: "connected", toolCount: 3 });
 		expect(notice?.servers.get("linear")?.state).toBe("needs-sign-in");
 		expect(notice?.servers.get("broken")).toMatchObject({ state: "failed" });
 		expect(notice?.configErrors).toEqual(["bad file"]);

@@ -23,8 +23,7 @@ function stateOf(text: string): Omit<ParsedMcpServerStatus, "detail"> {
 	if (text.startsWith("disconnected")) return { state: "disconnected" };
 	if (text.startsWith("failed")) return { state: "failed" };
 	if (text === "starting" || text.startsWith("connecting")) return { state: "starting" };
-	const connected =
-		/^connected(?:, (\d+) tools)?/.exec(text) ?? /^connected · (\d+) tools?/.exec(text);
+	const connected = /^connected(?:(?:,| ·) (\d+) tools?)?/.exec(text);
 	if (connected) return { state: "connected", toolCount: Number(connected[1] ?? 0) };
 	return { state: "unknown" };
 }
