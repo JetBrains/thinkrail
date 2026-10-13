@@ -98,8 +98,14 @@ export function removeMcpServerEntry(options: {
 	}
 }
 
-export function projectMcpEntryFingerprint(worktree: string, name: string): string | undefined {
-	const entry = readRawEntry(projectMcpConfigPath(worktree), name);
+export function mcpEntryFingerprint(
+	scope: McpServerScope,
+	worktree: string,
+	name: string,
+): string | undefined {
+	const path =
+		scope === "user" ? globalMcpConfigPath(getAgentDir()) : projectMcpConfigPath(worktree);
+	const entry = readRawEntry(path, name);
 	return entry === undefined ? undefined : fingerprintMcpEntry(name, entry);
 }
 

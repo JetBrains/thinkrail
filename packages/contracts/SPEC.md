@@ -812,9 +812,12 @@ contracts only.
 - Every request names its target: `workspaceId` for configuration (project scope = that workspace's
   `.pi/mcp.json`; `user` = the global file), plus `sessionId` for per-session actions (`reconnect`,
   `setSessionOverride`, `readOutput`). The host has no notion of an "active workspace".
-- `mcp.list` returns the configured `McpServerSummary` set (scope, defining file, masked endpoint,
-  configured and effective exposure, enablement, project override, repo-approval state, pi-equivalent
-  config error — one per named entry, an entry that is not an object included). The additive optional
+- `mcp.list` returns the configured `McpServerSummary` set (scope, defining file, the `fingerprint` of the
+  defining file's entry as rendered, masked endpoint, configured and effective exposure, enablement,
+  project override, repo-approval state, pi-equivalent config error — one per named entry, an entry that
+  is not an object included). `fingerprint` is the row's identity for a rewrite or removal at either
+  scope; `approval.fingerprint` is the repository content whose approval is tracked — the same value on a
+  project row, the folded `.pi/mcp.json` override's on a user row — and is what `mcp.approve` takes. The additive optional
   `effective` flag identifies the definition actually admitted by the host loader, independently of
   displayed override diagnostics; login/logout/test actions belong only to that row. Older hosts may
   omit it, in which case clients must not infer authority for ambiguous same-name rows. Together with
@@ -851,10 +854,13 @@ contracts only.
 - A write never approves repository content the user has not reviewed. A project-scope `add` of a new name
   is the user's own entry and is approved as written. A project-scope `update` carries approval to the
   written entry only when the entry on disk was approved at its current fingerprint (otherwise the rewrite
-  stays pending). A project-scope `update` or `remove` names its target as `McpRenderedTarget`: the
-  `McpServerSummary.approval.fingerprint` the client rendered the row with is required, and the host
-  refuses, file untouched, when the on-disk entry no longer has it — so a stale Edit or Remove never
-  rewrites or deletes repository content the user has not seen (user scope carries no fingerprint). The
+  stays pending). Every `update` or `remove`, at user and project scope alike, names its target as
+  `McpRenderedTarget`: the `McpServerSummary.fingerprint` the client rendered the row with is required
+  (`expectedFingerprint`), and the host refuses, file untouched, when the entry in that scope's file no
+  longer has it — so a stale Edit or Remove never rewrites or deletes content the user has not seen,
+  whether a checkout changed the repository entry or another client or editor replaced the user entry
+  under an open dialog. The field is required rather than optional on the wire: the MCP surface ships
+  whole at `MCP_PROTOCOL_VERSION`, so there is no older host or client to tolerate. The
   host validates `scope` itself; anything but `user` / `project` is rejected before any path is chosen. `shareWithRepo` refuses when the project file already defines that name or
   holds an override that is not approved at its current fingerprint.
 - `mcp.login` / `mcp.testConnection` check MCP ownership in the same synchronous step that starts the

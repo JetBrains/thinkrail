@@ -7,6 +7,7 @@ import {
 	mcpConfiguredExposureText,
 	mcpEntryUpdate,
 	mcpHandledElsewhereText,
+	mcpRenderedTarget,
 	mcpRowView,
 	mcpSaveFeedback,
 	mcpSettingWrite,
@@ -19,6 +20,7 @@ function summary(overrides: Partial<McpServerSummary> = {}): McpServerSummary {
 		name: "docs",
 		scope: "user",
 		source: "/home/.pi/agent/mcp.json",
+		fingerprint: "rendered",
 		transport: "stdio",
 		endpoint: "bun docs.ts",
 		exposure: "deferred",
@@ -206,12 +208,16 @@ test("enablement and exposure route by scope: user servers send only the changed
 	expect(() => mcpSettingWrite("ws", project, { enabled: true }, null)).toThrow(".pi/mcp.json");
 });
 
-test("a repo entry update carries the fingerprint its row was rendered with; a user entry update never does", () => {
+test("an update or removal at either scope carries the fingerprint its row was rendered with, never a folded override's", () => {
 	const entry = { command: "x" };
 	expect(
 		mcpEntryUpdate(
 			"ws",
-			summary({ scope: "project", approval: { state: "changed", fingerprint: "seen" } }),
+			summary({
+				scope: "project",
+				fingerprint: "seen",
+				approval: { state: "changed", fingerprint: "seen" },
+			}),
 			entry,
 		),
 	).toEqual({
@@ -221,13 +227,18 @@ test("a repo entry update carries the fingerprint its row was rendered with; a u
 		entry,
 		expectedFingerprint: "seen",
 	});
-	expect(
-		mcpEntryUpdate(
-			"ws",
-			summary({ approval: { state: "approved", fingerprint: "override" } }),
-			entry,
-		),
-	).toEqual({ workspaceId: "ws", scope: "user", name: "docs", entry });
+	const user = summary({
+		fingerprint: "user-entry",
+		approval: { state: "approved", fingerprint: "override" },
+	});
+	expect(mcpEntryUpdate("ws", user, entry)).toEqual({
+		workspaceId: "ws",
+		scope: "user",
+		name: "docs",
+		entry,
+		expectedFingerprint: "user-entry",
+	});
+	expect(mcpRenderedTarget(user)).toEqual({ scope: "user", expectedFingerprint: "user-entry" });
 });
 
 test("save feedback never claims open chats already applied a change they are still reloading for", () => {

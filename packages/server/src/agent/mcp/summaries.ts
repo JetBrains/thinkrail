@@ -35,11 +35,11 @@ function configErrorFor(entry: McpConfigFileEntry, errors: readonly string[]): s
 }
 
 function approvalOf(
-	entry: McpConfigFileEntry,
+	name: string,
+	fingerprint: string,
 	policy: McpProjectPolicy,
 ): NonNullable<McpServerSummary["approval"]> {
-	const fingerprint = fingerprintMcpEntry(entry.name, entry.raw);
-	const approved = policy.approvals[entry.name];
+	const approved = policy.approvals[name];
 	return {
 		state: approved === fingerprint ? "approved" : approved ? "changed" : "pending",
 		fingerprint,
@@ -79,6 +79,7 @@ export function summarizeMcpServers(options: {
 		const exposure = configuredExposure(raw);
 		const repoOverride = entry.scope === "global" ? overrides.get(entry.name) : undefined;
 		const transport = typeof raw.url === "string" || raw.type === "http" ? "http" : "stdio";
+		const fingerprint = fingerprintMcpEntry(entry.name, entry.raw);
 		const configError = [
 			configErrorFor(entry, written.errors),
 			repoOverride ? configErrorFor(repoOverride, written.errors) : undefined,
@@ -89,6 +90,7 @@ export function summarizeMcpServers(options: {
 			name: entry.name,
 			scope: entry.scope === "global" ? "user" : "project",
 			source: entry.path,
+			fingerprint,
 			transport,
 			endpoint: maskMcpEndpoint(raw),
 			effective: isEffective,
@@ -105,9 +107,15 @@ export function summarizeMcpServers(options: {
 			...(entry.scope === "project" && globalNames.has(entry.name) ? { replacesGlobal: true } : {}),
 			...(projectOverride ? { projectOverride } : {}),
 			...(entry.scope === "project"
-				? { approval: approvalOf(entry, policy) }
+				? { approval: approvalOf(entry.name, fingerprint, policy) }
 				: repoOverride
-					? { approval: approvalOf(repoOverride, policy) }
+					? {
+							approval: approvalOf(
+								entry.name,
+								fingerprintMcpEntry(repoOverride.name, repoOverride.raw),
+								policy,
+							),
+						}
 					: {}),
 			...(configError ? { configError: redactMcpText(configError) } : {}),
 		});

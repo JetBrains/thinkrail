@@ -368,6 +368,8 @@ export interface McpServerSummary {
 	scope: McpServerScope;
 	/** Defining `mcp.json` path. */
 	source: string;
+	/** Fingerprint of the defining file's entry as rendered; `mcp.update` / `mcp.remove` name their target with it. */
+	fingerprint: string;
 	transport: McpTransportKind;
 	/** Command + args, or URL, with literal credential values masked. */
 	endpoint: string;
@@ -381,7 +383,7 @@ export interface McpServerSummary {
 	/** Project entry that shadows a user-level server of the same name. */
 	replacesGlobal?: boolean;
 	projectOverride?: McpProjectOverride;
-	/** Repo-defined entries only. */
+	/** Repository content only: the project entry, or the repo override folded into a user row. */
 	approval?: { state: "approved" | "pending" | "changed"; fingerprint: string };
 	/** pi-equivalent validation message when the entry is rejected; credential-looking values are masked by the host. */
 	configError?: string;

@@ -17,9 +17,9 @@ import {
 	listMcpServers,
 	liveSessionIdsOf,
 	type McpProbeAction,
+	mcpEntryFingerprint,
 	mcpOwnershipGuard,
 	mcpPolicyOf,
-	projectMcpEntryFingerprint,
 	readMcpServerLog,
 	readMcpToolOutput,
 	reconcileMcpSessions,
@@ -130,12 +130,11 @@ function serverScope(scope: unknown): McpServerScope {
 
 function renderedTarget(params: unknown): McpRenderedTarget {
 	const scope = serverScope(isRecord(params) ? params.scope : undefined);
-	if (scope === "user") return { scope };
 	const expectedFingerprint = isRecord(params) ? params.expectedFingerprint : undefined;
 	if (typeof expectedFingerprint !== "string") {
 		throw new CodedError(
 			"MCP_CONFIG_INVALID",
-			"A repository entry is written only with the fingerprint it was rendered with.",
+			"An entry is rewritten or removed only with the fingerprint it was rendered with.",
 		);
 	}
 	return { scope, expectedFingerprint };
@@ -193,7 +192,7 @@ export function mcpAdd(params: {
 	});
 }
 
-/** A project-scope rewrite or removal runs only against the entry the client rendered. */
+/** A rewrite or removal runs only against the entry the client rendered, at either scope. */
 function renderedEntry(
 	params: { workspaceId: string; name: string },
 	write: (
@@ -205,12 +204,9 @@ function renderedEntry(
 	const target = renderedTarget(params);
 	const name = serverName(params.name);
 	return mutateManaged(params.workspaceId, ({ workspace, project }) => {
-		let onDisk: string | undefined;
-		if (target.scope === "project") {
-			assertRepositoryWritable(project);
-			onDisk = projectMcpEntryFingerprint(workspace.worktreePath, name);
-			assertRenderedEntry(name, onDisk, target.expectedFingerprint);
-		}
+		if (target.scope === "project") assertRepositoryWritable(project);
+		const onDisk = mcpEntryFingerprint(target.scope, workspace.worktreePath, name);
+		assertRenderedEntry(name, onDisk, target.expectedFingerprint);
 		write({ scope: target.scope, worktree: workspace.worktreePath, name }, onDisk, project);
 		return target.scope === "user" ? allWorkspaces() : projectWorkspaces(project);
 	});
@@ -260,7 +256,7 @@ export function mcpApprove(params: {
 	const name = serverName(params.name);
 	return mutateManaged(params.workspaceId, ({ workspace, project }) => {
 		assertRepositoryWritable(project);
-		if (projectMcpEntryFingerprint(workspace.worktreePath, name) !== params.fingerprint) {
+		if (mcpEntryFingerprint("project", workspace.worktreePath, name) !== params.fingerprint) {
 			throw new CodedError(
 				"MCP_CONFIG_INVALID",
 				`The entry for "${name}" changed since it was reviewed — review it again.`,

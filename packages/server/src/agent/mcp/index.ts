@@ -18,7 +18,7 @@ export { createMcpEngine } from "./engine";
 export { readMcpServerLog } from "./log";
 export {
 	effectiveMcpServerConfig,
-	projectMcpEntryFingerprint,
+	mcpEntryFingerprint,
 	removeMcpServerEntry,
 	shareMcpOverrideWithRepo,
 	writeMcpServerEntry,

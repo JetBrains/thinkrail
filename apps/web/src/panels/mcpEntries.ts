@@ -344,13 +344,9 @@ function draftArgs(draft: McpFormDraft): string[] {
 		.filter(Boolean);
 }
 
-function draftValues(draft: McpFormDraft): McpValueRow[] {
-	return draft.values.filter((row) => row.name.trim() !== "" || row.value !== "");
-}
-
 export function buildMcpEntry(draft: McpFormDraft): McpServerEntryInput {
 	const values = Object.fromEntries(
-		draftValues(draft).map((row) => [row.name.trim(), row.value] as const),
+		draft.values.map((row) => [row.name.trim(), row.value] as const),
 	);
 	const hasValues = Object.keys(values).length > 0;
 	const args = draftArgs(draft);
@@ -388,7 +384,7 @@ export function validateMcpDraft(
 	} else if (!draft.command.trim()) {
 		issues.command = "Enter the executable to run.";
 	}
-	const rows = draftValues(draft);
+	const rows = draft.values;
 	const kind = draft.transport === "http" ? "header" : "variable";
 	const names = rows.map((row) => row.name.trim());
 	const plain = literalIssue(

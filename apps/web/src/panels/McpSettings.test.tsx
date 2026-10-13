@@ -24,6 +24,7 @@ function row(overrides: Partial<McpServerRow> = {}, summary: Partial<McpServerSu
 			name: "fixture",
 			scope: "user",
 			source: "/home/.pi/agent/mcp.json",
+			fingerprint: "rendered",
 			transport: "stdio",
 			endpoint: "bun stdioServer.ts",
 			exposure: "codemode",

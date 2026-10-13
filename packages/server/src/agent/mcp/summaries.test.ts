@@ -71,13 +71,28 @@ test("summaries cover scope, approval states, replacement, folded overrides, rec
 	expect(pending["user:linear"]).toMatchObject({
 		oauth: true,
 		effectiveExposure: "deferred",
-		approval: { state: "pending" },
+		fingerprint: fingerprintMcpEntry("linear", {
+			url: "https://linear.example/mcp",
+			description: "Linear issues; use token=sk-live-secret",
+		}),
+		approval: {
+			state: "pending",
+			fingerprint: fingerprintMcpEntry("linear", { exposure: "direct" }),
+		},
 	});
 	expect(pending["project:repo"]).toMatchObject({
 		transport: "stdio",
 		endpoint: 'npx -y repo-server --header "Authorization: ***"',
+		fingerprint: fingerprintMcpEntry("repo", repo),
 		approval: { state: "pending", fingerprint: fingerprintMcpEntry("repo", repo) },
 	});
+	expect(pending["user:docs"]?.fingerprint).toBe(
+		fingerprintMcpEntry("docs", {
+			headers: { Authorization: `Bearer \${DOCS}` },
+			url: "https://docs.example/mcp",
+		}),
+	);
+	expect(byName({})["user:docs"]?.fingerprint).toBe(pending["user:docs"]?.fingerprint);
 	expect(pending["project:shared"]?.replacesGlobal).toBe(true);
 	expect(pending["project:shared"]?.effective).toBe(false);
 	expect(pending["user:shared"]?.effective).toBe(true);

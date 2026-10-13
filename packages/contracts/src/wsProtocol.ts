@@ -513,12 +513,13 @@ export function isSharedModelContextTarget(
 }
 
 /**
- * A user-scope target, or a repository entry named with the `McpServerSummary.approval.fingerprint` the
- * client rendered it with: the host refuses the write when the entry on disk no longer has it.
+ * The entry a rewrite or removal was rendered from: its scope and the `McpServerSummary.fingerprint` the
+ * client rendered it with. The host refuses the write when the entry on disk no longer has it.
  */
-export type McpRenderedTarget =
-	| { scope: "user" }
-	| { scope: "project"; expectedFingerprint: string };
+export interface McpRenderedTarget {
+	scope: McpServerScope;
+	expectedFingerprint: string;
+}
 
 export interface WsMethodMap {
 	"project.open": { params: { path: string }; result: Project };

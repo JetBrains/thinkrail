@@ -26,8 +26,8 @@ export {
 } from "./extensions";
 export {
 	effectiveMcpServerConfig,
+	mcpEntryFingerprint,
 	mcpPolicyOf,
-	projectMcpEntryFingerprint,
 	readMcpServerLog,
 	removeMcpServerEntry,
 	shareMcpOverrideWithRepo,

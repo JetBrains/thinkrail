@@ -189,7 +189,7 @@ test("names follow pi's charset, are unique per file, and never twin another nam
 	expect(mcpNameWarning("fresh", "user", existing)).toBeUndefined();
 });
 
-test("the form validates transport fields and value names, and builds the entry without empty rows", () => {
+test("the form validates transport fields and value names, blank rows included, and builds the entry from the validated rows", () => {
 	expect(validateMcpDraft(draft({ name: "docs", transport: "http" }), "user", [])).toEqual({
 		url: "Enter the server URL.",
 	});
@@ -219,6 +219,18 @@ test("the form validates transport fields and value names, and builds the entry 
 				name: "docs",
 				transport: "http",
 				url: "https://x/mcp",
+				values: [{ id: "1", name: "", value: "" }],
+			}),
+			"user",
+			[],
+		).values,
+	).toBe("Name every header.");
+	expect(
+		validateMcpDraft(
+			draft({
+				name: "docs",
+				transport: "http",
+				url: "https://x/mcp",
 				values: [
 					{ id: "1", name: "A", value: "1" },
 					{ id: "2", name: "A", value: "2" },
@@ -234,10 +246,7 @@ test("the form validates transport fields and value names, and builds the entry 
 				name: "fixture",
 				command: " /usr/bin/bun ",
 				args: "/abs/stdioServer.ts\n\n  --verbose  \n",
-				values: [
-					{ id: "1", name: "TOKEN", value: `\${TOKEN}` },
-					{ id: "2", name: "", value: "" },
-				],
+				values: [{ id: "1", name: "TOKEN", value: `\${TOKEN}` }],
 				exposure: "direct",
 				description: "  Fixture  ",
 			}),

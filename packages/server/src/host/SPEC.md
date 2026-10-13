@@ -203,10 +203,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
   and record exposure must be `deferred`, `direct` or `hidden`; invalid values are rejected before record
   or per-chat disabled-set mutations. No write approves
   repository content the user has not reviewed: a project-file `mcp.add` (a name the file does not define
-  yet) is the user's own entry, so its fingerprint is approved in the same request; `mcp.update` reads the
-  on-disk entry's fingerprint before writing, refuses when the request's `expectedFingerprint` differs from
-  it, and carries approval to the written fingerprint only when the record approved that on-disk
-  fingerprint — a rewrite of a pending or changed entry stays pending (a toggle rebuilt from a checkout's
+  yet) is the user's own entry, so its fingerprint is approved in the same request; `mcp.update` and
+  `mcp.remove` read the on-disk entry's fingerprint in the scope's own file (the global `mcp.json` for
+  user scope, the worktree's `.pi/mcp.json` for project scope) in the same synchronous step as the write
+  and refuse, file untouched, when the request's `expectedFingerprint` differs from it
+  (a missing fingerprint is refused at either scope); `mcp.update` carries approval to the written
+  fingerprint only when the record approved that on-disk fingerprint — a rewrite of a pending or changed entry stays pending (a toggle rebuilt from a checkout's
   new entry must not approve it); an edit that arrives from the repo stays pending; `mcp.approve` refuses a
   fingerprint that is no longer the one on disk; `mcp.shareWithRepo` refuses when the project file already
   defines that name or holds an override not approved at its current fingerprint, else writes the record

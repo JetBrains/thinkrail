@@ -100,6 +100,7 @@ describe("pi's headless /mcp text", () => {
 const summary = (over: Partial<McpServerSummary> & { name: string }): McpServerSummary => ({
 	scope: "user",
 	source: "/agent/mcp.json",
+	fingerprint: "rendered",
 	transport: "http",
 	endpoint: "https://x",
 	exposure: "deferred",

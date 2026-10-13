@@ -217,11 +217,9 @@ type McpSettingWrite =
 	| { method: "mcp.setProjectOverride"; params: WsParams<"mcp.setProjectOverride"> }
 	| { method: "mcp.update"; params: WsParams<"mcp.update"> };
 
-/** The row's identity for a rewrite or removal: a repository row carries the fingerprint it rendered. */
+/** The row's identity for a rewrite or removal: its scope and the fingerprint it was rendered with. */
 export function mcpRenderedTarget(summary: McpServerSummary): McpRenderedTarget {
-	if (summary.scope === "user") return { scope: "user" };
-	if (!summary.approval) throw new Error(`Read "${summary.name}" from .pi/mcp.json first.`);
-	return { scope: "project", expectedFingerprint: summary.approval.fingerprint };
+	return { scope: summary.scope, expectedFingerprint: summary.fingerprint };
 }
 
 export function mcpEntryUpdate(

@@ -134,8 +134,70 @@ test("config writes land in the defining file, validate like pi, and a project s
 	});
 	expect(find(project, "project", "repo-tool")?.approval?.state).toBe("approved");
 
-	const removed = await request("mcp.remove", { workspaceId: "w1", scope: "user", name: "docs" });
+	const removed = await request("mcp.remove", {
+		workspaceId: "w1",
+		scope: "user",
+		name: "docs",
+		expectedFingerprint: find(project, "user", "docs")?.fingerprint,
+	});
 	expect(find(removed, "user", "docs")).toBeUndefined();
+});
+
+test("a user entry is rewritten or removed only as rendered: a stale or missing fingerprint refuses and leaves the file as it is", async () => {
+	const file = join(agentDir, "mcp.json");
+	const rendered = find(
+		await request("mcp.add", {
+			workspaceId: "w1",
+			scope: "user",
+			name: "docs",
+			entry: { url: "https://docs.example/mcp" },
+		}),
+		"user",
+		"docs",
+	);
+	expect(rendered?.fingerprint).toBeString();
+	expect(rendered?.approval).toBeUndefined();
+
+	writeFileSync(
+		file,
+		JSON.stringify({ mcpServers: { docs: { command: "npx", args: ["-y", "replaced"] } } }),
+	);
+	const replaced = readFileSync(file, "utf8");
+	const stale = { workspaceId: "w1", scope: "user", name: "docs" };
+	for (const params of [
+		{ ...stale, expectedFingerprint: rendered?.fingerprint },
+		stale,
+		{ ...stale, expectedFingerprint: 42 },
+	]) {
+		expect(
+			await codeOf(request("mcp.update", { ...params, entry: { url: "https://docs.example/v2" } })),
+		).toBe("MCP_CONFIG_INVALID");
+		expect(await codeOf(request("mcp.remove", params))).toBe("MCP_CONFIG_INVALID");
+		expect(readFileSync(file, "utf8")).toBe(replaced);
+	}
+	await expect(
+		request("mcp.remove", { ...stale, expectedFingerprint: rendered?.fingerprint }),
+	).rejects.toThrow('The entry for "docs" changed since it was opened — review it again.');
+
+	const current = find(await request("mcp.list", { workspaceId: "w1" }), "user", "docs");
+	expect(current?.fingerprint).not.toBe(rendered?.fingerprint);
+	const updated = find(
+		await request("mcp.update", {
+			...stale,
+			entry: { url: "https://docs.example/v2" },
+			expectedFingerprint: current?.fingerprint,
+		}),
+		"user",
+		"docs",
+	);
+	expect(updated?.endpoint).toBe("https://docs.example/v2");
+	expect(updated?.fingerprint).not.toBe(current?.fingerprint);
+	const removed = await request("mcp.remove", {
+		...stale,
+		expectedFingerprint: updated?.fingerprint,
+	});
+	expect(find(removed, "user", "docs")).toBeUndefined();
+	expect(JSON.parse(readFileSync(file, "utf8")).mcpServers.docs).toBeUndefined();
 });
 
 for (const scope of ["user", "project"] as const) {
@@ -173,7 +235,7 @@ for (const scope of ["user", "project"] as const) {
 					scope,
 					name: "docs",
 					entry: { url: "https://docs.example/mcp" },
-					expectedFingerprint: current?.approval?.fingerprint,
+					expectedFingerprint: current?.fingerprint,
 				}),
 			),
 		).toBe("MCP_CONFIG_INVALID");
@@ -516,10 +578,19 @@ test("with builtin:mcp turned off in pi settings, sign-in, sign-out, Test connec
 		);
 	}
 	const before = readFileSync(join(agentDir, "mcp.json"), "utf8");
+	const docs = find(await request("mcp.list", { workspaceId: "w1" }), "user", "docs");
 	const mutations: [string, object][] = [
 		["mcp.add", { scope: "user", name: "more", entry: { url: "https://more.example/mcp" } }],
-		["mcp.update", { scope: "user", name: "docs", entry: { url: "https://docs.example/v2" } }],
-		["mcp.remove", { scope: "user", name: "docs" }],
+		[
+			"mcp.update",
+			{
+				scope: "user",
+				name: "docs",
+				entry: { url: "https://docs.example/v2" },
+				expectedFingerprint: docs?.fingerprint,
+			},
+		],
+		["mcp.remove", { scope: "user", name: "docs", expectedFingerprint: docs?.fingerprint }],
 		["mcp.setProjectOverride", { name: "docs", enabled: false }],
 		["mcp.approve", { name: "docs", fingerprint: "f" }],
 		["mcp.shareWithRepo", { name: "docs" }],

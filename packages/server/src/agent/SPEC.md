@@ -803,7 +803,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `readMcpServerLog` (one server's masked lines from pi's shared `mcp.log`),
   `setSessionMcpServerEnabled` (the chat-local disable, applied through the reload gate), the config
   effective-config read `effectiveMcpServerConfig` and the config
-  writers `writeMcpServerEntry` / `removeMcpServerEntry` / `projectMcpEntryFingerprint` /
+  writers `writeMcpServerEntry` / `removeMcpServerEntry` / `mcpEntryFingerprint` /
   `shareMcpOverrideWithRepo` (pi-rule validation, `MCP_CONFIG_INVALID` / `MCP_PATH_UNSAFE`) and the
   sign-in probe (`startMcpProbe`, `replyMcpProbe`, `cancelMcpProbe`, `cancelMcpProbesOwnedBy`,
   `cancelAllMcpProbes`, `setMcpLoginPublisher`, `isMcpLoginId`);

@@ -469,9 +469,12 @@ a project picker, the prompt hero, and the reused
   Review & approve or project-scope Remove dialog, drops an Edit / Review read that was still in flight,
   and an open Add dialog falls back to User scope — including a review step it had reached for Project
   scope (the host refuses repository writes for an untrusted project regardless). A user-server
-  enable/exposure change sends only the changed field (`mcp.setProjectOverride` merges), and a project-scope
-  Remove and Edit carry the rendered `approval.fingerprint` (`mcpRenderedTarget`), so a stale row refuses
-  instead of rewriting or deleting changed repository content; both refresh the list on failure. Rows show a status dot + label + one reason line, the name,
+  enable/exposure change sends only the changed field (`mcp.setProjectOverride` merges), and Remove (at
+  either scope) and Edit carry the rendered `summary.fingerprint` (`mcpRenderedTarget`, built from the row
+  the dialog opened with, never a re-read), so a stale row refuses instead of rewriting or deleting
+  changed content — a repository entry a checkout changed, or a user entry another client or editor
+  replaced while the Remove dialog was open; both refresh the list on failure, so the user sees the
+  current entry and can retry from it. Rows show a status dot + label + one reason line, the name,
   User/Project and HTTP/stdio chips (stdio: "Runs on host — inherits the host environment"), an exposure
   menu (`deferred | direct | hidden`; configured codemode reads "treated as deferred (codemode not available
   yet)"), the enable switch, at most one primary and one secondary action — the status table `mcpRowView`
@@ -504,9 +507,10 @@ a project picker, the prompt hero, and the reused
   changes for this project only, through `mcp.setProjectOverride` (the host merges fields atomically,
   so only the changed field travels), and the global `mcp.json` is never written; a repo-defined server is
   rewritten in `.pi/mcp.json` with `mcp.update`, whose whole-entry replacement starts from the entry as
-  written, read through `fs.readFile`. Every repo-entry `mcp.update` (toggle, exposure, Edit) is built by
-  `mcpEntryUpdate` and carries the fingerprint the row was rendered with as `expectedFingerprint`, so the
-  host refuses a write rebuilt from an entry that changed on disk since; the host carries approval forward
+  written, read through `fs.readFile`. Every `mcp.update` (toggle, exposure, Edit) is built by
+  `mcpEntryUpdate` and carries the fingerprint the row was rendered with as `expectedFingerprint`
+  (`summary.fingerprint`, the same identity Remove sends at either scope), so the host refuses a write
+  rebuilt from an entry that changed on disk since; the host carries approval forward
   only from an entry approved as it is on disk. A refused update or share shows the host's error on the row
   (or in the Edit dialog) and re-reads `mcp.list`. Pending-approval, invalid and replaced rows lock both
   controls, so a toggle can never approve a repo entry by the back door. Reading the raw entry is for
@@ -543,7 +547,7 @@ a project picker, the prompt hero, and the reused
   (pi's grammar, `isConfigReference`: `$$` / `$!` escape the next character, a complete malformed
   `${...}` is consumed as a literal without rescanning dollars inside it, and later references still count)
   — anything else, empty included, is a validation error with the
-  rewrite hint — and its URL may carry no user info or credential-named query value (pi sends URLs as
+  rewrite hint, and a row added and left wholly blank is reported as an unnamed row rather than dropped — and its URL may carry no user info or credential-named query value (pi sends URLs as
   written, so the advice is a header); a pasted entry with a plain env, header or OAuth client-secret value
   or such a URL is flagged with the same hints and not added. There is no plain-text confirm. Any save
   that runs something first shows a review step listing every command and `!` value; when a `!command` is

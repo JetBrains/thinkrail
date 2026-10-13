@@ -21,6 +21,7 @@ function summary(name: string, overrides: Partial<McpServerSummary> = {}): McpSe
 		name,
 		scope: "user",
 		source: "/home/me/.pi/agent/mcp.json",
+		fingerprint: `${name}-rendered`,
 		transport: "stdio",
 		endpoint: `bun ${name}.ts`,
 		exposure: "deferred",
