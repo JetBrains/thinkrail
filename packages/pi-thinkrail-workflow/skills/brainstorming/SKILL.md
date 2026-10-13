@@ -40,9 +40,9 @@ description: "Use before implementing a feature, a change in behavior, or a bug 
    question before any technical choice — skip only when the request itself supplied all of it.
 6. **Technical phase.** Interview the technical decisions that the product answers leave open:
    constraints, compatibility, how the change will be verified, and the *why* of any decision noted
-   in step 1. Compare approaches only when more than one viable approach remains — do not invent
-   options once the constraints select one. Record the **Design** section: the chosen approach and
-   why, trade-offs that matter, explicit deferrals.
+   in step 1. If you can name an alternative you rejected, especially where the code lives (server
+   or browser, contract or display), show it with the trade-off instead of deciding silently. Record
+   the **Design** section: the chosen approach and why, trade-offs that matter, explicit deferrals.
 7. **Self-review, then review once.** Remove placeholders, contradictions, accidental scope
    expansion, and ambiguous requirements; then present one cohesive design scaled to the change.
    Ask for approval only when the request has not already approved it; revise the task-spec if the
@@ -68,6 +68,7 @@ task-spec as unconfirmed and continue.
 - "It's small" or "the request already says what to do" — the workflow scales down, it does not
   switch off.
 - You offered technical options before the product phase was settled.
+- The task-spec has a Design section the user hasn't seen.
 - You are about to hand off without step 9 — the specs drift from the code one skipped change at a
   time.
 
