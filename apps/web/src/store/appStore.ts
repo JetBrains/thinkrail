@@ -378,7 +378,7 @@ export type SettingsSection = (typeof SettingsSection)[keyof typeof SettingsSect
 
 export interface Toast {
 	id: string;
-	variant: "error" | "success" | "info";
+	variant: "error" | "success" | "info" | "warning";
 	message: string;
 	title?: string;
 	durationMs?: number;
@@ -4184,4 +4184,6 @@ export const toast = {
 		useAppStore.getState().pushToast({ variant: "success", message, ...(title ? { title } : {}) }),
 	info: (message: string, title?: string) =>
 		useAppStore.getState().pushToast({ variant: "info", message, ...(title ? { title } : {}) }),
+	warning: (message: string, title?: string) =>
+		useAppStore.getState().pushToast({ variant: "warning", message, ...(title ? { title } : {}) }),
 };

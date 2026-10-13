@@ -22,13 +22,14 @@ function ToastViewport({
 }
 
 const toastVariants = cva(
-	"group pointer-events-auto relative flex w-full items-start gap-8 overflow-hidden rounded-sm border border-l-4 bg-container-elevated-bg p-12 text-text-default shadow-[var(--shadow-md)] data-[state=closed]:animate-[toast-out_120ms_ease-in] data-[state=open]:animate-[toast-in_150ms_ease-out] data-[swipe=cancel]:translate-x-0 data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[swipe=end]:animate-[toast-out_120ms_ease-in]",
+	"group pointer-events-auto relative flex w-full items-start gap-8 overflow-hidden rounded-sm border p-12 text-text-default shadow-[var(--shadow-md)] data-[state=closed]:animate-[toast-out_120ms_ease-in] data-[state=open]:animate-[toast-in_150ms_ease-out] data-[swipe=cancel]:translate-x-0 data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[swipe=end]:animate-[toast-out_120ms_ease-in]",
 	{
 		variants: {
 			variant: {
-				error: "border-border-default border-l-feedback-error",
-				success: "border-border-default border-l-feedback-success",
-				info: "border-border-default border-l-primary",
+				error: "bg-feedback-error-subtle border-feedback-error-muted",
+				success: "bg-feedback-success-subtle border-feedback-success-muted",
+				warning: "bg-feedback-warning-subtle border-feedback-warning-muted",
+				info: "bg-container-elevated-bg border-border-muted",
 			},
 		},
 		defaultVariants: { variant: "info" },
