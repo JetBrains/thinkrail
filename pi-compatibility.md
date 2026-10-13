@@ -15,11 +15,11 @@ packaging constraint. Pi remains the engine and state owner. Module specs own de
 this index records what an upgrade must re-check and what would let us delete the adaptation.
 The installed version comes only from the root dependency catalog, not a second pin in this file.
 
-## Last re-check: pi 1.2.0
+## Last re-check
 
-Every MCP entry below was re-checked against the installed 1.2.0 package and retained: the public
+Every MCP entry below was re-checked against the installed catalog version and retained: the public
 exports, the builtin MCP configuration/writer code, `openUrl`, the shutdown ordering and startup
-dispatch, and the ephemeral `structuredContent` are unchanged from 1.1.0. 1.2.0 widened
+dispatch, and the ephemeral `structuredContent` had not changed. That upgrade widened
 `structuredContent` to any JSON value, stopped enumerating resources on connect (status wording
 `connected · N tools · resources`), cancels requests abandoned during an OAuth refresh, and added
 `reachesTools`; the status parser and result summary tests cover the two visible changes.
@@ -67,8 +67,8 @@ modern status pushes and legacy notification redaction when pi's wording changes
 by an unrelated handler. The host captures the builtin MCP shutdown handler and starts it before
 ordinary teardown/reload, retaining a bounded host quit path. Captured and runner-emitted shutdown
 share one per-load cleanup promise; reload awaits actual cleanup before replacement admission. Pi
-clears its server list before awaiting closure (through 1.2.0), so idempotence is insufficient to
-guarantee completion ordering. The host also guards the actual MCP startup/change callbacks after closure:
+clears its server list before awaiting closure, so idempotence is insufficient to guarantee
+completion ordering. The host also guards the actual MCP startup/change callbacks after closure:
 `beforeSessionStart` precedes the entire async dispatch and cannot alone prevent late startup.
 **Removal gate:** a public lifecycle that closes MCP independently of unrelated handlers, joins the
 same actual cleanup on repeated shutdown, admits replacements only after cleanup completes, and
