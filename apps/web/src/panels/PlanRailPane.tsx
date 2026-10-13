@@ -5,7 +5,7 @@
 // FileText button inside `TodoAddRow`) and will land in center as before \u2014 see
 // `plan-as-side-rail-rfc.md` for placement + `plan-chatless-work-surface-rfc.md` for the Now-block
 // direction.
-import { hostSessionGlance, planGlance } from "../chat/planView";
+import { hostSessionGlance, sessionGlance } from "../chat/planView";
 import { TodoAddRow, TodoRows } from "../chat/TodoList";
 import { useChatTodos } from "../chat/useChatTodos";
 import { useAppStore } from "../store";
@@ -27,7 +27,11 @@ export default function PlanRailPane({
 	const glance = useAppStore((s) => {
 		const runtime = s.sessions[sessionId];
 		if (!runtime) return "waiting" as const;
-		return hostSessionGlance(runtime.hostState, planGlance(runtime.isStreaming, {}));
+		// Prefer the authoritative `hostState` (same path the full Plan page uses). Fall back to
+		// `sessionGlance(runtime)` (NOT `planGlance(isStreaming, {})`), so a pending
+		// `ask_user_question` surfaced only through the transcript (hostState hasn't arrived yet)
+		// still reads as "Needs your answer" instead of the misleading paused/working glyph.
+		return hostSessionGlance(runtime.hostState, sessionGlance(runtime));
 	});
 
 	if (plan.data === null) {
