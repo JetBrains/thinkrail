@@ -73,10 +73,12 @@ export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 			<div
 				data-testid="project-trust-notice"
 				data-state="trusted"
-				className="mt-16 flex items-center gap-4 text-text-muted tr-text-metadata"
+				className="mt-16 flex w-full max-w-[560px] items-center gap-8 rounded-sm border border-feedback-success-muted bg-container-elevated-bg px-12 py-8 text-left"
 			>
-				<ShieldCheck className="size-14 shrink-0 text-feedback-warning" />
-				{trustedNoticeText(notice)}
+				<ShieldCheck className="-mt-[2px] size-14 shrink-0 text-feedback-success" />
+				<span className="min-w-0 flex-1 tr-text-ui text-text-default">
+					{trustedNoticeText(notice)}
+				</span>
 				{stopTrusting}
 			</div>
 		);
@@ -88,43 +90,49 @@ export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 		<div
 			data-testid="project-trust-notice"
 			data-state={pending ? "pending" : "untrusted"}
-			className="mt-16 flex w-full max-w-[560px] items-center gap-8 rounded-sm border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8 text-left"
+			className="mt-16 flex w-full max-w-[560px] flex-col gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-12 py-8 text-left"
 		>
-			<TriangleAlert className="size-16 shrink-0 text-feedback-warning" />
-			<span className="flex min-w-0 flex-1 flex-col gap-2">
-				<span className="tr-text-ui text-text-default">
-					{pending
-						? `${notice.names.length} new skill${notice.names.length === 1 ? "" : "s"} appeared since you trusted this project.`
-						: untrustedNoticeText(notice)}
-				</span>
-				{enables ? (
-					<span data-testid="project-trust-enables" className="text-text-muted tr-text-metadata">
-						{enables}
+			{/* Content row */}
+			<div className="flex items-start gap-8">
+				<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" />
+				<span className="flex min-w-0 flex-1 flex-col gap-2">
+					<span className="tr-text-ui text-text-default">
+						{pending
+							? `${notice.names.length} new skill${notice.names.length === 1 ? "" : "s"} appeared since you trusted this project.`
+							: untrustedNoticeText(notice)}
 					</span>
-				) : null}
-			</span>
-			{stopTrusting}
-			<Button
-				size="sm"
-				data-testid={pending ? "project-ack-button" : "project-trust-button"}
-				disabled={busy}
-				onClick={() =>
-					void run(
-						pending
-							? () =>
-									getTransport().request("project.acknowledgeSkills", {
-										id: projectId,
-										names: notice.names,
-									})
-							: () =>
-									getTransport().request("project.setTrust", trustGrantParams(projectId, notice)),
-						pending ? "Couldn't confirm skills" : "Couldn't trust project",
-					)
-				}
-				className="shrink-0"
-			>
-				{pending ? "Review & enable" : "Trust project"}
-			</Button>
+					{enables ? (
+						<span data-testid="project-trust-enables" className="text-text-muted tr-text-metadata">
+							{enables}
+						</span>
+					) : null}
+				</span>
+			</div>
+			{/* Footer: buttons */}
+			<div className="flex justify-end gap-8">
+				{stopTrusting}
+				<Button
+					variant="outline"
+					size="sm"
+					data-testid={pending ? "project-ack-button" : "project-trust-button"}
+					disabled={busy}
+					onClick={() =>
+						void run(
+							pending
+								? () =>
+										getTransport().request("project.acknowledgeSkills", {
+											id: projectId,
+											names: notice.names,
+										})
+								: () =>
+										getTransport().request("project.setTrust", trustGrantParams(projectId, notice)),
+							pending ? "Couldn't confirm skills" : "Couldn't trust project",
+						)
+					}
+				>
+					{pending ? "Review & enable" : "Trust project"}
+				</Button>
+			</div>
 		</div>
 	);
 }

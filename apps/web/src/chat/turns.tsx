@@ -572,9 +572,9 @@ function ErrorTurn({ text, onTryAgain }: { text: string; onTryAgain?: (() => voi
 		<div
 			data-testid="chat-message"
 			data-role="error"
-			className="flex items-start gap-8 rounded-sm border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
+			className="flex items-start gap-8 rounded-sm border border-feedback-error-muted bg-container-elevated-bg px-12 py-8 text-text-default tr-text-ui"
 		>
-			<TriangleAlert className="mt-2 size-12 shrink-0" />
+			<TriangleAlert className="mt-2 size-12 shrink-0 text-feedback-error" />
 			<span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{text}</span>
 			{onTryAgain ? (
 				<Button
@@ -604,9 +604,9 @@ function CompactionNotice({
 			<div
 				data-testid="compaction-notice"
 				data-status="failed"
-				className="flex items-start gap-8 rounded-md border border-feedback-error-muted bg-clip-padding bg-feedback-error-subtle px-12 py-8 text-feedback-error tr-text-ui"
+				className="flex items-start gap-8 rounded-md border border-feedback-error-muted bg-container-elevated-bg px-12 py-8 text-text-default tr-text-ui"
 			>
-				<TriangleAlert className="mt-2 size-12 shrink-0" />
+				<TriangleAlert className="mt-2 size-12 shrink-0 text-feedback-error" />
 				<span className="min-w-0 whitespace-pre-wrap break-words">
 					{detail || "Compaction failed."}
 				</span>

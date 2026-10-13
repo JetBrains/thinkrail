@@ -26,13 +26,14 @@ export function ProviderWarningBanner() {
 	return (
 		<div
 			data-testid="welcome-provider-warning"
-			className="mt-16 flex w-full max-w-[560px] items-center gap-8 rounded-sm border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8 text-left"
+			className="mt-16 flex w-full max-w-[560px] items-center gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-12 py-8 text-left"
 		>
-			<TriangleAlert className="size-16 shrink-0 text-feedback-warning" />
-			<span className="min-w-0 flex-1 tr-text-reading text-text-default">
+			<TriangleAlert className="-mt-[2px] size-14 shrink-0 text-feedback-warning" />
+			<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 				No model provider connected — the agent can't run.
 			</span>
 			<Button
+				variant="outline"
 				size="sm"
 				data-testid="welcome-connect-provider"
 				onClick={() => useAppStore.getState().openSettings("providers")}

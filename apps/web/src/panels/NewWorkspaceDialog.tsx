@@ -537,25 +537,33 @@ export function NewWorkspaceDialog({
 				{trustNotice.kind === "untrusted" ? (
 					<div
 						data-testid="ws-trust-notice"
-						className="flex w-full items-center gap-8 rounded-sm border border-border-default border-l-[3px] border-l-feedback-warning bg-feedback-warning-subtle px-12 py-8 text-left"
+						className="flex w-full flex-col gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-12 py-8 text-left"
 					>
-						<TriangleAlert className="size-16 shrink-0 text-feedback-warning" />
-						<span className="min-w-0 flex-1 tr-text-ui text-text-default">
-							{untrustedNoticeText(trustNotice)} Your personal and ThinkRail's built-in skills are
-							unaffected.
-							{trustEnables ? (
-								<span className="block text-text-muted tr-text-metadata">{trustEnables}</span>
-							) : null}
-						</span>
-						<Button
-							size="sm"
-							data-testid="ws-trust-project"
-							disabled={trusting}
-							onClick={() => void trustProject(trustNotice)}
-							className="shrink-0"
-						>
-							Trust project
-						</Button>
+						{/* Content row */}
+						<div className="flex items-start gap-8">
+							<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" />
+							<span className="flex min-w-0 flex-1 flex-col gap-2">
+								<span className="tr-text-ui text-text-default">
+									{untrustedNoticeText(trustNotice)} Your personal and ThinkRail's built-in skills
+									are unaffected.
+								</span>
+								{trustEnables ? (
+									<span className="text-text-muted tr-text-metadata">{trustEnables}</span>
+								) : null}
+							</span>
+						</div>
+						{/* Footer: button */}
+						<div className="flex justify-end">
+							<Button
+								variant="outline"
+								size="sm"
+								data-testid="ws-trust-project"
+								disabled={trusting}
+								onClick={() => void trustProject(trustNotice)}
+							>
+								Trust project
+							</Button>
+						</div>
 					</div>
 				) : null}
 
@@ -723,7 +731,7 @@ function TargetOption({
 			)}
 		>
 			<input type="radio" name={name} className="sr-only" checked={active} onChange={onSelect} />
-			<Icon className="size-14 shrink-0" />
+			<Icon className="mt-2 size-14 shrink-0" />
 			{label}
 		</label>
 	);
@@ -770,7 +778,7 @@ function ProjectPicker({
 										setOpen(false);
 									}}
 								>
-									<Box className="size-14 shrink-0 text-text-muted" />
+									<Box className="mt-2 size-14 shrink-0 text-text-muted" />
 									<span className="truncate">{p.name}</span>
 								</CommandItem>
 							))}

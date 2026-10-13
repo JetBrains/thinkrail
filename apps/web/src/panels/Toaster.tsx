@@ -4,6 +4,7 @@ import {
 	RiErrorWarningLine,
 	RiInformationLine,
 } from "@remixicon/react";
+import { Button } from "@thinkrail/ui/button";
 import {
 	Toast,
 	ToastAction,
@@ -20,7 +21,7 @@ const variantIcon: Record<ToastType["variant"], { Icon: typeof RiAlertLine; clas
 	error: { Icon: RiAlertLine, className: "text-feedback-error" },
 	success: { Icon: RiCheckboxCircleFill, className: "text-feedback-success" },
 	warning: { Icon: RiErrorWarningLine, className: "text-feedback-warning" },
-	info: { Icon: RiInformationLine, className: "text-text-muted" },
+	info: { Icon: RiInformationLine, className: "text-feedback-info" },
 };
 
 const AUTO_DISMISS_MS = 5000;
@@ -45,23 +46,30 @@ export function Toaster() {
 						data-testid="toast"
 						data-variant={t.variant}
 					>
-						<Icon className={`mt-2 size-14 shrink-0 ${iconClass}`} aria-hidden />
-						<div className="flex min-w-0 flex-1 flex-col gap-4">
-							{t.title ? <ToastTitle>{t.title}</ToastTitle> : null}
-							<ToastDescription>{t.message}</ToastDescription>
-							{t.action ? (
-								<div className="mt-4 flex justify-end">
-									<ToastAction
-										altText={t.action.label}
+						{/* Content row: icon + text + close */}
+						<div className="flex items-start gap-8">
+							<Icon className={`mt-2 size-14 shrink-0 ${iconClass}`} aria-hidden />
+							<div className="flex min-w-0 flex-1 flex-col gap-4">
+								{t.title ? <ToastTitle>{t.title}</ToastTitle> : null}
+								<ToastDescription>{t.message}</ToastDescription>
+							</div>
+							<ToastClose />
+						</div>
+						{/* Footer: action button */}
+						{t.action ? (
+							<div className="mt-12 flex justify-end">
+								<ToastAction altText={t.action.label} asChild>
+									<Button
+										variant="outline"
+										size="sm"
 										data-testid="toast-action"
 										onClick={t.action.onClick}
 									>
 										{t.action.label}
-									</ToastAction>
-								</div>
-							) : null}
-						</div>
-						<ToastClose />
+									</Button>
+								</ToastAction>
+							</div>
+						) : null}
 					</Toast>
 				);
 			})}

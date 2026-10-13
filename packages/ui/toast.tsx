@@ -22,14 +22,14 @@ function ToastViewport({
 }
 
 const toastVariants = cva(
-	"group pointer-events-auto relative flex w-full items-start gap-8 overflow-hidden rounded-sm border p-12 text-text-default shadow-[var(--shadow-md)] data-[state=closed]:animate-[toast-out_120ms_ease-in] data-[state=open]:animate-[toast-in_150ms_ease-out] data-[swipe=cancel]:translate-x-0 data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[swipe=end]:animate-[toast-out_120ms_ease-in]",
+	"group pointer-events-auto relative flex w-full flex-col overflow-hidden rounded-sm border bg-container-elevated-bg p-12 text-text-default shadow-[var(--shadow-md)] data-[state=closed]:animate-[toast-out_120ms_ease-in] data-[state=open]:animate-[toast-in_150ms_ease-out] data-[swipe=cancel]:translate-x-0 data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=move]:transition-none data-[swipe=end]:animate-[toast-out_120ms_ease-in]",
 	{
 		variants: {
 			variant: {
-				error: "bg-feedback-error-subtle border-feedback-error-muted",
-				success: "bg-feedback-success-subtle border-feedback-success-muted",
-				warning: "bg-feedback-warning-subtle border-feedback-warning-muted",
-				info: "bg-container-elevated-bg border-border-muted",
+				error: "border-feedback-error-muted",
+				success: "border-feedback-success-muted",
+				warning: "border-feedback-warning-muted",
+				info: "border-feedback-info-muted",
 			},
 		},
 		defaultVariants: { variant: "info" },
@@ -61,15 +61,7 @@ function ToastDescription({
 }
 
 function ToastAction({ className, ...props }: React.ComponentProps<typeof ToastPrimitive.Action>) {
-	return (
-		<ToastPrimitive.Action
-			className={cn(
-				"shrink-0 rounded-sm px-4 py-2 tr-text-action text-primary outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary",
-				className,
-			)}
-			{...props}
-		/>
-	);
+	return <ToastPrimitive.Action className={className} {...props} />;
 }
 
 function ToastClose({ className, ...props }: React.ComponentProps<typeof ToastPrimitive.Close>) {
@@ -77,7 +69,7 @@ function ToastClose({ className, ...props }: React.ComponentProps<typeof ToastPr
 		<ToastPrimitive.Close
 			aria-label="Dismiss"
 			className={cn(
-				"-mr-4 -mt-4 ml-auto flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary",
+				"ml-auto flex h-24 w-24 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary",
 				className,
 			)}
 			{...props}

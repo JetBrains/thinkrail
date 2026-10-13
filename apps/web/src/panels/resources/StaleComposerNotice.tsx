@@ -5,7 +5,7 @@ export function StaleComposerNotice({ visible }: { visible: boolean }) {
 		<p
 			role="status"
 			data-testid="review-selection-stale"
-			className="border border-feedback-warning bg-feedback-warning-subtle px-8 py-4 tr-text-metadata text-feedback-warning"
+			className="border border-feedback-warning-muted bg-container-elevated-bg px-8 py-4 tr-text-metadata text-text-default"
 		>
 			{FILE_CHANGED_NOTICE}
 		</p>
