@@ -69,6 +69,7 @@ import { useModelPreferences } from "./useModelPreferences";
 import { useSessionStats } from "./useSessionStats";
 import "./tools/register";
 import type { ChatAttachment } from "./types";
+import { useChatTodos } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
 
 registerWebExtensions();
@@ -164,6 +165,12 @@ export default function ChatView({
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
+	// Keep the TODO hook mounted here even though the rail/page own the rendered surfaces, so the
+	// auto-summary trigger inside `useChatTodos` (drafts a completed plan's note via
+	// `todo.generateSummary` when the agent didn't call `todo_plan_summary`) still fires whenever a
+	// chat is open, not only while the rail or the center-tab Plan happen to be mounted. Without
+	// this `renderPrBody` would prepend nothing on a completed plan whose rail is closed.
+	useChatTodos(workspaceId, sessionId);
 	const [slashActive, setSlashActive] = useState(false);
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
 	const [templatesEmpty, setTemplatesEmpty] = useState(false);
