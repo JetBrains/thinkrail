@@ -1271,12 +1271,14 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   scheme would be dead; interactive navigation is the plan page's job. It also emits a
   **`## Committed outside the plan`** section for `TodoPlan.adoptedCommits` (mirroring `## Outside the
   plan` for `unattributed`), so the export covers branch commits no step owns; the `No items yet`
-  placeholder is suppressed when either section is present), and `ChatPlan` (`ChatPlanStripContent` +
-  `ChatPlanContent` — a header strip that opens the plan in a `Popover` over the chat; `ChatView` composes
-  the `Popover` anchored to the header, so the popup hangs flush under it at the chat's left edge). There
-  is no right-panel Todo tab — the plan lives in the conversation; the plan *page* is a center tab, a
-  document-scale view of the same plan, not a panel. Frontend-local workspace view state persists that page
-  as a registered `todo-plan` reference (resolver kind + session identity, never plan content); another
+  placeholder is suppressed when either section is present). `ChatPlan.tsx` and its header strip +
+  popover were removed in the TODO-rail migration: the compact TODO list lives as a side-rail tool
+  (`panels/PlanRailPane.tsx`, see [[submodule-web-panels]]) and the Plan page is a center tab opened
+  via `openPlan`. `ChatView` still mounts `useChatTodos` so the auto-summary trigger
+  (`todo.generateSummary` on a completed plan with no summary) fires whenever a chat is open, not
+  only while the rail or center-tab Plan happens to be mounted. Frontend-local workspace view state
+  persists the Plan page as a registered `todo-plan` reference (resolver kind + session identity,
+  never plan content); another
   client may explicitly reopen the same live page from the host-owned TODO plan without inheriting placement. (An earlier design compiled the plan to a
   static markdown `doc` tab with a custom `thinkrail-diff:` link scheme — replaced: a snapshot lies the
   moment the agent flips a status, and markdown can't carry the Changes-panel affordances; the page is live

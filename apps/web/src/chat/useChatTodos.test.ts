@@ -136,21 +136,22 @@ test("an unsubscribe cleans up the key's bucket \u2014 later signals cost nothin
 });
 
 test("one listener's throw does not swallow its siblings' signal \u2014 the bus keeps delivering", () => {
-	// Sibling isolation: if ever a listener synchronously throws (e.g. during an unmount race), the
-	// other hooks must still refetch. A naked for..of in signalTodoRefetch does bubble a throw, so
-	// this test is EXPECTED to fail \u2014 use it to decide whether we need try/catch around dispatch.
-	// For now we DOCUMENT the current behaviour instead of locking a nice-to-have we don't yet own.
+	// Sibling isolation: when a listener synchronously throws (unmount race, stale closure) the
+	// other hooks still refetch. `signalTodoRefetch` wraps each listener in try/catch and logs the
+	// error, so neither the signal nor sibling delivery is observable from the outside.
 	const survivors: string[] = [];
 	const a = subscribeTodoRefetch("K4", () => {
 		throw new Error("first listener blew up");
 	});
 	const b = subscribeTodoRefetch("K4", () => survivors.push("b"));
-	expect(() => signalTodoRefetch("K4")).toThrow("first listener blew up");
-	// `b` ran OR did not run depending on dispatch order; what we lock here is that the bus is still
-	// usable afterwards (no corrupted internal state), and a follow-up signal reaches `b`.
-	survivors.length = 0;
+	const originalError = console.error;
+	console.error = () => {};
+	try {
+		expect(() => signalTodoRefetch("K4")).not.toThrow();
+		expect(survivors).toEqual(["b"]);
+	} finally {
+		console.error = originalError;
+	}
 	a();
-	expect(() => signalTodoRefetch("K4")).not.toThrow();
-	expect(survivors).toEqual(["b"]);
 	b();
 });

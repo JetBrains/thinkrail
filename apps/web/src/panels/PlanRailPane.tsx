@@ -5,6 +5,7 @@
 // FileText button inside `TodoAddRow`) and will land in center as before \u2014 see
 // `plan-as-side-rail-rfc.md` for placement + `plan-chatless-work-surface-rfc.md` for the Now-block
 // direction.
+import { useEffect } from "react";
 import { hostSessionGlance, sessionGlance } from "../chat/planView";
 import { TodoAddRow, TodoRows } from "../chat/TodoList";
 import { useChatTodos } from "../chat/useChatTodos";
@@ -18,6 +19,15 @@ export default function PlanRailPane({
 	sessionId: string;
 }) {
 	const plan = useChatTodos(workspaceId, sessionId);
+	// Analytics: fire the `plan_opened { surface: "rail" }` event once per (workspaceId, sessionId)
+	// mount so the rail is a tracked open, not an invisible one. (Before the TODO-rail migration,
+	// `plan_opened { surface: "popup" }` fired from the chat header strip click; that chip is gone.)
+	useEffect(() => {
+		plan.notifyOpened("rail");
+		// Intentionally not depending on `plan` (recreated each render); we only want one fire per
+		// (workspaceId, sessionId).
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [workspaceId, sessionId]);
 	// Glance drives the status glyph on in-progress rows. The rail is now the ONLY compact plan
 	// surface (the chat popover is gone), so it must be able to show \u201cNeeds your answer\u201d while
 	// `ask_user_question` is pending \u2014 otherwise the active row reads as paused and the user has

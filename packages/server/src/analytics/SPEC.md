@@ -54,7 +54,7 @@ bounded browser-derived strings, never resource identities or arbitrary product 
 | `agent_run_started` | Work-cycle origin, workspace kind and catalog-bucketed provider/model. |
 | `agent_run_settled` | Final outcome, elapsed-time/retry/compaction buckets; only `agent_settled`, never attempt-level `agent_end`. |
 | `task_completed` | Nonempty task-group completion transition after artifact reconciliation, change evidence and whether verification was recorded. |
-| `plan_opened` | The plan surfaced for the user, by `surface` (`page`/`popup`); a deliberate open action, not every plan refetch. |
+| `plan_opened` | The plan surfaced for the user, by `surface` (`page`/`rail`); a deliberate open action, not every plan refetch. |
 | `plan_item_added` | A user-added plan item (`origin:"user"`), by `surface` (`chat`/`page`); the user curating the plan, not agent re-plans. |
 | `review_decided` | Actual user/agent approval or changes-requested decision, not aborted-review cleanup. |
 | `review_comment_added` | A review comment created on a file/diff/doc, by `author` (`user`/`agent`) and `kind`; the human draft flow and the reviewer agent's findings, distinguished — not draft edits. |
@@ -79,7 +79,7 @@ twice. No comment body, path, anchor text or line numbers are ever copied — on
 `author`/`kind`/`actor`/`outcome`/`outdated` enums.
 
 The plan/TODO funnel rides existing wire actions, never browser autocapture: the host captures
-`plan_opened` off a deliberate `todo.list { opened }` call (the plan page open or the chat popup open —
+`plan_opened` off a deliberate `todo.list { opened }` call (the plan page open or the TODO rail open —
 not the automatic refetches), `plan_item_added` off a successful `todo.add` (`surface` names the in-chat add row or
 the plan page's add row), and stamps the `source` discriminator on
 `pr_action_finished` from the `pr.open` caller (`plan_page` when the plan page's PR button drove it). The

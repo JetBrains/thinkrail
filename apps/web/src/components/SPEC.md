@@ -126,10 +126,11 @@ Beyond picking the right tier:
   implementation; reach for the same shape before inventing a new one.
 - **Conditionally-absent content is not a loading state.** When "still loading" and "definitely nothing
   here" render identically (both blank) *and* blank is the correct steady state — not merely an
-  unhandled gap — showing nothing while unresolved is correct, not a defect: `chat/ChatPlan.tsx`'s
-  `plan.data === null` guard is gated at its call site (`chat/ChatView.tsx` only mounts the plan
-  strip/popover once `plan.data` exists at all), so there is no "empty region promising content" the way
-  `panels/WelcomePanel.tsx`'s always-eventually-populated card row has. Reach for a skeleton only when the
+  unhandled gap: showing nothing while unresolved is correct, not a defect. `panels/PlanRailPane.tsx`
+  surfaces a small "Loading…" line via its `plan.data === null` branch because the rail tool may open
+  before the first plan read lands and "empty" is a valid steady state; there is no empty region
+  promising content the way `panels/WelcomePanel.tsx`'s always-eventually-populated card row has.
+  Reach for a skeleton only when the
   region is guaranteed to fill; reach for nothing only when it may legitimately never fill and the caller
   already treats absence as absence, not as a pending state.
 - Bare "Loading…"/"Restoring…" text with neither a skeleton nor a spinner is a defect, full stop.

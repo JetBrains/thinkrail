@@ -50,14 +50,25 @@ export function subscribeTodoRefetch(key: string, listener: () => void): () => v
 		if (current && current.size === 0) todoRefetchBus.delete(key);
 	};
 }
-export function signalTodoRefetch(key: string): void {
+export function signalTodoRefetch(key: string, except?: () => void): void {
 	const listeners = todoRefetchBus.get(key);
 	if (!listeners) return;
 	// Snapshot the Set before dispatch: a Set that gains entries mid-iteration would visit the newly
 	// added ones in the same loop (per JS spec), which would run a listener for a signal it wasn't
-	// subscribed to yet \u2014 a double-work hazard when a React render-time subscribe coincides with
-	// a sibling's write.
-	for (const listener of [...listeners]) listener();
+	// subscribed to yet — a double-work hazard when a React render-time subscribe coincides with
+	// a sibling's write. The optional `except` lets the originating hook skip itself (it already
+	// reloaded via its local write path; another scheduled reload would be redundant work). A
+	// listener's synchronous throw must not swallow its siblings' signal (unmount races, stale
+	// closures), so dispatch is isolated per listener.
+	for (const listener of [...listeners]) {
+		if (listener === except) continue;
+		try {
+			listener();
+		} catch (error) {
+			// eslint-disable-next-line no-console
+			console.error("[useChatTodos] refetch listener threw; ignored to keep bus delivering", error);
+		}
+	}
 }
 
 // The content eligibility for an auto-drafted plan summary: every step done and no summary yet (agent- or
@@ -76,7 +87,7 @@ export interface ChatTodos {
 	failed: boolean;
 	add: (title: string, surface?: "chat" | "page") => Promise<void>;
 	openPlan: () => void;
-	notifyOpened: (surface: "popup") => void;
+	notifyOpened: (surface: "rail") => void;
 	openChanges: (target: { sha: string } | { path: string }) => void;
 	startReview: (id: string) => Promise<void>;
 	reviewAll: () => Promise<{ total: number; alreadyRunning?: boolean }>;
@@ -90,6 +101,10 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	const identity = tupleKey("chat-todos", workspaceId, sessionId);
 	const currentIdentity = useRef(identity);
 	const readGeneration = useRef(0);
+	// Captures our own bus listener so write-path `signalTodoRefetch(identity, selfListenerRef.current)`
+	// skips firing to ourselves. We already reloaded through the local write path (optimistic patch
+	// + explicit `reloadPlan`); another scheduled reload would be redundant work.
+	const selfListenerRef = useRef<(() => void) | null>(null);
 	const initializedIdentity = useRef<string | null>(null);
 	useInsertionEffect(() => {
 		currentIdentity.current = identity;
@@ -156,6 +171,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		});
 		// Cross-instance refetch bus: a sibling hook (rail or page) wrote to this chat's plan and now
 		// signals every other mounted hook to reload. Debounces through the same `scheduleRefetch`.
+		selfListenerRef.current = scheduleRefetch;
 		const unsubscribeBus = subscribeTodoRefetch(identity, scheduleRefetch);
 		// A plan review runs as a hidden subagent (no piEvent for this session) and writes its verdict to the
 		// review record; the host re-broadcasts reviewChanged when it lands, so refetch the plan to show it.
@@ -232,7 +248,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		// Tell sibling hooks for the SAME chat (rail \u2194 page \u2194 strip) to reload so a user add
 		// is visible on every surface, not only the one that invoked it. The local optimistic patch
 		// above keeps our own render instant; siblings pick up the real plan from `todo.list`.
-		signalTodoRefetch(requestIdentity);
+		signalTodoRefetch(requestIdentity, selfListenerRef.current ?? undefined);
 		void nudgeAgent(workspaceId, sessionId, title);
 	};
 
@@ -260,7 +276,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		return true;
 	};
 
-	const notifyOpened = (surface: "page" | "popup") => {
+	const notifyOpened = (surface: "page" | "rail") => {
 		void getTransport()
 			.request("todo.list", { workspaceId, sessionId, opened: surface })
 			.catch(() => {});
@@ -297,7 +313,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	const startReview = async (id: string) => {
 		await getTransport().request("todo.startReview", { workspaceId, sessionId, id });
 		await reloadPlan(); // the `reviewing` mark is host-derived — never patched locally
-		signalTodoRefetch(identity); // and tell sibling hooks about it
+		signalTodoRefetch(identity, selfListenerRef.current ?? undefined); // and tell sibling hooks about it
 	};
 
 	const reviewAll = async () => {
@@ -306,7 +322,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			sessionId,
 		});
 		await reloadPlan(); // the first item's `reviewing` mark is host-derived — re-read to show it
-		signalTodoRefetch(identity);
+		signalTodoRefetch(identity, selfListenerRef.current ?? undefined);
 		return { total, ...(alreadyRunning ? { alreadyRunning } : {}) };
 	};
 
@@ -315,7 +331,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		failed,
 		add,
 		openPlan,
-		notifyOpened: (surface: "popup") => notifyOpened(surface),
+		notifyOpened: (surface: "rail") => notifyOpened(surface),
 		openChanges,
 		startReview,
 		reviewAll,

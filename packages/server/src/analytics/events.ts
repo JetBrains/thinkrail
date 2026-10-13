@@ -19,7 +19,7 @@ export interface ProviderAnalyticsProperties {
 
 export type SendMode = "prompt" | "steer" | "follow_up";
 
-export type PlanOpenSurface = "page" | "popup";
+export type PlanOpenSurface = "page" | "rail";
 export type PlanAddSurface = "chat" | "page";
 export type PlanActionSource = "plan_page" | "other";
 

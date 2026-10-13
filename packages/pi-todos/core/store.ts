@@ -392,8 +392,7 @@ export class TodoStore {
 			titleOverride !== undefined ? decodeEscapes(titleOverride) : item.title,
 		);
 		if (!title) return { ok: false, reason: "empty-title" };
-		if (plan.groups.some((g) => g.title === title))
-			return { ok: false, reason: "title-collision" };
+		if (plan.groups.some((g) => g.title === title)) return { ok: false, reason: "title-collision" };
 		plan.todos.splice(idx, 1);
 		const group: TodoGroup = { id: item.id, title, todos: [] };
 		plan.groups.push(group);

@@ -897,17 +897,16 @@ a project picker, the prompt hero, and the reused
   page**. Frontend-local placement stores only the `todo-plan` resolver kind + session identity, never inline
   plan content; another client can explicitly reopen the same host-owned page without inheriting placement.
 
-  **TODO list is also a right-rail tool.** `LAYOUT_TOOLS` carries `"plan"`;
+  **TODO list is a right-rail tool.** `LAYOUT_TOOLS` carries `"plan"`;
   `WorkspaceWorkbench.toolBodies.plan` renders the lazy **`PlanRailPane`** (new file,
   `apps/web/src/panels/PlanRailPane.tsx`) which is **not** `PlanPane` — it imports the SAME compact
-  `TodoAddRow` + `TodoRows` the chat popover uses (`apps/web/src/chat/TodoList.tsx`), so visual
+  `TodoAddRow` + `TodoRows` the chat view relies on (`apps/web/src/chat/TodoList.tsx`), so visual
   changes to one surface land on the other. `data-testid="plan-rail-pane"` on its outer div
   (distinct from the center-tab `plan-pane`) so e2e can address either surface unambiguously. The
   rail picks the workspace's currently-active chat via `selectRailPlanSessionId` and shows that
   chat's TODOs; when the workspace has no chat tab at all, the `plan-rail-empty` placeholder invites
-  "Open a chat to see its plan here." The chat strip's `todo-open-plan` button inside `TodoAddRow`
-  still opens the document-scale **center-tab Plan** (`openPlan` → `openDoc({kind:"plan", ...})`),
-  reachable from both the chat popover and from the rail's own `TodoAddRow` — the rail is the
+  "Open a chat to see its plan here." The `todo-open-plan` button inside `TodoAddRow` opens the
+  document-scale **center-tab Plan** (`openPlan` → `openDoc({kind:"plan", ...})`); the rail is the
   always-on glance surface, the center-tab Plan is the deep-review surface (`PlanSessionLive`, PR
   actions, next-action banners, adopted commits, unattributed). They complement each other — rail for
   the task list, page for the review trail. No layout migration: existing center-tab Plans keep
@@ -965,11 +964,9 @@ a project picker, the prompt hero, and the reused
   **auto-growing textarea** (`plan-add-input`) — plain **Enter adds**, **Shift+Enter** inserts a newline
   (multi-line like the composer), Esc closes — wired to the SAME `useChatTodos.add` as the popup's
   `TodoAddRow` — a loose **user** item plus the agent nudge — so the two entry points stay one flow.
-  **Plan items carry no UI Remove affordance.** The agent still manages the plan through its
-  `todo.remove` tool when it needs to drop a step, but the user never does — removing a step from the
-  UI confused users («when would I want this?»), so the hover trash button + its confirm popover
-  were removed. User items added from the TODO rail stay on the plan until the agent finishes them or
-  the user explicitly asks the agent to cancel.
+  **Plan items carry no UI Remove affordance.** The agent manages the plan through its
+  `todo.remove` tool when it needs to drop a step; the user does not. Items added from the TODO rail
+  stay on the plan until the agent finishes them or the user explicitly asks the agent to cancel.
   Items keep a **scan-first item
   anatomy**: the item TITLE is
   the only full-size text (`tr-text-ui font-medium`), every detail is a step down (`tr-text-metadata`,
@@ -990,12 +987,7 @@ a project picker, the prompt hero, and the reused
   phones — short sha + `DiffStatBadge`. The two meta rows are both aligned to the title via the same
   ghost-chevron spacer. The meta lives on its own line(s) precisely so the title row's right edge is
   free for the review slot — the reveal-on-hover action never collides with the title, the summary
-  preview, or the meta. Rationale (direct user feedback: "не понятно что сделано"): a done item used to show only
-  `title + icon + file count`, with `summary` and `verification` hidden behind the chevron — so a
-  reader scanning the plan had to click every single done item to see what actually shipped; the
-  always-on preview + hoverable verification removes that cost. **The whole row is the hover target** (`group` on the `<li>`, ProjectTree's pattern):
-  hovering the row tints it and **reveals `Check it` — WITHOUT changing the row's height** (the
-  button reserves its slot in-flow and only fades in; hover never resizes the row). **Expansion is a
+  preview, or the meta. The always-on preview + hoverable verification removes the cost of expanding every done item to see what shipped. **Expansion is a
   click, not a hover** (`plan-item-toggle` → `data-expanded`): the detail block is always mounted but
   CSS-hidden (`hidden` → `group-data-[expanded=true]:flex`), so a click persists it (and it works on
   touch, which has no hover) and the meta line yields to it (`group-data-[expanded=true]:hidden`);

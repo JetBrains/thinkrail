@@ -531,7 +531,7 @@ test("plan_opened rides an explicit todo.list open; plan_item_added rides todo.a
 	const { ref, ctx } = await taskFixture();
 	await handleRequest("todo.list", ref, ctx);
 	await handleRequest("todo.list", { ...ref, opened: "page" }, ctx);
-	await handleRequest("todo.list", { ...ref, opened: "popup" }, ctx);
+	await handleRequest("todo.list", { ...ref, opened: "rail" }, ctx);
 	await handleRequest("todo.add", { ...ref, title: "user step", surface: "chat" }, ctx);
 	await handleRequest("todo.add", { ...ref, title: "page step", surface: "page" }, ctx);
 	await handleRequest("todo.add", { ...ref, title: "defaulted step" }, ctx);
@@ -539,7 +539,7 @@ test("plan_opened rides an explicit todo.list open; plan_item_added rides todo.a
 	await shutdownAnalytics();
 	expect(
 		sent.filter((event) => event.event === "plan_opened").map((event) => event.properties.surface),
-	).toEqual(["page", "popup"]);
+	).toEqual(["page", "rail"]);
 	expect(
 		sent
 			.filter((event) => event.event === "plan_item_added")

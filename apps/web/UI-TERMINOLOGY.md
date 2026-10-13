@@ -208,10 +208,6 @@ The agent conversation, rendered inside a Chat tab in the Center Tabbed Area.
 - **Parent:** Chat View.
 - **Position:** Slim top bar of the Chat View.
 - **Children / slots:**
-  - **TODO List Strip** — `ChatPlanStripContent` (from `chat/ChatPlan.tsx`), passed into the
-    header's `left` slot; click focuses the right-rail **TODO List** tool via
-    `requestToolView(workspaceId, "plan")`. The former inline popover is gone (the rail is the
-    always-on surface now).
   - **Status Entries** — inline muted `statusEntries` text (extension status).
   - **Session Stats Bar** — `chat/SessionStatsBar.tsx` → `SessionStatsBar` (token/cost stats).
   - **Resources Trigger** — `chat/resources/ResourcesButton.tsx` → `ResourcesButton`
@@ -335,11 +331,13 @@ Children / associated surfaces:
 ## Chat Plan (TODO plan)
 
 - **Canonical name:** Chat Plan.
-- **Implementation:** `chat/ChatPlan.tsx` (`ChatPlanStripContent` = the Plan Strip in the Chat Header;
-  `chat/TodoList.tsx` → `TodoList` + `panels/PlanRailPane.tsx` → `PlanRailPane` (rail body).
-- **Parent:** Chat Header (strip) → Popover (body).
-- **Responsibility:** surface the chat's `pi-todos` plan (group-first, status-ordered). There is no
-  side-tool Todo tab — the plan lives in the conversation.
+- **Implementation:** `chat/TodoList.tsx` → `TodoList` + `panels/PlanRailPane.tsx` → `PlanRailPane`
+  (rail body) + `panels/PlanPane.tsx` → `PlanPane` (center-tab page, opened via `openPlan`).
+- **Parent:** Right side-rail tool (`plan`) for the compact TODO list; center editor tab for the
+  document-scale Plan page. The chat header's old plan chip + popover are removed; the chat view
+  mounts `useChatTodos` only so the auto-summary trigger still fires when a chat is open.
+- **Responsibility:** surface the chat's `pi-todos` plan (group-first, status-ordered). The TODO list
+  is a side-rail tool next to Files / Specs / Changes / Review.
 
 ---
 
@@ -606,7 +604,7 @@ its alternatives in parentheses.
   **Send Button**, **History-Open Button**, **Slot Hint Chip**.
 - **History Overlay** — **Results List**, **Preview Pane**, **Scope Picker**, **Jump Action**,
   **Save-as-Template Action**.
-- **Chat Plan** — **TODO List Strip** (chat header chip) + **TODO List** (right-rail tool, `PlanRailPane`) + **Plan Page** (center-tab, `PlanPane`, opened via `openPlan`).
+- **Chat Plan** — **TODO List** (right-rail tool, `PlanRailPane`) + **Plan Page** (center-tab, `PlanPane`, opened via `openPlan`).
 
 **Changes review**
 

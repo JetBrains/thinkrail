@@ -679,6 +679,25 @@ export function selectActiveEditorTab(
 	return (state.tabsByWorkspace[workspaceId] ?? []).find((tab) => tab.id === activeId) ?? null;
 }
 
+/** Shared rule for "which chat does this workspace speak for right now?". The active chat tab wins;
+ * otherwise the most recently appended chat tab in the workspace. Both the history target
+ * (`selectHistoryTarget`) and the TODO rail (`selectRailPlanSessionId`) must agree on the answer so
+ * they never drift 
+ centralized here per AGENTS.md's "centralize duplicated derivations" rule. */
+export function selectWorkspaceChatTab(
+	state: {
+		tabsByWorkspace: Record<string, EditorTab[]>;
+		activeTabByWorkspace: Record<string, string | null>;
+	},
+	workspaceId: string,
+): Extract<EditorTab, { kind: "chat" }> | null {
+	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
+	const active = selectActiveEditorTab(state, workspaceId);
+	if (active?.kind === "chat") return active;
+	const fallback = tabs.findLast((t) => t.kind === "chat");
+	return fallback?.kind === "chat" ? fallback : null;
+}
+
 export function selectHistoryTarget(state: {
 	activeWorkspaceId: string | null;
 	tabsByWorkspace: Record<string, EditorTab[]>;
@@ -686,17 +705,11 @@ export function selectHistoryTarget(state: {
 }): HistoryTarget | null {
 	const workspaceId = state.activeWorkspaceId;
 	if (!workspaceId) return null;
-	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
-	const active = selectActiveEditorTab(state, workspaceId);
-	const chat = active?.kind === "chat" ? active : tabs.findLast((t) => t.kind === "chat");
+	const chat = selectWorkspaceChatTab(state, workspaceId);
 	return chat ? { workspaceId, tabId: chat.id, sessionId: chat.sessionId } : null;
 }
 
-/** Pick the chat session whose plan the workspace's side-rail Plan tool should show.
- * Prefers the currently-active chat tab; falls back to the most recently appended chat tab;
- * returns `null` when the workspace has no chat tab at all (callers render a "start a chat" state).
- * Mirrors `selectHistoryTarget`'s rule 
- keep both selectors in step. */
+/** Pick the chat session whose plan the workspace's side-rail TODO List tool should show. */
 export function selectRailPlanSessionId(
 	state: {
 		tabsByWorkspace: Record<string, EditorTab[]>;
@@ -704,10 +717,7 @@ export function selectRailPlanSessionId(
 	},
 	workspaceId: string,
 ): string | null {
-	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
-	const active = selectActiveEditorTab(state, workspaceId);
-	const chat = active?.kind === "chat" ? active : tabs.findLast((t) => t.kind === "chat");
-	return chat?.sessionId ?? null;
+	return selectWorkspaceChatTab(state, workspaceId)?.sessionId ?? null;
 }
 
 export interface KnownChatLocation {
