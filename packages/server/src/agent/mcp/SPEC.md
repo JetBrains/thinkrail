@@ -150,7 +150,7 @@ relax a rule.
   eagerly). Each factory load owns a closed flag and one cleanup promise. `on` captures pi's
   `session_shutdown` handlers; both `shutdown(event, ctx)` and the runner's shutdown dispatch close that
   load synchronously and join the same cleanup promise. Pi clears its server list before awaiting
-  transport closure (re-verified through 1.2.0), so a second raw dispatch would return early: idempotence alone does not preserve
+  transport closure (re-verified on every upgrade), so a second raw dispatch would return early: idempotence alone does not preserve
   completion ordering. Reload must await actual cleanup before admitting a replacement, not the bounded
   quit wait. The proxy guards the actual `session_start` and `mcp_servers_change` callbacks, including
   tool-search activation, against a closed load: an earlier async handler can resume the dispatch after
