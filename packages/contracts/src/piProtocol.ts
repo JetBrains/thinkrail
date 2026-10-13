@@ -86,6 +86,11 @@ export interface SessionState {
 	completion: SessionCompletion | null;
 	completionUnread: boolean;
 	queuedCount: number;
+	backgroundWork: boolean;
+}
+
+export function isSessionWorking(state: SessionState): boolean {
+	return state.execution === "running" || state.backgroundWork === true;
 }
 
 type WithWireMessage<E> = E extends { message: AgentMessage }

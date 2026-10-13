@@ -156,6 +156,7 @@ export function deriveSessionState(inputs: SessionStateInputs): SessionState {
 			completion: null,
 			completionUnread: false,
 			queuedCount: inputs.pendingMessageCount,
+			backgroundWork: inputs.backgroundWorkActive,
 		};
 	}
 
@@ -171,5 +172,6 @@ export function deriveSessionState(inputs: SessionStateInputs): SessionState {
 			completion.outcome !== "cancelled" &&
 			completion.completionId !== inputs.handledCompletionId,
 		queuedCount: inputs.pendingMessageCount,
+		backgroundWork: inputs.backgroundWorkActive,
 	};
 }

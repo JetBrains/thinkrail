@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import type { SessionState } from "@thinkrail/contracts";
-import { activeWorktreeRow, openWorkspaceChat } from "./fixtures/app";
+import { activeWorktreeRow, openWorkspaceChat, setWindowFocus } from "./fixtures/app";
 
 function observeStates(page: Page) {
 	const states = new Map<string, SessionState[]>();
@@ -48,12 +48,15 @@ async function expectHeldThenLit(
 	await expect(trigger).toHaveAttribute("data-active-count", "1");
 	await expect(row).not.toHaveAttribute("data-attention", "true");
 	await expect(row.getByTestId("attention-dot")).toHaveCount(0);
+	await expect(row).toHaveAttribute("data-running", "true");
 
+	await setWindowFocus(page, false);
 	await finished();
 	await expect(trigger).toHaveAttribute("data-active-count", "0", { timeout: 180_000 });
 	await expect.poll(() => states().some(isIdleUnread), { timeout: 180_000 }).toBe(true);
 	await expect(row).toHaveAttribute("data-attention", "true", { timeout: 30_000 });
 	await expect(row.getByTestId("attention-dot")).toHaveAttribute("aria-label", "Needs attention");
+	await expect(row).not.toHaveAttribute("data-running", "true");
 
 	const after = states().slice(launchSettled);
 	const firstUnread = after.findIndex(isIdleUnread);

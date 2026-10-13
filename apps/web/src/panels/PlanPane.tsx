@@ -1523,7 +1523,6 @@ export default function PlanPane({
 					)}
 					onAdd={(title) => plan.add(title, "page")}
 					onOpenChat={() => {
-						useAppStore.getState().noteDirectChatActivation(sessionId);
 						void openChatInTab(workspaceId, sessionId);
 					}}
 					onSend={async (text) => {

@@ -145,6 +145,7 @@ test("a running session stamps its workspace; idle state changes do not", async 
 			completion: null,
 			completionUnread: true,
 			queuedCount: 0,
+			backgroundWork: false,
 		},
 	};
 	stampSessionActivity(base);

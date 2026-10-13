@@ -1,12 +1,13 @@
-import type {
-	AskUserQuestionResult,
-	GitFileChange,
-	ReviewComment,
-	SessionState,
-	TextContent,
-	TodoGroupItem,
-	TodoItem,
-	TodoPlan,
+import {
+	type AskUserQuestionResult,
+	type GitFileChange,
+	isSessionWorking,
+	type ReviewComment,
+	type SessionState,
+	type TextContent,
+	type TodoGroupItem,
+	type TodoItem,
+	type TodoPlan,
 } from "@thinkrail/contracts";
 import type { ToolStatus } from "@thinkrail/extension-api/web";
 import { type AskState, deriveAskStates } from "./askState";
@@ -248,7 +249,7 @@ export function hostSessionGlance(
 ): PlanGlance {
 	if (!state) return fallback;
 	if (state.needsInput) return "waiting_question";
-	return state.execution === "running" ? "working" : "waiting";
+	return isSessionWorking(state) ? "working" : "waiting";
 }
 
 interface GlanceInputs {
@@ -256,14 +257,15 @@ interface GlanceInputs {
 	turns: ChatTurn[];
 	askAnswers: Record<string, AskUserQuestionResult>;
 	toolResults: Record<string, ToolResultState>;
+	hostState?: SessionState | null;
 }
 
 const glanceByTurns = new WeakMap<
 	ChatTurn[],
-	Omit<GlanceInputs, "turns"> & { glance: PlanGlance }
+	Omit<GlanceInputs, "turns" | "hostState"> & { glance: PlanGlance }
 >();
 
-export function sessionGlance({
+function transcriptGlance({
 	isStreaming,
 	turns,
 	askAnswers,
@@ -280,6 +282,12 @@ export function sessionGlance({
 	const glance = planGlance(isStreaming, deriveAskStates(turns, askAnswers, toolResults));
 	glanceByTurns.set(turns, { isStreaming, askAnswers, toolResults, glance });
 	return glance;
+}
+
+export function sessionGlance(inputs: GlanceInputs): PlanGlance {
+	return inputs.hostState
+		? hostSessionGlance(inputs.hostState, "waiting")
+		: transcriptGlance(inputs);
 }
 
 export function shouldNudgeOnAdd(glance: PlanGlance): boolean {

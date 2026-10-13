@@ -170,7 +170,6 @@ function ClosedChatRow({
 					onClick={() => {
 						onDismiss();
 						const store = useAppStore.getState();
-						store.noteDirectChatActivation(chat.sessionId);
 						const navigation = store.beginCenterNavigation(workspaceId, targetGroupId);
 						void openChatInTab(workspaceId, chat.sessionId, navigation);
 					}}

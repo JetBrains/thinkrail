@@ -132,8 +132,13 @@ test("hostSessionGlance uses host blockers and execution over stale transcript f
 		completion: null,
 		completionUnread: false,
 		queuedCount: 0,
+		backgroundWork: false,
 	};
 	expect(hostSessionGlance(base, "waiting_question")).toBe("working");
+	expect(hostSessionGlance({ ...base, execution: "idle" }, "working")).toBe("waiting");
+	expect(hostSessionGlance({ ...base, execution: "idle", backgroundWork: true }, "waiting")).toBe(
+		"working",
+	);
 	expect(
 		hostSessionGlance(
 			{
@@ -162,7 +167,7 @@ test("shouldNudgeOnAdd: never wake an agent waiting on a question; wake it other
 	expect(shouldNudgeOnAdd("waiting")).toBe(true);
 });
 
-test("sessionGlance derives the glance straight from a runtime (deriveAskStates + planGlance)", () => {
+test("sessionGlance prefers host state and falls back to the runtime transcript (deriveAskStates + planGlance)", () => {
 	const askTurn: ChatTurn = {
 		kind: "assistant",
 		id: "a1",
@@ -189,6 +194,23 @@ test("sessionGlance derives the glance straight from a runtime (deriveAskStates 
 			toolResults: { q1: { status: "error", raw: {} } },
 		}),
 	).toBe("waiting");
+	expect(
+		sessionGlance({
+			isStreaming: false,
+			turns: [],
+			askAnswers: {},
+			toolResults: {},
+			hostState: {
+				execution: "idle",
+				runId: "run-1",
+				needsInput: null,
+				completion: { completionId: "completion:a1", outcome: "succeeded" },
+				completionUnread: false,
+				queuedCount: 0,
+				backgroundWork: true,
+			},
+		}),
+	).toBe("working");
 });
 
 test("sessionGlance recomputes when any input changes identity under the same turns array", () => {

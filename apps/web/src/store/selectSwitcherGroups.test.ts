@@ -48,6 +48,7 @@ const stateRecord = (
 		completion: null,
 		completionUnread: false,
 		queuedCount: 0,
+		backgroundWork: false,
 		...overrides,
 	},
 });
@@ -78,12 +79,16 @@ describe("selectSwitcherGroups", () => {
 		const state = baseState([
 			stateRecord("s_needs", "w1", "p1", { needsInput: { inputKind: "ask_user_question" } }),
 			stateRecord("s_running", "w1", "p1", { execution: "running" }),
+			stateRecord("s_delegating", "w1", "p1", { backgroundWork: true }),
 			stateRecord("s_idle", "w1", "p1"),
 		]);
 		const groups = selectSwitcherGroups(state);
 		expect(groups).toHaveLength(1);
 		const ids = groups[0]?.sessions.map((s) => s.sessionId) ?? [];
-		expect(ids).toEqual(["s_needs", "s_running"]);
+		expect(ids).toEqual(["s_needs", "s_running", "s_delegating"]);
+		expect(groups[0]?.sessions.find((s) => s.sessionId === "s_delegating")?.attention).toBe(
+			"running",
+		);
 	});
 
 	test("computes attention status and sorts by priority", () => {

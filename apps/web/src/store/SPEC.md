@@ -294,27 +294,22 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   errored assistant followed by another assistant message), so live and reloaded clients agree.
   - **Normalized session state** (`sessionStateByWorkspace`) is the full host-authored state record per
     workspace/session. Snapshot hydration replaces the map only on a complete current-generation read;
-    ordered pushes fold one record, and deletion removes it. Shared selectors derive needs-input, working,
+    ordered pushes fold one record, and deletion removes it. Shared selectors derive needs-input, working
+    (contracts' `isSessionWorking`, so a chat idle on background commands or subagents still reads as
+    running),
     unread-finished, and project/workspace rollups—no stored precedence or second running slice.
     `SessionRuntime.hostState` is installed with transcript hydration and by state pushes delivered after Pi
-    events. Exact completion ids let `selectReadyCompletionActivation` require current connection, rendered
-    runtime state, unread record, and direct activation of that exact unread completion. Activation records
-    the current completion id as well as its local clock, so an attach/hydration push for the same id cannot
-    erase a deliberate open while a stale activation can never clear a newer result. On a cold connection,
-    a deliberate open before the first state snapshot cannot trust the retained record, which may be absent
-    or stale after reconnect; one pending activation survives only until the ordered snapshot-plus-buffer
-    state installs, which binds its exact unread completion or drops it when the session is quiet/absent. Connection transition and chat deletion clear the pending activation, and
-    later pushes cannot inherit it. The exact result must render before acknowledgement is sent, but a
-    deliberate tab/history activation may happen first and
-    remains eligible once that row mounts—opening and reading is sufficient without a second composer
-    focus. Deliberate workspace entry also activates its already-selected chat once that chat is visible and
-    unobscured, so entering the workspace and reading does not require a second click on the chat. Passive
-    mount/visibility and background layout restoration never advance activation; chat-tab/group selection,
-    direct history/search open, an explicit Review/Plan-panel open-chat action, workspace entry, and
-    unobscured conversation pointer intent do. Workspace
-    entry arms one pending activation only until the first selected center tab converges; competing
-    navigation or any connection transition expires it, so a later background restore cannot inherit an
-    old read gesture. Incidental interactions inside an obscuring history overlay do not.
+    events. A result is **read when it is seen**, not on a gesture: `selectReadyCompletionAck` returns the
+    exact unread completion id only while the connection is current, the runtime is synced to this
+    generation, its `hostState` names that same completion, the exact result row has rendered, and
+    `selectChatAttended` holds — the chat is the selected tab of the last-focused center group in the active
+    workspace and no history overlay obscures it or is requested for it (a pending
+    `historyOpenRequest` must not let the focusing jump acknowledge before the overlay mounts). `ChatTranscript` adds the facts the store cannot know (the window
+    has focus and is visible; no Resources inspector or modal layer covers the transcript; it follows the latest edge) and acknowledges once all hold.
+    The condition is continuous, so it needs no recorded activation, pending cold-connection gesture or
+    tick ordering: a result that arrives while the user follows clears at once, scrolling back to the latest
+    edge clears it later, and an unfocused window keeps it lit (and notifying) until the user returns. The
+    host compare-and-sets the exact id, so a stale view can never clear a newer result.
   Closed chats are reopenable: the workbench close command atomically removes local placement and invokes
   **`closeChatToHistory`**, which **keeps the runtime + host session alive**, records it in
   **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first), and clears pending

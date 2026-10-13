@@ -728,12 +728,14 @@ test("a running background command holds the idle parent's completion unread unt
 			execution: "idle",
 			completion: { outcome: "succeeded" },
 			completionUnread: false,
+			backgroundWork: true,
 		});
 		await stopBackgroundCommand(p.workspaceId, p.sessionId, commandId, p.cwd);
 		await waitFor(async () => recorder.states.at(-1)?.completionUnread === true);
 		expect(getSessionState(p.sessionId)).toMatchObject({
 			execution: "idle",
 			completionUnread: true,
+			backgroundWork: false,
 		});
 	} finally {
 		recorder.stop();
@@ -789,6 +791,7 @@ test("a running detached Agent child holds the idle parent's completion unread u
 		expect(getSessionState(p.sessionId)).toMatchObject({
 			execution: "idle",
 			completionUnread: false,
+			backgroundWork: true,
 		});
 		await stopSubagent(p.workspaceId, p.sessionId, child.childSessionId, p.cwd);
 		gate.resolve();
@@ -796,6 +799,7 @@ test("a running detached Agent child holds the idle parent's completion unread u
 		expect(getSessionState(p.sessionId)).toMatchObject({
 			execution: "idle",
 			completionUnread: true,
+			backgroundWork: false,
 		});
 	} finally {
 		gate.resolve();

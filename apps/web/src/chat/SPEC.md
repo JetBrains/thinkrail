@@ -1281,18 +1281,20 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   your answer" **even when every item is done** (the earlier strip hid it whenever there was no
   in-progress step, so an agent blocked on a question read as "finished"); waiting outranks the raw live
   run flag; "working" covers other runs; "paused" only when it stopped with open steps left; and nothing extra on a clean finish (all done,
-  idle). The glance's working/waiting lifecycle comes from the normalized host `SessionState`; `askStates`
-  remains only to identify and render the exact questionnaire/recap. `ChatView` records unobscured
-  conversation pointer intent; workbench integration records deliberate tab/group selection; history
-  surfaces record direct history/search opens; the Review and Plan panels' explicit open-chat actions record
-  their open; and the store records workspace entry that reveals the
-  selected chat. Neither passive mount/background restoration nor incidental history-overlay interaction
-  counts. Activation captures the exact current unread completion id (plus its local
-  clock), while exact-row rendering gates the actual acknowledgement: deliberate navigation may occur
-  before hydration/attach convergence and clears once the same result mounts, without requiring a second
-  chat or composer click; stale ids cannot clear newer results. Passive multi-pane rendering still cannot
-  clear another client's marker. Transient acknowledgement failure
-  retries with a bounded capped-backoff budget; a later direct activation rearms that exact id.
+  idle). The glance's working/waiting lifecycle comes from the normalized host `SessionState` — in
+  `ChatView` and, through `sessionGlance`, in the Plan and Review panels — so a chat idle on its background commands or subagents reads as working (`isSessionWorking`); the transcript-derived glance is only the older-host
+  fallback. `askStates` remains only to identify and render the exact questionnaire/recap. **Unread results clear when seen** (no read gesture): `ChatTranscript`
+  acknowledges the exact unread completion while the window has focus and is visible, the chat is
+  attended (`selectChatAttended`: selected in the last-focused center group of the active workspace, no
+  history overlay open or requested for it), neither the Resources inspector nor an open modal dialog covers the transcript
+  (`useModalLayerOpen` from `@thinkrail/ui/dialog`, which marks every modal overlay), and the
+  transcript follows the latest edge (`followState`), once that exact result row has
+  rendered (`selectReadyCompletionAck`). A result landing while the user follows never stays lit; one that
+  lands while they read history, sit in another group, or are away clears when they return to the latest
+  edge of that chat; opening a chat that lands at the latest edge clears it immediately. A passively
+  visible neighbour pane or an unfocused second client never clears another reader's marker. Transient
+  acknowledgement failure retries with a bounded capped-backoff budget; re-entering the seen state rearms
+  that exact id.
   `TodoList` stays props-driven — it receives the resolved glance, never reads the transport.
   Its section label + pending/active/done status glyphs live in **`planKit.tsx`** — shared
   presentational atoms the Review panel (`panels/ReviewPanel`) reuses so both "work items in

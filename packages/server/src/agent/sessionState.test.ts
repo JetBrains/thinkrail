@@ -64,6 +64,7 @@ describe("deriveSessionState", () => {
 			completion: null,
 			completionUnread: false,
 			queuedCount: 2,
+			backgroundWork: false,
 		});
 	});
 
@@ -198,11 +199,13 @@ describe("deriveSessionState", () => {
 			inputs({ backgroundWorkActive: true, lastSettlement: { stopReason: "stop" } }),
 		);
 		expect(held.execution).toBe("idle");
+		expect(held.backgroundWork).toBe(true);
 		expect(held.completion).toEqual({ completionId: "completion:a1", outcome: "succeeded" });
 		expect(held.completionUnread).toBe(false);
 
 		const released = deriveSessionState(inputs({ lastSettlement: { stopReason: "stop" } }));
 		expect(released.completionUnread).toBe(true);
+		expect(released.backgroundWork).toBe(false);
 
 		const blocked = deriveSessionState(
 			inputs({
@@ -246,6 +249,7 @@ describe("deriveSessionState", () => {
 			completion: null,
 			completionUnread: false,
 			queuedCount: 0,
+			backgroundWork: false,
 		});
 	});
 });

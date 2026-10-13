@@ -224,7 +224,6 @@ export function useHistorySearch(
 			close();
 			const store = useAppStore.getState();
 			store.setChatObscured(sessionId, false);
-			store.noteDirectChatActivation(target.sessionId);
 			store.requestChatLocation(target);
 		},
 		[close, sessionId],

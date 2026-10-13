@@ -55,7 +55,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   (the one shared reading of pi's persisted-but-superseded auto-retry attempts — the client's hydration
   hides their turns, the host's history indexer skips their text; both consume the index slot so jump
   anchors stay aligned) from `domain`; **`isTranscriptMessageRole(role)`**
-  from `piProtocol` (the one definition of which roles a transcript carries: the host filters
+  and **`isSessionWorking(state)`** (running or idle on background work — the one working test every
+  badge and glance uses) from `piProtocol` (`isTranscriptMessageRole` is the one definition of which roles a transcript carries: the host filters
   `session.getMessages` by it *and* `history` counts `messageIndex` by it, so two copies differing by a role
   would silently shift every later jump anchor); `export *` (value) of `wsProtocol`
   (`WS_METHODS`, `WS_CHANNELS`, the typed maps, `PROTOCOL_VERSION`, and feature-introduction versions).
@@ -898,9 +899,11 @@ contracts only.
 `SessionState` carries orthogonal host facts: `execution` (`idle | running`) plus stable `runId`, nullable
 `needsInput` (stable `interactionId`, `question | dialog`; a pending dialog also carries its exact replayable
 request), nullable latest `completion` (stable id and explicit
-`succeeded | failed(error|length) | interrupted | cancelled` outcome), Pi's queue count, and the
-owner-global `completionUnread` receipt projection (held false while the idle session still runs background
-commands or subagents). `SessionStateRecord` adds session/workspace/project
+`succeeded | failed(error|length) | interrupted | cancelled` outcome), Pi's queue count, the live
+`backgroundWork` flag (the session still owns running background commands or subagents), and the
+owner-global `completionUnread` receipt projection (held false while an idle session has background work).
+`isSessionWorking` is the one *working* test: `execution` running or `backgroundWork`; an older host omits
+the flag, which reads as false. `SessionStateRecord` adds session/workspace/project
 attribution; `SessionSummary.state` carries the exact attached session's state.
 
 `session.stateList` is an authoritative all-workspace snapshot of every top-level live or disk session and

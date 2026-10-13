@@ -23,6 +23,7 @@ import {
 	selectAttentionCenterTab,
 	selectCanRenameChat,
 	selectCatalogModel,
+	selectChatAttended,
 	selectContextProject,
 	selectHistoryTarget,
 	selectKnownChatLocation,
@@ -31,7 +32,7 @@ import {
 	selectLayoutTabPlacement,
 	selectProjectIsRunning,
 	selectProjectNeedsAttention,
-	selectReadyCompletionActivation,
+	selectReadyCompletionAck,
 	selectSkillsStale,
 	selectSupportsModelPicker,
 	selectWorkspaceIsRunning,
@@ -79,8 +80,10 @@ test("normalized rail flags keep attention binary and working orthogonal", () =>
 		completion: null,
 		completionUnread: false,
 		queuedCount: 0,
+		backgroundWork: false,
 	};
 	const working = { ...quiet, execution: "running" as const, runId: "run-working" };
+	const delegating = { ...quiet, runId: "run-delegating", backgroundWork: true };
 	const finished = {
 		...quiet,
 		runId: "run-finished",
@@ -99,6 +102,7 @@ test("normalized rail flags keep attention binary and working orthogonal", () =>
 			},
 			w2: { c: record("c", "p1", "w2", needsInput) },
 			w3: { d: record("d", "p2", "w3", quiet) },
+			w4: { e: record("e", "p3", "w4", delegating) },
 		},
 	};
 	expect(selectWorkspaceNeedsAttention(state, "w1")).toBe(true);
@@ -109,9 +113,11 @@ test("normalized rail flags keep attention binary and working orthogonal", () =>
 	expect(selectProjectIsRunning(state, "p1")).toBe(true);
 	expect(selectProjectNeedsAttention(state, "p2")).toBe(false);
 	expect(selectProjectIsRunning(state, "p2")).toBe(false);
+	expect(selectWorkspaceIsRunning(state, "w4")).toBe(true);
+	expect(selectProjectIsRunning(state, "p3")).toBe(true);
 });
 
-test("completion acknowledgement requires exact render and a direct activation after state arrival", () => {
+test("completion acknowledgement requires the exact current result to have rendered", () => {
 	const completion = { completionId: "completion:a1", outcome: "succeeded" as const };
 	const hostState = {
 		execution: "idle" as const,
@@ -120,6 +126,7 @@ test("completion acknowledgement requires exact render and a direct activation a
 		completion,
 		completionUnread: true,
 		queuedCount: 0,
+		backgroundWork: false,
 	};
 	const state = {
 		status: "connected",
@@ -130,33 +137,86 @@ test("completion acknowledgement requires exact render and a direct activation a
 		sessions: {
 			s1: { ...EMPTY_RUNTIME, hostState, syncedConnectionGeneration: 4 },
 		},
-		sessionStateTickBySession: { s1: 10 },
-		directChatActivationTickBySession: { s1: 9 },
-		directActivatedCompletionBySession: { s1: completion.completionId },
 		renderedCompletionBySession: { s1: completion.completionId },
 	};
-	expect(selectReadyCompletionActivation(state, "w1", "s1")).toBe(completion.completionId);
+	expect(selectReadyCompletionAck(state, "w1", "s1")).toBe(completion.completionId);
 	expect(
-		selectReadyCompletionActivation(
-			{
-				...state,
-				directChatActivationTickBySession: { s1: 8 },
-				directActivatedCompletionBySession: {},
-			},
-			"w1",
-			"s1",
-		),
-	).toBeNull();
-	expect(
-		selectReadyCompletionActivation(
+		selectReadyCompletionAck(
 			{ ...state, renderedCompletionBySession: { s1: "older" } },
 			"w1",
 			"s1",
 		),
 	).toBeNull();
+	expect(selectReadyCompletionAck({ ...state, status: "disconnected" }, "w1", "s1")).toBeNull();
 	expect(
-		selectReadyCompletionActivation({ ...state, status: "disconnected" }, "w1", "s1"),
+		selectReadyCompletionAck(
+			{ ...state, sessions: { s1: { ...state.sessions.s1, syncedConnectionGeneration: 3 } } },
+			"w1",
+			"s1",
+		),
 	).toBeNull();
+	const read = { ...hostState, completionUnread: false };
+	expect(
+		selectReadyCompletionAck(
+			{
+				...state,
+				sessionStateByWorkspace: {
+					w1: { s1: { sessionId: "s1", workspaceId: "w1", projectId: "p1", state: read } },
+				},
+			},
+			"w1",
+			"s1",
+		),
+	).toBeNull();
+});
+
+test("a chat is attended only as the selected tab of the last-focused center group in the active workspace", () => {
+	const chat = (id: string, sessionId: string) => ({
+		kind: "chat" as const,
+		id,
+		name: id,
+		sessionId,
+	});
+	const state = {
+		activeWorkspaceId: "w1",
+		obscuredChatSessions: {},
+		historyOpenRequest: null,
+		layoutDocumentsByWorkspace: {
+			w1: {
+				center: {
+					kind: "split" as const,
+					id: "split",
+					orientation: "horizontal" as const,
+					ratio: 0.5,
+					children: [
+						{ kind: "group" as const, id: "left", tabs: [chat("t-a", "a")] },
+						{ kind: "group" as const, id: "right", tabs: [chat("t-b", "b"), chat("t-c", "c")] },
+					],
+				},
+			},
+		},
+		layoutAttentionByWorkspace: {
+			w1: {
+				selectedByGroup: { left: "t-a", right: "t-b" },
+				lastFocusedCenterGroupId: "right",
+				lastFocusedSideGroupId: {},
+				navigationClockByGroup: {},
+			},
+		},
+	} as unknown as Parameters<typeof selectChatAttended>[0];
+	expect(selectChatAttended(state, "w1", "b")).toBe(true);
+	expect(selectChatAttended(state, "w1", "a")).toBe(false);
+	expect(selectChatAttended(state, "w1", "c")).toBe(false);
+	expect(selectChatAttended({ ...state, activeWorkspaceId: "w2" }, "w1", "b")).toBe(false);
+	expect(selectChatAttended({ ...state, obscuredChatSessions: { b: true } }, "w1", "b")).toBe(
+		false,
+	);
+	expect(selectChatAttended({ ...state, historyOpenRequest: { sessionId: "b" } }, "w1", "b")).toBe(
+		false,
+	);
+	expect(selectChatAttended({ ...state, historyOpenRequest: { sessionId: "a" } }, "w1", "b")).toBe(
+		true,
+	);
 });
 
 test("workspace kind predicates distinguish managed and user-owned checkouts", () => {

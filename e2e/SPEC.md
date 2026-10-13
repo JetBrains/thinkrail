@@ -105,7 +105,8 @@ isolation, reload and closed-inspector completion, and exercise individual Stop 
 select a model or seed a running-resource catalog. SDK faux-provider unit tests are not evidence of
 browser agent execution. `attention-background-work.live` pins the background-work unread hold end to end:
 while a real background command or detached subagent runs after the parent settled, the host never
-publishes an unread completion and the worktree row shows no dot; it lights only after the woken turn.
+publishes an unread completion and the worktree row shows running, not a dot; with the window unfocused
+(a seen result is read at once), the dot lights only after the woken turn and the running badge clears.
 
 **MCP servers** coverage (`mcp-settings.spec.ts`) runs the server package's stdio fixture through the
 absolute path of the runner's `bun`, since the host's hermetic `PATH` has none. It adds a user server

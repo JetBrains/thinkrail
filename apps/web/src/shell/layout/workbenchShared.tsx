@@ -67,7 +67,6 @@ export interface WorkbenchProps {
 	onCommit: (document: WorkspaceLayoutDocument, attention?: LayoutAttention) => void;
 	onAttentionChange: (attention: LayoutAttention) => void;
 	onUserNavigation: () => void;
-	onDirectTabActivation?: (tab: LayoutTab) => void;
 	readNavigationTick: () => number;
 	onRequestClose: (
 		tab: LayoutTab,

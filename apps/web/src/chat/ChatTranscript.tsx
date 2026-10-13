@@ -1,5 +1,6 @@
 import { RiArrowDownLine as ArrowDown, RiArrowUpLine as ArrowUp } from "@remixicon/react";
 import type { AskUserQuestionResult, GitDiffScope, TurnChangeSet } from "@thinkrail/contracts";
+import { useModalLayerOpen } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	forwardRef,
@@ -17,7 +18,8 @@ import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useShallow } from "zustand/react/shallow";
 import {
 	EMPTY_RUNTIME,
-	selectReadyCompletionActivation,
+	selectChatAttended,
+	selectReadyCompletionAck,
 	specPathMatcher,
 	toast,
 	useAppStore,
@@ -36,6 +38,7 @@ import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndic
 import { ChatTurnView } from "./turns";
 import { useChatScroll } from "./useChatScroll";
 import { useTranscriptSync } from "./useTranscriptSync";
+import { useWindowFocused } from "./useWindowFocused";
 import { advanceVirtualRows, initialVirtualRows } from "./virtualRows";
 
 const CHAT_VIEWPORT_INCREASE = 800;
@@ -153,6 +156,7 @@ const ChatTranscript = forwardRef<
 		openSubagentTranscript: (childSessionId: string | null) => void;
 		onTryAgain: () => void;
 		historyOpen: boolean;
+		inspectorOpen: boolean;
 		stillRunning: { count: number; onOpen: () => void } | undefined;
 		readMcpOutput?: ChatActions["readMcpOutput"];
 		openMcpSettings?: ChatActions["openMcpSettings"];
@@ -169,6 +173,7 @@ const ChatTranscript = forwardRef<
 		openSubagentTranscript,
 		onTryAgain,
 		historyOpen,
+		inspectorOpen,
 		stillRunning,
 		readMcpOutput,
 		openMcpSettings,
@@ -238,40 +243,6 @@ const ChatTranscript = forwardRef<
 	);
 	const completionId = runtime.hostState?.completion?.completionId ?? null;
 	const completionAnchorRowId = completionId ? (chronologicalRows.at(-1)?.id ?? null) : null;
-	const readyCompletionId = useAppStore((state) =>
-		selectReadyCompletionActivation(state, workspaceId, sessionId),
-	);
-	const directActivationTick = useAppStore(
-		(state) => state.directChatActivationTickBySession[sessionId] ?? 0,
-	);
-	useEffect(() => {
-		if (!readyCompletionId) return;
-		let cancelled = false;
-		let retry: ReturnType<typeof setTimeout> | undefined;
-		let delay = 250;
-		let attempts = 0;
-		const acknowledge = (): void => {
-			attempts += 1;
-			void getTransport()
-				.request("session.acknowledgeCompletion", {
-					sessionId,
-					completionId: readyCompletionId,
-				})
-				.then(({ record }) => {
-					if (!cancelled) useAppStore.getState().applySessionState(record);
-				})
-				.catch(() => {
-					if (cancelled || attempts >= 5) return;
-					retry = setTimeout(acknowledge, delay);
-					delay = Math.min(delay * 2, 4_000);
-				});
-		};
-		acknowledge();
-		return () => {
-			cancelled = true;
-			if (retry) clearTimeout(retry);
-		};
-	}, [directActivationTick, readyCompletionId, sessionId]);
 	const [rowHeightEstimateCache, setRowHeightEstimateCache] = useState(() => ({
 		messageOrder: chatMessageOrder,
 		heights: new Map<string, number>(),
@@ -346,6 +317,48 @@ const ChatTranscript = forwardRef<
 		rowHeightEstimates,
 		streamingResponseMovement,
 	);
+
+	const readyCompletionId = useAppStore((state) =>
+		selectReadyCompletionAck(state, workspaceId, sessionId),
+	);
+	const attended = useAppStore((state) => selectChatAttended(state, workspaceId, sessionId));
+	const windowFocused = useWindowFocused();
+	const modalOpen = useModalLayerOpen();
+	const seen =
+		windowFocused &&
+		attended &&
+		!historyOpen &&
+		!inspectorOpen &&
+		!modalOpen &&
+		followState === "following";
+	useEffect(() => {
+		if (!seen || !readyCompletionId) return;
+		let cancelled = false;
+		let retry: ReturnType<typeof setTimeout> | undefined;
+		let delay = 250;
+		let attempts = 0;
+		const acknowledge = (): void => {
+			attempts += 1;
+			void getTransport()
+				.request("session.acknowledgeCompletion", {
+					sessionId,
+					completionId: readyCompletionId,
+				})
+				.then(({ record }) => {
+					if (!cancelled) useAppStore.getState().applySessionState(record);
+				})
+				.catch(() => {
+					if (cancelled || attempts >= 5) return;
+					retry = setTimeout(acknowledge, delay);
+					delay = Math.min(delay * 2, 4_000);
+				});
+		};
+		acknowledge();
+		return () => {
+			cancelled = true;
+			if (retry) clearTimeout(retry);
+		};
+	}, [readyCompletionId, seen, sessionId]);
 
 	useImperativeHandle(ref, () => ({ armImmediateTurn, cancelImmediateTurn }), [
 		armImmediateTurn,

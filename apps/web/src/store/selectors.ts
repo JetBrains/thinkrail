@@ -3,6 +3,7 @@ import {
 	type BackgroundCommandSummary,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	type GitDiffScope,
+	isSessionWorking,
 	MCP_PROTOCOL_VERSION,
 	type McpServerResourceSummary,
 	MODEL_PICKER_PROTOCOL_VERSION,
@@ -414,8 +415,8 @@ export function selectWorkspaceIsRunning(
 	state: SessionStateProjection,
 	workspaceId: string,
 ): boolean {
-	return Object.values(state.sessionStateByWorkspace[workspaceId] ?? {}).some(
-		(record) => record.state.execution === "running",
+	return Object.values(state.sessionStateByWorkspace[workspaceId] ?? {}).some((record) =>
+		isSessionWorking(record.state),
 	);
 }
 
@@ -435,31 +436,26 @@ export function selectProjectNeedsAttention(
 export function selectProjectIsRunning(state: SessionStateProjection, projectId: string): boolean {
 	return Object.values(state.sessionStateByWorkspace).some((records) =>
 		Object.values(records).some(
-			(record) => record.projectId === projectId && record.state.execution === "running",
+			(record) => record.projectId === projectId && isSessionWorking(record.state),
 		),
 	);
 }
 
-interface CompletionActivationState extends SessionStateProjection {
+interface CompletionAckState extends SessionStateProjection {
 	status: string;
 	connectionGeneration: number;
 	sessions: Record<string, SessionRuntime>;
-	sessionStateTickBySession: Record<string, number>;
-	directChatActivationTickBySession: Record<string, number>;
-	directActivatedCompletionBySession: Record<string, string>;
 	renderedCompletionBySession: Record<string, string>;
 }
 
-export function selectReadyCompletionActivation(
-	state: CompletionActivationState,
+export function selectReadyCompletionAck(
+	state: CompletionAckState,
 	workspaceId: string,
 	sessionId: string,
 ): string | null {
 	const record = state.sessionStateByWorkspace[workspaceId]?.[sessionId];
 	const completion = record?.state.completion;
 	const runtime = state.sessions[sessionId];
-	const directlyActivated =
-		state.directActivatedCompletionBySession[sessionId] === completion?.completionId;
 	if (
 		state.status !== "connected" ||
 		!completion ||
@@ -467,10 +463,7 @@ export function selectReadyCompletionActivation(
 		!runtime ||
 		runtime.syncedConnectionGeneration !== state.connectionGeneration ||
 		runtime.hostState?.completion?.completionId !== completion.completionId ||
-		state.renderedCompletionBySession[sessionId] !== completion.completionId ||
-		(!directlyActivated &&
-			(state.directChatActivationTickBySession[sessionId] ?? 0) <=
-				(state.sessionStateTickBySession[sessionId] ?? 0))
+		state.renderedCompletionBySession[sessionId] !== completion.completionId
 	) {
 		return null;
 	}
@@ -574,6 +567,27 @@ export function selectAttentionCenterTab(
 		return node.tabs.find((tab) => tab.id === selectedId) ?? node.tabs[0] ?? null;
 	};
 	return find(document.center);
+}
+
+interface ChatAttentionState extends LayoutAttentionState {
+	activeWorkspaceId: string | null;
+	obscuredChatSessions: Record<string, true>;
+	historyOpenRequest: { sessionId: string } | null;
+}
+
+export function selectChatAttended(
+	state: ChatAttentionState,
+	workspaceId: string,
+	sessionId: string,
+): boolean {
+	if (
+		state.activeWorkspaceId !== workspaceId ||
+		state.obscuredChatSessions[sessionId] ||
+		state.historyOpenRequest?.sessionId === sessionId
+	)
+		return false;
+	const tab = selectAttentionCenterTab(state, workspaceId);
+	return tab?.kind === "chat" && tab.sessionId === sessionId;
 }
 
 export function selectAttentionCenterResourceCacheKey(
