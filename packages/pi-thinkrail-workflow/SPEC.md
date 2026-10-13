@@ -79,8 +79,9 @@ dispatcher to load rather than relying on description-matching (see [[module-web
 
 `index.test.ts` pins the one runtime behavior this package has: the factory registers a
 `before_agent_start` handler that puts `WORKFLOW_RULE` into `systemPromptOptions.sections` and returns
-nothing, and pi's own renderer (`buildSystemPromptSections` / `buildSystemPrompt`) turns those mutated
-options into a `<pi-thinkrail-workflow>` block ordered after `cwd` and ending the prompt — the tail
+nothing — for runs started by a user prompt and by a custom message alike (pi 1.2 emits the event for
+both, discriminated by `messageType`) — and pi's own renderer (`buildSystemPromptSections` /
+`buildSystemPrompt`) turns those mutated options into a `<pi-thinkrail-workflow>` block ordered after `cwd` and ending the prompt — the tail
 position the old free-text append had. pi does not re-export that renderer from its package root or
 `core/index.ts` (only its `BuildSystemPromptOptions`/`NormalizedBuildSystemPromptOptions` types are
 root-exported), so the test reaches `dist/core/system-prompt.js` by resolved path; a pi that moves it breaks the

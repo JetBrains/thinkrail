@@ -960,8 +960,9 @@ settings or workspaces edge. The owning parent graph records this package depend
   `answerQuestion`, `sendReviewFixToSession`, `compactSession`) refuses with "reloading", and completion
   delivery waits in its owners through `canDeliverCompletion` and flushes afterwards; the gate opens only
   when pi is `isIdle`, no admitted prompt is still in preflight (the host reserves the window from
-  admission to `agent_start` — pi reports idle there, and a prompt handled as a slash command never starts
-  a run), no queued-message removal is putting the kept messages back (`removeQueuedSession` holds a
+  admission to `agent_start` — pi ≤ 1.1 reported idle throughout it and pi 1.2 still does until
+  `before_agent_start`, through `input` handlers and expansion; a prompt handled as a slash command never
+  starts a run), no queued-message removal is putting the kept messages back (`removeQueuedSession` holds a
   reservation `agent_start` does not release from its drain to its last requeue, so a run that settles
   meanwhile cannot start a reload that would refuse — and lose — the rest), and no manual or automatic
   compaction is in flight; a pending reload is reconsidered at `agent_settled`, on every reservation release

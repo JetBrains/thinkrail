@@ -54,6 +54,7 @@ describe("pi-thinkrail-workflow extension", () => {
 		const systemPromptOptions = promptOptions();
 		const result = loadHandler()({
 			type: "before_agent_start",
+			messageType: "user",
 			prompt: "do the thing",
 			systemPrompt: "You are a helpful agent.",
 			systemPromptOptions,
@@ -63,10 +64,30 @@ describe("pi-thinkrail-workflow extension", () => {
 		expect(result).toBeUndefined();
 	});
 
+	test("contributes the rule to runs started by a custom message too", () => {
+		const systemPromptOptions = promptOptions();
+		loadHandler()({
+			type: "before_agent_start",
+			messageType: "custom",
+			message: {
+				role: "custom",
+				customType: "test",
+				content: "continue",
+				display: false,
+				timestamp: 0,
+			},
+			systemPrompt: "You are a helpful agent.",
+			systemPromptOptions,
+		});
+
+		expect(systemPromptOptions.sections).toEqual({ [WORKFLOW_SECTION]: WORKFLOW_RULE });
+	});
+
 	test("pi renders the rule as its own tagged block at the tail of the prompt", async () => {
 		const systemPromptOptions = promptOptions();
 		loadHandler()({
 			type: "before_agent_start",
+			messageType: "user",
 			prompt: "do the thing",
 			systemPrompt: "You are a helpful agent.",
 			systemPromptOptions,

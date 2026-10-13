@@ -109,9 +109,12 @@ creation after source-chat disposal, unchanged parent behavior, and zero-worker 
   consumer-retained immutable input, not a core history store. Capture materializes the branch; no
   byte quota is added in this bounded extension. Admission-limit policy remains a follow-up.
 - Resource prompt preflight uses literal extension-source input; guarded steering synchronously
-  calls public `session.agent.steer` with the unchanged user message. Preflight cancellation is
-  checked immediately before pi starts its run, and cancellation is reapplied at agent start.
-  Queues are cleared before cancellation and again before settlement/admission of another run.
+  calls public `session.agent.steer` with the unchanged user message. A prompt whose run was
+  cancelled during preflight is dropped by an internal `input` handler that every child loads after
+  its own extensions, so the user message is never written and no request is made; cancellation is
+  reapplied at agent start for the remaining window. Pi 1.2 counts the session busy from
+  `before_agent_start` on and runs `preflightResult` inside that busy span, so throwing from it (the
+  pre-1.2 mechanism) would leave the child busy forever. Queues are cleared before cancellation and again before settlement/admission of another run.
   `abort()` on a resource handle awaits the invocation's full settlement, including queued work.
 - `RunOutcome.stopReason` and final text are the last finalized assistant observation in that
   invocation, retained through retries/compaction; cancellation intent cannot overwrite that

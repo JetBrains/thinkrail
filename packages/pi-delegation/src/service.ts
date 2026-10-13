@@ -287,6 +287,23 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		{ runtime: Promise<ModelRuntime>; mirroredProviderIds: Set<string> }
 	>();
 
+	function entryBySession(sessionId: string): ChildEntry | undefined {
+		const owned = children.get(sessionId);
+		if (owned) return owned;
+		for (const resource of resources.values()) {
+			const child = resource.children.get(sessionId);
+			if (child) return child;
+		}
+		return undefined;
+	}
+
+	const dropCancelledPrompt: InlineExtension = (pi) => {
+		pi.on("input", (_event, ctx) => {
+			const entry = entryBySession(ctx.sessionManager.getSessionId());
+			return entry?.activeRun?.controller.signal.aborted ? { action: "handled" } : undefined;
+		});
+	};
+
 	function parentLifetimeFor(parentSessionId: string): object {
 		let lifetime = parentLifetimes.get(parentSessionId);
 		if (!lifetime) {
@@ -519,15 +536,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			if (!abortRequested)
 				await session.prompt(
 					task,
-					entry.resource
-						? {
-								expandPromptTemplates: false,
-								source: "extension",
-								preflightResult: () => {
-									if (opts.signal?.aborted) throw new Error("Cancelled during prompt preflight");
-								},
-							}
-						: undefined,
+					entry.resource ? { expandPromptTemplates: false, source: "extension" } : undefined,
 				);
 		} catch (error) {
 			thrownMessage = error instanceof Error ? error.message : String(error);
@@ -768,13 +777,14 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 		const childFactories = [
 			...(bindings.childBaseExtensionFactories ?? []),
 			...(options.extensions === true ? factories : []),
+			dropCancelledPrompt,
 		];
 		const resourceLoader = new DefaultResourceLoader({
 			cwd,
 			agentDir: getAgentDir(),
 			settingsManager,
 			noExtensions: true,
-			...(childFactories.length > 0 ? { extensionFactories: childFactories } : {}),
+			extensionFactories: childFactories,
 			noPromptTemplates: true,
 			noThemes: true,
 			...(options.contextFiles === true ? {} : { noContextFiles: true }),
