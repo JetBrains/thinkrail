@@ -1,34 +1,43 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
-import { BRAND_MARK_PATH } from "../constants/branding";
 import { RunningIcon } from "./RunningIcon";
 
-test("running icon is the store-free, labeled brand badge with a reduced-motion static fallback", () => {
+test("running icon is the store-free, labeled, theme-coloured stroke-drawn monogram with split frame", () => {
 	const markup = renderToStaticMarkup(<RunningIcon className="size-14 text-primary" />);
 
 	expect(markup).toContain('aria-label="Agent working"');
 	expect(markup).toContain('data-testid="running-icon"');
 	expect(markup).toContain('data-running="true"');
 	expect(markup).toContain("size-14 text-primary");
-	expect(markup.split(`d="${BRAND_MARK_PATH}"`)).toHaveLength(3);
-	expect(markup).toContain("motion-safe:animate-working-train");
-	expect(markup).toContain("motion-safe:animate-working-pulse");
-	expect(markup).toContain('pathLength="1000"');
-	expect(markup).toContain("motion-safe:animate-working-trace motion-reduce:hidden");
-	expect(markup.match(/motion-reduce:hidden/g)).toHaveLength(2);
+	// Logo strokes + split frame animation classes
+	for (const cls of [
+		"loader-fa",
+		"loader-fb",
+		"loader-s1",
+		"loader-s2",
+		"loader-a1",
+		"loader-c3",
+		"loader-c2",
+		"loader-b1",
+	])
+		expect(markup).toContain(`motion-safe:animate-${cls}`);
+	// 6 logo strokes + 2 frame halves = 8 stroke="currentColor"
+	expect(markup.match(/stroke="currentColor"/g)).toHaveLength(8);
+	expect(markup).not.toMatch(/stroke-dashoffset/);
 	expect(markup).not.toMatch(/#[0-9a-f]{3,8}\b|style="/i);
 	expect(markup).not.toContain("Needs attention");
 });
 
-test("two running icons never share a tail gradient", () => {
+test("two running icons never share a clip path", () => {
 	const markup = renderToStaticMarkup(
 		<>
 			<RunningIcon />
 			<RunningIcon />
 		</>,
 	);
-	const ids = [...markup.matchAll(/<linearGradient id="([^"]+)"/g)].map((m) => m[1]);
-	expect(ids).toHaveLength(2);
-	expect(new Set(ids).size).toBe(2);
-	for (const id of ids) expect(markup).toContain(`stroke="url(#${id})"`);
+	const ids = [...markup.matchAll(/<clipPath id="([^"]+)"/g)].map((m) => m[1]);
+	// 5 clip paths per icon × 2 icons = 10 total
+	expect(ids).toHaveLength(10);
+	expect(new Set(ids).size).toBe(10);
+	for (const id of ids) expect(markup).toContain(`clip-path="url(#${id})"`);
 });

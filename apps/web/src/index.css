@@ -68,26 +68,133 @@
 		}
 	}
 
-	/* The "agent working" brand badge (`components/RunningIcon`): the ring train, the monogram pulsing once per lap, and three sparks (90-unit dashes on the pathLength-1000 outline) tracing the monogram. */
-	--animate-working-train: working-train 1.875s linear infinite;
-	@keyframes working-train {
-		to {
-			transform: rotate(360deg);
+	/* The "agent working" brand badge (`components/RunningIcon`): logo strokes + split frame on one 3.263s cycle. */
+	--animate-loader-fa: loader-fa 3.263s infinite;
+	@keyframes loader-fa {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
 		}
-	}
-	--animate-working-pulse: working-pulse 1.875s ease-in-out infinite;
-	@keyframes working-pulse {
-		0%,
+		37.606%,
+		59.341% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		96.947%,
 		100% {
-			opacity: 1;
-		}
-		50% {
-			opacity: 0.25;
+			stroke-dashoffset: -1000;
 		}
 	}
-	--animate-working-trace: working-trace 6.75s linear infinite;
-	@keyframes working-trace {
-		to {
+	--animate-loader-fb: loader-fb 3.263s infinite;
+	@keyframes loader-fb {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		37.606%,
+		59.341% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		96.947%,
+		100% {
+			stroke-dashoffset: -1000;
+		}
+	}
+	--animate-loader-s1: loader-s1 3.263s -2.036s infinite;
+	@keyframes loader-s1 {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		8.693%,
+		44.299% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		52.991%,
+		100% {
+			stroke-dashoffset: -1000;
+		}
+	}
+	--animate-loader-s2: loader-s2 3.263s -2.036s infinite;
+	@keyframes loader-s2 {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		13.638%,
+		44.299% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		57.936%,
+		100% {
+			stroke-dashoffset: -1000;
+		}
+	}
+	--animate-loader-a1: loader-a1 3.263s -2.036s infinite;
+	@keyframes loader-a1 {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		16.708%,
+		44.299% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		61.007%,
+		100% {
+			stroke-dashoffset: -1000;
+		}
+	}
+	--animate-loader-c3: loader-c3 3.263s -1.491s infinite;
+	@keyframes loader-c3 {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		20.35%,
+		44.299% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		64.649%,
+		100% {
+			stroke-dashoffset: -1000;
+		}
+	}
+	--animate-loader-c2: loader-c2 3.263s -1.491s infinite;
+	@keyframes loader-c2 {
+		0%,
+		3.19% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		7.648%,
+		47.489% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		51.946%,
+		100% {
+			stroke-dashoffset: -1000;
+		}
+	}
+	--animate-loader-b1: loader-b1 3.263s -1.491s infinite;
+	@keyframes loader-b1 {
+		0% {
+			stroke-dashoffset: 1000;
+			animation-timing-function: linear;
+		}
+		11.535%,
+		44.299% {
+			stroke-dashoffset: 0;
+			animation-timing-function: linear;
+		}
+		55.834%,
+		100% {
 			stroke-dashoffset: -1000;
 		}
 	}
