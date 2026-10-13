@@ -14,6 +14,8 @@ export {
 	type TodoOrigin,
 	type TodoPatch,
 	type TodoPlan,
+	type TodoPromoteFailure,
+	type TodoPromoteResult,
 	type TodoStatus,
 	type TodoUpdateResult,
 	type WriteItem,

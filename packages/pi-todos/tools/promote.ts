@@ -1,7 +1,21 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import type { TodoGroup } from "../core/index.ts";
+import type { TodoGroup, TodoPromoteFailure } from "../core/index.ts";
 import { consistencyNudge, errorResult, storeFor, textResult, withNudges } from "./shared.ts";
+
+// Agent recovery differs per failure reason; a flat "no loose item" message collapses them all and
+// pushes the agent back to the old `todo_add group:` + `todo_remove` dance the skill forbids. Each
+// message names what's wrong AND what the agent should do next, so a retry is a one-step decision.
+const FAILURE_MESSAGES: Record<TodoPromoteFailure, (id: string, title?: string) => string> = {
+	"unknown-id": (id) =>
+		`No TODO with id "${id}". Check the id with todo_list; a stale id from an older plan read never matches.`,
+	"grouped-step": (id) =>
+		`"${id}" is already a step inside a group. Promotion only applies to loose items (todo_promote adds a group of its own; a grouped step is already in one).`,
+	"empty-title": (_id, title) =>
+		`Resolved group title is empty${title ? ` (override "${title}" normalized to nothing)` : ""}. Pass a non-empty \`title:\` so the group has an addressable name for later todo_add group: calls.`,
+	"title-collision": (_id, title) =>
+		`A group titled ${title ? `"${title}"` : "the loose item's title"} already exists. Pass a disambiguating \`title:\` on todo_promote (a silent merge would make the loose ask disappear without adding any step).`,
+};
 
 const parameters = Type.Object({
 	id: Type.String({
@@ -27,12 +41,11 @@ export function registerTodoPromote(pi: ExtensionAPI): void {
 		parameters,
 		async execute(_callId, params, _signal, _onUpdate, ctx) {
 			const store = storeFor(ctx);
-			const group = store.promote(params.id, params.title);
-			if (!group) {
-				return errorResult(
-					`No loose item with id "${params.id}" to promote. Only loose-lane items are promoted; a grouped step is already in a group.`,
-				);
+			const result = store.promote(params.id, params.title);
+			if (!result.ok) {
+				return errorResult(FAILURE_MESSAGES[result.reason](params.id, params.title));
 			}
+			const group = result.group;
 			return textResult(
 				withNudges(
 					`Promoted ${params.id} → group "${group.title}" (${group.id}). Add its first step with todo_add group:"${group.title}" and flip it in_progress.`,

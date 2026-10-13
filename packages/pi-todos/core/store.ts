@@ -14,6 +14,7 @@ import {
 	type TodoOrigin,
 	type TodoPatch,
 	type TodoPlan,
+	type TodoPromoteResult,
 	type TodoStatus,
 	type TodoUpdateResult,
 	type WriteItem,
@@ -159,9 +160,14 @@ function sanitizeGroup(raw: unknown): TodoGroup | null {
 	// Empty groups are kept on purpose: a freshly promoted loose item becomes an empty group
 	// whose steps the agent will add next (see TodoStore.promote). Dropping them here would
 	// erase that "task taken, plan forming" state on the next read.
+	//
+	// Title: already decoded at write-time per the author's origin (agent writes go through
+	// `decodeEscapes` in `add`/`promote`/`replaceAll`; a promote with no override inherits the
+	// user's verbatim title, which must stay verbatim). Re-decoding here would corrupt the user's
+	// path-like text: `fix C:\\new path` would become `fix C: ew path` on every read. Just flatten.
 	return {
 		id: typeof o.id === "string" ? o.id : freshId("g"),
-		title: flattenTitle(decodeEscapes(o.title)),
+		title: flattenTitle(o.title),
 		todos,
 	};
 }
@@ -367,30 +373,32 @@ export class TodoStore {
 	/** Promote a loose item into a group of its own: the item disappears from the loose lane and a
 	 * group inherits its id + title (optionally overridden), ready for the agent to decompose. One
 	 * atomic step with no duplicate window 
- so even a session that dies right after promotion leaves a
-	 * consistent plan ("user's ask, now its own group"). Returns the new group, or `undefined` when
-	 * the id isn't a loose item (grouped steps aren't promoted 
- they're already in a group), when
-	 * the resolved title is empty (a blank group has no addressable task for `todo_add group:`), or
-	 * when a group with that title already exists (silently merging the loose item in would make the
-	 * ask vanish 
- same-title merge adds no step). In the reject cases the loose item is left in
-	 * place so the caller can retry with a disambiguating override. */
-	promote(id: string, titleOverride?: string): TodoGroup | undefined {
+ so even a session that dies right after promotion leaves
+	 * a consistent plan ("user's ask, now its own group"). Returns a discriminated result so the
+	 * tool wrapper can name the actual reason 
+ agent recovery differs per failure (a `title-collision`
+	 * is retryable with a disambiguating `title:`; a `grouped-step` is not promotable at all; an
+	 * `unknown-id` means a stale id). In every failure case the loose item is left in place so a
+	 * retry can succeed. */
+	promote(id: string, titleOverride?: string): TodoPromoteResult {
 		const plan = this.read();
 		const idx = plan.todos.findIndex((t) => t.id === id);
-		if (idx === -1) return undefined;
+		if (idx === -1) {
+			const inGroup = plan.groups.some((g) => g.todos.some((t) => t.id === id));
+			return { ok: false, reason: inGroup ? "grouped-step" : "unknown-id" };
+		}
 		const item = plan.todos[idx] as Todo;
 		const title = flattenTitle(
 			titleOverride !== undefined ? decodeEscapes(titleOverride) : item.title,
 		);
-		if (!title) return undefined; // empty / whitespace-only override after normalization
-		if (plan.groups.some((g) => g.title === title)) return undefined; // title collides with existing group
+		if (!title) return { ok: false, reason: "empty-title" };
+		if (plan.groups.some((g) => g.title === title))
+			return { ok: false, reason: "title-collision" };
 		plan.todos.splice(idx, 1);
 		const group: TodoGroup = { id: item.id, title, todos: [] };
 		plan.groups.push(group);
 		this.write(plan);
-		return group;
+		return { ok: true, group };
 	}
 
 	replaceAll(plan: WritePlan): TodoPlan {

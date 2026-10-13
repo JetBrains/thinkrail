@@ -94,18 +94,25 @@ single atomic step with `TodoStore.promote(id, titleOverride?)`: the loose item 
 lane and a group with the **same id** (and the item's title, unless overridden) appears in the groups
 list, ready for `add` to append decomposition. One write, no duplicate window — a session that dies
 right after promotion still leaves a consistent plan (the user's ask shown as its own group). The group
-is intentionally created empty (an empty-group state is first-class, see below). `promote` returns
-`undefined` and leaves the loose item in place in four cases — together these cover the
-«ask that cannot become its own addressable group»; the caller can always retry with a disambiguating
-override:
+is intentionally created empty (an empty-group state is first-class, see below).
 
-1. the id is unknown;
-2. the id is a grouped step (promotion applies only to loose-lane items);
-3. the normalized title is empty (after `decodeEscapes` + `flattenTitle` — a blank group has no
-   addressable task for `todo_add group:` to target);
-4. the normalized title collides with an existing group — silently merging the loose item into the
-   pre-existing group would add no step, so a second identical ask would just vanish; reject instead
-   and let the caller supply a unique override.
+`promote` returns a **discriminated result** (`TodoPromoteResult`): `{ ok: true, group }` on success,
+or `{ ok: false, reason }` with one of four `TodoPromoteFailure` members. The result shape exists
+precisely because agent recovery differs per failure — a `title-collision` is retryable with a
+disambiguating `title:`, a `grouped-step` is not promotable at all, an `unknown-id` points at a stale
+id, an `empty-title` needs a non-empty override. In every failure case the loose item is left in
+place so a retry can succeed, and the `todo_promote` tool wrapper emits one tailored error per
+reason so the agent never falls back to the deprecated `todo_add group:` + `todo_remove` dance.
+The four reasons:
+
+1. `unknown-id` — the id is nowhere in the plan;
+2. `grouped-step` — the id is a step inside an existing group (promotion applies only to loose-lane
+   items);
+3. `empty-title` — the normalized title is empty (after `decodeEscapes` + `flattenTitle` — a blank
+   group has no addressable task for `todo_add group:` to target);
+4. `title-collision` — the normalized title collides with an existing group; silently merging the
+   loose item into the pre-existing group would add no step, so a second identical ask would just
+   vanish; reject instead and let the caller supply a unique override.
 
 The structural guards that still hold: `WritePlan` has no `todos` field (`todo_write`
 reconciles `groups` only, so a re-plan never mints or edits loose items); a loose item that reaches

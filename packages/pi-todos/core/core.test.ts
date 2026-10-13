@@ -813,8 +813,9 @@ test("promote lifts a loose item into a group of its own, keeping its id as the 
 	try {
 		const s = store(root);
 		const loose = s.add({ title: "fix auth bug", origin: "user" });
-		const group = s.promote(loose.id);
-		expect(group).toBeDefined();
+		const result = s.promote(loose.id);
+		expect(result.ok).toBe(true);
+		const group = result.ok ? result.group : undefined;
 		expect(group?.id).toBe(loose.id);
 		expect(group?.title).toBe("fix auth bug");
 		expect(group?.todos).toEqual([]);
@@ -832,7 +833,9 @@ test("promote accepts a title override, flattens it, and decodes agent escapes",
 	try {
 		const s = store(root);
 		const loose = s.add({ title: "raw ask", origin: "user" });
-		const group = s.promote(loose.id, "Fix \\u2705 bug\nnow");
+		const result = s.promote(loose.id, "Fix \\u2705 bug\nnow");
+		expect(result.ok).toBe(true);
+		const group = result.ok ? result.group : undefined;
 		expect(group?.title).toBe("Fix \u2705 bug now");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -848,7 +851,9 @@ test("promote refuses when its title collides with an existing group \u2014 the 
 		// Silently merging the loose item into the pre-existing group would make the ask vanish
 		// (same-title merge adds no step), so promote must reject and leave the loose item untouched
 		// so the caller can retry with a disambiguating override.
-		expect(s.promote(loose.id, "Fix auth")).toBeUndefined();
+		const col = s.promote(loose.id, "Fix auth");
+		expect(col.ok).toBe(false);
+		expect(col.ok || col.reason).toBe("title-collision");
 		const plan = s.read();
 		expect(plan.todos.map((t) => t.id)).toEqual([loose.id]);
 		expect(plan.groups).toHaveLength(1);
@@ -865,12 +870,18 @@ test("promote refuses an empty or whitespace-only override \u2014 a blank group 
 		const loose = s.add({ title: "ask", origin: "user" });
 		// A blank group would have no title for `todo_add group:` to target. The loose item stays
 		// put so a follow-up promote with a real title still works.
-		expect(s.promote(loose.id, "")).toBeUndefined();
-		expect(s.promote(loose.id, "   \n\t  ")).toBeUndefined();
+		const emp1 = s.promote(loose.id, "");
+		expect(emp1.ok).toBe(false);
+		expect(emp1.ok || emp1.reason).toBe("empty-title");
+		const emp2 = s.promote(loose.id, "   \n\t  ");
+		expect(emp2.ok).toBe(false);
+		expect(emp2.ok || emp2.reason).toBe("empty-title");
 		expect(s.read().todos.map((t) => t.id)).toEqual([loose.id]);
 		expect(s.read().groups).toEqual([]);
 		// A real override still works afterwards.
-		const group = s.promote(loose.id, "Real title");
+		const okr = s.promote(loose.id, "Real title");
+		expect(okr.ok).toBe(true);
+		const group = okr.ok ? okr.group : undefined;
 		expect(group?.title).toBe("Real title");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -882,7 +893,9 @@ test("promote refuses an id that is a grouped step (already in a group), not a l
 	try {
 		const s = store(root);
 		const step = s.add({ title: "step", group: "Task" });
-		expect(s.promote(step.id)).toBeUndefined();
+		const gs = s.promote(step.id);
+		expect(gs.ok).toBe(false);
+		expect(gs.ok || gs.reason).toBe("grouped-step");
 		// Plan unchanged.
 		expect(s.read().groups[0]?.todos.map((t) => t.id)).toEqual([step.id]);
 	} finally {
@@ -896,7 +909,9 @@ test("promote returns undefined for an unknown id and writes nothing", () => {
 		const s = store(root);
 		s.add({ title: "something", origin: "user" });
 		const before = s.read();
-		expect(s.promote("t_nope")).toBeUndefined();
+		const un = s.promote("t_nope");
+		expect(un.ok).toBe(false);
+		expect(un.ok || un.reason).toBe("unknown-id");
 		expect(s.read()).toEqual(before);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
