@@ -20,6 +20,7 @@ import {
 import { handleRequest } from "./handlers";
 
 const CTX = { clientKey: "test-client" };
+const malformedEntries = [42, "invalid", 0, false, null, []];
 const saved = { data: process.env.THINKRAIL_DATA_DIR, agent: process.env.PI_CODING_AGENT_DIR };
 let root: string;
 let repo: string;
@@ -136,6 +137,68 @@ test("config writes land in the defining file, validate like pi, and a project s
 	const removed = await request("mcp.remove", { workspaceId: "w1", scope: "user", name: "docs" });
 	expect(find(removed, "user", "docs")).toBeUndefined();
 });
+
+for (const scope of ["user", "project"] as const) {
+	test.each(
+		malformedEntries.map((entry) => [entry] as const),
+	)(`add refuses a ${scope} name occupied by %j after the client listed it as absent`, async (entry) => {
+		approveProjectMcpServer("p1", "other", "other-fingerprint");
+		expect(find(await request("mcp.list", { workspaceId: "w1" }), scope, "docs")).toBeUndefined();
+		mkdirSync(join(repo, ".pi"));
+		const file = join(scope === "user" ? agentDir : join(repo, ".pi"), "mcp.json");
+		writeFileSync(file, `${JSON.stringify({ mcpServers: { docs: entry } }, null, "\t")}\n`);
+		const before = readFileSync(file, "utf8");
+		const projectsFile = join(root, "data", "projects.json");
+		const projectsBefore = readFileSync(projectsFile, "utf8");
+
+		expect(
+			await codeOf(
+				request("mcp.add", {
+					workspaceId: "w1",
+					scope,
+					name: "docs",
+					entry: { url: "https://docs.example/mcp" },
+				}),
+			),
+		).toBe("MCP_CONFIG_INVALID");
+		expect(readFileSync(file, "utf8")).toBe(before);
+		expect(readFileSync(projectsFile, "utf8")).toBe(projectsBefore);
+
+		const current = find(await request("mcp.list", { workspaceId: "w1" }), scope, "docs");
+		expect(current?.configError).toBe('server "docs" must be an object');
+		expect(
+			await codeOf(
+				request("mcp.update", {
+					workspaceId: "w1",
+					scope,
+					name: "docs",
+					entry: { url: "https://docs.example/mcp" },
+					expectedFingerprint: current?.approval?.fingerprint,
+				}),
+			),
+		).toBe("MCP_CONFIG_INVALID");
+		expect(readFileSync(file, "utf8")).toBe(before);
+		expect(readFileSync(projectsFile, "utf8")).toBe(projectsBefore);
+	});
+
+	test(`add at ${scope} scope only treats own properties as occupied`, async () => {
+		mkdirSync(join(repo, ".pi"));
+		const file = join(scope === "user" ? agentDir : join(repo, ".pi"), "mcp.json");
+		writeFileSync(file, JSON.stringify({ mcpServers: {} }));
+		const added = await request("mcp.add", {
+			workspaceId: "w1",
+			scope,
+			name: "__proto__",
+			entry: { url: "https://proto.example/mcp" },
+		});
+		expect(find(added, scope, "__proto__")).toMatchObject({ transport: "http" });
+		if (scope === "project")
+			expect(find(added, scope, "__proto__")?.approval?.state).toBe("approved");
+		const servers = JSON.parse(readFileSync(file, "utf8")).mcpServers;
+		expect(Object.hasOwn(servers, "__proto__")).toBe(true);
+		expect(servers).toEqual({ ["__proto__"]: { url: "https://proto.example/mcp" } });
+	});
+}
 
 test("a repo-side change lapses approval, and approving needs the fingerprint that is on disk now", async () => {
 	mkdirSync(join(repo, ".pi"));
@@ -312,6 +375,37 @@ test("share refuses a repository entry of that name that is a full definition or
 	});
 });
 
+test.each(
+	malformedEntries.map((entry) => [entry] as const),
+)("share refuses a repository name occupied by %j regardless of approval", async (entry) => {
+	writeFileSync(
+		join(agentDir, "mcp.json"),
+		JSON.stringify({ mcpServers: { linear: { url: "https://linear.example/mcp" } } }),
+	);
+	await request("mcp.setProjectOverride", { workspaceId: "w1", name: "linear", enabled: false });
+	mkdirSync(join(repo, ".pi"));
+	const file = join(repo, ".pi", "mcp.json");
+	writeFileSync(file, `${JSON.stringify({ mcpServers: { linear: entry } }, null, "\t")}\n`);
+	const before = readFileSync(file, "utf8");
+	const projectsFile = join(root, "data", "projects.json");
+	for (const approved of [false, true]) {
+		if (approved) {
+			const current = find(await request("mcp.list", { workspaceId: "w1" }), "project", "linear");
+			await request("mcp.approve", {
+				workspaceId: "w1",
+				name: "linear",
+				fingerprint: current?.approval?.fingerprint,
+			});
+		}
+		const projectsBefore = readFileSync(projectsFile, "utf8");
+		expect(await codeOf(request("mcp.shareWithRepo", { workspaceId: "w1", name: "linear" }))).toBe(
+			"MCP_CONFIG_INVALID",
+		);
+		expect(readFileSync(file, "utf8")).toBe(before);
+		expect(readFileSync(projectsFile, "utf8")).toBe(projectsBefore);
+	}
+});
+
 test("project settings for a user server merge into the record field by field until shared with the repo", async () => {
 	writeFileSync(
 		join(agentDir, "mcp.json"),
@@ -348,17 +442,25 @@ test("project settings for a user server merge into the record field by field un
 	);
 });
 
-test("share refuses once the user-level server it overrides is gone", async () => {
+test("share requires the user-level server to remain an object definition", async () => {
 	writeFileSync(
 		join(agentDir, "mcp.json"),
 		JSON.stringify({ mcpServers: { linear: { url: "https://linear.example/mcp" } } }),
 	);
 	await request("mcp.setProjectOverride", { workspaceId: "w1", name: "linear", enabled: false });
-	writeFileSync(join(agentDir, "mcp.json"), JSON.stringify({ mcpServers: {} }));
-	expect(await codeOf(request("mcp.shareWithRepo", { workspaceId: "w1", name: "linear" }))).toBe(
-		"MCP_CONFIG_INVALID",
-	);
-	expect(existsSync(join(repo, ".pi", "mcp.json"))).toBe(false);
+	const projectsFile = join(root, "data", "projects.json");
+	const projectsBefore = readFileSync(projectsFile, "utf8");
+	for (const entry of [undefined, ...malformedEntries, { enabled: false }]) {
+		const userFile = join(agentDir, "mcp.json");
+		writeFileSync(userFile, JSON.stringify({ mcpServers: { linear: entry } }));
+		const before = readFileSync(userFile, "utf8");
+		expect(await codeOf(request("mcp.shareWithRepo", { workspaceId: "w1", name: "linear" }))).toBe(
+			"MCP_CONFIG_INVALID",
+		);
+		expect(existsSync(join(repo, ".pi", "mcp.json"))).toBe(false);
+		expect(readFileSync(userFile, "utf8")).toBe(before);
+		expect(readFileSync(projectsFile, "utf8")).toBe(projectsBefore);
+	}
 	writeFileSync(
 		join(agentDir, "mcp.json"),
 		JSON.stringify({ mcpServers: { linear: { url: "https://linear.example/mcp" } } }),

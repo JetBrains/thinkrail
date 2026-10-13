@@ -78,9 +78,11 @@ export function writeMcpServerEntry(options: {
 		throw invalid(`server "${name}": auth is only allowed in the global mcp.json`);
 	}
 	const path = configPath(scope, worktree);
-	const exists = readEntry(path, name) !== undefined;
-	if (mode === "add" && exists) throw invalid(`An MCP server named "${name}" already exists`);
-	if (mode === "update" && !exists) throw invalid(`No MCP server named "${name}" in ${path}`);
+	const existing = readRawEntry(path, name);
+	if (mode === "add" && existing !== undefined)
+		throw invalid(`An MCP server named "${name}" already exists`);
+	if (mode === "update" && !isRecord(existing))
+		throw invalid(`No MCP server named "${name}" in ${path}`);
 	addMcpServerConfig(path, name, entry);
 	return scope === "project" ? fingerprintMcpEntry(name, entry) : undefined;
 }
@@ -113,13 +115,16 @@ export function shareMcpOverrideWithRepo(options: {
 		throw invalid(`"${name}" is no longer defined in your mcp.json — nothing to share.`);
 	}
 	const path = configPath("project", options.worktree);
-	const existing = readEntry(path, name);
-	if (existing && !isOverrideEntry(existing)) {
+	const existing = readRawEntry(path, name);
+	if (existing !== undefined && (!isRecord(existing) || !isOverrideEntry(existing))) {
 		throw invalid(
 			`The repository's .pi/mcp.json already defines "${name}" — edit that entry instead.`,
 		);
 	}
-	if (existing && fingerprintMcpEntry(name, existing) !== options.approvedFingerprint) {
+	if (
+		existing !== undefined &&
+		fingerprintMcpEntry(name, existing) !== options.approvedFingerprint
+	) {
 		throw invalid(
 			`The repository's override for "${name}" isn't approved — review it before sharing.`,
 		);

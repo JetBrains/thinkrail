@@ -86,14 +86,21 @@ relax a rule.
   `structuredContent` from finalized messages, so this lets a result be rendered the same live, after
   reload and on another client.
 - `management.ts` — `effectiveMcpServerConfig` reads the admitted definition through the same loader
-  used by sessions, so probes never infer it from a presentation row. The config mutations the host
-  composes are `writeMcpServerEntry` (pi validation plus the
-  project `auth` ban, add vs update, project containment; returns a project entry's fingerprint),
-  `removeMcpServerEntry`, `projectMcpEntryFingerprint`, `shareMcpOverrideWithRepo` (writes pi's override
-  entry from the record; refuses when the user-level server it overrides no longer exists — an override
-  without a definition would be an invalid entry — when the project file defines that server itself, or
-  when it holds an override not approved at its current fingerprint, so a share never merges into
-  unreviewed repository content).
+  used by sessions, so probes never infer it from a presentation row. The host composes
+  `writeMcpServerEntry` (pi validation plus the project `auth` ban, add vs update, project containment;
+  returns a project entry's fingerprint).
+  Add requires the name to be absent as an own property in the defining file's `mcpServers`, regardless
+  of entry validity: scalar, null and array values occupy the name at both user and project scope, even
+  if they appeared after the client's list read. Refusal changes neither file bytes nor approvals.
+  Update intentionally still requires an existing object entry; it does not replace malformed
+  non-object values. The other helpers are `removeMcpServerEntry`, `projectMcpEntryFingerprint`, and
+  `shareMcpOverrideWithRepo` (writes pi's override entry from the record; refuses when the user-level
+  server it overrides no longer exists — an override without a definition would be an invalid entry —
+  when the project file has any own value that is not an override object, or when it holds an override
+  not approved at its current fingerprint, so a share never merges into unreviewed repository content).
+  Sharing checks raw repository occupancy independently of validity; rejecting a malformed occupied
+  entry preserves the file, approvals and record override. Its user-level definition read and
+  written-override verification intentionally remain object-only checks, not absence checks.
 - `config.ts` — the port plus the host additions: `loadHostMcpConfig()` is what a session hands pi —
   project-file entries (servers and override-only entries alike) are admitted only when the project
   record's `mcpApprovals[name]` equals their current fingerprint (an unapproved override leaves the global
