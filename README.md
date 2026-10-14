@@ -32,7 +32,7 @@ create the tools it needs based on how you actually work.
   and diffs and send them to a chat as structured context, or open the worktree in your installed IDE.
 - **Chats that stream like the engine thinks.** Several concurrent `pi` sessions per workspace, each with
   its own model and live token and cost readout. Steer a running turn or queue a follow-up, delegate to
-  subagents, and work a shared plan the agent updates and you edit — each completed step can be committed
+  subagents, and work a shared plan the agent keeps and you add tasks to — each completed step can be committed
   and reviewed on its own.
 - **Specs as ground truth.** A connected graph of `SPEC.md` files lives beside the code; the agent reads,
   searches, and maintains it through dedicated `spec_*` tools, so intent survives the session. The
