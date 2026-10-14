@@ -47,7 +47,7 @@
 
 ```tsx
 <div className="flex items-center gap-8 rounded-sm border border-feedback-*-muted bg-container-elevated-bg px-12 py-8">
-  <Icon className="-mt-[2px] size-14 shrink-0 text-feedback-*" />
+  <Icon className="-mt-2 size-14 shrink-0 text-feedback-*" />
   <span className="min-w-0 flex-1 tr-text-ui text-text-default">
     {message}
   </span>
@@ -103,7 +103,7 @@
 
 - **Размер:** `size-14` (14px)
 - **Цвет:** `text-feedback-*` (семантический)
-- **Выравнивание однострочный:** `items-center` + `-mt-[2px]` для оптической коррекции
+- **Выравнивание однострочный:** `items-center` + `-mt-2` для оптической коррекции
 - **Выравнивание многострочный:** `items-start` + `mt-1` для выравнивания с первой строкой
 
 ### Кнопки
