@@ -1,6 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import type { AppConfig, ThinkingLevel } from "@thinkrail/contracts";
-import { openWorkspaceChat } from "./fixtures/app";
+import { expandModelGroup, openWorkspaceChat } from "./fixtures/app";
 import { connectCentral, openProviders, waitForCentralState } from "./fixtures/jbcentral";
 import { shot } from "./fixtures/screenshots";
 import { E2eWire } from "./fixtures/wire";
@@ -61,6 +61,8 @@ test("the composer pill stars a favorite, records it as recent, and saves the pa
 		await openFreshChat(page);
 		const pill = page.getByTestId("model-selector").last();
 		await pill.click();
+		// Provider groups start collapsed unless they hold the chat's current model.
+		await expandModelGroup(page, "e2e-central");
 		const option = page.locator(CENTRAL_OPTION).first();
 		await expect(option).toBeVisible();
 		await expect(option).toContainText("quota");
@@ -76,7 +78,7 @@ test("the composer pill stars a favorite, records it as recent, and saves the pa
 		await expect
 			.poll(async () => (await readConfig(page)).favoriteModels.map((m) => m.id))
 			.toEqual(["e2e-central-model"]);
-		await expect(page.locator("[cmdk-group-heading]", { hasText: "Favorites" })).toBeVisible();
+		await expect(page.locator("[cmdk-group-heading]", { hasText: "Pinned" })).toBeVisible();
 		await expect(page.getByTestId("model-show-all")).toBeVisible();
 
 		await option.click();
@@ -186,6 +188,7 @@ test("the new-workspace dialog follows the host default until a model is picked 
 		await expect(defaultRow).toContainText("Follows Settings → Models");
 		const showAll = page.getByTestId("model-show-all");
 		if ((await showAll.count()) > 0) await showAll.click();
+		await expandModelGroup(page, "e2e-central");
 		await page.locator(CENTRAL_OPTION).first().click();
 		await expect(pill).not.toContainText("Default");
 		await expect(pill).toContainText("Synthetic JetBrains AI model");

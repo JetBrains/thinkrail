@@ -1,6 +1,11 @@
 import { realpathSync } from "node:fs";
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { enterDefaultWorkspace, openFixtureProject, openPersistedChat } from "./fixtures/app";
+import {
+	enterDefaultWorkspace,
+	expandDisclosure,
+	openFixtureProject,
+	openPersistedChat,
+} from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
@@ -58,6 +63,8 @@ async function openAppearance(page: Page): Promise<Locator> {
 	await expect(dialog).toBeVisible();
 	await page.getByTestId("settings-nav-appearance").click();
 	await expect(dialog).toContainText("Theme");
+	// The fixed-mode theme list sits in a collapsed disclosure.
+	await expandDisclosure(dialog.getByTestId("theme-toggle"));
 	return dialog;
 }
 

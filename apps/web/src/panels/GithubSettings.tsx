@@ -1,12 +1,11 @@
-import {
-	RiCheckLine as Check,
-	RiRefreshLine as RefreshCw,
-	RiCloseLine as X,
-} from "@remixicon/react";
+import { RiCheckLine as Check, RiRefreshLine as RefreshCw } from "@remixicon/react";
 import type { GithubAuthStatus } from "@thinkrail/contracts";
 import { Button } from "@thinkrail/ui/button";
+import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useState } from "react";
 import { getTransport } from "@/transport";
+import { SettingsGroup } from "./SettingsGroup";
+import { SettingsNotice } from "./SettingsNotice";
 
 export function GithubSettings() {
 	const [gh, setGh] = useState<GithubAuthStatus | null>(null);
@@ -35,46 +34,47 @@ export function GithubSettings() {
 	};
 
 	const connected = gh?.connected ?? false;
+	const refreshButton = (
+		<Button
+			variant="outline"
+			size="sm"
+			data-testid="settings-gh-refresh"
+			disabled={refreshing}
+			onClick={() => void refresh()}
+		>
+			<RefreshCw className={cn("size-14", refreshing && "animate-spin")} />
+			Refresh
+		</Button>
+	);
 
 	return (
-		<section data-testid="settings-github" className="flex flex-col gap-8">
-			<div className="flex flex-col gap-4">
-				<h3 className="tr-title-section text-text-default">Local GitHub</h3>
-				<p className="text-text-muted tr-text-metadata">
-					Authenticate the GitHub CLI to create workspaces from remote branches.
-				</p>
-			</div>
-			<div className="flex items-center gap-8 rounded-sm border border-border-default bg-control-bg px-12 py-8">
-				<span
-					data-testid="settings-gh-status"
-					data-connected={connected}
-					className={`inline-flex items-center gap-4 tr-text-ui ${
-						connected ? "text-feedback-success" : "text-text-muted"
-					}`}
-				>
-					{connected ? <Check className="size-14" /> : <X className="size-14" />}
-					{connected ? "Connected" : "Not connected"}
-				</span>
-				{connected && gh?.login ? (
-					<span className="truncate text-text-muted tr-text-ui">{gh.login}</span>
-				) : null}
-				<Button
-					variant="outline"
-					size="sm"
-					data-testid="settings-gh-refresh"
-					disabled={refreshing}
-					onClick={() => void refresh()}
-					className="ml-auto"
-				>
-					<RefreshCw className={`size-14 ${refreshing ? "animate-spin" : ""}`} />
-					Refresh
-				</Button>
-			</div>
-			<p className="text-text-muted tr-text-metadata">
-				The GitHub CLI (<code className="tr-code-text">gh</code>) is read locally on the host.
-				Authenticate with <code className="tr-code-text">gh auth login</code> to enable creating
-				workspaces from remote branches.
-			</p>
-		</section>
+		<div data-testid="settings-github" className="flex flex-col">
+			<SettingsGroup
+				title="Local GitHub"
+				description="Authenticate the GitHub CLI to create workspaces from remote branches."
+			>
+				<div data-testid="settings-gh-status" data-connected={connected}>
+					{connected ? (
+						<div className="flex items-center gap-8 rounded-sm bg-control-bg px-12 py-8">
+							<Check className="size-14 text-feedback-success" />
+							<span className="tr-text-ui text-feedback-success">Connected</span>
+							{gh?.login ? (
+								<span className="min-w-0 truncate text-text-muted tr-text-metadata">
+									{gh.login}
+								</span>
+							) : null}
+							<div className="ml-auto shrink-0">{refreshButton}</div>
+						</div>
+					) : (
+						<SettingsNotice variant="warning" action={refreshButton}>
+							<p>
+								Not connected. Run <code className="tr-code-text">gh auth login</code> in a
+								terminal, then Refresh.
+							</p>
+						</SettingsNotice>
+					)}
+				</div>
+			</SettingsGroup>
+		</div>
 	);
 }

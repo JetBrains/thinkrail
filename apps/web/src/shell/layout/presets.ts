@@ -379,3 +379,59 @@ export function captureWorkbenchPreset(
 		},
 	};
 }
+
+const GEOMETRY_TOLERANCE = 0.001;
+
+function numbersMatch(a: number, b: number): boolean {
+	return Math.abs(a - b) < GEOMETRY_TOLERANCE;
+}
+
+function centerTopologyMatches(
+	frame: WorkbenchCenterNode,
+	preset: LayoutPresetCenterNode,
+): boolean {
+	if (frame.kind !== preset.kind) return false;
+	if (frame.kind === "group") return true;
+	if (preset.kind !== "split") return false;
+	if (frame.direction !== preset.direction) return false;
+	if (!numbersMatch(frame.weights[0], preset.weights[0])) return false;
+	if (!numbersMatch(frame.weights[1], preset.weights[1])) return false;
+	return (
+		centerTopologyMatches(frame.children[0], preset.children[0]) &&
+		centerTopologyMatches(frame.children[1], preset.children[1])
+	);
+}
+
+function auxiliaryGroupsMatch(
+	frameGroups: readonly WorkbenchAuxiliaryGroup[],
+	presetGroups: readonly { weight: number; folded: boolean; tools: LayoutToolId[] }[],
+): boolean {
+	if (frameGroups.length !== presetGroups.length) return false;
+	return frameGroups.every((fg, i) => {
+		const pg = presetGroups[i];
+		if (!pg) return false;
+		if (!numbersMatch(fg.weight, pg.weight)) return false;
+		if (fg.folded !== pg.folded) return false;
+		if (fg.tools.length !== pg.tools.length) return false;
+		return fg.tools.every((tool, j) => tool.tool === pg.tools[j]);
+	});
+}
+
+export function frameMatchesPreset(frame: WorkbenchFrame, preset: LayoutPreset): boolean {
+	if (!centerTopologyMatches(frame.center, preset.center)) return false;
+
+	if (frame.left.visible !== preset.left.visible) return false;
+	if (!numbersMatch(frame.left.width, preset.left.width)) return false;
+	if (!auxiliaryGroupsMatch(frame.left.groups, preset.left.groups)) return false;
+
+	if (frame.right.visible !== preset.right.visible) return false;
+	if (!numbersMatch(frame.right.width, preset.right.width)) return false;
+	if (!auxiliaryGroupsMatch(frame.right.groups, preset.right.groups)) return false;
+
+	if (frame.bottom.visible !== preset.bottom.visible) return false;
+	if (!numbersMatch(frame.bottom.height, preset.bottom.height)) return false;
+	if (frame.bottom.alignment !== preset.bottom.alignment) return false;
+	if (!auxiliaryGroupsMatch(frame.bottom.groups, preset.bottom.groups)) return false;
+
+	return true;
+}

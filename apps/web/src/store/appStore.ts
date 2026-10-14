@@ -51,6 +51,7 @@ import {
 	isTerminalWindowsShell,
 	isTodoReviewFixMessage,
 	normalizeThemePreference,
+	sameModel,
 } from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
@@ -103,6 +104,7 @@ import {
 	isChatResourceReadCurrent,
 	isChatResourceScopeAlive,
 	isConnectedGeneration,
+	type ModelRef,
 	SETTLED_SHELF_PAGE,
 	selectActiveWorkspaceProjectId,
 	selectLayoutResourcePlacement,
@@ -936,6 +938,7 @@ interface AppState {
 	obscuredChatSessions: Record<string, true>;
 	extUiOrphans: ExtUiRequest[];
 	models: WireModel[];
+	hiddenModels: ModelRef[];
 	providerVersion: number;
 	templatesVersion: number;
 	modelsRefreshing: boolean;
@@ -1226,6 +1229,9 @@ interface AppState {
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
 	handlePiEvents: (payloads: readonly SessionEventPayload[]) => void;
 	setModelsForProviderVersion: (providerVersion: number, models: WireModel[]) => void;
+	hydrateHiddenModels: (hidden: ModelRef[]) => void;
+	setModelVisibility: (model: ModelRef, visible: boolean) => void;
+	toggleModelVisibility: (model: ModelRef) => void;
 	noteProviderChanged: () => void;
 	bumpTemplatesVersion: () => void;
 	beginModelsRefresh: () => number;
@@ -2105,6 +2111,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	obscuredChatSessions: {},
 	extUiOrphans: [],
 	models: [],
+	hiddenModels: [],
 	providerVersion: 0,
 	templatesVersion: 0,
 	modelsRefreshing: false,
@@ -3871,6 +3878,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	setModelsForProviderVersion: (providerVersion, models) =>
 		set((s) => (s.providerVersion === providerVersion ? { models, modelsFresh: false } : s)),
+	hydrateHiddenModels: (hiddenModels) => set({ hiddenModels }),
+	setModelVisibility: (model, visible) =>
+		set((s) => {
+			const hidden = s.hiddenModels.some((h) => sameModel(h, model));
+			if (visible !== hidden) return s;
+			return {
+				hiddenModels: visible
+					? s.hiddenModels.filter((h) => !sameModel(h, model))
+					: [...s.hiddenModels, { provider: model.provider, id: model.id }],
+			};
+		}),
+	toggleModelVisibility: (model) =>
+		get().setModelVisibility(
+			model,
+			get().hiddenModels.some((h) => sameModel(h, model)),
+		),
 	noteProviderChanged: () =>
 		set((s) => ({
 			models: [],

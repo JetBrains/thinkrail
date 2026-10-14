@@ -8,6 +8,7 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	enterDefaultWorkspace,
+	expandDisclosure,
 	openAppFresh,
 	openFixtureProject,
 	PHONE_VIEWPORT,
@@ -99,6 +100,7 @@ async function setQuotaInterval(page: Page, seconds: number): Promise<void> {
 }
 
 async function selectOppositeAppearanceTheme(page: Page): Promise<string> {
+	await expandDisclosure(page.getByTestId("theme-toggle"));
 	const selected = page.locator('[data-testid^="theme-option-"][data-active="true"]');
 	const originalTheme = await selected.getAttribute("data-theme-id");
 	const appearance = await selected.getAttribute("data-appearance");

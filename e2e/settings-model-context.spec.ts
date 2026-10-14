@@ -169,7 +169,7 @@ test("shared changes reach every provider row and uniform row changes flow back 
 	for (const row of rows) {
 		await choose(page, row, "custom");
 		await page.getByTestId(`context-limit-${row}-input`).fill("750000");
-		await page.getByTestId(`context-limit-${row}-apply`).click();
+		await page.getByTestId(`context-limit-${row}-input`).press("Enter");
 		await expect(page.getByTestId(`context-limit-${row}`)).toHaveAttribute(
 			"data-context-override",
 			"750000",
@@ -216,7 +216,9 @@ test("shared saves leave an override set outside the app range alone until its o
 		"aria-invalid",
 		"true",
 	);
-	await expect(page.getByTestId(`context-limit-${row}-apply`)).toBeDisabled();
+	// The outside-range value is never written back: Enter does not commit it.
+	await page.getByTestId(`context-limit-${row}-input`).press("Enter");
+	expect((await setting("context-proxy"))?.override).toBe(1_050_000);
 	await choose(page, row, "default");
 	await expect.poll(async () => (await setting("context-proxy"))?.override).toBeNull();
 	await expect(shared).toContainText("3 available models");
@@ -246,28 +248,30 @@ test("expanded customization isolates the same model on different providers", as
 	await expect(page.getByTestId("context-limit-all")).toContainText("Customized by model");
 });
 
-test("custom budgets require explicit Apply, validate the 272K–1M range and keep unrelated config", async ({
+test("custom budgets save on Enter, validate the 272K–1M range and keep unrelated config", async ({
 	page,
 }) => {
 	await page.getByTestId("model-context-customize").click();
 	const target = `openai-${modelId}`;
 	await choose(page, target, "custom");
 	const input = page.getByTestId(`context-limit-${target}-input`);
-	const apply = page.getByTestId(`context-limit-${target}-apply`);
-	for (const invalid of ["", "0", "1.5", "271999", "1000001"]) {
+	// An empty draft is neutral rather than an error; neither it nor an out-of-range one commits.
+	await input.fill("");
+	await expect(input).toHaveAttribute("aria-invalid", "false");
+	await input.press("Enter");
+	for (const invalid of ["0", "1.5", "271999", "1000001"]) {
 		await input.fill(invalid);
 		await expect(input).toHaveAttribute("aria-invalid", "true");
-		await expect(apply).toBeDisabled();
+		await input.press("Enter");
 	}
 	await input.fill("750000");
-	await expect(apply).toBeEnabled();
+	await expect(input).toHaveAttribute("aria-invalid", "false");
 	expect((await setting("openai"))?.override).toBeNull();
-	await apply.click();
+	await input.press("Enter");
 	await expect(page.getByTestId(`context-limit-${target}`)).toHaveAttribute(
 		"data-context-override",
 		"750000",
 	);
-	await expect(apply).toBeDisabled();
 	await expect(input).toBeFocused();
 	await expect.poll(async () => (await setting("openai"))?.contextWindow).toBe(750_000);
 	expect((await setting("openai-codex"))?.override).toBeNull();

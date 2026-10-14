@@ -26,6 +26,7 @@ import {
 	selectCanRenameChat,
 	selectCatalogModel,
 	selectCompactionTurnIds,
+	selectPickerModels,
 	selectSkillsStale,
 	selectSupportsMcp,
 	selectWorkspaceById,
@@ -125,8 +126,21 @@ export default function ChatView({
 	const chatLineWidth = useAppStore((state) => state.chatLineWidth);
 	const chatLineWidthBounded = useAppStore((state) => state.chatLineWidthBounded);
 	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);
-	const { models, refreshing: modelsRefreshing, refresh: onRefreshModels } = useModelCatalog();
-	const modelPreferences = useModelPreferences(models);
+	const {
+		models: allModels,
+		refreshing: modelsRefreshing,
+		refresh: onRefreshModels,
+	} = useModelCatalog();
+	const hiddenModels = useAppStore((s) => s.hiddenModels);
+	const visibleModels = useMemo(
+		() => selectPickerModels(allModels, hiddenModels, []),
+		[allModels, hiddenModels],
+	);
+	const models = useMemo(
+		() => selectPickerModels(allModels, hiddenModels, [sessionModel]),
+		[allModels, hiddenModels, sessionModel],
+	);
+	const modelPreferences = useModelPreferences(visibleModels);
 	const projectId = useAppStore(
 		(s) =>
 			Object.values(s.workspaces)

@@ -914,3 +914,16 @@ export function selectAgentReviewCommentCount(
 		(c) => c.author === "agent" && c.status !== "resolved" && c.status !== "dismissed",
 	).length;
 }
+
+export type ModelRef = Pick<WireModel, "provider" | "id">;
+
+export function selectPickerModels(
+	models: readonly WireModel[],
+	hidden: readonly ModelRef[],
+	keep: readonly (ModelRef | null | undefined)[],
+): WireModel[] {
+	return models.filter(
+		(model) =>
+			!hidden.some((h) => sameModel(h, model)) || keep.some((kept) => sameModel(kept, model)),
+	);
+}

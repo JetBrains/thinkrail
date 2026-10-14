@@ -50,27 +50,33 @@ import {
 	levelPosition,
 	levelTone,
 	litBars,
-	modelKey,
 	trailingLevel,
 } from "./modelPicker";
 import { ProviderGlyph } from "./ProviderGlyph";
+import {
+	type GroupExpansion,
+	groupRowValue,
+	initialGroupExpansion,
+	NO_MODELS_HINT,
+	type PickerGroup,
+	pickerEmptyState,
+	pickerFilter,
+	pickerGroups,
+	rowValue,
+	toggleGroup,
+} from "./pickerGroups";
 import type { ModelPreferences } from "./useModelPreferences";
 
 export interface ModelEffortPickerHandle {
-	/** Opens the popover with the search prefilled — the `/model` slash command's entry. */
 	open: (query?: string) => void;
 }
 
-/** The pre-session "Default" row: what the host would pick when the caller sends no explicit pair. */
 export interface DefaultPairOption {
-	/** The host's `model.default` answer, or `null` while it is still being asked. */
 	resolved: ModelDefault | null;
-	/** True while the held pair is the default rather than an explicit choice. */
 	active: boolean;
 	onSelect: () => void;
 }
 
-/** A model choice, carrying a level only when the user picked both at once (`opus high`). */
 export interface ModelSelection {
 	model: WireModel;
 	level?: ThinkingLevel;
@@ -81,7 +87,6 @@ export interface ModelEffortPickerProps {
 	current: WireModel | null;
 	level: ThinkingLevel;
 	onSelect: (selection: ModelSelection) => void;
-	/** A level change for the current model alone. */
 	onSelectLevel: (level: ThinkingLevel) => void;
 	refreshing: boolean;
 	onRefresh: (force: boolean) => void;
@@ -91,11 +96,18 @@ export interface ModelEffortPickerProps {
 	className?: string;
 }
 
+function rowKeywords(model: WireModel): string[] {
+	return [model.name, model.id, model.provider, ...model.thinkingLevels];
+}
+
+function groupRow(model: WireModel) {
+	return { value: rowValue("all", model), keywords: rowKeywords(model) };
+}
+
 function hasKindGlyph(model: WireModel): boolean {
 	return model.auth !== undefined && model.auth.kind !== "other";
 }
 
-/** The connection-kind mark: key = API key, ∞ = subscription, { } = environment key, JCP = JetBrains AI. */
 function KindGlyph({ model, className }: { model: WireModel; className?: string }) {
 	switch (model.auth?.kind) {
 		case "api-key":
@@ -148,10 +160,6 @@ const TONE_TEXT: Record<LevelTone, string> = {
 	hot: "text-feedback-warning",
 };
 
-/**
- * The rail between two adjacent levels: solid within a tone, a blend where the tone changes. Tones
- * only ever warm up along a model's levels, so the cooling pairs just stay solid.
- */
 const TONE_SEGMENT: Record<`${LevelTone}>${LevelTone}`, string> = {
 	"cool>cool": "bg-feedback-info",
 	"cool>accent": "bg-[linear-gradient(90deg,var(--feedback-info),var(--primary))]",
@@ -174,11 +182,6 @@ const LEVEL_GLYPH: Record<ThinkingLevel, RemixiconComponentType> = {
 	max: Fire,
 };
 
-/**
- * The effort slider: a thick rail hiding a cool→warm gradient that the handle uncovers as it moves,
- * with the level word riding on the handle. A native range input does the dragging, keyboard and
- * touch; the labels beneath are the same levels as buttons.
- */
 function EffortSlider({
 	model,
 	level,
@@ -345,9 +348,13 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 		const [open, setOpen] = useState(false);
 		const [query, setQuery] = useState("");
 		const [showAll, setShowAll] = useState(false);
+		const [expansion, setExpansion] = useState<GroupExpansion>(() =>
+			initialGroupExpansion(null, []),
+		);
 
 		const openWith = (next: string) => {
 			setQuery(next);
+			setExpansion(initialGroupExpansion(current, preferences.favorites));
 			setOpen(true);
 			onRefresh(false);
 		};
@@ -360,9 +367,17 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 			setShowAll(false);
 		};
 
-		const groups = useMemo(() => groupByProvider(models), [models]);
+		const providers = useMemo(() => groupByProvider(models).map((g) => g.provider), [models]);
 		const shortlist = preferences.favorites.length > 0 || preferences.recents.length > 0;
 		const folded = shortlist && !showAll && query.trim() === "";
+		const searching = query !== "";
+		const groups = pickerGroups(models, {
+			pinned: preferences.favorites,
+			query,
+			expansion,
+			row: groupRow,
+		});
+		const emptyState = pickerEmptyState(query, models.length);
 
 		const pickModel = (model: WireModel) => {
 			const typedLevel = trailingLevel(query, model);
@@ -384,9 +399,9 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 			const isCurrent = !defaultOption?.active && sameModel(model, current);
 			return (
 				<CommandItem
-					key={`${section}:${modelKey(model)}`}
-					value={`${section}:${modelKey(model)}`}
-					keywords={[model.name, model.id, model.provider, ...model.thinkingLevels]}
+					key={rowValue(section, model)}
+					value={rowValue(section, model)}
+					keywords={rowKeywords(model)}
 					data-testid="model-option"
 					data-model-id={model.id}
 					data-provider={model.provider}
@@ -408,7 +423,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							type="button"
 							data-testid="model-favorite-toggle"
 							data-favorite={favorite}
-							aria-label={favorite ? `Unstar ${model.name}` : `Star ${model.name}`}
+							aria-label={favorite ? `Unpin ${model.name}` : `Pin ${model.name}`}
 							aria-pressed={favorite}
 							onClick={(event) => {
 								event.stopPropagation();
@@ -427,6 +442,29 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 				</CommandItem>
 			);
 		};
+
+		const renderGroupHeader = (group: PickerGroup) => (
+			<CommandItem
+				value={groupRowValue(group.provider)}
+				data-testid="model-group-toggle"
+				data-provider={group.provider}
+				aria-expanded={group.expanded}
+				onSelect={() => setExpansion((prev) => toggleGroup(prev, group.provider, searching))}
+				className="gap-8 py-8"
+			>
+				<ProviderGlyph provider={group.provider} className="size-14 shrink-0 text-text-muted" />
+				<span className="min-w-0 flex-1 truncate">{group.provider}</span>
+				{group.auth ? (
+					<span className="min-w-0 truncate text-text-subtle tr-text-metadata">{group.auth}</span>
+				) : null}
+				<span className="shrink-0 text-text-muted tr-text-metadata">{group.count}</span>
+				{group.expanded ? (
+					<ChevronDown className="size-14 shrink-0 text-text-muted" />
+				) : (
+					<ChevronRight className="size-14 shrink-0 text-text-muted" />
+				)}
+			</CommandItem>
+		);
 
 		const effortLevels = current?.thinkingLevels ?? [];
 		const isDefaultPair = current !== null && preferences.isDefault(current, level);
@@ -489,14 +527,22 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					container={container}
 					className="flex max-h-[var(--radix-popover-content-available-height)] w-[min(360px,calc(100vw-16px))] flex-col p-0"
 				>
-					<Command className="min-h-0 flex-1 bg-transparent">
+					<Command
+						className="min-h-0 flex-1 bg-transparent"
+						filter={pickerFilter(groups, groupRow)}
+					>
 						<CommandInput
 							placeholder="Search models… (append a level: opus high)"
 							value={query}
 							onValueChange={setQuery}
 						/>
-						<CommandList className="max-h-[340px] min-h-0 flex-1">
-							<CommandEmpty>No models found.</CommandEmpty>
+						<CommandList className="max-h-340 min-h-0 flex-1">
+							{emptyState === "no-match" ? <CommandEmpty>No models found.</CommandEmpty> : null}
+							{emptyState === "no-models" ? (
+								<p className="px-8 py-12 text-center text-text-muted tr-text-ui">
+									{NO_MODELS_HINT}
+								</p>
+							) : null}
 							{defaultOption ? (
 								<CommandGroup>
 									<CommandItem
@@ -529,7 +575,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 								</CommandGroup>
 							) : null}
 							{preferences.favorites.length > 0 ? (
-								<CommandGroup heading="Favorites">
+								<CommandGroup heading="Pinned">
 									{preferences.favorites.map((m) => renderModel(m, "fav"))}
 								</CommandGroup>
 							) : null}
@@ -550,25 +596,16 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 										<span className="flex min-w-0 flex-1 flex-col">
 											<span>All models</span>
 											<span className="truncate tr-text-metadata">
-												{groups.map((g) => g.provider).join(" · ")} · {models.length}
+												{providers.join(" · ")} · {models.length}
 											</span>
 										</span>
 									</CommandItem>
 								</CommandGroup>
 							) : (
 								groups.map((group) => (
-									<CommandGroup
-										key={group.provider}
-										heading={
-											<span className="flex items-center gap-8">
-												<span className="truncate">{group.provider}</span>
-												{group.auth ? (
-													<span className="ml-auto truncate text-text-subtle">{group.auth}</span>
-												) : null}
-											</span>
-										}
-									>
-										{group.models.map((m) => renderModel(m, "all"))}
+									<CommandGroup key={group.provider}>
+										{renderGroupHeader(group)}
+										{group.expanded ? group.models.map((m) => renderModel(m, "all")) : null}
 									</CommandGroup>
 								))
 							)}
@@ -618,7 +655,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							data-refreshing={refreshing}
 							disabled={refreshing}
 							onClick={() => onRefresh(true)}
-							className={FOOTER_LINK}
+							className="inline-flex items-center gap-4 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-metadata text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 						>
 							<RefreshCw className={cn("size-12 shrink-0", refreshing && "animate-spin")} />
 							{refreshing ? "Updating…" : "Refresh"}

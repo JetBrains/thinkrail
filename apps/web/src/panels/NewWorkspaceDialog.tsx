@@ -37,7 +37,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { type DefaultPairOption, ModelEffortPicker } from "@/chat/ModelEffortPicker";
 import {
 	deriveProjectTrustNotice,
@@ -75,7 +75,7 @@ import {
 	useSlashCommandCompletion,
 	useTemplateCommandPicker,
 } from "@/prompt";
-import { selectCatalogModel, toast, useAppStore } from "@/store";
+import { selectCatalogModel, selectPickerModels, toast, useAppStore } from "@/store";
 import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
@@ -255,12 +255,21 @@ export function NewWorkspaceDialog({
 	const trustSummary = useProjectTrustSummary(selectedProjectId, open);
 
 	const {
-		models,
+		models: allModels,
 		refreshing: modelsRefreshing,
 		refresh: onRefreshModels,
 		fresh: catalogFresh,
 	} = useModelCatalog(open);
-	const modelPreferences = useModelPreferences(models);
+	const hiddenModels = useAppStore((s) => s.hiddenModels);
+	const visibleModels = useMemo(
+		() => selectPickerModels(allModels, hiddenModels, []),
+		[allModels, hiddenModels],
+	);
+	const models = useMemo(
+		() => selectPickerModels(allModels, hiddenModels, [model]),
+		[allModels, hiddenModels, model],
+	);
+	const modelPreferences = useModelPreferences(visibleModels);
 
 	const applyHostDefault = useCallback(() => {
 		let cancelled = false;
@@ -298,7 +307,7 @@ export function NewWorkspaceDialog({
 
 	useEffect(() => {
 		if (!open || !model) return;
-		const next = reconcileModel(models, model, catalogFresh);
+		const next = reconcileModel(allModels, model, catalogFresh);
 		if (next === null) return;
 		if (next !== "unavailable") {
 			if (next !== model) setModel(next);
@@ -307,7 +316,7 @@ export function NewWorkspaceDialog({
 		if (hostDefaultAsked.current) return;
 		hostDefaultAsked.current = true;
 		return applyHostDefault();
-	}, [open, models, model, catalogFresh, applyHostDefault]);
+	}, [open, allModels, model, catalogFresh, applyHostDefault]);
 
 	useEffect(() => {
 		if (!open || !model) return;

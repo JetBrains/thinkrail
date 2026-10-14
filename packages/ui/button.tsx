@@ -15,6 +15,7 @@ const buttonVariants = cva(
 					"border border-control-border-default bg-control-bg text-text-default hover:bg-control-bg-hovered active:border-control-border-active disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text",
 				ghost:
 					"text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text",
+				soft: "border border-primary-soft bg-primary-subtle text-primary hover:bg-primary-soft disabled:bg-control-disabled-bg disabled:border-control-disabled-border disabled:text-control-disabled-text",
 			},
 			size: {
 				default: "h-32 px-12 tr-text-ui",
