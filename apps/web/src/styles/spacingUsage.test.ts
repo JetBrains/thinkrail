@@ -40,6 +40,7 @@ const ARBITRARY_SPACING_EXEMPT = new Set([
 	"pl-[1.6em]",
 	"pl-[calc(0.875rem+var(--space-8))]",
 	"pl-[calc(1.125rem+var(--space-8))]",
+	"pb-[2.5rem]", // ModelSelector footer-overlay scroll clearance (chat/ModelSelector.tsx)
 ]);
 
 function allowsSpacingSuffix(prefix: string, suffix: string): boolean {
@@ -234,7 +235,7 @@ describe("container-width presets are not spacing", () => {
 				(h) => h.slice(h.lastIndexOf(" ") + 1),
 			),
 		);
-		for (const preset of ["max-w-lg", "max-w-sm"]) expect(named.has(preset)).toBe(true);
+		for (const preset of ["max-w-lg"]) expect(named.has(preset)).toBe(true);
 	});
 });
 

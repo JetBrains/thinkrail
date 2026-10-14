@@ -785,23 +785,33 @@ a project picker, the prompt hero, and the reused
   no optimistic value or AppConfig field; reads follow catalog/provider invalidation, fence stale
   replies, disable controls while pending, and replace controls with Retry on failure. The props-driven
   `ModelContextControls` owns presentation; older hosts get neither the block nor its requests.
-  **`ReviewSettings`** is the
-  **plan-review policy** section: the reviewer **model + effort** (`ModelSelector`/`ThinkingSelector` over
-  `useModelCatalog`, written as `settings.update { reviewModel | reviewEffort }`; unset ⇒ default). The
-  selector carries an **explicit default-model row** (`model-option-default`, labelled with the host's
-  `model.default` result) that writes `{ reviewModel: null, reviewEffort: null }` — the null-clears wire
-  form, see `submodule-server-settings` — so a chosen reviewer model can be restored to the host's new-chat default
+  `ModelsSettings` organizes its controls into three visual groups:
+
+  **DEFAULT MODELS** — the **chat model + effort** (`defaultModel`, `defaultEffort`), the **review
+  model + effort** (`reviewModel`, `reviewEffort`), and **model visibility** preferences. Both model
+  selectors use `ModelSelector`/`ThinkingSelector` over `useModelCatalog`; the review selector carries an
+  **explicit default-model row** (`model-option-default`, labelled with the host's `model.default` result)
+  that writes `{ reviewModel: null, reviewEffort: null }` — the null-clears wire form, see
+  `submodule-server-settings` — so a chosen reviewer model can be restored to the host's new-chat default
   without hand-editing host state; while unset, the effort control runs on the default model's supported
-  levels (fetched once from `model.default`) instead of an empty list. And an
-  **auto-fix toggle** (`review-autofix-toggle`, a switch over `store.reviewAutoFix` →
-  `settings.update { reviewAutoFix }`) — off means a `request_changes` verdict records findings and waits
-  (the host gates its auto-fix cycle on it, see `submodule-server-todos`). And an **agent-review toggle**
-  (`agent-review-toggle`, a switch over `store.agentReviewEnabled` → `settings.update { agentReviewEnabled }`)
-  — off withholds the worker's in-session `request_review` tool so review happens only via the Review button
-  (the host live-toggles the tool's active set on it, see `submodule-server-host-plan-review`). It lives in
-  the props-driven `AgentReviewSettings` and is **hidden until the host negotiates v68**
-  (`AGENT_REVIEW_SETTING_PROTOCOL_VERSION`): a pre-v68 host can echo/store the unknown field while still
-  registering `request_review`, so the switch would misreport the worker's behavior.
+  levels (fetched once from `model.default`) instead of an empty list. **`VisibleModelsSettings`** lists
+  every provider/model pair with a toggle; hidden models are removed from catalog, pinned, recent, and
+  search results in all model pickers, but the currently selected model is preserved even when hidden.
+  Visibility preferences persist in browser localStorage (`thinkrail:hiddenModels`), initialized at app
+  startup via `initModelVisibility()`. The full catalog remains available here for configuration.
+
+  **AUTOMATION** (gated on `AGENT_REVIEW_SETTING_PROTOCOL_VERSION`, v68) — an **agent-review toggle**
+  (`agent-review-toggle`, `agent-review-row`, a switch over `store.agentReviewEnabled` →
+  `settings.update { agentReviewEnabled }`) — off withholds the worker's in-session `request_review` tool
+  so review happens only via the Review button (the host live-toggles the tool's active set on it, see
+  `submodule-server-host-plan-review`). And an **auto-fix toggle** (`review-autofix-toggle`,
+  `review-autofix-row`, a switch over `store.reviewAutoFix` → `settings.update { reviewAutoFix }`) — off
+  means a `request_changes` verdict records findings and waits (the host gates its auto-fix cycle on it,
+  see `submodule-server-todos`).
+
+  **GPT CONTEXT WINDOW** — the `ModelContextSettings` block described above.
+
+  There is **no separate Review navigation section**; all review-related controls live inside Models.
   **`ExtensionsSettings`** (the **Extensions** section, nav `settings-nav-extensions`, listed only at
   `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) fetches the host-registry catalog with
   `extension.list` each time the section mounts — the catalog is static per host process, so it is
@@ -815,7 +825,7 @@ a project picker, the prompt hero, and the reused
   renders `extensions-failed`. Disabling never unregisters a tool renderer
   ([[submodule-web-extensions]]), so past transcripts still render. A single dimmed "General" nav item ("Soon") still signals the shell is
   built to grow. `ProvidersSettings`/`McpSettings`/`AppearanceSettings`/`LineWidthSettings`/`ChatSettings`/`TemplatesSettings`/
-  `PrivacySettings`/`ReviewSettings`/`ModelsSettings`/`FeedbackSettings`/`ExtensionsSettings` and the app-wide **`InterviewPromptDialog`** are the
+  `PrivacySettings`/`ModelsSettings`/`FeedbackSettings`/`ExtensionsSettings` and the app-wide **`InterviewPromptDialog`** are the
   panels-owned **integration pieces** (store + transport). The prompt renders the shared incentive copy and
   fixed Calendar anchor with `Schedule an interview`, `Not now`, and `Never show again` actions. Primary and
   middle-button booking activation open Calendar immediately and record `book`; close, Escape, and backdrop record `postpone`; permanent
@@ -1178,7 +1188,7 @@ own section. The kebab menu (`plan-menu`, a
   state renders content-shaped skeleton rows, never a bare "Loading…" line), `@thinkrail/ui/*` (incl. `popover`/`command`/`textarea` for the
   dialog), `chat` (`ModelEffortPicker` + the `useModelCatalog`/`useModelPreferences` hooks that feed it,
   reused by `NewWorkspaceDialog`; `ModelSelector`/`ThinkingSelector`, still mounted by
-  `ReviewSettings`/`ModelsSettings`; `modelPicker`'s `AUTH_KIND_LABEL`, the one connection-kind vocabulary
+  `ModelsSettings`; `modelPicker`'s `AUTH_KIND_LABEL`, the one connection-kind vocabulary
   `ProvidersSettings` shares with the picker; `Markdown`,
   reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `auth` (`LoginDialog`, mounted by
   `ProvidersSettings` and `McpSettings`), `resources`, `lib`, `themes` (catalog + generic application contract),

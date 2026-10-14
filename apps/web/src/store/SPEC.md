@@ -447,10 +447,11 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   push's `target`, which is how Providers and MCP settings each open only their own logins,
   **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Mcp`/`Github`/`Appearance`/`LineWidth`/`Chat`/`Layout`/`Updates`/`Terminal`/`Templates`/`Review`/`Notifications`/`Privacy`/`Feedback`) with
-  **`openSettings(section?)`** (deep-links to a section, defaults to Providers) / **`closeSettings()`** /
-  **`setSettingsSection()`** — lives here so the top-bar gear, Welcome provider warning, and update-ready
-  shell affordance can deep-link without prop-drilling. The optional Update key is navigation only. Native
+  **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Mcp`/`Github`/`Appearance`/`LineWidth`/`Chat`/`Layout`/`Updates`/`Terminal`/`Templates`/`Notifications`/`Privacy`/`Feedback`; the `Review` key is
+  retained for backward compatibility but is not a navigation section — review settings live within
+  Models) with **`openSettings(section?)`** (deep-links to a section, defaults to Providers) /
+  **`closeSettings()`** / **`setSettingsSection()`** — lives here so the top-bar gear, Welcome provider
+  warning, and update-ready shell affordance can deep-link without prop-drilling. The optional Update key is navigation only. Native
   updater snapshots/actions remain in `updates`' shell-local hook state; the optional **`hostUpdate`** lifecycle
   snapshot is host domain state, installed atomically from `server.welcome` or replaced by the one
   `host.updateAvailable` push. It remains visible through a temporary disconnect; a later welcome replaces or
@@ -498,7 +499,13 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   `{ settle: 75, trigger: 100 }`. `setChatMessageOrder` / `setStreamingResponseMovement` change them
   without a server round trip, and `applyConfig` can never overwrite either. `ChatView` projects each
   runtime from order without rewriting canonical turns and passes the movement window into its sole scroll
-  controller. The instantiated
+  controller. **`hiddenModels: WireModel[]`** is a browser-local model visibility preference: hidden
+  models are removed from catalog, pinned, recent, and search results in all model pickers; the currently
+  selected model is preserved even when hidden. **`loadHiddenModels(models)`** seeds the array at app
+  startup from the `chat/useModelVisibility` persistence module (host-qualified localStorage key
+  `thinkrail:hiddenModels`); **`setModelVisibility(model, visible)`** / **`toggleModelVisibility(model)`**
+  update it; `selectVisibleModels(allModels)` is the filtering selector. The full catalog remains
+  available in `ModelsSettings`' visibility configuration. The instantiated
   workbench frame, current/default preset id, and group limits are separate local values hydrated by
   `shell/layoutState`; `applyConfig` can never overwrite them. The
   **toast queue** — **`toasts: Toast[]`** (oldest-first) with **`pushToast(toast) → id`** / **`dismissToast(id)`**

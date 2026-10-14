@@ -690,7 +690,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   in every connected client), and a
   **zoomed-stage preview pane** + **scope picker** — see the next bullet),
   **`ModelEffortPicker`** (the one **model · effort pill**, also mounted by `NewWorkspaceDialog` in
-  pre-session mode; `ReviewSettings`/`ModelsSettings` still mount the older `ModelSelector` +
+  pre-session mode; `ModelsSettings` still mounts the older `ModelSelector` +
   `ThinkingSelector` pair — the named survivors until they migrate). Decision: a chat's model and effort
   are **one fact with two parts**, shown by one borderless trigger (`[vendor glyph] name ▂▄▆ level
   [connection glyph] ▾` — the effort bars light the level's rank among the model's reasoning levels,

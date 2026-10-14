@@ -1,8 +1,8 @@
 import {
 	RiFileTextLine as FileText,
+	RiMagicLine as MagicWand,
 	RiPencilLine as Pencil,
 	RiAddLine as Plus,
-	RiSparkling2Line as Sparkles,
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
@@ -17,6 +17,8 @@ import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { ConfirmPopover } from "./ConfirmPopover";
 import { openFileInTab } from "./openTabs";
+import { SettingsPageContainer } from "./SettingsGroup";
+import { SettingsNotice } from "./SettingsNotice";
 
 const STARTER_TEMPLATES: ReadonlyArray<{
 	name: string;
@@ -55,47 +57,6 @@ const STARTER_TEMPLATES: ReadonlyArray<{
 		body: "Rename `$1` to `$2` across the codebase: update every definition, reference, and import of `$1`,\nplus any docs or comments that mention `$1`. Keep `$2` consistent everywhere and run the type-checker after.",
 	},
 ];
-
-function StarterTemplatesOffer() {
-	const [adding, setAdding] = useState(false);
-
-	const addStarters = async () => {
-		if (adding) return;
-		setAdding(true);
-		try {
-			for (const t of STARTER_TEMPLATES) {
-				await getTransport().request("template.save", {
-					scope: "global",
-					name: t.name,
-					content: assembleTemplate(t.description, t.argumentHint, t.body),
-				});
-			}
-		} catch (err) {
-			toast.error(errorText(err), "Couldn't add starter templates");
-		} finally {
-			useAppStore.getState().bumpTemplatesVersion();
-			setAdding(false);
-		}
-	};
-
-	return (
-		<div className="flex flex-col items-start gap-8">
-			<p className="text-text-muted tr-text-metadata">
-				No templates yet. Add a few common ones to get started.
-			</p>
-			<Button
-				data-testid="template-starters"
-				variant="outline"
-				size="sm"
-				disabled={adding}
-				onClick={() => void addStarters()}
-			>
-				<Sparkles className="size-14" />
-				Add starter templates
-			</Button>
-		</div>
-	);
-}
 
 function useTemplateList(
 	workspaceId: string | undefined,
@@ -170,47 +131,44 @@ export function TemplatesSettings() {
 	const loading =
 		!failed && (globalTemplates == null || (workspaceId != null && projectTemplates == null));
 
-	return (
-		<section data-testid="settings-templates" className="flex flex-col gap-16">
-			<div className="flex flex-col gap-4">
-				<h3 className="tr-title-section text-text-default">Prompt templates</h3>
-				<p className="text-text-muted tr-text-metadata">
-					Reusable prompts, expanded from the composer's <code className="tr-code-text">/</code>{" "}
-					menu. Global templates are available in every workspace; project templates live in this
-					worktree's <code className="tr-code-text">.pi/prompts/</code>.
-				</p>
-			</div>
-
-			{loading ? (
+	// Loading state
+	if (loading) {
+		return (
+			<div data-testid="settings-templates">
 				<SkeletonRows rows={3} />
-			) : failed ? (
+			</div>
+		);
+	}
+
+	// Error state
+	if (failed) {
+		return (
+			<div data-testid="settings-templates">
 				<p data-testid="templates-error" className="text-text-muted tr-text-ui">
 					Couldn't read templates from the host — reopen Settings to retry.
 				</p>
-			) : (
-				<>
-					<TemplateGroup
-						title="Global"
-						scope="global"
-						templates={globalTemplates ?? []}
-						workspaceId={workspaceId ?? undefined}
-						showOpenAsFile={false}
-						onNew={() => openNew("global")}
-						onEdit={openEdit}
-					/>
-					{workspaceId ? (
-						<TemplateGroup
-							title="This project"
-							scope="project"
-							templates={projectTemplates ?? []}
-							workspaceId={workspaceId}
-							showOpenAsFile
-							onNew={() => openNew("project")}
-							onEdit={openEdit}
-						/>
-					) : null}
-				</>
-			)}
+			</div>
+		);
+	}
+
+	return (
+		<>
+			<SettingsPageContainer testId="settings-templates">
+				{/* GROUP 1: Project templates */}
+				<ProjectTemplatesSection
+					workspaceId={workspaceId ?? undefined}
+					templates={projectTemplates}
+					onNew={() => openNew("project")}
+					onEdit={openEdit}
+				/>
+
+				{/* GROUP 2: Global templates */}
+				<GlobalTemplatesSection
+					templates={globalTemplates ?? []}
+					onNew={() => openNew("global")}
+					onEdit={openEdit}
+				/>
+			</SettingsPageContainer>
 
 			<TemplateEditorDialog
 				open={editorOpen}
@@ -219,55 +177,176 @@ export function TemplatesSettings() {
 				template={editing}
 				initialScope={newScope}
 			/>
-		</section>
+		</>
 	);
 }
 
-function TemplateGroup({
-	title,
-	scope,
-	templates,
+function ProjectTemplatesSection({
 	workspaceId,
-	showOpenAsFile,
+	templates,
 	onNew,
 	onEdit,
 }: {
-	title: string;
-	scope: TemplateScope;
-	templates: TemplateInfo[];
 	workspaceId: string | undefined;
-	showOpenAsFile: boolean;
+	templates: TemplateInfo[] | null;
 	onNew: () => void;
 	onEdit: (template: TemplateInfo) => void;
 }) {
+	const hasProject = workspaceId != null;
+	const [adding, setAdding] = useState(false);
+
+	const addStarters = async () => {
+		if (adding || !workspaceId) return;
+		setAdding(true);
+		try {
+			for (const t of STARTER_TEMPLATES) {
+				await getTransport().request("template.save", {
+					workspaceId,
+					scope: "project",
+					name: t.name,
+					content: assembleTemplate(t.description, t.argumentHint, t.body),
+				});
+			}
+		} catch (err) {
+			toast.error(errorText(err), "Couldn't add starter templates");
+		} finally {
+			useAppStore.getState().bumpTemplatesVersion();
+			setAdding(false);
+		}
+	};
+
 	return (
-		<section className="flex flex-col gap-8">
+		<section className="flex flex-col gap-12">
 			<div className="flex items-center justify-between">
-				<h4 className="tr-text-eyebrow text-text-muted">{title}</h4>
-				<button
-					type="button"
-					data-testid={`template-new-${scope}`}
-					onClick={onNew}
-					className="flex items-center gap-4 rounded-sm px-8 py-4 text-text-muted tr-text-metadata transition-colors hover:bg-control-bg-hovered hover:text-text-default"
-				>
-					<Plus className="size-14" />
-					New
-				</button>
+				<h4 className="tr-text-label-pill text-text-subtle">Project templates</h4>
+				{hasProject && (
+					<Button variant="soft" size="sm" data-testid="template-new-project" onClick={onNew}>
+						<Plus className="size-14" />
+						New
+					</Button>
+				)}
 			</div>
-			{templates.length === 0 ? (
-				scope === "global" ? (
-					<StarterTemplatesOffer />
-				) : (
-					<p className="text-text-muted tr-text-metadata">No templates yet.</p>
-				)
-			) : (
-				<div className="flex flex-col gap-4">
+
+			{!hasProject ? (
+				<SettingsNotice variant="info" testId="project-templates-unavailable">
+					<p className="tr-text-ui text-text-default">Open a project to manage its templates</p>
+					<p className="tr-text-metadata text-text-muted">
+						Project templates are stored in the project's{" "}
+						<code className="tr-code-text">.pi/prompts/</code> directory and are available in that
+						project.
+					</p>
+				</SettingsNotice>
+			) : templates && templates.length === 0 ? (
+				<SettingsNotice
+					variant="neutral"
+					hideIcon
+					testId="project-templates-empty"
+					action={
+						<Button
+							data-testid="template-starters-project"
+							variant="outline"
+							size="sm"
+							disabled={adding}
+							onClick={() => void addStarters()}
+						>
+							<MagicWand className="size-14" />
+							Add starter templates
+						</Button>
+					}
+				>
+					<p className="tr-text-ui text-text-default">No project templates yet</p>
+					<p className="tr-text-metadata text-text-muted">
+						Create templates for this project, or start with a ready-made set of templates.
+					</p>
+				</SettingsNotice>
+			) : templates ? (
+				<div className="flex flex-col gap-8">
 					{templates.map((t) => (
 						<TemplateRow
 							key={t.name}
 							template={t}
 							workspaceId={workspaceId}
-							showOpenAsFile={showOpenAsFile}
+							showOpenAsFile
+							onEdit={() => onEdit(t)}
+						/>
+					))}
+				</div>
+			) : null}
+		</section>
+	);
+}
+
+function GlobalTemplatesSection({
+	templates,
+	onNew,
+	onEdit,
+}: {
+	templates: TemplateInfo[];
+	onNew: () => void;
+	onEdit: (template: TemplateInfo) => void;
+}) {
+	const [adding, setAdding] = useState(false);
+
+	const addStarters = async () => {
+		if (adding) return;
+		setAdding(true);
+		try {
+			for (const t of STARTER_TEMPLATES) {
+				await getTransport().request("template.save", {
+					scope: "global",
+					name: t.name,
+					content: assembleTemplate(t.description, t.argumentHint, t.body),
+				});
+			}
+		} catch (err) {
+			toast.error(errorText(err), "Couldn't add starter templates");
+		} finally {
+			useAppStore.getState().bumpTemplatesVersion();
+			setAdding(false);
+		}
+	};
+
+	return (
+		<section className="flex flex-col gap-12">
+			<div className="flex items-center justify-between">
+				<h4 className="tr-text-label-pill text-text-subtle">Global templates</h4>
+				<Button variant="soft" size="sm" data-testid="template-new-global" onClick={onNew}>
+					<Plus className="size-14" />
+					New
+				</Button>
+			</div>
+
+			{templates.length === 0 ? (
+				<SettingsNotice
+					variant="info"
+					icon={<MagicWand className="size-14" />}
+					testId="global-templates-empty"
+					action={
+						<Button
+							data-testid="template-starters"
+							variant="outline"
+							size="sm"
+							disabled={adding}
+							onClick={() => void addStarters()}
+						>
+							<MagicWand className="size-14" />
+							Add starter templates
+						</Button>
+					}
+				>
+					<p className="tr-text-ui text-text-default">No global templates yet</p>
+					<p className="tr-text-metadata text-text-muted">
+						Create your own templates, or try a set of starter templates to get started.
+					</p>
+				</SettingsNotice>
+			) : (
+				<div className="flex flex-col gap-8">
+					{templates.map((t) => (
+						<TemplateRow
+							key={t.name}
+							template={t}
+							workspaceId={undefined}
+							showOpenAsFile={false}
 							onEdit={() => onEdit(t)}
 						/>
 					))}
@@ -325,7 +404,7 @@ function TemplateRow({
 				data-testid="template-row"
 				data-name={template.name}
 				data-scope={template.scope}
-				className="group flex items-center gap-8 rounded-sm border border-border-default bg-control-bg px-12 py-8"
+				className="group flex items-center gap-8 rounded-sm bg-control-bg px-12 py-8"
 			>
 				<div className="flex min-w-0 flex-1 flex-col">
 					<span className="truncate tr-text-ui text-text-default">{template.name}</span>

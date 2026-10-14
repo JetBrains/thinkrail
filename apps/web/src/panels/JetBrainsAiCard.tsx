@@ -7,7 +7,6 @@ import {
 	RiLogoutBoxLine as LogOut,
 	RiPlayLine as Play,
 	RiRefreshLine as RefreshCw,
-	RiBardLine,
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
 import {
@@ -26,7 +25,6 @@ import { getTransport } from "@/transport";
 import { SettingsSwitch } from "./SettingsSwitch";
 
 const LOGIN_CMD = "central login";
-const QUOTA_INTERVAL_RANGE = `${JBCENTRAL_QUOTA_REFRESH_SECONDS.min}–${JBCENTRAL_QUOTA_REFRESH_SECONDS.max}`;
 
 type Notice =
 	| { kind: "failed"; action: JbcentralAction; reason: JbcentralActionFailureReason }
@@ -55,13 +53,11 @@ function JbcentralQuotaSettings({
 	const saveInterval = async () => {
 		const seconds = Number(draft);
 		if (!isJbcentralQuotaRefreshSeconds(seconds)) {
-			setError(
-				`Enter a whole number from ${JBCENTRAL_QUOTA_REFRESH_SECONDS.min} to ${JBCENTRAL_QUOTA_REFRESH_SECONDS.max}.`,
-			);
+			// Invalid - restore to last valid saved value
+			setDraft(String(refreshSeconds));
 			return;
 		}
 		if (seconds === refreshSeconds) {
-			setError(null);
 			return;
 		}
 		try {
@@ -76,15 +72,11 @@ function JbcentralQuotaSettings({
 	return (
 		<div
 			data-testid="jbcentral-quota-settings"
-			className="flex flex-col gap-8 border-border-muted border-t pt-12"
+			className="flex flex-col border-border-muted border-t"
 		>
-			<div className="flex items-center justify-between gap-12">
-				<div className="min-w-0">
-					<p className="text-text-default tr-text-ui">Show quota in top bar</p>
-					<p className="text-text-muted tr-text-metadata">
-						Display recurring JetBrains AI credits while Central is connected.
-					</p>
-				</div>
+			{/* Show quota in top bar */}
+			<div className="flex items-center justify-between gap-12 border-border-muted border-b py-12">
+				<span className="text-text-default tr-text-ui">Show quota in top bar</span>
 				<SettingsSwitch
 					checked={enabled}
 					label="Show JetBrains AI quota in top bar"
@@ -97,9 +89,11 @@ function JbcentralQuotaSettings({
 					}}
 				/>
 			</div>
-			<div className="flex items-center gap-8">
-				<label htmlFor="jbcentral-quota-interval" className="text-text-muted tr-text-metadata">
-					Refresh every
+
+			{/* Refresh interval */}
+			<div className="flex items-center justify-between gap-12 py-12">
+				<label htmlFor="jbcentral-quota-interval" className="text-text-default tr-text-ui">
+					Refresh every (sec)
 				</label>
 				<input
 					id="jbcentral-quota-interval"
@@ -110,7 +104,6 @@ function JbcentralQuotaSettings({
 					step={1}
 					value={draft}
 					disabled={!enabled}
-					aria-invalid={error ? true : undefined}
 					onChange={(event) => {
 						setDraft(event.currentTarget.value);
 						setError(null);
@@ -119,11 +112,10 @@ function JbcentralQuotaSettings({
 					onKeyDown={(event) => {
 						if (event.key === "Enter") event.currentTarget.blur();
 					}}
-					className="w-80 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 text-text-default tr-text-ui outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+					className="h-32 w-64 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus:border-control-border-active disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 				/>
-				<span className="text-text-muted tr-text-metadata">seconds</span>
-				<span className="ml-auto text-text-subtle tr-text-metadata">{QUOTA_INTERVAL_RANGE}</span>
 			</div>
+
 			{error ? (
 				<p
 					data-testid="jbcentral-quota-interval-error"
@@ -223,31 +215,18 @@ export function JetBrainsAiCard({
 			data-state={visibleState}
 			data-configured={configured}
 			data-installed={installed}
-			className="flex flex-col gap-8 rounded-sm border border-border-default bg-control-bg p-12"
+			className="flex flex-col gap-8"
 		>
-			<div className="flex items-center gap-12">
-				<span className="flex size-32 shrink-0 items-center justify-center rounded-sm bg-primary-subtle text-primary">
-					<RiBardLine className="size-16" />
-				</span>
-				<div className="flex min-w-0 flex-col">
-					<span className="tr-text-ui text-text-default">JetBrains AI</span>
-					<span className="text-text-muted tr-text-metadata">
-						Use models made available through your JetBrains subscription.
-					</span>
-				</div>
-				<div className="ml-auto flex shrink-0 items-center gap-4">
+			<div className="flex items-center justify-between gap-12">
+				<h3 className="tr-text-label-pill text-text-subtle">JetBrains AI</h3>
+				<div className="flex shrink-0 items-center gap-4">
 					{busyAction ? (
 						<Button size="sm" disabled data-testid="jetbrains-configuring">
 							<Loader2 className="size-14 animate-spin" />
 							{actionLabel(busyAction)}…
 						</Button>
 					) : signedOut ? (
-						<SignInButton
-							variant="default"
-							label="Sign in"
-							signingIn={signingIn}
-							onSignIn={() => void signIn()}
-						/>
+						<SignInButton label="Sign in" signingIn={signingIn} onSignIn={() => void signIn()} />
 					) : status.state === "load-failed" && retryAction ? (
 						<>
 							<Button
@@ -328,9 +307,7 @@ function ActionButton({ action, onAction }: { action: JbcentralAction; onAction:
 				<Wrench className="size-14" />
 			) : action === "start-proxy" ? (
 				<Play className="size-14" />
-			) : (
-				<RiBardLine className="size-14" />
-			)}
+			) : null}
 			{actionLabel(action)}
 		</Button>
 	);
@@ -376,7 +353,7 @@ function StatusBody({
 			);
 		case "supported":
 			return (
-				<p className="text-text-muted tr-text-metadata" data-testid="jetbrains-ready">
+				<p className="text-feedback-success tr-text-metadata" data-testid="jetbrains-ready">
 					Central is ready. Connect to make its JetBrains AI models available to new chats.
 				</p>
 			);
@@ -437,16 +414,14 @@ function SignInButton({
 	signingIn,
 	onSignIn,
 	label,
-	variant,
 }: {
 	signingIn: boolean;
 	onSignIn: () => void;
 	label: string;
-	variant: "default" | "outline";
 }) {
 	return (
 		<Button
-			variant={variant}
+			variant="soft"
 			size="sm"
 			data-testid="jetbrains-signin"
 			disabled={signingIn}
@@ -469,12 +444,7 @@ function SignInGuidance({ signingIn, onSignIn }: { signingIn: boolean; onSignIn:
 			<p className="text-text-muted tr-text-metadata">
 				If Central needs authentication, sign in and then retry Connect.
 			</p>
-			<SignInButton
-				variant="outline"
-				label="Sign in to JetBrains"
-				signingIn={signingIn}
-				onSignIn={onSignIn}
-			/>
+			<SignInButton label="Sign in to JetBrains" signingIn={signingIn} onSignIn={onSignIn} />
 		</div>
 	);
 }

@@ -50,7 +50,7 @@ test("one Default/1M/Custom selector appears while individual settings start col
 	expect(html).toContain('aria-expanded="false"');
 	expect(html).not.toContain('data-testid="context-limit-openai-gpt-5.5"');
 	expect(html).toContain("pi CLI");
-	expect(html).toContain("restart the host");
+	expect(html).toContain("host restart");
 });
 
 test("pending settings keep the authoritative 1M override but disable changes", () => {
@@ -60,28 +60,30 @@ test("pending settings keep the authoritative 1M override but disable changes", 
 	expect(html.match(/type="radio"[^>]*disabled/g)).toHaveLength(3);
 });
 
-test("non-preset overrides expose an editable Custom field within the app range", () => {
+test("non-preset overrides expose an editable Custom field that auto-saves", () => {
 	const html = render({ settings: [{ ...setting, override: 500_000, contextWindow: 500_000 }] });
 	expect(html).toContain('data-testid="context-limit-all-input"');
 	expect(html).toContain('value="500000"');
-	expect(html).toContain('data-testid="context-limit-all-apply"');
-	expect(html).toContain('min="272000"');
-	expect(html).toContain('max="1000000"');
+	// No Apply button - input auto-saves on blur or Enter
+	expect(html).not.toContain('data-testid="context-limit-all-apply"');
+	expect(html).toContain('inputMode="numeric"');
 });
 
-test("different overrides show Customized instead of claiming a uniform preset", () => {
+test("different overrides show mixed state without a preset selected", () => {
 	const html = render({
 		settings: [
 			setting,
 			{ ...setting, provider: "context-proxy", override: 750_000, contextWindow: 750_000 },
 		],
 	});
-	expect(html).toContain("Customized by model");
+	// Main control shows mixed state when shared models have different overrides
 	expect(html).toContain('data-context-override="mixed"');
+	// No preset should be selected
 	expect(html).not.toContain('checked=""');
 });
 
-test("the shared control summarizes only rows it governs and names the external ones it leaves alone", () => {
+test("the shared control governs only eligible models and hides when none are eligible", () => {
+	// When shared model has 1M override, main control shows 1M selected
 	const html = render({
 		settings: [
 			{ ...setting, override: 1_000_000, contextWindow: 1_000_000 },
@@ -89,9 +91,7 @@ test("the shared control summarizes only rows it governs and names the external 
 		],
 	});
 	expect(html).toMatch(/context-limit-all-1m[^>]*><input[^>]*checked=""/);
-	expect(html).toContain(
-		"1 available model \u00b7 1 kept at a limit set outside the 272,000\u20131,000,000 range",
-	);
+	// When only external models exist (outside range), the main control is hidden
 	expect(
 		render({ settings: [{ ...setting, override: 1_050_000, contextWindow: 1_050_000 }] }),
 	).not.toContain('data-testid="context-limit-all"');

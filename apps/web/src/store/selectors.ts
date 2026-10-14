@@ -914,3 +914,32 @@ export function selectAgentReviewCommentCount(
 		(c) => c.author === "agent" && c.status !== "resolved" && c.status !== "dismissed",
 	).length;
 }
+
+/**
+ * Returns the models from the catalog that are visible (not hidden by user preference).
+ * The currently selected model is NOT included here - callers should merge it separately
+ * to preserve the active selection without reintroducing it to the general catalog.
+ */
+export function selectVisibleModels(state: {
+	models: readonly WireModel[];
+	hiddenModels: readonly { provider: string; id: string }[];
+}): WireModel[] {
+	return state.models.filter(
+		(model) =>
+			!state.hiddenModels.some(
+				(hidden) => hidden.provider === model.provider && hidden.id === model.id,
+			),
+	);
+}
+
+/**
+ * Check if a specific model is hidden by user visibility preference.
+ */
+export function isModelHidden(
+	state: { hiddenModels: readonly { provider: string; id: string }[] },
+	model: { provider: string; id: string },
+): boolean {
+	return state.hiddenModels.some(
+		(hidden) => hidden.provider === model.provider && hidden.id === model.id,
+	);
+}

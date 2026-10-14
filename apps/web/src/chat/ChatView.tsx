@@ -125,8 +125,30 @@ export default function ChatView({
 	const chatLineWidth = useAppStore((state) => state.chatLineWidth);
 	const chatLineWidthBounded = useAppStore((state) => state.chatLineWidthBounded);
 	const chatMessageOrder = useAppStore((state) => state.chatMessageOrder);
-	const { models, refreshing: modelsRefreshing, refresh: onRefreshModels } = useModelCatalog();
-	const modelPreferences = useModelPreferences(models);
+	const {
+		models: allModels,
+		refreshing: modelsRefreshing,
+		refresh: onRefreshModels,
+	} = useModelCatalog();
+	const hiddenModels = useAppStore((s) => s.hiddenModels);
+	// Filter to visible models (this is used for preferences so hidden models don't appear in Pinned/Recent)
+	const visibleModels = useMemo(
+		() =>
+			allModels.filter(
+				(m) => !hiddenModels.some((h) => h.provider === m.provider && h.id === m.id),
+			),
+		[allModels, hiddenModels],
+	);
+	// For the picker, include the currently selected model even if hidden
+	const models = useMemo(() => {
+		if (sessionModel && !visibleModels.some((m) => sameModel(m, sessionModel))) {
+			const current = allModels.find((m) => sameModel(m, sessionModel));
+			if (current) return [current, ...visibleModels];
+		}
+		return visibleModels;
+	}, [allModels, visibleModels, sessionModel]);
+	// Use visible models for preferences so hidden models don't appear in Pinned/Recent
+	const modelPreferences = useModelPreferences(visibleModels);
 	const projectId = useAppStore(
 		(s) =>
 			Object.values(s.workspaces)

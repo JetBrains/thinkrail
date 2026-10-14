@@ -69,7 +69,7 @@ function LineWidthControl({
 							aria-invalid={parsed === null}
 							aria-describedby={parsed === null ? errorId : undefined}
 							data-testid={`${kind}-line-width-input`}
-							data-settings-draft-input
+							data-line-width-input
 							onChange={(event) => setDraft(event.currentTarget.value)}
 							onKeyDown={(event) => {
 								if (event.key === "Escape") {
@@ -81,7 +81,7 @@ function LineWidthControl({
 									void save();
 								}
 							}}
-							className="w-96 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none focus:border-control-border-active focus:ring-2 focus:ring-primary aria-invalid:border-feedback-error"
+							className="h-32 w-96 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default outline-none focus:border-control-border-active aria-invalid:border-feedback-error"
 						/>
 						<span>symbols</span>
 					</span>

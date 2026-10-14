@@ -345,6 +345,8 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 		const [open, setOpen] = useState(false);
 		const [query, setQuery] = useState("");
 		const [showAll, setShowAll] = useState(false);
+		// Track which provider groups are expanded
+		const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set());
 
 		const openWith = (next: string) => {
 			setQuery(next);
@@ -529,7 +531,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 								</CommandGroup>
 							) : null}
 							{preferences.favorites.length > 0 ? (
-								<CommandGroup heading="Favorites">
+								<CommandGroup heading="Pinned">
 									{preferences.favorites.map((m) => renderModel(m, "fav"))}
 								</CommandGroup>
 							) : null}
@@ -556,21 +558,45 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 									</CommandItem>
 								</CommandGroup>
 							) : (
-								groups.map((group) => (
-									<CommandGroup
-										key={group.provider}
-										heading={
-											<span className="flex items-center gap-8">
-												<span className="truncate">{group.provider}</span>
-												{group.auth ? (
-													<span className="ml-auto truncate text-text-subtle">{group.auth}</span>
-												) : null}
-											</span>
-										}
-									>
-										{group.models.map((m) => renderModel(m, "all"))}
-									</CommandGroup>
-								))
+								groups.map((group) => {
+									const isExpanded = expandedProviders.has(group.provider) || query.trim() !== "";
+									return (
+										<div key={group.provider}>
+											{/* Collapsible provider header */}
+											<button
+												type="button"
+												onClick={() => {
+													setExpandedProviders((prev) => {
+														const next = new Set(prev);
+														if (next.has(group.provider)) next.delete(group.provider);
+														else next.add(group.provider);
+														return next;
+													});
+												}}
+												className="flex w-full items-center gap-8 px-8 py-8 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+											>
+												<ProviderGlyph provider={group.provider} className="size-14 shrink-0" />
+												<span className="flex-1 truncate tr-text-ui text-text-default">
+													{group.provider}
+												</span>
+												<span className="tr-text-metadata text-text-muted">
+													{group.models.length}
+												</span>
+												{isExpanded ? (
+													<ChevronDown className="size-14 shrink-0 text-text-muted" />
+												) : (
+													<ChevronRight className="size-14 shrink-0 text-text-muted" />
+												)}
+											</button>
+											{/* Models in this provider */}
+											{isExpanded && (
+												<CommandGroup>
+													{group.models.map((m) => renderModel(m, "all"))}
+												</CommandGroup>
+											)}
+										</div>
+									);
+								})
 							)}
 						</CommandList>
 					</Command>
@@ -582,6 +608,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							onSelectLevel={onSelectLevel}
 						/>
 					) : null}
+					{/* Footer with actions */}
 					<div className="flex shrink-0 items-center gap-8 border-border-default border-t px-8 py-4">
 						{preferences.supported && current ? (
 							<button
@@ -618,10 +645,10 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							data-refreshing={refreshing}
 							disabled={refreshing}
 							onClick={() => onRefresh(true)}
-							className={FOOTER_LINK}
+							className="inline-flex items-center gap-4 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-metadata text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default disabled:text-text-muted disabled:hover:bg-control-bg"
 						>
 							<RefreshCw className={cn("size-12 shrink-0", refreshing && "animate-spin")} />
-							{refreshing ? "Updating…" : "Refresh"}
+							Refresh
 						</button>
 					</div>
 				</PopoverContent>

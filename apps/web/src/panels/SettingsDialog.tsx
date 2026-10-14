@@ -1,8 +1,7 @@
 import {
 	RiBrainLine as Brain,
 	RiDownloadCloud2Line as DownloadCloud,
-	RiFeedbackLine as Feedback,
-	RiGitBranchLine as GitBranch,
+	RiGithubFill as GitHub,
 	RiKeyLine as KeyRound,
 	RiLayoutTop2Line as LayoutPanelTop,
 	RiLayoutGridLine as LayoutTemplate,
@@ -11,91 +10,89 @@ import {
 	RiNotification3Line as NotificationBell,
 	RiPaletteLine as Palette,
 	RiPlugLine as Plug,
-	RiPuzzle2Line as Puzzle,
-	RiGitRepositoryLine as Repository,
-	RiSearchEyeLine as ScanEye,
+	RiRefreshLine as Refresh,
 	RiShieldCheckLine as ShieldCheck,
-	RiEqualizerLine as SlidersHorizontal,
 	RiTerminalBoxLine as SquareTerminal,
-	RiTextWrap as TextWrap,
 } from "@remixicon/react";
-import {
-	DEFAULT_MODEL_PROTOCOL_VERSION,
-	EXTENSION_CATALOG_PROTOCOL_VERSION,
-	MCP_PROTOCOL_VERSION,
-	WORKSPACE_SETTLE_PROTOCOL_VERSION,
-} from "@thinkrail/contracts";
+import { DEFAULT_MODEL_PROTOCOL_VERSION, MCP_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
 import { SettingsSection, useAppStore } from "@/store";
 import { AppearanceSettings } from "./AppearanceSettings";
 import { ChatSettings } from "./ChatSettings";
-import { ExtensionsSettings } from "./ExtensionsSettings";
 import { FeedbackSettings } from "./FeedbackSettings";
 import { GithubSettings } from "./GithubSettings";
-import { LineWidthSettings } from "./LineWidthSettings";
 import { McpSettings } from "./McpSettings";
 import { ModelsSettings } from "./ModelsSettings";
 import { NotificationsSettings } from "./NotificationsSettings";
 import { PrivacySettings } from "./PrivacySettings";
 import { ProvidersSettings } from "./ProvidersSettings";
-import { ReviewSettings } from "./ReviewSettings";
 import { TemplatesSettings } from "./TemplatesSettings";
 import { TerminalSettings } from "./TerminalSettings";
-import { WorkspacesSettings } from "./WorkspacesSettings";
 
-const SECTIONS: {
+interface NavSection {
 	id: SettingsSection;
 	label: string;
 	icon: LucideIcon;
 	requiresInjectedContent?: true;
 	requiresProtocolVersion?: number;
-}[] = [
-	{ id: SettingsSection.Providers, label: "Providers", icon: KeyRound },
+}
+
+interface NavGroup {
+	label: string;
+	sections: NavSection[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
 	{
-		id: SettingsSection.Models,
-		label: "Models",
-		icon: Brain,
-		requiresProtocolVersion: DEFAULT_MODEL_PROTOCOL_VERSION,
+		label: "Agent",
+		sections: [
+			{
+				id: SettingsSection.Models,
+				label: "Models",
+				icon: Brain,
+				requiresProtocolVersion: DEFAULT_MODEL_PROTOCOL_VERSION,
+			},
+			{ id: SettingsSection.Providers, label: "Providers", icon: KeyRound },
+			{
+				id: SettingsSection.Mcp,
+				label: "MCP servers",
+				icon: Plug,
+				requiresProtocolVersion: MCP_PROTOCOL_VERSION,
+			},
+		],
 	},
 	{
-		id: SettingsSection.Mcp,
-		label: "MCP servers",
-		icon: Plug,
-		requiresProtocolVersion: MCP_PROTOCOL_VERSION,
+		label: "Interface",
+		sections: [
+			{ id: SettingsSection.Chat, label: "Chat", icon: MessageSquareText },
+			{ id: SettingsSection.Appearance, label: "Appearance", icon: Palette },
+			{ id: SettingsSection.Layout, label: "Layout", icon: LayoutPanelTop },
+			{ id: SettingsSection.Terminal, label: "Terminal", icon: SquareTerminal },
+		],
 	},
-	{ id: SettingsSection.Github, label: "GitHub", icon: GitBranch },
-	{ id: SettingsSection.Appearance, label: "Appearance", icon: Palette },
-	{ id: SettingsSection.LineWidth, label: "Line width", icon: TextWrap },
-	{ id: SettingsSection.Chat, label: "Chat", icon: MessageSquareText },
-	{ id: SettingsSection.Layout, label: "Layout", icon: LayoutPanelTop },
 	{
-		id: SettingsSection.Updates,
-		label: "Updates",
-		icon: DownloadCloud,
-		requiresInjectedContent: true,
+		label: "Integrations",
+		sections: [
+			{ id: SettingsSection.Github, label: "GitHub", icon: GitHub },
+			{ id: SettingsSection.Templates, label: "Prompt Templates", icon: LayoutTemplate },
+		],
 	},
-	{ id: SettingsSection.Terminal, label: "Terminal", icon: SquareTerminal },
 	{
-		id: SettingsSection.Workspaces,
-		label: "Workspaces",
-		icon: Repository,
-		requiresProtocolVersion: WORKSPACE_SETTLE_PROTOCOL_VERSION,
+		label: "System",
+		sections: [
+			{ id: SettingsSection.Notifications, label: "Notifications", icon: NotificationBell },
+			{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
+			{
+				id: SettingsSection.Updates,
+				label: "Updates",
+				icon: DownloadCloud,
+				requiresInjectedContent: true,
+			},
+		],
 	},
-	{ id: SettingsSection.Templates, label: "Templates", icon: LayoutTemplate },
-	{ id: SettingsSection.Review, label: "Review", icon: ScanEye },
-	{
-		id: SettingsSection.Extensions,
-		label: "Extensions",
-		icon: Puzzle,
-		requiresProtocolVersion: EXTENSION_CATALOG_PROTOCOL_VERSION,
-	},
-	{ id: SettingsSection.Notifications, label: "Notifications", icon: NotificationBell },
-	{ id: SettingsSection.Privacy, label: "Privacy", icon: ShieldCheck },
-	{ id: SettingsSection.Feedback, label: "Feedback", icon: Feedback },
 ];
-const SOON: { label: string; icon: LucideIcon }[] = [{ label: "General", icon: SlidersHorizontal }];
 
 export function SettingsDialog({
 	layoutSettings,
@@ -107,15 +104,29 @@ export function SettingsDialog({
 	const open = useAppStore((s) => s.settingsOpen);
 	const section = useAppStore((s) => s.settingsSection);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
-	const sections = SECTIONS.filter(
-		(candidate) =>
-			(!candidate.requiresInjectedContent || updateSettings !== undefined) &&
-			(candidate.requiresProtocolVersion === undefined ||
-				(protocolVersion !== null && protocolVersion >= candidate.requiresProtocolVersion)),
-	);
-	const selectedSection = sections.some((candidate) => candidate.id === section)
-		? section
-		: SettingsSection.Appearance;
+
+	// Filter sections based on requirements
+	const isAvailable = (s: NavSection) =>
+		(!s.requiresInjectedContent || updateSettings !== undefined) &&
+		(s.requiresProtocolVersion === undefined ||
+			(protocolVersion !== null && protocolVersion >= s.requiresProtocolVersion));
+
+	// Get filtered groups (only include groups with at least one available section)
+	const filteredGroups = NAV_GROUPS.map((group) => ({
+		...group,
+		sections: group.sections.filter(isAvailable),
+	})).filter((group) => group.sections.length > 0);
+
+	// Determine selected section
+	// Feedback is not in NAV_GROUPS but is a valid section accessible via the sidebar card
+	const availableSections = filteredGroups.flatMap((g) => g.sections);
+	const selectedSection =
+		section === SettingsSection.Feedback || availableSections.some((s) => s.id === section)
+			? section
+			: // Fall back to Appearance (always available) or the first available section
+				availableSections.some((s) => s.id === SettingsSection.Appearance)
+				? SettingsSection.Appearance
+				: (availableSections[0]?.id ?? SettingsSection.Appearance);
 
 	return (
 		<Dialog
@@ -129,7 +140,7 @@ export function SettingsDialog({
 				onEscapeKeyDown={(event) => {
 					if (
 						document.activeElement instanceof HTMLElement &&
-						document.activeElement.hasAttribute("data-settings-draft-input")
+						document.activeElement.hasAttribute("data-line-width-input")
 					) {
 						event.preventDefault();
 					}
@@ -143,74 +154,129 @@ export function SettingsDialog({
 				<div className="flex min-h-0 flex-1 flex-col md:flex-row">
 					<nav
 						aria-label="Settings sections"
-						className="flex shrink-0 gap-4 overflow-x-auto border-border-default border-b p-8 md:w-[192px] md:flex-col md:gap-2 md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:bg-container-elevated-bg md:p-12"
+						className="flex shrink-0 flex-col gap-4 overflow-x-auto border-border-default border-b p-8 md:w-[192px] md:gap-0 md:overflow-x-visible md:overflow-y-auto md:border-r md:border-b-0 md:bg-container-elevated-bg md:p-12"
 					>
-						{sections.map(({ id, label, icon: Icon }) => {
-							const active = selectedSection === id;
-							return (
-								<button
-									key={id}
-									type="button"
-									data-testid={`settings-nav-${id}`}
-									data-active={active}
-									onClick={() => useAppStore.getState().setSettingsSection(id)}
-									className={cn(
-										"flex shrink-0 items-center gap-8 rounded-sm px-12 py-8 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
-										active
-											? "bg-primary-subtle text-primary"
-											: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
-									)}
-								>
-									<Icon className="size-16 shrink-0" />
-									{label}
-								</button>
-							);
-						})}
-						{SOON.map(({ label, icon: Icon }) => (
-							<span
-								key={label}
-								className="flex shrink-0 cursor-default items-center gap-8 rounded-sm px-12 py-8 text-text-disabled tr-text-ui"
+						{/* Mobile: horizontal scroll of all sections */}
+						<div className="flex gap-4 md:hidden">
+							{availableSections.map(({ id, label, icon: Icon }) => {
+								const active = selectedSection === id;
+								return (
+									<button
+										key={id}
+										type="button"
+										data-testid={`settings-nav-${id}`}
+										data-active={active}
+										onClick={() => useAppStore.getState().setSettingsSection(id)}
+										className={cn(
+											"flex shrink-0 items-center gap-4 rounded-sm px-4 py-4 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+											active
+												? "bg-primary-subtle text-primary"
+												: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
+										)}
+									>
+										<Icon className="size-14 shrink-0" />
+										{label}
+									</button>
+								);
+							})}
+						</div>
+
+						{/* Desktop: grouped sections */}
+						<div className="hidden md:flex md:flex-1 md:flex-col md:justify-between">
+							<div className="flex flex-col">
+								{filteredGroups.map((group, groupIndex) => (
+									<div key={group.label} className={cn(groupIndex > 0 && "pt-12")}>
+										<span className="block h-28 py-4 tr-text-label-pill text-text-subtle uppercase">
+											{group.label}
+										</span>
+										<div className="flex flex-col gap-2">
+											{group.sections.map(({ id, label, icon: Icon }) => {
+												const active = selectedSection === id;
+												const showRefresh = id === SettingsSection.Providers && active;
+												return (
+													<div
+														key={id}
+														className={cn(
+															"relative flex h-28 w-full shrink-0 items-center rounded-sm",
+															active && "bg-primary-subtle",
+														)}
+													>
+														<button
+															type="button"
+															data-testid={`settings-nav-${id}`}
+															data-active={active}
+															onClick={() => useAppStore.getState().setSettingsSection(id)}
+															className={cn(
+																"flex h-28 flex-1 items-center gap-4 rounded-sm px-8 text-left tr-text-ui outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary",
+																active
+																	? "text-primary"
+																	: "text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
+															)}
+														>
+															<Icon className="size-14 shrink-0" />
+															{label}
+														</button>
+														{showRefresh && (
+															<button
+																type="button"
+																data-testid="providers-refresh"
+																aria-label="Refresh providers"
+																onClick={(e) => {
+																	e.stopPropagation();
+																	useAppStore.getState().requestProvidersRefresh();
+																}}
+																className="mr-4 flex size-20 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+															>
+																<Refresh className="size-14" />
+															</button>
+														)}
+													</div>
+												);
+											})}
+										</div>
+									</div>
+								))}
+							</div>
+
+							{/* Interview invitation in footer */}
+							<button
+								type="button"
+								data-testid="settings-feedback-notice"
+								onClick={() => useAppStore.getState().setSettingsSection(SettingsSection.Feedback)}
+								className="rounded-sm border border-primary-soft bg-control-bg px-12 py-8 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 							>
-								<Icon className="size-16 shrink-0" />
-								{label}
-								<span className="ml-auto rounded-full border border-border-default px-4 py-2 tr-text-label-pill text-text-disabled">
-									Soon
+								<span className="tr-text-ui text-primary">
+									Earn 100 credits for honest feedback
 								</span>
-							</span>
-						))}
+							</button>
+						</div>
 					</nav>
 
 					<div className="min-h-0 flex-1 overflow-y-auto p-16">
-						{selectedSection === SettingsSection.Providers ? (
-							<ProvidersSettings />
-						) : selectedSection === SettingsSection.Models ? (
+						{selectedSection === SettingsSection.Models ? (
 							<ModelsSettings />
+						) : selectedSection === SettingsSection.Providers ? (
+							<ProvidersSettings />
 						) : selectedSection === SettingsSection.Mcp ? (
 							<McpSettings />
-						) : selectedSection === SettingsSection.Github ? (
-							<GithubSettings />
-						) : selectedSection === SettingsSection.LineWidth ? (
-							<LineWidthSettings />
 						) : selectedSection === SettingsSection.Chat ? (
 							<ChatSettings />
+						) : selectedSection === SettingsSection.Appearance ? (
+							<AppearanceSettings />
 						) : selectedSection === SettingsSection.Layout ? (
 							layoutSettings
-						) : selectedSection === SettingsSection.Updates && updateSettings !== undefined ? (
-							updateSettings
 						) : selectedSection === SettingsSection.Terminal ? (
 							<TerminalSettings />
-						) : selectedSection === SettingsSection.Workspaces ? (
-							<WorkspacesSettings />
+						) : selectedSection === SettingsSection.Github ? (
+							<GithubSettings />
 						) : selectedSection === SettingsSection.Templates ? (
 							<TemplatesSettings />
-						) : selectedSection === SettingsSection.Review ? (
-							<ReviewSettings />
-						) : selectedSection === SettingsSection.Extensions ? (
-							<ExtensionsSettings />
 						) : selectedSection === SettingsSection.Notifications ? (
 							<NotificationsSettings />
 						) : selectedSection === SettingsSection.Privacy ? (
 							<PrivacySettings />
+						) : selectedSection === SettingsSection.Updates && updateSettings !== undefined ? (
+							updateSettings
 						) : selectedSection === SettingsSection.Feedback ? (
 							<FeedbackSettings />
 						) : (

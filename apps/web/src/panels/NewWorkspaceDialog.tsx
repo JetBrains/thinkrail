@@ -12,6 +12,7 @@ import {
 	type ModelDefault,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	type SlashCommandInfo,
+	sameModel,
 	type TemplateInfo,
 	type TemplateReadLocation,
 	type ThinkingLevel,
@@ -37,7 +38,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { type DefaultPairOption, ModelEffortPicker } from "@/chat/ModelEffortPicker";
 import {
 	deriveProjectTrustNotice,
@@ -255,12 +256,30 @@ export function NewWorkspaceDialog({
 	const trustSummary = useProjectTrustSummary(selectedProjectId, open);
 
 	const {
-		models,
+		models: allModels,
 		refreshing: modelsRefreshing,
 		refresh: onRefreshModels,
 		fresh: catalogFresh,
 	} = useModelCatalog(open);
-	const modelPreferences = useModelPreferences(models);
+	const hiddenModels = useAppStore((s) => s.hiddenModels);
+	// Filter to visible models (used for preferences so hidden models don't appear in Pinned/Recent)
+	const visibleModels = useMemo(
+		() =>
+			allModels.filter(
+				(m) => !hiddenModels.some((h) => h.provider === m.provider && h.id === m.id),
+			),
+		[allModels, hiddenModels],
+	);
+	// For the picker, include the currently selected model even if hidden
+	const models = useMemo(() => {
+		if (model && !visibleModels.some((m) => sameModel(m, model))) {
+			const current = allModels.find((m) => sameModel(m, model));
+			if (current) return [current, ...visibleModels];
+		}
+		return visibleModels;
+	}, [allModels, visibleModels, model]);
+	// Use visible models for preferences so hidden models don't appear in Pinned/Recent
+	const modelPreferences = useModelPreferences(visibleModels);
 
 	const applyHostDefault = useCallback(() => {
 		let cancelled = false;

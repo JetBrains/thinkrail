@@ -11,6 +11,7 @@ import {
 	applyWorkbenchPreset,
 	BUILTIN_LAYOUT_PRESETS,
 	captureWorkbenchPreset,
+	frameMatchesPreset,
 	instantiateWorkbenchFrame,
 } from "./presets";
 import type { LayoutCenterTab, LayoutTerminalTab, WorkspaceLayoutDocument } from "./types";
@@ -290,5 +291,128 @@ describe("normalized workbench layout", () => {
 			"first-shell",
 			"second-shell",
 		]);
+	});
+});
+
+describe("frameMatchesPreset", () => {
+	test("matches a freshly instantiated frame to its preset", () => {
+		const preset = BUILTIN_LAYOUT_PRESETS[0];
+		if (!preset) throw new Error("missing built-in preset");
+		const frame = instantiateWorkbenchFrame(preset);
+		expect(frameMatchesPreset(frame, preset)).toBe(true);
+	});
+
+	test("detects width changes", () => {
+		const preset = BUILTIN_LAYOUT_PRESETS[0];
+		if (!preset) throw new Error("missing built-in preset");
+		const frame = instantiateWorkbenchFrame(preset);
+		const modified = { ...frame, left: { ...frame.left, width: frame.left.width + 0.05 } };
+		expect(frameMatchesPreset(modified, preset)).toBe(false);
+	});
+
+	test("detects visibility changes", () => {
+		const preset = BUILTIN_LAYOUT_PRESETS[0];
+		if (!preset) throw new Error("missing built-in preset");
+		const frame = instantiateWorkbenchFrame(preset);
+		const modified = { ...frame, left: { ...frame.left, visible: !frame.left.visible } };
+		expect(frameMatchesPreset(modified, preset)).toBe(false);
+	});
+
+	test("detects folded state changes", () => {
+		const preset = BUILTIN_LAYOUT_PRESETS[0];
+		if (!preset) throw new Error("missing built-in preset");
+		const frame = instantiateWorkbenchFrame(preset);
+		const firstGroup = frame.left.groups[0];
+		if (!firstGroup) throw new Error("missing left group");
+		const modified = {
+			...frame,
+			left: {
+				...frame.left,
+				groups: [{ ...firstGroup, folded: !firstGroup.folded }, ...frame.left.groups.slice(1)],
+			},
+		};
+		expect(frameMatchesPreset(modified, preset)).toBe(false);
+	});
+
+	test("detects weight changes", () => {
+		const preset = BUILTIN_LAYOUT_PRESETS[0];
+		if (!preset) throw new Error("missing built-in preset");
+		const frame = instantiateWorkbenchFrame(preset);
+		const firstGroup = frame.right.groups[0];
+		if (!firstGroup) throw new Error("missing right group");
+		const modified = {
+			...frame,
+			right: {
+				...frame.right,
+				groups: [
+					{ ...firstGroup, weight: firstGroup.weight + 0.1 },
+					...frame.right.groups.slice(1),
+				],
+			},
+		};
+		expect(frameMatchesPreset(modified, preset)).toBe(false);
+	});
+
+	test("detects bottom height changes", () => {
+		const preset = BUILTIN_LAYOUT_PRESETS[0];
+		if (!preset) throw new Error("missing built-in preset");
+		const frame = instantiateWorkbenchFrame(preset);
+		const modified = { ...frame, bottom: { ...frame.bottom, height: frame.bottom.height + 0.1 } };
+		expect(frameMatchesPreset(modified, preset)).toBe(false);
+	});
+
+	test("detects bottom alignment changes", () => {
+		const preset = BUILTIN_LAYOUT_PRESETS[0];
+		if (!preset) throw new Error("missing built-in preset");
+		const frame = instantiateWorkbenchFrame(preset);
+		const newAlignment = frame.bottom.alignment === "center" ? "full" : "center";
+		const modified = {
+			...frame,
+			bottom: { ...frame.bottom, alignment: newAlignment as typeof frame.bottom.alignment },
+		};
+		expect(frameMatchesPreset(modified, preset)).toBe(false);
+	});
+
+	test("ignores minted IDs but compares structure", () => {
+		const preset = BUILTIN_LAYOUT_PRESETS[0];
+		if (!preset) throw new Error("missing built-in preset");
+		const frame1 = instantiateWorkbenchFrame(preset);
+		const frame2 = instantiateWorkbenchFrame(preset);
+		// Different minted IDs, same structure
+		expect(frame1.center.id).not.toBe(frame2.center.id);
+		expect(frameMatchesPreset(frame1, preset)).toBe(true);
+		expect(frameMatchesPreset(frame2, preset)).toBe(true);
+	});
+
+	test("tolerates tiny floating-point differences", () => {
+		const preset = BUILTIN_LAYOUT_PRESETS[0];
+		if (!preset) throw new Error("missing built-in preset");
+		const frame = instantiateWorkbenchFrame(preset);
+		// Tiny difference within tolerance (0.001)
+		const modified = { ...frame, left: { ...frame.left, width: frame.left.width + 0.0001 } };
+		expect(frameMatchesPreset(modified, preset)).toBe(true);
+	});
+
+	test("detects tool order changes", () => {
+		const preset = BUILTIN_LAYOUT_PRESETS[0];
+		if (!preset) throw new Error("missing built-in preset");
+		const frame = instantiateWorkbenchFrame(preset);
+		const firstGroup = frame.right.groups[0];
+		if (!firstGroup || firstGroup.tools.length < 2) {
+			// Skip if not enough tools to reorder
+			return;
+		}
+		// Reverse tool order
+		const modified = {
+			...frame,
+			right: {
+				...frame.right,
+				groups: [
+					{ ...firstGroup, tools: [...firstGroup.tools].reverse() },
+					...frame.right.groups.slice(1),
+				],
+			},
+		};
+		expect(frameMatchesPreset(modified, preset)).toBe(false);
 	});
 });

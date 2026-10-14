@@ -109,10 +109,12 @@ The shared source scanner covers app source, `packages/ui`, and every `thinkrail
   through an arbitrary value** (`p-[8px]`, `p-[var(--space-8)]`) — the numeric utility is the one way;
 - keyword suffixes that are not rhythm stay fine (`ml-auto`, `gap-px` hairline);
 - the **bracket escape hatch is closed** to the documented measured/geometry expressions that are not
-  rhythm steps: `pr-[2rem]` (a close-button reserve), `pl-[1.6em]` (an em-relative list indent), and the
-  icon-aligned `pl-[calc(0.875rem+var(--space-8))]` /
-  `pl-[calc(1.125rem+var(--space-8))]` indents. Any other arbitrary spacing utility fails the guard; adding
-  one is a design decision recorded here, not a silent escape from the scale;
+  rhythm steps: `pr-[2rem]` (a close-button reserve), `pl-[1.6em]` (an em-relative list indent), the
+  icon-aligned `pl-[calc(0.875rem+var(--space-8))]` / `pl-[calc(1.125rem+var(--space-8))]` indents, and
+  `pb-[2.5rem]` (ModelSelector footer-overlay scroll clearance — structural geometry to clear the
+  absolutely positioned gradient footer and refresh button, not rhythm). Any other arbitrary spacing
+  utility fails the guard; adding one is a design decision recorded here, not a silent escape from the
+  scale;
 - the scale is a defined primitive set, so a step is **not** required to have a consumer — the gate has no
   orphan/reachability check that could reject a reserved primitive (`32`/`40`/`64`);
 - handwritten CSS declarations throughout those source roots are covered, including multiline declarations and

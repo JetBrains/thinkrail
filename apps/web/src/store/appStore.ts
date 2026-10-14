@@ -64,6 +64,7 @@ import type {
 	ExtUiDialogRequest,
 	ToolResultState,
 } from "../chat/types";
+import { STORAGE_PREFIX } from "../constants/branding";
 import {
 	isPreviewCompatibleTabKind,
 	type LayoutAttention,
@@ -936,8 +937,10 @@ interface AppState {
 	obscuredChatSessions: Record<string, true>;
 	extUiOrphans: ExtUiRequest[];
 	models: WireModel[];
+	hiddenModels: { provider: string; id: string }[];
 	providerVersion: number;
 	templatesVersion: number;
+	providersRefreshRequest: number;
 	modelsRefreshing: boolean;
 	modelsFresh: boolean;
 	changesRequest: {
@@ -1226,8 +1229,12 @@ interface AppState {
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
 	handlePiEvents: (payloads: readonly SessionEventPayload[]) => void;
 	setModelsForProviderVersion: (providerVersion: number, models: WireModel[]) => void;
+	loadHiddenModels: () => void;
+	setModelVisibility: (model: { provider: string; id: string }, visible: boolean) => void;
+	toggleModelVisibility: (model: { provider: string; id: string }) => void;
 	noteProviderChanged: () => void;
 	bumpTemplatesVersion: () => void;
+	requestProvidersRefresh: () => void;
 	beginModelsRefresh: () => number;
 	finishModelsRefresh: (providerVersion: number, result: RefreshedModels | null) => void;
 	dropModelsFreshness: () => void;
@@ -2105,8 +2112,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 	obscuredChatSessions: {},
 	extUiOrphans: [],
 	models: [],
+	hiddenModels: [],
 	providerVersion: 0,
 	templatesVersion: 0,
+	providersRefreshRequest: 0,
 	modelsRefreshing: false,
 	modelsFresh: false,
 	changesRequest: null,
@@ -3871,6 +3880,54 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	setModelsForProviderVersion: (providerVersion, models) =>
 		set((s) => (s.providerVersion === providerVersion ? { models, modelsFresh: false } : s)),
+	loadHiddenModels: () => {
+		const storage = typeof localStorage !== "undefined" ? localStorage : null;
+		if (!storage) return;
+		const httpBase = typeof window !== "undefined" ? window.location.origin : "";
+		const key = `${STORAGE_PREFIX}hidden-models:${httpBase}`;
+		try {
+			const stored = storage.getItem(key);
+			if (!stored) return;
+			const parsed = JSON.parse(stored);
+			if (!Array.isArray(parsed)) return;
+			const hiddenModels = parsed.filter(
+				(item): item is { provider: string; id: string } =>
+					typeof item === "object" &&
+					item !== null &&
+					typeof item.provider === "string" &&
+					typeof item.id === "string",
+			);
+			set({ hiddenModels });
+		} catch {
+			// Ignore parse errors
+		}
+	},
+	setModelVisibility: (model, visible) => {
+		const { hiddenModels } = get();
+		const isHidden = hiddenModels.some((h) => h.provider === model.provider && h.id === model.id);
+		if (visible && !isHidden) return;
+		if (!visible && isHidden) return;
+		const next = visible
+			? hiddenModels.filter((h) => !(h.provider === model.provider && h.id === model.id))
+			: [...hiddenModels, { provider: model.provider, id: model.id }];
+		set({ hiddenModels: next });
+		// Persist to localStorage
+		const storage = typeof localStorage !== "undefined" ? localStorage : null;
+		if (!storage) return;
+		const httpBase = typeof window !== "undefined" ? window.location.origin : "";
+		const key = `${STORAGE_PREFIX}hidden-models:${httpBase}`;
+		try {
+			if (next.length === 0) storage.removeItem(key);
+			else storage.setItem(key, JSON.stringify(next));
+		} catch {
+			// Storage full or unavailable
+		}
+	},
+	toggleModelVisibility: (model) => {
+		const { hiddenModels } = get();
+		const isHidden = hiddenModels.some((h) => h.provider === model.provider && h.id === model.id);
+		get().setModelVisibility(model, isHidden);
+	},
 	noteProviderChanged: () =>
 		set((s) => ({
 			models: [],
@@ -3879,6 +3936,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 			providerVersion: s.providerVersion + 1,
 		})),
 	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
+	requestProvidersRefresh: () =>
+		set((s) => ({ providersRefreshRequest: s.providersRefreshRequest + 1 })),
 	beginModelsRefresh: () => {
 		const providerVersion = get().providerVersion;
 		set({ modelsRefreshing: true });
