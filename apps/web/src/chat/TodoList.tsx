@@ -430,7 +430,7 @@ function TodoRow({
 						onClick={() => {
 							void onRemove(todo.id);
 						}}
-						className="shrink-0 rounded-sm p-2 text-text-muted opacity-0 group-hover:opacity-100 hover:bg-control-bg-pressed hover:text-text-default focus:opacity-100"
+						className="shrink-0 rounded-sm p-2 text-text-muted opacity-0 group-hover:opacity-100 hover:bg-control-bg-selected hover:text-text-default focus:opacity-100"
 					>
 						<Close className="size-14" />
 					</button>
