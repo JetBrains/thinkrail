@@ -1202,7 +1202,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   clears a step's `changes_requested`, re-reads the plan) + the
   `openMarkdown` snapshot action; tool completion refreshes immediately and `agent_settled` supplies the
   final refresh; overlapping list reads are latest-wins and connection-generation stamped, accepted adds
-  fold by item id; plus the agent-review ops `startReview` (`todo.startReview`) and
+  fold by item id; `remove` patches the row out optimistically and, when the host rejects it, reloads
+  authority and raises an error toast; plus the agent-review ops `startReview` (`todo.startReview`) and
   `reviewAll` (`todo.reviewAll`) — both re-read the plan, since the review decoration is host-derived
   and never patched locally; the manual-verdict ops were removed with the plan page's manual mode —
   `todo.review`/`todo.requestFix` remain on the wire, host-side), `planView` (pure derivations over the DTO: `groupProgress`,

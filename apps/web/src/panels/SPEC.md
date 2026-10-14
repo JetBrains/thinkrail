@@ -922,7 +922,7 @@ a project picker, the prompt hero, and the reused
   click (row just became done between render and click) never surfaces as an unhandled rejection.
   The center-tab Plan page does NOT expose this affordance — it is a review-trail surface, and
   queue manipulation lives on the rail. The agent still manages its own removal through pi-todos'
-  `todo_remove` tool, which bypasses the host guard (needed for `todo_promote` cleanup).
+  `todo_remove` tool, which bypasses the host guard.
 
   Center-tab Plan renders the session's TODO plan document-scale,
   **status-grouped** (`planSections`): a single **`Now` block** (`plan-now-executing`) holds the

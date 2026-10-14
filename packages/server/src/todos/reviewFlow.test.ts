@@ -10,6 +10,7 @@ import {
 	clearAllPendingReviews,
 	dropReviewRecord,
 	putReviewRecord,
+	readAutoCycles,
 	readReviewRecords,
 	setAutoCycles,
 } from "./reviews";
@@ -285,6 +286,7 @@ test("removeTodo drops a pending/in_progress item plus its baseline + review rec
 	const pending = store.add({ title: "pending work" });
 	const active = store.add({ title: "active work" });
 	store.update(active.id, { status: "in_progress" });
+	setAutoCycles(repo, SESSION, active.id, 1);
 
 	await removeTodo({ workspaceId: "w1", sessionId: SESSION, id: pending.id });
 	await removeTodo({ workspaceId: "w1", sessionId: SESSION, id: active.id });
@@ -292,6 +294,7 @@ test("removeTodo drops a pending/in_progress item plus its baseline + review rec
 	const plan = new TodoStore(repo, SESSION).read();
 	expect(plan.todos.find((t) => t.id === pending.id)).toBeUndefined();
 	expect(plan.todos.find((t) => t.id === active.id)).toBeUndefined();
+	expect(readAutoCycles(repo, SESSION, active.id)).toBeUndefined();
 });
 
 test("removeTodo refuses a done item \u2014 completed steps are the plan's history", async () => {

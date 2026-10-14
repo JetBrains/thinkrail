@@ -28,8 +28,8 @@ constrained by `removeTodo`'s **done-guard**: pending / in_progress items can be
 shows a hover "Remove" button on them); a `done` item is rejected because completed steps are the
 plan's audit trail. The host also layers an active-review guard (`isItemUnderActiveReview`) so a
 mid-review cancellation can't strand review bookkeeping. The agent's own `todo_remove` tool goes
-through `TodoStore.remove` directly and does NOT run through this gate (needed for `todo_promote`
-cleanup). `updateTodo` unwraps the store's
+through `TodoStore.remove` directly and does not run through this gate. A UI removal also drops the
+item's baseline, review record and auto-review cycle count. `updateTodo` unwraps the store's
 `TodoUpdateResult` (`{ todo, paused }` — `paused` = items auto-demoted to keep one `in_progress`); the
 wire response stays a bare `TodoItem` — the UI re-reads the whole plan on change, so demotions arrive
 with the next `todo.list`.

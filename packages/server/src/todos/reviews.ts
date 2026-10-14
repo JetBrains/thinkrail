@@ -196,6 +196,13 @@ export function restoreReviewRecord(
 	return true;
 }
 
+export function clearAutoCycles(root: string, sessionId: string, id: string): void {
+	const file = readFile(root, sessionId);
+	if (!file.autoCycles?.[id]) return;
+	delete file.autoCycles[id];
+	writeFile(root, sessionId, file);
+}
+
 export function dropReviewRecord(
 	root: string,
 	sessionId: string,

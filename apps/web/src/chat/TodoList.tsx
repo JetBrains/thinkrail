@@ -427,6 +427,7 @@ function TodoRow({
 					<button
 						type="button"
 						data-testid="todo-remove"
+						aria-label="Remove from the queue"
 						onClick={() => {
 							void onRemove(todo.id);
 						}}

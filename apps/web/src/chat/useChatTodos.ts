@@ -303,11 +303,6 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		broadcastWrite(identity); // and tell sibling hooks about it
 	};
 
-	// User-driven cancellation of a queued step. The host throws if the item is already `done`
-	// (completed steps are the plan's history) or under active review. We own the failure path end
-	// to end here: the optimistic patch removes the row immediately for a snappy UI; on reject we
-	// roll back from authority and toast an error. The promise resolves either way, so a call site
-	// can `void plan.remove(id)` without producing an unhandled rejection on a stale click.
 	const remove = async (id: string): Promise<void> => {
 		const requestIdentity = identity;
 		setData((prev) => {

@@ -20,6 +20,7 @@ import { getWorkspace } from "../workspaces";
 import { enqueueTodoMutation, settleChangeArtifacts, unattributedChanges } from "./artifacts";
 import { dropItemBaseline, readBaselines, removeSessionBaselines } from "./baselines";
 import {
+	clearAutoCycles,
 	clearReviewPending,
 	commitReviewTransition,
 	dropReviewRecord,
@@ -349,16 +350,6 @@ function reviewedWatermark(
 	return readReviewMeta(root, sessionId).pending[id]?.shas ?? commitShas(item);
 }
 
-/**
- * UI-driven removal of a plan item. Narrower than the agent's `todo_remove` tool: the user can
- * cancel a queued step (pending / in_progress) but can't delete a completed step 
- done items are
- * the plan's audit trail and are only ever hidden/compressed, never removed from the UI. The host
- * also guards against removing an item that is actively being reviewed (durable `pending` mark +
- * in-memory fix latch), so a mid-review cancellation can't strand review bookkeeping. Enqueued on
- * the per-workspace reconcile chain so the removal + baseline drop can't interleave with an
- * in-flight `maybeAttachChangeArtifacts` write. Agent code paths use `TodoStore.remove` directly.
- */
 export function removeTodo(
 	params: { workspaceId: string; sessionId: string; id: string },
 	isUnderActiveReview: () => boolean = () => false,
@@ -381,6 +372,7 @@ export function removeTodo(
 		store.remove(params.id);
 		dropItemBaseline(root, params.sessionId, params.id);
 		dropReviewRecord(root, params.sessionId, params.id);
+		clearAutoCycles(root, params.sessionId, params.id);
 		return { ok: true } as const;
 	});
 }
