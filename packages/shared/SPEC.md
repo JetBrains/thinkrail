@@ -33,8 +33,10 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   hidden-child-process seam every console child the host or CLI launches goes through;
   `@thinkrail/shared/jbcentral` → the native Central CLI adapter: absolute executable/version/status
   probing; the minimum supported version and the global opaque PI-extension path; a one-directional auth
-  verdict; an artifact-location watcher; `add pi` / `remove pi` / `login` / `update --install` actions; and
-  the per-OS official install plan. It never edits PI model or credential configuration.
+  verdict; an artifact-location watcher; `add pi` / `remove pi` / `login` / `update --install` actions; the
+  per-OS official install plan; and AI access source listing/switching (`listJbcentralAccessSources`,
+  `switchJbcentralAccessSource`) for accounts with more than one org/workspace. It never edits PI model or
+  credential configuration.
 - **/spawn** — `spawnSyncCaptured()` (sync capture → `{ launched, exitCode, stdout, stderr }`),
   `spawnSyncCapturedBytes()` (the same launch and exit semantics with **`stdout` left as bytes**, for a
   caller reading binary child output the UTF-8 decoder would replace — stderr stays decoded text, since a
@@ -127,7 +129,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   parses a bounded `central --version` result into a compatibility verdict, exposes the
   global opaque artifact path (`~/.pi/agent/extensions/jetbrains-central.ts`, and the `~/.local/bin/`
   installer fallback) and existence only, and invokes only the reviewed argv: `status`, `quota --json`,
-  `add pi`, `remove pi`, `login`, `update --install`, and `proxy start --ensure-updated`. Support is a
+  `add pi`, `remove pi`, `login`, `update --install`, `proxy start --ensure-updated`, `login export`,
+  `access <selectionId>`, and `proxy stop`. Support is a
   **minimum version only** (`MINIMUM_CENTRAL_VERSION`,
   `1.4.0` — the first Central release carrying the native PI surface): anything at or above it is supported,
   lower versions require update, and malformed output is
@@ -143,7 +146,7 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   presentation collapses to **unknown/not-stopped**. Only those positively observed negative facts may drive
   a recovery demand. This is the only place presentation output is read, and the shared observation never
   returns raw text, port, PID, URL, account, licence, company, server details, or diagnostics. Swapping to
-  JSON later remains internal to this boundary; every other command's output is still never parsed.
+  JSON later remains internal to this boundary; other presentation output is never parsed.
   The probe is expensive by Central's design (a proxy health check plus a network update check, ~1.3s, and one
   CLI analytics event per call), so `JBCENTRAL_STATUS_TTL_MS` bounds how long a caller
   may serve an observation before re-probing; nothing here polls.
@@ -209,6 +212,22 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   plan carried to the card; a remote browser never guesses its own OS. **The server's `auth` module is the sole
   caller** and composes these host-local actions and watcher invalidations with `agent`'s runtime-generation
   seam.
+
+  **AI access source listing uses the existing Central session.** `listJbcentralAccessSources()` captures
+  `central login export`, decodes its version-1 `central-` transfer envelope in memory, and admits only
+  production/staging JetBrains Account sessions. It exchanges the exported refresh token at the fixed
+  account OAuth endpoint (`client_id=central-cli`) and requests the matching Cloud user-management
+  `/api/ai-access-options` endpoint. Enabled workspace/license entries yield display names and selection
+  IDs; the exported `ai_access` selection supplies the current marker. Unknown environments, malformed
+  envelopes/responses, failed requests, and unexpected refresh-token rotation fail closed. Credentials
+  and raw responses are never persisted, logged, thrown, or sent to clients; child and HTTP reads have
+  byte limits and deadlines, and redirects are rejected. This endpoint/envelope integration is not a
+  documented machine-readable Central listing contract and may require updating when Central changes.
+  No browser login, TUI automation, encrypted-store reads, or log parsing is involved.
+
+  `switchJbcentralAccessSource(id)` runs the supported `central access <id>` command. Successful switching
+  best-effort restarts the proxy (`proxy stop`, then `proxy start --ensure-updated`), reported separately
+  through `proxyRestarted`: a failed restart does not undo the selection Central already saved.
 
 ## Get right (shellEnv)
 

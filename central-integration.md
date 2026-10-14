@@ -5,7 +5,7 @@ status: active
 title: JetBrains AI via the Central CLI — cross-module lifecycle
 parent: architecture
 depends-on: [module-shared, submodule-server-auth, submodule-server-agent, module-contracts, submodule-web-panels, submodule-server-settings, submodule-web-shell, submodule-web-store]
-covers: [central-lifecycle, central-liveness, central-trust-boundary, central-artifact, central-quota]
+covers: [central-lifecycle, central-liveness, central-trust-boundary, central-artifact, central-quota, central-access-source]
 tags: [providers, central]
 ---
 
@@ -67,15 +67,19 @@ Two facts the lifecycle table encodes that no single module states:
    verdict, and watcher; the runtime receives only its opaque path. Because configured truth uses existence
    alone, in-place replacement depends on the watcher rather than the existence poll. The local mechanics
    remain authoritative in [[module-shared]] and [[submodule-server-agent]].
-2. **No Central-derived text reaches a client.** The process adapter, pre-extension provider allowlist, and
-   closed wire status each enforce one part of that guarantee; their local contracts remain in
-   [[module-shared]], [[submodule-server-agent]], [[submodule-server-auth]], and [[module-contracts]].
-   The built-ins the artifact re-registers (`anthropic`, `openai`, `google-vertex`) are the one place Central
-   *is* visible outside the card: they remain ordinary provider rows labelled `kind: "central"` ("JetBrains
-   AI"), attributed by registration identity so the user can see which providers reach them through Central
+2. **No Central-derived text reaches a client, with one narrow, named exception.** The process adapter,
+   pre-extension provider allowlist, and closed wire status each enforce one part of that guarantee; their
+   local contracts remain in [[module-shared]], [[submodule-server-agent]], [[submodule-server-auth]], and
+   [[module-contracts]]. Quota extends the rule with a structured numeric allowlist: account, plan, usage,
+   top-up, refill, diagnostics, and raw output remain host-local and are discarded. **AI access source
+   display name and kind are the one exception** — a user cannot choose between orgs/workspaces without
+   seeing what they are called, so the feature is impossible under a literal reading of this rule. Nothing
+   else changes: account/licence/company/server/diagnostic detail is still discarded, and the switch
+   `selectionId` that rides alongside each name is an opaque token (like the reviewed artifact path
+   elsewhere in this chain), never parsed or displayed as text by any client.
+   The built-ins the artifact re-registers (`anthropic`, `openai`, `google-vertex`) remain ordinary
+   provider rows labelled `kind: "central"` ("JetBrains AI"), attributed by registration identity
    without any of its configuration crossing the wire.
-   Quota extends the rule with a structured numeric allowlist: account, plan, usage, top-up, refill,
-   diagnostics, and raw output remain host-local and are discarded.
 3. **Quota is a separate read, not provider status and not a host ticker.** Provider lifecycle and quota have
    different latency/failure semantics, while a host-owned timer would run without a visible consumer.
    Visible clients own cadence; one host cache/single-flight prevents them multiplying CLI work.

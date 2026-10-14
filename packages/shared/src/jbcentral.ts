@@ -108,6 +108,7 @@ export interface JbcentralAdapterDependencies {
 	run?: (request: ProcessRequest) => Promise<ProcessResult>;
 	launchDetached?: (argv: readonly string[]) => LoginHandle | null;
 	watchDirectory?: (path: string, onEntry: (entry: string | null) => void) => WatchHandle;
+	fetch?: (url: string, init: RequestInit) => Promise<Response>;
 }
 
 interface SemanticVersion {
@@ -401,6 +402,221 @@ export async function readJbcentralQuota(
 	if (result.outcome !== "exited") return { outcome: "failed", reason: result.outcome };
 	if (result.exitCode !== 0) return { outcome: "failed", reason: "nonzero-exit" };
 	return parseJbcentralQuota(result.stdout);
+}
+
+export interface JbcentralAccessSource {
+	displayName: string;
+	kind: string;
+	current: boolean;
+	selectionId: string | null;
+}
+
+export type JbcentralAccessListResult =
+	| { outcome: "succeeded"; sources: JbcentralAccessSource[] }
+	| {
+			outcome: "failed";
+			reason:
+				| "not-installed"
+				| "launch-failed"
+				| "timed-out"
+				| "output-too-large"
+				| "nonzero-exit"
+				| "invalid-output"
+				| "request-failed";
+	  };
+
+export type JbcentralAccessSwitchResult =
+	| { outcome: "succeeded"; proxyRestarted: boolean }
+	| { outcome: "failed"; reason: "not-installed" | "launch-failed" | "timed-out" | "nonzero-exit" };
+
+const MAX_ACCESS_RESPONSE_BYTES = 65_536;
+
+function objectValue(value: unknown): Record<string, unknown> | null {
+	return value !== null && typeof value === "object" && !Array.isArray(value)
+		? Object.fromEntries(Object.entries(value))
+		: null;
+}
+
+function accessSelectionId(value: Record<string, unknown>): string | null {
+	const id = (key: string): string | null => {
+		const candidate = value[key];
+		return typeof candidate === "string" && /^[A-Za-z0-9-]+$/u.test(candidate) ? candidate : null;
+	};
+	if (value.type === "workspace") {
+		const org = id("orgId");
+		const workspace = id("workspaceId");
+		return org && workspace ? `workspace:${org}:${workspace}` : null;
+	}
+	const license = id("licenseId");
+	return value.type === "license" && license ? `license:${license}` : null;
+}
+
+async function accessResponse(
+	url: string,
+	init: RequestInit,
+	deps: JbcentralAdapterDependencies,
+	signal: AbortSignal,
+): Promise<Record<string, unknown> | null> {
+	const response = await (deps.fetch ?? fetch)(url, { ...init, signal, redirect: "error" });
+	if (!response.ok) {
+		await response.body?.cancel();
+		return null;
+	}
+	if (!response.body) return null;
+	const body = await readBounded(response.body, MAX_ACCESS_RESPONSE_BYTES);
+	return body.outcome === "ok" ? objectValue(JSON.parse(body.text)) : null;
+}
+
+export async function listJbcentralAccessSources(
+	deps: JbcentralAdapterDependencies = {},
+): Promise<JbcentralAccessListResult> {
+	const executablePath = resolveJbcentralBin(deps);
+	if (!executablePath) return { outcome: "failed", reason: "not-installed" };
+
+	let result: ProcessResult;
+	try {
+		result = await processRunner(deps)({
+			argv: [executablePath, "login", "export"],
+			captureStdout: true,
+			timeoutMs: STATUS_TIMEOUT_MS,
+			maxStdoutBytes: MAX_STATUS_OUTPUT_BYTES,
+		});
+	} catch {
+		return { outcome: "failed", reason: "launch-failed" };
+	}
+	if (result.outcome !== "exited") return { outcome: "failed", reason: result.outcome };
+	if (result.exitCode !== 0) return { outcome: "failed", reason: "nonzero-exit" };
+
+	const signal = AbortSignal.timeout(STATUS_TIMEOUT_MS);
+	try {
+		const encoded = result.stdout.trim();
+		if (!/^central-[A-Za-z0-9_-]+$/u.test(encoded)) {
+			return { outcome: "failed", reason: "invalid-output" };
+		}
+		const session = objectValue(JSON.parse(Buffer.from(encoded.slice(8), "base64url").toString()));
+		if (
+			session?.version !== 1 ||
+			typeof session.refresh_token !== "string" ||
+			!session.refresh_token ||
+			(session.environment !== "prod" && session.environment !== "staging")
+		)
+			return { outcome: "failed", reason: "invalid-output" };
+		const staging = session.environment === "staging";
+		const token = await accessResponse(
+			staging
+				? "https://public.aip.oauth.intservices.aws.intellij.net/oauth2/token"
+				: "https://oauth.account.jetbrains.com/oauth2/token",
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams({
+					grant_type: "refresh_token",
+					client_id: "central-cli",
+					refresh_token: session.refresh_token,
+				}),
+			},
+			deps,
+			signal,
+		);
+		if (
+			!token ||
+			typeof token.access_token !== "string" ||
+			!token.access_token ||
+			(token.refresh_token !== undefined && token.refresh_token !== session.refresh_token)
+		) {
+			return { outcome: "failed", reason: "request-failed" };
+		}
+		const response = await accessResponse(
+			`https://api.${staging ? "stgn." : ""}jetbrains.cloud/user-management/api/ai-access-options`,
+			{ headers: { Authorization: `Bearer ${token.access_token}`, Accept: "application/json" } },
+			deps,
+			signal,
+		);
+		if (!response || !Array.isArray(response.aiAccessOptions)) {
+			return { outcome: "failed", reason: "invalid-output" };
+		}
+		const current = objectValue(session.ai_access);
+		const currentId = current
+			? accessSelectionId({
+					type: current.type,
+					orgId: current.org_id,
+					workspaceId: current.workspace_id,
+					licenseId: current.license_id,
+				})
+			: null;
+		const sources: JbcentralAccessSource[] = [];
+		for (const entry of response.aiAccessOptions) {
+			const option = objectValue(entry);
+			if (option?.aiAccessEnabled !== true) continue;
+			const selectionId = accessSelectionId(option);
+			const displayName = option.type === "workspace" ? option.workspaceName : option.licenseName;
+			if (!selectionId || typeof displayName !== "string" || !displayName.trim()) {
+				return { outcome: "failed", reason: "invalid-output" };
+			}
+			sources.push({
+				displayName,
+				kind: option.type === "workspace" ? "workspace" : "license",
+				current: selectionId === currentId,
+				selectionId,
+			});
+		}
+		return { outcome: "succeeded", sources };
+	} catch {
+		return { outcome: "failed", reason: signal.aborted ? "timed-out" : "request-failed" };
+	}
+}
+
+async function restartJbcentralProxy(deps: JbcentralAdapterDependencies): Promise<boolean> {
+	const executablePath = resolveJbcentralBin(deps);
+	if (!executablePath) return false;
+	const run = processRunner(deps);
+	try {
+		const stop = await run({
+			argv: [executablePath, "proxy", "stop"],
+			captureStdout: false,
+			timeoutMs: ACTION_TIMEOUT_MS,
+			maxStdoutBytes: 0,
+		});
+		if (stop.outcome !== "exited" || stop.exitCode !== 0) return false;
+		const start = await run({
+			argv: [executablePath, "proxy", "start", "--ensure-updated"],
+			captureStdout: false,
+			timeoutMs: ACTION_TIMEOUT_MS,
+			maxStdoutBytes: 0,
+		});
+		return start.outcome === "exited" && start.exitCode === 0;
+	} catch {
+		return false;
+	}
+}
+
+export async function switchJbcentralAccessSource(
+	selectionId: string,
+	deps: JbcentralAdapterDependencies = {},
+): Promise<JbcentralAccessSwitchResult> {
+	const executablePath = resolveJbcentralBin(deps);
+	if (!executablePath) return { outcome: "failed", reason: "not-installed" };
+
+	let result: ProcessResult;
+	try {
+		result = await processRunner(deps)({
+			argv: [executablePath, "access", selectionId],
+			captureStdout: false,
+			timeoutMs: ACTION_TIMEOUT_MS,
+			maxStdoutBytes: 0,
+		});
+	} catch {
+		return { outcome: "failed", reason: "launch-failed" };
+	}
+	if (result.outcome !== "exited") {
+		return {
+			outcome: "failed",
+			reason: result.outcome === "output-too-large" ? "launch-failed" : result.outcome,
+		};
+	}
+	if (result.exitCode !== 0) return { outcome: "failed", reason: "nonzero-exit" };
+
+	return { outcome: "succeeded", proxyRestarted: await restartJbcentralProxy(deps) };
 }
 
 export async function probeJbcentralStatus(

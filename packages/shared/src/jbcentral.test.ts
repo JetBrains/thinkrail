@@ -9,6 +9,7 @@ import {
 	jbcentralExtensionPath,
 	jbcentralInstall,
 	launchJbcentralLogin,
+	listJbcentralAccessSources,
 	MINIMUM_CENTRAL_VERSION,
 	parseJbcentralStatusObservation,
 	parseJbcentralVersion,
@@ -16,6 +17,7 @@ import {
 	readJbcentralQuota,
 	resolveJbcentralBin,
 	runJbcentralAction,
+	switchJbcentralAccessSource,
 	watchJbcentralArtifact,
 } from "./jbcentral";
 
@@ -811,5 +813,291 @@ describe("Central paths and install guidance", () => {
 			shell: "powershell",
 			command: `irm ${base}/install.ps1 | iex`,
 		});
+	});
+});
+
+function accessExport(overrides: Record<string, unknown> = {}): string {
+	return `central-${Buffer.from(
+		JSON.stringify({
+			version: 1,
+			environment: "prod",
+			refresh_token: "synthetic-refresh-secret",
+			ai_access: { type: "workspace", org_id: "ccc", workspace_id: "ddd" },
+			...overrides,
+		}),
+	).toString("base64url")}`;
+}
+
+const accessOptions = [
+	{
+		type: "workspace",
+		orgId: "aaa",
+		workspaceId: "bbb",
+		workspaceName: "Shared name",
+		aiAccessEnabled: true,
+	},
+	{
+		type: "workspace",
+		orgId: "ccc",
+		workspaceId: "ddd",
+		workspaceName: "Shared name",
+		aiAccessEnabled: true,
+	},
+	{ type: "license", licenseId: "license-123", licenseName: "Personal AI", aiAccessEnabled: true },
+	{
+		type: "workspace",
+		orgId: "disabled",
+		workspaceId: "disabled",
+		workspaceName: "Disabled",
+		aiAccessEnabled: false,
+	},
+];
+
+function accessDeps(overrides: JbcentralAdapterDependencies = {}): JbcentralAdapterDependencies {
+	return adapterDeps({
+		run: async () => ({ outcome: "exited", exitCode: 0, stdout: accessExport() }),
+		fetch: async (url) =>
+			Response.json(
+				url.endsWith("/oauth2/token")
+					? { access_token: "synthetic-access-secret", refresh_token: "synthetic-refresh-secret" }
+					: { aiAccessOptions: accessOptions, email: "synthetic-private-account" },
+			),
+		...overrides,
+	});
+}
+
+describe("listJbcentralAccessSources", () => {
+	test("exports the session, exchanges credentials and selects current by ID rather than name", async () => {
+		const commands: string[][] = [];
+		const requests: Array<{ url: string; init: RequestInit }> = [];
+		const deps = accessDeps({
+			run: async (request) => {
+				commands.push([...request.argv]);
+				return { outcome: "exited", exitCode: 0, stdout: accessExport() };
+			},
+			fetch: async (url, init) => {
+				requests.push({ url, init });
+				return Response.json(
+					url.endsWith("/oauth2/token")
+						? { access_token: "synthetic-access-secret" }
+						: { aiAccessOptions: accessOptions, email: "synthetic-private-account" },
+				);
+			},
+		});
+		const result = await listJbcentralAccessSources(deps);
+		expect(result).toEqual({
+			outcome: "succeeded",
+			sources: [
+				{
+					displayName: "Shared name",
+					kind: "workspace",
+					current: false,
+					selectionId: "workspace:aaa:bbb",
+				},
+				{
+					displayName: "Shared name",
+					kind: "workspace",
+					current: true,
+					selectionId: "workspace:ccc:ddd",
+				},
+				{
+					displayName: "Personal AI",
+					kind: "license",
+					current: false,
+					selectionId: "license:license-123",
+				},
+			],
+		});
+		expect(commands).toEqual([[CENTRAL_BIN, "login", "export"]]);
+		expect(requests.map(({ url }) => url)).toEqual([
+			"https://oauth.account.jetbrains.com/oauth2/token",
+			"https://api.jetbrains.cloud/user-management/api/ai-access-options",
+		]);
+		expect(String(requests[0]?.init.body)).toBe(
+			"grant_type=refresh_token&client_id=central-cli&refresh_token=synthetic-refresh-secret",
+		);
+		expect(requests[1]?.init.headers).toEqual({
+			Authorization: "Bearer synthetic-access-secret",
+			Accept: "application/json",
+		});
+		for (const { init } of requests) {
+			expect(init.redirect).toBe("error");
+			expect(init.signal).toBeInstanceOf(AbortSignal);
+		}
+		for (const secret of [
+			"synthetic-refresh-secret",
+			"synthetic-access-secret",
+			"synthetic-private-account",
+		])
+			expect(JSON.stringify(result)).not.toContain(secret);
+	});
+
+	test("routes staging only to the fixed staging endpoints and identifies license selection", async () => {
+		const urls: string[] = [];
+		const result = await listJbcentralAccessSources(
+			accessDeps({
+				run: async () => ({
+					outcome: "exited",
+					exitCode: 0,
+					stdout: accessExport({
+						environment: "staging",
+						ai_access: { type: "license", license_id: "license-123" },
+					}),
+				}),
+				fetch: async (url) => {
+					urls.push(url);
+					return Response.json(
+						url.endsWith("/oauth2/token")
+							? { access_token: "synthetic-access-secret" }
+							: { aiAccessOptions: accessOptions },
+					);
+				},
+			}),
+		);
+		expect(urls).toEqual([
+			"https://public.aip.oauth.intservices.aws.intellij.net/oauth2/token",
+			"https://api.stgn.jetbrains.cloud/user-management/api/ai-access-options",
+		]);
+		expect(
+			result.outcome === "succeeded" &&
+				result.sources.find((source) => source.current)?.selectionId,
+		).toBe("license:license-123");
+	});
+
+	test("rejects unknown environments and malformed envelopes before any network request", async () => {
+		for (const stdout of [
+			"sensitive-invalid-output",
+			accessExport({ version: 2 }),
+			accessExport({ environment: "ides" }),
+			accessExport({ refresh_token: "" }),
+		]) {
+			let called = false;
+			const result = await listJbcentralAccessSources(
+				accessDeps({
+					run: async () => ({ outcome: "exited", exitCode: 0, stdout }),
+					fetch: async () => {
+						called = true;
+						throw new Error("unexpected HTTP");
+					},
+				}),
+			);
+			expect(result.outcome).toBe("failed");
+			expect(called).toBe(false);
+			expect(JSON.stringify(result)).not.toContain(stdout);
+		}
+	});
+
+	test("fails closed on token rotation, HTTP errors, malformed and oversized responses", async () => {
+		for (const response of [
+			Response.json({ access_token: "secret", refresh_token: "rotated-secret" }),
+			Response.json({ error: "sensitive-error" }, { status: 401 }),
+			new Response("sensitive-invalid-json"),
+			new Response("x".repeat(65_537)),
+		]) {
+			let calls = 0;
+			const result = await listJbcentralAccessSources(
+				accessDeps({
+					fetch: async () => {
+						calls++;
+						return response;
+					},
+				}),
+			);
+			expect(result.outcome).toBe("failed");
+			expect(calls).toBe(1);
+			expect(JSON.stringify(result)).not.toContain("secret");
+		}
+	});
+
+	test("rejects invalid source IDs and handles empty lists", async () => {
+		for (const aiAccessOptions of [[], [{ ...accessOptions[0], workspaceId: "id:injection" }]]) {
+			const result = await listJbcentralAccessSources(
+				accessDeps({
+					fetch: async (url) =>
+						Response.json(
+							url.endsWith("/oauth2/token")
+								? { access_token: "synthetic-access-secret" }
+								: { aiAccessOptions },
+						),
+				}),
+			);
+			expect(result).toEqual(
+				aiAccessOptions.length
+					? { outcome: "failed", reason: "invalid-output" }
+					: { outcome: "succeeded", sources: [] },
+			);
+		}
+	});
+
+	test("returns closed process and network failures", async () => {
+		expect(
+			await listJbcentralAccessSources(adapterDeps({ which: () => null, exists: () => false })),
+		).toEqual({ outcome: "failed", reason: "not-installed" });
+		expect(
+			await listJbcentralAccessSources(
+				accessDeps({ run: async () => ({ outcome: "exited", exitCode: 1, stdout: "sensitive" }) }),
+			),
+		).toEqual({ outcome: "failed", reason: "nonzero-exit" });
+		expect(
+			await listJbcentralAccessSources(
+				accessDeps({
+					fetch: async () => {
+						throw new Error("sensitive");
+					},
+				}),
+			),
+		).toEqual({ outcome: "failed", reason: "request-failed" });
+	});
+});
+
+describe("switchJbcentralAccessSource", () => {
+	test("switches then restarts the proxy through reviewed absolute argv", async () => {
+		const requests: Array<readonly string[]> = [];
+		const deps = adapterDeps({
+			run: async (request) => {
+				requests.push(request.argv);
+				return { outcome: "exited", exitCode: 0, stdout: "" };
+			},
+		});
+		expect(await switchJbcentralAccessSource("workspace:aaa:bbb", deps)).toEqual({
+			outcome: "succeeded",
+			proxyRestarted: true,
+		});
+		expect(requests).toEqual([
+			[CENTRAL_BIN, "access", "workspace:aaa:bbb"],
+			[CENTRAL_BIN, "proxy", "stop"],
+			[CENTRAL_BIN, "proxy", "start", "--ensure-updated"],
+		]);
+	});
+
+	test("reports the switch as succeeded even when the proxy restart fails", async () => {
+		const deps = adapterDeps({
+			run: async (request) =>
+				request.argv[1] === "proxy"
+					? { outcome: "exited", exitCode: 1, stdout: "" }
+					: { outcome: "exited", exitCode: 0, stdout: "" },
+		});
+		expect(await switchJbcentralAccessSource("workspace:aaa:bbb", deps)).toEqual({
+			outcome: "succeeded",
+			proxyRestarted: false,
+		});
+	});
+
+	test("returns closed generic failures and discards raw command output", async () => {
+		const rawOutput = "synthetic-private-child-output";
+		expect(
+			await switchJbcentralAccessSource(
+				"workspace:aaa:bbb",
+				adapterDeps({ which: () => null, exists: () => false }),
+			),
+		).toEqual({ outcome: "failed", reason: "not-installed" });
+		const result = await switchJbcentralAccessSource(
+			"workspace:aaa:bbb",
+			adapterDeps({
+				run: async () => ({ outcome: "exited", exitCode: 7, stdout: rawOutput }),
+			}),
+		);
+		expect(result).toEqual({ outcome: "failed", reason: "nonzero-exit" });
+		expect(JSON.stringify(result)).not.toContain(rawOutput);
 	});
 });

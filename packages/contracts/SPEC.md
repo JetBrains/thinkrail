@@ -313,6 +313,16 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   v59 adds **`JbcentralQuotaSnapshot`**, the separate closed quota read: `hidden`, `available`, `stale`, or
   `unavailable`; only available/stale carry finite recurring `remaining` / `total` numbers and an observation
   timestamp. No account/plan/used/top-up/refill field or raw failure text exists;
+  protocol v84 adds the **AI access source wire** — the one exception to "no Central text on the wire"
+  (see [[central-integration]] decision 2): **`JbcentralAccessSourceWire`** (`{ displayName, kind, current,
+  selectionId }`) carries the org/workspace's display name and kind because the switch this wire exists
+  for is unusable without them, while `selectionId` is an opaque token, never parsed by any client; it is
+  nullable on the wire, and a client must not offer a switch action for a `null` source. The current host
+  supplies an id for every admitted source. **`JbcentralAccessListResult`** (`succeeded { sources }` / `failed`) answers
+  `provider.jbcentralAccessList`; **`JbcentralAccessSwitchResult`** (`succeeded { proxyRestarted } /
+  failed`) answers `provider.jbcentralAccessSwitch({ selectionId })` — `proxyRestarted` is reported
+  separately because a successful switch is never undone by a failed restart. No account, licence, org id,
+  workspace id, or diagnostic field crosses this wire beyond the opaque `selectionId`;
   the **theme/config selection** — **`ThemeId`** is an open string on the wire, because the host persists
   opaque selections while the independently shipped web client owns the available manifest catalog;
   **`ThemeMode`** is the closed `"fixed" | "system"` behavior and **`SystemThemePair`** carries one opaque
@@ -340,6 +350,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   a bare ack, and its detached failure arrives on the additive `review.failed` push (`ReviewFailedPayload`)
   since the review has no chat to carry it. An older client reads the dropped fields as absent, so the pin
   is what lets a client tell "this host has no reviewer chat" from "this host is older" rather than inferring it;
+  **`JBCENTRAL_ACCESS_PROTOCOL_VERSION`** pins the v84 AI access source list/switch wire;
   **`AppConfig`** (`{ theme, themeMode, systemThemePair?, analyticsEnabled, analyticsConsentConfirmed, terminalReplayKb,
   terminalWindowsShell, composerGrowthLimit, chatLineWidth, fileLineWidth, chatLineWidthBounded,
   fileLineWidthBounded, customLayoutPresets, defaultModel?, defaultEffort?, reviewModel?, reviewEffort?,

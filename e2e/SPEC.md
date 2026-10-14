@@ -191,7 +191,10 @@ the native-window path and broad browser behavior without introducing two compet
 
 JetBrains Central coverage uses a stateful, independently authored fake executable implementing only the
 argv/exit/postcondition surface ThinkRail invokes (`--version`, `status`, `quota --json`, `add pi`,
-`remove pi`, `login`, `update --install`). Its control file holds **space-separated tokens**, because the version a probe reports,
+`remove pi`, `login`, `login export`, `access <selectionId>`, `update --install`).
+Source-mode AI access switching tests use a host-only preload to intercept the two fixed JetBrains
+HTTP endpoints and require synthetic credentials; no request reaches a production service. These
+`@dev-seam` tests are excluded from artifact modes, which do not load the source-host preload. Its control file holds **space-separated tokens**, because the version a probe reports,
 whether credentials exist, and how an action fails are independent facts about a host: a single-valued control
 made real combinations unrepresentable, and a state that cannot be reached is a failure mode nothing asserts
 (`update --install` refusing while the host is below the minimum needs both at once). It

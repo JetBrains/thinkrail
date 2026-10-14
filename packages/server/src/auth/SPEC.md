@@ -123,6 +123,13 @@ ourselves and never surface a credential value over the wire.
     never persist. The caller supplies the settings-derived age, so auth does
     not import the settings sibling.
 
+    `getJbcentralAccessSources()` admits reads only while connected. `switchJbcentralAccess(id)`
+    serializes switches with other Central actions and shares only the latest queued switch when its
+    source id matches. An intervening different source preserves a later switch back to the original id.
+    Switching invalidates status and quota on success and publishes
+    provider invalidation. The display-name exception and best-effort proxy restart belong to
+    [[central-integration]] and [[module-shared]].
+
     Watcher events are debounced/coalesced and each rebuild re-inspects the latest version + artifact
     postcondition. A monotonic request sequence prevents an older candidate from activating after a newer
     file event. On success, auth activates the candidate for provider/model reads and future sessions, clears
@@ -138,7 +145,7 @@ ourselves and never surface a credential value over the wire.
 - **Public surface (barrel):** `getProviderStatus`, `buildProviderReport` (+ `ProviderStatusSources`);
   `startLogin`, `resolveLogin`, `cancelLogin`, `cancelAllLogins`, `logoutProvider`,
   `setLoginPublisher`; `initializeJbcentralRuntime`, `stopJbcentralRuntime`, `getJbcentralStatus`,
-  `getJbcentralQuota`, `connectJbcentral`, `disconnectJbcentral`, `startProxyJbcentral`,
+  `getJbcentralQuota`, `getJbcentralAccessSources`, `switchJbcentralAccess`, `connectJbcentral`, `disconnectJbcentral`, `startProxyJbcentral`,
   `updateJbcentral`, `jbcentralLogin`, the successful-action /
   runtime-changed publisher seams, and the explicit `resetJbcentralStateForTests` lifecycle seam used by
   sibling host tests.

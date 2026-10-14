@@ -18,8 +18,12 @@ const REVIEWED_ARGV = [
 	"add pi",
 	"remove pi",
 	"proxy start --ensure-updated",
+	"proxy stop",
 	"login",
 	"update --install",
+	"login export",
+	"access workspace:aaa:bbb",
+	"access workspace:ccc:ddd",
 ];
 
 export async function openProviders(page: Page): Promise<Locator> {

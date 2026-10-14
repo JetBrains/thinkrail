@@ -658,6 +658,21 @@ export type JbcentralQuotaSnapshot =
 	| { state: "stale"; remaining: number; total: number; observedAt: number }
 	| { state: "unavailable" };
 
+export interface JbcentralAccessSourceWire {
+	displayName: string;
+	kind: string;
+	current: boolean;
+	selectionId: string | null;
+}
+
+export type JbcentralAccessListResult =
+	| { outcome: "succeeded"; sources: JbcentralAccessSourceWire[] }
+	| { outcome: "failed" };
+
+export type JbcentralAccessSwitchResult =
+	| { outcome: "succeeded"; proxyRestarted: boolean }
+	| { outcome: "failed" };
+
 export type LoginFrame =
 	| { kind: "authUrl"; url: string; instructions?: string }
 	| { kind: "deviceCode"; userCode: string; verificationUri: string; expiresInSeconds?: number }

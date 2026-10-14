@@ -26,6 +26,7 @@ import {
 import {
 	connectJbcentral,
 	disconnectJbcentral,
+	getJbcentralAccessSources,
 	getJbcentralQuota,
 	getJbcentralStatus,
 	initializeJbcentralRuntime,
@@ -33,6 +34,7 @@ import {
 	resetJbcentralStateForTests,
 	setJbcentralChangedPublisher,
 	startProxyJbcentral,
+	switchJbcentralAccess,
 	updateJbcentral,
 } from "./jbcentral";
 import { getProviderStatus } from "./providerStatus";
@@ -126,6 +128,10 @@ case "$1" in
     rm -f "$THINKRAIL_CENTRAL_TEST_CONTROL/outdated"
     ;;
   proxy)
+    if [ "$2" = "stop" ]; then
+      if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/proxy-stop-fail" ]; then exit 9; fi
+      exit 0
+    fi
     [ "$2" = "start" ]
     [ "$3" = "--ensure-updated" ]
     if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/proxy-start-fail" ]; then exit 9; fi
@@ -135,6 +141,28 @@ case "$1" in
     fi
     ;;
   login)
+    if [ "\${2:-}" = "export" ]; then
+      if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/access-current-alumni" ]; then
+        org=aaa; workspace=bbb
+      else
+        org=ccc; workspace=ddd
+      fi
+      printf 'central-'
+      printf '{"version":1,"environment":"prod","refresh_token":"synthetic-refresh-secret","ai_access":{"type":"workspace","org_id":"%s","workspace_id":"%s"}}' "$org" "$workspace" | base64 | tr -d '\\n='
+      printf '\\n'
+    fi
+    ;;
+  access)
+      if [ -f "$THINKRAIL_CENTRAL_TEST_CONTROL/access-switch-fail" ]; then
+        printf 'synthetic-sensitive-child-output\n' >&2
+        exit 9
+      fi
+      if [ "$2" = "workspace:aaa:bbb" ]; then
+        touch "$THINKRAIL_CENTRAL_TEST_CONTROL/access-current-alumni"
+      else
+        rm -f "$THINKRAIL_CENTRAL_TEST_CONTROL/access-current-alumni"
+      fi
+      printf 'AI access source switched to %s\n' "$2"
     ;;
   *)
     exit 8
@@ -150,6 +178,48 @@ let logPath: string;
 let extensionSource: string;
 let artifactPath: string;
 let priorEnv: Record<string, string | undefined>;
+let restoreAccessFetch: (() => void) | undefined;
+
+function mockCentralAccessRequests(): void {
+	const fetchSpy = spyOn(globalThis, "fetch").mockImplementation(
+		Object.assign(
+			async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+				if (String(input) === "https://oauth.account.jetbrains.com/oauth2/token") {
+					expect(new URLSearchParams(String(init?.body)).get("refresh_token")).toBe(
+						"synthetic-refresh-secret",
+					);
+					return Response.json({ access_token: "synthetic-access-secret" });
+				}
+				expect(String(input)).toBe(
+					"https://api.jetbrains.cloud/user-management/api/ai-access-options",
+				);
+				expect(new Headers(init?.headers).get("Authorization")).toBe(
+					"Bearer synthetic-access-secret",
+				);
+				return Response.json({
+					aiAccessOptions: [
+						{
+							type: "workspace",
+							orgId: "aaa",
+							workspaceId: "bbb",
+							workspaceName: "JB Alumni",
+							aiAccessEnabled: true,
+						},
+						{
+							type: "workspace",
+							orgId: "ccc",
+							workspaceId: "ddd",
+							workspaceName: "JetBrains Team",
+							aiAccessEnabled: true,
+						},
+					],
+				});
+			},
+			{ preconnect: globalThis.fetch.preconnect },
+		),
+	);
+	restoreAccessFetch = () => fetchSpy.mockRestore();
+}
 
 function control(name: string, present: boolean): void {
 	const path = join(controlDir, name);
@@ -180,6 +250,15 @@ async function waitFor(predicate: () => boolean | Promise<boolean>): Promise<voi
 		await new Promise((resolve) => setTimeout(resolve, 10));
 	}
 	throw new Error("condition was not reached");
+}
+
+async function initializeConnectedCentralFixture(): Promise<void> {
+	await resetJbcentralStateForTests();
+	configurePiRuntime(null);
+	mkdirSync(join(home, ".pi", "agent", "extensions"), { recursive: true });
+	writeFileSync(artifactPath, syntheticExtension("central-model"));
+	await initializeJbcentralRuntime();
+	expect((await getJbcentralStatus()).state).toBe("configured");
 }
 
 async function emptyRuntime(): Promise<ModelRuntime> {
@@ -232,6 +311,8 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+	restoreAccessFetch?.();
+	restoreAccessFetch = undefined;
 	disposeAllSessions();
 	await resetJbcentralStateForTests();
 	configurePiRuntimeFactory();
@@ -398,6 +479,143 @@ describe("watched native Central runtime", () => {
 		control("quota-fail", true);
 		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
 		expect(await getJbcentralQuota({ maxAgeMs: 30_000 })).toEqual({ state: "unavailable" });
+	});
+
+	test("lists AI access sources with a switch id only once Central is connected", async () => {
+		mockCentralAccessRequests();
+		expect(await getJbcentralAccessSources()).toEqual({ outcome: "failed" });
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		expect(await getJbcentralAccessSources()).toEqual({
+			outcome: "succeeded",
+			sources: [
+				{
+					displayName: "JB Alumni",
+					kind: "workspace",
+					current: false,
+					selectionId: "workspace:aaa:bbb",
+				},
+				{
+					displayName: "JetBrains Team",
+					kind: "workspace",
+					current: true,
+					selectionId: "workspace:ccc:ddd",
+				},
+			],
+		});
+	});
+
+	test("switches the access source, restarts the proxy, and invalidates the cached quota", async () => {
+		mockCentralAccessRequests();
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		expect(await getJbcentralQuota({ maxAgeMs: 30_000 })).toMatchObject({
+			state: "available",
+			remaining: 19.92,
+		});
+
+		expect(await switchJbcentralAccess("workspace:aaa:bbb")).toEqual({
+			outcome: "succeeded",
+			proxyRestarted: true,
+		});
+		expect(commandLog()).toContain("access workspace:aaa:bbb");
+		expect(commandLog()).toContain("proxy stop");
+		expect(commandLog()).toContain("proxy start --ensure-updated");
+
+		const sources = await getJbcentralAccessSources();
+		expect(sources).toMatchObject({
+			outcome: "succeeded",
+			sources: [
+				{ displayName: "JB Alumni", current: true },
+				{ displayName: "JetBrains Team", current: false },
+			],
+		});
+
+		control("quota-alt", true);
+		expect(await getJbcentralQuota({ maxAgeMs: 30_000 })).toMatchObject({
+			state: "available",
+			remaining: 18.5,
+		});
+	});
+
+	test("a failed switch never restarts the proxy and reports a closed failure", async () => {
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		control("access-switch-fail", true);
+
+		const result = await switchJbcentralAccess("workspace:aaa:bbb");
+		expect(result).toEqual({ outcome: "failed" });
+		expect(commandLog()).not.toContain("proxy stop");
+	});
+
+	test("a switch that cannot restart the proxy still reports the switch itself as succeeded", async () => {
+		expect(await connectJbcentral()).toEqual({ outcome: "applied" });
+		control("proxy-stop-fail", true);
+
+		expect(await switchJbcentralAccess("workspace:aaa:bbb")).toEqual({
+			outcome: "succeeded",
+			proxyRestarted: false,
+		});
+	});
+
+	test("duplicate requests for the latest source share one switch", async () => {
+		await initializeConnectedCentralFixture();
+		const first = switchJbcentralAccess("workspace:aaa:bbb");
+		const second = switchJbcentralAccess("workspace:aaa:bbb");
+		expect(first).toBe(second);
+		expect(await first).toEqual({ outcome: "succeeded", proxyRestarted: true });
+		expect(commandLog().filter((line) => line === "access workspace:aaa:bbb")).toHaveLength(1);
+	});
+
+	test("distinct sources wait for the earlier switch and proxy restart", async () => {
+		mockCentralAccessRequests();
+		await initializeConnectedCentralFixture();
+		control("proxy-start-wait", true);
+		const first = switchJbcentralAccess("workspace:aaa:bbb");
+		await waitFor(() => commandLog().includes("proxy start --ensure-updated"));
+		const second = switchJbcentralAccess("workspace:ccc:ddd");
+		expect(second).not.toBe(first);
+		expect(switchJbcentralAccess("workspace:ccc:ddd")).toBe(second);
+		expect(commandLog()).not.toContain("access workspace:ccc:ddd");
+		control("proxy-start-wait", false);
+		expect(await first).toEqual({ outcome: "succeeded", proxyRestarted: true });
+		expect(await second).toEqual({ outcome: "succeeded", proxyRestarted: true });
+		expect(
+			commandLog().filter((line) => line.startsWith("access ") || line.startsWith("proxy ")),
+		).toEqual([
+			"access workspace:aaa:bbb",
+			"proxy stop",
+			"proxy start --ensure-updated",
+			"access workspace:ccc:ddd",
+			"proxy stop",
+			"proxy start --ensure-updated",
+		]);
+		expect(await getJbcentralAccessSources()).toMatchObject({
+			outcome: "succeeded",
+			sources: [{ current: false }, { current: true }],
+		});
+	});
+
+	test("a switch back after a different queued source is not deduplicated", async () => {
+		mockCentralAccessRequests();
+		await initializeConnectedCentralFixture();
+		const first = switchJbcentralAccess("workspace:aaa:bbb");
+		const second = switchJbcentralAccess("workspace:ccc:ddd");
+		const third = switchJbcentralAccess("workspace:aaa:bbb");
+		expect(third).not.toBe(first);
+		expect(third).not.toBe(second);
+		expect(switchJbcentralAccess("workspace:aaa:bbb")).toBe(third);
+		expect(await Promise.all([first, second, third])).toEqual([
+			{ outcome: "succeeded", proxyRestarted: true },
+			{ outcome: "succeeded", proxyRestarted: true },
+			{ outcome: "succeeded", proxyRestarted: true },
+		]);
+		expect(commandLog().filter((line) => line.startsWith("access "))).toEqual([
+			"access workspace:aaa:bbb",
+			"access workspace:ccc:ddd",
+			"access workspace:aaa:bbb",
+		]);
+		expect(await getJbcentralAccessSources()).toMatchObject({
+			outcome: "succeeded",
+			sources: [{ current: true }, { current: false }],
+		});
 	});
 
 	test("disconnect affects new work while an existing Central chat keeps its generation", async () => {

@@ -20,6 +20,7 @@ import {
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
 	isBackgroundCommandCompletionMessage,
 	isTodoReviewFixMessage,
+	JBCENTRAL_ACCESS_PROTOCOL_VERSION,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	MODEL_PICKER_PROTOCOL_VERSION,
@@ -195,9 +196,8 @@ test("the project trust summary and pi-level resource consent are pinned to v81"
 });
 
 test("MCP server management, status and chat resources are pinned to v83", () => {
-	expect(PROTOCOL_VERSION).toBe(83);
-	expect(MCP_PROTOCOL_VERSION).toBe(83);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(MCP_PROTOCOL_VERSION);
+	expect(MCP_PROTOCOL_VERSION).toBe(83);
 	expect(WS_METHODS.mcpList).toBe("mcp.list");
 	expect(WS_METHODS.mcpSetSessionOverride).toBe("mcp.setSessionOverride");
 	expect(WS_METHODS.mcpLogin).toBe("mcp.login");
@@ -341,4 +341,12 @@ test("chat resources introduce scoped reads and cancellation, never browser comm
 	expect(WS_METHODS.subagentStop).toBe("subagent.stop");
 	expect(WS_METHODS.subagentStopAll).toBe("subagent.stopAll");
 	expect(Object.values(WS_METHODS)).not.toContain("backgroundCommand.start");
+});
+
+test("AI access source switching advances the protocol and names its methods", () => {
+	expect(PROTOCOL_VERSION).toBe(84);
+	expect(JBCENTRAL_ACCESS_PROTOCOL_VERSION).toBe(84);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(JBCENTRAL_ACCESS_PROTOCOL_VERSION);
+	expect(WS_METHODS.providerJbcentralAccessList).toBe("provider.jbcentralAccessList");
+	expect(WS_METHODS.providerJbcentralAccessSwitch).toBe("provider.jbcentralAccessSwitch");
 });

@@ -97,3 +97,17 @@ describe("JetBrainsAiCard proxy prerequisite", () => {
 		expect(markup).not.toContain('data-testid="jetbrains-start-proxy"');
 	});
 });
+
+describe("AI access source switching", () => {
+	test("never appears in a fresh, unmounted render", () => {
+		const markup = renderToStaticMarkup(
+			<JetBrainsAiCard
+				status={{ state: "configured", version: "1.7.0", signedOut: false, proxyStopped: false }}
+				install={install}
+				onChanged={() => {}}
+				accessSourceSwitching
+			/>,
+		);
+		expect(markup).not.toContain('data-testid="jbcentral-access-sources"');
+	});
+});

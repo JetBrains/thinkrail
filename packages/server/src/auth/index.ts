@@ -1,6 +1,7 @@
 export {
 	connectJbcentral,
 	disconnectJbcentral,
+	getJbcentralAccessSources,
 	getJbcentralQuota,
 	getJbcentralStatus,
 	initializeJbcentralRuntime,
@@ -10,6 +11,7 @@ export {
 	setJbcentralChangedPublisher,
 	startProxyJbcentral,
 	stopJbcentralRuntime,
+	switchJbcentralAccess,
 	updateJbcentral,
 } from "./jbcentral";
 export {

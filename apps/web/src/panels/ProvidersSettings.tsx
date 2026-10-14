@@ -9,6 +9,7 @@ import {
 } from "@remixicon/react";
 import {
 	type AppConfigUpdate,
+	JBCENTRAL_ACCESS_PROTOCOL_VERSION,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	type ProviderStatus,
 	type ProviderStatusReport,
@@ -121,6 +122,8 @@ export function ProvidersSettings() {
 						saveQuotaSetting({ jbcentralQuotaRefreshSeconds: seconds }),
 				}
 			: null;
+	const accessSourceSwitching =
+		protocolVersion !== null && protocolVersion >= JBCENTRAL_ACCESS_PROTOCOL_VERSION;
 	const providers = report?.providers ?? [];
 	const configured = providers.filter((p) => p.configured);
 	const unconfigured = providers.filter((p) => !p.configured);
@@ -206,6 +209,7 @@ export function ProvidersSettings() {
 							status={report.jbcentral}
 							install={report.jbcentralInstall}
 							onChanged={load}
+							accessSourceSwitching={accessSourceSwitching}
 							{...(quotaSettings ? { quotaSettings } : {})}
 						/>
 					) : null}

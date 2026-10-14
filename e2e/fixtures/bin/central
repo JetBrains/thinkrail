@@ -24,6 +24,12 @@ drop() {
 	state=${next# }
 	printf '%s\n' "$state" > "$CENTRAL_STUB_STATE"
 }
+add() {
+	if ! has "$1"; then
+		state="$state $1"
+		printf '%s\n' "$state" > "$CENTRAL_STUB_STATE"
+	fi
+}
 if [ -n "${CENTRAL_STUB_LOG:-}" ]; then
 	printf '%s\n' "$*" >> "$CENTRAL_STUB_LOG"
 fi
@@ -125,6 +131,41 @@ if [ "$1" = "proxy" ] && [ "${2:-}" = "start" ] && [ "${3:-}" = "--ensure-update
 		exit 14
 	fi
 	drop proxy-stopped
+	exit 0
+fi
+
+if [ "$1" = "proxy" ] && [ "${2:-}" = "stop" ]; then
+	if has proxy-stop-error; then
+		exit 17
+	fi
+	exit 0
+fi
+
+if [ "$1" = "login" ] && [ "${2:-}" = "export" ]; then
+	if has needs-login; then exit 12; fi
+	if has access-alumni-current; then
+		org=aaa
+		workspace=bbb
+	else
+		org=ccc
+		workspace=ddd
+	fi
+	printf 'central-'
+	printf '{"version":1,"environment":"prod","refresh_token":"e2e-central-refresh","ai_access":{"type":"workspace","org_id":"%s","workspace_id":"%s"}}' "$org" "$workspace" | base64 | tr -d '\n='
+	printf '\n'
+	exit 0
+fi
+
+if [ "$1" = "access" ] && [ -n "${2:-}" ]; then
+	if has access-switch-error; then
+		printf 'E2E_CENTRAL_CHILD_SENTINEL_access\n' >&2
+		exit 18
+	fi
+	if [ "$2" = "workspace:aaa:bbb" ]; then
+		add access-alumni-current
+	else
+		drop access-alumni-current
+	fi
 	exit 0
 fi
 

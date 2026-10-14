@@ -47,7 +47,8 @@ create the tools it needs based on how you actually work.
   Settings): ThinkRail asks before calls the server does not mark read-only, keeps servers a repository
   defines off until you approve them, signs you in to OAuth servers from Settings, and shows each chat's
   servers next to its background commands and subagents.
-- **Your providers, your credentials.** Sign in with [JetBrains AI](https://www.jetbrains.com/ai/) or
+- **Your providers, your credentials.** Sign in with [JetBrains AI](https://www.jetbrains.com/ai/) and
+  choose which organization supplies AI credits in Providers settings, or
   connect any provider through `pi`'s own auth. ThinkRail has no accounts of its own.
 - **Desktop app or browser.** A native desktop app, or the `thinkrail` CLI that opens the same app in your
   browser. Both embed the same engine host; app state lives under `~/.thinkrail`.
