@@ -68,6 +68,20 @@ equals `border-default` is not a second weight, it is a second name).
 | Strict-consumer editor roles | `editor-selection-bg` · `editor-selection-text` · `editor-selection-highlight-bg` · `editor-find-match-bg` · `widget-shadow` | `publish: false`; Monaco/xterm read them directly and no Tailwind utility is emitted |
 | Media | `media-checker-tile` | `publish: false`; the transparency checkerboard tile that `index.css`'s `.media-backdrop` paints behind every image and vector preview, derived from `text` at the `soft` (20%) step so it is light-on-dark in a dark theme and the conventional `#ccc`-on-white in a light one — a dark logo on a transparent PNG must never read as "no image" |
 
+## Surface assignments
+
+**Floating surfaces use `container-elevated-bg`.** Popups, dropdowns, flyouts, tooltips, context menus,
+command palettes, and any other overlay that floats above the page must use `bg-container-elevated-bg`.
+This includes:
+
+- Radix/shadcn `PopoverContent`, `DropdownMenuContent`, `TooltipContent`, `DialogContent`
+- Command palette and model selector popups
+- Portal-rendered submenus and flyouts
+- Toast notifications and snackbars
+
+Do **not** use `bg-black`, `bg-white`, raw hex, or component-specific background overrides on floating
+surfaces. The elevated token is theme-aware and maintains proper contrast in all bundled themes.
+
 There is no `text-strong` and no `text-link` utility: they duplicate other tokens, and `--text-link`
 exists as a variable for `global.css`'s bare-anchor fallback alone. That fallback lives in the CSS base
 layer so an explicit semantic text utility on a link-shaped control always wins the cascade.

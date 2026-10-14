@@ -3,7 +3,8 @@ import { PROVIDER_GLYPHS } from "./generated/providerGlyphs";
 
 /** A vendor mark for a pi provider id; providers without a known mark get a monogram. */
 export function ProviderGlyph({ provider, className }: { provider: string; className?: string }) {
-	const paths = PROVIDER_GLYPHS[provider];
+	// Try exact match first, then lowercase (display names like "Anthropic" → "anthropic")
+	const paths = PROVIDER_GLYPHS[provider] ?? PROVIDER_GLYPHS[provider.toLowerCase()];
 	if (!paths) {
 		return (
 			<span

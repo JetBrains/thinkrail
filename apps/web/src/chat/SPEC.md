@@ -697,56 +697,72 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `litBars`, in the level's **tone** — cool blue for off/minimal/low, accent for medium/high, warning
   amber for the costly tiers, so cost reads before the word does) and chosen in one popover where the
   **effort control sits under the model list and follows the chosen model** — so the levels on offer are
-  always *that model's* `thinkingLevels` and a
-  disabled-effort state cannot exist. The flow is **click model → slide effort**: picking a model applies
-  it at once and keeps the popover open (hover never changes anything — an earlier hover-preview made the
-  effort row jump as the pointer moved); the effort control is a **slider**: a thick rail hiding a
-  cool→warm gradient (`feedback-info` → `primary` → `feedback-warning`) that the handle uncovers as it
-  moves, the level word and its glyph riding on the handle, one clickable label per level beneath (the
-  user's saved `defaultEffort` dotted — the web never guesses the host's fallback level), a one-line
-  hint, and a warning caption on the costly tiers (`COSTLY_LEVELS`: xhigh, max). A native `<input
-  type="range">` drives it — drag, click-to-snap, touch and ←/→ for free — and every change applies at
-  once while the popover stays open; the footer offers "reset to ‹default›" while the level differs from a
-  saved default. The handle's position is the one inline style (a `--effort` custom property, the
-  normalized-geometry exception), colour stays in tokens, and `motion-reduce` flattens the spring.
+  always *that model's* `thinkingLevels` and a disabled-effort state cannot exist.
+  
+  **Effort control** is a **segmented control**: a row of buttons, one per level from the model's
+  `thinkingLevels` array in order (off, minimal, low, medium, high, xhigh, max — shown only when the model
+  supports them). Compact UI labels (`effortLabel`): Min for minimal, Med for medium, XHigh for xhigh,
+  Max for max; unknown future levels get a capitalized fallback. A dynamic description (`effortDescription`)
+  appears beside the EFFORT heading — "No reasoning · Fastest · Cheapest" for off, "Briefest reasoning"
+  for minimal, through "Maximum reasoning" for max, with a fallback "‹Label› reasoning" for unknown levels.
+  Each button click applies at once and keeps the popover open; the selected level fills with
+  `bg-control-bg-selected`. The segmented row has a `border-border-muted` outline with 2px internal padding.
+  The web keeps **no hard-coded allowlist** of levels: every level in `WireModel.thinkingLevels` renders,
+  including xhigh/max and any future values the host may add.
+  
+  The flow is **click model → pick effort**: picking a model applies it at once and keeps the popover open
+  (hover never changes anything — an earlier hover-preview made the effort row jump as the pointer moved).
   Escape, an outside click, or clicking the already-current model closes. `onSelect({model, level?})`
-  is the model callback (level present only
-  when a typed `opus high` chose both at once), `onSelectLevel` the level-only one, and the caller — never
-  the picker — talks to the host (`ChatView` chains `session.setModel` → `session.setThinkingLevel`
-  behind one selection counter that every model *or* effort pick advances, so the chained level is sent
-  — and on failure rolled back — only while that pick is still the newest: A·high then B·low can never
-  land A's level on B, and B·high then a slide to medium can never let B's response re-send high). When a
-  catalog refresh leaves a session on a level its model no longer offers, `ChatView` asks the host's
-  `model.clampThinking` and applies the answer — the reconcile `NewWorkspaceDialog` already runs for its
-  pair, and the same clamp pi applies at request time — so the pill and slider show the level pi will
-  actually use rather than a stop the rail does not have.
-  Rows are **two lines**: the name, then `provider · [kind glyph] what it draws on · price · context`. The list reads **Default
-  row** (pre-session callers only, `defaultOption`: what the host would pick, checked while the caller
-  follows it) → **Favorites** → **Recent** (the host's list minus starred models) → provider groups, folded behind one
-  "All models" row while a shortlist exists and expanded by search; a trailing query word that names a
-  level the highlighted model supports (`opus high`) pre-selects it — pi's `model:level` idiom typed
-  with a space — and `/model [query]` in the composer opens the picker prefilled instead of sending
-  text. The second row line **says what the user actually pays** (`kindLabel` / `costLabel`): the
-  connection glyph — **key** = API key, **∞** = subscription, **{ }** = environment key, a **JCP** tag =
-  JetBrains AI (Central proxy) — then the plan/variable/key word and, only where the provider bills per
-  token (`auth.kind` api-key / env), `$in / $out per M`; group headings add the provider's connection
-  detail. The **vendor glyph** (`ProviderGlyph`) is a monochrome `currentColor` mark from
-  `generated/providerGlyphs.ts`, which `scripts/generate-provider-glyphs.ts` extracts at build time from
-  the dev-only `@lobehub/icons-static-svg` set (`provider-glyphs:check` guards drift, like the colour
-  pipeline); the pi-provider-id → mark mapping lives once in `scripts/providerGlyphs.ts`, vendors reached
-  through several pi providers share a mark, and an unmapped provider renders a monogram. Marks are never
-  tinted with brand colours — the colour system owns colour. Favorites/recents/default come in through
-  **`useModelPreferences(models)`** (the one store+transport seam both callers share: lists re-pointed to
-  the live catalog with vanished models dropped, `toggleFavorite` as a whole-list `settings.update`,
-  `setDefault` writing model + effort together, all gated on `MODEL_PICKER_PROTOCOL_VERSION` so an older
-  host shows neither stars nor sections). The footer holds **Set as default** (reads "Default for new
-  chats" once the pair matches) and the **Refresh** row (`force: true`, spins while the awaited refresh
-  runs; opening fires an unforced read served from the host snapshot). The web still keeps **no
-  enumeration of the level vocabulary**: rows are `WireModel.thinkingLevels` verbatim, the host clamps,
-  and `LEVEL_HINT` is a partial record of qualitative copy a level may simply lack. Rows follow the
-  **live catalog** — `ChatView` resolves the session's model through `store`'s `selectCatalogModel`
-  before passing it down, so a `model.refresh` that changes what a model supports changes the offered
-  levels with it), `SessionStatsBar`, `ChatHeader` (the fixed, single-line **panel-header row** —
+  is the model callback (level present only when a typed `opus high` chose both at once), `onSelectLevel`
+  the level-only one, and the caller — never the picker — talks to the host (`ChatView` chains
+  `session.setModel` → `session.setThinkingLevel` behind one selection counter that every model *or* effort
+  pick advances, so the chained level is sent — and on failure rolled back — only while that pick is still
+  the newest: A·high then B·low can never land A's level on B, and B·high then a slide to medium can never
+  let B's response re-send high). When a catalog refresh leaves a session on a level its model no longer
+  offers, `ChatView` asks the host's `model.clampThinking` and applies the answer — the reconcile
+  `NewWorkspaceDialog` already runs for its pair, and the same clamp pi applies at request time — so the
+  pill and segmented control show the level pi will actually use rather than a stop the model does not have.
+  
+  **Popover layout**: a **search header** with `CommandInput` and a **Refresh** button at the far right
+  (spins while the awaited refresh runs; opening fires an unforced read served from the host snapshot),
+  then scrollable sections. The list reads **Default row** (pre-session callers only, `defaultOption`: what
+  the host would pick, checked while the caller follows it) → **PINNED** (user-pinned models) → **RECENT**
+  (the host's recent list, frozen on open so it doesn't shift during selection) → **ALL MODELS** (provider
+  rows with flyout submenus). A trailing query word that names a level the highlighted model supports
+  (`opus high`) pre-selects it — pi's `model:level` idiom typed with a space — and `/model [query]` in the
+  composer opens the picker prefilled instead of sending text.
+  
+  **ALL MODELS section** groups models by provider display name (`groupByDisplayName` — e.g., `openai` +
+  `openai-codex` both show as "OpenAI"). Each **provider row** shows the vendor glyph + display name + model
+  count + chevron. On hover or focus, a **portal-based flyout submenu** appears to the right (or left if
+  viewport-constrained) showing that provider's models. The flyout bottom-aligns with the main popup and
+  attaches with a -1px gap so borders overlap for a merged appearance. Provider rows are sorted by priority
+  (`PROVIDER_PRIORITY_ORDER`), then alphabetically.
+  
+  **Row actions**: each model row (in PINNED, RECENT, or flyout) has two hover-revealed icon buttons:
+  **Pin/Unpin** (pushpin icon, first position) toggles the model's pinned status via `preferences.toggleFavorite`,
+  and **Set as Default** (radio button icon, second position) sets the model + current effort as the default
+  for new chats via `preferences.setDefault`. The default indicator shows a filled radio when this model+effort
+  pair matches the saved default.
+  
+  Rows are **two lines**: the name (in `text-text-muted`), then `provider · [kind glyph] what it draws on ·
+  price · context` (in `text-text-subtle`). The second row line **says what the user actually pays**
+  (`kindLabel` / `costLabel`): the connection glyph — **key** = API key, **∞** = subscription,
+  **{ }** = environment key, a **JCP** tag = JetBrains AI (Central proxy) — then the plan/variable/key word
+  and, only where the provider bills per token (`auth.kind` api-key / env), `$in / $out per M`. The
+  **vendor glyph** (`ProviderGlyph`) is a monochrome `currentColor` mark from `generated/providerGlyphs.ts`,
+  which `scripts/generate-provider-glyphs.ts` extracts at build time from the dev-only
+  `@lobehub/icons-static-svg` set (`provider-glyphs:check` guards drift, like the colour pipeline); the
+  pi-provider-id → mark mapping lives once in `scripts/providerGlyphs.ts`, vendors reached through several
+  pi providers share a mark, and an unmapped provider renders a monogram. Marks are never tinted with brand
+  colours — the colour system owns colour.
+  
+  **`useModelPreferences(models)`** is the one store+transport seam both callers share: lists re-pointed to
+  the live catalog with vanished models dropped, `toggleFavorite` for pin/unpin, `setDefault` writing
+  model + effort together, all gated on `MODEL_PICKER_PROTOCOL_VERSION` so an older host shows neither
+  pins nor sections. Rows follow the **live catalog** — `ChatView` resolves the session's model through
+  `store`'s `selectCatalogModel` before passing it down, so a `model.refresh` that changes what a model
+  supports changes the offered levels with it), `SessionStatsBar`, `ChatHeader` (the fixed, single-line **panel-header row** —
   `h-panel-header-row` (`--panel-header-row-height`, currently 28px), the shared structural geometry with
   workbench Group Headers and the Changes toolbar, not a value pinned here; it never scrolls,
   and constrained widths clip/truncate TODO + status/usage text while preserving the trailing Skills

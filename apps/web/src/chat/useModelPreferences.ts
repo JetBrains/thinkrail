@@ -13,6 +13,9 @@ export interface ModelPreferences {
 	defaultEffort: ThinkingLevel | undefined;
 	isFavorite: (model: Pick<WireModel, "provider" | "id">) => boolean;
 	toggleFavorite: (model: WireModel) => void;
+	/** True when the model matches the default model (ignoring effort level). */
+	isDefaultModel: (model: Pick<WireModel, "provider" | "id"> | null) => boolean;
+	/** True when both model and effort level match the default. */
 	isDefault: (model: Pick<WireModel, "provider" | "id"> | null, level: ThinkingLevel) => boolean;
 	setDefault: (model: WireModel, level: ThinkingLevel) => void;
 }
@@ -73,6 +76,11 @@ export function useModelPreferences(models: readonly WireModel[]): ModelPreferen
 		});
 	}, []);
 
+	const isDefaultModel = useCallback(
+		(model: Pick<WireModel, "provider" | "id"> | null) => sameModel(defaultModelRef, model),
+		[defaultModelRef],
+	);
+
 	const isDefault = useCallback(
 		(model: Pick<WireModel, "provider" | "id"> | null, level: ThinkingLevel) =>
 			sameModel(defaultModelRef, model) && defaultEffort === level,
@@ -92,6 +100,7 @@ export function useModelPreferences(models: readonly WireModel[]): ModelPreferen
 		defaultEffort,
 		isFavorite,
 		toggleFavorite,
+		isDefaultModel,
 		isDefault,
 		setDefault,
 	};

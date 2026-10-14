@@ -72,34 +72,34 @@ test("the composer pill stars a favorite, records it as recent, and saves the pa
 			"popover",
 		);
 
-		await option.locator('[data-testid="model-favorite-toggle"]').click();
+		await option.locator('[data-testid="model-pin-toggle"]').click();
 		await expect
 			.poll(async () => (await readConfig(page)).favoriteModels.map((m) => m.id))
 			.toEqual(["e2e-central-model"]);
-		await expect(page.locator("[cmdk-group-heading]", { hasText: "Favorites" })).toBeVisible();
+		await expect(page.locator("[cmdk-group-heading]", { hasText: "PINNED" })).toBeVisible();
 		await expect(page.getByTestId("model-show-all")).toBeVisible();
 
 		await option.click();
-		await expect(page.getByTestId("thinking-section")).toContainText(
-			"Synthetic JetBrains AI model",
-		);
+		await expect(page.getByTestId("thinking-section")).toBeVisible();
 		await expect(pill).toContainText("Synthetic JetBrains AI model");
 		await expect
 			.poll(async () => (await readConfig(page)).recentModels.map((m) => m.id))
 			.toEqual(["e2e-central-model"]);
 
+		// Test effort segmented control
 		const high = page.locator('[data-testid="thinking-option"][data-level="high"]');
 		await expect(high).toBeVisible();
 		await high.click();
 		await expect(high).toHaveAttribute("aria-pressed", "true");
 		await expect(page.getByTestId("thinking-selector").last()).toContainText("high");
 		await expect.poll(() => hostLevel(page, workspace.id)).toBe("high");
-		const slider = page.getByTestId("thinking-slider");
-		await slider.focus();
-		await page.keyboard.press("ArrowLeft");
+
+		// Switch to medium via button
+		const medium = page.locator('[data-testid="thinking-option"][data-level="medium"]');
+		await medium.click();
 		await expect(page.getByTestId("thinking-selector").last()).toContainText("medium");
 		await expect.poll(() => hostLevel(page, workspace.id)).toBe("medium");
-		await expect(slider).toHaveAttribute("aria-valuetext", "medium");
+
 		await high.click();
 		await expect.poll(() => hostLevel(page, workspace.id)).toBe("high");
 		await shot(
@@ -110,32 +110,23 @@ test("the composer pill stars a favorite, records it as recent, and saves the pa
 		await page.keyboard.press("Escape");
 		await expect(page.getByTestId("model-option")).toHaveCount(0);
 
+		// Test set-as-default on row
 		await pill.click();
-		await page.getByTestId("model-set-default").click();
+		await option.locator('[data-testid="model-set-default"]').click();
 		await expect
 			.poll(() => readConfig(page))
 			.toMatchObject({
 				defaultModel: { provider: "e2e-central", id: "e2e-central-model" },
 				defaultEffort: "high",
 			});
-		await expect(page.getByTestId("model-set-default")).toHaveAttribute("data-default", "true");
-		const reset = page.getByTestId("thinking-reset");
-		await expect(reset).toHaveCount(0);
-		await slider.focus();
-		await page.keyboard.press("ArrowLeft");
-		await expect.poll(() => hostLevel(page, workspace.id)).toBe("medium");
-		await expect(reset).toContainText("reset to high");
-		await reset.click();
-		await expect.poll(() => hostLevel(page, workspace.id)).toBe("high");
-		await expect(reset).toHaveCount(0);
+		await expect(option.locator('[data-testid="model-set-default"]')).toHaveAttribute(
+			"data-active",
+			"true",
+		);
 		await page.keyboard.press("Escape");
 
 		await pill.click();
-		await page
-			.locator(CENTRAL_OPTION)
-			.first()
-			.locator('[data-testid="model-favorite-toggle"]')
-			.click();
+		await page.locator(CENTRAL_OPTION).first().locator('[data-testid="model-pin-toggle"]').click();
 		await expect.poll(async () => (await readConfig(page)).favoriteModels).toEqual([]);
 		await page.keyboard.press("Escape");
 		await disconnectFixtureProvider(page);

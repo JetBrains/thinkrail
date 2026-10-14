@@ -1206,7 +1206,7 @@ export default function PlanPane({
 	return (
 		<div
 			data-testid="plan-pane"
-			className="h-full overflow-auto bg-container-content-bg motion-safe:animate-reveal"
+			className="h-full overflow-auto bg-container-elevated-bg motion-safe:animate-reveal"
 		>
 			<PrComposeDialog
 				state={prCompose}
