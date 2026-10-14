@@ -977,6 +977,34 @@ test("promote refuses an id that is a grouped step (already in a group), not a l
 	}
 });
 
+test("a promote-born empty group survives a replaceAll that doesn't re-emit it", () => {
+	// Promote parks a user ask as an empty group whose steps the agent will add later. A
+	// `replaceAll` landing BEFORE the agent decomposes it (reconnect race, parallel edit) must not
+	// silently drop that group; it carries user intent the plan contract promises will survive.
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const userAsk = s.add({ title: "Design the X workflow", origin: "user" });
+		const promoted = s.promote(userAsk.id);
+		expect(promoted.ok).toBe(true);
+		const parkedId = promoted.ok ? promoted.group.id : "";
+		expect(parkedId).toBe(userAsk.id);
+
+		// A separate agent write that restructures a different task.
+		s.replaceAll({
+			groups: [{ title: "Other work", todos: [{ title: "a" }, { title: "b" }] }],
+		});
+
+		const next = s.read();
+		const parked = next.groups.find((g) => g.title === "Design the X workflow");
+		expect(parked).toBeDefined();
+		expect(parked?.id).toBe(parkedId);
+		expect(parked?.todos).toEqual([]);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
 test("promote returns undefined for an unknown id and writes nothing", () => {
 	const root = tempRoot();
 	try {

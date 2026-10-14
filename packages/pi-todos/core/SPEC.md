@@ -80,7 +80,10 @@ plan; the model reaches for it to say "make the plan look like this, keep the pr
   shared raw-input scratchpad, see below); `done` items inside groups are preserved (rejoin a fresh
   group of the same title, else carried over under their original group, appended after the fresh
   groups); **agent + open items inside a group** are **dropped** — that is the legitimate "removed a
-  step". A leftover **agent `done` item in the loose lane** (out of contract — a loose item is a
+  step". **Promote-born empty groups** (a group whose `todos[]` is empty — see the first-class rule
+  below) are carried forward with their original id when the fresh plan doesn't re-emit the same
+  title; dropping them would silently lose a parked user ask the promotion contract promises to
+  preserve. A leftover **agent `done` item in the loose lane** (out of contract — a loose item is a
   pre-work note the agent should have promoted or removed, not completed in place) is carried into a
   `"Completed"` group rather than left in the loose lane, so a `done` loose item is never silently
   lost. Consequence: re-writing the same plan is a **no-op on progress** (no status reset, no

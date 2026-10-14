@@ -474,6 +474,15 @@ export class TodoStore {
 		});
 		const resultLoose = current.todos.filter((t) => t.origin === "user" || t.status !== "done");
 		const carriedGroups: TodoGroup[] = [];
+		// Promote-born empty groups are first-class state (a user ask parked for decomposition, see
+		// `promote`). A `replaceAll` that doesn't re-emit the same title would otherwise silently drop
+		// them, violating the "survives even if the session dies right after promotion" invariant.
+		// Carry each existing empty group forward with its id unless the fresh write already names it.
+		for (const old of current.groups) {
+			if (old.todos.length > 0) continue;
+			if (freshGroups.some((g) => g.title === old.title)) continue;
+			carriedGroups.push({ id: old.id, title: old.title, todos: [] });
+		}
 		const carriedLooseDone: Todo[] = [];
 		for (const old of current.groups) {
 			const carriedDone: Todo[] = [];
