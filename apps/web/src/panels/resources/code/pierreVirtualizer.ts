@@ -52,10 +52,10 @@ const OVERSCROLL_SIZE = 400;
 const HUNK_LINE_COUNT = 5;
 
 function codeLineHeight(): number {
-	const style = getComputedStyle(document.documentElement);
-	const fontSize = Number.parseFloat(style.getPropertyValue("--tr-font-size-s11"));
-	const ratio = Number.parseFloat(style.getPropertyValue("--tr-line-height-default"));
-	return Math.round(fontSize * ratio) || DEFAULT_VIRTUAL_FILE_METRICS.lineHeight;
+	const height = getComputedStyle(document.documentElement).getPropertyValue(
+		"--tr-code-row-height",
+	);
+	return Number.parseFloat(height) || DEFAULT_VIRTUAL_FILE_METRICS.lineHeight;
 }
 
 export function usePierreVirtualizer<T extends HTMLElement>(

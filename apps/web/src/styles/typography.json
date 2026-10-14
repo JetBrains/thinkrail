@@ -1,7 +1,7 @@
 {
 	"$schema": "./typography.schema.json",
 	"metadata": {
-		"version": "3.0.0",
+		"version": "3.1.0",
 		"cssVarPrefix": "tr",
 		"classPrefix": "tr"
 	},
@@ -86,6 +86,10 @@
 	},
 	"rootStyle": {
 		"$ref": "ui.default"
+	},
+	"codeRow": {
+		"fontSize": "s11",
+		"lineHeight": "default"
 	},
 	"textStyles": {
 		"brand": {

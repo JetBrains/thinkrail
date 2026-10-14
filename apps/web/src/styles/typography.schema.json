@@ -14,6 +14,7 @@
 		"lineHeights",
 		"letterSpacings",
 		"rootStyle",
+		"codeRow",
 		"textStyles",
 		"proseSystems"
 	],
@@ -105,6 +106,16 @@
 		"rootStyle": {
 			"description": "The `<body>` fallback for text that carries no semantic class. Always a `$ref` naming a semantic style, never values of its own, so the document base can never drift from the system.",
 			"$ref": "#/definitions/ref"
+		},
+		"codeRow": {
+			"description": "The dense code row (Monaco, Pierre). Generated as one whole-pixel height so CSS and a JS virtualizer read the same row without CSS `round()`.",
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["fontSize", "lineHeight"],
+			"properties": {
+				"fontSize": { "type": "string" },
+				"lineHeight": { "type": "string" }
+			}
 		},
 		"textStyles": {
 			"type": "object",
