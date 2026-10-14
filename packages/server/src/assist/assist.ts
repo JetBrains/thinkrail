@@ -8,12 +8,6 @@ export function setOneShotRunner(fn: OneShotRunner | null): void {
 	runOneShot = fn ?? completeOnce;
 }
 
-// This fallback runs when the agent did NOT call `todo_plan_summary`, and the host persists its
-// output as the plan's summary. The UI renders that summary verbatim AND `renderPrBody` prepends
-// it to the generated PR body, so the fallback must emit the same PR-body shape the agent-authored
-// contract requires: three H2 sections in order — `## Summary`, `## Changes`, `## Testing`. If the
-// model has nothing to say under a section it should still write the heading with `_not verified_`
-// (Testing) or `_no cross-cutting notes_` (Changes), so renderPrBody keeps the structure intact.
 const PLAN_SUMMARY_SYSTEM =
 	"Summarize a COMPLETED work plan for a reviewer, from its finished steps (each step's title and the " +
 	"agent's own note/verification), as the body of a pull request. Output GitHub Markdown with exactly " +
@@ -87,14 +81,10 @@ export function toPlanSummary(raw: string): string | null {
 	return ensurePrBodyShape(text);
 }
 
-// Enforce the three-H2-sections contract `renderPrBody` prepends verbatim. If the model emitted
-// `## Summary`, `## Changes`, `## Testing` in order, pass through. Otherwise treat the model's
-// output as the Summary body and append placeholders for the missing sections — a model that
-// returned only "Done." or skipped a heading still ships a well-formed PR body.
 function ensurePrBodyShape(text: string): string {
 	const sections = splitBySections(text);
 	if (sections.ordered) return text;
-	const summaryBody = sections.summary ?? text;
+	const summaryBody = sections.summary ?? (sections.preamble || "_no summary_");
 	const changesBody = sections.changes ?? "_no cross-cutting notes_";
 	const testingBody = sections.testing ?? "_not verified_";
 	return `## Summary\n\n${summaryBody}\n\n## Changes\n\n${changesBody}\n\n## Testing\n\n${testingBody}`;
@@ -102,6 +92,7 @@ function ensurePrBodyShape(text: string): string {
 
 interface Sections {
 	ordered: boolean;
+	preamble: string;
 	summary?: string;
 	changes?: string;
 	testing?: string;
@@ -118,8 +109,7 @@ function splitBySections(text: string): Sections {
 	const body = (name: "Summary" | "Changes" | "Testing"): string | undefined => {
 		const idx = spans.findIndex((s) => s.name === name);
 		if (idx < 0) return undefined;
-		// End the body AT the next heading (not after it), so Summary doesn't swallow a trailing
-		// `## Testing` section emitted when the model skipped `## Changes`.
+		// Stop at the next heading so a later section cannot be absorbed when an earlier one is missing.
 		const end = spans[idx + 1]?.headingStart ?? text.length;
 		const span = spans[idx];
 		if (!span) return undefined;
@@ -132,7 +122,8 @@ function splitBySections(text: string): Sections {
 		names[0] === "Summary" &&
 		names[1] === "Changes" &&
 		names[2] === "Testing";
-	const out: Sections = { ordered };
+	const preamble = text.slice(0, spans[0]?.headingStart ?? text.length).trim();
+	const out: Sections = { ordered, preamble };
 	const s = body("Summary");
 	const c = body("Changes");
 	const t = body("Testing");

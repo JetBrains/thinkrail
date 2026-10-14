@@ -29,7 +29,9 @@ surface** — no wire method; consumers are host-side flows.
     finished steps (`{ title, summary?, verification? }[]`, built by the caller \u2014 assist reads no store),
     through the same tool-free cheap-model path, or `null` (best-effort: `null`, never throws, on no auth /
     timeout / no usable steps / empty output). `toPlanSummary(raw)` is the pure output guard (strip a code
-    fence and a leading `Summary:` label, clamp length; `null` when empty). The host persists the result
+    fence and a leading `Summary:` label, clamp length, then reshape into `## Summary` / `## Changes` /
+    `## Testing` — a missing section gets a placeholder, and a missing Summary takes the text before the
+    first heading; `null` when empty). The host persists the result
     only when non-null; it never overwrites an agent-authored `plan.summary`.
 - **Public surface (barrel):** `setOneShotRunner`, `suggestPlanSummary`, `toPlanSummary`, `OneShotRunner`,
   `PlanSummaryStep`.

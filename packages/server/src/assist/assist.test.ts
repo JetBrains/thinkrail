@@ -38,7 +38,6 @@ test("suggestPlanSummary feeds the finished steps to the runner and returns the 
 	expect(seen).toContain("note: EV = P_accept");
 	expect(seen).toContain("verified: pytest");
 	expect(seen).toContain("Add logging");
-	// The system prompt steers the model into PR-body shape so `renderPrBody` can prepend it as-is.
 	expect(seenSystem).toContain("## Summary");
 	expect(seenSystem).toContain("## Changes");
 	expect(seenSystem).toContain("## Testing");
@@ -61,17 +60,12 @@ test("suggestPlanSummary preserves H2 headings when stripping a code fence / 'Su
 });
 
 test("suggestPlanSummary normalizes model output that misses one or more required H2 sections", async () => {
-	// A model that returns a bare "Done." (no headings at all) gets wrapped as the Summary body with
-	// placeholder Changes + Testing sections appended. `renderPrBody` can prepend this verbatim
-	// without losing the Summary / Changes / Testing structure.
 	fakeRunner(async () => ({ text: "Done.", model: { provider: "p", id: "m" } }));
 	const wrapped = await suggestPlanSummary([{ title: "step" }]);
 	expect(wrapped).toBe(
 		"## Summary\n\nDone.\n\n## Changes\n\n_no cross-cutting notes_\n\n## Testing\n\n_not verified_",
 	);
 
-	// A model that emits only Summary + Testing (skips Changes) is treated the same way: the
-	// authored sections become bodies in a scaffold that reads ordered Summary \u2192 Changes \u2192 Testing.
 	fakeRunner(async () => ({
 		text: "## Summary\n\nShipped the thing.\n\n## Testing\n\n- unit \u2192 pass",
 		model: { provider: "p", id: "m" },
@@ -79,6 +73,22 @@ test("suggestPlanSummary normalizes model output that misses one or more require
 	const reordered = await suggestPlanSummary([{ title: "step" }]);
 	expect(reordered).toBe(
 		"## Summary\n\nShipped the thing.\n\n## Changes\n\n_no cross-cutting notes_\n\n## Testing\n\n- unit \u2192 pass",
+	);
+
+	fakeRunner(async () => ({
+		text: "Lead line.\n\n## Changes\n\n- a\n\n## Testing\n\n- unit \u2192 pass",
+		model: { provider: "p", id: "m" },
+	}));
+	expect(await suggestPlanSummary([{ title: "step" }])).toBe(
+		"## Summary\n\nLead line.\n\n## Changes\n\n- a\n\n## Testing\n\n- unit \u2192 pass",
+	);
+
+	fakeRunner(async () => ({
+		text: "## Changes\n\n- a\n\n## Testing\n\n- unit \u2192 pass",
+		model: { provider: "p", id: "m" },
+	}));
+	expect(await suggestPlanSummary([{ title: "step" }])).toBe(
+		"## Summary\n\n_no summary_\n\n## Changes\n\n- a\n\n## Testing\n\n- unit \u2192 pass",
 	);
 });
 
