@@ -835,6 +835,8 @@ function runGatedReload(entry: Entry): Promise<void> {
 				entry.reloadPending = false;
 			} else {
 				entry.reloadRunning = null;
+				applySubagentTools(entry);
+				applyReviewTool(entry);
 				applyExtensionTools(entry, { allowReload: false });
 				entry.commands.flushCompletions();
 				entry.subagents.flushCompletions();
