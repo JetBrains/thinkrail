@@ -648,8 +648,8 @@ a project picker, the prompt hero, and the reused
   **`AppearanceSettings`** (the catalog-driven theme settings: a **Theme mode** segmented control,
   **System / Light / Dark** with System offered only from `THEME_SYSTEM_PROTOCOL_VERSION` (older hosts keep
   fixed-only behavior), and a **Contrast level** control, **Default / High**. Light/Dark write a fixed
-  theme: from System they return to the retained fixed theme when it already has that appearance, else adopt
-  the pair's half; in fixed mode they move to the current theme family's counterpart. Contrast swaps to the
+  theme: from System they adopt the pair's half for that appearance — what the control showed — never a
+  stale retained fixed theme; in fixed mode they move to the current theme family's counterpart. Contrast swaps to the
   same family's other-contrast theme (in System mode both pair halves at once), so the family survives
   either switch; an option with no target in the catalog is disabled rather than mapped to an unrelated
   theme. The specific theme sits behind a collapsed disclosure — the manifest list in fixed mode, the

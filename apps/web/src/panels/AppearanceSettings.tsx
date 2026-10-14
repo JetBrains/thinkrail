@@ -278,10 +278,6 @@ export function AppearanceSettings() {
 			update({ themeMode: "system", systemThemePair: pair });
 			return;
 		}
-		if (systemMode && activeTheme.appearance === mode) {
-			update({ themeMode: "fixed" });
-			return;
-		}
 		const target = modeTarget(mode);
 		if (target) update({ theme: target.id, themeMode: "fixed" });
 	};
