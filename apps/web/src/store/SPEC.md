@@ -510,7 +510,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   workbench frame, current/default preset id, and group limits are separate local values hydrated by
   `shell/layoutState`; `applyConfig` can never overwrite them. The
   **toast queue** — **`toasts: Toast[]`** (oldest-first) with **`pushToast(toast) → id`** / **`dismissToast(id)`**
-  and the ergonomic **`toast.error/success/info(message, title?)`** helper (wraps `pushToast` so a non-React
+  and the ergonomic **`toast.error/success/warning/info(message, title?)`** helpers (wrap `pushToast` so a non-React
   call site — a `.catch` in a fire-and-forget wire call — can fire one) — lives here so any surface can raise
   a transient notification. A toast may additionally carry `durationMs` and one `{ label, onClick }` action;
   `panels/Toaster` renders that action through Radix `ToastAction` and otherwise owns timeout/swipe closure
