@@ -74,25 +74,31 @@ function freshId(prefix: string): string {
 	return `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
 
-// Write-time escape rescue, split by field class.
+// Write-time escape rescue, split by field class and (inside Markdown fields) by syntax, not just
+// content:
 //
-// `\uXXXX` is unambiguous: no Windows path, regex, or source snippet writes `\u` literally, so it
-// is decoded on every agent-authored write. The `(?<!\\)` lookbehind leaves `\\u` alone.
+// `\uXXXX` is unambiguous (no Windows path, regex, or source snippet writes `\u` literally), so it
+// is decoded on every agent-authored write across every text field. `(?<!\\)` protects `\\u`.
 //
-// `\n` / `\r` / `\t` are AMBIGUOUS: an LLM may emit them as a markdown-newline substitute
-// (`summary = "a\\nb"`) OR an agent may legitimately store a Windows path (`C:\\new file`), a regex
-// pattern (`/\\n/g`), a code snippet, or any other backslash-prefixed identifier where `\n` means
-// "backslash + n" literally. We can't tell these apart in a short string. Decode only in fields
-// that are rendered as Markdown and therefore need the rescue (the plan-level `summary` and the
-// per-item `summary`); every other agent-written field (titles, notes, verifications, commit
-// subjects, artifact labels) is left verbatim so paths and patterns survive. The no-real-newline
-// guard is kept as a second line of defence: even in a summary, an already-multiline string is
-// clearly intentional and left alone.
-const ESCAPE_MAP: Record<"n" | "r" | "t", string> = {
-	n: "\n",
-	r: "\r",
-	t: "\t",
-};
+// `\n` is AMBIGUOUS: a Markdown-rendered field may need it (`summary = "a\\n\\nb"`,
+// `verification = "- a\\n- b"`) OR the author may legitimately store a Windows path
+// (`C:\\new file`), a regex pattern (`/\\n/g`), or a code snippet where `\n` means
+// "backslash + n" literally. Even in a Markdown field we can't rescue every `\n` without mangling
+// paths. Rule: decode a `\n` only when it precedes a Markdown structural marker (another `\n`,
+// a bullet / ordered list / heading / blockquote / fenced block / thematic break). Short prose
+// `\n` with no structural follower stays verbatim, matching the common agent output of structured
+// Markdown bodies. `\r` / `\t` are rare as intentional Markdown separators and would overlap with
+// hard-tab indentation / Windows line endings in paths, so the rescue stays `\n`-only.
+// Two passes, both pattern-matched (NOT content-based). Each pattern matches literal two-char `\n`
+// sequences in the source string, NOT real newlines. `(?<!\\)` leaves `\\n` (escaped backslash + n)
+// alone, so a user who really wrote backslash + n stays verbatim.
+// 1. A doubled `\n\n` is a paragraph break under every Markdown dialect; collapse both to real
+//    newlines in one match so neither can be left behind by regex pointer advancement.
+// 2. A standalone `\n` is decoded only when it introduces a Markdown structural separator (bullet,
+//    ordered list, heading, blockquote, fenced block, thematic break). Any other `\n` (Windows
+//    path, regex pattern, prose soft break) stays verbatim.
+const MARKDOWN_NL_PARAGRAPH = /(?<!\\)\\n\\n/g;
+const MARKDOWN_NL_STRUCTURE = /(?<!\\)\\n(?=[-*+] |\d+\. |#{1,6} |> |```|-{3,}|={3,})/g;
 
 function decodeUnicode(s: string): string {
 	if (!s.includes("\\u")) return s;
@@ -103,9 +109,8 @@ function decodeUnicode(s: string): string {
 
 function decodeMarkdown(s: string): string {
 	const unicoded = decodeUnicode(s);
-	if (/[\n\r\t]/.test(unicoded)) return unicoded;
-	if (!/(?<!\\)\\[nrt]/.test(unicoded)) return unicoded;
-	return unicoded.replace(/(?<!\\)\\([nrt])/g, (_m, k: "n" | "r" | "t") => ESCAPE_MAP[k]);
+	if (!unicoded.includes("\\n")) return unicoded;
+	return unicoded.replace(MARKDOWN_NL_PARAGRAPH, "\n\n").replace(MARKDOWN_NL_STRUCTURE, "\n");
 }
 
 function decodeIfAgent(s: string, origin: TodoOrigin): string {
@@ -221,7 +226,7 @@ function makeTodo(
 	};
 	if (note) todo.note = decodeIfAgent(note, origin);
 	if (summary) todo.summary = decodeMarkdownIfAgent(summary, origin);
-	if (verification) todo.verification = decodeIfAgent(verification, origin);
+	if (verification) todo.verification = decodeMarkdownIfAgent(verification, origin);
 	const clean = sanitizeArtifacts(decodeArtifactsIfAgent(artifacts, origin));
 	if (clean) todo.artifacts = clean;
 	return todo;
@@ -362,7 +367,8 @@ export class TodoStore {
 			else delete todo.summary;
 		}
 		if (patch.verification !== undefined) {
-			if (patch.verification) todo.verification = decodeIfAgent(patch.verification, todo.origin);
+			if (patch.verification)
+				todo.verification = decodeMarkdownIfAgent(patch.verification, todo.origin);
 			else delete todo.verification;
 		}
 		if (patch.commitSubject !== undefined) {

@@ -16,7 +16,7 @@ import {
 	remoteRefOid,
 } from "../git";
 import { ghSetupProblem } from "../github";
-import { listTodos } from "../todos";
+import { generateTodoSummary, listTodos } from "../todos";
 import { getWorkspace, refreshUserOwnedWorkspace } from "../workspaces";
 import { renderPrBody } from "./prBody";
 
@@ -48,6 +48,12 @@ export async function previewPr(params: {
 	title?: string;
 }): Promise<PrDraft> {
 	const ws = getWorkspace(params.workspaceId);
+	// Drive the auto-draft summary from the host side so a chat whose UI anchor is torn down (chat
+	// closed to history, Plan tab closed) can't race `pr.preview` / `pr.open` to an empty summary.
+	// `generateTodoSummary` is idempotent: it returns the existing summary if one is already on
+	// disk, no-ops when the plan isn't fully done, and shares its in-flight promise across
+	// concurrent callers, so running it unconditionally here costs at most one draft per PR open.
+	await generateTodoSummary({ workspaceId: params.workspaceId, sessionId: params.sessionId });
 	return {
 		title: params.title?.trim() || ws.branch,
 		body: renderPrBody(await listTodos(params)),

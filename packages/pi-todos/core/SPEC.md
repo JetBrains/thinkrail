@@ -176,21 +176,24 @@ The `index.ts` barrel:
 Writes are atomic (temp file + `rename`); a session id is validated as a safe path segment before it
 becomes a filename.
 
-**Escape decoding is a narrow write-time rescue, split by field class.** `\uXXXX` is unambiguous
-(no Windows path, regex, or source snippet writes `\u` literally), so it is decoded on every
-agent-authored write across every text field. `\n` / `\r` / `\t` are AMBIGUOUS 
- an LLM may emit
-them as a Markdown-newline substitute (`summary = "a\\nb"`) OR an agent may legitimately store a
-Windows path (`C:\\new file`), a regex pattern (`/\\n/g`), or any other backslash-prefixed
-identifier where `\n` means "backslash + n" literally 
- so they are decoded ONLY in fields that
-are rendered as Markdown and therefore need the rescue: the plan-level `summary` and the per-item
-`summary`. Every other agent-written field (titles, group names, notes, verifications, commit
-subjects, artifact labels) is left verbatim; paths and patterns survive there. As a second line of
-defence even inside summaries, an already-multiline string (containing a real `\n` / `\r` / `\t`)
-is left alone. All decoding is gated on origin: user-authored text is never rescued. `\\n` (an
-escaped backslash + n) is left alone via a negative lookbehind. Reads are pass-through: stored
-text surfaces verbatim, so old on-disk data is never silently mutated on reload.
+**Escape decoding is a narrow write-time rescue, split by field class AND (inside Markdown fields)
+by syntax.** `\uXXXX` is unambiguous (no Windows path, regex, or source snippet writes `\u`
+literally), so it is decoded on every agent-authored write across every text field; a `(?<!\\)`
+lookbehind leaves `\\u` alone. `\n` is AMBIGUOUS — an LLM may emit it as a Markdown newline
+substitute (`summary = "a\\n\\nb"`, `verification = "- a\\n- b"`) OR as a legitimate backslash-prefix
+identifier (Windows path `C:\\new file`, regex pattern `/\\n/g`, code snippet). Even inside a
+Markdown-rendered field we can't rescue every `\n` without mangling paths, so the rescue is
+*structural*: `\n` is decoded only when it precedes a Markdown separator — another `\n`
+(paragraph break), a bullet / ordered list / heading / blockquote / fenced block / thematic break
+marker. Any other `\n` (short prose, path, pattern) stays verbatim. `\r` and `\t` are not
+rescued (too rare as intentional Markdown separators, too close to Windows line endings and
+hard-tab indentation). The rescue applies ONLY to the plan-level `summary`, the per-item
+`summary`, and the per-item `verification` (the three fields rendered as Markdown by the UI and by
+`renderPrBody`); every other agent-written field (titles, group names, notes, commit subjects,
+artifact labels) only runs `decodeUnicode`. All decoding is gated on origin: user-authored text is
+never rescued. `\\n` (escaped backslash + n) is left alone via a negative lookbehind. Reads are
+pass-through: stored text surfaces verbatim, so old on-disk data is never silently mutated on
+reload.
 
 ## Boundary
 

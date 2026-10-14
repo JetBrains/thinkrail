@@ -327,24 +327,38 @@ test("literal \\uXXXX escapes in titles/notes/group names are decoded, not shown
 	}
 });
 
-test("literal \\n/\\r/\\t in agent summary is decoded, but note/title/verification stay verbatim", () => {
+test("literal `\\n` is decoded in summary/verification only when the next chars start a Markdown separator", () => {
+	// The rescue is syntax-aware, not content-aware: a `\n` is decoded only when it precedes a
+	// Markdown structural marker (another `\n` paragraph break, bullet, ordered list, heading,
+	// blockquote, fenced block, thematic break). A `\n` inside prose / a path / a regex pattern
+	// stays verbatim. Only summary + verification are Markdown-rendered; note/title/commitSubject
+	// are unicode-only.
 	const root = tempRoot();
 	try {
 		const s = store(root);
-		// The double-escaped case the rescue exists for: plan-level and per-item `summary` are the
-		// only fields rendered as Markdown, so only they decode `\n/\r/\t`. No real newline present,
-		// so the no-real-newline guard also lets the decode through.
+		// Plan-level summary with heading + paragraph + bullet list; every `\n` is in a structural
+		// position so every one is decoded.
 		s.setSummary("## Summary\\n\\nFirst line.\\n\\n- bullet\\n- bullet two");
 		expect(s.read().summary).toBe("## Summary\n\nFirst line.\n\n- bullet\n- bullet two");
-		const todo = s.add({ title: "step", note: "line one\\nline two" });
-		// `note` is NOT a Markdown-rendered field: stays verbatim so a Windows path / regex / code
-		// snippet with a literal `\n` survives.
-		expect(s.get(todo.id)?.note).toBe("line one\\nline two");
-		s.update(todo.id, { status: "done", summary: "Shipped.\\n\\nDetails." });
-		expect(s.get(todo.id)?.summary).toBe("Shipped.\n\nDetails.");
-		// Verification is a short single-line badge, never Markdown. Stays verbatim.
-		s.update(todo.id, { verification: "ran /\\nfoo/.test(x) \u2192 true" });
-		expect(s.get(todo.id)?.verification).toBe("ran /\\nfoo/.test(x) \u2192 true");
+		// Verification bullets (the shape the planSummary tool prescribes) "check \u2192 result" lines.
+		const todo = s.add({ title: "step" });
+		s.update(todo.id, {
+			status: "done",
+			verification: "- unit \u2192 pass\\n- lint \u2192 pass\\n- typecheck \u2192 green",
+		});
+		expect(s.get(todo.id)?.verification).toBe(
+			"- unit \u2192 pass\n- lint \u2192 pass\n- typecheck \u2192 green",
+		);
+		// A plan summary with a Windows path mid-prose: no structural marker after `\n`, so the path
+		// stays verbatim (regression for the bot's blocking case).
+		s.setSummary("Adjusted C:\\new file for parity.");
+		expect(s.read().summary).toBe("Adjusted C:\\new file for parity.");
+		// Note is NOT markdown-rendered; stays verbatim regardless of what follows.
+		const t2 = s.add({
+			title: "step 2",
+			note: "line one\\n- not a bullet because note isn't markdown",
+		});
+		expect(s.get(t2.id)?.note).toBe("line one\\n- not a bullet because note isn't markdown");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TodoStore } from "pi-todos/core";
 import { setOneShotRunner } from "../assist";
+import { previewPr } from "../pr/pr";
 import { generateTodoSummary } from "./todos";
 
 // generateTodoSummary: the host-side auto-draft of a completed plan's note when the agent left none.
@@ -127,6 +128,25 @@ test("returns null (no model call) when the plan is not fully done", async () =>
 	expect(result.summary).toBeNull();
 	expect(called).toBe(false);
 	expect(new TodoStore(repo, SESSION).read().summary).toBeUndefined();
+});
+
+test("previewPr drives summary generation on the host side so the PR body is never empty", async () => {
+	// Regression for the chat-closed-to-history race: no UI anchor is mounted when the plan
+	// completes, so previewPr itself must drive `generateTodoSummary` before `renderPrBody` reads
+	// `plan.summary`. Without this the PR ships with no `## Summary / ## Changes / ## Testing`.
+	const draft =
+		"## Summary\n\nShipped end to end.\n\n" +
+		"## Changes\n\n_no cross-cutting notes_\n\n" +
+		"## Testing\n\n- pytest \u2192 3 pass";
+	setOneShotRunner(async () => ({ text: draft, model: { provider: "p", id: "m" } }));
+	const store = new TodoStore(repo, SESSION);
+	seedDone(store);
+	expect(new TodoStore(repo, SESSION).read().summary).toBeUndefined();
+
+	const preview = await previewPr({ workspaceId: "w1", sessionId: SESSION });
+	expect(new TodoStore(repo, SESSION).read().summary).toBe(draft);
+	expect(preview.body).toContain("## Summary");
+	expect(preview.body).toContain("## Testing");
 });
 
 test("a concurrent request shares the in-flight draft instead of getting null", async () => {
