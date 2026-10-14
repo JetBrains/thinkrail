@@ -1274,9 +1274,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   placeholder is suppressed when either section is present). `ChatPlan.tsx` and its header strip +
   popover were removed in the TODO-rail migration: the compact TODO list lives as a side-rail tool
   (`panels/PlanRailPane.tsx`, see [[submodule-web-panels]]) and the Plan page is a center tab opened
-  via `openPlan`. `ChatView` still mounts `useChatTodos` so the auto-summary trigger
-  (`todo.generateSummary` on a completed plan with no summary) fires whenever a chat is open, not
-  only while the rail or center-tab Plan happens to be mounted. Frontend-local workspace view state
+  via `openPlan`. The auto-summary trigger (`todo.generateSummary` on a completed plan with no
+  summary) is exposed as the dedicated side-effect-only hook `useAutoPlanSummary(workspaceId,
+  sessionId)`, mounted by `shell/WorkspaceWorkbench` through a `PlanSummaryAutoDraft` anchor 
+ one
+  per open chat tab 
+ so the trigger survives the user switching to the Plan page, a File tab, or
+  any other center tab (`ChatView` unmounts when the center tab changes). Without this anchor a
+  plan that completes while the chat tab is unselected would ship an empty `## Summary` through
+  `renderPrBody`.   Frontend-local workspace view state
   persists the Plan page as a registered `todo-plan` reference (resolver kind + session identity,
   never plan content); another
   client may explicitly reopen the same live page from the host-owned TODO plan without inheriting placement. (An earlier design compiled the plan to a

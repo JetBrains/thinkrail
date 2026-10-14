@@ -69,7 +69,6 @@ import { useModelPreferences } from "./useModelPreferences";
 import { useSessionStats } from "./useSessionStats";
 import "./tools/register";
 import type { ChatAttachment } from "./types";
-import { useAutoPlanSummary } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
 
 registerWebExtensions();
@@ -165,9 +164,6 @@ export default function ChatView({
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
-	// Keep the auto-draft of the plan summary alive even when neither the TODO rail nor the Plan
-	// page is mounted. See panels/SPEC.md.
-	useAutoPlanSummary(workspaceId, sessionId);
 	const [slashActive, setSlashActive] = useState(false);
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
 	const [templatesEmpty, setTemplatesEmpty] = useState(false);

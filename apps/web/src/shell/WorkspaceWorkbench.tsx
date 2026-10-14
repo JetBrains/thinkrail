@@ -16,6 +16,7 @@ import {
 	useState,
 } from "react";
 import { prepareChatTitle } from "../chat/chatTitle";
+import { useAutoPlanSummary } from "../chat/useChatTodos";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { LoadingRegion } from "../components/Skeleton";
@@ -84,6 +85,25 @@ import {
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
+
+/**
+ * Keeps the auto-draft of the plan summary alive for one chat tab regardless of which tab is
+ * currently selected. Mounted from `WorkspaceWorkbench` for every chat tab in the workspace so
+ * the trigger survives the user switching to the Plan page, a File tab, or any other center tab
+ * 
+ without it, a plan that completes while the ChatView is unmounted would ship an empty summary
+ * through `renderPrBody`. Returns `null`; this is a pure side-effect anchor.
+ */
+function PlanSummaryAutoDraft({
+	workspaceId,
+	sessionId,
+}: {
+	workspaceId: string;
+	sessionId: string;
+}) {
+	useAutoPlanSummary(workspaceId, sessionId);
+	return null;
+}
 
 const ChatView = lazy(() => import("../chat/ChatView"));
 const PlanPane = lazy(() => import("../panels/PlanPane"));
@@ -282,6 +302,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
+	const chatSessionIds = useMemo(() => {
+		const seen = new Set<string>();
+		for (const tab of editorTabs) if (tab.kind === "chat") seen.add(tab.sessionId);
+		return [...seen];
+	}, [editorTabs]);
 	const chatStarting = useAppStore((state) => (state.chatStartsByWorkspace[workspaceId] ?? 0) > 0);
 	const deletedSessions = useAppStore((state) => state.deletedSessionsByWorkspace[workspaceId]);
 	const terminalClose = useTerminalClose();
@@ -734,6 +759,13 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 
 	return (
 		<div data-testid="workspace-workbench" data-layout-status="settled" className="contents">
+			{chatSessionIds.map((sessionId) => (
+				<PlanSummaryAutoDraft
+					key={`plan-summary-draft:${workspaceId}:${sessionId}`}
+					workspaceId={workspaceId}
+					sessionId={sessionId}
+				/>
+			))}
 			<Workbench
 				workspaceId={workspaceId}
 				document={rendered.document}
