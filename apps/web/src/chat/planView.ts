@@ -190,18 +190,6 @@ export function planStaleSummary(plan: TodoPlan): string | undefined {
 	return all.some((t) => t.status !== "done") ? plan.summary : undefined;
 }
 
-export function stripStatus(
-	glance: PlanGlance,
-	summary: { done: number; total: number; current: TodoItem | undefined },
-): { show: boolean; showLabel: boolean; title?: string } {
-	const openLeft = summary.total - summary.done > 0;
-	return {
-		show: glance !== "waiting" || openLeft,
-		showLabel: glance !== "working" || !summary.current,
-		...(summary.current ? { title: summary.current.title } : {}),
-	};
-}
-
 export interface PlanSections {
 	activeGroups: TodoGroupItem[];
 	activeLoose: TodoItem[];

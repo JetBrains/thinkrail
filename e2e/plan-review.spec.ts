@@ -14,7 +14,7 @@ import { commitFile, gitAs } from "./fixtures/git";
 // a kebab menu. Actually settling a review (the review subagent's verdict, ask-to-fix's fix cycle,
 // Check All's pass) is @agent territory; the seeded JSON here is exactly the shape those leave behind.
 
-test("reviewable steps show the reviewed counter, Start review, and the settled Verified state", async ({
+test("reviewable steps show the reviewed counter, Check it, and the settled Checked state", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -131,7 +131,7 @@ test("reviewable steps show the reviewed counter, Start review, and the settled 
 		}),
 	);
 
-	// Open the plan page through the popup.
+	// Open the plan page from the plan rail.
 	await revealWorkbenchTool(page, "plan");
 	await page.getByTestId("plan-rail-pane").getByTestId("todo-open-plan").click();
 	const pane = page.getByTestId("plan-pane");
@@ -372,7 +372,7 @@ test("the plan page groups items into a Now block and Done, and adds a task inli
 	).toBeVisible();
 });
 
-test("plan items can be removed, and the add box takes multi-line input (Enter adds, Shift+Enter wraps)", async ({
+test("plan items have no UI remove control, and the add box takes multi-line input (Enter adds, Shift+Enter wraps)", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
