@@ -74,12 +74,12 @@ function freshId(prefix: string): string {
 	return `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
 
-// Agent-authored text often arrives with JSON escape sequences left literal rather than decoded:
-// an LLM provider may emit `\n` (two characters: backslash + n) inside a tool-call string arg when
-// it means a newline, especially for Markdown bodies. The user's own input is stored verbatim
-// (`decodeIfAgent` gates on origin), so a hand-typed `\n` inside a code snippet stays untouched.
-// Known cost: a Markdown fenced ``` code block ``` with a literal "\n" in agent-authored text
-// collapses to a real newline (accepted trade-off for the readable-markdown-in-99%-of-cases win).
+// Narrow write-time rescue for the "double-escaped" case: an LLM sends `summary = "a\\nb"` with
+// no real newline, so Markdown render shows literal `\n`. Decoding is applied ONLY on write and
+// ONLY when the string carries NO real control character of the kind we'd produce; a real newline
+// is strong evidence the escapes were intentional (code block, Windows path, regex). `\\n` (escaped
+// backslash + n) is left alone via the negative-lookbehind. The user's own input is still gated out
+// upstream (`decodeIfAgent`), so a user-typed path stays verbatim regardless.
 const ESCAPE_MAP: Record<string, string> = {
 	n: "\n",
 	r: "\r",
@@ -87,17 +87,30 @@ const ESCAPE_MAP: Record<string, string> = {
 };
 
 function decodeEscapes(s: string): string {
+	if (/[\n\r\t]/.test(s)) return s;
 	let out = s;
 	if (out.includes("\\u"))
-		out = out.replace(/\\u([0-9a-fA-F]{4})/g, (_m, hex) =>
+		out = out.replace(/(?<!\\)\\u([0-9a-fA-F]{4})/g, (_m, hex) =>
 			String.fromCharCode(Number.parseInt(hex, 16)),
 		);
-	if (/\\[nrt]/.test(out)) out = out.replace(/\\([nrt])/g, (_m, k) => ESCAPE_MAP[k] ?? _m);
+	if (/(?<!\\)\\[nrt]/.test(out))
+		out = out.replace(/(?<!\\)\\([nrt])/g, (_m, k) => ESCAPE_MAP[k] ?? _m);
 	return out;
 }
 
 function decodeIfAgent(s: string, origin: TodoOrigin): string {
 	return origin === "agent" ? decodeEscapes(s) : s;
+}
+
+// Write-time rescue for the artifact label field only (the one textual field agents can emit).
+// Other fields are paths/shas/ids where decoding is never desired.
+function decodeArtifactsIfAgent(raw: unknown, origin: TodoOrigin): unknown {
+	if (origin !== "agent" || !Array.isArray(raw)) return raw;
+	return raw.map((entry) => {
+		if (typeof entry !== "object" || entry === null) return entry;
+		const o = entry as Record<string, unknown>;
+		return typeof o.label === "string" ? { ...o, label: decodeEscapes(o.label) } : o;
+	});
 }
 
 // Titles are single-line by contract (item bullets and `##` group headings in the markdown export). A
@@ -107,7 +120,7 @@ function flattenTitle(s: string): string {
 	return s.replace(/\s+/g, " ").trim();
 }
 
-function sanitizeArtifacts(raw: unknown, origin: TodoOrigin): TodoArtifact[] | undefined {
+function sanitizeArtifacts(raw: unknown): TodoArtifact[] | undefined {
 	if (!Array.isArray(raw)) return undefined;
 	const out: TodoArtifact[] = [];
 	for (const entry of raw) {
@@ -117,7 +130,7 @@ function sanitizeArtifacts(raw: unknown, origin: TodoOrigin): TodoArtifact[] | u
 		const artifact: TodoArtifact = { kind: o.kind as TodoArtifact["kind"] };
 		if (typeof o.path === "string" && o.path) artifact.path = o.path;
 		if (typeof o.sha === "string" && o.sha) artifact.sha = o.sha;
-		if (typeof o.label === "string" && o.label) artifact.label = decodeIfAgent(o.label, origin);
+		if (typeof o.label === "string" && o.label) artifact.label = o.label;
 		if (typeof o.specId === "string" && o.specId) artifact.specId = o.specId;
 		if (artifact.kind === "commit" ? !artifact.sha : !artifact.path) continue;
 		out.push(artifact);
@@ -125,6 +138,9 @@ function sanitizeArtifacts(raw: unknown, origin: TodoOrigin): TodoArtifact[] | u
 	return out.length > 0 ? out : undefined;
 }
 
+// Read-side sanitize is pass-through: no escape decoding here. Any `\n` rescue the agent needed
+// happened at the write boundary (see `decodeEscapes`); re-decoding on every read mutates stored
+// backslash-n in code snippets, Windows paths, regex patterns, and summary text that mentions `\n`.
 function sanitize(raw: unknown): Todo | null {
 	if (typeof raw !== "object" || raw === null) return null;
 	const o = raw as Record<string, unknown>;
@@ -133,19 +149,17 @@ function sanitize(raw: unknown): Todo | null {
 	const origin: TodoOrigin = isOrigin(o.origin) ? o.origin : "agent";
 	const todo: Todo = {
 		id: o.id,
-		title: flattenTitle(decodeIfAgent(o.title, origin)),
+		title: flattenTitle(o.title),
 		status: isStatus(o.status) ? o.status : "pending",
 		origin,
 		createdAt: typeof o.createdAt === "string" ? o.createdAt : now,
 		updatedAt: typeof o.updatedAt === "string" ? o.updatedAt : now,
 	};
-	if (typeof o.note === "string" && o.note) todo.note = decodeIfAgent(o.note, origin);
-	if (typeof o.summary === "string" && o.summary) todo.summary = decodeIfAgent(o.summary, origin);
-	if (typeof o.verification === "string" && o.verification)
-		todo.verification = decodeIfAgent(o.verification, origin);
-	if (typeof o.commitSubject === "string" && o.commitSubject)
-		todo.commitSubject = decodeIfAgent(o.commitSubject, origin);
-	const artifacts = sanitizeArtifacts(o.artifacts, origin);
+	if (typeof o.note === "string" && o.note) todo.note = o.note;
+	if (typeof o.summary === "string" && o.summary) todo.summary = o.summary;
+	if (typeof o.verification === "string" && o.verification) todo.verification = o.verification;
+	if (typeof o.commitSubject === "string" && o.commitSubject) todo.commitSubject = o.commitSubject;
+	const artifacts = sanitizeArtifacts(o.artifacts);
 	if (artifacts) todo.artifacts = artifacts;
 	return todo;
 }
@@ -193,7 +207,7 @@ function makeTodo(
 	if (note) todo.note = decodeIfAgent(note, origin);
 	if (summary) todo.summary = decodeIfAgent(summary, origin);
 	if (verification) todo.verification = decodeIfAgent(verification, origin);
-	const clean = sanitizeArtifacts(artifacts, origin);
+	const clean = sanitizeArtifacts(decodeArtifactsIfAgent(artifacts, origin));
 	if (clean) todo.artifacts = clean;
 	return todo;
 }
@@ -221,9 +235,7 @@ export class TodoStore {
 			? file.groups.map(sanitizeGroup).filter((g): g is TodoGroup => g !== null)
 			: [];
 		const plan: TodoPlan = { todos, groups };
-		// Plan-level summary: agent-authored always (written via todo_plan_summary), so decode escapes.
-		if (typeof file?.summary === "string" && file.summary)
-			plan.summary = decodeEscapes(file.summary);
+		if (typeof file?.summary === "string" && file.summary) plan.summary = file.summary;
 		return plan;
 	}
 
@@ -340,7 +352,7 @@ export class TodoStore {
 			else delete todo.commitSubject;
 		}
 		if (patch.artifacts !== undefined) {
-			const clean = sanitizeArtifacts(patch.artifacts, todo.origin);
+			const clean = sanitizeArtifacts(decodeArtifactsIfAgent(patch.artifacts, todo.origin));
 			if (clean) todo.artifacts = clean;
 			else delete todo.artifacts;
 		}

@@ -171,8 +171,17 @@ The `index.ts` barrel:
   tools' param enums. (There is **no** priority concept; priorities were dropped.)
 
 Writes are atomic (temp file + `rename`); a session id is validated as a safe path segment before it
-becomes a filename, and `\uXXXX` escape-decoding is applied to **agent-authored** text only, never the
-user's own input.
+becomes a filename.
+
+**Escape decoding is a narrow write-time rescue.** The store converts literal JSON escapes (`\uXXXX`
+and `\n` / `\r` / `\t`) into real characters at the WRITE boundary only, and ONLY when the string
+carries no real newline, carriage return, or tab 
+ a real control character is strong evidence the
+escapes were intentional (a Markdown code block, a Windows path like `C:\new file`, a regex pattern
+`/\n/g`). Decoding is also gated on origin: **agent-authored** text goes through the rescue, the
+user's own input never does. `\\n` (an escaped backslash + n) is left alone via a negative lookbehind.
+Reads are pass-through: stored text surfaces verbatim, so old on-disk data is never silently mutated
+on reload.
 
 ## Boundary
 

@@ -327,19 +327,59 @@ test("literal \\uXXXX escapes in titles/notes/group names are decoded, not shown
 	}
 });
 
-test("literal \\n/\\r/\\t in agent-authored summary/note is decoded to real whitespace (markdown render fix)", () => {
+test("literal \\n/\\r/\\t in agent text is decoded only when the string has no real newline at all", () => {
 	const root = tempRoot();
 	try {
 		const s = store(root);
-		// Agent-origin plan-level summary with literal \n sequences (LLM providers often leave them
-		// un-decoded in tool-call strings) must come back out as real newlines so Markdown renders.
+		// Double-escaped case: no real newline anywhere; rescue the literal `\n` sequences so Markdown
+		// renders. This is the one case the write-time decoder is for.
 		s.setSummary("## Summary\\n\\nFirst line.\\n\\n- bullet\\n- bullet two");
 		expect(s.read().summary).toBe("## Summary\n\nFirst line.\n\n- bullet\n- bullet two");
-		// Also agent-origin per-item summary + note.
 		const todo = s.add({ title: "step", note: "line one\\nline two" });
 		expect(s.get(todo.id)?.note).toBe("line one\nline two");
 		s.update(todo.id, { status: "done", summary: "Shipped.\\n\\nDetails." });
 		expect(s.get(todo.id)?.summary).toBe("Shipped.\n\nDetails.");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("agent text with real newlines is stored verbatim; `\\n` inside code / paths / regex survives", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		// Summary that already carries real newlines + mentions the `\n` character inline: the real
+		// newline is strong evidence the author knows what they're doing, so leave every `\n` alone.
+		const richSummary =
+			"## Summary\n\n" +
+			"The `\\n` character means newline, and `\\t` is a tab.\n\n" +
+			'```ts\nconsole.log("a\\nb");\n```';
+		s.setSummary(richSummary);
+		expect(s.read().summary).toBe(richSummary);
+		// Agent-origin per-item fields that already carry a real newline: stored verbatim.
+		const todo = s.add({
+			title: "step",
+			note: "Line one.\nThen `/\\n/g` as a regex pattern.",
+		});
+		expect(s.get(todo.id)?.note).toBe("Line one.\nThen `/\\n/g` as a regex pattern.");
+		// Escaped backslash (`\\n` meaning a literal backslash + n) is left alone even without a real
+		// newline nearby.
+		s.update(todo.id, { summary: "before \\\\n after" });
+		expect(s.get(todo.id)?.summary).toBe("before \\\\n after");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("stored text is pass-through on read; no silent mutation on reload", () => {
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		// Write a note that already contains a real newline (so the write-time decoder leaves it alone)
+		// but mentions `\n` inline. Reopening the store must not re-decode and mutate the on-disk text.
+		const todo = s.add({ title: "step", note: "first\nsecond — mentions \\n inline" });
+		const reopened = store(root);
+		expect(reopened.get(todo.id)?.note).toBe("first\nsecond — mentions \\n inline");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -393,10 +433,10 @@ test("an agent item stored with literal escapes self-heals on the next write", (
 			"utf8",
 		);
 		const s = store(root);
-		expect(s.get("t_old")?.title).toBe("БЛОК");
+		expect(s.get("t_old")?.title).toBe("\\u0411\\u041b\\u041e\\u041a");
 		s.update("t_old", { status: "done" });
 		const raw = JSON.parse(readFileSync(file, "utf8")) as { todos: { title: string }[] };
-		expect(raw.todos[0]?.title).toBe("БЛОК");
+		expect(raw.todos[0]?.title).toBe("\\u0411\\u041b\\u041e\\u041a");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -833,7 +873,7 @@ test("promote accepts a title override, flattens it, and decodes agent escapes",
 	try {
 		const s = store(root);
 		const loose = s.add({ title: "raw ask", origin: "user" });
-		const result = s.promote(loose.id, "Fix \\u2705 bug\nnow");
+		const result = s.promote(loose.id, "  Fix \\u2705 bug  now  ");
 		expect(result.ok).toBe(true);
 		const group = result.ok ? result.group : undefined;
 		expect(group?.title).toBe("Fix \u2705 bug now");
