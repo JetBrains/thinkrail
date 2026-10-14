@@ -64,26 +64,26 @@ test("non-preset overrides expose an editable Custom field that auto-saves", () 
 	const html = render({ settings: [{ ...setting, override: 500_000, contextWindow: 500_000 }] });
 	expect(html).toContain('data-testid="context-limit-all-input"');
 	expect(html).toContain('value="500000"');
-	// No Apply button - input auto-saves on blur or Enter
+	expect(html).toContain("data-settings-draft-input");
+	expect(html).toContain('aria-invalid="false"');
 	expect(html).not.toContain('data-testid="context-limit-all-apply"');
-	expect(html).toContain('inputMode="numeric"');
+	expect(html).not.toContain("undefined");
 });
 
-test("different overrides show mixed state without a preset selected", () => {
+test("different overrides show Customized instead of claiming a uniform preset", () => {
 	const html = render({
 		settings: [
 			setting,
 			{ ...setting, provider: "context-proxy", override: 750_000, contextWindow: 750_000 },
 		],
 	});
-	// Main control shows mixed state when shared models have different overrides
+	expect(html).toContain("Customized by model");
 	expect(html).toContain('data-context-override="mixed"');
-	// No preset should be selected
 	expect(html).not.toContain('checked=""');
+	expect(html).not.toContain("undefined");
 });
 
-test("the shared control governs only eligible models and hides when none are eligible", () => {
-	// When shared model has 1M override, main control shows 1M selected
+test("the shared control summarizes only rows it governs and names the external ones it leaves alone", () => {
 	const html = render({
 		settings: [
 			{ ...setting, override: 1_000_000, contextWindow: 1_000_000 },
@@ -91,7 +91,9 @@ test("the shared control governs only eligible models and hides when none are el
 		],
 	});
 	expect(html).toMatch(/context-limit-all-1m[^>]*><input[^>]*checked=""/);
-	// When only external models exist (outside range), the main control is hidden
+	expect(html).toContain(
+		"1 available model \u00b7 1 kept at a limit set outside the 272,000\u20131,000,000 range",
+	);
 	expect(
 		render({ settings: [{ ...setting, override: 1_050_000, contextWindow: 1_050_000 }] }),
 	).not.toContain('data-testid="context-limit-all"');

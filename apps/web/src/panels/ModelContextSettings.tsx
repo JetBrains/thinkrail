@@ -28,14 +28,14 @@ function supported(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION;
 }
 
-/**
- * Compound segmented control with integrated custom input.
- * Default and 1M are regular segments. Custom is a segment that,
- * when selected, shows an editable numeric input as part of the same control.
- */
+function isCustomText(text: string): boolean {
+	return /^\d+$/.test(text) && isModelContextWindow(Number(text));
+}
+
 function ContextLimitControl({
 	label,
 	controlLabel = label,
+	description,
 	override,
 	disabled,
 	testId,
@@ -44,6 +44,7 @@ function ContextLimitControl({
 }: {
 	label: string;
 	controlLabel?: string;
+	description: string;
 	override: number | null | undefined;
 	disabled: boolean;
 	testId: string;
@@ -52,47 +53,41 @@ function ContextLimitControl({
 }) {
 	const id = useId();
 	const inputRef = useRef<HTMLInputElement>(null);
-	// Track last valid custom value to restore when switching back to Custom
-	const [lastCustomValue, setLastCustomValue] = useState<string>(
-		override !== null && override !== MODEL_CONTEXT_WINDOW_LIMITS.max ? String(override) : "",
-	);
+	const restoreFocus = useRef<HTMLElement | null>(null);
+	const skipBlurCommit = useRef(false);
 	const initialDraft = {
 		revision,
 		custom: false,
-		text:
-			override !== null && override !== MODEL_CONTEXT_WINDOW_LIMITS.max
-				? String(override)
-				: lastCustomValue,
-		touched: false,
+		text: override != null && override !== MODEL_CONTEXT_WINDOW_LIMITS.max ? String(override) : "",
+		submitted: null as string | null,
 	};
 	const [draft, setDraft] = useState(initialDraft);
-	if (draft.revision !== revision) setDraft({ ...initialDraft, text: lastCustomValue });
+	if (draft.revision !== revision) setDraft(initialDraft);
 
-	// Determine which preset is selected
+	useEffect(() => {
+		const previous = restoreFocus.current;
+		if (disabled || !previous) return;
+		restoreFocus.current = null;
+		if (document.activeElement === document.body && previous.isConnected) previous.focus();
+	}, [disabled]);
+
 	const selected = draft.custom
 		? "custom"
 		: override === undefined
 			? null
 			: (PRESETS.find((preset) => preset.override === override)?.id ?? "custom");
-
-	const parsed = Number(draft.text);
-	const showError =
-		draft.touched &&
-		draft.text !== "" &&
-		!(/^\d+$/.test(draft.text) && isModelContextWindow(parsed));
-
-	// Commit valid input on blur or Enter
-	const commitValue = () => {
-		if (disabled) return;
-		const trimmed = draft.text.trim();
-		const parsedValue = Number(trimmed);
-		if (/^\d+$/.test(trimmed) && isModelContextWindow(parsedValue) && parsedValue !== override) {
-			setLastCustomValue(trimmed);
-			onChange(parsedValue);
-		}
-	};
-
 	const isCustomActive = selected === "custom";
+	const text = draft.text.trim();
+	const showError = text !== "" && !isCustomText(text);
+
+	const commitValue = () => {
+		if (disabled || !isCustomText(text) || text === draft.submitted) return false;
+		const value = Number(text);
+		if (value === override) return false;
+		setDraft({ ...draft, submitted: text });
+		onChange(value);
+		return true;
+	};
 
 	return (
 		<div
@@ -101,9 +96,11 @@ function ContextLimitControl({
 			className="flex flex-col gap-4"
 		>
 			<div className="flex flex-wrap items-center justify-between gap-12">
-				<p className="min-w-0 flex-1 tr-text-ui text-text-default">{label}</p>
+				<div className="flex min-w-0 flex-1 flex-col gap-2">
+					<p className="tr-text-ui text-text-default">{label}</p>
+					<p className="tr-text-metadata text-text-muted">{description}</p>
+				</div>
 
-				{/* Compound segmented control with integrated custom input */}
 				<div
 					role="radiogroup"
 					aria-label={`Context window for ${controlLabel}`}
@@ -112,11 +109,13 @@ function ContextLimitControl({
 						showError && "ring-1 ring-feedback-error",
 					)}
 				>
-					{/* Default and 1M presets */}
 					{PRESETS.filter((p) => p.id !== "custom").map((preset) => (
 						<label
 							key={preset.id}
 							data-testid={`${testId}-${preset.id}`}
+							onPointerDown={() => {
+								if (document.activeElement === inputRef.current) skipBlurCommit.current = true;
+							}}
 							className={cn(
 								"relative cursor-pointer transition-colors",
 								disabled && "cursor-default",
@@ -130,9 +129,10 @@ function ContextLimitControl({
 								disabled={disabled}
 								aria-label={`${preset.label} for ${controlLabel}`}
 								className="peer sr-only inset-0"
-								onChange={() => {
+								onChange={(event) => {
 									if (disabled) return;
-									setDraft({ ...initialDraft, touched: false });
+									restoreFocus.current = event.currentTarget;
+									setDraft(initialDraft);
 									onChange(preset.override);
 								}}
 							/>
@@ -151,7 +151,6 @@ function ContextLimitControl({
 						</label>
 					))}
 
-					{/* Custom segment with integrated input */}
 					<div
 						className={cn(
 							"flex items-center",
@@ -175,7 +174,7 @@ function ContextLimitControl({
 								className="peer sr-only inset-0"
 								onChange={() => {
 									if (disabled) return;
-									setDraft({ ...draft, custom: true, text: lastCustomValue, touched: false });
+									setDraft({ ...draft, custom: true });
 									setTimeout(() => inputRef.current?.focus(), 0);
 								}}
 							/>
@@ -193,8 +192,7 @@ function ContextLimitControl({
 							</span>
 						</label>
 
-						{/* Input - only visible when Custom is active */}
-						{isCustomActive && (
+						{isCustomActive ? (
 							<input
 								ref={inputRef}
 								type="text"
@@ -206,27 +204,37 @@ function ContextLimitControl({
 								aria-invalid={showError}
 								aria-describedby={showError ? `${id}-error` : undefined}
 								data-testid={`${testId}-input`}
+								data-settings-draft-input
 								onChange={(event) =>
-									setDraft({ ...draft, text: event.currentTarget.value, touched: true })
+									setDraft({ ...draft, text: event.currentTarget.value, submitted: null })
 								}
-								onBlur={commitValue}
+								onBlur={(event) => {
+									const next = event.relatedTarget;
+									const toSibling =
+										next instanceof HTMLInputElement && next.type === "radio" && next.name === id;
+									const skip = skipBlurCommit.current || toSibling;
+									skipBlurCommit.current = false;
+									if (!skip) commitValue();
+								}}
 								onKeyDown={(event) => {
 									if (event.key === "Enter") {
 										event.preventDefault();
-										commitValue();
+										if (commitValue()) restoreFocus.current = event.currentTarget;
+									} else if (event.key === "Escape") {
+										setDraft(initialDraft);
 									}
 								}}
-								className="h-32 w-[100px] bg-transparent pr-8 tr-text-ui text-text-default outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none placeholder:text-text-muted disabled:text-control-disabled-text"
+								className="h-32 w-100 bg-transparent pr-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted disabled:text-control-disabled-text"
 							/>
-						)}
+						) : null}
 					</div>
 				</div>
 			</div>
-			{showError && (
+			{showError ? (
 				<p id={`${id}-error`} className="text-right tr-text-metadata text-feedback-error">
 					Enter a number within {RANGE} tokens.
 				</p>
-			)}
+			) : null}
 		</div>
 	);
 }
@@ -250,11 +258,18 @@ export function ModelContextControls({
 	const rowsId = useId();
 	if (!supported(protocolVersion)) return null;
 	const shared = settings?.filter(isSharedModelContextTarget) ?? [];
+	const external = (settings?.length ?? 0) - shared.length;
 	const first = shared[0]?.override;
 	const sharedOverride = shared.every((model) => model.override === first) ? first : undefined;
 	const revision = JSON.stringify(
 		settings?.map((model) => [model.provider, model.id, model.override]),
 	);
+	const sharedDescription = [
+		sharedOverride === undefined
+			? "Customized by model"
+			: `${shared.length} available model${shared.length === 1 ? "" : "s"}`,
+		...(external > 0 ? [`${external} kept at a limit set outside the ${RANGE} range`] : []),
+	].join(" · ");
 
 	return (
 		<SettingsGroup title="GPT context window" testId="settings-model-context">
@@ -277,19 +292,18 @@ export function ModelContextControls({
 				</div>
 			) : (
 				<>
-					{/* Global context window setting - includes control and explanatory note */}
 					<div className="flex flex-col gap-8 border-border-muted border-b py-12">
-						{shared.length > 0 && (
+						{shared.length > 0 ? (
 							<ContextLimitControl
 								revision={revision}
 								label="Global"
+								description={sharedDescription}
 								override={sharedOverride}
 								disabled={pending}
 								testId="context-limit-all"
 								onChange={(override) => onChange("available", override)}
 							/>
-						)}
-						{/* Explanatory note - part of the same setting block */}
+						) : null}
 						<p className="rounded-sm bg-control-bg px-12 py-8 tr-text-metadata text-text-muted">
 							Default uses the model's catalog limit. Larger contexts may increase cost or quota
 							usage. Settings sync with pi CLI via models.json. New chats use updated limits;
@@ -297,7 +311,6 @@ export function ModelContextControls({
 						</p>
 					</div>
 
-					{/* By each model - collapsible disclosure */}
 					<div className="flex flex-col border-border-muted border-b">
 						<button
 							type="button"
@@ -308,7 +321,6 @@ export function ModelContextControls({
 							className="flex w-full items-start gap-8 py-12 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary"
 						>
 							<span className="flex-1 tr-text-ui text-text-default">By each model</span>
-							{/* Chevron right-aligned */}
 							<span className="mt-2 shrink-0">
 								{expanded ? (
 									<RiArrowDownSLine className="size-20 text-text-muted" aria-hidden="true" />
@@ -325,6 +337,7 @@ export function ModelContextControls({
 										revision={String(model.override)}
 										label={model.name}
 										controlLabel={`${model.name} (${model.provider})`}
+										description={`${model.provider} · ${tokens(model.contextWindow)} tokens${model.override === null ? " (pi default)" : ""}`}
 										override={model.override}
 										disabled={pending}
 										testId={`context-limit-${model.provider}-${model.id}`}

@@ -131,7 +131,6 @@ export function TemplatesSettings() {
 	const loading =
 		!failed && (globalTemplates == null || (workspaceId != null && projectTemplates == null));
 
-	// Loading state
 	if (loading) {
 		return (
 			<div data-testid="settings-templates">
@@ -140,7 +139,6 @@ export function TemplatesSettings() {
 		);
 	}
 
-	// Error state
 	if (failed) {
 		return (
 			<div data-testid="settings-templates">
@@ -154,7 +152,6 @@ export function TemplatesSettings() {
 	return (
 		<>
 			<SettingsPageContainer testId="settings-templates">
-				{/* GROUP 1: Project templates */}
 				<ProjectTemplatesSection
 					workspaceId={workspaceId ?? undefined}
 					templates={projectTemplates}
@@ -162,7 +159,6 @@ export function TemplatesSettings() {
 					onEdit={openEdit}
 				/>
 
-				{/* GROUP 2: Global templates */}
 				<GlobalTemplatesSection
 					templates={globalTemplates ?? []}
 					onNew={() => openNew("global")}
@@ -193,38 +189,17 @@ function ProjectTemplatesSection({
 	onEdit: (template: TemplateInfo) => void;
 }) {
 	const hasProject = workspaceId != null;
-	const [adding, setAdding] = useState(false);
-
-	const addStarters = async () => {
-		if (adding || !workspaceId) return;
-		setAdding(true);
-		try {
-			for (const t of STARTER_TEMPLATES) {
-				await getTransport().request("template.save", {
-					workspaceId,
-					scope: "project",
-					name: t.name,
-					content: assembleTemplate(t.description, t.argumentHint, t.body),
-				});
-			}
-		} catch (err) {
-			toast.error(errorText(err), "Couldn't add starter templates");
-		} finally {
-			useAppStore.getState().bumpTemplatesVersion();
-			setAdding(false);
-		}
-	};
 
 	return (
 		<section className="flex flex-col gap-12">
 			<div className="flex items-center justify-between">
 				<h4 className="tr-text-label-pill text-text-subtle">Project templates</h4>
-				{hasProject && (
+				{hasProject ? (
 					<Button variant="soft" size="sm" data-testid="template-new-project" onClick={onNew}>
 						<Plus className="size-14" />
 						New
 					</Button>
-				)}
+				) : null}
 			</div>
 
 			{!hasProject ? (
@@ -237,26 +212,11 @@ function ProjectTemplatesSection({
 					</p>
 				</SettingsNotice>
 			) : templates && templates.length === 0 ? (
-				<SettingsNotice
-					variant="neutral"
-					hideIcon
-					testId="project-templates-empty"
-					action={
-						<Button
-							data-testid="template-starters-project"
-							variant="outline"
-							size="sm"
-							disabled={adding}
-							onClick={() => void addStarters()}
-						>
-							<MagicWand className="size-14" />
-							Add starter templates
-						</Button>
-					}
-				>
+				<SettingsNotice variant="neutral" hideIcon testId="project-templates-empty">
 					<p className="tr-text-ui text-text-default">No project templates yet</p>
 					<p className="tr-text-metadata text-text-muted">
-						Create templates for this project, or start with a ready-made set of templates.
+						Templates you create here are stored in this project's{" "}
+						<code className="tr-code-text">.pi/prompts/</code> directory.
 					</p>
 				</SettingsNotice>
 			) : templates ? (
@@ -276,6 +236,22 @@ function ProjectTemplatesSection({
 	);
 }
 
+async function addStarterTemplates() {
+	try {
+		for (const t of STARTER_TEMPLATES) {
+			await getTransport().request("template.save", {
+				scope: "global",
+				name: t.name,
+				content: assembleTemplate(t.description, t.argumentHint, t.body),
+			});
+		}
+	} catch (err) {
+		toast.error(errorText(err), "Couldn't add starter templates");
+	} finally {
+		useAppStore.getState().bumpTemplatesVersion();
+	}
+}
+
 function GlobalTemplatesSection({
 	templates,
 	onNew,
@@ -287,23 +263,10 @@ function GlobalTemplatesSection({
 }) {
 	const [adding, setAdding] = useState(false);
 
-	const addStarters = async () => {
+	const addStarters = () => {
 		if (adding) return;
 		setAdding(true);
-		try {
-			for (const t of STARTER_TEMPLATES) {
-				await getTransport().request("template.save", {
-					scope: "global",
-					name: t.name,
-					content: assembleTemplate(t.description, t.argumentHint, t.body),
-				});
-			}
-		} catch (err) {
-			toast.error(errorText(err), "Couldn't add starter templates");
-		} finally {
-			useAppStore.getState().bumpTemplatesVersion();
-			setAdding(false);
-		}
+		void addStarterTemplates().then(() => setAdding(false));
 	};
 
 	return (
@@ -327,7 +290,7 @@ function GlobalTemplatesSection({
 							variant="outline"
 							size="sm"
 							disabled={adding}
-							onClick={() => void addStarters()}
+							onClick={addStarters}
 						>
 							<MagicWand className="size-14" />
 							Add starter templates

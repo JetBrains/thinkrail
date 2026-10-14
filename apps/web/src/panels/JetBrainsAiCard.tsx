@@ -45,28 +45,31 @@ function JbcentralQuotaSettings({
 	onEnabledChange,
 	onRefreshSecondsChange,
 }: JbcentralQuotaSettingsProps) {
-	const [draft, setDraft] = useState(String(refreshSeconds));
-	const [error, setError] = useState<string | null>(null);
+	const savedText = String(refreshSeconds);
+	const [draft, setDraft] = useState(savedText);
+	const [submitted, setSubmitted] = useState<string | null>(null);
+	const [saveError, setSaveError] = useState<string | null>(null);
 
-	useEffect(() => setDraft(String(refreshSeconds)), [refreshSeconds]);
+	useEffect(() => {
+		setDraft(savedText);
+		setSubmitted(null);
+	}, [savedText]);
 
-	const saveInterval = async () => {
-		const seconds = Number(draft);
-		if (!isJbcentralQuotaRefreshSeconds(seconds)) {
-			// Invalid - restore to last valid saved value
-			setDraft(String(refreshSeconds));
-			return;
-		}
-		if (seconds === refreshSeconds) {
-			return;
-		}
-		try {
-			await onRefreshSecondsChange(seconds);
-			setError(null);
-		} catch {
-			setDraft(String(refreshSeconds));
-			setError("Couldn't save the refresh interval.");
-		}
+	const invalid = !isJbcentralQuotaRefreshSeconds(Number(draft));
+	const error = invalid
+		? `Enter a whole number from ${JBCENTRAL_QUOTA_REFRESH_SECONDS.min} to ${JBCENTRAL_QUOTA_REFRESH_SECONDS.max}.`
+		: saveError;
+	const errorId = "jbcentral-quota-interval-error";
+
+	const commitInterval = () => {
+		if (invalid || draft === savedText || draft === submitted) return;
+		setSubmitted(draft);
+		setSaveError(null);
+		onRefreshSecondsChange(Number(draft)).catch(() => {
+			setDraft(savedText);
+			setSubmitted(null);
+			setSaveError("Couldn't save the refresh interval.");
+		});
 	};
 
 	return (
@@ -74,7 +77,6 @@ function JbcentralQuotaSettings({
 			data-testid="jbcentral-quota-settings"
 			className="flex flex-col border-border-muted border-t"
 		>
-			{/* Show quota in top bar */}
 			<div className="flex items-center justify-between gap-12 border-border-muted border-b py-12">
 				<span className="text-text-default tr-text-ui">Show quota in top bar</span>
 				<SettingsSwitch
@@ -82,15 +84,14 @@ function JbcentralQuotaSettings({
 					label="Show JetBrains AI quota in top bar"
 					testId="jbcentral-quota-toggle"
 					onChange={(next) => {
-						setError(null);
+						setSaveError(null);
 						void onEnabledChange(next).catch(() =>
-							setError("Couldn't save the quota display setting."),
+							setSaveError("Couldn't save the quota display setting."),
 						);
 					}}
 				/>
 			</div>
 
-			{/* Refresh interval */}
 			<div className="flex items-center justify-between gap-12 py-12">
 				<label htmlFor="jbcentral-quota-interval" className="text-text-default tr-text-ui">
 					Refresh every (sec)
@@ -98,28 +99,40 @@ function JbcentralQuotaSettings({
 				<input
 					id="jbcentral-quota-interval"
 					type="number"
+					inputMode="numeric"
 					data-testid="jbcentral-quota-interval"
+					data-settings-draft-input
 					min={JBCENTRAL_QUOTA_REFRESH_SECONDS.min}
 					max={JBCENTRAL_QUOTA_REFRESH_SECONDS.max}
 					step={1}
 					value={draft}
 					disabled={!enabled}
+					aria-invalid={invalid}
+					aria-describedby={error ? errorId : undefined}
 					onChange={(event) => {
 						setDraft(event.currentTarget.value);
-						setError(null);
+						setSubmitted(null);
+						setSaveError(null);
 					}}
-					onBlur={() => void saveInterval()}
+					onBlur={commitInterval}
 					onKeyDown={(event) => {
-						if (event.key === "Enter") event.currentTarget.blur();
+						if (event.key === "Enter") {
+							event.preventDefault();
+							event.currentTarget.blur();
+						} else if (event.key === "Escape") {
+							setDraft(savedText);
+							setSaveError(null);
+						}
 					}}
-					className="h-32 w-64 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus:border-control-border-active disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
+					className="h-32 w-64 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default outline-none focus:border-control-border-active focus-visible:ring-2 focus-visible:ring-primary disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text aria-invalid:border-feedback-error"
 				/>
 			</div>
 
 			{error ? (
 				<p
+					id={errorId}
 					data-testid="jbcentral-quota-interval-error"
-					className="text-feedback-error tr-text-metadata"
+					className="pb-12 text-feedback-error tr-text-metadata"
 				>
 					{error}
 				</p>

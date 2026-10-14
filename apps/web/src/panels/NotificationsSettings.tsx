@@ -1,5 +1,6 @@
 import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
-import { useState } from "react";
+import { Button } from "@thinkrail/ui/button";
+import { useId, useState } from "react";
 import {
 	type NotificationChannel,
 	type NotificationPermissionState,
@@ -13,11 +14,14 @@ import { SettingsSwitch } from "./SettingsSwitch";
 
 function HowToEnableInstructions() {
 	const [expanded, setExpanded] = useState(false);
+	const stepsId = useId();
 
 	return (
 		<div className="flex flex-col">
 			<button
 				type="button"
+				aria-expanded={expanded}
+				aria-controls={stepsId}
 				onClick={() => setExpanded((v) => !v)}
 				className="flex items-center gap-4 tr-text-metadata text-text-muted transition-colors hover:text-text-default"
 			>
@@ -28,14 +32,17 @@ function HowToEnableInstructions() {
 				)}
 				How to enable
 			</button>
-			{expanded && (
-				<ol className="ml-24 mt-8 list-decimal space-y-4 tr-text-metadata text-text-muted">
+			{expanded ? (
+				<ol
+					id={stepsId}
+					className="mt-8 ml-24 list-decimal space-y-4 tr-text-metadata text-text-muted"
+				>
 					<li>Click the lock or info icon in your browser's address bar</li>
 					<li>Find "Notifications" in the site permissions</li>
 					<li>Change the setting from "Block" to "Allow"</li>
 					<li>Refresh this page</li>
 				</ol>
-			)}
+			) : null}
 		</div>
 	);
 }
@@ -67,17 +74,12 @@ export function NotificationsSettings() {
 		getTransport()
 			.request("settings.update", { config: { notificationsEnabled } })
 			.catch(() => toast.error("Couldn't change the notification setting"));
-		// Request permission when enabling notifications (if not already granted)
 		if (notificationsEnabled && permission === "default") {
 			requestPermission();
 		}
 	};
 
-	// Determine if we need to show a permission warning
-	const showPermissionWarning =
-		enabled &&
-		channelKind === "browser" &&
-		(permission === "denied" || permission === "unsupported");
+	const browserPermission = enabled && channelKind === "browser" ? permission : "granted";
 
 	return (
 		<div data-testid="settings-notifications" className={SETTINGS_ROWS_CONTAINER}>
@@ -98,20 +100,38 @@ export function NotificationsSettings() {
 				}
 			/>
 
-			{/* Permission warning - shown only when blocked/denied */}
-			{showPermissionWarning && (
+			{browserPermission === "default" ? (
+				<div className="border-border-muted border-b py-12">
+					<SettingsNotice
+						variant="info"
+						testId="notifications-permission-prompt"
+						action={
+							<Button
+								variant="outline"
+								size="sm"
+								data-testid="notifications-allow"
+								onClick={requestPermission}
+							>
+								Allow in browser
+							</Button>
+						}
+					>
+						Your browser hasn't granted permission yet.
+					</SettingsNotice>
+				</div>
+			) : browserPermission === "denied" || browserPermission === "unsupported" ? (
 				<div className="border-border-muted border-b py-12">
 					<SettingsNotice
 						variant="warning"
 						testId="notifications-permission-warning"
-						action={<HowToEnableInstructions />}
+						action={browserPermission === "denied" ? <HowToEnableInstructions /> : null}
 					>
-						{permission === "unsupported"
+						{browserPermission === "unsupported"
 							? "This browser doesn't support notifications."
 							: "Notifications are blocked by your browser."}
 					</SettingsNotice>
 				</div>
-			)}
+			) : null}
 		</div>
 	);
 }

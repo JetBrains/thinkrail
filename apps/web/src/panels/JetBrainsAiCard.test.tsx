@@ -36,6 +36,9 @@ describe("JetBrains quota settings", () => {
 		expect(markup).toContain('value="30"');
 		expect(markup).toContain('min="1"');
 		expect(markup).toContain('max="3600"');
+		expect(markup).toContain("data-settings-draft-input");
+		expect(markup).toContain('aria-invalid="false"');
+		expect(markup).not.toContain('data-testid="jbcentral-quota-interval-error"');
 	});
 
 	test("turning display off disables but retains the interval", () => {
