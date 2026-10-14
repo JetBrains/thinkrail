@@ -1,16 +1,16 @@
 import { cn } from "@thinkrail/ui/utils";
 import { useId } from "react";
-import { BRAND_MARK_CLIP_PATHS } from "../constants/branding";
+import { BRAND_MARK_SEGMENTS } from "../constants/branding";
 
 const FRAME_A = "M20 195 V110 A90 90 0 0 1 110 20 H650 A90 90 0 0 1 740 110 V552";
 const FRAME_B = "M20 225 V650 A90 90 0 0 0 110 740 H650 A90 90 0 0 0 740 650 V548";
 
-/** Stroke centre-lines for the animation, each clipped to a region from `BRAND_MARK_CLIP_PATHS`. */
+/** Stroke centre-lines for the animation, each clipped to a region from `BRAND_MARK_SEGMENTS`. */
 const STROKES: ReadonlyArray<{
 	d: string;
 	join: "miter" | "round";
 	width: number;
-	clip: keyof typeof BRAND_MARK_CLIP_PATHS;
+	clip: keyof typeof BRAND_MARK_SEGMENTS;
 	className: string;
 }> = [
 	{
@@ -42,7 +42,7 @@ const STROKES: ReadonlyArray<{
 		className: "motion-safe:animate-loader-c3",
 	},
 	{
-		d: "M200 335 V135",
+		d: "M200 335 V140",
 		join: "miter",
 		width: 40,
 		clip: "rBowl",
@@ -71,7 +71,7 @@ export function RunningIcon({ className }: { className?: string | undefined }) {
 		>
 			<svg aria-hidden="true" viewBox="0 0 760 760" className="size-full">
 				<defs>
-					{Object.entries(BRAND_MARK_CLIP_PATHS).map(([name, d]) => (
+					{Object.entries(BRAND_MARK_SEGMENTS).map(([name, d]) => (
 						<clipPath key={name} id={clipId(name)}>
 							<path d={d} />
 						</clipPath>
