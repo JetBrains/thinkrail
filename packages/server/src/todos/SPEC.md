@@ -23,8 +23,13 @@ second copy of it.
 Unlike the agent's own tools (which own status), the host's write surface is the **user's** edit lever:
 `todo.add` tags new items `origin: "user"` so the agent's `todo_write` re-plans never drop them.
 `todo.update` exists on the wire (accepts status/title/note) but no current UI path calls it — status
-stays agent-owned (see [[module-pi-todos]]). There is no `todo.remove` wire call: the agent manages
-removal through its own `todo_remove` tool and the UI has no delete affordance. `updateTodo` unwraps the store's
+stays agent-owned (see [[module-pi-todos]]). `todo.remove` is the user's queue-cancel action,
+constrained by `removeTodo`'s **done-guard**: pending / in_progress items can be removed (the UI
+shows a hover "Remove" button on them); a `done` item is rejected because completed steps are the
+plan's audit trail. The host also layers an active-review guard (`isItemUnderActiveReview`) so a
+mid-review cancellation can't strand review bookkeeping. The agent's own `todo_remove` tool goes
+through `TodoStore.remove` directly and does NOT run through this gate (needed for `todo_promote`
+cleanup). `updateTodo` unwraps the store's
 `TodoUpdateResult` (`{ todo, paused }` — `paused` = items auto-demoted to keep one `in_progress`); the
 wire response stays a bare `TodoItem` — the UI re-reads the whole plan on change, so demotions arrive
 with the next `todo.list`.

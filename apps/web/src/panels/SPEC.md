@@ -962,9 +962,13 @@ a project picker, the prompt hero, and the reused
   **auto-growing textarea** (`plan-add-input`) — plain **Enter adds**, **Shift+Enter** inserts a newline
   (multi-line like the composer), Esc closes — wired to the SAME `useChatTodos.add` as the rail's
   `TodoAddRow` — a loose **user** item plus the agent nudge — so the two entry points stay one flow.
-  **Plan items carry no UI Remove affordance.** The agent drops a step through its own `todo_remove`
-  tool; there is no wire `todo.remove`. Items added from the TODO rail stay on the plan until the
-  agent finishes them or the user explicitly asks the agent to cancel.
+  **Not-yet-done plan items carry a hover Remove button.** The user can cancel a queued or
+  in-progress step via a `data-testid="todo-remove"` × button that appears on the row's hover state;
+  the click calls `plan.remove(id)` which fires the host's `todo.remove` wire call. **Done items
+  carry no Remove button**: completed steps are the plan's audit trail, and the host rejects
+  `todo.remove` on a `done` item with an explanatory error. The agent still manages its own removal
+  through pi-todos' `todo_remove` tool, which bypasses the host guard (needed for `todo_promote`
+  cleanup); the UI path is the user-facing cancel action for their queue.
   Items keep a **scan-first item
   anatomy**: the item TITLE is
   the only full-size text (`tr-text-ui font-medium`), every detail is a step down (`tr-text-metadata`,

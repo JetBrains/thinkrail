@@ -110,6 +110,7 @@ export interface ChatTodos {
 	data: TodoPlan | null;
 	failed: boolean;
 	add: (title: string, surface?: "chat" | "page" | "rail") => Promise<void>;
+	remove: (id: string) => Promise<void>;
 	openPlan: () => void;
 	openChanges: (target: { sha: string } | { path: string }) => void;
 	startReview: (id: string) => Promise<void>;
@@ -302,6 +303,31 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		broadcastWrite(identity); // and tell sibling hooks about it
 	};
 
+	// User-driven cancellation of a queued step. The host throws if the item is already `done`
+	// (completed steps are the plan's history) or under active review; the error bubbles up as a
+	// toast at the caller. The optimistic patch removes the row locally so the UI feels immediate;
+	// `reloadPlan` reconciles the authoritative state (empty-group pruning, baseline drop).
+	const remove = async (id: string): Promise<void> => {
+		const requestIdentity = identity;
+		setData((prev) => {
+			if (!prev) return prev;
+			return {
+				...prev,
+				todos: prev.todos.filter((t) => t.id !== id),
+				groups: prev.groups.map((g) => ({ ...g, todos: g.todos.filter((t) => t.id !== id) })),
+			};
+		});
+		try {
+			await getTransport().request("todo.remove", { workspaceId, sessionId, id });
+		} catch (error) {
+			if (live(requestIdentity)) await reloadPlan(); // roll the optimistic patch back from authority
+			throw error;
+		}
+		if (!live(requestIdentity)) return;
+		await reloadPlan();
+		broadcastWrite(identity);
+	};
+
 	const reviewAll = async () => {
 		const { total, alreadyRunning } = await getTransport().request("todo.reviewAll", {
 			workspaceId,
@@ -316,6 +342,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		data,
 		failed,
 		add,
+		remove,
 		openPlan,
 		openChanges,
 		startReview,

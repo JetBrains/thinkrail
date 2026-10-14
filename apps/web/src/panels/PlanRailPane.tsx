@@ -52,7 +52,12 @@ export default function PlanRailPane({
 						No TODOs yet — the agent adds its plan here, or add one above.
 					</p>
 				) : (
-					<TodoRows plan={plan.data} glance={glance} onOpenChanges={plan.openChanges} />
+					<TodoRows
+						plan={plan.data}
+						glance={glance}
+						onOpenChanges={plan.openChanges}
+						onRemove={plan.remove}
+					/>
 				)}
 			</div>
 		</div>

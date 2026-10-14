@@ -154,6 +154,7 @@ import {
 	generateTodoSummary,
 	listTodos,
 	removeSessionTodoWindows,
+	removeTodo,
 	requestTodoFix,
 	rollbackTodoFix,
 	settleChangeArtifacts,
@@ -230,6 +231,7 @@ import { taskObservation } from "./taskAnalytics";
 import {
 	claimItemFix,
 	clearChangesRequestedIfResolved,
+	isItemUnderActiveReview,
 	itemFixFindings,
 	markClientStale,
 	releaseItemFix,
@@ -595,6 +597,7 @@ const handlers: WsHandlers = {
 		if (p.status === "done") await observeCompletion();
 		return result;
 	},
+	"todo.remove": (p) => removeTodo(p, () => isItemUnderActiveReview(p.sessionId, p.id)),
 	"todo.review": (params) => {
 		const capture = additionalCapture();
 		const result = approveTodoReview(params);

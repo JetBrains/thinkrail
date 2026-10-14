@@ -7,6 +7,7 @@ import {
 	RiCheckboxCircleLine as CircleCheck,
 	RiRecordCircleLine as CircleDot,
 	RiPauseCircleLine as CirclePause,
+	RiCloseLine as Close,
 	RiFileTextLine as FileText,
 	RiLoaderLine as LoaderCircle,
 	RiQuestionnaireLine as MessageCircleQuestion,
@@ -139,10 +140,12 @@ function GroupBlock({
 	group,
 	glance,
 	onOpenChanges,
+	onRemove,
 }: {
 	group: TodoGroupItem;
 	glance: PlanGlance;
 	onOpenChanges?: ((target: ChangeTarget) => void) | undefined;
+	onRemove?: ((id: string) => Promise<void>) | undefined;
 }) {
 	const status = group.status;
 	const { done, total } = groupProgress(group);
@@ -188,7 +191,13 @@ function GroupBlock({
 			) : null}
 			<ul className="ml-12 flex flex-col border-border-default border-l pl-8">
 				{group.todos.map((todo) => (
-					<TodoRow key={todo.id} todo={todo} glance={glance} onOpenChanges={onOpenChanges} />
+					<TodoRow
+						key={todo.id}
+						todo={todo}
+						glance={glance}
+						onOpenChanges={onOpenChanges}
+						onRemove={onRemove}
+					/>
 				))}
 			</ul>
 		</div>
@@ -199,16 +208,24 @@ function LooseList({
 	items,
 	glance,
 	onOpenChanges,
+	onRemove,
 }: {
 	items: TodoItem[];
 	glance: PlanGlance;
 	onOpenChanges?: ((target: ChangeTarget) => void) | undefined;
+	onRemove?: ((id: string) => Promise<void>) | undefined;
 }) {
 	if (items.length === 0) return null;
 	return (
 		<ul className="flex flex-col">
 			{items.map((todo) => (
-				<TodoRow key={todo.id} todo={todo} glance={glance} onOpenChanges={onOpenChanges} />
+				<TodoRow
+					key={todo.id}
+					todo={todo}
+					glance={glance}
+					onOpenChanges={onOpenChanges}
+					onRemove={onRemove}
+				/>
 			))}
 		</ul>
 	);
@@ -218,15 +235,17 @@ export function TodoRows({
 	plan,
 	glance = "working",
 	onOpenChanges,
+	onRemove,
 }: {
 	plan: TodoPlan;
 	glance?: PlanGlance;
 	onOpenChanges?: ((target: ChangeTarget) => void) | undefined;
+	onRemove?: ((id: string) => Promise<void>) | undefined;
 }) {
 	const s = planSections(plan);
 	const hasTodo = s.pendingGroups.length > 0 || s.pendingLoose.length > 0;
 	const hasDone = s.doneGroups.length > 0 || s.doneLoose.length > 0;
-	const rowProps = { glance, onOpenChanges };
+	const rowProps = { glance, onOpenChanges, onRemove };
 	return (
 		<>
 			{s.activeGroups.map((group) => (
@@ -341,10 +360,12 @@ function TodoRow({
 	todo,
 	glance,
 	onOpenChanges,
+	onRemove,
 }: {
 	todo: TodoItem;
 	glance: PlanGlance;
 	onOpenChanges?: ((target: ChangeTarget) => void) | undefined;
+	onRemove?: ((id: string) => Promise<void>) | undefined;
 }) {
 	const changeSet = onOpenChanges ? itemChangeSet(todo) : null;
 	const reviewed = reviewSettled(todo);
@@ -400,6 +421,20 @@ function TodoRow({
 				>
 					<UserRound className="size-14" />
 				</span>
+			) : null}
+			{onRemove && todo.status !== "done" && !reviewing ? (
+				<IconTooltip label="Remove from the queue">
+					<button
+						type="button"
+						data-testid="todo-remove"
+						onClick={() => {
+							void onRemove(todo.id);
+						}}
+						className="shrink-0 rounded-sm p-2 text-text-muted opacity-0 group-hover:opacity-100 hover:bg-control-bg-pressed hover:text-text-default focus:opacity-100"
+					>
+						<Close className="size-14" />
+					</button>
+				</IconTooltip>
 			) : null}
 		</li>
 	);

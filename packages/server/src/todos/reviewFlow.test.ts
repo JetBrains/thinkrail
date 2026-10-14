@@ -16,6 +16,7 @@ import {
 import {
 	approveTodoReview,
 	listTodos,
+	removeTodo,
 	renderFixPackage,
 	requestTodoFix,
 	reviewedShaSuperseded,
@@ -277,6 +278,36 @@ test("a path-list fallback redo resets the review record (no sha to watermark ag
 	store.update(todo.id, { status: "done" });
 	await reconcileChangeArtifacts(store, repo, SESSION, async () => ["b.ts"]);
 	expect(readReviewRecords(repo, SESSION)[todo.id]).toBeUndefined();
+});
+
+test("removeTodo drops a pending/in_progress item plus its baseline + review record", async () => {
+	const store = new TodoStore(repo, SESSION);
+	const pending = store.add({ title: "pending work" });
+	const active = store.add({ title: "active work" });
+	store.update(active.id, { status: "in_progress" });
+
+	await removeTodo({ workspaceId: "w1", sessionId: SESSION, id: pending.id });
+	await removeTodo({ workspaceId: "w1", sessionId: SESSION, id: active.id });
+
+	const plan = new TodoStore(repo, SESSION).read();
+	expect(plan.todos.find((t) => t.id === pending.id)).toBeUndefined();
+	expect(plan.todos.find((t) => t.id === active.id)).toBeUndefined();
+});
+
+test("removeTodo refuses a done item \u2014 completed steps are the plan's history", async () => {
+	const store = new TodoStore(repo, SESSION);
+	const { id } = committedItem(store, "step", "impl.ts");
+
+	await expect(removeTodo({ workspaceId: "w1", sessionId: SESSION, id })).rejects.toThrow(
+		/already done/,
+	);
+	expect(new TodoStore(repo, SESSION).get(id)).toBeDefined();
+});
+
+test("removeTodo on an unknown id is a no-op (idempotent)", async () => {
+	await expect(
+		removeTodo({ workspaceId: "w1", sessionId: SESSION, id: "t_nope" }),
+	).resolves.toEqual({ ok: true });
 });
 
 test("renderFixPackage names changed paths for the fallback change set", () => {
