@@ -1,10 +1,10 @@
 import { RiArrowDownSLine, RiArrowRightSLine, RiSearchLine } from "@remixicon/react";
-import type { WireModel } from "@thinkrail/contracts";
+import { sameModel, type WireModel } from "@thinkrail/contracts";
 import { cn } from "@thinkrail/ui/utils";
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import { formatContext } from "@/chat/modelPicker";
 import { ProviderGlyph } from "@/chat/ProviderGlyph";
-import { useModelVisibility } from "@/chat/useModelVisibility";
+import { useAppStore } from "@/store";
 import { SettingsSwitch } from "./SettingsSwitch";
 
 interface Props {
@@ -14,7 +14,10 @@ interface Props {
 export function VisibleModelsSettings({ models }: Props) {
 	const [expanded, setExpanded] = useState(false);
 	const [search, setSearch] = useState("");
-	const visibility = useModelVisibility();
+	const listId = useId();
+	const hiddenModels = useAppStore((s) => s.hiddenModels);
+	const toggleModelVisibility = useAppStore((s) => s.toggleModelVisibility);
+	const isHidden = (model: WireModel) => hiddenModels.some((hidden) => sameModel(hidden, model));
 
 	const filteredModels = useMemo(() => {
 		if (!search.trim()) return models;
@@ -27,12 +30,15 @@ export function VisibleModelsSettings({ models }: Props) {
 		);
 	}, [models, search]);
 
-	const hiddenCount = visibility.hiddenModels.length;
+	const hiddenCount = models.filter(isHidden).length;
 
 	return (
 		<div className="flex flex-col">
 			<button
 				type="button"
+				data-testid="visible-models-toggle"
+				aria-expanded={expanded}
+				aria-controls={listId}
 				onClick={() => setExpanded(!expanded)}
 				className="flex w-full items-start gap-8 py-12 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary"
 			>
@@ -44,7 +50,6 @@ export function VisibleModelsSettings({ models }: Props) {
 							: `${hiddenCount} model${hiddenCount === 1 ? "" : "s"} hidden. New models are shown automatically.`}
 					</span>
 				</span>
-				{/* Chevron right-aligned, vertically aligned with title line */}
 				<span className="mt-2 shrink-0">
 					{expanded ? (
 						<RiArrowDownSLine className="size-20 text-text-muted" />
@@ -55,8 +60,7 @@ export function VisibleModelsSettings({ models }: Props) {
 			</button>
 
 			{expanded && (
-				<div className="flex flex-col gap-8 pb-12">
-					{/* Search input */}
+				<div id={listId} className="flex flex-col gap-8 pb-12">
 					<div className="relative">
 						<RiSearchLine className="pointer-events-none absolute top-1/2 left-8 size-14 -translate-y-1/2 text-text-muted" />
 						<input
@@ -64,46 +68,50 @@ export function VisibleModelsSettings({ models }: Props) {
 							value={search}
 							onChange={(e) => setSearch(e.target.value)}
 							placeholder="Search models…"
+							aria-label="Search models to show"
 							className="h-32 w-full rounded-sm border border-control-border-default bg-control-bg pl-24 pr-8 tr-text-ui text-text-default placeholder:text-text-muted outline-none transition-colors focus:border-control-border-active"
 						/>
 					</div>
 
-					{/* Model list - no outer border, clean integrated list */}
-					<div className="max-h-[320px] overflow-y-auto">
+					<div className="max-h-320 overflow-y-auto">
 						{filteredModels.length === 0 ? (
 							<div className="px-12 py-16 text-center text-text-muted tr-text-metadata">
 								{search.trim() ? "No models match your search." : "No models available."}
 							</div>
 						) : (
 							filteredModels.map((model, index) => {
-								const isVisible = visibility.isVisible(model);
+								const isVisible = !isHidden(model);
 								return (
 									<div
 										key={`${model.provider}:${model.id}`}
 										className={cn(
 											"flex items-start gap-8 py-8",
 											index > 0 && "border-border-muted border-t",
-											!isVisible && "opacity-60",
 										)}
 									>
-										{/* Logo aligned with model name line */}
 										<ProviderGlyph
 											provider={model.provider}
 											className="mt-4 size-14 shrink-0 text-text-muted"
 										/>
 										<span className="flex min-w-0 flex-1 flex-col">
-											<span className="truncate tr-text-ui text-text-default">{model.name}</span>
+											<span
+												className={cn(
+													"truncate tr-text-ui",
+													isVisible ? "text-text-default" : "text-text-muted",
+												)}
+											>
+												{model.name}
+											</span>
 											<span className="truncate tr-text-metadata text-text-muted">
 												{model.provider} · {formatContext(model.contextWindow)}
 												{model.reasoning ? " · reasoning" : ""}
 											</span>
 										</span>
-										{/* Toggle switch instead of checkmark */}
 										<SettingsSwitch
 											checked={isVisible}
-											label={`Toggle visibility for ${model.name}`}
+											label={`Show ${model.name}`}
 											testId={`model-visibility-${model.provider}-${model.id}`}
-											onChange={() => visibility.toggleVisibility(model)}
+											onChange={() => toggleModelVisibility(model)}
 										/>
 									</div>
 								);

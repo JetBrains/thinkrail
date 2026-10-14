@@ -26,6 +26,7 @@ import {
 	selectCanRenameChat,
 	selectCatalogModel,
 	selectCompactionTurnIds,
+	selectPickerModels,
 	selectSkillsStale,
 	selectSupportsMcp,
 	selectWorkspaceById,
@@ -131,23 +132,14 @@ export default function ChatView({
 		refresh: onRefreshModels,
 	} = useModelCatalog();
 	const hiddenModels = useAppStore((s) => s.hiddenModels);
-	// Filter to visible models (this is used for preferences so hidden models don't appear in Pinned/Recent)
 	const visibleModels = useMemo(
-		() =>
-			allModels.filter(
-				(m) => !hiddenModels.some((h) => h.provider === m.provider && h.id === m.id),
-			),
+		() => selectPickerModels(allModels, hiddenModels, []),
 		[allModels, hiddenModels],
 	);
-	// For the picker, include the currently selected model even if hidden
-	const models = useMemo(() => {
-		if (sessionModel && !visibleModels.some((m) => sameModel(m, sessionModel))) {
-			const current = allModels.find((m) => sameModel(m, sessionModel));
-			if (current) return [current, ...visibleModels];
-		}
-		return visibleModels;
-	}, [allModels, visibleModels, sessionModel]);
-	// Use visible models for preferences so hidden models don't appear in Pinned/Recent
+	const models = useMemo(
+		() => selectPickerModels(allModels, hiddenModels, [sessionModel]),
+		[allModels, hiddenModels, sessionModel],
+	);
 	const modelPreferences = useModelPreferences(visibleModels);
 	const projectId = useAppStore(
 		(s) =>

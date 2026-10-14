@@ -51,6 +51,7 @@ import {
 	isTerminalWindowsShell,
 	isTodoReviewFixMessage,
 	normalizeThemePreference,
+	sameModel,
 } from "@thinkrail/contracts";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
@@ -64,7 +65,6 @@ import type {
 	ExtUiDialogRequest,
 	ToolResultState,
 } from "../chat/types";
-import { STORAGE_PREFIX } from "../constants/branding";
 import {
 	isPreviewCompatibleTabKind,
 	type LayoutAttention,
@@ -104,6 +104,7 @@ import {
 	isChatResourceReadCurrent,
 	isChatResourceScopeAlive,
 	isConnectedGeneration,
+	type ModelRef,
 	SETTLED_SHELF_PAGE,
 	selectActiveWorkspaceProjectId,
 	selectLayoutResourcePlacement,
@@ -937,10 +938,9 @@ interface AppState {
 	obscuredChatSessions: Record<string, true>;
 	extUiOrphans: ExtUiRequest[];
 	models: WireModel[];
-	hiddenModels: { provider: string; id: string }[];
+	hiddenModels: ModelRef[];
 	providerVersion: number;
 	templatesVersion: number;
-	providersRefreshRequest: number;
 	modelsRefreshing: boolean;
 	modelsFresh: boolean;
 	changesRequest: {
@@ -1229,12 +1229,11 @@ interface AppState {
 	handlePiEvent: (event: PiEvent, sessionId: string) => void;
 	handlePiEvents: (payloads: readonly SessionEventPayload[]) => void;
 	setModelsForProviderVersion: (providerVersion: number, models: WireModel[]) => void;
-	loadHiddenModels: () => void;
-	setModelVisibility: (model: { provider: string; id: string }, visible: boolean) => void;
-	toggleModelVisibility: (model: { provider: string; id: string }) => void;
+	hydrateHiddenModels: (hidden: ModelRef[]) => void;
+	setModelVisibility: (model: ModelRef, visible: boolean) => void;
+	toggleModelVisibility: (model: ModelRef) => void;
 	noteProviderChanged: () => void;
 	bumpTemplatesVersion: () => void;
-	requestProvidersRefresh: () => void;
 	beginModelsRefresh: () => number;
 	finishModelsRefresh: (providerVersion: number, result: RefreshedModels | null) => void;
 	dropModelsFreshness: () => void;
@@ -2115,7 +2114,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 	hiddenModels: [],
 	providerVersion: 0,
 	templatesVersion: 0,
-	providersRefreshRequest: 0,
 	modelsRefreshing: false,
 	modelsFresh: false,
 	changesRequest: null,
@@ -3880,54 +3878,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 		}),
 	setModelsForProviderVersion: (providerVersion, models) =>
 		set((s) => (s.providerVersion === providerVersion ? { models, modelsFresh: false } : s)),
-	loadHiddenModels: () => {
-		const storage = typeof localStorage !== "undefined" ? localStorage : null;
-		if (!storage) return;
-		const httpBase = typeof window !== "undefined" ? window.location.origin : "";
-		const key = `${STORAGE_PREFIX}hidden-models:${httpBase}`;
-		try {
-			const stored = storage.getItem(key);
-			if (!stored) return;
-			const parsed = JSON.parse(stored);
-			if (!Array.isArray(parsed)) return;
-			const hiddenModels = parsed.filter(
-				(item): item is { provider: string; id: string } =>
-					typeof item === "object" &&
-					item !== null &&
-					typeof item.provider === "string" &&
-					typeof item.id === "string",
-			);
-			set({ hiddenModels });
-		} catch {
-			// Ignore parse errors
-		}
-	},
-	setModelVisibility: (model, visible) => {
-		const { hiddenModels } = get();
-		const isHidden = hiddenModels.some((h) => h.provider === model.provider && h.id === model.id);
-		if (visible && !isHidden) return;
-		if (!visible && isHidden) return;
-		const next = visible
-			? hiddenModels.filter((h) => !(h.provider === model.provider && h.id === model.id))
-			: [...hiddenModels, { provider: model.provider, id: model.id }];
-		set({ hiddenModels: next });
-		// Persist to localStorage
-		const storage = typeof localStorage !== "undefined" ? localStorage : null;
-		if (!storage) return;
-		const httpBase = typeof window !== "undefined" ? window.location.origin : "";
-		const key = `${STORAGE_PREFIX}hidden-models:${httpBase}`;
-		try {
-			if (next.length === 0) storage.removeItem(key);
-			else storage.setItem(key, JSON.stringify(next));
-		} catch {
-			// Storage full or unavailable
-		}
-	},
-	toggleModelVisibility: (model) => {
-		const { hiddenModels } = get();
-		const isHidden = hiddenModels.some((h) => h.provider === model.provider && h.id === model.id);
-		get().setModelVisibility(model, isHidden);
-	},
+	hydrateHiddenModels: (hiddenModels) => set({ hiddenModels }),
+	setModelVisibility: (model, visible) =>
+		set((s) => {
+			const hidden = s.hiddenModels.some((h) => sameModel(h, model));
+			if (visible !== hidden) return s;
+			return {
+				hiddenModels: visible
+					? s.hiddenModels.filter((h) => !sameModel(h, model))
+					: [...s.hiddenModels, { provider: model.provider, id: model.id }],
+			};
+		}),
+	toggleModelVisibility: (model) =>
+		get().setModelVisibility(
+			model,
+			get().hiddenModels.some((h) => sameModel(h, model)),
+		),
 	noteProviderChanged: () =>
 		set((s) => ({
 			models: [],
@@ -3936,8 +3902,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 			providerVersion: s.providerVersion + 1,
 		})),
 	bumpTemplatesVersion: () => set((s) => ({ templatesVersion: s.templatesVersion + 1 })),
-	requestProvidersRefresh: () =>
-		set((s) => ({ providersRefreshRequest: s.providersRefreshRequest + 1 })),
 	beginModelsRefresh: () => {
 		const providerVersion = get().providerVersion;
 		set({ modelsRefreshing: true });

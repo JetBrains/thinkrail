@@ -3,7 +3,7 @@ import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { initChatPreferencesPersistence } from "./chat/chatPreferences";
-import { initModelVisibility } from "./chat/useModelVisibility";
+import { initModelVisibilityPersistence } from "./chat/modelVisibility";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { initNavigation } from "./navigation";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
@@ -15,7 +15,7 @@ initializeBundledThemes();
 applyThemePreference(readThemeHint());
 initTransport();
 initChatPreferencesPersistence();
-initModelVisibility();
+initModelVisibilityPersistence();
 initProjectExpansionPersistence();
 initNavigation();
 

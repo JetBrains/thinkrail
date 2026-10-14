@@ -12,7 +12,6 @@ import {
 	type ModelDefault,
 	PROJECT_TEMPLATE_PREVIEW_PROTOCOL_VERSION,
 	type SlashCommandInfo,
-	sameModel,
 	type TemplateInfo,
 	type TemplateReadLocation,
 	type ThinkingLevel,
@@ -76,7 +75,7 @@ import {
 	useSlashCommandCompletion,
 	useTemplateCommandPicker,
 } from "@/prompt";
-import { selectCatalogModel, toast, useAppStore } from "@/store";
+import { selectCatalogModel, selectPickerModels, toast, useAppStore } from "@/store";
 import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
@@ -262,23 +261,14 @@ export function NewWorkspaceDialog({
 		fresh: catalogFresh,
 	} = useModelCatalog(open);
 	const hiddenModels = useAppStore((s) => s.hiddenModels);
-	// Filter to visible models (used for preferences so hidden models don't appear in Pinned/Recent)
 	const visibleModels = useMemo(
-		() =>
-			allModels.filter(
-				(m) => !hiddenModels.some((h) => h.provider === m.provider && h.id === m.id),
-			),
+		() => selectPickerModels(allModels, hiddenModels, []),
 		[allModels, hiddenModels],
 	);
-	// For the picker, include the currently selected model even if hidden
-	const models = useMemo(() => {
-		if (model && !visibleModels.some((m) => sameModel(m, model))) {
-			const current = allModels.find((m) => sameModel(m, model));
-			if (current) return [current, ...visibleModels];
-		}
-		return visibleModels;
-	}, [allModels, visibleModels, model]);
-	// Use visible models for preferences so hidden models don't appear in Pinned/Recent
+	const models = useMemo(
+		() => selectPickerModels(allModels, hiddenModels, [model]),
+		[allModels, hiddenModels, model],
+	);
 	const modelPreferences = useModelPreferences(visibleModels);
 
 	const applyHostDefault = useCallback(() => {
@@ -317,7 +307,7 @@ export function NewWorkspaceDialog({
 
 	useEffect(() => {
 		if (!open || !model) return;
-		const next = reconcileModel(models, model, catalogFresh);
+		const next = reconcileModel(allModels, model, catalogFresh);
 		if (next === null) return;
 		if (next !== "unavailable") {
 			if (next !== model) setModel(next);
@@ -326,7 +316,7 @@ export function NewWorkspaceDialog({
 		if (hostDefaultAsked.current) return;
 		hostDefaultAsked.current = true;
 		return applyHostDefault();
-	}, [open, models, model, catalogFresh, applyHostDefault]);
+	}, [open, allModels, model, catalogFresh, applyHostDefault]);
 
 	useEffect(() => {
 		if (!open || !model) return;

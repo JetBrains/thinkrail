@@ -1,7 +1,6 @@
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	type ModelDefault,
-	sameModel,
 	type ThinkingLevel,
 	type WireModel,
 } from "@thinkrail/contracts";
@@ -11,7 +10,7 @@ import { ModelSelector } from "@/chat/ModelSelector";
 import { ThinkingSelector } from "@/chat/ThinkingSelector";
 import { useModelCatalog } from "@/chat/useModelCatalog";
 import { useModelPreferences } from "@/chat/useModelPreferences";
-import { selectCatalogModel, toast, useAppStore } from "@/store";
+import { selectCatalogModel, selectPickerModels, toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { ModelContextSettings } from "./ModelContextSettings";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
@@ -29,30 +28,11 @@ export function ModelsSettings() {
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const { models: allModels, refreshing, refresh } = useModelCatalog(true);
 	const hiddenModels = useAppStore((s) => s.hiddenModels);
-	// Filter to visible models (used for preferences so hidden models don't appear in Pinned/Recent)
-	const baseVisibleModels = useMemo(
-		() =>
-			allModels.filter(
-				(m) => !hiddenModels.some((h) => h.provider === m.provider && h.id === m.id),
-			),
+	const visibleModels = useMemo(
+		() => selectPickerModels(allModels, hiddenModels, []),
 		[allModels, hiddenModels],
 	);
-	// For the selectors, include the currently selected models even if hidden
-	const visibleModels = useMemo(() => {
-		const result = [...baseVisibleModels];
-		const ensureIncluded = (ref: WireModel | null | undefined) => {
-			if (!ref) return;
-			if (!result.some((m) => sameModel(m, ref))) {
-				const found = allModels.find((m) => sameModel(m, ref));
-				if (found) result.unshift(found);
-			}
-		};
-		ensureIncluded(defaultModel);
-		ensureIncluded(reviewModel);
-		return result;
-	}, [allModels, baseVisibleModels, defaultModel, reviewModel]);
-	// Use visible models for preferences so hidden models don't appear in Pinned/Recent
-	const preferences = useModelPreferences(baseVisibleModels);
+	const preferences = useModelPreferences(visibleModels);
 	const [resolvedDefault, setResolvedDefault] = useState<ModelDefault | null>(null);
 	const [loadFailed, setLoadFailed] = useState(false);
 	const [saving, setSaving] = useState(false);
@@ -97,12 +77,12 @@ export function ModelsSettings() {
 	const configuredModel = selectCatalogModel(allModels, defaultModel ?? null);
 	const model = resolvedDefault ? resolvedDefault.model : configuredModel;
 	const level = resolvedDefault?.thinkingLevel ?? defaultEffort ?? "medium";
+	const chatPickerModels = selectPickerModels(allModels, hiddenModels, [model]);
+	const reviewPickerModels = selectPickerModels(allModels, hiddenModels, [reviewModel]);
 
-	// Reviewer model state
 	const reviewerEffortModel = reviewModel ?? resolvedDefault?.model ?? null;
 	const reviewerEffortLevel =
 		reviewEffort ?? (reviewModel ? "medium" : (resolvedDefault?.thinkingLevel ?? "medium"));
-	// Display format: "Model Name (Default)" when using inherited model
 	const reviewerPlaceholder = resolvedDefault?.model
 		? `${resolvedDefault.model.name} (Default)`
 		: "Default model";
@@ -130,7 +110,6 @@ export function ModelsSettings() {
 
 	return (
 		<SettingsPageContainer testId="settings-models">
-			{/* GROUP 1: Default Models */}
 			<SettingsGroup title="Default models">
 				{loadFailed ? (
 					<div className="flex items-center gap-8 border-border-muted border-b py-12">
@@ -140,62 +119,62 @@ export function ModelsSettings() {
 						</Button>
 					</div>
 				) : resolvedDefault || !reading ? (
-					<>
-						<div className="flex flex-wrap items-center justify-between gap-12 border-border-muted border-b py-12">
-							<span className="tr-text-ui text-text-default">Chat model</span>
-							<div className="flex flex-wrap items-center gap-8">
-								<ModelSelector
-									models={visibleModels}
-									current={model}
-									refreshing={refreshing}
-									onRefresh={refresh}
-									onSelect={(selected) =>
-										void saveConfig({ defaultModel: selected }, "Couldn't save the default model")
-									}
-									placeholder="First available"
-									disabled={saving || reading}
-									preferences={preferences}
-								/>
-								<ThinkingSelector
-									level={level}
-									levels={model?.thinkingLevels ?? []}
-									onSelect={(defaultEffort) =>
-										void saveConfig({ defaultEffort }, "Couldn't save the default effort")
-									}
-									disabled={saving || reading}
-								/>
-							</div>
+					<div
+						data-testid="default-model-row"
+						className="flex flex-wrap items-center justify-between gap-12 border-border-muted border-b py-12"
+					>
+						<span className="tr-text-ui text-text-default">Chat model</span>
+						<div className="flex flex-wrap items-center gap-8">
+							<ModelSelector
+								models={chatPickerModels}
+								current={model}
+								refreshing={refreshing}
+								onRefresh={refresh}
+								onSelect={(selected) =>
+									void saveConfig({ defaultModel: selected }, "Couldn't save the default model")
+								}
+								placeholder="First available"
+								disabled={saving || reading}
+								preferences={preferences}
+							/>
+							<ThinkingSelector
+								level={level}
+								levels={model?.thinkingLevels ?? []}
+								onSelect={(defaultEffort) =>
+									void saveConfig({ defaultEffort }, "Couldn't save the default effort")
+								}
+								disabled={saving || reading}
+							/>
 						</div>
-						<div className="flex flex-wrap items-center justify-between gap-12 border-border-muted border-b py-12">
-							<span className="tr-text-ui text-text-default">Review model</span>
-							<div className="flex flex-wrap items-center gap-8">
-								<ModelSelector
-									models={visibleModels}
-									current={reviewModel ?? null}
-									refreshing={refreshing}
-									onRefresh={refresh}
-									onSelect={(m) => updateReviewer({ reviewModel: m })}
-									placeholder={reviewerPlaceholder}
-									defaultOption={reviewerPlaceholder}
-									onSelectDefault={() => updateReviewer({ reviewModel: null, reviewEffort: null })}
-									disabled={saving || reading}
-									preferences={preferences}
-								/>
-								<ThinkingSelector
-									level={reviewerEffortLevel}
-									levels={reviewerEffortModel?.thinkingLevels ?? []}
-									onSelect={(level) => updateReviewer({ reviewEffort: level })}
-									disabled={saving || reading}
-								/>
-							</div>
-						</div>
-					</>
+					</div>
 				) : null}
-				{/* Visible models - part of Default Models group (needs full catalog) */}
+				<div
+					data-testid="review-model-row"
+					className="flex flex-wrap items-center justify-between gap-12 border-border-muted border-b py-12"
+				>
+					<span className="tr-text-ui text-text-default">Review model</span>
+					<div className="flex flex-wrap items-center gap-8">
+						<ModelSelector
+							models={reviewPickerModels}
+							current={reviewModel ?? null}
+							refreshing={refreshing}
+							onRefresh={refresh}
+							onSelect={(m) => updateReviewer({ reviewModel: m })}
+							placeholder={reviewerPlaceholder}
+							defaultOption={reviewerPlaceholder}
+							onSelectDefault={() => updateReviewer({ reviewModel: null, reviewEffort: null })}
+							preferences={preferences}
+						/>
+						<ThinkingSelector
+							level={reviewerEffortLevel}
+							levels={reviewerEffortModel?.thinkingLevels ?? []}
+							onSelect={(level) => updateReviewer({ reviewEffort: level })}
+						/>
+					</div>
+				</div>
 				<VisibleModelsSettings models={allModels} />
 			</SettingsGroup>
 
-			{/* GROUP 2: Automation */}
 			<SettingsGroup title="Automation">
 				{protocolVersion !== null && protocolVersion >= AGENT_REVIEW_SETTING_PROTOCOL_VERSION && (
 					<SettingsRow
@@ -205,7 +184,7 @@ export function ModelsSettings() {
 						control={
 							<SettingsSwitch
 								checked={agentReviewEnabled}
-								label="Let the agent request review"
+								label="Agent-triggered review"
 								testId="agent-review-toggle"
 								onChange={setAgentReviewEnabled}
 							/>
@@ -219,7 +198,7 @@ export function ModelsSettings() {
 					control={
 						<SettingsSwitch
 							checked={autoFix}
-							label="Auto-fix requested changes"
+							label="Automatic fix cycle"
 							testId="review-autofix-toggle"
 							onChange={setAutoFix}
 						/>
@@ -227,7 +206,6 @@ export function ModelsSettings() {
 				/>
 			</SettingsGroup>
 
-			{/* GROUP 3: GPT Context Window */}
 			<ModelContextSettings />
 		</SettingsPageContainer>
 	);
