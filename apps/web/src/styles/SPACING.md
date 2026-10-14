@@ -57,8 +57,8 @@ Tailwind v4 drives **spacing (`p`/`m`/`gap`) and sizing (`w`/`h`/`size`/inset/tr
 is is a layout constraint, not rhythm** — sizing is deliberately *not* policed by the spacing gate, and
 sizing values are free-form px, not the canonical step set.
 
-Tailwind's **named container presets stay a separate scale**: `max-w-lg` / `max-w-sm` (and the rest of
-`w`/`min-w`/`max-w`/`basis` t-shirt names) resolve through `--container-*` (32rem / 24rem), independent
+Tailwind's **named container presets stay a separate scale**: `max-w-lg` (and the rest of the
+`w`/`min-w`/`max-w`/`basis` t-shirt names) resolves through `--container-*` (32rem), independent
 of `--spacing`. They are **not** spacing aliases and must never be migrated to numeric utilities — a
 mechanical `lg`→`16` rewrite would collapse a 32rem column to 16px. `spacingUsage.test.ts` pins this
 (the gate never polices a width/sizing prefix, and the container presets we depend on stay named).
@@ -109,12 +109,10 @@ The shared source scanner covers app source, `packages/ui`, and every `thinkrail
   through an arbitrary value** (`p-[8px]`, `p-[var(--space-8)]`) — the numeric utility is the one way;
 - keyword suffixes that are not rhythm stay fine (`ml-auto`, `gap-px` hairline);
 - the **bracket escape hatch is closed** to the documented measured/geometry expressions that are not
-  rhythm steps: `pr-[2rem]` (a close-button reserve), `pl-[1.6em]` (an em-relative list indent), the
-  icon-aligned `pl-[calc(0.875rem+var(--space-8))]` / `pl-[calc(1.125rem+var(--space-8))]` indents, and
-  `pb-[2.5rem]` (ModelSelector footer-overlay scroll clearance — structural geometry to clear the
-  absolutely positioned gradient footer and refresh button, not rhythm). Any other arbitrary spacing
-  utility fails the guard; adding one is a design decision recorded here, not a silent escape from the
-  scale;
+  rhythm steps: `pr-[2rem]` (a close-button reserve), `pl-[1.6em]` (an em-relative list indent), and the
+  icon-aligned `pl-[calc(0.875rem+var(--space-8))]` / `pl-[calc(1.125rem+var(--space-8))]` indents. Any
+  other arbitrary spacing utility fails the guard; adding one is a design decision recorded here, not a
+  silent escape from the scale;
 - the scale is a defined primitive set, so a step is **not** required to have a consumer — the gate has no
   orphan/reachability check that could reject a reserved primitive (`32`/`40`/`64`);
 - handwritten CSS declarations throughout those source roots are covered, including multiline declarations and

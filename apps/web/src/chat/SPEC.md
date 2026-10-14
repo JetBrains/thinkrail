@@ -722,26 +722,37 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   actually use rather than a stop the rail does not have.
   Rows are **two lines**: the name, then `provider · [kind glyph] what it draws on · price · context`. The list reads **Default
   row** (pre-session callers only, `defaultOption`: what the host would pick, checked while the caller
-  follows it) → **Favorites** → **Recent** (the host's list minus starred models) → provider groups, folded behind one
-  "All models" row while a shortlist exists and expanded by search; a trailing query word that names a
+  follows it) → **Pinned** → **Recent** (the host's list minus pinned models) → provider groups, folded behind one
+  "All models" row while a shortlist exists and expanded by search. Each provider group is collapsible: its
+  header is itself a cmdk row (`model-group-toggle`, `aria-expanded`, Enter toggles) carrying the match
+  count, and a picker opens with every group collapsed except the current model's (none when that model
+  is pinned); a search opens every matching group, each still collapsible for that search. Pinned models
+  are never repeated inside groups. Headers, counts and rows are matched by the pickers' own cmdk `filter`
+  (`chat/pickerGroups.ts`, a port of cmdk's default scorer), so a header matches when any of its models
+  does and its count equals the rows it reveals. With no query and no models the list reads "No models to
+  show. Connect a provider, or show hidden models in Settings → Models → Visible models."; "No models
+  found." appears only for a query. Hidden models never reach either picker: callers pass `store`'s
+  `selectPickerModels`, which keeps the current model. Settings' `ModelSelector` shares this grouping,
+  filter, Pinned section, empty states and "Updating…" Refresh, without Recent or the header connection
+  detail. A trailing query word that names a
   level the highlighted model supports (`opus high`) pre-selects it — pi's `model:level` idiom typed
   with a space — and `/model [query]` in the composer opens the picker prefilled instead of sending
   text. The second row line **says what the user actually pays** (`kindLabel` / `costLabel`): the
   connection glyph — **key** = API key, **∞** = subscription, **{ }** = environment key, a **JCP** tag =
   JetBrains AI (Central proxy) — then the plan/variable/key word and, only where the provider bills per
-  token (`auth.kind` api-key / env), `$in / $out per M`; group headings add the provider's connection
+  token (`auth.kind` api-key / env), `$in / $out per M`; group headers add the provider's connection
   detail. The **vendor glyph** (`ProviderGlyph`) is a monochrome `currentColor` mark from
   `generated/providerGlyphs.ts`, which `scripts/generate-provider-glyphs.ts` extracts at build time from
   the dev-only `@lobehub/icons-static-svg` set (`provider-glyphs:check` guards drift, like the colour
   pipeline); the pi-provider-id → mark mapping lives once in `scripts/providerGlyphs.ts`, vendors reached
   through several pi providers share a mark, and an unmapped provider renders a monogram. Marks are never
-  tinted with brand colours — the colour system owns colour. Favorites/recents/default come in through
+  tinted with brand colours — the colour system owns colour. Pinned/recents/default come in through
   **`useModelPreferences(models)`** (the one store+transport seam both callers share: lists re-pointed to
   the live catalog with vanished models dropped, `toggleFavorite` as a whole-list `settings.update`,
   `setDefault` writing model + effort together, all gated on `MODEL_PICKER_PROTOCOL_VERSION` so an older
-  host shows neither stars nor sections). The footer holds **Set as default** (reads "Default for new
-  chats" once the pair matches) and the **Refresh** row (`force: true`, spins while the awaited refresh
-  runs; opening fires an unforced read served from the host snapshot). The web still keeps **no
+  host shows neither pin toggles nor sections). The footer holds **Set as default** (reads "Default for new
+  chats" once the pair matches) and the **Refresh** row (`force: true`, spins and reads "Updating…" while
+  the awaited refresh runs; opening fires an unforced read served from the host snapshot). The web still keeps **no
   enumeration of the level vocabulary**: rows are `WireModel.thinkingLevels` verbatim, the host clamps,
   and `LEVEL_HINT` is a partial record of qualitative copy a level may simply lack. Rows follow the
   **live catalog** — `ChatView` resolves the session's model through `store`'s `selectCatalogModel`
@@ -1387,8 +1398,11 @@ Unknown custom messages retain their existing behavior.
   reconciliation), `SkillsDialog.tsx`, **`useProjectTrustSummary.ts`** (the trust-summary read the Skills
   dialog shares with `panels/ProjectTrustNotice` and New Workspace; its pure derivation and copy live in the
   store-free `projectTrust.ts`), `TemplateEditorDialog.tsx`,
-  `SubagentTranscriptDialog.tsx`, and **`useModelPreferences.ts`** (favorites / recents / default pair:
-  the store read plus the `settings.update` writes every picker mount shares). `useModelCatalog` is the shared
+  `SubagentTranscriptDialog.tsx`, **`useModelPreferences.ts`** (pinned / recents / default pair:
+  the store read plus the `settings.update` writes every picker mount shares), and **`modelVisibility.ts`**
+  (the hidden-models persistence seam `main.tsx` starts once: hydrates `store.hiddenModels` and writes it
+  back through the stable client-preference adapter or host-qualified localStorage — the store itself
+  touches no storage). `useModelCatalog` is the shared
   models-catalog seam `panels/NewWorkspaceDialog` also imports per-file, so the two pickers cannot
   drift; on activation it **drops catalog authority synchronously** (a flag an earlier consumer set says
   nothing about the list this one inherited) and reads `model.list` only when the shared list is **empty** —
