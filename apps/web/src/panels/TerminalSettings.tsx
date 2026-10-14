@@ -3,7 +3,6 @@ import { WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
-
 import { SettingsRadioCards, type SettingsRadioChoice } from "./SettingsRadioCards";
 import { SETTINGS_ROWS_CONTAINER } from "./SettingsRow";
 
@@ -45,7 +44,6 @@ const WINDOWS_SHELL_CHOICES: SettingsRadioChoice<TerminalWindowsShell>[] = [
 	},
 ];
 
-/** Windows-only; props-driven so it stays testable under `renderToStaticMarkup` (see panels/SPEC.md). */
 export function WindowsShellSettings({
 	platform,
 	protocolVersion,
@@ -103,26 +101,11 @@ export function TerminalSettings() {
 			.catch(() => toast.error("Couldn't change the Windows shell"));
 	};
 
-	// Map KB value to option ID
-	const scrollbackValue: ScrollbackOption =
-		replayKb === 0
-			? "0"
-			: replayKb === 16
-				? "16"
-				: replayKb === 256
-					? "256"
-					: replayKb >= 1024
-						? "1024"
-						: "64";
-
-	const selectScrollback = (id: ScrollbackOption) => {
-		const kb = Number(id);
-		select(kb);
-	};
+	const scrollbackValue =
+		SCROLLBACK_OPTIONS.find((option) => Number(option.id) === replayKb)?.id ?? null;
 
 	return (
 		<div data-testid="settings-terminal" className={SETTINGS_ROWS_CONTAINER}>
-			{/* Scrollback - vertical layout with control below description */}
 			<div className="flex flex-col gap-12 py-12">
 				<div className="flex flex-col gap-2">
 					<span className="tr-text-ui text-text-default">Scrollback</span>
@@ -135,7 +118,7 @@ export function TerminalSettings() {
 					label="Scrollback buffer size"
 					options={SCROLLBACK_OPTIONS}
 					value={scrollbackValue}
-					onSelect={selectScrollback}
+					onSelect={(id) => select(Number(id))}
 					testId="terminal-scrollback-control"
 				/>
 			</div>

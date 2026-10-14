@@ -365,11 +365,9 @@ describe("frameMatchesPreset", () => {
 		const preset = BUILTIN_LAYOUT_PRESETS[0];
 		if (!preset) throw new Error("missing built-in preset");
 		const frame = instantiateWorkbenchFrame(preset);
-		const newAlignment = frame.bottom.alignment === "center" ? "full" : "center";
-		const modified = {
-			...frame,
-			bottom: { ...frame.bottom, alignment: newAlignment as typeof frame.bottom.alignment },
-		};
+		const alignment: typeof frame.bottom.alignment =
+			frame.bottom.alignment === "center" ? "full" : "center";
+		const modified = { ...frame, bottom: { ...frame.bottom, alignment } };
 		expect(frameMatchesPreset(modified, preset)).toBe(false);
 	});
 
@@ -378,7 +376,6 @@ describe("frameMatchesPreset", () => {
 		if (!preset) throw new Error("missing built-in preset");
 		const frame1 = instantiateWorkbenchFrame(preset);
 		const frame2 = instantiateWorkbenchFrame(preset);
-		// Different minted IDs, same structure
 		expect(frame1.center.id).not.toBe(frame2.center.id);
 		expect(frameMatchesPreset(frame1, preset)).toBe(true);
 		expect(frameMatchesPreset(frame2, preset)).toBe(true);
@@ -388,7 +385,6 @@ describe("frameMatchesPreset", () => {
 		const preset = BUILTIN_LAYOUT_PRESETS[0];
 		if (!preset) throw new Error("missing built-in preset");
 		const frame = instantiateWorkbenchFrame(preset);
-		// Tiny difference within tolerance (0.001)
 		const modified = { ...frame, left: { ...frame.left, width: frame.left.width + 0.0001 } };
 		expect(frameMatchesPreset(modified, preset)).toBe(true);
 	});
@@ -398,11 +394,8 @@ describe("frameMatchesPreset", () => {
 		if (!preset) throw new Error("missing built-in preset");
 		const frame = instantiateWorkbenchFrame(preset);
 		const firstGroup = frame.right.groups[0];
-		if (!firstGroup || firstGroup.tools.length < 2) {
-			// Skip if not enough tools to reorder
-			return;
-		}
-		// Reverse tool order
+		if (!firstGroup || firstGroup.tools.length < 2)
+			throw new Error("missing multi-tool right group");
 		const modified = {
 			...frame,
 			right: {

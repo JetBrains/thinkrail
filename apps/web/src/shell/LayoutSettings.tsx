@@ -21,7 +21,7 @@ import { randomId } from "../lib";
 import { ConfirmDialog } from "../panels/ConfirmDialog";
 import { SettingsGroup } from "../panels/SettingsGroup";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "../panels/SettingsRow";
-import { type LocalLayoutPreferences, toast, useAppStore } from "../store";
+import { toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import {
 	BUILTIN_LAYOUT_PRESETS,
@@ -67,9 +67,8 @@ type GroupLimitKey = "maxSideGroups" | "maxBottomGroups";
 
 function commitGroupLimit(key: GroupLimitKey, value: number): void {
 	const state = useAppStore.getState();
-	const preferences: LocalLayoutPreferences = state.localLayoutPreferences;
-	if (preferences[key] === value) return;
-	state.setLocalLayoutPreferences({ ...preferences, [key]: value });
+	if (state.localLayoutPreferences[key] === value) return;
+	state.setLocalLayoutPreferences({ ...state.localLayoutPreferences, [key]: value });
 }
 
 function parseGroupLimit(draft: string): number | null {

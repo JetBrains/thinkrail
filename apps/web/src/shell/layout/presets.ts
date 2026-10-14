@@ -380,7 +380,6 @@ export function captureWorkbenchPreset(
 	};
 }
 
-/** Tolerance for comparing floating-point dimensions and weights (0.1% of normalized range). */
 const GEOMETRY_TOLERANCE = 0.001;
 
 function numbersMatch(a: number, b: number): boolean {
@@ -392,7 +391,7 @@ function centerTopologyMatches(
 	preset: LayoutPresetCenterNode,
 ): boolean {
 	if (frame.kind !== preset.kind) return false;
-	if (frame.kind === "group") return true; // IDs are excluded from comparison
+	if (frame.kind === "group") return true;
 	if (preset.kind !== "split") return false;
 	if (frame.direction !== preset.direction) return false;
 	if (!numbersMatch(frame.weights[0], preset.weights[0])) return false;
@@ -413,33 +412,22 @@ function auxiliaryGroupsMatch(
 		if (!pg) return false;
 		if (!numbersMatch(fg.weight, pg.weight)) return false;
 		if (fg.folded !== pg.folded) return false;
-		// Compare tools in their original order (order is preset-owned)
 		if (fg.tools.length !== pg.tools.length) return false;
 		return fg.tools.every((tool, j) => tool.tool === pg.tools[j]);
 	});
 }
 
-/**
- * Compare a WorkbenchFrame's complete preset-owned projection with a LayoutPreset.
- * Returns true if the frame matches the preset's geometry, visibility, weights,
- * folded states, tool placement, and center topology.
- * Generated runtime IDs are excluded from comparison.
- */
 export function frameMatchesPreset(frame: WorkbenchFrame, preset: LayoutPreset): boolean {
-	// Compare center topology (splits, directions, weights)
 	if (!centerTopologyMatches(frame.center, preset.center)) return false;
 
-	// Compare left region
 	if (frame.left.visible !== preset.left.visible) return false;
 	if (!numbersMatch(frame.left.width, preset.left.width)) return false;
 	if (!auxiliaryGroupsMatch(frame.left.groups, preset.left.groups)) return false;
 
-	// Compare right region
 	if (frame.right.visible !== preset.right.visible) return false;
 	if (!numbersMatch(frame.right.width, preset.right.width)) return false;
 	if (!auxiliaryGroupsMatch(frame.right.groups, preset.right.groups)) return false;
 
-	// Compare bottom region
 	if (frame.bottom.visible !== preset.bottom.visible) return false;
 	if (!numbersMatch(frame.bottom.height, preset.bottom.height)) return false;
 	if (frame.bottom.alignment !== preset.bottom.alignment) return false;
