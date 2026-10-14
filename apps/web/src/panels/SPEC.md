@@ -2001,7 +2001,8 @@ own section. The kebab menu (`plan-menu`, a
   unchanged siblings on disk), matching `FileTree`. **Status is shown on the file name, not a letter glyph**
   (the git-decoration convention — `changesModel.statusNameClass`, shared by both views):
   added / untracked → green, deleted → red + strikethrough, renamed → blue, modified → plain. Each file
-  and folder also shows a `+N −M` badge (shared `DiffStatBadge`) — per-file counts come from `git.status`
+  shows a `+N −M` badge (shared `DiffStatBadge`), and a folder shows its aggregate badge **only while
+  collapsed** — expanded, its children already carry the counts — per-file counts come from `git.status`
   (`GitFileChange.added/removed`, from `git diff --numstat`; untracked files count their whole content as
   added — but a binary or oversized untracked file gets no count, mirroring how tracked binaries drop out
   of `--numstat`), folder counts are summed client-side. Both views share `ChangesPanel`'s `openDiff` + `isActive`.

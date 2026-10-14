@@ -781,8 +781,14 @@ test("Change rows stay one aligned, fully-highlighted row — menu slot included
 	expect(await background(longRow)).toBe("rgba(0, 0, 0, 0)");
 
 	await page.getByTestId("changes-toggle-tree").click();
-	const folderBadge = page.getByTestId("change-tree-folder").filter({ hasText: "packages" });
-	const fileBadge = page.getByTestId("change-item").filter({ hasText: "ForTheChangesPanel.ts" });
+	const collapsedFolder = page.getByTestId("change-tree-folder").filter({ hasText: "deeply" });
+	await collapsedFolder.click();
+	const folderBadge = collapsedFolder.getByText(/^\+\d+/);
+	await expect(folderBadge).toBeVisible();
+	const fileBadge = page
+		.getByTestId("change-item")
+		.filter({ hasText: "ForTheChangesPanel.ts" })
+		.getByText(/^\+\d+/);
 	const folderRight = await rightEdge(folderBadge);
 	const fileRight = await rightEdge(fileBadge);
 	expect(Math.abs(folderRight - fileRight)).toBeLessThanOrEqual(1);
