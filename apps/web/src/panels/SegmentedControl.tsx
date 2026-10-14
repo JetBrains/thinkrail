@@ -4,29 +4,19 @@ export interface SegmentedControlOption<T extends string> {
 	id: T;
 	label: string;
 	testId?: string;
+	disabled?: boolean;
 }
 
 export interface SegmentedControlProps<T extends string> {
-	/** Name for the radio group (accessibility) */
 	name: string;
-	/** Accessible label for the control group */
 	label: string;
-	/** Available options */
 	options: readonly SegmentedControlOption<T>[];
-	/** Currently selected value */
-	value: T;
-	/** Called when selection changes */
+	value: T | null;
 	onSelect: (value: T) => void;
-	/** Whether the control is disabled */
 	disabled?: boolean;
-	/** Test ID for the control */
 	testId?: string;
 }
 
-/**
- * A compact segmented control for mutually exclusive options.
- * Use for small sets of 2-4 options (e.g., System/Light/Dark, Soft/Default/High).
- */
 export function SegmentedControl<T extends string>({
 	name,
 	label,
@@ -44,7 +34,8 @@ export function SegmentedControl<T extends string>({
 			className="inline-flex h-32 overflow-hidden rounded-sm bg-control-bg"
 		>
 			{options.map((option) => {
-				const selected = option.id === value;
+				const selected = value !== null && option.id === value;
+				const optionDisabled = disabled || option.disabled === true;
 				return (
 					<label
 						key={option.id}
@@ -52,7 +43,7 @@ export function SegmentedControl<T extends string>({
 						data-active={selected}
 						className={cn(
 							"relative cursor-pointer transition-colors",
-							disabled && "cursor-default",
+							optionDisabled && "cursor-default",
 						)}
 					>
 						<input
@@ -60,7 +51,7 @@ export function SegmentedControl<T extends string>({
 							name={name}
 							value={option.id}
 							checked={selected}
-							disabled={disabled}
+							disabled={optionDisabled}
 							onChange={() => onSelect(option.id)}
 							className="peer sr-only inset-0"
 						/>

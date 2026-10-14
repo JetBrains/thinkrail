@@ -24,18 +24,18 @@ export function SettingsRow({
 		<div
 			data-testid={testId}
 			className={cn(
-				"flex items-center justify-between gap-12 py-12",
+				"flex flex-wrap items-center justify-between gap-12 py-12",
 				!noBorder && "border-border-muted border-b",
 				className,
 			)}
 		>
-			<div className="flex min-w-0 flex-1 flex-col gap-2">
+			<div className="flex min-w-160 flex-1 flex-col gap-2">
 				<span className="tr-text-ui text-text-default">{label}</span>
 				{description ? (
 					<span className="tr-text-metadata text-text-muted">{description}</span>
 				) : null}
 			</div>
-			<div className="shrink-0">{control}</div>
+			<div className="max-w-full shrink-0">{control}</div>
 		</div>
 	);
 }

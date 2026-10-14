@@ -1,7 +1,10 @@
 import {
+	RiArrowRightLine as ArrowRight,
 	RiCheckLine as Check,
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
+	RiComputerLine as Device,
+	RiPaletteLine as Palette,
 } from "@remixicon/react";
 import {
 	type AppConfigUpdate,
@@ -18,7 +21,7 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { cn } from "@thinkrail/ui/utils";
-import { useState, useSyncExternalStore } from "react";
+import { type ReactNode, useState, useSyncExternalStore } from "react";
 import { toast, useAppStore } from "@/store";
 import {
 	deriveSystemThemePair,
@@ -30,101 +33,99 @@ import {
 	type ThemeDescriptor,
 	type ThemeResolution,
 } from "@/themes";
-import { getTransport } from "@/transport";
+import { errorText, getTransport } from "@/transport";
+import { LineWidthControl } from "./LineWidthSettings";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
+import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
+import { SettingsNotice } from "./SettingsNotice";
 import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
 
-type ThemeModeOption = "system" | "light" | "dark";
-type ContrastLevel = "default" | "high";
+type Appearance = ThemeDescriptor["appearance"];
+type Contrast = ThemeDescriptor["contrast"];
+type ThemeModeOption = "system" | Appearance;
 
-const MODE_OPTIONS: SegmentedControlOption<ThemeModeOption>[] = [
-	{ id: "system", label: "System", testId: "theme-mode-system" },
-	{ id: "light", label: "Light", testId: "theme-mode-light" },
-	{ id: "dark", label: "Dark", testId: "theme-mode-dark" },
-];
-
-const CONTRAST_OPTIONS: SegmentedControlOption<ContrastLevel>[] = [
-	{ id: "default", label: "Default", testId: "contrast-default" },
-	{ id: "high", label: "High", testId: "contrast-high" },
-];
-
-/** Get the current contrast level based on the resolved theme */
-function getContrastLevel(themeDescriptor: ThemeDescriptor): ContrastLevel {
-	return themeDescriptor.contrast === "high" ? "high" : "default";
+function familyKey(id: ThemeId): string {
+	return id.replace(/(^|-)(light|dark)$/, "").replace(/^high-contrast-?/, "");
 }
 
-/** Find a theme variant with the specified contrast level and appearance */
-function findContrastVariant(
+function counterpart(
 	themes: readonly ThemeDescriptor[],
-	currentTheme: ThemeDescriptor,
-	targetContrast: ContrastLevel,
+	from: ThemeDescriptor,
+	appearance: Appearance,
+	contrast: Contrast,
 ): ThemeDescriptor | null {
-	const targetContrastValue = targetContrast === "high" ? "high" : "normal";
+	const candidates = themes.filter(
+		(theme) => theme.appearance === appearance && theme.contrast === contrast,
+	);
+	const family = familyKey(from.id);
 	return (
-		themes.find(
-			(theme) =>
-				theme.appearance === currentTheme.appearance && theme.contrast === targetContrastValue,
-		) ?? null
+		candidates.find((theme) => familyKey(theme.id) === family) ??
+		candidates.find((theme) => familyKey(theme.id) === "") ??
+		candidates[0] ??
+		null
 	);
 }
 
-/** Compact dropdown for theme selection in settings rows */
-function ThemeDropdownCompact({
+function appearanceTarget(
+	themes: readonly ThemeDescriptor[],
+	from: ThemeDescriptor,
+	appearance: Appearance,
+): ThemeDescriptor | null {
+	if (from.appearance === appearance) return from;
+	return (
+		counterpart(themes, from, appearance, from.contrast) ??
+		themes.find((theme) => theme.appearance === appearance) ??
+		null
+	);
+}
+
+function ThemeDropdown({
+	appearance,
 	themes,
 	resolution,
 	disabled,
-	testIdPrefix,
 	onSelect,
 }: {
+	appearance: Appearance;
 	themes: readonly ThemeDescriptor[];
 	resolution: ThemeResolution;
 	disabled: boolean;
-	testIdPrefix: string;
 	onSelect: (id: ThemeId) => void;
 }) {
+	const label = appearance === "light" ? "Light theme" : "Dark theme";
 	return (
-		<div className="flex flex-col gap-4">
-			<DropdownMenu>
-				<DropdownMenuTrigger asChild>
-					<Button
-						variant="outline"
-						disabled={disabled}
-						aria-label={resolution.theme.label}
-						data-testid={`${testIdPrefix}-trigger`}
-						className="h-32 justify-between"
-					>
-						<span className="truncate">{resolution.theme.label}</span>
-						<ChevronDown className="size-16" />
-					</Button>
-				</DropdownMenuTrigger>
-				<DropdownMenuContent
-					align="end"
-					className="min-w-[var(--radix-dropdown-menu-trigger-width)]"
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
+				<Button
+					variant="outline"
+					disabled={disabled}
+					aria-label={`${label}: ${resolution.theme.label}`}
+					data-testid={`system-theme-${appearance}-trigger`}
+					className="h-32 justify-between"
 				>
-					<DropdownMenuRadioGroup value={resolution.theme.id} onValueChange={onSelect}>
-						{themes.map((theme) => (
-							<DropdownMenuRadioItem
-								key={theme.id}
-								value={theme.id}
-								data-testid={`${testIdPrefix}-option-${theme.id}`}
-							>
-								{theme.id === resolution.theme.id ? (
-									<Check className="size-14 text-primary" />
-								) : (
-									<span className="size-14" />
-								)}
-								<span>{theme.label}</span>
-							</DropdownMenuRadioItem>
-						))}
-					</DropdownMenuRadioGroup>
-				</DropdownMenuContent>
-			</DropdownMenu>
-			{resolution.fallback && (
-				<p className="tr-text-metadata text-feedback-warning">
-					Theme unavailable. Using {resolution.theme.label}.
-				</p>
-			)}
-		</div>
+					<span className="truncate">{resolution.theme.label}</span>
+					<ChevronDown className="size-16" />
+				</Button>
+			</DropdownMenuTrigger>
+			<DropdownMenuContent align="end" className="min-w-[var(--radix-dropdown-menu-trigger-width)]">
+				<DropdownMenuRadioGroup value={resolution.theme.id} onValueChange={onSelect}>
+					{themes.map((theme) => (
+						<DropdownMenuRadioItem
+							key={theme.id}
+							value={theme.id}
+							data-testid={`system-theme-${appearance}-option-${theme.id}`}
+						>
+							{theme.id === resolution.theme.id ? (
+								<Check className="size-14 text-primary" />
+							) : (
+								<span className="size-14" />
+							)}
+							<span>{theme.label}</span>
+						</DropdownMenuRadioItem>
+					))}
+				</DropdownMenuRadioGroup>
+			</DropdownMenuContent>
+		</DropdownMenu>
 	);
 }
 
@@ -141,7 +142,7 @@ function ThemeList({
 }) {
 	return (
 		<div className="flex flex-col gap-4">
-			{themes.map(({ id, label }) => {
+			{themes.map(({ id, label, appearance, contrast }) => {
 				const active = id === activeId;
 				return (
 					<button
@@ -150,6 +151,9 @@ function ThemeList({
 						disabled={disabled}
 						aria-pressed={active}
 						data-testid={`theme-option-${id}`}
+						data-theme-id={id}
+						data-appearance={appearance}
+						data-contrast={contrast}
 						data-active={active}
 						onClick={() => onSelect(id)}
 						className={cn(
@@ -161,10 +165,44 @@ function ThemeList({
 						)}
 					>
 						<span className="flex-1">{label}</span>
-						{active && <Check className="size-16 shrink-0 text-primary" />}
+						{active ? <Check className="size-16 shrink-0 text-primary" /> : null}
 					</button>
 				);
 			})}
+		</div>
+	);
+}
+
+function Disclosure({
+	label,
+	summary,
+	expanded,
+	testId,
+	onToggle,
+	children,
+}: {
+	label: string;
+	summary: string;
+	expanded: boolean;
+	testId: string;
+	onToggle: () => void;
+	children: ReactNode;
+}) {
+	const Chevron = expanded ? ChevronDown : ChevronRight;
+	return (
+		<div className="flex flex-col border-border-muted border-b">
+			<button
+				type="button"
+				onClick={onToggle}
+				aria-expanded={expanded}
+				data-testid={testId}
+				className="flex w-full items-center gap-8 py-12 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary"
+			>
+				<span className="flex-1 tr-text-ui text-text-default">{label}</span>
+				<span className="truncate tr-text-metadata text-text-muted">{summary}</span>
+				<Chevron className="size-20 shrink-0 text-text-muted" aria-hidden="true" />
+			</button>
+			{expanded ? children : null}
 		</div>
 	);
 }
@@ -175,55 +213,77 @@ export function AppearanceSettings() {
 	const themeMode = useAppStore((state) => state.themeMode);
 	const systemThemePair = useAppStore((state) => state.systemThemePair);
 	const [pending, setPending] = useState(false);
+	const [expanded, setExpanded] = useState(false);
 	const systemAppearance = useSyncExternalStore(onSystemAppearanceChange, readSystemAppearance);
 
 	const themes = getThemes();
 	const systemSupported = (protocolVersion ?? 0) >= THEME_SYSTEM_PROTOCOL_VERSION;
 	const activeTheme = resolveTheme(theme);
+	const fixedResolution = resolveThemePreference({ theme, themeMode: "fixed" });
 	const pair = systemThemePair ?? deriveSystemThemePair(theme);
 	const preference = { theme, themeMode: "system" as const, systemThemePair: pair };
 	const currentResolution = resolveThemePreference(preference, systemAppearance);
 	const lightResolution = resolveThemePreference(preference, "light");
 	const darkResolution = resolveThemePreference(preference, "dark");
+	const systemMode = systemSupported && themeMode === "system";
+	const effectiveMode: ThemeModeOption = systemMode ? "system" : activeTheme.appearance;
+	const currentContrast = (systemMode ? currentResolution.theme : activeTheme).contrast;
 
-	// Derive the effective mode option from the stored mode and theme
-	const effectiveMode: ThemeModeOption =
-		systemSupported && themeMode === "system" ? "system" : activeTheme.appearance;
+	const modeTarget = (appearance: Appearance): ThemeDescriptor | null =>
+		systemMode
+			? (appearance === "light" ? lightResolution : darkResolution).theme
+			: appearanceTarget(themes, activeTheme, appearance);
 
-	// Get current contrast level from the resolved theme
-	const currentContrast = getContrastLevel(
-		effectiveMode === "system" ? currentResolution.theme : activeTheme,
-	);
+	const contrastTargets = (contrast: Contrast) =>
+		systemMode
+			? {
+					light: counterpart(themes, lightResolution.theme, "light", contrast),
+					dark: counterpart(themes, darkResolution.theme, "dark", contrast),
+				}
+			: { fixed: counterpart(themes, activeTheme, activeTheme.appearance, contrast) };
 
-	// Filter themes by appearance and contrast for display
-	const lightThemes = themes.filter((t) => t.appearance === "light");
-	const darkThemes = themes.filter((t) => t.appearance === "dark");
-	const normalLightThemes = lightThemes.filter((t) => t.contrast === "normal");
-	const normalDarkThemes = darkThemes.filter((t) => t.contrast === "normal");
+	const contrastAvailable = (contrast: Contrast) =>
+		Object.values(contrastTargets(contrast)).some((target) => target !== null);
+
+	const modeOptions: SegmentedControlOption<ThemeModeOption>[] = [
+		...(systemSupported
+			? [{ id: "system" as const, label: "System", testId: "theme-mode-system" }]
+			: []),
+		{ id: "light", label: "Light", testId: "theme-mode-light", disabled: !modeTarget("light") },
+		{ id: "dark", label: "Dark", testId: "theme-mode-dark", disabled: !modeTarget("dark") },
+	];
+
+	const contrastOptions: SegmentedControlOption<Contrast>[] = [
+		{
+			id: "normal",
+			label: "Default",
+			testId: "contrast-default",
+			disabled: !contrastAvailable("normal"),
+		},
+		{ id: "high", label: "High", testId: "contrast-high", disabled: !contrastAvailable("high") },
+	];
 
 	const update = (config: AppConfigUpdate) => {
 		if (pending) return;
 		setPending(true);
 		getTransport()
 			.request("settings.update", { config })
-			.catch(() => toast.error("Couldn't change theme"))
+			.catch((err: unknown) => toast.error(errorText(err), "Couldn't change theme"))
 			.finally(() => setPending(false));
 	};
 
 	const selectMode = (mode: ThemeModeOption) => {
 		if (mode === effectiveMode) return;
-
 		if (mode === "system") {
-			// Switch to system mode with the current pair
 			update({ themeMode: "system", systemThemePair: pair });
-		} else {
-			// Switch to fixed mode with the appropriate theme for the selected appearance
-			// Prefer normal contrast themes when switching modes
-			const targetTheme = (mode === "light" ? normalLightThemes : normalDarkThemes)[0];
-			if (targetTheme) {
-				update({ theme: targetTheme.id, themeMode: "fixed" });
-			}
+			return;
 		}
+		if (systemMode && activeTheme.appearance === mode) {
+			update({ themeMode: "fixed" });
+			return;
+		}
+		const target = modeTarget(mode);
+		if (target) update({ theme: target.id, themeMode: "fixed" });
 	};
 
 	const selectFixed = (id: ThemeId) => {
@@ -231,93 +291,98 @@ export function AppearanceSettings() {
 		update({ theme: id, themeMode: "fixed" });
 	};
 
-	const selectSystem = (appearance: "light" | "dark", id: ThemeId) => {
+	const selectSystem = (appearance: Appearance, id: ThemeId) => {
 		const next: SystemThemePair = { ...pair, [appearance]: id };
 		if (next.light === pair.light && next.dark === pair.dark) return;
 		update({ systemThemePair: next });
 	};
 
-	const selectContrast = (level: ContrastLevel) => {
-		if (level === currentContrast) return;
-
-		if (effectiveMode === "system") {
-			// For system mode, update both themes in the pair
-			const lightVariant = findContrastVariant(themes, lightResolution.theme, level);
-			const darkVariant = findContrastVariant(themes, darkResolution.theme, level);
-			if (lightVariant && darkVariant) {
-				update({ systemThemePair: { light: lightVariant.id, dark: darkVariant.id } });
-			}
-		} else {
-			// For fixed mode, switch to the variant with the target contrast
-			const variant = findContrastVariant(themes, activeTheme, level);
-			if (variant) {
-				update({ theme: variant.id, themeMode: "fixed" });
-			}
+	const selectContrast = (contrast: Contrast) => {
+		if (contrast === currentContrast) return;
+		const targets = contrastTargets(contrast);
+		if ("fixed" in targets) {
+			if (targets.fixed) update({ theme: targets.fixed.id, themeMode: "fixed" });
+			return;
 		}
+		const next: SystemThemePair = {
+			light: targets.light?.id ?? pair.light,
+			dark: targets.dark?.id ?? pair.dark,
+		};
+		if (next.light !== pair.light || next.dark !== pair.dark) update({ systemThemePair: next });
 	};
 
-	// Get the themes to display based on current mode and contrast
-	const getThemesForDisplay = () => {
-		const targetContrast = currentContrast === "high" ? "high" : "normal";
-		if (effectiveMode === "light") {
-			return lightThemes.filter((t) => t.contrast === targetContrast);
-		}
-		if (effectiveMode === "dark") {
-			return darkThemes.filter((t) => t.contrast === targetContrast);
-		}
-		return [];
-	};
-
-	const [themePairExpanded, setThemePairExpanded] = useState(false);
+	const fallbacks = systemMode
+		? [
+				{ appearance: "light", resolution: lightResolution },
+				{ appearance: "dark", resolution: darkResolution },
+			].filter(({ resolution }) => resolution.fallback)
+		: fixedResolution.fallback
+			? [{ appearance: null, resolution: fixedResolution }]
+			: [];
 
 	return (
-		<div data-testid="settings-appearance" className={SETTINGS_ROWS_CONTAINER}>
-			{/* Theme mode row */}
-			<SettingsRow
-				label="Theme mode"
-				control={
-					<SegmentedControl
-						name="theme-mode"
-						label="Theme mode"
-						options={systemSupported ? MODE_OPTIONS : MODE_OPTIONS.filter((o) => o.id !== "system")}
-						value={effectiveMode}
-						disabled={pending}
-						onSelect={selectMode}
-						testId="theme-mode-control"
+		<SettingsPageContainer testId="settings-appearance">
+			<SettingsGroup title="Theme">
+				<SettingsRow
+					label="Theme mode"
+					control={
+						<SegmentedControl
+							name="theme-mode"
+							label="Theme mode"
+							options={modeOptions}
+							value={effectiveMode}
+							disabled={pending}
+							onSelect={selectMode}
+							testId="theme-mode-control"
+						/>
+					}
+				/>
+				{fallbacks.length > 0 ? (
+					<div className="flex flex-col gap-4 border-border-muted border-b py-12">
+						{fallbacks.map(({ appearance, resolution }) => (
+							<SettingsNotice
+								key={appearance ?? "fixed"}
+								variant="warning"
+								testId="theme-fallback-warning"
+							>
+								Configured {appearance ? `${appearance} ` : ""}theme unavailable in this app
+								version. Using {resolution.theme.label}.
+							</SettingsNotice>
+						))}
+					</div>
+				) : null}
+				{systemMode ? (
+					<SettingsRow
+						label="Current on this device"
+						testId="system-theme-current"
+						control={
+							<span className="flex items-center gap-4 tr-text-ui text-text-default">
+								<Device className="size-14 shrink-0 text-text-muted" />
+								{systemAppearance === "light" ? "Light" : "Dark"}
+								<ArrowRight className="size-14 shrink-0 text-text-muted" />
+								<Palette className="size-14 shrink-0 text-text-muted" />
+								{currentResolution.theme.label}
+							</span>
+						}
 					/>
-				}
-			/>
-
-			{/* Theme pair collapsible (system mode) or Theme collapsible (fixed mode) */}
-			{effectiveMode === "system" ? (
-				<div className="flex flex-col border-border-muted border-b">
-					<button
-						type="button"
-						onClick={() => setThemePairExpanded((v) => !v)}
-						aria-expanded={themePairExpanded}
-						data-testid="theme-pair-toggle"
-						className="flex w-full items-start gap-8 py-12 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary"
+				) : null}
+				{systemMode ? (
+					<Disclosure
+						label="Theme pair"
+						summary={`${lightResolution.theme.label} / ${darkResolution.theme.label}`}
+						expanded={expanded}
+						testId="theme-pair-toggle"
+						onToggle={() => setExpanded((value) => !value)}
 					>
-						<span className="flex-1 tr-text-ui text-text-default">Theme pair</span>
-						{/* Chevron right-aligned */}
-						<span className="mt-2 shrink-0">
-							{themePairExpanded ? (
-								<ChevronDown className="size-20 text-text-muted" aria-hidden="true" />
-							) : (
-								<ChevronRight className="size-20 text-text-muted" aria-hidden="true" />
-							)}
-						</span>
-					</button>
-					{themePairExpanded && (
-						<div className={`${SETTINGS_ROWS_CONTAINER} pb-12`}>
+						<div className={cn(SETTINGS_ROWS_CONTAINER, "pb-12")}>
 							<SettingsRow
 								label="Light theme"
 								control={
-									<ThemeDropdownCompact
-										themes={lightThemes}
+									<ThemeDropdown
+										appearance="light"
+										themes={themes.filter((candidate) => candidate.appearance === "light")}
 										resolution={lightResolution}
 										disabled={pending}
-										testIdPrefix="system-theme-light"
 										onSelect={(id) => selectSystem("light", id)}
 									/>
 								}
@@ -325,65 +390,53 @@ export function AppearanceSettings() {
 							<SettingsRow
 								label="Dark theme"
 								control={
-									<ThemeDropdownCompact
-										themes={darkThemes}
+									<ThemeDropdown
+										appearance="dark"
+										themes={themes.filter((candidate) => candidate.appearance === "dark")}
 										resolution={darkResolution}
 										disabled={pending}
-										testIdPrefix="system-theme-dark"
 										onSelect={(id) => selectSystem("dark", id)}
 									/>
 								}
 							/>
 						</div>
-					)}
-				</div>
-			) : (
-				<div className="flex flex-col border-border-muted border-b">
-					<button
-						type="button"
-						onClick={() => setThemePairExpanded((v) => !v)}
-						aria-expanded={themePairExpanded}
-						data-testid="theme-toggle"
-						className="flex w-full items-start gap-8 py-12 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary"
+					</Disclosure>
+				) : (
+					<Disclosure
+						label="Theme"
+						summary={activeTheme.label}
+						expanded={expanded}
+						testId="theme-toggle"
+						onToggle={() => setExpanded((value) => !value)}
 					>
-						<span className="flex-1 tr-text-ui text-text-default">Theme</span>
-						{/* Chevron right-aligned */}
-						<span className="mt-2 shrink-0">
-							{themePairExpanded ? (
-								<ChevronDown className="size-20 text-text-muted" aria-hidden="true" />
-							) : (
-								<ChevronRight className="size-20 text-text-muted" aria-hidden="true" />
-							)}
-						</span>
-					</button>
-					{themePairExpanded && (
 						<div className="pb-12">
 							<ThemeList
-								themes={getThemesForDisplay()}
+								themes={themes}
 								activeId={activeTheme.id}
 								disabled={pending}
 								onSelect={selectFixed}
 							/>
 						</div>
-					)}
-				</div>
-			)}
-
-			{/* Contrast level row */}
-			<SettingsRow
-				label="Contrast level"
-				control={
-					<SegmentedControl
-						name="contrast-level"
-						label="Contrast level"
-						options={CONTRAST_OPTIONS}
-						value={currentContrast}
-						disabled={pending}
-						onSelect={selectContrast}
-						testId="contrast-level-control"
-					/>
-				}
-			/>
-		</div>
+					</Disclosure>
+				)}
+				<SettingsRow
+					label="Contrast level"
+					control={
+						<SegmentedControl
+							name="contrast-level"
+							label="Contrast level"
+							options={contrastOptions}
+							value={currentContrast}
+							disabled={pending}
+							onSelect={selectContrast}
+							testId="contrast-level-control"
+						/>
+					}
+				/>
+			</SettingsGroup>
+			<SettingsGroup title="Editor">
+				<LineWidthControl kind="file" />
+			</SettingsGroup>
+		</SettingsPageContainer>
 	);
 }

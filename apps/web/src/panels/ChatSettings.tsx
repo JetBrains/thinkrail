@@ -1,21 +1,18 @@
+import type { AppConfigUpdate, ComposerGrowthLimit, SubagentOverride } from "@thinkrail/contracts";
+import { cn } from "@thinkrail/ui/utils";
 import {
-	type AppConfigUpdate,
-	type ComposerGrowthLimit,
-	isLineWidth,
-	LINE_WIDTH_COLUMNS,
-	SUBAGENT_SETTINGS_PROTOCOL_VERSION,
-	type SubagentOverride,
-	type Workspace,
-} from "@thinkrail/contracts";
-import { useEffect, useState } from "react";
-import type { ChatMessageOrder, StreamingResponseMovement } from "@/chat/chatPreferences";
+	type ChatMessageOrder,
+	moveStreamingResponseHandle,
+	STREAMING_RESPONSE_MOVEMENT_LIMITS,
+	type StreamingResponseMovement,
+} from "@/chat/chatPreferences";
 import { selectActiveWorkspace, toast, useAppStore } from "@/store";
-import { getTransport } from "@/transport";
+import { errorText, getTransport } from "@/transport";
+import { LineWidthControl } from "./LineWidthSettings";
 import { SegmentedControl, type SegmentedControlOption } from "./SegmentedControl";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
-import { SettingsRadioGroup, type SettingsRadioOption } from "./SettingsRadioGroup";
 import { SettingsRow } from "./SettingsRow";
-import { SettingsSwitch } from "./SettingsSwitch";
+import { SubagentSettings } from "./SubagentSettings";
 
 const MESSAGE_ORDER_OPTIONS: SegmentedControlOption<ChatMessageOrder>[] = [
 	{ id: "oldest-first", label: "Oldest first", testId: "chat-order-oldest-first" },
@@ -28,196 +25,100 @@ const GROWTH_OPTIONS: SegmentedControlOption<ComposerGrowthLimit>[] = [
 	{ id: "half-chat", label: "Half chat", testId: "composer-growth-half-chat" },
 ];
 
-type WorkspaceSubagentChoice = "inherit" | SubagentOverride;
+const MOVEMENT_TRACK_SEGMENTS = Array.from({ length: 20 }, (_, index) => index * 5);
 
-/** Map streaming behavior to a simplified three-mode model */
-type ScrollingMode = "follow" | "keep-position" | "stay-at-bottom";
+const MOVEMENT_THUMB =
+	"pointer-events-none absolute inset-0 h-24 w-full appearance-none bg-transparent focus-visible:outline-none [&::-moz-range-thumb]:pointer-events-auto [&::-moz-range-thumb]:size-16 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-border-default [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:shadow-sm [&::-moz-range-track]:bg-transparent [&::-webkit-slider-runnable-track]:bg-transparent [&::-webkit-slider-thumb]:pointer-events-auto [&::-webkit-slider-thumb]:size-16 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-border-default [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-sm focus-visible:[&::-moz-range-thumb]:ring-2 focus-visible:[&::-moz-range-thumb]:ring-primary focus-visible:[&::-webkit-slider-thumb]:ring-2 focus-visible:[&::-webkit-slider-thumb]:ring-primary";
 
-const SCROLLING_OPTIONS: SettingsRadioOption<ScrollingMode>[] = [
-	{
-		id: "follow",
-		label: "Follow response",
-		description: "Automatically scroll to keep the latest generated text visible.",
-		testId: "scrolling-follow",
-	},
-	{
-		id: "keep-position",
-		label: "Keep position",
-		description: "Keep your current scroll position while the agent responds.",
-		testId: "scrolling-keep-position",
-	},
-	{
-		id: "stay-at-bottom",
-		label: "Stay at bottom",
-		description: "Keep the chat at the bottom as new content appears.",
-		testId: "scrolling-stay-at-bottom",
-	},
-];
-
-/** Convert internal settle/trigger values to user-facing mode */
-function toScrollingMode(value: StreamingResponseMovement): ScrollingMode {
-	// "follow" = default behavior with settle ~50%, trigger ~70%
-	// "keep-position" = settle and trigger both at 100% (never auto-scroll)
-	// "stay-at-bottom" = settle at minimum, trigger near bottom (always scroll)
-	if (value.settle >= 90 && value.trigger >= 95) return "keep-position";
-	if (value.settle <= 30 && value.trigger >= 95) return "stay-at-bottom";
-	return "follow";
-}
-
-/** Convert user-facing mode to internal values */
-function fromScrollingMode(mode: ScrollingMode): StreamingResponseMovement {
-	switch (mode) {
-		case "follow":
-			return { settle: 50, trigger: 70 };
-		case "keep-position":
-			return { settle: 100, trigger: 100 };
-		case "stay-at-bottom":
-			return { settle: 25, trigger: 95 };
-	}
-}
-
-function saveSetting(config: AppConfigUpdate, errorMessage: string): void {
-	getTransport()
-		.request("settings.update", { config })
-		.catch(() => toast.error(errorMessage));
-}
-
-function LineWidthInput({
+function StreamingResponseMovementControl({
 	value,
-	onSave,
+	onChange,
 }: {
-	value: number;
-	onSave: (value: number) => Promise<void>;
+	value: StreamingResponseMovement;
+	onChange: (value: StreamingResponseMovement) => void;
 }) {
-	const [draft, setDraft] = useState(String(value));
-	const [saving, setSaving] = useState(false);
-	useEffect(() => setDraft(String(value)), [value]);
-
-	const parsed = /^\d+$/.test(draft) ? Number(draft) : null;
-	const valid = parsed !== null && isLineWidth(parsed);
-	const canSave = valid && parsed !== value && !saving;
-
-	const save = async () => {
-		if (!canSave || parsed === null) return;
-		setSaving(true);
-		try {
-			await onSave(parsed);
-		} finally {
-			setSaving(false);
-		}
+	const update = (handle: "settle" | "trigger", rawValue: string) => {
+		onChange(moveStreamingResponseHandle(value, handle, Number(rawValue)));
 	};
 
 	return (
-		<input
-			type="number"
-			min={LINE_WIDTH_COLUMNS.min}
-			max={LINE_WIDTH_COLUMNS.max}
-			step={1}
-			value={draft}
-			aria-label="Line width"
-			aria-invalid={!valid}
-			data-testid="chat-line-width-input"
-			data-line-width-input
-			onChange={(event) => setDraft(event.currentTarget.value)}
-			onKeyDown={(event) => {
-				if (event.key === "Escape") {
-					event.preventDefault();
-					event.stopPropagation();
-					setDraft(String(value));
-				} else if (event.key === "Enter" && canSave) {
-					event.preventDefault();
-					void save();
-				}
-			}}
-			onBlur={() => {
-				if (canSave) void save();
-			}}
-			className="h-32 w-80 rounded-sm border border-control-border-default bg-control-bg px-8 tr-text-ui text-text-default outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none focus:border-control-border-active aria-invalid:border-feedback-error"
-		/>
+		<div
+			data-testid="streaming-response-movement"
+			className="flex flex-col gap-8 border-border-muted border-b py-12"
+		>
+			<div className="flex flex-col gap-2">
+				<span className="tr-text-ui text-text-default">Streaming response movement</span>
+				<span className="tr-text-metadata text-text-muted">
+					When the chat moves while an answer grows, and where its newest edge lands.
+				</span>
+			</div>
+			<div className="flex items-center justify-between text-text-muted tr-text-metadata">
+				<span>Top</span>
+				<span>Message box</span>
+			</div>
+			<div className="relative h-24">
+				<div className="absolute inset-x-0 top-1/2 flex h-4 -translate-y-1/2 overflow-hidden rounded-full bg-control-bg">
+					{MOVEMENT_TRACK_SEGMENTS.map((start) => (
+						<span
+							key={start}
+							className={cn(
+								"h-full flex-1",
+								start >= value.settle && start < value.trigger ? "bg-primary" : "bg-control-bg",
+							)}
+						/>
+					))}
+				</div>
+				<input
+					type="range"
+					data-testid="streaming-movement-settle"
+					aria-label="Settle position"
+					aria-valuemin={STREAMING_RESPONSE_MOVEMENT_LIMITS.settleMin}
+					aria-valuemax={Math.min(
+						STREAMING_RESPONSE_MOVEMENT_LIMITS.settleMax,
+						value.trigger - STREAMING_RESPONSE_MOVEMENT_LIMITS.minimumGap,
+					)}
+					aria-valuetext={`${value.settle}% from the top`}
+					min={0}
+					max={100}
+					step={STREAMING_RESPONSE_MOVEMENT_LIMITS.step}
+					value={value.settle}
+					onChange={(event) => update("settle", event.currentTarget.value)}
+					className={MOVEMENT_THUMB}
+				/>
+				<input
+					type="range"
+					data-testid="streaming-movement-trigger"
+					aria-label="Trigger position"
+					aria-valuemin={Math.max(
+						STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMin,
+						value.settle + STREAMING_RESPONSE_MOVEMENT_LIMITS.minimumGap,
+					)}
+					aria-valuemax={STREAMING_RESPONSE_MOVEMENT_LIMITS.triggerMax}
+					aria-valuetext={`${value.trigger}% from the top`}
+					min={0}
+					max={100}
+					step={STREAMING_RESPONSE_MOVEMENT_LIMITS.step}
+					value={value.trigger}
+					onChange={(event) => update("trigger", event.currentTarget.value)}
+					className={MOVEMENT_THUMB}
+				/>
+			</div>
+			<div className="flex items-center justify-between gap-8 text-text-muted tr-text-metadata">
+				<span>
+					Settle <span className="text-text-default">{value.settle}%</span>
+				</span>
+				<span>
+					Trigger <span className="text-text-default">{value.trigger}%</span>
+				</span>
+			</div>
+		</div>
 	);
 }
 
-export function SubagentSettings({
-	protocolVersion,
-	globalEnabled,
-	workspace,
-	onGlobalChange,
-	onWorkspaceChange,
-}: {
-	protocolVersion: number | null;
-	globalEnabled: boolean;
-	workspace: Workspace | null;
-	onGlobalChange: (enabled: boolean) => void;
-	onWorkspaceChange: (choice: WorkspaceSubagentChoice) => void;
-}) {
-	if (protocolVersion === null || protocolVersion < SUBAGENT_SETTINGS_PROTOCOL_VERSION) {
-		return null;
-	}
-
-	const workspaceOptions: SettingsRadioOption<WorkspaceSubagentChoice>[] = [
-		{
-			id: "inherit",
-			label: "Use global setting",
-			description: "Follow the global subagent setting for this workspace.",
-			hint: globalEnabled ? "Currently On" : "Currently Off",
-			testId: "subagents-workspace-inherit",
-		},
-		{
-			id: "on",
-			label: "On",
-			description: "Always allow delegation in this workspace.",
-			testId: "subagents-workspace-on",
-		},
-		{
-			id: "off",
-			label: "Off",
-			description: "Prevent new subagents in this workspace.",
-			testId: "subagents-workspace-off",
-		},
-	];
-
-	return (
-		<SettingsGroup
-			testId="settings-subagents"
-			title="Subagents"
-			description="Allow chats to delegate work to specialized agents."
-		>
-			<SettingsRow
-				label="Enable subagents"
-				description={
-					globalEnabled ? "Workspaces may delegate by default." : "Delegation is off by default."
-				}
-				control={
-					<SettingsSwitch
-						checked={globalEnabled}
-						label="Enable subagents by default"
-						testId="subagents-global-toggle"
-						onChange={onGlobalChange}
-					/>
-				}
-			/>
-
-			{/* Workspace-specific override - vertical layout with radio group below */}
-			{workspace && (
-				<div data-testid="subagents-workspace-row" className="flex flex-col gap-8 py-12">
-					<div className="flex flex-col gap-2">
-						<span className="tr-text-ui text-text-default">This workspace</span>
-						<span className="tr-text-metadata text-text-muted">
-							Override the global subagent setting for this workspace.
-						</span>
-					</div>
-					<SettingsRadioGroup
-						name="workspace-subagents"
-						label={`Subagents in ${workspace.name}`}
-						options={workspaceOptions}
-						value={workspace.subagentsOverride ?? "inherit"}
-						onSelect={onWorkspaceChange}
-						testId="subagents-workspace-options"
-					/>
-				</div>
-			)}
-		</SettingsGroup>
-	);
+function saveSetting(config: AppConfigUpdate, failure: string): void {
+	getTransport()
+		.request("settings.update", { config })
+		.catch((err: unknown) => toast.error(errorText(err), failure));
 }
 
 export function ChatSettings() {
@@ -226,9 +127,8 @@ export function ChatSettings() {
 	const streamingResponseMovement = useAppStore((state) => state.streamingResponseMovement);
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const subagentsEnabled = useAppStore((state) => state.subagentsEnabled);
+	const subagentMaxConcurrent = useAppStore((state) => state.subagentMaxConcurrent);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
-	const chatLineWidth = useAppStore((state) => state.chatLineWidth);
-	const chatLineWidthBounded = useAppStore((state) => state.chatLineWidthBounded);
 	const setChatMessageOrder = useAppStore((state) => state.setChatMessageOrder);
 	const setStreamingResponseMovement = useAppStore((state) => state.setStreamingResponseMovement);
 
@@ -242,27 +142,26 @@ export function ChatSettings() {
 		saveSetting({ composerGrowthLimit }, "Couldn't change message box growth");
 	};
 
-	const selectWorkspaceSubagents = (choice: WorkspaceSubagentChoice) => {
+	const setWorkspaceSubagents = (override: SubagentOverride | null) => {
 		if (!activeWorkspace) return;
-		const current = activeWorkspace.subagentsOverride ?? "inherit";
-		if (choice === current) return;
 		getTransport()
-			.request("workspace.setSubagentsOverride", {
-				id: activeWorkspace.id,
-				override: choice === "inherit" ? null : choice,
-			})
-			.catch(() => toast.error("Couldn't change subagents for this workspace"));
+			.request("workspace.setSubagentsOverride", { id: activeWorkspace.id, override })
+			.catch((err: unknown) =>
+				toast.error(errorText(err), "Couldn't change subagents for this workspace"),
+			);
 	};
 
-	const scrollingMode = toScrollingMode(streamingResponseMovement);
-	const selectScrollingMode = (mode: ScrollingMode) => {
-		if (mode === scrollingMode) return;
-		setStreamingResponseMovement(fromScrollingMode(mode));
+	const setWorkspaceSubagentLimit = (value: number | null) => {
+		if (!activeWorkspace) return;
+		getTransport()
+			.request("workspace.setSubagentMaxConcurrent", { id: activeWorkspace.id, value })
+			.catch((err: unknown) =>
+				toast.error(errorText(err), "Couldn't change the subagent limit for this workspace"),
+			);
 	};
 
 	return (
 		<SettingsPageContainer testId="settings-chat">
-			{/* GROUP 1: Appearance and behavior */}
 			<SettingsGroup title="Appearance and behavior">
 				<SettingsRow
 					label="Message order"
@@ -292,61 +191,26 @@ export function ChatSettings() {
 						/>
 					}
 				/>
-				<SettingsRow
-					label="Line width"
-					description="Maximum characters per line in chat."
-					control={
-						<LineWidthInput
-							value={chatLineWidth}
-							onSave={async (chatLineWidth) => {
-								await getTransport().request("settings.update", { config: { chatLineWidth } });
-							}}
-						/>
-					}
+				<LineWidthControl kind="chat" />
+				<StreamingResponseMovementControl
+					value={streamingResponseMovement}
+					onChange={setStreamingResponseMovement}
 				/>
-				<SettingsRow
-					label="Fit to pane"
-					description="Wrap lines shorter when the pane is narrow."
-					testId="chat-line-width-bounded"
-					control={
-						<SettingsSwitch
-							checked={chatLineWidthBounded}
-							label="Fit line width to pane"
-							testId="chat-line-width-bounded-toggle"
-							onChange={(chatLineWidthBounded) => {
-								saveSetting({ chatLineWidthBounded }, "Couldn't change line width setting");
-							}}
-						/>
-					}
-				/>
-				{/* Scrolling during responses - vertical layout within Appearance and behavior */}
-				<div data-testid="scrolling-during-responses" className="flex flex-col gap-8 py-12">
-					<div className="flex flex-col gap-2">
-						<span className="tr-text-ui text-text-default">Scrolling during responses</span>
-						<span className="tr-text-metadata text-text-muted">
-							How the chat scrolls while the agent is generating.
-						</span>
-					</div>
-					<SettingsRadioGroup
-						name="scrolling-mode"
-						label="Scrolling during responses"
-						options={SCROLLING_OPTIONS}
-						value={scrollingMode}
-						onSelect={selectScrollingMode}
-						testId="scrolling-mode-control"
-					/>
-				</div>
 			</SettingsGroup>
 
-			{/* GROUP 2: Subagents */}
 			<SubagentSettings
 				protocolVersion={protocolVersion}
 				globalEnabled={subagentsEnabled}
+				globalLimit={subagentMaxConcurrent}
 				workspace={activeWorkspace}
-				onGlobalChange={(enabled) =>
+				onGlobalEnabledChange={(enabled) =>
 					saveSetting({ subagentsEnabled: enabled }, "Couldn't change the global subagent default")
 				}
-				onWorkspaceChange={selectWorkspaceSubagents}
+				onWorkspaceEnabledChange={setWorkspaceSubagents}
+				onGlobalLimitChange={(value) =>
+					saveSetting({ subagentMaxConcurrent: value }, "Couldn't change the subagent limit")
+				}
+				onWorkspaceLimitChange={setWorkspaceSubagentLimit}
 			/>
 		</SettingsPageContainer>
 	);

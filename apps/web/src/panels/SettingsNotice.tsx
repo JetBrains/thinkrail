@@ -26,27 +26,15 @@ const VARIANT_ICONS: Record<SettingsNoticeVariant, typeof Info> = {
 };
 
 export interface SettingsNoticeProps {
-	/** Visual variant determining background and icon color */
 	variant: SettingsNoticeVariant;
-	/** Optional icon override - defaults to variant-appropriate icon */
 	icon?: ReactNode;
-	/** Hide the icon entirely */
 	hideIcon?: boolean;
-	/** Main notice text */
 	children: ReactNode;
-	/** Optional action button/link */
 	action?: ReactNode;
-	/** Test ID for the notice container */
 	testId?: string;
-	/** Additional class names */
 	className?: string;
 }
 
-/**
- * A shared notice component for Settings screens.
- * Uses semantic background fills without visible borders.
- * Supports informational, success, warning, and error states.
- */
 export function SettingsNotice({
 	variant,
 	icon,
