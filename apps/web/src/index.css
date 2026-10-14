@@ -68,9 +68,9 @@
 		}
 	}
 
-	/* The "agent working" brand badge (`components/RunningIcon`): logo strokes + split frame on one 3.263s cycle. */
-	--animate-loader-fa: loader-fa 3.263s infinite;
-	@keyframes loader-fa {
+	/* The "agent working" brand badge (`components/RunningIcon`): the split frame and the six monogram strokes draw and erase on one 3.263s cycle. */
+	--animate-loader-frame: loader-frame 3.263s infinite;
+	@keyframes loader-frame {
 		0% {
 			stroke-dashoffset: 1000;
 			animation-timing-function: linear;
@@ -85,24 +85,8 @@
 			stroke-dashoffset: -1000;
 		}
 	}
-	--animate-loader-fb: loader-fb 3.263s infinite;
-	@keyframes loader-fb {
-		0% {
-			stroke-dashoffset: 1000;
-			animation-timing-function: linear;
-		}
-		37.606%,
-		59.341% {
-			stroke-dashoffset: 0;
-			animation-timing-function: linear;
-		}
-		96.947%,
-		100% {
-			stroke-dashoffset: -1000;
-		}
-	}
-	--animate-loader-s1: loader-s1 3.263s -2.036s infinite;
-	@keyframes loader-s1 {
+	--animate-loader-t-bar: loader-t-bar 3.263s -2.036s infinite;
+	@keyframes loader-t-bar {
 		0% {
 			stroke-dashoffset: 1000;
 			animation-timing-function: linear;
@@ -117,8 +101,8 @@
 			stroke-dashoffset: -1000;
 		}
 	}
-	--animate-loader-s2: loader-s2 3.263s -2.036s infinite;
-	@keyframes loader-s2 {
+	--animate-loader-t-stem: loader-t-stem 3.263s -2.036s infinite;
+	@keyframes loader-t-stem {
 		0% {
 			stroke-dashoffset: 1000;
 			animation-timing-function: linear;
@@ -133,8 +117,8 @@
 			stroke-dashoffset: -1000;
 		}
 	}
-	--animate-loader-a1: loader-a1 3.263s -2.036s infinite;
-	@keyframes loader-a1 {
+	--animate-loader-r-tail: loader-r-tail 3.263s -2.036s infinite;
+	@keyframes loader-r-tail {
 		0% {
 			stroke-dashoffset: 1000;
 			animation-timing-function: linear;
@@ -149,8 +133,8 @@
 			stroke-dashoffset: -1000;
 		}
 	}
-	--animate-loader-c3: loader-c3 3.263s -1.491s infinite;
-	@keyframes loader-c3 {
+	--animate-loader-r-bowl: loader-r-bowl 3.263s -1.491s infinite;
+	@keyframes loader-r-bowl {
 		0% {
 			stroke-dashoffset: 1000;
 			animation-timing-function: linear;
@@ -165,8 +149,8 @@
 			stroke-dashoffset: -1000;
 		}
 	}
-	--animate-loader-c2: loader-c2 3.263s -1.491s infinite;
-	@keyframes loader-c2 {
+	--animate-loader-r-stem: loader-r-stem 3.263s -1.491s infinite;
+	@keyframes loader-r-stem {
 		0%,
 		3.19% {
 			stroke-dashoffset: 1000;
@@ -182,8 +166,8 @@
 			stroke-dashoffset: -1000;
 		}
 	}
-	--animate-loader-b1: loader-b1 3.263s -1.491s infinite;
-	@keyframes loader-b1 {
+	--animate-loader-r-leg: loader-r-leg 3.263s -1.491s infinite;
+	@keyframes loader-r-leg {
 		0% {
 			stroke-dashoffset: 1000;
 			animation-timing-function: linear;
