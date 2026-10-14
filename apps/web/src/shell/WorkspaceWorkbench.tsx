@@ -39,6 +39,7 @@ import { useLoadWorkspaceTurns } from "../panels/useWorkspaceTurns";
 import {
 	createChangesTab,
 	type EditorTab,
+	editorSessionId,
 	isConnectedGeneration,
 	isDefaultWorkspace,
 	isExternalWorkspace,
@@ -302,9 +303,18 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
-	const chatSessionIds = useMemo(() => {
+	// Every session-backed tab in the workspace: chat (sessionId), the live center-tab Plan page
+	// (sessionId), and the markdown plan `doc` export (sourceId). The auto-summary anchor must
+	// cover ALL of them; a user who closes the chat tab to history but keeps the Plan page open
+	// would otherwise lose the trigger, and the agent could finish the plan with no `## Summary`
+	// on disk when Open PR fires. Centralized via `editorSessionId(tab)` so a new session-backed
+	// tab kind can't drift out of coverage.
+	const planSessionIds = useMemo(() => {
 		const seen = new Set<string>();
-		for (const tab of editorTabs) if (tab.kind === "chat") seen.add(tab.sessionId);
+		for (const tab of editorTabs) {
+			const sid = editorSessionId(tab);
+			if (sid) seen.add(sid);
+		}
 		return [...seen];
 	}, [editorTabs]);
 	const chatStarting = useAppStore((state) => (state.chatStartsByWorkspace[workspaceId] ?? 0) > 0);
@@ -759,7 +769,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 
 	return (
 		<div data-testid="workspace-workbench" data-layout-status="settled" className="contents">
-			{chatSessionIds.map((sessionId) => (
+			{planSessionIds.map((sessionId) => (
 				<PlanSummaryAutoDraft
 					key={`plan-summary-draft:${workspaceId}:${sessionId}`}
 					workspaceId={workspaceId}
