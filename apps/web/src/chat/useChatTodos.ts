@@ -304,9 +304,10 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	};
 
 	// User-driven cancellation of a queued step. The host throws if the item is already `done`
-	// (completed steps are the plan's history) or under active review; the error bubbles up as a
-	// toast at the caller. The optimistic patch removes the row locally so the UI feels immediate;
-	// `reloadPlan` reconciles the authoritative state (empty-group pruning, baseline drop).
+	// (completed steps are the plan's history) or under active review. We own the failure path end
+	// to end here: the optimistic patch removes the row immediately for a snappy UI; on reject we
+	// roll back from authority and toast an error. The promise resolves either way, so a call site
+	// can `void plan.remove(id)` without producing an unhandled rejection on a stale click.
 	const remove = async (id: string): Promise<void> => {
 		const requestIdentity = identity;
 		setData((prev) => {
@@ -321,7 +322,8 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			await getTransport().request("todo.remove", { workspaceId, sessionId, id });
 		} catch (error) {
 			if (live(requestIdentity)) await reloadPlan(); // roll the optimistic patch back from authority
-			throw error;
+			toast.error(errorText(error), "Couldn't remove the step");
+			return;
 		}
 		if (!live(requestIdentity)) return;
 		await reloadPlan();

@@ -912,6 +912,18 @@ a project picker, the prompt hero, and the reused
   the task list, page for the review trail. No layout migration: existing center-tab Plans keep
   working alongside the new rail tool.
 
+  **Not-yet-done rail items carry a hover Remove button.** The user can cancel a queued or
+  in-progress step from the rail via a `data-testid="todo-remove"` × button that appears on the
+  row's hover state; the click calls `plan.remove(id)` which fires the host's `todo.remove` wire
+  call. The host's `removeTodo` rejects a `done` item with an explanatory error (completed steps
+  are the plan's audit trail), so the button is also hidden client-side on done rows. The failure
+  path is owned by `useChatTodos.remove` itself: a rejecting host throws, the hook rolls back the
+  optimistic patch and toasts "Couldn't remove the step" via the store's error channel, so a stale
+  click (row just became done between render and click) never surfaces as an unhandled rejection.
+  The center-tab Plan page does NOT expose this affordance — it is a review-trail surface, and
+  queue manipulation lives on the rail. The agent still manages its own removal through pi-todos'
+  `todo_remove` tool, which bypasses the host guard (needed for `todo_promote` cleanup).
+
   Center-tab Plan renders the session's TODO plan document-scale,
   **status-grouped** (`planSections`): a single **`Now` block** (`plan-now-executing`) holds the
   current work — the active group(s)/loose items followed by the pending ones (no separate To-do
@@ -962,13 +974,6 @@ a project picker, the prompt hero, and the reused
   **auto-growing textarea** (`plan-add-input`) — plain **Enter adds**, **Shift+Enter** inserts a newline
   (multi-line like the composer), Esc closes — wired to the SAME `useChatTodos.add` as the rail's
   `TodoAddRow` — a loose **user** item plus the agent nudge — so the two entry points stay one flow.
-  **Not-yet-done plan items carry a hover Remove button.** The user can cancel a queued or
-  in-progress step via a `data-testid="todo-remove"` × button that appears on the row's hover state;
-  the click calls `plan.remove(id)` which fires the host's `todo.remove` wire call. **Done items
-  carry no Remove button**: completed steps are the plan's audit trail, and the host rejects
-  `todo.remove` on a `done` item with an explanatory error. The agent still manages its own removal
-  through pi-todos' `todo_remove` tool, which bypasses the host guard (needed for `todo_promote`
-  cleanup); the UI path is the user-facing cancel action for their queue.
   Items keep a **scan-first item
   anatomy**: the item TITLE is
   the only full-size text (`tr-text-ui font-medium`), every detail is a step down (`tr-text-metadata`,
