@@ -75,9 +75,6 @@ function buildPlanSummaryPrompt(steps: PlanSummaryStep[]): string | null {
 }
 
 export function toPlanSummary(raw: string): string | null {
-	// Normalize what the model sometimes wraps the response in — a stray fenced block or a leading
-	// 'Summary:' label — but leave the three H2 headings in place: they are the whole point of the
-	// PR-body shape and `renderPrBody` prepends this verbatim.
 	const text = raw
 		.trim()
 		.replace(/^```[a-z]*\n?/i, "")
@@ -86,7 +83,63 @@ export function toPlanSummary(raw: string): string | null {
 		.trim()
 		.slice(0, PLAN_SUMMARY_MAX_LENGTH)
 		.trim();
-	return hasTitleContent(text) ? text : null;
+	if (!hasTitleContent(text)) return null;
+	return ensurePrBodyShape(text);
+}
+
+// Enforce the three-H2-sections contract `renderPrBody` prepends verbatim. If the model emitted
+// `## Summary`, `## Changes`, `## Testing` in order, pass through. Otherwise treat the model's
+// output as the Summary body and append placeholders for the missing sections — a model that
+// returned only "Done." or skipped a heading still ships a well-formed PR body.
+function ensurePrBodyShape(text: string): string {
+	const sections = splitBySections(text);
+	if (sections.ordered) return text;
+	const summaryBody = sections.summary ?? text;
+	const changesBody = sections.changes ?? "_no cross-cutting notes_";
+	const testingBody = sections.testing ?? "_not verified_";
+	return `## Summary\n\n${summaryBody}\n\n## Changes\n\n${changesBody}\n\n## Testing\n\n${testingBody}`;
+}
+
+interface Sections {
+	ordered: boolean;
+	summary?: string;
+	changes?: string;
+	testing?: string;
+}
+
+function splitBySections(text: string): Sections {
+	const HEADING = /^## +(Summary|Changes|Testing)\b.*$/gim;
+	const matches = [...text.matchAll(HEADING)];
+	const spans = matches.map((m) => ({
+		name: m[1] as "Summary" | "Changes" | "Testing",
+		headingStart: m.index ?? 0,
+		bodyStart: (m.index ?? 0) + m[0].length,
+	}));
+	const body = (name: "Summary" | "Changes" | "Testing"): string | undefined => {
+		const idx = spans.findIndex((s) => s.name === name);
+		if (idx < 0) return undefined;
+		// End the body AT the next heading (not after it), so Summary doesn't swallow a trailing
+		// `## Testing` section emitted when the model skipped `## Changes`.
+		const end = spans[idx + 1]?.headingStart ?? text.length;
+		const span = spans[idx];
+		if (!span) return undefined;
+		const slice = text.slice(span.bodyStart, end).trim();
+		return slice || undefined;
+	};
+	const names = spans.map((s) => s.name);
+	const ordered =
+		names.length === 3 &&
+		names[0] === "Summary" &&
+		names[1] === "Changes" &&
+		names[2] === "Testing";
+	const out: Sections = { ordered };
+	const s = body("Summary");
+	const c = body("Changes");
+	const t = body("Testing");
+	if (s) out.summary = s;
+	if (c) out.changes = c;
+	if (t) out.testing = t;
+	return out;
 }
 
 function hasTitleContent(value: string): boolean {

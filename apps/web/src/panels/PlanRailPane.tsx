@@ -54,7 +54,9 @@ export default function PlanRailPane({
 			className="flex h-full min-h-0 flex-col overflow-hidden"
 		>
 			<div className="shrink-0 border-border-muted border-b">
-				<TodoAddRow onAdd={plan.add} onOpenPlan={plan.openPlan} />
+				{/* Analytics: rail adds carry `surface: "rail"` so `plan_item_added` doesn't misattribute them
+				    to the removed chat strip. */}
+				<TodoAddRow onAdd={(title) => plan.add(title, "rail")} onOpenPlan={plan.openPlan} />
 			</div>
 			<div className="min-h-0 flex-1 overflow-auto p-4">
 				{empty ? (

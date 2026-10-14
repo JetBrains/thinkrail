@@ -163,7 +163,11 @@ test("a concurrent request shares the in-flight draft instead of getting null", 
 		generateTodoSummary({ workspaceId: "w1", sessionId: SESSION }),
 		generateTodoSummary({ workspaceId: "w1", sessionId: SESSION }),
 	]);
-	expect(chat.summary).toBe("One shared draft.");
-	expect(plan.summary).toBe("One shared draft.");
+	// Both callers share the same wrapped PR-body draft (the raw "One shared draft." is treated as
+	// the Summary body, with placeholder Changes + Testing sections appended).
+	expect(chat.summary).toContain("One shared draft.");
+	expect(chat.summary).toContain("## Changes");
+	expect(chat.summary).toContain("## Testing");
+	expect(plan.summary).toBe(chat.summary);
 	expect(calls).toBe(1);
 });

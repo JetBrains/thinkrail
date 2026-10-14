@@ -123,7 +123,7 @@ export function useAutoPlanSummary(workspaceId: string, sessionId: string): void
 export interface ChatTodos {
 	data: TodoPlan | null;
 	failed: boolean;
-	add: (title: string, surface?: "chat" | "page") => Promise<void>;
+	add: (title: string, surface?: "chat" | "page" | "rail") => Promise<void>;
 	openPlan: () => void;
 	openChanges: (target: { sha: string } | { path: string }) => void;
 	startReview: (id: string) => Promise<void>;
@@ -241,7 +241,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	const broadcastWrite = (key: string): void =>
 		signalTodoRefetch(key, selfListenerRef.current ?? undefined);
 
-	const add = async (rawTitle: string, surface: "chat" | "page" = "chat") => {
+	const add = async (rawTitle: string, surface: "chat" | "page" | "rail" = "chat") => {
 		const title = rawTitle.trim();
 		if (!title) return;
 		const requestIdentity = identity;

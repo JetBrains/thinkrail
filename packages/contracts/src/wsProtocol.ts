@@ -624,7 +624,7 @@ export interface WsMethodMap {
 			sessionId: string;
 			title: string;
 			note?: string;
-			surface?: "chat" | "page";
+			surface?: "chat" | "page" | "rail";
 		};
 		result: TodoItem;
 	};

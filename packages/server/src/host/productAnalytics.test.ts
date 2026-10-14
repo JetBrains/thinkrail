@@ -534,6 +534,7 @@ test("plan_opened rides an explicit todo.list open; plan_item_added rides todo.a
 	await handleRequest("todo.list", { ...ref, opened: "rail" }, ctx);
 	await handleRequest("todo.add", { ...ref, title: "user step", surface: "chat" }, ctx);
 	await handleRequest("todo.add", { ...ref, title: "page step", surface: "page" }, ctx);
+	await handleRequest("todo.add", { ...ref, title: "rail step", surface: "rail" }, ctx);
 	await handleRequest("todo.add", { ...ref, title: "defaulted step" }, ctx);
 	await expect(handleRequest("todo.add", { ...ref, title: "   " }, ctx)).rejects.toThrow();
 	await shutdownAnalytics();
@@ -544,7 +545,7 @@ test("plan_opened rides an explicit todo.list open; plan_item_added rides todo.a
 		sent
 			.filter((event) => event.event === "plan_item_added")
 			.map((event) => event.properties.surface),
-	).toEqual(["chat", "page", "chat"]);
+	).toEqual(["chat", "page", "rail", "chat"]);
 });
 
 test("canonical TODO mutation observation waits for the real artifact reconciliation", async () => {
