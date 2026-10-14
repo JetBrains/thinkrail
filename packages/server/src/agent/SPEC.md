@@ -196,7 +196,9 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     that wakes the parent has already flipped it to running — so the last finishing child never flashes
     the dot before the woken turn. A completion that does not wake the parent (user stop) releases the hold
     on that republish; a delivery gated by a reload or trash hold also releases first, and its later wake
-    clears the unread again. Disk-only sessions have no live work and never hold.
+    clears the unread again. Disk-only sessions have no live work and never hold. The same fact is published as
+    `backgroundWork`, so clients show the idle chat as working (contracts' `isSessionWorking`) instead of
+    quietly finished.
 
     State ids come from Pi's active session-entry chain: run/interruption from the latest user entry,
     completion from the decisive assistant entry, questions/dialogs from their interaction ids. Disk state

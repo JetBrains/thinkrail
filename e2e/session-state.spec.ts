@@ -8,6 +8,7 @@ import {
 	openFixtureProject,
 	openPersistedChat,
 	revealWorkbenchTool,
+	setWindowFocus,
 } from "./fixtures/app";
 import { E2E_DATA_DIR, E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
@@ -133,7 +134,7 @@ test("entering a workspace clears its visible unread result without a chat click
 	}
 });
 
-test("an unread finished result clears only after direct chat activation renders it", async ({
+test("opening an unread finished chat at its latest edge clears it for every client", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -176,6 +177,157 @@ test("an unread finished result clears only after direct chat activation renders
 	} finally {
 		rmSync(session.path, { force: true });
 		rmSync(quietSibling.path, { force: true });
+	}
+});
+
+function recordAcknowledgements(page: Page): () => number {
+	let sent = 0;
+	page.on("websocket", (socket) => {
+		socket.on("framesent", ({ payload }) => {
+			if (String(payload).includes("session.acknowledgeCompletion")) sent += 1;
+		});
+	});
+	return () => sent;
+}
+
+async function settleFrames(page: Page): Promise<void> {
+	await page.evaluate(
+		() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+	);
+}
+
+test("an unread result clears only once its chat is seen at the latest edge of a focused window", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "seen state receipt",
+		messages: Array.from({ length: 30 }, (_, index) => [
+			{
+				role: "user" as const,
+				text: `seen request ${index + 1}`,
+				timestamp: BASE_TS + 40 + index * 2,
+			},
+			{
+				role: "assistant" as const,
+				text: `seen answer ${index + 1}`,
+				timestamp: BASE_TS + 41 + index * 2,
+			},
+		]).flat(),
+	});
+	const acknowledgements = recordAcknowledgements(page);
+	try {
+		await reconnectWithSeed(page);
+		const workspace = defaultWorkspaceRow(page);
+		await expectAttentionDot(workspace);
+
+		await setWindowFocus(page, false);
+		await enterDefaultWorkspace(page);
+		await openPersistedChat(page, "seen state receipt");
+		const chatScroll = page.getByTestId("chat-scroll");
+		await expect(page.getByText("seen answer 30", { exact: true })).toBeVisible();
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+		await settleFrames(page);
+		expect(acknowledgements()).toBe(0);
+		await expectAttentionDot(workspace);
+
+		await chatScroll.evaluate((root) => {
+			const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
+			if (!scroller) throw new Error("missing Virtuoso scroller");
+			scroller.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: -900 }));
+			scroller.scrollTop = 300;
+			scroller.dispatchEvent(new Event("scroll"));
+		});
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
+		await setWindowFocus(page, true);
+		await settleFrames(page);
+		expect(acknowledgements()).toBe(0);
+		await expectAttentionDot(workspace);
+
+		await page.getByTestId("scroll-to-bottom").click();
+		await expect(chatScroll).toHaveAttribute("data-follow-state", "following");
+		await expect(workspace).not.toHaveAttribute("data-attention", /.+/);
+		expect(acknowledgements()).toBe(1);
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("a result finished under the open Resources inspector clears only once the inspector closes", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "inspector state receipt",
+		messages: [
+			{ role: "user", text: "Finish behind the inspector.", timestamp: BASE_TS + 120 },
+			{ role: "assistant", text: "Covered finished result.", timestamp: BASE_TS + 121 },
+		],
+	});
+	const acknowledgements = recordAcknowledgements(page);
+	try {
+		await reconnectWithSeed(page);
+		const workspace = defaultWorkspaceRow(page);
+		await expectAttentionDot(workspace);
+
+		await setWindowFocus(page, false);
+		await enterDefaultWorkspace(page);
+		await openPersistedChat(page, "inspector state receipt");
+		await expect(page.getByText("Covered finished result.", { exact: true })).toBeVisible();
+		await page.getByTestId("resources-trigger").click();
+		const inspector = page.getByTestId("resources-inspector");
+		await expect(inspector).toBeVisible();
+		await setWindowFocus(page, true);
+		await settleFrames(page);
+		expect(acknowledgements()).toBe(0);
+		await expectAttentionDot(workspace);
+
+		await inspector.getByTestId("resources-inspector-close").click();
+		await expect(inspector).toHaveCount(0);
+		await expect(workspace).not.toHaveAttribute("data-attention", /.+/);
+		expect(acknowledgements()).toBe(1);
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("a result behind an open modal clears only once the modal closes", async ({ page }) => {
+	await openFixtureProject(page);
+	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "modal state receipt",
+		messages: [
+			{ role: "user", text: "Finish behind a modal.", timestamp: BASE_TS + 140 },
+			{ role: "assistant", text: "Modal-covered finished result.", timestamp: BASE_TS + 141 },
+		],
+	});
+	const acknowledgements = recordAcknowledgements(page);
+	try {
+		await reconnectWithSeed(page);
+		const workspace = defaultWorkspaceRow(page);
+		await expectAttentionDot(workspace);
+
+		await setWindowFocus(page, false);
+		await enterDefaultWorkspace(page);
+		await openPersistedChat(page, "modal state receipt");
+		await expect(page.getByText("Modal-covered finished result.", { exact: true })).toBeVisible();
+		await page.getByTestId("chat-view").evaluate((chat) => {
+			const liveRegion = document.createElement("div");
+			liveRegion.setAttribute("aria-live", "polite");
+			chat.append(liveRegion);
+		});
+		await page.getByTestId("open-settings").click();
+		await expect(page.getByRole("dialog")).toBeVisible();
+		await setWindowFocus(page, true);
+		await settleFrames(page);
+		expect(acknowledgements()).toBe(0);
+		await expectAttentionDot(workspace);
+
+		await page.keyboard.press("Escape");
+		await expect(page.getByRole("dialog")).toHaveCount(0);
+		await expect(workspace).not.toHaveAttribute("data-attention", /.+/);
+		expect(acknowledgements()).toBe(1);
+	} finally {
+		rmSync(session.path, { force: true });
 	}
 });
 

@@ -20,7 +20,7 @@ The trigger is a single signal: the **green attention dot lighting up**
 and an unread completion (`succeeded` / `failed` / `interrupted`). A user-cancelled run never sets
 `completionUnread` on the host, so it never lights the dot and never notifies. Likewise the host holds
 `completionUnread` false while an idle chat still runs background commands or subagents, so the edge fires
-only once that work ends. The host already
+only once that work ends (the session shows as running meanwhile). The host already
 collapses `agent_end` vs `agent_settled` into `completion`, so this module never listens to raw agent
 events.
 

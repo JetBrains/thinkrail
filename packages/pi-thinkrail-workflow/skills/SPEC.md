@@ -274,8 +274,10 @@ follows is only the rationale the skill bodies don't state:
   we know it is done), then **technical** (approaches, constraints, verification) — with one
   checkpoint between them that confirms the product understanding before any technical choice is
   made. Explicit answers in the request are not re-asked, and an explicit design or acceptance
-  criteria still count as approval. Alternatives are compared only when more than one viable
-  approach remains. There is deliberately no separate plan artifact; the spec is the plan.
+  criteria still count as approval. An alternative the agent considered and rejected — especially where
+  the code lives (server or browser, contract or display) — is shown with its trade-off, never decided
+  silently: a viability gate the agent judged for itself let it pick an approach the user never saw.
+  There is deliberately no separate plan artifact; the spec is the plan.
   Open user decisions are interviewed in rounds through `asking-user-questions` until none is left
   assumed.
   **Bugs** take the `fixing-a-bug.md` branch: a bug is a gap between recorded intent and behavior, so

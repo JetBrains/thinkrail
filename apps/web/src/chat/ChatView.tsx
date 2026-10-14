@@ -675,11 +675,6 @@ export default function ChatView({
 	return (
 		<div
 			ref={chatViewRef}
-			onPointerDownCapture={(event) => {
-				const target = event.target;
-				if (target instanceof Element && target.closest('[data-testid="history-overlay"]')) return;
-				useAppStore.getState().noteDirectChatActivation(sessionId);
-			}}
 			data-testid="chat-view"
 			data-line-width-bounded={chatLineWidthBounded}
 			data-message-order={chatMessageOrder}
@@ -751,6 +746,7 @@ export default function ChatView({
 				openSubagentTranscript={setTranscriptChildId}
 				onTryAgain={onTryAgain}
 				historyOpen={historyState.open}
+				inspectorOpen={inspectorOpen}
 				stillRunning={stillRunning}
 				readMcpOutput={supportsMcp ? readMcpOutput : undefined}
 				openMcpSettings={supportsMcp ? openMcpSettings : undefined}

@@ -101,7 +101,6 @@ export function Workbench({
 	onCommit,
 	onAttentionChange,
 	onUserNavigation,
-	onDirectTabActivation,
 	readNavigationTick,
 	onRequestClose,
 	onRenameChat,
@@ -197,8 +196,6 @@ export function Workbench({
 				return;
 			}
 			onUserNavigation();
-			const activated = findLayoutGroupTabs(document, location)?.find((tab) => tab.id === tabId);
-			if (activated) onDirectTabActivation?.(activated);
 			if (
 				options.keep &&
 				findCenterGroup(document.center, location.groupId)?.previewTabId === tabId
@@ -211,7 +208,7 @@ export function Workbench({
 			}
 			onAttentionChange(selectTab(attention, location, tabId, true, true));
 		},
-		[apply, onAttentionChange, onDirectTabActivation, onUserNavigation],
+		[apply, onAttentionChange, onUserNavigation],
 	);
 
 	const focusGroup = useCallback(
@@ -692,7 +689,6 @@ export function Workbench({
 				) ?? target.tabs[0];
 			onUserNavigation();
 			if (selected) {
-				onDirectTabActivation?.(selected);
 				onAttentionChange(selectTab(currentAttention, target.location, selected.id));
 				setLocalFocusRequest({
 					workspaceId,
@@ -737,7 +733,7 @@ export function Workbench({
 				location: target.location,
 			});
 		},
-		[onAttentionChange, onDirectTabActivation, onUserNavigation, workspaceId],
+		[onAttentionChange, onUserNavigation, workspaceId],
 	);
 	const canFocusAdjacentGroup = focusableGroups.length > 1;
 	const hideSideRegion = useCallback(
