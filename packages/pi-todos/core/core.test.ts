@@ -327,18 +327,24 @@ test("literal \\uXXXX escapes in titles/notes/group names are decoded, not shown
 	}
 });
 
-test("literal \\n/\\r/\\t in agent text is decoded only when the string has no real newline at all", () => {
+test("literal \\n/\\r/\\t in agent summary is decoded, but note/title/verification stay verbatim", () => {
 	const root = tempRoot();
 	try {
 		const s = store(root);
-		// Double-escaped case: no real newline anywhere; rescue the literal `\n` sequences so Markdown
-		// renders. This is the one case the write-time decoder is for.
+		// The double-escaped case the rescue exists for: plan-level and per-item `summary` are the
+		// only fields rendered as Markdown, so only they decode `\n/\r/\t`. No real newline present,
+		// so the no-real-newline guard also lets the decode through.
 		s.setSummary("## Summary\\n\\nFirst line.\\n\\n- bullet\\n- bullet two");
 		expect(s.read().summary).toBe("## Summary\n\nFirst line.\n\n- bullet\n- bullet two");
 		const todo = s.add({ title: "step", note: "line one\\nline two" });
-		expect(s.get(todo.id)?.note).toBe("line one\nline two");
+		// `note` is NOT a Markdown-rendered field: stays verbatim so a Windows path / regex / code
+		// snippet with a literal `\n` survives.
+		expect(s.get(todo.id)?.note).toBe("line one\\nline two");
 		s.update(todo.id, { status: "done", summary: "Shipped.\\n\\nDetails." });
 		expect(s.get(todo.id)?.summary).toBe("Shipped.\n\nDetails.");
+		// Verification is a short single-line badge, never Markdown. Stays verbatim.
+		s.update(todo.id, { verification: "ran /\\nfoo/.test(x) \u2192 true" });
+		expect(s.get(todo.id)?.verification).toBe("ran /\\nfoo/.test(x) \u2192 true");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}
@@ -366,6 +372,34 @@ test("agent text with real newlines is stored verbatim; `\\n` inside code / path
 		// newline nearby.
 		s.update(todo.id, { summary: "before \\\\n after" });
 		expect(s.get(todo.id)?.summary).toBe("before \\\\n after");
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+	}
+});
+
+test("an agent-written Windows path / regex in a non-summary field survives verbatim", () => {
+	// Guards the scenario the no-real-newline guard alone cannot cover: a single-line title / note /
+	// verification / commit subject / artifact label that contains a backslash-n sequence because
+	// the author genuinely means backslash + n (Windows path, regex pattern, code snippet). Decoding
+	// is now gated by field class, not by content, so these fields never run the markdown rescue.
+	const root = tempRoot();
+	try {
+		const s = store(root);
+		const t1 = s.add({ title: "fix C:\\new file.ts", note: "ran /^\\n/.test(x)" });
+		expect(s.get(t1.id)?.title).toBe("fix C:\\new file.ts");
+		expect(s.get(t1.id)?.note).toBe("ran /^\\n/.test(x)");
+		s.update(t1.id, {
+			status: "done",
+			verification: "grep '\\n' src/foo.ts \u2192 2 matches",
+			commitSubject: "fix: handle C:\\new on windows",
+		});
+		expect(s.get(t1.id)?.verification).toBe("grep '\\n' src/foo.ts \u2192 2 matches");
+		expect(s.get(t1.id)?.commitSubject).toBe("fix: handle C:\\new on windows");
+		// Artifact label stays verbatim (short identifier, not Markdown prose).
+		s.update(t1.id, {
+			artifacts: [{ kind: "change", path: "src\\win.ts", label: "src\\win.ts \\n lane" }],
+		});
+		expect(s.get(t1.id)?.artifacts?.[0]?.label).toBe("src\\win.ts \\n lane");
 	} finally {
 		rmSync(root, { recursive: true, force: true });
 	}

@@ -108,7 +108,7 @@ The four reasons:
 1. `unknown-id` — the id is nowhere in the plan;
 2. `grouped-step` — the id is a step inside an existing group (promotion applies only to loose-lane
    items);
-3. `empty-title` — the normalized title is empty (after `decodeEscapes` + `flattenTitle` — a blank
+3. `empty-title` — the normalized title is empty (after `decodeUnicode` + `flattenTitle` — a blank
    group has no addressable task for `todo_add group:` to target);
 4. `title-collision` — the normalized title collides with an existing group; silently merging the
    loose item into the pre-existing group would add no step, so a second identical ask would just
@@ -173,15 +173,21 @@ The `index.ts` barrel:
 Writes are atomic (temp file + `rename`); a session id is validated as a safe path segment before it
 becomes a filename.
 
-**Escape decoding is a narrow write-time rescue.** The store converts literal JSON escapes (`\uXXXX`
-and `\n` / `\r` / `\t`) into real characters at the WRITE boundary only, and ONLY when the string
-carries no real newline, carriage return, or tab 
- a real control character is strong evidence the
-escapes were intentional (a Markdown code block, a Windows path like `C:\new file`, a regex pattern
-`/\n/g`). Decoding is also gated on origin: **agent-authored** text goes through the rescue, the
-user's own input never does. `\\n` (an escaped backslash + n) is left alone via a negative lookbehind.
-Reads are pass-through: stored text surfaces verbatim, so old on-disk data is never silently mutated
-on reload.
+**Escape decoding is a narrow write-time rescue, split by field class.** `\uXXXX` is unambiguous
+(no Windows path, regex, or source snippet writes `\u` literally), so it is decoded on every
+agent-authored write across every text field. `\n` / `\r` / `\t` are AMBIGUOUS 
+ an LLM may emit
+them as a Markdown-newline substitute (`summary = "a\\nb"`) OR an agent may legitimately store a
+Windows path (`C:\\new file`), a regex pattern (`/\\n/g`), or any other backslash-prefixed
+identifier where `\n` means "backslash + n" literally 
+ so they are decoded ONLY in fields that
+are rendered as Markdown and therefore need the rescue: the plan-level `summary` and the per-item
+`summary`. Every other agent-written field (titles, group names, notes, verifications, commit
+subjects, artifact labels) is left verbatim; paths and patterns survive there. As a second line of
+defence even inside summaries, an already-multiline string (containing a real `\n` / `\r` / `\t`)
+is left alone. All decoding is gated on origin: user-authored text is never rescued. `\\n` (an
+escaped backslash + n) is left alone via a negative lookbehind. Reads are pass-through: stored
+text surfaces verbatim, so old on-disk data is never silently mutated on reload.
 
 ## Boundary
 
