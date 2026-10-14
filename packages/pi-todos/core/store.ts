@@ -80,7 +80,7 @@ function freshId(prefix: string): string {
 // is strong evidence the escapes were intentional (code block, Windows path, regex). `\\n` (escaped
 // backslash + n) is left alone via the negative-lookbehind. The user's own input is still gated out
 // upstream (`decodeIfAgent`), so a user-typed path stays verbatim regardless.
-const ESCAPE_MAP: Record<string, string> = {
+const ESCAPE_MAP: Record<"n" | "r" | "t", string> = {
 	n: "\n",
 	r: "\r",
 	t: "\t",
@@ -94,7 +94,7 @@ function decodeEscapes(s: string): string {
 			String.fromCharCode(Number.parseInt(hex, 16)),
 		);
 	if (/(?<!\\)\\[nrt]/.test(out))
-		out = out.replace(/(?<!\\)\\([nrt])/g, (_m, k) => ESCAPE_MAP[k] ?? _m);
+		out = out.replace(/(?<!\\)\\([nrt])/g, (_m, k: "n" | "r" | "t") => ESCAPE_MAP[k]);
 	return out;
 }
 
@@ -367,7 +367,7 @@ export class TodoStore {
 		plan.todos = plan.todos.filter((t) => t.id !== id);
 		// A `promote`-born empty group is kept on purpose (it parks a user ask the agent is about to
 		// decompose, see TodoStore.promote). An `in situ` group that LOSES its last item is a
-		// different story \u2014 without pruning it we'd leave a ghost "planning\u2026" task the user has
+		// different story — without pruning it we'd leave a ghost "planning…" task the user has
 		// no tool to remove. Prune only groups the removal itself emptied: carry forward the
 		// pre-remove todo counts and drop a group iff its count went from >0 to 0 in this call.
 		const prevCounts = new Map<string, number>();

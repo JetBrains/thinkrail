@@ -20,7 +20,7 @@ test("a pending ask surfaces on the rail as waiting_question glance, not paused"
 	// Regression for the rail (now the ONLY compact plan surface after the chat popover was removed):
 	// an `ask_user_question` must light the rail up with `waiting_question` glance, otherwise the
 	// user sees \u201cpaused\u201d and loses the cue that an answer is expected. Driven by the host-side
-	// `sessionState.needsInput` through `hostSessionGlance` \u2014 the same path the Plan page uses.
+	// `sessionState.needsInput` through `hostSessionGlance` — the same path the Plan page uses.
 	await openFixtureProject(page);
 	const askArgs: AskUserQuestionArgs = {
 		questions: [

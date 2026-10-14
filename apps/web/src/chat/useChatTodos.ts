@@ -71,12 +71,60 @@ export function planIsCompleteWithoutSummary(
 	return items.length > 0 && items.every((todo) => todo.status === "done");
 }
 
+/**
+ * Side-effect-only hook that keeps the auto-drafted plan summary alive while a chat is open, even
+ * if neither the TODO rail nor the center-tab Plan page is mounted. `renderPrBody` needs the
+ * summary to exist on disk when the PR is opened; without this trigger, a completed plan whose UI
+ * surfaces were all closed would ship with no `## Summary` section.
+ *
+ * Subscribes to the session's piEvent stream and, on each `tool_execution_end`/`agent_settled`,
+ * fetches `todo.list` once, checks `planIsCompleteWithoutSummary`, and asks the host for a draft
+ * via `todo.generateSummary`. Fires at most once per completion (re-armed if the plan opens back
+ * up and completes again). On a successful draft, signals the refetch bus so any mounted
+ * `useChatTodos` reloads and the UI picks up the new summary.
+ */
+export function useAutoPlanSummary(workspaceId: string, sessionId: string): void {
+	const triedRef = useRef(false);
+	const identity = tupleKey("chat-todos", workspaceId, sessionId);
+	useEffect(() => {
+		triedRef.current = false;
+		let cancelled = false;
+		const check = async (): Promise<void> => {
+			if (cancelled || triedRef.current) return;
+			if (!supportsPlanSummaryGeneration(useAppStore.getState().protocolVersion)) return;
+			const plan = await getTransport()
+				.request("todo.list", { workspaceId, sessionId })
+				.catch(() => null);
+			if (cancelled || !plan) return;
+			if (!planIsCompleteWithoutSummary(plan)) {
+				triedRef.current = false;
+				return;
+			}
+			triedRef.current = true;
+			const res = await getTransport()
+				.request("todo.generateSummary", { workspaceId, sessionId })
+				.catch(() => null);
+			if (cancelled || !res?.summary) return;
+			signalTodoRefetch(identity);
+		};
+		const unsub = getTransport().subscribe(WS_CHANNELS.piEvent, (payload) => {
+			const event = payload as SessionEventPayload;
+			if (event.sessionId !== sessionId) return;
+			if (shouldRefreshTodos(event.event)) void check();
+		});
+		void check();
+		return () => {
+			cancelled = true;
+			unsub();
+		};
+	}, [workspaceId, sessionId, identity]);
+}
+
 export interface ChatTodos {
 	data: TodoPlan | null;
 	failed: boolean;
 	add: (title: string, surface?: "chat" | "page") => Promise<void>;
 	openPlan: () => void;
-	notifyOpened: (surface: "rail") => void;
 	openChanges: (target: { sha: string } | { path: string }) => void;
 	startReview: (id: string) => Promise<void>;
 	reviewAll: () => Promise<{ total: number; alreadyRunning?: boolean }>;
@@ -188,29 +236,10 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		};
 	}, [connectionGeneration, identity, live, sessionId, status, workspaceId]);
 
-	// When a completed plan carries no agent-authored summary, ask the host to draft one once (a
-	// best-effort cheap-model one-shot). Re-armed if the plan re-opens or its summary clears.
-	const summaryTriedRef = useRef(false);
-	useEffect(() => {
-		if (!data) return;
-		if (!planIsCompleteWithoutSummary(data)) {
-			summaryTriedRef.current = false;
-			return;
-		}
-		// Only ask hosts that advertise the capability (v69+); an older host has no such method.
-		if (!supportsPlanSummaryGeneration(useAppStore.getState().protocolVersion)) return;
-		if (summaryTriedRef.current) return;
-		summaryTriedRef.current = true;
-		const requestIdentity = identity;
-		getTransport()
-			.request("todo.generateSummary", { workspaceId, sessionId })
-			.then((res) => {
-				const summary = res.summary;
-				if (!summary || !live(requestIdentity)) return;
-				setData((prev) => (prev && !prev.summary ? { ...prev, summary } : prev));
-			})
-			.catch(() => {});
-	}, [data, identity, live, sessionId, workspaceId]);
+	// One home for the self-skip write-fanout: a sibling hook on the same chat key reloads, but the
+	// originating hook (already applied an optimistic patch + explicit reload) is skipped.
+	const broadcastWrite = (key: string): void =>
+		signalTodoRefetch(key, selfListenerRef.current ?? undefined);
 
 	const add = async (rawTitle: string, surface: "chat" | "page" = "chat") => {
 		const title = rawTitle.trim();
@@ -233,7 +262,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 				: prev,
 		);
 		// Make the add visible on sibling surfaces (we already applied the optimistic patch above).
-		signalTodoRefetch(requestIdentity, selfListenerRef.current ?? undefined);
+		broadcastWrite(requestIdentity);
 		void nudgeAgent(workspaceId, sessionId, title);
 	};
 
@@ -261,17 +290,15 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		return true;
 	};
 
-	const notifyOpened = (surface: "page" | "rail") => {
-		void getTransport()
-			.request("todo.list", { workspaceId, sessionId, opened: surface })
-			.catch(() => {});
-	};
-
 	const openPlan = () => {
 		// Open the document-scale Plan page in a center tab; the compact TODO list lives in the rail.
+		// Fires `plan_opened { surface: "page" }` through the raw transport; the rail-side `"rail"`
+		// surface is fired directly in `PlanRailPane` so this hook has only one open-event consumer.
 		const state = useAppStore.getState();
 		const title = selectChatTitle(state, workspaceId, sessionId);
-		notifyOpened("page");
+		void getTransport()
+			.request("todo.list", { workspaceId, sessionId, opened: "page" })
+			.catch(() => {});
 		state.openDoc({
 			kind: "plan",
 			id: `${workspaceId}:plan:${sessionId}`,
@@ -295,7 +322,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	const startReview = async (id: string) => {
 		await getTransport().request("todo.startReview", { workspaceId, sessionId, id });
 		await reloadPlan(); // the `reviewing` mark is host-derived — never patched locally
-		signalTodoRefetch(identity, selfListenerRef.current ?? undefined); // and tell sibling hooks about it
+		broadcastWrite(identity); // and tell sibling hooks about it
 	};
 
 	const reviewAll = async () => {
@@ -304,7 +331,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			sessionId,
 		});
 		await reloadPlan(); // the first item's `reviewing` mark is host-derived — re-read to show it
-		signalTodoRefetch(identity, selfListenerRef.current ?? undefined);
+		broadcastWrite(identity);
 		return { total, ...(alreadyRunning ? { alreadyRunning } : {}) };
 	};
 
@@ -313,7 +340,6 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		failed,
 		add,
 		openPlan,
-		notifyOpened: (surface: "rail") => notifyOpened(surface),
 		openChanges,
 		startReview,
 		reviewAll,

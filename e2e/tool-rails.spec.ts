@@ -375,7 +375,7 @@ test("the plan rail entry is reachable by keyboard, exposes aria-controls, and l
 	await expect(panel).toContainText("No TODOs yet");
 	await expect(panel).toHaveAttribute("aria-labelledby", (await plan.getAttribute("id")) ?? "");
 
-	// Space collapses the pane but keeps the rail entry \u2014 same semantics as every other tool.
+	// Space collapses the pane but keeps the rail entry — same semantics as every other tool.
 	await page.keyboard.press("Space");
 	await expect(plan).toHaveAttribute("aria-pressed", "false");
 	await expect(panel).toBeHidden();

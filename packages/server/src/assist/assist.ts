@@ -11,7 +11,7 @@ export function setOneShotRunner(fn: OneShotRunner | null): void {
 // This fallback runs when the agent did NOT call `todo_plan_summary`, and the host persists its
 // output as the plan's summary. The UI renders that summary verbatim AND `renderPrBody` prepends
 // it to the generated PR body, so the fallback must emit the same PR-body shape the agent-authored
-// contract requires: three H2 sections in order \u2014 `## Summary`, `## Changes`, `## Testing`. If the
+// contract requires: three H2 sections in order — `## Summary`, `## Changes`, `## Testing`. If the
 // model has nothing to say under a section it should still write the heading with `_not verified_`
 // (Testing) or `_no cross-cutting notes_` (Changes), so renderPrBody keeps the structure intact.
 const PLAN_SUMMARY_SYSTEM =
@@ -35,7 +35,7 @@ export interface PlanSummaryStep {
 }
 
 /**
- * Draft a completed plan's overall handoff note from its finished steps \u2014 best-effort, cheap-model,
+ * Draft a completed plan's overall handoff note from its finished steps — best-effort, cheap-model,
  * time-boxed. Returns Markdown prose or `null` (never throws) when nothing is authenticated, it times
  * out, there are no steps, or the output is unusable. The caller builds the step list (assist reads no
  * store state) and decides whether to persist the result.
@@ -75,8 +75,8 @@ function buildPlanSummaryPrompt(steps: PlanSummaryStep[]): string | null {
 }
 
 export function toPlanSummary(raw: string): string | null {
-	// Normalize what the model sometimes wraps the response in \u2014 a stray fenced block or a leading
-	// 'Summary:' label \u2014 but leave the three H2 headings in place: they are the whole point of the
+	// Normalize what the model sometimes wraps the response in — a stray fenced block or a leading
+	// 'Summary:' label — but leave the three H2 headings in place: they are the whole point of the
 	// PR-body shape and `renderPrBody` prepends this verbatim.
 	const text = raw
 		.trim()

@@ -131,7 +131,7 @@ test("an unsubscribe cleans up the key's bucket \u2014 later signals cost nothin
 	signalTodoRefetch("K3");
 	signalTodoRefetch("K3");
 	expect(sink).toEqual([]);
-	// Idempotent unsubscribe: a double-drop (StrictMode cleanup \u2192 re-cleanup) is harmless.
+	// Idempotent unsubscribe: a double-drop (StrictMode cleanup → re-cleanup) is harmless.
 	expect(() => drop()).not.toThrow();
 });
 

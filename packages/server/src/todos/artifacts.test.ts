@@ -15,7 +15,6 @@ import {
 	unattributedChanges,
 } from "./artifacts";
 import {
-	dropItemBaseline,
 	otherSessionWindows,
 	readBaselines,
 	removeSessionBaselines,
@@ -1017,18 +1016,13 @@ test("an orphan baseline (its item removed from the plan) is pruned by the next 
 	}
 });
 
-test("dropItemBaseline closes one removed item's window; removeSessionBaselines drops the whole sidecar", async () => {
+test("removeSessionBaselines drops the whole sidecar and is idempotent", async () => {
 	const { root } = tempStore();
 	try {
 		writeBaselines(root, SESSION, {
 			t1: { paths: [], head: null },
 			t2: { paths: ["a.ts"], head: "h1" },
 		});
-		dropItemBaseline(root, SESSION, "t1");
-		expect(Object.keys(readBaselines(root, SESSION))).toEqual(["t2"]);
-		dropItemBaseline(root, SESSION, "absent");
-		expect(Object.keys(readBaselines(root, SESSION))).toEqual(["t2"]);
-
 		expect(otherSessionWindows(root, "sess-other")).toBe(true);
 		removeSessionBaselines(root, SESSION);
 		expect(existsSync(join(root, WORKSPACE_TODOS_DIR, `${SESSION}.baselines.json`))).toBe(false);

@@ -498,8 +498,7 @@ function PlanSummary({ summary, stale = false }: { summary: string; stale?: bool
 					</span>
 				) : null}
 			</div>
-			{/* Bounded scroll area 
- a long PR-body summary (## Summary / ## Changes / ## Testing with
+			{/* Bounded scroll area — a long PR-body summary (## Summary / ## Changes / ## Testing with
 			    bullets) shouldn't push the plan items below the fold. 40vh keeps it visible but capped. */}
 			<div data-testid="plan-overall-summary" className="max-h-[40vh] overflow-y-auto">
 				<Markdown text={summary} className={`tr-text-ui ${SUMMARY_PROSE}`} />

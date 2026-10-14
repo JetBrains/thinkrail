@@ -411,7 +411,7 @@ test("an empty-string note clears the note", () => {
 	}
 });
 
-test("an agent item stored with literal escapes self-heals on the next write", () => {
+test("a legacy on-disk agent item with literal \\uXXXX is NOT decoded on read, and the next write preserves it verbatim", () => {
 	const root = tempRoot();
 	try {
 		const file = join(root, storeRel(SESSION));
@@ -474,7 +474,7 @@ test("update/remove find items inside a group by id, pruning a group that just l
 		expect(s.update(todo.id, { status: "in_progress" })?.todo.status).toBe("in_progress");
 		expect(s.remove(todo.id)).toBe(true);
 		// A group that LOSES its last item in a remove is pruned: otherwise the user is stuck with a
-		// ghost "planning\u2026" task they have no tool to delete. A promote-born empty group that was
+		// ghost "planning…" task they have no tool to delete. A promote-born empty group that was
 		// ALREADY empty before this remove is left alone (covered by the next test).
 		expect(s.read().groups).toEqual([]);
 	} finally {
@@ -496,7 +496,7 @@ test("remove preserves a promote-born empty group that was already empty before 
 				.sort(),
 		).toEqual(["Other", "parked ask"]);
 		expect(s.remove(grouped.id)).toBe(true);
-		// "Other" lost its last item \u2192 pruned; "parked ask" was already empty \u2192 preserved.
+		// "Other" lost its last item → pruned; "parked ask" was already empty → preserved.
 		expect(s.read().groups.map((g) => g.title)).toEqual(["parked ask"]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });

@@ -6,6 +6,7 @@ import { hostSessionGlance, sessionGlance } from "../chat/planView";
 import { TodoAddRow, TodoRows } from "../chat/TodoList";
 import { useChatTodos } from "../chat/useChatTodos";
 import { useAppStore } from "../store";
+import { getTransport } from "../transport";
 
 export default function PlanRailPane({
 	workspaceId,
@@ -15,11 +16,13 @@ export default function PlanRailPane({
 	sessionId: string;
 }) {
 	const plan = useChatTodos(workspaceId, sessionId);
-	// Fire `plan_opened { surface: "rail" }` once per (workspaceId, sessionId) mount.
+	// Fire `plan_opened { surface: "rail" }` once per (workspaceId, sessionId) mount. Done through
+	// the raw transport, not `plan.notifyOpened`, so the effect's deps are only the identity and no
+	// eslint-disable is needed to pin the fire to that identity.
 	useEffect(() => {
-		plan.notifyOpened("rail");
-		// `plan` is recreated each render; depend only on the identity.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
+		void getTransport()
+			.request("todo.list", { workspaceId, sessionId, opened: "rail" })
+			.catch(() => {});
 	}, [workspaceId, sessionId]);
 	// Drives the status glyph on in-progress rows. Prefer `hostState`; fall back to
 	// `sessionGlance(runtime)` so a pending `ask_user_question` surfaces as "Needs your answer".

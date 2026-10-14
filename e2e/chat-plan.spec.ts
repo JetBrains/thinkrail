@@ -51,7 +51,7 @@ test("the full Plan page opens from the rail's open-plan button and reflects rai
 	).toBeVisible();
 	await expect(pane.getByTestId("plan-progress")).toContainText("0/1");
 
-	// The rail stays visible while we add from it \u2014 both the rail list and the center-tab Plan
+	// The rail stays visible while we add from it — both the rail list and the center-tab Plan
 	// update because they share the same TodoStore.
 	await rail.getByTestId("todo-add-input").fill("Second thought");
 	await rail.getByTestId("todo-add-input").press("Enter");
@@ -69,9 +69,9 @@ test("the full Plan page opens from the rail's open-plan button and reflects rai
 test("a task added from the Plan page shows up in the rail without an agent tick", async ({
 	page,
 }) => {
-	// Regression companion for the rail\u2192page direction above: the two surfaces each own a React
+	// Regression companion for the rail→page direction above: the two surfaces each own a React
 	// state in `useChatTodos`, so a write on one must signal the other via the module-local refetch
-	// bus. This locks the PAGE\u2192RAIL direction so a future refactor can't quietly regress it.
+	// bus. This locks the PAGE→RAIL direction so a future refactor can't quietly regress it.
 	await openWorkspaceChat(page);
 	await revealWorkbenchTool(page, "plan");
 	const rail = page.getByTestId("plan-rail-pane");
@@ -122,7 +122,7 @@ test("two chats keep their own TODO lists \u2014 a rail write in chat A never bl
 	await expect(rail.getByTestId("todo-row").filter({ hasText: "Chat A item" })).toBeVisible();
 
 	// Open a second chat in the same workspace and switch to it: the rail is a singleton tied to
-	// the active chat, so it should retarget and show an empty list \u2014 not Chat A's leftover row.
+	// the active chat, so it should retarget and show an empty list — not Chat A's leftover row.
 	await page.getByTestId("new-chat").first().click();
 	await expect(chatTabs).toHaveCount(2);
 	await expect(chatTabs.last()).toHaveAttribute("data-active", "true");

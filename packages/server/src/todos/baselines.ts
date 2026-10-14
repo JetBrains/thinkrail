@@ -75,13 +75,6 @@ function otherOwners(root: string, sessionId: string): string[] {
 	}
 }
 
-export function dropItemBaseline(root: string, sessionId: string, id: string): void {
-	const items = readBaselines(root, sessionId);
-	if (items[id] === undefined) return;
-	delete items[id];
-	writeBaselines(root, sessionId, items);
-}
-
 export function removeSessionBaselines(root: string, sessionId: string): void {
 	try {
 		rmSync(baselinePath(root, sessionId), { force: true });

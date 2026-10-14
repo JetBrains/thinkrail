@@ -12,7 +12,6 @@ src/panels/MonacoEditor.tsx MonacoEditor
 src/panels/NewWorkspaceDialog.tsx NewWorkspaceDialog
 src/panels/PlanPane.tsx PlanComposer
 src/panels/PlanPane.tsx PlanPane
-src/panels/PlanRailPane.tsx PlanRailPane
 src/panels/ProjectTrustNotice.tsx ProjectTrustNotice
 src/panels/ProvidersSettings.tsx ProvidersSettings
 src/panels/ReviewPanel.tsx ReviewPanel

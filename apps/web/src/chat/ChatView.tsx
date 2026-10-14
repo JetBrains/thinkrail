@@ -69,7 +69,7 @@ import { useModelPreferences } from "./useModelPreferences";
 import { useSessionStats } from "./useSessionStats";
 import "./tools/register";
 import type { ChatAttachment } from "./types";
-import { useChatTodos } from "./useChatTodos";
+import { useAutoPlanSummary } from "./useChatTodos";
 import { useHistorySearch } from "./useHistorySearch";
 
 registerWebExtensions();
@@ -165,9 +165,9 @@ export default function ChatView({
 
 	const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 	const [mentionCandidates, setMentionCandidates] = useState<MentionCandidate[]>([]);
-	// Mount `useChatTodos` so its auto-summary trigger fires whenever a chat is open, not only
-	// while the rail / Plan page happens to be mounted. See panels/SPEC.md.
-	useChatTodos(workspaceId, sessionId);
+	// Keep the auto-draft of the plan summary alive even when neither the TODO rail nor the Plan
+	// page is mounted. See panels/SPEC.md.
+	useAutoPlanSummary(workspaceId, sessionId);
 	const [slashActive, setSlashActive] = useState(false);
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
 	const [templatesEmpty, setTemplatesEmpty] = useState(false);
