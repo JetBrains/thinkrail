@@ -12,9 +12,32 @@
 
 ### Toast-нотификации
 
-Всплывающие уведомления в правом нижнем углу. Используй `showToast()` из `@/store`.
+Всплывающие уведомления в правом нижнем углу.
 
 **Компоненты:** `packages/ui/toast.tsx`, `apps/web/src/panels/Toaster.tsx`
+
+**API (из `@/store`):**
+
+```tsx
+import { toast } from "@/store";
+
+// Простые уведомления: (message, title?)
+toast.info("Workspace synced");
+toast.success("File saved", "Success");
+toast.warning("Connection unstable");
+toast.error("Failed to save", "Error");
+
+// С действием или кастомной длительностью: pushToast
+import { useAppStore } from "@/store";
+
+useAppStore.getState().pushToast({
+  variant: "info",
+  message: "New version available",
+  title: "Update",
+  durationMs: 10000,
+  action: { label: "Update now", onClick: () => update() },
+});
+```
 
 **Варианты:**
 - `info` — синяя рамка и иконка (`feedback-info`)
