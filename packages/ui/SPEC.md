@@ -32,8 +32,9 @@ The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-
 `popover`, `command` (cmdk combobox body), `textarea`, `tooltip`, `resizable`, and `toast`, alongside
 `utils` and `theme`. `menu-styles` is shared by the menu primitives and custom app menu rows.
 
-- Button variants are `default`/`destructive`/`outline`/`ghost`; destructive confirms irreversible
-  actions. Switch exposes native disabled behavior and `role="switch"`/`aria-checked`, not visible On/Off
+- Button variants are `default`/`destructive`/`outline`/`ghost`/`soft`; destructive confirms irreversible
+  actions, and `soft` (primary-tinted surface + primary text) marks a prominent secondary action such as
+  provider Sign in / New template. Switch exposes native disabled behavior and `role="switch"`/`aria-checked`, not visible On/Off
   text. Every modal dialog's overlay carries `data-modal-layer`, and `useModalLayerOpen()` reports whether one is open: it lets callers tell "covered by a modal" from their own visibility without a dialog registry, independent of how `aria-hidden` treats live regions. Dialog accepts `hideClose` for chromeless surfaces. `DialogPanel` renders Radix content in place
   without a portal or overlay for caller-positioned, non-modal dialogs; title/role semantics, Escape
   dismissal, and focus return remain Radix-owned while surrounding UI stays interactive.
