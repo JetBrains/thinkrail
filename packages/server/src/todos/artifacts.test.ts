@@ -166,11 +166,6 @@ test("done attaches the delta of changes since the in_progress baseline", async 
 });
 
 test("an in-progress reconcile aborts when the item finishes during its git read", async () => {
-	// Race safety: a reconcile that started while in_progress but the item moved to done mid-flight
-	// aborts cleanly (no baseline written, no artifacts attached). The stale pass intentionally
-	// never writes anything — and because the baseline was never persisted, a follow-up reconcile has
-	// no honest basis for attribution either (bundled-done honesty). The window would have to be
-	// captured by a fresh in_progress cycle for attribution to land.
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
@@ -286,10 +281,6 @@ test("baselines persist on disk — a fresh process (new read) still sees the wi
 });
 
 test("no baseline (bundled done, pending→done direct): no artifacts, no commit — honest unattribution", async () => {
-	// "Bundled done" = agent flips `done` without a prior `in_progress`, so no baseline window was
-	// captured. We used to grab ALL current dirty paths as `change` artifacts (claiming every file in
-	// the workspace, including sibling steps' work — misattribution). Now: no baseline = no honest
-	// claim, nothing attached. The dirty paths surface in `unattributed` instead, which is correct.
 	const { store, root } = tempStore();
 	try {
 		const todo = store.add({ title: "step" });
@@ -347,7 +338,6 @@ test("reconcile is idempotent — a done item already carrying a change set is l
 	try {
 		const todo = store.add({ title: "step" });
 		store.update(todo.id, { status: "in_progress" });
-		// Baseline captured here (empty paths).
 		await reconcileChangeArtifacts(store, root, SESSION, async () => []);
 		store.update(todo.id, { status: "done" });
 		await reconcileChangeArtifacts(store, root, SESSION, async () => ["x.ts"]);

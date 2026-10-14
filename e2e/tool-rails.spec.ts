@@ -222,15 +222,12 @@ async function finishDrag(page: Page, target: Locator): Promise<void> {
 	await page.mouse.up();
 }
 
-test("rail clusters mirror the panes, boundary drops create panes, and tools never join a terminal pane", async ({
+test("rail clusters include unplaced tools, boundary drops create panes, and tools never join a terminal pane", async ({
 	page,
 }) => {
 	await openDefaultWorkbench(page);
 	await addTerminal(page, page.getByTestId("bottom-group"));
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
-	// The right rail now carries three clusters: the two default panes (specs+files, changes+review)
-	// plus the unplaced `plan` tool parked in a trailing cluster. `plan`'s default side is `right`
-	// (LAYOUT_TOOL_DEFAULT_SIDES.plan), but it has no default pane, so it lives on its own line.
 	expect(await railClusters(page, "right-layout-rail")).toEqual([
 		["tool-rail-specs", "tool-rail-files"],
 		["tool-rail-changes", "tool-rail-review"],
@@ -273,7 +270,6 @@ test("rail clusters mirror the panes, boundary drops create panes, and tools nev
 
 	await page.getByTestId("tab-review").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Remove tool from group", exact: true }).click();
-	// Review loses its pane, so it falls into the trailing "unplaced" bucket alongside `plan`.
 	expect(await railClusters(page, "right-layout-rail")).toEqual([
 		["tool-rail-specs"],
 		["empty-rail-group"],
@@ -288,12 +284,6 @@ test("rail clusters mirror the panes, boundary drops create panes, and tools nev
 test("the plan rail entry is an idempotent toggler \u2014 one click opens, another closes, revealWorkbenchTool is a no-op when already open", async ({
 	page,
 }) => {
-	// Regression for the copy-paste bug that landed on this PR: `tool-rail-plan` is a toggler, so
-	// two consecutive bare `.click()` calls closed the rail you just opened and every plan-* spec
-	// then timed out waiting for `plan-rail-pane`. Lock the behaviour here instead of only on the
-	// `tool-rail-specs` default-open control: `plan` starts CLOSED (it has no default pane) and
-	// `revealWorkbenchTool` must be safe to call twice. `plan-rail-pane` needs an active chat to
-	// mount, so use `openWorkspaceChat` instead of the default workbench.
 	await openWorkspaceChat(page);
 	const plan = page.getByTestId("tool-rail-plan");
 	await expect(plan).toBeVisible();
@@ -308,8 +298,6 @@ test("the plan rail entry is an idempotent toggler \u2014 one click opens, anoth
 	await expect(plan).toHaveAttribute("aria-pressed", "false");
 	await expect(page.getByTestId("plan-rail-pane")).toHaveCount(0);
 
-	// `revealWorkbenchTool` is the right primitive for "make sure the pane is visible": safe to
-	// repeat, never a toggler. Two calls in a row must leave the pane OPEN, not flap it shut.
 	await revealWorkbenchTool(page, "plan");
 	await revealWorkbenchTool(page, "plan");
 	await expect(plan).toHaveAttribute("aria-pressed", "true");
@@ -350,10 +338,6 @@ test("rail keyboard navigation changes focus without selection and keeps collaps
 test("the plan rail entry is reachable by keyboard, exposes aria-controls, and labels its panel", async ({
 	page,
 }) => {
-	// `plan` is the new, closed-by-default right rail tool. Lock that it participates in the toolbar
-	// keyboard navigation like Specs / Files / Changes / Review (ArrowDown reaches it), carries the
-	// standard `aria-controls` relationship to its pane, and that the pane echoes the control's id
-	// through `aria-labelledby`. Needs an active chat because `PlanRailPane` is session-scoped.
 	await openWorkspaceChat(page);
 	const rail = page.getByTestId("right-layout-rail");
 	const plan = page.getByTestId("tool-rail-plan");
@@ -375,7 +359,6 @@ test("the plan rail entry is reachable by keyboard, exposes aria-controls, and l
 	await expect(panel).toContainText("No TODOs yet");
 	await expect(panel).toHaveAttribute("aria-labelledby", (await plan.getAttribute("id")) ?? "");
 
-	// Space collapses the pane but keeps the rail entry — same semantics as every other tool.
 	await page.keyboard.press("Space");
 	await expect(plan).toHaveAttribute("aria-pressed", "false");
 	await expect(panel).toBeHidden();

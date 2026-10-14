@@ -4,10 +4,7 @@
 // last step. When a summary from an earlier completion survives (the plan gained new work and finished
 // again), extend that text rather than rewriting it from scratch (the done-flip nudge surfaces it to
 // build on). Stored on the plan file (`TodoFile.summary`); the UI shows it only while the plan stays
-// fully done, and keeps the prior note visible (marked stale) while it is being redone. Shape is the
-// PR-body shape (`## Summary` / `## Changes` / `## Testing`) — the host prepends it verbatim when it
-// renders the PR body (see `server/src/pr/prBody.ts`), so a well-shaped summary doubles as the PR
-// body with no second pass.
+// fully done, and keeps the prior note visible (marked stale) while it is being redone.
 
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";

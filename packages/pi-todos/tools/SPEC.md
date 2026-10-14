@@ -58,7 +58,9 @@ and the host wire use loose items, and the agent can author loose too):
   lives host-side). `todo_plan_summary` sets the plan-level handoff note
   (`TodoStore.setSummary`) — a **cumulative** recap of everything done across the whole plan (every task,
   every completion), extended not rewritten when an earlier note survives; it accepts an early call but
-  flags how many items are still open (the UI shows the note only once everything is done).
+  flags how many items are still open (the UI shows the note only once everything is done). Plan-level
+  summaries use `## Summary`, `## Changes`, and `## Testing` sections because the host inserts them
+  verbatim into the PR body.
 - **Group-first output:** `formatPlan` renders each group under `formatGroupHeader` — `▸ <title>
   [<derived status> <done>/<total>]` — with its steps indented, **then the loose lane (the shared raw-input
   queue) last** under a `Loose queue:` header. The loose lane is last on purpose: an item added

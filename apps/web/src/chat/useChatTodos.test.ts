@@ -87,14 +87,10 @@ test("an unknown key signal is a no-op \u2014 safe to fire before any subscriber
 });
 
 test("a listener added mid-signal does NOT run for the signal that was already in flight", () => {
-	// This locks the fan-out contract: a mount that races with a sibling's write doesn't accidentally
-	// run against the write that just finished; it will see the NEXT signal, not this one. Prevents
-	// a double-refetch loop if a hook mount coincides with an in-flight add.
 	const calls: string[] = [];
 	const late: (() => void)[] = [];
 	const early = () => {
 		calls.push("early");
-		// Simulate a React render-time subscription that happens during the same flush as the signal.
 		late.push(subscribeTodoRefetch("K", () => calls.push("late")));
 	};
 	const unsubscribeEarly = subscribeTodoRefetch("K", early);
@@ -110,8 +106,6 @@ test("a listener added mid-signal does NOT run for the signal that was already i
 });
 
 test("the same listener subscribed twice is only invoked once per signal (Set-based bus)", () => {
-	// The bus is backed by a Set, so a defensive duplicate `subscribe` never double-fires. Protects a
-	// StrictMode double-mount from a thundering herd of refetches.
 	let calls = 0;
 	const listener = () => {
 		calls += 1;
@@ -131,14 +125,10 @@ test("an unsubscribe cleans up the key's bucket \u2014 later signals cost nothin
 	signalTodoRefetch("K3");
 	signalTodoRefetch("K3");
 	expect(sink).toEqual([]);
-	// Idempotent unsubscribe: a double-drop (StrictMode cleanup → re-cleanup) is harmless.
 	expect(() => drop()).not.toThrow();
 });
 
 test("one listener's throw does not swallow its siblings' signal \u2014 the bus keeps delivering", () => {
-	// Sibling isolation: when a listener synchronously throws (unmount race, stale closure) the
-	// other hooks still refetch. `signalTodoRefetch` wraps each listener in try/catch and logs the
-	// error, so neither the signal nor sibling delivery is observable from the outside.
 	const survivors: string[] = [];
 	const a = subscribeTodoRefetch("K4", () => {
 		throw new Error("first listener blew up");

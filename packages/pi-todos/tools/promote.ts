@@ -3,7 +3,6 @@ import { Type } from "typebox";
 import type { TodoGroup, TodoPromoteFailure } from "../core/index.ts";
 import { consistencyNudge, errorResult, storeFor, textResult, withNudges } from "./shared.ts";
 
-// One tailored message per failure reason: names what's wrong and the agent's next step.
 const FAILURE_MESSAGES: Record<TodoPromoteFailure, (id: string, title?: string) => string> = {
 	"unknown-id": (id) =>
 		`No TODO with id "${id}". Check the id with todo_list; a stale id from an older plan read never matches.`,

@@ -17,10 +17,6 @@ const BASE_TS = 1_700_800_000_000;
 test("a pending ask surfaces on the rail as waiting_question glance, not paused", async ({
 	page,
 }) => {
-	// Regression for the rail (now the ONLY compact plan surface after the chat popover was removed):
-	// an `ask_user_question` must light the rail up with `waiting_question` glance, otherwise the
-	// user sees \u201cpaused\u201d and loses the cue that an answer is expected. Driven by the host-side
-	// `sessionState.needsInput` through `hostSessionGlance` — the same path the Plan page uses.
 	await openFixtureProject(page);
 	const askArgs: AskUserQuestionArgs = {
 		questions: [
@@ -65,8 +61,6 @@ test("a pending ask surfaces on the rail as waiting_question glance, not paused"
 		await revealWorkbenchTool(page, "plan");
 		const rail = page.getByTestId("plan-rail-pane");
 		await expect(rail).toBeVisible();
-		// `waiting_question` is the glance that drives the \u201cNeeds your answer\u201d label on the
-		// in-progress StatusIcon; without the hostState wiring this used to read as `waiting` (paused).
 		await expect(rail).toHaveAttribute("data-glance", "waiting_question");
 	} finally {
 		rmSync(session.path, { force: true });

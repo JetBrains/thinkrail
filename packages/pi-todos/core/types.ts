@@ -66,15 +66,7 @@ export interface TodoUpdateResult {
 	paused: Todo[];
 }
 
-// Why a discriminated union: `TodoStore.promote` can fail for four distinct reasons and the agent's
-// recovery differs per reason. A plain `TodoGroup | undefined` collapses all four into "no", so the
-// tool must say "doesn't exist" even when the caller can fix it by retrying with a new title. The
-// discriminated result lets `todo_promote`'s error message name the actual cause.
-export type TodoPromoteFailure =
-	| "unknown-id" // id isn't anywhere in the plan
-	| "grouped-step" // id is a step inside an existing group, promotion doesn't apply
-	| "empty-title" // titleOverride normalized to empty, a blank group has no addressable task
-	| "title-collision"; // another group already uses that title, silent merge would lose the ask
+export type TodoPromoteFailure = "unknown-id" | "grouped-step" | "empty-title" | "title-collision";
 
 export type TodoPromoteResult =
 	| { ok: true; group: TodoGroup }

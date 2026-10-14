@@ -679,8 +679,6 @@ export function selectActiveEditorTab(
 	return (state.tabsByWorkspace[workspaceId] ?? []).find((tab) => tab.id === activeId) ?? null;
 }
 
-/** Active chat tab for the workspace, falling back to the most recently appended chat tab. Shared
- * by `selectHistoryTarget` and `selectRailPlanSessionId` so they can't drift. */
 export function selectWorkspaceChatTab(
 	state: {
 		tabsByWorkspace: Record<string, EditorTab[]>;
@@ -706,7 +704,6 @@ export function selectHistoryTarget(state: {
 	return chat ? { workspaceId, tabId: chat.id, sessionId: chat.sessionId } : null;
 }
 
-/** Pick the chat session whose plan the workspace's side-rail TODO List tool should show. */
 export function selectRailPlanSessionId(
 	state: {
 		tabsByWorkspace: Record<string, EditorTab[]>;

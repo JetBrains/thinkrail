@@ -446,7 +446,6 @@ test("host handlers exclude Default provisioning and hydration; observing a muta
 	const { root, ctx, workspace, store, item, ref } = await taskFixture();
 	await handleRequest("todo.list", ref, ctx);
 	await handleRequest("todo.update", { ...ref, status: "in_progress" }, ctx);
-	// Capture the baseline first; without it the item is bundled-done and attributes nothing to review.
 	await maybeAttachChangeArtifacts(workspace.id, ref.sessionId);
 	writeFileSync(join(root, "README.md"), "changed\n");
 	await handleRequest("todo.update", { ...ref, status: "done" }, ctx);

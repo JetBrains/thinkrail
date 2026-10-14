@@ -28,8 +28,6 @@ export function shouldRefreshTodos(event: PiEvent): boolean {
 	return event.type === "tool_execution_end" || event.type === "agent_settled";
 }
 
-// Cross-instance refetch bus: a local write (todo.add from one surface) signals every other
-// `useChatTodos` on the same chat key to reload. See panels/SPEC.md.
 const todoRefetchBus = new Map<string, Set<() => void>>();
 export function subscribeTodoRefetch(key: string, listener: () => void): () => void {
 	let set = todoRefetchBus.get(key);
@@ -47,14 +45,11 @@ export function subscribeTodoRefetch(key: string, listener: () => void): () => v
 export function signalTodoRefetch(key: string, except?: () => void): void {
 	const listeners = todoRefetchBus.get(key);
 	if (!listeners) return;
-	// Snapshot before dispatch (a mid-iteration subscribe would otherwise run for its own signal).
-	// `except` lets the originating hook skip itself; try/catch isolates a throwing listener.
 	for (const listener of [...listeners]) {
 		if (listener === except) continue;
 		try {
 			listener();
 		} catch (error) {
-			// eslint-disable-next-line no-console
 			console.error("[useChatTodos] refetch listener threw; ignored to keep bus delivering", error);
 		}
 	}
@@ -71,26 +66,17 @@ export function planIsCompleteWithoutSummary(
 	return items.length > 0 && items.every((todo) => todo.status === "done");
 }
 
-/**
- * Side-effect-only hook that keeps the auto-drafted plan summary alive while a chat is open, even
- * if neither the TODO rail nor the center-tab Plan page is mounted. `renderPrBody` needs the
- * summary to exist on disk when the PR is opened; without this trigger, a completed plan whose UI
- * surfaces were all closed would ship with no `## Summary` section.
- *
- * Subscribes to the session's piEvent stream and, on each `tool_execution_end`/`agent_settled`,
- * fetches `todo.list` once, checks `planIsCompleteWithoutSummary`, and asks the host for a draft
- * via `todo.generateSummary`. Fires at most once per completion (re-armed if the plan opens back
- * up and completes again). On a successful draft, signals the refetch bus so any mounted
- * `useChatTodos` reloads and the UI picks up the new summary.
- */
 export function useAutoPlanSummary(workspaceId: string, sessionId: string): void {
 	const triedRef = useRef(false);
 	const identity = tupleKey("chat-todos", workspaceId, sessionId);
 	useEffect(() => {
 		triedRef.current = false;
 		let cancelled = false;
+		// When a completed plan carries no agent-authored summary, ask the host to draft one once (a
+		// best-effort cheap-model one-shot). Re-armed if the plan re-opens or its summary clears.
 		const check = async (): Promise<void> => {
 			if (cancelled || triedRef.current) return;
+			// Only ask hosts that advertise the capability (v69+); an older host has no such method.
 			if (!supportsPlanSummaryGeneration(useAppStore.getState().protocolVersion)) return;
 			const plan = await getTransport()
 				.request("todo.list", { workspaceId, sessionId })
@@ -138,7 +124,6 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	const identity = tupleKey("chat-todos", workspaceId, sessionId);
 	const currentIdentity = useRef(identity);
 	const readGeneration = useRef(0);
-	// Self-skip handle for `signalTodoRefetch(identity, selfListenerRef.current)`.
 	const selfListenerRef = useRef<(() => void) | null>(null);
 	const initializedIdentity = useRef<string | null>(null);
 	useInsertionEffect(() => {
@@ -204,8 +189,6 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			if (event.sessionId !== sessionId) return;
 			if (shouldRefreshTodos(event.event)) scheduleRefetch();
 		});
-		// Cross-instance refetch bus: a sibling hook (rail or page) wrote to this chat's plan and now
-		// signals every other mounted hook to reload. Debounces through the same `scheduleRefetch`.
 		selfListenerRef.current = scheduleRefetch;
 		const unsubscribeBus = subscribeTodoRefetch(identity, scheduleRefetch);
 		// A plan review runs as a hidden subagent (no piEvent for this session) and writes its verdict to the
@@ -236,8 +219,6 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		};
 	}, [connectionGeneration, identity, live, sessionId, status, workspaceId]);
 
-	// One home for the self-skip write-fanout: a sibling hook on the same chat key reloads, but the
-	// originating hook (already applied an optimistic patch + explicit reload) is skipped.
 	const broadcastWrite = (key: string): void =>
 		signalTodoRefetch(key, selfListenerRef.current ?? undefined);
 
@@ -261,7 +242,6 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 				? { ...prev, todos: [...prev.todos, todo] }
 				: prev,
 		);
-		// Make the add visible on sibling surfaces (we already applied the optimistic patch above).
 		broadcastWrite(requestIdentity);
 		void nudgeAgent(workspaceId, sessionId, title);
 	};
@@ -291,9 +271,6 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	};
 
 	const openPlan = () => {
-		// Open the document-scale Plan page in a center tab; the compact TODO list lives in the rail.
-		// Fires `plan_opened { surface: "page" }` through the raw transport; the rail-side `"rail"`
-		// surface is fired directly in `PlanRailPane` so this hook has only one open-event consumer.
 		const state = useAppStore.getState();
 		const title = selectChatTitle(state, workspaceId, sessionId);
 		void getTransport()

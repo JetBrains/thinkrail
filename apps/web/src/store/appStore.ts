@@ -246,10 +246,6 @@ function editorResourceIdentity(tab: EditorTab): string {
 	return layoutResourceIdentity(tab);
 }
 
-/** The session id a tab speaks for, or `null` for session-free tabs (file, diff, changes). Chat
- * and the live center-tab Plan carry it on `sessionId`; the markdown plan `doc` export carries it
- * on `sourceId`. Shared by the layout reducers and the workspace-level session anchors (see
- * `shell/WorkspaceWorkbench`'s `PlanSummaryAutoDraft`). */
 export function editorSessionId(tab: EditorTab): string | null {
 	if (tab.kind === "chat" || tab.kind === "plan") return tab.sessionId;
 	return tab.kind === "doc" ? tab.sourceId : null;

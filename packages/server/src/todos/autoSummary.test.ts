@@ -57,8 +57,6 @@ function seedDone(store: TodoStore): void {
 test("generates and persists a PR-body summary when the completed plan has none", async () => {
 	let seen = "";
 	let seenSystem = "";
-	// The host persists this verbatim and `renderPrBody` prepends it to the PR body, so the fallback
-	// is expected to emit the three H2 sections exactly like `todo_plan_summary` does.
 	const draft =
 		"## Summary\n\nShipped the EV ranker end to end.\n\n" +
 		"## Changes\n\n_no cross-cutting notes_\n\n" +
@@ -131,9 +129,6 @@ test("returns null (no model call) when the plan is not fully done", async () =>
 });
 
 test("previewPr drives summary generation on the host side so the PR body is never empty", async () => {
-	// Regression for the chat-closed-to-history race: no UI anchor is mounted when the plan
-	// completes, so previewPr itself must drive `generateTodoSummary` before `renderPrBody` reads
-	// `plan.summary`. Without this the PR ships with no `## Summary / ## Changes / ## Testing`.
 	const draft =
 		"## Summary\n\nShipped end to end.\n\n" +
 		"## Changes\n\n_no cross-cutting notes_\n\n" +
@@ -163,8 +158,6 @@ test("a concurrent request shares the in-flight draft instead of getting null", 
 		generateTodoSummary({ workspaceId: "w1", sessionId: SESSION }),
 		generateTodoSummary({ workspaceId: "w1", sessionId: SESSION }),
 	]);
-	// Both callers share the same wrapped PR-body draft (the raw "One shared draft." is treated as
-	// the Summary body, with placeholder Changes + Testing sections appended).
 	expect(chat.summary).toContain("One shared draft.");
 	expect(chat.summary).toContain("## Changes");
 	expect(chat.summary).toContain("## Testing");

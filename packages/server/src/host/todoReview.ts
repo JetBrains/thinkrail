@@ -31,8 +31,7 @@ export function releaseItemFix(sessionId: string, todoId: string): void {
 	activeFixItems.delete(activeFixKey(sessionId, todoId));
 }
 
-/** True while a review is in flight for this item: the fix latch (`claimItemFix`) OR an active
- * planReviewQueue entry. See host/SPEC.md. */
+/** See host/SPEC.md for the active-review contract. */
 export function isItemUnderActiveReview(sessionId: string, id: string): boolean {
 	return activeFixItems.has(activeFixKey(sessionId, id)) || itemReviewActive(sessionId, id);
 }

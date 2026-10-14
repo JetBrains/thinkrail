@@ -1277,7 +1277,8 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `shell/WorkspaceWorkbench` through one `PlanSummaryAutoDraft` anchor per unique sessionId of any open
   session-backed tab (chat, the live Plan page, the markdown plan `doc` export) via
   `editorSessionId(tab)`, so it fires regardless of which tab is selected or which plan surface is
-  open. Frontend-local workspace view state
+  open. Plan writes signal other mounted `useChatTodos` instances for the same chat to refetch.
+  Frontend-local workspace view state
   persists the Plan page as a registered `todo-plan` reference (resolver kind + session identity,
   never plan content); another
   client may explicitly reopen the same live page from the host-owned TODO plan without inheriting placement. (An earlier design compiled the plan to a

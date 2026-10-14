@@ -87,14 +87,6 @@ import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./l
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
 
-/**
- * Keeps the auto-draft of the plan summary alive for one chat tab regardless of which tab is
- * currently selected. Mounted from `WorkspaceWorkbench` for every chat tab in the workspace so
- * the trigger survives the user switching to the Plan page, a File tab, or any other center tab
- * 
- without it, a plan that completes while the ChatView is unmounted would ship an empty summary
- * through `renderPrBody`. Returns `null`; this is a pure side-effect anchor.
- */
 function PlanSummaryAutoDraft({
 	workspaceId,
 	sessionId,
@@ -303,12 +295,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const workspace = useAppStore((state) => selectWorkspaceById(state, workspaceId));
 	const contextProject = useAppStore(selectContextProject);
 	const editorTabs = useAppStore((state) => state.tabsByWorkspace[workspaceId] ?? NO_EDITOR_TABS);
-	// Every session-backed tab in the workspace: chat (sessionId), the live center-tab Plan page
-	// (sessionId), and the markdown plan `doc` export (sourceId). The auto-summary anchor must
-	// cover ALL of them; a user who closes the chat tab to history but keeps the Plan page open
-	// would otherwise lose the trigger, and the agent could finish the plan with no `## Summary`
-	// on disk when Open PR fires. Centralized via `editorSessionId(tab)` so a new session-backed
-	// tab kind can't drift out of coverage.
 	const planSessionIds = useMemo(() => {
 		const seen = new Set<string>();
 		for (const tab of editorTabs) {
@@ -605,10 +591,6 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			),
 			changes: <ChangesPanel key={workspaceId} workspaceId={workspaceId} />,
 			review: <ReviewPanel key={workspaceId} workspaceId={workspaceId} failed={review.failed} />,
-			// Plan rail body: shows the plan of the workspace's currently-active chat (or the last chat
-			// tab); when there is no chat tab at all, renders an empty state inviting the user to open
-			// one. The selector mirrors `selectHistoryTarget`'s rule, so the Plan and the history pane
-			// point at the same chat.
 			plan: railPlanSessionId ? (
 				<ErrorBoundary label="plan rail" resetKeys={[workspaceId, railPlanSessionId]}>
 					<Suspense fallback={<MissingResource label="plan" />}>

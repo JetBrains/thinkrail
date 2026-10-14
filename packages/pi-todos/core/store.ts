@@ -74,29 +74,6 @@ function freshId(prefix: string): string {
 	return `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
 
-// Write-time escape rescue, split by field class and (inside Markdown fields) by syntax, not just
-// content:
-//
-// `\uXXXX` is unambiguous (no Windows path, regex, or source snippet writes `\u` literally), so it
-// is decoded on every agent-authored write across every text field. `(?<!\\)` protects `\\u`.
-//
-// `\n` is AMBIGUOUS: a Markdown-rendered field may need it (`summary = "a\\n\\nb"`,
-// `verification = "- a\\n- b"`) OR the author may legitimately store a Windows path
-// (`C:\\new file`), a regex pattern (`/\\n/g`), or a code snippet where `\n` means
-// "backslash + n" literally. Even in a Markdown field we can't rescue every `\n` without mangling
-// paths. Rule: decode a `\n` only when it precedes a Markdown structural marker (another `\n`,
-// a bullet / ordered list / heading / blockquote / fenced block / thematic break). Short prose
-// `\n` with no structural follower stays verbatim, matching the common agent output of structured
-// Markdown bodies. `\r` / `\t` are rare as intentional Markdown separators and would overlap with
-// hard-tab indentation / Windows line endings in paths, so the rescue stays `\n`-only.
-// Two passes, both pattern-matched (NOT content-based). Each pattern matches literal two-char `\n`
-// sequences in the source string, NOT real newlines. `(?<!\\)` leaves `\\n` (escaped backslash + n)
-// alone, so a user who really wrote backslash + n stays verbatim.
-// 1. A doubled `\n\n` is a paragraph break under every Markdown dialect; collapse both to real
-//    newlines in one match so neither can be left behind by regex pointer advancement.
-// 2. A standalone `\n` is decoded only when it introduces a Markdown structural separator (bullet,
-//    ordered list, heading, blockquote, fenced block, thematic break). Any other `\n` (Windows
-//    path, regex pattern, prose soft break) stays verbatim.
 const MARKDOWN_NL_PARAGRAPH = /(?<!\\)\\n\\n/g;
 const MARKDOWN_NL_STRUCTURE = /(?<!\\)\\n(?=[-*+] |\d+\. |#{1,6} |> |```|-{3,}|={3,})/g;
 
@@ -121,8 +98,6 @@ function decodeMarkdownIfAgent(s: string, origin: TodoOrigin): string {
 	return origin === "agent" ? decodeMarkdown(s) : s;
 }
 
-// Artifact labels are short identifiers, not Markdown bodies, so `\n/\r/\t` would be literal
-// characters there (think a file path or a commit subject fragment). Only `\uXXXX` is decoded.
 function decodeArtifactsIfAgent(raw: unknown, origin: TodoOrigin): unknown {
 	if (origin !== "agent" || !Array.isArray(raw)) return raw;
 	return raw.map((entry) => {
@@ -157,10 +132,6 @@ function sanitizeArtifacts(raw: unknown): TodoArtifact[] | undefined {
 	return out.length > 0 ? out : undefined;
 }
 
-// Read-side sanitize is pass-through: no escape decoding here. Any rescue the agent needed happened
-// at the write boundary (see `decodeUnicode` / `decodeMarkdown`); re-decoding on every read would
-// mutate stored backslash-n in code snippets, Windows paths, regex patterns, and summary text that
-// mentions `\n`.
 function sanitize(raw: unknown): Todo | null {
 	if (typeof raw !== "object" || raw === null) return null;
 	const o = raw as Record<string, unknown>;
@@ -191,14 +162,6 @@ function sanitizeGroup(raw: unknown): TodoGroup | null {
 	const todos = Array.isArray(o.todos)
 		? o.todos.map(sanitize).filter((t): t is Todo => t !== null)
 		: [];
-	// Empty groups are kept on purpose: a freshly promoted loose item becomes an empty group
-	// whose steps the agent will add next (see TodoStore.promote). Dropping them here would
-	// erase that "task taken, plan forming" state on the next read.
-	//
-	// Title: already decoded at write-time per the author's origin (agent writes go through
-	// `decodeUnicode` in `add`/`promote`/`replaceAll`; a promote with no override inherits the user's
-	// verbatim title, which must stay verbatim). Re-decoding here would corrupt the user's path-like
-	// text: `fix C:\\new path` would become `fix C: ew path` on every read. Just flatten.
 	return {
 		id: typeof o.id === "string" ? o.id : freshId("g"),
 		title: flattenTitle(o.title),
@@ -266,7 +229,6 @@ export class TodoStore {
 	 */
 	setSummary(summary: string): void {
 		const plan = this.read();
-		// Plan-level summary is always agent-authored (via `todo_plan_summary`) and rendered as Markdown.
 		const text = decodeMarkdown(summary.trim());
 		if (text) plan.summary = text;
 		else delete plan.summary;
@@ -304,8 +266,6 @@ export class TodoStore {
 			this.write(plan);
 			return todo;
 		}
-		// Group titles are single-line; only `\uXXXX` needs decoding here. Any `\n` escapes would just
-		// collapse to a space in `flattenTitle`.
 		const groupTitle = input.group ? flattenTitle(decodeUnicode(input.group)) : undefined;
 		if (groupTitle) {
 			let group = plan.groups.find((g) => g.title === groupTitle);
@@ -389,33 +349,18 @@ export class TodoStore {
 		const plan = this.read();
 		const before = countItems(plan);
 		plan.todos = plan.todos.filter((t) => t.id !== id);
-		// A `promote`-born empty group is kept on purpose (it parks a user ask the agent is about to
-		// decompose, see TodoStore.promote). An `in situ` group that LOSES its last item is a
-		// different story — without pruning it we'd leave a ghost "planning…" task the user has
-		// no tool to remove. Prune only groups the removal itself emptied: carry forward the
-		// pre-remove todo counts and drop a group iff its count went from >0 to 0 in this call.
 		const prevCounts = new Map<string, number>();
 		for (const group of plan.groups) prevCounts.set(group.id, group.todos.length);
 		for (const group of plan.groups) group.todos = group.todos.filter((t) => t.id !== id);
 		plan.groups = plan.groups.filter((group) => {
 			if (group.todos.length > 0) return true;
-			return (prevCounts.get(group.id) ?? 0) === 0; // never pre-emptied by this call \u21d2 keep
+			return (prevCounts.get(group.id) ?? 0) === 0;
 		});
 		if (countItems(plan) === before) return false;
 		this.write(plan);
 		return true;
 	}
 
-	/** Promote a loose item into a group of its own: the item disappears from the loose lane and a
-	 * group inherits its id + title (optionally overridden), ready for the agent to decompose. One
-	 * atomic step with no duplicate window 
- so even a session that dies right after promotion leaves
-	 * a consistent plan ("user's ask, now its own group"). Returns a discriminated result so the
-	 * tool wrapper can name the actual reason 
- agent recovery differs per failure (a `title-collision`
-	 * is retryable with a disambiguating `title:`; a `grouped-step` is not promotable at all; an
-	 * `unknown-id` means a stale id). In every failure case the loose item is left in place so a
-	 * retry can succeed. */
 	promote(id: string, titleOverride?: string): TodoPromoteResult {
 		const plan = this.read();
 		const idx = plan.todos.findIndex((t) => t.id === id);
@@ -480,10 +425,6 @@ export class TodoStore {
 		});
 		const resultLoose = current.todos.filter((t) => t.origin === "user" || t.status !== "done");
 		const carriedGroups: TodoGroup[] = [];
-		// Promote-born empty groups are first-class state (a user ask parked for decomposition, see
-		// `promote`). A `replaceAll` that doesn't re-emit the same title would otherwise silently drop
-		// them, violating the "survives even if the session dies right after promotion" invariant.
-		// Carry each existing empty group forward with its id unless the fresh write already names it.
 		for (const old of current.groups) {
 			if (old.todos.length > 0) continue;
 			if (freshGroups.some((g) => g.title === old.title)) continue;
@@ -530,10 +471,6 @@ export class TodoStore {
 		const file: TodoFile = {
 			version: CURRENT_VERSION,
 			todos: plan.todos,
-			// Keep empty groups at the write boundary: `TodoStore.promote` parks a loose user ask as an
-			// empty group whose steps the agent decomposes afterward; filtering here would silently undo
-			// it. The ghost-group case (a group that LOSES its last item in `remove`) is handled at the
-			// remove call site, not here, so that we only prune a group the caller actually drained.
 			groups: plan.groups,
 		};
 		if (plan.summary) file.summary = plan.summary;

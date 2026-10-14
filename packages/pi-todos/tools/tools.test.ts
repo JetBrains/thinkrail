@@ -71,7 +71,6 @@ test("todo_promote turns a loose user ask into a group of its own (same id, same
 		expect(plan.groups).toHaveLength(1);
 		expect(plan.groups[0]?.id).toBe(mine.id);
 
-		// Agent fills the group with its first substantive step and flips it in_progress.
 		const first = (await run(
 			"todo_add",
 			{ title: "reproduce the bug", group: "fix auth bug" },
@@ -97,10 +96,8 @@ test("todo_promote accepts a title override and errors on an unknown or already-
 		)) as AgentToolResult<{ group: { title: string } }>;
 		expect(renamed.details.group.title).toBe("Fix the auth bug");
 
-		// Unknown id → error, no mutation.
 		expect(isError(await run("todo_promote", { id: "t_nope" }, cwd))).toBe(true);
 
-		// A grouped step isn't a loose item: promotion doesn't apply.
 		const step = (await run(
 			"todo_add",
 			{ title: "step", group: "Fix the auth bug" },
@@ -147,9 +144,6 @@ test("add → list → update → remove round-trips through the store", async (
 			plan: { todos: unknown[]; groups: unknown[] };
 		}>;
 		expect(listedAfter.details.plan.todos).toHaveLength(0);
-		// A group that LOSES its last item in a remove is pruned (no ghost "planning…" row), so an
-		// end-to-end round-trip leaves nothing behind. A `promote`-born group that was ALREADY empty
-		// before the remove is preserved — that invariant is covered in core/core.test.ts.
 		expect(listedAfter.details.plan.groups).toHaveLength(0);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });

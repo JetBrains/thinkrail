@@ -11,8 +11,6 @@ test("the TODO rail opens from the right-side tool rail and takes a user item", 
 }) => {
 	await openWorkspaceChat(page);
 
-	// The chat-plan popover + its header toggle are gone with the move to a rail-tool. The rail is
-	// reached from the right-side tool-rail button (`tool-rail-plan`), same as Files / Specs / Review.
 	await expect(page.getByTestId("chat-plan-toggle")).toHaveCount(0);
 	await expect(page.getByTestId("chat-plan-popover")).toHaveCount(0);
 
@@ -51,8 +49,6 @@ test("the full Plan page opens from the rail's open-plan button and reflects rai
 	).toBeVisible();
 	await expect(pane.getByTestId("plan-progress")).toContainText("0/1");
 
-	// The rail stays visible while we add from it — both the rail list and the center-tab Plan
-	// update because they share the same TodoStore.
 	await rail.getByTestId("todo-add-input").fill("Second thought");
 	await rail.getByTestId("todo-add-input").press("Enter");
 	await expect(rail.getByTestId("todo-row").filter({ hasText: "Second thought" })).toBeVisible();
@@ -69,9 +65,6 @@ test("the full Plan page opens from the rail's open-plan button and reflects rai
 test("a task added from the Plan page shows up in the rail without an agent tick", async ({
 	page,
 }) => {
-	// Regression companion for the rail→page direction above: the two surfaces each own a React
-	// state in `useChatTodos`, so a write on one must signal the other via the module-local refetch
-	// bus. This locks the PAGE→RAIL direction so a future refactor can't quietly regress it.
 	await openWorkspaceChat(page);
 	await revealWorkbenchTool(page, "plan");
 	const rail = page.getByTestId("plan-rail-pane");
@@ -83,7 +76,6 @@ test("a task added from the Plan page shows up in the rail without an agent tick
 	await expect(pane).toBeVisible();
 	await expect(pane.getByTestId("plan-item").filter({ hasText: "Rail-first item" })).toBeVisible();
 
-	// Add from the center PAGE this time, and expect the RAIL to pick it up.
 	await pane.getByTestId("plan-add-task").click();
 	await pane.getByTestId("plan-add-input").fill("Page-first item");
 	await pane.getByTestId("plan-add-input").press("Enter");
@@ -93,8 +85,6 @@ test("a task added from the Plan page shows up in the rail without an agent tick
 });
 
 test("an empty chat shows the empty-rail copy and no todo rows", async ({ page }) => {
-	// Lock the explicit idle state so a refactor can't quietly render a stale skeleton or leave a
-	// ghost `todo-row` from a cached plan. The rail copy comes from `PlanRailPane`.
 	await openWorkspaceChat(page);
 	await revealWorkbenchTool(page, "plan");
 	const rail = page.getByTestId("plan-rail-pane");
@@ -107,10 +97,6 @@ test("an empty chat shows the empty-rail copy and no todo rows", async ({ page }
 test("two chats keep their own TODO lists \u2014 a rail write in chat A never bleeds into chat B", async ({
 	page,
 }) => {
-	// Lock the refetch-bus key isolation end-to-end: `useChatTodos` is keyed on
-	// `tupleKey("chat-todos", workspaceId, sessionId)`, so a signal for chat A must not nudge chat
-	// B's hook. Without the bus's per-key bucketing a shared Zustand slice would almost certainly
-	// cross-pollinate, so a focused multi-chat scenario is the right place to guard that.
 	await openWorkspaceChat(page);
 	await revealWorkbenchTool(page, "plan");
 	const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
@@ -121,8 +107,6 @@ test("two chats keep their own TODO lists \u2014 a rail write in chat A never bl
 	await rail.getByTestId("todo-add-input").press("Enter");
 	await expect(rail.getByTestId("todo-row").filter({ hasText: "Chat A item" })).toBeVisible();
 
-	// Open a second chat in the same workspace and switch to it: the rail is a singleton tied to
-	// the active chat, so it should retarget and show an empty list — not Chat A's leftover row.
 	await page.getByTestId("new-chat").first().click();
 	await expect(chatTabs).toHaveCount(2);
 	await expect(chatTabs.last()).toHaveAttribute("data-active", "true");
@@ -130,21 +114,17 @@ test("two chats keep their own TODO lists \u2014 a rail write in chat A never bl
 	await expect(rail.getByTestId("todo-row")).toHaveCount(0);
 	await expect(rail).toContainText("No TODOs yet");
 
-	// Add a DIFFERENT item in chat B. Both the add and any eventual bus-signal are keyed on chat
-	// B's identity, so chat A's data must remain untouched.
 	await rail.getByTestId("todo-add-input").fill("Chat B item");
 	await rail.getByTestId("todo-add-input").press("Enter");
 	await expect(rail.getByTestId("todo-row").filter({ hasText: "Chat B item" })).toBeVisible();
 	await expect(rail.getByTestId("todo-row")).toHaveCount(1);
 
-	// Switch back to chat A: rail refocuses on its original list, chat B's write did not bleed in.
 	await chatTabs.first().getByRole("tab").click();
 	await expect(chatTabs.first()).toHaveAttribute("data-active", "true");
 	await expect(rail.getByTestId("todo-row")).toHaveCount(1);
 	await expect(rail.getByTestId("todo-row").filter({ hasText: "Chat A item" })).toBeVisible();
 	await expect(rail.getByTestId("todo-row").filter({ hasText: "Chat B item" })).toHaveCount(0);
 
-	// And once more to B, to make sure retarget is symmetric (not just a one-shot initial load).
 	await chatTabs.last().getByRole("tab").click();
 	await expect(chatTabs.last()).toHaveAttribute("data-active", "true");
 	await expect(rail.getByTestId("todo-row")).toHaveCount(1);

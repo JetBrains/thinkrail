@@ -328,19 +328,11 @@ test("literal \\uXXXX escapes in titles/notes/group names are decoded, not shown
 });
 
 test("literal `\\n` is decoded in summary/verification only when the next chars start a Markdown separator", () => {
-	// The rescue is syntax-aware, not content-aware: a `\n` is decoded only when it precedes a
-	// Markdown structural marker (another `\n` paragraph break, bullet, ordered list, heading,
-	// blockquote, fenced block, thematic break). A `\n` inside prose / a path / a regex pattern
-	// stays verbatim. Only summary + verification are Markdown-rendered; note/title/commitSubject
-	// are unicode-only.
 	const root = tempRoot();
 	try {
 		const s = store(root);
-		// Plan-level summary with heading + paragraph + bullet list; every `\n` is in a structural
-		// position so every one is decoded.
 		s.setSummary("## Summary\\n\\nFirst line.\\n\\n- bullet\\n- bullet two");
 		expect(s.read().summary).toBe("## Summary\n\nFirst line.\n\n- bullet\n- bullet two");
-		// Verification bullets (the shape the planSummary tool prescribes) "check \u2192 result" lines.
 		const todo = s.add({ title: "step" });
 		s.update(todo.id, {
 			status: "done",
@@ -349,11 +341,8 @@ test("literal `\\n` is decoded in summary/verification only when the next chars 
 		expect(s.get(todo.id)?.verification).toBe(
 			"- unit \u2192 pass\n- lint \u2192 pass\n- typecheck \u2192 green",
 		);
-		// A plan summary with a Windows path mid-prose: no structural marker after `\n`, so the path
-		// stays verbatim (regression for the bot's blocking case).
 		s.setSummary("Adjusted C:\\new file for parity.");
 		expect(s.read().summary).toBe("Adjusted C:\\new file for parity.");
-		// Note is NOT markdown-rendered; stays verbatim regardless of what follows.
 		const t2 = s.add({
 			title: "step 2",
 			note: "line one\\n- not a bullet because note isn't markdown",
@@ -368,22 +357,17 @@ test("agent text with real newlines is stored verbatim; `\\n` inside code / path
 	const root = tempRoot();
 	try {
 		const s = store(root);
-		// Summary that already carries real newlines + mentions the `\n` character inline: the real
-		// newline is strong evidence the author knows what they're doing, so leave every `\n` alone.
 		const richSummary =
 			"## Summary\n\n" +
 			"The `\\n` character means newline, and `\\t` is a tab.\n\n" +
 			'```ts\nconsole.log("a\\nb");\n```';
 		s.setSummary(richSummary);
 		expect(s.read().summary).toBe(richSummary);
-		// Agent-origin per-item fields that already carry a real newline: stored verbatim.
 		const todo = s.add({
 			title: "step",
 			note: "Line one.\nThen `/\\n/g` as a regex pattern.",
 		});
 		expect(s.get(todo.id)?.note).toBe("Line one.\nThen `/\\n/g` as a regex pattern.");
-		// Escaped backslash (`\\n` meaning a literal backslash + n) is left alone even without a real
-		// newline nearby.
 		s.update(todo.id, { summary: "before \\\\n after" });
 		expect(s.get(todo.id)?.summary).toBe("before \\\\n after");
 	} finally {
@@ -392,10 +376,6 @@ test("agent text with real newlines is stored verbatim; `\\n` inside code / path
 });
 
 test("an agent-written Windows path / regex in a non-summary field survives verbatim", () => {
-	// Guards the scenario the no-real-newline guard alone cannot cover: a single-line title / note /
-	// verification / commit subject / artifact label that contains a backslash-n sequence because
-	// the author genuinely means backslash + n (Windows path, regex pattern, code snippet). Decoding
-	// is now gated by field class, not by content, so these fields never run the markdown rescue.
 	const root = tempRoot();
 	try {
 		const s = store(root);
@@ -409,7 +389,6 @@ test("an agent-written Windows path / regex in a non-summary field survives verb
 		});
 		expect(s.get(t1.id)?.verification).toBe("grep '\\n' src/foo.ts \u2192 2 matches");
 		expect(s.get(t1.id)?.commitSubject).toBe("fix: handle C:\\new on windows");
-		// Artifact label stays verbatim (short identifier, not Markdown prose).
 		s.update(t1.id, {
 			artifacts: [{ kind: "change", path: "src\\win.ts", label: "src\\win.ts \\n lane" }],
 		});
@@ -423,8 +402,6 @@ test("stored text is pass-through on read; no silent mutation on reload", () => 
 	const root = tempRoot();
 	try {
 		const s = store(root);
-		// Write a note that already contains a real newline (so the write-time decoder leaves it alone)
-		// but mentions `\n` inline. Reopening the store must not re-decode and mutate the on-disk text.
 		const todo = s.add({ title: "step", note: "first\nsecond — mentions \\n inline" });
 		const reopened = store(root);
 		expect(reopened.get(todo.id)?.note).toBe("first\nsecond — mentions \\n inline");
@@ -521,9 +498,6 @@ test("update/remove find items inside a group by id, pruning a group that just l
 		expect(s.get(todo.id)?.title).toBe("grouped");
 		expect(s.update(todo.id, { status: "in_progress" })?.todo.status).toBe("in_progress");
 		expect(s.remove(todo.id)).toBe(true);
-		// A group that LOSES its last item in a remove is pruned: otherwise the user is stuck with a
-		// ghost "planning…" task they have no tool to delete. A promote-born empty group that was
-		// ALREADY empty before this remove is left alone (covered by the next test).
 		expect(s.read().groups).toEqual([]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -536,7 +510,7 @@ test("remove preserves a promote-born empty group that was already empty before 
 		const s = store(root);
 		const parked = s.add({ title: "parked ask", origin: "user" });
 		const grouped = s.add({ title: "other step", group: "Other" });
-		s.promote(parked.id); // creates an empty group named "parked ask"
+		s.promote(parked.id);
 		expect(
 			s
 				.read()
@@ -544,7 +518,6 @@ test("remove preserves a promote-born empty group that was already empty before 
 				.sort(),
 		).toEqual(["Other", "parked ask"]);
 		expect(s.remove(grouped.id)).toBe(true);
-		// "Other" lost its last item → pruned; "parked ask" was already empty → preserved.
 		expect(s.read().groups.map((g) => g.title)).toEqual(["parked ask"]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -936,9 +909,6 @@ test("promote refuses when its title collides with an existing group \u2014 the 
 		const s = store(root);
 		const existing = s.add({ title: "step", group: "Fix auth" });
 		const loose = s.add({ title: "fix auth", origin: "user" });
-		// Silently merging the loose item into the pre-existing group would make the ask vanish
-		// (same-title merge adds no step), so promote must reject and leave the loose item untouched
-		// so the caller can retry with a disambiguating override.
 		const col = s.promote(loose.id, "Fix auth");
 		expect(col.ok).toBe(false);
 		expect(col.ok || col.reason).toBe("title-collision");
@@ -956,8 +926,6 @@ test("promote refuses an empty or whitespace-only override \u2014 a blank group 
 	try {
 		const s = store(root);
 		const loose = s.add({ title: "ask", origin: "user" });
-		// A blank group would have no title for `todo_add group:` to target. The loose item stays
-		// put so a follow-up promote with a real title still works.
 		const emp1 = s.promote(loose.id, "");
 		expect(emp1.ok).toBe(false);
 		expect(emp1.ok || emp1.reason).toBe("empty-title");
@@ -966,7 +934,6 @@ test("promote refuses an empty or whitespace-only override \u2014 a blank group 
 		expect(emp2.ok || emp2.reason).toBe("empty-title");
 		expect(s.read().todos.map((t) => t.id)).toEqual([loose.id]);
 		expect(s.read().groups).toEqual([]);
-		// A real override still works afterwards.
 		const okr = s.promote(loose.id, "Real title");
 		expect(okr.ok).toBe(true);
 		const group = okr.ok ? okr.group : undefined;
@@ -984,7 +951,6 @@ test("promote refuses an id that is a grouped step (already in a group), not a l
 		const gs = s.promote(step.id);
 		expect(gs.ok).toBe(false);
 		expect(gs.ok || gs.reason).toBe("grouped-step");
-		// Plan unchanged.
 		expect(s.read().groups[0]?.todos.map((t) => t.id)).toEqual([step.id]);
 	} finally {
 		rmSync(root, { recursive: true, force: true });
@@ -992,9 +958,6 @@ test("promote refuses an id that is a grouped step (already in a group), not a l
 });
 
 test("a promote-born empty group survives a replaceAll that doesn't re-emit it", () => {
-	// Promote parks a user ask as an empty group whose steps the agent will add later. A
-	// `replaceAll` landing BEFORE the agent decomposes it (reconnect race, parallel edit) must not
-	// silently drop that group; it carries user intent the plan contract promises will survive.
 	const root = tempRoot();
 	try {
 		const s = store(root);
@@ -1004,7 +967,6 @@ test("a promote-born empty group survives a replaceAll that doesn't re-emit it",
 		const parkedId = promoted.ok ? promoted.group.id : "";
 		expect(parkedId).toBe(userAsk.id);
 
-		// A separate agent write that restructures a different task.
 		s.replaceAll({
 			groups: [{ title: "Other work", todos: [{ title: "a" }, { title: "b" }] }],
 		});

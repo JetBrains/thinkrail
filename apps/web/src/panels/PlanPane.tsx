@@ -458,10 +458,6 @@ function ItemBlock({
 	);
 }
 
-// Plan summary (and per-item summary) render through Markdown; the agent writes them in PR-body
-// shape (`## Summary` / `## Changes` / `## Testing`) per `todos` SKILL.md, so we need to actually
-// style headings, code, and quotes (not just paragraphs). Scaled smaller than `DOCUMENT_PROSE`
-// (which is for the full MarkdownPreview page) to fit a card inside the Plan page.
 const SUMMARY_PROSE = [
 	"max-w-none break-words text-text-muted",
 	"[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
@@ -481,8 +477,6 @@ const SUMMARY_PROSE = [
 ].join(" ");
 
 function PlanSummary({ summary, stale = false }: { summary: string; stale?: boolean }) {
-	// The summary is written in PR-body shape (## Summary / ## Changes / ## Testing) — render it in
-	// full, no clamp or disclosure. If the user opened the plan page, they want to see the recap.
 	return (
 		<div className={`${PLAN_CARD_CLASS} flex flex-col gap-8`}>
 			<div className="flex flex-wrap items-center gap-x-8 gap-y-2">
@@ -498,8 +492,6 @@ function PlanSummary({ summary, stale = false }: { summary: string; stale?: bool
 					</span>
 				) : null}
 			</div>
-			{/* Bounded scroll area — a long PR-body summary (## Summary / ## Changes / ## Testing with
-			    bullets) shouldn't push the plan items below the fold. 40vh keeps it visible but capped. */}
 			<div data-testid="plan-overall-summary" className="max-h-[40vh] overflow-y-auto">
 				<Markdown text={summary} className={`tr-text-ui ${SUMMARY_PROSE}`} />
 			</div>
@@ -658,12 +650,7 @@ function PlanCardSection({
 	);
 }
 
-// The Session block's LIVE slot. Subscribes to the session runtime itself (isolating re-renders from
-// the heavy PlanPane). Shows the pending question as the SAME `AskUserQuestionCard` the chat uses
-// (answerable in place via a real `session.answerQuestion`, chat-only actions no-op); otherwise shows
-// the agent's latest message — always, including while a step is in progress — so the plan is
-// honest about what the agent is doing right now. Renders nothing when neither a pending ask nor a
-// message exists.
+// Keep the session's live slot isolated from the heavy PlanPane.
 function PlanSessionLive({ sessionId }: { workspaceId: string; sessionId: string }) {
 	const runtime = useAppStore((s) => s.sessions[sessionId]);
 	const [focusScope] = useState<object>(() => ({}));
