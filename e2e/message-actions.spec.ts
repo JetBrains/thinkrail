@@ -9,7 +9,7 @@ async function restoreChatWidthBounded(page: Page): Promise<void> {
 	if (!(await page.getByTestId("settings-dialog").isVisible())) {
 		await page.getByTestId("open-settings").click();
 	}
-	await page.getByTestId("settings-nav-line-width").click();
+	await page.getByTestId("settings-nav-chat").click();
 	const bounded = page.getByTestId("chat-line-width-bounded");
 	if ((await bounded.getAttribute("data-active")) !== "true") {
 		await bounded.click();
@@ -124,7 +124,7 @@ test("an unbounded transcript keeps the user message within the visible pane", a
 
 	try {
 		await page.getByTestId("open-settings").click();
-		await page.getByTestId("settings-nav-line-width").click();
+		await page.getByTestId("settings-nav-chat").click();
 		const bounded = page.getByTestId("chat-line-width-bounded");
 		await expect(bounded).toHaveAttribute("data-active", "true");
 		await bounded.click();

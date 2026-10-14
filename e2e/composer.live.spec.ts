@@ -1,9 +1,11 @@
 import { expect, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
+	expandDisclosure,
 	hideAuxiliaryWorkbench,
 	openFixtureProject,
 	PHONE_VIEWPORT,
+	revealModelGroups,
 	worktreeRows,
 } from "./fixtures/app";
 
@@ -69,6 +71,9 @@ test("model picker plus file and portable-skill completion use the live session 
 	const modelSelector = page.getByTestId("model-selector");
 	await expect(modelSelector).toBeEnabled();
 	await modelSelector.click();
+	// Provider groups other than the current model's start collapsed; open one so it lists options.
+	await revealModelGroups(page);
+	await expandDisclosure(page.getByTestId("model-group-toggle").first());
 	await expect(page.getByTestId("model-option").first()).toBeVisible();
 	expect(await page.getByTestId("model-option").count()).toBeGreaterThan(0);
 	await page.keyboard.press("Escape");

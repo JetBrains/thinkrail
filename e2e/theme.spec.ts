@@ -2,6 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
 	enterDefaultWorkspace,
+	expandDisclosure,
 	openFixtureProject,
 	revealWorkbenchTool,
 } from "./fixtures/app";
@@ -23,8 +24,15 @@ async function openAppearance(page: Page) {
 	return dialog;
 }
 
-async function readThemeOptions(page: Page): Promise<ThemeOption[]> {
+/** Opens Appearance with its fixed-mode theme list, which the page keeps in a collapsed disclosure. */
+async function openThemeList(page: Page) {
 	const dialog = await openAppearance(page);
+	await expandDisclosure(dialog.getByTestId("theme-toggle"));
+	return dialog;
+}
+
+async function readThemeOptions(page: Page): Promise<ThemeOption[]> {
+	const dialog = await openThemeList(page);
 	const options = await dialog.locator('[data-testid^="theme-option-"]').evaluateAll((nodes) =>
 		nodes.map((node) => ({
 			id: node.getAttribute("data-theme-id") ?? "",
@@ -40,7 +48,7 @@ async function readThemeOptions(page: Page): Promise<ThemeOption[]> {
 }
 
 async function pickTheme(page: Page, theme: string): Promise<void> {
-	const dialog = await openAppearance(page);
+	const dialog = await openThemeList(page);
 	await dialog.locator(`[data-theme-id="${theme}"]`).click();
 	await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
 	await page.keyboard.press("Escape");
@@ -107,6 +115,7 @@ test("system mode follows each client and retains its explicit pair", async ({ p
 	await dialog.getByTestId("theme-mode-system").click();
 	await expect(page.locator("html")).toHaveAttribute("data-theme", initialLight?.id ?? "");
 	await expect(dialog.getByTestId("system-theme-current")).toContainText("Light");
+	await expandDisclosure(dialog.getByTestId("theme-pair-toggle"));
 	await expect(dialog.getByTestId("system-theme-light-trigger")).toHaveAccessibleName(
 		`Light theme: ${initialLight?.label}`,
 	);
@@ -124,14 +133,14 @@ test("system mode follows each client and retains its explicit pair", async ({ p
 	await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await expect(peer.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");
 
-	await dialog.getByTestId("theme-mode-fixed").click();
+	await dialog.getByTestId(`theme-mode-${fixed?.appearance}`).click();
 	await expect(page.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
 	await expect(peer.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
 
 	await dialog.getByTestId("theme-mode-system").click();
 	await expect(page.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
 	await expect(peer.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");
-	await dialog.getByTestId("theme-mode-fixed").click();
+	await dialog.getByTestId(`theme-mode-${fixed?.appearance}`).click();
 	await peer.close();
 });
 

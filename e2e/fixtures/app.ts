@@ -325,6 +325,39 @@ export async function expandActivityStep(page: Page, tool: string): Promise<Loca
 	return step;
 }
 
+/** Opens an `aria-expanded` disclosure (a Settings theme list, layout Advanced, …) unless it is already open. */
+export async function expandDisclosure(toggle: Locator): Promise<void> {
+	await expect(toggle).toBeVisible();
+	if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+	await expect(toggle).toHaveAttribute("aria-expanded", "true");
+}
+
+export function modelGroupToggle(page: Page, provider: string): Locator {
+	return page.locator(`[data-testid="model-group-toggle"][data-provider="${provider}"]`);
+}
+
+/**
+ * Model pickers collapse every provider group except the current model's, so an option of another
+ * provider renders only once its group is expanded.
+ */
+export async function expandModelGroup(page: Page, provider: string): Promise<void> {
+	await expandDisclosure(modelGroupToggle(page, provider));
+}
+
+/**
+ * Waits until an open picker has rendered its catalog — its provider groups, or the empty-catalog
+ * hint — first unfolding a composer picker's pinned/recent shortlist. An absent group is then
+ * evidence, not a not-yet-rendered list.
+ */
+export async function revealModelGroups(page: Page): Promise<void> {
+	const showAll = page.getByTestId("model-show-all");
+	const groups = page.getByTestId("model-group-toggle");
+	const empty = page.getByText("No models to show.", { exact: false });
+	await expect(showAll.or(groups).or(empty).first()).toBeVisible();
+	if (await showAll.isVisible()) await showAll.click();
+	await expect(groups.or(empty).first()).toBeVisible();
+}
+
 export function visibleTerminal(page: Page): Locator {
 	return page.locator('[data-testid="terminal-instance"][data-visible="true"]');
 }

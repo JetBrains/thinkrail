@@ -2,7 +2,7 @@ import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import type { AppConfig, ModelDefault } from "@thinkrail/contracts";
-import { openWorkspaceChat } from "./fixtures/app";
+import { expandModelGroup, openWorkspaceChat } from "./fixtures/app";
 import { connectCentral, openProviders, waitForCentralState } from "./fixtures/jbcentral";
 import { E2E_SCREENSHOT_DIR } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
@@ -71,14 +71,14 @@ test("Models settings save host defaults and apply them to a fresh chat", async 
 		await expect(dialog).toBeVisible();
 		await page.getByTestId("settings-nav-models").click();
 		const section = page.getByTestId("settings-models");
-		await expect(section).toContainText("Default model");
-		await expect(section).toContainText(
-			"If it's unavailable, new chats use the first available model.",
-		);
+		await expect(section).toContainText("Default models");
+		const row = section.getByTestId("default-model-row");
+		await expect(row).toContainText("Chat model");
 
-		const modelSelector = section.getByTestId("model-selector");
+		const modelSelector = row.getByTestId("model-selector");
 		await expect(modelSelector).toBeVisible();
 		await modelSelector.click();
+		await expandModelGroup(page, "e2e-central");
 		const modelOption = page.locator(
 			'[data-testid="model-option"][data-model-id="e2e-central-model"]',
 		);
@@ -92,7 +92,7 @@ test("Models settings save host defaults and apply them to a fresh chat", async 
 		await modelOption.click();
 		await expect(modelSelector).toContainText(modelName);
 
-		const effortSelector = section.getByTestId("thinking-selector");
+		const effortSelector = row.getByTestId("thinking-selector");
 		await expect(effortSelector).toBeEnabled();
 		await effortSelector.click();
 		const effortOption = page.locator('[data-testid="thinking-option"][data-level="high"]');
@@ -150,9 +150,9 @@ test("without saved defaults, Settings and a fresh chat use the first available 
 
 		await openProviders(page);
 		await page.getByTestId("settings-nav-models").click();
-		const section = page.getByTestId("settings-models");
-		await expect(section.getByTestId("model-selector")).toContainText(modelName);
-		await expect(section.getByTestId("thinking-selector")).toContainText(effortLevel);
+		const row = page.getByTestId("settings-models").getByTestId("default-model-row");
+		await expect(row.getByTestId("model-selector")).toContainText(modelName);
+		await expect(row.getByTestId("thinking-selector")).toContainText(effortLevel);
 
 		await page.keyboard.press("Escape");
 		await openFreshChat(page);

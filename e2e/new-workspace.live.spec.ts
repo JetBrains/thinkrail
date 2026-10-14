@@ -1,7 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { openFixtureProject, worktreeRow, worktreeRows } from "./fixtures/app";
+import {
+	expandModelGroup,
+	openFixtureProject,
+	revealModelGroups,
+	worktreeRow,
+	worktreeRows,
+} from "./fixtures/app";
 import { isExactE2eModel, resolveE2eModel } from "./fixtures/centralAgent";
 import { E2E_CENTRAL_ARTIFACT, E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { E2eWire } from "./fixtures/wire";
@@ -42,13 +48,22 @@ test("the dialog shows the exact default model and its picker scrolls inside the
 
 	await model.click();
 	const list = page.locator("[cmdk-list]");
-	const showAll = page.getByTestId("model-show-all");
-	if ((await showAll.count()) > 0) await showAll.click();
+	await revealModelGroups(page);
+	// The current model's provider group opens expanded; the rest start collapsed.
+	await expandModelGroup(page, selected.model.provider);
 	const exactOption = page.locator(
 		`[data-testid="model-option"][data-provider="${selected.model.provider}"][data-model-id="${selected.model.id}"]`,
 	);
 	expect(await exactOption.count()).toBeGreaterThanOrEqual(1);
 	await expect(exactOption.first()).toBeVisible();
+	await expect(list).toHaveJSProperty("scrollTop", 0);
+	// Expand every provider group so the list is long enough to prove it scrolls inside the dialog;
+	// clicking lower headers scrolls the list, so return it to the top before the wheel probe.
+	const collapsed = page.locator('[data-testid="model-group-toggle"][aria-expanded="false"]');
+	while ((await collapsed.count()) > 0) await collapsed.first().click();
+	await list.evaluate((el) => {
+		el.scrollTop = 0;
+	});
 	await expect(list).toHaveJSProperty("scrollTop", 0);
 	await list.hover();
 	await page.mouse.wheel(0, 600);
