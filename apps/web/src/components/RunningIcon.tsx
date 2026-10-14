@@ -81,6 +81,7 @@ export function RunningIcon({ className }: { className?: string | undefined }) {
 				{FRAME_HALVES.map((d) => (
 					<path
 						key={d}
+						data-testid="running-icon-frame"
 						d={d}
 						fill="none"
 						stroke="currentColor"

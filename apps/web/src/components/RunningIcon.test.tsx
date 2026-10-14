@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
+import { BRAND_MARK_SEGMENTS } from "../constants/branding";
 import { RunningIcon } from "./RunningIcon";
 
 test("running icon is the store-free, labeled, theme-coloured stroke-drawn monogram with split frame", () => {
@@ -20,7 +21,9 @@ test("running icon is the store-free, labeled, theme-coloured stroke-drawn monog
 		expect(markup).toContain(`motion-safe:animate-${cls}`);
 	expect(markup.match(/motion-safe:animate-loader-frame/g)).toHaveLength(2);
 	expect(markup.match(/stroke="currentColor"/g)).toHaveLength(8);
+	expect(markup.match(/stroke-dasharray="1000 1000"/g)).toHaveLength(8);
 	expect(markup).not.toMatch(/stroke-dashoffset/);
+	expect(markup).not.toContain("motion-reduce:");
 	expect(markup).not.toMatch(/#[0-9a-f]{3,8}\b|style="/i);
 	expect(markup).not.toContain("Needs attention");
 });
@@ -36,4 +39,10 @@ test("two running icons never share a clip path", () => {
 	expect(ids).toHaveLength(10);
 	expect(new Set(ids).size).toBe(10);
 	for (const id of ids) expect(markup).toContain(`clip-path="url(#${id})"`);
+});
+
+test("running icon clips to the shared brand mark segments rather than its own copy", () => {
+	const markup = renderToStaticMarkup(<RunningIcon />);
+	for (const d of Object.values(BRAND_MARK_SEGMENTS))
+		expect(markup).toContain(`<path d="${d}"></path>`);
 });
