@@ -44,9 +44,21 @@ export function ReviewComposer({
 	useEffect(() => {
 		const element = inputRef.current;
 		if (!element) return;
-		if (!initial.restored) element.focus();
 		element.setSelectionRange(initial.value.start, initial.value.end, initial.value.direction);
 		grow(element);
+		if (initial.restored) return;
+		if (element.getClientRects().length > 0) {
+			element.focus();
+			return;
+		}
+		const rendered = new ResizeObserver(() => {
+			if (element.getClientRects().length === 0) return;
+			rendered.disconnect();
+			grow(element);
+			element.focus();
+		});
+		rendered.observe(element);
+		return () => rendered.disconnect();
 	}, [initial]);
 	useEffect(() => {
 		if (input && !input.value) input.onChange(initial.value);

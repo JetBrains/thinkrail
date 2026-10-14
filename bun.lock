@@ -381,7 +381,7 @@
       },
     },
     "pi-extensions/visualize": {
-      "name": "@thinkrail.ai/pi-visualize",
+      "name": "@thinkrail/pi-visualize",
       "version": "0.1.0",
       "dependencies": {
         "lovely-mermaid": "0.3.3",
@@ -406,7 +406,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@remixicon/react": "catalog:",
-        "@thinkrail.ai/pi-visualize": "workspace:*",
+        "@thinkrail/pi-visualize": "workspace:*",
         "@thinkrail/extension-api": "workspace:*",
         "@thinkrail/ui": "workspace:*",
         "linkedom": "0.16.11",
@@ -1134,7 +1134,7 @@
 
     "@tailwindcss/vite": ["@tailwindcss/vite@4.3.1", "", { "dependencies": { "@tailwindcss/node": "4.3.1", "@tailwindcss/oxide": "4.3.1", "tailwindcss": "4.3.1" }, "peerDependencies": { "vite": "^5.2.0 || ^6 || ^7 || ^8" } }, "sha512-hItDHuIIlEV61R+faXu66s1K36aTurO/Qw0e45Vskz57gXl9pWOT6eg3zmcEui6CZXddbN7zd41bwmvag4JGwQ=="],
 
-    "@thinkrail.ai/pi-visualize": ["@thinkrail.ai/pi-visualize@workspace:pi-extensions/visualize"],
+    "@thinkrail/pi-visualize": ["@thinkrail/pi-visualize@workspace:pi-extensions/visualize"],
 
     "@thinkrail/artifact-tests": ["@thinkrail/artifact-tests@workspace:packages/artifact-tests"],
 

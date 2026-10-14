@@ -1,3 +1,25 @@
+diff --git a/dist/components/FileDiff.js b/dist/components/FileDiff.js
+index 8d9ba31..f3d307d 100644
+--- a/dist/components/FileDiff.js
++++ b/dist/components/FileDiff.js
+@@ -1797,7 +1797,7 @@ var FileDiff = class {
+ 				continue;
+ 			}
+ 			if (gutterElement.dataset.gutterBuffer === "annotation" && "lineAnnotation" in contentElement.dataset) {
+-				if (preTrimCount > 0 || hasPostTrim && visibleLineIndex >= postTrimStart) {
++				if (preTrimCount > 0 || hasPostTrim && visibleLineIndex > postTrimStart) {
+ 					gutterElement.remove();
+ 					contentElement.remove();
+ 					rowCount++;
+@@ -1805,7 +1805,7 @@ var FileDiff = class {
+ 				continue;
+ 			}
+ 			if (gutterElement.dataset.gutterBuffer === "metadata" && "noNewline" in contentElement.dataset) {
+-				if (preTrimCount > 0 || hasPostTrim && visibleLineIndex >= postTrimStart) {
++				if (preTrimCount > 0 || hasPostTrim && visibleLineIndex > postTrimStart) {
+ 					gutterElement.remove();
+ 					contentElement.remove();
+ 					rowCount++;
 diff --git a/dist/managers/InteractionManager.js b/dist/managers/InteractionManager.js
 index 20fe22dfeec141a172a9be6763c4d9cf3c808ea5..60b243631a367ef5c1c905a129c630ceda569b89 100644
 --- a/dist/managers/InteractionManager.js

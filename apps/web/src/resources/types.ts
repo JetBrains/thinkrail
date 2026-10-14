@@ -92,6 +92,7 @@ export interface ResourceDiffProps {
 	onPlacedThreadIds?(ids: ReadonlySet<string>): void;
 	viewState?: unknown;
 	onViewState?(state: unknown): void;
+	virtualize?: boolean;
 }
 
 export type ResourceAnchorCapability = "line" | `structural:${string}` | "region";
@@ -117,7 +118,7 @@ export interface ResourceRenderer {
 		copy: boolean;
 		layout: boolean;
 		whitespace: boolean;
-		boundedDiff?: boolean;
+		boundedDiff?: "always" | "large";
 	};
 	loadView?(): Promise<{ default: ComponentType<ResourceViewProps> }>;
 	loadDiff?(): Promise<{ default: ComponentType<ResourceDiffProps> }>;

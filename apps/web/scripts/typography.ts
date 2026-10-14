@@ -37,6 +37,7 @@ export interface Typography {
 	lineHeights: Record<string, number>;
 	letterSpacings: Record<string, string>;
 	rootStyle: StyleRef;
+	codeRow: { fontSize: string; lineHeight: string };
 	textStyles: Record<string, Record<string, Style | StyleRef>>;
 	proseSystems: Record<string, Record<string, Style | StyleRef>>;
 }
@@ -299,6 +300,10 @@ export function validate(t: Typography): string[] {
 					`Reference ${target.$ref} directly.`,
 			);
 	}
+	if (!(t.codeRow?.fontSize in (t.fontSizes ?? {})))
+		fail(`codeRow.fontSize: unknown font size '${t.codeRow?.fontSize}'`);
+	if (!(t.codeRow?.lineHeight in (t.lineHeights ?? {})))
+		fail(`codeRow.lineHeight: unknown line height '${t.codeRow?.lineHeight}'`);
 	const root = t.rootStyle;
 	if (!isRef(root)) fail("rootStyle must be a $ref to a semantic style, not a set of values");
 	else if (Object.keys(root).length > 1) fail("rootStyle: a $ref may not carry other properties");
@@ -438,6 +443,10 @@ function declarations(t: Typography, style: Style, indent = "\t"): string {
 	return lines.map((l) => indent + l).join("\n");
 }
 
+export function codeRowHeight(t: Typography): number {
+	return Math.round(t.fontSizes[t.codeRow.fontSize] * t.lineHeights[t.codeRow.lineHeight]);
+}
+
 export function renderCss(t: Typography): string {
 	const out: string[] = [HEADER(t.metadata.version)];
 
@@ -456,6 +465,8 @@ export function renderCss(t: Typography): string {
 	out.push("\n\t/* Line heights (unitless) */");
 	for (const [id, v] of Object.entries(t.lineHeights))
 		out.push(`\t${cssVarName(t, "line-height", id)}: ${v};`);
+	out.push("\n\t/* Code row height (px) — font size × line height, rounded to a whole pixel */");
+	out.push(`\t--${t.metadata.cssVarPrefix}-code-row-height: ${codeRowHeight(t)}px;`);
 	out.push("\n\t/* Letter spacing */");
 	for (const [id, v] of Object.entries(t.letterSpacings))
 		out.push(`\t${cssVarName(t, "letter-spacing", id)}: ${v};`);

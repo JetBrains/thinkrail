@@ -34,7 +34,7 @@ The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-
 
 - Button variants are `default`/`destructive`/`outline`/`ghost`; destructive confirms irreversible
   actions. Switch exposes native disabled behavior and `role="switch"`/`aria-checked`, not visible On/Off
-  text. Dialog accepts `hideClose` for chromeless surfaces. `DialogPanel` renders Radix content in place
+  text. Every modal dialog's overlay carries `data-modal-layer`, and `useModalLayerOpen()` reports whether one is open: it lets callers tell "covered by a modal" from their own visibility without a dialog registry, independent of how `aria-hidden` treats live regions. Dialog accepts `hideClose` for chromeless surfaces. `DialogPanel` renders Radix content in place
   without a portal or overlay for caller-positioned, non-modal dialogs; title/role semantics, Escape
   dismissal, and focus return remain Radix-owned while surrounding UI stays interactive.
 - React 19 refs pass through controls; dialog/popover portals preserve accessible focus and scroll
@@ -52,6 +52,9 @@ The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-
 - Toast exposes `ToastProvider`/`Toast`/`ToastViewport`/`ToastTitle`/`ToastDescription`/`ToastAction`/
   `ToastClose` and `toastVariants` (`error`/`success`/`info`). Severity is a presentational left accent;
   queue ownership and notification lifetimes stay in the app (`panels/Toaster` composes the primitives).
+- Resizable handles paint a 1 px line at their leading edge; the pointer hit area extends only into the
+  following panel (fine-pointer margin 1 px), so the preceding panel's trailing-edge scrollbar stays
+  usable. There is no grip variant.
 - Primitives use only the host's token utilities, never shadcn's default oklch palette.
 
 Code highlighting is deliberately absent: `CodeBlock` and shiki depend on the app's theme registration

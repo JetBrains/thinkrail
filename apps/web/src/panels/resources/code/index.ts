@@ -14,6 +14,7 @@ export const codeRenderer: ResourceRenderer = {
 		copy: true,
 		layout: true,
 		whitespace: true,
+		boundedDiff: "large",
 	},
 	loadView: () => (isPhoneViewport() ? import("./PierreFile") : import("../../MonacoEditor")),
 	loadDiff: () => import("./PierreDiff"),

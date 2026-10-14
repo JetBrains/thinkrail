@@ -1,6 +1,7 @@
 import type { AnnotationSide, FileDiffMetadata, Hunk, SelectedLineRange } from "@pierre/diffs";
 import { type RefObject, useEffect } from "react";
 import type { AnchorDraft, ResourceDiffProps, ReviewThread, SurfaceReview } from "@/resources";
+import type { PierreVirtualizer } from "./pierreVirtualizer";
 
 export const COLLAPSED_CONTEXT_THRESHOLD = 3;
 
@@ -10,7 +11,7 @@ export interface RenderedDiffLines {
 }
 
 export function threadLineRange(
-	thread: ReviewThread,
+	thread: Pick<ReviewThread, "anchor">,
 ): { startLine: number; endLine: number } | null {
 	const range = thread.anchor.selectors.find((selector) => selector.kind === "lineRange");
 	return range?.kind === "lineRange"
@@ -184,22 +185,32 @@ function addTrailingLines(
 	addRange(deletions, deletionEnd + 1, fileDiff.deletionLines.length);
 }
 
+export interface FocusSurface {
+	review: SurfaceReview | undefined;
+	side?: AnnotationSide;
+}
+
 export function usePierreFocus(
 	rootRef: RefObject<HTMLDivElement | null>,
-	surfaces: readonly (SurfaceReview | undefined)[],
+	virtualizer: PierreVirtualizer,
+	surfaces: readonly FocusSurface[],
 	placedThreadIds?: ReadonlySet<string>,
 ): void {
-	const focused =
-		surfaces.find(
-			(surface) =>
-				surface?.focus && (placedThreadIds === undefined || placedThreadIds.has(surface.focus.id)),
-		)?.focus ?? null;
+	const focusedSurface = surfaces.find(
+		({ review }) =>
+			review?.focus && (placedThreadIds === undefined || placedThreadIds.has(review.focus.id)),
+	);
+	const focused = focusedSurface?.review?.focus ?? null;
 	const focusId = focused?.id ?? null;
-	const onFocusHandled = surfaces.find((surface) => surface?.focus?.id === focusId)?.onFocusHandled;
+	const focusLine = focused ? (threadLineRange(focused)?.endLine ?? null) : null;
+	const focusSide = focusedSurface?.side;
+	const onFocusHandled = surfaces.find(({ review }) => review?.focus?.id === focusId)?.review
+		?.onFocusHandled;
 	useEffect(() => {
 		if (!focusId || !onFocusHandled) return;
 		let card: HTMLElement | undefined;
 		let handled = false;
+		let lineRevealed = focusLine === null;
 		const sizeObserver = new ResizeObserver(() => reveal());
 		const findCard = () => {
 			const next = [
@@ -214,7 +225,11 @@ export function usePierreFocus(
 		};
 		const reveal = () => {
 			const target = card?.isConnected ? card : findCard();
-			if (!target || target.getClientRects().length === 0 || handled) return;
+			const rendered = target !== undefined && target.getClientRects().length > 0;
+			if (!rendered && !lineRevealed && focusLine !== null) {
+				lineRevealed = virtualizer.revealLine(focusLine, focusSide);
+			}
+			if (!target || !rendered || handled) return;
 			handled = true;
 			target.scrollIntoView({ block: "center" });
 			onFocusHandled();
@@ -224,10 +239,11 @@ export function usePierreFocus(
 		const mutationObserver = new MutationObserver(reveal);
 		const root = rootRef.current;
 		if (root) mutationObserver.observe(root, { childList: true, subtree: true });
+		if (root?.firstElementChild) sizeObserver.observe(root.firstElementChild);
 		reveal();
 		return () => {
 			sizeObserver.disconnect();
 			mutationObserver.disconnect();
 		};
-	}, [focusId, onFocusHandled, rootRef]);
+	}, [focusId, focusLine, focusSide, onFocusHandled, rootRef, virtualizer]);
 }

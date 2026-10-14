@@ -73,8 +73,8 @@ treatment.
   **The Settled shelf.** It renders only when the host advertises
   `WORKSPACE_SETTLE_PROTOCOL_VERSION`; an older host retains the raw flat list and order, with no
   shelf or settle controls even if rollback persistence carries stale newer fields. On a
-  capable host, an expanded project renders its **live** rows from `selectWorkspacePartition` in the
-  host's order (never re-sorted by activity, so rows stay put while agents work), then a **`Settled · N`** disclosure header (collapsed by default, store-held
+  capable host, an expanded project renders its **live** rows from `selectWorkspacePartition` newest
+  created first (never re-sorted by activity, so rows stay put while agents work), then a **`Settled · N`** disclosure header (collapsed by default, store-held
   per browser) whose body lists the settled rows **slim** — single line, name only, a small **reason chip**
   (`merged` / `closed` / `idle 2w` / `by you`, long form in its tooltip), a hover **↩ Keep active** beside the kebab — ten at
   a time with a *Show 25 more* row. Live rows gain a hover **✓ Settle** beside the kebab (also in the menu
@@ -241,7 +241,8 @@ treatment.
   directory as one unit. `ChangesTree` evaluates this against the changed-file tree; `FileTree` resolves
   only visible compact runs through its existing client-side directory reads, so the wire remains a plain
   immediate-directory listing. The **`+N −M` diff-count badge** is the shared **`DiffStatBadge`**, used
-  only inside Changes: the flat list's file rows and the tree's per-file / per-folder counts.
+  only inside Changes: the flat list's file rows, the tree's file rows, and a tree folder's aggregate only
+  while it is collapsed (an expanded folder's children already show those counts).
   `ChangesTree`'s tree build + `+/−` aggregation + shared status glyphs live in the pure
   **`changesModel.ts`** (unit-tested; no store/transport — `ChangesTree` is presentational, fed `changes` +
   `onOpen`/`isActive` by `ChangesPanel`), together with the **diff-tab identity + scope vocabulary**:
@@ -1337,7 +1338,13 @@ own section. The kebab menu (`plan-menu`, a
   and "… that leaves the diff on its first move keeps the comment button" are the guard: they fail on
   Chromium whenever the patched behavior is missing, including a Pierre release that carries only
   #1185. A Pierre bump keeps them green and, once a release contains the fix, deletes the patch file and
-  its `patchedDependencies` entry. Turbo hashes `patches/**`, so an edited patch rebuilds the web
+  its `patchedDependencies` entry. The same patch also fixes `FileDiff.trimColumnRows`: when a
+  virtualized window's end shrinks, 1.5.1 trims the annotation and no-newline rows trailing the last
+  kept line along with the dropped lines, and later appended chunks never re-emit them, so a composer,
+  thread, or toolbar on that line vanishes until a full render (seen when a composer's focus scroll
+  moved the window). Rows trailing a kept line now stay; separators, which precede their line, still go.
+  The guard is "Changes keeps unsaved composer selection…" in `e2e/changes-review-drafts.spec.ts`.
+  Turbo hashes `patches/**`, so an edited patch rebuilds the web
   bundle instead of restoring a stale one from cache. The tests' controls (the utility sat on the start
   line; the selection holds the dragged text) keep an emptied layout from passing — earlier
   `display:grid` bisections "fixed" the crash only that way. The crash itself reproduces only in WebKit
@@ -1702,6 +1709,17 @@ own section. The kebab menu (`plan-menu`, a
   is chosen in the Changes header and is part of the tab's identity), the file / `+ −` totals with the
   viewed count, *Collapse all* / *Expand all*, and `Send review (N)` over the workspace's drafts.
 
+  **Wide rewrites wait behind a notice.** Source diffs run on the main thread, and that cost
+  tracks the number of changed lines, not the file size: a 10 MB all-added file diffs in ~0.1 s while ~10k
+  changed lines take over 20 s. Before mounting a renderer, `DiffSurfaceBody` estimates the changed lines
+  (`largeDiff.ts`: the linear multiset difference of the two sides' lines). Above
+  `LARGE_DIFF_CHANGED_LINES` (2000, about a second of diffing), or when an order-sensitive check cannot
+  finish within 50 ms / 2000 edits, it shows `diff-too-large` with **Show diff anyway** (per surface mount)
+  and, when a worktree-backed modified side exists, **Open file** into the desktop editor. A one-sided
+  diff (added or deleted file) is never guarded: it costs no diffing. The bounded check closes the multiset estimate's
+  blind spot for reordered lines. Both guards show “This diff is too expensive to show automatically”
+  without a line count; the guard returns only whether automatic rendering should wait.
+
   Bundled candidates are registered once from `panels/resources/register.ts`: `thinkrail/code` renders
   every source diff with Pierre `FileDiff` and supports copy, layout, and whitespace controls;
   `thinkrail/markdown` supplies `RenderedDiff`, and `thinkrail/binary` reports both sides' byte sizes. Rich
@@ -1884,6 +1902,76 @@ own section. The kebab menu (`plan-menu`, a
   time, so four keep up. The phone code-file implementation is Pierre `File` with the same theme and
   review grammar; desktop files alone load Monaco.
 
+  **Pierre surfaces are virtualized.** Unvirtualized Pierre puts every line in the DOM (≈400k nodes for a
+  100k-line file), which WebKit — the desktop shell's engine — cannot style or lay out, hanging the app.
+  `pierreVirtualizer.ts` owns one `PierreVirtualizer` (a core `Virtualizer` subclass) per surface,
+  provided through `VirtualizerContext` so `FileDiff`/`File` build their virtualized instances, and set up
+  from the same ref callback as `useScrollViewState` so scroll restoration keeps working. The scroller's
+  first child is the content container and must give the Pierre element a non-zero height from the first
+  frame (`flex-1` in a `min-h-full` column): Pierre's scroll anchor treats a zero-height file as lying
+  above the viewport and jumps to its end once the height lands. The scroller opts out of browser scroll
+  anchoring (`overflow-anchor: none`, as Pierre's own `CodeView` does) because Pierre corrects scroll
+  itself. Annotation children stay in the light DOM but lay out only inside the render window, so the
+  focus reveal first asks the virtualizer to center the thread's end line (`revealLine`, through the
+  connected instance's `getLinePosition`) and then centers the card once it renders. A freshly opened
+  diff composer gets the same treatment — Ask agent anchors it at the hunk's end line, which for a tall
+  hunk lies outside the window — and `ReviewComposer` defers its initial focus until its textarea has a
+  box, since focusing an unrendered element is a silent no-op. Restored composers keep the restored
+  scroll position instead.
+  A virtualizer windows only against a real scroller: a stacked Changes section at natural height is as
+  tall as its content, so its virtualizer "sees" every line and renders them all (≈72k rows for a
+  100k-line added file, freezing the app once it lands). The code renderer therefore declares
+  `boundedDiff: "large"`, and a stacked section above `VIRTUALIZED_DIFF_LINES` (1000, by the larger
+  text side's line count, including unchanged context) gets the same bounded `60vh` viewport as
+  `"always"` renderers and owns its scroller. Counting source lines keeps expansions virtualized even
+  when a large file has only a small edit, and covers untracked files without git's missing counts.
+  The same threshold gates virtualization in every host: `DiffSurfaceBody` passes `virtualize` only
+  above it, and below it `PierreDiff` withholds its virtualizer so the plain `FileDiff` renders every
+  row, as before virtualization. Virtualizing small diffs bought nothing and cost two failures. A
+  virtualized instance's hydrate measures its offset (forcing layout) while its container is still
+  empty; in the stacked list, whose end sits at maximum scroll so the last header can reach the top,
+  that collapsed layout clamps `scrollTop`, and Virtuoso's size correction compounds the jump until the
+  reviewed section leaves the render window. And `@pierre/diffs` 1.5.1's virtualized in-place column
+  re-render can drop annotation rows that the instance still records, leaving a just-opened composer
+  slotted nowhere until something forces a `rerender()`. Large diffs still carry that annotation risk.
+
+  **Virtualized scrolling is tuned for chunk cost.** Pierre lays each code column out as a subgrid with
+  one item per row, so every render-window shift relays out the whole rendered grid, and the cost of a
+  shift tracks the rows inserted, not the rows kept. Split layout pays it twice whenever the new rows
+  carry an annotation (hunk toolbars, threads): Pierre's `ResizeManager` pairs each annotation row across
+  both columns with a forced `getBoundingClientRect` and then syncs the pair's
+  `--diffs-annotation-min-height`, forcing a second layout. With Pierre's 50-line chunks that was a
+  ~90 ms long task per shift under the Chromium profiler and ~80–95 ms hitches in WebKit.
+  `usePierreVirtualizer` therefore passes `hunkLineCount: 5` and a 400 px overscroll (Pierre defaults: 50
+  lines, 1000 px), measured with wheel flings over a 6k-line, 150-hunk diff: inline and added-file
+  scrolling drop from 12–34 to 2–3 dropped frames in WebKit, and the worst split hitch roughly halves
+  (~45 ms). Split scrolling over dense hunk toolbars still drops frames in WebKit; without the toolbars
+  it is smooth, and `overflow: "wrap"` (which skips the pairing because both sides share grid rows) helps
+  moderate scrolling but not flings. The virtualizer's `lineHeight` metric is the real row height:
+  `.pierre-code-surface` rounds `--diffs-line-height` to whole pixels (`s11` × `default` = 14 px,
+  matching Monaco's rounding), and `codeLineHeight()` derives the same number from the tokens. Against
+  Pierre's 20 px default estimate the scroll height of a 20k-line file started ~40% too tall and shrank
+  while scrolling as rows were measured. Rejected after measurement: mirroring an invisible spacer onto
+  the opposite split column (it cut paint area but not dropped frames in either engine) and a larger
+  overscroll (about twice the dropped split frames at 5-line chunks, and no fewer blank frames in fast
+  flings).
+
+  **`PierreScroller` keeps the compositor from showing unpainted rows.** WebKit (the desktop shell)
+  scrolls overflow off the main thread: a scrollbar drag in a 20k-line file jumps ~2,600 px per step,
+  and each step showed one fully blank frame before the main thread painted the new window. No
+  overscroll covers that, and painting Pierre's spacer elements like rows did not help: the blank was
+  unrasterized space, not the spacers. The scroller therefore keeps native scrolling (scrollbar, wheel,
+  keys, momentum, autoscroll) but holds a sizer measured to the content height, a `sticky` viewport
+  clipped to the scroller's height, and the content translated by `-scrollTop` on the main thread.
+  Off-thread scrolling moves only the sizer, so the pinned viewport keeps showing the last painted rows
+  until the main thread moves the content in the same frame it renders the window — a fast drag lags,
+  never blanks. Pierre corrects the scroll position inside its rAF pass and `useScrollViewState`
+  restores it from a ResizeObserver, both after that frame's scroll event, so the scroller's own
+  `scrollTo` and `scrollTop` re-sync the transform synchronously; otherwise Pierre would measure rows
+  against a stale offset. Natural-height stacked sections run the same structure without scrolling:
+  the viewport's height is read back from the scroller after the sizer is set, so it never feeds the
+  content's own height.
+
   Mutable scopes (`branch`, `uncommitted`, `pinned`) receive `hunkActions` only after the current welcome
   advertises `CHANGE_MUTATIONS_PROTOCOL_VERSION` and the diff metadata carrying both hashes has landed.
   Change blocks are independent of
@@ -1913,7 +2001,8 @@ own section. The kebab menu (`plan-menu`, a
   unchanged siblings on disk), matching `FileTree`. **Status is shown on the file name, not a letter glyph**
   (the git-decoration convention — `changesModel.statusNameClass`, shared by both views):
   added / untracked → green, deleted → red + strikethrough, renamed → blue, modified → plain. Each file
-  and folder also shows a `+N −M` badge (shared `DiffStatBadge`) — per-file counts come from `git.status`
+  shows a `+N −M` badge (shared `DiffStatBadge`), and a folder shows its aggregate badge **only while
+  collapsed** — expanded, its children already carry the counts — per-file counts come from `git.status`
   (`GitFileChange.added/removed`, from `git diff --numstat`; untracked files count their whole content as
   added — but a binary or oversized untracked file gets no count, mirroring how tracked binaries drop out
   of `--numstat`), folder counts are summed client-side. Both views share `ChangesPanel`'s `openDiff` + `isActive`.

@@ -1,7 +1,7 @@
 /*
  * GENERATED FILE — DO NOT EDIT.
  *
- * Source:    src/styles/typography.json (v3.0.0)
+ * Source:    src/styles/typography.json (v3.1.0)
  * Generator: scripts/generate-typography.ts  ·  regenerate: bun run typography:generate
  * Drift gate: bun run typography:check (fails when this file is stale)
  *
@@ -49,6 +49,9 @@
 	--tr-line-height-relaxed: 1.4;
 	--tr-line-height-default: 1.3;
 	--tr-line-height-reading: 1.45;
+
+	/* Code row height (px) — font size × line height, rounded to a whole pixel */
+	--tr-code-row-height: 14px;
 
 	/* Letter spacing */
 	--tr-letter-spacing-normal: normal;

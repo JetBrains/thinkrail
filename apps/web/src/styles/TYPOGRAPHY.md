@@ -55,7 +55,7 @@ The leading scale is deliberately **dense** (1.25–1.4): Geist’s x-height at 
 the former 1.5–1.6 left an empty band between lines taller than the letters themselves — it read as
 near double spacing. Reading prose — `body.reading`: chat, user messages, documents — is the deliberate exception at
 `reading` 1.45: at the dense value long replies read as a compressed wall, so reading text keeps more leading
-than UI chrome. Monaco and the Pierre diff surface read `--tr-line-height-default` and stay dense. Values are short exact decimals on purpose: the production minifier rounds custom properties to
+than UI chrome. Monaco and the Pierre diff surface read `--tr-line-height-default` and stay dense; both use a whole-pixel code row (Pierre's virtualizer needs the exact row height). `codeRow` in `typography.json` names its font size and line height, and the generator emits the pre-rounded `--tr-code-row-height`, which Pierre's CSS and its virtualizer both read, because CSS `round()` is missing before Safari 15.4. Values are short exact decimals on purpose: the production minifier rounds custom properties to
 five decimals, so a repeating ratio such as 18/14 can never land on a whole pixel (it shipped as `17.9999px`).
 
 **Semantic styles** are what components use. Each names seven primitive references and nothing else, so
@@ -263,9 +263,10 @@ The allowlist is deliberately tiny, and each entry is enforced by name in
 | Surface | Why it cannot use a semantic class |
 |---|---|
 | `panels/monacoSetup.ts` | Monaco takes `fontFamily` / `fontSize` / `lineHeight` as JS options — it reads `--tr-font-family-code`, `--tr-font-size-s11`, `--tr-line-height-default`, so it cannot drift from a code block |
+| `panels/resources/code/pierreVirtualizer.ts` | Pierre's virtualizer takes its row height as a JS metric — it reads the generated `--tr-code-row-height`, the same value `.pierre-code-surface` gives `--diffs-line-height` |
 | `panels/TerminalInstance.tsx` | xterm, same reason — it reads `--tr-font-family-code` + `--tr-font-size-s13` (the primitives behind `code.text`), and owns row height through its own `lineHeight` option rather than a CSS line-height |
 | `thinkrail-extensions/visualize/web/mermaid.ts` | mermaid's theme config takes a family string (`--tr-font-family-code`) |
-| `index.css`, `styles/tokens.css`, `styles/global.css` | the mapping layers themselves; `.pierre-code-surface` passes the code family, `s11`, and default line-height into Pierre's Shadow DOM |
+| `index.css`, `styles/tokens.css`, `styles/global.css` | the mapping layers themselves; `.pierre-code-surface` passes the code family, `s11`, and the default line-height (rounded to whole pixels) into Pierre's Shadow DOM |
 
 The OTP code is **not** an exception any more: it is the named `code.otp` style (`.tr-code-otp`).
 

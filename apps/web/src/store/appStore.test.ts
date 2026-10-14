@@ -36,11 +36,12 @@ import {
 	useAppStore,
 } from "./appStore";
 import {
+	selectChatAttended,
 	selectCompactionTurnIds,
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
 	selectLastOpenChatSession,
-	selectReadyCompletionActivation,
+	selectReadyCompletionAck,
 	selectSkillsStale,
 	selectWorkspaceNavTick,
 	selectWorkspaceSessionIds,
@@ -143,11 +144,7 @@ beforeEach(() => {
 		sessions: {},
 		sessionStateByWorkspace: {},
 		sessionStateClock: 0,
-		sessionStateTickBySession: {},
 		sessionStateSnapshotInstalled: false,
-		directChatActivationTickBySession: {},
-		directActivatedCompletionBySession: {},
-		pendingDirectChatActivationBySession: {},
 		renderedCompletionBySession: {},
 		obscuredChatSessions: {},
 		extUiOrphans: [],
@@ -177,7 +174,6 @@ beforeEach(() => {
 		selectedProjectId: null,
 		activeWorkspaceId: null,
 		workspaceSelectionHistory: [],
-		pendingWorkspaceChatActivation: null,
 		activeLogin: null,
 		settingsOpen: false,
 		settingsSection: "providers",
@@ -446,7 +442,7 @@ test("queue_update folds pi's queue into the runtime; the canonical echo lands t
 	expect(rt("a").queue).toEqual({ steering: [], followUp: [] });
 });
 
-test("normalized session snapshots, pushes, and direct activation keep one exact receipt projection", () => {
+test("normalized session snapshots and pushes gate acknowledgement on the exact rendered result", () => {
 	const record = (completionId: string): SessionStateRecord => ({
 		sessionId: "state-session",
 		workspaceId: "state-workspace",
@@ -458,8 +454,11 @@ test("normalized session snapshots, pushes, and direct activation keep one exact
 			completion: { completionId, outcome: "succeeded" },
 			completionUnread: true,
 			queuedCount: 0,
+			backgroundWork: false,
 		},
 	});
+	const ready = () =>
+		selectReadyCompletionAck(useAppStore.getState(), "state-workspace", "state-session");
 	const store = useAppStore.getState();
 	store.setStatus("connected");
 	store.openChatSession("state-workspace", "state-session", null, "medium");
@@ -467,120 +466,26 @@ test("normalized session snapshots, pushes, and direct activation keep one exact
 	expect(useAppStore.getState().sessions["state-session"]?.hostState).toEqual(
 		record("completion:one").state,
 	);
+	expect(ready()).toBeNull();
 	store.noteRenderedCompletion("state-session", "completion:one");
-	expect(
-		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
-	).toBeNull();
-	store.noteDirectChatActivation("state-session");
-	expect(
-		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
-	).toBe("completion:one");
+	expect(ready()).toBe("completion:one");
 
 	store.applySessionState(record("completion:two"));
-	store.setChatObscured("state-session", true);
-	store.noteDirectChatActivation("state-session");
-	expect(useAppStore.getState().directActivatedCompletionBySession["state-session"]).toBe(
-		"completion:one",
-	);
-	store.setChatObscured("state-session", false);
+	expect(ready()).toBeNull();
+	store.noteRenderedCompletion("state-session", "completion:one");
+	expect(ready()).toBeNull();
 	store.noteRenderedCompletion("state-session", "completion:two");
-	expect(
-		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
-	).toBeNull();
+	expect(ready()).toBe("completion:two");
 
-	store.applySessionState(record("completion:three"));
-	store.noteDirectChatActivation("state-session");
-	expect(
-		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
-	).toBeNull();
-	store.noteRenderedCompletion("state-session", "completion:three");
-	expect(
-		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
-	).toBe("completion:three");
-	store.applySessionState({
-		...record("completion:three"),
-		state: { ...record("completion:three").state, queuedCount: 1 },
-	});
-	expect(useAppStore.getState().sessionStateTickBySession["state-session"]).toBeGreaterThan(
-		useAppStore.getState().directChatActivationTickBySession["state-session"] ?? 0,
-	);
-	expect(
-		selectReadyCompletionActivation(useAppStore.getState(), "state-workspace", "state-session"),
-	).toBe("completion:three");
+	store.setStatus("disconnected");
+	store.setStatus("connected");
+	expect(ready()).toBeNull();
+
 	store.deleteChat("state-workspace", "state-session");
 	expect(
 		useAppStore.getState().sessionStateByWorkspace["state-workspace"]?.["state-session"],
 	).toBeUndefined();
-	expect(useAppStore.getState().sessionStateTickBySession["state-session"]).toBeUndefined();
-});
-
-test("a cold direct open binds the first snapshot completion without a second click", () => {
-	const record = (sessionId: string, completionId: string): SessionStateRecord => ({
-		sessionId,
-		workspaceId: "cold-workspace",
-		projectId: "cold-project",
-		state: {
-			execution: "idle",
-			runId: `run:${sessionId}`,
-			needsInput: null,
-			completion: { completionId, outcome: "succeeded" },
-			completionUnread: true,
-			queuedCount: 0,
-		},
-	});
-	const store = useAppStore.getState();
-	store.setStatus("connected");
-	store.openChatSession("cold-workspace", "cold-session", null, "medium");
-	store.noteDirectChatActivation("cold-session");
-	expect(useAppStore.getState().pendingDirectChatActivationBySession).toEqual({
-		"cold-session": true,
-	});
-
-	store.installSessionStateSnapshot([record("cold-session", "completion:cold")]);
-	expect(useAppStore.getState().pendingDirectChatActivationBySession).toEqual({});
-	expect(useAppStore.getState().directActivatedCompletionBySession["cold-session"]).toBe(
-		"completion:cold",
-	);
-	store.noteRenderedCompletion("cold-session", "completion:cold");
-	expect(
-		selectReadyCompletionActivation(useAppStore.getState(), "cold-workspace", "cold-session"),
-	).toBe("completion:cold");
-
-	store.setStatus("disconnected");
-	store.setStatus("connected");
-	store.noteDirectChatActivation("cold-session");
-	expect(useAppStore.getState().pendingDirectChatActivationBySession).toEqual({
-		"cold-session": true,
-	});
-	store.installSessionStateSnapshot([record("cold-session", "completion:reconnected")]);
-	expect(useAppStore.getState().directActivatedCompletionBySession["cold-session"]).toBe(
-		"completion:reconnected",
-	);
-	const reconnected = useAppStore.getState();
-	const runtime = reconnected.sessions["cold-session"];
-	if (!runtime) throw new Error("cold session runtime is missing");
-	useAppStore.setState({
-		sessions: {
-			...reconnected.sessions,
-			"cold-session": {
-				...runtime,
-				syncedConnectionGeneration: reconnected.connectionGeneration,
-			},
-		},
-	});
-	store.noteRenderedCompletion("cold-session", "completion:reconnected");
-	expect(
-		selectReadyCompletionActivation(useAppStore.getState(), "cold-workspace", "cold-session"),
-	).toBe("completion:reconnected");
-
-	store.openChatSession("cold-workspace", "future-session", null, "medium");
-	store.noteDirectChatActivation("future-session");
-	expect(useAppStore.getState().pendingDirectChatActivationBySession).toEqual({});
-	store.applySessionState(record("future-session", "completion:future"));
-	store.noteRenderedCompletion("future-session", "completion:future");
-	expect(
-		selectReadyCompletionActivation(useAppStore.getState(), "cold-workspace", "future-session"),
-	).toBeNull();
+	expect(ready()).toBeNull();
 });
 
 test("hydrateSession seeds the queue from the summary snapshot", () => {
@@ -2496,7 +2401,6 @@ test("applyProjectUpdated closes the current project to the next Home and preser
 		workspaces: { p1: [workspace] },
 		selectedProjectId: "p1",
 		activeWorkspaceId: "w1",
-		pendingWorkspaceChatActivation: "w1",
 		tabsByWorkspace: tabs,
 	});
 
@@ -2506,7 +2410,6 @@ test("applyProjectUpdated closes the current project to the next Home and preser
 	expect(state.projects.map((candidate) => candidate.id)).toEqual(["p2"]);
 	expect(state.selectedProjectId).toBe("p2");
 	expect(state.activeWorkspaceId).toBeNull();
-	expect(state.pendingWorkspaceChatActivation).toBeNull();
 	expect(state.workspaces.p1).toEqual([workspace]);
 	expect(state.tabsByWorkspace).toBe(tabs);
 });
@@ -2594,101 +2497,29 @@ test("project and workspace navigation update both scope ids atomically", () => 
 	unsubscribe();
 });
 
-test("deliberate workspace entry activates its selected chat after layout convergence", () => {
+test("the selected chat of an entered workspace is attended once layout attention converges", () => {
 	const workspace = pushedWorkspace();
 	const sessionId = "workspace-entry-chat";
-	const completionId = "completion:workspace-entry";
-	const record: SessionStateRecord = {
-		workspaceId: workspace.id,
-		projectId: workspace.projectId,
-		sessionId,
-		state: {
-			execution: "idle",
-			runId: "run",
-			needsInput: null,
-			completion: { completionId, outcome: "succeeded" },
-			completionUnread: true,
-			queuedCount: 0,
-		},
-	};
 	useAppStore.setState({
-		status: "connected",
-		sessionStateByWorkspace: { [workspace.id]: { [sessionId]: record } },
 		layoutDocumentsByWorkspace: { [workspace.id]: selectedChatLayout(sessionId) },
 	});
+	const attended = () => selectChatAttended(useAppStore.getState(), workspace.id, sessionId);
 
 	const store = useAppStore.getState();
 	store.activateWorkspace(workspace);
-	expect(useAppStore.getState().pendingWorkspaceChatActivation).toBe(workspace.id);
-	expect(useAppStore.getState().directActivatedCompletionBySession[sessionId]).toBeUndefined();
-
+	expect(attended()).toBe(false);
 	store.setLayoutAttention(workspace.id, {
 		selectedByGroup: { center: `chat:${sessionId}` },
 		lastFocusedCenterGroupId: "center",
 		lastFocusedSideGroupId: {},
 		navigationClockByGroup: { center: 0 },
 	});
-	expect(useAppStore.getState().pendingWorkspaceChatActivation).toBeNull();
-	expect(useAppStore.getState().directActivatedCompletionBySession[sessionId]).toBe(completionId);
-});
-
-test("connection transitions expire a pending workspace-entry receipt", () => {
-	const workspace = pushedWorkspace();
-	const sessionId = "post-reconnect-chat";
-	useAppStore.setState({
-		layoutDocumentsByWorkspace: { [workspace.id]: selectedChatLayout(sessionId) },
-	});
-
-	const store = useAppStore.getState();
-	store.activateWorkspace(workspace);
-	expect(useAppStore.getState().pendingWorkspaceChatActivation).toBe(workspace.id);
-	store.setStatus("connected");
-	expect(useAppStore.getState().pendingWorkspaceChatActivation).toBeNull();
-
-	store.setLayoutAttention(workspace.id, {
-		selectedByGroup: { center: `chat:${sessionId}` },
-		lastFocusedCenterGroupId: "center",
-		lastFocusedSideGroupId: {},
-		navigationClockByGroup: { center: 0 },
-	});
-	expect(useAppStore.getState().directActivatedCompletionBySession[sessionId]).toBeUndefined();
-});
-
-test("route restoration never turns a selected visible chat into a read receipt", () => {
-	const workspace = pushedWorkspace();
-	const sessionId = "restored-chat";
-	useAppStore.setState({
-		sessionStateByWorkspace: {
-			[workspace.id]: {
-				[sessionId]: {
-					workspaceId: workspace.id,
-					projectId: workspace.projectId,
-					sessionId,
-					state: {
-						execution: "idle",
-						runId: "run",
-						needsInput: null,
-						completion: { completionId: "completion:restored", outcome: "succeeded" },
-						completionUnread: true,
-						queuedCount: 0,
-					},
-				},
-			},
-		},
-		layoutDocumentsByWorkspace: { [workspace.id]: selectedChatLayout(sessionId) },
-		layoutAttentionByWorkspace: {
-			[workspace.id]: {
-				selectedByGroup: { center: `chat:${sessionId}` },
-				lastFocusedCenterGroupId: "center",
-				lastFocusedSideGroupId: {},
-				navigationClockByGroup: { center: 0 },
-			},
-		},
-	});
-
-	useAppStore.getState().activateWorkspaceFromRoute(workspace);
-	expect(useAppStore.getState().pendingWorkspaceChatActivation).toBeNull();
-	expect(useAppStore.getState().directActivatedCompletionBySession[sessionId]).toBeUndefined();
+	expect(attended()).toBe(true);
+	store.setChatObscured(sessionId, true);
+	expect(attended()).toBe(false);
+	store.setChatObscured(sessionId, false);
+	store.selectMain();
+	expect(attended()).toBe(false);
 });
 
 test("workspace selection history tracks ordinary, route, and history-search activation", () => {
@@ -2993,8 +2824,6 @@ test("applyWorkspaceRemoved restores the most-recent workspace across projects",
 	expect(state.activeWorkspaceId).toBe("w2");
 	expect(state.selectedProjectId).toBe("p2");
 	expect(state.workspaceSelectionHistory).toEqual(["w2"]);
-	expect(state.pendingWorkspaceChatActivation).toBeNull();
-	expect(state.directActivatedCompletionBySession[previousSessionId]).toBeUndefined();
 	expect(state.toasts).toHaveLength(1);
 });
 

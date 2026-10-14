@@ -20,9 +20,11 @@ host — two copies coexist on purpose and the wiring PR deletes the old one. A 
 
 ## Identity and distribution
 
-- npm name `@thinkrail.ai/pi-<name>` (the npm org is `thinkrail.ai`, matching the product domain; org name =
-  scope), directory `pi-extensions/<name>/`. Only *published* packages use this scope — private workspace
-  packages stay `@thinkrail/*`. The scope is deliberate: unscoped `pi-*` names collide (`pi-subagents` is
+- npm name `@thinkrail/pi-<name>` (the npm org is `thinkrail`; org name = scope), directory
+  `pi-extensions/<name>/`. Private workspace packages share the scope but stay `private: true`; owning
+  the org keeps their names from being claimed on npm. Packages first shipped under the interim
+  `thinkrail.ai` org (only `@thinkrail.ai/pi-visualize@0.1.0`) are deprecated there and point here. The
+  scope is deliberate: unscoped `pi-*` names collide (`pi-subagents` is
   third-party) and the scope attributes ownership in the
   `pi.dev/packages` gallery, which is an index of npm packages carrying the `pi-package` keyword — there
   is no registry to submit to.
@@ -55,7 +57,7 @@ Required before a package's first publish, and the definition of "works in vanil
 - Gate: `bun run check:pi-packages` (`scripts/check-pi-packages.ts`, CI job `pi-packages`, provider-free).
   Packs the package and every pending portable workspace dependency, greps the tarball for Bun-only APIs,
   installs the tarballs plus pi at the catalog version into a temp agent dir **outside the repository**
-  with pi's own npm policy (`--legacy-peer-deps`), configures `packages: ["npm:@thinkrail.ai/pi-<name>"]`,
+  with pi's own npm policy (`--legacy-peer-deps`), configures `packages: ["npm:@thinkrail/pi-<name>"]`,
   then copies `scripts/pi-package-parity.node.mjs` **into the fixture** and runs it under Node so pi
   resolves from the fixture (Node ignores `import.meta.resolve`'s parent URL — resolving from the script's
   own location silently tested the repo's pi). The runner loads through `DefaultResourceLoader.reload()`,

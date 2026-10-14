@@ -159,7 +159,7 @@ export function composeText(result: PlanReviewResult, outcome: VerdictOutcome): 
 	}
 	const head = `Review verdict: REQUEST_CHANGES — step "${result.itemTitle}".`;
 	const next = outcome.canAutoFix
-		? "Address each finding below (re-open the step, fix it, mark it done with a fresh commit), then request_review again."
+		? "Fix each finding below NOW without asking the user: set the step back to in_progress (todo_update), apply the fixes, mark it done, then call request_review again."
 		: "The automated fix cycle is spent or auto-fix is off: do NOT fix now. Report these findings to the user and wait for their direction.";
 	return `${head} ${next}${rationale}${findings}`;
 }

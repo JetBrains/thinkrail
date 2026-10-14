@@ -1,7 +1,29 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { RiCloseLine as X } from "@remixicon/react";
 import type * as React from "react";
+import { useSyncExternalStore } from "react";
 import { cn } from "./utils";
+
+const OPEN_MODAL_LAYER = '[data-modal-layer][data-state="open"]';
+
+function subscribeModalLayers(onChange: () => void): () => void {
+	const observer = new MutationObserver(onChange);
+	observer.observe(document.body, {
+		childList: true,
+		subtree: true,
+		attributes: true,
+		attributeFilter: ["data-state"],
+	});
+	return () => observer.disconnect();
+}
+
+function modalLayerOpen(): boolean {
+	return document.querySelector(OPEN_MODAL_LAYER) !== null;
+}
+
+function useModalLayerOpen(): boolean {
+	return useSyncExternalStore(subscribeModalLayers, modalLayerOpen, () => false);
+}
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -14,6 +36,7 @@ function DialogOverlay({
 	return (
 		<DialogPrimitive.Overlay
 			data-testid="dialog-overlay"
+			data-modal-layer=""
 			className={cn("fixed inset-0 z-50 bg-overlay", className)}
 			{...props}
 		/>
@@ -107,4 +130,5 @@ export {
 	DialogPanel,
 	DialogTitle,
 	DialogTrigger,
+	useModalLayerOpen,
 };

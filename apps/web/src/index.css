@@ -236,7 +236,7 @@
 	--diffs-font-family: var(--tr-font-family-code);
 	--diffs-header-font-family: var(--tr-font-family-code);
 	--diffs-font-size: var(--tr-font-size-s11);
-	--diffs-line-height: var(--tr-line-height-default);
+	--diffs-line-height: var(--tr-code-row-height);
 	--diffs-foreground: var(--code-foreground);
 	--diffs-fg: var(--code-foreground);
 	--diffs-fg-number-override: var(--text-muted);

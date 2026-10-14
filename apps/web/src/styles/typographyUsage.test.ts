@@ -29,6 +29,7 @@ const PRIMITIVE_ALLOWLIST = new Set([
 	"styles/global.css",
 	"panels/monacoSetup.ts",
 	"panels/TerminalInstance.tsx",
+	"panels/resources/code/pierreVirtualizer.ts",
 	"thinkrail-extensions/visualize/web/mermaid.ts",
 ]);
 

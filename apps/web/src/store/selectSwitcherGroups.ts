@@ -1,4 +1,9 @@
-import type { Project, SessionStateRecord, Workspace } from "@thinkrail/contracts";
+import {
+	isSessionWorking,
+	type Project,
+	type SessionStateRecord,
+	type Workspace,
+} from "@thinkrail/contracts";
 import type { WorkspaceLayoutDocument } from "../shell/layout";
 import type { ClosedChat } from "./appStore";
 
@@ -32,7 +37,7 @@ function getSessionAttention(state: SessionStateRecord["state"]): SessionAttenti
 	if (state.needsInput !== null) return "needs-input";
 	if (state.completionUnread && state.completion?.outcome === "failed") return "error";
 	if (state.completionUnread) return "unread";
-	if (state.execution === "running") return "running";
+	if (isSessionWorking(state)) return "running";
 	return null;
 }
 

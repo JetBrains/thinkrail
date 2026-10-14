@@ -105,7 +105,6 @@ import {
 	isConnectedGeneration,
 	SETTLED_SHELF_PAGE,
 	selectActiveWorkspaceProjectId,
-	selectAttentionCenterTab,
 	selectLayoutResourcePlacement,
 	selectSupportsMcp,
 	selectWorkspaceById,
@@ -909,7 +908,6 @@ interface AppState {
 	/** The active workspace counts as live while this holds, whatever the idle window says. */
 	activeWorkspaceLiveLatch: boolean;
 	workspaceSelectionHistory: string[];
-	pendingWorkspaceChatActivation: string | null;
 	routeChatTarget: RouteChatTarget | null;
 	routeChatTargetGeneration: number;
 	workbenchFrame: WorkbenchFrame | null;
@@ -933,11 +931,7 @@ interface AppState {
 	sessions: Record<string, SessionRuntime>;
 	sessionStateByWorkspace: Record<string, Record<string, SessionStateRecord>>;
 	sessionStateClock: number;
-	sessionStateTickBySession: Record<string, number>;
 	sessionStateSnapshotInstalled: boolean;
-	directChatActivationTickBySession: Record<string, number>;
-	directActivatedCompletionBySession: Record<string, string>;
-	pendingDirectChatActivationBySession: Record<string, true>;
 	renderedCompletionBySession: Record<string, string>;
 	obscuredChatSessions: Record<string, true>;
 	extUiOrphans: ExtUiRequest[];
@@ -1028,7 +1022,6 @@ interface AppState {
 	hydrateExpandedProjects: (projectIds: readonly string[]) => void;
 	selectMain: () => void;
 	activateWorkspace: (workspace: Pick<Workspace, "id" | "projectId">) => void;
-	consumeWorkspaceChatActivation: (workspaceId: string) => void;
 	activateWorkspaceFromRoute: (
 		workspace: Pick<Workspace, "id" | "projectId">,
 		sessionId?: string,
@@ -1200,7 +1193,6 @@ interface AppState {
 	) => void;
 	installSessionStateSnapshot: (records: readonly SessionStateRecord[]) => void;
 	applySessionState: (record: SessionStateRecord) => void;
-	noteDirectChatActivation: (sessionId: string) => void;
 	noteRenderedCompletion: (sessionId: string, completionId: string) => void;
 	setChatObscured: (sessionId: string, obscured: boolean) => void;
 	reopenChat: (workspaceId: string, sessionId: string, options?: LayoutOpenOptions) => void;
@@ -1450,15 +1442,12 @@ function pruneExpandedProjects(
 function reconcileProjectNavigation(
 	state: Pick<AppState, "selectedProjectId" | "activeWorkspaceId" | "workspaces">,
 	projects: Project[],
-):
-	| Pick<AppState, "selectedProjectId" | "activeWorkspaceId" | "pendingWorkspaceChatActivation">
-	| Record<string, never> {
+): Pick<AppState, "selectedProjectId" | "activeWorkspaceId"> | Record<string, never> {
 	const currentProjectId = selectActiveWorkspaceProjectId(state) ?? state.selectedProjectId;
 	if (!currentProjectId || projects.some((project) => project.id === currentProjectId)) return {};
 	return {
 		selectedProjectId: projects[0]?.id ?? null,
 		activeWorkspaceId: null,
-		pendingWorkspaceChatActivation: null,
 	};
 }
 
@@ -1733,10 +1722,6 @@ function withoutChat(
 	const hasResources = s.resourceSnapshots[workspaceId]?.[sessionId] !== undefined;
 	const hasMcpStatus = s.mcpByWorkspace[workspaceId]?.sessions[sessionId] !== undefined;
 	const hasHostState = s.sessionStateByWorkspace[workspaceId]?.[sessionId] !== undefined;
-	const hasStateTick = Object.hasOwn(s.sessionStateTickBySession, sessionId);
-	const hasActivationTick = Object.hasOwn(s.directChatActivationTickBySession, sessionId);
-	const hasActivatedCompletion = Object.hasOwn(s.directActivatedCompletionBySession, sessionId);
-	const hasPendingActivation = Object.hasOwn(s.pendingDirectChatActivationBySession, sessionId);
 	const hasRenderedCompletion = Object.hasOwn(s.renderedCompletionBySession, sessionId);
 	const isObscured = Boolean(s.obscuredChatSessions[sessionId]);
 	const hasSkillBaseline = Object.hasOwn(s.skillsSyncedTickBySession, sessionId);
@@ -1757,10 +1742,6 @@ function withoutChat(
 		!hasResources &&
 		!hasMcpStatus &&
 		!hasHostState &&
-		!hasStateTick &&
-		!hasActivationTick &&
-		!hasActivatedCompletion &&
-		!hasPendingActivation &&
 		!hasRenderedCompletion &&
 		!isObscured &&
 		!hasSkillBaseline &&
@@ -1845,33 +1826,6 @@ function withoutChat(
 						...s.sessionStateByWorkspace,
 						[workspaceId]: omitKey(s.sessionStateByWorkspace[workspaceId] ?? {}, sessionId),
 					},
-				}
-			: {}),
-		...(hasStateTick
-			? { sessionStateTickBySession: omitKey(s.sessionStateTickBySession, sessionId) }
-			: {}),
-		...(hasActivationTick
-			? {
-					directChatActivationTickBySession: omitKey(
-						s.directChatActivationTickBySession,
-						sessionId,
-					),
-				}
-			: {}),
-		...(hasActivatedCompletion
-			? {
-					directActivatedCompletionBySession: omitKey(
-						s.directActivatedCompletionBySession,
-						sessionId,
-					),
-				}
-			: {}),
-		...(hasPendingActivation
-			? {
-					pendingDirectChatActivationBySession: omitKey(
-						s.pendingDirectChatActivationBySession,
-						sessionId,
-					),
 				}
 			: {}),
 		...(hasRenderedCompletion
@@ -2123,7 +2077,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 	activeWorkspaceId: null,
 	activeWorkspaceLiveLatch: false,
 	workspaceSelectionHistory: [],
-	pendingWorkspaceChatActivation: null,
 	routeChatTarget: null,
 	routeChatTargetGeneration: 0,
 	workbenchFrame: null,
@@ -2147,11 +2100,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	sessions: {},
 	sessionStateByWorkspace: {},
 	sessionStateClock: 0,
-	sessionStateTickBySession: {},
 	sessionStateSnapshotInstalled: false,
-	directChatActivationTickBySession: {},
-	directActivatedCompletionBySession: {},
-	pendingDirectChatActivationBySession: {},
 	renderedCompletionBySession: {},
 	obscuredChatSessions: {},
 	extUiOrphans: [],
@@ -2349,9 +2298,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			resourceSnapshots: staleChatResources(state.resourceSnapshots),
 			connectionGeneration:
 				status === "connected" ? state.connectionGeneration + 1 : state.connectionGeneration,
-			pendingWorkspaceChatActivation: null,
 			sessionStateSnapshotInstalled: false,
-			pendingDirectChatActivationBySession: {},
 		})),
 	installWelcomeSnapshot: (
 		protocolVersion,
@@ -2467,10 +2414,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 				workspaceSelectionHistory: state.workspaceSelectionHistory.filter(
 					(id) => id !== workspaceId,
 				),
-				pendingWorkspaceChatActivation:
-					state.pendingWorkspaceChatActivation === workspaceId
-						? null
-						: state.pendingWorkspaceChatActivation,
 				fsChangesByWorkspace: omitKey(state.fsChangesByWorkspace, workspaceId),
 				turnsByWorkspace: omitKey(state.turnsByWorkspace, workspaceId),
 				resourceSnapshots: omitKey(state.resourceSnapshots, workspaceId),
@@ -2509,7 +2452,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set((state) => ({
 			selectedProjectId,
 			activeWorkspaceId: null,
-			pendingWorkspaceChatActivation: null,
 			...(opts?.reveal
 				? { expandedProjectIds: withExpandedProject(state.expandedProjectIds, selectedProjectId) }
 				: {}),
@@ -2549,29 +2491,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 		set({
 			selectedProjectId: null,
 			activeWorkspaceId: null,
-			pendingWorkspaceChatActivation: null,
 			routeChatTarget: null,
 		}),
 	activateWorkspace: (workspace) => {
 		if (get().removedWorkspaceIds[workspace.id]) return;
-		set((state) => ({
-			...workspaceActivationPatch(state, workspace),
-			pendingWorkspaceChatActivation: workspace.id,
-		}));
-		get().consumeWorkspaceChatActivation(workspace.id);
-	},
-	consumeWorkspaceChatActivation: (workspaceId) => {
-		const state = get();
-		if (
-			state.activeWorkspaceId !== workspaceId ||
-			state.pendingWorkspaceChatActivation !== workspaceId
-		) {
-			return;
-		}
-		const active = selectAttentionCenterTab(state, workspaceId);
-		if (!active) return;
-		set({ pendingWorkspaceChatActivation: null });
-		if (active.kind === "chat") get().noteDirectChatActivation(active.sessionId);
+		set((state) => workspaceActivationPatch(state, workspace));
 	},
 	activateWorkspaceFromRoute: (workspace, sessionId) =>
 		set((state) => {
@@ -2580,7 +2504,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 			return {
 				...advanced.patch,
 				...workspaceActivationPatch(state, workspace),
-				pendingWorkspaceChatActivation: null,
 				routeChatTarget: sessionId
 					? {
 							workspaceId: workspace.id,
@@ -2616,8 +2539,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 						layoutStateReady: true,
 					},
 		);
-		const pending = get().pendingWorkspaceChatActivation;
-		if (pending) get().consumeWorkspaceChatActivation(pending);
 	},
 	applyLocalLayoutState: (payload, invalidateProjection = false) => {
 		set((state) => ({
@@ -2628,8 +2549,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 			localLayoutPreferences: payload.preferences,
 			layoutProjectionEpoch: state.layoutProjectionEpoch + (invalidateProjection ? 1 : 0),
 		}));
-		const pending = get().pendingWorkspaceChatActivation;
-		if (pending) get().consumeWorkspaceChatActivation(pending);
 	},
 	setLocalLayoutPreferences: (preferences) => set({ localLayoutPreferences: preferences }),
 	setLayoutAttention: (workspaceId, attention) => {
@@ -2643,7 +2562,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 						},
 					},
 		);
-		get().consumeWorkspaceChatActivation(workspaceId);
 	},
 	syncLegacySelection: (workspaceId, selection) =>
 		set((state) => {
@@ -3529,27 +3447,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 				(frame) =>
 					!isDialogRequest(frame) || dialogIsAuthorized(stateBySession.get(frame.sessionId), frame),
 			);
-			const sessionStateClock = s.sessionStateClock + 1;
-			const sessionStateTickBySession = Object.fromEntries(
-				[...stateBySession.keys()].map((sessionId) => [sessionId, sessionStateClock]),
-			);
-			const directActivatedCompletionBySession = {
-				...s.directActivatedCompletionBySession,
-			};
-			for (const sessionId of Object.keys(s.pendingDirectChatActivationBySession)) {
-				const state = stateBySession.get(sessionId);
-				const completionId = state?.completionUnread ? state.completion?.completionId : undefined;
-				if (completionId) directActivatedCompletionBySession[sessionId] = completionId;
-			}
 			return {
 				sessionStateByWorkspace,
 				sessions,
 				extUiOrphans,
-				sessionStateClock,
-				sessionStateTickBySession,
+				sessionStateClock: s.sessionStateClock + 1,
 				sessionStateSnapshotInstalled: true,
-				directActivatedCompletionBySession,
-				pendingDirectChatActivationBySession: {},
 			};
 		}),
 	applySessionState: (record) =>
@@ -3586,10 +3489,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 			const sessionStateClock = s.sessionStateClock + 1;
 			return {
 				sessionStateClock,
-				sessionStateTickBySession: {
-					...s.sessionStateTickBySession,
-					[record.sessionId]: sessionStateClock,
-				},
 				sessionStateByWorkspace: {
 					...s.sessionStateByWorkspace,
 					[record.workspaceId]: { ...workspaceStates, [record.sessionId]: record },
@@ -3600,40 +3499,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 							sessions: {
 								...s.sessions,
 								[record.sessionId]: withHostState(runtime, record.state),
-							},
-						}
-					: {}),
-			};
-		}),
-	noteDirectChatActivation: (sessionId) =>
-		set((s) => {
-			if (s.obscuredChatSessions[sessionId]) return {};
-			const sessionStateClock = s.sessionStateClock + 1;
-			const record = Object.values(s.sessionStateByWorkspace).find(
-				(records) => records[sessionId] !== undefined,
-			)?.[sessionId];
-			const completionId = record?.state.completionUnread
-				? record.state.completion?.completionId
-				: undefined;
-			return {
-				sessionStateClock,
-				directChatActivationTickBySession: {
-					...s.directChatActivationTickBySession,
-					[sessionId]: sessionStateClock,
-				},
-				...(completionId
-					? {
-							directActivatedCompletionBySession: {
-								...s.directActivatedCompletionBySession,
-								[sessionId]: completionId,
-							},
-						}
-					: {}),
-				...(!s.sessionStateSnapshotInstalled
-					? {
-							pendingDirectChatActivationBySession: {
-								...s.pendingDirectChatActivationBySession,
-								[sessionId]: true,
 							},
 						}
 					: {}),
@@ -4161,7 +4026,6 @@ export const useAppStore = create<AppState>((set, get) => ({
 					...(advanced ? { navigation: advanced.stamp } : {}),
 				},
 				...workspaceActivationPatch(state, { id: req.workspaceId, projectId: req.projectId }),
-				pendingWorkspaceChatActivation: null,
 			};
 		}),
 	clearChatLocation: () => set({ chatLocationRequest: null }),

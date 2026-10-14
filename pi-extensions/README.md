@@ -1,6 +1,6 @@
 # Publishing pi packages
 
-How-to for the packages under `pi-extensions/*`, published to npm as `@thinkrail.ai/pi-<name>` and usable
+How-to for the packages under `pi-extensions/*`, published to npm as `@thinkrail/pi-<name>` and usable
 in vanilla `pi` without ThinkRail. Decisions and rationale live in [SPEC.md](SPEC.md); this file is the
 checklist.
 
@@ -9,7 +9,7 @@ checklist.
 1. Create `pi-extensions/<name>/` **beside** its predecessor (if one exists under `packages/`); never
    modify or delete the old package in the same PR — the wiring PR does that later.
 2. `package.json`: copy `visualize/package.json` and adjust. Non-negotiables:
-   - `name: "@thinkrail.ai/pi-<name>"`, `version: "0.0.0"` (the first changeset produces the first
+   - `name: "@thinkrail/pi-<name>"`, `version: "0.0.0"` (the first changeset produces the first
      real version), `private` absent, `license: "Apache-2.0"`, `repository.directory`,
      `publishConfig: { access: "public", provenance: true }`.
    - `keywords` include `"pi-package"` and a `pi` manifest (`extensions`, `skills` …) **only** for an
@@ -19,7 +19,7 @@ checklist.
    - Pi SDK packages (`@earendil-works/pi-ai`, `pi-coding-agent`, `pi-tui`, `pi-agent-core`, `typebox`) are
      `peerDependencies: "*"` and `devDependencies: "catalog:"`. Other runtime deps: exact pins.
 3. Copy `LICENSE` from the repo root. Write a `README.md` whose first lines are
-   `pi install npm:@thinkrail.ai/pi-<name>` and what the package adds.
+   `pi install npm:@thinkrail/pi-<name>` and what the package adds.
 4. Create `SPEC.md` (`parent: module-pi-extensions`) and add the package to the members table in
    [SPEC.md](SPEC.md).
 5. Register the package in `scripts/check-module-boundaries.ts` (`{ root: "pi-extensions/<name>", allowed: [] }`
@@ -71,7 +71,7 @@ checklist.
 ## First publish of a new package (one-time bootstrap)
 
 npm Trusted Publishing can only be configured on a package that already exists, so the very first
-version is published by a human who owns the `thinkrail.ai` npm org:
+version is published by a human who owns the `thinkrail` npm org:
 
 ```bash
 bun run release:pack <dir>                      # e.g. visualize → dist/pi-packages/<name>-<version>.tgz

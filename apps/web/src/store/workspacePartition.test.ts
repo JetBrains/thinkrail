@@ -197,11 +197,11 @@ describe("selectWorkspacePartition", () => {
 	];
 	const state = { ...base, workspaces: { p1: rows } };
 
-	test("host order by default: Default first, then the host's list order in both lists", () => {
+	test("created order by default: Default first, then newest created first in both lists", () => {
 		const partition = selectWorkspacePartition(state, "p1", NOW);
-		expect(partition.live.map((w) => w.id)).toEqual(["home", "b-old", "a-new"]);
-		expect(partition.settled.map((row) => row.workspace.id)).toEqual(["merged", "idle"]);
-		expect(partition.settled.map((row) => row.reason.kind)).toEqual(["review", "idle"]);
+		expect(partition.live.map((w) => w.id)).toEqual(["home", "a-new", "b-old"]);
+		expect(partition.settled.map((row) => row.workspace.id)).toEqual(["idle", "merged"]);
+		expect(partition.settled.map((row) => row.reason.kind)).toEqual(["idle", "review"]);
 	});
 
 	test("recent order: Default stays first, then newest activity; settled rows sort the same way", () => {
@@ -211,13 +211,13 @@ describe("selectWorkspacePartition", () => {
 		expect(partition.settled.map((row) => row.workspace.id)).toEqual(["merged", "idle"]);
 	});
 
-	test("recent order breaks activity ties by host order", () => {
+	test("recent order breaks activity ties newest created first", () => {
 		const tied = [ws("first", { lastActiveAt: NOW }), ws("second", { lastActiveAt: NOW })];
 		expect(
 			selectWorkspacePartition({ ...base, workspaces: { p1: tied } }, "p1", NOW, "recent").live.map(
 				(w) => w.id,
 			),
-		).toEqual(["first", "second"]);
+		).toEqual(["second", "first"]);
 	});
 
 	test("an unknown project partitions to nothing", () => {

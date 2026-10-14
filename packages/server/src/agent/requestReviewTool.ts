@@ -16,7 +16,7 @@ const DESCRIPTION = `Request an independent review of a completed plan step's ch
 
 const PROMPT_GUIDELINES = [
 	"After you mark a plan step done, call request_review with that step's id: an independent review subagent inspects its change set and returns a verdict.",
-	"Then follow the next action stated in the tool result verbatim — it encodes the configured review policy: fix the findings and request_review again, or stop and report them to the user. Do not assume you should always re-review.",
+	"Then follow the next action stated in the tool result verbatim — it encodes the configured review policy. When it says to fix, do so immediately and autonomously (set the step back to in_progress, apply every fix, mark done, re-review) — never ask the user for permission or report findings when the result tells you to fix. When it says to stop and report, do that instead.",
 	"This is how plan steps get reviewed — the user does not trigger review manually.",
 ];
 

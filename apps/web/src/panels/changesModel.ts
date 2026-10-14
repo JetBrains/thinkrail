@@ -7,6 +7,7 @@ import type {
 } from "@thinkrail/contracts";
 import { tupleKey } from "../lib";
 import { extendFolderChain, startFolderChain } from "./folderChains";
+import { VIRTUALIZED_DIFF_LINES } from "./largeDiff";
 
 export function statusNameClass(status: GitFileStatus): string {
 	switch (status) {
@@ -95,6 +96,15 @@ export function sectionCollapsedByDefault(change: GitFileChange): boolean {
 const SECTION_CHROME_HEIGHT = 232;
 const SECTION_HEIGHT_PER_LINE = 40;
 const SECTION_HEIGHT_MAX = 20_000;
+
+export function stackedDiffBounded(
+	boundedDiff: "always" | "large" | undefined,
+	lineCount: number,
+): boolean {
+	return (
+		boundedDiff === "always" || (boundedDiff === "large" && lineCount > VIRTUALIZED_DIFF_LINES)
+	);
+}
 
 export function estimatedSectionHeight(change: GitFileChange): number {
 	const lines = (change.added ?? 0) + (change.removed ?? 0);

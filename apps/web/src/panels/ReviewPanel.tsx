@@ -53,10 +53,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 			setExpanded(new Set(expanded).add(activeReviewedPath));
 	}
 
-	const openChat = (sessionId: string) => {
-		useAppStore.getState().noteDirectChatActivation(sessionId);
-		return openChatInTab(workspaceId, sessionId);
-	};
+	const openChat = (sessionId: string) => openChatInTab(workspaceId, sessionId);
 
 	const openSurface = (path: string, surface: ReviewSurface) => {
 		if (surface.kind === "file") {

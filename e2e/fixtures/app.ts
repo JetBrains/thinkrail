@@ -243,6 +243,13 @@ export function worktreeRow(page: Page, name: string): Locator {
 	});
 }
 
+export async function setWindowFocus(page: Page, focused: boolean): Promise<void> {
+	await page.evaluate((value) => {
+		Object.defineProperty(document, "hasFocus", { configurable: true, value: () => value });
+		window.dispatchEvent(new Event(value ? "focus" : "blur"));
+	}, focused);
+}
+
 export function activeWorktreeRow(page: Page): Locator {
 	return worktreeRows(page).and(page.locator('[data-active="true"]'));
 }

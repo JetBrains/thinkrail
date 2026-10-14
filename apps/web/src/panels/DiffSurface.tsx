@@ -1,4 +1,5 @@
 import type { ChangeReceipt, GitDiffScope, ResourceMeta } from "@thinkrail/contracts";
+import { Button } from "@thinkrail/ui/button";
 import {
 	type ComponentType,
 	type LazyExoticComponent,
@@ -24,6 +25,8 @@ import { selectWorkspaceIsRunning, toast, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { canOfferChangeMutations, scopeHasMutableModifiedSide } from "./changeMutationAvailability";
 import { splitPath } from "./changesModel";
+import { isDiffTooExpensive, surfaceLineCount, VIRTUALIZED_DIFF_LINES } from "./largeDiff";
+import { openFileInTab } from "./openTabs";
 import {
 	PENDING_TEXT_META,
 	rendererImplementationKey,
@@ -65,6 +68,7 @@ export interface DiffSurface {
 	mobile: boolean;
 	original: ResourceContent;
 	modified: ResourceContent;
+	lineCount: number;
 	review: FileReview;
 	reviewable: boolean;
 	hunkActions: HunkActions | undefined;
@@ -171,17 +175,25 @@ export function useDiffSurface({
 	const placedThreadIds =
 		placement?.implementationKey === implementationKey ? placement.ids : undefined;
 
-	const original = sideContent(
-		content.original,
-		content.meta?.original,
-		content.originalOid ? resourceBytesUrl(workspaceId, path, content.originalOid) : null,
+	const original = useMemo(
+		() =>
+			sideContent(
+				content.original,
+				content.meta?.original,
+				content.originalOid ? resourceBytesUrl(workspaceId, path, content.originalOid) : null,
+			),
+		[content.original, content.meta?.original, content.originalOid, workspaceId, path],
 	);
 	const modifiedOid =
 		scope.kind === "commit" ? scope.sha : scope.kind === "turn" ? scope.headTree : null;
-	const modified = sideContent(
-		content.modified,
-		content.meta?.modified,
-		resourceBytesUrl(workspaceId, path, modifiedOid),
+	const modified = useMemo(
+		() =>
+			sideContent(
+				content.modified,
+				content.meta?.modified,
+				resourceBytesUrl(workspaceId, path, modifiedOid),
+			),
+		[content.modified, content.meta?.modified, modifiedOid, workspaceId, path],
 	);
 	const modifiedText = modified.kind === "text" ? modified.text : "";
 	const { base } = splitPath(path);
@@ -290,6 +302,8 @@ export function useDiffSurface({
 		[agentWorking, askAgent, mutationsAvailable, revertBlock, revertFile, triage],
 	);
 
+	const lineCount = useMemo(() => surfaceLineCount(original, modified), [original, modified]);
+
 	return {
 		resource,
 		candidates,
@@ -298,6 +312,7 @@ export function useDiffSurface({
 		mobile,
 		original,
 		modified,
+		lineCount,
 		review,
 		reviewable,
 		hunkActions,
@@ -325,6 +340,12 @@ export function DiffSurfaceBody({
 }) {
 	const { renderer, candidates, review, reviewable, hunkActions, placedThreadIds } = surface;
 	const reviews = reviewable ? [review.worktree, review.base] : [];
+	const tooExpensive = useMemo(
+		() => isDiffTooExpensive(surface.original, surface.modified),
+		[surface.original, surface.modified],
+	);
+	const [showLargeDiff, setShowLargeDiff] = useState(false);
+	const { workspaceId, path } = surface.resource;
 	return (
 		<>
 			<UnplacedReviewStrip
@@ -336,23 +357,53 @@ export function DiffSurfaceBody({
 				onSelectRenderer={onSelectRenderer}
 			/>
 			<div className={bodyClassName}>
-				<Suspense fallback={loading}>
-					<RendererDiff
-						key={surface.implementationKey}
-						renderer={renderer}
-						implementationKey={surface.implementationKey}
-						resource={surface.resource}
-						original={surface.original}
-						modified={surface.modified}
-						layout={view === "split" ? "split" : "unified"}
-						ignoreWhitespace={ignoreWhitespace}
-						{...(reviewable ? { review } : {})}
-						{...(hunkActions ? { hunkActions } : {})}
-						onPlacedThreadIds={surface.onPlacedThreadIds}
-						viewState={viewState}
-						{...(onViewState ? { onViewState } : {})}
-					/>
-				</Suspense>
+				{tooExpensive && !showLargeDiff ? (
+					<div data-testid="diff-too-large" className="flex flex-col items-start gap-8 px-12 py-8">
+						<p className="tr-text-ui text-text-muted">
+							This diff is too expensive to show automatically. Rendering it can freeze the app for
+							a while.
+						</p>
+						<div className="flex gap-8">
+							<Button
+								size="sm"
+								variant="outline"
+								data-testid="diff-show-anyway"
+								onClick={() => setShowLargeDiff(true)}
+							>
+								Show diff anyway
+							</Button>
+							{surface.modified.kind === "text" && reviewable ? (
+								<Button
+									size="sm"
+									variant="ghost"
+									data-testid="diff-open-file"
+									onClick={() => void openFileInTab(workspaceId, path, "keep")}
+								>
+									Open file
+								</Button>
+							) : null}
+						</div>
+					</div>
+				) : (
+					<Suspense fallback={loading}>
+						<RendererDiff
+							key={surface.implementationKey}
+							renderer={renderer}
+							implementationKey={surface.implementationKey}
+							resource={surface.resource}
+							original={surface.original}
+							modified={surface.modified}
+							layout={view === "split" ? "split" : "unified"}
+							ignoreWhitespace={ignoreWhitespace}
+							{...(reviewable ? { review } : {})}
+							{...(hunkActions ? { hunkActions } : {})}
+							onPlacedThreadIds={surface.onPlacedThreadIds}
+							viewState={viewState}
+							{...(onViewState ? { onViewState } : {})}
+							virtualize={surface.lineCount > VIRTUALIZED_DIFF_LINES}
+						/>
+					</Suspense>
+				)}
 			</div>
 		</>
 	);

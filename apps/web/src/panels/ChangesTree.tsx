@@ -90,7 +90,7 @@ function ChangeNodeRow({
 					expanded={expanded}
 					label={node.name}
 					onClick={() => setExpanded((v) => !v)}
-					trailing={<DiffStatBadge added={node.added} removed={node.removed} />}
+					trailing={expanded ? null : <DiffStatBadge added={node.added} removed={node.removed} />}
 				/>
 				<span className={ROW_MENU_SLOT} />
 			</div>

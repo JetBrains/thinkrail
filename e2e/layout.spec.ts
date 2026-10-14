@@ -343,6 +343,19 @@ test("outer side widths publish on pointer-up and restore after reload", async (
 	expect(Math.abs((await width(page.getByTestId("right-stack"))) - resized)).toBeLessThan(24);
 });
 
+test("resize hit areas leave the preceding panel's scrollbar edge alone", async ({ page }) => {
+	await openDefaultWorkbench(page);
+	const handle = page.getByTestId("resize-right");
+	const box = await handle.boundingBox();
+	if (!box) throw new Error("right resize handle has no box");
+	const y = box.y + box.height / 2;
+
+	await page.mouse.move(box.x - 3, y);
+	await expect(handle).toHaveAttribute("data-resize-handle-state", "inactive");
+	await page.mouse.move(box.x + box.width - 1, y);
+	await expect(handle).toHaveAttribute("data-resize-handle-state", "hover");
+});
+
 test("one local frame survives workspace switches while resource tabs stay workspace-specific", async ({
 	page,
 }) => {

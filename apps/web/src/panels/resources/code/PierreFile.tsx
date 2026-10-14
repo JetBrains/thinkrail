@@ -1,5 +1,5 @@
 import type { LineAnnotation, SelectedLineRange } from "@pierre/diffs";
-import { File } from "@pierre/diffs/react";
+import { File, VirtualizerContext } from "@pierre/diffs/react";
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -9,6 +9,7 @@ import { ReviewThreadCard } from "../../ReviewThreadCard";
 import { useScrollViewState } from "../../useScrollViewState";
 import { type AnnotationSlot, reconcileAnnotationSlots } from "./annotationSlots";
 import PierreProvider from "./PierreProvider";
+import { PierreScroller } from "./PierreScroller";
 import {
 	composerLineLabel,
 	draftLineLabel,
@@ -16,6 +17,7 @@ import {
 	threadLineRange,
 	usePierreFocus,
 } from "./pierreReview";
+import { usePierreVirtualizer } from "./pierreVirtualizer";
 
 const NO_PLACED_THREADS: ReadonlySet<string> = new Set();
 
@@ -143,62 +145,66 @@ function PierreFileSurface({
 		viewState,
 		onViewState,
 	);
-	usePierreFocus(rootRef, [review], placedThreadIds);
+	const { virtualizer, metrics, attach } = usePierreVirtualizer(attachScroller);
+	usePierreFocus(rootRef, virtualizer, [{ review }], placedThreadIds);
 
 	return (
-		<div
-			ref={attachScroller}
-			data-testid="file-view"
-			className="h-full overflow-auto bg-container-workspace-bg pierre-code-surface pierre-file-surface"
+		<PierreScroller
+			attach={attach}
+			testId="file-view"
+			className="h-full overflow-auto bg-container-workspace-bg [overflow-anchor:none] pierre-code-surface pierre-file-surface"
 		>
-			<File<FileAnnotationMetadata>
-				file={file}
-				options={options}
-				lineAnnotations={annotations}
-				selectedLines={selectedLines}
-				className="min-h-full"
-				renderGutterUtility={(getHoveredLine) => (
-					<IconTooltip label="Comment on this line">
-						<button
-							type="button"
-							data-testid="review-add-icon"
-							aria-label="Comment on this line"
-							onPointerDown={(event) => {
-								event.preventDefault();
-								event.stopPropagation();
-							}}
-							onClick={() => {
-								const line = getHoveredLine();
-								if (line) openSelection({ start: line.lineNumber, end: line.lineNumber });
-							}}
-							className="flex size-24 items-center justify-center rounded-sm bg-primary text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
-						>
-							<MessageSquarePlus className="size-14" />
-						</button>
-					</IconTooltip>
-				)}
-				renderAnnotation={(annotation) => {
-					const metadata = annotation.metadata;
-					if (metadata.kind === "thread") {
-						const thread = threadById.get(metadata.id);
-						return thread && review && placedThreadIds.has(metadata.id) ? (
-							<ReviewThreadCard key={thread.id} thread={thread} actions={review.actions} />
-						) : null;
-					}
-					if (!composer || composer.id !== metadata.id || !review) return null;
-					return (
-						<ReviewComposer
-							key={composer.id}
-							draft={composer.draft}
-							label={composer.label}
-							commenting={review.commenting}
-							onClose={closeComposer}
-							className="review-composer-flow"
-						/>
-					);
-				}}
-			/>
-		</div>
+			<VirtualizerContext.Provider value={virtualizer}>
+				<File<FileAnnotationMetadata>
+					file={file}
+					options={options}
+					metrics={metrics}
+					lineAnnotations={annotations}
+					selectedLines={selectedLines}
+					className="flex-1"
+					renderGutterUtility={(getHoveredLine) => (
+						<IconTooltip label="Comment on this line">
+							<button
+								type="button"
+								data-testid="review-add-icon"
+								aria-label="Comment on this line"
+								onPointerDown={(event) => {
+									event.preventDefault();
+									event.stopPropagation();
+								}}
+								onClick={() => {
+									const line = getHoveredLine();
+									if (line) openSelection({ start: line.lineNumber, end: line.lineNumber });
+								}}
+								className="flex size-24 items-center justify-center rounded-sm bg-primary text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
+							>
+								<MessageSquarePlus className="size-14" />
+							</button>
+						</IconTooltip>
+					)}
+					renderAnnotation={(annotation) => {
+						const metadata = annotation.metadata;
+						if (metadata.kind === "thread") {
+							const thread = threadById.get(metadata.id);
+							return thread && review && placedThreadIds.has(metadata.id) ? (
+								<ReviewThreadCard key={thread.id} thread={thread} actions={review.actions} />
+							) : null;
+						}
+						if (!composer || composer.id !== metadata.id || !review) return null;
+						return (
+							<ReviewComposer
+								key={composer.id}
+								draft={composer.draft}
+								label={composer.label}
+								commenting={review.commenting}
+								onClose={closeComposer}
+								className="review-composer-flow"
+							/>
+						);
+					}}
+				/>
+			</VirtualizerContext.Provider>
+		</PierreScroller>
 	);
 }
 

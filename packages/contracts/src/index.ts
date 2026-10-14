@@ -36,7 +36,12 @@ export {
 } from "./domain";
 export type * from "./nativeClient";
 export type * from "./piProtocol";
-export { assistantToolCallsAreExecutable, isTranscriptMessageRole, sameModel } from "./piProtocol";
+export {
+	assistantToolCallsAreExecutable,
+	isSessionWorking,
+	isTranscriptMessageRole,
+	sameModel,
+} from "./piProtocol";
 export type { QuitConfirmationDependencies } from "./quitConfirmation";
 export { createQuitConfirmation, QUIT_CONFIRMATION } from "./quitConfirmation";
 export * from "./wsProtocol";

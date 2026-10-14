@@ -14,7 +14,7 @@ const modules = {
 	"packages/pi-background-commands": "pi-background-commands",
 	"packages/pi-subagents": "pi-subagents",
 	"packages/pi-dag": "pi-dag",
-	"pi-extensions/visualize": "@thinkrail.ai/pi-visualize",
+	"pi-extensions/visualize": "@thinkrail/pi-visualize",
 	"packages/server": "@thinkrail/server",
 	"apps/web": "@thinkrail/web",
 	"apps/cli": "@thinkrail/cli",
@@ -139,15 +139,15 @@ test("keeps published pi packages free of host imports and unwired from the host
 		"pi-extensions/visualize/src/leak.ts",
 		'import "@thinkrail/server"; import "pi-delegation";',
 	);
-	write(root, "packages/server/src/early.ts", 'import "@thinkrail.ai/pi-visualize";');
+	write(root, "packages/server/src/early.ts", 'import "@thinkrail/pi-visualize";');
 	write(
 		root,
 		"apps/web/src/early.ts",
-		'import type { VisualizeParams } from "@thinkrail.ai/pi-visualize";',
+		'import type { VisualizeParams } from "@thinkrail/pi-visualize";',
 	);
 	expect(moduleBoundaryViolations(root)).toEqual([
-		'apps/web/src/early.ts: import "@thinkrail.ai/pi-visualize" creates forbidden apps/web -> pi-extensions/visualize edge',
-		'packages/server/src/early.ts: import "@thinkrail.ai/pi-visualize" creates forbidden packages/server -> pi-extensions/visualize edge',
+		'apps/web/src/early.ts: import "@thinkrail/pi-visualize" creates forbidden apps/web -> pi-extensions/visualize edge',
+		'packages/server/src/early.ts: import "@thinkrail/pi-visualize" creates forbidden packages/server -> pi-extensions/visualize edge',
 		'pi-extensions/visualize/src/leak.ts: import "@thinkrail/server" creates forbidden pi-extensions/visualize -> packages/server edge',
 		'pi-extensions/visualize/src/leak.ts: import "pi-delegation" creates forbidden pi-extensions/visualize -> packages/pi-delegation edge',
 	]);
@@ -215,7 +215,7 @@ function sdkFixture(): string {
 	for (const [moduleRoot, name] of Object.entries({
 		"packages/ui": "@thinkrail/ui",
 		"packages/extension-api": "@thinkrail/extension-api",
-		"pi-extensions/future": "@thinkrail.ai/pi-future",
+		"pi-extensions/future": "@thinkrail/pi-future",
 		"thinkrail-extensions/future": "@thinkrail/ext-future",
 		"thinkrail-extensions/another": "@thinkrail/ext-another",
 	})) {
@@ -300,13 +300,9 @@ test("discovers new pi and ThinkRail extensions and rejects host and sibling dep
 	write(
 		root,
 		"thinkrail-extensions/future/web/pi.ts",
-		'import type { Value } from "@thinkrail.ai/pi-future";',
+		'import type { Value } from "@thinkrail/pi-future";',
 	);
-	write(
-		root,
-		"thinkrail-extensions/future/server/sibling.ts",
-		'import "@thinkrail.ai/pi-visualize";',
-	);
+	write(root, "thinkrail-extensions/future/server/sibling.ts", 'import "@thinkrail/pi-visualize";');
 	expect(moduleBoundaryViolations(root)).toHaveLength(5);
 });
 
@@ -320,7 +316,7 @@ test.each([
 	for (const [moduleRoot, name] of Object.entries({
 		"packages/ui": "@thinkrail/ui",
 		"packages/extension-api": "@thinkrail/extension-api",
-		"pi-extensions/future": "@thinkrail.ai/pi-future",
+		"pi-extensions/future": "@thinkrail/pi-future",
 		"thinkrail-extensions/future": "@thinkrail/ext-future",
 	})) {
 		write(
@@ -439,12 +435,7 @@ test("accepts SDK edges, extension manifest unions, same-half sources, and publi
 		[
 			"thinkrail-extensions/future",
 			"@thinkrail/ext-future",
-			[
-				"@thinkrail/ui",
-				"@thinkrail/extension-api",
-				"@thinkrail/contracts",
-				"@thinkrail.ai/pi-future",
-			],
+			["@thinkrail/ui", "@thinkrail/extension-api", "@thinkrail/contracts", "@thinkrail/pi-future"],
 		],
 		[
 			"apps/web",
@@ -491,7 +482,7 @@ test("accepts SDK edges, extension manifest unions, same-half sources, and publi
 	write(
 		root,
 		"thinkrail-extensions/future/server/index.ts",
-		'import "@thinkrail/extension-api/server"; import "@thinkrail.ai/pi-future"; import "@earendil-works/pi-coding-agent"; import "./helpers";',
+		'import "@thinkrail/extension-api/server"; import "@thinkrail/pi-future"; import "@earendil-works/pi-coding-agent"; import "./helpers";',
 	);
 	write(
 		root,
