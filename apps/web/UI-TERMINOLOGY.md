@@ -199,7 +199,7 @@ The agent conversation, rendered inside a Chat tab in the Center Tabbed Area.
 - **Position:** Fills the Editor Pane. Vertically: Chat Header (top) → Message List (middle, scrolls) →
   Composer (bottom).
 - **Responsibility:** render pi's canonical message / content-block model as folded rows; own the
-  composer, history overlay, plan popover, and dialogs.
+  composer, history overlay, and dialogs.
 
 ## Chat Header
 
@@ -334,8 +334,7 @@ Children / associated surfaces:
 - **Implementation:** `chat/TodoList.tsx` → `TodoList` + `panels/PlanRailPane.tsx` → `PlanRailPane`
   (rail body) + `panels/PlanPane.tsx` → `PlanPane` (center-tab page, opened via `openPlan`).
 - **Parent:** Right side-rail tool (`plan`) for the compact TODO list; center editor tab for the
-  document-scale Plan page. The chat header's old plan chip + popover are removed; the chat view
-  mounts `useChatTodos` only so the auto-summary trigger still fires when a chat is open.
+  document-scale Plan page.
 - **Responsibility:** surface the chat's `pi-todos` plan (group-first, status-ordered). The TODO list
   is a side-rail tool next to Files / Specs / Changes / Review.
 
@@ -590,7 +589,7 @@ its alternatives in parentheses.
 **Chat**
 
 - **Chat View** — the whole conversation surface.
-- **Chat Header** — its top bar. **Plan Strip**, **Session Stats Bar**, **Resources Trigger**, **Skills Button**.
+- **Chat Header** — its top bar. **Session Stats Bar**, **Resources Trigger**, **Skills Button**.
 - **Resources** — **Resources Trigger**, **Resources Dock**, **Resources Inspector**, **Resource Row**,
   **Command Log View**, **Subagent Transcript Pane**, **Stop-All Action**, **Still-Running Chip**.
 - **Message List** (alt: Transcript). Units: **Turn** (pi message), **Row** (derived render unit).

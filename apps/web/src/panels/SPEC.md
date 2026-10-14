@@ -928,9 +928,7 @@ a project picker, the prompt hero, and the reused
   latest message** (`plan-agent-message`, `planView.lastAgentText` rendered Markdown inside a bounded
   scroll area — `max-h-[12rem] overflow-y-auto` so the full message stays readable without pushing
   the plan items down — live while it streams) — **always, including while a step is in progress**,
-  so the plan stays honest about what the agent is doing right now (the earlier variant that gated this
-  on "no active step" left the live slot blank precisely while the agent was most active, which read
-  as "frozen" to users); it renders nothing only when the pending-ask case takes the slot or there is
+  so the plan stays honest about what the agent is doing right now; it renders nothing only when the pending-ask case takes the slot or there is
   no agent message yet. Below the items the Session ends in a **chat/steer
   composer** (`plan-session-chat`, a `PlanComposer` textarea that works like the chat composer — Enter
   sends, Shift+Enter newlines) whose send adapts to the run: while the agent is streaming it **steers**
@@ -962,7 +960,7 @@ a project picker, the prompt hero, and the reused
   `tr-text-metadata` — a group heading is never smaller than the items it holds. The Now block header carries the plan page's **add-task control**
   (the plan page's only in-page way to add): a `+ Task` button (`plan-add-task`) toggles an inline
   **auto-growing textarea** (`plan-add-input`) — plain **Enter adds**, **Shift+Enter** inserts a newline
-  (multi-line like the composer), Esc closes — wired to the SAME `useChatTodos.add` as the popup's
+  (multi-line like the composer), Esc closes — wired to the SAME `useChatTodos.add` as the rail's
   `TodoAddRow` — a loose **user** item plus the agent nudge — so the two entry points stay one flow.
   **Plan items carry no UI Remove affordance.** The agent drops a step through its own `todo_remove`
   tool; there is no wire `todo.remove`. Items added from the TODO rail stay on the plan until the
@@ -1045,7 +1043,7 @@ a project picker, the prompt hero, and the reused
   protocol work; agent-authored findings appear in the Review
   panel badged `agent` (`review-comment-agent`), and an agent-settled card reads `Reviewed · agent`;
   a **changes_requested** verdict marks the item loudly: the status glyph flips to the warning
-  `CircleAlert` (`StatusIcon changesRequested`, `data-changes-requested` — popup row and plan page
+  `CircleAlert` (`StatusIcon changesRequested`, `data-changes-requested` — rail row and plan page
   alike), the plan page's title row grows a warning **`Needs a fix · N`** chip
   (`plan-item-changes-requested`; N = `planView.itemOpenFindings`, the reviewer's open comments
   matched by `origin` provenance (path-join fallback for provenance-less ones) — the Review tab is
@@ -1053,7 +1051,7 @@ a project picker, the prompt hero, and the reused
   `requestToolView`s the Review tab) and the verdict's `feedback` note renders inline
   (`plan-item-review-feedback`); approving settles the item — the plan page shows a **`Checked` label**
   in the row's review slot, right of the title (`plan-item-verified`, `CircleCheck` + text, success tone),
-  and `data-reviewed` on the row (the popup keeps the circled `StatusIcon reviewed` glyph); `planView.reviewSettled` is the
+  and `data-reviewed` on the row (the rail keeps the circled `StatusIcon reviewed` glyph); `planView.reviewSettled` is the
   one derivation — approved AND no unreviewed delta, so a fresh revision drops the item back out of both
   the label and the reviewed counter. **The header is a title + a lifecycle STEPPER and a kebab menu**. The stepper (`plan-progress`)
   renders the plan's shipping funnel — **Build (`d/t done`) → Review (`r/k reviewed`,
@@ -1217,7 +1215,7 @@ own section. The kebab menu (`plan-menu`, a
   instead of disappearing, until the agent rewrites it at the next completion — exports stay gated on
   `planCompletionSummary`. `FileRow` (`planFileRow.tsx`, its own module so plan surfaces
   share one row without cycles) is the shared change-set row. Live by
-  construction, it reads through the same `useChatTodos` hook as the plan popup (per-mount fetch +
+  construction, it reads through the same `useChatTodos` hook as the TODO rail (per-mount fetch +
   `pi.event` refetch), so it cannot show a stale snapshot.
   `TerminalWorkbench` owns one visibility-gated terminal body per semantic terminal identity and
   the host-atomic close flow. A busy close remains one correlated request through confirmation and forced

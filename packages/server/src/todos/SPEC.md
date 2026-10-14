@@ -66,7 +66,7 @@ window shared too (`markOtherSessionWindowsShared`) — the flag is **sticky**, 
 exclusive for its whole life?" is what the gate needs and can't be re-derived once the other closed.
 (Two items of *one* plan can't overlap: `pi-todos` keeps exactly one item `in_progress` and a demoted
 item's window is dropped — pinned by a test, since the gate leans on it.) **Windows never outlive their
-owner**: a baseline whose item has vanished from the plan is pruned at the top of every reconcile, the
+owner**: a baseline whose item has vanished from the plan is pruned at the top of every reconcile,
 and `session.delete` removes the chat's whole sidecar (`removeSessionTodoWindows`) — an orphan would read
 as a permanently open foreign window and force every sibling chat into the fallback forever. On `done`:
 
@@ -117,9 +117,8 @@ as a permanently open foreign window and force every sibling chat into the fallb
      plan predating the sidecar). The reconcile has no honest basis for claiming anything the step
      did, so **`deltaPaths` is empty**: no commit, **no `change` artifacts**, nothing. The dirty paths
      surface in `unattributed` instead, which is the correct place for "work the reconcile can't
-     attribute". Before (see `attribution-v2-rfc.md`): the reconcile fell back to `deltaPaths = now`,
-     claiming every dirty path as `change` — which grabbed sibling steps' work and user WIP into a
-     bundled-done step, the exact misattribution this gate now prevents.
+     attribute" — claiming every dirty path would grab sibling steps' work and user WIP into a
+     bundled-done step.
   2. **No foreign dirt left** — every path dirty at the baseline is clean again by `done`. This is what
      quietly disables auto-commit in a Default workspace holding the user's WIP, the intended guard.
   3. **A window never shared** (`shared` unset) and no other chat mid-work right now — concurrent windows

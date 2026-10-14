@@ -761,7 +761,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   `h-panel-header-row` (`--panel-header-row-height`, currently 28px), the shared structural geometry with
   workbench Group Headers and the Changes toolbar, not a value pinned here; it never scrolls,
   and constrained widths clip/truncate TODO + status/usage text while preserving the trailing Skills
-  action. Its `left` slot carries the plan strip; its **Skills** button is the presentational **`SkillsButton`**
+  action. Its **Skills** button is the presentational **`SkillsButton`**
   primitive — a `BookOpen` pill, badged when a skill dir changed on disk — also shared with
   `NewWorkspaceDialog` so the two triggers cannot drift), `ExtUiDialog`, and **`SkillsDialog`** (the **Skills manager**: a catalog
   grouped by source with **sticky section headers** — the first-party **ThinkRail** and **Pi** groups lead
@@ -1194,18 +1194,15 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   inside a synchronous handler, and one read stays narrowable where repeated `.current` reads do not. A `History`-icon ghost button (`data-testid="history-open"`, `aria-label="Search history"`,
   tooltip of the same name, always rendered next to send) calls the same `openHistory` the global `Ctrl+R` reaches — the tap path
   on mobile, a discoverability affordance on desktop.
-- **Chat TODO plan** — the chat's `pi-todos` list surfaced **only in the chat** (engine:
+- **Chat TODO plan** — the chat's `pi-todos` list, surfaced in the TODO rail and the Plan page (engine:
   [[module-pi-todos]]; host read/write: [[submodule-server-todos]]):
   `useChatTodos` (the `todo.*` data hook — fetch + live `pi.event` refetch + edits + the add-nudge + the
-  **auto-summary trigger** (a fully-done plan with no agent `summary` fires one best-effort
-  `todo.generateSummary` that folds a host-drafted note in — re-armed if the plan re-opens or its summary
-  clears, never overwriting an existing note) + the **review-snapshot refetch** (the plan's review
+  **review-snapshot refetch** (the plan's review
   decoration is host-derived, so a change to the workspace's review comments, e.g. deleting a finding that
   clears a step's `changes_requested`, re-reads the plan) + the
   `openMarkdown` snapshot action; tool completion refreshes immediately and `agent_settled` supplies the
   final refresh; overlapping list reads are latest-wins and connection-generation stamped, accepted adds
-  fold by item id, and a failed optimistic removal re-reads authority rather than restoring a stale whole-plan
-  capture over concurrent edits; plus the agent-review ops `startReview` (`todo.startReview`) and
+  fold by item id; plus the agent-review ops `startReview` (`todo.startReview`) and
   `reviewAll` (`todo.reviewAll`) — both re-read the plan, since the review decoration is host-derived
   and never patched locally; the manual-verdict ops were removed with the plan page's manual mode —
   `todo.review`/`todo.requestFix` remain on the wire, host-side), `planView` (pure derivations over the DTO: `groupProgress`,
@@ -1250,7 +1247,7 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   focuses the right-panel Review tab (see `panels/SPEC.md`). A row whose review is **settled** (`planView.reviewSettled` — approved and
   nothing landed since) upgrades its done check to the **circled Verified glyph**
   (`StatusIcon reviewed`, hover "Verified", `data-reviewed`) — the at-a-glance "this step was
-  reviewed" state, popup and plan page alike; a **changes_requested** verdict flips the glyph to the
+  reviewed" state, rail and plan page alike; a **changes_requested** verdict flips the glyph to the
   warning `CircleAlert` instead (`StatusIcon changesRequested`, hover "Changes requested",
   `data-changes-requested`) — the plan page adds the chip + feedback note (see `panels/SPEC.md`). **A row whose item carries a host
   change set grows a quiet "N files" chip** (`itemChangeSet` in `planView` — the one derivation shared
@@ -1271,18 +1268,16 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   scheme would be dead; interactive navigation is the plan page's job. It also emits a
   **`## Committed outside the plan`** section for `TodoPlan.adoptedCommits` (mirroring `## Outside the
   plan` for `unattributed`), so the export covers branch commits no step owns; the `No items yet`
-  placeholder is suppressed when either section is present). `ChatPlan.tsx` and its header strip +
-  popover were removed in the TODO-rail migration: the compact TODO list lives as a side-rail tool
-  (`panels/PlanRailPane.tsx`, see [[submodule-web-panels]]) and the Plan page is a center tab opened
-  via `openPlan`. The auto-summary trigger (`todo.generateSummary` on a completed plan with no
-  summary) is exposed as the dedicated side-effect-only hook `useAutoPlanSummary(workspaceId,
-  sessionId)`, mounted by `shell/WorkspaceWorkbench` through a `PlanSummaryAutoDraft` anchor 
- one
-  per unique sessionId referenced by any open session-backed tab (chat, the live center-tab Plan,
-  the markdown plan `doc` export) via `editorSessionId(tab)`. The trigger therefore survives any
-  center-tab switch AND the user closing the chat tab while keeping the Plan page open; without
-  this anchor a plan that completes under those conditions would ship an empty `## Summary`
-  through `renderPrBody`.   Frontend-local workspace view state
+  placeholder is suppressed when either section is present). The compact TODO list is a side-rail
+  tool (`panels/PlanRailPane.tsx`, see [[submodule-web-panels]]) and the Plan page is a center tab
+  opened via `openPlan`; the chat view itself renders no plan surface. The **auto-summary trigger**
+  (a fully-done plan with no agent `summary` fires one best-effort `todo.generateSummary` that folds a
+  host-drafted note in — re-armed if the plan re-opens or its summary clears, never overwriting an
+  existing note) is the side-effect-only hook `useAutoPlanSummary(workspaceId, sessionId)`, mounted by
+  `shell/WorkspaceWorkbench` through one `PlanSummaryAutoDraft` anchor per unique sessionId of any open
+  session-backed tab (chat, the live Plan page, the markdown plan `doc` export) via
+  `editorSessionId(tab)`, so it fires regardless of which tab is selected or which plan surface is
+  open. Frontend-local workspace view state
   persists the Plan page as a registered `todo-plan` reference (resolver kind + session identity,
   never plan content); another
   client may explicitly reopen the same live page from the host-owned TODO plan without inheriting placement. (An earlier design compiled the plan to a
@@ -1290,18 +1285,14 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   moment the agent flips a status, and markdown can't carry the Changes-panel affordances; the page is live
   and markdown is demoted to its export.)
   **The glance state** keeps the plan honest as the user's status window: the memoized `sessionGlance(runtime)`
-  selector (which runs `planGlance` over the session's streaming flag + ask-state), read in `ChatView`'s shell
+  selector (which runs `planGlance` over the session's streaming flag + ask-state), read by the TODO rail
   and layered over the host `SessionState` via `hostSessionGlance`, **never stored**, so the agent can't make it
   lie — renders the `in_progress` step as working (dot), **waiting for your answer**
   (`MessageCircleQuestion` — the same glyph as the `ask_user_question` card, while a live tool blocks or a
   restart-repaired session awaits), or **paused** (`CirclePause`, any other stop: turn ended, error). A stop with no
-  pending question never claims the user owes an answer. **The header strip reflects the agent's state,
-  not the checkboxes** (`stripStatus`, decoupled from the `in_progress` step): it shows "waiting for
-  your answer" **even when every item is done** (the earlier strip hid it whenever there was no
-  in-progress step, so an agent blocked on a question read as "finished"); waiting outranks the raw live
-  run flag; "working" covers other runs; "paused" only when it stopped with open steps left; and nothing extra on a clean finish (all done,
-  idle). The glance's working/waiting lifecycle comes from the normalized host `SessionState` — in
-  `ChatView` and, through `sessionGlance`, in the Plan and Review panels — so a chat idle on its background commands or subagents reads as working (`isSessionWorking`); the transcript-derived glance is only the older-host
+  pending question never claims the user owes an answer. The glance's working/waiting lifecycle comes
+  from the normalized host `SessionState` — in the TODO rail and, through `sessionGlance`, in the Plan
+  and Review panels — so a chat idle on its background commands or subagents reads as working (`isSessionWorking`); the transcript-derived glance is only the older-host
   fallback. `askStates` remains only to identify and render the exact questionnaire/recap. **Unread results clear when seen** (no read gesture): `ChatTranscript`
   acknowledges the exact unread completion while the window has focus and is visible, the chat is
   attended (`selectChatAttended`: selected in the last-focused center group of the active workspace, no

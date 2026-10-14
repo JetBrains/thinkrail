@@ -418,9 +418,6 @@ test("plan items can be removed, and the add box takes multi-line input (Enter a
 	await input.press("Enter");
 	await expect(pane.getByTestId("plan-item").filter({ hasText: "second line" })).toBeVisible();
 
-	// The hover Remove affordance is intentionally gone: removing a plan item from the UI was
-	// confusing ("when would I want this?"); the agent still controls todo.remove through its tool.
-	// The item just stays on the plan.
 	const item = pane.getByTestId("plan-item").filter({ hasText: "A task I added" });
 	await item.hover();
 	await expect(item.getByTestId("plan-item-remove")).toHaveCount(0);

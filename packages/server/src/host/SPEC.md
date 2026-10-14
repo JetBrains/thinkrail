@@ -346,7 +346,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   whole-change verdict that never had an inline finding is never touched. The agent's `resolve_comment`
   path (`applyAgentResolution`) is deliberately NOT reconciled here — it lands inside a fix cycle whose
   following re-review re-derives the verdict, and the record is inert either way (the Open-PR gate counts
-  open findings, not the record). The plan chip is host-derived
+  open findings, not the record). The plan's review decoration is host-derived
   from that record and `apps/web`'s `useChatTodos` re-reads the plan on any review-snapshot change. A blocked
   approve clears the `reviewing` mark, leaves the record alone, tells the worker to `resolve_comment`
   what it addressed (`composeText`'s third shape) and rides the wire as
