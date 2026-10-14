@@ -51,8 +51,10 @@ The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-
   and actions. Dropdowns are vertically bounded by the smaller of 60vh and Radix's available height,
   scrollable with horizontal overflow hidden so long rows truncate rather than scroll.
 - Toast exposes `ToastProvider`/`Toast`/`ToastViewport`/`ToastTitle`/`ToastDescription`/`ToastAction`/
-  `ToastClose` and `toastVariants` (`error`/`success`/`info`). Severity is a presentational left accent;
-  queue ownership and notification lifetimes stay in the app (`panels/Toaster` composes the primitives).
+  `ToastClose` and `toastVariants` (`error`/`success`/`warning`/`info`). Severity is a uniform semantic
+  border (`border-feedback-*-muted`) on a neutral `bg-container-elevated-bg` background. `ToastAction` is
+  unstyled: the caller supplies the control through `asChild`. Queue ownership, icons, and notification
+  lifetimes stay in the app (`panels/Toaster` composes the primitives).
 - Resizable handles paint a 1 px line at their leading edge; the pointer hit area extends only into the
   following panel (fine-pointer margin 1 px), so the preceding panel's trailing-edge scrollbar stays
   usable. There is no grip variant.
