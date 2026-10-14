@@ -18,7 +18,7 @@ is the props-driven presentation. The tool name joins the two without a wire cha
 
 Two entrypoints and no root barrel. `@thinkrail/ext-visualize/server` default-exports
 `defineServerExtension({ name: "visualize", title, description, extensions: [createVisualizeExtension({ validateMermaid })] })`
-— no children, no skill packages — and may import `extension-api/server`, `@thinkrail.ai/pi-visualize`,
+— no children, no skill packages — and may import `extension-api/server`, `@thinkrail/pi-visualize`,
 `mermaid`, `linkedom`. `@thinkrail/ext-visualize/web` default-exports a `defineWebExtension` descriptor plus
 named `MermaidView` for fenced mermaid in chat markdown, and consumes `extension-api/web`, per-file UI
 primitives, contracts, React and Remix Icon. Neither half imports the other, app/host internals, or (web)

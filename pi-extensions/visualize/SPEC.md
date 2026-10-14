@@ -2,7 +2,7 @@
 id: module-pi-visualize
 type: module-design
 status: draft
-title: "@thinkrail.ai/pi-visualize — the visualize tool for vanilla pi"
+title: "@thinkrail/pi-visualize — the visualize tool for vanilla pi"
 parent: module-pi-extensions
 tags: [pi-extension, visualization, mermaid]
 ---

@@ -1,5 +1,5 @@
 import { defineServerExtension } from "@thinkrail/extension-api/server";
-import { createVisualizeExtension } from "@thinkrail.ai/pi-visualize";
+import { createVisualizeExtension } from "@thinkrail/pi-visualize";
 import { strictMermaidValidator } from "./mermaid";
 
 export default defineServerExtension({

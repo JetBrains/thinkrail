@@ -1,11 +1,11 @@
-# @thinkrail.ai/pi-visualize
+# @thinkrail/pi-visualize
 
 A [pi](https://pi.dev) extension that gives the agent a `visualize` tool for **diagrams** (Mermaid) and
 **option comparisons**, so it reaches for a picture instead of ASCII art or a markdown table when it
 explains architecture, flows, or trade-offs.
 
 ```bash
-pi install npm:@thinkrail.ai/pi-visualize
+pi install npm:@thinkrail/pi-visualize
 ```
 
 ## What you get
@@ -39,7 +39,7 @@ always one keypress away in the TUI, so nothing is hidden.
 Hosts that render Mermaid themselves can plug in a strict validator:
 
 ```ts
-import { createVisualizeExtension } from "@thinkrail.ai/pi-visualize";
+import { createVisualizeExtension } from "@thinkrail/pi-visualize";
 
 export default createVisualizeExtension({
   // Throw to reject; the message is returned to the model with the field location.

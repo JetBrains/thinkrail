@@ -1,4 +1,4 @@
-# @thinkrail.ai/pi-visualize
+# @thinkrail/pi-visualize
 
 ## 0.1.0
 

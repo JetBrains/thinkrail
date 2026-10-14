@@ -56,7 +56,7 @@ dispatcher to load rather than relying on description-matching (see [[module-web
   `before_agent_start` rule and skill content.
 - **Forbidden:** any `@thinkrail/*` package, `apps/web`, `packages/server` internals — reached only by
   tool *name* (`ask_user_question`, `spec_*`), never by import.
-- **Not portable, and honest about it.** Unlike `pi-spec-graph` and `@thinkrail.ai/pi-visualize`, this package's skill
+- **Not portable, and honest about it.** Unlike `pi-spec-graph` and `@thinkrail/pi-visualize`, this package's skill
   content assumes the host's `ask_user_question` tool (`packages/server/src/agent/askUserQuestion.ts`) is
   present in the session — that tool exists only in thinkrail. This package does not claim to run
   under vanilla `pi`; it is a workspace-internal module, not a portable capability. It stays its own
