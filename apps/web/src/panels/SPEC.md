@@ -452,10 +452,10 @@ a project picker, the prompt hero, and the reused
   to report the dropped kick-off). (`gh` status lives in `SettingsDialog`, not the
   create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — a
   **store-driven two-pane shell**: one nav list, rendered once, beside a scrollable content pane. At `md`+
-  the list is a rail grouped **Agent** (Models, Providers, MCP servers, Prompt templates, Extensions) ·
-  **Interface** (Chat, Appearance, Layout, Terminal) · **System** (Workspaces, Integrations — section id
-  `github`, today the GitHub CLI page and the future home of further integrations — Notifications,
-  Privacy, Updates); below `md` the same list is a horizontal scrolling strip without group labels. The
+  the list is a rail grouped **Agent** (Models, Providers, MCP servers, Prompt templates) ·
+  **Interface** (Chat, Appearance, Layout, Terminal) · **System** (Workspaces, Integrations, Extensions,
+  Notifications, Privacy, Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
+  and it is the home for further integrations. Below `md` the same list is a horizontal scrolling strip without group labels. The
   Feedback card (`settings-nav-feedback`, “Get 100 credits for a user interview”) belongs to that list at
   every width, pinned to the rail's bottom at `md`+. The pure nav data — groups, protocol and
   injected-content gating, and resolving a requested section to an available one (a gated or retired id,

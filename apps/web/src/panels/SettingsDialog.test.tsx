@@ -37,7 +37,6 @@ describe("settingsNavGroups", () => {
 					SettingsSection.Providers,
 					SettingsSection.Mcp,
 					SettingsSection.Templates,
-					SettingsSection.Extensions,
 				],
 			],
 			[
@@ -54,6 +53,7 @@ describe("settingsNavGroups", () => {
 				[
 					SettingsSection.Workspaces,
 					SettingsSection.Github,
+					SettingsSection.Extensions,
 					SettingsSection.Notifications,
 					SettingsSection.Privacy,
 					SettingsSection.Updates,

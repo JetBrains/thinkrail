@@ -54,12 +54,6 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 				requiresProtocolVersion: MCP_PROTOCOL_VERSION,
 			},
 			{ id: SettingsSection.Templates, label: "Prompt templates", icon: RiLayoutGridLine },
-			{
-				id: SettingsSection.Extensions,
-				label: "Extensions",
-				icon: RiPuzzle2Line,
-				requiresProtocolVersion: EXTENSION_CATALOG_PROTOCOL_VERSION,
-			},
 		],
 	},
 	{
@@ -81,6 +75,12 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 				requiresProtocolVersion: WORKSPACE_SETTLE_PROTOCOL_VERSION,
 			},
 			{ id: SettingsSection.Github, label: "Integrations", icon: RiApps2Line },
+			{
+				id: SettingsSection.Extensions,
+				label: "Extensions",
+				icon: RiPuzzle2Line,
+				requiresProtocolVersion: EXTENSION_CATALOG_PROTOCOL_VERSION,
+			},
 			{ id: SettingsSection.Notifications, label: "Notifications", icon: RiNotification3Line },
 			{ id: SettingsSection.Privacy, label: "Privacy", icon: RiShieldCheckLine },
 			{
