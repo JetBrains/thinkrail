@@ -46,11 +46,11 @@ async function restoreLineWidthDefaults(page: Page): Promise<void> {
 	if (await page.getByTestId("settings-dialog").isVisible()) await page.keyboard.press("Escape");
 	await openLineWidthSettings(page);
 	const controls = widthControls(page);
-	if ((await controls.chatInput.inputValue()) !== "120") {
-		await saveWidth(controls.chatInput, controls.chatSave, 120);
+	if ((await controls.chatInput.inputValue()) !== "75") {
+		await saveWidth(controls.chatInput, controls.chatSave, 75);
 	}
-	if ((await controls.fileInput.inputValue()) !== "120") {
-		await saveWidth(controls.fileInput, controls.fileSave, 120);
+	if ((await controls.fileInput.inputValue()) !== "75") {
+		await saveWidth(controls.fileInput, controls.fileSave, 75);
 	}
 	if ((await controls.chatBounded.getAttribute("data-active")) !== "true") {
 		await controls.chatBounded.click();
@@ -79,21 +79,21 @@ test("line-width controls validate drafts, converge on broadcasts, and persist",
 		await openLineWidthSettings(page);
 		const controls = widthControls(page);
 
-		await expect(controls.chatInput).toHaveValue("120");
-		await expect(controls.fileInput).toHaveValue("120");
+		await expect(controls.chatInput).toHaveValue("75");
+		await expect(controls.fileInput).toHaveValue("75");
 		await expect(controls.chatBounded).toHaveAttribute("data-active", "true");
 		await expect(controls.fileBounded).toHaveAttribute("data-active", "true");
 
 		await controls.chatInput.fill("90");
 		await controls.chatInput.press("Escape");
-		await expect(controls.chatInput).toHaveValue("120");
+		await expect(controls.chatInput).toHaveValue("75");
 
 		await controls.chatInput.fill("39");
 		await expect(controls.chatInput).toHaveAttribute("aria-invalid", "true");
 		await expect(page.getByText("Enter a whole number from 40 to 240.")).toBeVisible();
 		await expect(controls.chatSave).toBeDisabled();
 
-		await controls.chatInput.fill("80");
+		await controls.chatInput.fill("100");
 		await expect(controls.chatSave).toBeEnabled();
 		await controls.chatInput.press("Enter");
 		await expect(controls.chatSave).toBeDisabled();
@@ -112,7 +112,7 @@ test("line-width controls validate drafts, converge on broadcasts, and persist",
 		await page.reload();
 		await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 		await openLineWidthSettings(page);
-		await expect(controls.chatInput).toHaveValue("80");
+		await expect(controls.chatInput).toHaveValue("100");
 		await expect(controls.fileInput).toHaveValue("160");
 		await expect(controls.chatBounded).toHaveAttribute("data-active", "false");
 		await expect(controls.fileBounded).toHaveAttribute("data-active", "true");
@@ -180,6 +180,7 @@ test("chat uses the selected measure and optionally exceeds a narrow pane", asyn
 		const row = userMessage.locator('xpath=ancestor::*[@data-testid="chat-row"][1]');
 		// Poll the measure: the `--chat-transcript-width` custom property is applied via a ref callback and a
 		// native webview can flush its layout a frame later, so a single synchronous read is racy.
+		// The `--chat-gutter` is responsive via container query, so read it from the element itself.
 		await expect
 			.poll(() =>
 				row.evaluate((element) => {
@@ -190,7 +191,7 @@ test("chat uses the selected measure and optionally exceeds a narrow pane", asyn
 					const expectedTextWidth = probe.getBoundingClientRect().width;
 					probe.remove();
 					const gutter = Number.parseFloat(
-						getComputedStyle(document.documentElement).getPropertyValue("--chat-gutter"),
+						getComputedStyle(element).getPropertyValue("--chat-gutter"),
 					);
 					return Math.abs(element.getBoundingClientRect().width - (expectedTextWidth + 2 * gutter));
 				}),

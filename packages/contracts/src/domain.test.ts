@@ -113,10 +113,10 @@ describe("config defaults", () => {
 		}
 	});
 
-	test("chat and file lines default to 120-symbol pane-bounded measures", () => {
+	test("chat and file lines default to 75-symbol pane-bounded measures", () => {
 		expect(DEFAULT_CONFIG).toMatchObject({
-			chatLineWidth: 120,
-			fileLineWidth: 120,
+			chatLineWidth: 75,
+			fileLineWidth: 75,
 			chatLineWidthBounded: true,
 			fileLineWidthBounded: true,
 		});

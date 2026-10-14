@@ -281,17 +281,28 @@ export default function ChatView({
 		[resources.visible, resources.authoritative, resources.groups.activeCount, openInspector],
 	);
 
-	const chatViewRef = useCallback(
-		(element: HTMLDivElement | null) => {
-			if (element) {
-				element.style.setProperty(
-					"--chat-transcript-width",
-					`calc(${chatLineWidth}ch + 2 * var(--chat-gutter))`,
-				);
-			}
-		},
-		[chatLineWidth],
-	);
+	// Responsive chat gutter: 48px for panels ≥600px, 32px for narrower panels.
+	// Set on the container itself so --chat-transcript-width calc uses the correct value.
+	const chatViewElementRef = useRef<HTMLDivElement | null>(null);
+	const chatViewRef = useCallback((element: HTMLDivElement | null) => {
+		chatViewElementRef.current = element;
+	}, []);
+	useEffect(() => {
+		const element = chatViewElementRef.current;
+		if (!element) return;
+		const updateGutter = () => {
+			const gutter = element.clientWidth >= 600 ? 48 : 32;
+			element.style.setProperty("--chat-gutter", `${gutter}px`);
+			element.style.setProperty(
+				"--chat-transcript-width",
+				`calc(${chatLineWidth}ch + ${2 * gutter}px)`,
+			);
+		};
+		updateGutter();
+		const observer = new ResizeObserver(updateGutter);
+		observer.observe(element);
+		return () => observer.disconnect();
+	}, [chatLineWidth]);
 
 	const {
 		state: historyState,

@@ -33,7 +33,20 @@
 	--panel-row-height: 22px;
 	--panel-inset: var(--space-8);
 	--tree-indent: var(--space-8);
-	--chat-gutter: var(--space-8);
+	/* Chat gutter: 32px base (narrow panels), 48px for panels ≥600px (set via container query below). */
+	--chat-gutter: var(--space-32);
+}
+
+/*
+ * Chat gutter responsive sizing: 48px for chat panels 
+ * On wide chat panels (≥600px), override the base 32px gutter to 48px. The chat container
+ * (`ChatView`) sets `container-type: size`, so this query matches when that container is wide.
+ * Descendant elements using `px-chat-gutter` will pick up the increased value.
+ */
+@container (min-width: 600px) {
+	:where(*) {
+		--chat-gutter: var(--space-48);
+	}
 }
 
 /*

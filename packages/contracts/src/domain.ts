@@ -781,7 +781,7 @@ export function isComposerGrowthLimit(value: unknown): value is ComposerGrowthLi
 	return COMPOSER_GROWTH_LIMITS.some((limit) => limit === value);
 }
 
-export const LINE_WIDTH_COLUMNS = { min: 40, max: 240, default: 120 } as const;
+export const LINE_WIDTH_COLUMNS = { min: 40, max: 240, default: 75 } as const;
 
 export function isLineWidth(value: unknown): value is number {
 	return (

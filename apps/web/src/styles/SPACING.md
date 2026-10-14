@@ -81,7 +81,7 @@ mapped into Tailwind by `index.css`'s `@theme inline` — the same shape as `--p
 | `--panel-row-height` | `22px` | `h-` / `min-h-` / `size-panel-row` | every side-pane row (file, change, spec, project, workspace) and the row-height icon buttons inside them |
 | `--panel-inset` | `var(--space-8)` | `p-panel-inset` | the content inset of every tool pane (Projects, Specs, Files, Changes, Review) |
 | `--tree-indent` | `var(--space-8)` | `pl-tree-indent` | per-depth indentation of the Files, Changes and Specs trees |
-| `--chat-gutter` | `var(--space-8)` | `px-` / `p-chat-gutter` | chat row gutters, the stream-status and activity-breadcrumb strips, the composer inset, and the gutter terms of the transcript-width and unbounded user-bubble calcs |
+| `--chat-gutter` | `var(--space-32)` base, `var(--space-48)` for panels ≥600px (responsive) | `px-` / `p-chat-gutter` | chat row gutters, stream-status strip, activity breadcrumbs, composer inset, and the gutter terms of the transcript-width calc; responsive via container query on descendants and ResizeObserver on the chat container |
 
 - A **rhythm role aliases a canonical step** (`var(--space-<n>)`), never a raw length, so `spacing.json`
   stays the only source of rhythm lengths and `tokens.css` still holds no scale of its own. A sizing role
