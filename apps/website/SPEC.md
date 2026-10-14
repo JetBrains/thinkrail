@@ -62,7 +62,13 @@ binary.
     (`scripts/build-blog.ts` + HTML string templates) is deleted.
   - *Lint caveat:* Biome parses only `.astro` frontmatter, so `noUnusedVariables`/`noUnusedImports`
     are disabled for `*.astro` in `biome.json` (template usage is invisible to it — every flag would
-    be a false positive). `astro check` covers the templates instead.
+    be a false positive). `.astro` templates are currently type-checked by nobody — see *TypeScript 7* below.
+
+  - *TypeScript 7 (decision, 2026-09):* `astro check` is gone. It needs `@astrojs/check`, whose language
+    server refuses TypeScript 7 (the native compiler ships no programmatic API yet — withastro/roadmap#1321),
+    and the repo pins exactly one TypeScript. `typecheck` is `astro sync && tsc --noEmit` plus the Functions
+    project: the generated `.astro/types.d.ts` and every `.ts`/`.tsx` under strict `tsc`. The frontmatter of
+    the `.astro` templates is unchecked until Astro's tooling supports TypeScript 7; restore `astro check` then.
 
 The parent owns the route-composition edges; the vibecoding leaf has no sibling dependency:
 
@@ -245,7 +251,7 @@ claim Functions. Pinned Wrangler `4.124.0` deploys from `apps/website` so its co
 and local Pages/D1 workflows; production applies committed attribution migrations before deploy. The
 build compiles the Functions, and a local Pages/D1 smoke starts Pages from the checked-in configuration,
 applies the actual migration, and exercises create, bind, and redeem. `.github/workflows/site.yml` runs
-`bun run --filter @thinkrail/website build` (`astro check`, the Functions typecheck and build, `astro
+`bun run --filter @thinkrail/website build` (`astro sync && tsc --noEmit`, the Functions typecheck and build, `astro
 build`, and artifact validation) on pushes that
 touch this module, [[module-website-analytics]], the root package manifest, or the lockfile (plus manual
 dispatch). It verifies the provider URL before succeeding. `thinkrail.ai` is the project's custom apex

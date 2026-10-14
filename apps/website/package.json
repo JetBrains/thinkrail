@@ -5,9 +5,9 @@
 	"type": "module",
 	"scripts": {
 		"dev": "astro dev",
-		"build": "astro check && bun run typecheck:functions && bun run build:functions && astro build && bun src/validateBuild.ts",
+		"build": "bun run typecheck && bun run build:functions && astro build && bun src/validateBuild.ts",
 		"build:functions": "bunx wrangler@4.124.0 pages functions build functions --project-directory . --outdir .wrangler/functions-build",
-		"typecheck": "astro check && bun run typecheck:functions",
+		"typecheck": "astro sync && tsc --noEmit && bun run typecheck:functions",
 		"typecheck:functions": "tsc --noEmit -p tsconfig.functions.json",
 		"test": "bun test",
 		"smoke:attribution": "bun src/attribution/localD1Smoke.ts",
@@ -21,7 +21,6 @@
 		"react-dom": "catalog:"
 	},
 	"devDependencies": {
-		"@astrojs/check": "catalog:",
 		"@astrojs/markdown-satteri": "0.3.7",
 		"@astrojs/react": "6.0.4",
 		"@astrojs/rss": "4.0.19",

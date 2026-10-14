@@ -2,7 +2,15 @@
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
-import ts from "typescript";
+import {
+	isCallExpression,
+	isNoSubstitutionTemplateLiteral,
+	isStringLiteral,
+	type Node,
+	type SourceFile,
+	SyntaxKind,
+} from "typescript/unstable/ast";
+import { parseFiles } from "./tsProjects";
 
 const ALLOWLIST: Record<string, { reason: string; imports: string[] }> = {
 	"pi-ai/dist/auth/oauth/load.js": {
@@ -51,28 +59,21 @@ function listJsFiles(dir: string): string[] {
 	return out;
 }
 
-function opaqueImportsIn(fileName: string, source: string): string[] {
-	const sourceFile = ts.createSourceFile(
-		fileName,
-		source,
-		ts.ScriptTarget.Latest,
-		false,
-		ts.ScriptKind.JS,
-	);
+function opaqueImportsIn(sourceFile: SourceFile): string[] {
 	const found: string[] = [];
-	const visit = (node: ts.Node): void => {
-		if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
+	const visit = (node: Node): void => {
+		if (isCallExpression(node) && node.expression.kind === SyntaxKind.ImportKeyword) {
 			const specifier = node.arguments[0];
 			const isConstant =
 				specifier !== undefined &&
-				(ts.isStringLiteral(specifier) || ts.isNoSubstitutionTemplateLiteral(specifier));
+				(isStringLiteral(specifier) || isNoSubstitutionTemplateLiteral(specifier));
 			if (!isConstant) {
 				found.push(
 					specifier ? specifier.getText(sourceFile).replace(/\s+/g, " ").trim() : "<no argument>",
 				);
 			}
 		}
-		ts.forEachChild(node, visit);
+		node.forEachChild(visit);
 	};
 	visit(sourceFile);
 	return found.sort();
@@ -98,7 +99,7 @@ for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
 	}
 }
 
-const found = new Map<string, string[]>();
+const candidates: { id: string; file: string }[] = [];
 const usedSkips = new Set<string>();
 for (const [name, root] of roots) {
 	for (const file of listJsFiles(join(root, "dist"))) {
@@ -111,13 +112,22 @@ for (const [name, root] of roots) {
 			usedSkips.add(skipped);
 			continue;
 		}
-		const source = readFileSync(file, "utf8");
-		if (!/\bimport\s*\(/.test(source)) continue;
-		const imports = opaqueImportsIn(file, source);
-		if (imports.length === 0) continue;
-		found.set(id, imports);
+		if (!/\bimport\s*\(/.test(readFileSync(file, "utf8"))) continue;
+		candidates.push({ id, file });
 	}
 }
+
+const found = new Map<string, string[]>();
+await parseFiles(
+	repoRoot,
+	candidates.map((candidate) => candidate.file),
+	async (parsed) => {
+		for (const { id, file } of candidates) {
+			const imports = opaqueImportsIn(await parsed(file));
+			if (imports.length > 0) found.set(id, imports);
+		}
+	},
+);
 
 const unexpected: string[] = [];
 const stale: string[] = [];

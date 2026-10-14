@@ -17,7 +17,7 @@ Repository-wide development orchestration and conformance gates that do not belo
 
 - **Owns:** the multi-process development launcher; exact-version/catalog validation; the PI binary-seam canary; module dependency/import boundary validation; declared-spec-surface to TypeScript-barrel conformance; and focused root contract tests that compose otherwise independent product implementations.
 - **Public surface:** the root `package.json` commands consumed by developers, Husky, and CI.
-- **Allowed deps:** Bun/Node, the TypeScript compiler API, `pi-spec-graph/core` for the canonical spec/frontmatter model, and `mdast-util-from-markdown` for CommonMark block structure; read-only inspection of workspace manifests and source trees; the public package metadata and bundle outputs each check validates; and test-only imports of real product internals when a root harness must prove a cross-package contract without creating a product dependency.
+- **Allowed deps:** Bun/Node, the TypeScript 7 `typescript/unstable/*` API (the async `tsgo` client plus AST type guards), `pi-spec-graph/core` for the canonical spec/frontmatter model, and `mdast-util-from-markdown` for CommonMark block structure; read-only inspection of workspace manifests and source trees; the public package metadata and bundle outputs each check validates; and test-only imports of real product internals when a root harness must prove a cross-package contract without creating a product dependency.
 - **Forbidden:** product runtime logic, a second source of package or feature behavior, editing source as part of a check, or application-internal imports outside focused root contract tests. A root contract test may compose implementations but must not become the protocol source or a product dependency.
 
 `check:boundaries` runs the checker's focused tests before scanning the real workspace. It enforces both manifest edges and static source imports, including type-only, dynamic, re-export, CommonJS, import-type, package-subpath, and relative cross-module forms. Generated/build directories, including Hutch's projected `.hutch` SDK trees and transient `.cottontail-tmp` loaders, are excluded. The current product rings and launcher edges are exhaustive: contracts, `pi-delegation`, and `pi-background-commands` → none; `pi-subagents` and `pi-dag` → `pi-delegation`; shared → contracts; server → contracts/shared plus its existing bundled extension and delegation packages; web → contracts and the browser SDK/extension entries below; CLI → server/shared; desktop → server/shared/contracts; artifact-tests → CLI/server/shared. Product packages may not import artifact-tests. A future composition root must add an explicit rule rather than silently inheriting access to every workspace package.
@@ -35,3 +35,16 @@ These are static literal-import checks, not a runtime module resolver. Negative 
 `check:spec-surface` enrolls only valid specs tagged `public-surface-checked`. Enrollment is explicit so adding prose cannot silently turn enforcement off: an enrolled spec must retain a bare backticked identifier list and a discoverable TypeScript barrel, or the check fails. Unenrolled prose surfaces remain descriptive and are reported only by `--list-skipped`.
 
 The TypeScript compiler resolves the barrel's effective export names, including type-only and default exports and transitive re-exports; a CommonJS `export =` assignment is the module's singular `default` surface rather than the assigned value's synthetic members. An unresolved re-export is a violation rather than a silently incomplete surface. The declared and effective name sets must match in both directions. Filesystem-level tests exercise enrollment, resolution, and failure behavior through the same runner CI invokes.
+
+## TypeScript access (decision, 2026-09)
+
+TypeScript 7 ships the native `tsgo` compiler and no JavaScript parser or checker: the `typescript` package
+exposes only `tsc` and the `unstable/*` API. The three checks that read TypeScript syntax or symbols
+(`check:seams`, `check:boundaries`, `check:spec-surface`) therefore drive the bundled `tsgo` server through
+`typescript/unstable/async` via `scripts/tsProjects.ts`. Each run declares an in-memory `tsconfig` (real files,
+virtual config) so that arbitrary file lists — pi's `dist/*.js`, every workspace source tree, a barrel outside
+its package's `include` — become a project without touching disk; the syntax-only checks open a lib-free,
+resolution-free project, and the spec-surface check `extends` the barrel's nearest `tsconfig.json` (or a
+Bundler-resolution fallback) with the barrel appended to its files. The synchronous `unstable/sync` client is
+unusable under Bun (it reads Node's private stream handles), so the checks are async end to end. The
+`unstable` prefix is an accepted risk: the exact catalog pin makes any API drift a reviewable bump.
