@@ -257,18 +257,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   identity-checks and rolls back exactly the `changes_requested` record this request wrote, plus any
   marks, so it neither strands a failed request nor overwrites a newer decision. The same identity-safe
   compensation runs on detached pre-turn rejection;
-  **`todo.remove`** layers a host-side guard in front of `todos`' own, together covering the item's
-  full in-flight lifetime — neither alone does: `removeTodo`'s durable `pending` mark covers
-  `startTodoReview` (synchronous, at start/enqueue) until the verdict clears it;
-  `isItemUnderActiveReview(sessionId, id)` reads the in-memory per-item latches — the fix latch
-  (`claimItemFix`) and `planReviewQueue`'s active set — and covers the tail `pending` misses: the
-  verdict clears the durable mark, but the fix delivery that follows it is still in flight. The host
-  injects that in-memory guard into `removeTodo`, and the queued removal evaluates it together with the
-  durable guard immediately before deleting; checking before enqueue would leave a wait-behind-reconcile
-  window in which a review could start and reach a verdict. A manual or automatic fix claims one
-  in-memory per-item latch before its first await and remains part of that guard through package
-  preparation and fix-send acceptance/failure; overlapping manual sends are rejected, and removing the
-  item cannot send a captured fix package for a TODO that no longer exists;
+  A manual or automatic fix claims one in-memory per-item latch (`claimItemFix`) before its first
+  await and holds it through package preparation and fix-send acceptance/failure, so overlapping
+  manual sends are rejected. `isItemUnderActiveReview(sessionId, id)` surfaces both that latch and
+  `planReviewQueue`'s active set to any caller that needs to know whether a review is in flight for
+  an item.
   **`todo.startReview` / `todo.reviewAll` + `host/requestReview.ts`** compose the agent reviewer. A plan
   step is reviewed by a **hidden, ephemeral delegation child** of the plan session (`agent`'s
   `runReviewSubagent`) carrying OUR reviewer role — `host/reviewerRole.ts` owns the system prompt, the

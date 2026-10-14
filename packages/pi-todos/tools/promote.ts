@@ -3,9 +3,7 @@ import { Type } from "typebox";
 import type { TodoGroup, TodoPromoteFailure } from "../core/index.ts";
 import { consistencyNudge, errorResult, storeFor, textResult, withNudges } from "./shared.ts";
 
-// Agent recovery differs per failure reason; a flat "no loose item" message collapses them all and
-// pushes the agent back to the old `todo_add group:` + `todo_remove` dance the skill forbids. Each
-// message names what's wrong AND what the agent should do next, so a retry is a one-step decision.
+// One tailored message per failure reason: names what's wrong and the agent's next step.
 const FAILURE_MESSAGES: Record<TodoPromoteFailure, (id: string, title?: string) => string> = {
 	"unknown-id": (id) =>
 		`No TODO with id "${id}". Check the id with todo_list; a stale id from an older plan read never matches.`,

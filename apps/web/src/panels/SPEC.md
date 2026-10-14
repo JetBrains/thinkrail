@@ -964,9 +964,9 @@ a project picker, the prompt hero, and the reused
   **auto-growing textarea** (`plan-add-input`) — plain **Enter adds**, **Shift+Enter** inserts a newline
   (multi-line like the composer), Esc closes — wired to the SAME `useChatTodos.add` as the popup's
   `TodoAddRow` — a loose **user** item plus the agent nudge — so the two entry points stay one flow.
-  **Plan items carry no UI Remove affordance.** The agent manages the plan through its
-  `todo.remove` tool when it needs to drop a step; the user does not. Items added from the TODO rail
-  stay on the plan until the agent finishes them or the user explicitly asks the agent to cancel.
+  **Plan items carry no UI Remove affordance.** The agent drops a step through its own `todo_remove`
+  tool; there is no wire `todo.remove`. Items added from the TODO rail stay on the plan until the
+  agent finishes them or the user explicitly asks the agent to cancel.
   Items keep a **scan-first item
   anatomy**: the item TITLE is
   the only full-size text (`tr-text-ui font-medium`), every detail is a step down (`tr-text-metadata`,

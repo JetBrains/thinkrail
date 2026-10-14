@@ -18,9 +18,8 @@ import { suggestPlanSummary } from "../assist";
 import { gitStatus, listCommits, readCommitSubject, resolveListedCommit } from "../git";
 import { getWorkspace } from "../workspaces";
 import { enqueueTodoMutation, settleChangeArtifacts, unattributedChanges } from "./artifacts";
-import { dropItemBaseline, readBaselines, removeSessionBaselines } from "./baselines";
+import { readBaselines, removeSessionBaselines } from "./baselines";
 import {
-	clearAutoCycles,
 	clearReviewPending,
 	commitReviewTransition,
 	dropReviewRecord,
@@ -298,31 +297,6 @@ export function updateTodo(params: {
 		const result = storeFor(params.workspaceId, params.sessionId).update(params.id, patch);
 		if (!result) throw new Error(`No TODO with id "${params.id}".`);
 		return result.todo;
-	});
-}
-
-export function removeTodo(
-	params: {
-		workspaceId: string;
-		sessionId: string;
-		id: string;
-	},
-	isUnderActiveReview: () => boolean = () => false,
-): Promise<{
-	ok: true;
-}> {
-	return enqueueTodoMutation(params.workspaceId, () => {
-		const root = getWorkspace(params.workspaceId).worktreePath;
-		if (readReviewMeta(root, params.sessionId).pending[params.id] || isUnderActiveReview()) {
-			throw new Error(
-				`TODO "${params.id}" is currently under review — cancel or wait for the review to finish before removing it.`,
-			);
-		}
-		new TodoStore(root, params.sessionId).remove(params.id);
-		dropItemBaseline(root, params.sessionId, params.id);
-		dropReviewRecord(root, params.sessionId, params.id);
-		clearAutoCycles(root, params.sessionId, params.id);
-		return { ok: true } as const;
 	});
 }
 

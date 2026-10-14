@@ -28,14 +28,8 @@ export function shouldRefreshTodos(event: PiEvent): boolean {
 	return event.type === "tool_execution_end" || event.type === "agent_settled";
 }
 
-// Cross-instance refetch bus for `useChatTodos`.
-//
-// Multiple surfaces (the rail `PlanRailPane`, the center `PlanPane`, the chat strip) each call
-// `useChatTodos(workspaceId, sessionId)` and hold their OWN React state. The server-driven refetch
-// only fires on agent events (`tool_execution_end` / `agent_settled`), so a user-initiated edit
-// (todo.add from the rail) stayed invisible to the already-open Plan page until the agent happened
-// to tick \u2014 fine on fast runs, deterministically broken on binary/desktop. This module-local
-// bus lets a successful local write signal every other hook for the same chat key to reload.
+// Cross-instance refetch bus: a local write (todo.add from one surface) signals every other
+// `useChatTodos` on the same chat key to reload. See panels/SPEC.md.
 const todoRefetchBus = new Map<string, Set<() => void>>();
 export function subscribeTodoRefetch(key: string, listener: () => void): () => void {
 	let set = todoRefetchBus.get(key);
@@ -53,13 +47,8 @@ export function subscribeTodoRefetch(key: string, listener: () => void): () => v
 export function signalTodoRefetch(key: string, except?: () => void): void {
 	const listeners = todoRefetchBus.get(key);
 	if (!listeners) return;
-	// Snapshot the Set before dispatch: a Set that gains entries mid-iteration would visit the newly
-	// added ones in the same loop (per JS spec), which would run a listener for a signal it wasn't
-	// subscribed to yet — a double-work hazard when a React render-time subscribe coincides with
-	// a sibling's write. The optional `except` lets the originating hook skip itself (it already
-	// reloaded via its local write path; another scheduled reload would be redundant work). A
-	// listener's synchronous throw must not swallow its siblings' signal (unmount races, stale
-	// closures), so dispatch is isolated per listener.
+	// Snapshot before dispatch (a mid-iteration subscribe would otherwise run for its own signal).
+	// `except` lets the originating hook skip itself; try/catch isolates a throwing listener.
 	for (const listener of [...listeners]) {
 		if (listener === except) continue;
 		try {
@@ -101,9 +90,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	const identity = tupleKey("chat-todos", workspaceId, sessionId);
 	const currentIdentity = useRef(identity);
 	const readGeneration = useRef(0);
-	// Captures our own bus listener so write-path `signalTodoRefetch(identity, selfListenerRef.current)`
-	// skips firing to ourselves. We already reloaded through the local write path (optimistic patch
-	// + explicit `reloadPlan`); another scheduled reload would be redundant work.
+	// Self-skip handle for `signalTodoRefetch(identity, selfListenerRef.current)`.
 	const selfListenerRef = useRef<(() => void) | null>(null);
 	const initializedIdentity = useRef<string | null>(null);
 	useInsertionEffect(() => {
@@ -245,9 +232,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 				? { ...prev, todos: [...prev.todos, todo] }
 				: prev,
 		);
-		// Tell sibling hooks for the SAME chat (rail \u2194 page \u2194 strip) to reload so a user add
-		// is visible on every surface, not only the one that invoked it. The local optimistic patch
-		// above keeps our own render instant; siblings pick up the real plan from `todo.list`.
+		// Make the add visible on sibling surfaces (we already applied the optimistic patch above).
 		signalTodoRefetch(requestIdentity, selfListenerRef.current ?? undefined);
 		void nudgeAgent(workspaceId, sessionId, title);
 	};
@@ -283,10 +268,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 	};
 
 	const openPlan = () => {
-		// "Open plan" opens the document-scale Plan page in a center tab. The compact TODO list in the
-		// right rail (PlanRailPane) is the always-on glance surface; the Plan page is the deep-review
-		// surface (PlanSessionLive, PR actions, next-action banners, adopted commits, unattributed).
-		// They complement each other — rail for the task list, page for the review trail.
+		// Open the document-scale Plan page in a center tab; the compact TODO list lives in the rail.
 		const state = useAppStore.getState();
 		const title = selectChatTitle(state, workspaceId, sessionId);
 		notifyOpened("page");

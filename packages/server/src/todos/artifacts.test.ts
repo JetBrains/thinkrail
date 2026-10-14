@@ -22,7 +22,6 @@ import {
 	writeBaselines,
 } from "./baselines";
 import { putReviewRecord, readReviewRecords } from "./reviews";
-import { removeTodo } from "./todos";
 
 const SESSION = "sess-artifacts";
 const STORE_PATH = storeRel(SESSION);
@@ -1052,52 +1051,6 @@ test("a pending reset drops the persisted baseline", async () => {
 		expect(readBaselines(root, SESSION)[todo.id]).toBeUndefined();
 	} finally {
 		rmSync(root, { recursive: true, force: true });
-	}
-});
-
-test("a UI removal landing during an in-flight reconcile leaves no orphan window", async () => {
-	const dataDir = mkdtempSync(join(tmpdir(), "todos-race-data-"));
-	const worktree = mkdtempSync(join(tmpdir(), "todos-race-wt-"));
-	const prevDataDir = process.env.THINKRAIL_DATA_DIR;
-	process.env.THINKRAIL_DATA_DIR = dataDir;
-	try {
-		execFileSync("git", ["init", "-b", "main"], { cwd: worktree, stdio: "ignore" });
-		execFileSync("git", ["config", "commit.gpgsign", "false"], { cwd: worktree, stdio: "ignore" });
-		execFileSync(
-			"git",
-			["-c", "user.email=t@t", "-c", "user.name=t", "commit", "--allow-empty", "-m", "init"],
-			{ cwd: worktree, stdio: "ignore" },
-		);
-		saveWorkspaces([
-			{
-				id: "ws-todo-race",
-				projectId: "p1",
-				name: "race",
-				branch: "main",
-				baseBranch: "main",
-				worktreePath: worktree,
-				createdAt: 0,
-			} as Workspace,
-		]);
-		writeFileSync(join(worktree, "dirty.ts"), "work\n");
-		const store = new TodoStore(worktree, SESSION);
-		const todo = store.add({ title: "step" });
-		store.update(todo.id, { status: "in_progress" });
-
-		const reconcile = maybeAttachChangeArtifacts("ws-todo-race", SESSION);
-		expect(readBaselines(worktree, SESSION)[todo.id]?.paths).toEqual(["dirty.ts"]);
-		await new Promise((resolve) => setTimeout(resolve, 0));
-		const removal = removeTodo({ workspaceId: "ws-todo-race", sessionId: SESSION, id: todo.id });
-		await Promise.all([reconcile, removal]);
-
-		expect(store.get(todo.id)).toBeUndefined();
-		expect(readBaselines(worktree, SESSION)[todo.id]).toBeUndefined();
-		expect(otherSessionWindows(worktree, "sess-other")).toBe(false);
-	} finally {
-		if (prevDataDir === undefined) delete process.env.THINKRAIL_DATA_DIR;
-		else process.env.THINKRAIL_DATA_DIR = prevDataDir;
-		rmSync(dataDir, { recursive: true, force: true });
-		rmSync(worktree, { recursive: true, force: true });
 	}
 });
 

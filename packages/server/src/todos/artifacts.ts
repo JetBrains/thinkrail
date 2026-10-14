@@ -244,12 +244,8 @@ export async function reconcileChangeArtifacts(
 		if (hasChangeSet(existing) && base === undefined) continue;
 		const now = await currentChanged();
 		if (!planUnchanged() || !baselinesUnchanged()) return;
-		// No baseline = this item never flipped `in_progress` (jumped straight to `done`; a bundled
-		// completion). We have no honest basis for claiming any dirty path belongs to it, so
-		// `deltaPaths` is empty: no commit, no `change` artifacts, the work surfaces in
-		// `unattributed` instead. The old behaviour (claim ALL dirty paths) grabbed every file the
-		// workspace held including sibling steps' work; a bundled-done step then showed files it never
-		// touched (see `attribution-v2-rfc.md`).
+		// No baseline: jumped straight to `done` with no `in_progress` window, so no honest basis to
+		// claim any dirty path; the work surfaces in `unattributed`. See todos/SPEC.md.
 		const deltaPaths = base ? now.filter((p) => !base.paths.includes(p)) : [];
 		const exclusive = base?.shared !== true && !otherChatWorking();
 		// Adopt commits a subagent/user landed while the item was in_progress (base.head..HEAD) into the

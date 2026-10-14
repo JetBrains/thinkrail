@@ -31,7 +31,8 @@ export function releaseItemFix(sessionId: string, todoId: string): void {
 	activeFixItems.delete(activeFixKey(sessionId, todoId));
 }
 
-/** See host/SPEC.md (todo.remove) — covers the tail past the verdict that the durable `pending` mark can't. */
+/** True while a review is in flight for this item: the fix latch (`claimItemFix`) OR an active
+ * planReviewQueue entry. See host/SPEC.md. */
 export function isItemUnderActiveReview(sessionId: string, id: string): boolean {
 	return activeFixItems.has(activeFixKey(sessionId, id)) || itemReviewActive(sessionId, id);
 }

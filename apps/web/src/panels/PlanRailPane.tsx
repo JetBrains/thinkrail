@@ -1,10 +1,6 @@
-// PlanRailPane — the TODO side-rail panel: the SAME compact rendering the chat popover uses
-// (`TodoRows` + `TodoAddRow` from `../chat/TodoList`), scoped to the workspace's active chat.
-// Intentionally NOT `PlanPane`: the user asked for the TODO list to live next to Files/Specs, not
-// the document-scale Plan page. The full Plan page stays reachable through `plan.openPlan` (the
-// FileText button inside `TodoAddRow`) and will land in center as before \u2014 see
-// `plan-as-side-rail-rfc.md` for placement + `plan-chatless-work-surface-rfc.md` for the Now-block
-// direction.
+// PlanRailPane — the compact TODO side-rail panel. Shares the `TodoRows` + `TodoAddRow` rendering
+// with the chat view (`../chat/TodoList`); the full Plan page is opened via `plan.openPlan`.
+// See panels/SPEC.md.
 import { useEffect } from "react";
 import { hostSessionGlance, sessionGlance } from "../chat/planView";
 import { TodoAddRow, TodoRows } from "../chat/TodoList";
@@ -19,28 +15,17 @@ export default function PlanRailPane({
 	sessionId: string;
 }) {
 	const plan = useChatTodos(workspaceId, sessionId);
-	// Analytics: fire the `plan_opened { surface: "rail" }` event once per (workspaceId, sessionId)
-	// mount so the rail is a tracked open, not an invisible one. (Before the TODO-rail migration,
-	// `plan_opened { surface: "popup" }` fired from the chat header strip click; that chip is gone.)
+	// Fire `plan_opened { surface: "rail" }` once per (workspaceId, sessionId) mount.
 	useEffect(() => {
 		plan.notifyOpened("rail");
-		// Intentionally not depending on `plan` (recreated each render); we only want one fire per
-		// (workspaceId, sessionId).
+		// `plan` is recreated each render; depend only on the identity.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [workspaceId, sessionId]);
-	// Glance drives the status glyph on in-progress rows. The rail is now the ONLY compact plan
-	// surface (the chat popover is gone), so it must be able to show \u201cNeeds your answer\u201d while
-	// `ask_user_question` is pending \u2014 otherwise the active row reads as paused and the user has
-	// no cue that an answer is expected. Prefer the authoritative `hostState` (same path the full
-	// Plan page uses) and fall back to the local isStreaming-only `planGlance` when no host state
-	// has arrived yet.
+	// Drives the status glyph on in-progress rows. Prefer `hostState`; fall back to
+	// `sessionGlance(runtime)` so a pending `ask_user_question` surfaces as "Needs your answer".
 	const glance = useAppStore((s) => {
 		const runtime = s.sessions[sessionId];
 		if (!runtime) return "waiting" as const;
-		// Prefer the authoritative `hostState` (same path the full Plan page uses). Fall back to
-		// `sessionGlance(runtime)` (NOT `planGlance(isStreaming, {})`), so a pending
-		// `ask_user_question` surfaced only through the transcript (hostState hasn't arrived yet)
-		// still reads as "Needs your answer" instead of the misleading paused/working glyph.
 		return hostSessionGlance(runtime.hostState, sessionGlance(runtime));
 	});
 
@@ -58,13 +43,10 @@ export default function PlanRailPane({
 	const empty = plan.data.todos.length === 0 && plan.data.groups.length === 0;
 
 	return (
-		// Background is inherited from the rail panel chrome (same as Review / Changes / Files). An
-		// explicit `bg-container-content-bg` here would paint the lighter editor-tab surface over the
-		// darker rail background and the panel would stand out from its neighbours.
+		// Background inherits from the rail panel chrome; no explicit bg here.
 		<div
 			data-testid="plan-rail-pane"
-			// Exposed so tests can lock the pending-ask glance without needing an in_progress item
-			// mounted (StatusIcon's `data-glance` only renders for in-progress rows).
+			// Exposed so tests can lock the glance without needing an in_progress row.
 			data-glance={glance}
 			className="flex h-full min-h-0 flex-col overflow-hidden"
 		>

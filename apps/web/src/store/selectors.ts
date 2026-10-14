@@ -679,11 +679,8 @@ export function selectActiveEditorTab(
 	return (state.tabsByWorkspace[workspaceId] ?? []).find((tab) => tab.id === activeId) ?? null;
 }
 
-/** Shared rule for "which chat does this workspace speak for right now?". The active chat tab wins;
- * otherwise the most recently appended chat tab in the workspace. Both the history target
- * (`selectHistoryTarget`) and the TODO rail (`selectRailPlanSessionId`) must agree on the answer so
- * they never drift 
- centralized here per AGENTS.md's "centralize duplicated derivations" rule. */
+/** Active chat tab for the workspace, falling back to the most recently appended chat tab. Shared
+ * by `selectHistoryTarget` and `selectRailPlanSessionId` so they can't drift. */
 export function selectWorkspaceChatTab(
 	state: {
 		tabsByWorkspace: Record<string, EditorTab[]>;

@@ -226,7 +226,6 @@ export const WS_METHODS = {
 	todoList: "todo.list",
 	todoAdd: "todo.add",
 	todoUpdate: "todo.update",
-	todoRemove: "todo.remove",
 	todoReview: "todo.review",
 	todoRequestFix: "todo.requestFix",
 	todoStartReview: "todo.startReview",
@@ -640,7 +639,6 @@ export interface WsMethodMap {
 		};
 		result: TodoItem;
 	};
-	"todo.remove": { params: { workspaceId: string; sessionId: string; id: string }; result: Ack };
 	"todo.review": { params: { workspaceId: string; sessionId: string; id: string }; result: Ack };
 	"todo.requestFix": {
 		params: { workspaceId: string; sessionId: string; id: string; feedback: string };
