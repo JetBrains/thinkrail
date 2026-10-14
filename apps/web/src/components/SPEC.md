@@ -48,19 +48,20 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
 - **`AttentionDot.tsx`** — the store-free, static green/accent dot whose sole accessible label is “Needs
   attention.” It carries no reason, count, tooltip, motion, or clearing behavior; callers decide only whether
   it is present. It is the one marker for both needs-input and unread-result attention.
-- **`RunningIcon.tsx`** — the store-free **"ThinkRail is working" badge**: the brand monogram inside a
-  rounded-rectangle frame, drawn in `currentColor` so it sizes with `size-*` and colours with `text-*`
-  like a Remix icon — the theme's `text-primary` at every call site that wants brand colour — with the
-  accessible label "Agent working". While motion is allowed, the animation runs on a 3.263s cycle with
-  eight coordinated stroke draws: the frame splits into two halves (`loader-fa`/`loader-fb` in
-  `index.css`) that run from a gap and meet on the right, while six monogram strokes (`loader-s1`,
-  `loader-s2`, `loader-a1`, `loader-c3`, `loader-c2`, `loader-b1`) draw and erase the "TR" letters,
-  each clipped to its region of the mark via `BRAND_MARK_CLIP_PATHS` from `constants/branding`. The
-  clip paths are the canonical monogram geometry; the stroke centre-lines are local to the component
-  because they trace a path through those regions, not the fill boundary itself. Under reduced motion
-  the animated strokes are hidden. Callers pass only size/colour classes and decide from normalized
-  host state whether a top-level session is running; the icon renders no dot, spinner, count, tooltip,
-  or idle state.
+- **`RunningIcon.tsx`** — the store-free **“ThinkRail is working” badge**: the brand monogram inside a
+  rounded-square frame, drawn in `currentColor` so it sizes with `size-*` and colours with `text-*` like a
+  Remix icon, with the accessible label “Agent working”. While motion is allowed, the frame (two halves
+  leaving a gap on the left and meeting on the right) and the six letter strokes of the monogram draw and
+  erase on one 3.263s cycle (`loader-*` keyframes in `index.css`); a beat with only the frame showing is
+  part of the design. Each letter stroke is a wide line clipped to its region of `BRAND_MARK_SEGMENTS`, the
+  same segments `BRAND_MARK_PATH` is joined from, so the fully drawn badge is the shell's mark rather than a
+  second copy that could drift. Only the stroke centre-lines, the frame, and the small gap between the R's
+  stem and top bar (the stem stroke stops short) are local animation geometry. Reduced motion leaves every
+  stroke at its fully drawn dash: the static, complete badge. This loader replaced a ring with a lapping
+  train and a pulsing monogram; before that the row's own identity glyph breathed, dropped because a
+  dimming folder reads as “disabled” at 14px. Callers pass only size/colour classes and decide from
+  normalized host state whether a top-level session is running; the icon renders no dot, spinner, count,
+  tooltip, or idle state.
 - **Also owns:** `Skeleton.tsx` — `SkeletonRows`, the one pulsing-rows placeholder every loading surface
   uses, and `LoadingRegion`, the sized-wrapper shape around it that most call sites actually want (a
   `className` for the region's own padding/sizing, an optional `label` threaded to `SkeletonRows`'
@@ -74,7 +75,8 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
   wall clock as a `useSyncExternalStore` value on a shared 30 s ticker, so a render never calls `Date.now`
   itself).
 - **Allowed deps:** React, `@remixicon/react`, `@thinkrail/ui/utils` (`cn`), `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
-  rather than re-stated). Kept dependency-light on purpose, and it is a leaf, so *any* region
+  rather than re-stated), `constants` (`BRAND_MARK_SEGMENTS` — the monogram regions `RunningIcon` clips to,
+  shared with the shell logo rather than copied). Kept dependency-light on purpose, and both are leaves, so *any* region
   (shell, panels, `main.tsx`) can still wrap in it without creating a cycle.
 - **Forbidden:** `store`/`transport`/`panels`/`shell`/`chat`/`contracts`; `server`/`shared`/`pi`; inline
   `style` objects or raw hex (fallback is themed with token utilities only).

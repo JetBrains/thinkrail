@@ -52,7 +52,7 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `lib` | shared path/array primitives + highlighting | yes | [lib/SPEC.md](src/lib/SPEC.md) |
 
 Leaf utilities without their own spec: `constants/` (branding — the product name, storage/event prefixes, and the one
-`BRAND_MARK_PATH` monogram outline that the shell logo and the components' working badge both draw), `clientPreferences.ts` (feature-neutral
+`BRAND_MARK_SEGMENTS` monogram regions, joined into the `BRAND_MARK_PATH` the shell logo fills and clipped to by the components' working badge), `clientPreferences.ts` (feature-neutral
 access to the optional native stable string adapter), and `styles/` — which holds the three
 design-system SOURCES (`typography.json`, `colors.json`, `spacing.json`), their generated CSS, and the
 structural token contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
