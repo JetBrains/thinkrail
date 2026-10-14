@@ -81,7 +81,7 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   ([[submodule-web-chat]], [[submodule-server-agent]]).
 - **Existing skills reused** — portable Agent Skills kept for other coding agents are read in place;
   `pi` stays the parser and runtime ([[submodule-server-agent]]).
-- **Plans with per-step review** — a shared TODO plan the agent maintains and the user adds tasks to; a completed step
+- **Plans with per-step review** — a shared TODO plan the agent works and the user edits; a completed step
   is committed on its own when its changes are provably its own, and can be reviewed by an independent
   reviewer ([[module-pi-todos]], [[submodule-server-todos]],
   [[submodule-server-host-plan-review]]).
