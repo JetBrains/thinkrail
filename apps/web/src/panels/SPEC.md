@@ -241,7 +241,8 @@ treatment.
   directory as one unit. `ChangesTree` evaluates this against the changed-file tree; `FileTree` resolves
   only visible compact runs through its existing client-side directory reads, so the wire remains a plain
   immediate-directory listing. The **`+N −M` diff-count badge** is the shared **`DiffStatBadge`**, used
-  only inside Changes: the flat list's file rows and the tree's per-file / per-folder counts.
+  only inside Changes: the flat list's file rows, the tree's file rows, and a tree folder's aggregate only
+  while it is collapsed (an expanded folder's children already show those counts).
   `ChangesTree`'s tree build + `+/−` aggregation + shared status glyphs live in the pure
   **`changesModel.ts`** (unit-tested; no store/transport — `ChangesTree` is presentational, fed `changes` +
   `onOpen`/`isActive` by `ChangesPanel`), together with the **diff-tab identity + scope vocabulary**:

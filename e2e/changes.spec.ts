@@ -362,10 +362,13 @@ test("Changes has a List|Tree toggle (Tree by default); Tree groups files into f
 	await expect(compactFolder).toContainText("docs/guides");
 	const fileNode = page.getByTestId("change-item").filter({ hasText: "notes.md" });
 	await expect(fileNode).toBeVisible();
+	await expect(compactFolder).not.toContainText("+3");
 	await compactFolder.click();
 	await expect(fileNode).toBeHidden();
+	await expect(compactFolder).toContainText("+3");
 	await compactFolder.click();
 	await expect(fileNode).toBeVisible();
+	await expect(compactFolder).not.toContainText("+3");
 	await expect(fileNode).toHaveAttribute("data-status", "untracked");
 	await expect(fileNode).toContainText("+3");
 
