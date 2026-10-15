@@ -602,7 +602,7 @@ function CompactionNotice({
 			<div
 				data-testid="compaction-notice"
 				data-status="failed"
-				className="flex items-start gap-8 rounded-md border border-feedback-error-muted bg-container-elevated-bg px-12 py-8 text-text-default tr-text-ui"
+				className="flex items-start gap-8 rounded-sm border border-feedback-error-muted bg-container-elevated-bg px-12 py-8 text-text-default tr-text-ui"
 			>
 				<CircleAlert className="mt-2 size-12 shrink-0 text-feedback-error" aria-hidden />
 				<span className="min-w-0 whitespace-pre-wrap break-words">

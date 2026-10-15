@@ -67,8 +67,9 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   pi `auto_retry_*`; `summarization` = compaction/branch-summary `summarization_retry_*`, pi ≥0.81.1) —
   the flows can overlap mid-run, each keeps exactly one indicator (re-scheduling replaces, each source's
   end event clears only its own), and `RetryIndicator` labels them apart ("Retrying" vs "Retrying
-  summarization"). **`ErrorTurn`** is a persistent tinted failure notice
-  (provider/model error, an unrecovered `length` truncation, or a rejected send) — **never folded**, so
+  summarization"). **`ErrorTurn`** is a persistent failure notice
+  (provider/model error, an unrecovered `length` truncation, or a rejected send), drawn in the shared
+  [[web-notices]] style: neutral fill, error border and icon, **Try again** in a footer row. It is **never folded**, so
   a failed turn can't look like nothing happened. Only the current settlement-derived failure carries the
   web-local `try-again` recovery action; its **Try again** button sends one visible ordinary `Try again.` user
   message through `ChatView`'s existing immediate-send path. Rejected sends, extension notifications, and
