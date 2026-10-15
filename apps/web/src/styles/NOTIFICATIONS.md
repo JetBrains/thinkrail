@@ -1,198 +1,77 @@
-# Notification Design System
+---
+id: web-notices
+type: submodule-design
+status: active
+title: ThinkRail in-app notices — one look for toasts and inline banners
+parent: module-web
+references: [web-color, web-spacing, web-typography]
+---
 
-Правила дизайна и реализации уведомлений в ThinkRail.
+# In-app notices
 
-## Принципы
+One visual language for every transient or inline message the app shows inside its own window: toasts
+(`packages/ui/toast.tsx` composed by `panels/Toaster`) and inline notices such as `ProjectTrustNotice`,
+`ProviderWarningBanner`, the trust notices in `SkillsDialog` / `NewWorkspaceDialog`, and the chat
+`ErrorTurn` / `CompactionNotice`. OS-level notifications are a different thing, owned by the `notifications`
+module.
 
-1. **Переиспользуй компоненты** — не создавай нотификации в новом стиле, используй существующие паттерны
-2. **Единообразие** — все нотификации следуют одному визуальному языку
-3. **Семантика** — цвет рамки и иконки отражает тип сообщения
+## Raising a toast
 
-## Типы уведомлений
+Use the store helpers: `toast.info|success|warning|error(message, title?)` from `@/store`. Use `pushToast`
+when you need an `action` (`{ label, onClick }`) or a custom `durationMs`. Error toasts stay until
+dismissed. Every other toast auto-dismisses.
 
-### Toast-нотификации
+## Surface
 
-Всплывающие уведомления в правом нижнем углу.
+- Neutral fill: `bg-container-elevated-bg` for every severity. No tinted `bg-feedback-*-subtle` fill and
+  no left accent stripe.
+- Severity is shown only by the 1px border (`border-feedback-<severity>-muted`) and the icon colour
+  (`text-feedback-<severity>`). Body text stays `text-text-default`.
+- Geometry: `rounded-sm`. Inline notices use `px-12 py-8`, or `px-8 py-4` inside dense side panels
+  such as the Resources inspector. Toasts use `p-12`.
+- Text: message `tr-text-ui text-text-default`, secondary line `tr-text-metadata text-text-muted`.
 
-**Компоненты:** `packages/ui/toast.tsx`, `apps/web/src/panels/Toaster.tsx`
+## Icons
 
-**API (из `@/store`):**
+Use one Line glyph per severity, everywhere, coloured with the matching `text-feedback-*` and marked
+`aria-hidden`:
 
-```tsx
-import { toast } from "@/store";
+| Severity | Glyph |
+|---|---|
+| info | `RiInformationLine` |
+| success | `RiCheckboxCircleLine` |
+| warning | `RiAlertLine` (triangle) |
+| error | `RiErrorWarningLine` (circled `!`) |
 
-// Простые уведомления: (message, title?)
-toast.info("Workspace synced");
-toast.success("File saved", "Success");
-toast.warning("Connection unstable");
-toast.error("Failed to save", "Error");
+A notice whose meaning is more specific than its severity may use a domain glyph, for example
+`RiShieldCheckLine` on the trusted-project notice.
 
-// С действием или кастомной длительностью: pushToast
-import { useAppStore } from "@/store";
+## Layout
 
-useAppStore.getState().pushToast({
-  variant: "info",
-  message: "New version available",
-  title: "Update",
-  durationMs: 10000,
-  action: { label: "Update now", onClick: () => update() },
-});
-```
+Pick one of two layouts based on the content:
 
-**Варианты:**
-- `info` — синяя рамка и иконка (`feedback-info`)
-- `success` — зелёная (`feedback-success`)
-- `warning` — жёлтая (`feedback-warning`)
-- `error` — красная (`feedback-error`)
+- **Single line** (one short message, no secondary line): `flex items-center gap-8`. The icon, message
+  (`flex-1`) and actions sit in one row. Nudge a 14px icon with `-mt-2` so it lines up optically with the
+  text.
+- **Multi-line** (a secondary line, or a message that can wrap): `flex flex-col gap-8`. Put the icon and
+  text in a content row (`flex items-start gap-8`, icon `mt-2` to match the first line). Put the actions
+  in a footer row (`flex justify-end gap-8`). Never keep actions on the right of text that wraps.
 
-### Inline-уведомления
+Toasts always use the multi-line layout. `ToastClose` sits in the content row, and the optional action
+goes in a `mt-12` footer.
 
-Встроенные в интерфейс уведомления. Используются в Welcome Panel, диалогах и панелях.
+## Actions
 
-**Примеры:**
-- `ProjectTrustNotice` — доверие проекту
-- `ProviderWarningBanner` — отсутствие провайдера
-- `ErrorTurn` — ошибка в чате
+- Use `size="sm"` buttons. The primary action is `variant="outline"`. A secondary action next to it is
+  `variant="ghost"`.
+- Never use a filled (`default`) or coloured button inside a notice. The border already carries the
+  severity, and a filled button would compete with the page's primary action.
+- A toast action is rendered through `ToastAction asChild` around a `Button`. That way Radix still closes
+  the toast and announces the action's `altText`.
 
-## Структура
+## Not yet migrated
 
-### Однострочный layout (кнопка справа)
-
-Используй когда:
-- Текст помещается в одну строку
-- Нет subtitle/description
-
-```
-┌──────────────────────────────────────────────────────┐
-│ [icon]  Single line text message         [Button]   │
-└──────────────────────────────────────────────────────┘
-```
-
-```tsx
-<div className="flex items-center gap-8 rounded-sm border border-feedback-*-muted bg-container-elevated-bg px-12 py-8">
-  <Icon className="-mt-2 size-14 shrink-0 text-feedback-*" />
-  <span className="min-w-0 flex-1 tr-text-ui text-text-default">
-    {message}
-  </span>
-  <Button variant="outline" size="sm">Action</Button>
-</div>
-```
-
-### Многострочный layout (кнопки снизу)
-
-Используй когда:
-- Текст не помещается в одну строку
-- Есть subtitle/description
-- При адаптиве текст переносится
-
-```
-┌──────────────────────────────────────────────────────┐
-│ [icon]  Multi-line text message that wraps          │
-│         to multiple lines                           │
-│         Subtitle/description text                   │
-├──────────────────────────────────────────────────────┤
-│                              [Button 1]  [Button 2] │
-└──────────────────────────────────────────────────────┘
-```
-
-```tsx
-<div className="flex flex-col gap-8 rounded-sm border border-feedback-*-muted bg-container-elevated-bg px-12 py-8">
-  {/* Content row */}
-  <div className="flex items-start gap-8">
-    <Icon className="mt-1 size-14 shrink-0 text-feedback-*" />
-    <span className="flex min-w-0 flex-1 flex-col gap-2">
-      <span className="tr-text-ui text-text-default">{title}</span>
-      <span className="tr-text-metadata text-text-muted">{subtitle}</span>
-    </span>
-  </div>
-  {/* Footer: buttons */}
-  <div className="flex justify-end gap-8">
-    <Button variant="ghost" size="sm">Secondary</Button>
-    <Button variant="outline" size="sm">Primary</Button>
-  </div>
-</div>
-```
-
-## Стили
-
-### Фон и рамка
-
-- **Фон:** `bg-container-elevated-bg` (нейтральный, одинаковый для всех вариантов)
-- **Рамка:** `border-feedback-*-muted` (семантический цвет с 40% прозрачностью)
-- **Скругление:** `rounded-sm`
-- **Паддинги:** `px-12 py-8`
-
-### Иконки
-
-- **Размер:** `size-14` (14px)
-- **Цвет:** `text-feedback-*` (семантический)
-- **Выравнивание однострочный:** `items-center` + `-mt-2` для оптической коррекции
-- **Выравнивание многострочный:** `items-start` + `mt-1` для выравнивания с первой строкой
-
-### Кнопки
-
-- **Размер:** `size="sm"`
-- **Одна кнопка:** `variant="outline"` (с бордером)
-- **Две кнопки:**
-  - Основное действие: `variant="outline"` (с бордером)
-  - Дополнительное действие: `variant="ghost"` (без бордера)
-- **Никогда** не используй `variant="primary"` или цветные кнопки
-
-### Типографика
-
-- **Основной текст:** `tr-text-ui text-text-default`
-- **Subtitle:** `tr-text-metadata text-text-muted`
-
-## Toast-специфика
-
-### Структура
-
-```tsx
-<Toast>
-  {/* Content row: icon + text + close */}
-  <div className="flex items-start gap-8">
-    <Icon className="mt-1 size-14 shrink-0 text-feedback-*" />
-    <div className="flex min-w-0 flex-1 flex-col gap-4">
-      <ToastTitle>{title}</ToastTitle>
-      <ToastDescription>{message}</ToastDescription>
-    </div>
-    <ToastClose />
-  </div>
-  {/* Footer: action button */}
-  {action && (
-    <div className="mt-12 flex justify-end">
-      <Button variant="outline" size="sm">{action.label}</Button>
-    </div>
-  )}
-</Toast>
-```
-
-### Кнопка закрытия
-
-- В потоке с `ml-auto`, не `position: absolute`
-- Находится в content row, рядом с текстом
-- Не влияет на позицию action button в футере
-
-### Отступы
-
-- Между контентом и футером: `mt-12` (12px)
-- Gap между элементами: `gap-8` (8px)
-
-## Чеклист при создании нотификации
-
-- [ ] Используется существующий компонент/паттерн
-- [ ] Фон `bg-container-elevated-bg`
-- [ ] Рамка `border-feedback-*-muted`
-- [ ] Иконка с правильным цветом `text-feedback-*`
-- [ ] Кнопки: одна — `outline`, две — secondary `ghost` + primary `outline`
-- [ ] Правильный layout: однострочный или многострочный
-- [ ] Иконка выровнена с текстом
-
-## Запрещено
-
-- ❌ Создавать нотификации в совершенно новом стиле
-- ❌ Использовать `variant="primary"` или цветные кнопки
-- ❌ Использовать `variant="outline"` для secondary action при двух кнопках
-- ❌ Использовать `position: absolute` для кнопки закрытия в toast
-- ❌ Располагать кнопки справа при многострочном тексте
-- ❌ Использовать тонированный фон (`bg-feedback-*-subtle`)
+A few older error surfaces still use the tinted style, for example `ExistingWorktreeDialog` and the
+`SpecsPanel` load error. Migrate them when you next touch them, and do not copy their style into new
+notices. Markdown alert callouts (`panels/markdownAlerts`) are not notices: they deliberately mirror
+GitHub's alert styling.

@@ -56,7 +56,8 @@ Leaf utilities without their own spec: `constants/` (branding — the product na
 access to the optional native stable string adapter), and `styles/` — which holds the three
 design-system SOURCES (`typography.json`, `colors.json`, `spacing.json`), their generated CSS, and the
 structural token contract; per-theme palettes belong to `themes`. Each system is specced beside its source:
-[TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md), [COLOR.md](src/styles/COLOR.md) and [SPACING.md](src/styles/SPACING.md).
+[TYPOGRAPHY.md](src/styles/TYPOGRAPHY.md), [COLOR.md](src/styles/COLOR.md) and [SPACING.md](src/styles/SPACING.md);
+the in-app notice and toast look built on them is [NOTIFICATIONS.md](src/styles/NOTIFICATIONS.md).
 Outside `src/`, **[`scripts/`](scripts/SPEC.md)** is the build-time generator module — it runs under Bun,
 never ships, and turns those three JSON sources into `styles/generated/` (plus the vendored provider
 marks into `chat/generated/`).
