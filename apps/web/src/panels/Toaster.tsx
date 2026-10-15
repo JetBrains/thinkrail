@@ -1,6 +1,6 @@
 import {
 	RiAlertLine,
-	RiCheckboxCircleFill,
+	RiCheckboxCircleLine,
 	RiErrorWarningLine,
 	RiInformationLine,
 } from "@remixicon/react";
@@ -14,13 +14,14 @@ import {
 	ToastTitle,
 	ToastViewport,
 } from "@thinkrail/ui/toast";
+import { cn } from "@thinkrail/ui/utils";
 import type { Toast as ToastType } from "@/store";
 import { useAppStore } from "@/store";
 
 const variantIcon: Record<ToastType["variant"], { Icon: typeof RiAlertLine; className: string }> = {
-	error: { Icon: RiAlertLine, className: "text-feedback-error" },
-	success: { Icon: RiCheckboxCircleFill, className: "text-feedback-success" },
-	warning: { Icon: RiErrorWarningLine, className: "text-feedback-warning" },
+	error: { Icon: RiErrorWarningLine, className: "text-feedback-error" },
+	success: { Icon: RiCheckboxCircleLine, className: "text-feedback-success" },
+	warning: { Icon: RiAlertLine, className: "text-feedback-warning" },
 	info: { Icon: RiInformationLine, className: "text-feedback-info" },
 };
 
@@ -48,7 +49,7 @@ export function Toaster() {
 					>
 						{/* Content row: icon + text + close */}
 						<div className="flex items-start gap-8">
-							<Icon className={`mt-2 size-14 shrink-0 ${iconClass}`} aria-hidden />
+							<Icon className={cn("mt-2 size-14 shrink-0", iconClass)} aria-hidden />
 							<div className="flex min-w-0 flex-1 flex-col gap-4">
 								{t.title ? <ToastTitle>{t.title}</ToastTitle> : null}
 								<ToastDescription>{t.message}</ToastDescription>

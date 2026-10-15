@@ -1,4 +1,5 @@
 import {
+	RiAlertLine,
 	RiCloseLine,
 	RiErrorWarningLine,
 	RiInformationLine,
@@ -318,7 +319,7 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 					) : null}
 					{props.stale ? (
 						<p className="mx-8 flex items-center gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-8 py-4 text-text-default tr-text-metadata">
-							<RiErrorWarningLine className="size-14 shrink-0 text-feedback-warning" />
+							<RiAlertLine className="size-14 shrink-0 text-feedback-warning" aria-hidden />
 							Snapshot is stale — controls return when the host reconnects.
 						</p>
 					) : null}
@@ -327,10 +328,10 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 							role="alert"
 							className="mx-8 flex items-center gap-8 rounded-sm border border-feedback-error-muted bg-container-elevated-bg px-8 py-4 text-text-default tr-text-metadata"
 						>
-							<RiErrorWarningLine className="size-14 shrink-0 text-feedback-error" />
+							<RiErrorWarningLine className="size-14 shrink-0 text-feedback-error" aria-hidden />
 							<span className="min-w-0 flex-1 break-words">{props.error}</span>
 							<Button
-								variant="ghost"
+								variant="outline"
 								size="sm"
 								data-testid="resources-retry"
 								onClick={props.onRetry}

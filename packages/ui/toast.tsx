@@ -69,7 +69,7 @@ function ToastClose({ className, ...props }: React.ComponentProps<typeof ToastPr
 		<ToastPrimitive.Close
 			aria-label="Dismiss"
 			className={cn(
-				"ml-auto flex h-24 w-24 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary",
+				"ml-auto flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary",
 				className,
 			)}
 			{...props}

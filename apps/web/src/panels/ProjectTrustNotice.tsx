@@ -75,7 +75,7 @@ export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 				data-state="trusted"
 				className="mt-16 flex w-full max-w-[560px] items-center gap-8 rounded-sm border border-feedback-success-muted bg-container-elevated-bg px-12 py-8 text-left"
 			>
-				<ShieldCheck className="-mt-2 size-14 shrink-0 text-feedback-success" />
+				<ShieldCheck className="-mt-2 size-14 shrink-0 text-feedback-success" aria-hidden />
 				<span className="min-w-0 flex-1 tr-text-ui text-text-default">
 					{trustedNoticeText(notice)}
 				</span>
@@ -94,7 +94,7 @@ export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 		>
 			{/* Content row */}
 			<div className="flex items-start gap-8">
-				<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" />
+				<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" aria-hidden />
 				<span className="flex min-w-0 flex-1 flex-col gap-2">
 					<span className="tr-text-ui text-text-default">
 						{pending

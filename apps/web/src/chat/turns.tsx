@@ -3,13 +3,13 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 	RiArrowUpSLine as ChevronUp,
+	RiErrorWarningLine as CircleAlert,
 	RiTimeLine as Clock,
 	RiEyeLine as Eye,
 	RiFileTextLine as FileText,
 	RiContractUpDownLine as FoldVertical,
 	RiLoopRightLine as RotateCw,
 	RiStackLine as Stack,
-	RiAlertLine as TriangleAlert,
 	RiToolsLine as Wrench,
 } from "@remixicon/react";
 import type {
@@ -572,21 +572,19 @@ function ErrorTurn({ text, onTryAgain }: { text: string; onTryAgain?: (() => voi
 		<div
 			data-testid="chat-message"
 			data-role="error"
-			className="flex items-start gap-8 rounded-sm border border-feedback-error-muted bg-container-elevated-bg px-12 py-8 text-text-default tr-text-ui"
+			className="flex flex-col gap-8 rounded-sm border border-feedback-error-muted bg-container-elevated-bg px-12 py-8 text-text-default tr-text-ui"
 		>
-			<TriangleAlert className="mt-2 size-12 shrink-0 text-feedback-error" />
-			<span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{text}</span>
+			<div className="flex items-start gap-8">
+				<CircleAlert className="mt-2 size-12 shrink-0 text-feedback-error" aria-hidden />
+				<span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{text}</span>
+			</div>
 			{onTryAgain ? (
-				<Button
-					variant="outline"
-					size="sm"
-					data-testid="agent-try-again"
-					className="shrink-0"
-					onClick={onTryAgain}
-				>
-					<RotateCw className="size-12" />
-					Try again
-				</Button>
+				<div className="flex justify-end">
+					<Button variant="outline" size="sm" data-testid="agent-try-again" onClick={onTryAgain}>
+						<RotateCw className="size-12" />
+						Try again
+					</Button>
+				</div>
 			) : null}
 		</div>
 	);
@@ -606,7 +604,7 @@ function CompactionNotice({
 				data-status="failed"
 				className="flex items-start gap-8 rounded-md border border-feedback-error-muted bg-container-elevated-bg px-12 py-8 text-text-default tr-text-ui"
 			>
-				<TriangleAlert className="mt-2 size-12 shrink-0 text-feedback-error" />
+				<CircleAlert className="mt-2 size-12 shrink-0 text-feedback-error" aria-hidden />
 				<span className="min-w-0 whitespace-pre-wrap break-words">
 					{detail || "Compaction failed."}
 				</span>

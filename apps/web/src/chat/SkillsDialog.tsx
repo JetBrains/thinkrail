@@ -186,7 +186,7 @@ export function SkillsDialog({
 					)}
 				>
 					{group.isPlugin ? (
-						<Puzzle className="mt-2 size-14 shrink-0 text-text-muted" aria-hidden />
+						<Puzzle className="size-14 shrink-0 text-text-muted" aria-hidden />
 					) : null}
 					<span className="tr-text-eyebrow text-text-default">{group.label}</span>
 					<span className="min-w-0 flex-1 truncate text-text-muted tr-text-metadata">
@@ -280,7 +280,7 @@ export function SkillsDialog({
 					>
 						{/* Content row */}
 						<div className="flex items-start gap-8">
-							<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" />
+							<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" aria-hidden />
 							<span className="flex min-w-0 flex-1 flex-col gap-2">
 								<span className="tr-text-ui text-text-default">
 									{untrustedNoticeText(trustNotice)}

@@ -541,7 +541,7 @@ export function NewWorkspaceDialog({
 					>
 						{/* Content row */}
 						<div className="flex items-start gap-8">
-							<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" />
+							<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" aria-hidden />
 							<span className="flex min-w-0 flex-1 flex-col gap-2">
 								<span className="tr-text-ui text-text-default">
 									{untrustedNoticeText(trustNotice)} Your personal and ThinkRail's built-in skills
@@ -731,7 +731,7 @@ function TargetOption({
 			)}
 		>
 			<input type="radio" name={name} className="sr-only" checked={active} onChange={onSelect} />
-			<Icon className="mt-2 size-14 shrink-0" />
+			<Icon className="size-14 shrink-0" />
 			{label}
 		</label>
 	);
@@ -778,7 +778,7 @@ function ProjectPicker({
 										setOpen(false);
 									}}
 								>
-									<Box className="mt-2 size-14 shrink-0 text-text-muted" />
+									<Box className="size-14 shrink-0 text-text-muted" />
 									<span className="truncate">{p.name}</span>
 								</CommandItem>
 							))}
