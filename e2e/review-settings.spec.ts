@@ -10,8 +10,11 @@ test("Review settings: model + effort render and the auto-fix toggle persists ac
 	const dialog = page.getByTestId("settings-dialog");
 	await expect(dialog).toBeVisible();
 	await page.getByTestId("settings-nav-models").click();
-	const reviewRow = page.getByTestId("review-model-row");
+	const reviewGroup = page.getByTestId("models-review-group");
+	await expect(reviewGroup.getByRole("heading", { name: "Review" })).toBeVisible();
+	const reviewRow = reviewGroup.getByTestId("review-model-row");
 	await expect(reviewRow).toContainText("Review model");
+	await expect(reviewGroup.getByTestId("review-autofix-row")).toBeVisible();
 
 	// The model + effort pickers render (the catalog may be empty without a provider — the controls exist).
 	await expect(reviewRow.getByTestId("model-selector")).toBeVisible();
@@ -52,7 +55,9 @@ test("Review settings: the agent-review toggle persists across a reload", async 
 	const dialog = page.getByTestId("settings-dialog");
 	await expect(dialog).toBeVisible();
 	await page.getByTestId("settings-nav-models").click();
-	await expect(dialog).toContainText("Agent-triggered review");
+	await expect(
+		page.getByTestId("models-review-group").getByTestId("agent-review-row"),
+	).toContainText("Agent-triggered review");
 
 	const toggle = page.getByTestId("agent-review-toggle");
 	await expect(toggle).toHaveAttribute("data-active", "false");

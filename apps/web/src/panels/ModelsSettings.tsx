@@ -110,7 +110,7 @@ export function ModelsSettings() {
 
 	return (
 		<SettingsPageContainer testId="settings-models">
-			<SettingsGroup title="Default models">
+			<SettingsGroup title="Default model">
 				{loadFailed ? (
 					<div className="flex items-center gap-8 border-border-muted border-b py-12">
 						<p className="text-text-muted tr-text-ui">Couldn't load your default model.</p>
@@ -148,6 +148,10 @@ export function ModelsSettings() {
 						</div>
 					</div>
 				) : null}
+				<VisibleModelsSettings models={allModels} />
+			</SettingsGroup>
+
+			<SettingsGroup title="Review" testId="models-review-group">
 				<div
 					data-testid="review-model-row"
 					className="flex flex-wrap items-center justify-between gap-12 border-border-muted border-b py-12"
@@ -172,10 +176,6 @@ export function ModelsSettings() {
 						/>
 					</div>
 				</div>
-				<VisibleModelsSettings models={allModels} />
-			</SettingsGroup>
-
-			<SettingsGroup title="Automation">
 				{protocolVersion !== null && protocolVersion >= AGENT_REVIEW_SETTING_PROTOCOL_VERSION && (
 					<SettingsRow
 						testId="agent-review-row"

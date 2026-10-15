@@ -71,7 +71,7 @@ test("Models settings save host defaults and apply them to a fresh chat", async 
 		await expect(dialog).toBeVisible();
 		await page.getByTestId("settings-nav-models").click();
 		const section = page.getByTestId("settings-models");
-		await expect(section).toContainText("Default models");
+		await expect(section).toContainText("Default model");
 		const row = section.getByTestId("default-model-row");
 		await expect(row).toContainText("Chat model");
 

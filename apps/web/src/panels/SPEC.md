@@ -829,9 +829,11 @@ a project picker, the prompt hero, and the reused
   `ModelContextControls` owns presentation; older hosts get neither the block nor its requests.
   `ModelsSettings` organizes its controls into three visual groups:
 
-  **DEFAULT MODELS** — a **Chat model** row (`defaultModel`, `defaultEffort`), an independent **Review
-  model** row (`reviewModel`, `reviewEffort`), and the **Visible models** disclosure. Both model
-  rows use `ModelSelector`/`ThinkingSelector` over `useModelCatalog`; the review selector carries an
+  **DEFAULT MODEL** — a **Chat model** row (`defaultModel`, `defaultEffort`) and the **Visible models**
+  disclosure. **REVIEW** (`models-review-group`) — everything that configures review in one place, because
+  users look for it by that word: the **Review model** row (`review-model-row`; `reviewModel`,
+  `reviewEffort`), independent of the Chat model row's loading state, then the two automation toggles
+  below. Both model rows use `ModelSelector`/`ThinkingSelector` over `useModelCatalog`; the review selector carries an
   **explicit default-model row** (`model-option-default`, labelled with the host's `model.default` result)
   that writes `{ reviewModel: null, reviewEffort: null }` — the null-clears wire form, see
   `submodule-server-settings` — so a chosen reviewer model can be restored to the host's new-chat default
@@ -847,7 +849,7 @@ a project picker, the prompt hero, and the reused
   `${STORAGE_PREFIX}hidden-models:<httpBase>`, whose `storage` events sync other tabs. The full catalog
   remains available here for configuration.
 
-  **AUTOMATION** — an **agent-review toggle**
+  The REVIEW group's toggles: an **agent-review toggle**
   (`agent-review-toggle`, `agent-review-row`, a switch over `store.agentReviewEnabled` →
   `settings.update { agentReviewEnabled }`) — off withholds the worker's in-session `request_review` tool
   so review happens only via the Review button (the host live-toggles the tool's active set on it, see
@@ -859,7 +861,7 @@ a project picker, the prompt hero, and the reused
 
   **GPT CONTEXT WINDOW** — the `ModelContextSettings` block described above.
 
-  There is **no separate Review navigation section**; all review-related controls live inside Models.
+  There is **no separate Review navigation section**; all review-related controls live in Models' REVIEW group.
   **`ExtensionsSettings`** (the **Extensions** section, nav `settings-nav-extensions`, listed only at
   `protocolVersion >= EXTENSION_CATALOG_PROTOCOL_VERSION`) fetches the host-registry catalog with
   `extension.list` each time the section mounts — the catalog is static per host process, so it is
