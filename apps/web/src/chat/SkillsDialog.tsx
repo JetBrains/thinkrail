@@ -278,7 +278,6 @@ export function SkillsDialog({
 						data-testid="skills-trust-all"
 						className="flex flex-col gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-12 py-8"
 					>
-						{/* Content row */}
 						<div className="flex items-start gap-8">
 							<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" aria-hidden />
 							<span className="flex min-w-0 flex-1 flex-col gap-2">
@@ -290,7 +289,6 @@ export function SkillsDialog({
 								) : null}
 							</span>
 						</div>
-						{/* Footer: button */}
 						<div className="flex justify-end">
 							<Button
 								variant="outline"

@@ -47,16 +47,16 @@ export function Toaster() {
 						data-testid="toast"
 						data-variant={t.variant}
 					>
-						{/* Content row: icon + text + close */}
 						<div className="flex items-start gap-8">
 							<Icon className={cn("mt-2 size-14 shrink-0", iconClass)} aria-hidden />
 							<div className="flex min-w-0 flex-1 flex-col gap-4">
 								{t.title ? <ToastTitle>{t.title}</ToastTitle> : null}
-								<ToastDescription>{t.message}</ToastDescription>
+								<ToastDescription className={t.title ? undefined : "text-text-default"}>
+									{t.message}
+								</ToastDescription>
 							</div>
 							<ToastClose />
 						</div>
-						{/* Footer: action button */}
 						{t.action ? (
 							<div className="mt-12 flex justify-end">
 								<ToastAction altText={t.action.label} asChild>

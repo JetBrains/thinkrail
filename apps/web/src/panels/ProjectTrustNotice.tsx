@@ -92,7 +92,6 @@ export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 			data-state={pending ? "pending" : "untrusted"}
 			className="mt-16 flex w-full max-w-[560px] flex-col gap-8 rounded-sm border border-feedback-warning-muted bg-container-elevated-bg px-12 py-8 text-left"
 		>
-			{/* Content row */}
 			<div className="flex items-start gap-8">
 				<TriangleAlert className="mt-2 size-14 shrink-0 text-feedback-warning" aria-hidden />
 				<span className="flex min-w-0 flex-1 flex-col gap-2">
@@ -108,7 +107,6 @@ export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 					) : null}
 				</span>
 			</div>
-			{/* Footer: buttons */}
 			<div className="flex justify-end gap-8">
 				{stopTrusting}
 				<Button
