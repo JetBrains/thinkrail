@@ -495,7 +495,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   ready, and installing are distinct states. The window-controls bridge exposes the same
   snapshot/action/subscription shape for window state. The shortcuts bridge pushes quit-hint changes
   (`hidden` / `armed` / `release` / `quitting`) and `NativeCommand` ids (today `close-item`, close the
-  focused in-app item), and its one action `quit()` asks the host for an ordinary coordinated quit. The
+  focused in-app item, and `open-settings`, open Settings unless a modal is open), and its one action `quit()` asks the host for an ordinary coordinated quit. The
   notification bridge exposes `show({ title, subtitle?, body, silent? })` (fire-and-forget OS notification,
   no callback or id) and an optional `isWindowFocused()` that reports OS-level window focus — true even
   when DevTools has renderer focus, unlike `document.hasFocus()`. A browser
