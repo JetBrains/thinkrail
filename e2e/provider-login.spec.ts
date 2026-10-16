@@ -21,6 +21,14 @@ test("signs in through the OAuth dialog (select → open-URL + paste → success
 	await page.locator('[data-testid="login-option"][data-option="subscription"]').click();
 
 	await expect(page.getByTestId("login-open-url")).toBeVisible();
+	await expect(page.getByTestId("login-copy-url")).toBeVisible();
+	await expect(dialog).not.toContainText("e2e.test/authorize");
+	await expect(page.getByTestId("login-progress")).toHaveText(
+		"Waiting for you to finish signing in…",
+	);
+	await expect(page.getByTestId("login-input")).toHaveCount(0);
+	await page.getByTestId("login-paste-toggle").click();
+	await expect(page.getByTestId("login-paste-hint")).toBeVisible();
 	const codeInput = page.getByTestId("login-input");
 	await expect(codeInput).toBeVisible();
 	await codeInput.fill("the-auth-code");

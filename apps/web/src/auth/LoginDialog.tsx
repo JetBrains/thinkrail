@@ -1,7 +1,7 @@
 import {
 	RiCheckLine as Check,
-	RiExternalLinkLine as ExternalLink,
 	RiFileCopyLine as Copy,
+	RiExternalLinkLine as ExternalLink,
 	RiLoader4Line as Loader2,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
@@ -47,10 +47,7 @@ export function LoginDialog({
 	const [pasteOpen, setPasteOpen] = useState(() => !uiServedFromLoopback());
 	const [copied, setCopied] = useState(false);
 	const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-	useEffect(
-		() => () => (copiedTimer.current ? clearTimeout(copiedTimer.current) : undefined),
-		[],
-	);
+	useEffect(() => () => (copiedTimer.current ? clearTimeout(copiedTimer.current) : undefined), []);
 	const copyUrl = async (url: string) => {
 		if (!(await copyText(url))) return;
 		setCopied(true);

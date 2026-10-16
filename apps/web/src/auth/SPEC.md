@@ -26,14 +26,20 @@ not here — `auth` stays presentational + types, so nothing here imports `store
     browser-vs-paste race), `status` goes `active → success/error`. An optional `target` names the MCP
     server of an MCP sign-in or connection test (`LoginPush.target`). **Types only** (like `chat/types`).
   - `LoginDialog` — **props-driven, no store/transport** (like the chat renderers): renders a `LoginState`
-    (open-URL button + selectable URL; a device code with a **clickable verification link** that also
+    (open-URL button + **Copy link** — never the raw URL text, which can run to hundreds of scope params;
+    a device code with a **clickable verification link** that also
     **auto-opens** in a new tab best-effort on arrival; a `select`/`prompt` input — a `secret`-flagged
-    prompt renders **masked** (API keys, issue #97); progress/working spinner;
+    prompt renders **masked** (API keys, issue #97); progress/working spinner — while a sign-in URL is
+    live the spinner reads host copy ("Waiting for you to finish signing in…") instead of pi's
+    terminal-oriented progress (loopback ports, callback URLs), which shows only when no URL is live;
     terminal success/error) and calls back `onReply(value)` / `onCancel()` / `onClose()`. Copy says
     **"Connect"**, not "Sign in" — one dialog serves OAuth and API-key entry alike. Themed with token
     utilities only; `@remixicon/react` icons; shadcn `Dialog`/`Button`.
+  - `uiOrigin` — `isLoopbackHost` / `uiServedFromLoopback`: whether the UI was opened via a loopback host,
+    the dialog's proxy for "the browser runs on the ThinkRail host machine".
 - **Public surface (barrel `index.ts`):** `LoginDialog`; `LoginState`/`LoginInput*` (types).
-- **Allowed deps:** `@thinkrail/ui/dialog` and `@thinkrail/ui/button`. (The state types need no imports.)
+- **Allowed deps:** `@thinkrail/ui/dialog` and `@thinkrail/ui/button`; `lib` (`copyText`). (The state types
+  need no imports.)
 - **Forbidden:** importing `store`/`transport` (the dialog stays presentational — the **panel** is the
   integration piece, exactly as `chat/ChatView` is for the chat renderers); any `pi`/`server` import.
 
@@ -61,5 +67,12 @@ not here — `auth` stays presentational + types, so nothing here imports `store
 
 - **Frames accumulate** — the reducer must not clobber `url` when a paste `prompt` arrives, or vice-versa.
 - The dialog is mounted with `key={state.loginId}` so a new login gets fresh local (text/busy) state.
+- **Paste fallback.** A `prompt` that arrives while a sign-in URL is live is the paste-back fallback: the
+  loopback OAuth redirect only loads when the browser runs on the host machine, so a remote browser can
+  finish only by pasting the failed page's address. Opened via a loopback origin (desktop, local dev) it
+  starts **collapsed** behind "Sign-in page didn't load? Paste its address"; any other origin starts it
+  **expanded**. It is always one click away — an SSH port-forward looks local but still needs it. Its
+  one-line explanation is host copy (it replaces the prompt's message); a prompt with no live URL (API key)
+  renders as-is.
 - Device-code **auto-open** is best-effort (a popup blocker may stop the async `window.open`); the clickable
   verification link is the guaranteed fallback, so the flow never dead-ends on a blocked popup.
