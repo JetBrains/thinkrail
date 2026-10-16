@@ -13,6 +13,7 @@ import type { ExtUiRequest } from "@thinkrail/contracts";
 import {
 	createSession,
 	disposeAllSessions,
+	followUpSession,
 	getSessionMessages,
 	promptSession,
 	setSessionManagerFactory,
@@ -70,6 +71,12 @@ beforeAll(async () => {
 			"export default function probe(pi) {",
 			tool("mcp__probe__write", "WROTE", false),
 			tool("mcp__probe__read", "READ", true),
+			tool("gated", "GATED", false),
+			'  pi.on("tool_call", async (event, ctx) => {',
+			'    if (event.toolName !== "gated") return undefined;',
+			'    const ok = await ctx.ui.confirm("Run gated?", "It is gated.");',
+			'    return ok ? undefined : { block: true, reason: "not confirmed" };',
+			"  });",
 			`  if (existsSync(${JSON.stringify(registerMarker)}))`,
 			'    pi.registerMcpServer("registered", { url: "https://registered.example/mcp" });',
 			"}",
@@ -177,9 +184,10 @@ test("read-only MCP tools run unasked; others ask with Deny kept away from Allow
 	await turn;
 	expect(asked).toMatchObject({
 		kind: "select",
+		title: "Allow probe/write? It may change data.",
 		options: [MCP_CONFIRM_DENY, MCP_CONFIRM_ONCE, MCP_CONFIRM_CHAT],
+		toolCallId: "call-1",
 	});
-	expect(asked.kind === "select" && asked.title).toContain("probe/write");
 	expect(selects()).toHaveLength(1);
 	expect(await toolResults(p)).toEqual([
 		{ tool: "mcp__probe__read", isError: false, text: "READ" },
@@ -214,20 +222,36 @@ test("Deny and a dismissed dialog both block the call with a reason", async () =
 	const results = await toolResults(p);
 	expect(results.map((result) => result.isError)).toEqual([true, true]);
 	expect(results[0]?.text).toContain("denied");
-	expect(results[1]?.text).toContain("dismissed");
+	expect(results[1]?.text).toContain("did not confirm");
 });
 
-test("an accepted steer cancels a pending confirmation, dismisses it and blocks the call", async () => {
+for (const [label, send] of [
+	["steer", steerSession],
+	["follow-up", followUpSession],
+] as const) {
+	test(`an accepted ${label} answers a pending confirmation: it is dismissed and the call blocked`, async () => {
+		const p = await chat();
+		callTools("mcp__probe__write");
+		const turn = promptSession(p.sessionId, "Write.");
+		const asked = await waitFor(() => selects()[0]);
+		await send(p.sessionId, "Never mind, stop.");
+		await turn;
+		expect(requests).toContainEqual(expect.objectContaining({ id: asked.id, kind: "dismiss" }));
+		const [result] = await toolResults(p);
+		expect(result).toMatchObject({ tool: "mcp__probe__write", isError: true });
+		expect(result?.text).toContain("replied in the chat");
+	});
+}
+
+test("a third-party gate's dialog names the one running tool call it is about", async () => {
 	const p = await chat();
-	callTools("mcp__probe__write");
-	const turn = promptSession(p.sessionId, "Write.");
-	const asked = await waitFor(() => selects()[0]);
-	await steerSession(p.sessionId, "Never mind, stop.");
+	callTools("gated");
+	const turn = promptSession(p.sessionId, "Run the gated tool.");
+	const asked = await waitFor(() => requests.find((request) => request.kind === "confirm"));
+	expect(asked).toMatchObject({ kind: "confirm", title: "Run gated?", toolCallId: "call-0" });
+	resolveExtUi({ id: asked.id, value: true });
 	await turn;
-	expect(requests).toContainEqual(expect.objectContaining({ id: asked.id, kind: "dismiss" }));
-	const [result] = await toolResults(p);
-	expect(result).toMatchObject({ tool: "mcp__probe__write", isError: true });
-	expect(result?.text).toContain("cancelled");
+	expect(await toolResults(p)).toEqual([{ tool: "gated", isError: false, text: "GATED" }]);
 });
 
 test("the built-in tool_search is activated only when an extension registered an MCP server", async () => {

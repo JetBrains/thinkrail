@@ -15,7 +15,6 @@ import { createMcpEngine } from "./engine";
 import { isMcpResultTool, summarizeMcpResult } from "./results";
 
 const MCP_TOOL_PREFIX = "mcp__";
-const ARGS_PREVIEW_CHARS = 160;
 
 export const MCP_CONFIRM_DENY = "Deny";
 export const MCP_CONFIRM_ONCE = "Allow once";
@@ -29,28 +28,37 @@ export interface McpSessionHost {
 	loaded(): ReadonlyMap<string, McpServerConfig> | null;
 	registered(): RegisteredMcpServer[];
 	shutdownEngine(event: SessionShutdownEvent, ctx: ExtensionContext): Promise<void>;
-	cancelPendingConfirmations(): void;
+}
+
+export type AskForToolCall = (
+	toolCallId: string,
+	title: string,
+	options: string[],
+	signal: AbortSignal | undefined,
+) => Promise<string | undefined>;
+
+export interface McpSessionHostOptions {
+	policy: () => McpProjectPolicy;
+	onCommandSettled?: (sessionId: string) => void;
+	askForToolCall: AskForToolCall;
 }
 
 function describeCall(event: ToolCallEvent): string {
 	const [server, ...tool] = event.toolName.slice(MCP_TOOL_PREFIX.length).split("__");
-	const args = JSON.stringify(event.input ?? {});
-	const preview =
-		args.length > ARGS_PREVIEW_CHARS ? `${args.slice(0, ARGS_PREVIEW_CHARS - 1)}…` : args;
-	return `Allow the MCP call ${server}/${tool.join("__")}? It may change data. ${preview}`;
+	return `Allow ${server}/${tool.join("__")}? It may change data.`;
 }
 
 function blocked(reason: string): ToolCallEventResult {
 	return { block: true, reason };
 }
 
-export function createMcpSessionHost(
-	policy: () => McpProjectPolicy,
-	onCommandSettled?: (sessionId: string) => void,
-): McpSessionHost {
+export function createMcpSessionHost({
+	policy,
+	onCommandSettled,
+	askForToolCall,
+}: McpSessionHostOptions): McpSessionHost {
 	const allowedInChat = new Set<string>();
 	const disabledInChat = new Set<string>();
-	const pending = new Set<AbortController>();
 	let loaded: Map<string, McpServerConfig> | null = null;
 	let current: ExtensionAPI | null = null;
 
@@ -67,27 +75,23 @@ export function createMcpSessionHost(
 		if (!ctx.hasUI) {
 			return blocked("This MCP call needs the user's confirmation, and no UI is attached.");
 		}
-		const cancel = new AbortController();
-		const signal = ctx.signal ? AbortSignal.any([ctx.signal, cancel.signal]) : cancel.signal;
-		pending.add(cancel);
-		try {
-			const answer = await ctx.ui.select(describeCall(event), CONFIRM_OPTIONS, { signal });
-			if (signal.aborted) {
-				return blocked("The MCP call was cancelled before the user confirmed it.");
-			}
-			if (answer === MCP_CONFIRM_ONCE) return undefined;
-			if (answer === MCP_CONFIRM_CHAT) {
-				allowedInChat.add(event.toolName);
-				return undefined;
-			}
-			return blocked(
-				answer === MCP_CONFIRM_DENY
-					? "The user denied this MCP call."
-					: "The user dismissed the confirmation for this MCP call.",
-			);
-		} finally {
-			pending.delete(cancel);
+		const answer = await askForToolCall(
+			event.toolCallId,
+			describeCall(event),
+			CONFIRM_OPTIONS,
+			ctx.signal,
+		);
+		if (answer === MCP_CONFIRM_ONCE) return undefined;
+		if (answer === MCP_CONFIRM_CHAT) {
+			allowedInChat.add(event.toolName);
+			return undefined;
 		}
+		if (answer === MCP_CONFIRM_DENY) return blocked("The user denied this MCP call.");
+		return blocked(
+			ctx.signal?.aborted
+				? "The MCP call was cancelled before the user confirmed it."
+				: "The user did not confirm this MCP call: they dismissed it or replied in the chat instead.",
+		);
 	};
 
 	const hostExtension: ExtensionFactory = (pi) => {
@@ -130,8 +134,5 @@ export function createMcpSessionHost(
 			}
 		},
 		shutdownEngine: (event, ctx) => engine.shutdown(event, ctx),
-		cancelPendingConfirmations: () => {
-			for (const cancel of pending) cancel.abort();
-		},
 	};
 }

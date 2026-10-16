@@ -234,11 +234,16 @@ export interface SkillCatalogEntry {
 	decision: SkillDecision;
 }
 
+/** The tool call a dialog is about; absent when it is not tied to one (a command, startup, parallel calls). */
+interface ExtUiDialogAnchor {
+	toolCallId?: string;
+}
+
 export type ExtUiRequest =
-	| { id: string; sessionId: string; kind: "select"; title: string; options: string[] }
-	| { id: string; sessionId: string; kind: "confirm"; title: string; message: string }
-	| { id: string; sessionId: string; kind: "input"; title: string; placeholder?: string }
-	| { id: string; sessionId: string; kind: "editor"; title: string; prefill?: string }
+	| ({ id: string; sessionId: string; kind: "select"; title: string; options: string[] } & ExtUiDialogAnchor)
+	| ({ id: string; sessionId: string; kind: "confirm"; title: string; message: string } & ExtUiDialogAnchor)
+	| ({ id: string; sessionId: string; kind: "input"; title: string; placeholder?: string } & ExtUiDialogAnchor)
+	| ({ id: string; sessionId: string; kind: "editor"; title: string; prefill?: string } & ExtUiDialogAnchor)
 	| {
 			id: string;
 			sessionId: string;

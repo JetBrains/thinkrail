@@ -117,6 +117,7 @@ import type { SkillAdmissionContext } from "./skillAdmission";
 import {
 	cancelExtUiForSession,
 	createWebUiContext,
+	selectForToolCall,
 	notifyExtensionError,
 	notifyExtUi,
 	pendingExtUiDialog,
@@ -1142,7 +1143,7 @@ async function prepareSessionEntry(
 		watchMcpStatus(sessionId);
 		await session.bindExtensions({
 			mode: "rpc",
-			uiContext: createWebUiContext(sessionId),
+			uiContext: createWebUiContext(sessionId, () => soleRunningToolCall(session)),
 			onError: reportExtensionError,
 		});
 		if (!sessionCanAttach(sessionId, workspaceId)) throw new Error(`Unknown session: ${sessionId}`);
@@ -1161,6 +1162,13 @@ async function prepareSessionEntry(
 			thinkingLevel: session.thinkingLevel,
 		},
 	};
+}
+
+function soleRunningToolCall(session: AgentSession): string | undefined {
+	const running = session.agent.state.pendingToolCalls;
+	if (running.size !== 1) return undefined;
+	const [toolCallId] = running;
+	return toolCallId;
 }
 
 function abandonPreparedEntry(entry: Entry): void {
@@ -1282,10 +1290,12 @@ async function createParentSessionInternal(
 	const { sessionManager, settingsManager, cwd } = options;
 	const sessionId = sessionManager.getSessionId();
 	const askUserQuestionWaiters = createAskUserQuestionWaiters();
-	const mcpHost = createMcpSessionHost(
-		() => mcpPolicyResolver(workspaceId),
-		scheduleMcpStatusRefresh,
-	);
+	const mcpHost = createMcpSessionHost({
+		policy: () => mcpPolicyResolver(workspaceId),
+		onCommandSettled: scheduleMcpStatusRefresh,
+		askForToolCall: (toolCallId, title, choices, signal) =>
+			selectForToolCall(sessionId, toolCallId, title, choices, signal ? { signal } : undefined),
+	});
 	const canDeliverCompletion = () =>
 		canUseSessionResources(sessionId, workspaceId) &&
 		!askUserQuestionWaiters.hasRecoverableCall() &&
@@ -2013,7 +2023,7 @@ async function steerEntry(
 		entry.session.steer(text, images),
 	);
 	if (disposition !== "queued") return;
-	entry.mcpHost.cancelPendingConfirmations();
+	cancelExtUiForSession(entry.session.sessionId);
 	if (entry.askUserQuestionWaiters.supersede()) publishEntryState(entry);
 }
 
@@ -2028,6 +2038,7 @@ export async function promptSession(
 		await steerEntry(entry, text, images);
 		return;
 	}
+	cancelExtUiForSession(sessionId);
 	const release = admitPreflight(entry);
 	try {
 		await entry.session.prompt(text, images ? { images } : undefined);
@@ -2051,14 +2062,25 @@ export async function followUpSession(
 	text: string,
 	images?: ImageContent[],
 ): Promise<void> {
-	const entry = mustGetEntry(sessionId);
+	await followUpEntry(mustGetEntry(sessionId), text, images, true);
+}
+
+async function followUpEntry(
+	entry: Entry,
+	text: string,
+	images: ImageContent[] | undefined,
+	answersDialogs: boolean,
+): Promise<void> {
+	const { sessionId } = entry.session;
 	admitRun(entry);
 	if (entry.session.isStreaming) {
 		await queueSessionMessage(entry, "followUp", text, images, () =>
 			entry.session.followUp(text, images),
 		);
+		if (answersDialogs) cancelExtUiForSession(sessionId);
 		return;
 	}
+	if (answersDialogs) cancelExtUiForSession(sessionId);
 	const release = admitPreflight(entry);
 	try {
 		await entry.session.prompt(text, images ? { images } : undefined);
@@ -2143,19 +2165,21 @@ export async function removeQueuedSession(
 			);
 		}
 		for (const message of keep.followUp) {
-			await followUpSession(
-				sessionId,
+			await followUpEntry(
+				entry,
 				message.text,
 				message.images ? [...message.images] : undefined,
+				false,
 			);
 		}
 		if (!session.isStreaming && session.pendingMessageCount > 0) {
 			const parked = clearQueueSession(sessionId);
 			for (const message of [...parked.steering, ...parked.followUp]) {
-				await followUpSession(
-					sessionId,
+				await followUpEntry(
+					entry,
 					message.text,
 					message.images ? [...message.images] : undefined,
+					false,
 				);
 			}
 		}
