@@ -1,8 +1,14 @@
 import type { NativeCommand, NativeQuitHint, NativeShortcutsBridge } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
+import { useAppStore } from "../store";
 import { requestClose } from "./closeRequestChannel";
 import { createWebShortcuts, hasWebShortcuts, shortcutPlatform } from "./shortcutCommands";
-import { hasDismissibleLayer, isInTerminal } from "./shortcutLayers";
+import {
+	hasDismissibleLayer,
+	hasLayer,
+	isInTerminal,
+	MODAL_LAYER_SELECTOR,
+} from "./shortcutLayers";
 
 const NATIVE_SHORTCUTS_GLOBAL = "__THINKRAIL_NATIVE_SHORTCUTS__";
 
@@ -31,6 +37,10 @@ function dismissTopLayer() {
 		}),
 	);
 	return true;
+}
+
+function openSettingsUnlessModal() {
+	if (!hasLayer(globalThis.document, MODAL_LAYER_SELECTOR)) useAppStore.getState().openSettings();
 }
 
 function subscribeToNativeShortcuts(
@@ -85,6 +95,7 @@ export function useAppShortcuts() {
 			closeItem: () => {
 				if (!dismissTopLayer()) requestClose();
 			},
+			openSettings: openSettingsUnlessModal,
 			quit: () => {
 				bridge.quit().catch((error: unknown) => {
 					console.error("[shortcuts] quit failed", error);

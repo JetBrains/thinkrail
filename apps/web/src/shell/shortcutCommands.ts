@@ -25,9 +25,14 @@ const CLOSE_ITEM_CHORDS: readonly ShortcutChord[] = [
 	{ code: "F4", inTerminal: true },
 ];
 
+const OPEN_SETTINGS_CHORDS: readonly ShortcutChord[] = [{ code: "Comma", inTerminal: true }];
+
+const PUNCTUATION: Readonly<Record<string, string>> = { Comma: "," };
+
 export const SHORTCUT_COMMANDS: readonly ShortcutCommand[] = [
 	{ id: "close-item", chords: { windows: CLOSE_ITEM_CHORDS, linux: CLOSE_ITEM_CHORDS } },
 	{ id: "quit", chords: { linux: [{ code: "KeyQ", inTerminal: true }] } },
+	{ id: "open-settings", chords: { windows: OPEN_SETTINGS_CHORDS, linux: OPEN_SETTINGS_CHORDS } },
 ];
 
 export function hasWebShortcuts(platform: ShortcutPlatform) {
@@ -47,8 +52,12 @@ type ChordEvent = Pick<
 
 function chordMatches(chord: ShortcutChord, event: ChordEvent) {
 	const letter = /^Key([A-Z])$/.exec(chord.code)?.[1];
-	if (letter && /^[a-z]$/i.test(event.key)) return event.key.toUpperCase() === letter;
-	return chord.code === event.code;
+	if (letter && /^[a-z]$/i.test(event.key)) {
+		return !event.shiftKey && event.key.toUpperCase() === letter;
+	}
+	const character = PUNCTUATION[chord.code];
+	if (character && /^[!-~]$/.test(event.key)) return event.key === character;
+	return !event.shiftKey && chord.code === event.code;
 }
 
 export function matchShortcut(
@@ -56,7 +65,7 @@ export function matchShortcut(
 	platform: ShortcutPlatform,
 	inTerminal: () => boolean,
 ): ShortcutCommandId | null {
-	if (!event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return null;
+	if (!event.ctrlKey || event.metaKey || event.altKey) return null;
 	for (const command of SHORTCUT_COMMANDS) {
 		const chord = command.chords[platform]?.find((candidate) => chordMatches(candidate, event));
 		if (chord && (chord.inTerminal || !inTerminal())) return command.id;
@@ -70,6 +79,7 @@ type ShortcutKeyEvent = ChordEvent &
 export interface WebShortcutsOptions extends Pick<QuitConfirmationDependencies, "now" | "every"> {
 	platform: ShortcutPlatform;
 	closeItem(): void;
+	openSettings(): void;
 	quit(): void;
 	onQuitHint(hint: NativeQuitHint): void;
 	isInTerminal(target: EventTarget | null): boolean;
@@ -87,6 +97,7 @@ export function createWebShortcuts(options: WebShortcutsOptions) {
 	});
 	const handlers: Record<ShortcutCommandId, () => void> = {
 		"close-item": options.closeItem,
+		"open-settings": options.openSettings,
 		quit: () => quitConfirmation.press(true),
 	};
 

@@ -56,7 +56,7 @@ export interface NativeNotificationBridge {
 
 export type NativeQuitHint = "hidden" | "armed" | "release" | "quitting";
 
-export type NativeCommand = "close-item";
+export type NativeCommand = "close-item" | "open-settings";
 
 export interface NativeShortcutsBridge {
 	subscribeQuitHint(listener: (hint: NativeQuitHint) => void): () => void;
