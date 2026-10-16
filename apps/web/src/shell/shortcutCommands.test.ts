@@ -33,6 +33,7 @@ function harness(platform: ShortcutPlatform = "linux") {
 	const shortcuts = createWebShortcuts({
 		platform,
 		closeItem: () => log.push("close-item"),
+		openSettings: () => log.push("open-settings"),
 		quit: () => log.push("quit"),
 		onQuitHint: (hint) => hints.push(hint),
 		isInTerminal: (target) => target === TERMINAL,
@@ -88,10 +89,10 @@ describe("shortcut platform", () => {
 describe("chord matching", () => {
 	test("each platform binds its table and only with a bare Ctrl", () => {
 		const table = {
-			apple: { KeyW: null, F4: null, KeyQ: null },
-			browser: { KeyW: null, F4: null, KeyQ: null },
-			windows: { KeyW: "close-item", F4: "close-item", KeyQ: null },
-			linux: { KeyW: "close-item", F4: "close-item", KeyQ: "quit" },
+			apple: { KeyW: null, F4: null, KeyQ: null, Comma: null },
+			browser: { KeyW: null, F4: null, KeyQ: null, Comma: null },
+			windows: { KeyW: "close-item", F4: "close-item", KeyQ: null, Comma: "open-settings" },
+			linux: { KeyW: "close-item", F4: "close-item", KeyQ: "quit", Comma: "open-settings" },
 		} as const;
 		for (const [platform, codes] of Object.entries(table)) {
 			for (const [code, command] of Object.entries(codes)) {
@@ -118,8 +119,11 @@ describe("chord matching", () => {
 		expect(matchShortcut(chord("KeyA"), "linux", terminalCheckSkipped)).toBeNull();
 	});
 
-	test("inside a terminal Ctrl+W goes to the shell; Ctrl+F4 and Ctrl+Q stay app-owned", () => {
+	test("inside a terminal Ctrl+W goes to the shell; Ctrl+F4, Ctrl+Q, Ctrl+, stay app-owned", () => {
 		expect(matchShortcut(chord("KeyW"), "linux", () => true)).toBeNull();
+		expect(matchShortcut(chord("Comma", { key: "," }), "windows", () => true)).toBe(
+			"open-settings",
+		);
 		expect(matchShortcut(chord("F4"), "windows", () => true)).toBe("close-item");
 		expect(matchShortcut(chord("KeyQ"), "linux", () => true)).toBe("quit");
 	});
@@ -136,6 +140,21 @@ describe("chord matching", () => {
 		expect(matchShortcut(chord("KeyW", { key: "W" }), "linux", () => false)).toBe("close-item");
 		expect(matchShortcut(chord("KeyW", { key: "ц" }), "linux", () => false)).toBe("close-item");
 		expect(matchShortcut(chord("F4", { key: "F4" }), "windows", () => false)).toBe("close-item");
+	});
+
+	test("Ctrl+, follows the typed comma, including a Shift-produced one", () => {
+		const match = (code: string, overrides: Partial<KeyboardEvent>) =>
+			matchShortcut(chord(code, overrides), "windows", () => false);
+		expect(match("Comma", { key: "," })).toBe("open-settings");
+		expect(match("KeyM", { key: "," })).toBe("open-settings");
+		expect(match("Slash", { key: ",", shiftKey: true })).toBe("open-settings");
+		expect(match("Comma", { key: "б" })).toBe("open-settings");
+		expect(match("Comma", { key: ";" })).toBeNull();
+		expect(match("Comma", { key: "<", shiftKey: true })).toBeNull();
+		expect(match("Comma", { key: "Б", shiftKey: true })).toBeNull();
+		expect(match("Comma", { key: ",", altKey: true })).toBeNull();
+		expect(match("Comma", { key: ",", ctrlKey: false, metaKey: true })).toBeNull();
+		expect(match("KeyW", { key: "W", shiftKey: true })).toBeNull();
 	});
 });
 
@@ -164,6 +183,15 @@ test("keydown swallows repeats and leaves terminal Ctrl+W unprevented", () => {
 	expect(h.keydown("KeyW", {}, TERMINAL)).toBe(false);
 	expect(h.keydown("F4", {}, TERMINAL)).toBe(true);
 	expect(h.log).toEqual(["close-item"]);
+});
+
+test("Ctrl+, runs open-settings once per press, inside a terminal too", () => {
+	const h = harness("windows");
+	expect(h.keydown("Comma", { key: "," }, TERMINAL)).toBe(true);
+	expect(h.keydown("Comma", { key: ",", repeat: true })).toBe(true);
+	expect(h.log).toEqual(["open-settings"]);
+	h.shortcuts.run("open-settings");
+	expect(h.log).toEqual(["open-settings", "open-settings"]);
 });
 
 describe("linux quit confirmation", () => {
