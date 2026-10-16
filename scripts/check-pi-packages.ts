@@ -108,6 +108,24 @@ const EXPECTATIONS: Record<string, Expectation> = {
 				expectText: ["✅ Recommended", "- fast", "- slow"],
 				expectRender: { width: 100, contains: ["A", "fast", "slow"] },
 			},
+			{
+				tool: "visualize",
+				name: "before-after-mockup-links",
+				args: {
+					type: "mockup",
+					title: "Toolbar",
+					before: "<nav>old</nav>",
+					after: "<nav>new</nav>",
+				},
+				expectText: ['Rendered before/after mockup "Toolbar" (desktop)'],
+				expectRender: { width: 200, contains: ["Toolbar (desktop)", "Before:", "After:", ".html"] },
+			},
+			{
+				tool: "visualize",
+				name: "half-mockup-rejected",
+				args: { type: "mockup", before: "<nav>old</nav>" },
+				expectError: "needs `html`, or both `before` and `after`",
+			},
 		],
 	},
 };

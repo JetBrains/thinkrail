@@ -1,10 +1,14 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { initTheme, type Theme } from "@earendil-works/pi-coding-agent";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import {
 	callSummary,
 	DiagramComponent,
 	fitsWidth,
+	MockupLinksComponent,
 	renderVisualizeCall,
 	renderVisualizeResult,
 } from "./tui.ts";
@@ -209,5 +213,102 @@ describe("renderVisualizeCall / renderVisualizeResult", () => {
 		const lines = plain(comparison.render(80)).join("\n");
 		expect(lines).toContain("A");
 		expect(lines).toContain("x");
+	});
+});
+
+describe("mockup results", () => {
+	let previousTmp: string | undefined;
+	let sandbox: string;
+	const options = { expanded: false, isPartial: false };
+
+	beforeAll(() => {
+		previousTmp = process.env.TMPDIR;
+		sandbox = mkdtempSync(join(tmpdir(), "pi-visualize-tui-"));
+		process.env.TMPDIR = sandbox;
+	});
+
+	afterAll(() => {
+		process.env.TMPDIR = previousTmp;
+		rmSync(sandbox, { recursive: true, force: true });
+	});
+
+	test("summarises mockup calls", () => {
+		expect(callSummary({ type: "mockup", html: "<p/>" })).toBe("mockup");
+		expect(callSummary({ type: "mockup", before: "<p/>", after: "<p/>" })).toBe(
+			"before/after mockup",
+		);
+	});
+
+	test("a before/after mockup lists a saved file per side, linked when the terminal can", () => {
+		const params = {
+			type: "mockup" as const,
+			title: "Toolbar",
+			before: "<p>old</p>",
+			after: "<p>new</p>",
+		};
+		const linked = new MockupLinksComponent(params, undefined, "/w", false, theme, true).render(
+			120,
+		);
+		const text = plain(linked).join("\n");
+		expect(text).toContain("Toolbar (desktop)");
+		expect(text).toContain("*Before:* Open in browser ↗");
+		expect(text).toContain("*After:* Open in browser ↗");
+		expect(linked.join("\n")).toContain("\x1b]8;;file://");
+		const paths = text.split("\n").filter((line) => line.endsWith(".html"));
+		expect(paths).toHaveLength(2);
+		expect(readFileSync(paths[1] as string, "utf8")).toContain("<p>new</p>");
+
+		const unlinked = plain(
+			new MockupLinksComponent(params, undefined, "/w", false, theme, false).render(120),
+		).join("\n");
+		expect(unlinked).toContain("*Before:* open in a browser:");
+		expect(unlinked).not.toContain("↗");
+	});
+
+	test("expanded shows the HTML source; every line fits the width", () => {
+		const params = {
+			type: "mockup" as const,
+			html: "<main>Body</main>",
+			viewport: "phone" as const,
+		};
+		const lines = new MockupLinksComponent(params, undefined, "/w", true, theme, false).render(30);
+		const text = plain(lines).join("\n");
+		expect(text).toContain("HTML mockup (phone)");
+		expect(text).toContain("*Mockup:* open in a browser:");
+		expect(text).toContain("<main>Body</main>");
+		for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(30);
+	});
+
+	test("renderVisualizeResult routes mockups and html-carrying comparisons to links", () => {
+		const mockup = renderVisualizeResult(
+			{
+				content: [{ type: "text", text: "Rendered mockup" }],
+				details: { type: "mockup", html: "<p/>" },
+			},
+			options,
+			theme,
+			{ isError: false, cwd: "/w" },
+		);
+		expect(mockup).toBeInstanceOf(MockupLinksComponent);
+		const comparison = renderVisualizeResult(
+			{
+				content: [{ type: "text", text: "### A\n\n_(HTML mockup shown to the user)_" }],
+				details: { type: "comparison", options: [{ name: "A", html: "<p>a</p>" }, { name: "B" }] },
+			},
+			options,
+			theme,
+			{ isError: false, cwd: "/w" },
+		);
+		const text = plain(comparison.render(100)).join("\n");
+		expect(text).toContain("HTML mockup shown to the user");
+		expect(text).toContain("*A:*");
+		expect(text).not.toContain("*B:*");
+		const malformed = renderVisualizeResult(
+			{ content: [{ type: "text", text: "Rendered" }], details: { type: "mockup", html: 3 } },
+			options,
+			theme,
+			{ isError: false, cwd: "/w" },
+		);
+		expect(malformed).not.toBeInstanceOf(MockupLinksComponent);
 	});
 });
