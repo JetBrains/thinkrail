@@ -82,6 +82,42 @@ test("a single click opens one continuous review tab in preview with a section p
 	await expect(section(page, "README.md")).toHaveAttribute("data-collapsed", "true");
 });
 
+test("the Split/Inline toggle is hidden when no file in the scope supports a layout", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	// a Markdown-only change renders with the rendered-diff renderer, which ignores split/unified
+	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nedited by e2e\n");
+	await revealWorkbenchTool(page, "changes");
+	await row(page, "README.md").click();
+	await expect(reviewTab(page)).toHaveCount(1);
+	await expect(section(page, "README.md").getByTestId("rendered-diff")).toBeVisible();
+	await expect(page.getByTestId("changes-review-toggle-split")).toHaveCount(0);
+	await expect(page.getByTestId("changes-review-toggle-inline")).toHaveCount(0);
+});
+
+test("the Split/Inline toggle appears and switches layout when a code file is in the scope", async ({
+	page,
+}) => {
+	await seedThreeChanges(page);
+	await row(page, "script.ts").click();
+	await expect(reviewTab(page)).toHaveCount(1);
+	await expect(page.getByTestId("changes-review-toggle-split")).toHaveAttribute(
+		"data-active",
+		"true",
+	);
+	const codeDiff = section(page, "script.ts").getByTestId("diff-view");
+	await expect(codeDiff.locator("[data-unified]")).toHaveCount(0);
+	await page.getByTestId("changes-review-toggle-inline").click();
+	await expect(page.getByTestId("changes-review-toggle-inline")).toHaveAttribute(
+		"data-active",
+		"true",
+	);
+	await expect(codeDiff.locator("[data-unified]")).toHaveCount(1);
+});
+
 test("a double click opens the per-file tab and a section's Open as tab does the same", async ({
 	page,
 }) => {
@@ -412,6 +448,81 @@ test("the review guide walks the reviewer's reading order and findings with N", 
 	await expect(guide).toHaveCount(0);
 	await page.getByTestId("changes-review-guide-toggle").click();
 	await expect(page.getByTestId("changes-review-guide")).toBeVisible();
+});
+
+test("the guide reveals a finding deep inside a bounded (virtualized) section", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	// a >1000-line code file => bounded section with its own inner virtualized scroller, where the
+	// finding's line (and its card) is not in the DOM until the inner virtualizer reveals it.
+	writeFileSync(
+		join(worktree, "script.ts"),
+		`${Array.from({ length: 1600 }, (_, i) => `export const value${i + 1} = true;`).join("\n")}\n`,
+	);
+	await revealWorkbenchTool(page, "changes");
+	const workspaceId = JSON.parse(readFileSync(join(E2E_DATA_DIR, "workspaces.json"), "utf8")).find(
+		(w: { worktreePath: string }) => w.worktreePath === worktree,
+	).id as string;
+	const baseSha = gitAs(worktree, "rev-parse", "HEAD");
+	mkdirSync(join(E2E_DATA_DIR, "reviews"), { recursive: true });
+	writeFileSync(
+		join(E2E_DATA_DIR, "reviews", `${workspaceId}.json`),
+		JSON.stringify({
+			review: {
+				id: "rev_seeded",
+				workspaceId,
+				status: "open",
+				baseSha,
+				createdAt: 1,
+				guide: {
+					summary: "One deep risk.",
+					readingOrder: [{ path: "script.ts", why: "The actual change." }],
+					verdict: "request_changes",
+					todoId: "t1",
+					sessionId: "seeded",
+					reviewedSha: baseSha,
+					at: 1,
+				},
+			},
+			comments: [
+				{
+					id: "finding-1",
+					reviewId: "rev_seeded",
+					kind: "diff",
+					anchor: {
+						path: "script.ts",
+						side: "worktree",
+						selectors: [{ kind: "lineRange", startLine: 1500, endLine: 1500 }],
+					},
+					body: "RISK deep in the file.",
+					status: "draft",
+					anchorState: "anchored",
+					author: "agent",
+					origin: { todoId: "t1", reviewedSha: baseSha, sessionId: "seeded" },
+					createdAt: 1,
+				},
+			],
+		}),
+	);
+
+	await page.reload();
+	await revealWorkbenchTool(page, "changes");
+	await row(page, "script.ts").click();
+	const guide = page.getByTestId("changes-review-guide");
+	await expect(guide).toBeVisible();
+	await guide.getByTestId("changes-review-guide-next").click();
+	await guide.getByTestId("changes-review-guide-next").click();
+	await expect(guide.getByTestId("changes-review-guide-finding")).toHaveAttribute(
+		"data-active",
+		"true",
+	);
+	await expect(page.locator('[data-comment-id="finding-1"]')).toBeInViewport({ timeout: 8000 });
+	await expect(page.locator('[data-comment-id="finding-1"]')).toContainText(
+		"RISK deep in the file",
+	);
 });
 
 test("revealing a file stays anchored while slow diffs determine the virtual list height", async ({

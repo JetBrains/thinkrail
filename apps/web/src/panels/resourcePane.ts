@@ -34,9 +34,7 @@ export function rendererImplementationKey(rendererId: string, mobile: boolean): 
 	return `${rendererId}:${mobile ? "phone" : "desktop"}`;
 }
 
-// Whether the diff renderer that a file resolves to from its path alone (before its content loads)
-// honours the split/unified layout control. Lets a pane-level toggle hide itself when no file in a
-// scope can use it, matching the single-file DiffPane's `renderer.capabilities.layout` gate.
+// Layout capability of the diff renderer a file resolves to from its path alone (before content loads).
 export function diffRendererSupportsLayout(
 	workspaceId: string,
 	path: string,

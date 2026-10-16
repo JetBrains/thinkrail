@@ -8,8 +8,8 @@ import {
 	RiParagraph as Pilcrow,
 } from "@remixicon/react";
 import type { GitFileChange, GitStatus } from "@thinkrail/contracts";
-import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Virtuoso } from "react-virtuoso";
 import { usePhoneViewport } from "@/lib";
 import { LoadingRegion } from "../components/Skeleton";
 import {
@@ -25,16 +25,14 @@ import { ChangesReviewGuide, guideSteps } from "./ChangesReviewGuide";
 import { LARGE_SCOPE_FILES, scopeKey, scopeLabel, sectionCollapsedByDefault } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { HeaderIconButton } from "./HeaderIconButton";
+import { diffRendererSupportsLayout } from "./resourcePane";
 import { ownsReviewShortcut } from "./reviewShortcuts";
 import { SendAllReviewsButton } from "./SendReviewButton";
 import { createSectionContentCache } from "./sectionContentCache";
 import { ToggleSegment } from "./ToggleSegment";
+import { useReviewReveal } from "./useReviewReveal";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 import { useWorkspaceTurns } from "./useWorkspaceTurns";
-
-const SECTION_HEADER_HEIGHT = 32;
-const END_NOTE_HEIGHT = 48;
-const USER_SCROLL_EVENTS = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
 
 interface ReviewListContext {
 	tailHeight: number;
@@ -72,7 +70,6 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const setViewed = useAppStore((state) => state.setChangesTabViewed);
 	const setActivePath = useAppStore((state) => state.setChangesTabActivePath);
 	const setCollapsed = useAppStore((state) => state.setChangesTabCollapsed);
-	const consumeReveal = useAppStore((state) => state.consumeChangesTabReveal);
 	const requestReveal = useAppStore((state) => state.requestChangesTabReveal);
 	const [cache] = useState(createSectionContentCache);
 	const turns = useWorkspaceTurns(workspaceId);
@@ -144,6 +141,20 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	);
 	const viewedCount = files.filter((change) => viewedSet.has(change.path)).length;
 	const view = mobile ? "inline" : (tab.view ?? "split");
+	const layoutToggleAvailable = useMemo(
+		() =>
+			!mobile &&
+			files.some((change) =>
+				diffRendererSupportsLayout(
+					workspaceId,
+					change.path,
+					scope,
+					tab.sections[change.path]?.rendererId,
+					mobile,
+				),
+			),
+		[files, mobile, scope, tab.sections, workspaceId],
+	);
 	const ignoreWhitespace = tab.ignoreWhitespace ?? false;
 
 	const [lastIndex, setLastIndex] = useState(0);
@@ -153,147 +164,23 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		foundIndex >= 0 ? foundIndex : Math.min(lastIndex, Math.max(0, files.length - 1));
 	const current = files[currentIndex];
 
-	const virtuoso = useRef<VirtuosoHandle>(null);
-	const scrollerRef = useRef<HTMLElement | null>(null);
-	const [tailHeight, setTailHeight] = useState(0);
-	const tailObserver = useRef<ResizeObserver | null>(null);
-	const settling = useRef<{ path: string; commentId?: string } | null>(null);
-	const releaseSettling = useCallback(() => {
-		const commentId = settling.current?.commentId;
-		settling.current = null;
-		if (commentId) useAppStore.getState().clearReviewFocus(commentId);
-	}, []);
-	const detachScroller = useRef<(() => void) | null>(null);
-	const attachScroller = useCallback(
-		(element: HTMLElement | Window | null) => {
-			detachScroller.current?.();
-			detachScroller.current = null;
-			tailObserver.current?.disconnect();
-			tailObserver.current = null;
-			const scroller = element instanceof HTMLElement ? element : null;
-			scrollerRef.current = scroller;
-			if (!scroller) return;
-			const measure = () => {
-				setTailHeight(Math.max(0, scroller.clientHeight - SECTION_HEADER_HEIGHT - END_NOTE_HEIGHT));
-			};
-			measure();
-			tailObserver.current = new ResizeObserver(measure);
-			tailObserver.current.observe(scroller);
-			for (const type of USER_SCROLL_EVENTS)
-				scroller.addEventListener(type, releaseSettling, { passive: true, capture: true });
-			detachScroller.current = () => {
-				for (const type of USER_SCROLL_EVENTS)
-					scroller.removeEventListener(type, releaseSettling, true);
-			};
-		},
-		[releaseSettling],
-	);
-	useEffect(
-		() => () => {
-			tailObserver.current?.disconnect();
-			detachScroller.current?.();
-			releaseSettling();
-		},
-		[releaseSettling],
-	);
-	const activePathRef = useRef(tab.activePath);
-	useInsertionEffect(() => {
-		activePathRef.current = tab.activePath;
-	});
-	const spyFrame = useRef(0);
-	const scrollToSection = useCallback(
-		(index: number, target: { path: string; commentId?: string }) => {
-			releaseSettling();
-			settling.current = target;
-			virtuoso.current?.scrollToIndex({ index, align: "start" });
-		},
-		[releaseSettling],
-	);
-	const revealComment = useCallback(() => {
-		const commentId = settling.current?.commentId;
-		const scroller = scrollerRef.current;
-		if (!commentId || !scroller) return false;
-		const card = [...scroller.querySelectorAll<HTMLElement>("[data-comment-id]")].find(
-			(element) => element.dataset.commentId === commentId,
-		);
-		if (!card) return false;
-		card.scrollIntoView({ block: "center" });
-		return true;
-	}, []);
-	const spyActiveSection = useCallback(() => {
-		if (!restoredStacked.current) return;
-		cancelAnimationFrame(spyFrame.current);
-		spyFrame.current = requestAnimationFrame(() => {
-			if (settling.current) {
-				revealComment();
-				return;
-			}
-			const scroller = scrollerRef.current;
-			if (!scroller) return;
-			const edge = scroller.getBoundingClientRect().top + SECTION_HEADER_HEIGHT / 2;
-			let active: string | null = null;
-			for (const section of scroller.querySelectorAll<HTMLElement>(
-				'[data-testid="changes-section"]',
-			)) {
-				if (section.getBoundingClientRect().top <= edge) active = section.dataset.path ?? null;
-			}
-			if (active !== null && active !== activePathRef.current) {
-				setActivePath(workspaceId, tab.id, active);
-			}
+	const { virtuoso, attachScroller, tailHeight, spyActiveSection, onTotalListHeightChanged } =
+		useReviewReveal({
+			workspaceId,
+			tabId: tab.id,
+			files,
+			status,
+			layout,
+			reveal: tab.reveal,
+			activePath: tab.activePath,
+			restoredStacked,
 		});
-	}, [revealComment, setActivePath, tab.id, workspaceId]);
-	useEffect(() => () => cancelAnimationFrame(spyFrame.current), []);
-	useEffect(() => {
-		const reveal = tab.reveal;
-		if (!reveal || !status) return;
-		const index = files.findIndex((change) => change.path === reveal.path);
-		if (index < 0) {
-			consumeReveal(workspaceId, tab.id, null);
-			return;
-		}
-		const target = {
-			path: reveal.path,
-			...(reveal.commentId ? { commentId: reveal.commentId } : {}),
-		};
-		releaseSettling();
-		consumeReveal(workspaceId, tab.id, target);
-		if (layout === "stacked") {
-			restoredStacked.current = true;
-			scrollToSection(index, target);
-		}
-	}, [
-		consumeReveal,
-		files,
-		layout,
-		releaseSettling,
-		scrollToSection,
-		status,
-		tab.id,
-		tab.reveal,
-		workspaceId,
-	]);
 
 	useEffect(() => {
 		if (!status || tab.reveal) return;
 		if (tab.activePath !== null && files.some((change) => change.path === tab.activePath)) return;
 		setActivePath(workspaceId, tab.id, current?.path ?? null);
 	}, [current, files, setActivePath, status, tab.activePath, tab.id, tab.reveal, workspaceId]);
-
-	const pendingReveal = tab.reveal !== null;
-	useEffect(() => {
-		if (layout !== "stacked") {
-			restoredStacked.current = false;
-			settling.current = null;
-			return;
-		}
-		if (pendingReveal || !status || restoredStacked.current) return;
-		restoredStacked.current = true;
-		const index = files.findIndex((change) => change.path === activePathRef.current);
-		const change = files[index];
-		if (!change) return;
-		const frame = requestAnimationFrame(() => scrollToSection(index, { path: change.path }));
-		return () => cancelAnimationFrame(frame);
-	}, [files, layout, pendingReveal, scrollToSection, status]);
 
 	const setPathViewed = useCallback(
 		(path: string, next: boolean) => setViewed(workspaceId, tab.id, path, next),
@@ -452,7 +339,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 					>
 						<Pilcrow className="size-14" />
 					</HeaderIconButton>
-					{!mobile ? (
+					{layoutToggleAvailable ? (
 						<>
 							<ToggleSegment
 								testid="changes-review-toggle-split"
@@ -628,16 +515,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 							scrollerRef={attachScroller}
 							onScroll={spyActiveSection}
 							rangeChanged={spyActiveSection}
-							totalListHeightChanged={() => {
-								if (revealComment()) return;
-								const index = files.findIndex((change) => change.path === settling.current?.path);
-								if (index >= 0) {
-									virtuoso.current?.scrollToIndex({ index, align: "start" });
-									return;
-								}
-								releaseSettling();
-								spyActiveSection();
-							}}
+							totalListHeightChanged={onTotalListHeightChanged}
 							itemContent={(_index, change) => (
 								<ChangesFileSection
 									workspaceId={workspaceId}
