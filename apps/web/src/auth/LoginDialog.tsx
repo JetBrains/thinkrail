@@ -17,7 +17,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { copyText } from "@/lib";
 import type { LoginState } from "./loginState";
-import { uiServedFromLoopback } from "./uiOrigin";
+import { redirectsToLoopback, uiServedFromLoopback } from "./uiOrigin";
 
 const WAITING_FOR_BROWSER = "Waiting for you to finish signing in…";
 
@@ -55,8 +55,11 @@ export function LoginDialog({
 		copiedTimer.current = setTimeout(() => setCopied(false), 1500);
 	};
 
-	const pasteFallback = Boolean(state.url) && state.input?.kind === "prompt";
-	const progress = state.url ? WAITING_FOR_BROWSER : state.progress;
+	const pasteFallback =
+		state.input?.kind === "prompt" && state.url !== undefined && redirectsToLoopback(state.url);
+	const waitingForBrowser =
+		state.url !== undefined && (state.input?.kind !== "prompt" || pasteFallback);
+	const progress = waitingForBrowser ? WAITING_FOR_BROWSER : state.progress;
 
 	const submitPrompt = () => {
 		const value = promptRef.current?.value.trim() ?? "";
@@ -186,7 +189,7 @@ export function LoginDialog({
 								onClick={() => setPasteOpen(true)}
 								className="self-start rounded-sm text-text-muted tr-text-metadata underline underline-offset-2 outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 							>
-								Sign-in page didn't load? Paste its address
+								Sign-in didn't finish? Paste the final URL
 							</button>
 						) : null}
 
@@ -194,8 +197,8 @@ export function LoginDialog({
 							<div className="flex flex-col gap-4">
 								{pasteFallback ? (
 									<p className="text-text-muted tr-text-metadata" data-testid="login-paste-hint">
-										If your browser is on another computer, the page it ends on after signing in
-										won't load. Copy that page's address and paste it here.
+										If sign-in doesn't finish automatically, copy the address your browser ends on
+										and paste it here.
 									</p>
 								) : state.input.message ? (
 									<p className="text-text-muted tr-text-ui">{state.input.message}</p>
