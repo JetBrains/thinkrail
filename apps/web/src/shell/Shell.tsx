@@ -36,6 +36,7 @@ import { LocationBar } from "./locationBar";
 import { NativeWindowControls } from "./NativeWindowControls";
 import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
 import { SessionSwitcher } from "./SessionSwitcher";
+import { readSettingsShortcutLabel } from "./useAppShortcuts";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { useNativeWindowControls } from "./useNativeWindowControls";
@@ -75,6 +76,7 @@ export function Shell() {
 	const homeProjects = useCollapsibleRegion<HTMLDivElement>(PROJECT_HOME_PROJECTS_REGION_ID);
 
 	const [themeHint] = useState(readThemeHint);
+	const [settingsShortcut] = useState(readSettingsShortcutLabel);
 	const welcomeGeneration = useAppStore((s) => s.welcomeGeneration);
 	const theme = useAppStore((s) => s.theme);
 	const themeMode = useAppStore((s) => s.themeMode);
@@ -172,7 +174,7 @@ export function Shell() {
 							{STATUS_LABEL[status]}
 						</span>
 					</span>
-					<IconTooltip label="Settings">
+					<IconTooltip label={settingsShortcut ? `Settings (${settingsShortcut})` : "Settings"}>
 						<button
 							type="button"
 							data-testid="open-settings"

@@ -1,5 +1,6 @@
 import type { NativeCommand, NativeQuitHint, NativeShortcutsBridge } from "@thinkrail/contracts";
 import { useEffect, useState } from "react";
+import { platformShortcutLabel } from "../lib";
 import { useAppStore } from "../store";
 import { requestClose } from "./closeRequestChannel";
 import { createWebShortcuts, hasWebShortcuts, shortcutPlatform } from "./shortcutCommands";
@@ -23,6 +24,16 @@ export function getNativeShortcutsBridge(value: unknown): NativeShortcutsBridge 
 	} catch {
 		return null;
 	}
+}
+
+function readNativeShortcutsBridge() {
+	return getNativeShortcutsBridge(Reflect.get(globalThis, NATIVE_SHORTCUTS_GLOBAL));
+}
+
+export function readSettingsShortcutLabel(): string | null {
+	return shortcutPlatform(readNativeShortcutsBridge() !== null) === "browser"
+		? null
+		: platformShortcutLabel(",");
 }
 
 function dismissTopLayer() {
@@ -80,9 +91,7 @@ function intervalScope() {
 }
 
 export function useAppShortcuts() {
-	const [bridge] = useState(() =>
-		getNativeShortcutsBridge(Reflect.get(globalThis, NATIVE_SHORTCUTS_GLOBAL)),
-	);
+	const [bridge] = useState(readNativeShortcutsBridge);
 	const [quitHint, setQuitHint] = useState<NativeQuitHint>("hidden");
 
 	useEffect(() => {
