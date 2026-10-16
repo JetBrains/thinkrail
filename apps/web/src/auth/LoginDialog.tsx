@@ -1,6 +1,7 @@
 import {
 	RiCheckLine as Check,
 	RiExternalLinkLine as ExternalLink,
+	RiFileCopyLine as Copy,
 	RiLoader4Line as Loader2,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
@@ -13,8 +14,12 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { copyText } from "@/lib";
 import type { LoginState } from "./loginState";
+import { uiServedFromLoopback } from "./uiOrigin";
+
+const WAITING_FOR_BROWSER = "Waiting for you to finish signing in…";
 
 export function LoginDialog({
 	state,
@@ -38,6 +43,23 @@ export function LoginDialog({
 		openedUrlRef.current = deviceUri;
 		window.open(deviceUri, "_blank", "noopener,noreferrer");
 	}, [deviceUri]);
+
+	const [pasteOpen, setPasteOpen] = useState(() => !uiServedFromLoopback());
+	const [copied, setCopied] = useState(false);
+	const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	useEffect(
+		() => () => (copiedTimer.current ? clearTimeout(copiedTimer.current) : undefined),
+		[],
+	);
+	const copyUrl = async (url: string) => {
+		if (!(await copyText(url))) return;
+		setCopied(true);
+		if (copiedTimer.current) clearTimeout(copiedTimer.current);
+		copiedTimer.current = setTimeout(() => setCopied(false), 1500);
+	};
+
+	const pasteFallback = Boolean(state.url) && state.input?.kind === "prompt";
+	const progress = state.url ? WAITING_FOR_BROWSER : state.progress;
 
 	const submitPrompt = () => {
 		const value = promptRef.current?.value.trim() ?? "";
@@ -93,17 +115,26 @@ export function LoginDialog({
 				) : (
 					<div className="flex flex-col gap-12">
 						{state.url ? (
-							<div className="flex flex-col gap-4">
+							<div className="flex gap-8">
 								<Button
 									data-testid="login-open-url"
+									className="flex-1"
 									onClick={() => window.open(state.url, "_blank", "noopener,noreferrer")}
 								>
 									<ExternalLink className="size-16" />
 									Open sign-in page
 								</Button>
-								<code className="select-all break-all rounded-sm bg-control-bg px-8 py-4 tr-code-text text-text-muted">
-									{state.url}
-								</code>
+								<Button
+									variant="outline"
+									data-testid="login-copy-url"
+									data-copied={copied || undefined}
+									onClick={() => {
+										if (state.url) void copyUrl(state.url);
+									}}
+								>
+									{copied ? <Check className="size-16" /> : <Copy className="size-16" />}
+									{copied ? "Copied" : "Copy link"}
+								</Button>
 							</div>
 						) : null}
 
@@ -151,9 +182,25 @@ export function LoginDialog({
 							</div>
 						) : null}
 
-						{state.input?.kind === "prompt" ? (
+						{state.input?.kind === "prompt" && pasteFallback && !pasteOpen ? (
+							<button
+								type="button"
+								data-testid="login-paste-toggle"
+								onClick={() => setPasteOpen(true)}
+								className="self-start rounded-sm text-text-muted tr-text-metadata underline underline-offset-2 outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+							>
+								Sign-in page didn't load? Paste its address
+							</button>
+						) : null}
+
+						{state.input?.kind === "prompt" && (!pasteFallback || pasteOpen) ? (
 							<div className="flex flex-col gap-4">
-								{state.input.message ? (
+								{pasteFallback ? (
+									<p className="text-text-muted tr-text-metadata" data-testid="login-paste-hint">
+										If your browser is on another computer, the page it ends on after signing in
+										won't load. Copy that page's address and paste it here.
+									</p>
+								) : state.input.message ? (
 									<p className="text-text-muted tr-text-ui">{state.input.message}</p>
 								) : null}
 								<div className="flex gap-8">
@@ -178,13 +225,13 @@ export function LoginDialog({
 							</div>
 						) : null}
 
-						{state.progress ? (
+						{progress ? (
 							<p
 								className="flex items-center gap-8 text-text-muted tr-text-ui"
 								data-testid="login-progress"
 							>
 								<Loader2 className="size-16 shrink-0 animate-spin" />
-								{state.progress}
+								{progress}
 							</p>
 						) : null}
 
