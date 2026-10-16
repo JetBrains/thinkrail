@@ -22,11 +22,13 @@ import { useState } from "react";
 import { formatContext } from "./modelPicker";
 import { ProviderGlyph } from "./ProviderGlyph";
 import {
+	GROUPED_ROW,
 	type GroupExpansion,
 	groupRowValue,
 	initialGroupExpansion,
 	NO_MODELS_HINT,
 	type PickerGroup,
+	PROVIDER_GROUP,
 	pickerEmptyState,
 	pickerFilter,
 	pickerGroups,
@@ -99,6 +101,7 @@ export function ModelSelector({
 	const renderModel = (model: WireModel, section: string) => {
 		const isCurrent = sameModel(current, model);
 		const isPinned = pinnedModels.some((pinned) => sameModel(pinned, model));
+		const grouped = section === "all";
 		return (
 			<CommandItem
 				key={rowValue(section, model)}
@@ -110,10 +113,13 @@ export function ModelSelector({
 				onSelect={() => select(model)}
 				className={cn(
 					"group/row items-start gap-8 py-4",
+					grouped && GROUPED_ROW,
 					isCurrent && "bg-primary-subtle data-[selected=true]:bg-primary-subtle",
 				)}
 			>
-				<ProviderGlyph provider={model.provider} className="mt-2 text-text-muted" />
+				{grouped ? null : (
+					<ProviderGlyph provider={model.provider} className="mt-2 text-text-muted" />
+				)}
 				<span className="flex min-w-0 flex-1 flex-col">
 					<span className="truncate">{model.name}</span>
 					<span className="truncate text-text-muted tr-text-metadata">{subLine(model)}</span>
@@ -154,8 +160,8 @@ export function ModelSelector({
 			onSelect={() => setExpansion((prev) => toggleGroup(prev, group.provider, searching))}
 			className="gap-8 py-8"
 		>
-			<ProviderGlyph provider={group.provider} className="size-14 shrink-0 text-text-muted" />
-			<span className="min-w-0 flex-1 truncate">{group.provider}</span>
+			<ProviderGlyph provider={group.provider} className="text-text-muted" />
+			<span className="min-w-0 flex-1 truncate tr-text-emphasis">{group.provider}</span>
 			<span className="shrink-0 text-text-muted tr-text-metadata">{group.count}</span>
 			{group.expanded ? (
 				<ChevronDown className="size-14 shrink-0 text-text-muted" />
@@ -231,7 +237,7 @@ export function ModelSelector({
 							</CommandGroup>
 						)}
 						{groups.map((group) => (
-							<CommandGroup key={group.provider}>
+							<CommandGroup key={group.provider} className={PROVIDER_GROUP}>
 								{renderGroupHeader(group)}
 								{group.expanded ? group.models.map((m) => renderModel(m, "all")) : null}
 							</CommandGroup>

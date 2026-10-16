@@ -727,8 +727,11 @@ from their `toolCall` args and reply through **`ChatActions`** (see below). Work
   "All models" row while a shortlist exists and expanded by search. Each provider group is collapsible: its
   header is itself a cmdk row (`model-group-toggle`, `aria-expanded`, Enter toggles) carrying the match
   count, and a picker opens with every group collapsed except the current model's (none when that model
-  is pinned); a search opens every matching group, each still collapsible for that search. Pinned models
-  are never repeated inside groups. Headers, counts and rows are matched by the pickers' own cmdk `filter`
+  is pinned); a search opens every matching group, each still collapsible for that search. The header
+  reads as a section header (emphasis-weight name, vendor glyph), each group after the first is set
+  off by a divider, and its rows are indented under the header and drop their own vendor glyph and
+  provider word (the header carries both) — a flat, unpadded list made headers and models hard to tell
+  apart. Pinned models are never repeated inside groups. Headers, counts and rows are matched by the pickers' own cmdk `filter`
   (`chat/pickerGroups.ts`, a port of cmdk's default scorer), so a header matches when any of its models
   does and its count equals the rows it reveals. With no query and no models the list reads "No models to
   show. Connect a provider, or show hidden models in Settings → Models → Visible models."; "No models

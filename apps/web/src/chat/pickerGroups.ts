@@ -185,6 +185,11 @@ export function pickerFilter(
 	};
 }
 
+export const PROVIDER_GROUP =
+	"not-first:mt-4 not-first:border-border-muted not-first:border-t not-first:pt-4";
+
+export const GROUPED_ROW = "ml-24";
+
 export const NO_MODELS_HINT =
 	"No models to show. Connect a provider, or show hidden models in Settings → Models → Visible models.";
 
