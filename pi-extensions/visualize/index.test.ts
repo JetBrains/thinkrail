@@ -64,6 +64,42 @@ describe("visualize extension", () => {
 		expect(res.content[0]?.text).toContain("✅ Recommended");
 	});
 
+	test("execute returns a short summary for a mockup, never the HTML, and echoes details", async () => {
+		const params = { type: "mockup", title: "Toolbar", html: "<nav>UNIQUE_MARKUP</nav>" };
+		const res = await loadTool().execute("id", params);
+		expect(res.content[0]?.text).toBe('Rendered mockup "Toolbar" (desktop) for the user.');
+		expect(res.details).toEqual(params);
+	});
+
+	test("execute appends non-fatal authoring notes for active or remote content", async () => {
+		const res = await loadTool().execute("id", {
+			type: "mockup",
+			before: "<p>old</p>",
+			after: '<p onclick="x()">new</p><script>1</script>',
+		});
+		expect(res.content[0]?.text).toContain("Notes:");
+		expect(res.content[0]?.text).toContain("`after`: <script> is removed");
+		expect(res.content[0]?.text).toContain("`after`: on* event handlers");
+	});
+
+	test("execute rejects a malformed mockup with a retry hint", async () => {
+		await expect(loadTool().execute("id", { type: "mockup", before: "<p/>" })).rejects.toThrow(
+			/needs `html`, or both `before` and `after`/,
+		);
+		await expect(
+			loadTool().execute("id", { type: "comparison", options: [{ name: "A", html: " " }] }),
+		).rejects.toThrow(/`options\[0\]\.html` is empty/);
+	});
+
+	test("execute marks comparison options with a mockup instead of echoing it", async () => {
+		const res = await loadTool().execute("id", {
+			type: "comparison",
+			options: [{ name: "A", html: "<p>UNIQUE_MARKUP</p>" }],
+		});
+		expect(res.content[0]?.text).toContain("HTML mockup shown to the user");
+		expect(res.content[0]?.text).not.toContain("UNIQUE_MARKUP");
+	});
+
 	test("execute rejects whitespace-only Mermaid with its option location", async () => {
 		await expect(
 			loadTool().execute("id", {

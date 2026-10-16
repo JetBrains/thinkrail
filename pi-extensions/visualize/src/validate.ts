@@ -1,3 +1,4 @@
+import { validateMockupShape } from "./mockup.ts";
 import type { VisualizeParams } from "./schema.ts";
 
 export interface MermaidSource {
@@ -9,12 +10,18 @@ export function mermaidSources(params: VisualizeParams): MermaidSource[] {
 	if (params.type === "diagram") {
 		return [{ location: "mermaid", source: params.mermaid ?? "" }];
 	}
+	if (params.type === "mockup") return [];
 	return (params.options ?? []).flatMap((option, index) =>
 		option.mermaid ? [{ location: `options[${index}].mermaid`, source: option.mermaid }] : [],
 	);
 }
 
 export function validateShape(params: VisualizeParams): void {
+	if (params.type === "mockup") {
+		validateMockupShape(params);
+		return;
+	}
+
 	if (params.type === "diagram") {
 		if (!params.mermaid || params.mermaid.trim() === "") {
 			throw new Error(

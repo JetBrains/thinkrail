@@ -22,6 +22,7 @@ export function comparisonMarkdown(title: string | undefined, options: Compariso
 		if (opt.mermaid && opt.mermaid.trim() !== "") {
 			parts.push(mermaidFence(undefined, opt.mermaid));
 		}
+		if (opt.html !== undefined) parts.push("_(HTML mockup shown to the user)_");
 		blocks.push(parts.join("\n\n"));
 	}
 
