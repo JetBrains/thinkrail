@@ -100,8 +100,8 @@ webview surfaces without competing with their local key handling.
 macOS receives the conventional application, Edit, and Window role menus. Windows receives the supported
 Edit role menu. Linux skips registration because Electrobun 2.0.1 does not support application menus
 there; WebKitGTK keeps its renderer-native editing behavior. macOS Command-H, Option-Command-H, and Command-M carry explicit
-accelerators because role items get no default shortcut. Quit and Close are custom-action items, not
-roles; see Confirmed quit and close. The policy is platform-pure and the packaged
+accelerators because role items get no default shortcut. Settings… (Command-comma, after About), Quit, and Close
+are custom-action items, not roles; see Confirmed quit and close. The policy is platform-pure and the packaged
 ready seam reports whether registration ran, so unit tests pin menu composition while expanded-app smoke
 pins production wiring.
 
@@ -137,10 +137,11 @@ Other menu shortcuts are forwarded `NativeCommand`s: the menu action is the comm
 `nativeCommand`. A shared `repeatGate` makes them edge-triggered: after a forward with a key down, further
 actions drop until no non-modifier key is down, so key-repeat never fires a command twice. A click with no
 key down, or unreadable key state, always forwards. Command-W (`close-item`) asks the web client to close
-its focused item or do nothing; it never closes the native window. The preload exposes hints and commands
+its focused item or do nothing; it never closes the native window. Command-comma (`open-settings`) asks it
+to open Settings; the web decides whether a modal blocks it. The preload exposes hints and commands
 as the frozen non-enumerable `__THINKRAIL_NATIVE_SHORTCUTS__` `NativeShortcutsBridge` (built by
 `shortcutsBridge.ts`) on every desktop platform; only the macOS menu sends events today. On Windows and
-Linux the web shell owns Ctrl+W / Ctrl+F4 (close item) through its command table.
+Linux the web shell owns Ctrl+W / Ctrl+F4 (close item) and Ctrl+, (Settings) through its command table.
 
 The preload also exposes the frozen non-enumerable `__THINKRAIL_NATIVE_NOTIFICATIONS__`
 `NativeNotificationBridge` ([[module-contracts]]) on every desktop platform. It has two capabilities:
