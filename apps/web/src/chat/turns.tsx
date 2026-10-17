@@ -35,6 +35,7 @@ import { ActivityGroup } from "./ActivityGroup";
 import { AssistantMarkdown } from "./assistantLinks";
 import { BackgroundCommandCompletion } from "./BackgroundCommandCompletion";
 import { CopyButton } from "./CopyButton";
+import { ToolPromptSlot } from "./ExtUiPrompt";
 import { FileChip } from "./FileChip";
 import { useFold, useSelection } from "./foldState";
 import { Markdown } from "./Markdown";
@@ -494,6 +495,7 @@ function ToolRow({
 		return (
 			<div className="tr-text-ui text-text-default">
 				<ToolRendererBody {...renderProps} imageLabel={getToolSummary(row.toolName, renderProps)} />
+				<ToolPromptSlot toolCallId={row.toolCallId} className="mt-8" />
 			</div>
 		);
 	}

@@ -8,7 +8,9 @@ import {
 } from "@remixicon/react";
 import type { ToolRenderProps, ToolStatus } from "@thinkrail/extension-api/web";
 import { cn } from "@thinkrail/ui/utils";
+import { useContext } from "react";
 import type { ActivityBreadcrumbKind } from "./activityBreadcrumbs";
+import { PendingExtUiContext, ToolPromptSlot } from "./ExtUiPrompt";
 import { useFold } from "./foldState";
 import type { ActivityStep, RoutineToolStep, ThinkingStep } from "./rows";
 import { ToolRendererBody } from "./ToolRendererBody";
@@ -57,6 +59,14 @@ export function ActivityGroup({
 			breadcrumbLabel={breadcrumb.label}
 			breadcrumbMeta={breadcrumb.meta}
 			summary={summary}
+			awaiting={
+				<AwaitingStep
+					steps={flatSteps}
+					parentId={id}
+					workspaceRoot={workspaceRoot}
+					onOpenFile={onOpenFile}
+				/>
+			}
 		>
 			{steps.map((step) =>
 				step.kind === "thinking" ? (
@@ -121,6 +131,14 @@ export function ThinkingGroup({
 			breadcrumbLabel="Thinking"
 			breadcrumbMeta={summary}
 			summary={summary}
+			awaiting={
+				<AwaitingStep
+					steps={tools}
+					parentId={id}
+					workspaceRoot={workspaceRoot}
+					onOpenFile={onOpenFile}
+				/>
+			}
 		>
 			<div
 				data-testid="thinking-group-text"
@@ -154,6 +172,7 @@ function GroupDisclosure({
 	breadcrumbLabel,
 	breadcrumbMeta,
 	summary,
+	awaiting,
 	children,
 }: {
 	id: string;
@@ -168,6 +187,7 @@ function GroupDisclosure({
 	breadcrumbLabel: string;
 	breadcrumbMeta: string;
 	summary: string;
+	awaiting: React.ReactNode;
 	children: React.ReactNode;
 }) {
 	const [expanded, toggle, toggleRef] = useFold(id);
@@ -220,7 +240,38 @@ function GroupDisclosure({
 					{summary}
 				</span>
 			</button>
-			{expanded ? <div className="flex flex-col gap-px pl-12">{children}</div> : null}
+			{expanded ? <div className="flex flex-col gap-px pl-12">{children}</div> : awaiting}
+		</div>
+	);
+}
+
+function AwaitingStep({
+	steps,
+	parentId,
+	workspaceRoot,
+	onOpenFile,
+}: {
+	steps: ActivityStep[];
+	parentId: string;
+	workspaceRoot?: string | undefined;
+	onOpenFile?: ((path: string) => void) | undefined;
+}) {
+	const toolCallId = useContext(PendingExtUiContext)?.request.toolCallId;
+	const step = toolCallId
+		? steps.find(
+				(candidate): candidate is RoutineToolStep =>
+					candidate.kind === "tool" && candidate.toolCallId === toolCallId,
+			)
+		: undefined;
+	if (!step) return null;
+	return (
+		<div data-testid="activity-awaiting-step" className="flex flex-col gap-px pl-12">
+			<RoutineToolRow
+				step={step}
+				parentId={parentId}
+				workspaceRoot={workspaceRoot}
+				onOpenFile={onOpenFile}
+			/>
 		</div>
 	);
 }
@@ -347,6 +398,7 @@ function RoutineToolRow({
 					<ToolRendererBody {...renderProps} imageLabel={summary} />
 				</div>
 			) : null}
+			<ToolPromptSlot toolCallId={step.toolCallId} className="my-4 ml-16" />
 		</div>
 	);
 }

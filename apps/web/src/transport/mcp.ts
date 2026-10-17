@@ -9,6 +9,7 @@ export type McpListMethod =
 	| "mcp.remove"
 	| "mcp.setProjectOverride"
 	| "mcp.approve"
+	| "mcp.revokeToolGrant"
 	| "mcp.shareWithRepo";
 
 export const MCP_STARTING_POLL_MS: readonly number[] = [1_000, 2_000, 3_000, 5_000, 8_000, 13_000];

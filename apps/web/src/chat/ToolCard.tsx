@@ -5,6 +5,7 @@ import {
 	RiCloseLine as X,
 } from "@remixicon/react";
 import { cn } from "@thinkrail/ui/utils";
+import { ToolPromptSlot } from "./ExtUiPrompt";
 import { useFold } from "./foldState";
 import { ToolRendererBody } from "./ToolRendererBody";
 import { getToolSummary, resolveProminence } from "./toolRegistry";
@@ -87,6 +88,7 @@ export function ToolCard({
 					<ToolRendererBody {...renderProps} imageLabel={summary} />
 				</div>
 			) : null}
+			<ToolPromptSlot toolCallId={toolCallId} className="mx-8 mb-8" />
 		</div>
 	);
 }

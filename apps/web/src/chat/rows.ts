@@ -64,6 +64,18 @@ export type ChatRow =
 	  }
 	| { kind: "divider"; id: string; data: TurnDividerData };
 
+export function rowsHaveToolCall(rows: readonly ChatRow[], toolCallId: string): boolean {
+	return rows.some((row) => {
+		if (row.kind === "tool") return row.toolCallId === toolCallId;
+		if (row.kind !== "activity") return false;
+		return row.steps.some((step) =>
+			step.kind === "tool"
+				? step.toolCallId === toolCallId
+				: step.tools.some((tool) => tool.toolCallId === toolCallId),
+		);
+	});
+}
+
 export function projectRows(rows: ChatRow[], messageOrder: ChatMessageOrder): ChatRow[] {
 	if (messageOrder === "oldest-first" || rows.length < 2) return rows;
 	const groups: ChatRow[][] = [];
