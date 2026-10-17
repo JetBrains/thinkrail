@@ -22,6 +22,7 @@ import {
 	isTodoReviewFixMessage,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
+	MCP_TOOL_GRANTS_PROTOCOL_VERSION,
 	MODEL_PICKER_PROTOCOL_VERSION,
 	normalizeSessionTitle,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
@@ -195,7 +196,6 @@ test("the project trust summary and pi-level resource consent are pinned to v81"
 });
 
 test("MCP server management, status and chat resources are pinned to v83", () => {
-	expect(PROTOCOL_VERSION).toBe(83);
 	expect(MCP_PROTOCOL_VERSION).toBe(83);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(MCP_PROTOCOL_VERSION);
 	expect(WS_METHODS.mcpList).toBe("mcp.list");
@@ -205,6 +205,12 @@ test("MCP server management, status and chat resources are pinned to v83", () =>
 	expect(WS_METHODS.mcpReadLog).toBe("mcp.readLog");
 	expect(WS_CHANNELS.mcpStatus).toBe("mcp.status");
 	expect(WS_METHODS).not.toHaveProperty("mcpStop");
+});
+
+test("always-allowed MCP tools and their revoke are pinned to v84", () => {
+	expect(PROTOCOL_VERSION).toBe(84);
+	expect(MCP_TOOL_GRANTS_PROTOCOL_VERSION).toBe(84);
+	expect(WS_METHODS.mcpRevokeToolGrant).toBe("mcp.revokeToolGrant");
 });
 
 test("rich review anchors advance the additive selector union to v74", () => {

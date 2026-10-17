@@ -170,8 +170,7 @@ export function createWebUiContext(
 		},
 		async confirm(title, message, opts) {
 			return (
-				(await dialog({ id: nextId(), sessionId, kind: "confirm", title, message }, opts)) ===
-				true
+				(await dialog({ id: nextId(), sessionId, kind: "confirm", title, message }, opts)) === true
 			);
 		},
 		async input(title, placeholder, opts) {

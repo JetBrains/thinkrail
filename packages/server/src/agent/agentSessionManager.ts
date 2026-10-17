@@ -12,6 +12,7 @@ import {
 	type ExtensionUIContext,
 	getAgentDir,
 	type McpServerConfig,
+	type PromptOptions,
 	type RegisteredMcpServer,
 	type SessionInfo,
 	SessionManager,
@@ -90,7 +91,12 @@ import {
 	subagentsFor,
 } from "./delegation";
 import { buildResourceLoader, disabledExtensions, toSkillCommands } from "./extensions";
-import { createMcpSessionHost, type McpProjectPolicy, type McpSessionHost } from "./mcp";
+import {
+	createMcpSessionHost,
+	type McpProjectPolicy,
+	type McpSessionHost,
+	mcpPolicyOf,
+} from "./mcp";
 import {
 	assertMcpServerDisablableInChat,
 	forgetMcpStatus,
@@ -117,10 +123,10 @@ import type { SkillAdmissionContext } from "./skillAdmission";
 import {
 	cancelExtUiForSession,
 	createWebUiContext,
-	selectForToolCall,
 	notifyExtensionError,
 	notifyExtUi,
 	pendingExtUiDialog,
+	selectForToolCall,
 	setExtUiStateChanged,
 } from "./webUiContext";
 
@@ -570,12 +576,20 @@ export function setSkillAdmissionResolver(
 	skillAdmissionResolver = resolver;
 }
 
-let mcpPolicyResolver: (workspaceId: string) => McpProjectPolicy = () => ({
-	approvals: {},
-	overrides: {},
-});
+let mcpPolicyResolver: (workspaceId: string) => McpProjectPolicy = () => mcpPolicyOf(undefined);
 export function setMcpPolicyResolver(resolver: (workspaceId: string) => McpProjectPolicy): void {
 	mcpPolicyResolver = resolver;
+}
+
+type McpToolGrantWriter = (
+	workspaceId: string,
+	server: string,
+	target: string,
+	tool: string,
+) => void;
+let mcpToolGrantWriter: McpToolGrantWriter = () => {};
+export function setMcpToolGrantWriter(writer: McpToolGrantWriter): void {
+	mcpToolGrantWriter = writer;
 }
 
 function piResourceTrustFor(workspaceId: string): boolean {
@@ -1295,6 +1309,13 @@ async function createParentSessionInternal(
 		onCommandSettled: scheduleMcpStatusRefresh,
 		askForToolCall: (toolCallId, title, choices, signal) =>
 			selectForToolCall(sessionId, toolCallId, title, choices, signal ? { signal } : undefined),
+		grantTool: (server, target, tool) => {
+			try {
+				mcpToolGrantWriter(workspaceId, server, target, tool);
+			} catch (error) {
+				log.warn(`could not save the MCP grant for ${tool}`, error as Error);
+			}
+		},
 	});
 	const canDeliverCompletion = () =>
 		canUseSessionResources(sessionId, workspaceId) &&
@@ -2038,13 +2059,21 @@ export async function promptSession(
 		await steerEntry(entry, text, images);
 		return;
 	}
-	cancelExtUiForSession(sessionId);
 	const release = admitPreflight(entry);
 	try {
-		await entry.session.prompt(text, images ? { images } : undefined);
+		await entry.session.prompt(text, answeringDialogs(entry, images));
 	} finally {
 		release();
 	}
+}
+
+function answeringDialogs(entry: Entry, images: ImageContent[] | undefined): PromptOptions {
+	return {
+		...(images ? { images } : {}),
+		preflightResult: (disposition) => {
+			if (disposition !== "handled") cancelExtUiForSession(entry.session.sessionId);
+		},
+	};
 }
 
 export async function steerSession(
@@ -2071,19 +2100,20 @@ async function followUpEntry(
 	images: ImageContent[] | undefined,
 	answersDialogs: boolean,
 ): Promise<void> {
-	const { sessionId } = entry.session;
 	admitRun(entry);
 	if (entry.session.isStreaming) {
-		await queueSessionMessage(entry, "followUp", text, images, () =>
+		const disposition = await queueSessionMessage(entry, "followUp", text, images, () =>
 			entry.session.followUp(text, images),
 		);
-		if (answersDialogs) cancelExtUiForSession(sessionId);
+		if (answersDialogs && disposition === "queued") cancelExtUiForSession(entry.session.sessionId);
 		return;
 	}
-	if (answersDialogs) cancelExtUiForSession(sessionId);
 	const release = admitPreflight(entry);
 	try {
-		await entry.session.prompt(text, images ? { images } : undefined);
+		await entry.session.prompt(
+			text,
+			answersDialogs ? answeringDialogs(entry, images) : images ? { images } : undefined,
+		);
 	} finally {
 		release();
 	}

@@ -39,6 +39,7 @@ import {
 	setMcpLoginPublisher,
 	setMcpPolicyResolver,
 	setMcpStatusPublisher,
+	setMcpToolGrantWriter,
 	setModelContextPublisher,
 	setReviewCommentHandler,
 	setSessionCreatedPublisher,
@@ -75,6 +76,7 @@ import { logger } from "../log";
 import { loadWorkspaces } from "../persistence";
 import {
 	getProjects,
+	grantProjectMcpTool,
 	listProjects,
 	listRecentProjects,
 	openProject,
@@ -569,6 +571,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		} catch {
 			return mcpPolicyOf(undefined);
 		}
+	});
+	setMcpToolGrantWriter((workspaceId, server, target, tool) => {
+		grantProjectMcpTool(getWorkspace(workspaceId).projectId, server, target, tool);
 	});
 
 	setSubagentsEnabledResolver((workspaceId) => {

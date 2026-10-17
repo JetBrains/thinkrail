@@ -8,7 +8,7 @@ import type {
 	McpServerEntry,
 } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
-import type { McpProjectOverride, Project } from "@thinkrail/contracts";
+import type { McpProjectOverride, McpToolGrant, Project } from "@thinkrail/contracts";
 
 // Port of pi's `core/mcp-servers.ts` and `extensions/mcp/config.ts` (MIT, Earendil Works).
 
@@ -358,6 +358,31 @@ export function fingerprintMcpEntry(name: string, raw: unknown): string {
 		.digest("hex");
 }
 
+export function mcpTargetOf(config: McpServerConfig): string {
+	const target =
+		"url" in config && typeof config.url === "string"
+			? { url: config.url }
+			: {
+					command: "command" in config ? config.command : null,
+					args: "args" in config ? (config.args ?? []) : [],
+				};
+	return createHash("sha256").update(JSON.stringify(target)).digest("hex");
+}
+
+export function mcpToolLabel(server: string, tool: string): string {
+	const prefix = `${mcpNamespace(server)}__`;
+	return tool.startsWith(prefix) ? tool.slice(prefix.length) : tool;
+}
+
+export function grantedMcpTools(
+	policy: McpProjectPolicy,
+	server: string,
+	config: McpServerConfig,
+): readonly string[] {
+	const grant = policy.toolGrants[server];
+	return grant && grant.target === mcpTargetOf(config) ? grant.tools : [];
+}
+
 export function normalizeExposureForHost(config: McpServerConfig): McpServerConfig {
 	const normalized: McpServerConfig = { ...config };
 	if (config.exposure === undefined || config.exposure === "codemode")
@@ -376,6 +401,7 @@ export function normalizeExposureForHost(config: McpServerConfig): McpServerConf
 export interface McpProjectPolicy {
 	approvals: Readonly<Record<string, string>>;
 	overrides: Readonly<Record<string, McpProjectOverride>>;
+	toolGrants: Readonly<Record<string, McpToolGrant>>;
 }
 
 // Null-prototype copies, so a server named `__proto__` never reads Object.prototype as its policy.
@@ -383,11 +409,12 @@ const ownEntries = <T>(record: Record<string, T> | undefined): Record<string, T>
 	Object.assign(Object.create(null) as Record<string, T>, record);
 
 export function mcpPolicyOf(
-	project: Pick<Project, "mcpApprovals" | "mcpOverrides"> | undefined,
+	project: Pick<Project, "mcpApprovals" | "mcpOverrides" | "mcpToolGrants"> | undefined,
 ): McpProjectPolicy {
 	return {
 		approvals: ownEntries(project?.mcpApprovals),
 		overrides: ownEntries(project?.mcpOverrides),
+		toolGrants: ownEntries(project?.mcpToolGrants),
 	};
 }
 

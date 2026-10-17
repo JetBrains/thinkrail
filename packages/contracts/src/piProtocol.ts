@@ -240,10 +240,34 @@ interface ExtUiDialogAnchor {
 }
 
 export type ExtUiRequest =
-	| ({ id: string; sessionId: string; kind: "select"; title: string; options: string[] } & ExtUiDialogAnchor)
-	| ({ id: string; sessionId: string; kind: "confirm"; title: string; message: string } & ExtUiDialogAnchor)
-	| ({ id: string; sessionId: string; kind: "input"; title: string; placeholder?: string } & ExtUiDialogAnchor)
-	| ({ id: string; sessionId: string; kind: "editor"; title: string; prefill?: string } & ExtUiDialogAnchor)
+	| ({
+			id: string;
+			sessionId: string;
+			kind: "select";
+			title: string;
+			options: string[];
+	  } & ExtUiDialogAnchor)
+	| ({
+			id: string;
+			sessionId: string;
+			kind: "confirm";
+			title: string;
+			message: string;
+	  } & ExtUiDialogAnchor)
+	| ({
+			id: string;
+			sessionId: string;
+			kind: "input";
+			title: string;
+			placeholder?: string;
+	  } & ExtUiDialogAnchor)
+	| ({
+			id: string;
+			sessionId: string;
+			kind: "editor";
+			title: string;
+			prefill?: string;
+	  } & ExtUiDialogAnchor)
 	| {
 			id: string;
 			sessionId: string;
