@@ -91,7 +91,7 @@ import {
 	useWorkspaceRename,
 } from "./workspaceActions";
 
-const CREATE_WORKSPACE_LABEL = `Create workspace (${platformShortcutLabel("N")} or ${platformShortcutLabel("N", { alt: true })})`;
+const CREATE_WORKSPACE_LABEL = `Start work (${platformShortcutLabel("N")} or ${platformShortcutLabel("N", { alt: true })})`;
 const HOVER_CONTROL_CLASS =
 	"flex size-20 shrink-0 items-center justify-center rounded-sm text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100 disabled:pointer-events-none disabled:opacity-0";
 
@@ -600,7 +600,7 @@ function ProjectRow({
 						}}
 					>
 						<Plus />
-						Create workspace
+						Start work
 					</ContextMenuItem>
 					<ContextMenuItem
 						data-testid="project-menu-open-existing-worktree"

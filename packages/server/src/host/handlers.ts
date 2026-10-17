@@ -183,6 +183,7 @@ import {
 	setWorkspaceSkillOverride,
 	setWorkspaceSubagentMaxConcurrent,
 	setWorkspaceSubagentsOverride,
+	suggestWorkspaceName,
 	unsettleWorkspace,
 	workspaceDiffStats,
 } from "../workspaces";
@@ -473,6 +474,9 @@ const handlers: WsHandlers = {
 			),
 		);
 	},
+	"workspace.suggestName": async (params) => ({
+		name: await suggestWorkspaceName(params.projectId),
+	}),
 	"workspace.listExisting": (params) => listExistingWorktrees(params.projectId),
 	"workspace.openExisting": async (p) => {
 		return provisionInitialTerminal(

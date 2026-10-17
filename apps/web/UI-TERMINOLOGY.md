@@ -98,7 +98,7 @@ Children:
 | — Project Name | inline `<button>` | `project-name` | Selects the project (project home) |
 | — Workspace Count | inline `<span>` | `project-workspace-count` | Collapsed-row count of the project's worktree workspaces |
 | — Add-Workspace Button | inline "+" | `add-workspace` | Opens the New Workspace Dialog |
-| — Project Actions Menu | Context Menu on the row | `project-actions` | Create workspace (`project-menu-create-workspace`) / Close project (`project-menu-close`) |
+| — Project Actions Menu | Context Menu on the row | `project-actions` | Start work (`project-menu-create-workspace`) / Close project (`project-menu-close`) |
 | Workspace Row | inline row in `ProjectTree` | `workspace-item` | A workspace (git worktree); two-line: name + branch |
 | — Workspace Name | inline `<span>` | `workspace-name` | Display name |
 | — Workspace Branch | inline `<span>` | `workspace-branch` | Git branch (muted, proportional metadata; hidden if it equals the name) |

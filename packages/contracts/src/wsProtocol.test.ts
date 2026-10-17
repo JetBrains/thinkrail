@@ -195,7 +195,7 @@ test("the project trust summary and pi-level resource consent are pinned to v81"
 });
 
 test("MCP server management, status and chat resources are pinned to v83", () => {
-	expect(PROTOCOL_VERSION).toBe(83);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(83);
 	expect(MCP_PROTOCOL_VERSION).toBe(83);
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(MCP_PROTOCOL_VERSION);
 	expect(WS_METHODS.mcpList).toBe("mcp.list");
@@ -341,4 +341,9 @@ test("chat resources introduce scoped reads and cancellation, never browser comm
 	expect(WS_METHODS.subagentStop).toBe("subagent.stop");
 	expect(WS_METHODS.subagentStopAll).toBe("subagent.stopAll");
 	expect(Object.values(WS_METHODS)).not.toContain("backgroundCommand.start");
+});
+
+test("the workspace-name suggestion advances the additive wire shape to v84", () => {
+	expect(PROTOCOL_VERSION).toBe(84);
+	expect(WS_METHODS.workspaceSuggestName).toBe("workspace.suggestName");
 });

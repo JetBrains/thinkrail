@@ -35,6 +35,7 @@ import {
 	setWorkspaceReview,
 	setWorkspaceSubagentMaxConcurrent,
 	setWorkspaceSubagentsOverride,
+	suggestWorkspaceName,
 	unsettleWorkspace,
 	type WorkspaceLifecycleEvent,
 } from "./workspaces";
@@ -386,6 +387,16 @@ test("createWorkspace marks a user-named workspace renamed; an auto-named one st
 	expect(named.name).toBe("My Feature");
 	expect(named.branch).toBe("my-feature");
 	expect(named.renamed).toBe(true);
+});
+
+test("suggestWorkspaceName names the slot the next auto-named create would take", async () => {
+	expect(await suggestWorkspaceName("p1")).toBe("workspace-1");
+
+	await createWorkspace("p1");
+	expect(await suggestWorkspaceName("p1")).toBe("workspace-2");
+
+	await createWorkspace("p1", "My Feature");
+	expect(await suggestWorkspaceName("p1")).toBe("workspace-2");
 });
 
 test("renameWorkspace moves the branch in place: record + git follow, the worktree dir does not", async () => {
