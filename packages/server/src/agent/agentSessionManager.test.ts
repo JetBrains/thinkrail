@@ -83,7 +83,7 @@ import { ASK_ACK_TEXT, ASK_STOPPED_ERROR, assessAnswerability } from "./askUserQ
 import { setDisabledExtensionsResolver } from "./extensions";
 import { configurePiRuntime } from "./piRuntime";
 import { admissionContextFor } from "./skillAdmission";
-import { setExtUiPublisher } from "./webUiContext";
+import { resolveExtUi, setExtUiPublisher } from "./webUiContext";
 
 function modelDef(id: string) {
 	return {
@@ -1648,6 +1648,82 @@ test("emergency session disposal rejects an accepted answer that cannot persist"
 		gate.remove();
 		await prompting.catch(() => {});
 		if (hasSession(session.sessionId)) removeSession(session.sessionId);
+	}
+});
+
+test("the host questionnaire wins over a same-name extension tool before and after reload", async () => {
+	const cwd = tmpCwd("trpi-question-collision-");
+	const extensionDir = join(cwd, ".pi", "extensions");
+	mkdirSync(extensionDir, { recursive: true });
+	writeFileSync(
+		join(extensionDir, "questionnaire.ts"),
+		[
+			"export default function (pi) {",
+			"  pi.registerTool({",
+			'    name: "ask_user_question", label: "External questionnaire", description: "External questionnaire",',
+			'    parameters: { type: "object", additionalProperties: true },',
+			"    async execute(_id, _args, _signal, _update, ctx) {",
+			'      await ctx.ui.input("Enter the numbers of all that apply", "1,3");',
+			'      return { content: [{ type: "text", text: "EXTERNAL_QUESTIONNAIRE" }] };',
+			"    },",
+			"  });",
+			'  pi.registerCommand("questionnaire-status", { description: "probe", handler: async (_args, ctx) => {',
+			'    ctx.ui.notify("EXTERNAL_COMMAND_AVAILABLE", "info");',
+			"  } });",
+			"}",
+		].join("\n"),
+	);
+	const dialogs: ExtUiRequest[] = [];
+	setExtUiPublisher((request) => dialogs.push(request));
+	const session = await createSession({
+		cwd,
+		workspaceId: "ws-question-collision",
+		model: toWireModel(fauxA.getModel()),
+	});
+	try {
+		for (const round of ["initial", "reloaded"]) {
+			if (round === "reloaded") await reloadSessionResources(session.sessionId);
+			const toolCallId = `collision-${round}`;
+			fauxA.setResponses([
+				gatedQuestionMessage(toolCallId),
+				fauxAssistantMessage("HOST_QUESTIONNAIRE_CONTINUED"),
+			]);
+			const prompting = promptSession(session.sessionId, "Choose a runtime.");
+			prompting.catch(() => {});
+			try {
+				for (let attempt = 0; attempt < 200; attempt++) {
+					if (getSessionState(session.sessionId).needsInput) break;
+					await Bun.sleep(5);
+				}
+				expect(getSessionState(session.sessionId).needsInput?.kind).toBe("question");
+				expect(dialogs.filter((request) => request.kind === "input")).toEqual([]);
+				await answerQuestion(session.sessionId, toolCallId, gatedQuestionAnswer());
+				await prompting;
+				const { messages } = await getSessionMessages(
+					session.sessionId,
+					"ws-question-collision",
+					cwd,
+				);
+				expect(messages).toContainEqual(
+					expect.objectContaining({
+						role: "toolResult",
+						toolCallId,
+						details: gatedQuestionAnswer(),
+					}),
+				);
+			} finally {
+				for (const request of dialogs) resolveExtUi({ id: request.id, value: null });
+				await abortSession(session.sessionId);
+				await prompting.catch(() => {});
+			}
+		}
+		await promptSession(session.sessionId, "/questionnaire-status");
+		expect(dialogs).toContainEqual(
+			expect.objectContaining({ message: "EXTERNAL_COMMAND_AVAILABLE" }),
+		);
+	} finally {
+		removeSession(session.sessionId);
+		setExtUiPublisher(() => {});
 	}
 });
 
