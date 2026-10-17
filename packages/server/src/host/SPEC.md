@@ -212,7 +212,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   new entry must not approve it); an edit that arrives from the repo stays pending; `mcp.approve` refuses a
   fingerprint that is no longer the one on disk; `mcp.shareWithRepo` refuses when the project file already
   defines that name or holds an override not approved at its current fingerprint, else writes the record
-  override as pi's override entry, approves it and clears the record copy. After a mutation the affected
+  override as pi's override entry, approves it and clears the record copy. `mcp.revokeToolGrant` removes
+  one always-allowed tool from the record and reloads no chat: the call guard reads grants live. After a mutation the affected
   live sessions (all for the user file, the project's for project files and record changes) are
   reconciled — only those whose effective config changed reload, through the gate. The reconciliation is
   started, not awaited (a failure is logged): agent reloads idle chats one after another, so the request
@@ -361,7 +362,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `resources: true` (a revoke clears both; an older client's grant is alias-only), and hands the project's
   workspaces to agent's `applyPiResourceTrust` so live chats reload into the new trust (idle now, busy at
   settlement); `createServer` wires `setMcpPolicyResolver` (workspace → its project's `mcpApprovals` /
-  `mcpOverrides`, fail-closed to none) next to the admission resolver, and injects agent's
+  `mcpOverrides` / `mcpToolGrants`, fail-closed to none) and `setMcpToolGrantWriter` (an "Always allow"
+  answer → `grantProjectMcpTool` on the workspace's project) next to the admission resolver, and injects agent's
   `piTrustsProjectPath` as the projects trust seed
   (`setPiTrustSeed`), so a newly added project starts from pi's own decision; `project.acknowledgeSkills` / `project.setSkillEnabled` /
   `project.setGroupEnabled` / `project.aliasSkills` / `workspace.setSkillOverride` mutate/read the persisted

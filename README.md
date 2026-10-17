@@ -44,7 +44,8 @@ create the tools it needs based on how you actually work.
   in the chat. Settings → Extensions lists the ThinkRail extensions the agent gets and lets you switch
   each one off.
 - **MCP servers.** Connect the MCP servers in your `pi` `mcp.json` (or add them, and a few presets, from
-  Settings): ThinkRail asks before calls the server does not mark read-only, keeps servers a repository
+  Settings): ThinkRail asks in the chat before calls the server does not mark read-only (or always allows
+  the tools you trust in a project), keeps servers a repository
   defines off until you approve them, signs you in to OAuth servers from Settings, and shows each chat's
   servers next to its background commands and subagents.
 - **Your providers, your credentials.** Sign in with [JetBrains AI](https://www.jetbrains.com/ai/) or

@@ -12,9 +12,9 @@ tags: [ui, auth]
 ## Responsibility
 
 The client half of in-app provider login: the accumulating client-side **login-state types** and the
-**presentational** OAuth dialog that renders them. The dialog is the exact analogue of `chat/ExtUiDialog` —
-pi's flow, bridged over the wire, rendered as a modal — but **session-less**: a login runs on the Welcome
-screen before any session exists. (Mirroring the `chat`/ExtUi split, the **frame reducer lives in `store`**,
+**presentational** OAuth dialog that renders them. The dialog is the session-less analogue of
+`chat/ExtUiPrompt` — pi's flow, bridged over the wire — but rendered as a modal, because a login runs on
+the Welcome screen before any session or chat exists to ask in. (Mirroring the `chat`/ExtUi split, the **frame reducer lives in `store`**,
 not here — `auth` stays presentational + types, so nothing here imports `store`.)
 
 ## Boundary
