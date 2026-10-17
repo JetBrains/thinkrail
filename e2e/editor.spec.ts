@@ -1,8 +1,31 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createWorkspaceViaDialog, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
+import {
+	createWorkspaceViaDialog,
+	enterDefaultWorkspace,
+	openFixtureProject,
+	revealWorkbenchTool,
+} from "./fixtures/app";
+import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 import { asciiPdf, lfsPointer } from "./fixtures/repo";
+
+for (const extension of ["java", "css"]) {
+	test(`an issue number in a ${extension} comment is not painted as a colour`, async ({ page }) => {
+		const filename = `issue-130.${extension}`;
+		writeFileSync(
+			join(E2E_FIXTURE_REPO, filename),
+			`/** GH #130: keep this in sync */\n${extension === "css" ? "a { color: #abc; }" : "class Example {}"}\n`,
+		);
+		await openFixtureProject(page);
+		await enterDefaultWorkspace(page);
+		await revealWorkbenchTool(page, "files");
+		await page.getByTestId("file-node").filter({ hasText: filename }).dblclick();
+		const pane = page.getByTestId("editor-pane");
+		await expect(pane).toContainText("GH #130");
+		await expect(pane.locator(".colorpicker-color-decoration")).toHaveCount(0);
+	});
+}
 
 test("opens a file in a center Monaco tab, focuses on re-open, and closes", async ({ page }) => {
 	await openFixtureProject(page);

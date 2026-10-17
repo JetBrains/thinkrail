@@ -2232,6 +2232,10 @@ own section. The kebab menu (`plan-menu`, a
   addition/deletion paint to feedback roles, so a theme swap needs no re-highlight. `TerminalInstance`
   similarly rebuilds from the complete 16-slot ANSI variable set. Monaco and xterm consume the nullable
   editor selection-foreground override when provided.
+- Monaco colour decorators are disabled in `fileEditorOptions`. Its default `*` colour provider can
+  interpret issue references such as `#130` as hex colours in any language, including Java comments;
+  CSS-family providers can do the same. Code buffers keep issue references as plain text, with colour
+  presentation left to rendered previews.
 - **Terminal renderer + font measurement.** `TerminalInstance` runs xterm's **default DOM renderer** on
   purpose — `addon-webgl` is *not* loaded, and loading it would be a regression (see `architecture.md`
   Decision #11: the DOM renderer is a prerequisite for touch, and `WebglAddon.dispose()` leaks its WebGL2

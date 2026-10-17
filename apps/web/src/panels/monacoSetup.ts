@@ -95,6 +95,7 @@ export function fileEditorOptions(lineWidth: number, bounded: boolean, path: str
 		readOnlyMessage: { value: "Files open read-only here — ask the agent to change them." },
 		ariaLabel: path,
 		unicodeHighlight: { ambiguousCharacters: false },
+		colorDecorators: false,
 		lineNumbersMinChars: 3,
 		renderLineHighlight: "all",
 		smoothScrolling: true,
