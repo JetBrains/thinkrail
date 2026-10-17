@@ -1725,8 +1725,12 @@ own section. The kebab menu (`plan-menu`, a
   viewed files carry a check glyph, and clicking a row reveals that section (and expands it if it was
   collapsed) — the reveal remains anchored by path while asynchronous sections determine their heights,
   until a view-mode change or user wheel, touch, pointer, or keyboard input takes over. A timeout cannot bound remote reads.
-  Finding navigation hands scrolling to the thread only after the section reveal, and disables further
-  header corrections so the thread cannot be scrolled back out of view; a reveal the user takes over, a
+  This scroll choreography — the active-section spy, the settle-to-section dance across variable section
+  heights, and the measured tail — lives in the `useReviewReveal` hook, not inline in the pane. The hook
+  brings the **section** into view; the within-section reveal of a **comment** is a `reviewFocusRequest`
+  that `consumeChangesTabReveal` raises and the target section's `usePierreFocus` consumes
+  (`virtualizer.revealLine`) — the one path that can surface a line, and its thread card, not yet rendered
+  in a bounded, virtualized section. A reveal the user takes over, a
   newer reveal, or the pane unmounting withdraws its pending `reviewFocusRequest`, so a thread that mounts
   later never yanks the viewport to a finding nobody is waiting for. Each section receives only its own
   path's slice of the tab (scratch, kept keys, flags) behind `memo`, so a keystroke in one section's
@@ -1797,7 +1801,11 @@ own section. The kebab menu (`plan-menu`, a
   corresponding capability. It renders one `view-toggle-<renderer suffix>` segment per candidate when the
   registry returns more than one. Renderer choice replaces the old markdown-only `rendered` state; layout
   and whitespace remain independent diff state. The review tab's toolbar carries the same whitespace and
-  `Split | Inline` controls for every section at once, the scope and target as read-only chips (the scope
+  `Split | Inline` controls for every section at once — but, because that toggle is pane-level across every
+  section rather than per-renderer, it follows `DiffPane`'s capability gate collectively: the segment shows
+  only when at least one file in the scope resolves (by path, through `diffRendererSupportsLayout`) to a
+  layout-capable renderer, so an all-Markdown/binary/rich scope hides it instead of offering an inert
+  control. It also carries the scope and target as read-only chips (the scope
   is chosen in the Changes header and is part of the tab's identity), the file / `+ −` totals with the
   viewed count, *Collapse all* / *Expand all*, and `Send review (N)` over the workspace's drafts.
 

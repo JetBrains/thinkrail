@@ -33,6 +33,7 @@ src/panels/resources/pdf/usePdfDocument.ts usePdfDocument
 src/panels/useAnalyticsConsent.ts useAnalyticsConsent
 src/panels/useLiveTabContent.ts useLiveTabContent
 src/panels/useOpenBranchReview.ts useOpenBranchReview
+src/panels/useReviewReveal.ts useReviewReveal
 src/panels/useScrollViewState.ts useScrollViewState
 src/panels/useWorkspaceRead.ts useWorkspaceRead
 src/prompt/pendingSelection.ts usePendingSelection
