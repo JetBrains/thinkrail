@@ -285,6 +285,7 @@ test("the host loader admits repo entries only at their approved fingerprint and
 					quiet: { exposure: "hidden" },
 					repo: { enabled: false },
 				},
+				toolGrants: {},
 			},
 			...(disabledInChat ? { disabledInChat } : {}),
 		});
@@ -469,7 +470,11 @@ test("an approved invalid project entry cannot replace the valid effective user 
 		agentDir,
 		cwd,
 		projectTrusted: true,
-		policy: { approvals: { docs: fingerprintMcpEntry("docs", invalid) }, overrides: {} },
+		policy: {
+			approvals: { docs: fingerprintMcpEntry("docs", invalid) },
+			overrides: {},
+			toolGrants: {},
+		},
 	});
 	expect(loaded.servers).toEqual([
 		{

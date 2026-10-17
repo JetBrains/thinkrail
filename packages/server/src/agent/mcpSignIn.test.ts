@@ -130,7 +130,7 @@ const start = (action: "login" | "test" | "logout", deadlineMs?: number) =>
 		workspaceId: "ws-signin",
 		cwd,
 		projectTrusted: false,
-		policy: { approvals: {}, overrides: {} },
+		policy: { approvals: {}, overrides: {}, toolGrants: {} },
 		serverName: "oauthy",
 		ownerClientKey: "owner",
 		...(deadlineMs !== undefined ? { deadlineMs } : {}),
@@ -161,7 +161,7 @@ test("a failed Test connection reports pi's reason with credentials masked", asy
 			workspaceId: "ws-signin",
 			cwd,
 			projectTrusted: false,
-			policy: { approvals: {}, overrides: {} },
+			policy: { approvals: {}, overrides: {}, toolGrants: {} },
 			serverName: "leaky",
 			ownerClientKey: "owner",
 		});

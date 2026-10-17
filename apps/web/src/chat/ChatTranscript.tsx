@@ -29,11 +29,19 @@ import { ACTIVITY_BREADCRUMB_HEIGHT, ActivityBreadcrumbTrail } from "./activityB
 import { AskStatesContext, deriveAskStates } from "./askState";
 import { type ChatActions, ChatActionsContext } from "./ChatActions";
 import type { ChatMessageOrder } from "./chatPreferences";
+import { type PendingExtUi, PendingExtUiContext, PendingExtUiPrompt } from "./ExtUiPrompt";
 import { FoldGeometryProvider } from "./foldState";
 import { deriveMessageActions } from "./messageActions";
 import { turnAnchorText } from "./recentPrompts";
 import { estimateChatRowHeights } from "./rowHeightEstimates";
-import { type ChatRow, deriveRows, projectRows, rowIndexForTurn, stabilizeRows } from "./rows";
+import {
+	type ChatRow,
+	deriveRows,
+	projectRows,
+	rowIndexForTurn,
+	rowsHaveToolCall,
+	stabilizeRows,
+} from "./rows";
 import { type StreamStatus, StreamStatusSlot, streamStatus } from "./StreamIndicator";
 import { ChatTurnView } from "./turns";
 import { useChatScroll } from "./useChatScroll";
@@ -495,6 +503,46 @@ const ChatTranscript = forwardRef<
 		[workspaceId],
 	);
 
+	const pendingExtUiRequest = useAppStore((s) => s.sessions[sessionId]?.pendingExtUi ?? null);
+	const pendingExtUi = useMemo<PendingExtUi | null>(() => {
+		if (!pendingExtUiRequest) return null;
+		let draft: string | undefined;
+		let revealed = false;
+		return {
+			request: pendingExtUiRequest,
+			reply: (value) => {
+				const { id } = pendingExtUiRequest;
+				useAppStore.getState().clearPendingExtUi(sessionId, id);
+				getTransport()
+					.request("session.extUiReply", { response: { id, value } })
+					.catch(() => {});
+			},
+			draft: () => draft,
+			rememberDraft: (text) => {
+				draft = text;
+			},
+			claimReveal: () => {
+				if (revealed) return false;
+				revealed = true;
+				return true;
+			},
+		};
+	}, [pendingExtUiRequest, sessionId]);
+	const pendingExtUiId = pendingExtUiRequest?.id ?? null;
+	const [announcedExtUiId, setAnnouncedExtUiId] = useState<string | null>(null);
+	useEffect(() => {
+		if (pendingExtUiId === null) return;
+		const frame = requestAnimationFrame(() => setAnnouncedExtUiId(pendingExtUiId));
+		return () => cancelAnimationFrame(frame);
+	}, [pendingExtUiId]);
+	const extUiAnnouncement =
+		pendingExtUiRequest && announcedExtUiId === pendingExtUiRequest.id
+			? `Your input is needed: ${pendingExtUiRequest.title.split("\n")[0]}`
+			: "";
+	const anchorToolCallId = pendingExtUiRequest?.toolCallId;
+	const promptOnToolCard =
+		anchorToolCallId !== undefined && rowsHaveToolCall(chronologicalRows, anchorToolCallId);
+
 	const askStates = useMemo(
 		() => deriveAskStates(runtime.turns, runtime.askAnswers, runtime.toolResults),
 		[runtime.turns, runtime.askAnswers, runtime.toolResults],
@@ -532,129 +580,150 @@ const ChatTranscript = forwardRef<
 
 	return (
 		<ChatActionsContext.Provider value={chatActions}>
-			<AskStatesContext.Provider value={askContext}>
-				<div
-					data-testid="chat-scroll"
-					data-follow-state={followState}
-					data-latest-edge={chatMessageOrder === "newest-first" ? "top" : "bottom"}
-					data-streaming={isStreaming}
-					data-scroll-moving={scrollMoving}
-					className="relative flex min-h-0 flex-1 flex-col [container-type:size]"
-					{...containerProps}
-				>
+			<PendingExtUiContext.Provider value={pendingExtUi}>
+				<AskStatesContext.Provider value={askContext}>
 					<div
-						data-testid="chat-transcript-scroll"
-						className={cn(
-							"relative min-h-0 flex-1 overflow-y-hidden",
-							chatLineWidthBounded ? "overflow-x-hidden" : "overflow-x-auto",
-						)}
+						data-testid="chat-scroll"
+						data-follow-state={followState}
+						data-latest-edge={chatMessageOrder === "newest-first" ? "top" : "bottom"}
+						data-streaming={isStreaming}
+						data-scroll-moving={scrollMoving}
+						className="relative flex min-h-0 flex-1 flex-col [container-type:size]"
+						{...containerProps}
 					>
-						{/* One provider above the list: its value is the single transcript-wide callback, so a
-						    per-row provider would only re-commit that identical value for every visible row. */}
-						<FoldGeometryProvider onBeforeChange={prepareFoldChange}>
-							<Virtuoso<ChatRow, ChatListContext>
-								key={chatMessageOrder}
-								ref={virtuosoRef}
-								data={rows}
-								heightEstimates={rowHeightEstimates}
-								firstItemIndex={firstItemIndex}
-								increaseViewportBy={CHAT_VIEWPORT_INCREASE}
-								minOverscanItemCount={CHAT_MIN_OVERSCAN_ITEMS}
-								skipAnimationFrameInResizeObserver
-								scrollerRef={handleScrollerRef}
-								context={listContext}
-								components={CHAT_LIST_COMPONENTS}
-								className={cn(
-									"h-full min-h-0 overflow-x-hidden [overflow-anchor:none]",
-									chatLineWidthBounded
-										? "w-full"
-										: "w-[var(--chat-transcript-width)] min-w-full max-w-none",
-								)}
-								followOutput={followOutput}
-								rangeChanged={({ startIndex }) => {
-									const localIndex = startIndex - firstItemIndex;
-									visibleAnchorRowId.current = rows[localIndex]?.id ?? null;
-								}}
-								totalListHeightChanged={handleContentHeight}
-								computeItemKey={(_, row) => row.id}
-								itemContent={(index, row) => (
-									<div
-										ref={
-											row.id === completionAnchorRowId && completionId
-												? (element) => {
-														if (element && !historyOpen) {
-															useAppStore
-																.getState()
-																.noteRenderedCompletion(sessionId, completionId);
-														}
-													}
-												: undefined
-										}
-										data-testid="chat-row"
-										data-chat-row-id={row.id}
-										data-chat-row-index={index - firstItemIndex}
-										data-flash={row.id === flashRowId || undefined}
-										className={cn(
-											measureClassName,
-											"rounded-sm px-chat-gutter py-4 transition-colors data-[flash]:bg-primary-subtle",
-										)}
-									>
-										<ChatTurnView
-											row={row}
-											workspaceRoot={workspaceRoot}
-											onOpenFile={onOpenFile}
-											agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
-											isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
-											onOpenSpec={onOpenSpec}
-											onOpenChange={onOpenChange}
-											onReveal={onReveal}
-											onReviewTurn={onReviewTurn}
-											onTryAgain={onTryAgain}
-											stillRunning={row.id === latestDividerRowId ? stillRunning : undefined}
-										/>
-										{chatMessageOrder === "newest-first" &&
-										runwayActive &&
-										index === firstItemIndex ? (
-											<div ref={streamEdgeRef} data-testid="chat-stream-edge" className="h-0" />
-										) : null}
-									</div>
-								)}
-							/>
-						</FoldGeometryProvider>
-						<ActivityBreadcrumbTrail
-							scroller={scrollerElement}
-							measureClassName={measureClassName}
-							onReveal={(node) =>
-								revealElement(node, {
-									block: "start",
-									provenance: "user-navigation",
-									runway: "preserve",
-									stability: "none",
-									topInset: ACTIVITY_BREADCRUMB_HEIGHT,
-								})
-							}
-						/>
-					</div>
-					{showScrollButton ? (
-						<button
-							type="button"
-							data-testid={
-								chatMessageOrder === "newest-first" ? "scroll-to-top" : "scroll-to-bottom"
-							}
-							onClick={scrollToLatest}
-							className="-translate-x-1/2 absolute bottom-12 left-1/2 flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
-						>
-							{chatMessageOrder === "newest-first" ? (
-								<ArrowUp className="size-12" />
-							) : (
-								<ArrowDown className="size-12" />
+						<div
+							data-testid="chat-transcript-scroll"
+							className={cn(
+								"relative min-h-0 flex-1 overflow-y-hidden",
+								chatLineWidthBounded ? "overflow-x-hidden" : "overflow-x-auto",
 							)}
-							{scrollButtonLabel}
-						</button>
-					) : null}
-					{resourcesOverlay}
-				</div>
-			</AskStatesContext.Provider>
+						>
+							{/* One provider above the list: its value is the single transcript-wide callback, so a
+						    per-row provider would only re-commit that identical value for every visible row. */}
+							<FoldGeometryProvider onBeforeChange={prepareFoldChange}>
+								<Virtuoso<ChatRow, ChatListContext>
+									key={chatMessageOrder}
+									ref={virtuosoRef}
+									data={rows}
+									heightEstimates={rowHeightEstimates}
+									firstItemIndex={firstItemIndex}
+									increaseViewportBy={CHAT_VIEWPORT_INCREASE}
+									minOverscanItemCount={CHAT_MIN_OVERSCAN_ITEMS}
+									skipAnimationFrameInResizeObserver
+									scrollerRef={handleScrollerRef}
+									context={listContext}
+									components={CHAT_LIST_COMPONENTS}
+									className={cn(
+										"h-full min-h-0 overflow-x-hidden [overflow-anchor:none]",
+										chatLineWidthBounded
+											? "w-full"
+											: "w-[var(--chat-transcript-width)] min-w-full max-w-none",
+									)}
+									followOutput={followOutput}
+									rangeChanged={({ startIndex }) => {
+										const localIndex = startIndex - firstItemIndex;
+										visibleAnchorRowId.current = rows[localIndex]?.id ?? null;
+									}}
+									totalListHeightChanged={handleContentHeight}
+									computeItemKey={(_, row) => row.id}
+									itemContent={(index, row) => (
+										<div
+											ref={
+												row.id === completionAnchorRowId && completionId
+													? (element) => {
+															if (element && !historyOpen) {
+																useAppStore
+																	.getState()
+																	.noteRenderedCompletion(sessionId, completionId);
+															}
+														}
+													: undefined
+											}
+											data-testid="chat-row"
+											data-chat-row-id={row.id}
+											data-chat-row-index={index - firstItemIndex}
+											data-flash={row.id === flashRowId || undefined}
+											className={cn(
+												measureClassName,
+												"rounded-sm px-chat-gutter py-4 transition-colors data-[flash]:bg-primary-subtle",
+											)}
+										>
+											<ChatTurnView
+												row={row}
+												workspaceRoot={workspaceRoot}
+												onOpenFile={onOpenFile}
+												agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
+												isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
+												onOpenSpec={onOpenSpec}
+												onOpenChange={onOpenChange}
+												onReveal={onReveal}
+												onReviewTurn={onReviewTurn}
+												onTryAgain={onTryAgain}
+												stillRunning={row.id === latestDividerRowId ? stillRunning : undefined}
+											/>
+											{chatMessageOrder === "newest-first" &&
+											runwayActive &&
+											index === firstItemIndex ? (
+												<div ref={streamEdgeRef} data-testid="chat-stream-edge" className="h-0" />
+											) : null}
+										</div>
+									)}
+								/>
+							</FoldGeometryProvider>
+							<ActivityBreadcrumbTrail
+								scroller={scrollerElement}
+								measureClassName={measureClassName}
+								onReveal={(node) =>
+									revealElement(node, {
+										block: "start",
+										provenance: "user-navigation",
+										runway: "preserve",
+										stability: "none",
+										topInset: ACTIVITY_BREADCRUMB_HEIGHT,
+									})
+								}
+							/>
+						</div>
+						{showScrollButton ? (
+							<button
+								type="button"
+								data-testid={
+									chatMessageOrder === "newest-first" ? "scroll-to-top" : "scroll-to-bottom"
+								}
+								onClick={scrollToLatest}
+								className="-translate-x-1/2 absolute bottom-12 left-1/2 flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
+							>
+								{chatMessageOrder === "newest-first" ? (
+									<ArrowUp className="size-12" />
+								) : (
+									<ArrowDown className="size-12" />
+								)}
+								{scrollButtonLabel}
+							</button>
+						) : null}
+						<span
+							role="status"
+							aria-live="polite"
+							data-testid="ext-ui-announcement"
+							className="sr-only"
+						>
+							{extUiAnnouncement}
+						</span>
+						{pendingExtUi && !promptOnToolCard ? (
+							<div
+								data-testid="ext-ui-dock"
+								className={cn(
+									measureClassName,
+									"flex max-h-[60cqh] min-h-0 shrink-0 flex-col px-chat-gutter pt-8",
+								)}
+							>
+								<PendingExtUiPrompt pending={pendingExtUi} />
+							</div>
+						) : null}
+						{resourcesOverlay}
+					</div>
+				</AskStatesContext.Provider>
+			</PendingExtUiContext.Provider>
 		</ChatActionsContext.Provider>
 	);
 });

@@ -10,6 +10,7 @@ export {
 	type McpProjectPolicy,
 	mcpNamespace,
 	mcpPolicyOf,
+	mcpToolLabel,
 	normalizeExposureForHost,
 	projectMcpConfigPath,
 	validateMcpServerConfig,
@@ -31,6 +32,7 @@ export {
 } from "./results";
 export {
 	createMcpSessionHost,
+	MCP_CONFIRM_ALWAYS,
 	MCP_CONFIRM_CHAT,
 	MCP_CONFIRM_DENY,
 	MCP_CONFIRM_ONCE,

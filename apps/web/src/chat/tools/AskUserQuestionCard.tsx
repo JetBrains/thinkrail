@@ -24,6 +24,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { AttentionLine } from "../AttentionLine";
 import { readAskResult, useAskFocusScope, useAskState } from "../askState";
 import { useChatActions } from "../ChatActions";
 import { useFoldGeometry } from "../foldState";
@@ -695,21 +696,6 @@ export function AskUserQuestionCard({
 					</div>
 				</div>
 			</section>
-		</div>
-	);
-}
-
-function AttentionLine({ announced }: { announced: boolean }) {
-	return (
-		<div className="flex items-center gap-4 text-primary tr-text-action">
-			<span aria-hidden={announced || undefined} className="flex items-center gap-4">
-				<MessageCircleQuestion className="size-14 shrink-0" />
-				<span>Your input is needed</span>
-				<span className="text-text-muted tr-text-metadata">· Agent is waiting</span>
-			</span>
-			<span role="status" aria-live="polite" className="sr-only">
-				{announced ? "Your input is needed — the agent is waiting." : ""}
-			</span>
 		</div>
 	);
 }

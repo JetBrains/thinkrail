@@ -513,8 +513,8 @@ a project picker, the prompt hero, and the reused
   toast. Open a chat closes Settings and starts a chat in the workspace through `openChat`'s
   `startChatInTab`, the same path as the workbench's New chat. Show log opens `McpLogDialog`: pi's last
   report for the server (`detail`, with a stdio server's stderr tail) and its lines from pi's `mcp.log`
-  (`mcp.readLog`, masked by the host). Details lists no tools: no payload carries tool names yet (pi's
-  `/mcp` text and `SessionResources` report a count). Attention
+  (`mcp.readLog`, masked by the host). Details lists no tools: apart from always-allowed ones, no payload
+  carries tool names yet (pi's `/mcp` text and `SessionResources` report a count). Attention
   rows sort first and disabled rows stay listed last; `handledElsewhere` makes the section read-only with a
   notice (`mcpHandledElsewhereText`): "MCP is handled by <path> in this workspace; ThinkRail's MCP
   management is read-only." for a replacing extension, and for the host's `by: "pi settings
@@ -590,8 +590,13 @@ a project picker, the prompt hero, and the reused
   `mcp.login` / `mcp.testConnection` and reuse `auth/LoginDialog` as Providers does: the login state keeps
   the push's `target`, so only an MCP login for this workspace opens this section's dialog (Providers
   ignores it, and so does the section shown for another workspace), and the sign-in page opens only from
-  the dialog's button. A banner reads "ThinkRail asks before MCP calls that may
-  change data (per chat); no saved rules yet"; the empty state offers presets, the form, JSON import and a
+  the dialog's button. A banner reads "ThinkRail asks in the chat before MCP calls that may change data.
+  Always allow trusts a tool in every chat of this project; those tools are listed on their server
+  below." A row whose summary carries `alwaysAllowed` shows an **Always allowed in this project:** line
+  of tool chips (the host's `label`, the pi tool name as title) — the scope is spelled out because the
+  row's USER chip describes the server, not the grant; each chip's × ("Ask again before <tool> in this
+  project") sends `mcp.revokeToolGrant` through `requestMcpList` and is
+  disabled while the row is read-only or busy. This is the only place grants are revoked. The empty state offers presets, the form, JSON import and a
   host notice. Live sections: **`ProvidersSettings`** (the in-app
   provider-auth surface — a header line with an in-page **Refresh** (`providers-refresh`, disabled while a
   status read is in flight) over the groups **Connected** (each row with a **Sign-out only when

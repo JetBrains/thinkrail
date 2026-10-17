@@ -58,8 +58,12 @@ bootstrap it into one so it can be opened.
   added before pi-level trust existed asks once through the trust notice instead of keeping code-running
   resources nobody consented to (user decision, PR #690 review). pi-level trust never enables MCP by itself:
   the record also carries `mcpApprovals` (repo-defined MCP server name → fingerprint of the whole original
-  project-file entry) and `mcpOverrides` (per-project enablement/exposure of user-level servers, kept out of
-  the tracked `.pi/mcp.json`). `setProjectMcpOverride` synchronously merges only supplied fields into the
+  project-file entry), `mcpOverrides` (per-project enablement/exposure of user-level servers, kept out of
+  the tracked `.pi/mcp.json`) and `mcpToolGrants` (per server, the "Always allow" tools and the `target` of
+  the entry they were granted for — out of the repository so it can never ship pre-granted).
+  `grantProjectMcpTool(id, name, target, tool)` appends a tool, starting the list over when `target`
+  changed; `revokeProjectMcpTool` drops one and removes the server, then the field, once empty. Both store
+  server names as own properties, so a server named `__proto__` is just a name. `setProjectMcpOverride` synchronously merges only supplied fields into the
   latest stored override, so overlapping enablement and exposure patches do not lose each other. An empty
   patch is a no-op; `null` clears the override. It rejects non-boolean enablement and exposure outside
   `deferred`, `direct`, `hidden` before persistence. `setProjectTrust(id, trusted, acknowledged?,
@@ -72,7 +76,8 @@ bootstrap it into one so it can be opened.
 - **Public surface (barrel):** `openProject`, `listProjects`, `listRecentProjects`, `closeProject`,
   `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`, `setProjectTrust`,
   `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`,
-  `approveProjectMcpServer`, `setProjectMcpOverride`, `setPiTrustSeed`.
+  `approveProjectMcpServer`, `setProjectMcpOverride`, `grantProjectMcpTool`, `revokeProjectMcpTool`,
+  `setPiTrustSeed`.
 - **Allowed deps:** `persistence`; the `git` sub-module (shared `git()` runner, which now owns the
   environment its children spawn under — this module passes none); `contracts` (`Project`, `ProjectPathStatus`);
   `shared/codedError` (the two named open failures); Node/Bun.

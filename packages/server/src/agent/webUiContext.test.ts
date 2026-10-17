@@ -6,6 +6,7 @@ import {
 	createWebUiContext,
 	notifyExtensionError,
 	resolveExtUi,
+	selectForToolCall,
 	setExtUiPublisher,
 } from "./webUiContext";
 
@@ -38,6 +39,28 @@ test("extension-UI bridge: confirm round-trips, a cancel resolves undefined, dis
 	expect(await inputP).toBeUndefined();
 	expect(frames.some((f) => f.kind === "dismiss" && f.id === inputFrame.id)).toBe(true);
 
+	setExtUiPublisher(() => {});
+});
+
+test("extension-UI bridge: a dialog names the running tool call it is about, if any", async () => {
+	const frames: ExtUiRequest[] = [];
+	setExtUiPublisher((f) => frames.push(f));
+	let running: string | undefined = "call-7";
+	const ui = createWebUiContext("sess-anchor", () => running);
+
+	const anchored = ui.confirm("Run rm?", "It deletes files.");
+	expect(frames.at(-1)).toMatchObject({ kind: "confirm", toolCallId: "call-7" });
+	running = undefined;
+	const loose = ui.input("Paste the code");
+	expect(frames.at(-1)).not.toHaveProperty("toolCallId");
+	const explicit = selectForToolCall("sess-anchor", "call-9", "Allow?", ["Deny", "Allow once"]);
+	expect(frames.at(-1)).toMatchObject({ kind: "select", toolCallId: "call-9" });
+	resolveExtUi({ id: frames.at(-1)?.id ?? "", value: "Allow once" });
+	expect(await explicit).toBe("Allow once");
+
+	cancelExtUiForSession("sess-anchor");
+	expect(await anchored).toBe(false);
+	expect(await loose).toBeUndefined();
 	setExtUiPublisher(() => {});
 });
 

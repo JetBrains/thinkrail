@@ -42,7 +42,6 @@ import {
 	type MentionCandidate,
 	type SubmitBehavior,
 } from "./Composer";
-import { ExtUiDialog } from "./ExtUiDialog";
 import { HistoryOverlay } from "./HistoryOverlay";
 import type { ModelSelection } from "./ModelEffortPicker";
 import {
@@ -92,7 +91,6 @@ export default function ChatView({
 	const thinkingLevel = useAppStore(
 		(s) => s.sessions[sessionId]?.thinkingLevel ?? EMPTY_RUNTIME.thinkingLevel,
 	);
-	const pendingExtUi = useAppStore((s) => s.sessions[sessionId]?.pendingExtUi ?? null);
 	const extUiStatus = useAppStore(
 		(s) => s.sessions[sessionId]?.extUiStatus ?? EMPTY_RUNTIME.extUiStatus,
 	);
@@ -651,15 +649,6 @@ export default function ChatView({
 		else composerRef.current?.openHistory();
 	}, [historyOpenRequest, sessionId, historyOverlayOpen, cycleScope]);
 
-	const onExtUiReply = (value: string | boolean | null) => {
-		if (!pendingExtUi) return;
-		const id = pendingExtUi.id;
-		useAppStore.getState().clearPendingExtUi(sessionId, id);
-		getTransport()
-			.request("session.extUiReply", { response: { id, value } })
-			.catch(() => {});
-	};
-
 	const widgetEntries = Object.entries(extUiWidget);
 	const focusComposer = useCallback(() => composerRef.current?.refocus(), []);
 	// Keep a stable `onTryAgain` identity (it is passed to every transcript row) while always calling the
@@ -833,9 +822,6 @@ export default function ChatView({
 				workspaceId={workspaceId}
 				initialBody={saveAsTemplateHit?.text ?? ""}
 			/>
-			{pendingExtUi ? (
-				<ExtUiDialog key={pendingExtUi.id} request={pendingExtUi} onReply={onExtUiReply} />
-			) : null}
 			<Dialog open={stopAllOpen} onOpenChange={setStopAllOpen}>
 				<DialogContent onCloseAutoFocus={returnToResources}>
 					<DialogTitle>Stop all subagents?</DialogTitle>

@@ -1,6 +1,7 @@
 import {
 	RiCheckLine as Check,
 	RiArrowDownSLine as ChevronDown,
+	RiCloseLine as Close,
 	RiMore2Line as MoreVertical,
 	RiAddLine as Plus,
 	RiShieldCheckLine as ShieldCheck,
@@ -211,6 +212,7 @@ function writeSetting(
 type McpRowCommand =
 	| { kind: "toggle"; enabled: boolean }
 	| { kind: "exposure"; exposure: McpEditableExposure }
+	| { kind: "revoke-tool"; tool: string }
 	| { kind: McpRowAction | "sign-out" | "remove" | "share" | "details" };
 
 function lockedSettings(row: McpServerRow): boolean {
@@ -423,6 +425,39 @@ export function McpServerRowView({
 					</DropdownMenu>
 				</div>
 			</div>
+			{summary.alwaysAllowed && summary.alwaysAllowed.length > 0 ? (
+				<div
+					data-testid="mcp-always-allowed"
+					className="flex flex-wrap items-center gap-4 text-text-muted tr-text-metadata"
+				>
+					<span className="shrink-0">Always allowed in this project:</span>
+					{summary.alwaysAllowed.map(({ tool, label }) => (
+						<span
+							key={tool}
+							data-testid="mcp-always-allowed-tool"
+							data-tool={tool}
+							className="flex min-w-0 items-center gap-2 rounded-xs border border-border-default pl-4 text-text-default"
+						>
+							<span className="min-w-0 truncate" title={tool}>
+								{label}
+							</span>
+							<IconTooltip label={`Ask again before ${label} in this project`}>
+								<Button
+									variant="ghost"
+									size="icon"
+									data-testid="mcp-always-allowed-revoke"
+									aria-label={`Ask again before ${label} in this project`}
+									disabled={inert}
+									onClick={() => onCommand({ kind: "revoke-tool", tool })}
+									className="size-20"
+								>
+									<Close className="size-12" />
+								</Button>
+							</IconTooltip>
+						</span>
+					))}
+				</div>
+			) : null}
 			{error ? (
 				<p
 					role="alert"
@@ -557,7 +592,8 @@ export function McpConfirmBanner() {
 			className="flex items-center gap-8 rounded-sm border border-border-default bg-feedback-info-subtle px-12 py-8 text-text-default tr-text-metadata"
 		>
 			<ShieldCheck className="size-14 shrink-0 text-feedback-info" />
-			ThinkRail asks before MCP calls that may change data (per chat); no saved rules yet.
+			ThinkRail asks in the chat before MCP calls that may change data. Always allow trusts a tool
+			in every chat of this project; those tools are listed on their server below.
 		</p>
 	);
 }
@@ -804,6 +840,13 @@ function McpWorkspaceSettings({ workspace }: { workspace: Workspace }) {
 				return;
 			case "exposure":
 				void run(row, () => writeSetting(workspaceId, row, { exposure: command.exposure }));
+				return;
+			case "revoke-tool":
+				void run(row, () =>
+					refreshOnFailure(workspaceId, () =>
+						requestMcpList("mcp.revokeToolGrant", { workspaceId, name, tool: command.tool }),
+					),
+				);
 				return;
 			case "sign-in":
 				void startProbe(row, "mcp.login");

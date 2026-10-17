@@ -204,7 +204,7 @@ test("a stdio server added through the form connects in a chat, is disabled ther
 		await openMcpSettings(page);
 		const settings = page.getByTestId("settings-mcp");
 		await expect(settings.getByTestId("mcp-confirm-banner")).toHaveText(
-			"ThinkRail asks before MCP calls that may change data (per chat); no saved rules yet.",
+			"ThinkRail asks in the chat before MCP calls that may change data. Always allow trusts a tool in every chat of this project; those tools are listed on their server below.",
 		);
 		await settings.getByTestId("mcp-empty-add").click();
 		const dialog = page.getByTestId("mcp-add-dialog");

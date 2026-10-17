@@ -112,7 +112,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 83;
+export const PROTOCOL_VERSION = 84;
+export const MCP_TOOL_GRANTS_PROTOCOL_VERSION = 84;
 export const MCP_PROTOCOL_VERSION = 83;
 export const EXTENSION_CATALOG_PROTOCOL_VERSION = 82;
 export const PROJECT_TRUST_PROTOCOL_VERSION = 81;
@@ -318,6 +319,7 @@ export const WS_METHODS = {
 	mcpSetProjectOverride: "mcp.setProjectOverride",
 	mcpSetSessionOverride: "mcp.setSessionOverride",
 	mcpApprove: "mcp.approve",
+	mcpRevokeToolGrant: "mcp.revokeToolGrant",
 	mcpShareWithRepo: "mcp.shareWithRepo",
 	mcpLogin: "mcp.login",
 	mcpLogout: "mcp.logout",
@@ -915,6 +917,10 @@ export interface WsMethodMap {
 	};
 	"mcp.approve": {
 		params: { workspaceId: string; name: string; fingerprint: string };
+		result: McpListResult;
+	};
+	"mcp.revokeToolGrant": {
+		params: { workspaceId: string; name: string; tool: string };
 		result: McpListResult;
 	};
 	"mcp.shareWithRepo": { params: { workspaceId: string; name: string }; result: McpListResult };

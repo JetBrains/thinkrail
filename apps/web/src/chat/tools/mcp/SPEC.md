@@ -87,6 +87,8 @@ standalone render) or a host older than MCP hides them.
 ## Get right
 
 - MCP calls stay **routine** like any other tool: a needs-sign-in failure folds into the activity run,
-  and the chat resources attention marker remains the at-a-glance signal.
+  and the chat resources attention marker remains the at-a-glance signal. The call's approval is not
+  these renderers' concern: the host anchors it to the call and the tool shell renders it, popping the
+  step out of a collapsed fold while it waits (chat SPEC › Extension dialogs).
 - `tool_search` and the three resource tools are exact registrations; only `mcp__` resolves by prefix.
 - Token-utility styling only (no raw hex / inline `style`).

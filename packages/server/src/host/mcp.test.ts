@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import {
 	existsSync,
 	mkdirSync,
@@ -14,6 +15,7 @@ import type { McpListResult, McpServerLog, McpServerSummary } from "@thinkrail/c
 import {
 	approveProjectMcpServer,
 	getProjects,
+	grantProjectMcpTool,
 	setProjectMcpOverride,
 	setProjectTrust,
 } from "../projects";
@@ -398,6 +400,31 @@ test("an update or removal rendered from an entry that changed on disk since is 
 		expectedFingerprint: current?.approval?.fingerprint,
 	});
 	expect(find(removed, "project", "repo")).toBeUndefined();
+});
+
+test("always-allowed tools are listed on their server row and revoked one by one", async () => {
+	const url = "https://linear.example/mcp";
+	const target = createHash("sha256").update(JSON.stringify({ url })).digest("hex");
+	writeFileSync(join(agentDir, "mcp.json"), JSON.stringify({ mcpServers: { linear: { url } } }));
+	grantProjectMcpTool("p1", "linear", target, "mcp__linear__create_issue");
+	grantProjectMcpTool("p1", "linear", target, "mcp__linear__comment");
+	const listed = await request("mcp.list", { workspaceId: "w1" });
+	expect(find(listed, "user", "linear")?.alwaysAllowed).toEqual([
+		{ tool: "mcp__linear__create_issue", label: "create_issue" },
+		{ tool: "mcp__linear__comment", label: "comment" },
+	]);
+	const revoked = await request("mcp.revokeToolGrant", {
+		workspaceId: "w1",
+		name: "linear",
+		tool: "mcp__linear__create_issue",
+	});
+	expect(find(revoked, "user", "linear")?.alwaysAllowed).toEqual([
+		{ tool: "mcp__linear__comment", label: "comment" },
+	]);
+	expect(getProjects()[0]?.mcpToolGrants?.linear?.tools).toEqual(["mcp__linear__comment"]);
+	expect(
+		await codeOf(request("mcp.revokeToolGrant", { workspaceId: "w1", name: "linear", tool: 7 })),
+	).toBe("MCP_CONFIG_INVALID");
 });
 
 test("share refuses a repository entry of that name that is a full definition or an unapproved override", async () => {
