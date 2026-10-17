@@ -543,9 +543,7 @@ export function isolateAskUserQuestionBatch(message: AgentMessage): AgentMessage
 	return content.length === message.content.length ? undefined : { ...message, content };
 }
 
-export function createAskUserQuestionTool(
-	waiters: AskUserQuestionWaiters,
-): ToolDefinition<typeof AskUserQuestionSchema, AskUserQuestionResult | AskUserQuestionAckDetails> {
+export function createAskUserQuestionTool(waiters: AskUserQuestionWaiters) {
 	return {
 		name: ASK_USER_QUESTION_TOOL_NAME,
 		label: "Ask User Question",
@@ -574,17 +572,17 @@ export function createAskUserQuestionTool(
 			waiters.recordExecutedResult(toolCallId, result);
 			return result;
 		},
-	};
+	} satisfies ToolDefinition<
+		typeof AskUserQuestionSchema,
+		AskUserQuestionResult | AskUserQuestionAckDetails
+	>;
 }
 
-export function askUserQuestionExtension(
-	waiters: AskUserQuestionWaiters,
-): (pi: ExtensionAPI) => void {
+export function askUserQuestionExtension(): (pi: ExtensionAPI) => void {
 	return (pi) => {
 		pi.on("message_end", (event) => {
 			const message = isolateAskUserQuestionBatch(event.message);
 			return message ? { message } : undefined;
 		});
-		pi.registerTool(createAskUserQuestionTool(waiters));
 	};
 }

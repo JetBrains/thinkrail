@@ -25,11 +25,7 @@ import {
 	serverExtensions,
 } from "../extensions";
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
-import {
-	type AskUserQuestionWaiters,
-	askUserQuestionExtension,
-	createAskUserQuestionWaiters,
-} from "./askUserQuestion";
+import { askUserQuestionExtension } from "./askUserQuestion";
 import { oversizedImageGuard } from "./imageGuard";
 import { requestReviewExtension } from "./requestReviewTool";
 import { reviewToolExtension } from "./reviewTool";
@@ -232,14 +228,13 @@ export async function buildResourceLoader(
 	getAdmission: () => SkillAdmissionContext,
 	excludedExtensionPaths: readonly string[] = [],
 	extraFactories: InlineExtension[] = [],
-	askUserQuestionWaiters: AskUserQuestionWaiters = createAskUserQuestionWaiters(),
 ): Promise<ResourceLoader> {
 	let disabledAtReload = disabledExtensions();
 	const isDisabledAtReload = (name: string): boolean => disabledAtReload.has(name);
 	const sharedFactories: InlineExtension[] = [
 		...registryInlineExtensions("extensions", isDisabledAtReload),
 		headlessSearchPolicy,
-		askUserQuestionExtension(askUserQuestionWaiters),
+		askUserQuestionExtension(),
 		reviewToolExtension,
 		requestReviewExtension,
 		setTitleExtension,

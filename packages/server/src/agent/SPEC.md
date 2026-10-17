@@ -449,7 +449,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     embedder of pi-as-a-library hits this; an upstream fix would not reach us until a deliberate pi bump.
   - `askUserQuestion` — the host-owned **`ask_user_question`** pi custom tool, registered per session with
     a session-bound phase registry. New and reopened parent sessions create one `AskUserQuestionWaiters`
-    in `createParentSession`, shared by the resource loader's tool and the registered entry. An eligible
+    in `createParentSession`, shared by the SDK `customTools` definition and the registered entry.
+    SDK custom tools take precedence over same-name extension tools, including after resource reload.
+    This keeps the host's structured questionnaire and answer channel paired: an installed terminal
+    questionnaire must not replace execution with `ui.input` while the web client still renders the host
+    card. Other tools, commands, and hooks from that extension remain available. An eligible
     live call is **sequential and blocking**: after validation its `execute` waits for
     `session.answerQuestion`, then returns the person's real
     `AskUserQuestionResult`/`buildQuestionnaireResponse` as the native tool result. Eligibility is shared:
@@ -759,7 +763,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
-    `rpc` host can't render), `askUserQuestionExtension` (registers the `ask_user_question` tool),
+    `rpc` host can't render), `askUserQuestionExtension` (normalizes ask-only assistant batches),
     `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet), **and the
     caller's `extraFactories`** — per-session host bindings (the workspace-bound subagents extension),
     value-imported so dev and the compiled binary take the same path. pi's own built-in extensions
