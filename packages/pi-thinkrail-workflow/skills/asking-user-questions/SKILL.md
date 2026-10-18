@@ -56,7 +56,9 @@ stays with the referencing skill.
 - **A concrete scenario beats an abstract principle.** Ask "a user drags a file onto a busy session —
   queue it or reject it?", not "how should concurrency be handled?".
 - If the question can't be settled by talking (how something should look or feel), show a concrete
-  artifact in `options[].preview` — a mockup, snippet, or config — instead of describing it.
+  artifact in `options[].preview` — a mockup, snippet, or config — instead of describing it. For a
+  visible UI choice, make the preview a ```` ```mockup ```` fence of static HTML/CSS: it renders as the
+  actual screen, not as code.
 
 ## Options
 
@@ -74,7 +76,7 @@ stays with the referencing skill.
 - `multiSelect: true` when several answers are valid at once (feature checklists); single-select when
   confirming something or choosing one path.
 - `options[].preview` (markdown) when a concrete artifact — code, a config, a mockup — is clearer
-  shown than described. Single-select only.
+  shown than described; UI mockups go in a ```` ```mockup ```` fence. Single-select only.
 - `header` is a short chip, ≤ 16 characters.
 
 ## Confirming an inference

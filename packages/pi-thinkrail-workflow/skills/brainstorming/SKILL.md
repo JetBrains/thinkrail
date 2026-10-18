@@ -38,13 +38,16 @@ description: "Use before implementing a feature, a change in behavior, or a bug 
    decision is left assumed; look facts up instead of asking them. Record the answers in the
    task-spec's **Product** section, then confirm that understanding with one inference-confirmation
    question before any technical choice — skip only when the request itself supplied all of it.
+   When the change is visible UI, show it instead of describing it: a `visualize` mockup (`before` +
+   `after` for an existing screen) or mockup previews on the question's options.
 6. **Technical phase.** Interview the technical decisions that the product answers leave open:
    constraints, compatibility, how the change will be verified, and the *why* of any decision noted
    in step 1. If you can name an alternative you rejected, especially where the code lives (server
    or browser, contract or display), show it with the trade-off instead of deciding silently. Record
    the **Design** section: the chosen approach and why, trade-offs that matter, explicit deferrals.
 7. **Self-review, then review once.** Remove placeholders, contradictions, accidental scope
-   expansion, and ambiguous requirements; then present one cohesive design scaled to the change.
+   expansion, and ambiguous requirements; then present one cohesive design scaled to the change,
+   with a mockup of any screen it changes.
    Ask for approval only when the request has not already approved it; revise the task-spec if the
    user adjusts it.
 8. **Build.** Implement against the accepted design. Before handoff, self-review the task diff: no
