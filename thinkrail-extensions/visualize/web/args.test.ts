@@ -16,6 +16,7 @@ describe("parseComparisonOptions", () => {
 				cons: ["c"],
 				recommended: true,
 				mermaid: "graph LR;A-->B",
+				html: "<p>a</p>",
 			},
 		]);
 		expect(opt?.name).toBe("A");
@@ -24,6 +25,7 @@ describe("parseComparisonOptions", () => {
 		expect(opt?.cons).toEqual(["c"]);
 		expect(opt?.recommended).toBe(true);
 		expect(opt?.mermaid).toBe("graph LR;A-->B");
+		expect(opt?.html).toBe("<p>a</p>");
 	});
 
 	test("defaults missing fields safely", () => {
@@ -34,6 +36,7 @@ describe("parseComparisonOptions", () => {
 		expect(opt?.cons).toEqual([]);
 		expect(opt?.recommended).toBe(false);
 		expect(opt?.mermaid).toBeUndefined();
+		expect(opt?.html).toBeUndefined();
 	});
 
 	test("filters non-string pros/cons and coerces recommended to a boolean", () => {

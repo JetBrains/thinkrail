@@ -9,6 +9,8 @@ export {
 
 export type ToolStatus = "running" | "done" | "error";
 
+export type AssetResolver = (workspacePath: string) => Promise<string | null>;
+
 export interface ToolRenderProps {
 	toolCallId: string;
 	toolName: string;
@@ -17,6 +19,7 @@ export interface ToolRenderProps {
 	status: ToolStatus;
 	workspaceRoot?: string | undefined;
 	onOpenFile?: ((path: string) => void) | undefined;
+	resolveAsset?: AssetResolver | undefined;
 	streaming: boolean;
 }
 

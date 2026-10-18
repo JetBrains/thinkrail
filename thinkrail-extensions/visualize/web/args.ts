@@ -5,6 +5,7 @@ export interface ComparisonOptionView {
 	cons: string[];
 	recommended: boolean;
 	mermaid: string | undefined;
+	html: string | undefined;
 }
 
 function strArray(value: unknown): string[] {
@@ -22,6 +23,7 @@ export function parseComparisonOptions(value: unknown): ComparisonOptionView[] {
 			cons: strArray(o.cons),
 			recommended: o.recommended === true,
 			mermaid: typeof o.mermaid === "string" ? o.mermaid : undefined,
+			html: typeof o.html === "string" && o.html.trim() !== "" ? o.html : undefined,
 		};
 	});
 }

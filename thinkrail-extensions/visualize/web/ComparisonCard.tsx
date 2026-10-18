@@ -2,8 +2,10 @@ import { RiCheckLine as Check, RiCloseLine as X } from "@remixicon/react";
 import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { parseComparisonOptions } from "./args";
 import { MermaidView } from "./MermaidView";
+import { MockupView } from "./MockupView";
+import { parseViewport } from "./mockup";
 
-export function ComparisonCard({ args }: ToolRenderProps) {
+export function ComparisonCard({ args, resolveAsset }: ToolRenderProps) {
 	const title = strArg(args, "title");
 	const options = parseComparisonOptions(args.options);
 
@@ -13,12 +15,12 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 	return (
 		<div data-testid="tool-visualize-comparison" className="flex flex-col gap-8">
 			{title ? <div className="tr-title-compact text-text-default">{title}</div> : null}
-			<div className="grid gap-8 sm:grid-cols-2">
+			<div className={`grid gap-8 ${options.some((opt) => opt.html) ? "" : "sm:grid-cols-2"}`}>
 				{options.map((opt) => (
 					<div
 						key={opt.name}
 						data-recommended={opt.recommended || undefined}
-						className={`flex flex-col gap-4 rounded-sm border p-8 ${
+						className={`flex min-w-0 flex-col gap-4 rounded-sm border p-8 ${
 							opt.recommended ? "border-primary bg-container-elevated-bg" : "border-border-default"
 						}`}
 					>
@@ -54,6 +56,14 @@ export function ComparisonCard({ args }: ToolRenderProps) {
 							</ul>
 						) : null}
 						{opt.mermaid ? <MermaidView source={opt.mermaid} title={opt.name} /> : null}
+						{opt.html ? (
+							<MockupView
+								documents={[{ label: opt.name, html: opt.html }]}
+								title={opt.name}
+								viewport={parseViewport(args.viewport)}
+								resolveAsset={resolveAsset}
+							/>
+						) : null}
 					</div>
 				))}
 			</div>
