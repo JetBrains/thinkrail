@@ -1,11 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { DOMParser as LinkedomParser } from "linkedom";
 import {
+	ASSET_CONCURRENCY,
 	applyAssetUrls,
 	buildMockupDocumentWithAssets,
 	clampMockupHeight,
 	collectAssetRefs,
 	isWorkspaceAssetRef,
+	MAX_ASSET_CHARS,
+	MAX_ASSET_PATHS,
 	MAX_MOCKUP_HEIGHT,
 	MIN_MOCKUP_HEIGHT,
 	mockupScale,
@@ -146,5 +149,47 @@ describe("buildMockupDocumentWithAssets", () => {
 			undefined,
 		);
 		expect(html).not.toContain("logo.svg");
+	});
+});
+
+describe("resolveAssetUrls budget", () => {
+	test("dedupes refs that normalize to one workspace path and maps every ref back", async () => {
+		const asked: string[] = [];
+		const refs = Array.from({ length: 2000 }, (_, i) => `logo.png?${i}`);
+		const urls = await resolveAssetUrls(refs, async (path) => {
+			asked.push(path);
+			return "data:image/png,L";
+		});
+		expect(asked).toEqual(["logo.png"]);
+		expect(urls.size).toBe(2000);
+		expect(urls.get("logo.png?1999")).toBe("data:image/png,L");
+	});
+
+	test("caps unique paths, bounds concurrency, and stops at the byte budget", async () => {
+		let active = 0;
+		let peak = 0;
+		const asked: string[] = [];
+		const refs = Array.from({ length: MAX_ASSET_PATHS + 50 }, (_, i) => `img/${i}.png`);
+		const urls = await resolveAssetUrls(refs, async (path) => {
+			asked.push(path);
+			active += 1;
+			peak = Math.max(peak, active);
+			await new Promise((resolve) => setTimeout(resolve, 1));
+			active -= 1;
+			return "data:image/png,x";
+		});
+		expect(asked).toHaveLength(MAX_ASSET_PATHS);
+		expect(peak).toBeLessThanOrEqual(ASSET_CONCURRENCY);
+		expect(urls.size).toBe(MAX_ASSET_PATHS);
+
+		const big = `data:image/png,${"x".repeat(Math.ceil(MAX_ASSET_CHARS / 3))}`;
+		const budgeted = await resolveAssetUrls(
+			["a.png", "b.png", "c.png", "d.png", "e.png"],
+			async () => big,
+		);
+		expect(budgeted.size).toBeLessThan(5);
+		expect([...budgeted.values()].reduce((n, url) => n + url.length, 0)).toBeLessThanOrEqual(
+			MAX_ASSET_CHARS,
+		);
 	});
 });

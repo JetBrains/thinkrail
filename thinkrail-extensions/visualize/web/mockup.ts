@@ -161,19 +161,41 @@ export function applyAssetUrls(document: Document, urls: ReadonlyMap<string, str
 	}
 }
 
+export const MAX_ASSET_PATHS = 32;
+export const ASSET_CONCURRENCY = 4;
+export const MAX_ASSET_CHARS = 8 * 1024 * 1024;
+
 export async function resolveAssetUrls(
 	refs: readonly string[],
 	resolveAsset: AssetResolver,
 ): Promise<Map<string, string>> {
-	const entries = await Promise.all(
-		refs.map(async (ref) => {
-			const path = normalizeAssetPath(ref);
-			if (path === null) return null;
+	const refsByPath = new Map<string, string[]>();
+	for (const ref of refs) {
+		const path = normalizeAssetPath(ref);
+		if (path === null) continue;
+		const group = refsByPath.get(path);
+		if (group) group.push(ref);
+		else if (refsByPath.size < MAX_ASSET_PATHS) refsByPath.set(path, [ref]);
+	}
+	const paths = [...refsByPath.keys()];
+	const urlByPath = new Map<string, string>();
+	let budget = MAX_ASSET_CHARS;
+	let next = 0;
+	const worker = async () => {
+		while (next < paths.length && budget > 0) {
+			const path = paths[next++] as string;
 			const url = await resolveAsset(path).catch(() => null);
-			return url && /^data:/i.test(url) ? ([ref, url] as const) : null;
-		}),
-	);
-	return new Map(entries.filter((entry) => entry !== null));
+			if (!url || !/^data:/i.test(url) || url.length > budget) continue;
+			budget -= url.length;
+			urlByPath.set(path, url);
+		}
+	};
+	await Promise.all(Array.from({ length: Math.min(ASSET_CONCURRENCY, paths.length) }, worker));
+	const urls = new Map<string, string>();
+	for (const [path, url] of urlByPath) {
+		for (const ref of refsByPath.get(path) ?? []) urls.set(ref, url);
+	}
+	return urls;
 }
 
 export async function buildMockupDocumentWithAssets(

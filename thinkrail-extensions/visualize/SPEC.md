@@ -81,8 +81,11 @@ documents (a pair is Before | After).
   Comparison options with mockups stack in one column so each mockup keeps a readable scale.
 - **Workspace assets (live).** Relative `src`, `srcset`, `poster`, SVG `<image href>`, and CSS `url()`
   (attribute and `<style>`) references are collected, normalized inside the workspace root (`..` past
-  the root, absolute paths and URL schemes refused), resolved through the host-supplied
-  `resolveAsset` from `ToolRenderProps` (or the fence's context), and rewritten only to `data:` URLs —
+  the root, absolute paths and URL schemes refused), deduplicated by normalized path (so `a.png?1` and
+  `a.png?2` are one read), and resolved through the host-supplied `resolveAsset` from `ToolRenderProps`
+  (or the fence's context) on a bounded budget — at most 32 unique paths, 4 in flight, 8 M characters
+  of `data:` URLs in total; a 256 KB mockup could otherwise start thousands of reads — then rewritten
+  only to `data:` URLs —
   so the frame's CSP never widens and a later file change shows in old mockups (accepted). Without a
   resolver, relative assets are stripped like any non-`data:` URL.
 - Streaming or incomplete arguments show a placeholder; the Source toggle shows the raw HTML, wrapped
