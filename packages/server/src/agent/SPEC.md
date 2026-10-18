@@ -381,10 +381,18 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     curated small/fast allowlist ∩ the authenticated set, else the cheapest by per-token cost; `default`
     = first available; `null` when nothing is authenticated. This is the primitive the `assist` tasks
     (plan summaries, PR drafting) run on — the only place model **dispatch** happens outside a session.
-  - `webUiContext` — `createWebUiContext(sessionId)` builds the `ExtensionUIContext` pi calls (dialogs
-    round-trip to the browser, fire-and-forget methods push); `setExtUiPublisher`
+  - `webUiContext` — `createWebUiContext(sessionId, currentToolCall?)` builds the `ExtensionUIContext` pi
+    calls (dialogs round-trip to the browser, fire-and-forget methods push). A dialog names the tool call
+    it is about (`toolCallId`) so the web asks on that call's card: the manager passes pi's own
+    `agent.state.pendingToolCalls` and a dialog anchors only while **exactly one** call is running (the
+    common gate-before-a-tool case; parallel calls stay unanchored rather than guess), and
+    `selectForToolCall` anchors explicitly (the MCP guard). `setExtUiPublisher`
     (server→client push seam; an optional `ExtUiAudience` narrows a push to clients below a protocol
-    version), `resolveExtUi` (browser reply), `cancelExtUiForSession` (on dispose),
+    version), `resolveExtUi` (browser reply), `cancelExtUiForSession` (on dispose, and once pi accepts a
+    user message — a steer or follow-up pi `"queued"`, or an idle prompt whose `preflightResult` says
+    `"started"`/`"queued"` — which then answers every pending dialog of that chat; a message an input
+    extension `"handled"`, or one preflight rejects (no model, no credentials), leaves the dialog open, and
+    the queue's own re-queuing in `removeQueuedSession` cancels nothing),
     `notifyExtUi`, `notifyExtensionError` (pi's `ExtensionError` → one client-visible `error` notify
     carrying extension + event + cause — the cause capped at 500 chars because `error.error` is
     remote-shaped, and the extension named by its **directory** when its file is an anonymous
@@ -799,8 +807,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `requestSessionReload(sessionId)` (the deferring variant: `"reloaded"` now or `"deferred"` until the gate
   opens — settlement, the release of an admitted prompt, or a compaction's end; requests coalesce); the **`setSkillAdmissionResolver`** seam (host
   wires `workspaceId` → the admission context, derived once by `admissionContextFor(project, overrides)`);
-  the **`setMcpPolicyResolver`** seam (host wires `workspaceId` → the project's MCP approvals and overrides,
-  derived by `mcpPolicyOf(project)`); the MCP management surface — `listMcpServers`,
+  the **`setMcpPolicyResolver`** seam (host wires `workspaceId` → the project's MCP approvals, overrides
+  and tool grants, derived by `mcpPolicyOf(project)`) and its writer twin **`setMcpToolGrantWriter`**; the MCP management surface — `listMcpServers`,
   `mcpOwnershipGuard` (resolves pi settings, then answers synchronously who manages MCP instead of
   ThinkRail — what `listMcpServers` reports as `handledElsewhere` — so the host checks it in the same call
   stack as every management mutation), `refreshMcpStatus`,
@@ -948,9 +956,11 @@ pi's built-in MCP is the only MCP engine: connections, OAuth, exposure, resource
 the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes around it.
 
 - **Registration.** The two built-in descriptors above, per parent session only, built by the session's
-  `createMcpSessionHost` together with the call guard and a status invalidation callback; the host injects
-  the workspace's project policy (`setMcpPolicyResolver` → `Project.mcpApprovals` / `mcpOverrides`,
-  fail-closed to none). Child (subagent) sessions load neither — the curated child set carries no engine —
+  `createMcpSessionHost` together with the call guard and a status invalidation callback. The manager
+  injects the guard's two ports — `askForToolCall` (→ `selectForToolCall(sessionId, toolCallId, …)`, so
+  the approval is anchored to its call even among parallel calls) and `grantTool` (→ the grant-writer
+  seam) — and the host injects the workspace's project policy (`setMcpPolicyResolver` → `Project.mcpApprovals` / `mcpOverrides` /
+  `mcpToolGrants`, fail-closed to none). Child (subagent) sessions load neither — the curated child set carries no engine —
   and the `Agent` tool's description says subagents cannot call MCP tools.
   Parent chats make pi's `openUrl` a no-op (a remote client must never get a browser opened on the host
   machine); pi's rpc-mode `/mcp login` still shows the URL and the paste-back dialog. In the
@@ -1120,10 +1130,12 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
   packages are skipped, never installed) and reports `by: "pi settings (-builtin:mcp)"`. Whether an
   enabled non-built-in extension registers `/mcp` is not knowable without loading it, so a replacement is
   only seen through a live chat's owner.
-- **Calls.** The per-session host extension ([[submodule-server-agent-mcp]]) asks before any `mcp__*`
-  call without `readOnlyHint` (Deny · Allow once · Allow in this chat; session memory only; anything but
-  the two affirmative answers blocks, and `steerEntry` cancels pending confirmations once pi accepts a
-  steer). Its `tool_result` handler
+- **Calls.** The per-session host extension ([[submodule-server-agent-mcp]]) asks on the call's card
+  before any `mcp__*` call without `readOnlyHint` (Deny · Allow once · Allow in this chat · Always allow;
+  anything but an affirmative answer blocks, and a user message answers it like any dialog). "Allow in
+  this chat" is session memory; "Always allow" is a project grant written through the
+  **`setMcpToolGrantWriter`** seam (host → `grantProjectMcpTool`; a failed write is logged and the call
+  still runs) and read back through the policy resolver on every call. Its `tool_result` handler
   adds the bounded, base64-free `McpResultSummary` under `details.thinkrail` (`summarizeMcpResult`), and
   `readMcpToolOutput` serves a result's recorded full output (`mcp.readOutput`) from exactly its
   `fullOutputPath` (pi's owner-only temp file; at most 1 MiB, `truncated` beyond) — `unavailable` for a

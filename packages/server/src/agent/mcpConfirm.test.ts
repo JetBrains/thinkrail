@@ -9,17 +9,26 @@ import {
 	fauxToolCall,
 } from "@earendil-works/pi-ai/providers/faux";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
-import type { ExtUiRequest } from "@thinkrail/contracts";
+import type { ExtUiRequest, McpToolGrant } from "@thinkrail/contracts";
 import {
 	createSession,
 	disposeAllSessions,
+	followUpSession,
 	getSessionMessages,
 	promptSession,
+	setMcpPolicyResolver,
+	setMcpToolGrantWriter,
 	setSessionManagerFactory,
 	settleSessionsForShutdown,
 	steerSession,
 } from "./agentSessionManager";
-import { MCP_CONFIRM_CHAT, MCP_CONFIRM_DENY, MCP_CONFIRM_ONCE } from "./mcp";
+import {
+	MCP_CONFIRM_ALWAYS,
+	MCP_CONFIRM_CHAT,
+	MCP_CONFIRM_DENY,
+	MCP_CONFIRM_ONCE,
+	mcpPolicyOf,
+} from "./mcp";
 import { configurePiRuntime } from "./piRuntime";
 import { resolveExtUi, setExtUiPublisher } from "./webUiContext";
 
@@ -54,12 +63,15 @@ beforeAll(async () => {
 	process.env.THINKRAIL_DATA_DIR = join(root, "data");
 	process.env.PI_OFFLINE = "1";
 	mkdirSync(join(agentDir, "extensions"), { recursive: true });
-	const tool = (name: string, text: string, readOnly: boolean) =>
+	const tool = (name: string, text: string, readOnly: boolean, server?: string) =>
 		[
 			"  pi.registerTool({",
 			`    name: ${JSON.stringify(name)}, label: ${JSON.stringify(name)}, description: "probe",`,
 			'    parameters: { type: "object", properties: {} },',
 			readOnly ? "    annotations: { readOnlyHint: true }," : "",
+			server
+				? `    namespace: { name: ${JSON.stringify(`mcp__${server}`)}, aliases: [${JSON.stringify(server)}] },`
+				: "",
 			`    execute: async () => ({ content: [{ type: "text", text: ${JSON.stringify(text)} }], details: {} }),`,
 			"  });",
 		].join("\n");
@@ -70,6 +82,17 @@ beforeAll(async () => {
 			"export default function probe(pi) {",
 			tool("mcp__probe__write", "WROTE", false),
 			tool("mcp__probe__read", "READ", true),
+			tool("gated", "GATED", false),
+			tool("mcp__probe__send", "SENT", false, "probe"),
+			'  pi.on("input", (event) => (event.text === "HANDLED ELSEWHERE" ? { action: "handled" } : undefined));',
+			'  pi.registerCommand("ask-idle", { description: "probe", handler: async (_args, ctx) => {',
+			'    await ctx.ui.input("Paste the code");',
+			"  } });",
+			'  pi.on("tool_call", async (event, ctx) => {',
+			'    if (event.toolName !== "gated") return undefined;',
+			'    const ok = await ctx.ui.confirm("Run gated?", "It is gated.");',
+			'    return ok ? undefined : { block: true, reason: "not confirmed" };',
+			"  });",
 			`  if (existsSync(${JSON.stringify(registerMarker)}))`,
 			'    pi.registerMcpServer("registered", { url: "https://registered.example/mcp" });',
 			"}",
@@ -177,9 +200,10 @@ test("read-only MCP tools run unasked; others ask with Deny kept away from Allow
 	await turn;
 	expect(asked).toMatchObject({
 		kind: "select",
+		title: "Allow probe/write? It may change data.",
 		options: [MCP_CONFIRM_DENY, MCP_CONFIRM_ONCE, MCP_CONFIRM_CHAT],
+		toolCallId: "call-1",
 	});
-	expect(asked.kind === "select" && asked.title).toContain("probe/write");
 	expect(selects()).toHaveLength(1);
 	expect(await toolResults(p)).toEqual([
 		{ tool: "mcp__probe__read", isError: false, text: "READ" },
@@ -214,20 +238,104 @@ test("Deny and a dismissed dialog both block the call with a reason", async () =
 	const results = await toolResults(p);
 	expect(results.map((result) => result.isError)).toEqual([true, true]);
 	expect(results[0]?.text).toContain("denied");
-	expect(results[1]?.text).toContain("dismissed");
+	expect(results[1]?.text).toContain("did not confirm");
 });
 
-test("an accepted steer cancels a pending confirmation, dismisses it and blocks the call", async () => {
+for (const [label, send] of [
+	["steer", steerSession],
+	["follow-up", followUpSession],
+] as const) {
+	test(`an accepted ${label} answers a pending confirmation: it is dismissed and the call blocked`, async () => {
+		const p = await chat();
+		callTools("mcp__probe__write");
+		const turn = promptSession(p.sessionId, "Write.");
+		const asked = await waitFor(() => selects()[0]);
+		await send(p.sessionId, "Never mind, stop.");
+		await turn;
+		expect(requests).toContainEqual(expect.objectContaining({ id: asked.id, kind: "dismiss" }));
+		const [result] = await toolResults(p);
+		expect(result).toMatchObject({ tool: "mcp__probe__write", isError: true });
+		expect(result?.text).toContain("replied in the chat");
+	});
+}
+
+test("a message an input extension handles answers no dialog, while or between turns", async () => {
 	const p = await chat();
 	callTools("mcp__probe__write");
 	const turn = promptSession(p.sessionId, "Write.");
 	const asked = await waitFor(() => selects()[0]);
-	await steerSession(p.sessionId, "Never mind, stop.");
+	await followUpSession(p.sessionId, "HANDLED ELSEWHERE");
+	await steerSession(p.sessionId, "HANDLED ELSEWHERE");
+	expect(requests).not.toContainEqual(expect.objectContaining({ id: asked.id, kind: "dismiss" }));
+	resolveExtUi({ id: asked.id, value: MCP_CONFIRM_ONCE });
 	await turn;
-	expect(requests).toContainEqual(expect.objectContaining({ id: asked.id, kind: "dismiss" }));
-	const [result] = await toolResults(p);
-	expect(result).toMatchObject({ tool: "mcp__probe__write", isError: true });
-	expect(result?.text).toContain("cancelled");
+	expect((await toolResults(p)).map((result) => result.text)).toEqual(["WROTE"]);
+
+	const command = promptSession(p.sessionId, "/ask-idle");
+	const idle = await waitFor(() => requests.find((request) => request.kind === "input"));
+	await promptSession(p.sessionId, "HANDLED ELSEWHERE");
+	await followUpSession(p.sessionId, "HANDLED ELSEWHERE");
+	expect(requests).not.toContainEqual(expect.objectContaining({ id: idle.id, kind: "dismiss" }));
+	faux.setResponses([fauxAssistantMessage("OK")]);
+	await promptSession(p.sessionId, "Never mind.");
+	expect(requests).toContainEqual(expect.objectContaining({ id: idle.id, kind: "dismiss" }));
+	await command;
+});
+
+test("Always allow saves a project grant that skips the question until the server's command changes", async () => {
+	const grants: Record<string, McpToolGrant> = {};
+	setMcpPolicyResolver(() => mcpPolicyOf({ mcpToolGrants: grants }));
+	setMcpToolGrantWriter((_workspaceId, server, target, tool) => {
+		grants[server] = { target, tools: [tool] };
+	});
+	const configure = (command: string) =>
+		writeFileSync(
+			join(agentDir, "mcp.json"),
+			JSON.stringify({ mcpServers: { probe: { command } } }),
+		);
+	try {
+		configure("thinkrail-absent-probe-a");
+		const first = await chat();
+		callTools("mcp__probe__send");
+		const firstTurn = promptSession(first.sessionId, "Send.");
+		const asked = await answerNextSelect(MCP_CONFIRM_ALWAYS, 0);
+		await firstTurn;
+		expect(asked).toMatchObject({
+			title:
+				"Allow probe/send? It may change data.\nAlways allow trusts this tool in every chat of this project. Manage it in Settings › MCP servers.",
+			options: [MCP_CONFIRM_DENY, MCP_CONFIRM_ONCE, MCP_CONFIRM_CHAT, MCP_CONFIRM_ALWAYS],
+		});
+		expect(grants.probe?.tools).toEqual(["mcp__probe__send"]);
+
+		const second = await chat();
+		callTools("mcp__probe__send");
+		await promptSession(second.sessionId, "Send again.");
+		expect(selects()).toHaveLength(1);
+		expect((await toolResults(second)).map((result) => result.text)).toEqual(["SENT"]);
+
+		configure("thinkrail-absent-probe-b");
+		const third = await chat();
+		callTools("mcp__probe__send");
+		const thirdTurn = promptSession(third.sessionId, "Send once more.");
+		await answerNextSelect(MCP_CONFIRM_ONCE, 1);
+		await thirdTurn;
+		expect(selects()).toHaveLength(2);
+	} finally {
+		rmSync(join(agentDir, "mcp.json"), { force: true });
+		setMcpPolicyResolver(() => mcpPolicyOf(undefined));
+		setMcpToolGrantWriter(() => {});
+	}
+});
+
+test("a third-party gate's dialog names the one running tool call it is about", async () => {
+	const p = await chat();
+	callTools("gated");
+	const turn = promptSession(p.sessionId, "Run the gated tool.");
+	const asked = await waitFor(() => requests.find((request) => request.kind === "confirm"));
+	expect(asked).toMatchObject({ kind: "confirm", title: "Run gated?", toolCallId: "call-0" });
+	resolveExtUi({ id: asked.id, value: true });
+	await turn;
+	expect(await toolResults(p)).toEqual([{ tool: "gated", isError: false, text: "GATED" }]);
 });
 
 test("the built-in tool_search is activated only when an extension registered an MCP server", async () => {

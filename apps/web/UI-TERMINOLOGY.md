@@ -262,6 +262,7 @@ Row / message renderers (all in `chat/turns.tsx` unless noted):
 | Retry Indicator | `RetryIndicator` | `retry-indicator` | `retry` | Retry countdown (turn / summarization) |
 | Tool Card | `chat/ToolCard.tsx` → `ToolCard` | `tool-card` (`-toggle`) | `tool` | A primary tool call (collapsible frame) |
 | Activity Group | `chat/ActivityGroup.tsx` → `ActivityGroup` | — | `activity` | Folded run of routine steps ("N steps · …") |
+| Ext-UI Prompt | `chat/ExtUiPrompt.tsx` → `ExtUiPrompt` | `ext-ui-prompt` | — | An extension's in-chat question (`pi.extensionUi` dialog): on its tool's card, else docked above the composer |
 | Turn Divider | `TurnDivider` | `turn-divider` / `turn-divider-<id>` | `divider` | Round-end summary + artifact chips |
 | — Artifact Chip | `ArtifactChip` | `turn-divider-specs` / `turn-divider-files` | — | "N specs" / "N files changed" deep-link/disclosure; with a host turn receipt the files chip reads `N files changed · +a −r` |
 | — Artifact List | `ArtifactList` | `<testid>-list` / `-list-item` | — | Expanded per-path list (per-file `+/−` from the receipt) |
@@ -522,7 +523,6 @@ App-level dialog/popover instances built on those primitives:
 | Confirm Popover | `panels/ConfirmPopover.tsx` → `ConfirmPopover` | Popover | Anchored yes/no from a dedicated action control (template delete) |
 | Template Editor Dialog | `chat/TemplateEditorDialog.tsx` → `TemplateEditorDialog` | Dialog | Create/edit a prompt template |
 | Skills Dialog | `chat/SkillsDialog.tsx` → `SkillsDialog` | Dialog | Skills manager (chat + project modes) |
-| Ext-UI Dialog | `chat/ExtUiDialog.tsx` → `ExtUiDialog` | Dialog | `pi.extensionUi` bridge dialog |
 | Login Dialog | `auth/` → `LoginDialog` | Dialog | Provider OAuth / API-key login |
 
 **⚠ Naming notes (primitives):**
@@ -640,7 +640,8 @@ its alternatives in parentheses.
 - **Modal** = the **Dialog** primitive. **Dropdown Menu**, **Context Menu**, **Popover**, **Command**,
   **Tooltip**, **Toast**, **Resizable**, **Error Boundary**.
 - App dialogs: **New Workspace Dialog**, **Confirm Dialog**, **Notice Dialog**, **Confirm Popover**,
-  **Template Editor Dialog**, **Skills Dialog**, **Ext-UI Dialog**, **Login Dialog**.
+  **Template Editor Dialog**, **Skills Dialog**, **Login Dialog**. (Extension dialogs are not a modal: see
+  **Ext-UI Prompt**.)
 
 **Terms that do NOT map to a ThinkRail region (avoid or use only as noted)**
 

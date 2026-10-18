@@ -272,9 +272,30 @@ test("read-only rows disable every control and row errors render as alerts", () 
 	expect(html).toContain("MCP_CONFIG_INVALID: bad");
 });
 
-test("the banner states the per-chat confirm and the empty state offers import and the host notice", () => {
+test("a row lists its always-allowed tools, each with its own way to ask again", () => {
+	const html = render(
+		row(
+			{},
+			{
+				alwaysAllowed: [
+					{ tool: "mcp__fixture__create_issue", label: "create_issue" },
+					{ tool: "mcp__fixture__comment", label: "comment" },
+				],
+			},
+		),
+	);
+	expect(html).toContain('data-testid="mcp-always-allowed"');
+	expect(html.match(/data-testid="mcp-always-allowed-tool"/g)).toHaveLength(2);
+	expect(html).toContain('aria-label="Ask again before create_issue in this project"');
+	expect(render(row())).not.toContain("mcp-always-allowed");
+	expect(
+		render(row({}, { alwaysAllowed: [{ tool: "t", label: "t" }] }), { readOnly: true }),
+	).toMatch(/data-testid="mcp-always-allowed-revoke"[^>]*disabled=""/);
+});
+
+test("the banner states the in-chat confirm and the empty state offers import and the host notice", () => {
 	expect(renderToStaticMarkup(<McpConfirmBanner />)).toContain(
-		"ThinkRail asks before MCP calls that may change data (per chat); no saved rules yet.",
+		"ThinkRail asks in the chat before MCP calls that may change data. Always allow trusts a tool in every chat of this project; those tools are listed on their server below.",
 	);
 	const empty = renderToStaticMarkup(
 		<McpEmptyState disabled={false} onAdd={() => {}} onImport={() => {}} onPreset={() => {}} />,

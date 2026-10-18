@@ -27,6 +27,14 @@ export interface Project {
 	mcpApprovals?: Record<string, string>;
 	/** Per-project enablement/exposure of user-level MCP servers (never written to `.pi/mcp.json`). */
 	mcpOverrides?: Record<string, McpProjectOverride>;
+	/** "Always allow" MCP tools per server name (never written to `.pi/mcp.json`). */
+	mcpToolGrants?: Record<string, McpToolGrant>;
+}
+
+/** Tools (pi tool names) granted while the server keeps the command + args or URL hashed as `target`. */
+export interface McpToolGrant {
+	target: string;
+	tools: string[];
 }
 
 export type ProjectPathStatus = { kind: "repo" | "initable" | "missing" | "notDirectory" };
@@ -387,6 +395,8 @@ export interface McpServerSummary {
 	approval?: { state: "approved" | "pending" | "changed"; fingerprint: string };
 	/** pi-equivalent validation message when the entry is rejected; credential-looking values are masked by the host. */
 	configError?: string;
+	/** Always-allowed tools still valid for the effective entry: pi's tool name and its display label. */
+	alwaysAllowed?: { tool: string; label: string }[];
 }
 
 export type McpServerState =

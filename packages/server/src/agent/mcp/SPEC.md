@@ -46,7 +46,8 @@ relax a rule.
   configured vs effective exposure and enablement (record
   overrides and admitted repo overrides applied), OAuth applicability, replacement of a user-level server,
   approval state (`approved` / `pending` / `changed` against the current fingerprint), the configured
-  description and pi-equivalent config errors (both through `redactMcpText`). `summarizeMcpConfigErrors()` is the file-level rest (unparsable
+  description and pi-equivalent config errors (both through `redactMcpText`), and on the effective row the
+  `alwaysAllowed` tools whose grant still matches its target. `summarizeMcpConfigErrors()` is the file-level rest (unparsable
   JSON, `mcpServers` not an object, a mistyped `autoEnableCodemode`) as `{ source, message }`, masked, for
   `McpListResult.configErrors`: for the first two pi's loader lists none of that file's servers, so without
   it Settings would read "no servers".
@@ -119,16 +120,32 @@ relax a rule.
   `fingerprintMcpEntry(name, raw)` = SHA-256 over the name and the canonical JSON of the whole raw entry (keys sorted recursively except
   `toolExposure`, whose order is semantic) — never over resolved values; `normalizeExposureForHost()` maps
   unset and `codemode` exposures (server and per-tool) to `deferred` in memory while codemode is not
-  shipped. `mcpPolicyOf(project)` reads that policy off a project record (absent fields read as empty).
-- `sessionHost.ts` — `createMcpSessionHost()`, one per parent session (the manager keeps it on its entry;
-  child sessions get none): a `tool_call` handler that asks before any `mcp__*` call whose tool does not
-  declare `readOnlyHint: true` — options **Deny · Allow once · Allow in this chat**, in that order so the
-  chat-wide grant never sits next to Deny on a stacked mobile layout — and blocks with a reason on
-  everything but the two affirmative answers (Deny, dismissal, abort, no UI). Each pending dialog owns an
-  `AbortController` combined with the run's `ctx.signal`; `cancelPendingConfirmations()` is what the
-  manager calls when a steer is accepted, because pi's steering only queues the message. "Allow in this
-  chat" lives in the host object, so it survives resource reloads and dies with the session; nothing is
-  persisted. Its `extensions` also carry the engine (`engine.ts`) with the session's `loadConfig`
+  shipped. `mcpPolicyOf(project)` reads that policy (approvals, overrides, tool grants) off a project
+  record (absent fields read as empty); `mcpTargetOf` / `grantedMcpTools` / `mcpToolLabel` (the tool name
+  without `mcp__<server>__`) back the tool grants.
+- `sessionHost.ts` — `createMcpSessionHost({ policy, onCommandSettled?, askForToolCall, grantTool })`,
+  one per parent session (the manager keeps it on its entry; child sessions get none): a `tool_call`
+  handler for every `mcp__*` call whose tool does not declare `readOnlyHint: true`. It skips the question
+  for a tool allowed in this chat or holding a valid project grant; otherwise it asks through the injected
+  `askForToolCall` (the manager's `selectForToolCall`, so the dialog names `event.toolCallId` and renders
+  on that call's card) with **Deny · Allow once · Allow in this chat · Always allow**, in that order so a
+  lasting grant never sits next to Deny on a stacked mobile layout. When Always allow is offered, the
+  title's second line states its scope ("Always allow trusts this tool in every chat of this project.
+  Manage it in Settings › MCP servers."); the web renders later title lines as supporting text, so the
+  copy needs no contract field. Anything but an affirmative answer
+  (Deny, dismissal, a user message that answered instead, abort, no UI) blocks with a reason. The only
+  abort it wires is the run's `ctx.signal`, passed to the port; a user message pi accepts cancels the
+  dialog through the bridge's generic `cancelExtUiForSession` ([[submodule-server-agent]] ›
+  `webUiContext`), so the host owns no cancel set or `AbortController` of its own and exposes no cancel
+  method. "Allow in this chat" lives in the host object, so it survives resource reloads and dies
+  with the session. **Always allow** is offered only when `loaded()` knows the tool's server (pi's
+  `ToolInfo.namespace.aliases[0]`); it calls `grantTool(server, mcpTargetOf(config), toolName)` and never
+  touches the in-chat set, so a revoke in Settings reaches open chats at their next call. Grants are read
+  through `policy().toolGrants` on every call (`grantedMcpTools`): a grant counts only while its `target`
+  — SHA-256 of the effective entry's `command` + `args`, or `url`, as written — still matches, so env,
+  header or exposure edits keep it and a new command or URL asks again. Tools are keyed by pi's tool name,
+  the only name the guard sees (pi's `ToolInfo` carries no raw MCP tool name). Grants live in the project
+  record, never in `.pi/mcp.json`, which a repository could ship pre-granted. Its `extensions` also carry the engine (`engine.ts`) with the session's `loadConfig`
   (`loadHostMcpConfig` over `getAgentDir()`, the session `cwd`, `ctx.isProjectTrusted()` and the injected
   project policy). The host extension is an always-loaded inline factory, so its factory starts every load:
   it clears `loaded()` (each server's effective config as pi received it, set again only when the built-in
@@ -195,7 +212,7 @@ relax a rule.
   `globalMcpConfigPath`, `projectMcpConfigPath`, `addMcpServerConfig`, `updateMcpServerConfig`,
   `removeMcpServerConfig`, `assertProjectMcpConfigWritable`, `McpConfigPathUnsafeError`,
   `createMcpSessionHost` + `McpSessionHost` and the option labels `MCP_CONFIRM_DENY` / `MCP_CONFIRM_ONCE` /
-  `MCP_CONFIRM_CHAT`, `createMcpEngine` (`{ loadConfig, lockSignIns?, openUrl?, onCommandSettled? }`), `acquireMcpSignInLock`,
+  `MCP_CONFIRM_CHAT` / `MCP_CONFIRM_ALWAYS`, `createMcpEngine` (`{ loadConfig, lockSignIns?, openUrl?, onCommandSettled? }`), `acquireMcpSignInLock`,
   `loadHostMcpConfig` + `McpProjectPolicy` + `mcpPolicyOf`, `summarizeMcpServers`, `maskMcpEndpoint` /
   `redactMcpText`, `readMcpServerLog`, `effectiveMcpServerConfig`, the `management.ts` mutations (`writeMcpServerEntry`,
   `removeMcpServerEntry`, `mcpEntryFingerprint`, `shareMcpOverrideWithRepo`),
