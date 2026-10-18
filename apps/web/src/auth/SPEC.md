@@ -26,17 +26,20 @@ not here — `auth` stays presentational + types, so nothing here imports `store
     browser-vs-paste race), `status` goes `active → success/error`. An optional `target` names the MCP
     server of an MCP sign-in or connection test (`LoginPush.target`). **Types only** (like `chat/types`).
   - `LoginDialog` — **props-driven, no store/transport** (like the chat renderers): renders a `LoginState`
-    (open-URL button + **Copy link** — never the raw URL text, which can run to hundreds of scope params;
+    (an **Open sign-in page** link — a real anchor, so native copy/middle-click work — + **Copy link**;
+    never the raw URL text, which can run to hundreds of scope params — a failed clipboard write reveals a
+    one-line, selected read-only field instead;
     a device code with a **clickable verification link** that also
     **auto-opens** in a new tab best-effort on arrival; a `select`/`prompt` input — a `secret`-flagged
     prompt renders **masked** (API keys, issue #97); progress/working spinner — while a sign-in URL is
-    live the spinner reads host copy ("Waiting for you to finish signing in…") instead of pi's
-    terminal-oriented progress (loopback ports, callback URLs), which shows only when no URL is live;
+    live and no required prompt is pending, the spinner reads host copy ("Waiting for you to finish
+    signing in…") instead of pi's terminal-oriented progress (loopback ports, callback URLs);
     terminal success/error) and calls back `onReply(value)` / `onCancel()` / `onClose()`. Copy says
     **"Connect"**, not "Sign in" — one dialog serves OAuth and API-key entry alike. Themed with token
     utilities only; `@remixicon/react` icons; shadcn `Dialog`/`Button`.
   - `uiOrigin` — `isLoopbackHost` / `uiServedFromLoopback`: whether the UI was opened via a loopback host,
-    the dialog's proxy for "the browser runs on the ThinkRail host machine".
+    the dialog's proxy for "the browser runs on the ThinkRail host machine"; `redirectsToLoopback`:
+    whether an authorize URL's `redirect_uri` / `callback_url` is an `http:` loopback address.
 - **Public surface (barrel `index.ts`):** `LoginDialog`; `LoginState`/`LoginInput*` (types).
 - **Allowed deps:** `@thinkrail/ui/dialog` and `@thinkrail/ui/button`; `lib` (`copyText`). (The state types
   need no imports.)
@@ -67,12 +70,16 @@ not here — `auth` stays presentational + types, so nothing here imports `store
 
 - **Frames accumulate** — the reducer must not clobber `url` when a paste `prompt` arrives, or vice-versa.
 - The dialog is mounted with `key={state.loginId}` so a new login gets fresh local (text/busy) state.
-- **Paste fallback.** A `prompt` that arrives while a sign-in URL is live is the paste-back fallback: the
-  loopback OAuth redirect only loads when the browser runs on the host machine, so a remote browser can
-  finish only by pasting the failed page's address. Opened via a loopback origin (desktop, local dev) it
-  starts **collapsed** behind "Sign-in page didn't load? Paste its address"; any other origin starts it
-  **expanded**. It is always one click away — an SSH port-forward looks local but still needs it. Its
-  one-line explanation is host copy (it replaces the prompt's message); a prompt with no live URL (API key)
-  renders as-is.
+- **Paste fallback, classified conservatively.** pi sends the raced loopback fallback and a *required*
+  code prompt (e.g. Anthropic copy-code) identically (`manual_code` → `prompt`), so the dialog infers it:
+  a `prompt` is the fallback only when the live URL's `redirect_uri`/`callback_url` is an `http:` loopback
+  address. Anything else — an https copy-code redirect, no redirect param, a malformed URL — renders the
+  prompt as a normal, visible input with pi's message. This is a presentation heuristic, not proof a
+  listener runs (Codex keeps its loopback URL when port 1455 is taken and then needs the paste), so the
+  fallback is always one click away and its copy covers both cases: "Sign-in didn't finish? Paste the
+  final URL". A remote browser can only finish by pasting (the loopback redirect fails there), so the
+  fallback starts **collapsed** on a loopback UI origin (desktop, local dev) and **expanded** on any other;
+  an SSH port-forward looks local but still needs it (accepted). Its one-line hint is host copy and
+  replaces the prompt's message.
 - Device-code **auto-open** is best-effort (a popup blocker may stop the async `window.open`); the clickable
   verification link is the guaranteed fallback, so the flow never dead-ends on a blocked popup.

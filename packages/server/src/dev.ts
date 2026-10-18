@@ -15,8 +15,19 @@ if (process.env.THINKRAIL_E2E_FAKE_OAUTH === "1") {
 				],
 			});
 			if (!choice) throw new Error("Login cancelled");
-			callbacks.onAuth({ url: "https://e2e.test/authorize?probe=1" });
-			const code = (await callbacks.onManualCodeInput?.()) ?? "";
+			let code: string;
+			if (choice === "api") {
+				callbacks.onAuth({
+					url: "https://e2e.test/authorize?probe=1&redirect_uri=https%3A%2F%2Fe2e.test%2Fcode",
+					instructions: "Copy the code the sign-in page shows and paste it here.",
+				});
+				code = await callbacks.onPrompt({ message: "Paste the code E2E shows after you sign in:" });
+			} else {
+				callbacks.onAuth({
+					url: "https://e2e.test/authorize?probe=1&redirect_uri=http%3A%2F%2F127.0.0.1%3A1455%2Fcallback",
+				});
+				code = (await callbacks.onManualCodeInput?.()) ?? "";
+			}
 			callbacks.onProgress?.("Exchanging authorization code…");
 			return {
 				refresh: "e2e-refresh",
