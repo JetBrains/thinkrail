@@ -40,8 +40,9 @@ create the tools it needs based on how you actually work.
 - **Skills and workflows.** Portable Agent Skills you already keep for other coding agents are read in
   place, and bundled workflows guide project setup, design brainstorming, and shipping a pull request —
   pushing the workspace branch and opening or updating its GitHub PR through your own `gh`.
-- **Agent tools beyond the shell.** Web research, and inline diagrams and option comparisons rendered right
-  in the chat. Settings → Extensions lists the ThinkRail extensions the agent gets and lets you switch
+- **Agent tools beyond the shell.** Web research, and inline diagrams, option comparisons and HTML UI
+  mockups rendered right in the chat — the agent shows a proposed screen, or a before/after of it, at
+  desktop, tablet or phone width before building it. Settings → Extensions lists the ThinkRail extensions the agent gets and lets you switch
   each one off.
 - **MCP servers.** Connect the MCP servers in your `pi` `mcp.json` (or add them, and a few presets, from
   Settings): ThinkRail asks before calls the server does not mark read-only, keeps servers a repository

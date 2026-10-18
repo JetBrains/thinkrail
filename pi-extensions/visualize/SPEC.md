@@ -10,8 +10,8 @@ tags: [pi-extension, visualization, mermaid]
 ## Responsibility
 
 The published, portable half of the visualization capability: one tool, `visualize`, that validates a
-diagram or comparison request, returns a markdown fallback as the model-facing result, and draws the
-result in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes it through [[module-ext-visualize]]'s server half
+diagram, comparison, or HTML mockup request, returns a model-facing text result, and draws the result
+in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes it through [[module-ext-visualize]]'s server half
 (the successor of the deleted `packages/pi-visualize`), injecting its strict validator.
 
 ## Public surface
@@ -25,8 +25,10 @@ result in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes
   throw into the field-specific diagnostic (`` `mermaid` `` / `` `options[N].mermaid` ``) that asks the
   model to correct and retry.
 - **The tool contract** renderers key on: the name `"visualize"`, its argument shape
-  (`type: "diagram" | "comparison"`, `title?`, `mermaid?`, `options?[]`), and `details` = the validated
-  params. Changing this shape is a breaking change for every renderer, including ThinkRail's.
+  (`type: "diagram" | "comparison" | "mockup"`, `title?`, `mermaid?`, `options?[]` each with an optional
+  `html`, `html?` or `before?` + `after?`, `viewport?: "desktop" | "tablet" | "phone"`), and `details` =
+  the validated params. Changing this shape is a breaking change for every renderer, including
+  ThinkRail's; additions stay optional.
 
 ## Decisions
 
@@ -57,20 +59,41 @@ result in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes
   TUI share one render call that strips leading blank and `%%` lines first: `lovely-mermaid` 0.3.3
   returns `null` for a mindmap behind a comment or `%%{init}%%` directive (other kinds are unaffected).
 - **Terminal rendering tiers.** `renderCall` is a one-line summary (`visualize <title | diagram |
-  comparison — N options>`). `renderResult` returns a width-aware component: in `render(width)` a
+  comparison — N options | mockup | before/after mockup>`). `renderResult` returns a width-aware component: in `render(width)` a
   diagram is drawn only when the art is **complete** (no warnings) and every row fits the width by
   pi-tui's `visibleWidth` (which agrees with the renderer's grapheme-correct widths, so CJK and emoji
   labels draw); otherwise, and for kinds the renderer does not draw, the pi-tui `Markdown` fence of the
   source is shown. Span roles map to pi's theme exactly as pi's native renderer does (`border` →
   `borderMuted`, `text` → `text`, `edge` → `accent`, `edgeLabel` → `muted`). A diagram is never
-  word-wrapped. Collapsed = drawing only; expanded = drawing + source fence. Diagrams render from
-  defensively checked `result.details`; comparisons, errors (`context.isError`) and missing details
-  render from `result.content`; partial results show a placeholder. Image-tier rendering
+  word-wrapped. Collapsed = drawing only; expanded = drawing + source fence. Diagrams and mockups
+  (including comparisons whose options carry `html`: their markdown, then the links) render from
+  defensively checked `result.details`; other comparisons, errors (`context.isError`) and missing
+  details render from `result.content`; partial results show a placeholder. Image-tier rendering
   (Kitty/iTerm2) is deferred: it needs SVG rasterisation without a browser and degrades under tmux/SSH.
-- **Dual runtime.** Shipped code uses `node:`-free standard ESM and pi's host-provided packages only,
-  so it runs under Node (vanilla pi, jiti) and Bun (ThinkRail). Runtime imports from
-  `@earendil-works/pi-coding-agent` are limited to `getMarkdownTheme`; `@earendil-works/pi-tui` supplies
-  `Text`, `Markdown`, `visibleWidth`.
+- **Dual runtime.** Shipped code uses standard ESM, `node:` builtins (only `mockupFile.ts`: `crypto`,
+  `fs`, `os`, `path`, `url`) and pi's host-provided packages, so it runs under Node (vanilla pi, jiti)
+  and Bun (ThinkRail). Runtime imports from `@earendil-works/pi-coding-agent` are limited to
+  `getMarkdownTheme`; `@earendil-works/pi-tui` supplies `Text`, `Markdown`, `visibleWidth`,
+  `wrapTextWithAnsi`, `hyperlink`, `getCapabilities`.
+
+- **Mockups are static, self-contained HTML, and the model never gets its HTML back.** A mockup is
+  `html` alone or a full `before` + `after` pair (both or neither, never mixed); every document is
+  non-empty and ≤ 256 KB, else the retry-hinting error. The result text is a one-line summary (kind,
+  title, viewport) and comparison markdown marks an option's mockup as shown: echoing up to 256 KB per
+  document into the context buys the model nothing. Scripts, `on*` handlers and http(s) resources are
+  **accepted with notes** appended to the result — every renderer strips them, so a hard reject would
+  only cost a retry. Prompt guidelines tell the agent to mock up any visible UI proposal before building
+  it (before/after for an existing screen) and to choose fidelity per question: wireframe for layout,
+  the project's real colors/fonts/spacing for visual decisions.
+- **Terminal mockups are files behind a link (rejected: inline screenshots, text approximations).**
+  `renderResult` writes each document on demand to `<tmpdir>/pi-visualize/<sha256>.html`, idempotent
+  by content hash so a resumed session recreates it, with `<base href>` at the tool call's `cwd` (so
+  workspace-relative assets resolve) and a CSP `<meta>` (`default-src 'none'`, `file:`/`data:` images,
+  styles and fonts, no scripts, no form action) so "static only" also holds in the browser. It shows an
+  OSC 8 **Open in browser ↗** link when pi-tui reports hyperlink support, always the path, and the
+  source when expanded; a write failure renders inline. An inline screenshot needs a headless browser
+  and only draws in image-capable terminals (not under tmux/SSH) — the same reason image-tier diagrams
+  are deferred; a text approximation loses the layout and color a mockup exists to show.
 
 ## Boundary
 
@@ -83,5 +106,7 @@ result in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes
 
 `index.ts` (exports + default), `src/extension.ts` (factory, tool registration, validator wrapping),
 `src/schema.ts`, `src/validate.ts` (shape + source enumeration), `src/markdown.ts` (tier-1 fallbacks),
-`src/probe.ts` (the shared render call + default validator), `src/tui.ts` (renderers + `DiagramComponent`). `bun test` covers each; the vanilla-parity gate in
+`src/probe.ts` (the shared render call + default validator), `src/mockup.ts` (mockup documents,
+validation, notes, summary), `src/mockupFile.ts` (the terminal file writer), `src/tui.ts` (renderers +
+`DiagramComponent` + `MockupLinksComponent`). `bun test` covers each; the vanilla-parity gate in
 [[module-pi-extensions]] exercises the packed artifact.

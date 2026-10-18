@@ -1962,7 +1962,8 @@ own section. The kebab menu (`plan-menu`, a
   represented by an explicit empty page frame.
 
   `thinkrail/html` parses source into a document before previewing it in an empty-capability `sandbox=""`
-  iframe. The sanitizer removes active, navigational, embedding, and form elements; strips event handlers and
+  iframe, both from the shared `@thinkrail/ui/html-frame` primitive ([[module-ui]]). The sanitizer (default
+  mode) removes active, navigational, embedding, and form elements; strips event handlers, `autofocus`, and
   non-`data:` resource URLs; and turns anchors into inert text-bearing elements. Styles remain. Notebook HTML
   output uses this same sanitizer. The injected CSP is exactly `default-src 'none'; img-src data: blob:;
   style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src
@@ -2180,6 +2181,10 @@ own section. The kebab menu (`plan-menu`, a
   (through `resourcePane.resourceBytesUrl`, injected into `documentComponents` so the markdown layer never
   reaches for the transport itself). A cross-file link's `#fragment` is not yet followed (opens the
   file only).
+- **Chat mockup assets ride the same byte route.** `workspaceAssets.createWorkspaceAssetResolver(workspaceId)`
+  fetches a workspace-relative path through `resourceBytesUrl` and answers a `data:` URL (null when missing or
+  over 2 MB). The shell builds one per workspace and hands it to `ChatView`, so chat never imports panels and
+  the byte URL keeps its single composer.
 - **Document markdown renders sanitized raw HTML; chat markdown does not.** READMEs place logos and
   banners with `<p align="center"><img src width>`, float images with `<img align="right">`, fold
   sections in `<details>`, and ship theme-aware logos as `<picture><source media srcset>`; shown as

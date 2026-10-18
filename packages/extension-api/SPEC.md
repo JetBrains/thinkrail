@@ -17,8 +17,12 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
 ## Boundary
 
 - `./web` exposes `ToolStatus`, `ToolRenderProps`, `ToolRenderer`, `ToolSummary`, `ToolChrome`,
-  `ToolProminence`, `ToolRegistrationOptions`, `WebExtension`, `defineWebExtension`, and the pure
-  argument/result readers from `toolHelpers` and `toolResultContent`.
+  `ToolProminence`, `ToolRegistrationOptions`, `AssetResolver`, `WebExtension`, `defineWebExtension`,
+  and the pure argument/result readers from `toolHelpers` and `toolResultContent`.
+- `ToolRenderProps.resolveAsset?: AssetResolver` — `(workspacePath) => Promise<dataUrl | null>`, a
+  host-supplied reader of a workspace-relative file as a `data:` URL, so a renderer can inline workspace
+  assets (visualize mockups) without knowing the host's byte routes. Optional: absent where the host
+  has no workspace context.
 - `WebExtension` is `{ name, toolRenderers }`, with each tool-name entry carrying a `renderer` and
   optional `ToolRegistrationOptions` under `options`. `defineWebExtension` is a typed identity helper:
   it preserves the descriptor and its inferred tool keys without registration or default injection.

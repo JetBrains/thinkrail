@@ -462,7 +462,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     validation rejects the whole call and echoes every argument back, so a few extra characters would
     cost a failed card plus a full retry, while the card already wraps/scrolls long text. Questions that
     depend on an open answer wait for a later round; the multi-round interview norm itself lives in the
-    workflow family's `asking-user-questions` concept skill ([[submodule-workflow-skills]]).
+    workflow family's `asking-user-questions` concept skill ([[submodule-workflow-skills]]). An option's
+    `preview` is markdown; for a UI choice the field description steers the model to a ```` ```mockup ````
+    fence of static HTML, which the web renders as a live mockup ([[module-ext-visualize]]). The returned
+    `selected preview` replaces such fences with a placeholder (`previewForModel`) — the model wrote that
+    HTML and gains nothing from reading it back.
 
     The registry tracks `expected` (eligible call observed), `waiting`, `answer-accepted-uncommitted`, and
     `stopped` through `turn_end`. This includes Pi's real asynchronous gap from `tool_execution_start` through

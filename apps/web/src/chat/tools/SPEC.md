@@ -192,7 +192,7 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
     a tooltip and, being ordinary visible text, it reads on touch and for AT without a popover.
     **Active card only** — the resolved record shows selections only, no rationale.
 - **Visualize** is owned by [[module-ext-visualize]], outside this module. Its primary/default-expanded
-  registration and named `MermaidView` reach chat through the public web entrypoint.
+  registration and named `MermaidView` / `MockupView` reach chat through the public web entrypoint.
 - **Spec-graph tools** — one defensive `SpecToolCard` registered for all seven `spec_*` names. Each keeps
   the capability's readable text, folds long output, replaces redundant args JSON with a meaningful
   activity summary, and turns only exact standalone worktree-path tokens obtained from known successful

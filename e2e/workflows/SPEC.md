@@ -35,7 +35,10 @@ config `testIgnore`s this directory).
 ## Harness (`harness/`, barrel `index.ts` — the only import surface for spec files)
 
 Adding a workflow test = one `defineScenario` call: `{ name, skill, workspace, preset?, entry?,
-user?, dialog?, stopWhen?, forbid?, watchdog?, expect, judge?, record? }`.
+user?, dialog?, stopWhen?, forbid?, watchdog?, expect, advisory?, judge?, record? }`. `advisory` checks
+run like `expect` but only warn (`[advisory]`) and land in the run record — deterministic quality
+heuristics that must not gate. `judge.context(log)` appends artifacts to the judge's transcript, which
+otherwise truncates tool arguments (so the judge can grade, e.g., mockup HTML).
 
 - `session` — lifecycle over the production `@thinkrail/server/agent` barrel (`createSession` etc.);
   sets `PI_CODING_AGENT_DIR`, `HOME`, and supported vendor-home overrides before the pi runtime initializes
@@ -130,6 +133,14 @@ Dependency direction is one-way: `scenario` → everything; `dialog`/`signals`/`
   no-candidates regression variant (only README/CHANGELOG/TODO present → the offer must not fire, the
   plain import path unchanged). Fixture docs are seeded inline from scenario code (no `*.md` fixture
   files at rest — the masking concern above doesn't arise).
+- `mockups.live.spec.ts` — HTML UI mockups on a seeded static landing page (brand teal): brainstorming
+  a header change must show a mockup (visualize card, question-preview fence, or reply fence) before any
+  `index.html`/`styles.css` edit; a restyle request must yield a `before` + `after` pair; "give me
+  options" must put ≥ 2 mockups on one comparison or question. Binding HTML checks (non-empty visible
+  content, no `<script>`, no remote resources, ≤ 256 KB); advisory checks (styled, ≥ 5 elements,
+  balanced structural tags, no `on*` handlers, reuses the project's brand/copy) plus a judge rubric over
+  the HTML. Helpers live in `mockupQuality.ts` (scenario-local, imports only the harness barrel) with
+  `mockupQuality.unit.spec.ts`.
 - Follow-up (scenario definitions only): the remaining worker flows end-to-end (slice 3:
   `starting-a-new-project` / `brainstorming` full runs) — tracked in [[module-thinkrail-workflow]]
   § Testing.

@@ -29,8 +29,8 @@ The app's Tailwind sources and adoption guards include this package and extensio
 ## Primitive invariants
 
 The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-menu`, `menu-styles`,
-`popover`, `command` (cmdk combobox body), `textarea`, `tooltip`, `resizable`, and `toast`, alongside
-`utils` and `theme`. `menu-styles` is shared by the menu primitives and custom app menu rows.
+`popover`, `command` (cmdk combobox body), `textarea`, `tooltip`, `resizable`, `toast`, and
+`html-frame`, alongside `utils` and `theme`. `menu-styles` is shared by the menu primitives and custom app menu rows.
 
 - Button variants are `default`/`destructive`/`outline`/`ghost`/`soft`; destructive confirms irreversible
   actions, and `soft` (primary-tinted surface + primary text) marks a prominent secondary action such as
@@ -62,3 +62,12 @@ The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-
 
 Code highlighting is deliberately absent: `CodeBlock` and shiki depend on the app's theme registration
 and remain app-local until a second extension requires that seam.
+- `html-frame` is the one owner of untrusted-HTML preview: `sanitizeHtmlDocument` /
+  `prepareHtmlPreviewDocument` / `buildHtmlPreviewDocument` (+ `parseHtmlDocument`), the exact
+  `HTML_PREVIEW_CSP`, and `HtmlFrame`. The sanitizer removes active, embedding and navigational
+  elements, event handlers, `autofocus`, and non-`data:` resource URLs, and makes anchors inert; form
+  controls are removed by default and kept only with `keepFormControls` (UI mockups). `HtmlFrame` is an
+  empty-capability `sandbox=""` srcdoc frame; passing `onContentSize` switches it to
+  `sandbox="allow-same-origin"` — **never** with `allow-scripts` — so the parent can measure the
+  document (`ResizeObserver` on its root) while the frame still runs no script. File previews, notebook
+  HTML output and chat mockups all render through it; the panels' renderer spec owns how files use it.

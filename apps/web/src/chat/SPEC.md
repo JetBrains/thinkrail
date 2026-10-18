@@ -117,7 +117,14 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   ```mermaid block renders as a themed diagram via `@thinkrail/ext-visualize/web`'s `MermaidView` (fullscreen
   pan-zoom, error → source fallback) — uniform across every `Markdown` surface (chat, file/specs
   preview); until mounted it renders as highlighted source, so static contexts (`RenderedDiff`'s
-  `renderToStaticMarkup`) degrade to code exactly like shiki blocks do.
+  `renderToStaticMarkup`) degrade to code exactly like shiki blocks do. A fenced ```` ```mockup ```` block
+  renders the same way through `MockupView` (static HTML/CSS in the shared sandbox — [[module-ext-visualize]]),
+  after the same 200 ms settle, as highlighted HTML until then. This is how `ask_user_question` option
+  previews and plain replies show UI mockups; the server abbreviates mockup fences in the answer it returns
+  (`selected preview`) so the HTML is not echoed to the model. Workspace assets resolve through
+  `MockupAssetsContext` (`mockupAssets.ts`): `ChatView` provides the shell-supplied `resolveAsset` prop
+  around the transcript, and `ToolRendererBody` passes it into `ToolRenderProps.resolveAsset`; surfaces
+  without a provider (plan pane, subagent dialog) block relative assets.
   Assistant text renders per top-level block (`BlockMarkdown`): `markdownBlocks` splits it with the `marked`
   block lexer, and each block is a memoized react-markdown render, so a streamed delta re-parses only the
   tail. Blocks are direct children of the prose `div`, separated by the same `"\n"` the whole-document
@@ -326,7 +333,7 @@ the **capability** registers with the pi session server-side (custom tool or pi 
 into it when `ChatView` loads. Built-in app renderers retain their local side-effect registrations.
 Render contracts (`ToolRenderProps`, `ToolStatus`, registration metadata) and pure argument/result
 helpers come from `@thinkrail/extension-api/web`, not chat internals. `Markdown` imports the named
-`MermaidView` from `@thinkrail/ext-visualize/web` for fenced mermaid; shiki and highlighted `CodeBlock`
+`MermaidView` and `MockupView` from `@thinkrail/ext-visualize/web` for fenced mermaid and mockups; shiki and highlighted `CodeBlock`
 remain app-local. A registration is:
 
 - a **renderer** (the specialized card body; `ToolRenderProps` carries `toolCallId`/`args`/`result`/
@@ -1421,7 +1428,7 @@ Unknown custom messages retain their existing behavior.
   `react-markdown` / `remark-gfm` / `shiki` (via `lib/highlighter` / `lib/highlightCode`; a streaming fence
   shows its last highlight plus the newer text as plain until the worker catches up); `marked` (block lexer
   for `markdownBlocks` splitting only, never for rendering); `@thinkrail/ext-visualize/web`
-  (`Markdown` consumes `MermaidView`; `mermaid` stays lazy inside the extension);
+  (`Markdown` consumes `MermaidView` and `MockupView`; `mermaid` stays lazy inside the extension);
   `@thinkrail/extension-api/web`; `react-virtuoso`; `@remixicon/react`; `@thinkrail/ui/*`;
   `components/useNow`; `lib`.
 - **Forbidden:** value-importing any `pi` package; a **presentational** renderer importing

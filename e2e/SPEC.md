@@ -407,13 +407,18 @@ fullscreen SVG growth, pan/reset/Escape and claimed WebKit pinch gestures, exact
 and recommendation, and assistant mermaid fences alongside tool diagrams re-rendering to the host's
 `--container-elevated-bg` after selecting a discovered opposite appearance in real settings. Malformed
 source is seeded as a successful historical tool result (`isError: false`) so both tool and chat exercise
-the renderer's plain-source fallback, not the tool-error branch. These regressions need no provider,
+the renderer's plain-source fallback, not the tool-error branch. Mockup coverage in the same file pins the
+sanitized frame (scripts and `autofocus` gone, form controls kept, `allow-same-origin` only), the fixture's
+`logo.png` inlined as a decoded `data:` image, viewport/Source toggles and Escape-closable fullscreen, the
+before/after switch with side-by-side fullscreen at 1440 px and the switch at 820 px, per-option comparison
+mockups, and an assistant mockup fence. These regressions need no provider,
 prompt submission, route mock, or screenshot. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
 real Settings → Extensions switch through `settings.update`, proves it survives a reload, and seeds a
 historical `visualize` call that must still render its diagram while the extension is off; each test restores
 the switch in `afterEach` because the shard shares one host. The provider-backed counterpart in
 `visualize.live.spec.ts` runs first: with the extension off the agent is never offered `visualize`, and the
-existing diagram/comparison tests that follow re-prove the restored tool in the same chat. MCP tool-card coverage
+existing diagram/comparison tests that follow re-prove the restored tool in the same chat; its mockup tests
+prove a real agent's before/after mockup switches and an `ask_user_question` preview renders a mockup fence. MCP tool-card coverage
 (`mcp-tool-cards.spec.ts`) seeds historical `mcp__*`, resource and `tool_search` results the same way and pins
 the single shared image strip, the collapsed JSON tree, Full output through the real `mcp.readOutput`
 (a recorded file and an expired one), Sign in deep links into Settings › MCP servers or Providers according

@@ -1,8 +1,8 @@
 # @thinkrail/pi-visualize
 
-A [pi](https://pi.dev) extension that gives the agent a `visualize` tool for **diagrams** (Mermaid) and
-**option comparisons**, so it reaches for a picture instead of ASCII art or a markdown table when it
-explains architecture, flows, or trade-offs.
+A [pi](https://pi.dev) extension that gives the agent a `visualize` tool for **diagrams** (Mermaid),
+**option comparisons**, and **HTML UI mockups**, so it reaches for a picture instead of ASCII art, a
+markdown table, or a prose description when it explains architecture, flows, trade-offs, or a UI change.
 
 ```bash
 pi install npm:@thinkrail/pi-visualize
@@ -10,8 +10,15 @@ pi install npm:@thinkrail/pi-visualize
 
 ## What you get
 
-- **`visualize` tool** — `type: "diagram"` with raw Mermaid source, or `type: "comparison"` with options
-  (name, description, pros, cons, `recommended`, optional inline Mermaid), plus an optional `title`.
+- **`visualize` tool** — `type: "diagram"` with raw Mermaid source; `type: "comparison"` with options
+  (name, description, pros, cons, `recommended`, optional inline Mermaid, optional `html` mockup); or
+  `type: "mockup"` with static HTML/CSS in `html`, or `before` + `after` to contrast the current and
+  proposed UI, and an optional `viewport` (`desktop` / `tablet` / `phone`). All take an optional `title`.
+- **Mockups open in your browser.** In the terminal each mockup document is saved as a self-contained
+  `.html` file under your temp directory and shown as an **Open in browser ↗** link (where the terminal
+  supports links) plus its path. Workspace-relative images and fonts resolve against the session's
+  directory; scripts and remote resources are blocked by the file's Content-Security-Policy. Expand the
+  result to see the HTML source.
 - **Terminal rendering.** Flowcharts, state, sequence, class and ER diagrams, pies, mindmaps,
   timelines and git graphs are drawn as Unicode box-drawing right in the pi TUI, in your pi theme's
   colours (via [`lovely-mermaid`](https://github.com/xl0/lovely-mermaid), the same engine family pi uses
@@ -25,7 +32,9 @@ pi install npm:@thinkrail/pi-visualize
 ## Validation — what the tool checks
 
 The tool rejects empty sources and shape errors (a diagram without `mermaid`, a comparison without
-`options`) with a message that tells the model how to fix the call.
+`options`, a mockup without `html` or a full `before` + `after` pair, a mockup over 256 KB) with a
+message that tells the model how to fix the call. A mockup that contains scripts, `on*` handlers, or
+http(s) resources is accepted with a note telling the model those parts are dropped when rendered.
 
 Mermaid syntax is checked **best-effort** with the renderer's own parser: for the families it can draw,
 the tool rejects an unknown flowchart direction (`flowchart XX`), a source in which nothing parses, and
