@@ -6,6 +6,7 @@ import {
 	type TemplateInfo,
 	type ThinkingLevel,
 } from "@thinkrail/contracts";
+import type { AssetResolver } from "@thinkrail/extension-api/web";
 import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -45,6 +46,7 @@ import {
 import { ExtUiDialog } from "./ExtUiDialog";
 import { HistoryOverlay } from "./HistoryOverlay";
 import type { ModelSelection } from "./ModelEffortPicker";
+import { MockupAssetsContext } from "./mockupAssets";
 import {
 	compactSubmissionError,
 	mergeNativeChatCommands,
@@ -79,10 +81,12 @@ export default function ChatView({
 	sessionId,
 	workspaceId,
 	onOpenFile,
+	resolveAsset,
 }: {
 	sessionId: string;
 	workspaceId: string;
 	onOpenFile?: ((path: string) => void) | undefined;
+	resolveAsset?: AssetResolver | undefined;
 }) {
 	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
 	const isStreaming = useAppStore((s) => s.sessions[sessionId]?.isStreaming ?? false);
@@ -709,59 +713,61 @@ export default function ChatView({
 					{...(projectId ? { onOpenSkills: () => setSkillsOpen(true) } : {})}
 				/>
 			</div>
-			<ChatTranscript
-				ref={transcriptRef}
-				sessionId={sessionId}
-				workspaceId={workspaceId}
-				onOpenFile={onOpenFile}
-				workspaceRoot={workspaceRoot}
-				focusComposer={focusComposer}
-				openSubagentTranscript={setTranscriptChildId}
-				onTryAgain={onTryAgain}
-				historyOpen={historyState.open}
-				inspectorOpen={inspectorOpen}
-				stillRunning={stillRunning}
-				readMcpOutput={supportsMcp ? readMcpOutput : undefined}
-				openMcpSettings={supportsMcp ? openMcpSettings : undefined}
-				openProviderSettings={supportsMcp ? openProviderSettings : undefined}
-				resourcesOverlay={
-					resources.visible ? (
-						<ResourcesInspector
-							open={inspectorOpen}
-							onOpenChange={setInspectorOpen}
-							onCloseAutoFocus={returnToResources}
-							{...resources.groups}
-							now={now}
-							authoritative={resources.authoritative}
-							loading={resources.loading}
-							stale={resources.stale}
-							error={resources.projection?.error ?? null}
-							actions={resources.actions}
-							selectedId={inspectorSelectedId}
-							onSelect={selectResource}
-							onRetry={resources.retry}
-							onStopCommand={resources.stopCommand}
-							onStopSubagent={resources.stopSubagent}
-							onStopAll={() => setStopAllOpen(true)}
-							onMcpSetEnabled={resources.setMcpEnabled}
-							onMcpReconnect={resources.reconnectMcp}
-							onOpenMcpSettings={openMcpSettings}
-							detail={
-								selectedCommandId ? (
-									<CommandLogView {...commandLog} onRetry={commandLog.retry} />
-								) : selectedSubagentId ? (
-									<SubagentTranscriptPane
-										key={selectedSubagentId}
-										workspaceId={workspaceId}
-										parentSessionId={sessionId}
-										childSessionId={selectedSubagentId}
-									/>
-								) : null
-							}
-						/>
-					) : null
-				}
-			/>
+			<MockupAssetsContext.Provider value={resolveAsset}>
+				<ChatTranscript
+					ref={transcriptRef}
+					sessionId={sessionId}
+					workspaceId={workspaceId}
+					onOpenFile={onOpenFile}
+					workspaceRoot={workspaceRoot}
+					focusComposer={focusComposer}
+					openSubagentTranscript={setTranscriptChildId}
+					onTryAgain={onTryAgain}
+					historyOpen={historyState.open}
+					inspectorOpen={inspectorOpen}
+					stillRunning={stillRunning}
+					readMcpOutput={supportsMcp ? readMcpOutput : undefined}
+					openMcpSettings={supportsMcp ? openMcpSettings : undefined}
+					openProviderSettings={supportsMcp ? openProviderSettings : undefined}
+					resourcesOverlay={
+						resources.visible ? (
+							<ResourcesInspector
+								open={inspectorOpen}
+								onOpenChange={setInspectorOpen}
+								onCloseAutoFocus={returnToResources}
+								{...resources.groups}
+								now={now}
+								authoritative={resources.authoritative}
+								loading={resources.loading}
+								stale={resources.stale}
+								error={resources.projection?.error ?? null}
+								actions={resources.actions}
+								selectedId={inspectorSelectedId}
+								onSelect={selectResource}
+								onRetry={resources.retry}
+								onStopCommand={resources.stopCommand}
+								onStopSubagent={resources.stopSubagent}
+								onStopAll={() => setStopAllOpen(true)}
+								onMcpSetEnabled={resources.setMcpEnabled}
+								onMcpReconnect={resources.reconnectMcp}
+								onOpenMcpSettings={openMcpSettings}
+								detail={
+									selectedCommandId ? (
+										<CommandLogView {...commandLog} onRetry={commandLog.retry} />
+									) : selectedSubagentId ? (
+										<SubagentTranscriptPane
+											key={selectedSubagentId}
+											workspaceId={workspaceId}
+											parentSessionId={sessionId}
+											childSessionId={selectedSubagentId}
+										/>
+									) : null
+								}
+							/>
+						) : null
+					}
+				/>
+			</MockupAssetsContext.Provider>
 			{widgetEntries.length > 0 ? (
 				<div className="shrink-0 border-border-default border-t bg-container-elevated-bg px-12 py-4 text-text-muted tr-text-metadata">
 					{widgetEntries.map(([key, lines]) => (
