@@ -37,7 +37,7 @@ const OptionSchema = Type.Object({
 	preview: Type.Optional(
 		Type.String({
 			description:
-				"Optional markdown preview shown beside this option (mockups, code snippets, diagrams, configs). Single-select only.",
+				"Optional markdown preview shown beside this option (code snippets, diagrams, configs). For a UI choice, put static HTML/CSS in a ```mockup fenced block — it renders as a live mockup. Single-select only.",
 		}),
 	),
 	recommendedReason: Type.Optional(
@@ -87,7 +87,7 @@ Calling this tool PAUSES EXECUTION until the user answers: the questions render 
 - Every question also gets an "Other" option with a free-text field, and the user can always Skip the whole questionnaire (you are told they declined) — do NOT author "Other"-style, free-text, or escape options yourself (reserved labels are rejected).
 - Set multiSelect: true when several answers are valid; the user may combine checked options with their own typed answer.
 - If you recommend one option, make it FIRST, append "(Recommended)" to its label, and set its recommendedReason to one short sentence on why you recommend it over the alternatives (shown inline under the option).
-- Use options[].preview (markdown) for concrete artifacts to compare side-by-side (code, ASCII mockups, configs). Single-select only.
+- Use options[].preview (markdown) for concrete artifacts to compare side-by-side (code, configs; for UI choices a \`\`\`mockup fenced block of static HTML/CSS renders as a live mockup). Single-select only.
 - One call = one round: ask every question you can ask now in a single call — never split independent questions across back-to-back calls. A question that depends on another question's answer waits for a later round; ask follow-up rounds until no decision is left assumed.
 - Call ask_user_question as the only tool in the assistant response; other tool calls in that response are discarded and can be re-issued after the answer.
 - The user may answer only some questions; unanswered ones are reported as declined.`;
@@ -159,11 +159,18 @@ function toolResult(
 	return { content: [{ type: "text", text }], details };
 }
 
+const MOCKUP_FENCE =
+	/(^|\n)[ \t]*(`{3,}|~{3,})[ \t]*mockup\b[^\n]*\n[\s\S]*?(?:\n[ \t]*\2[ \t]*(?=\n|$)|$)/g;
+
+export function previewForModel(preview: string): string {
+	return preview.replace(MOCKUP_FENCE, "$1[HTML mockup shown to the user]");
+}
+
 function answerSegment(a: AskUserQuestionAnswer): string {
 	const scalar = a.kind === "multi" ? (a.selected ?? []).join(", ") : (a.answer ?? "(no answer)");
 	const parts = [`"${a.question}"="${scalar}"`];
 	if (a.kind === "multi" && a.answer) parts.push(`user's own answer: "${a.answer}"`);
-	if (a.preview) parts.push(`selected preview: ${a.preview}`);
+	if (a.preview) parts.push(`selected preview: ${previewForModel(a.preview)}`);
 	if (a.notes) parts.push(`user notes: ${a.notes}`);
 	return `${parts.join(". ")}.`;
 }

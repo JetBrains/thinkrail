@@ -1,9 +1,10 @@
-import { MermaidView } from "@thinkrail/ext-visualize/web";
+import { MermaidView, MockupView } from "@thinkrail/ext-visualize/web";
 import { type ComponentProps, memo, type ReactNode, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useHighlightedCode } from "@/lib/highlightCode";
 import { createMarkdownSplitter } from "./markdownBlocks";
+import { useMockupAssets } from "./mockupAssets";
 
 const CHAT_PROSE =
 	"tr-prose-chat max-w-none break-words [&>*:first-child]:mt-0 [&>*:last-child]:mb-0 [&_a]:text-primary [&_a]:underline [&_li]:my-2 [&_ol]:my-8 [&_ol]:list-decimal [&_ol]:pl-16 [&_p]:my-8 [&_table]:border-collapse [&_td]:border [&_td]:border-border-muted [&_td]:px-8 [&_td]:py-4 [&_th]:border [&_th]:border-border-muted [&_th]:px-8 [&_th]:py-4 [&_th]:text-left [&_ul]:my-8 [&_ul]:list-disc [&_ul]:pl-16";
@@ -111,6 +112,7 @@ function CodeBlock({
 	const lang = /language-(\w+)/.exec(className ?? "")?.[1];
 	const code = String(children ?? "").replace(/\n$/, "");
 	if (lang === "mermaid") return <MermaidBlock code={code} />;
+	if (lang === "mockup") return <MockupBlock code={code} />;
 	if (!lang) {
 		if (!code.includes("\n")) {
 			return <code className="rounded-xs bg-container-elevated-bg px-4 py-2">{children}</code>;
@@ -121,17 +123,32 @@ function CodeBlock({
 }
 
 function MermaidBlock({ code }: { code: string }) {
+	const settled = useSettled(code);
+	const source = <ShikiBlock code={code} lang="mermaid" />;
+	if (!settled) return source;
+	return (
+		<div className="whitespace-normal">
+			<MermaidView source={code} fallback={source} />
+		</div>
+	);
+}
+
+function useSettled(code: string): boolean {
 	const [settled, setSettled] = useState<string | null>(null);
 	useEffect(() => {
 		const timer = setTimeout(() => setSettled(code), 200);
 		return () => clearTimeout(timer);
 	}, [code]);
+	return settled === code;
+}
 
-	const source = <ShikiBlock code={code} lang="mermaid" />;
-	if (settled !== code) return source;
+function MockupBlock({ code }: { code: string }) {
+	const settled = useSettled(code);
+	const resolveAsset = useMockupAssets();
+	if (!settled || code.trim() === "") return <ShikiBlock code={code} lang="html" />;
 	return (
-		<div className="whitespace-normal">
-			<MermaidView source={code} fallback={source} />
+		<div data-testid="markdown-mockup" className="whitespace-normal">
+			<MockupView documents={[{ label: "Mockup", html: code }]} resolveAsset={resolveAsset} />
 		</div>
 	);
 }

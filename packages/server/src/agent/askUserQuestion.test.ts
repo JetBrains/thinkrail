@@ -22,6 +22,7 @@ import {
 	MAX_HEADER_LENGTH,
 	MAX_LABEL_LENGTH,
 	MAX_RECOMMENDED_REASON_LENGTH,
+	previewForModel,
 	validateQuestionnaire,
 } from "./askUserQuestion";
 
@@ -233,6 +234,32 @@ test("buildQuestionnaireResponse: a partial submission lists the unanswered ques
 	);
 	expect(r.content[0]?.text).toContain('"Which library?"="luxon"');
 	expect(r.content[0]?.text).toContain('The user declined to answer: "Which runtime?".');
+});
+
+test("previewForModel: mockup fences are abbreviated, other markdown is kept", () => {
+	const preview =
+		"Layout A\n\n```mockup\n<nav>SECRET_MARKUP</nav>\n```\n\n```ts\nconst x = 1;\n```\n~~~~ mockup\n<p>more</p>";
+	const out = previewForModel(preview);
+	expect(out).toBe(
+		"Layout A\n\n[HTML mockup shown to the user]\n\n```ts\nconst x = 1;\n```\n[HTML mockup shown to the user]",
+	);
+	const r = buildQuestionnaireResponse(
+		{
+			cancelled: false,
+			answers: [
+				{
+					questionIndex: 0,
+					question: "Which library?",
+					kind: "option",
+					answer: "luxon",
+					preview: "```mockup\n<nav>SECRET_MARKUP</nav>\n```",
+				},
+			],
+		},
+		args(),
+	);
+	expect(r.content[0]?.text).toContain("selected preview: [HTML mockup shown to the user]");
+	expect(r.content[0]?.text).not.toContain("SECRET_MARKUP");
 });
 
 test("buildQuestionnaireResponse: an answer → the envelope with the option + note", () => {
