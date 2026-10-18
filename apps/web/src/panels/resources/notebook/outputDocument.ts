@@ -1,4 +1,4 @@
-import { buildHtmlPreviewDocument, HTML_PREVIEW_CSP } from "../html/htmlDocument";
+import { buildHtmlPreviewDocument, HTML_PREVIEW_CSP } from "@thinkrail/ui/html-frame";
 import type { NotebookImageMime } from "./notebookModel";
 
 export const NOTEBOOK_HTML_CSP = HTML_PREVIEW_CSP;

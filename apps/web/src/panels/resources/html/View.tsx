@@ -1,7 +1,6 @@
+import { buildHtmlPreviewDocument, HtmlFrame } from "@thinkrail/ui/html-frame";
 import { useMemo } from "react";
 import type { ResourceViewProps } from "@/resources";
-import { HtmlFrame } from "./HtmlFrame";
-import { buildHtmlPreviewDocument } from "./htmlDocument";
 
 export default function HtmlView({ resource, content }: ResourceViewProps) {
 	const text = content.kind === "text" ? content.text : "";

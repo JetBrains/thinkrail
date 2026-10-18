@@ -1,9 +1,8 @@
+import { buildHtmlPreviewDocument, HtmlFrame } from "@thinkrail/ui/html-frame";
 import { useMemo } from "react";
 import type { ResourceContent, ResourceDiffProps } from "@/resources";
 import { diffContentStamp } from "../reviewComposerState";
 import { VisualDiff, type VisualDiffSide } from "../VisualDiff";
-import { HtmlFrame } from "./HtmlFrame";
-import { buildHtmlPreviewDocument } from "./htmlDocument";
 
 function textOf(content: ResourceContent): string | null {
 	return content.kind === "text" ? content.text : null;

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
+import { HTML_PREVIEW_CSP } from "@thinkrail/ui/html-frame";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { HTML_PREVIEW_CSP } from "../html/htmlDocument";
 import { notebookRenderer } from ".";
 import { NotebookFrame } from "./NotebookOutputView";
 import {
