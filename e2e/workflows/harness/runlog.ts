@@ -12,6 +12,7 @@ export interface RunRecord {
 	scenario: string;
 	skill: string;
 	deterministic: { pass: boolean; failed: string[]; checks: CheckResult[] };
+	advisory?: CheckResult[];
 	judge: JudgeResult | null;
 	dialog: { rung: DialogRung; cancelled: boolean; error?: string }[];
 	durationMs: number;

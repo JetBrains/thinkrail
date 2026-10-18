@@ -279,3 +279,152 @@ test("malformed historical tool diagrams and chat fences fall back to plain sour
 		await expect(surface.getByTestId("mermaid-fullscreen")).toHaveCount(0);
 	}
 });
+
+const LOGIN_MOCKUP = `<!doctype html><html><head><style>
+body{margin:0;font-family:sans-serif;background:#f4f4f5}
+.card{margin:40px auto;width:320px;padding:24px;background:white;border-radius:12px}
+.card button:hover{background:#4338ca}
+</style></head><body><div class="card"><img src="logo.png" width="24" height="24" alt="fixture-logo">
+<h1>Sign in</h1><form><input autofocus placeholder="Email"><button type="submit">Continue</button></form>
+<a href="https://attacker.invalid">Forgot password?</a><script>document.body.dataset.ran = "yes"</script></div></body></html>`;
+
+test("a mockup renders static HTML with workspace assets, viewport and source toggles, and fullscreen", async ({
+	page,
+}) => {
+	const card = await openVisualization(page, "single mockup", {
+		type: "mockup",
+		title: "Sign-in screen",
+		html: LOGIN_MOCKUP,
+		viewport: "phone",
+	});
+	const mockup = card.getByTestId("tool-visualize-mockup");
+	await expect(mockup.getByText("Sign-in screen", { exact: true })).toBeVisible();
+	const box = mockup.getByTestId("mockup-frame-box");
+	await expect(box).toHaveAttribute("data-viewport", "phone");
+	const frame = mockup.frameLocator("iframe");
+	await expect(frame.getByRole("heading", { name: "Sign in" })).toBeVisible();
+	await expect(frame.getByPlaceholder("Email")).toBeVisible();
+	await expect(frame.getByRole("button", { name: "Continue" })).toBeVisible();
+	const logo = frame.getByAltText("fixture-logo");
+	await expect(logo).toHaveAttribute("src", /^data:image\/png;base64,/);
+	await expect.poll(() => logo.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(1);
+	expect(await frame.locator("body").getAttribute("data-ran")).toBeNull();
+	expect(await frame.locator("script").count()).toBe(0);
+	expect(await frame.locator("[autofocus]").count()).toBe(0);
+	await expect(mockup.locator("iframe")).toHaveAttribute("sandbox", "allow-same-origin");
+
+	const frameWidth = () =>
+		mockup.locator("iframe").evaluate((element) => element.getBoundingClientRect().width);
+	const phoneWidth = await frameWidth();
+	await mockup.getByTestId("mockup-viewport").locator('[data-value="desktop"]').click();
+	await expect(box).toHaveAttribute("data-viewport", "desktop");
+	await expect
+		.poll(async () => (await frameWidth()) <= ((await box.boundingBox())?.width ?? 0) + 1)
+		.toBe(true);
+	expect(phoneWidth).toBeLessThanOrEqual(391);
+
+	await mockup.getByTestId("mockup-source-toggle").click();
+	await expect(mockup.getByTestId("mockup-source")).toContainText("<h1>Sign in</h1>");
+	await expect(mockup.locator("iframe")).toHaveCount(0);
+	await mockup.getByTestId("mockup-source-toggle").click();
+	await expect(mockup.locator("iframe")).toHaveCount(1);
+
+	await mockup.getByTestId("mockup-fullscreen").click();
+	const dialog = page.getByTestId("mockup-fullscreen-dialog");
+	await expect(dialog.getByRole("heading", { name: "Sign-in screen" })).toBeVisible();
+	await expect(
+		dialog.frameLocator("iframe").getByRole("heading", { name: "Sign in" }),
+	).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
+});
+
+test("a before/after mockup defaults to After, switches inline, and goes side by side when wide", async ({
+	page,
+}) => {
+	const card = await openVisualization(page, "before after mockup", {
+		type: "mockup",
+		title: "Toolbar",
+		before: "<nav><b>OLD_TOOLBAR</b></nav>",
+		after: "<nav><b>NEW_TOOLBAR</b></nav>",
+	});
+	const mockup = card.getByTestId("tool-visualize-mockup");
+	const version = mockup.getByTestId("mockup-version");
+	await expect(version.locator('[aria-pressed="true"]')).toHaveText("After");
+	await expect(mockup.frameLocator("iframe").getByText("NEW_TOOLBAR")).toBeVisible();
+	await version.getByText("Before", { exact: true }).click();
+	await expect(mockup.frameLocator("iframe").getByText("OLD_TOOLBAR")).toBeVisible();
+
+	await page.setViewportSize({ width: 1440, height: 900 });
+	await mockup.getByTestId("mockup-fullscreen").click();
+	const dialog = page.getByTestId("mockup-fullscreen-dialog");
+	const body = dialog.getByTestId("mockup-fullscreen-body");
+	await expect(body).toHaveAttribute("data-layout", "side-by-side");
+	await expect(body.locator("iframe")).toHaveCount(2);
+	await expect(dialog.getByTestId("mockup-version")).toHaveCount(0);
+	await page.keyboard.press("Escape");
+
+	await page.setViewportSize({ width: 820, height: 900 });
+	await mockup.getByTestId("mockup-fullscreen").click();
+	await expect(body).toHaveAttribute("data-layout", "single");
+	await expect(body.locator("iframe")).toHaveCount(1);
+	await expect(dialog.getByTestId("mockup-version")).toBeVisible();
+	await page.keyboard.press("Escape");
+});
+
+test("comparison options carry their own mockups and assistant mockup fences render", async ({
+	page,
+}) => {
+	const card = await openVisualization(
+		page,
+		"comparison mockups",
+		{
+			type: "comparison",
+			title: "Header layout",
+			options: [
+				{ name: "Tabs", html: "<div>OPTION_TABS</div>", recommended: true },
+				{ name: "Menu", html: "<div>OPTION_MENU</div>" },
+			],
+		},
+		"Here is the empty state:\n\n```mockup\n<section><h2>FENCE_EMPTY_STATE</h2><button>Create</button></section>\n```",
+	);
+	const comparison = card.getByTestId("tool-visualize-comparison");
+	const views = comparison.getByTestId("mockup-view");
+	await expect(views).toHaveCount(2);
+	await expect(views.nth(0).frameLocator("iframe").getByText("OPTION_TABS")).toBeVisible();
+	await expect(views.nth(1).frameLocator("iframe").getByText("OPTION_MENU")).toBeVisible();
+
+	const assistant = page.locator('[data-testid="chat-message"][data-role="assistant"]').last();
+	const fence = assistant.getByTestId("markdown-mockup");
+	await expect(fence).toBeVisible({ timeout: 10_000 });
+	await expect(
+		fence.frameLocator("iframe").getByRole("heading", { name: "FENCE_EMPTY_STATE" }),
+	).toBeVisible();
+	await expect(fence.frameLocator("iframe").getByRole("button", { name: "Create" })).toBeVisible();
+});
+
+test("a mockup's HTML source stays inside a comparison card and wraps long lines", async ({
+	page,
+}) => {
+	const oneLine = `<style>.e{display:flex;flex-direction:column;align-items:center;padding:48px;font-family:system-ui;color:#3f3f46}</style><div class="e"><h2>No projects yet</h2><p>${"Open a local folder or clone a repository to start. ".repeat(12)}</p><button>Open project</button></div>`;
+	const card = await openVisualization(page, "comparison source width", {
+		type: "comparison",
+		title: "Empty state",
+		options: [
+			{ name: "Centered", html: oneLine },
+			{ name: "Split", html: oneLine.replace("No projects yet", "Split") },
+		],
+	});
+	const comparison = card.getByTestId("tool-visualize-comparison");
+	const option = comparison.getByTestId("mockup-view").first();
+	const cardWidth = async () => (await comparison.boundingBox())?.width ?? 0;
+	const before = await cardWidth();
+	await option.getByTestId("mockup-source-toggle").click();
+	const source = option.getByTestId("mockup-source");
+	await expect(source).toContainText("No projects yet");
+	expect(await cardWidth()).toBeLessThanOrEqual(before + 1);
+	expect((await source.boundingBox())?.width ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(
+		before,
+	);
+	expect(await source.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+});

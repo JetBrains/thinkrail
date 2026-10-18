@@ -15,7 +15,8 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-	process.env.TMPDIR = previousTmp;
+	if (previousTmp === undefined) delete process.env.TMPDIR;
+	else process.env.TMPDIR = previousTmp;
 	rmSync(sandbox, { recursive: true, force: true });
 });
 

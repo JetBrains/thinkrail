@@ -107,3 +107,40 @@ test("visualize (comparison) renders option cards with a recommended pick", {
 	await expect(body).toContainText("GraphQL");
 	await expect(body.locator('[data-recommended="true"]').first()).toBeVisible();
 });
+
+test("visualize (mockup) renders a before/after HTML mockup the user can switch", {
+	tag: "@agent",
+}, async ({ page }) => {
+	test.setTimeout(150_000);
+	await openChatAndSend(
+		page,
+		"Use the visualize tool with type='mockup' to show a before/after of a settings page header: `before` has the title 'Settings' alone, `after` adds a search input to the right of the title. Static HTML with inline <style>, no scripts. Use only that tool.",
+	);
+	const card = await awaitExpandedCard(page, "visualize");
+	const mockup = card.getByTestId("tool-visualize-mockup");
+	await expect(mockup).toBeVisible();
+	await expect(mockup.getByTestId("mockup-version").locator('[aria-pressed="true"]')).toHaveText(
+		"After",
+	);
+	const frame = mockup.frameLocator("iframe");
+	await expect(frame.getByText("Settings").first()).toBeVisible({ timeout: 30_000 });
+	await expect(frame.locator("input")).not.toHaveCount(0);
+	await mockup.getByTestId("mockup-version").getByText("Before", { exact: true }).click();
+	await expect(frame.getByText("Settings").first()).toBeVisible();
+	await expect(frame.locator("input")).toHaveCount(0);
+});
+
+test("ask_user_question previews render mockup fences", { tag: "@agent" }, async ({ page }) => {
+	test.setTimeout(150_000);
+	await openChatAndSend(
+		page,
+		"Call ask_user_question once with a single single-select question 'Which save button style?' and two options, 'Filled' and 'Outline'. Give each option a preview that is only a ```mockup fenced block of static HTML with an inline <style> showing that button labelled Save. Use only that tool.",
+	);
+	const question = page.getByTestId("ask-user-question").first();
+	await expect(question).toBeVisible({ timeout: 90_000 });
+	const preview = question.getByTestId("ask-preview");
+	const mockup = preview.getByTestId("markdown-mockup");
+	await expect(mockup).toBeVisible({ timeout: 30_000 });
+	await expect(mockup.frameLocator("iframe").getByText("Save").first()).toBeVisible();
+	await question.getByTestId("ask-skip").click();
+});

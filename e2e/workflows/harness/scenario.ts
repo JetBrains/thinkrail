@@ -26,7 +26,8 @@ export interface ScenarioDef {
 	forbid?: Signal[];
 	watchdog?: WatchdogConfig;
 	expect: Check[];
-	judge?: { rubric: string[] };
+	advisory?: Check[];
+	judge?: { rubric: string[]; context?: (log: EventLog) => string };
 	record?: string;
 }
 
@@ -34,6 +35,7 @@ export interface ScenarioResult {
 	pass: boolean;
 	failed: string[];
 	checks: CheckResult[];
+	advisory: CheckResult[];
 	judge: JudgeResult | null;
 	hit: SignalHit | null;
 	watchdogReason: string | null;
@@ -75,6 +77,7 @@ export async function runScenario(def: ScenarioDef): Promise<ScenarioResult> {
 	let watchdogReason: string | null = null;
 	let judge: JudgeResult | null = null;
 	let checks: CheckResult[] = [];
+	let advisory: CheckResult[] = [];
 	let crashed: string | undefined;
 	const failed: string[] = [];
 	try {
@@ -128,6 +131,7 @@ export async function runScenario(def: ScenarioDef): Promise<ScenarioResult> {
 		await dialog.settle();
 
 		checks = runChecks(def.expect, { log, cwd });
+		advisory = runChecks(def.advisory ?? [], { log, cwd });
 		for (const check of checks) if (!check.pass) failed.push(`${check.name} — ${check.detail}`);
 		const hit = activeWatcher.peek();
 		if (hit?.kind === "forbid") failed.push(`forbid signal fired: ${hit.signal.description}`);
@@ -136,7 +140,14 @@ export async function runScenario(def: ScenarioDef): Promise<ScenarioResult> {
 				`no stop signal fired${watchdogReason ? ` — ${watchdogReason}` : " (turn ended without it)"}`,
 			);
 
-		if (def.judge) judge = await judgeTranscript(log.renderTranscript(), def.judge.rubric);
+		if (def.judge) {
+			const context = def.judge.context?.(log);
+			const transcript = log.renderTranscript();
+			judge = await judgeTranscript(
+				context ? `${transcript}\n\nArtifacts under review:\n${context}` : transcript,
+				def.judge.rubric,
+			);
+		}
 
 		if (isRecordMode() && def.record) await recordFixture(def.record, cwd);
 
@@ -144,6 +155,7 @@ export async function runScenario(def: ScenarioDef): Promise<ScenarioResult> {
 			pass: failed.length === 0,
 			failed,
 			checks,
+			advisory,
 			judge,
 			hit,
 			watchdogReason,
@@ -168,6 +180,7 @@ export async function runScenario(def: ScenarioDef): Promise<ScenarioResult> {
 			scenario: def.name,
 			skill: def.skill,
 			deterministic: { pass: !crashed && failed.length === 0, failed, checks },
+			...(advisory.length > 0 ? { advisory } : {}),
 			judge,
 			dialog: (dialog?.answered ?? []).map((round) => ({
 				rung: round.rung,
@@ -185,6 +198,8 @@ export async function runScenario(def: ScenarioDef): Promise<ScenarioResult> {
 export function workflowTest(def: ScenarioDef): void {
 	test(def.name, { tag: "@agent" }, async () => {
 		const result = await runScenario(def);
+		for (const check of result.advisory.filter((item) => !item.pass))
+			console.warn(`[advisory] ${def.name}: FAIL "${check.name}" — ${check.detail}`);
 		const advisoryFailures = result.judge?.items.filter((item) => item.verdict === "fail") ?? [];
 		for (const item of advisoryFailures)
 			console.warn(`[judge advisory] ${def.name}: FAIL "${item.statement}" — ${item.evidence}`);
