@@ -5,7 +5,7 @@ import {
 	RiLoader4Line as Loader2,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, buttonVariants } from "@thinkrail/ui/button";
 import {
 	Dialog,
 	DialogContent,
@@ -14,7 +14,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { copyText } from "@/lib";
 import type { LoginState } from "./loginState";
 import { redirectsToLoopback, uiServedFromLoopback } from "./uiOrigin";
@@ -48,8 +48,19 @@ export function LoginDialog({
 	const [copied, setCopied] = useState(false);
 	const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	useEffect(() => () => (copiedTimer.current ? clearTimeout(copiedTimer.current) : undefined), []);
+	const [copyFailed, setCopyFailed] = useState(false);
+	const urlFieldRef = useRef<HTMLInputElement>(null);
+	const urlFieldId = useId();
+	useEffect(() => {
+		if (!copyFailed) return;
+		urlFieldRef.current?.focus();
+		urlFieldRef.current?.select();
+	}, [copyFailed]);
 	const copyUrl = async (url: string) => {
-		if (!(await copyText(url))) return;
+		if (!(await copyText(url))) {
+			setCopyFailed(true);
+			return;
+		}
 		setCopied(true);
 		if (copiedTimer.current) clearTimeout(copiedTimer.current);
 		copiedTimer.current = setTimeout(() => setCopied(false), 1500);
@@ -116,14 +127,16 @@ export function LoginDialog({
 					<div className="flex flex-col gap-12">
 						{state.url ? (
 							<div className="flex gap-8">
-								<Button
+								<a
+									href={state.url}
+									target="_blank"
+									rel="noopener noreferrer"
 									data-testid="login-open-url"
-									className="flex-1"
-									onClick={() => window.open(state.url, "_blank", "noopener,noreferrer")}
+									className={buttonVariants({ className: "flex-1" })}
 								>
 									<ExternalLink className="size-16" />
 									Open sign-in page
-								</Button>
+								</a>
 								<Button
 									variant="outline"
 									data-testid="login-copy-url"
@@ -135,6 +148,22 @@ export function LoginDialog({
 									{copied ? <Check className="size-16" /> : <Copy className="size-16" />}
 									{copied ? "Copied" : "Copy link"}
 								</Button>
+							</div>
+						) : null}
+
+						{state.url && copyFailed ? (
+							<div className="flex flex-col gap-4">
+								<label htmlFor={urlFieldId} className="text-text-muted tr-text-metadata">
+									Copy this link manually
+								</label>
+								<input
+									id={urlFieldId}
+									ref={urlFieldRef}
+									readOnly
+									value={state.url}
+									data-testid="login-url-field"
+									className="min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-code-text text-text-default outline-none focus-visible:border-control-border-active"
+								/>
 							</div>
 						) : null}
 
