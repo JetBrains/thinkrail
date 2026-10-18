@@ -16,25 +16,17 @@ function escapeHtml(text: string): string {
 		.replace(/"/g, "&quot;");
 }
 
+const HTTP_EQUIV_META = /<meta\b[^>]*\bhttp-equiv\b[^>]*>/gi;
+
 export function mockupFileHtml(document: MockupDocument, cwd: string): string {
 	const base = pathToFileURL(cwd.endsWith("/") ? cwd : `${cwd}/`).href;
-	const head =
-		`<meta charset="utf-8"><base href="${escapeHtml(base)}">` +
+	const prelude =
+		`<!doctype html><html><head><meta charset="utf-8">` +
 		`<meta http-equiv="Content-Security-Policy" content="${MOCKUP_FILE_CSP}">` +
-		`<meta name="viewport" content="width=device-width, initial-scale=1">`;
-	const title = `<title>${escapeHtml(document.label)}</title>`;
-	const headTag = /<head\b[^>]*>/i.exec(document.html);
-	if (headTag) {
-		const at = headTag.index + headTag[0].length;
-		const hasTitle = /<title\b/i.test(document.html);
-		return `${document.html.slice(0, at)}${head}${hasTitle ? "" : title}${document.html.slice(at)}`;
-	}
-	const htmlTag = /<html\b[^>]*>/i.exec(document.html);
-	if (htmlTag) {
-		const at = htmlTag.index + htmlTag[0].length;
-		return `${document.html.slice(0, at)}<head>${head}${title}</head>${document.html.slice(at)}`;
-	}
-	return `<!doctype html><html><head>${head}${title}</head><body>${document.html}</body></html>`;
+		`<base href="${escapeHtml(base)}">` +
+		`<meta name="viewport" content="width=device-width, initial-scale=1">` +
+		`<title>${escapeHtml(document.label)}</title></head>`;
+	return `${prelude}${document.html.replace(HTTP_EQUIV_META, "")}`;
 }
 
 export function mockupFileUrl(path: string): string {

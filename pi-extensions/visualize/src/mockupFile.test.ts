@@ -21,29 +21,46 @@ afterAll(() => {
 });
 
 describe("mockupFileHtml", () => {
-	test("wraps a fragment with the workspace base, a no-script CSP and an escaped title", () => {
+	test("prefixes the workspace base, a no-script CSP and an escaped title before the user markup", () => {
 		const html = mockupFileHtml(doc("<p>Hi</p>"), "/work/my app");
-		expect(html.startsWith("<!doctype html><html><head>")).toBe(true);
+		expect(html.startsWith("<!doctype html><html><head><meta charset")).toBe(true);
 		expect(html).toContain('<base href="file:///work/my%20app/">');
 		expect(html).toContain(MOCKUP_FILE_CSP);
 		expect(MOCKUP_FILE_CSP).toContain("default-src 'none'");
-		expect(html).toContain("<title>Login &lt;form&gt;</title>");
-		expect(html).toContain("<body><p>Hi</p></body>");
+		expect(html).toContain("<title>Login &lt;form&gt;</title></head><p>Hi</p>");
 	});
 
-	test("injects into an existing head and keeps the document's own title", () => {
+	test("a full user document follows the prelude unchanged, for the browser to merge", () => {
+		const source =
+			"<!doctype html><html lang='en'><head><style>p{}</style></head><body>x</body></html>";
+		expect(mockupFileHtml(doc(source), "/w").endsWith(source)).toBe(true);
+	});
+});
+
+describe("mockupFileHtml policy ordering", () => {
+	const firstUserMarkup = (html: string, marker: string) => html.indexOf(marker);
+	test("the CSP precedes active content placed before <head>, and before every user tag", () => {
+		for (const source of [
+			"<script>fetch('https://x.invalid')</script><head><title>T</title></head><body>x</body>",
+			'<html><body onload="go()"><head></head>x</body></html>',
+			"<!--c--><svg onload=go()></svg><head></head>",
+			"<p>plain fragment</p>",
+		]) {
+			const html = mockupFileHtml(doc(source), "/w");
+			const csp = html.indexOf("Content-Security-Policy");
+			expect(csp).toBeGreaterThan(-1);
+			expect(csp).toBeLessThan(firstUserMarkup(html, source.slice(0, 8)));
+			expect(html.indexOf("<base")).toBeLessThan(firstUserMarkup(html, source.slice(0, 8)));
+		}
+	});
+
+	test("user meta refreshes and other http-equiv tags are dropped", () => {
 		const html = mockupFileHtml(
-			doc("<!doctype html><html><head><title>Own</title></head><body>x</body></html>"),
+			doc('<meta http-equiv="refresh" content="0;url=https://x.invalid"><p>x</p>'),
 			"/w",
 		);
-		expect(html.indexOf("<base")).toBeGreaterThan(html.indexOf("<head>"));
-		expect(html.indexOf("<base")).toBeLessThan(html.indexOf("<title>Own"));
-		expect(html).not.toContain("Login");
-	});
-
-	test("adds a head to a document that has <html> but no <head>", () => {
-		const html = mockupFileHtml(doc("<html lang='en'><body>x</body></html>"), "/w");
-		expect(html.startsWith("<html lang='en'><head><meta charset")).toBe(true);
+		expect(html).not.toContain("refresh");
+		expect(html.match(/http-equiv/gi)).toHaveLength(1);
 	});
 });
 

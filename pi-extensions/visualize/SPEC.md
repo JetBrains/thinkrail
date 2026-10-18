@@ -87,9 +87,13 @@ in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes it thr
   the project's real colors/fonts/spacing for visual decisions.
 - **Terminal mockups are files behind a link (rejected: inline screenshots, text approximations).**
   `renderResult` writes each document on demand to `<tmpdir>/pi-visualize/<sha256>.html`, idempotent
-  by content hash so a resumed session recreates it, with `<base href>` at the tool call's `cwd` (so
-  workspace-relative assets resolve) and a CSP `<meta>` (`default-src 'none'`, `file:`/`data:` images,
-  styles and fonts, no scripts, no form action) so "static only" also holds in the browser. It shows an
+  by content hash so a resumed session recreates it. The file is a fixed prelude — charset, a CSP
+  `<meta>` (`default-src 'none'`, `file:`/`data:` images, styles and fonts, no scripts, no form
+  action), `<base href>` at the tool call's `cwd` (so workspace-relative assets resolve), title —
+  followed by the user's markup with its `http-equiv` metas removed, so "static only" also holds in the
+  browser. The policy must precede **every** user byte (post-mortem from review: injecting it after the
+  first textual `<head>` let a `<script>` placed before that tag run first); the browser merges a full
+  user document's own `<html>`/`<head>` into the prelude's. It shows an
   OSC 8 **Open in browser ↗** link when pi-tui reports hyperlink support, always the path, and the
   source when expanded; a write failure renders inline. An inline screenshot needs a headless browser
   and only draws in image-capable terminals (not under tmux/SSH) — the same reason image-tier diagrams
