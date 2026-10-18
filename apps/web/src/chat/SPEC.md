@@ -383,10 +383,15 @@ them; a reply or dismissal ends the request and its draft with it. The draft is 
 chat-view remount. A request whose `toolCallId` is in the
 rows (`rowsHaveToolCall`) asks **on that tool**: the tool shell — `ToolCard`, the routine step row and a
 bare tool's wrapper — renders `ToolPromptSlot` under its header regardless of the tool's own fold, so no
-renderer needs prompt code (the MCP approval included). A collapsed Activity or thinking group shows just
-the awaiting step under its header (`AwaitingStep`) and folds back once answered; it never writes fold
-state, so the reader's manual collapse survives. Any other request (no anchor, or one the transcript does
-not hold) docks under the transcript, above the composer, outside the virtualized list so it is visible in
+renderer needs prompt code (the MCP approval included). A request carrying `toolInput` lists it **inside
+the prompt frame**, between the question and the options: one `ToolArgList` row per argument (the
+`key / value` list `McpArgs` shares), wrapping, bounded to 40vh with its own scroll — never truncated,
+never behind "Show more" — so what is approved sits inside the box the user answers, whether the prompt is
+anchored or docked. The tool card keeps the reader's fold. *Rejected:* auto-expanding the awaiting card —
+the arguments landed outside the prompt, and a call the transcript does not hold (an MCP `codemode`
+nested call) has no card at all. A collapsed Activity or thinking group shows just the awaiting step under
+its header (`AwaitingStep`) and folds back once answered; it never writes fold state, so the reader's
+manual collapse survives. Any other request (no anchor, or one the transcript does not hold) docks under the transcript, above the composer, outside the virtualized list so it is visible in
 both message orders. *Rejected:* keeping the modal for non-MCP extensions — every dialog had the same
 "strange popup" problem, and an anchored prompt shows exactly what is being approved.
 

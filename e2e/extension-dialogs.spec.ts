@@ -175,6 +175,59 @@ test("an extension dialog about a tool call asks on that tool's card, out of a c
 	await expect(group.getByTestId("activity-awaiting-step")).toHaveCount(0);
 });
 
+test("an approval lists the call's whole input inside the prompt, anchored or docked", async ({
+	page,
+}) => {
+	const wire = await routeWire(page);
+	const sessionId = await openSeededChat(page, "Approval lists the input");
+	const group = page.getByTestId("activity-group").first();
+	const topic = "A very long research topic, written out in full detail. ".repeat(60).trim();
+
+	wire.ask({
+		id: "extui-anchored",
+		sessionId,
+		kind: "select",
+		title: "Allow linear/create_issue? It may change data.",
+		options: ["Deny", "Allow once"],
+		toolCallId: MCP_CALL,
+		toolInput: { title: "Fix login", topic, team: "ENG" },
+	});
+	const step = group.getByTestId("activity-awaiting-step").getByTestId("activity-step");
+	const prompt = step.getByTestId("ext-ui-prompt");
+	const input = prompt.getByTestId("ext-ui-tool-input");
+	await expect(input.locator("dt")).toHaveText(["title", "topic", "team"]);
+	await expect(input.locator("dd")).toHaveText(["Fix login", topic, "ENG"]);
+	await expect(step).toHaveAttribute("data-expanded", "false");
+	const bounded = await input.evaluate((list) => ({
+		scrolls: list.scrollHeight > list.clientHeight,
+		bound: list.clientHeight <= window.innerHeight * 0.4 + 1,
+	}));
+	expect(bounded).toEqual({ scrolls: true, bound: true });
+	await input.evaluate((list) => {
+		list.scrollTop = list.scrollHeight;
+	});
+	await expect(input.locator("dd").last()).toBeInViewport();
+	await shot(group, "extension-dialogs", "mcp-approval-lists-input");
+	await prompt.getByTestId("ext-ui-option").filter({ hasText: "Deny" }).click();
+	await expect.poll(() => wire.replies).toEqual([{ id: "extui-anchored", value: "Deny" }]);
+
+	wire.ask({
+		id: "extui-docked",
+		sessionId,
+		kind: "select",
+		title: "Allow linear/create_issue? It may change data.",
+		options: ["Deny", "Allow once"],
+		toolCallId: `${MCP_CALL}/1`,
+		toolInput: { path: "/etc/hosts", force: true },
+	});
+	const docked = page.getByTestId("ext-ui-prompt");
+	await expect(group.getByTestId("ext-ui-prompt")).toHaveCount(0);
+	await expect(docked.getByTestId("ext-ui-tool-input").locator("dd")).toHaveText([
+		"/etc/hosts",
+		"true",
+	]);
+});
+
 test("a draft typed into an anchored prompt survives folding its Activity group open and shut", async ({
 	page,
 }) => {

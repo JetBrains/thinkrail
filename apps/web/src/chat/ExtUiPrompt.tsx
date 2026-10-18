@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useId, useRef, useState } from "r
 import { AttentionLine } from "./AttentionLine";
 import { ACTIVITY_BREADCRUMB_HEIGHT } from "./activityBreadcrumbs";
 import { useChatActions } from "./ChatActions";
+import { ToolArgList, toolArgEntries } from "./ToolArgList";
 import type { ExtUiDialogRequest } from "./types";
 
 export type ExtUiReply = (value: string | boolean | null) => void;
@@ -43,6 +44,7 @@ export function ExtUiPrompt({
 	const [heading, ...details] = request.title.split("\n");
 	const detail = details.join("\n").trim();
 	const anchored = request.toolCallId !== undefined;
+	const toolArgs = request.toolInput ? toolArgEntries(request.toolInput) : [];
 
 	useEffect(() => {
 		if (!anchored) return;
@@ -110,6 +112,16 @@ export function ExtUiPrompt({
 							</span>
 						) : null}
 					</div>
+
+					{toolArgs.length > 0 ? (
+						<ToolArgList
+							data-testid="ext-ui-tool-input"
+							aria-label="Arguments"
+							tabIndex={0}
+							entries={toolArgs}
+							className="max-h-[40vh] shrink-0 overflow-y-auto rounded-sm bg-container-header-bg px-8 py-4 outline-none focus-visible:ring-2 focus-visible:ring-primary"
+						/>
+					) : null}
 
 					{request.kind === "input" ? (
 						<input

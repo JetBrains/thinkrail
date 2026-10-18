@@ -45,6 +45,9 @@ test("an MCP call asks on its card; Always allow runs it unasked from then on un
 			"Allow in this chat",
 			"Always allow",
 		]);
+		const input = prompt.getByTestId("ext-ui-tool-input");
+		await expect(input.locator("dt")).toHaveText(["text"]);
+		await expect(input.locator("dd")).toHaveText(["first"]);
 		await expect(page.getByRole("dialog")).toHaveCount(0);
 		await shot(step, "mcp-approval", "asks-on-card");
 		await prompt.getByTestId("ext-ui-option").filter({ hasText: "Always allow" }).click();

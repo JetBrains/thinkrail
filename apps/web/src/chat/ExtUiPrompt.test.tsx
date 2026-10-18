@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { ExtUiPrompt, PendingExtUiContext } from "./ExtUiPrompt";
-import { type ChatRow, type RoutineToolStep, rowsHaveToolCall } from "./rows";
+import { type ChatRow, type RoutineToolStep, rowsHaveToolCall, type ThinkingStep } from "./rows";
 import { ChatTurnView } from "./turns";
 import type { ExtUiDialogRequest } from "./types";
 
@@ -158,6 +158,45 @@ describe("a dialog about a tool call renders on that tool", () => {
 		const card = renderWith({ ...tool("b", "visualize"), kind: "tool" }, approval);
 		expect(card).toContain('data-testid="tool-card"');
 		expect(card).toContain('data-testid="ext-ui-prompt"');
+	});
+
+	it("lists the call's whole input inside the prompt and leaves the tool's fold alone", () => {
+		const topic = "a long research topic ".repeat(20).trim();
+		const awaited = {
+			...tool("b", "mcp__everything__simulate_research_query"),
+			args: { topic, ambiguous: false },
+		};
+		const nested: ChatRow = {
+			...activity,
+			steps: [tool("a", "read"), { ...(activity.steps[1] as ThinkingStep), tools: [awaited] }],
+		};
+		const markup = renderWith(nested, {
+			...approval,
+			toolInput: { topic, ambiguous: false, filter: { state: "open" } },
+		});
+		const prompt = markup.slice(markup.indexOf('data-testid="ext-ui-prompt"'));
+		expect(prompt).toContain('data-testid="ext-ui-tool-input"');
+		expect(prompt).toContain(`<dt class="text-text-muted">topic</dt>`);
+		expect(prompt).toContain(topic);
+		expect(prompt).toContain(">ambiguous</dt>");
+		expect(prompt).toContain(">false</dd>");
+		expect(prompt).toContain("&quot;state&quot;: &quot;open&quot;");
+		expect(markup).toMatch(
+			/data-step="tool" data-tool="mcp__everything__simulate_research_query"[^>]*data-expanded="false"/,
+		);
+	});
+
+	it("lists the input on a docked prompt too, and nothing when the request carries none", () => {
+		const docked = renderToStaticMarkup(
+			<ExtUiPrompt
+				request={{ ...approval, toolCallId: "call/1", toolInput: { path: "/etc/hosts" } }}
+				onReply={() => {}}
+			/>,
+		);
+		expect(docked).toContain('data-testid="ext-ui-tool-input"');
+		expect(docked).toContain(">/etc/hosts</dd>");
+		const bare = renderToStaticMarkup(<ExtUiPrompt request={approval} onReply={() => {}} />);
+		expect(bare).not.toContain("ext-ui-tool-input");
 	});
 
 	it("finds a call anywhere in the transcript rows, nested thinking included", () => {
