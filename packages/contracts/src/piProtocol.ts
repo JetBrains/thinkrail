@@ -237,6 +237,8 @@ export interface SkillCatalogEntry {
 /** The tool call a dialog is about; absent when it is not tied to one (a command, startup, parallel calls). */
 interface ExtUiDialogAnchor {
 	toolCallId?: string;
+	/** The input that call will run with, as the asking host saw it — shown in full inside the prompt. */
+	toolInput?: Record<string, unknown>;
 }
 
 export type ExtUiRequest =

@@ -127,8 +127,9 @@ relax a rule.
   one per parent session (the manager keeps it on its entry; child sessions get none): a `tool_call`
   handler for every `mcp__*` call whose tool does not declare `readOnlyHint: true`. It skips the question
   for a tool allowed in this chat or holding a valid project grant; otherwise it asks through the injected
-  `askForToolCall` (the manager's `selectForToolCall`, so the dialog names `event.toolCallId` and renders
-  on that call's card) with **Deny · Allow once · Allow in this chat · Always allow**, in that order so a
+  `askForToolCall` (the manager's `selectForToolCall`, so the dialog names `event.toolCallId`, renders
+  on that call's card, and carries `event.input` as `toolInput` — the input as it reaches the guard, which
+  the prompt lists in full; the title never embeds a preview) with **Deny · Allow once · Allow in this chat · Always allow**, in that order so a
   lasting grant never sits next to Deny on a stacked mobile layout. When Always allow is offered, the
   title's second line states its scope ("Always allow trusts this tool in every chat of this project.
   Manage it in Settings › MCP servers."); the web renders later title lines as supporting text, so the

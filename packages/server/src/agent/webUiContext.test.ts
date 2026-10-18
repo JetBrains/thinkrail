@@ -53,8 +53,17 @@ test("extension-UI bridge: a dialog names the running tool call it is about, if 
 	running = undefined;
 	const loose = ui.input("Paste the code");
 	expect(frames.at(-1)).not.toHaveProperty("toolCallId");
-	const explicit = selectForToolCall("sess-anchor", "call-9", "Allow?", ["Deny", "Allow once"]);
-	expect(frames.at(-1)).toMatchObject({ kind: "select", toolCallId: "call-9" });
+	const explicit = selectForToolCall(
+		"sess-anchor",
+		{ toolCallId: "call-9", toolInput: { path: "/etc/hosts" } },
+		"Allow?",
+		["Deny", "Allow once"],
+	);
+	expect(frames.at(-1)).toMatchObject({
+		kind: "select",
+		toolCallId: "call-9",
+		toolInput: { path: "/etc/hosts" },
+	});
 	resolveExtUi({ id: frames.at(-1)?.id ?? "", value: "Allow once" });
 	expect(await explicit).toBe("Allow once");
 

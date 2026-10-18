@@ -386,7 +386,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     it is about (`toolCallId`) so the web asks on that call's card: the manager passes pi's own
     `agent.state.pendingToolCalls` and a dialog anchors only while **exactly one** call is running (the
     common gate-before-a-tool case; parallel calls stay unanchored rather than guess), and
-    `selectForToolCall` anchors explicitly (the MCP guard). `setExtUiPublisher`
+    `selectForToolCall` anchors explicitly and carries the call's `toolInput` (the MCP guard). `setExtUiPublisher`
     (server→client push seam; an optional `ExtUiAudience` narrows a push to clients below a protocol
     version), `resolveExtUi` (browser reply), `cancelExtUiForSession` (on dispose, and once pi accepts a
     user message — a steer or follow-up pi `"queued"`, or an idle prompt whose `preflightResult` says
@@ -957,8 +957,8 @@ the `/mcp` command stay pi's; ThinkRail owns what a multi-session GUI host owes 
 
 - **Registration.** The two built-in descriptors above, per parent session only, built by the session's
   `createMcpSessionHost` together with the call guard and a status invalidation callback. The manager
-  injects the guard's two ports — `askForToolCall` (→ `selectForToolCall(sessionId, toolCallId, …)`, so
-  the approval is anchored to its call even among parallel calls) and `grantTool` (→ the grant-writer
+  injects the guard's two ports — `askForToolCall` (→ `selectForToolCall(sessionId, { toolCallId, toolInput }, …)`,
+  so the approval is anchored to its call even among parallel calls and lists the call's input) and `grantTool` (→ the grant-writer
   seam) — and the host injects the workspace's project policy (`setMcpPolicyResolver` → `Project.mcpApprovals` / `mcpOverrides` /
   `mcpToolGrants`, fail-closed to none). Child (subagent) sessions load neither — the curated child set carries no engine —
   and the `Agent` tool's description says subagents cannot call MCP tools.

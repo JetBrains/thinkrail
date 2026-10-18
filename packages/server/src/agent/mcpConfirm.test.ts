@@ -211,6 +211,23 @@ test("read-only MCP tools run unasked; others ask with Deny kept away from Allow
 	]);
 });
 
+test("the approval carries the call's whole input, never a truncated preview", async () => {
+	const p = await chat();
+	const input = { topic: "a ".repeat(300).trim(), ambiguous: false };
+	faux.setResponses([
+		fauxAssistantMessage(fauxToolCall("mcp__probe__write", input, { id: "call-0" })),
+		fauxAssistantMessage("DONE"),
+	]);
+	const turn = promptSession(p.sessionId, "Write it.");
+	const asked = await answerNextSelect(MCP_CONFIRM_DENY, 0);
+	await turn;
+	expect(asked).toMatchObject({
+		title: "Allow probe/write? It may change data.",
+		toolCallId: "call-0",
+		toolInput: input,
+	});
+});
+
 test("Allow once asks again next time; Allow in this chat stops asking for that tool in that chat", async () => {
 	const p = await chat();
 	callTools("mcp__probe__write", "mcp__probe__write", "mcp__probe__write");

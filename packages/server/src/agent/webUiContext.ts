@@ -139,14 +139,14 @@ function bridgeDialog(
 
 export async function selectForToolCall(
 	sessionId: string,
-	toolCallId: string,
+	call: { toolCallId: string; toolInput: Record<string, unknown> },
 	title: string,
 	options: string[],
 	opts?: ExtensionUIDialogOptions,
 ): Promise<string | undefined> {
 	const v = await bridgeDialog(
 		sessionId,
-		{ id: nextId(), sessionId, kind: "select", title, options, toolCallId },
+		{ id: nextId(), sessionId, kind: "select", title, options, ...call },
 		opts,
 	);
 	return typeof v === "string" ? v : undefined;

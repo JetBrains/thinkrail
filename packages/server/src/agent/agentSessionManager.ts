@@ -1308,8 +1308,14 @@ async function createParentSessionInternal(
 	const mcpHost = createMcpSessionHost({
 		policy: () => mcpPolicyResolver(workspaceId),
 		onCommandSettled: scheduleMcpStatusRefresh,
-		askForToolCall: (toolCallId, title, choices, signal) =>
-			selectForToolCall(sessionId, toolCallId, title, choices, signal ? { signal } : undefined),
+		askForToolCall: (toolCallId, input, title, choices, signal) =>
+			selectForToolCall(
+				sessionId,
+				{ toolCallId, toolInput: input },
+				title,
+				choices,
+				signal ? { signal } : undefined,
+			),
 		grantTool: (server, target, tool) => {
 			try {
 				mcpToolGrantWriter(workspaceId, server, target, tool);

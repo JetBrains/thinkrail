@@ -178,8 +178,10 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
     `uiContext` calls (`select`/`confirm`/`input`/`editor` round-trip; `notify`/`setStatus`/`setWidget`/
     `setTitle`/`dismiss` are fire-and-forget), carried on the `pi.extensionUi` channel. A round-trip
     request's optional `toolCallId` names the tool call it is about; absent, it is tied to none (the host
-    anchors a dialog only when it knows the call: explicitly, or while exactly one call runs). The field
-    is additive: an older client ignores it, an older host never sends it. A pending dialog ends with the
+    anchors a dialog only when it knows the call: explicitly, or while exactly one call runs). An explicit
+    anchor may add `toolInput` — the input that call will run with, as the asking host saw it — which the
+    client lists in full inside the prompt. Both fields are additive: an older client ignores them, an
+    older host never sends them. A pending dialog ends with the
     client's `session.extUiReply` or a host `dismiss` frame; the host dismisses it on abort, dispose, or
     when it accepts a user message for that chat (a message an extension handles or preflight rejects
     leaves it pending), so a client never treats its own message send as an answer.

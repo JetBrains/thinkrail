@@ -34,6 +34,7 @@ export interface McpSessionHost {
 
 export type AskForToolCall = (
 	toolCallId: string,
+	input: Record<string, unknown>,
 	title: string,
 	options: string[],
 	signal: AbortSignal | undefined,
@@ -96,6 +97,7 @@ export function createMcpSessionHost({
 		}
 		const answer = await askForToolCall(
 			event.toolCallId,
+			event.input,
 			describeCall(event, config !== undefined),
 			config ? CONFIRM_OPTIONS_WITH_ALWAYS : CONFIRM_OPTIONS,
 			ctx.signal,
