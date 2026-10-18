@@ -175,8 +175,10 @@ nor initializes its pool. Renderer metadata and loaders are the only eager edge.
 retain distinct Pierre diff, Pierre file, worker-pool, and Monaco chunks, with none of their implementation
 code in the entry chunk.
 Vite emits every worker as an ES module (`worker.format: "es"`), so worker `import()` calls split into
-on-demand chunks instead of inlining; every target webview (Chromium, WebKit/Safari 15+, WebView2) runs
-module workers.
+on-demand chunks instead of inlining; every target webview (Chromium, WebKit/Safari 17+, WebView2) runs
+module workers. Safari/WebKit 17 is the browser floor: the shipped webviews (macOS 12+ system WebKit,
+Ubuntu 24.04 WebKitGTK, WebView2) all meet it, so web code may use baseline-17 APIs such as
+`URL.canParse`.
 
 The module set: `transport` / `store` / branded `shell` + its headless `shell/layout` child;
 layout-agnostic Project/File/Specs/Changes/Review renderers; registry-dispatched resource bodies and lazy xterm terminal
