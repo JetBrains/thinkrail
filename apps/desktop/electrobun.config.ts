@@ -1,6 +1,10 @@
 import { version } from "@thinkrail/shared/version";
 import type { ElectrobunConfig } from "electrobun";
 
+// Hutch reads `build.bun.version` like the other toolchain versions, but ElectrobunConfig does not type
+// it, so the literal is kept out of the excess-property check. It must match the root packageManager pin.
+const bun = { entrypoint: "src/index.ts", version: "1.4.3" };
+
 export default {
 	app: {
 		name: "ThinkRail",
@@ -16,7 +20,7 @@ export default {
 	},
 	build: {
 		mainProcess: "bun",
-		bun: { entrypoint: "src/index.ts" },
+		bun,
 		views: { preload: { entrypoint: "src/preload.ts", format: "iife" } },
 		copy: {
 			"../web/dist": "views/web",

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { version } from "@thinkrail/shared/version";
+import rootManifest from "../../../package.json";
 import hutchConfig from "../hutch.config";
 import manifest from "../package.json";
 
@@ -31,7 +32,7 @@ test("selects real Bun and preserves the physical runtime resources without reti
 	expect(config.runtime).toEqual({ exitOnLastWindowClosed: true });
 	expect(config.build).toMatchObject({
 		mainProcess: "bun",
-		bun: { entrypoint: "src/index.ts" },
+		bun: { entrypoint: "src/index.ts", version: rootManifest.packageManager.replace(/^bun@/, "") },
 		views: { preload: { entrypoint: "src/preload.ts", format: "iife" } },
 		copy: { "../web/dist": "views/web", ".stage/runtime": "runtime" },
 		mac: { bundleCEF: false, icons: "assets/icon.iconset" },

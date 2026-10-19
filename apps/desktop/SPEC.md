@@ -330,9 +330,12 @@ drivers and assertions live in the test package, which product code never import
 The package pins the Electrobun `2.0.1` npm bootstrap as a build-only dependency. That exact pin selects
 its paired Hutch toolchain and SDK; direct global Hutch invocation and floating version overrides are not
 part of the build path. The application explicitly selects the real Bun main process, not the default
-Cottontail runtime. Electrobun owns the packaged Bun `1.4.0` version; per-project runtime overrides are
-unsupported. The repository's independently pinned development/CI runtime is aligned with it through
-[[architecture]]'s root toolchain contract.
+Cottontail runtime. The packaged Bun is `1.4.3`, selected by `build.bun.version` rather than
+Electrobun's default `1.4.0`. Hutch resolves that field like the other toolchain versions
+(`configuredToolchainVersion`), but `ElectrobunConfig` does not type it, so the config passes the Bun
+block as a named value. `buildConfig.test.ts` asserts that it equals the root `packageManager` pin, which
+keeps the packaged runtime aligned with [[architecture]]'s root toolchain contract. Electrobun's own
+suite runs only on its default Bun, so desktop smoke and e2e are the gate for this runtime.
 
 The package runs the official `electrobun build` / `dev` commands. Configuration reads the same shared
 version module as the launcher, without an environment-version bridge. One documented `preBuild` hook

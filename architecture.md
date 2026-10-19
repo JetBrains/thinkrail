@@ -205,9 +205,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
     hyphens, without admitting a range.
 
     The root `packageManager` field also pins Bun for development, CI, and CLI compilation; Bun types
-    live in the catalog. Bun `1.4.0` aligns these paths with the desktop runtime, whose version is still
-    owned independently by its Electrobun release (see [[module-desktop]]). CI reads the root pin rather
-    than maintaining a second version in workflow YAML.
+    live in the catalog. Bun `1.4.3` aligns these paths with the desktop runtime, which the desktop
+    config selects through Electrobun's `build.bun.version` (see [[module-desktop]]); a desktop test keeps
+    the two pins equal. CI reads the root pin rather than maintaining a second version in workflow YAML.
 
 11. **Terminal = xterm.js on the DOM renderer.** The browser terminal is `@xterm/xterm`, driven from
     `apps/web/src/panels/TerminalInstance.tsx` against a real PTY (`bun-pty`) in
@@ -254,7 +254,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     proxy to a second site.
 
 15. **Desktop packaging preserves the host/runtime boundary.** Electrobun `2.0.1` explicitly selects
-    its release-owned Bun `1.4.0` runtime and embeds the host in that process, not the default Cottontail
+    the pinned Bun `1.4.3` runtime and embeds the host in that process, not the default Cottontail
     runtime; it never wraps or spawns the CLI. Its exact npm bootstrap pin selects the Hutch build
     toolchain and generated SDK; Bun remains the workspace package manager. The native window loads the
     packaged web build from the host's actual loopback port so UI, wire, files, and SPA fallback keep one
