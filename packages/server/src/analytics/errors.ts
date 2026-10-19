@@ -1,5 +1,5 @@
 import { homedir, hostname, userInfo } from "node:os";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { dirname, isAbsolute, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export type ErrorSource = "host_crash" | "host_logged" | "request" | "ui" | "desktop";
@@ -17,8 +17,13 @@ export interface ScrubContext {
 
 export interface FrameRoots {
 	appRoot: string;
-	cwd: string;
+	remapBase?: string;
 	caseInsensitive: boolean;
+}
+
+export interface FrameRootOptions {
+	appRoot?: string;
+	remapBase?: string;
 }
 
 function safely<T>(read: () => T, fallback: T): T {
@@ -51,10 +56,12 @@ export function detectAppRoot(moduleUrl: string = import.meta.url): string {
 	return moduleDir.endsWith(sourceSuffix) ? moduleDir.slice(0, -sourceSuffix.length) : moduleDir;
 }
 
-export function currentFrameRoots(appRoot?: string): FrameRoots {
+export function frameRoots(options: FrameRootOptions = {}): FrameRoots {
 	return {
-		appRoot: stripTrailingSlash(toSlashes(appRoot ? resolve(appRoot) : detectAppRoot())),
-		cwd: safely(() => process.cwd(), "/"),
+		appRoot: stripTrailingSlash(
+			toSlashes(options.appRoot ? resolve(options.appRoot) : detectAppRoot()),
+		),
+		...(options.remapBase ? { remapBase: options.remapBase } : {}),
 		caseInsensitive: process.platform === "win32",
 	};
 }
@@ -133,9 +140,8 @@ export function normalizeFrameFilename(filename: unknown, roots: FrameRoots): No
 	}
 	const raw = filename.startsWith("file://") ? safely(() => fileURLToPath(filename), "") : filename;
 	if (!raw) return external;
-	const absolute = toSlashes(
-		isAbsolute(raw) || /^[A-Za-z]:[\\/]/.test(raw) ? raw : resolve(roots.cwd, raw),
-	);
+	if (!isAbsolute(raw) && !/^[A-Za-z]:[\\/]/.test(raw)) return remappedFrame(raw, roots);
+	const absolute = toSlashes(raw);
 	const root = `${stripTrailingSlash(toSlashes(roots.appRoot))}/`;
 	const within = roots.caseInsensitive
 		? absolute.toLowerCase().startsWith(root.toLowerCase())
@@ -145,6 +151,18 @@ export function normalizeFrameFilename(filename: unknown, roots: FrameRoots): No
 	if (!relative || !/^[A-Za-z0-9_\-./@$~+]+$/.test(relative)) return external;
 	return { filename: relative, inApp: !relative.includes("node_modules/"), web: false };
 }
+
+function remappedFrame(raw: string, roots: FrameRoots): NormalizedFrameFile {
+	const external = { filename: EXTERNAL_FRAME, inApp: false, web: false };
+	if (!roots.remapBase) return external;
+	const relative = posix.normalize(posix.join(roots.remapBase, toSlashes(raw)));
+	if (relative.startsWith("../") || relative.startsWith("/") || relative === "..") return external;
+	if (!/^[A-Za-z0-9_\-./@$~+]+$/.test(relative)) return external;
+	return { filename: relative, inApp: !relative.includes("node_modules/"), web: false };
+}
+
+const CHUNK_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const CHUNK_IDS_PROPERTY = "$thinkrail_chunk_ids";
 
 const SAFE_TYPE = /^[A-Za-z_$][A-Za-z0-9_$.]{0,63}$/;
 const SAFE_FUNCTION = /^[A-Za-z0-9_$.<>[\]? -]{1,128}$/;
@@ -177,7 +195,21 @@ function positiveInt(value: unknown): number | undefined {
 	return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
-function sanitizeFrame(frame: unknown, roots: FrameRoots): Record<string, unknown> | null {
+function frameChunkId(
+	frame: Record<string, unknown>,
+	chunkIds: Record<string, unknown>,
+): string | undefined {
+	const own = frame.chunk_id;
+	if (typeof own === "string" && CHUNK_ID.test(own)) return own;
+	const mapped = typeof frame.filename === "string" ? chunkIds[frame.filename] : undefined;
+	return typeof mapped === "string" && CHUNK_ID.test(mapped) ? mapped : undefined;
+}
+
+function sanitizeFrame(
+	frame: unknown,
+	roots: FrameRoots,
+	chunkIds: Record<string, unknown>,
+): Record<string, unknown> | null {
 	if (!isRecord(frame)) return null;
 	const file = normalizeFrameFilename(frame.filename, roots);
 	const external = file.filename === EXTERNAL_FRAME;
@@ -193,6 +225,8 @@ function sanitizeFrame(frame: unknown, roots: FrameRoots): Record<string, unknow
 		const colno = positiveInt(frame.colno);
 		if (lineno !== undefined) out.lineno = lineno;
 		if (colno !== undefined) out.colno = colno;
+		const chunkId = frameChunkId(frame, chunkIds);
+		if (chunkId) out.chunk_id = chunkId;
 	}
 	return out;
 }
@@ -201,6 +235,7 @@ function sanitizeException(
 	exception: unknown,
 	roots: FrameRoots,
 	scrub: ScrubContext,
+	chunkIds: Record<string, unknown>,
 ): Record<string, unknown> | null {
 	if (!isRecord(exception)) return null;
 	const out: Record<string, unknown> = {
@@ -225,7 +260,7 @@ function sanitizeException(
 	if (isRecord(stacktrace) && Array.isArray(stacktrace.frames)) {
 		const frames = stacktrace.frames
 			.slice(-MAX_FRAMES)
-			.map((frame) => sanitizeFrame(frame, roots))
+			.map((frame) => sanitizeFrame(frame, roots, chunkIds))
 			.filter((frame): frame is Record<string, unknown> => frame !== null);
 		out.stacktrace = { type: "raw", frames };
 	}
@@ -238,10 +273,12 @@ export function sanitizeExceptionProperties(
 	scrub: ScrubContext,
 ): Record<string, unknown> {
 	const list = Array.isArray(properties.$exception_list) ? properties.$exception_list : [];
+	const chunkIdsValue = properties[CHUNK_IDS_PROPERTY];
+	const chunkIds = isRecord(chunkIdsValue) ? chunkIdsValue : {};
 	const out: Record<string, unknown> = {
 		$exception_list: list
 			.slice(0, MAX_EXCEPTIONS)
-			.map((exception) => sanitizeException(exception, roots, scrub))
+			.map((exception) => sanitizeException(exception, roots, scrub, chunkIds))
 			.filter((exception) => exception !== null),
 		$process_person_profile: false,
 	};
@@ -256,10 +293,11 @@ export function sanitizeExceptionProperties(
 }
 
 export function createExceptionSanitizer(
-	appRoot?: string,
+	options: FrameRootOptions = {},
 ): (properties: Record<string, unknown>) => Record<string, unknown> {
 	const scrub = defaultScrubContext();
-	return (properties) => sanitizeExceptionProperties(properties, currentFrameRoots(appRoot), scrub);
+	const roots = frameRoots(options);
+	return (properties) => sanitizeExceptionProperties(properties, roots, scrub);
 }
 
 export function errorCode(error: unknown): string | undefined {

@@ -200,3 +200,38 @@ test("client errors keep WebKit stacks parseable and their frames web-relative",
 	});
 	expect(JSON.stringify(frames)).not.toContain("evil.example");
 });
+
+test("chunk ids reach PostHog: registered bundles via the SDK, browser chunks via the report", async () => {
+	const id = "01a15438-b3fb-7af1-a9d9-5a7475549eac";
+	const webId = "ab8fcdab-5c22-55ed-bec8-0f9acb6a407e";
+	const registry = globalThis as { _posthogChunkIds?: Record<string, string> };
+	registry._posthogChunkIds = { [`Error\n    at ${import.meta.path}:1:1`]: id };
+	try {
+		const sent: BatchEntry[] = [];
+		boot(sent);
+		reportError(new Error("bundled"), { source: "request", handled: true });
+		reportClientError({
+			kind: "window",
+			type: "TypeError",
+			message: "x",
+			stack: "f@http://127.0.0.1:4317/assets/index-abc.js:10:5",
+			chunkIds: { "http://127.0.0.1:4317/assets/index-abc.js": webId },
+		});
+		await shutdownAnalytics();
+		const chunkIds = exceptions(sent).flatMap((entry) =>
+			(
+				entry.properties.$exception_list as Array<{
+					stacktrace: { frames: Array<Record<string, unknown>> };
+				}>
+			)
+				.flatMap((exception) => exception.stacktrace.frames)
+				.map((frame) => frame.chunk_id)
+				.filter(Boolean),
+		);
+		expect(chunkIds).toContain(id);
+		expect(chunkIds).toContain(webId);
+		expect(JSON.stringify(sent)).not.toContain("$thinkrail_chunk_ids");
+	} finally {
+		delete registry._posthogChunkIds;
+	}
+});

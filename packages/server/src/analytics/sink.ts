@@ -1,6 +1,7 @@
+import { ErrorTracking } from "@posthog/core";
 import { type EventMessage, PostHog } from "posthog-node";
 import { logger } from "../log";
-import { createExceptionSanitizer } from "./errors";
+import { createExceptionSanitizer, type FrameRootOptions } from "./errors";
 
 const log = logger("analytics");
 
@@ -14,7 +15,7 @@ export interface AnalyticsSink {
 	sendException(
 		clientId: string,
 		error: unknown,
-		params: Record<string, string | boolean>,
+		params: Record<string, unknown>,
 		immediate: boolean,
 	): Promise<void>;
 	setSending(enabled: boolean): void;
@@ -26,17 +27,32 @@ export interface PostHogSinkOptions {
 	host?: string;
 	fetchImpl?: typeof fetch;
 	retryDelayMs?: number;
-	appRoot?: string;
+	frames?: FrameRootOptions;
 }
 
 export const POSTHOG_EU_HOST = "https://eu.i.posthog.com";
 
 const SHUTDOWN_TIMEOUT_MS = 2_000;
 
+class RawFramePostHog extends PostHog {
+	protected override createErrorPropertiesBuilder(): ErrorTracking.ErrorPropertiesBuilder {
+		return new ErrorTracking.ErrorPropertiesBuilder(
+			[
+				new ErrorTracking.EventCoercer(),
+				new ErrorTracking.ErrorCoercer(),
+				new ErrorTracking.ObjectCoercer(),
+				new ErrorTracking.StringCoercer(),
+				new ErrorTracking.PrimitiveCoercer(),
+			],
+			ErrorTracking.createStackParser("node:javascript", ErrorTracking.nodeStackLineParser),
+		);
+	}
+}
+
 function exceptionBeforeSend(
-	appRoot?: string,
+	frames?: FrameRootOptions,
 ): (event: EventMessage | null) => EventMessage | null {
-	const sanitize = createExceptionSanitizer(appRoot);
+	const sanitize = createExceptionSanitizer(frames);
 	return (event) => {
 		if (event?.event !== "$exception") return event;
 		try {
@@ -54,13 +70,13 @@ export function createPostHogSink(options: PostHogSinkOptions): AnalyticsSink {
 		if (!sending) return Promise.resolve(new Response('{"status":"dropped client-side"}'));
 		return realFetch(url, init);
 	};
-	const client = new PostHog(options.apiKey, {
+	const client = new RawFramePostHog(options.apiKey, {
 		host: (options.host ?? POSTHOG_EU_HOST).replace(/\/+$/, ""),
 		flushAt: 1,
 		disableGeoip: true,
 		disableCompression: true,
 		fetch: gatedFetch,
-		before_send: exceptionBeforeSend(options.appRoot),
+		before_send: exceptionBeforeSend(options.frames),
 		...(options.retryDelayMs === undefined ? {} : { fetchRetryDelay: options.retryDelayMs }),
 	});
 	client.on("error", (error) => debugLog(error));

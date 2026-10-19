@@ -10,7 +10,7 @@ import {
 	saveAcquisition,
 } from "../persistence";
 import { runAttributionClaim } from "./attribution";
-import { type ErrorSource, errorCode, toV8Stack } from "./errors";
+import { CHUNK_IDS_PROPERTY, type ErrorSource, errorCode, toV8Stack } from "./errors";
 import {
 	type AdditionalAnalyticsCapture,
 	type AnalyticsEvent,
@@ -30,6 +30,7 @@ export interface AnalyticsOptions {
 	posthogApiKey?: string;
 	posthogHost?: string;
 	appRoot?: string;
+	remapBase?: string;
 	mute?: boolean;
 	additionalEnabled: boolean;
 	env?: AnalyticsEnv;
@@ -101,7 +102,10 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 			sinkFactory({
 				apiKey,
 				...(host ? { host } : {}),
-				...(options.appRoot ? { appRoot: options.appRoot } : {}),
+				frames: {
+					...(options.appRoot ? { appRoot: options.appRoot } : {}),
+					...(options.remapBase ? { remapBase: options.remapBase } : {}),
+				},
 				...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
 			});
 		const basic = createSink();
@@ -162,6 +166,7 @@ export interface ErrorReport {
 	handled: boolean;
 	scope?: string;
 	requestMethod?: string;
+	chunkIds?: Record<string, string>;
 }
 
 export interface ClientErrorInput {
@@ -170,6 +175,7 @@ export interface ClientErrorInput {
 	message?: unknown;
 	stack?: unknown;
 	boundary?: unknown;
+	chunkIds?: unknown;
 }
 
 const MAX_ERROR_REPORTS = 100;
@@ -198,7 +204,7 @@ function errorParams(
 	error: unknown,
 	report: ErrorReport,
 	fatal: boolean,
-): Record<string, string | boolean> {
+): Record<string, unknown> {
 	const code = errorCode(error);
 	return {
 		...s.env,
@@ -208,6 +214,7 @@ function errorParams(
 		...(report.scope ? { scope: report.scope } : {}),
 		...(report.requestMethod ? { request_method: report.requestMethod } : {}),
 		...(fatal ? { $exception_level: "fatal" } : {}),
+		...(report.chunkIds ? { [CHUNK_IDS_PROPERTY]: report.chunkIds } : {}),
 	};
 }
 
@@ -254,14 +261,29 @@ function clientError(input: ClientErrorInput): Error {
 	return error;
 }
 
+const MAX_CLIENT_CHUNK_IDS = 20;
+
+function clientChunkIds(value: unknown): Record<string, string> | undefined {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+	const entries = Object.entries(value)
+		.filter(
+			(entry): entry is [string, string] =>
+				entry[0].length <= 2_048 && typeof entry[1] === "string" && entry[1].length <= 64,
+		)
+		.slice(0, MAX_CLIENT_CHUNK_IDS);
+	return entries.length ? Object.fromEntries(entries) : undefined;
+}
+
 export function reportClientError(input: ClientErrorInput): void {
 	const kind =
 		typeof input.kind === "string" && CLIENT_ERROR_KINDS.has(input.kind) ? input.kind : "window";
 	const boundary = boundedString(input.boundary, 64).trim().replace(/\s+/g, "_");
+	const chunkIds = clientChunkIds(input.chunkIds);
 	reportError(clientError(input), {
 		source: "ui",
 		handled: kind === "render",
 		scope: boundary ? `${kind}:${boundary}` : kind,
+		...(chunkIds ? { chunkIds } : {}),
 	});
 }
 

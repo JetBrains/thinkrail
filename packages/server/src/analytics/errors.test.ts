@@ -15,11 +15,7 @@ const SCRUB: ScrubContext = {
 	username: "jdoe",
 	hostname: "Janes-MacBook-Pro",
 };
-const ROOTS: FrameRoots = {
-	appRoot: "/opt/thinkrail",
-	cwd: "/Users/jdoe/acme",
-	caseInsensitive: false,
-};
+const ROOTS: FrameRoots = { appRoot: "/opt/thinkrail", caseInsensitive: false };
 
 test.each([
 	[
@@ -63,11 +59,8 @@ test("scrubMessage caps length and ignores non-strings", () => {
 
 test.each([
 	["/opt/thinkrail/packages/server/src/host/server.ts", "packages/server/src/host/server.ts", true],
-	[
-		"../../../opt/thinkrail/packages/server/src/log/logging.ts",
-		"packages/server/src/log/logging.ts",
-		true,
-	],
+	["../../packages/server/src/log/logging.ts", EXTERNAL_FRAME, false],
+	["packages/billing/index.ts", EXTERNAL_FRAME, false],
 	["file:///opt/thinkrail/apps/cli/src/main.ts", "apps/cli/src/main.ts", true],
 	[
 		"/opt/thinkrail/node_modules/@earendil-works/pi-coding-agent/dist/index.js",
@@ -89,10 +82,67 @@ test.each([
 	expect(result.inApp).toBe(inApp);
 });
 
+test.each([
+	["../../packages/server/src/log/logging.ts", "packages/server/src/log/logging.ts", true],
+	["src/compiled-entry.ts", "apps/cli/src/compiled-entry.ts", true],
+	[
+		"../../node_modules/.bun/pi@1/node_modules/pi/dist/x.js",
+		"node_modules/.bun/pi@1/node_modules/pi/dist/x.js",
+		false,
+	],
+	["../../../escape/payroll.ts", EXTERNAL_FRAME, false],
+	["/Users/jdoe/.pi/agent/extensions/payroll.ts", EXTERNAL_FRAME, false],
+])("source-mapped binary frame %j resolves only through the remap base", (input, filename, inApp) => {
+	const result = normalizeFrameFilename(input, { ...ROOTS, remapBase: "apps/cli" });
+	expect(result.filename).toBe(filename);
+	expect(result.inApp).toBe(inApp);
+});
+
+test("chunk ids pass only as UUIDs, from the SDK frame or the browser's url map", () => {
+	const id = "ab8fcdab-5c22-55ed-bec8-0f9acb6a407e";
+	const url = "http://127.0.0.1:4317/assets/index-abc.js";
+	const frame = (extra: Record<string, unknown>) => ({
+		platform: "node:javascript",
+		function: "f",
+		lineno: 1,
+		colno: 2,
+		...extra,
+	});
+	const properties = sanitizeExceptionProperties(
+		{
+			$exception_list: [
+				{
+					type: "Error",
+					value: "x",
+					stacktrace: {
+						type: "raw",
+						frames: [
+							frame({ filename: "/opt/thinkrail/runtime/server-runtime.ts", chunk_id: id }),
+							frame({ filename: url }),
+							frame({ filename: "/opt/thinkrail/a.js", chunk_id: "not a uuid /Users/jdoe" }),
+							frame({ filename: "/Users/jdoe/x.js", chunk_id: id }),
+						],
+					},
+				},
+			],
+			$thinkrail_chunk_ids: { [url]: id },
+		},
+		ROOTS,
+		SCRUB,
+	);
+	const [list] = properties.$exception_list as Array<{ stacktrace: { frames: unknown[] } }>;
+	expect(list?.stacktrace.frames.map((f) => (f as { chunk_id?: string }).chunk_id)).toEqual([
+		id,
+		id,
+		undefined,
+		undefined,
+	]);
+	expect(properties).not.toHaveProperty("$thinkrail_chunk_ids");
+});
+
 test("Windows frame roots compare case-insensitively with either separator", () => {
 	const roots: FrameRoots = {
 		appRoot: "C:/Program Files/ThinkRail/resources/app",
-		cwd: "C:/Users/jdoe",
 		caseInsensitive: true,
 	};
 	expect(
