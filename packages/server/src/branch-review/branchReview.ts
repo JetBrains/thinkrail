@@ -20,7 +20,7 @@ type ProviderDetection = {
 	cacheable: boolean;
 	remoteUrl?: string;
 };
-type CommandResult = { ok: boolean; out: string };
+type CommandResult = { ok: boolean; out: string; err?: string };
 type CommandRunner = (cwd: string, command: string[]) => Promise<CommandResult>;
 type LookupResult = { value: OpenBranchReview | null; cacheable: boolean };
 type LookupOptions = { fresh?: boolean; now?: () => number };
@@ -521,5 +521,5 @@ export async function runProviderCommand(
 			NO_COLOR: "1",
 		},
 	});
-	return { ok: run.ok, out: run.out.trim() };
+	return { ok: run.ok, out: run.out.trim(), err: run.err.trim() };
 }

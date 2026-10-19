@@ -30,9 +30,9 @@ export type PrCommandRunner = (
 	cwd: string,
 	command: string[],
 	timeoutMs?: number,
-) => Promise<{ ok: boolean; out: string }>;
+) => Promise<{ ok: boolean; out: string; err?: string }>;
 
-const MUTATION_TIMEOUT_MS = 60_000;
+export const MUTATION_TIMEOUT_MS = 60_000;
 
 export interface OpenPrParams {
 	workspaceId: string;
@@ -393,24 +393,32 @@ export async function ghPrFlow(
 	return null;
 }
 
-async function pushToOrigin(cwd: string, branch: string): Promise<string> {
-	const origin = (await originUrls(cwd)).push;
-	if (!origin) throw new Error("This workspace's repository has no 'origin' remote to push to.");
+/** Every push to origin runs here: one non-interactive env and one auth-failure classification. */
+export async function pushOrigin(
+	cwd: string,
+	args: string[],
+): Promise<{ ok: true } | { err: string }> {
 	const hasSshCommandConfig = git(cwd, ["config", "core.sshCommand"]).ok;
-	const pushed = await gitAsync(cwd, ["push", "--set-upstream", "origin", branch], {
+	const pushed = await gitAsync(cwd, ["push", ...args], {
 		env: pushGitEnv(process.env, hasSshCommandConfig),
 		network: true,
 	});
-	if (!pushed.ok) {
-		const detail = pushed.err || "git push failed";
-		if (isPushAuthFailure(detail)) throw new CodedError("PUSH_AUTH_FAILED", detail);
-		throw new Error(detail);
-	}
+	if (pushed.ok) return { ok: true };
+	const detail = pushed.err || "git push failed";
+	if (isPushAuthFailure(detail)) throw new CodedError("PUSH_AUTH_FAILED", detail);
+	return { err: detail };
+}
+
+async function pushToOrigin(cwd: string, branch: string): Promise<string> {
+	const origin = (await originUrls(cwd)).push;
+	if (!origin) throw new Error("This workspace's repository has no 'origin' remote to push to.");
+	const pushed = await pushOrigin(cwd, ["--set-upstream", "origin", branch]);
+	if ("err" in pushed) throw new Error(pushed.err);
 	forgetOpenBranchReview(cwd);
 	return origin;
 }
 
-function refreshedWorkspace(workspaceId: string, expectedBranch: string | undefined) {
+export function refreshedWorkspace(workspaceId: string, expectedBranch: string | undefined) {
 	refreshUserOwnedWorkspace(workspaceId);
 	const ws = getWorkspace(workspaceId);
 	assertSafeRef(ws.branch);

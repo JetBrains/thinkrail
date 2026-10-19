@@ -211,6 +211,42 @@ test("branch status reports a review-free branch, and workspace.push publishes i
 	});
 });
 
+test("a CI poll re-reads the review without fetching origin; a focus read still fetches", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Poll" },
+		CTX,
+	)) as Workspace;
+	const remote = join(dataDir, "poll.git");
+	mkdirSync(remote);
+	git(remote, "init", "--bare");
+	git(repo, "remote", "add", "origin", remote);
+	await handleRequest(
+		"workspace.push",
+		{ workspaceId: workspace.id, branch: workspace.branch },
+		CTX,
+	);
+	const other = join(dataDir, "poll-other");
+	git(dataDir, "clone", "--branch", workspace.branch, remote, other);
+	git(other, "config", "user.email", "t@thinkrail.test");
+	git(other, "config", "user.name", "test");
+	writeFileSync(join(other, "teammate.txt"), "teammate\n");
+	git(other, "add", "-A");
+	git(other, "commit", "-m", "teammate");
+	git(other, "push", "origin", workspace.branch);
+
+	expect(
+		await handleRequest(
+			"workspace.branchStatus",
+			{ workspaceId: workspace.id, skipFetch: true },
+			CTX,
+		),
+	).toMatchObject({ published: true, behind: 0 });
+	expect(
+		await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
+	).toMatchObject({ published: true, behind: 1 });
+});
+
 test("a split origin measures the branch against where it is pushed, not where it is fetched", async () => {
 	const workspace = (await handleRequest(
 		"workspace.create",
