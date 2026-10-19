@@ -374,6 +374,25 @@ dependency. This keeps test process drivers outside both launchers and the serve
     the ThinkRail server half through `createVisualizeExtension({ validateMermaid })`; the old
     `packages/pi-visualize` is deleted. Detail: [[module-thinkrail-extensions]].
 
+22. **A path's spelling follows its kind.** A directory identity (`Project.path`,
+    `Workspace.worktreePath`) is the host's **resolved** spelling (`path.resolve`), exactly what pi records as a
+    transcript's cwd (pi resolves the cwd it is handed), so comparing it with a pi-reported cwd is a plain
+    `===`. Paths that enter in another spelling are resolved where they enter: git prints `C:/…` on Windows,
+    `THINKRAIL_DATA_DIR` may be relative, and records written before this rule are healed on load
+    ([[submodule-server-persistence]]). A **workspace-relative** path on the wire or in a store (file tree,
+    changes, review anchors and reading order, fs events) is POSIX `/` and contained in the worktree; the
+    server converts native `path.relative` output and model-written paths where they enter, and git object
+    names (`<ref>:<path>`) use `/`. Absolute paths pi reports (tool arguments, transcript cwd) stay pi's and
+    may use either separator; the browser reads them through `projectRelativePath` ([[submodule-web-lib]]),
+    and in agent-written prose or paths a backslash is a separator, never a Markdown escape. Why: two
+    spellings of one Windows directory broke every raw comparison (#766), so chats in Default and external
+    workspaces could not be listed, reopened, renamed, deleted, or scoped in history. Rejected: normalizing at
+    each comparison (every future comparison must remember; the first patch missed nine of twelve sites);
+    `realpath` as the canonical form (diverges from headers already on disk wherever a stored path crosses a
+    symlink or 8.3 name); folding case (pi's own cwd identity is case-sensitive, and git and `resolve` both
+    keep on-disk case). Accepted cost: an older ThinkRail sharing `~/.thinkrail` fails reopen-from-Recent
+    (`ALREADY_OPEN`) for a healed project until it updates.
+
 ## Invariants
 
 - Never **value**-import `pi` in browser-bundled code; import types only, from the `pi-ai` /
