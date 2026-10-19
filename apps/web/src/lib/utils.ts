@@ -138,7 +138,7 @@ export function shallowEqualArrays(
 	return a.every((value, i) => Object.is(value, b[i]));
 }
 
-function fileName(path: string): string {
+export function fileName(path: string): string {
 	const parts = normalizePath(path).split("/").filter(Boolean);
 	return parts.at(-1) ?? path;
 }
