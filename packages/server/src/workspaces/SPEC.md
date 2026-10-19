@@ -233,8 +233,11 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   **refuses symlinked path components** (`lstat`, never followed — a malicious checkout can't redirect
   the seed outside the workspace); and the `.gitignore` write is **exclusive-create (`wx`) — only when
   the file is absent**: in the Default workspace that path is inside the user's own repo, where an
-  existing (possibly tracked, possibly customized) file is theirs to keep, and `O_EXCL` never follows
-  a (possibly dangling) symlink; seeding fills the gap, never overwrites (pinned by regression tests).
+  existing (possibly tracked, possibly customized) file is theirs to keep. The leaf is `lstat`-checked
+  first, so any entry already there, a (possibly dangling) symlink included, counts as present: POSIX
+  `O_EXCL` refuses to follow a symlink, but Windows' exclusive create (`CREATE_NEW`) follows the reparse
+  point and would write outside the checkout. Seeding fills the gap, never overwrites (pinned by
+  regression tests, the symlink one wherever the host may create symlinks).
 - **Lifecycle events:** every membership mutation — `createWorkspace` (`created`), `renameWorkspace`
   (`updated`, the agent's `set_title` included since it goes through it), `forgetWorkspace`
   (`removed`) — emits a `WorkspaceLifecycleEvent` through an **injected publisher** (`setWorkspacePublisher`,

@@ -312,8 +312,10 @@ export function ensureWorkspaceScratchDir(ws: Workspace): void {
 		else if (!entry.isDirectory())
 			throw new Error(`Refusing to seed the scratch dir: not a real directory: ${dir}`);
 	}
+	const gitignore = join(dir, ".gitignore");
+	if (lstatSync(gitignore, { throwIfNoEntry: false })) return;
 	try {
-		writeFileSync(join(dir, ".gitignore"), "*\n", { flag: "wx" });
+		writeFileSync(gitignore, "*\n", { flag: "wx" });
 	} catch (err) {
 		if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
 	}
