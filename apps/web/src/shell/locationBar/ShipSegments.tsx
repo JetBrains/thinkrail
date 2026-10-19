@@ -30,10 +30,10 @@ import {
 	type ShipArm,
 	shipActions,
 } from "../../panels/shipActions";
-import type { ShipRunner } from "../../panels/useShipRunner";
+import { type ShipRunner, useShipRunner } from "../../panels/useShipRunner";
 import { canSettleWorkspace } from "../../panels/workspaceActions";
-import { isDefaultWorkspace, useAppStore } from "../../store";
-import { ReviewChip } from "./BranchSegment";
+import { isDefaultWorkspace, selectWorkspaceChatTab, useAppStore } from "../../store";
+import { ReviewChip, ReviewSegment } from "./BranchSegment";
 import { chipClass, Segment, type SplitTone, splitFrameClass, splitPartClass } from "./Segment";
 
 const ACTION_ICON: Record<ShipActionId, RemixiconComponentType> = {
@@ -171,7 +171,7 @@ function RemoteValueView({ value }: { value: RemoteValue }) {
 	}
 }
 
-export function ShipSegments({
+function ShipSegments({
 	workspace,
 	status,
 	review,
@@ -244,6 +244,48 @@ export function ShipSegments({
 					onRun={runner.run}
 				/>
 			</Segment>
+		</>
+	);
+}
+
+export function ShipStrip({
+	workspace,
+	status,
+	review,
+	settled,
+	noteOpenReview,
+	refresh,
+}: {
+	workspace: Workspace;
+	status: BranchFacts | null;
+	review: OpenBranchReview | null;
+	settled: boolean;
+	noteOpenReview: (review: OpenBranchReview, url?: string) => void;
+	refresh: () => void;
+}) {
+	const sessionId = useAppStore((s) => selectWorkspaceChatTab(s, workspace.id)?.sessionId ?? null);
+	const runner = useShipRunner({
+		workspace,
+		sessionId,
+		openReview: null,
+		status,
+		noteOpenReview,
+		refresh,
+	});
+	return (
+		<>
+			{status ? (
+				<ShipSegments
+					workspace={workspace}
+					status={status}
+					review={review}
+					settled={settled}
+					runner={runner}
+				/>
+			) : review ? (
+				<ReviewSegment review={review} />
+			) : null}
+			{runner.dialogs}
 		</>
 	);
 }

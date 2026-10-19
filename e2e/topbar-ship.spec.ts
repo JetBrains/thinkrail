@@ -6,6 +6,7 @@ import {
 	createWorkspaceViaDialog,
 	enterDefaultWorkspace,
 	openFixtureProject,
+	worktreeRow,
 } from "./fixtures/app";
 import { commitFile, gitAs } from "./fixtures/git";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
@@ -185,5 +186,41 @@ test("Open PR from the topbar composes from commits or the repository template",
 		gitAs(workspace.worktreePath, "config", "--unset", "protocol.https.allow");
 		gitAs(workspace.worktreePath, "config", "--unset", `url.${bare}.pushInsteadOf`);
 		rmSync(bare, { recursive: true, force: true });
+	}
+});
+
+test("an Open PR draft belongs to its workspace and closes when the scope moves", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const second = await createWorkspaceViaDialog(page);
+	const currentHash = () => page.evaluate(() => window.location.hash);
+	await worktreeRow(page, "workspace-1")
+		.getByRole("button", { name: "workspace-1", exact: true })
+		.click();
+	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
+	const firstHash = await currentHash();
+	await worktreeRow(page, "workspace-2")
+		.getByRole("button", { name: "workspace-2", exact: true })
+		.click();
+	await expect(page.getByTestId("scope-name")).toHaveText("workspace-2");
+	await expect.poll(currentHash).not.toBe(firstHash);
+
+	commitFile(second.worktreePath, "ship.ts", "export const ship = 1;\n", "feat: ship segment");
+	gitAs(second.worktreePath, "remote", "add", "origin", "https://github.com/acme/sample.git");
+	gitAs(second.worktreePath, "config", "protocol.https.allow", "never");
+	try {
+		await revalidate(page);
+		await page.getByTestId("scope-ship-review-primary").click();
+		const compose = page.getByTestId("open-pr-compose-dialog");
+		await expect(compose).toBeVisible();
+
+		await page.goBack();
+		await expect.poll(currentHash).toBe(firstHash);
+		await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
+		await expect(compose).toHaveCount(0);
+	} finally {
+		gitAs(second.worktreePath, "config", "--unset", "protocol.https.allow");
 	}
 });

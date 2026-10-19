@@ -2,11 +2,10 @@ import type { OpenBranchReview, Project, Workspace } from "@thinkrail/contracts"
 import { useNow } from "../../components/useNow";
 import type { BranchFacts } from "../../panels/branchStatusState";
 import { resolveBranchReview } from "../../panels/useBranchStatus";
-import { useShipRunner } from "../../panels/useShipRunner";
-import { selectWorkspaceChatTab, useAppStore } from "../../store";
-import { BranchSegment, ReviewSegment } from "./BranchSegment";
+import { useAppStore } from "../../store";
+import { BranchSegment } from "./BranchSegment";
 import { ProjectSegment } from "./ProjectSegment";
-import { ShipSegments } from "./ShipSegments";
+import { ShipStrip } from "./ShipSegments";
 import { useActiveWorkspaceSettled, WorkspaceSegment } from "./WorkspaceSegment";
 
 export function LocationBar({
@@ -27,21 +26,10 @@ export function LocationBar({
 	onNewWorkspace: () => void;
 }) {
 	const workspaceSettlingSupported = useAppStore((state) => state.workspaceSettlingSupported);
-	const sessionId = useAppStore((state) =>
-		workspace ? (selectWorkspaceChatTab(state, workspace.id)?.sessionId ?? null) : null,
-	);
 	const now = useNow();
 	const settled = useActiveWorkspaceSettled(workspace, now);
 	const resolvedReview = resolveBranchReview(review, workspace?.review, workspaceSettlingSupported);
 	const shownReview = resolvedReview.review;
-	const runner = useShipRunner({
-		workspace,
-		sessionId,
-		openReview: null,
-		status: branchStatus,
-		noteOpenReview,
-		refresh: refreshBranchStatus,
-	});
 	return (
 		<div
 			data-testid="scope-context"
@@ -64,18 +52,17 @@ export function LocationBar({
 					status={branchStatus}
 				/>
 			) : null}
-			{workspace && branchStatus ? (
-				<ShipSegments
+			{workspace ? (
+				<ShipStrip
+					key={workspace.id}
 					workspace={workspace}
 					status={branchStatus}
 					review={shownReview}
 					settled={settled}
-					runner={runner}
+					noteOpenReview={noteOpenReview}
+					refresh={refreshBranchStatus}
 				/>
-			) : workspace && shownReview ? (
-				<ReviewSegment review={shownReview} />
 			) : null}
-			{runner.dialogs}
 		</div>
 	);
 }

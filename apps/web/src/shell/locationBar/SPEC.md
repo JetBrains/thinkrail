@@ -31,8 +31,11 @@ actions through the panels-owned ship runner; it owns no host state.
   `workspaceActions` (the one implementation of open-in / rename / reveal / remove / `editor.list` /
   `workspace.list`, shared with `ProjectTree`), `RemoveWorkspaceDialog`, `BranchPicker` + `branches`,
   `useOpenProject`, `useBranchStatus` (`openReviewLabel`, `resolveBranchReview`), `shipActions` (the
-  derivation), and `useShipRunner` (the action runner with its dialogs, shared with the Plan pane;
-  `LocationBar` owns it, so a compose draft survives the segments unmounting on a disconnect).
+  derivation), and `useShipRunner` (the action runner with its dialogs, shared with the Plan pane). A
+  `ShipStrip` keyed by the workspace id owns the runner: a compose draft survives the segments unmounting on a
+  disconnect, while moving to another workspace discards the draft, its retry, and any pending preview with
+  it, so a submit can never send one workspace's draft for another (the same binding rule as rename and
+  Remove).
 - **Forbidden:** server/shared/pi; layout engine, intents, or frame state; being imported by anything
   other than `Shell`; a second implementation of a workspace action that `panels/workspaceActions` has,
   or of a ship action (push, open PR, sync) that `panels/useShipRunner` has.
