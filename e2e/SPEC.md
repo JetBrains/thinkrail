@@ -335,6 +335,19 @@ Each scenario's app reset also removes the lane fixture repository's `origin` re
 Pull request segments read the shared repo config, so an origin a push scenario added must never reshape a
 later scenario's topbar.
 
+**GitHub review states** (`topbar-review.spec.ts`) need a real-looking PR without a network. Origin is
+`git@github.com:<repo>.git` — what both the host's configured-URL read and `git remote get-url` see — with
+`core.sshCommand` pointing at the fake-bin `github-ssh` (`ssh.variant simple`), which serves upload-pack /
+receive-pack from a local bare repo, so pushes, fetches, and remote-branch deletion run for real. An
+`insteadOf` rewrite cannot stand in: `get-url` expands it, and the host's review lookup would then see a
+local path and never find a PR. The lane's fake **`gh`** (`fixtures/fakeGh.ts`, launched by a generated
+fake-bin shim under the runner's bun, since the host PATH has none) answers `pr list|view` and `repo view`
+from a test-written scenario file, applies `pr ready|merge|reopen` to it, and logs every argv so a spec
+asserts the exact mutations. Without a scenario it fails like an unauthenticated gh, so every other spec
+keeps the gh-less behaviour; `THINKRAIL_GH_OFFLINE` still keeps `pr.open` on the compare hand-off. The reset
+deletes the scenario and log and unsets the ssh config. The host caches repository merge settings per origin
+URL for the whole run, so a spec that sets its own repository settings names its own repository.
+
 Every concurrent lane derives a distinct data dir, HOME, pi-agent dir, fixture repository, binary cache,
 desktop cache/state plus ready/control files, Playwright transform cache, restart artifacts,
 picker/editor/provider control files, host/restart/binary/desktop ports, and Central fixture artifacts. The

@@ -17,6 +17,8 @@ import {
 	E2E_CENTRAL_STATE,
 	E2E_DATA_DIR,
 	E2E_FIXTURE_REPO,
+	E2E_GH_LOG,
+	E2E_GH_SCENARIO,
 	E2E_PI_AGENT_DIR,
 	E2E_PI_MODELS_SEED,
 	E2E_PICK_DIR_POINTER,
@@ -77,6 +79,13 @@ function resetState(): void {
 	try {
 		gitQuiet(E2E_FIXTURE_REPO, "remote", "remove", "origin");
 	} catch {}
+	for (const key of ["core.sshCommand", "ssh.variant"]) {
+		try {
+			gitQuiet(E2E_FIXTURE_REPO, "config", "--unset-all", key);
+		} catch {}
+	}
+	rmSync(E2E_GH_SCENARIO, { force: true });
+	rmSync(E2E_GH_LOG, { force: true });
 
 	git(E2E_FIXTURE_REPO, "worktree", "prune");
 	for (let sweep = 0; sweep < 2; sweep += 1) {

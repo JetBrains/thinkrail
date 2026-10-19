@@ -14,7 +14,7 @@ import {
 	waitForCentralTarget,
 	writeE2eAgentSettings,
 } from "./fixtures/centralAgent";
-import { writeHermeticE2eShell } from "./fixtures/executables";
+import { writeFakeGh, writeHermeticE2eShell } from "./fixtures/executables";
 import {
 	E2E_CENTRAL_BAD_EXTENSION_SOURCE,
 	E2E_CENTRAL_EXTENSION_SOURCE,
@@ -22,6 +22,8 @@ import {
 	E2E_DATA_DIR,
 	E2E_FAKE_BIN_DIR,
 	E2E_FIXTURE_REPO,
+	E2E_GH_LOG,
+	E2E_GH_SCENARIO,
 	E2E_HOME_DIR,
 	E2E_PI_AGENT_DIR,
 	E2E_PI_MODELS_SEED,
@@ -66,12 +68,13 @@ export default function globalSetup(config?: FullConfig): void | Promise<void> {
 		for (const rc of [".zshrc", ".bashrc"]) writeFileSync(join(E2E_HOME_DIR, rc), "");
 
 		mkdirSync(E2E_FAKE_BIN_DIR, { recursive: true });
-		for (const command of ["central", "code"]) {
+		for (const command of ["central", "code", "github-ssh"]) {
 			const target = join(E2E_FAKE_BIN_DIR, command);
 			copyFileSync(new URL(`./fixtures/bin/${command}`, import.meta.url), target);
 			chmodSync(target, 0o755);
 		}
 		writeHermeticE2eShell(E2E_FAKE_BIN_DIR, process.env.SHELL ?? "/bin/bash");
+		writeFakeGh(E2E_FAKE_BIN_DIR, E2E_GH_SCENARIO, E2E_GH_LOG);
 		copyFileSync(
 			new URL("./fixtures/central-extension.ts.fixture", import.meta.url),
 			E2E_CENTRAL_EXTENSION_SOURCE,
