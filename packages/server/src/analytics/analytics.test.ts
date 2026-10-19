@@ -493,6 +493,7 @@ test("campaign-enriched basics stay on the current grant sink while plain basics
 				send(_clientId, events) {
 					sink.deliveries.push(...events);
 				},
+				async sendException() {},
 				setSending(enabled) {
 					sink.sending = enabled;
 				},

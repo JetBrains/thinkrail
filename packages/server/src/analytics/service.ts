@@ -10,6 +10,7 @@ import {
 	saveAcquisition,
 } from "../persistence";
 import { runAttributionClaim } from "./attribution";
+import { type ErrorSource, errorCode, toV8Stack } from "./errors";
 import {
 	type AdditionalAnalyticsCapture,
 	type AnalyticsEvent,
@@ -28,6 +29,7 @@ export interface AnalyticsOptions {
 	build?: BuildKind;
 	posthogApiKey?: string;
 	posthogHost?: string;
+	appRoot?: string;
 	mute?: boolean;
 	additionalEnabled: boolean;
 	env?: AnalyticsEnv;
@@ -57,6 +59,7 @@ interface AnalyticsState {
 	acquisition: AcquisitionRecord | null;
 	attributionGeneration: number;
 	attributionAbort: AbortController;
+	errorReports: { count: number; recent: Map<string, number> };
 	attribution: Pick<
 		AnalyticsOptions,
 		| "openExternal"
@@ -98,6 +101,7 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 			sinkFactory({
 				apiKey,
 				...(host ? { host } : {}),
+				...(options.appRoot ? { appRoot: options.appRoot } : {}),
 				...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
 			});
 		const basic = createSink();
@@ -113,6 +117,7 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 			acquisition: null,
 			attributionGeneration: 0,
 			attributionAbort: new AbortController(),
+			errorReports: { count: 0, recent: new Map() },
 			attribution: {
 				...(options.openExternal ? { openExternal: options.openExternal } : {}),
 				...(options.attributionEndpoint
@@ -150,6 +155,95 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 export function track(event: BasicAnalyticsEvent): void {
 	const s = state;
 	if (s && !s.shutdownPromise) send(s, s.basic, event);
+}
+
+export interface ErrorReport {
+	source: ErrorSource;
+	handled: boolean;
+	scope?: string;
+	requestMethod?: string;
+}
+
+export interface ClientErrorInput {
+	type?: string;
+	message?: string;
+	stack?: string;
+}
+
+const MAX_ERROR_REPORTS = 100;
+const ERROR_DEDUPE_MS = 60_000;
+const FATAL_FLUSH_TIMEOUT_MS = 2_000;
+
+function errorKey(error: unknown, report: ErrorReport): string {
+	const name = error instanceof Error ? error.name : typeof error;
+	const message = error instanceof Error ? error.message : String(error);
+	return `${report.source}|${report.scope ?? ""}|${report.requestMethod ?? ""}|${name}|${message.slice(0, 200)}`;
+}
+
+function admitErrorReport(s: AnalyticsState, error: unknown, report: ErrorReport): boolean {
+	const now = Date.now();
+	const key = errorKey(error, report);
+	const last = s.errorReports.recent.get(key);
+	if (last !== undefined && now - last < ERROR_DEDUPE_MS) return false;
+	if (s.errorReports.count >= MAX_ERROR_REPORTS) return false;
+	s.errorReports.count++;
+	s.errorReports.recent.set(key, now);
+	return true;
+}
+
+function errorParams(
+	s: AnalyticsState,
+	error: unknown,
+	report: ErrorReport,
+	fatal: boolean,
+): Record<string, string | boolean> {
+	const code = errorCode(error);
+	return {
+		...s.env,
+		source: report.source,
+		handled: report.handled,
+		...(code ? { code } : {}),
+		...(report.scope ? { scope: report.scope } : {}),
+		...(report.requestMethod ? { request_method: report.requestMethod } : {}),
+		...(fatal ? { $exception_level: "fatal" } : {}),
+	};
+}
+
+export function reportError(error: unknown, report: ErrorReport): void {
+	const s = state;
+	if (!s || s.shutdownPromise) return;
+	try {
+		if (!admitErrorReport(s, error, report)) return;
+		void s.basic.sendException(s.clientId, error, errorParams(s, error, report, false), false);
+	} catch {
+		log.debug("error report failed");
+	}
+}
+
+export async function reportFatalError(error: unknown): Promise<void> {
+	const s = state;
+	if (!s) return;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		const params = errorParams(s, error, { source: "host_crash", handled: false }, true);
+		await Promise.race([
+			s.basic.sendException(s.clientId, error, params, true),
+			new Promise<void>((resolve) => {
+				timer = setTimeout(resolve, FATAL_FLUSH_TIMEOUT_MS);
+			}),
+		]);
+	} catch {
+		log.debug("fatal error report failed");
+	} finally {
+		if (timer) clearTimeout(timer);
+	}
+}
+
+export function clientError(input: ClientErrorInput): Error {
+	const error = new Error(typeof input.message === "string" ? input.message : "");
+	error.name = typeof input.type === "string" && input.type ? input.type : "Error";
+	error.stack = typeof input.stack === "string" ? toV8Stack(input.stack) : "";
+	return error;
 }
 
 export function getAdditionalAnalyticsCapture(): AdditionalAnalyticsCapture | null {
