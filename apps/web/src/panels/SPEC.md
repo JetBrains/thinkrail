@@ -1325,9 +1325,20 @@ own section. The kebab menu (`plan-menu`, a
   `resolveBranchReview` — with v87's ahead/behind folded onto it, plus the review-free `BranchFacts`.
   `shipActions(context)` is the pure derivation of each segment's `{ primary, secondary }` —
   remote arm (Publish / Push N / Sync…) and review arm (Open PR / Create MR / Open draft PR / the
-  disabled Merge-locally stub / Settle) — unit-tested over the full scenario table. `useShipRunner`
+  disabled Merge-locally stub / Settle; on a v87 host Fix with agent / Ready / Merge PR for an open GitHub
+  PR and Reopen / Delete remote branch after it) — unit-tested over the full scenario table, as are the
+  agent prompt texts it builds (`fixChecksPrompt`, `integratePrompt`). `useShipRunner`
   executes them and owns their dialogs: the shared `PrComposeDialog` (now also used for first-time
-  creation from the topbar), `PrSetupDialog`, the diverged Sync dialog, and the base-push confirmation.
+  creation from the topbar), `PrSetupDialog`, the diverged Sync dialog, the base-push confirmation,
+  `MergePrDialog`, and the remote-branch deletion confirmation. Review actions act on the `review` the
+  caller shows (its number) and the branch the runner is bound to. **Merge PR** offers only the methods
+  the repository allows (every method when the host could not tell) and defaults to the last method used
+  for the project — `mergePrefs`, client-side per host + project (a project is one repository), falling back
+  to squash → merge → rebase; *delete the branch on GitHub* is remembered with it and starts on, and hides
+  when GitHub deletes merged branches itself. **Fix with agent** and the Sync dialog's **Ask agent to
+  integrate** hand a prompt to the runner's chat through `openChat`'s `promptWorkspaceChat` — a follow-up
+  while that chat streams, otherwise a prompt; with no chat, a new one starts with it — and show the chat.
+  Integration may rebase or merge but never force-push or drop commits, and leaves the push to the user.
   The Plan pane's Open PR / *Push updates* / diverged handling runs through the same runner, so the
   `lastSubmit` reuse, `PUSH_AUTH_FAILED`, `ghProblem`, and compare hand-off rules above have one home.
   **Try again** re-runs the mutation that actually failed — a PR submit or a push, recorded when it fails

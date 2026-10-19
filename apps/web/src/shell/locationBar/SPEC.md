@@ -13,7 +13,8 @@ tags: [ui, topbar, public-surface-checked]
 The persistent "where am I / what state is it in" strip after the ThinkRail mark: one row of captioned
 segments — **Project · Workspace · Branch · from base · Remote · Pull request** — whose values are the
 controls for switching project or workspace, acting on the workspace, reading or retargeting the
-branch, and taking the branch's **next delivery step** (publish, push, open a PR, sync, settle). It renders
+branch, and taking the branch's **next delivery step** (publish, push, open a PR, sync, fix checks, mark
+ready, merge, settle). It renders
 what the store and `workspace.branchStatus` (older hosts: `workspace.openReview`) already report and runs
 actions through the panels-owned ship runner; it owns no host state.
 
@@ -130,7 +131,22 @@ actions through the panels-owned ship runner; it owns no host state.
   host's compare / gh-setup outcome, as in the Plan pane), **Create MR** (GitLab: the same compose dialog; the
   host pushes and opens GitLab's prefilled new-MR page), **Open draft PR** in ▾, and the inactive **Merge into <base> locally** stub
   ("coming soon", a separate task). A merged or closed review offers **Settle** (▾ Keep active / Remove)
-  through the shared `workspaceActions`.
+  through the shared `workspaceActions`; on a v88 host ▾ also holds **Reopen PR on GitHub** (closed) and
+  **Delete remote branch…** (still published; a confirmation names `origin/<branch>` and promises the local
+  branch stays).
+- **An open GitHub PR** (v88 `details`) reads `Draft #N` in the neutral tone while a draft, and its chip's
+  trailing glyph is the checks verdict (✕ failing, spinner running, ✓ passed — tooltip and accessible name
+  carry the count and failing names) instead of the link icon. Its arm, in order: **Fix with agent**
+  (failing checks), **Ready for review** (draft), **Merge PR…** (`mergeState` clean / unstable / has_hooks,
+  and the branch known to match origin) — the first is the primary, the rest sit in ▾. While the branch is
+  ahead of or behind origin the PR has no primary: the Remote segment's Push / Sync is the next step, and
+  merging then would skip the unpushed commits. Merge is decided by the merge state, never by approvals,
+  so a repository without required review can merge once CI allows. The branch card adds a **Checks** row
+  and a **Review** row (approved / changes requested by whom, or waiting for review) — the review decision
+  is information, never an action gate.
+- **CI polling** belongs to the topbar's `useBranchStatus` (the Shell's hook opts in; the Plan pane's
+  instance of the same key does not, so nothing polls twice): every 20 s while the open review's checks are
+  pending and the window is visible, a fresh review read that skips the origin fetch.
 - On a pre-v87 host the review-only rule holds: **Remote** renders only while `unpushedCommits` (warning
   chip) or `behindCommits` (info chip) is non-zero and opens the same card. Both counts arrive on
   `OpenBranchReview`, so Remote (and the card's *Remote* row) can appear only alongside a review — a branch

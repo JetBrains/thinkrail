@@ -1,12 +1,15 @@
 import {
 	RiArrowDownLine as ArrowDown,
 	RiArrowUpLine as ArrowUp,
+	RiCheckLine as Check,
+	RiCloseCircleFill as CloseCircle,
 	RiFileCopyLine as Copy,
 	RiExternalLinkLine as ExternalLink,
 	RiGitBranchLine as GitBranch,
+	RiLoader4Line as Loader,
 	RiGitPullRequestLine as PullRequest,
 } from "@remixicon/react";
-import type { OpenBranchReview, Workspace } from "@thinkrail/contracts";
+import type { OpenBranchReview, ReviewChecks, Workspace } from "@thinkrail/contracts";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
@@ -19,10 +22,13 @@ import { isOpenBranchReview, openReviewLabel } from "../../panels/useBranchStatu
 import { isUserOwnedWorkspace, selectDiffBaseRef, toast, useAppStore } from "../../store";
 import { errorText, getTransport } from "../../transport";
 import {
+	checksSummary,
+	checksVerdict,
 	pluralCommits,
 	remoteCounts,
 	reviewChipLabel,
 	reviewStateLabel,
+	reviewSummary,
 	reviewTone,
 } from "./locationModel";
 import { chipClass, PillChevron, pillClass, Segment } from "./Segment";
@@ -94,6 +100,8 @@ export function BranchSegment({
 	const userOwned = isUserOwnedWorkspace(workspace);
 	const remoteStatus = status ? null : remoteCounts(review, reviewDetailsKnown);
 	const remote = remoteStatus === "unknown" ? null : remoteStatus;
+	const openDetails = review && isOpenBranchReview(review) ? review.details : undefined;
+	const decision = openDetails ? reviewSummary(openDetails) : null;
 	const summary = status
 		? statusSummary(status)
 		: review && isOpenBranchReview(review) && remoteStatus !== "unknown"
@@ -262,29 +270,77 @@ export function BranchSegment({
 						</span>
 					</Row>
 				) : null}
+				{openDetails?.checks ? (
+					<Row label="Checks">
+						<ChecksGlyph checks={openDetails.checks} />
+						<span data-testid="scope-review-checks" className="truncate">
+							{checksSummary(openDetails.checks)}
+						</span>
+					</Row>
+				) : null}
+				{decision ? (
+					<Row label="Review">
+						<span
+							data-testid="scope-review-decision"
+							data-tone={decision.tone}
+							className={cn(
+								"truncate",
+								decision.tone === "success"
+									? "text-feedback-success"
+									: decision.tone === "warning"
+										? "text-feedback-warning"
+										: "text-text-muted",
+							)}
+						>
+							{decision.text}
+						</span>
+					</Row>
+				) : null}
 			</PopoverContent>
 		</Popover>
 	);
 }
 
+function ChecksGlyph({ checks }: { checks: ReviewChecks }) {
+	switch (checksVerdict(checks)) {
+		case "failing":
+			return <CloseCircle aria-hidden="true" className="size-12 shrink-0 text-feedback-error" />;
+		case "pending":
+			return (
+				<Loader aria-hidden="true" className="size-12 shrink-0 animate-spin text-text-muted" />
+			);
+		case "passing":
+			return <Check aria-hidden="true" className="size-12 shrink-0 text-feedback-success" />;
+	}
+}
+
 export function ReviewChip({ review }: { review: OpenBranchReview }) {
 	const label = reviewChipLabel(review);
 	const tone = reviewTone(review);
+	const checks = isOpenBranchReview(review) ? review.details?.checks : undefined;
+	const checksText = checks ? checksSummary(checks) : null;
 	const chip = (
 		<>
 			<span aria-hidden="true" className="size-6 shrink-0 rounded-full bg-current" />
 			{label}
-			{review.url ? <ExternalLink aria-hidden="true" /> : null}
+			{checks ? (
+				<span data-testid="scope-review-checks-glyph" data-verdict={checksVerdict(checks)}>
+					<ChecksGlyph checks={checks} />
+				</span>
+			) : review.url ? (
+				<ExternalLink aria-hidden="true" />
+			) : null}
 		</>
 	);
-	return review.url ? (
+	const described = checksText ? `${label} · ${checksText}` : label;
+	const element = review.url ? (
 		<a
 			data-testid="scope-review"
 			data-kind={review.kind}
 			href={review.url}
 			target="_blank"
 			rel="noreferrer"
-			aria-label={`Open ${label}`}
+			aria-label={`Open ${described}`}
 			data-state-tone={tone}
 			className={chipClass(tone, true)}
 		>
@@ -298,8 +354,10 @@ export function ReviewChip({ review }: { review: OpenBranchReview }) {
 			className={chipClass(tone)}
 		>
 			{chip}
+			{checksText ? <span className="sr-only">{checksText}</span> : null}
 		</span>
 	);
+	return checksText ? <IconTooltip label={checksText}>{element}</IconTooltip> : element;
 }
 
 export function ReviewSegment({ review }: { review: OpenBranchReview }) {

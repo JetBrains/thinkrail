@@ -69,7 +69,7 @@ export function Shell() {
 		status: branchStatus,
 		noteOpenReview,
 		refreshBranchStatus,
-	} = useBranchStatus(activeWorkspace, status);
+	} = useBranchStatus(activeWorkspace, status, { pollChecks: true });
 	const locationReview =
 		openReview && openReviewUrl ? { ...openReview, url: openReviewUrl } : openReview;
 	const hasActiveWorkspace = activeWorkspaceId != null;

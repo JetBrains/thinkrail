@@ -5,15 +5,22 @@ import {
 	RiCheckLine as Check,
 	RiArrowDownSLine as ChevronDown,
 	RiExternalLinkLine as ExternalLink,
+	RiGitBranchLine as GitBranch,
 	RiGitMergeLine as GitMerge,
 	RiLoader4Line as Loader,
 	RiGitPullRequestLine as PullRequest,
 	RiRefreshLine as Refresh,
 	type RemixiconComponentType,
+	RiRobot2Line as Robot,
+	RiSendPlaneLine as SendPlane,
 	RiDeleteBin6Line as Trash2,
 	RiUploadCloud2Line as UploadCloud,
 } from "@remixicon/react";
-import type { OpenBranchReview, Workspace } from "@thinkrail/contracts";
+import {
+	type OpenBranchReview,
+	REVIEW_ACTIONS_PROTOCOL_VERSION,
+	type Workspace,
+} from "@thinkrail/contracts";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -44,6 +51,11 @@ const ACTION_ICON: Record<ShipActionId, RemixiconComponentType> = {
 	openDraftPr: PullRequest,
 	createMr: ExternalLink,
 	mergeLocal: GitMerge,
+	fixChecks: Robot,
+	ready: SendPlane,
+	mergePr: GitMerge,
+	reopen: PullRequest,
+	deleteRemote: GitBranch,
 	settle: Check,
 	keepActive: ArrowGoBack,
 	remove: Trash2,
@@ -103,9 +115,10 @@ function ArmButton({
 						{secondary.map((action, index) => {
 							const ItemIcon = ACTION_ICON[action.id];
 							const danger = action.tone === "danger";
+							const afterDanger = secondary[index - 1]?.tone === "danger";
 							return (
 								<div key={action.id}>
-									{danger && index > 0 ? <DropdownMenuSeparator /> : null}
+									{danger && index > 0 && !afterDanger ? <DropdownMenuSeparator /> : null}
 									<DropdownMenuItem
 										data-testid="scope-ship-action"
 										data-action={action.id}
@@ -194,6 +207,7 @@ function ShipSegments({
 		canSettle: canSettleWorkspace(protocolVersion, workspace),
 		settled,
 		removable: !isDefaultWorkspace(workspace),
+		reviewActions: protocolVersion !== null && protocolVersion >= REVIEW_ACTIONS_PROTOCOL_VERSION,
 	});
 	const remoteAction = model.remote.primary;
 	const showRemoteValue = !remoteAction || remoteAction.id === "sync";
@@ -270,6 +284,7 @@ export function ShipStrip({
 		workspace,
 		sessionId,
 		openReview: null,
+		review,
 		status,
 		noteOpenReview,
 		refresh,

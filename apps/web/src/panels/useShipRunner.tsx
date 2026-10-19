@@ -1,4 +1,8 @@
-import { RiFileCopyLine as Copy, RiTerminalBoxLine as Terminal } from "@remixicon/react";
+import {
+	RiFileCopyLine as Copy,
+	RiRobot2Line as Robot,
+	RiTerminalBoxLine as Terminal,
+} from "@remixicon/react";
 import type { OpenBranchReview, OpenPrResult, PrBodySource, Workspace } from "@thinkrail/contracts";
 import { Button } from "@thinkrail/ui/button";
 import {
@@ -15,6 +19,14 @@ import { useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import type { BranchFacts } from "./branchStatusState";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { MergePrDialog, type MergePrState, type MergePrSubmit } from "./MergePrDialog";
+import {
+	allowedMergeMethods,
+	defaultMergeMethod,
+	loadMergePrefs,
+	saveMergePrefs,
+} from "./mergePrefs";
+import { promptWorkspaceChat } from "./openChat";
 import {
 	PrComposeDialog,
 	type PrComposeSources,
@@ -23,7 +35,7 @@ import {
 } from "./PrComposeDialog";
 import { PrSetupDialog, type PrSetupState } from "./PrSetupDialog";
 import { RemoveWorkspaceDialog } from "./RemoveWorkspaceDialog";
-import { type ShipActionId, syncCommand } from "./shipActions";
+import { fixChecksPrompt, integratePrompt, type ShipActionId, syncCommand } from "./shipActions";
 import { openReviewLabel } from "./useBranchStatus";
 import { settleWorkspace, unsettleWorkspace } from "./workspaceActions";
 
@@ -40,7 +52,10 @@ type PrSubmit = {
 
 type PushTarget = { branch: string; confirmBase: boolean };
 
-type Retry = { kind: "pr"; submit: PrSubmit } | { kind: "push"; target: PushTarget };
+type Retry =
+	| { kind: "pr"; submit: PrSubmit }
+	| { kind: "push"; target: PushTarget }
+	| { kind: "deleteRemote"; branch: string };
 
 export interface ShipRunnerOptions {
 	workspace: Workspace | null;
@@ -48,6 +63,7 @@ export interface ShipRunnerOptions {
 	title?: string;
 	bodySource?: PrBodySource;
 	openReview: OpenBranchReview | null;
+	review?: OpenBranchReview | null;
 	status: BranchFacts | null;
 	analyticsSource?: "plan_page";
 	noteOpenReview: (review: OpenBranchReview, url?: string) => void;
@@ -81,6 +97,8 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 	const [setup, setSetup] = useState<PrSetupState | null>(null);
 	const [confirmPush, setConfirmPush] = useState<string | null>(null);
 	const [syncOpen, setSyncOpen] = useState(false);
+	const [merging, setMerging] = useState<MergePrState | null>(null);
+	const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 	const [removing, setRemoving] = useState<Workspace | null>(null);
 	const lastSubmit = useRef<PrSubmit | null>(null);
 	const retry = useRef<Retry | null>(null);
@@ -318,6 +336,121 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 			.finally(() => setPending(null));
 	};
 
+	const review = options.review ?? null;
+	const base = workspace?.baseBranch.replace(/^origin\//, "") ?? "";
+
+	const reviewAction = (
+		id: "ready" | "reopen",
+		failure: string,
+		success: (label: string) => { title: string; message: string },
+	): void => {
+		if (!review) return;
+		const label = openReviewLabel(review);
+		const params = { workspaceId, branch, number: review.number };
+		const timeout = { timeoutMs: PR_OPEN_TIMEOUT_MS };
+		setPending(id);
+		void (
+			id === "ready"
+				? getTransport().request("pr.ready", params, timeout)
+				: getTransport().request("pr.reopen", params, timeout)
+		)
+			.then(
+				() => pushToast({ variant: "success", ...success(label) }),
+				(err) => pushToast({ variant: "error", title: failure, message: errorText(err) }),
+			)
+			.finally(() => {
+				setPending(null);
+				refresh();
+			});
+	};
+
+	const startMerge = (): void => {
+		if (!review || !workspace) return;
+		const details = review.details;
+		const methods = allowedMergeMethods(details?.mergeMethods);
+		const remembered = loadMergePrefs(workspace.projectId);
+		setMerging({
+			number: review.number,
+			branch,
+			base,
+			methods,
+			method: defaultMergeMethod(methods, remembered.method),
+			deleteBranch: remembered.deleteBranch ?? true,
+			autoDeletes: details?.deleteBranchOnMerge === true,
+		});
+	};
+
+	const merge = (state: MergePrState, submit: MergePrSubmit): void => {
+		if (!workspace) return;
+		saveMergePrefs(workspace.projectId, {
+			method: submit.method,
+			deleteBranch: state.autoDeletes ? state.deleteBranch : submit.deleteBranch,
+		});
+		setPending("mergePr");
+		void getTransport()
+			.request(
+				"pr.merge",
+				{ workspaceId, branch: state.branch, number: state.number, ...submit },
+				{ timeoutMs: PR_OPEN_TIMEOUT_MS },
+			)
+			.then(
+				(result) => {
+					setMerging(null);
+					if (submit.deleteBranch && !result.branchDeleted) {
+						pushToast({
+							variant: "info",
+							title: `Merged PR #${state.number}`,
+							message: `origin/${state.branch} is still there: ${result.deleteError ?? "deleting it failed."}`,
+						});
+						return;
+					}
+					pushToast({
+						variant: "success",
+						title: `Merged PR #${state.number}`,
+						message: result.branchDeleted
+							? `Merged into ${state.base} and deleted origin/${state.branch}.`
+							: `Merged into ${state.base}.`,
+					});
+				},
+				(err) => pushToast({ variant: "error", title: "Merge failed", message: errorText(err) }),
+			)
+			.finally(() => {
+				setPending(null);
+				refresh();
+			});
+	};
+
+	const deleteRemote = (target: string): Promise<void> => {
+		setPending("deleteRemote");
+		return getTransport()
+			.request(
+				"workspace.deleteRemoteBranch",
+				{ workspaceId, branch: target },
+				{ timeoutMs: PR_OPEN_TIMEOUT_MS },
+			)
+			.then(
+				() => {
+					pushToast({
+						variant: "success",
+						title: "Remote branch deleted",
+						message: `origin/${target} is gone; the local branch stays.`,
+					});
+				},
+				(err) =>
+					onPushFailed("Couldn't delete the branch", err, { kind: "deleteRemote", branch: target }),
+			)
+			.finally(() => {
+				setPending(null);
+				refresh();
+			});
+	};
+
+	const askAgent = (text: string): void => {
+		void promptWorkspaceChat(workspaceId, sessionId, text).catch((err) =>
+			pushToast({ variant: "error", title: "Couldn't ask the agent", message: errorText(err) }),
+		);
+	};
+
 	const run = (id: ShipActionId): void => {
 		if (!workspace || busy) return;
 		switch (id) {
@@ -345,6 +478,27 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 			case "remove":
 				setRemoving(workspace);
 				return;
+			case "fixChecks":
+				if (review) askAgent(fixChecksPrompt(review, branch, base));
+				return;
+			case "ready":
+				reviewAction("ready", "Couldn't mark it ready", (label) => ({
+					title: "Ready for review",
+					message: `${label} is no longer a draft.`,
+				}));
+				return;
+			case "reopen":
+				reviewAction("reopen", "Couldn't reopen it", (label) => ({
+					title: "Reopened",
+					message: `${label} is open again.`,
+				}));
+				return;
+			case "mergePr":
+				startMerge();
+				return;
+			case "deleteRemote":
+				setConfirmDelete(branch);
+				return;
 			case "mergeLocal":
 				return;
 		}
@@ -355,7 +509,8 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 		const failed = retry.current;
 		retry.current = null;
 		if (failed?.kind === "pr") void submitPr(failed.submit);
-		else if (failed) void push(failed.target);
+		else if (failed?.kind === "push") void push(failed.target);
+		else if (failed?.kind === "deleteRemote") void deleteRemote(failed.branch);
 	};
 	const runSetupCommand = (command: string) => {
 		setSetup(null);
@@ -406,6 +561,29 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 					setConfirmPush(null);
 				}}
 			/>
+			<MergePrDialog
+				state={merging}
+				busy={pending === "mergePr"}
+				onClose={() => setMerging(null)}
+				onSubmit={(submit) => {
+					if (merging) merge(merging, submit);
+				}}
+			/>
+			<ConfirmDialog
+				open={confirmDelete !== null}
+				onOpenChange={(open) => {
+					if (!open) setConfirmDelete(null);
+				}}
+				title={`Delete origin/${confirmDelete ?? branch}?`}
+				description={`This deletes the branch on origin. The workspace keeps its local ${confirmDelete ?? branch} branch and every commit on it.`}
+				confirmLabel="Delete remote branch"
+				destructive
+				confirmTestId="ship-confirm-delete-remote"
+				onConfirm={() => {
+					if (confirmDelete !== null) void deleteRemote(confirmDelete);
+					setConfirmDelete(null);
+				}}
+			/>
 			<Dialog open={syncOpen} onOpenChange={setSyncOpen}>
 				<DialogContent data-testid="ship-sync-dialog" className="max-w-[32rem]">
 					<DialogHeader>
@@ -434,6 +612,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 									Copy command
 								</Button>
 								<Button
+									variant="outline"
 									data-testid="ship-sync-run"
 									onClick={() => runSetupCommand(integrateCommand)}
 								>
@@ -446,6 +625,16 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 								Close
 							</Button>
 						)}
+						<Button
+							data-testid="ship-sync-agent"
+							onClick={() => {
+								setSyncOpen(false);
+								askAgent(integratePrompt(branch, options.status));
+							}}
+						>
+							<Robot className="size-14" />
+							Ask agent to integrate
+						</Button>
 					</DialogFooter>
 				</DialogContent>
 			</Dialog>

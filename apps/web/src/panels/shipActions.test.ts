@@ -1,6 +1,12 @@
 import { expect, test } from "bun:test";
-import type { BranchStatus, OpenBranchReview } from "@thinkrail/contracts";
-import { type ShipContext, shipActions, syncCommand } from "./shipActions";
+import type { BranchStatus, OpenBranchReview, ReviewDetails } from "@thinkrail/contracts";
+import {
+	fixChecksPrompt,
+	integratePrompt,
+	type ShipContext,
+	shipActions,
+	syncCommand,
+} from "./shipActions";
 
 const published: BranchStatus = {
 	hasOrigin: true,
@@ -23,6 +29,7 @@ function model(status: Partial<BranchStatus>, extra: Partial<ShipContext> = {}) 
 		canSettle: true,
 		settled: false,
 		removable: true,
+		reviewActions: true,
 		...extra,
 	});
 }
@@ -125,17 +132,92 @@ test("a diverged branch offers Sync, never Push", () => {
 });
 
 test("merged or closed: Settle, or Keep active once settled; Default is never removable", () => {
-	expect(ids(model({ review: pr("merged") }).review)).toEqual({
+	const unpublished = { published: false, ahead: undefined, behind: undefined };
+	expect(ids(model({ ...unpublished, review: pr("merged") }).review)).toEqual({
 		primary: "settle",
 		secondary: ["remove"],
 	});
-	expect(ids(model({ review: pr("closed") }, { settled: true }).review)).toEqual({
+	expect(ids(model({ ...unpublished, review: pr("closed") }, { settled: true }).review)).toEqual({
 		primary: null,
-		secondary: ["keepActive", "remove"],
+		secondary: ["keepActive", "reopen", "remove"],
 	});
 	expect(
-		ids(model({ review: pr("merged") }, { canSettle: false, removable: false }).review),
+		ids(
+			model({ ...unpublished, review: pr("merged") }, { canSettle: false, removable: false })
+				.review,
+		),
 	).toEqual({ primary: null, secondary: [] });
+});
+
+test("a merged PR still on origin offers to delete the remote branch; a closed one can reopen", () => {
+	expect(ids(model({ review: pr("merged") }).review)).toEqual({
+		primary: "settle",
+		secondary: ["deleteRemote", "remove"],
+	});
+	expect(ids(model({ review: pr("closed") }).review)).toEqual({
+		primary: "settle",
+		secondary: ["reopen", "deleteRemote", "remove"],
+	});
+	const mr: OpenBranchReview = { kind: "merge-request", number: 4, state: "closed" };
+	expect(ids(model({ provider: "gitlab", review: mr }).review).secondary).toEqual([
+		"deleteRemote",
+		"remove",
+	]);
+	expect(ids(model({ review: pr("closed") }, { reviewActions: false }).review).secondary).toEqual([
+		"remove",
+	]);
+});
+
+const details = (over: Partial<ReviewDetails> = {}): ReviewDetails => ({
+	draft: false,
+	reviewers: [],
+	mergeState: "blocked",
+	...over,
+});
+const openPr = (over: Partial<ReviewDetails> = {}): OpenBranchReview => ({
+	...pr("open"),
+	details: details(over),
+});
+
+test("a draft PR in sync with origin offers Ready for review", () => {
+	const m = model({ review: openPr({ draft: true, mergeState: "draft" }) });
+	expect(ids(m.review)).toEqual({ primary: "ready", secondary: [] });
+	expect(m.review.primary).toMatchObject({ label: "Ready for review", short: "Ready" });
+});
+
+test("Merge PR follows the merge state, never approvals alone", () => {
+	expect(ids(model({ review: openPr({ mergeState: "clean" }) }).review).primary).toBe("mergePr");
+	expect(ids(model({ review: openPr({ mergeState: "unstable" }) }).review).primary).toBe("mergePr");
+	expect(ids(model({ review: openPr({ mergeState: "has_hooks" }) }).review).primary).toBe(
+		"mergePr",
+	);
+	const approvedButBlocked = openPr({ mergeState: "blocked", reviewDecision: "approved" });
+	expect(ids(model({ review: approvedButBlocked }).review)).toEqual({
+		primary: null,
+		secondary: [],
+	});
+	for (const mergeState of ["behind", "dirty", "unknown"] as const) {
+		expect(ids(model({ review: openPr({ mergeState }) }).review).primary).toBeNull();
+	}
+});
+
+test("unpushed or missing remote commits leave the PR's next step to the Remote segment", () => {
+	const ahead = model({ ahead: 1, review: openPr({ mergeState: "clean" }) });
+	expect(ids(ahead.remote).primary).toBe("push");
+	expect(ids(ahead.review)).toEqual({ primary: null, secondary: [] });
+	const draftBehind = model({ behind: 2, review: openPr({ draft: true }) });
+	expect(ids(draftBehind.review)).toEqual({ primary: null, secondary: ["ready"] });
+	const unknown = model({
+		ahead: undefined,
+		behind: undefined,
+		review: openPr({ mergeState: "clean" }),
+	});
+	expect(ids(unknown.review).primary).toBeNull();
+});
+
+test("a host without review actions keeps the open PR's arm empty", () => {
+	const m = model({ review: openPr({ draft: true }) }, { reviewActions: false });
+	expect(ids(m.review)).toEqual({ primary: null, secondary: [] });
 });
 
 test("the resolved review wins over the status review and names the noun", () => {
@@ -147,6 +229,7 @@ test("the resolved review wins over the status review and names the noun", () =>
 		canSettle: true,
 		settled: false,
 		removable: true,
+		reviewActions: true,
 	});
 	expect(m.noun).toBe("MR");
 	expect(ids(m.review).primary).toBe("settle");
@@ -162,4 +245,40 @@ test("a push repository that couldn't be read offers no remote action and claims
 	const m = model({ published: null, pushesElsewhere: true, ahead: undefined, behind: undefined });
 	expect(m.remote.value).toEqual({ kind: "unreachable" });
 	expect(ids(m.remote)).toEqual({ primary: null, secondary: [] });
+});
+
+test("failing checks put Fix with agent first, ahead of Ready or Merge", () => {
+	const checks = { passing: 4, pending: 0, failing: 2, failingNames: ["lint", "e2e"] };
+	expect(ids(model({ review: openPr({ checks, mergeState: "unstable" }) }).review)).toEqual({
+		primary: "fixChecks",
+		secondary: ["mergePr"],
+	});
+	expect(ids(model({ review: openPr({ checks, draft: true }) }).review)).toEqual({
+		primary: "fixChecks",
+		secondary: ["ready"],
+	});
+	expect(model({ review: openPr({ checks }) }).review.primary).toMatchObject({
+		label: "Fix with agent",
+		tone: "warning",
+	});
+});
+
+test("the agent prompts name the PR, its failing checks, and what integration may not do", () => {
+	const review = openPr({ checks: { passing: 0, pending: 0, failing: 1, failingNames: ["lint"] } });
+	const fix = fixChecksPrompt(review, "feature/ship", "main");
+	expect(fix).toContain("CI is failing on PR #128 (feature/ship → main): lint.");
+	expect(fix).toContain("gh pr checks 128");
+	expect(fix).toContain("push the branch");
+
+	const diverged = integratePrompt("feature/ship", { ...published, ahead: 1, behind: 2 });
+	expect(diverged).toContain("`origin/feature/ship` has 2 commits this checkout doesn't");
+	expect(diverged).toContain("the local branch has 1 commit it doesn't");
+	expect(diverged).toContain("without force-pushing");
+	expect(diverged).toContain("Don't push");
+	expect(integratePrompt("f", { ...published, ahead: 0, behind: 1 })).toContain(
+		"`origin/f` has 1 commit this checkout doesn't yet.",
+	);
+	const split = integratePrompt("f", { ...published, pushesElsewhere: true, ahead: 1, behind: 1 });
+	expect(split).toContain("origin's push repository");
+	expect(split).toContain("don't integrate by pulling from origin");
 });

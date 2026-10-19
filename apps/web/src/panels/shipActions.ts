@@ -1,4 +1,4 @@
-import type { OpenBranchReview } from "@thinkrail/contracts";
+import type { OpenBranchReview, ReviewMergeState } from "@thinkrail/contracts";
 import { isShellInert } from "../lib";
 import type { BranchFacts } from "./branchStatusState";
 import { isOpenBranchReview } from "./useBranchStatus";
@@ -11,6 +11,11 @@ export type ShipActionId =
 	| "openDraftPr"
 	| "createMr"
 	| "mergeLocal"
+	| "fixChecks"
+	| "ready"
+	| "mergePr"
+	| "reopen"
+	| "deleteRemote"
 	| "settle"
 	| "keepActive"
 	| "remove";
@@ -54,7 +59,10 @@ export interface ShipContext {
 	canSettle: boolean;
 	settled: boolean;
 	removable: boolean;
+	reviewActions: boolean;
 }
+
+const MERGEABLE_STATES = new Set<ReviewMergeState>(["clean", "unstable", "has_hooks"]);
 
 function commits(count: number): string {
 	return `${count} commit${count === 1 ? "" : "s"}`;
@@ -85,7 +93,29 @@ function remotePrimary(status: BranchFacts): ShipAction | null {
 		: null;
 }
 
-function finale(context: ShipContext): ShipArm {
+function finale(context: ShipContext, review: OpenBranchReview, noun: "PR" | "MR"): ShipArm {
+	const extra: ShipAction[] = [];
+	if (
+		context.reviewActions &&
+		review.state === "closed" &&
+		review.kind === "pull-request" &&
+		context.status.provider === "github"
+	) {
+		extra.push({
+			id: "reopen",
+			label: `Reopen ${noun} on GitHub`,
+			short: "Reopen",
+			tone: "neutral",
+		});
+	}
+	if (context.reviewActions && context.status.published && !context.status.onBase) {
+		extra.push({
+			id: "deleteRemote",
+			label: "Delete remote branch…",
+			short: "Delete branch",
+			tone: "danger",
+		});
+	}
 	const remove: ShipAction[] = context.removable
 		? [{ id: "remove", label: "Remove workspace…", short: "Remove", tone: "danger" }]
 		: [];
@@ -94,6 +124,7 @@ function finale(context: ShipContext): ShipArm {
 			primary: null,
 			secondary: [
 				{ id: "keepActive", label: "Keep active", short: "Keep active", tone: "neutral" },
+				...extra,
 				...remove,
 			],
 		};
@@ -101,15 +132,52 @@ function finale(context: ShipContext): ShipArm {
 	return context.canSettle
 		? {
 				primary: { id: "settle", label: "Settle workspace", short: "Settle", tone: "primary" },
-				secondary: remove,
+				secondary: [...extra, ...remove],
 			}
-		: { primary: null, secondary: remove };
+		: { primary: null, secondary: [...extra, ...remove] };
+}
+
+function openReviewArm(context: ShipContext, review: OpenBranchReview, noun: "PR" | "MR"): ShipArm {
+	const { status } = context;
+	const details = review.details;
+	if (!context.reviewActions || review.kind !== "pull-request" || !details) {
+		return { primary: null, secondary: [] };
+	}
+	const candidates: ShipAction[] = [];
+	if ((details.checks?.failing ?? 0) > 0) {
+		candidates.push({
+			id: "fixChecks",
+			label: "Fix with agent",
+			short: "Fix checks",
+			tone: "warning",
+		});
+	}
+	if (details.draft) {
+		candidates.push({ id: "ready", label: "Ready for review", short: "Ready", tone: "primary" });
+	} else if (
+		MERGEABLE_STATES.has(details.mergeState) &&
+		status.ahead === 0 &&
+		status.behind === 0
+	) {
+		candidates.push({
+			id: "mergePr",
+			label: `Merge ${noun} on GitHub…`,
+			short: `Merge ${noun}`,
+			tone: "primary",
+		});
+	}
+	const remoteFirst = (status.ahead ?? 0) > 0 || (status.behind ?? 0) > 0;
+	if (remoteFirst) return { primary: null, secondary: candidates };
+	const [primary = null, ...secondary] = candidates;
+	return { primary, secondary };
 }
 
 function reviewArm(context: ShipContext, noun: "PR" | "MR"): ShipArm {
 	const { status, review } = context;
 	if (review)
-		return isOpenBranchReview(review) ? { primary: null, secondary: [] } : finale(context);
+		return isOpenBranchReview(review)
+			? openReviewArm(context, review, noun)
+			: finale(context, review, noun);
 	if (status.onBase || status.aheadOfBase === 0) return { primary: null, secondary: [] };
 	const mergeLocal: ShipAction = {
 		id: "mergeLocal",
@@ -164,4 +232,30 @@ export function shipActions(context: ShipContext): ShipModel {
 export function syncCommand(branch: string, status: BranchFacts | null): string | null {
 	if (status?.pushesElsewhere || !isShellInert(branch)) return null;
 	return `git pull --rebase origin ${branch}`;
+}
+
+export function fixChecksPrompt(review: OpenBranchReview, branch: string, base: string): string {
+	const failing = review.details?.checks?.failingNames ?? [];
+	return [
+		`CI is failing on PR #${review.number} (${branch} → ${base})${failing.length > 0 ? `: ${failing.join(", ")}` : ""}.`,
+		`Find out why — \`gh pr checks ${review.number}\` lists the checks and \`gh run view <run-id> --log-failed\` shows a failed run's log. Fix the cause, run the relevant checks locally, commit the fix, and push the branch.`,
+	].join("\n\n");
+}
+
+export function integratePrompt(branch: string, status: BranchFacts | null): string {
+	const behind = status?.behind ?? 0;
+	const ahead = status?.ahead ?? 0;
+	const remote = status?.pushesElsewhere
+		? `The branch \`${branch}\` in origin's push repository (\`git remote get-url --push origin\`)`
+		: `\`origin/${branch}\``;
+	const missing = `${remote} has ${behind > 0 ? commits(behind) : "commits"} this checkout doesn't`;
+	return [
+		ahead > 0
+			? `${missing}, and the local branch has ${commits(ahead)} it doesn't, so a plain push is rejected.`
+			: `${missing} yet.`,
+		...(status?.pushesElsewhere
+			? ["Origin fetches from a different repository, so don't integrate by pulling from origin."]
+			: []),
+		"Integrate the remote commits into the local branch — rebase onto them (or merge them) and resolve any conflicts — without force-pushing and without dropping either side's commits. Don't push; I'll push from the topbar once the branch is integrated.",
+	].join("\n\n");
 }

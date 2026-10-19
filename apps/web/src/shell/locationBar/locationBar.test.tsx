@@ -1,14 +1,22 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import type { BranchStatus, OpenBranchReview, Project, Workspace } from "@thinkrail/contracts";
+import type {
+	BranchStatus,
+	OpenBranchReview,
+	Project,
+	ReviewDetails,
+	Workspace,
+} from "@thinkrail/contracts";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { LocationBar } from "./LocationBar";
 import {
+	checksSummary,
 	pluralCommits,
 	projectInitial,
 	remoteCounts,
 	reviewChipLabel,
+	reviewSummary,
 	reviewTone,
 } from "./locationModel";
 import { chipClass, pillClass } from "./Segment";
@@ -312,4 +320,81 @@ test("v87: without an origin the Remote says so and the PR segment only holds th
 	expect(html).toContain("No remote");
 	expect(testids(html)).toContain("scope-ship-review-menu");
 	expect(testids(html)).not.toContain("scope-ship-review-primary");
+});
+
+const openPr = (details: Partial<ReviewDetails>): OpenBranchReview => ({
+	kind: "pull-request",
+	number: 128,
+	state: "open",
+	url: "https://github.com/acme/repo/pull/128",
+	details: { draft: false, reviewers: [], mergeState: "blocked", ...details },
+});
+
+test("v87: a draft PR reads Draft #N in the neutral tone and carries its checks glyph", () => {
+	const draft = openPr({
+		draft: true,
+		mergeState: "draft",
+		checks: { passing: 1, pending: 2, failing: 0, failingNames: [] },
+	});
+	const html = render(worktree, draft, status({ review: draft }));
+	expect(html).toContain("Draft #128");
+	expect(html).toMatch(/data-testid="scope-review"[^>]*data-state-tone="neutral"/);
+	expect(html).toMatch(/data-testid="scope-review-checks-glyph" data-verdict="pending"/);
+	expect(html).toContain('aria-label="Open Draft #128 · 2 of 3 checks running"');
+	const failing = openPr({
+		checks: { passing: 2, pending: 0, failing: 1, failingNames: ["lint"] },
+	});
+	expect(render(worktree, failing, status({ review: failing }))).toMatch(
+		/data-testid="scope-review-checks-glyph" data-verdict="failing"/,
+	);
+});
+
+test("before the host advertises review actions the open PR keeps its chip without actions", () => {
+	const clean = openPr({ mergeState: "clean" });
+	const html = render(worktree, clean, status({ review: clean }));
+	expect(testids(html)).toContain("scope-review");
+	expect(testids(html)).not.toContain("scope-ship-review-primary");
+});
+
+test("checks and review decision read as information", () => {
+	expect(checksSummary({ passing: 6, pending: 0, failing: 0, failingNames: [] })).toBe(
+		"6 checks passed",
+	);
+	expect(checksSummary({ passing: 1, pending: 1, failing: 0, failingNames: [] })).toBe(
+		"1 of 2 checks running",
+	);
+	expect(checksSummary({ passing: 3, pending: 1, failing: 2, failingNames: ["lint", "e2e"] })).toBe(
+		"2 checks failing: lint, e2e",
+	);
+	const details = (over: Partial<ReviewDetails>): ReviewDetails => ({
+		draft: false,
+		reviewers: [],
+		mergeState: "clean",
+		...over,
+	});
+	expect(
+		reviewSummary(
+			details({ reviewDecision: "approved", reviewers: [{ login: "anna", state: "approved" }] }),
+		),
+	).toEqual({ text: "Approved by @anna", tone: "success" });
+	expect(
+		reviewSummary(
+			details({
+				reviewDecision: "changes_requested",
+				reviewers: [
+					{ login: "anna", state: "approved" },
+					{ login: "bob", state: "changes_requested" },
+				],
+			}),
+		),
+	).toEqual({ text: "Changes requested by @bob", tone: "warning" });
+	expect(reviewSummary(details({ reviewDecision: "review_required" }))).toEqual({
+		text: "Waiting for review",
+		tone: "muted",
+	});
+	expect(reviewSummary(details({ reviewers: [{ login: "cy", state: "approved" }] }))).toEqual({
+		text: "Approved by @cy",
+		tone: "success",
+	});
+	expect(reviewSummary(details({}))).toBeNull();
 });
