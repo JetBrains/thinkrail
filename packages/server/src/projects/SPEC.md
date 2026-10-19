@@ -17,7 +17,7 @@ bootstrap it into one so it can be opened.
 ## Boundary
 
 - **Owns:** resolve every external project-folder input against the **host filesystem** before inspecting
-  or mutating it: host-absolute paths pass, exact `~` and `~/…` expand against the host account, and every
+  or mutating it: host-absolute paths pass, exact `~` and `~/…` (on Windows also `~\…`) expand against the host account, and every
   other relative path is rejected rather than interpreted against the host process cwd. The same resolved
   path feeds `openProject`, `inspectProjectPath`, and `initProject`, so their classifications and actions
   cannot disagree. It then validates a path is a repo (`git rev-parse --show-toplevel`; a non-repo rejects

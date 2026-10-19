@@ -180,6 +180,24 @@ test("host-home paths resolve consistently across inspect, open, and init", () =
 	}
 });
 
+test.skipIf(process.platform !== "win32")(
+	"on Windows a home path may use the native separator",
+	() => {
+		const home = join(dataDir, "host-home");
+		const repo = join(home, "repo");
+		makeRepo(repo);
+		const savedUserProfile = process.env.USERPROFILE;
+		process.env.USERPROFILE = home;
+		try {
+			expect(inspectProjectPath("~\\repo")).toEqual({ kind: "repo" });
+			expect(openProject("~\\repo").path).toBe(realpathSync(repo));
+		} finally {
+			if (savedUserProfile === undefined) delete process.env.USERPROFILE;
+			else process.env.USERPROFILE = savedUserProfile;
+		}
+	},
+);
+
 test("relative project paths are rejected instead of using the host process cwd", () => {
 	for (const operation of [openProject, inspectProjectPath, initProject]) {
 		expect(() => operation("relative/project")).toThrow("must be absolute or start with ~/");
