@@ -134,12 +134,19 @@ Workspace removal cancels its active MCP login through `provider.loginCancel` af
 modal. Late login frames for tombstoned workspaces are cancelled instead of installed; the MCP start
 response path does the same if removal preceded its acknowledgement. Cancellation is best-effort over
 the existing reconnect-safe request transport; the host's bounded probe lifetime remains the final cleanup.
+**Client error reports** (`errorReports.ts`): `installClientErrorReporting()` listens for window `error` /
+`unhandledrejection`, and `reportClientError(clientErrorReport(kind, error, boundary?))` forwards raw
+class/message/stack over fire-and-forget `client.reportError` — only to a host with
+`supportsClientErrorReports` (v86); reports raised before the welcome wait for it (≤ 10 queued), and a
+page sends at most 50. The browser never scrubs or holds a vendor client: the host is the only sanitizer.
+`main.tsx` installs the listeners and injects the forwarder into `components`' error-boundary seam.
 
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `requestMcpList`,
   `watchMcpWorkspace`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
-  `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`. `runHostUpdate` is the typed empty host action
+  `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
+  `installClientErrorReporting`, `reportClientError`, `clientErrorReport`, `supportsClientErrorReports`. `runHostUpdate` is the typed empty host action
   and `supportsHostUpdateRun` lets `Shell` inject it only for protocol v70+; `supportsPlanReview` is exported
   because a sibling panel (`PlanPane`) gates the plan-review UI on it — an older host serves no
   `todo.startReview`/`reviewAll`, so the client must not offer them; `supportsPlanSummaryGeneration` (v69) is
@@ -164,7 +171,8 @@ the existing reconnect-safe request transport; the host's bounded probe lifetime
   `HOST_UPDATE_RUN_PROTOCOL_VERSION` + `Ack` + the typed `host.update` method for the CLI-host update action,
   `PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION` for the `supportsPlanReview` gate,
   `CHANGE_MUTATIONS_PROTOCOL_VERSION` for the diff-mutation gate, `REVIEW_RICH_ANCHORS_PROTOCOL_VERSION`
-  for the rich-anchor authoring gate, `provider.changed`, the empty
+  for the rich-anchor authoring gate, `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` + `ClientErrorReport` for
+  `client.reportError`, `provider.changed`, the empty
   addressed `feedback.interview` invitation, `HostUpdateNotice` for `server.welcome` +
   `host.updateAvailable`,
   `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for `server.welcome`'s config +

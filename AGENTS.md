@@ -54,6 +54,10 @@ Clear, fractal module boundaries are a top-priority requirement:
 - Automatic work ends at `agent_settled`, never `agent_end`; retries, compaction, recovery, or queued
   continuations may follow an attempt-level `agent_end`.
 - UI panels are layout-agnostic; the shell arranges them.
+- Error messages are reported to PostHog Error Tracking unconditionally. Keep personal values — paths,
+  project/branch/file names, URLs, emails, provider or tool output — out of an error's `message` in new
+  code; carry them in a separate field. Host diagnostics that carry an error go through `logger(scope)`,
+  not `console.*`. The scrubbing and allow-list live in `packages/server/src/analytics/SPEC.md`.
 - The transport host endpoint is a parameter, defaulting to same-origin; `server.welcome` carries the
   protocol version.
 

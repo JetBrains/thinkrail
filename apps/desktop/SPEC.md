@@ -99,12 +99,21 @@ another.
    `Utils.openExternal` callback used by the host's one-shot browser attribution claim. The callback passes through
    `DesktopHostOptions` and the generated runtime. The first native-window `dom-ready` explicitly calls the
    proxied `host.server.startAttributionClaim()` readiness method; host boot and elapsed time do not start a
-   saved-choice claim. No deep-link or RPC surface is added.
+   saved-choice claim. No deep-link or RPC surface is added. The runtime also passes `appRoot`
+   (`runtimeDir/..`, i.e. `Resources/app`) so error-report frames are rooted at the packaged app, and returns
+   `reportDesktopError` as `DesktopHost.reportError`.
 5. Restore the valid route fragment and bounded client-preference map for
    `{ backendProfileId: "local", windowId: "main" }`. The route is appended to the fresh origin; the
    preference map is serialized as data and prepended to the preload source so the web client can hydrate
    before React mounts despite the changing port. Open one normal native `BrowserWindow` with the system
    renderer.
+
+Handled native-shell failures (keyboard state, title-bar double-click, update listener/lifecycle,
+Windows frame restore, startup) go through `errorReporting.ts`'s `desktopError(scope, message, error)`:
+the `[desktop] …` console line stays, and once the host has booted the error is forwarded to
+`DesktopHost.reportError` as a sanitized `desktop` error report ([[submodule-server-analytics]]); before
+that it is console-only. Uncaught main-process faults need no seam — they share the host's process
+handlers. `updates` reaches this sibling helper directly.
 
 The Electrobun entry bundle contains native-shell code only. A static server import there is forbidden:
 it can load `bun-pty` before `BUN_PTY_LIB` and bypass the defined server-runtime build. Startup

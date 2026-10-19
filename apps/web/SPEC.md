@@ -66,7 +66,8 @@ marks into `chat/generated/`).
 ThinkRail artwork as the shell logo (compact enough for browser-tab sizes and light/dark browser chrome).
 `main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, resolves and
 applies the versioned first-paint theme-preference hint (including the current system color scheme) pre-React,
-initializes transport, the client-local preference seams (chat presentation, hidden models, project
+initializes transport and its client error reporting (window listeners + the error-boundary reporter
+seam), the client-local preference seams (chat presentation, hidden models, project
 expansion) and navigation, then wraps `<Shell />` in
 `components/ErrorBoundary` as the last-resort boundary (a crash escaping every region shows a reload
 screen, not a blank root) plus the app's single `TooltipProvider`.

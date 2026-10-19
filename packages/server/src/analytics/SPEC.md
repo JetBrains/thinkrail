@@ -10,15 +10,16 @@ tags: [analytics, privacy]
 
 ## Responsibility and boundary
 
-Host-only product analytics shared by CLI/source/desktop, delivered personless to PostHog EU.
-The module owns the closed event vocabulary, catalog bucketing, installation identity usage, delivery,
-consent gates and bounded shutdown. Host alone observes feature outcomes and captures events; feature
+Host-only product analytics and error reports shared by CLI/source/desktop, delivered personless to
+PostHog EU. The module owns the closed event vocabulary, catalog bucketing, installation identity usage,
+exception sanitization, delivery, consent gates and bounded shutdown. Host alone observes feature outcomes and captures events; feature
 modules remain analytics-free. Sibling dependency edges belong to [[module-server]].
 
 - **Public surface:** initialization, basic capture, consent-scoped additional capture, additional-data
-  enablement, shutdown/test reset, event types, bucket helpers and `BuildKind`.
+  enablement, error reports (`reportError`, `reportFatalError`, `reportClientError`, `ERROR_SOURCES`),
+  shutdown/test reset, event types, bucket helpers and `BuildKind`.
 - **Allowed deps:** persistence, log, contracts types, pi-ai's built-in catalog, Node, and `posthog-node`
-  inside the sink only.
+  inside the sink only (`errors.ts` is SDK-free; the sink adapts it into `before_send`).
 - **Forbidden:** importing host/feature siblings; being imported outside host; exposing the installation
   UUID on the wire; copying rich feature payloads into telemetry; browser autocapture or a native-only sink.
 
@@ -107,6 +108,41 @@ after re-enabling.
 Internal/unknown work never inflates user activation. A normal stop or agent-declared task/verification
 status is not proof of value, correctness or a passed test. Arrival order is not execution order.
 
+## Error reports
+
+PostHog Error Tracking `$exception` events are basic-tier: always on under the same gate as basic events
+(keyed build, not CI/test), unaffected by `analyticsEnabled`, `--no-analytics` or `THINKRAIL_NO_ANALYTICS`,
+and never campaign-enriched. Closed `source`: `host_crash` (crashLog's uncaught/unhandled, level `fatal`,
+sent with `captureExceptionImmediate` and awaited at most 2 s before exit), `host_logged` (a host
+`log.warn/error` carrying an error, with its `scope`), `request` (every failed WS request, CodedErrors
+included — revisitable; PostHog itself excludes expected 4xx outcomes — with `request_method` only for a
+registered method), `ui` (`client.reportError`; `scope` = kind[:boundary], render = handled) and `desktop`
+(handled desktop main-process errors, with their scope). An error `code` passes only as `^[A-Z][A-Z0-9_]+$`.
+
+The privacy guarantee is an allow-list, not a deny-list. Capture uses posthog-node 5.46.1's
+`captureException`, whose builder reads ±7 source lines per frame from disk, makes paths relative to
+`cwd` (still `../../Users/<name>/…`) and turns thrown objects into key lists; the sink's typed (doc-less)
+`before_send` therefore **rebuilds** every `$exception` from scratch: ≤ 5 exceptions of identifier-only
+`type`, scrubbed `value`, `mechanism.{handled,synthetic,type}`, and frames carrying only `platform`,
+identifier-only `function`, normalized `filename`, `lineno`, `colno`, `in_app`. Context lines, `vars`,
+`abs_path`, `module`, chunk ids or any field a later SDK adds can never pass. Filenames inside the app
+root (repo root from source, the bundle dir when packaged, `Resources/app` for desktop via `appRoot`)
+become root-relative; loopback/`views:` web URLs become `web/…`/`views/…`; everything else becomes
+`<external>` with function `?` — user extensions and project files leave no name. Messages keep the
+first line (≤ 300 chars) with home dir, username, hostname, URLs, emails, quoted text, any slash token,
+UUIDs, IPs, hex ≥ 7, long tokens, digit runs ≥ 4 and JSON tails replaced by `<…>` placeholders, which
+also groups dynamic messages into one issue. Known residual risk, accepted: a bare unquoted value inside
+one of our own interpolated messages (e.g. a branch name without `/`) survives; new code keeps personal
+values out of `message` (AGENTS.md). A wire-level test asserts on the SDK's actual request body, so an
+SDK upgrade that adds fields fails CI rather than leaking.
+
+`enableExceptionAutocapture` stays off: its own `uncaughtException` listener defers exit to ours, so its
+asynchronous capture would be lost. The SDK's rate limiter applies only to autocapture, so the service
+dedupes identical (source, scope, method, type, message) reports for 60 s and caps 100 per launch.
+Browser stacks arrive raw and are rewritten from WebKit/Gecko `fn@url:line:col` into V8 lines the node
+parser reads; the browser never holds a vendor client. Errors before host analytics initializes
+(desktop/CLI pre-boot) are not reported, and no source maps are uploaded.
+
 ## Preference and delivery
 
 `analyticsEnabled` is the additional-data preference and host delivery gate; `analyticsConsentConfirmed` records
@@ -155,7 +191,8 @@ Counts describe installations, not people. Every event carries `app_version`, `c
 plus its
 closed properties. Only built-in provider/model names pass raw; custom values become `custom`, preserving
 the existing explicit `jbcentral` login name. No chat/file contents, paths/names, resource IDs, credentials,
-arbitrary errors, token/cost counts or recordings are collected.
+unsanitized errors, token/cost counts or recordings are collected; error reports carry only the
+allow-listed shape above.
 
 The sink uses the launcher-supplied public key, EU endpoint, disabled GeoIP enrichment and
 `$process_person_profile: false`; key/endpoint/fetch injection supports tests and self-hosting. The
