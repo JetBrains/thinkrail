@@ -17,18 +17,46 @@ export function supportsClientErrorReports(protocolVersion: number | null): bool
 	return protocolVersion !== null && protocolVersion >= CLIENT_ERROR_REPORT_PROTOCOL_VERSION;
 }
 
+const MAX_CHUNK_IDS = 20;
+const STACK_URL = /((?:https?|views):\/\/[^\s()@]+):\d+:\d+(?=[)\s]|$)/gm;
+
+function stackUrls(stack: string): string[] {
+	return Array.from(stack.matchAll(STACK_URL), (match) => match[1] as string);
+}
+
+export function chunkIdsForStack(
+	stack: string,
+	registry: unknown = (globalThis as { _posthogChunkIds?: unknown })._posthogChunkIds,
+): Record<string, string> | undefined {
+	if (typeof registry !== "object" || registry === null) return undefined;
+	const wanted = new Set(stackUrls(stack));
+	const out: Record<string, string> = {};
+	let count = 0;
+	for (const [key, id] of Object.entries(registry)) {
+		if (typeof id !== "string" || count >= MAX_CHUNK_IDS) continue;
+		const url = stackUrls(key).at(-1);
+		if (url && wanted.has(url) && !(url in out)) {
+			out[url] = id;
+			count++;
+		}
+	}
+	return count ? out : undefined;
+}
+
 export function clientErrorReport(
 	kind: ClientErrorKind,
 	error: unknown,
 	boundary?: string,
 ): ClientErrorReport {
 	const real = error instanceof Error ? error : null;
+	const chunkIds = real?.stack ? chunkIdsForStack(real.stack) : undefined;
 	return {
 		kind,
 		type: real?.name || (kind === "rejection" ? "UnhandledRejection" : "Error"),
 		message: real ? real.message : typeof error === "string" ? error : "",
 		...(real?.stack ? { stack: real.stack } : {}),
 		...(boundary ? { boundary } : {}),
+		...(chunkIds ? { chunkIds } : {}),
 	};
 }
 

@@ -503,6 +503,7 @@ export interface ClientErrorReport {
 	message: string;
 	stack?: string;
 	boundary?: string;
+	chunkIds?: Record<string, string>;
 }
 
 export interface Ack {

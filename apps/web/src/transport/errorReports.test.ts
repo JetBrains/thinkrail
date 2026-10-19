@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import { CLIENT_ERROR_REPORT_PROTOCOL_VERSION } from "@thinkrail/contracts";
 import { useAppStore } from "../store";
 import {
+	chunkIdsForStack,
 	clientErrorReport,
 	installClientErrorReporting,
 	reportClientError,
@@ -89,4 +90,23 @@ test("window errors and unhandled rejections are forwarded until uninstalled", (
 		{ kind: "window", type: "RangeError", message: "boom" },
 		{ kind: "rejection", type: "Error", message: "nope" },
 	]);
+});
+
+test("chunk ids are matched from PostHog's registry only for urls in the error's stack", () => {
+	const app = "http://127.0.0.1:4317/assets/index-abc.js";
+	const lazy = "http://127.0.0.1:4317/assets/Pane-def.js";
+	const registry = {
+		[`Error\n    at ${app}:1:120`]: "ab8fcdab-5c22-55ed-bec8-0f9acb6a407e",
+		[`@${lazy}:1:64`]: "11111111-2222-5333-8444-555555555555",
+		"Error\n    at http://127.0.0.1:4317/assets/other.js:1:1":
+			"22222222-2222-5333-8444-555555555555",
+	};
+	expect(chunkIdsForStack(`TypeError: x\n    at f (${app}:10:5)\ng@${lazy}:3:9`, registry)).toEqual(
+		{
+			[app]: "ab8fcdab-5c22-55ed-bec8-0f9acb6a407e",
+			[lazy]: "11111111-2222-5333-8444-555555555555",
+		},
+	);
+	expect(chunkIdsForStack(`at f (${app}:1:1)`, undefined)).toBeUndefined();
+	expect(chunkIdsForStack("no urls here", registry)).toBeUndefined();
 });
