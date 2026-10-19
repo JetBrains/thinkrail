@@ -1,6 +1,6 @@
 import type { ResourceMeta } from "@thinkrail/contracts";
+import type { ResourceRenderer } from "@thinkrail/resource-renderers";
 import { useEffect, useRef } from "react";
-import type { ResourceRenderer } from "../resources";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 

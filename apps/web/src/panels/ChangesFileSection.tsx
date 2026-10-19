@@ -8,17 +8,19 @@ import {
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
 import type { GitDiffScope, GitFileChange } from "@thinkrail/contracts";
+import type { HunkTriage } from "@thinkrail/resource-renderers";
+import { ReviewDraftContext } from "@thinkrail/resource-renderers";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { copyText, isPhoneViewport } from "@/lib";
-import type { HunkTriage } from "@/resources";
 import { statusLetter } from "../chat/planView";
-import { LoadingRegion } from "../components/Skeleton";
 import {
 	type ChangesTabSection,
 	type DiffTabView,
@@ -38,9 +40,7 @@ import { DiffSurfaceBody, useDiffSurface } from "./DiffSurface";
 import { HeaderIconButton } from "./HeaderIconButton";
 import { openDiffInTab } from "./openTabs";
 import { rendererImplementationKey, rendererTestId } from "./resourcePane";
-import { ReviewDraftContext } from "./resources/reviewDraftState";
 import type { SectionContent, SectionContentCache } from "./sectionContentCache";
-import { ToggleSegment } from "./ToggleSegment";
 import { useLiveTabContent } from "./useLiveTabContent";
 
 const PENDING_CONTENT = {

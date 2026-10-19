@@ -227,11 +227,6 @@ export function cssColorToHex(color: string): string {
 	return `#${channels.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
 }
 
-export function stripFrontmatter(text: string): string {
-	const match = /^---[ \t]*\r?\n([\s\S]*?)\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(text);
-	return match ? text.slice(match[0].length) : text;
-}
-
 const APPLE_PLATFORM = /Mac|iPhone|iPad|iPod/;
 
 function browserPlatform(): string {

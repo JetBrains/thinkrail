@@ -4,6 +4,7 @@ import {
 	RiParagraph as Pilcrow,
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { useMemo, useState } from "react";
 import { copyText, isPhoneViewport } from "@/lib";
 import type { DiffTab } from "../store";
@@ -18,7 +19,6 @@ import {
 	useResetViewStateOnImplementationChange,
 } from "./resourcePane";
 import { SendReviewButton } from "./SendReviewButton";
-import { ToggleSegment } from "./ToggleSegment";
 import { useLiveTabContent } from "./useLiveTabContent";
 
 export function DiffPane({ tab }: { tab: DiffTab }) {

@@ -9,7 +9,9 @@ import {
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { ReviewComment } from "@thinkrail/contracts";
+import { outdatedReason } from "@thinkrail/resource-renderers";
 import { PopoverTrigger } from "@thinkrail/ui/popover";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
@@ -17,7 +19,6 @@ import { QuietScrollArea } from "@/components/QuietScrollArea";
 import { PlanStatusIcon, SectionLabel } from "../chat/planKit";
 import { sessionGlance } from "../chat/planView";
 import { glanceIcon } from "../chat/TodoList";
-import { LoadingRegion } from "../components/Skeleton";
 import { selectDiffScope, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { ConfirmPopover } from "./ConfirmPopover";
@@ -28,7 +29,6 @@ import {
 	commentSurface,
 	fileSummaries,
 	lineRef,
-	outdatedReason,
 	type ReviewFileSummary,
 	type ReviewSurface,
 	reviewFileSurface,

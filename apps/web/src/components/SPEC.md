@@ -62,13 +62,14 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
   dimming folder reads as “disabled” at 14px. Callers pass only size/colour classes and decide from
   normalized host state whether a top-level session is running; the icon renders no dot, spinner, count,
   tooltip, or idle state.
-- **Also owns:** `Skeleton.tsx` — `SkeletonRows`, the one pulsing-rows placeholder every loading surface
+- **Also governs (implementation in `@thinkrail/ui/skeleton`, [[module-ui]], so the app and
+  [[module-resource-renderers]] share it):** `SkeletonRows`, the one pulsing-rows placeholder every loading surface
   uses, and `LoadingRegion`, the sized-wrapper shape around it that most call sites actually want (a
   `className` for the region's own padding/sizing, an optional `label` threaded to `SkeletonRows`'
   `role="status"` region rather than opening a second one, and an optional `testId`). The full loading
   vocabulary and its rules are below.
-- **Public surface:** `ErrorBoundary`, `isChunkLoadError`, `SkeletonRows`, `LoadingRegion` — imported
-  directly via `@/components/ErrorBoundary` / `@/components/Skeleton` (no barrel); `AttentionDot` via
+- **Public surface:** `ErrorBoundary`, `isChunkLoadError` — imported directly via
+  `@/components/ErrorBoundary` (no barrel; the placeholders come from `@thinkrail/ui/skeleton`); `AttentionDot` via
   `@/components/AttentionDot`; `RunningIcon` via `@/components/RunningIcon`; `CustomIcon`,
   `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the
   `QuietScrollEdges` type via `@/components/QuietScrollArea`; `useNow()` via `@/components/useNow` (the

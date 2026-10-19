@@ -1,5 +1,17 @@
 import type { ChangeReceipt, GitDiffScope, ResourceMeta } from "@thinkrail/contracts";
+import {
+	createAskAgentRequest,
+	describeResource,
+	type HunkActions,
+	type HunkTriage,
+	type ResourceContent,
+	type ResourceDescriptor,
+	type ResourceDiffProps,
+	type ResourceRenderer,
+	resolveRenderers,
+} from "@thinkrail/resource-renderers";
 import { Button } from "@thinkrail/ui/button";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import {
 	type ComponentType,
 	type LazyExoticComponent,
@@ -10,17 +22,6 @@ import {
 	useState,
 } from "react";
 import { usePhoneViewport } from "@/lib";
-import {
-	describeResource,
-	type HunkActions,
-	type HunkTriage,
-	type ResourceContent,
-	type ResourceDescriptor,
-	type ResourceDiffProps,
-	type ResourceRenderer,
-	resolveRenderers,
-} from "@/resources";
-import { LoadingRegion } from "../components/Skeleton";
 import { selectWorkspaceIsRunning, toast, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { canOfferChangeMutations, scopeHasMutableModifiedSide } from "./changeMutationAvailability";
@@ -33,7 +34,6 @@ import {
 	resourceBytesUrl,
 	selectResourceRenderer,
 } from "./resourcePane";
-import { createAskAgentRequest } from "./resources/code/changeBlocks";
 import { UnplacedReviewStrip } from "./UnplacedReviewStrip";
 import { type FileReview, useFileReview } from "./useReviewCommenting";
 

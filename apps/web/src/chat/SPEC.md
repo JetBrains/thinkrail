@@ -1438,7 +1438,8 @@ Unknown custom messages retain their existing behavior.
   (`fileTargets`), and the renderers (incl. the presentational
   `Markdown` — GFM + shiki, no store/transport; the rendering is fixed but the **prose skin** is the
   caller's via an optional `className` — chat uses the compact bubble skin (`tr-prose-chat`),
-  `panels/MarkdownPreview` the document skin (`tr-prose-doc`). A skin names exactly one generated
+  [[module-resource-renderers]]' document preview the document skin (`tr-prose-doc`) — the shell injects this
+  component as the renderers' lazy `ResourceHost.loadMarkdown`, so chat never imports the package. A skin names exactly one generated
   `tr-prose-*` system and then carries only spacing/measure/chrome — no size, weight, leading or
   tracking (see `styles/TYPOGRAPHY.md`); a caller may
   also **extend** the render with an optional `urlTransform`, extra `remarkPlugins`, and `components`, e.g.

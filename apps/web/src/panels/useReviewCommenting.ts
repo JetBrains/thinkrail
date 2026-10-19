@@ -1,6 +1,11 @@
 import type { GitDiffScope, ReviewAnchor } from "@thinkrail/contracts";
+import type {
+	AnchorDraft,
+	ReviewThread,
+	ReviewThreadActions,
+	SurfaceReview,
+} from "@thinkrail/resource-renderers";
 import { useMemo } from "react";
-import type { AnchorDraft, ReviewThread, ReviewThreadActions, SurfaceReview } from "@/resources";
 import { toast, useAppStore } from "../store";
 import { errorText, getTransport, supportsRichAnchors } from "../transport";
 import { fileThreads } from "./reviewModel";

@@ -44,7 +44,12 @@ const MODULE_RULES: readonly ModuleRule[] = [
 	},
 	{
 		root: "apps/web",
-		allowed: ["packages/contracts", "packages/ui", "packages/extension-api"],
+		allowed: [
+			"packages/contracts",
+			"packages/ui",
+			"packages/extension-api",
+			"packages/resource-renderers",
+		],
 	},
 	{ root: "apps/cli", allowed: ["packages/server", "packages/shared"] },
 	{
@@ -104,6 +109,9 @@ function moduleRules(packages: ReadonlyMap<string, string>): ModuleRule[] {
 		...roots
 			.filter((root) => root === "packages/ui" || root === "packages/extension-api")
 			.map((root) => ({ root, allowed: ["packages/contracts"] })),
+		...roots
+			.filter((root) => root === "packages/resource-renderers")
+			.map((root) => ({ root, allowed: ["packages/contracts", "packages/ui"] })),
 		...roots
 			.filter((root) => root.startsWith("pi-extensions/"))
 			.map((root) => ({ root, allowed: [] })),
@@ -292,6 +300,7 @@ function sourceViolation(
 	const browserSafe =
 		rule.root === "apps/web" ||
 		rule.root === "packages/ui" ||
+		rule.root === "packages/resource-renderers" ||
 		rule.root === "packages/contracts" ||
 		sdk ||
 		(extension && half === "web");

@@ -14,8 +14,8 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { useRef, useState } from "react";
-import { LoadingRegion } from "@/components/Skeleton";
 import { useNow } from "@/components/useNow";
 import { relativeTime } from "@/lib";
 import { getTransport } from "../transport";

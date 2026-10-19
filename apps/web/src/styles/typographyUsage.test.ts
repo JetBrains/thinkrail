@@ -14,6 +14,9 @@ import {
 
 const typography = loadTypography();
 const SRC = fileURLToPath(new URL("..", import.meta.url));
+const RENDERERS = fileURLToPath(
+	new URL("../../../../packages/resource-renderers/src/", import.meta.url),
+);
 
 const FILES = designSourceFiles();
 const read = (p: string) => normalizeEol(readFileSync(p, "utf8"));
@@ -27,9 +30,9 @@ const PRIMITIVE_ALLOWLIST = new Set([
 	"index.css",
 	"styles/tokens.css",
 	"styles/global.css",
-	"panels/monacoSetup.ts",
+	"packages/resource-renderers/src/support/monacoSetup.ts",
 	"panels/TerminalInstance.tsx",
-	"panels/resources/code/pierreVirtualizer.ts",
+	"packages/resource-renderers/src/renderers/code/pierreVirtualizer.ts",
 	"thinkrail-extensions/visualize/web/mermaid.ts",
 ]);
 
@@ -143,7 +146,7 @@ describe("component usage", () => {
 
 describe("markdown prose systems", () => {
 	const chat = code(join(SRC, "chat/Markdown.tsx"));
-	const preview = code(join(SRC, "panels/MarkdownPreview.tsx"));
+	const preview = code(join(RENDERERS, "support/MarkdownPreview.tsx"));
 
 	it("gives each markdown surface exactly one generated prose system", () => {
 		expect(chat).toContain(proseRootClassName(typography, "chat"));
@@ -157,7 +160,7 @@ describe("markdown prose systems", () => {
 			/\[&[^\]]*\]:(?:text-(?!primary|muted|hint|text|balance|pretty|left|center|right)|font-|leading-|tracking-)/g;
 		for (const [label, src] of [
 			["chat/Markdown.tsx", chat],
-			["panels/MarkdownPreview.tsx", preview],
+			["resource-renderers/support/MarkdownPreview.tsx", preview],
 		] as const)
 			expect(
 				[...src.matchAll(perElementType)].map((m) => m[0]),

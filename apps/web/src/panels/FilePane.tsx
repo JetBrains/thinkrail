@@ -1,4 +1,13 @@
 import {
+	describeResource,
+	type ResourceContent,
+	type ResourceRenderer,
+	type ResourceViewProps,
+	resolveRenderers,
+} from "@thinkrail/resource-renderers";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import {
 	type ComponentType,
 	type LazyExoticComponent,
 	lazy,
@@ -7,15 +16,7 @@ import {
 	useMemo,
 	useState,
 } from "react";
-import { LoadingRegion } from "../components/Skeleton";
 import { isPhoneViewport, usePhoneViewport } from "../lib";
-import {
-	describeResource,
-	type ResourceContent,
-	type ResourceRenderer,
-	type ResourceViewProps,
-	resolveRenderers,
-} from "../resources";
 import type { FileTab } from "../store";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
@@ -29,7 +30,6 @@ import {
 } from "./resourcePane";
 import { reviewFlagFor } from "./reviewModel";
 import { SendReviewButton } from "./SendReviewButton";
-import { ToggleSegment } from "./ToggleSegment";
 import { UnplacedReviewStrip } from "./UnplacedReviewStrip";
 import { useLiveTabContent } from "./useLiveTabContent";
 import { useFileReview } from "./useReviewCommenting";
@@ -54,14 +54,16 @@ const viewComponents = new Map<string, LazyExoticComponent<ComponentType<Resourc
 function RendererView({
 	renderer,
 	implementationKey,
+	mobile,
 	...props
-}: ResourceViewProps & { renderer: ResourceRenderer; implementationKey: string }) {
+}: ResourceViewProps & { renderer: ResourceRenderer; implementationKey: string; mobile: boolean }) {
 	let Component = viewComponents.get(implementationKey);
 	if (!Component) {
-		if (!renderer.loadView) {
+		const load = renderer.loadView;
+		if (!load) {
 			throw new Error(`Resource renderer has no view loader: ${renderer.id}`);
 		}
-		Component = lazy(renderer.loadView);
+		Component = lazy(() => load({ mobile }));
 		viewComponents.set(implementationKey, Component);
 	}
 	return <Component {...props} />;
@@ -177,6 +179,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 						key={implementationKey}
 						renderer={renderer}
 						implementationKey={implementationKey}
+						mobile={mobile}
 						resource={resource}
 						content={content}
 						review={review.worktree}

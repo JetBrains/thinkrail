@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef } from "react";
 import {
 	anchorLabel,
 	isPlaceable,
 	type ResourceIntent,
 	type ResourceRenderer,
+	ReviewThreadCard,
 	type SurfaceReview,
-} from "@/resources";
-import { ReviewThreadCard } from "./ReviewThreadCard";
+} from "@thinkrail/resource-renderers";
+import { useEffect, useMemo, useRef } from "react";
 
 export interface UnplacedReviewEntry {
 	review: SurfaceReview;

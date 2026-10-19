@@ -14,8 +14,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LoadingRegion } from "@/components/Skeleton";
 import { errorText, getTransport } from "../transport";
 
 export function ExistingWorktreeDialog({

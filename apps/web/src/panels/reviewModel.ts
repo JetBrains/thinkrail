@@ -1,5 +1,5 @@
 import type { GitDiffScope, ReviewAnchor, ReviewComment } from "@thinkrail/contracts";
-import { anchorLabel, type ReviewThread } from "@/resources";
+import { anchorLabel, type ReviewThread } from "@thinkrail/resource-renderers";
 
 export type ReviewSurface = { kind: "file" } | { kind: "diff"; scope?: GitDiffScope };
 
@@ -58,23 +58,6 @@ export function statusLabel(
 		if (comment.anchorState === "outdated") return `${comment.status} · outdated`;
 	}
 	return comment.status;
-}
-
-export function threadLabel(t: Pick<ReviewThread, "status" | "anchorState" | "stale">): string {
-	if (t.stale) return `${t.status} · stale`;
-	if (t.anchorState === "outdated") return `${t.status} · outdated`;
-	return t.status;
-}
-
-export function outdatedReason(anchor: ReviewAnchor | null | undefined): string {
-	const kinds = new Set((anchor?.selectors ?? []).map((selector) => selector.kind));
-	if (kinds.has("textQuote")) {
-		return "The file changed or is gone, and this comment's text was not found again; it keeps its original snapshot.";
-	}
-	if (kinds.has("region") || kinds.has("structural") || kinds.has("lineRange")) {
-		return "The file's bytes changed or it is gone; a position in an image, PDF or notebook cannot be re-verified, so the comment keeps its original snapshot.";
-	}
-	return "The file this comment was about is gone.";
 }
 
 export type ReviewFlag = "draft" | "sent";

@@ -4,6 +4,7 @@ import {
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import {
 	Fragment,
@@ -19,7 +20,6 @@ import { prepareChatTitle } from "../chat/chatTitle";
 import { useAutoPlanSummary } from "../chat/useChatTodos";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { QuietScrollArea } from "../components/QuietScrollArea";
-import { LoadingRegion } from "../components/Skeleton";
 import { type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
 import { DiffPane } from "../panels/DiffPane";
@@ -28,7 +28,6 @@ import { FileTree } from "../panels/FileTree";
 import { startChatInTab } from "../panels/openChat";
 import { openFileInTab } from "../panels/openTabs";
 import { ProjectTree } from "../panels/ProjectTree";
-import "../panels/resources/register";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
 import { reviewFlags } from "../panels/reviewModel";
 import { SpecsPanel } from "../panels/SpecsPanel";

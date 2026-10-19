@@ -1,5 +1,5 @@
+import type { ResourceContent } from "@thinkrail/resource-renderers";
 import { diffArrays } from "diff";
-import type { ResourceContent } from "@/resources";
 
 export const LARGE_DIFF_CHANGED_LINES = 2000;
 export const VIRTUALIZED_DIFF_LINES = 1000;

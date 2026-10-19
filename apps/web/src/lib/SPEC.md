@@ -13,8 +13,7 @@ not this module; the theme-aware highlighter remains app-local.
 
 ## Boundary
 
-- **Owns:** `utils.ts` → `stripFrontmatter()` (drop a leading YAML `---`
-  block so a rendered document doesn't show spec metadata as a heading) + `cssColorToHex()` (canonicalize
+- **Owns:** `utils.ts` → `cssColorToHex()` (canonicalize
   a CSS color to hex — minified CSS serves `#fff`/`gray`-style equivalents, which strict consumers like
   Monaco and xterm reject; `""` when unparseable). Plus the primitives that more than one module needs and
   none should re-state: **`normalizePath()`** / **`isAbsolutePath()`** (a path from a pi tool call or the
@@ -78,7 +77,7 @@ not this module; the theme-aware highlighter remains app-local.
   **`tupleKey()`** length-prefixes independent strings, **`parseTupleKey()`** reads only its requested
   namespace, and **`layoutResourceIdentity()`** gives every frontend-local placement/cache alias one
   semantic resource key, so delimiters and stable noncanonical placement ids cannot split or alias identities.
-- **Public surface (barrel):** `stripFrontmatter`, `cssColorToHex`, `isPhoneViewport`,
+- **Public surface (barrel):** `cssColorToHex`, `isPhoneViewport`,
   `usePhoneViewport`, `normalizePath`, `isAbsolutePath`, `projectRelativePath` (canonical worktree-relative POSIX identity;
   collapses in-root `.`/`..` aliases but preserves an attempted leading escape for host rejection; Windows
   drive-rooted containment compares path/root case-insensitively while preserving the candidate's casing),
