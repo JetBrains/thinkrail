@@ -682,12 +682,15 @@ export async function originUrls(worktreePath: string): Promise<OriginUrls> {
 	return { fetch, push: pushurl.ok && pushurl.out ? pushurl.out : fetch };
 }
 
+export type PushTargetStatus =
+	| { published: false }
+	| ({ published: true } & Partial<PushDivergence>);
+
 export async function countPushTargetDivergence(
 	worktreePath: string,
 	branch: string,
 	pushUrl: string,
-	opts?: { fetch?: boolean },
-): Promise<PushDivergence | null> {
+): Promise<PushTargetStatus> {
 	if (!isSafeRef(branch)) throw new Error(`Not a usable git ref: ${branch}`);
 	const ref = `refs/heads/${branch}`;
 	const listed = await gitAsync(worktreePath, ["ls-remote", "--end-of-options", pushUrl, ref], {
@@ -698,17 +701,17 @@ export async function countPushTargetDivergence(
 		.split("\n")
 		.find((line) => line.endsWith(`\t${ref}`))
 		?.split("\t")[0];
-	if (!tip) return null;
+	if (!tip) return { published: false };
 	const present = async () =>
 		(await gitAsync(worktreePath, ["cat-file", "-e", "--end-of-options", `${tip}^{commit}`])).ok;
-	if (!(await present()) && opts?.fetch) {
+	if (!(await present())) {
 		await gitAsync(
 			worktreePath,
 			["fetch", "--no-tags", "--no-write-fetch-head", "--end-of-options", pushUrl, ref],
 			{ network: true },
 		);
+		if (!(await present())) return { published: true };
 	}
-	if (!(await present())) throw new Error("The push target's tip is not available locally");
 	const counted = await gitAsync(worktreePath, [
 		"rev-list",
 		"--left-right",
@@ -720,10 +723,9 @@ export async function countPushTargetDivergence(
 	const [behindStr, aheadStr] = counted.out.split(/\s+/);
 	const behind = Number(behindStr);
 	const ahead = Number(aheadStr);
-	if (!counted.ok || !Number.isSafeInteger(ahead) || !Number.isSafeInteger(behind)) {
-		throw new Error(`Could not measure push divergence: ${counted.err || "git failed"}`);
-	}
-	return { ahead, behind };
+	return counted.ok && Number.isSafeInteger(ahead) && Number.isSafeInteger(behind)
+		? { published: true, ahead, behind }
+		: { published: true };
 }
 
 export async function commitsAheadOf(worktreePath: string, baseRef: string): Promise<number> {

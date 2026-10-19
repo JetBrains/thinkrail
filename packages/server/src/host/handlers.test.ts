@@ -240,6 +240,7 @@ test("a split origin measures the branch against where it is pushed, not where i
 	git(other, "commit", "-m", "unrelated on the fetch side");
 	git(other, "push", "origin", workspace.branch);
 	git(workspace.worktreePath, "fetch", "origin");
+	git(other, "push", "origin", "--delete", workspace.branch);
 
 	expect(
 		await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
@@ -254,8 +255,14 @@ test("a split origin measures the branch against where it is pushed, not where i
 	git(pushed, "commit", "-m", "later on the push side");
 	git(pushed, "push", "origin", workspace.branch);
 
+	git(workspace.worktreePath, "fetch", "--prune", "origin");
+
 	expect(
-		await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
+		await handleRequest(
+			"workspace.branchStatus",
+			{ workspaceId: workspace.id, allowCached: true },
+			CTX,
+		),
 	).toMatchObject({ published: true, ahead: 0, behind: 1 });
 });
 

@@ -102,6 +102,7 @@ import {
 	listBranches,
 	listCommits,
 	originUrls,
+	type PushTargetStatus,
 	prefetchBranch,
 	remoteRefOid,
 } from "../git";
@@ -542,25 +543,26 @@ const handlers: WsHandlers = {
 		const fresh = shouldRefreshOpenReview(p.allowCached);
 		const origin = await originUrls(ws.worktreePath);
 		const splitPushUrl = origin.push !== origin.fetch ? origin.push : null;
-		const [outcome, divergence, aheadOfBase] = await Promise.all([
+		const [outcome, measured, aheadOfBase] = await Promise.all([
 			findBranchReviewOutcome(ws.worktreePath, ws.branch, { fresh }),
 			(splitPushUrl
-				? countPushTargetDivergence(ws.worktreePath, ws.branch, splitPushUrl, { fetch: fresh })
-				: countPushDivergence(ws.worktreePath, ws.branch, { fetch: fresh })
+				? countPushTargetDivergence(ws.worktreePath, ws.branch, splitPushUrl)
+				: countPushDivergence(ws.worktreePath, ws.branch, { fetch: fresh }).then(
+						(divergence): PushTargetStatus =>
+							divergence ? { published: true, ...divergence } : { published: false },
+					)
 			).catch(() => undefined),
 			commitsAheadOf(ws.worktreePath, ws.baseBranch),
 		]);
 		if (outcome.reliable) setWorkspaceReview(ws.id, outcome.value, ws.branch);
-
-		const published =
-			divergence === undefined
-				? remoteRefOid(ws.worktreePath, `origin/${ws.branch}`) !== null
-				: divergence !== null;
 		return {
 			hasOrigin: origin.push !== null,
 			provider: origin.push ? providerFromRemoteUrl(origin.push) : null,
-			published,
-			...(divergence ? { ahead: divergence.ahead, behind: divergence.behind } : {}),
+			published:
+				measured?.published ?? remoteRefOid(ws.worktreePath, `origin/${ws.branch}`) !== null,
+			...(measured?.published && measured.ahead !== undefined && measured.behind !== undefined
+				? { ahead: measured.ahead, behind: measured.behind }
+				: {}),
 			aheadOfBase,
 			onBase: onBaseBranch(ws),
 			review: openReviewForClient(outcome.value, ctx.protocolVersion),

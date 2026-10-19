@@ -188,13 +188,14 @@ ref off the workspace-create critical path.
   parallel with the gh lookup, not after it) so the plan page can flag commits the PR doesn't have yet and
   the diverged sync-conflict state; **`originUrls(worktreePath)`** (async) → origin's configured `{ fetch, push }`
   URLs (`push` = `remote.origin.pushurl`, else the fetch URL; unexpanded, `null` without an origin);
-  **`countPushTargetDivergence(worktreePath, branch, pushUrl, {fetch?})`** (async) → the same `{ ahead, behind }`
-  measured against the **push** repository for an origin whose push URL differs from its fetch URL: the
-  remote-tracking `origin/<branch>` mirrors the fetch repository there (a fetch overwrites what the push
-  wrote; git's own `@{push}` resolves to the same ref), so it reads the push target's tip with `ls-remote`,
-  fetches only that tip's objects (`--no-write-fetch-head`, no ref written) on a fresh read when they are
-  missing, and compares it to HEAD; `null` when the push repository lacks the branch, and it throws when the
-  tip stays unknown;
+  **`countPushTargetDivergence(worktreePath, branch, pushUrl)`** (async) → `{ published: false }` or
+  `{ published: true, ahead?, behind? }` measured against the **push** repository for an origin whose push URL
+  differs from its fetch URL: the remote-tracking `origin/<branch>` mirrors the fetch repository there (a
+  fetch overwrites what the push wrote; git's own `@{push}` resolves to the same ref), so it reads the push
+  target's tip with `ls-remote`, fetches that tip's objects when they are missing (`--no-write-fetch-head`,
+  no ref written — on every read, cached ones included, since the `ls-remote` already went to the network
+  and the fetch-side ref must never stand in for it), and compares it to HEAD; a tip that stays unavailable
+  leaves the counts unknown, and only a failed `ls-remote` throws;
   **`commitsAheadOf(worktreePath, baseRef)`** (async) → `rev-list --count
   <base>..HEAD`, `0` for an unsafe or unresolvable base, never a throw — the `origin/` here is the second
   deliberate survivor of the all-remotes sweep, because it asks where *this* workspace's own branch was
@@ -303,6 +304,7 @@ ref off the workspace-create critical path.
   `gitUncommittedPaths`, `gitDiffFile`,
   `readBlobAt`, `readBlobBytesAt`, `readBlobBytesAtAsync`, `readBlobStreamAtAsync`, `readBlobSizeAtAsync`,
   `readPathModeAtAsync`, `readCommitSubject`, `commitsAheadOf`, `originUrls`, `countPushTargetDivergence`,
+  `PushTargetStatus`,
   `gitCommitPaths`, `gitHeadSha`, `listCommits`, `listCommitsSince`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,

@@ -21,6 +21,7 @@ export {
 	listCommitsSince,
 	listRemotes,
 	originUrls,
+	type PushTargetStatus,
 	prefetchBranch,
 	readBlobAt,
 	readBlobBytesAt,
