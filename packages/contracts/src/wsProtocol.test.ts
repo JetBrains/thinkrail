@@ -11,6 +11,7 @@ import {
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	BRANCH_STATUS_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
@@ -208,6 +209,15 @@ test("project rename is pinned to v85", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_RENAME_PROTOCOL_VERSION);
 	expect(PROJECT_RENAME_PROTOCOL_VERSION).toBe(85);
 	expect(WS_METHODS.projectRename).toBe("project.rename");
+});
+
+test("branch status, review-free push, and PR description sources are pinned to v86", () => {
+	expect(PROTOCOL_VERSION).toBe(86);
+	expect(BRANCH_STATUS_PROTOCOL_VERSION).toBe(86);
+	expect(WS_METHODS.workspaceBranchStatus).toBe("workspace.branchStatus");
+	expect(WS_METHODS.workspacePush).toBe("workspace.push");
+	expect(WS_METHODS.prGenerate).toBe("pr.generate");
+	expect(WS_METHODS.workspaceOpenReview).toBe("workspace.openReview");
 });
 
 test("MCP server management, status and chat resources are pinned to v83", () => {

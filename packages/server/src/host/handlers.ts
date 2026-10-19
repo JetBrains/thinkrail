@@ -71,6 +71,7 @@ import {
 	stopSubagent,
 } from "../agent";
 import { type AdditionalAnalyticsCapture, type SendMode, track } from "../analytics";
+import { suggestPrDescription } from "../assist";
 import {
 	cancelLogin,
 	connectJbcentral,
@@ -84,7 +85,7 @@ import {
 	startProxyJbcentral,
 	updateJbcentral,
 } from "../auth";
-import { findBranchReviewOutcome } from "../branch-review";
+import { findBranchReviewOutcome, providerFromRemoteUrl } from "../branch-review";
 import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
@@ -92,18 +93,21 @@ import { listExtensionCatalog } from "../extensions";
 import { recordAcceptedMessage, respondToInterview } from "../feedback";
 import { readDir, readFile } from "../fs";
 import {
+	commitsAheadOf,
 	countPushDivergence,
+	gitAsync,
 	gitDiffFile,
 	gitStatus,
 	ignoredPaths,
 	listBranches,
 	listCommits,
 	prefetchBranch,
+	remoteRefOid,
 } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { clampLimit, getHistoryIndex } from "../history";
 import { logger } from "../log";
-import { openPr, previewPr } from "../pr";
+import { onBaseBranch, openPr, prDraftInput, previewPr, pushBranch } from "../pr";
 import {
 	acknowledgeProjectSkills,
 	closeProject,
@@ -532,6 +536,35 @@ const handlers: WsHandlers = {
 			...(divergence && divergence.behind > 0 ? { behindCommits: divergence.behind } : {}),
 		};
 	},
+	"workspace.branchStatus": async (p, ctx) => {
+		const ws = getWorkspace(p.workspaceId);
+		const fresh = shouldRefreshOpenReview(p.allowCached);
+		const [outcome, divergence, aheadOfBase, origin] = await Promise.all([
+			findBranchReviewOutcome(ws.worktreePath, ws.branch, { fresh }),
+			countPushDivergence(ws.worktreePath, ws.branch, { fetch: fresh }).catch(() => undefined),
+			commitsAheadOf(ws.worktreePath, ws.baseBranch),
+			gitAsync(ws.worktreePath, ["remote", "get-url", "origin"]),
+		]);
+		if (outcome.reliable) setWorkspaceReview(ws.id, outcome.value, ws.branch);
+		const hasOrigin = origin.ok && origin.out !== "";
+		const published =
+			divergence === undefined
+				? remoteRefOid(ws.worktreePath, `origin/${ws.branch}`) !== null
+				: divergence !== null;
+		return {
+			hasOrigin,
+			provider: hasOrigin ? providerFromRemoteUrl(origin.out) : null,
+			published,
+			...(divergence ? { ahead: divergence.ahead, behind: divergence.behind } : {}),
+			aheadOfBase,
+			onBase: onBaseBranch(ws),
+			review: openReviewForClient(outcome.value, ctx.protocolVersion),
+		};
+	},
+	"workspace.push": async (p) => {
+		recordWorkspaceActivity(p.workspaceId);
+		return pushBranch(p);
+	},
 	"workspace.settle": (params) => settleWorkspace(params.id),
 	"workspace.unsettle": (params) => unsettleWorkspace(params.id),
 	"workspace.markUnread": async (params) => ({
@@ -573,6 +606,9 @@ const handlers: WsHandlers = {
 	"github.authStatus": () => githubAuthStatus(),
 	"github.refresh": () => githubRefresh(),
 	"pr.preview": (params) => previewPr(params),
+	"pr.generate": async (params) => ({
+		body: await suggestPrDescription(await prDraftInput(params)),
+	}),
 	"pr.open": async (p) => {
 		refreshUserOwnedWorkspace(p.workspaceId);
 		recordWorkspaceActivity(p.workspaceId);

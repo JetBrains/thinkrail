@@ -186,10 +186,8 @@ ref off the workspace-create critical path.
   `workspace.openReview` passes `fetch` **only on a fresh lookup** (focus / explicit refresh, not a cached
   activation) and composes `ahead`→`unpushedCommits` and `behind`→`behindCommits` onto an open review (in
   parallel with the gh lookup, not after it) so the plan page can flag commits the PR doesn't have yet and
-  the diverged sync-conflict state; **`branchCounts(worktreePath, branch, baseRef)`** (async) → `{ published,
-  aheadOfBase, subjects }` — whether `origin/<branch>` exists, `rev-list --count <base>..HEAD`, and the first
-  bounded page of those commits' subjects (oldest first) for the commit-sourced PR body; an unresolvable
-  base reads as `aheadOfBase: 0`, never a throw — the `origin/` here is the second
+  the diverged sync-conflict state; **`commitsAheadOf(worktreePath, baseRef)`** (async) → `rev-list --count
+  <base>..HEAD`, `0` for an unsafe or unresolvable base, never a throw — the `origin/` here is the second
   deliberate survivor of the all-remotes sweep, because it asks where *this* workspace's own branch was
   pushed, not which remote a base was branched from; `listBranches(projectId)` → `{ local, remote,
   remoteGroups?, defaultBranch }` (local `refs/heads`; canonical `remote` = every direct full ref under
@@ -295,7 +293,7 @@ ref off the workspace-create critical path.
 - **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `gitAsyncStream`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`,
   `gitUncommittedPaths`, `gitDiffFile`,
   `readBlobAt`, `readBlobBytesAt`, `readBlobBytesAtAsync`, `readBlobStreamAtAsync`, `readBlobSizeAtAsync`,
-  `readPathModeAtAsync`, `readCommitSubject`, `branchCounts`,
+  `readPathModeAtAsync`, `readCommitSubject`, `commitsAheadOf`,
   `gitCommitPaths`, `gitHeadSha`, `listCommits`, `listCommitsSince`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,

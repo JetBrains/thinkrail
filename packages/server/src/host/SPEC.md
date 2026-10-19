@@ -587,7 +587,7 @@ enabled/confirmed choice before entering analytics attribution.
   review, because such a client reads any review as an open PR and its plan pane would offer *Push
   updates* that creates a new PR — the host snapshot itself still records the true state. **Branch status / push / generate (v86):**
   `workspace.branchStatus` composes the same review lookup + divergence as `openReview` with `git`'s
-  `branchCounts` (published, ahead of base) and the uncommitted count; `workspace.push` stamps activity
+  `commitsAheadOf` (ahead of the base), `pr`'s `onBaseBranch`, and the origin's provider — `published` is the divergence answer itself (its remote ref exists), so the two never disagree; `workspace.push` stamps activity
   like `pr.open` and drops the worktree's review cache through `pr`; `pr.generate` is composed here —
   `pr` gathers the bounded input (`prDraftInput`), `assist` drafts — so `pr` gains no `assist` edge. **Backfill:**
   the same post-list pass gives records without `lastActiveAt` their

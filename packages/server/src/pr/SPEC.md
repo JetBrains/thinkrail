@@ -24,15 +24,16 @@ future pi extension exposes the same library to the agent.
 ## Behavior
 
 `previewPr({ workspaceId, sessionId?, title?, source?, template? })` → `{ title, body, templates,
-planAvailable }` (`pr.preview`): the exact title/body `openPr` would use, so the client's compose dialog
-can offer them for editing before anything is pushed. `source` picks the body: **`plan`** (`renderPrBody`
-over the session's wire plan — the default whenever a `sessionId` is given, which keeps an older
-client's call unchanged), **`commits`** (the subjects of `<base>..HEAD`, oldest first, as a bullet list —
-the default without a session), **`template`** (the chosen discovered template verbatim; the first one
+planAvailable, source }` (`pr.preview`): the exact title/body `openPr` would use, so the client's compose
+dialog can offer them for editing before anything is pushed. `source` picks the body: **`plan`**
+(`renderPrBody` over the session's wire plan, adopted commits included — the default whenever that plan
+has items; `planAvailable` reports whether it renders anything at all), **`commits`** (the subjects of `<base>..HEAD`, oldest first, as a
+bullet list — the default otherwise, so a plan-less or empty-plan PR still gets an honest body), **`template`** (the chosen discovered template verbatim; the first one
 when `template` is absent), or **`empty`**. **Template discovery** reads the worktree, not the forge:
 GitHub's `pull_request_template.md` in `.github/`, the root, or `docs/` (any case) and every
 `.github/PULL_REQUEST_TEMPLATE/*.md`, plus GitLab's `.gitlab/merge_request_templates/*.md`; paths are
-worktree-relative, contained, size-capped, and listed in that order.
+worktree-relative, size-capped, and contained (the real path of each file, symlinks resolved, must sit
+inside the real worktree), and listed in that order.
 
 `prDraftInput({ workspaceId, sessionId?, template? })` → the bounded input `assist.suggestPrDescription`
 drafts from (`pr.generate`, composed in `host`): branch + base, commit subjects, `git diff --stat` against
@@ -93,7 +94,9 @@ value. Then:
    misreport it as an auth failure). When the host has a controlling tty, ssh would otherwise prompt
    for a key passphrase on `/dev/tty` and hang the whole call until the client times out — batch
    mode turns that hang into the immediate `Permission denied` the classification is built for.
-3. Non-GitHub origin (incl. local/bare test remotes) → `action: "pushed"` — the honest floor.
+3. GitLab.com origin → `action: "compare"` with GitLab's prefilled new-MR page (`gitlabNewMrUrl`: source,
+   target, title, description capped like the GitHub compare body) — no `glab` mutation this iteration. Any
+   other origin (incl. local/bare test remotes) → `action: "pushed"` — the honest floor.
 4. GitHub origin: an existing open PR (`gh pr list --head <branch> --base <input.base>`, parsed by
    `branch-review`'s `reviewNumber`) → `gh pr edit <NUMBER> --title --body` refresh → `action: "updated"` +
    **`bodyRefreshed`** (an edit failure is reported, never claimed as success). The edit selector is
@@ -140,7 +143,9 @@ an update, a create, or an ambiguous create result.
 
 - **Owns:** the push (with or without a PR) + PR action, PR-body rendering from the wire plan, commit and
   template body sources, PR/MR template discovery, the generation input, GitHub slug/compare-URL derivation.
-- **Public surface (barrel):** `openPr`, `previewPr`, `pushBranch`, `prDraftInput`.
+- **Public surface (barrel):** `openPr`, `previewPr`, `pushBranch`, `prDraftInput`, `onBaseBranch`.
+- `onBaseBranch` is the one "the branch is its own base" check, shared with `host`'s
+  `workspace.branchStatus`.
 - **Allowed deps:** `workspaces` (workspace record, `refreshUserOwnedWorkspace`), `git` (exec + status), `todos` (`listTodos` for
   the body), `branch-review` (provider detection, existing-PR lookup, the shared command runner,
   `forgetOpenBranchReview`),

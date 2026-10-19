@@ -1,11 +1,10 @@
-import type { BranchReviewState, OpenBranchReview } from "@thinkrail/contracts";
+import type { BranchReviewState, OpenBranchReview, ReviewProvider } from "@thinkrail/contracts";
 import { gitAsync, nonInteractiveGitEnv } from "../git";
 import { runBounded } from "../subprocess";
 
 const LOOKUP_TIMEOUT_MS = 8_000;
 export const OPEN_BRANCH_REVIEW_CACHE_TTL_MS = 60_000;
 
-type ReviewProvider = "github" | "gitlab";
 type ProviderDetection = { provider: ReviewProvider | null; cacheable: boolean };
 type CommandResult = { ok: boolean; out: string };
 type CommandRunner = (cwd: string, command: string[]) => Promise<CommandResult>;

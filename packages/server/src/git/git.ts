@@ -668,6 +668,19 @@ export async function listCommitsSince(
 	return commits;
 }
 
+export async function commitsAheadOf(worktreePath: string, baseRef: string): Promise<number> {
+	if (!isSafeRef(baseRef)) return 0;
+	const counted = await gitAsync(worktreePath, [
+		"rev-list",
+		"--count",
+		"--end-of-options",
+		`${baseRef}..HEAD`,
+		"--",
+	]);
+	const count = counted.ok ? Number(counted.out) : 0;
+	return Number.isSafeInteger(count) && count > 0 ? count : 0;
+}
+
 export interface PushDivergence {
 	/** Local commits origin/<branch> lacks (a plain push would deliver these). */
 	ahead: number;

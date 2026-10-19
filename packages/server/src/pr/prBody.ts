@@ -1,6 +1,6 @@
 import type { TodoItem, TodoPlan } from "@thinkrail/contracts";
 
-function flatItems(plan: TodoPlan): TodoItem[] {
+export function flatItems(plan: TodoPlan): TodoItem[] {
 	return [...plan.groups.flatMap((g) => g.todos), ...plan.todos];
 }
 

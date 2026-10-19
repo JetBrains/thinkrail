@@ -122,6 +122,37 @@ export interface PrDraft {
 	body: string;
 }
 
+export type PrBodySource = "plan" | "commits" | "template" | "empty";
+
+export interface PrPreview extends PrDraft {
+	/** v86: worktree-relative PR/MR templates the host found, in discovery order. */
+	templates?: string[];
+	/** v86: whether the session (when one was given) has a plan body to render. */
+	planAvailable?: boolean;
+	/** v86: the source the body was rendered from. */
+	source?: PrBodySource;
+}
+
+export type ReviewProvider = "github" | "gitlab";
+
+/** `workspace.branchStatus`: where the branch stands against origin and its base, review or not. */
+export interface BranchStatus {
+	hasOrigin: boolean;
+	/** The forge `origin` points at; `null` without an origin or for any other host. */
+	provider: ReviewProvider | null;
+	/** `origin/<branch>` exists. */
+	published: boolean;
+	/** Published only: local commits origin lacks. */
+	ahead?: number;
+	/** Published only: last-known origin commits HEAD lacks (the branch diverged). */
+	behind?: number;
+	/** Commits on HEAD that the workspace's base lacks. */
+	aheadOfBase: number;
+	/** The branch is its own base (Default on the default branch): no PR can be opened from it. */
+	onBase: boolean;
+	review: OpenBranchReview | null;
+}
+
 export interface OpenPrResult {
 	action: "created" | "updated" | "pushed" | "compare";
 	review?: OpenBranchReview;

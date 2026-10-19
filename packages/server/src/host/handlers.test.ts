@@ -156,6 +156,50 @@ test("starting a PR mutation reactivates a parked workspace before any network a
 	expect(after?.lastActiveAt ?? 0).toBeGreaterThanOrEqual(workspace.lastActiveAt ?? 0);
 });
 
+test("branch status reports a review-free branch, and workspace.push publishes it", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Ship segment" },
+		CTX,
+	)) as Workspace;
+	writeFileSync(join(workspace.worktreePath, "ship.txt"), "ship\n");
+	git(workspace.worktreePath, "add", "-A");
+	git(workspace.worktreePath, "commit", "-m", "ship");
+	writeFileSync(join(workspace.worktreePath, "dirty.txt"), "dirty\n");
+
+	const local = await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX);
+	expect(local).toEqual({
+		hasOrigin: false,
+		provider: null,
+		published: false,
+		aheadOfBase: 1,
+		onBase: false,
+		review: null,
+	});
+
+	const remote = join(dataDir, "origin.git");
+	mkdirSync(remote);
+	git(remote, "init", "--bare");
+	git(repo, "remote", "add", "origin", remote);
+	expect(await handleRequest("workspace.push", { workspaceId: workspace.id }, CTX)).toEqual({
+		dirtyFiles: 1,
+	});
+	const published = await handleRequest(
+		"workspace.branchStatus",
+		{ workspaceId: workspace.id },
+		CTX,
+	);
+	expect(published).toMatchObject({
+		hasOrigin: true,
+		provider: null,
+		published: true,
+		ahead: 0,
+		behind: 0,
+		aheadOfBase: 1,
+		review: null,
+	});
+});
+
 test("request diagnostics expose only registered method names", async () => {
 	expect(requestMethodDiagnostic("workspace.list")).toBe("workspace.list");
 	expect(requestMethodDiagnostic("host.update")).toBe("host.update");
