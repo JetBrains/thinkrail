@@ -9,6 +9,8 @@ import {
 	RiGitBranchLine as GitBranch,
 	RiHome2Line as House,
 	RiLoader4Line as Loader2,
+	RiMailOpenLine as MailOpen,
+	RiMailUnreadLine as MailUnread,
 	RiMore2Line as MoreVertical,
 	RiPencilLine as Pencil,
 	RiAddLine as Plus,
@@ -61,10 +63,13 @@ import {
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
 	selectWorkspacePartition,
+	selectWorkspaceReadAction,
 	settledReasonLabel,
 	settledReasonTitle,
+	supportsWorkspaceReadState,
 	toast,
 	useAppStore,
+	type WorkspaceReadAction,
 } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
@@ -83,6 +88,8 @@ import {
 	canRenameWorkspace,
 	canSettleWorkspace,
 	loadProjectWorkspaces,
+	markWorkspaceRead,
+	markWorkspaceUnread,
 	openWorkspaceIn,
 	renameProject,
 	renameWorkspace,
@@ -326,6 +333,11 @@ export function ProjectTree() {
 											isRunning={selectWorkspaceIsRunning(stateProjection, ws.id)}
 											canRename={canRenameWorkspace(protocolVersion, ws)}
 											canSettle={canSettleWorkspace(protocolVersion, ws)}
+											readAction={
+												supportsWorkspaceReadState(protocolVersion)
+													? selectWorkspaceReadAction(stateProjection, ws.id)
+													: null
+											}
 											editors={editors}
 											onSelect={() => selectWorkspace(ws)}
 											onOpenIn={(editor) => openWorkspaceIn(ws, editor)}
@@ -334,6 +346,8 @@ export function ProjectTree() {
 											onRename={(name) => renameWorkspace(ws, name)}
 											onSettle={() => settleWorkspace(ws.id)}
 											onKeepActive={() => unsettleWorkspace(ws.id)}
+											onMarkRead={() => markWorkspaceRead(ws.id)}
+											onMarkUnread={() => markWorkspaceUnread(ws.id)}
 										/>
 									)}
 								/>
@@ -696,6 +710,7 @@ function WorkspaceRow({
 	isRunning,
 	canRename,
 	canSettle,
+	readAction,
 	editors,
 	onSelect,
 	onOpenIn,
@@ -704,6 +719,8 @@ function WorkspaceRow({
 	onRename,
 	onSettle,
 	onKeepActive,
+	onMarkRead,
+	onMarkUnread,
 }: {
 	workspace: Workspace;
 	settled: SettledReason | null;
@@ -713,6 +730,7 @@ function WorkspaceRow({
 	isRunning: boolean;
 	canRename: boolean;
 	canSettle: boolean;
+	readAction: WorkspaceReadAction | null;
 	editors: EditorInfo[];
 	onSelect: () => void;
 	onOpenIn: (editor: EditorInfo) => void;
@@ -721,6 +739,8 @@ function WorkspaceRow({
 	onRename: (name: string) => void;
 	onSettle: () => void;
 	onKeepActive: () => void;
+	onMarkRead: () => void;
+	onMarkUnread: () => void;
 }) {
 	const isDefault = isDefaultWorkspace(workspace);
 	const isExternal = isExternalWorkspace(workspace);
@@ -927,28 +947,37 @@ function WorkspaceRow({
 								<FolderOpen />
 								Reveal in file manager
 							</DropdownMenuItem>
+							{readAction !== null || canSettle ? <DropdownMenuSeparator /> : null}
+							{readAction === "markRead" ? (
+								<DropdownMenuItem data-testid="workspace-mark-read" onSelect={onMarkRead}>
+									<MailOpen />
+									Mark as read
+								</DropdownMenuItem>
+							) : readAction === "markUnread" ? (
+								<DropdownMenuItem data-testid="workspace-mark-unread" onSelect={onMarkUnread}>
+									<MailUnread />
+									Mark as unread
+								</DropdownMenuItem>
+							) : null}
 							{canSettle ? (
-								<>
-									<DropdownMenuSeparator />
-									{isSettled ? (
-										<DropdownMenuItem
-											data-testid="workspace-menu-keep-active"
-											onSelect={onKeepActive}
-										>
-											<ArrowGoBack />
-											Keep active
-										</DropdownMenuItem>
-									) : (
-										<DropdownMenuItem
-											data-testid="workspace-menu-settle"
-											disabled={settleBlocked}
-											onSelect={onSettle}
-										>
-											<Check />
-											Settle
-										</DropdownMenuItem>
-									)}
-								</>
+								isSettled ? (
+									<DropdownMenuItem
+										data-testid="workspace-menu-keep-active"
+										onSelect={onKeepActive}
+									>
+										<ArrowGoBack />
+										Keep active
+									</DropdownMenuItem>
+								) : (
+									<DropdownMenuItem
+										data-testid="workspace-menu-settle"
+										disabled={settleBlocked}
+										onSelect={onSettle}
+									>
+										<Check />
+										Settle
+									</DropdownMenuItem>
+								)
 							) : null}
 							{!isDefault && (
 								<>

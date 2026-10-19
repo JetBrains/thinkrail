@@ -2522,6 +2522,116 @@ test("the selected chat of an entered workspace is attended once layout attentio
 	expect(attended()).toBe(false);
 });
 
+test("a result marked unread in the attended chat stays held until the chat is left", () => {
+	const workspace = pushedWorkspace();
+	const sessionId = "marked-unread-chat";
+	const completionId = "completion:marked";
+	useAppStore.setState({
+		layoutDocumentsByWorkspace: { [workspace.id]: selectedChatLayout(sessionId) },
+	});
+	const store = useAppStore.getState();
+	store.setStatus("connected");
+	store.activateWorkspace(workspace);
+	store.setLayoutAttention(workspace.id, {
+		selectedByGroup: { center: `chat:${sessionId}` },
+		lastFocusedCenterGroupId: "center",
+		lastFocusedSideGroupId: {},
+		navigationClockByGroup: { center: 0 },
+	});
+	store.openChatSession(workspace.id, sessionId, null, "medium");
+	const record = (completionUnread: boolean): SessionStateRecord => ({
+		sessionId,
+		workspaceId: workspace.id,
+		projectId: workspace.projectId,
+		state: {
+			execution: "idle",
+			runId: "run",
+			needsInput: null,
+			completion: { completionId, outcome: "succeeded" },
+			completionUnread,
+			queuedCount: 0,
+			backgroundWork: false,
+		},
+	});
+	store.installSessionStateSnapshot([record(false)]);
+	store.noteRenderedCompletion(sessionId, completionId);
+	const ready = () => selectReadyCompletionAck(useAppStore.getState(), workspace.id, sessionId);
+
+	store.beginMarkWorkspaceUnread(workspace.id);
+	store.applySessionState(record(true));
+	expect(ready()).toBeNull();
+	store.finishMarkWorkspaceUnread(workspace.id, record(true));
+	expect(useAppStore.getState().markingUnreadWorkspaces).toEqual({});
+	expect(useAppStore.getState().markedUnreadBySession[sessionId]).toMatchObject({ held: true });
+	expect(ready()).toBeNull();
+
+	store.setChatObscured(sessionId, true);
+	expect(useAppStore.getState().markedUnreadBySession[sessionId]).toMatchObject({ held: false });
+	store.setChatObscured(sessionId, false);
+	expect(ready()).toBe(completionId);
+
+	store.applySessionState(record(false));
+	store.beginMarkWorkspaceUnread(workspace.id);
+	expect(useAppStore.getState().markingUnreadWorkspaces[workspace.id]).toEqual({
+		candidates: { [sessionId]: completionId },
+		attendedSessionId: sessionId,
+	});
+	store.applySessionState(record(true));
+	store.setChatObscured(sessionId, true);
+	store.setChatObscured(sessionId, false);
+	expect(
+		useAppStore.getState().markingUnreadWorkspaces[workspace.id]?.attendedSessionId,
+	).toBeNull();
+	expect(ready()).toBeNull();
+	store.finishMarkWorkspaceUnread(workspace.id, record(true));
+	expect(useAppStore.getState().markedUnreadBySession[sessionId]).toMatchObject({ held: false });
+	expect(ready()).toBe(completionId);
+});
+
+test("a mark started away from a chat never holds it, even if the chat is entered mid-request", () => {
+	const workspace = pushedWorkspace();
+	const sessionId = "entered-mid-mark";
+	const completionId = "completion:entered";
+	useAppStore.setState({
+		layoutDocumentsByWorkspace: { [workspace.id]: selectedChatLayout(sessionId) },
+	});
+	const store = useAppStore.getState();
+	store.setStatus("connected");
+	store.activateWorkspace(workspace);
+	store.setLayoutAttention(workspace.id, {
+		selectedByGroup: { center: `chat:${sessionId}` },
+		lastFocusedCenterGroupId: "center",
+		lastFocusedSideGroupId: {},
+		navigationClockByGroup: { center: 0 },
+	});
+	const record: SessionStateRecord = {
+		sessionId,
+		workspaceId: workspace.id,
+		projectId: workspace.projectId,
+		state: {
+			execution: "idle",
+			runId: "run",
+			needsInput: null,
+			completion: { completionId, outcome: "succeeded" },
+			completionUnread: false,
+			queuedCount: 0,
+			backgroundWork: false,
+		},
+	};
+	store.installSessionStateSnapshot([record]);
+	store.setChatObscured(sessionId, true);
+	store.beginMarkWorkspaceUnread(workspace.id);
+	expect(
+		useAppStore.getState().markingUnreadWorkspaces[workspace.id]?.attendedSessionId,
+	).toBeNull();
+	store.setChatObscured(sessionId, false);
+	store.finishMarkWorkspaceUnread(workspace.id, {
+		...record,
+		state: { ...record.state, completionUnread: true },
+	});
+	expect(useAppStore.getState().markedUnreadBySession[sessionId]).toMatchObject({ held: false });
+});
+
 test("workspace selection history tracks ordinary, route, and history-search activation", () => {
 	const w1 = pushedWorkspace();
 	const w2 = pushedWorkspace({ id: "w2", projectId: "p2" });

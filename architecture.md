@@ -139,7 +139,9 @@ dependency. This keeps test process drivers outside both launchers and the serve
    failure/length, and interruption remain owner-globally unread until the exact result is seen: rendered in
    the focused, unobscured chat of a focused window, with the transcript at its latest edge. Explicit Stop is
    quiet, and an idle chat's completion becomes unread only once its background commands and subagents have
-   ended; meanwhile the host reports that background work, so the chat reads as working. Every client
+   ended; meanwhile the host reports that background work, so the chat reads as working. The only explicit
+   read gestures are per workspace — *Mark as unread* relights its most recent result, *Mark as read* clears
+   every unread one — and they write the same host receipts, so seeing stays the default path. Every client
    hydrates the same state and exact completion receipts from the host, while focus, attendance and scroll
    position remain frontend-local evidence of seeing.
 

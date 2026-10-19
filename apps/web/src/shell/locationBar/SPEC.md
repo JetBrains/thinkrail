@@ -65,7 +65,8 @@ branch. It renders what the store and `workspace.openReview` already report; it 
 - **Project** lists every open project (check on the current one), *Project home* (disabled while there),
   and *Add project…* (the shared `useOpenProject` picker + its dialogs). Choosing a project selects it with
   `reveal` and loads its workspace list, i.e. the same transition as the Projects tree.
-- **Workspace** shows the active workspace's actions (Open in, Rename, Copy path, Reveal, **Settle** or
+- **Workspace** shows the active workspace's actions (Open in, Rename, Copy path, Reveal, the rail's
+  **Mark as read / unread** toggle, **Settle** or
   **Keep active** — whichever applies, through the shared `workspaceActions` — and Remove through the
   shared confirm dialog; Default is non-removable and never settles) above *Switch to* (the project's
   **live** siblings, most recently active first — unlike the rail's stable newest-created order, since a switcher

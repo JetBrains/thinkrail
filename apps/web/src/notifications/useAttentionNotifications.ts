@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { selectWorkspaceById, useAppStore } from "@/store";
+import { selectCompletionMarkedUnread, selectWorkspaceById, useAppStore } from "@/store";
 import { createAttentionNotificationEngine, type TimerHandle } from "./attentionNotificationEngine";
 import { createAttentionObserver } from "./attentionObserver";
 import { selectNotificationChannel } from "./channel";
@@ -61,7 +61,7 @@ export function useAttentionNotifications(): void {
 				const state = useAppStore.getState();
 				for (const records of Object.values(state.sessionStateByWorkspace)) {
 					const record = records[sessionId];
-					if (record) return isLit(record.state);
+					if (record) return isLit(record.state) && !selectCompletionMarkedUnread(state, record);
 				}
 				return false;
 			},

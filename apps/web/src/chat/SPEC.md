@@ -1340,7 +1340,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   pending question never claims the user owes an answer. The glance's working/waiting lifecycle comes
   from the normalized host `SessionState` — in the TODO rail and, through `sessionGlance`, in the Plan
   and Review panels — so a chat idle on its background commands or subagents reads as working (`isSessionWorking`); the transcript-derived glance is only the older-host
-  fallback. `askStates` remains only to identify and render the exact questionnaire/recap. **Unread results clear when seen** (no read gesture): `ChatTranscript`
+  fallback. `askStates` remains only to identify and render the exact questionnaire/recap. **Unread results clear when seen** (no per-chat read gesture; the workspace menu's mark read/unread is
+  the explicit exception owned by [[submodule-web-store]]): `ChatTranscript`
   acknowledges the exact unread completion while the window has focus and is visible, the chat is
   attended (`selectChatAttended`: selected in the last-focused center group of the active workspace, no
   history overlay open or requested for it), neither the Resources inspector nor an open modal dialog covers the transcript

@@ -2,6 +2,7 @@ import {
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
 	type BackgroundCommandSummary,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
+	canMarkCompletionUnread,
 	type GitDiffScope,
 	isSessionWorking,
 	MCP_PROTOCOL_VERSION,
@@ -18,6 +19,7 @@ import {
 	type SubagentResourceSummary,
 	sameModel,
 	type WireModel,
+	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
@@ -42,6 +44,8 @@ import type {
 import type {
 	ClosedChat,
 	EditorTab,
+	MarkedUnread,
+	PendingMarkUnread,
 	RouteChatTarget,
 	SessionRuntime,
 	TerminalTab,
@@ -411,6 +415,42 @@ export function selectWorkspaceNeedsAttention(
 	);
 }
 
+export function supportsWorkspaceReadState(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= WORKSPACE_READ_STATE_PROTOCOL_VERSION;
+}
+
+export type WorkspaceReadAction = "markRead" | "markUnread";
+
+export function selectWorkspaceReadAction(
+	state: SessionStateProjection,
+	workspaceId: string,
+): WorkspaceReadAction | null {
+	const records = Object.values(state.sessionStateByWorkspace[workspaceId] ?? {});
+	if (records.some((record) => record.state.completionUnread)) return "markRead";
+	if (records.some((record) => canMarkCompletionUnread(record.state))) return "markUnread";
+	return null;
+}
+
+interface MarkedUnreadState {
+	markingUnreadWorkspaces: Record<string, PendingMarkUnread>;
+	markedUnreadBySession: Record<string, MarkedUnread>;
+}
+
+export function selectCompletionMarkedUnread(
+	state: MarkedUnreadState,
+	record: SessionStateRecord,
+	options: { heldOnly?: boolean } = {},
+): boolean {
+	if (!record.state.completionUnread || !record.state.completion) return false;
+	const completionId = record.state.completion.completionId;
+	const pending = state.markingUnreadWorkspaces[record.workspaceId];
+	if (pending?.candidates[record.sessionId] === completionId) return true;
+	const mark = state.markedUnreadBySession[record.sessionId];
+	return (
+		mark !== undefined && mark.completionId === completionId && (!options.heldOnly || mark.held)
+	);
+}
+
 export function selectWorkspaceIsRunning(
 	state: SessionStateProjection,
 	workspaceId: string,
@@ -441,7 +481,7 @@ export function selectProjectIsRunning(state: SessionStateProjection, projectId:
 	);
 }
 
-interface CompletionAckState extends SessionStateProjection {
+interface CompletionAckState extends SessionStateProjection, MarkedUnreadState {
 	status: string;
 	connectionGeneration: number;
 	sessions: Record<string, SessionRuntime>;
@@ -463,7 +503,8 @@ export function selectReadyCompletionAck(
 		!runtime ||
 		runtime.syncedConnectionGeneration !== state.connectionGeneration ||
 		runtime.hostState?.completion?.completionId !== completion.completionId ||
-		state.renderedCompletionBySession[sessionId] !== completion.completionId
+		state.renderedCompletionBySession[sessionId] !== completion.completionId ||
+		selectCompletionMarkedUnread(state, record, { heldOnly: true })
 	) {
 		return null;
 	}

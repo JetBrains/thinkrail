@@ -5,8 +5,10 @@ import type { AskUserQuestionArgs } from "@thinkrail/contracts";
 import {
 	defaultWorkspaceRow,
 	enterDefaultWorkspace,
+	goProjectHome,
 	openFixtureProject,
 	openPersistedChat,
+	openWorkspaceMenu,
 	revealWorkbenchTool,
 	setWindowFocus,
 } from "./fixtures/app";
@@ -128,6 +130,50 @@ test("entering a workspace clears its visible unread result without a chat click
 
 		await enterDefaultWorkspace(page);
 		await expect(page.getByText("Visible workspace result.", { exact: true })).toBeVisible();
+		await expect(workspace).not.toHaveAttribute("data-attention", /.+/);
+	} finally {
+		rmSync(session.path, { force: true });
+	}
+});
+
+test("marking a workspace unread relights its result until the chat is left, and mark as read clears it", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "mark unread receipt",
+		messages: [
+			{ role: "user", text: "Finish before marking.", timestamp: BASE_TS + 7 },
+			{ role: "assistant", text: "Result to revisit.", timestamp: BASE_TS + 8 },
+		],
+	});
+	try {
+		await reconnectWithSeed(page);
+		const workspace = defaultWorkspaceRow(page);
+		await enterDefaultWorkspace(page);
+		await openPersistedChat(page, "mark unread receipt");
+		await expect(page.getByText("Result to revisit.", { exact: true })).toBeVisible();
+		await expect(workspace).not.toHaveAttribute("data-attention", /.+/);
+
+		await openWorkspaceMenu(workspace);
+		await expect(page.getByTestId("workspace-mark-read")).toHaveCount(0);
+		await page.getByTestId("workspace-mark-unread").click();
+		await expectAttentionDot(workspace);
+		await settleFrames(page);
+		await expectAttentionDot(workspace);
+
+		await page.getByTestId("scope-workspace").click();
+		await expect(page.getByTestId("scope-workspace-mark-unread")).toHaveCount(0);
+		await page.getByTestId("scope-workspace-mark-read").click();
+		await expect(workspace).not.toHaveAttribute("data-attention", /.+/);
+
+		await page.getByTestId("scope-workspace").click();
+		await page.getByTestId("scope-workspace-mark-unread").click();
+		await expectAttentionDot(workspace);
+		await goProjectHome(page);
+		await expectAttentionDot(workspace);
+		await workspace.getByTestId("workspace-name").click();
+		await expect(page.getByText("Result to revisit.", { exact: true })).toBeVisible();
 		await expect(workspace).not.toHaveAttribute("data-attention", /.+/);
 	} finally {
 		rmSync(session.path, { force: true });

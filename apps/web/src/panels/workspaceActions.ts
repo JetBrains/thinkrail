@@ -56,6 +56,28 @@ export function unsettleWorkspace(workspaceId: string): void {
 		.catch((err) => toast.error(errorText(err, "Couldn't keep the workspace active")));
 }
 
+export function markWorkspaceUnread(workspaceId: string): void {
+	const store = useAppStore.getState();
+	store.beginMarkWorkspaceUnread(workspaceId);
+	void getTransport()
+		.request("workspace.markUnread", { id: workspaceId })
+		.then(({ record }) => useAppStore.getState().finishMarkWorkspaceUnread(workspaceId, record))
+		.catch((err) => {
+			useAppStore.getState().finishMarkWorkspaceUnread(workspaceId, null);
+			toast.error(errorText(err, "Couldn't mark the workspace unread"));
+		});
+}
+
+export function markWorkspaceRead(workspaceId: string): void {
+	void getTransport()
+		.request("workspace.markRead", { id: workspaceId })
+		.then(({ records }) => {
+			const store = useAppStore.getState();
+			for (const record of records) store.applySessionState(record);
+		})
+		.catch((err) => toast.error(errorText(err, "Couldn't mark the workspace read")));
+}
+
 export function workspaceRenameValue(currentName: string, input: string): string | null {
 	const name = input.trim();
 	return name && name !== currentName ? name : null;

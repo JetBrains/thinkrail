@@ -37,7 +37,10 @@ Producer → queue → consumer, so the decision to notify is deferred to the mo
 - **Engine** (`attentionNotificationEngine`): a DOM-free queue with one global collection window
   (`ATTENTION_WINDOW_MS`, 1s). Accumulated edges flush as one batch; the latest event per session wins.
 - **Consumer** (flush): emits only when every gate passes — master toggle on, channel permission granted,
-  window **not** focused, and the session's dot **still lit** (already-answered edges are dropped). One
+  window **not** focused, and the session's dot **still lit** (already-answered edges are dropped) for a
+  reason other than this window's own *Mark as unread* (`selectCompletionMarkedUnread`, exact completion
+  id; while the request is in flight, only the completions that were relightable when it started) — relighting a result by hand never notifies here, though another
+  unfocused window of the same owner may still notify on it. One
   surviving session opens its chat (`activateWorkspaceFromRoute`, landing at the latest message); several
   open the cross-workspace `SessionSwitcher` palette (`openSessionSwitcher` on [[submodule-web-store]]) so
   the user picks the one to attend, instead of landing in a window that may not show the right chat.
