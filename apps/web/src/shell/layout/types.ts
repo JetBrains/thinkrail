@@ -15,6 +15,7 @@ export interface LayoutDiffTab {
 	id: string;
 	name: string;
 	path: string;
+	before?: string;
 	scope: GitDiffScope;
 }
 

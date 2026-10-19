@@ -154,7 +154,14 @@ export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
 		case "file":
 			return { kind: "file", id: tab.id, name: tab.name, path: tab.path };
 		case "diff":
-			return { kind: "diff", id: tab.id, name: tab.name, path: tab.path, scope: tab.scope };
+			return {
+				kind: "diff",
+				id: tab.id,
+				name: tab.name,
+				path: tab.path,
+				...(tab.before === undefined ? {} : { before: tab.before }),
+				scope: tab.scope,
+			};
 		case "changes":
 			return { kind: "changes", id: tab.id, name: tab.name, scope: tab.scope };
 		case "chat":

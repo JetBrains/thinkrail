@@ -17,11 +17,12 @@ is the props-driven presentation. The tool name joins the two without a wire cha
 ## Boundary
 
 Two entrypoints and no root barrel. `@thinkrail/ext-visualize/server` default-exports
-`defineServerExtension({ name: "visualize", title, description, extensions: [createVisualizeExtension({ validateMermaid })] })`
+`defineServerExtension({ name: "visualize", title, description, extensions: [createVisualizeExtension({ validateMermaid, checkFile, scratchDir })] })`
 — no children, no skill packages — and may import `extension-api/server`, `@thinkrail/pi-visualize`,
-`mermaid`, `linkedom`. `@thinkrail/ext-visualize/web` default-exports a `defineWebExtension` descriptor plus
+`mermaid`, `linkedom`, and `node:fs`/`node:path`. `@thinkrail/ext-visualize/web` default-exports a `defineWebExtension` descriptor plus
 named `MermaidView` for fenced mermaid in chat markdown, and consumes `extension-api/web`, per-file UI
-primitives, contracts, React and Remix Icon. Neither half imports the other, app/host internals, or (web)
+primitives, `@thinkrail/resource-renderers` (`ResourcePreview` and the host seam), contracts, React and
+Remix Icon. Neither half imports the other, app/host internals, or (web)
 any pi package; the browser loads `mermaid` lazily inside the renderer, never in the eager entry chunk.
 
 ## Strict validation (server)
@@ -41,14 +42,27 @@ its defensive fallback.
 - Invalid syntax surfaces as the package's `isError` tool result asking the model to correct and retry;
   the extension injects no prompt and forces no retry.
 
+File previews get `workspaceFileChecker`: a path must be relative, stay inside the session cwd and name a
+regular file, else the tool result asks the model to write it first. `scratchDir` is
+`.thinkrail/context/mockups/`, inside the host's gitignored scratch dir, so mockups never become
+project changes.
+
 The host composes this descriptor from the server registry ([[submodule-server-extensions]]); a strict
 validation call through that composition is pinned in `packages/server` (dev) and in the artifact probes
 (CLI binary and desktop), so the vanilla probe can never be what runs in ThinkRail.
 
 ## Rendering contract (web)
 
-Diagrams, comparison options and recommended choices preserve the existing chat presentation. The
-registration is primary and expanded by default; its title or diagram/comparison summary is available
+Diagrams, comparison options and recommended choices preserve the existing chat presentation. A
+completed `type: "file"` call renders `FileCard`: the title, the `before → path` links (through
+`onOpenFile`), and [[module-resource-renderers]]' `ResourcePreview` for the path and `before` — the same
+renderers, diff and review comments as diff review. The card frame is a fixed 480px box (Monaco and bounded
+diffs need a height) whose toolbar adds **Open in tab** (`host.openFile` keep, or `host.openComparison` for a
+before/after) and **Full screen** (a 95vw × 90vh dialog rendering the same preview with Split/Inline; renderer
+choice is shared). The workspace and chat come from the host's `scope`, which the chat sets around every tool
+renderer, so review sends land in the chat that shows the card; with no host or scope the card shows only the
+links. The
+registration is primary and expanded by default; its title or diagram/comparison/file summary is available
 without rendering. Invalid or streaming arguments remain defensive and tool errors preserve readable
 result text.
 

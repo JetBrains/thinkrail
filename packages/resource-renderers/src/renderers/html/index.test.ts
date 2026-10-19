@@ -198,7 +198,9 @@ test("HTML frames carry exactly an empty sandbox capability set", () => {
 			document: "<!doctype html><html><body>preview</body></html>",
 		}),
 	);
-	const openingTag = markup.slice(0, markup.indexOf(">") + 1);
+	const iframeAt = markup.indexOf("<iframe");
+	const openingTag = markup.slice(iframeAt, markup.indexOf(">", iframeAt) + 1);
+	expect(markup.match(/<iframe/g)).toHaveLength(1);
 	expect([...openingTag.matchAll(/\ssandbox="([^"]*)"/g)].map((match) => match[1])).toEqual([""]);
 	expect(openingTag).not.toContain("allow-");
 });

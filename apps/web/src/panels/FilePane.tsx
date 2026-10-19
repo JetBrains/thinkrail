@@ -1,36 +1,28 @@
 import {
 	describeResource,
+	RendererView,
 	type ResourceContent,
-	type ResourceRenderer,
-	type ResourceViewProps,
+	rendererImplementationKey,
+	rendererTestId,
 	resolveRenderers,
+	selectResourceRenderer,
+	UnplacedReviewStrip,
+	usePlacedThreadIds,
 } from "@thinkrail/resource-renderers";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
-import {
-	type ComponentType,
-	type LazyExoticComponent,
-	lazy,
-	Suspense,
-	useCallback,
-	useMemo,
-	useState,
-} from "react";
+import { Suspense, useMemo } from "react";
 import { isPhoneViewport, usePhoneViewport } from "../lib";
 import type { FileTab } from "../store";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 import {
 	PENDING_TEXT_META,
-	rendererImplementationKey,
-	rendererTestId,
 	resourceBytesUrl,
-	selectResourceRenderer,
 	useResetViewStateOnImplementationChange,
 } from "./resourcePane";
 import { reviewFlagFor } from "./reviewModel";
 import { SendReviewButton } from "./SendReviewButton";
-import { UnplacedReviewStrip } from "./UnplacedReviewStrip";
 import { useLiveTabContent } from "./useLiveTabContent";
 import { useFileReview } from "./useReviewCommenting";
 
@@ -47,32 +39,6 @@ function contentFor(tab: FileTab): ResourceContent {
 		hash: meta.hash,
 		byteLength: meta.byteLength,
 	};
-}
-
-const viewComponents = new Map<string, LazyExoticComponent<ComponentType<ResourceViewProps>>>();
-
-function RendererView({
-	renderer,
-	implementationKey,
-	mobile,
-	...props
-}: ResourceViewProps & { renderer: ResourceRenderer; implementationKey: string; mobile: boolean }) {
-	let Component = viewComponents.get(implementationKey);
-	if (!Component) {
-		const load = renderer.loadView;
-		if (!load) {
-			throw new Error(`Resource renderer has no view loader: ${renderer.id}`);
-		}
-		Component = lazy(() => load({ mobile }));
-		viewComponents.set(implementationKey, Component);
-	}
-	return <Component {...props} />;
-}
-
-function sameIds(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
-	if (left.size !== right.size) return false;
-	for (const id of left) if (!right.has(id)) return false;
-	return true;
 }
 
 export function FilePane({ tab }: { tab: FileTab }) {
@@ -108,23 +74,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 	);
 	const renderer = selectResourceRenderer(candidates, tab.rendererId, tab.path);
 	const implementationKey = rendererImplementationKey(renderer.id, mobile);
-	const [placement, setPlacement] = useState<{
-		implementationKey: string;
-		ids: ReadonlySet<string>;
-	} | null>(null);
-	const onPlacedThreadIds = useCallback(
-		(ids: ReadonlySet<string>) => {
-			setPlacement((current) => {
-				if (current?.implementationKey === implementationKey && sameIds(current.ids, ids)) {
-					return current;
-				}
-				return { implementationKey, ids: new Set(ids) };
-			});
-		},
-		[implementationKey],
-	);
-	const placedThreadIds =
-		placement?.implementationKey === implementationKey ? placement.ids : undefined;
+	const { placedThreadIds, onPlacedThreadIds } = usePlacedThreadIds(implementationKey);
 	useResetViewStateOnImplementationChange(tab.workspaceId, tab.id, implementationKey);
 	const content = contentFor(tab);
 	const reviews = [review.worktree];

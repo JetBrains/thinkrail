@@ -121,6 +121,7 @@ function moduleRules(packages: ReadonlyMap<string, string>): ModuleRule[] {
 				"packages/contracts",
 				"packages/ui",
 				"packages/extension-api",
+				"packages/resource-renderers",
 				piExtensionRoot(root),
 			],
 		})),
@@ -250,7 +251,15 @@ function sourceRule(rule: ModuleRule, subpath: string): ModuleRule {
 	if (!rule.root.startsWith("thinkrail-extensions/")) return rule;
 	switch (sourceHalf(subpath)) {
 		case "web":
-			return { ...rule, allowed: ["packages/contracts", "packages/ui", "packages/extension-api"] };
+			return {
+				...rule,
+				allowed: [
+					"packages/contracts",
+					"packages/ui",
+					"packages/extension-api",
+					"packages/resource-renderers",
+				],
+			};
 		case "server":
 			return { ...rule, allowed: ["packages/extension-api", piExtensionRoot(rule.root)] };
 		default:

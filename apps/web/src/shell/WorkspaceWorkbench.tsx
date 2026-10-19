@@ -26,7 +26,7 @@ import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FileTree } from "../panels/FileTree";
 import { startChatInTab } from "../panels/openChat";
-import { openFileInTab } from "../panels/openTabs";
+import { fileComparisonTab, openFileInTab } from "../panels/openTabs";
 import { ProjectTree } from "../panels/ProjectTree";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
 import { reviewFlags } from "../panels/reviewModel";
@@ -431,6 +431,17 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					.openTab(createChangesTab(workspaceId, tab.id, tab.name, tab.scope), "keep", false, {
 						activate: false,
 					});
+				continue;
+			}
+			if (tab.kind === "diff" && tab.before !== undefined) {
+				useAppStore
+					.getState()
+					.openTab(
+						{ ...fileComparisonTab(workspaceId, tab.before, tab.path), id: tab.id },
+						"keep",
+						false,
+						{ activate: false },
+					);
 				continue;
 			}
 			const cacheArrived = () =>

@@ -432,6 +432,7 @@
         "@remixicon/react": "catalog:",
         "@thinkrail/extension-api": "workspace:*",
         "@thinkrail/pi-visualize": "workspace:*",
+        "@thinkrail/resource-renderers": "workspace:*",
         "@thinkrail/ui": "workspace:*",
         "linkedom": "0.16.11",
         "mermaid": "catalog:",

@@ -21,6 +21,7 @@ export function useFileReview(
 	path: string,
 	kind: "inline" | "diff",
 	scope?: GitDiffScope,
+	chatSessionId?: string,
 ): FileReview {
 	const comments = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.comments);
 	const worktreeThreads = useMemo(() => fileThreads(comments, path, "worktree"), [comments, path]);
@@ -34,16 +35,16 @@ export function useFileReview(
 	);
 	const baseFocus = useMemo(() => resolveFocus(baseThreads, focusId), [baseThreads, focusId]);
 	const worktreeCommenting = useMemo(
-		() => sideCommenting(workspaceId, path, kind, "worktree", scope),
-		[workspaceId, path, kind, scope],
+		() => sideCommenting(workspaceId, path, kind, "worktree", scope, chatSessionId),
+		[workspaceId, path, kind, scope, chatSessionId],
 	);
 	const baseCommenting = useMemo(
-		() => sideCommenting(workspaceId, path, kind, "base", scope),
-		[workspaceId, path, kind, scope],
+		() => sideCommenting(workspaceId, path, kind, "base", scope, chatSessionId),
+		[workspaceId, path, kind, scope, chatSessionId],
 	);
 	const actions = useMemo<ReviewThreadActions>(
 		() => ({
-			onSendComment: (id) => sendReviewComment(workspaceId, id),
+			onSendComment: (id) => sendReviewComment(workspaceId, id, chatSessionId),
 			onDeleteComment: async (id) => {
 				try {
 					await getTransport().request("review.commentDelete", { workspaceId, id });
@@ -61,7 +62,7 @@ export function useFileReview(
 				}
 			},
 		}),
-		[workspaceId],
+		[workspaceId, chatSessionId],
 	);
 	const onFocusHandled = useMemo(
 		() => () => useAppStore.getState().clearReviewFocus(focusId ?? undefined),
@@ -134,6 +135,7 @@ function sideCommenting(
 	kind: "inline" | "diff",
 	side: ReviewAnchor["side"],
 	scope: GitDiffScope | undefined,
+	chatSessionId: string | undefined,
 ): SurfaceReview["commenting"] {
 	const add = (draft: AnchorDraft, body: string) => {
 		if (
@@ -167,7 +169,7 @@ function sideCommenting(
 				toast.error(errorText(error), "Couldn't save the comment");
 				throw error;
 			}
-			await sendReviewComment(workspaceId, comment.id);
+			await sendReviewComment(workspaceId, comment.id, chatSessionId);
 		},
 	};
 }

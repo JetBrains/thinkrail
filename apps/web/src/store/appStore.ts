@@ -166,6 +166,7 @@ export interface DiffTab {
 	workspaceId: string;
 	name: string;
 	path: string;
+	before?: string;
 	scope: GitDiffScope;
 	loadedTarget: string;
 	original: string;

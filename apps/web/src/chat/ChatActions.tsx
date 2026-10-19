@@ -1,4 +1,5 @@
 import type { AskUserQuestionResult, McpReadOutputResult } from "@thinkrail/contracts";
+import type { ResourceScope } from "@thinkrail/resource-renderers";
 import { createContext, useContext } from "react";
 import type { RevealBlock } from "./scrollGeometry";
 
@@ -24,6 +25,7 @@ export interface ChatActions {
 	readMcpOutput?: ((toolCallId: string) => Promise<McpReadOutputResult>) | undefined;
 	openMcpSettings?: (() => void) | undefined;
 	openProviderSettings?: (() => void) | undefined;
+	resourceScope?: ResourceScope | undefined;
 }
 
 export const ChatActionsContext = createContext<ChatActions | null>(null);

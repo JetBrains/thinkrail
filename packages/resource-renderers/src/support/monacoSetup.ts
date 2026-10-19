@@ -1,3 +1,4 @@
+/// <reference path="../bundler.d.ts" />
 import { loader } from "@monaco-editor/react";
 import { shikiToMonaco, textmateThemeToMonacoTheme } from "@shikijs/monaco";
 import { createHighlighterCore, type HighlighterCore, type ThemeRegistration } from "shiki/core";

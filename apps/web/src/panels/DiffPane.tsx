@@ -4,6 +4,11 @@ import {
 	RiParagraph as Pilcrow,
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
+import {
+	ResourcePreview,
+	rendererImplementationKey,
+	rendererTestId,
+} from "@thinkrail/resource-renderers";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { useMemo, useState } from "react";
 import { copyText, isPhoneViewport } from "@/lib";
@@ -13,15 +18,47 @@ import { getTransport } from "../transport";
 import { splitPath } from "./changesModel";
 import { DiffSurfaceBody, useDiffSurface } from "./DiffSurface";
 import { HeaderIconButton } from "./HeaderIconButton";
-import {
-	rendererImplementationKey,
-	rendererTestId,
-	useResetViewStateOnImplementationChange,
-} from "./resourcePane";
+import { useResetViewStateOnImplementationChange } from "./resourcePane";
 import { SendReviewButton } from "./SendReviewButton";
 import { useLiveTabContent } from "./useLiveTabContent";
 
 export function DiffPane({ tab }: { tab: DiffTab }) {
+	return tab.before === undefined ? (
+		<GitDiffPane tab={tab} />
+	) : (
+		<FileComparisonPane tab={tab} before={tab.before} />
+	);
+}
+
+function FileComparisonPane({ tab, before }: { tab: DiffTab; before: string }) {
+	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
+	const setDiffTabView = useAppStore((state) => state.setDiffTabView);
+	return (
+		<div data-testid="diff-pane" data-compare className="flex h-full min-h-0 flex-col">
+			<ResourcePreview
+				workspaceId={tab.workspaceId}
+				path={tab.path}
+				before={before}
+				rendererId={tab.rendererId}
+				onRendererId={(rendererId) => setTabRenderer(tab.workspaceId, tab.id, rendererId)}
+				layout={tab.view === "inline" ? "unified" : "split"}
+				onLayout={(layout) => setDiffTabView(tab.id, layout === "unified" ? "inline" : "split")}
+				leading={
+					<span
+						data-testid="diff-path"
+						title={`${before} → ${tab.path}`}
+						className="truncate tr-code-text text-text-muted"
+					>
+						{before} → {tab.path}
+					</span>
+				}
+				className="h-full"
+			/>
+		</div>
+	);
+}
+
+function GitDiffPane({ tab }: { tab: DiffTab }) {
 	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
 	const setDiffTabView = useAppStore((state) => state.setDiffTabView);
 	const setDiffTabIgnoreWhitespace = useAppStore((state) => state.setDiffTabIgnoreWhitespace);

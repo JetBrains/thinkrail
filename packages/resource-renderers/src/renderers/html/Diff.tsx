@@ -1,27 +1,52 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { ResourceContent, ResourceDiffProps } from "../../registry";
 import { diffContentStamp } from "../reviewComposerState";
 import { VisualDiff, type VisualDiffSide } from "../VisualDiff";
 import { HtmlFrame } from "./HtmlFrame";
 import { buildHtmlPreviewDocument } from "./htmlDocument";
+import { HtmlPreviewNotice } from "./ViewportSwitch";
+import { type HtmlViewport, htmlViewport } from "./viewport";
 
 function textOf(content: ResourceContent): string | null {
 	return content.kind === "text" ? content.text : null;
 }
 
-function HtmlSide({ text, title }: { text: string; title: string }) {
+function HtmlSide({
+	text,
+	title,
+	viewport,
+}: {
+	text: string;
+	title: string;
+	viewport: HtmlViewport;
+}) {
 	const document = useMemo(() => buildHtmlPreviewDocument(text), [text]);
-	return <HtmlFrame title={title} document={document} />;
+	return <HtmlFrame title={title} document={document} viewport={viewport} />;
 }
 
-export default function HtmlDiff({ resource, original, modified }: ResourceDiffProps) {
+export default function HtmlDiff({
+	resource,
+	original,
+	modified,
+	viewState,
+	onViewState,
+}: ResourceDiffProps) {
+	const [viewport, setViewport] = useState<HtmlViewport>(() => htmlViewport(viewState));
+	const selectViewport = (next: HtmlViewport) => {
+		setViewport(next);
+		onViewState?.({ viewport: next });
+	};
 	const originalText = textOf(original);
 	const modifiedText = textOf(modified);
 	const originalSide: VisualDiffSide = {
 		present: originalText !== null,
 		content:
 			originalText === null ? null : (
-				<HtmlSide text={originalText} title={`Original preview of ${resource.path}`} />
+				<HtmlSide
+					text={originalText}
+					title={`Original preview of ${resource.path}`}
+					viewport={viewport}
+				/>
 			),
 		caption: originalText === null ? "Old: No document" : "Old document",
 		intrinsicSize: null,
@@ -30,16 +55,18 @@ export default function HtmlDiff({ resource, original, modified }: ResourceDiffP
 		present: modifiedText !== null,
 		content:
 			modifiedText === null ? null : (
-				<HtmlSide text={modifiedText} title={`Modified preview of ${resource.path}`} />
+				<HtmlSide
+					text={modifiedText}
+					title={`Modified preview of ${resource.path}`}
+					viewport={viewport}
+				/>
 			),
 		caption: modifiedText === null ? "New: No document" : "New document",
 		intrinsicSize: null,
 	};
 	return (
 		<div className="flex h-full min-h-0 flex-col">
-			<div className="shrink-0 border-border-default border-b bg-feedback-info-subtle px-12 py-8 tr-text-metadata text-feedback-info">
-				Scripts and external resources are disabled.
-			</div>
+			<HtmlPreviewNotice viewport={viewport} onViewport={selectViewport} />
 			<div className="min-h-0 flex-1">
 				<VisualDiff
 					prefix="html"

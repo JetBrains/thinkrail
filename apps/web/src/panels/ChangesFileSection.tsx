@@ -9,7 +9,11 @@ import {
 } from "@remixicon/react";
 import type { GitDiffScope, GitFileChange } from "@thinkrail/contracts";
 import type { HunkTriage, ReviewDraftPersistence } from "@thinkrail/resource-renderers";
-import { ReviewDraftContext } from "@thinkrail/resource-renderers";
+import {
+	ReviewDraftContext,
+	rendererImplementationKey,
+	rendererTestId,
+} from "@thinkrail/resource-renderers";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -40,7 +44,6 @@ import { DiffStatBadge } from "./DiffStatBadge";
 import { DiffSurfaceBody, useDiffSurface } from "./DiffSurface";
 import { HeaderIconButton } from "./HeaderIconButton";
 import { openDiffInTab } from "./openTabs";
-import { rendererImplementationKey, rendererTestId } from "./resourcePane";
 import type { SectionContent, SectionContentCache } from "./sectionContentCache";
 import { useLiveTabContent } from "./useLiveTabContent";
 

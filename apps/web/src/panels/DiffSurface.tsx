@@ -4,23 +4,19 @@ import {
 	describeResource,
 	type HunkActions,
 	type HunkTriage,
+	RendererDiff,
 	type ResourceContent,
 	type ResourceDescriptor,
-	type ResourceDiffProps,
 	type ResourceRenderer,
+	rendererImplementationKey,
 	resolveRenderers,
+	selectResourceRenderer,
+	UnplacedReviewStrip,
+	usePlacedThreadIds,
 } from "@thinkrail/resource-renderers";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import {
-	type ComponentType,
-	type LazyExoticComponent,
-	lazy,
-	Suspense,
-	useCallback,
-	useMemo,
-	useState,
-} from "react";
+import { Suspense, useCallback, useMemo, useState } from "react";
 import { usePhoneViewport } from "@/lib";
 import { selectWorkspaceIsRunning, toast, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
@@ -28,13 +24,7 @@ import { canOfferChangeMutations, scopeHasMutableModifiedSide } from "./changeMu
 import { splitPath } from "./changesModel";
 import { isDiffTooExpensive, surfaceLineCount, VIRTUALIZED_DIFF_LINES } from "./largeDiff";
 import { openFileInTab } from "./openTabs";
-import {
-	PENDING_TEXT_META,
-	rendererImplementationKey,
-	resourceBytesUrl,
-	selectResourceRenderer,
-} from "./resourcePane";
-import { UnplacedReviewStrip } from "./UnplacedReviewStrip";
+import { PENDING_TEXT_META, resourceBytesUrl } from "./resourcePane";
 import { type FileReview, useFileReview } from "./useReviewCommenting";
 
 const loading = <LoadingRegion rows={12} className="h-full p-12" />;
@@ -96,30 +86,6 @@ function sideContent(
 	return { kind: "bytes", url, hash: meta.hash, byteLength: meta.byteLength };
 }
 
-function sameIds(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
-	if (left.size !== right.size) return false;
-	for (const id of left) if (!right.has(id)) return false;
-	return true;
-}
-
-const diffComponents = new Map<string, LazyExoticComponent<ComponentType<ResourceDiffProps>>>();
-
-function RendererDiff({
-	renderer,
-	implementationKey,
-	...props
-}: ResourceDiffProps & { renderer: ResourceRenderer; implementationKey: string }) {
-	let Component = diffComponents.get(implementationKey);
-	if (!Component) {
-		if (!renderer.loadDiff) {
-			throw new Error(`Resource renderer has no diff loader: ${renderer.id}`);
-		}
-		Component = lazy(renderer.loadDiff);
-		diffComponents.set(implementationKey, Component);
-	}
-	return <Component {...props} />;
-}
-
 export function useDiffSurface({
 	workspaceId,
 	path,
@@ -157,23 +123,7 @@ export function useDiffSurface({
 	);
 	const renderer = selectResourceRenderer(candidates, rendererId, path);
 	const implementationKey = rendererImplementationKey(renderer.id, mobile);
-	const [placement, setPlacement] = useState<{
-		implementationKey: string;
-		ids: ReadonlySet<string>;
-	} | null>(null);
-	const onPlacedThreadIds = useCallback(
-		(ids: ReadonlySet<string>) => {
-			setPlacement((current) => {
-				if (current?.implementationKey === implementationKey && sameIds(current.ids, ids)) {
-					return current;
-				}
-				return { implementationKey, ids: new Set(ids) };
-			});
-		},
-		[implementationKey],
-	);
-	const placedThreadIds =
-		placement?.implementationKey === implementationKey ? placement.ids : undefined;
+	const { placedThreadIds, onPlacedThreadIds } = usePlacedThreadIds(implementationKey);
 
 	const original = useMemo(
 		() =>

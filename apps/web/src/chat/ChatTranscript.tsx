@@ -568,6 +568,7 @@ const ChatTranscript = forwardRef<
 			readMcpOutput,
 			openMcpSettings,
 			openProviderSettings,
+			resourceScope: { workspaceId, sessionId },
 		}),
 		[
 			cancelAutomaticReveal,
@@ -579,6 +580,7 @@ const ChatTranscript = forwardRef<
 			resultOpener,
 			revealElement,
 			sessionId,
+			workspaceId,
 		],
 	);
 

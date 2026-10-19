@@ -222,6 +222,49 @@ export function openDiffInTab(
 	);
 }
 
+export const FILE_COMPARISON_SCOPE: GitDiffScope = { kind: "uncommitted" };
+
+export function fileComparisonTab(
+	workspaceId: string,
+	before: string,
+	path: string,
+): Extract<EditorTab, { kind: "diff" }> {
+	return {
+		kind: "diff",
+		id: tupleKey("compare", workspaceId, before, path),
+		workspaceId,
+		name: `${baseName(before)} → ${baseName(path)}`,
+		path,
+		before,
+		scope: FILE_COMPARISON_SCOPE,
+		loadedTarget: "",
+		original: "",
+		modified: "",
+	};
+}
+
+export function openFileComparisonInTab(
+	workspaceId: string,
+	before: string,
+	path: string,
+	intent: TabIntent,
+): Promise<void> {
+	const worktree = selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath;
+	const tab = fileComparisonTab(
+		workspaceId,
+		projectRelativePath(before, worktree),
+		projectRelativePath(path, worktree),
+	);
+	return openReadTab(
+		workspaceId,
+		tab.id,
+		layoutResourceIdentity(tab),
+		intent,
+		() => Promise.resolve(null),
+		(_payload, loadedTick) => ({ ...tab, loadedTick }),
+	);
+}
+
 export async function openChangesTab(
 	workspaceId: string,
 	scope: GitDiffScope,

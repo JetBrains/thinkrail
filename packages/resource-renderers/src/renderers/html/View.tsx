@@ -1,21 +1,23 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { ResourceViewProps } from "../../registry";
 import { HtmlFrame } from "./HtmlFrame";
 import { buildHtmlPreviewDocument } from "./htmlDocument";
+import { HtmlPreviewNotice } from "./ViewportSwitch";
+import { type HtmlViewport, htmlViewport } from "./viewport";
 
-export default function HtmlView({ resource, content }: ResourceViewProps) {
+export default function HtmlView({ resource, content, viewState, onViewState }: ResourceViewProps) {
 	const text = content.kind === "text" ? content.text : "";
 	const document = useMemo(() => buildHtmlPreviewDocument(text), [text]);
+	const [viewport, setViewport] = useState<HtmlViewport>(() => htmlViewport(viewState));
+	const selectViewport = (next: HtmlViewport) => {
+		setViewport(next);
+		onViewState?.({ viewport: next });
+	};
 	return (
 		<div data-testid="html-view" className="flex h-full min-h-0 flex-col bg-container-workspace-bg">
-			<div
-				data-testid="html-disabled-notice"
-				className="shrink-0 border-border-default border-b bg-feedback-info-subtle px-12 py-8 tr-text-metadata text-feedback-info"
-			>
-				Scripts and external resources are disabled.
-			</div>
+			<HtmlPreviewNotice viewport={viewport} onViewport={selectViewport} />
 			<div className="min-h-0 flex-1 p-12">
-				<HtmlFrame title={`Preview of ${resource.path}`} document={document} />
+				<HtmlFrame title={`Preview of ${resource.path}`} document={document} viewport={viewport} />
 			</div>
 		</div>
 	);

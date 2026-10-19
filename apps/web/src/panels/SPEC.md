@@ -1502,7 +1502,12 @@ own section. The kebab menu (`plan-menu`, a
   uncommented file shows neither. There is no manual review mode to enter. Every send affordance (composer Send now, thread cards, sidebar rows/footer, tab
   Send all) goes through the one `reviewSend.ts` pair (`sendReviewComment`/`sendReviewBatch`: request
   → show the chat tab → toast on failure), and the panes integrate via the one **`useFileReview`** hook,
-  passing its anchor-keyed `worktree`/`base` surfaces through the registry props.
+  passing its anchor-keyed `worktree`/`base` surfaces through the registry props. The pair, the hook and
+  `SendReviewButton` take an optional chat session id: without it a send targets the last open chat (else
+  the file's pinned review chat); with it — a file shown in a chat tool card, whose `ResourcePreview` reads
+  the chat's scope — the host's explicit `sessionId` wins over the pinned chat, so feedback lands in the chat
+  that showed the file. The shell's `AppResourceHost` exposes exactly these (bound per call) as the
+  renderers' `FileReview` / `ReviewSend` host capabilities.
   A batch answers with EVERY session it touched (one per group), so a multi-file batch opens every chat
   it started and focuses the first — a chat the user never saw would still be an agent working on their
   comments. **Showing each chat forks on the result's `reused` flag:** a chat this send CREATED opens straight
@@ -1916,6 +1921,14 @@ own section. The kebab menu (`plan-menu`, a
   would overflow the chip **invisibly to the layout** while spilling over the buttons on screen, so the
   basename pairs it with `max-w-full`: flex never steals the name's width, but max-width still clamps it to
   the row, which is also why the e2e pin measures the *chip's* `scrollWidth`, not the header's.
+- **A diff tab can compare two workspace files.** `DiffTab` (and its persisted `LayoutDiffTab`) carries an
+  optional `before` path; `openFileComparisonInTab` opens it (identity `compare:<before>:<path>`, named
+  `before → after`). `DiffPane` forks on it: a comparison renders [[module-resource-renderers]]'
+  `ResourcePreview` (both files read live from disk, no revert/hunk actions, comments on the two files'
+  worktree anchors, Split/Inline and renderer on the tab) instead of the git-backed `DiffSurface`. Its `scope`
+  is an inert `uncommitted` placeholder, so every git-scope reader of diff tabs — `DiffPane`, the Changes
+  panel's active-diff match, layout identity and reload hydration (which installs a comparison without a
+  `git.diffFile` read) — checks `before` first.
 - **File tabs use the same renderer dispatch as diffs.** `FilePane` describes the first `fs.readFile`
   metadata (provisionally text before it lands — and permanently text against a host that predates
   `RESOURCE_META_PROTOCOL_VERSION` and never sends `meta`, which is that host's own legacy surface, so no

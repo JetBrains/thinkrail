@@ -14,7 +14,7 @@ type LayoutDiffScopeInput =
 
 type LayoutResourceIdentityInput =
 	| { kind: "file"; path: string }
-	| { kind: "diff"; path: string; scope: LayoutDiffScopeInput }
+	| { kind: "diff"; path: string; before?: string | undefined; scope: LayoutDiffScopeInput }
 	| { kind: "changes"; scope: LayoutDiffScopeInput }
 	| { kind: "chat"; sessionId: string }
 	| { kind: "document"; documentKind: string; sourceId: string }
@@ -43,13 +43,15 @@ export function layoutResourceIdentity<T extends LayoutResourceIdentityInput>(ta
 		case "file":
 			return tupleKey("layout-resource", "file", tab.path);
 		case "diff":
-			return tupleKey(
-				"layout-resource",
-				"diff",
-				tab.path,
-				tab.scope.kind,
-				layoutScopeReference(tab.scope),
-			);
+			return tab.before === undefined
+				? tupleKey(
+						"layout-resource",
+						"diff",
+						tab.path,
+						tab.scope.kind,
+						layoutScopeReference(tab.scope),
+					)
+				: tupleKey("layout-resource", "compare", tab.before, tab.path);
 		case "changes":
 			return tupleKey(
 				"layout-resource",

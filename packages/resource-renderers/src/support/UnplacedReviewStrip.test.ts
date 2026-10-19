@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { ResourceRenderer, ReviewThread, SurfaceReview } from "@thinkrail/resource-renderers";
+import type { ResourceRenderer, ReviewThread, SurfaceReview } from "../registry";
 import { focusedUnplacedEntry, unplacedReviewEntries } from "./UnplacedReviewStrip";
 
 function thread(id: string, line: number): ReviewThread {
