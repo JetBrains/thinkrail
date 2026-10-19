@@ -85,7 +85,7 @@ try {
 	writeFileSync(
 		generatedEntry,
 		`${sources.extensions.map((extension, index) => `import factory${index} from ${JSON.stringify(extension.entry)};`).join("\n")}
-import { bootHost, registerBundledRuntime } from "@thinkrail/server";
+import { bootHost, registerBundledRuntime, reportDesktopError } from "@thinkrail/server";
 
 export async function startDesktopHost(options) {
   await registerBundledRuntime({
@@ -97,7 +97,7 @@ export async function startDesktopHost(options) {
     },
     ${bundledRuntimeKeys.webAccessFactory}: factory${sources.webAccessIndex},
   });
-  return bootHost({
+  const host = await bootHost({
     port: 0,
     host: "127.0.0.1",
     portMode: "exact",
@@ -108,9 +108,11 @@ export async function startDesktopHost(options) {
       posthogApiKey: options.posthogProjectKey,
       channel: options.channel,
       build: "desktop",
+      appRoot: options.runtimeDir + "/..",
       ...(options.openExternal ? { openExternal: options.openExternal } : {}),
     },
   });
+  return { ...host, reportError: reportDesktopError };
 }
 `,
 	);

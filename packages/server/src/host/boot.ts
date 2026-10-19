@@ -1,5 +1,6 @@
 import { findFreePort } from "@thinkrail/shared/freePort";
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
+import { reportError } from "../analytics";
 import { initializeJbcentralRuntime } from "../auth";
 import { initLogging, logger } from "../log";
 import { installCrashLog } from "./crashLog";
@@ -81,4 +82,8 @@ export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
 	const server = attachProcessSignals(running);
 	log.info(`listening on port ${server.port}`);
 	return { server, port: server.port, requested };
+}
+
+export function reportDesktopError(error: unknown, scope: string): void {
+	reportError(error, { source: "desktop", handled: true, scope });
 }

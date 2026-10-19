@@ -5,6 +5,7 @@ import type {
 	NativeUpdateLogEntry,
 	NativeUpdateState,
 } from "@thinkrail/contracts";
+import { desktopError } from "../errorReporting";
 import { MAX_UPDATE_LOG_ENTRIES, type UpdateJournal, type UpdateJournalStore } from "./journal";
 
 const AUTO_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -176,7 +177,7 @@ export function createNativeUpdateController(
 			try {
 				listener(state);
 			} catch (error) {
-				console.error("[desktop] native update listener failed", error);
+				desktopError("updates", "native update listener failed", error);
 			}
 		}
 	};
