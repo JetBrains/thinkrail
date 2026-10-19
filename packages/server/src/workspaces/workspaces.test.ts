@@ -78,7 +78,7 @@ async function worktrees(projectId = "p1") {
 }
 
 beforeEach(() => {
-	dataDir = realpathSync(mkdtempSync(join(tmpdir(), "trpi-ws-test-")));
+	dataDir = realpathSync.native(mkdtempSync(join(tmpdir(), "trpi-ws-test-")));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
 	repo = join(dataDir, "repo");
 	mkdirSync(repo);

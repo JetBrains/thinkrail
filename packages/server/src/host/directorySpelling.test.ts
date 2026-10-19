@@ -62,7 +62,7 @@ const saved = {
 	data: process.env.THINKRAIL_DATA_DIR,
 	offline: process.env.PI_OFFLINE,
 };
-const root = realpathSync(mkdtempSync(join(tmpdir(), "trpi-dir-spelling-")));
+const root = realpathSync.native(mkdtempSync(join(tmpdir(), "trpi-dir-spelling-")));
 const agentDir = join(root, "agent");
 const trashed: string[] = [];
 

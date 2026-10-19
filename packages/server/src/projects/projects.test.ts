@@ -70,7 +70,7 @@ let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 
 beforeEach(() => {
-	dataDir = mkdtempSync(join(tmpdir(), "trpi-proj-test-"));
+	dataDir = realpathSync.native(mkdtempSync(join(tmpdir(), "trpi-proj-test-")));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
 });
 
