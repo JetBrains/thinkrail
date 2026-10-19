@@ -11,7 +11,7 @@ tags:
   - mcp
 ---
 
-0.2.0 is out, with 74 PRs since 0.1.6. The main thing I wanted fixed was a habit I kept catching myself in. The agent finishes, says it's done, and I scroll the transcript trying to piece together what it actually changed. That isn't a review. It's archaeology.
+[ThinkRail](https://thinkrail.ai/?utm_source=blog&utm_medium=organic-social&utm_campaign=release-0-2-0) 0.2.0 is out, with 74 PRs since 0.1.6. The main thing I wanted fixed was a habit I kept catching myself in. The agent finishes, says it's done, and I scroll the transcript trying to piece together what it actually changed. That isn't a review. It's archaeology.
 
 ## Every turn gets a receipt
 
@@ -73,14 +73,8 @@ Projects, Specs, Files, Changes and Review moved to edge tool rails. The layout 
 - Cmd/Ctrl+, opens Settings in the desktop app.
 - pi 1.2.0.
 
-Thanks to everyone who sent PRs, and welcome to first-time contributors @zhuravlikjb, @HadesArchitect and @superjackche.
+Thanks to everyone who sent PRs, and welcome to first-time contributors [@zhuravlikjb](https://github.com/zhuravlikjb), [@HadesArchitect](https://github.com/HadesArchitect) and [@superjackche](https://github.com/superjackche).
 
-## Get it
+## Try it
 
-Desktop installers for macOS, Windows and Linux are on the [releases page](https://github.com/JetBrains/thinkrail/releases/tag/v0.2.0). For the CLI:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.sh | bash
-```
-
-On Windows: `powershell -c "irm https://raw.githubusercontent.com/JetBrains/thinkrail/main/install.ps1 | iex"`. Full notes: [v0.2.0 release notes](https://github.com/JetBrains/thinkrail/releases/tag/v0.2.0).
+Grab the desktop app below, or see the rest of what ThinkRail does on [our main webpage](https://thinkrail.ai/?utm_source=blog&utm_medium=organic-social&utm_campaign=release-0-2-0). The full list of changes is in the [v0.2.0 release notes](https://github.com/JetBrains/thinkrail/releases/tag/v0.2.0).
