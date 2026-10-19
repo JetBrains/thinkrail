@@ -5,6 +5,8 @@
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],
+			"env": ["THINKRAIL_SOURCEMAPS_RELEASE"],
+			"passThroughEnv": ["POSTHOG_CLI_API_KEY", "POSTHOG_CLI_PROJECT_ID", "POSTHOG_CLI_HOST"],
 			"outputs": ["dist/**"]
 		},
 		"dev": {

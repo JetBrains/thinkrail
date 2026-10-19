@@ -61,9 +61,10 @@ function generateWebManifest(): void {
 	if (!existsSync(join(webDist, "index.html"))) {
 		throw new Error(`web build not found at ${webDist} — run \`bun run build:web\` first.`);
 	}
-	const files = listFiles(webDist)
-		.sort()
-		.map((file) => ({ root: webDist, file }));
+	const webFiles = listFiles(webDist).sort();
+	const maps = webFiles.filter((file) => file.endsWith(".map"));
+	if (maps.length) throw new Error(`refusing to embed web source maps: ${maps.join(", ")}`);
+	const files = webFiles.map((file) => ({ root: webDist, file }));
 	const { imports, entries, version } = embedFiles(files, "a");
 	writeFileSync(
 		webGeneratedPath,
