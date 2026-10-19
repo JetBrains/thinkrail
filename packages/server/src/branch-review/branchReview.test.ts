@@ -125,7 +125,7 @@ test("queries an open GitHub PR for the explicit branch, and only that when one 
 			"--state",
 			"open",
 			"--json",
-			"number,url,state,mergedAt,closedAt,createdAt,isDraft,reviewDecision,mergeStateStatus,statusCheckRollup,latestReviews",
+			"number,url,state,mergedAt,closedAt,createdAt,isDraft,reviewDecision,mergeStateStatus,statusCheckRollup,latestReviews,headRepositoryOwner,headRepository",
 			"--limit",
 			"1",
 		],
@@ -532,9 +532,12 @@ test("the outcome form tells a provider's 'no review' apart from a failed lookup
 	expect(calls).toBe(4);
 });
 
-function openPrRow(over: Record<string, unknown> = {}) {
+function openPrRow(repository: string, over: Record<string, unknown> = {}) {
+	const [owner, name] = repository.split("/");
 	return {
 		number: 128,
+		headRepositoryOwner: { login: owner },
+		headRepository: { name },
 		state: "OPEN",
 		url: "https://github.com/acme/app/pull/128",
 		isDraft: false,
@@ -560,7 +563,7 @@ function githubRunner(row: Record<string, unknown>, repoView: string | null) {
 test("an open GitHub PR carries draft, checks, review decision, merge state and merge methods", async () => {
 	const cwd = repo("git@github.com:acme/details.git");
 	const { run, commands } = githubRunner(
-		openPrRow({
+		openPrRow("acme/details", {
 			isDraft: true,
 			reviewDecision: "CHANGES_REQUESTED",
 			mergeStateStatus: "BLOCKED",
@@ -623,7 +626,7 @@ test("an open GitHub PR carries draft, checks, review decision, merge state and 
 test("a PR without checks or a decision omits them, and repository settings are read once per repo", async () => {
 	const cwd = repo("git@github.com:acme/settings-cache.git");
 	const { run, commands } = githubRunner(
-		openPrRow({ mergeStateStatus: "SOMETHING_NEW" }),
+		openPrRow("ACME/Settings-Cache", { mergeStateStatus: "SOMETHING_NEW" }),
 		JSON.stringify({
 			mergeCommitAllowed: false,
 			squashMergeAllowed: true,
@@ -643,8 +646,17 @@ test("a PR without checks or a decision omits them, and repository settings are 
 
 test("a failed repository read leaves merge methods out without failing the lookup", async () => {
 	const cwd = repo("git@github.com:acme/settings-down.git");
-	const { run } = githubRunner(openPrRow(), null);
+	const { run } = githubRunner(openPrRow("acme/settings-down"), null);
 	const outcome = await findBranchReviewOutcomeWithRunner(cwd, "feature", run);
 	expect(outcome.reliable).toBe(true);
 	expect(outcome.value?.details).toEqual({ draft: false, reviewers: [], mergeState: "clean" });
+});
+
+test("a same-named branch's PR from a fork carries no details, so nothing offers to act on it", async () => {
+	const cwd = repo("git@github.com:acme/forked.git");
+	const { run, commands } = githubRunner(openPrRow("contributor/forked", { isDraft: true }), "{}");
+	const review = await findOpenBranchReviewWithRunner(cwd, "feature", run);
+	expect(review).toMatchObject({ kind: "pull-request", number: 128, state: "open" });
+	expect(review?.details).toBeUndefined();
+	expect(commands.filter((args) => args[1] === "repo")).toHaveLength(0);
 });

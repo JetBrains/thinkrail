@@ -1,4 +1,5 @@
 // Independently authored fake of the `gh` surface the host invokes; contract in e2e/SPEC.md.
+import { execFileSync } from "node:child_process";
 import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 
 export type FakePrState = "OPEN" | "CLOSED" | "MERGED";
@@ -17,7 +18,9 @@ export interface FakePr {
 	closedAt?: string | null;
 	createdAt?: string;
 	mergeError?: string;
+	queued?: boolean;
 	mergedWith?: string;
+	headOwner?: string;
 }
 
 export interface FakeGhScenario {
@@ -50,8 +53,18 @@ function main(): void {
 		const fields = (flag("--json") ?? "").split(",").filter(Boolean);
 		return Object.fromEntries(fields.map((field) => [field, row[field] ?? null]));
 	};
+	let origin = "";
+	try {
+		origin = execFileSync("git", ["remote", "get-url", "--push", "origin"], {
+			encoding: "utf8",
+		}).trim();
+	} catch {}
+	const slug = /github\.com[:/](.+?)(?:\.git)?$/.exec(origin)?.[1] ?? "acme/sample";
+	const [owner = "", name = ""] = slug.split("/");
 	const shape = (pr: FakePr): Record<string, unknown> => ({
-		url: `https://github.com/acme/sample/pull/${pr.number}`,
+		headRepositoryOwner: { login: pr.headOwner ?? owner },
+		headRepository: { name },
+		url: `https://github.com/${slug}/pull/${pr.number}`,
 		baseRefName: "main",
 		isDraft: false,
 		reviewDecision: "",
@@ -110,9 +123,11 @@ function main(): void {
 		case "merge": {
 			const pr = find(selector);
 			if (pr.mergeError) fail(pr.mergeError);
-			pr.state = "MERGED";
-			pr.mergedAt = new Date().toISOString();
 			pr.mergedWith = argv.find((arg) => ["--squash", "--merge", "--rebase"].includes(arg));
+			if (!pr.queued) {
+				pr.state = "MERGED";
+				pr.mergedAt = new Date().toISOString();
+			}
 			save();
 			return;
 		}

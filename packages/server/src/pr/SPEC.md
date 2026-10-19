@@ -150,19 +150,26 @@ pushes nothing rather than opening a PR for another branch with this one's title
 **Review actions** (`reviewActions.ts`, v87): `readyPr` (`pr.ready`), `reopenPr` (`pr.reopen`),
 `mergePr({ …, method, deleteBranch })` (`pr.merge`) and `deleteRemoteBranch` (`workspace.deleteRemoteBranch`).
 Every PR mutation is bound to what the user saw: the refreshed live branch must still be the request's
-`branch` (a terminal switch changes nothing), and `gh pr view <number> --json headRefName,state` must still
-show that number heading this branch in the state the action needs (open for ready/merge, closed for
-reopen) — the number came from an earlier lookup, and a stale one must never mutate a stranger's PR. The
-merge passes **`--match-head-commit <HEAD>`** so GitHub merges exactly the head the user looked at (the
-client offers Merge only while the branch matches origin). Mutations run under the 60 s timeout through
+`branch` (a terminal switch changes nothing) and must not be its own base, and `gh pr view <number>`
+must still show that number heading this branch **from origin's own repository** (`headRepositoryOwner`
+/ `headRepository` against the slug of origin's push URL) in the state the action needs (open for
+ready/merge, closed for reopen). `gh pr list --head` matches by branch name alone, so a fork's PR from a
+same-named branch (`contributor:main`, `patch-1`) is otherwise indistinguishable — and the base-branch
+refusal keeps the Default workspace on `main` from ever acting on one. The merge passes
+**`--match-head-commit <HEAD>`** so GitHub merges exactly the head the user looked at (the client offers
+Merge only while the branch matches origin), then re-reads the PR: `gh pr merge` also exits 0 when a merge
+queue or auto-merge only **queued** it, so `MergePrResult.merged` reports the state GitHub shows and the
+branch is deleted only after a real merge — deleting a queued PR's head branch would close it. Mutations run under the 60 s timeout through
 the injected runner, surface gh's stderr when refused, and drop the worktree's review cache whatever the
 outcome. **The remote branch is deleted with git, never `gh pr merge --delete-branch`**: gh would also
 delete the local branch and switch the checkout — fatal for a worktree and for the user's own checkout.
-Both paths run `git push origin --delete <branch>` through `pushOrigin`, the one push helper (`pushGitEnv`
-+ `PUSH_AUTH_FAILED`) `pushToOrigin` also uses; an already-missing remote branch counts as deleted (GitHub's
-own auto-delete may have won). After a successful merge a failed deletion is reported in
-`MergePrResult.deleteError`, not thrown. The standalone deletion refuses the base branch and a branch whose
-review the fresh lookup still reports open, since deleting a PR's head branch closes it.
+Both paths run `git push origin --delete refs/heads/<branch>` (the full ref, so a same-named tag is never
+the one deleted) through `pushOrigin`, the one push helper (`pushGitEnv` + `PUSH_AUTH_FAILED`)
+`pushToOrigin` also uses; an already-missing remote branch counts as deleted (GitHub's own auto-delete may
+have won). After a successful merge a failed deletion is reported in `MergePrResult.deleteError`, not
+thrown. The standalone deletion refuses the base branch, a branch whose review the fresh lookup reports
+open, and — when that lookup did not answer — any branch at all, since deleting a PR's head branch closes
+it and an unanswered lookup cannot rule that out.
 
 The open-PR *read* side stays `workspace.branchStatus` / `workspace.openReview` (`branch-review`) — this module persists
 nothing; the client re-derives button/chip state from that lookup plus this call's result. That
@@ -181,8 +188,8 @@ an update, a create, or an ambiguous create result.
 - `onBaseBranch` is the one "the branch is its own base" check, shared with `host`'s
   `workspace.branchStatus`.
 - **Allowed deps:** `workspaces` (workspace record, `refreshUserOwnedWorkspace`), `git` (exec + status), `todos` (`listTodos` for
-  the body), `branch-review` (provider detection, existing-PR lookup, the fresh open-review check before a
-  remote deletion, the shared command runner, `forgetOpenBranchReview`),
+  the body), `branch-review` (provider detection, `githubSlug`, existing-PR lookup, the fresh open-review
+  check before a remote deletion, the shared command runner, `forgetOpenBranchReview`),
   `github` (`ghSetupProblem` — the named compare-fallback reason); `contracts` types;
   `shared/codedError` (`PUSH_AUTH_FAILED`).
 - **Forbidden:** `host`; provider HTTP APIs or stored tokens (auth stays external — the user's `gh`

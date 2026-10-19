@@ -49,15 +49,27 @@ function seedWorkspaces(rows: Record<string, unknown>[]): void {
 }
 
 type Call = { command: string[]; timeoutMs: number | undefined };
+type FakePr = { headRefName: string; state: string; owner?: string; queued?: boolean };
 
 function fakeGh(
-	pr: { headRefName: string; state: string },
+	pr: FakePr,
 	mutation: { ok: boolean; out: string; err?: string } = { ok: true, out: "" },
 ) {
 	const calls: Call[] = [];
 	const run: PrCommandRunner = async (_cwd, command, timeoutMs) => {
 		calls.push({ command, timeoutMs });
-		if (command[2] === "view") return { ok: true, out: JSON.stringify(pr) };
+		if (command[2] === "view") {
+			return {
+				ok: true,
+				out: JSON.stringify({
+					headRefName: pr.headRefName,
+					state: pr.state,
+					headRepositoryOwner: { login: pr.owner ?? "acme" },
+					headRepository: { name: "app" },
+				}),
+			};
+		}
+		if (command[2] === "merge" && mutation.ok && !pr.queued) pr.state = "MERGED";
 		return mutation;
 	};
 	return { run, calls };
@@ -78,7 +90,8 @@ beforeEach(() => {
 	sh(repo, "switch", "-q", "-c", "feature");
 	commit("a.txt", "Add the ship segment");
 	sh(remote, "init", "-q", "--bare");
-	sh(repo, "remote", "add", "origin", remote);
+	sh(repo, "remote", "add", "origin", "git@github.com:acme/app.git");
+	sh(repo, "config", `url.${remote}.insteadOf`, "git@github.com:acme/app.git");
 	sh(repo, "push", "-q", "origin", "main", "feature");
 	seedWorkspaces([{ id: "w1", name: "Feature", branch: "feature", baseBranch: "main" }]);
 });
@@ -98,16 +111,33 @@ describe("readyPr / reopenPr", () => {
 		const { run, calls } = fakeGh({ headRefName: "feature", state: "OPEN" });
 		await readyPr(params, run);
 		expect(calls.map((call) => call.command)).toEqual([
-			["gh", "pr", "view", "12", "--json", "headRefName,state"],
+			["gh", "pr", "view", "12", "--json", "headRefName,state,headRepositoryOwner,headRepository"],
 			["gh", "pr", "ready", "12"],
 		]);
 		expect(calls[1]?.timeoutMs).toBe(60_000);
 	});
 
-	test("a number that now heads another branch changes nothing", async () => {
-		const { run, calls } = fakeGh({ headRefName: "someone-else", state: "OPEN" });
-		await expect(readyPr(params, run)).rejects.toThrow(/no longer the pull request of "feature"/);
-		expect(calls).toHaveLength(1);
+	test("a number that heads another branch, or a fork's same-named one, changes nothing", async () => {
+		const other = fakeGh({ headRefName: "someone-else", state: "OPEN" });
+		await expect(readyPr(params, other.run)).rejects.toThrow(
+			/not the pull request of acme\/app:feature/,
+		);
+		expect(other.calls).toHaveLength(1);
+		const fork = fakeGh({ headRefName: "feature", state: "OPEN", owner: "contributor" });
+		await expect(readyPr(params, fork.run)).rejects.toThrow(/nothing was changed/);
+		expect(fork.calls).toHaveLength(1);
+	});
+
+	test("the workspace's base branch has no PR to act on", async () => {
+		sh(repo, "switch", "-q", "main");
+		seedWorkspaces([
+			{ id: "w0", kind: "default", name: "Default", branch: "main", baseBranch: "main" },
+		]);
+		const { run, calls } = fakeGh({ headRefName: "main", state: "OPEN", owner: "contributor" });
+		await expect(readyPr({ workspaceId: "w0", branch: "main", number: 12 }, run)).rejects.toThrow(
+			/base branch/,
+		);
+		expect(calls).toHaveLength(0);
 	});
 
 	test("Reopen needs a closed PR and reports gh's own reason when GitHub refuses", async () => {
@@ -139,7 +169,7 @@ describe("mergePr", () => {
 	test("merges exactly the shown head with the chosen method and keeps the branch by default", async () => {
 		const { run, calls } = fakeGh({ headRefName: "feature", state: "OPEN" });
 		const result = await mergePr({ ...params, method: "rebase", deleteBranch: false }, run);
-		expect(result).toEqual({ branchDeleted: false });
+		expect(result).toEqual({ merged: true, branchDeleted: false });
 		expect(calls[1]?.command).toEqual([
 			"gh",
 			"pr",
@@ -158,13 +188,27 @@ describe("mergePr", () => {
 	test("deleting the branch removes only origin's copy; an already-deleted one counts as deleted", async () => {
 		const { run } = fakeGh({ headRefName: "feature", state: "OPEN" });
 		expect(await mergePr({ ...params, method: "squash", deleteBranch: true }, run)).toEqual({
+			merged: true,
 			branchDeleted: true,
 		});
 		expect(sh(remote, "for-each-ref", "refs/heads/feature")).toBe("");
 		expect(sh(repo, "rev-parse", "--abbrev-ref", "HEAD")).toBe("feature");
-		expect(await mergePr({ ...params, method: "squash", deleteBranch: true }, run)).toEqual({
+		const again = fakeGh({ headRefName: "feature", state: "OPEN" });
+		expect(await mergePr({ ...params, method: "squash", deleteBranch: true }, again.run)).toEqual({
+			merged: true,
 			branchDeleted: true,
 		});
+	});
+
+	test("a PR GitHub only queued keeps its branch, so the queue cannot lose it", async () => {
+		const { run } = fakeGh({ headRefName: "feature", state: "OPEN", queued: true });
+		expect(await mergePr({ ...params, method: "squash", deleteBranch: true }, run)).toEqual({
+			merged: false,
+			branchDeleted: false,
+		});
+		expect(sh(remote, "for-each-ref", "--format=%(refname)", "refs/heads/feature")).toBe(
+			"refs/heads/feature",
+		);
 	});
 
 	test("a refused merge surfaces gh's reason and deletes nothing", async () => {

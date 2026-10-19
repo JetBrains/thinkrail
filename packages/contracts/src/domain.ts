@@ -156,7 +156,9 @@ export interface ReviewDetails {
 }
 
 export interface MergePrResult {
-	/** `deleteBranch` only: whether `origin/<branch>` is gone. */
+	/** `false` when GitHub queued the PR (merge queue / auto-merge) instead of merging it now. */
+	merged: boolean;
+	/** `deleteBranch` only: whether `origin/<branch>` is gone — never deleted for a queued PR. */
 	branchDeleted: boolean;
 	/** Why the deletion after a successful merge failed. */
 	deleteError?: string;

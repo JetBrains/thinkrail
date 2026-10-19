@@ -37,7 +37,7 @@ type ParsedReviewRows = { valid: true; rows: ReviewRow[] } | { valid: false };
 const SETTLED_REVIEW_ROW_LIMIT = "5";
 const GITHUB_ROW_FIELDS = "number,url,state,mergedAt,closedAt,createdAt";
 const GITHUB_DETAIL_FIELDS =
-	"isDraft,reviewDecision,mergeStateStatus,statusCheckRollup,latestReviews";
+	"isDraft,reviewDecision,mergeStateStatus,statusCheckRollup,latestReviews,headRepositoryOwner,headRepository";
 const FAILING_NAMES_LIMIT = 10;
 const REVIEWERS_LIMIT = 5;
 
@@ -81,6 +81,11 @@ export async function detectReviewProvider(
 	branch: string,
 ): Promise<ReviewProvider | null> {
 	return (await detectReviewProviderResult(cwd, branch)).provider;
+}
+
+export function githubSlug(remoteUrl: string): string | null {
+	const match = /github\.com[/:]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/.exec(remoteUrl.trim());
+	return match ? `${match[1]}/${match[2]}` : null;
 }
 
 export function providerFromRemoteUrl(remoteUrl: string): ReviewProvider | null {
@@ -210,10 +215,11 @@ async function listReviewRows(
 	branch: string,
 	scope: "open" | "settled",
 	run: CommandRunner,
+	ownSlug: string | null = null,
 ): Promise<ReviewRow[] | null> {
 	const result = await run(cwd, reviewListCommand(provider, branch, scope));
 	if (!result.ok) return null;
-	const parsed = parseReviewRows(result.out, provider === "github" ? "number" : "iid");
+	const parsed = parseReviewRows(result.out, provider === "github" ? "number" : "iid", ownSlug);
 	return parsed.valid ? parsed.rows : null;
 }
 
@@ -232,7 +238,9 @@ async function lookupOpenBranchReview(
 		const provider = detection.provider;
 		if (!provider) return { value: null, cacheable: detection.cacheable };
 
-		const open = await listReviewRows(cwd, provider, branch, "open", run);
+		const ownSlug =
+			provider === "github" && detection.remoteUrl ? githubSlug(detection.remoteUrl) : null;
+		const open = await listReviewRows(cwd, provider, branch, "open", run, ownSlug);
 		if (open === null) return { value: null, cacheable: false };
 		let row = pickReviewRow(open);
 		if (row === null) {
@@ -397,8 +405,20 @@ function reviewers(latest: unknown): ReviewDetails["reviewers"] {
 	return found;
 }
 
-function reviewRowDetails(row: Record<string, unknown>): ReviewDetails | undefined {
+function headRepositorySlug(row: Record<string, unknown>): string | null {
+	const owner = row.headRepositoryOwner as Record<string, unknown> | null | undefined;
+	const repo = row.headRepository as Record<string, unknown> | null | undefined;
+	const login = text(owner?.login);
+	const name = text(repo?.name);
+	return login && name ? `${login}/${name}`.toLowerCase() : null;
+}
+
+function reviewRowDetails(
+	row: Record<string, unknown>,
+	ownSlug: string | null,
+): ReviewDetails | undefined {
 	if (typeof row.isDraft !== "boolean") return undefined;
+	if (!ownSlug || headRepositorySlug(row) !== ownSlug.toLowerCase()) return undefined;
 	const mergeState = text(row.mergeStateStatus).toLowerCase() as ReviewMergeState;
 	const checks = reviewChecks(row.statusCheckRollup);
 	const decision = REVIEW_DECISIONS[text(row.reviewDecision).toUpperCase()];
@@ -450,7 +470,11 @@ async function repoMergeSettings(
 	}
 }
 
-function parseReviewRows(output: string, field: "number" | "iid"): ParsedReviewRows {
+function parseReviewRows(
+	output: string,
+	field: "number" | "iid",
+	ownSlug: string | null = null,
+): ParsedReviewRows {
 	try {
 		const rows: unknown = JSON.parse(output);
 		if (!Array.isArray(rows)) return { valid: false };
@@ -473,7 +497,7 @@ function parseReviewRows(output: string, field: "number" | "iid"): ParsedReviewR
 				return { valid: false };
 			}
 			const createdAt = reviewRowTime(row, ["createdAt", "created_at"]);
-			const details = state === "open" ? reviewRowDetails(row) : undefined;
+			const details = state === "open" ? reviewRowDetails(row, ownSlug) : undefined;
 			parsed.push({
 				number: value,
 				...(url ? { url } : {}),

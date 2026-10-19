@@ -396,6 +396,14 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 			.then(
 				(result) => {
 					setMerging(null);
+					if (!result.merged) {
+						pushToast({
+							variant: "info",
+							title: `Queued PR #${state.number}`,
+							message: `GitHub merges it into ${state.base} once the queue's requirements pass; origin/${branch} stays until then.`,
+						});
+						return;
+					}
 					if (submit.deleteBranch && !result.branchDeleted) {
 						pushToast({
 							variant: "info",

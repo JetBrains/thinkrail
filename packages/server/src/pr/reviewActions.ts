@@ -2,9 +2,10 @@ import type { MergeMethod, MergePrResult } from "@thinkrail/contracts";
 import {
 	findBranchReviewOutcome,
 	forgetOpenBranchReview,
+	githubSlug,
 	runProviderCommand,
 } from "../branch-review";
-import { git } from "../git";
+import { git, originUrls } from "../git";
 import {
 	MUTATION_TIMEOUT_MS,
 	onBaseBranch,
@@ -39,6 +40,11 @@ function branchWorkspace(workspaceId: string, branch: string) {
 			`The checkout moved from "${branch}" to "${ws.branch}" — nothing was changed. Review the branch and try again.`,
 		);
 	}
+	if (onBaseBranch(ws)) {
+		throw new Error(
+			`"${ws.branch}" is this workspace's base branch — it has no pull request of its own. Nothing was changed.`,
+		);
+	}
 	return ws;
 }
 
@@ -51,35 +57,57 @@ function ghFailure(what: string, result: { out: string; err?: string }): Error {
 	);
 }
 
+function login(value: unknown): string {
+	const owner = value as { login?: unknown } | null | undefined;
+	return typeof owner?.login === "string" ? owner.login : "";
+}
+
+function repoName(value: unknown): string {
+	const repo = value as { name?: unknown } | null | undefined;
+	return typeof repo?.name === "string" ? repo.name : "";
+}
+
+async function viewPr(cwd: string, number: number, run: PrCommandRunner) {
+	const viewed = await run(cwd, [
+		"gh",
+		"pr",
+		"view",
+		String(number),
+		"--json",
+		"headRefName,state,headRepositoryOwner,headRepository",
+	]);
+	if (!viewed.ok) throw ghFailure(`Couldn't read PR #${number}`, viewed);
+	try {
+		const pr = JSON.parse(viewed.out) as Record<string, unknown>;
+		return {
+			headRefName: pr.headRefName,
+			state: String(pr.state) as PrState,
+			head: `${login(pr.headRepositoryOwner)}/${repoName(pr.headRepository)}`.toLowerCase(),
+		};
+	} catch {
+		throw new Error(`Couldn't read PR #${number}: gh answered something unexpected.`);
+	}
+}
+
 async function assertBranchPr(
 	cwd: string,
 	params: ReviewActionParams,
 	states: PrState[],
 	run: PrCommandRunner,
 ): Promise<void> {
-	const viewed = await run(cwd, [
-		"gh",
-		"pr",
-		"view",
-		String(params.number),
-		"--json",
-		"headRefName,state",
-	]);
-	if (!viewed.ok) throw ghFailure(`Couldn't read PR #${params.number}`, viewed);
-	let pr: { headRefName?: unknown; state?: unknown };
-	try {
-		pr = JSON.parse(viewed.out) as typeof pr;
-	} catch {
-		throw new Error(`Couldn't read PR #${params.number}: gh answered something unexpected.`);
-	}
-	if (pr.headRefName !== params.branch) {
+	const origin = (await originUrls(cwd)).push;
+	const slug = origin ? githubSlug(origin) : null;
+	if (!slug)
+		throw new Error("This workspace's origin isn't a GitHub repository — nothing was changed.");
+	const pr = await viewPr(cwd, params.number, run);
+	if (pr.headRefName !== params.branch || pr.head !== slug.toLowerCase()) {
 		throw new Error(
-			`PR #${params.number} is no longer the pull request of "${params.branch}" — nothing was changed.`,
+			`PR #${params.number} is not the pull request of ${slug}:${params.branch} — nothing was changed.`,
 		);
 	}
-	if (!states.includes(String(pr.state) as PrState)) {
+	if (!states.includes(pr.state)) {
 		throw new Error(
-			`PR #${params.number} is ${String(pr.state).toLowerCase()} on GitHub now — refresh and try again.`,
+			`PR #${params.number} is ${pr.state.toLowerCase()} on GitHub now — refresh and try again.`,
 		);
 	}
 }
@@ -153,14 +181,16 @@ export async function mergePr(
 		`Couldn't merge PR #${params.number}`,
 		run,
 	);
-	if (!params.deleteBranch) return { branchDeleted: false };
+	const merged = (await viewPr(cwd, params.number, run).catch(() => null))?.state === "MERGED";
+	if (!merged || !params.deleteBranch) return { merged, branchDeleted: false };
 	try {
 		const deleted = await deleteOrigin(cwd, params.branch);
 		return deleted === true
-			? { branchDeleted: true }
-			: { branchDeleted: false, deleteError: deleted };
+			? { merged, branchDeleted: true }
+			: { merged, branchDeleted: false, deleteError: deleted };
 	} catch (err) {
 		return {
+			merged,
 			branchDeleted: false,
 			deleteError: err instanceof Error ? err.message : String(err),
 		};
@@ -168,7 +198,7 @@ export async function mergePr(
 }
 
 async function deleteOrigin(cwd: string, branch: string): Promise<true | string> {
-	const pushed = await pushOrigin(cwd, ["origin", "--delete", branch]);
+	const pushed = await pushOrigin(cwd, ["origin", "--delete", `refs/heads/${branch}`]);
 	forgetOpenBranchReview(cwd);
 	if (!("err" in pushed)) return true;
 	return /remote ref does not exist/i.test(pushed.err) ? true : pushed.err;
@@ -179,10 +209,12 @@ export async function deleteRemoteBranch(params: {
 	branch: string;
 }): Promise<void> {
 	const ws = branchWorkspace(params.workspaceId, params.branch);
-	if (onBaseBranch(ws)) {
-		throw new Error(`"${ws.branch}" is this workspace's base branch — it is never deleted.`);
-	}
 	const review = await findBranchReviewOutcome(ws.worktreePath, ws.branch, { fresh: true });
+	if (!review.reliable) {
+		throw new Error(
+			`Couldn't confirm that "${ws.branch}" has no open pull request — nothing was deleted. Try again in a moment.`,
+		);
+	}
 	if (review.value && (review.value.state ?? "open") === "open") {
 		throw new Error(
 			`"${ws.branch}" still has an open ${review.value.kind === "pull-request" ? "PR" : "MR"} — deleting the branch would close it. Nothing was deleted.`,

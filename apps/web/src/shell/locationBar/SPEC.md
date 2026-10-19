@@ -140,7 +140,8 @@ actions through the panels-owned ship runner; it owns no host state.
   (failing checks), **Ready for review** (draft), **Merge PR…** (`mergeState` clean / unstable / has_hooks,
   and the branch known to match origin) — the first is the primary, the rest sit in ▾. While the branch is
   ahead of or behind origin the PR has no primary: the Remote segment's Push / Sync is the next step, and
-  merging then would skip the unpushed commits. Merge is decided by the merge state, never by approvals,
+  merging then would skip the unpushed commits. A branch that is its own base gets no PR actions (and no
+  Reopen): its review is a same-named branch's PR, a fork's for instance, never its own. Merge is decided by the merge state, never by approvals,
   so a repository without required review can merge once CI allows. The branch card adds a **Checks** row
   and a **Review** row (approved / changes requested by whom, or waiting for review) — the review decision
   is information, never an action gate.

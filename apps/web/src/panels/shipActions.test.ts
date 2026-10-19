@@ -282,3 +282,13 @@ test("the agent prompts name the PR, its failing checks, and what integration ma
 	expect(split).toContain("origin's push repository");
 	expect(split).toContain("don't integrate by pulling from origin");
 });
+
+test("a branch that is its own base never acts on a same-named PR (a fork's, for one)", () => {
+	const onBase = { onBase: true, aheadOfBase: 0 };
+	const checks = { passing: 0, pending: 0, failing: 1, failingNames: ["lint"] };
+	expect(ids(model({ ...onBase, review: openPr({ draft: true, checks }) }).review)).toEqual({
+		primary: null,
+		secondary: [],
+	});
+	expect(ids(model({ ...onBase, review: pr("closed") }).review).secondary).toEqual(["remove"]);
+});

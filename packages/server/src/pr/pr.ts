@@ -4,6 +4,7 @@ import type { GhSetupProblem, OpenPrResult, PrBodySource, PrPreview } from "@thi
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	forgetOpenBranchReview,
+	githubSlug,
 	providerFromRemoteUrl,
 	reviewNumber,
 	runProviderCommand,
@@ -243,11 +244,6 @@ export function pushGitEnv(
 	};
 	delete env.LC_ALL;
 	return env;
-}
-
-export function githubSlug(remoteUrl: string): string | null {
-	const match = /github\.com[/:]([^/\s]+)\/([^/\s]+?)(?:\.git)?\/?$/.exec(remoteUrl.trim());
-	return match ? `${match[1]}/${match[2]}` : null;
 }
 
 export function gitlabProject(remoteUrl: string): string | null {

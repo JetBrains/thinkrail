@@ -546,8 +546,9 @@ const handlers: WsHandlers = {
 		if (outcome.reliable) setWorkspaceReview(ws.id, outcome.value, ws.branch);
 		const review = openReviewForClient(outcome.value, ctx.protocolVersion);
 		if (!review) return review;
+		const { details: _details, ...reference } = review;
 		return {
-			...review,
+			...reference,
 			...(divergence && divergence.ahead > 0 ? { unpushedCommits: divergence.ahead } : {}),
 			...(divergence && divergence.behind > 0 ? { behindCommits: divergence.behind } : {}),
 		};

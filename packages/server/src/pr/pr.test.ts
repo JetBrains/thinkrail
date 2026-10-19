@@ -3,11 +3,10 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import type { TodoPlan } from "@thinkrail/contracts";
-import { findBranchReviewOutcome, forgetOpenBranchReview } from "../branch-review";
+import { findBranchReviewOutcome, forgetOpenBranchReview, githubSlug } from "../branch-review";
 import {
 	compareQuickPullUrl,
 	ghPrFlow,
-	githubSlug,
 	isPushAuthFailure,
 	openPr,
 	type PrCommandRunner,

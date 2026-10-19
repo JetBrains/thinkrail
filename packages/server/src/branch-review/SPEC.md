@@ -42,7 +42,10 @@ contracts spec pins `state` to `WORKSPACE_SETTLE_PROTOCOL_VERSION` and the host 
   row whose url is absent or not `https:` yields a review with no url rather than a bad link.
 - **An open GitHub PR's review facts ride the same open-row call** (`isDraft, reviewDecision,
   mergeStateStatus, statusCheckRollup, latestReviews` join the `--json` list — no second call per read) and
-  become `OpenBranchReview.details`. Checks count each check once by its newest attempt (a re-run appears
+  become `OpenBranchReview.details` — only when the PR's head repository (`headRepositoryOwner` /
+  `headRepository`, also requested) is origin's own: `--head` matches by branch name alone, so a fork's PR
+  from a same-named branch is found too, and it must never look like something this workspace can act on.
+  Checks count each check once by its newest attempt (a re-run appears
   per attempt in the rollup): SUCCESS / NEUTRAL / SKIPPED pass; FAILURE / TIMED_OUT / CANCELLED /
   ACTION_REQUIRED / STARTUP_FAILURE fail; anything not completed (and PENDING / EXPECTED status contexts)
   is pending; STALE counts as nothing, since a never-finishing check would keep the client's CI poll alive
@@ -54,7 +57,7 @@ contracts spec pins `state` to `WORKSPACE_SETTLE_PROTOCOL_VERSION` and the host 
   is the cacheable bit surfaced, so a host that *persists* the answer can tell "the provider says there is
   no review" from "the provider did not answer" and keep its last-known snapshot through a `gh` outage;
   `forgetOpenBranchReview(cwd)`; plus the read primitives the `pr` action module reuses —
-  `providerFromRemoteUrl`, `reviewNumber`, and `runProviderCommand` (the bounded prompt-disabled CLI runner;
+  `providerFromRemoteUrl`, `githubSlug` (owner/repo of a GitHub remote URL, shared with `pr`), `reviewNumber`, and `runProviderCommand` (the bounded prompt-disabled CLI runner;
   it returns stderr as `err` so a refused mutation can say why).
 - **Successful answers are cached per `(worktree, branch)` for 60 seconds from settlement and lookups are
   single-flighted.** A syntactically valid empty provider response is a successful `null` and is cached —

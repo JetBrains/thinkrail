@@ -252,7 +252,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   open GitHub PR — `draft`, `checks` (passing / pending / failing counts plus bounded failing names),
   `reviewDecision`, the approving / change-requesting `reviewers`, `mergeState` (GitHub's
   `mergeStateStatus`, lower-cased), the repository's `mergeMethods` and `deleteBranchOnMerge`; details ride
-  `workspace.branchStatus` only and never enter the host-kept `Workspace.review` snapshot, whose state the
+  `workspace.branchStatus` only (the `workspace.openReview` answer strips them) and never enter the host-kept `Workspace.review` snapshot, whose state the
   client overlays them onto only for the same review),
   **`BranchStatus`** (`workspace.branchStatus`'s answer, v87 `BRANCH_STATUS_PROTOCOL_VERSION`: `hasOrigin`,
   `provider` (`"github" | "gitlab" | null`), `published` (the push repository has the branch; `null` when a split origin's push repository
@@ -613,8 +613,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   must still be the live branch, as for `workspace.push`) / the v88 **review actions** (`REVIEW_ACTIONS_PROTOCOL_VERSION`), each
   naming the `branch` the user saw and, for a PR, the `number` it showed: **`pr.ready`** / **`pr.reopen`**
   (`{ workspaceId, branch, number }` → `Ack`), **`pr.merge`** (`… , method: "squash" | "merge" | "rebase",
-  deleteBranch` → `MergePrResult { branchDeleted, deleteError? }` — a merge that landed while the branch
-  deletion failed is a success with the reason), and **`workspace.deleteRemoteBranch`** (`{ workspaceId,
+  deleteBranch` → `MergePrResult { merged, branchDeleted, deleteError? }` — `merged: false` when GitHub only
+  queued it (merge queue / auto-merge), in which case the branch is never deleted; a merge that landed while
+  the branch deletion failed is a success with the reason), and **`workspace.deleteRemoteBranch`** (`{ workspaceId,
   branch }` → `Ack`; `PUSH_AUTH_FAILED` as for a push) /
   **`project.setTrust`** (persist a project's trust grant → the updated `Project`; gates its committed
   cross-agent skill aliases; `resources: true` also grants pi-level resource trust, see Project trust) /
