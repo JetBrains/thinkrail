@@ -11,9 +11,11 @@ tags:
   - mcp
 ---
 
-[ThinkRail](https://thinkrail.ai/?utm_source=blog&utm_medium=organic-social&utm_campaign=release-0-2-0) 0.2.0 is out, with 74 PRs since 0.1.6. The main thing I wanted fixed was a habit I kept catching myself in. The agent finishes, says it's done, and I scroll the transcript trying to piece together what it actually changed. That isn't a review. It's archaeology.
+[ThinkRail](https://thinkrail.ai/?utm_source=blog&utm_medium=organic-social&utm_campaign=release-0-2-0) 0.2.0 is out. The new release of ThinkRail introduces a few new features that we’ve been working on for some time, as well as a number of fixes and other changes. Here's what I find the most important among them.
 
 ## Every turn gets a receipt
+
+The main thing I wanted fixed was a habit I kept catching myself in. The agent finishes, says it's done, and I scroll the transcript trying to piece together what it actually changed. That isn't a review. It's archaeology.
 
 When a run changes something, the round now ends with a line like `3 files changed · +27 −4` and a **Review turn** button. The numbers don't come from the agent's own tool calls. The host snapshots the worktree when the run starts and again when it settles, so a shell command that rewrote a file, a formatter, or a rename all count. HEAD, the index and your reflog aren't touched.
 
