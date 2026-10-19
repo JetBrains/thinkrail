@@ -79,7 +79,7 @@ base guard, the push, the `gh` lookup/create, and the compare URL all derive fro
 value. Then:
 1. No `origin` remote → throws (the client toasts it). The forge (GitHub slug / GitLab project) is read from
    origin's **configured push URL** (`remote.origin.pushurl`, else `remote.origin.url`, via `git`'s
-   `originPushUrl`), not the fetch URL, so a remote that pushes elsewhere than it fetches opens the review
+   `originUrls`), not the fetch URL, so a remote that pushes elsewhere than it fetches opens the review
    where the branch actually landed; `insteadOf` rewrites are not expanded, since they map transports for
    the same host. Push failure → throws with git's stderr;
    a stderr matching the non-interactive-auth signatures (`Permission denied (publickey)`,

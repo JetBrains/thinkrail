@@ -15,7 +15,7 @@ import {
 	gitStatus,
 	isSafeRef,
 	listRemotes,
-	originPushUrl,
+	originUrls,
 	remoteNameOf,
 	remoteRefOid,
 } from "../git";
@@ -387,7 +387,7 @@ export async function ghPrFlow(
 }
 
 async function pushToOrigin(cwd: string, branch: string): Promise<string> {
-	const origin = await originPushUrl(cwd);
+	const origin = (await originUrls(cwd)).push;
 	if (!origin) throw new Error("This workspace's repository has no 'origin' remote to push to.");
 	const hasSshCommandConfig = git(cwd, ["config", "core.sshCommand"]).ok;
 	const pushed = await gitAsync(cwd, ["push", "--set-upstream", "origin", branch], {

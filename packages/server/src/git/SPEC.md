@@ -186,8 +186,15 @@ ref off the workspace-create critical path.
   `workspace.openReview` passes `fetch` **only on a fresh lookup** (focus / explicit refresh, not a cached
   activation) and composes `ahead`→`unpushedCommits` and `behind`→`behindCommits` onto an open review (in
   parallel with the gh lookup, not after it) so the plan page can flag commits the PR doesn't have yet and
-  the diverged sync-conflict state; **`originPushUrl(worktreePath)`** (async) → origin's configured push URL
-  (`remote.origin.pushurl`, else `remote.origin.url`, unexpanded) or `null` without an origin;
+  the diverged sync-conflict state; **`originUrls(worktreePath)`** (async) → origin's configured `{ fetch, push }`
+  URLs (`push` = `remote.origin.pushurl`, else the fetch URL; unexpanded, `null` without an origin);
+  **`countPushTargetDivergence(worktreePath, branch, pushUrl, {fetch?})`** (async) → the same `{ ahead, behind }`
+  measured against the **push** repository for an origin whose push URL differs from its fetch URL: the
+  remote-tracking `origin/<branch>` mirrors the fetch repository there (a fetch overwrites what the push
+  wrote; git's own `@{push}` resolves to the same ref), so it reads the push target's tip with `ls-remote`,
+  fetches only that tip's objects (`--no-write-fetch-head`, no ref written) on a fresh read when they are
+  missing, and compares it to HEAD; `null` when the push repository lacks the branch, and it throws when the
+  tip stays unknown;
   **`commitsAheadOf(worktreePath, baseRef)`** (async) → `rev-list --count
   <base>..HEAD`, `0` for an unsafe or unresolvable base, never a throw — the `origin/` here is the second
   deliberate survivor of the all-remotes sweep, because it asks where *this* workspace's own branch was
@@ -295,7 +302,7 @@ ref off the workspace-create critical path.
 - **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `gitAsyncStream`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`,
   `gitUncommittedPaths`, `gitDiffFile`,
   `readBlobAt`, `readBlobBytesAt`, `readBlobBytesAtAsync`, `readBlobStreamAtAsync`, `readBlobSizeAtAsync`,
-  `readPathModeAtAsync`, `readCommitSubject`, `commitsAheadOf`, `originPushUrl`,
+  `readPathModeAtAsync`, `readCommitSubject`, `commitsAheadOf`, `originUrls`, `countPushTargetDivergence`,
   `gitCommitPaths`, `gitHeadSha`, `listCommits`, `listCommitsSince`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,

@@ -206,6 +206,59 @@ test("branch status reports a review-free branch, and workspace.push publishes i
 	});
 });
 
+test("a split origin measures the branch against where it is pushed, not where it is fetched", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Split origin" },
+		CTX,
+	)) as Workspace;
+	writeFileSync(join(workspace.worktreePath, "ship.txt"), "ship\n");
+	git(workspace.worktreePath, "add", "-A");
+	git(workspace.worktreePath, "commit", "-m", "ship");
+	const fetchRepo = join(dataDir, "fetch.git");
+	const pushRepo = join(dataDir, "push.git");
+	for (const bare of [fetchRepo, pushRepo]) {
+		mkdirSync(bare);
+		git(bare, "init", "--bare");
+	}
+	git(repo, "remote", "add", "origin", fetchRepo);
+	git(repo, "remote", "set-url", "--push", "origin", pushRepo);
+	git(repo, "push", fetchRepo, "main");
+	await handleRequest(
+		"workspace.push",
+		{ workspaceId: workspace.id, branch: workspace.branch },
+		CTX,
+	);
+
+	const other = join(dataDir, "other");
+	git(dataDir, "clone", fetchRepo, other);
+	git(other, "config", "user.email", "t@thinkrail.test");
+	git(other, "config", "user.name", "test");
+	git(other, "switch", "-c", workspace.branch);
+	writeFileSync(join(other, "unrelated.txt"), "unrelated\n");
+	git(other, "add", "-A");
+	git(other, "commit", "-m", "unrelated on the fetch side");
+	git(other, "push", "origin", workspace.branch);
+	git(workspace.worktreePath, "fetch", "origin");
+
+	expect(
+		await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
+	).toMatchObject({ published: true, ahead: 0, behind: 0 });
+
+	const pushed = join(dataDir, "pushed");
+	git(dataDir, "clone", "--branch", workspace.branch, pushRepo, pushed);
+	git(pushed, "config", "user.email", "t@thinkrail.test");
+	git(pushed, "config", "user.name", "test");
+	writeFileSync(join(pushed, "later.txt"), "later\n");
+	git(pushed, "add", "-A");
+	git(pushed, "commit", "-m", "later on the push side");
+	git(pushed, "push", "origin", workspace.branch);
+
+	expect(
+		await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
+	).toMatchObject({ published: true, ahead: 0, behind: 1 });
+});
+
 test("request diagnostics expose only registered method names", async () => {
 	expect(requestMethodDiagnostic("workspace.list")).toBe("workspace.list");
 	expect(requestMethodDiagnostic("host.update")).toBe("host.update");

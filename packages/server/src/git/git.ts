@@ -668,12 +668,62 @@ export async function listCommitsSince(
 	return commits;
 }
 
-export async function originPushUrl(worktreePath: string): Promise<string | null> {
-	for (const key of ["remote.origin.pushurl", "remote.origin.url"]) {
-		const configured = await gitAsync(worktreePath, ["config", "--get", key]);
-		if (configured.ok && configured.out) return configured.out;
+export interface OriginUrls {
+	fetch: string | null;
+	push: string | null;
+}
+
+export async function originUrls(worktreePath: string): Promise<OriginUrls> {
+	const [url, pushurl] = await Promise.all([
+		gitAsync(worktreePath, ["config", "--get", "remote.origin.url"]),
+		gitAsync(worktreePath, ["config", "--get", "remote.origin.pushurl"]),
+	]);
+	const fetch = url.ok && url.out ? url.out : null;
+	return { fetch, push: pushurl.ok && pushurl.out ? pushurl.out : fetch };
+}
+
+export async function countPushTargetDivergence(
+	worktreePath: string,
+	branch: string,
+	pushUrl: string,
+	opts?: { fetch?: boolean },
+): Promise<PushDivergence | null> {
+	if (!isSafeRef(branch)) throw new Error(`Not a usable git ref: ${branch}`);
+	const ref = `refs/heads/${branch}`;
+	const listed = await gitAsync(worktreePath, ["ls-remote", "--end-of-options", pushUrl, ref], {
+		network: true,
+	});
+	if (!listed.ok) throw new Error(`Could not read the push target: ${listed.err || "git failed"}`);
+	const tip = listed.out
+		.split("\n")
+		.find((line) => line.endsWith(`\t${ref}`))
+		?.split("\t")[0];
+	if (!tip) return null;
+	const present = async () =>
+		(await gitAsync(worktreePath, ["cat-file", "-e", "--end-of-options", `${tip}^{commit}`])).ok;
+	if (!(await present()) && opts?.fetch) {
+		await gitAsync(
+			worktreePath,
+			["fetch", "--no-tags", "--no-write-fetch-head", "--end-of-options", pushUrl, ref],
+			{ network: true },
+		);
 	}
-	return null;
+	if (!(await present())) throw new Error("The push target's tip is not available locally");
+	const counted = await gitAsync(worktreePath, [
+		"rev-list",
+		"--left-right",
+		"--count",
+		"--end-of-options",
+		`${tip}...HEAD`,
+		"--",
+	]);
+	const [behindStr, aheadStr] = counted.out.split(/\s+/);
+	const behind = Number(behindStr);
+	const ahead = Number(aheadStr);
+	if (!counted.ok || !Number.isSafeInteger(ahead) || !Number.isSafeInteger(behind)) {
+		throw new Error(`Could not measure push divergence: ${counted.err || "git failed"}`);
+	}
+	return { ahead, behind };
 }
 
 export async function commitsAheadOf(worktreePath: string, baseRef: string): Promise<number> {
