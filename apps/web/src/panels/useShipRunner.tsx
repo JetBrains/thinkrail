@@ -286,7 +286,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 		return getTransport()
 			.request(
 				"workspace.push",
-				{ workspaceId, ...(confirmBase ? { confirmBase: true } : {}) },
+				{ workspaceId, branch, ...(confirmBase ? { confirmBase: true } : {}) },
 				{ timeoutMs: PR_OPEN_TIMEOUT_MS },
 			)
 			.then(

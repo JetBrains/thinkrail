@@ -100,7 +100,7 @@ describe("commitsAheadOf", () => {
 describe("pushBranch", () => {
 	test("publishes the workspace branch to origin without touching any PR", async () => {
 		writeFileSync(join(repo, "dirty.txt"), "uncommitted\n");
-		const result = await pushBranch({ workspaceId: "w1" });
+		const result = await pushBranch({ workspaceId: "w1", branch: "feature" });
 		expect(result).toEqual({ dirtyFiles: 1 });
 		expect(sh(remote, "rev-parse", "refs/heads/feature")).toBe(sh(repo, "rev-parse", "HEAD"));
 		expect(sh(repo, "rev-parse", "--abbrev-ref", "feature@{upstream}")).toBe("origin/feature");
@@ -112,15 +112,28 @@ describe("pushBranch", () => {
 		seedWorkspaces([
 			{ id: "w0", kind: "default", name: "Default", branch: "main", baseBranch: "main" },
 		]);
-		await expect(pushBranch({ workspaceId: "w0" })).rejects.toThrow(/base branch/);
+		await expect(pushBranch({ workspaceId: "w0", branch: "main" })).rejects.toThrow(/base branch/);
 		expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
-		await pushBranch({ workspaceId: "w0", confirmBase: true });
+		await pushBranch({ workspaceId: "w0", branch: "main", confirmBase: true });
 		expect(sh(remote, "rev-parse", "refs/heads/main")).toBe(sh(repo, "rev-parse", "HEAD"));
+	});
+
+	test("a checkout that moved off the branch the user chose pushes nothing", async () => {
+		sh(repo, "switch", "-q", "main");
+		seedWorkspaces([
+			{ id: "w0", kind: "default", name: "Default", branch: "feature", baseBranch: "main" },
+		]);
+		await expect(
+			pushBranch({ workspaceId: "w0", branch: "feature", confirmBase: true }),
+		).rejects.toThrow(/moved from "feature" to "main"/);
+		expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
 	});
 
 	test("a repository without origin names the missing remote", async () => {
 		sh(repo, "remote", "remove", "origin");
-		await expect(pushBranch({ workspaceId: "w1" })).rejects.toThrow(/no 'origin' remote/);
+		await expect(pushBranch({ workspaceId: "w1", branch: "feature" })).rejects.toThrow(
+			/no 'origin' remote/,
+		);
 	});
 });
 
@@ -196,7 +209,7 @@ describe("previewPr sources and template discovery", () => {
 describe("openPr keeps its body source apart from the analytics source", () => {
 	test("a plan-page push with no body still renders a body instead of an empty one", async () => {
 		sh(repo, "remote", "set-url", "origin", "https://gitlab.com/acme/widgets.git");
-		sh(repo, "remote", "set-url", "--push", "origin", remote);
+		sh(repo, "config", `url.${remote}.pushInsteadOf`, "https://gitlab.com/acme/widgets.git");
 		const wireParams = { workspaceId: "w1", source: "plan_page" };
 		const result = await openPr(wireParams);
 		expect(result.action).toBe("compare");
@@ -221,6 +234,18 @@ describe("prDraftInput", () => {
 		expect(input.diffStat).toContain("b.txt");
 		expect(input.template).toBe("## Why");
 		expect(input.plan).toBeUndefined();
+	});
+});
+
+describe("openPr picks the forge from where the branch is pushed", () => {
+	test("a GitHub fetch URL with a GitLab push URL ends on GitLab's new-MR page", async () => {
+		sh(repo, "remote", "set-url", "origin", "https://github.com/acme/widgets.git");
+		sh(repo, "remote", "set-url", "--push", "origin", "https://gitlab.com/acme/widgets.git");
+		sh(repo, "config", `url.${remote}.insteadOf`, "https://gitlab.com/acme/widgets.git");
+		const result = await openPr({ workspaceId: "w1", body: "Body" });
+		expect(result.action).toBe("compare");
+		expect(result.compareUrl).toStartWith("https://gitlab.com/acme/widgets/-/merge_requests/new?");
+		expect(sh(remote, "rev-parse", "refs/heads/feature")).toBe(sh(repo, "rev-parse", "HEAD"));
 	});
 });
 

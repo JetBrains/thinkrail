@@ -186,7 +186,9 @@ ref off the workspace-create critical path.
   `workspace.openReview` passes `fetch` **only on a fresh lookup** (focus / explicit refresh, not a cached
   activation) and composes `ahead`→`unpushedCommits` and `behind`→`behindCommits` onto an open review (in
   parallel with the gh lookup, not after it) so the plan page can flag commits the PR doesn't have yet and
-  the diverged sync-conflict state; **`commitsAheadOf(worktreePath, baseRef)`** (async) → `rev-list --count
+  the diverged sync-conflict state; **`originPushUrl(worktreePath)`** (async) → origin's configured push URL
+  (`remote.origin.pushurl`, else `remote.origin.url`, unexpanded) or `null` without an origin;
+  **`commitsAheadOf(worktreePath, baseRef)`** (async) → `rev-list --count
   <base>..HEAD`, `0` for an unsafe or unresolvable base, never a throw — the `origin/` here is the second
   deliberate survivor of the all-remotes sweep, because it asks where *this* workspace's own branch was
   pushed, not which remote a base was branched from; `listBranches(projectId)` → `{ local, remote,
@@ -293,7 +295,7 @@ ref off the workspace-create critical path.
 - **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `gitAsyncStream`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`,
   `gitUncommittedPaths`, `gitDiffFile`,
   `readBlobAt`, `readBlobBytesAt`, `readBlobBytesAtAsync`, `readBlobStreamAtAsync`, `readBlobSizeAtAsync`,
-  `readPathModeAtAsync`, `readCommitSubject`, `commitsAheadOf`,
+  `readPathModeAtAsync`, `readCommitSubject`, `commitsAheadOf`, `originPushUrl`,
   `gitCommitPaths`, `gitHeadSha`, `listCommits`, `listCommitsSince`,
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,

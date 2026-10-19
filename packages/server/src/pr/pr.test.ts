@@ -451,7 +451,7 @@ describe("openPr — push lifecycle and cache invalidation", () => {
 		sh(repo, "commit", "-q", "-m", "feature");
 		sh(remote, "init", "-q", "--bare");
 		sh(repo, "remote", "add", "origin", "https://github.com/acme/widgets.git");
-		sh(repo, "remote", "set-url", "--push", "origin", remote);
+		sh(repo, "config", `url.${remote}.pushInsteadOf`, "https://github.com/acme/widgets.git");
 
 		writeFileSync(reviewMode, "closed\n");
 		if (process.platform === "win32") {

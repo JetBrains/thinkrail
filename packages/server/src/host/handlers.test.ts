@@ -181,7 +181,13 @@ test("branch status reports a review-free branch, and workspace.push publishes i
 	mkdirSync(remote);
 	git(remote, "init", "--bare");
 	git(repo, "remote", "add", "origin", remote);
-	expect(await handleRequest("workspace.push", { workspaceId: workspace.id }, CTX)).toEqual({
+	expect(
+		await handleRequest(
+			"workspace.push",
+			{ workspaceId: workspace.id, branch: workspace.branch },
+			CTX,
+		),
+	).toEqual({
 		dirtyFiles: 1,
 	});
 	const published = await handleRequest(

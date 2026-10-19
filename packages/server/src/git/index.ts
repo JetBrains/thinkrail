@@ -19,6 +19,7 @@ export {
 	listCommits,
 	listCommitsSince,
 	listRemotes,
+	originPushUrl,
 	prefetchBranch,
 	readBlobAt,
 	readBlobBytesAt,

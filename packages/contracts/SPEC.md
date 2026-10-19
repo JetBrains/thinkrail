@@ -594,9 +594,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   cache hit while omission preserves the original force-fresh behavior for older independently shipped
   clients; either form still joins a lookup already in flight) / **`workspace.branchStatus`** (v86, same
   params and freshness rules → `BranchStatus`; supersedes `openReview` for v86 clients, which stays for
-  older ones) / **`workspace.push`** (v86, `{ workspaceId, confirmBase? }` → `{ dirtyFiles }`: publish or
+  older ones) / **`workspace.push`** (v86, `{ workspaceId, branch, confirmBase? }` → `{ dirtyFiles }`: publish or
   push the branch to `origin` without touching any PR; a branch that is its own base is refused unless
-  `confirmBase: true`; `PUSH_AUTH_FAILED` as for `pr.open`) / **`pr.preview`** (v86 adds optional
+  `confirmBase: true`, and `branch` — the one the user saw and confirmed — must still be the live branch; `PUSH_AUTH_FAILED` as for `pr.open`) / **`pr.preview`** (v86 adds optional
   `source: "plan" | "commits" | "template" | "empty"` and `template`, makes `sessionId` optional, and
   returns the discovered `templates` and `planAvailable`; an older client's `{ sessionId }` call keeps the
   plan body) / **`pr.generate`** (v86, `{ workspaceId, sessionId?, template? }` → `{ body: string | null }`,

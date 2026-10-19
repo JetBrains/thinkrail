@@ -40,8 +40,10 @@ drafts from (`pr.generate`, composed in `host`): branch + base, commit subjects,
 the base clamped to a fixed line budget, the session plan's rendered body when present, and the chosen
 template's text.
 
-`pushBranch({ workspaceId, confirmBase? })` → `{ dirtyFiles }` (`workspace.push`): the safe-ref guard and
-`refreshUserOwnedWorkspace` revalidation, then the same `--set-upstream origin <branch>` push, env, and
+`pushBranch({ workspaceId, branch, confirmBase? })` → `{ dirtyFiles }` (`workspace.push`): the safe-ref guard
+and `refreshUserOwnedWorkspace` revalidation before and after the dirty read — each time the live branch must
+still be the `branch` the request names (the one the user saw and confirmed), so a terminal switch in between
+pushes nothing instead of another branch — then the same `--set-upstream origin <branch>` push, env, and
 `PUSH_AUTH_FAILED` classification as step 2 below — one implementation that `openPr` also calls. A branch
 that IS its base is refused unless `confirmBase` is set (the client confirms first, naming the shared
 branch); it never reads, edits, or creates a PR, and drops the worktree's review cache like every push.
@@ -75,7 +77,11 @@ read is in flight or moments before pressing Open PR would push/open/compare aga
 branch until the async watcher next catches up: the branch-sensitive `ws` is fresh, so the
 base guard, the push, the `gh` lookup/create, and the compare URL all derive from the one refreshed
 value. Then:
-1. No `origin` remote → throws (the client toasts it). Push failure → throws with git's stderr;
+1. No `origin` remote → throws (the client toasts it). The forge (GitHub slug / GitLab project) is read from
+   origin's **configured push URL** (`remote.origin.pushurl`, else `remote.origin.url`, via `git`'s
+   `originPushUrl`), not the fetch URL, so a remote that pushes elsewhere than it fetches opens the review
+   where the branch actually landed; `insteadOf` rewrites are not expanded, since they map transports for
+   the same host. Push failure → throws with git's stderr;
    a stderr matching the non-interactive-auth signatures (`Permission denied (publickey)`,
    `could not read Username/Password`, `Authentication failed`, `terminal prompts disabled`,
    `Host key verification failed` — `isPushAuthFailure`) throws `CodedError("PUSH_AUTH_FAILED")`

@@ -95,12 +95,12 @@ import { readDir, readFile } from "../fs";
 import {
 	commitsAheadOf,
 	countPushDivergence,
-	gitAsync,
 	gitDiffFile,
 	gitStatus,
 	ignoredPaths,
 	listBranches,
 	listCommits,
+	originPushUrl,
 	prefetchBranch,
 	remoteRefOid,
 } from "../git";
@@ -543,17 +543,17 @@ const handlers: WsHandlers = {
 			findBranchReviewOutcome(ws.worktreePath, ws.branch, { fresh }),
 			countPushDivergence(ws.worktreePath, ws.branch, { fetch: fresh }).catch(() => undefined),
 			commitsAheadOf(ws.worktreePath, ws.baseBranch),
-			gitAsync(ws.worktreePath, ["remote", "get-url", "origin"]),
+			originPushUrl(ws.worktreePath),
 		]);
 		if (outcome.reliable) setWorkspaceReview(ws.id, outcome.value, ws.branch);
-		const hasOrigin = origin.ok && origin.out !== "";
+
 		const published =
 			divergence === undefined
 				? remoteRefOid(ws.worktreePath, `origin/${ws.branch}`) !== null
 				: divergence !== null;
 		return {
-			hasOrigin,
-			provider: hasOrigin ? providerFromRemoteUrl(origin.out) : null,
+			hasOrigin: origin !== null,
+			provider: origin ? providerFromRemoteUrl(origin) : null,
 			published,
 			...(divergence ? { ahead: divergence.ahead, behind: divergence.behind } : {}),
 			aheadOfBase,

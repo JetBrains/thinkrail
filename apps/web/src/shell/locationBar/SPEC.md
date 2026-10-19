@@ -112,7 +112,8 @@ actions through the panels-owned ship runner; it owns no host state.
   ↑N warning / ↓N info chips. Its next action is the `shipActions` remote arm: **Publish** (unpublished
   with commits ahead of the base), **Push N** (ahead, not behind), or **Sync…** (behind: the diverged
   dialog with the Plan pane's shell-inert `git pull --rebase origin <branch>` rule, never a force command).
-  Publish/Push call `workspace.push`; when the branch **is** its base (Default on `main`) the runner first
+  Publish/Push call `workspace.push` with the branch the strip shows (the host pushes nothing if the
+  checkout has moved since); when the branch **is** its base (Default on `main`) the runner first
   confirms, naming the shared branch, and only then sends `confirmBase`. A topbar push never rewrites the PR
   description — the Plan pane's *Push updates* still refreshes it from the plan. A Publish/Push action
   replaces the value; Sync sits beside the chips.

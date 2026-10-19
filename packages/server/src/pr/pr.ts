@@ -15,6 +15,7 @@ import {
 	gitStatus,
 	isSafeRef,
 	listRemotes,
+	originPushUrl,
 	remoteNameOf,
 	remoteRefOid,
 } from "../git";
@@ -386,8 +387,8 @@ export async function ghPrFlow(
 }
 
 async function pushToOrigin(cwd: string, branch: string): Promise<string> {
-	const origin = git(cwd, ["remote", "get-url", "origin"]);
-	if (!origin.ok) throw new Error("This workspace's repository has no 'origin' remote to push to.");
+	const origin = await originPushUrl(cwd);
+	if (!origin) throw new Error("This workspace's repository has no 'origin' remote to push to.");
 	const hasSshCommandConfig = git(cwd, ["config", "core.sshCommand"]).ok;
 	const pushed = await gitAsync(cwd, ["push", "--set-upstream", "origin", branch], {
 		env: pushGitEnv(process.env, hasSshCommandConfig),
@@ -399,7 +400,7 @@ async function pushToOrigin(cwd: string, branch: string): Promise<string> {
 		throw new Error(detail);
 	}
 	forgetOpenBranchReview(cwd);
-	return origin.out;
+	return origin;
 }
 
 function refreshedWorkspace(workspaceId: string) {
@@ -409,8 +410,13 @@ function refreshedWorkspace(workspaceId: string) {
 	return ws;
 }
 
-function pushWorkspace(workspaceId: string, confirmBase: boolean) {
+function pushWorkspace(workspaceId: string, branch: string, confirmBase: boolean) {
 	const ws = refreshedWorkspace(workspaceId);
+	if (ws.branch !== branch) {
+		throw new Error(
+			`The checkout moved from "${branch}" to "${ws.branch}" — nothing was pushed. Review the branch and push again.`,
+		);
+	}
 	if (onBaseBranch(ws) && !confirmBase) {
 		throw new Error(
 			`"${ws.branch}" is this workspace's base branch — pushing it publishes the commits straight to the shared branch. Confirm the push first.`,
@@ -421,12 +427,13 @@ function pushWorkspace(workspaceId: string, confirmBase: boolean) {
 
 export async function pushBranch(params: {
 	workspaceId: string;
+	branch: string;
 	confirmBase?: boolean;
 }): Promise<{ dirtyFiles: number }> {
 	const confirmBase = params.confirmBase === true;
-	pushWorkspace(params.workspaceId, confirmBase);
+	pushWorkspace(params.workspaceId, params.branch, confirmBase);
 	const dirtyFiles = (await gitStatus(params.workspaceId, { kind: "uncommitted" })).changes.length;
-	const ws = pushWorkspace(params.workspaceId, confirmBase);
+	const ws = pushWorkspace(params.workspaceId, params.branch, confirmBase);
 	await pushToOrigin(ws.worktreePath, ws.branch);
 	return { dirtyFiles };
 }

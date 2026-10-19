@@ -584,7 +584,7 @@ export interface WsMethodMap {
 		result: BranchStatus;
 	};
 	"workspace.push": {
-		params: { workspaceId: string; confirmBase?: boolean };
+		params: { workspaceId: string; branch: string; confirmBase?: boolean };
 		result: { dirtyFiles: number };
 	};
 	"workspace.remove": { params: { id: string }; result: Ack };

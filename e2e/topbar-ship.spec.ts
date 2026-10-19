@@ -13,7 +13,7 @@ import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 // The topbar's Remote and Pull request segments without a forge review (v86 `workspace.branchStatus`).
 // Every journey wires `origin` into the lane's SHARED fixture repo config (worktrees share remotes); the
 // app fixture's reset removes it before the next test. A GitHub-looking origin pushes into a local bare repo
-// (`pushurl`) and refuses https fetches (`protocol.https.allow never`), so nothing leaves the machine;
+// (`pushInsteadOf`) and refuses https fetches (`protocol.https.allow never`), so nothing leaves the machine;
 // gh never runs (hermetic PATH + THINKRAIL_GH_OFFLINE), which makes Open PR end on the compare hand-off.
 
 function bareRemote(): string {
@@ -138,7 +138,12 @@ test("Open PR from the topbar composes from commits or the repository template",
 		gitAs(workspace.worktreePath, "commit", "--no-verify", "-m", "docs: add a PR template");
 		commitFile(workspace.worktreePath, "ship.ts", "export const ship = 1;\n", "feat: ship segment");
 		gitAs(workspace.worktreePath, "remote", "add", "origin", "https://github.com/acme/sample.git");
-		gitAs(workspace.worktreePath, "remote", "set-url", "--push", "origin", bare);
+		gitAs(
+			workspace.worktreePath,
+			"config",
+			`url.${bare}.pushInsteadOf`,
+			"https://github.com/acme/sample.git",
+		);
 		gitAs(workspace.worktreePath, "config", "protocol.https.allow", "never");
 		await revalidate(page);
 
@@ -178,6 +183,7 @@ test("Open PR from the topbar composes from commits or the repository template",
 		);
 	} finally {
 		gitAs(workspace.worktreePath, "config", "--unset", "protocol.https.allow");
+		gitAs(workspace.worktreePath, "config", "--unset", `url.${bare}.pushInsteadOf`);
 		rmSync(bare, { recursive: true, force: true });
 	}
 });

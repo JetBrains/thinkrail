@@ -668,6 +668,14 @@ export async function listCommitsSince(
 	return commits;
 }
 
+export async function originPushUrl(worktreePath: string): Promise<string | null> {
+	for (const key of ["remote.origin.pushurl", "remote.origin.url"]) {
+		const configured = await gitAsync(worktreePath, ["config", "--get", key]);
+		if (configured.ok && configured.out) return configured.out;
+	}
+	return null;
+}
+
 export async function commitsAheadOf(worktreePath: string, baseRef: string): Promise<number> {
 	if (!isSafeRef(baseRef)) return 0;
 	const counted = await gitAsync(worktreePath, [
