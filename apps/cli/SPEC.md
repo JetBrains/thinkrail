@@ -183,7 +183,7 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
 and `trash`'s **native helper sidecars** (which macOS/Windows must execute from real filesystem paths):
 
 - `scripts/build-binary.ts` consumes `@thinkrail/server/build-support`, writes three **transient** generated modules, runs
-  `bun build --compile --no-compile-autoload-bunfig --target=<host|--target>` on
+  `bun build --compile --no-compile-autoload-bunfig --bytecode --format=esm --target=<host|--target>` on
   `src/compiled-entry.ts`, then deletes them (so the artifact cannot execute a project-local
   `bunfig.toml` preload before ThinkRail boots, and the working tree + `tsc` stay clean); each generated
   module has a committed `.d.ts` type contract `tsc` resolves against
@@ -218,6 +218,16 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   automatically; **no photon wasm** — the agent's read tool is set to send images raw, server-side.
   Skills must be staged to the *real* filesystem: pi reads `SKILL.md` via plain fs and embeds the path in
   the system prompt.)
+- **Bytecode.** `--bytecode` embeds JSC bytecode next to the bundle, so a launch skips parsing the
+  ~25MB host graph: `/health` is ready about 0.3s sooner on darwin-arm64 and about 0.7s sooner on
+  linux-x64. `--format=esm` is required because `compiled-entry.ts` uses top-level `await`; without it
+  `--bytecode` emits CJS, which rejects it. The cost is size: about +41MB on linux-x64 and about +42MB
+  on darwin-arm64. This relies on the root Bun pin being 1.4.1+: Bun 1.4.0 embedded about +109MB on
+  linux-x64 and crashed cross-target bytecode builds at launch (oven-sh/bun#18416). The runtime that reads
+  the bytecode is the Bun that wrote it, so a version mismatch cannot silently disable it. Bun 1.4.3
+  also optimizes bytecode at build time; if a build aborts there (oven-sh/bun#44926), add
+  `--no-optimize-bytecode`. Minification is not applied: it renames identifiers that stack frames and
+  `constructor.name` checks read.
 - Cross-compile with `--target=bun-darwin-arm64|bun-linux-x64|bun-windows-x64|…`; each bundles that
   platform's matching `bun-pty` lib. The binary is platform-specific and self-extracts a few MB on first run.
 - **Verify by booting the artifact** (not just building it): extension wiring regressions surface only at
