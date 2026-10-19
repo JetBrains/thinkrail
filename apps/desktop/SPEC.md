@@ -108,6 +108,13 @@ another.
    before React mounts despite the changing port. Open one normal native `BrowserWindow` with the system
    renderer.
 
+The runtime bundle is built with `--outdir` + `--entry-naming` (Bun refuses external maps with
+`--outfile`). Only in a credentialed release build (`THINKRAIL_SOURCEMAPS_RELEASE`, [[module-ci-release]])
+does `preBuild` emit an external map, inject the PostHog chunk id itself, upload a `.js` copy + map with
+`posthog-cli sourcemap upload`, and delete the map: posthog-cli's own `inject` skips `.ts` files and would
+push Bun's `// @bun` pragma off line 1, so the registration statement becomes line 2 and the map shifts
+one line, with a deterministic content-hash UUID. `preBuild` also refuses to stage web `.map` files.
+
 Handled native-shell failures (keyboard state, title-bar double-click, update listener/lifecycle,
 Windows frame restore, startup) go through `errorReporting.ts`'s `desktopError(scope, message, error)`:
 the `[desktop] …` console line stays, and once the host has booted the error is forwarded to

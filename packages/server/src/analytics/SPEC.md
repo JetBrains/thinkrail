@@ -120,15 +120,29 @@ registered method), `ui` (`client.reportError`; `scope` = kind[:boundary], rende
 (handled desktop main-process errors, with their scope). An error `code` passes only as `^[A-Z][A-Z0-9_]+$`.
 
 The privacy guarantee is an allow-list, not a deny-list. Capture uses posthog-node 5.46.1's
-`captureException`, whose builder reads ±7 source lines per frame from disk, makes paths relative to
-`cwd` (still `../../Users/<name>/…`) and turns thrown objects into key lists; the sink's typed (doc-less)
-`before_send` therefore **rebuilds** every `$exception` from scratch: ≤ 5 exceptions of identifier-only
-`type`, scrubbed `value`, `mechanism.{handled,synthetic,type}`, and frames carrying only `platform`,
-identifier-only `function`, normalized `filename`, `lineno`, `colno`, `in_app`. Context lines, `vars`,
-`abs_path`, `module`, chunk ids or any field a later SDK adds can never pass. Filenames inside the app
+`captureException` through a `PostHog` subclass whose overridden (protected)
+`createErrorPropertiesBuilder` keeps the SDK's coercers and node parser but **no frame modifiers**: the
+default ones read ±7 source lines per frame from disk, make paths relative to `cwd` (still
+`../../Users/<name>/…`) and derive module names. `@posthog/core`, pinned to posthog-node's own core, is
+imported only for that builder. The sink's typed (doc-less) `before_send` then **rebuilds** every
+`$exception` from scratch: ≤ 5 exceptions of identifier-only `type`, scrubbed `value`,
+`mechanism.{handled,synthetic,type}`, and frames carrying only `platform`, identifier-only `function`,
+normalized `filename`, `lineno`, `colno`, `in_app` and a UUID-shaped `chunk_id`. Context lines, `vars`,
+`abs_path`, `module` or any field a later SDK adds can never pass. Absolute filenames inside the app
 root (repo root from source, the bundle dir when packaged, `Resources/app` for desktop via `appRoot`)
-become root-relative; loopback/`views:` web URLs become `web/…`/`views/…`; everything else becomes
-`<external>` with function `?` — user extensions and project files leave no name. Messages keep the
+become root-relative; loopback/`views:` web URLs become `web/…`/`views/…`; `node:` and `native` stay
+as-is; everything else becomes `<external>` with function `?` — user extensions and project files leave
+no name. A relative filename can only come from the CLI binary's embedded source map (Bun remaps frames
+relative to its compile directory) and resolves solely through the launcher's `remapBase` to a
+repo-relative JS/TS path, never through `cwd`.
+
+Source maps make reported frames readable without shipping more than the CLI's own map
+([[module-ci-release]] owns the upload). PostHog resolves Node frames only by `chunk_id` and browser
+frames by `chunk_id` (or a public URL we do not have): the SDK's core builder copies chunk ids from the
+`_posthogChunkIds` registry an injected bundle writes (the desktop runtime), and UI reports carry their
+own `chunkIds` (URL → id) which the host passes as the internal `$thinkrail_chunk_ids` property the
+sanitizer consumes and never forwards. The CLI binary embeds its map, so its frames arrive already
+resolved. Messages keep the
 first line (≤ 300 chars) with home dir, username, hostname, URLs, emails, quoted text, any slash token,
 UUIDs, IPs, hex ≥ 7, long tokens, digit runs ≥ 4 and JSON tails replaced by `<…>` placeholders, which
 also groups dynamic messages into one issue. Known residual risk, accepted: a bare unquoted value inside
@@ -141,7 +155,7 @@ asynchronous capture would be lost. The SDK's rate limiter applies only to autoc
 dedupes identical (source, scope, method, type, message) reports for 60 s and caps 100 per launch.
 Browser stacks arrive raw and are rewritten from WebKit/Gecko `fn@url:line:col` into V8 lines the node
 parser reads; the browser never holds a vendor client. Errors before host analytics initializes
-(desktop/CLI pre-boot) are not reported, and no source maps are uploaded.
+(desktop/CLI pre-boot) are not reported; desktop main-process bundles carry no source maps.
 
 ## Preference and delivery
 

@@ -693,7 +693,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `FEEDBACK_INTERVIEW_PROTOCOL_VERSION` pins the addressed channel's v56 introduction so the host does not
   claim an independently shipped older client that omits the current `?protocol=` socket capability) /
   **`client.reportError`** (`ClientErrorReport { kind: render | window | rejection, type, message, stack?,
-  boundary? }` → ack; a fire-and-forget UI error for host error tracking — the payload is raw and untrusted,
+  boundary?, chunkIds? }` → ack; `chunkIds` maps stack URLs to PostHog source-map chunk ids; a fire-and-forget UI error for host error tracking — the payload is raw and untrusted,
   the host is the only sanitizer; `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` pins its v86 introduction so a
   newer client never sends it to an older host) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
   recency-ordered; the messages section is assistant-only — a user-role hit surfaces as a jumpable

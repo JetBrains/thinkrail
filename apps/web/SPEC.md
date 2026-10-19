@@ -83,6 +83,12 @@ reads `bun.lock` and rejects any second `react` or `react-dom` version. Every Re
 packages together and repeats the mounted-chat memory stress probe before this temporary canary pin can
 return to stable.
 
+**Release source maps are build-only and never shipped.** With `THINKRAIL_SOURCEMAPS_RELEASE` set (a
+credentialed release build, [[module-ci-release]]), `vite.config.ts` emits hidden maps and the
+`sourceMapUpload.ts` plugin runs `posthog-cli sourcemap process --delete-after` on `dist`, failing if
+any `.map` remains; without it the build is unchanged. The injected chunk-id registry is what
+`transport` reads for UI error reports.
+
 **The React Compiler is on for every `apps/web` bundle** (`vite.config.ts`: `@rolldown/plugin-babel` running
 `@vitejs/plugin-react`'s `reactCompilerPreset()` over dev and build). Three devDependencies live in this
 manifest only, and the `@babel/core` 7.x pin is load-bearing: `babel-plugin-react-compiler` 1.0.0 mis-lowers
