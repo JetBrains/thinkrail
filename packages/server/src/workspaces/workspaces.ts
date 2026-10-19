@@ -123,7 +123,7 @@ async function gitWorktreeEntries(repoPath: string): Promise<GitWorktreeEntry[]>
 				branch = field.slice("branch refs/heads/".length);
 			} else if (field === "prunable" || field.startsWith("prunable ")) prunable = true;
 		}
-		if (path) entries.push({ path, prunable, ...(branch ? { branch } : {}) });
+		if (path) entries.push({ path: resolve(path), prunable, ...(branch ? { branch } : {}) });
 	}
 	return entries;
 }

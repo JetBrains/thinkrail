@@ -10,8 +10,9 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative, resolve } from "node:path";
 import type { Workspace } from "@thinkrail/contracts";
+import { WORKSPACE_CONTEXT_DIR } from "@thinkrail/shared/paths";
 import {
 	backfillWorkspaceActivity,
 	completeInitialTerminalReservation,
@@ -43,6 +44,25 @@ function gitOut(cwd: string, ...args: string[]): string {
 	const r = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "ignore" });
 	return new TextDecoder().decode(r.stdout).trim();
 }
+
+function registeredWorktrees(cwd: string): string[] {
+	return gitOut(cwd, "worktree", "list", "--porcelain")
+		.split("\n")
+		.filter((line) => line.startsWith("worktree "))
+		.map((line) => resolve(line.slice("worktree ".length)));
+}
+
+const canSymlink = (() => {
+	const probe = mkdtempSync(join(tmpdir(), "trpi-symlink-probe-"));
+	try {
+		symlinkSync(probe, join(probe, "link"));
+		return true;
+	} catch {
+		return false;
+	} finally {
+		rmSync(probe, { recursive: true, force: true });
+	}
+})();
 
 let dataDir: string;
 let repo: string;
@@ -97,6 +117,18 @@ test("createWorkspace cuts a fresh branch from baseRef and records it as the bas
 	expect(gitOut(ws.worktreePath, "rev-parse", "HEAD")).toBe(baseSha);
 	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
 	expect(ws.branch).not.toBe("feature/base");
+});
+
+test("a relative data dir still creates and records a managed worktree at one absolute path", async () => {
+	process.env.THINKRAIL_DATA_DIR = relative(process.cwd(), dataDir);
+	const ws = await createWorkspace("p1");
+
+	expect(ws.worktreePath).toBe(join(dataDir, "worktrees", "repo", ws.branch));
+	expect(gitOut(ws.worktreePath, "rev-parse", "--abbrev-ref", "HEAD")).toBe(ws.branch);
+	expect(existsSync(join(ws.worktreePath, WORKSPACE_CONTEXT_DIR, ".gitignore"))).toBe(true);
+	expect(listWorkspaceRecords("p1").find((w) => w.id === ws.id)?.worktreePath).toBe(
+		ws.worktreePath,
+	);
 });
 
 test("the retired eligibility marker never gains initial-terminal provisioning on read", async () => {
@@ -602,14 +634,17 @@ test("an option-shaped ref is refused at both mutation doors", async () => {
 	expect(setWorkspaceDiffBase(ws.id, "gone-branch").diffBase).toBe("gone-branch");
 });
 
-test("createWorkspace validates the RESOLVED base — including the one it reads off the repo's HEAD", async () => {
-	const probe = join(dataDir, "head-pwn-probe.txt");
-	git(repo, "update-ref", `refs/heads/--output=${probe}`, "HEAD");
-	git(repo, "symbolic-ref", "HEAD", `refs/heads/--output=${probe}`);
+test.skipIf(process.platform === "win32")(
+	"createWorkspace validates the RESOLVED base — including the one it reads off the repo's HEAD",
+	async () => {
+		const probe = join(dataDir, "head-pwn-probe.txt");
+		git(repo, "update-ref", `refs/heads/--output=${probe}`, "HEAD");
+		git(repo, "symbolic-ref", "HEAD", `refs/heads/--output=${probe}`);
 
-	await expect(createWorkspace("p1")).rejects.toThrow(/usable git ref/);
-	expect(existsSync(probe)).toBe(false);
-});
+		await expect(createWorkspace("p1")).rejects.toThrow(/usable git ref/);
+		expect(existsSync(probe)).toBe(false);
+	},
+);
 
 test("createWorkspace rejects a closed project — a stale or rogue client can't create behind the rail's back", async () => {
 	writeFileSync(
@@ -653,12 +688,10 @@ test("forgetWorkspace drops the record + returns it, but leaves the worktree for
 	const forgotten = forgetWorkspace(ws.id);
 	expect(forgotten?.id).toBe(ws.id);
 	expect(await worktrees()).toHaveLength(0);
-	const before = Bun.spawnSync(["git", "-C", repo, "worktree", "list"], { stdout: "pipe" });
-	expect(new TextDecoder().decode(before.stdout)).toContain(ws.worktreePath);
+	expect(registeredWorktrees(repo)).toContain(ws.worktreePath);
 
 	reclaimWorktree(forgotten as NonNullable<typeof forgotten>);
-	const after = Bun.spawnSync(["git", "-C", repo, "worktree", "list"], { stdout: "pipe" });
-	expect(new TextDecoder().decode(after.stdout)).not.toContain(ws.worktreePath);
+	expect(registeredWorktrees(repo)).not.toContain(ws.worktreePath);
 
 	expect(forgetWorkspace(ws.id)).toBeNull();
 });
@@ -865,23 +898,26 @@ test("ensureWorkspaceScratchDir refuses a missing workspace root instead of resu
 	expect(existsSync(ws.worktreePath)).toBe(false);
 });
 
-test("ensureWorkspaceScratchDir never follows symlinks — the checkout controls these paths", async () => {
-	const def = (await listWorkspaces("p1"))[0];
-	if (!def) throw new Error("expected the ensured Default workspace");
-	const outside = join(dataDir, "outside");
-	mkdirSync(outside);
+test.skipIf(!canSymlink)(
+	"ensureWorkspaceScratchDir never follows symlinks — the checkout controls these paths",
+	async () => {
+		const def = (await listWorkspaces("p1"))[0];
+		if (!def) throw new Error("expected the ensured Default workspace");
+		const outside = join(dataDir, "outside");
+		mkdirSync(outside);
 
-	symlinkSync(outside, join(repo, ".thinkrail"));
-	expect(() => ensureWorkspaceScratchDir(def)).toThrow("not a real directory");
-	expect(existsSync(join(outside, "context"))).toBe(false);
-	rmSync(join(repo, ".thinkrail"));
+		symlinkSync(outside, join(repo, ".thinkrail"));
+		expect(() => ensureWorkspaceScratchDir(def)).toThrow("not a real directory");
+		expect(existsSync(join(outside, "context"))).toBe(false);
+		rmSync(join(repo, ".thinkrail"));
 
-	mkdirSync(join(repo, ".thinkrail", "context"), { recursive: true });
-	const planted = join(outside, "planted");
-	symlinkSync(planted, join(repo, ".thinkrail", "context", ".gitignore"));
-	expect(() => ensureWorkspaceScratchDir(def)).not.toThrow();
-	expect(existsSync(planted)).toBe(false);
-});
+		mkdirSync(join(repo, ".thinkrail", "context"), { recursive: true });
+		const planted = join(outside, "planted");
+		symlinkSync(planted, join(repo, ".thinkrail", "context", ".gitignore"));
+		expect(() => ensureWorkspaceScratchDir(def)).not.toThrow();
+		expect(existsSync(planted)).toBe(false);
+	},
+);
 
 test("reclaimWorktree refuses a record pointing at the project folder even without the kind flag", async () => {
 	const def = (await listWorkspaces("p1"))[0];

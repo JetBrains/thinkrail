@@ -36,7 +36,7 @@ function resolveProjectPath(path: string): string {
 
 function gitToplevel(path: string): string | null {
 	const result = git(path, ["rev-parse", "--show-toplevel"]);
-	return result.ok ? result.out || null : null;
+	return result.ok && result.out ? resolve(result.out) : null;
 }
 
 function slugify(name: string): string {
