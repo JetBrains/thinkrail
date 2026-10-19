@@ -1,8 +1,9 @@
 # @thinkrail/pi-visualize
 
-A [pi](https://pi.dev) extension that gives the agent a `visualize` tool for **diagrams** (Mermaid) and
-**option comparisons**, so it reaches for a picture instead of ASCII art or a markdown table when it
-explains architecture, flows, or trade-offs.
+A [pi](https://pi.dev) extension that gives the agent a `visualize` tool for **diagrams** (Mermaid),
+**option comparisons**, and **file previews** (e.g. HTML mockups, optionally as before/after), so it
+reaches for a picture instead of ASCII art or a markdown table when it explains architecture, flows,
+trade-offs, or a UI change.
 
 ```bash
 pi install npm:@thinkrail/pi-visualize
@@ -11,14 +12,18 @@ pi install npm:@thinkrail/pi-visualize
 ## What you get
 
 - **`visualize` tool** — `type: "diagram"` with raw Mermaid source, or `type: "comparison"` with options
-  (name, description, pros, cons, `recommended`, optional inline Mermaid), plus an optional `title`.
+  (name, description, pros, cons, `recommended`, optional inline Mermaid), or `type: "file"` with a
+  workspace `path` (and an optional `before` path for a before/after view), plus an optional `title`.
+  The tool's prompt guideline asks the agent to write a self-contained HTML mockup and show it this
+  way whenever it proposes a UI change.
 - **Terminal rendering.** Flowcharts, state, sequence, class and ER diagrams, pies, mindmaps,
   timelines and git graphs are drawn as Unicode box-drawing right in the pi TUI, in your pi theme's
   colours (via [`lovely-mermaid`](https://github.com/xl0/lovely-mermaid), the same engine family pi uses
   for Mermaid in chat messages). When a diagram is wider than your terminal, could only be drawn in
   part, or is a family the renderer does not know (gantt, xychart, …), the tool shows the Mermaid
   source in a code fence instead — it never wraps a diagram. Expand the tool result to see the source
-  under the drawing. Comparisons render as markdown.
+  under the drawing. Comparisons render as markdown. A file preview prints the path(s) — open them in a
+  browser; hosts with a file renderer (ThinkRail) render the file inline.
 - **Readable everywhere.** The tool's text result is markdown — a ```mermaid fence or a sectioned
   comparison — so it also reads fine in `pi -p`, JSON/RPC mode, or any host without a renderer.
 
@@ -47,7 +52,17 @@ export default createVisualizeExtension({
 });
 ```
 
-The injected validator **replaces** the default check.
+The injected validator **replaces** the default check. A host can also reject file previews whose
+paths it cannot show, and name the scratch directory the prompt guideline sends mockups to:
+
+```ts
+export default createVisualizeExtension({
+  checkFile: async (path, cwd) => { await access(resolve(cwd, path)); },
+  scratchDir: ".scratch/mockups/",
+});
+```
+
+Without `checkFile` paths are not checked (the package stays `node:`-free).
 
 ## Requirements
 

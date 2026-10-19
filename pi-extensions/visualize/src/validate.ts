@@ -5,7 +5,20 @@ export interface MermaidSource {
 	source: string;
 }
 
+export interface FileSource {
+	location: "path" | "before";
+	path: string;
+}
+
+export function fileSources(params: VisualizeParams): FileSource[] {
+	if (params.type !== "file") return [];
+	const sources: FileSource[] = [{ location: "path", path: params.path ?? "" }];
+	if (params.before !== undefined) sources.push({ location: "before", path: params.before });
+	return sources;
+}
+
 export function mermaidSources(params: VisualizeParams): MermaidSource[] {
+	if (params.type === "file") return [];
 	if (params.type === "diagram") {
 		return [{ location: "mermaid", source: params.mermaid ?? "" }];
 	}
@@ -20,6 +33,18 @@ export function validateShape(params: VisualizeParams): void {
 			throw new Error(
 				'visualize: `mermaid` is required and must be a non-empty string when type is "diagram".',
 			);
+		}
+		return;
+	}
+
+	if (params.type === "file") {
+		if (!params.path || params.path.trim() === "") {
+			throw new Error(
+				'visualize: `path` is required and must be a non-empty string when type is "file".',
+			);
+		}
+		if (params.before !== undefined && params.before.trim() === "") {
+			throw new Error("visualize: `before` must be a non-empty path when given.");
 		}
 		return;
 	}

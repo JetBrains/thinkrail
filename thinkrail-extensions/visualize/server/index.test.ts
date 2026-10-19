@@ -1,11 +1,21 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import extension from "./index";
 
 type ExecResult = { content: Array<{ type: string; text: string }>; details: unknown };
 type CapturedTool = {
 	name: string;
-	execute: (id: string, params: unknown) => Promise<ExecResult>;
+	promptGuidelines?: string[];
+	execute: (
+		id: string,
+		params: unknown,
+		signal?: unknown,
+		onUpdate?: unknown,
+		ctx?: { cwd: string },
+	) => Promise<ExecResult>;
 };
 
 function loadTool(): CapturedTool {
@@ -105,5 +115,31 @@ describe("visualize server half", () => {
 		} finally {
 			if (parseDescriptor) Object.defineProperty(mermaid, "parse", parseDescriptor);
 		}
+	});
+
+	test("shows workspace files and rejects missing, directory, and escaping paths", async () => {
+		const cwd = mkdtempSync(join(tmpdir(), "visualize-files-"));
+		mkdirSync(join(cwd, ".thinkrail/context/mockups"), { recursive: true });
+		writeFileSync(join(cwd, ".thinkrail/context/mockups/after.html"), "<p>after</p>");
+		writeFileSync(join(cwd, "before.html"), "<p>before</p>");
+		const tool = loadTool();
+		const run = (params: unknown) => tool.execute("id", params, undefined, undefined, { cwd });
+		await expect(
+			run({ type: "file", path: ".thinkrail/context/mockups/after.html", before: "before.html" }),
+		).resolves.toBeDefined();
+		await expect(run({ type: "file", path: "missing.html" })).rejects.toThrow(
+			/cannot show `path` \(missing\.html\): no such file/,
+		);
+		await expect(run({ type: "file", path: ".thinkrail" })).rejects.toThrow(/not a regular file/);
+		await expect(
+			run({ type: "file", path: "before.html", before: "../outside.html" }),
+		).rejects.toThrow(/cannot show `before`[\s\S]*inside it/);
+		await expect(run({ type: "file", path: join(cwd, "before.html") })).rejects.toThrow(
+			/relative to the workspace/,
+		);
+	});
+
+	test("points the mockup guideline at the gitignored scratch directory", () => {
+		expect(loadTool().promptGuidelines?.[0]).toContain("`.thinkrail/context/mockups/`");
 	});
 });

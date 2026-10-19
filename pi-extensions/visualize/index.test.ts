@@ -1,23 +1,40 @@
 import { describe, expect, test } from "bun:test";
-import defaultFactory, { createVisualizeExtension, type MermaidValidator } from "./index.ts";
+import defaultFactory, {
+	createVisualizeExtension,
+	type MermaidValidator,
+	type VisualizeExtensionOptions,
+} from "./index.ts";
 
 type ExecResult = { content: Array<{ type: string; text: string }>; details: unknown };
 type CapturedTool = {
 	name: string;
 	label: string;
-	execute: (id: string, params: unknown) => Promise<ExecResult>;
+	promptGuidelines?: string[];
+	execute: (
+		id: string,
+		params: unknown,
+		signal?: unknown,
+		onUpdate?: unknown,
+		ctx?: { cwd: string },
+	) => Promise<ExecResult>;
 	renderCall?: unknown;
 	renderResult?: unknown;
 };
 
-function loadTool(validateMermaid?: MermaidValidator): CapturedTool {
+function loadTool(
+	validateMermaid?: MermaidValidator,
+	options: VisualizeExtensionOptions = {},
+): CapturedTool {
 	let captured: CapturedTool | undefined;
 	const fakePi = {
 		registerTool: (def: CapturedTool) => {
 			captured = def;
 		},
 	};
-	const factory = validateMermaid ? createVisualizeExtension({ validateMermaid }) : defaultFactory;
+	const factory =
+		validateMermaid || Object.keys(options).length > 0
+			? createVisualizeExtension({ ...options, ...(validateMermaid ? { validateMermaid } : {}) })
+			: defaultFactory;
 	factory(fakePi as unknown as Parameters<typeof defaultFactory>[0]);
 	if (!captured) throw new Error("factory did not register a tool");
 	return captured;
@@ -128,5 +145,53 @@ describe("visualize extension", () => {
 
 	test("execute rejects an invalid shape", async () => {
 		await expect(loadTool().execute("id", { type: "diagram" })).rejects.toThrow(/mermaid/);
+	});
+
+	test("execute shows a file and its before side without a checker", async () => {
+		const res = await loadTool().execute("id", {
+			type: "file",
+			path: "after.html",
+			before: "before.html",
+		});
+		expect(res.content[0]?.text).toContain("`after.html` (before: `before.html`)");
+		expect(res.details).toEqual({ type: "file", path: "after.html", before: "before.html" });
+	});
+
+	test("an injected file checker sees every path with the cwd and its rejection names the field", async () => {
+		const seen: string[] = [];
+		const tool = loadTool(undefined, {
+			checkFile: (path, cwd) => {
+				seen.push(`${cwd}:${path}`);
+				if (path === "missing.html") throw new Error("no such file");
+			},
+		});
+		await tool.execute(
+			"ok",
+			{ type: "file", path: "a.html", before: "b.html" },
+			undefined,
+			undefined,
+			{
+				cwd: "/ws",
+			},
+		);
+		expect(seen).toEqual(["/ws:a.html", "/ws:b.html"]);
+		await expect(
+			tool.execute(
+				"bad",
+				{ type: "file", path: "a.html", before: "missing.html" },
+				undefined,
+				undefined,
+				{
+					cwd: "/ws",
+				},
+			),
+		).rejects.toThrow(/cannot show `before` \(missing\.html\): no such file\nWrite the file first/);
+	});
+
+	test("the prompt guideline names the host scratch directory when given", () => {
+		expect(loadTool().promptGuidelines?.[0]).toContain("outside version control");
+		expect(
+			loadTool(undefined, { scratchDir: ".scratch/mockups/" }).promptGuidelines?.[0],
+		).toContain("`.scratch/mockups/`");
 	});
 });
