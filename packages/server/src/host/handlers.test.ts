@@ -172,6 +172,7 @@ test("branch status reports a review-free branch, and workspace.push publishes i
 		hasOrigin: false,
 		provider: null,
 		published: false,
+		pushesElsewhere: false,
 		aheadOfBase: 1,
 		onBase: false,
 		review: null,
@@ -244,7 +245,7 @@ test("a split origin measures the branch against where it is pushed, not where i
 
 	expect(
 		await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
-	).toMatchObject({ published: true, ahead: 0, behind: 0 });
+	).toMatchObject({ published: true, pushesElsewhere: true, ahead: 0, behind: 0 });
 
 	const pushed = join(dataDir, "pushed");
 	git(dataDir, "clone", "--branch", workspace.branch, pushRepo, pushed);

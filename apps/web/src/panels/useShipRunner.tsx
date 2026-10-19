@@ -10,7 +10,7 @@ import {
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
 import { type ReactNode, useRef, useState } from "react";
-import { copyText, isShellInert } from "../lib";
+import { copyText } from "../lib";
 import { useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import type { BranchFacts } from "./branchStatusState";
@@ -23,7 +23,7 @@ import {
 } from "./PrComposeDialog";
 import { PrSetupDialog, type PrSetupState } from "./PrSetupDialog";
 import { RemoveWorkspaceDialog } from "./RemoveWorkspaceDialog";
-import type { ShipActionId } from "./shipActions";
+import { type ShipActionId, syncCommand } from "./shipActions";
 import { openReviewLabel } from "./useBranchStatus";
 import { settleWorkspace, unsettleWorkspace } from "./workspaceActions";
 
@@ -83,7 +83,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 	const retry = useRef<Retry | null>(null);
 	const onBase = options.status?.onBase === true;
 	const ahead = options.status?.ahead ?? 0;
-	const integrateCommand = isShellInert(branch) ? `git pull --rebase origin ${branch}` : null;
+	const integrateCommand = syncCommand(branch, options.status);
 	const busy = pending !== null || submitting;
 
 	const copyIntegrateCommand = () => {
@@ -408,8 +408,9 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 						</code>
 					) : (
 						<p className="m-0 tr-text-ui text-text-muted">
-							Integrate origin/{branch} in a terminal — this branch name can't be quoted safely for
-							every shell.
+							{options.status?.pushesElsewhere
+								? `Origin pushes to a different repository than it fetches from, so pulling from origin would integrate the wrong history — integrate the push repository's ${branch} in a terminal.`
+								: `Integrate origin/${branch} in a terminal — this branch name can't be quoted safely for every shell.`}
 						</p>
 					)}
 					<DialogFooter>

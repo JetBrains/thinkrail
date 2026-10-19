@@ -558,6 +558,7 @@ const handlers: WsHandlers = {
 		return {
 			hasOrigin: origin.push !== null,
 			provider: origin.push ? providerFromRemoteUrl(origin.push) : null,
+			pushesElsewhere: splitPushUrl !== null,
 			published:
 				measured?.published ?? remoteRefOid(ws.worktreePath, `origin/${ws.branch}`) !== null,
 			...(measured?.published && measured.ahead !== undefined && measured.behind !== undefined

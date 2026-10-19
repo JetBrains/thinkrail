@@ -251,6 +251,7 @@ const status = (over: Partial<BranchStatus> = {}): BranchStatus => ({
 	hasOrigin: true,
 	provider: "github",
 	published: true,
+	pushesElsewhere: false,
 	ahead: 0,
 	behind: 0,
 	aheadOfBase: 2,

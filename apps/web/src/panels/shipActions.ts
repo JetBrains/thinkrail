@@ -1,4 +1,5 @@
 import type { OpenBranchReview } from "@thinkrail/contracts";
+import { isShellInert } from "../lib";
 import type { BranchFacts } from "./branchStatusState";
 import { isOpenBranchReview } from "./useBranchStatus";
 
@@ -156,4 +157,9 @@ export function shipActions(context: ShipContext): ShipModel {
 			...reviewArm(context, noun),
 		},
 	};
+}
+
+export function syncCommand(branch: string, status: BranchFacts | null): string | null {
+	if (status?.pushesElsewhere || !isShellInert(branch)) return null;
+	return `git pull --rebase origin ${branch}`;
 }

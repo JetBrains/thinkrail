@@ -114,7 +114,9 @@ actions through the panels-owned ship runner; it owns no host state.
   Its value reads *No remote* (no `origin`), *Not published* (origin lacks the branch), *In sync*, or the
   ↑N warning / ↓N info chips. Its next action is the `shipActions` remote arm: **Publish** (unpublished
   with commits ahead of the base), **Push N** (ahead, not behind), or **Sync…** (behind: the diverged
-  dialog with the Plan pane's shell-inert `git pull --rebase origin <branch>` rule, never a force command).
+  dialog with the Plan pane's shell-inert `git pull --rebase origin <branch>` rule, never a force command;
+  no pull command at all when `pushesElsewhere`, since pulling origin would integrate the fetch repository
+  while the counts describe the push repository — `shipActions`' `syncCommand` is the one rule).
   Publish/Push call `workspace.push` with the branch the strip shows (the host pushes nothing if the
   checkout has moved since); when the branch **is** its base (Default on `main`) the runner first
   confirms, naming the shared branch, and only then sends `confirmBase`. A topbar push never rewrites the PR

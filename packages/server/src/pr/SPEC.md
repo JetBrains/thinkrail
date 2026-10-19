@@ -49,7 +49,9 @@ that IS its base is refused unless `confirmBase` is set (the client confirms fir
 branch); it never reads, edits, or creates a PR, and drops the worktree's review cache like every push.
 
 `openPr({ workspaceId, sessionId?, title?, body?, draft? })` (`sessionId` only matters when `body` is
-absent), one call = one idempotent attempt
+absent: a session's PR is then refreshed from its plan body — source `plan` explicitly, never the
+preview default — so *Push updates* keeps a plan of adopted commits only in its structured form), one call =
+one idempotent attempt
 (`body` — the user-edited description from that dialog — replaces the rendered plan body verbatim
 when present; the title/body defaults come from ONE place — openPr consumes `previewPr`, so the
 previewed draft and the pushed PR can never diverge). The call opens with **`assertSafeRef(ws.branch)`**:

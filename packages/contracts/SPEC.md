@@ -250,7 +250,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   **`state`** — `"open" | "merged" | "closed"`, absent on a pre-v78 host and read as open — and
   **`changedAt`**, the ms time the provider merged or closed it; no actions),
   **`BranchStatus`** (`workspace.branchStatus`'s answer, v86 `BRANCH_STATUS_PROTOCOL_VERSION`: `hasOrigin`,
-  `provider` (`"github" | "gitlab" | null`), `published` (origin has the branch), `ahead` / `behind` vs
+  `provider` (`"github" | "gitlab" | null`), `published` (origin has the branch), `pushesElsewhere` (origin's
+  push URL differs from its fetch URL, so `ahead` / `behind` describe the push repository), `ahead` / `behind` vs
   `origin/<branch>` when published, `aheadOfBase`, `onBase` (the branch is its own base —
   Default on the default branch) and `review: OpenBranchReview | null` — the facts the topbar's Remote and
   Pull request segments derive their next action from, independent of whether a review exists),

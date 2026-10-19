@@ -481,7 +481,7 @@ export async function openPr(
 		(
 			await previewPr({
 				workspaceId: params.workspaceId,
-				...(params.sessionId ? { sessionId: params.sessionId } : {}),
+				...(params.sessionId ? { sessionId: params.sessionId, source: "plan" as const } : {}),
 			})
 		).body;
 	const gitlab = provider === "gitlab" ? gitlabProject(origin) : null;

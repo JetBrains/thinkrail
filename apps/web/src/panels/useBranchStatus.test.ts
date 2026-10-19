@@ -131,6 +131,7 @@ test("a v86 branch status folds its counts onto the review and keeps the facts r
 		hasOrigin: true,
 		provider: "github" as const,
 		published: true,
+		pushesElsewhere: false,
 		aheadOfBase: 4,
 		onBase: false,
 	};

@@ -142,6 +142,8 @@ export interface BranchStatus {
 	provider: ReviewProvider | null;
 	/** `origin/<branch>` exists. */
 	published: boolean;
+	/** Origin pushes to another URL than it fetches from: ahead/behind describe the push repository. */
+	pushesElsewhere: boolean;
 	/** Published only: local commits origin lacks. */
 	ahead?: number;
 	/** Published only: last-known origin commits HEAD lacks (the branch diverged). */

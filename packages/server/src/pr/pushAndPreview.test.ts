@@ -237,6 +237,17 @@ describe("prDraftInput", () => {
 	});
 });
 
+describe("openPr refreshes a session's PR body from its plan", () => {
+	test("a push with no body renders the session plan, adopted commits included", async () => {
+		sh(repo, "remote", "set-url", "origin", "https://gitlab.com/acme/widgets.git");
+		sh(repo, "config", `url.${remote}.pushInsteadOf`, "https://gitlab.com/acme/widgets.git");
+		const result = await openPr({ workspaceId: "w1", sessionId: "s1" });
+		expect(
+			new URL(result.compareUrl ?? "").searchParams.get("merge_request[description]"),
+		).toContain("## Committed outside the plan");
+	});
+});
+
 describe("openPr picks the forge from where the branch is pushed", () => {
 	test("a GitHub fetch URL with a GitLab push URL ends on GitLab's new-MR page", async () => {
 		sh(repo, "remote", "set-url", "origin", "https://github.com/acme/widgets.git");

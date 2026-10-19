@@ -104,6 +104,7 @@ test("a v86 answer keeps its branch facts across a noted review", () => {
 		hasOrigin: true,
 		provider: "github",
 		published: true,
+		pushesElsewhere: false,
 		ahead: 0,
 		behind: 0,
 		aheadOfBase: 3,

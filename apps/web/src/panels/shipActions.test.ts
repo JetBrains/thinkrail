@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
 import type { BranchStatus, OpenBranchReview } from "@thinkrail/contracts";
-import { type ShipContext, shipActions } from "./shipActions";
+import { type ShipContext, shipActions, syncCommand } from "./shipActions";
 
 const published: BranchStatus = {
 	hasOrigin: true,
 	provider: "github",
 	published: true,
+	pushesElsewhere: false,
 	ahead: 0,
 	behind: 0,
 	aheadOfBase: 3,
@@ -149,4 +150,10 @@ test("the resolved review wins over the status review and names the noun", () =>
 	});
 	expect(m.noun).toBe("MR");
 	expect(ids(m.review).primary).toBe("settle");
+});
+
+test("Sync offers git pull only when origin pulls from where it pushes and the branch quotes safely", () => {
+	expect(syncCommand("feature/ship", published)).toBe("git pull --rebase origin feature/ship");
+	expect(syncCommand("feature/ship", { ...published, pushesElsewhere: true })).toBeNull();
+	expect(syncCommand("feature;rm -rf", published)).toBeNull();
 });
