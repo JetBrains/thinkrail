@@ -29,6 +29,7 @@ import type {
 	AskUserQuestionResult,
 	ExtUiRequest,
 	ImageContent,
+	SessionStateRecord,
 	SessionSummary,
 } from "@thinkrail/contracts";
 import { isAskUserAnswersMessage } from "@thinkrail/contracts";
@@ -56,6 +57,8 @@ import {
 	listAvailableModels,
 	listSessionStates,
 	listSessions,
+	markWorkspaceRead,
+	markWorkspaceUnread,
 	nudgeSession,
 	promptSession,
 	refreshAgentReviewTool,
@@ -73,6 +76,7 @@ import {
 	setSessionManagerFactory,
 	setSessionProjectResolver,
 	setSessionPublisher,
+	setSessionStatePublisher,
 	setSkillAdmissionResolver,
 	setSubagentsEnabledResolver,
 	settleSessionsForShutdown,
@@ -598,6 +602,61 @@ for (const corrupt of ["session-receipts.json", "session-lifecycle.json"]) {
 			}
 		}));
 }
+
+test("marking a workspace unread relights its most recent result and read clears every one", () =>
+	withFreshDataDir(async () => {
+		const cwd = tmpCwd("trpi-mark-unread-ws-");
+		const dir = defaultSessionDirFor(process.env.PI_CODING_AGENT_DIR ?? "", cwd);
+		const finished = (at: number) =>
+			writeFixtureSession(dir, {
+				cwd,
+				messages: [
+					{ role: "user", text: "hi", timestamp: at },
+					{ role: "assistant", text: "done", stopReason: "stop", timestamp: at + 1 },
+				],
+			}).id;
+		const older = finished(1_000);
+		const newer = finished(5_000);
+		const workspace = { id: "ws-mark-unread", projectId: "p-mark-unread", cwd };
+		const published: SessionStateRecord[] = [];
+		setSessionStatePublisher((record) => published.push(record));
+		try {
+			await initializeSessionStates([workspace]);
+			const unreadOf = async () =>
+				Object.fromEntries(
+					(await listSessionStates([workspace])).map((r) => [
+						r.sessionId,
+						r.state.completionUnread,
+					]),
+				);
+			expect(await unreadOf()).toEqual({ [older]: false, [newer]: false });
+
+			const relit = await markWorkspaceUnread(workspace);
+			if (!relit) throw new Error("nothing was relit");
+			expect(relit).toMatchObject({ sessionId: newer, state: { completionUnread: true } });
+			expect(published).toEqual([relit]);
+			expect(await unreadOf()).toEqual({ [older]: false, [newer]: true });
+
+			const cleared = await markWorkspaceRead(workspace);
+			expect(cleared).toEqual([
+				expect.objectContaining({
+					sessionId: newer,
+					state: expect.objectContaining({ completionUnread: false }),
+				}),
+			]);
+			expect(await unreadOf()).toEqual({ [older]: false, [newer]: false });
+			expect(await markWorkspaceRead(workspace)).toEqual([]);
+			expect(
+				await markWorkspaceUnread({
+					id: "ws-empty",
+					projectId: "p-empty",
+					cwd: tmpCwd("trpi-empty-"),
+				}),
+			).toBeNull();
+		} finally {
+			setSessionStatePublisher(() => {});
+		}
+	}));
 
 test("the startup baseline skips an unreadable transcript instead of failing", () =>
 	withFreshDataDir(async (dataDir) => {

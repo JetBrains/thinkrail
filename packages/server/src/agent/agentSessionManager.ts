@@ -14,6 +14,7 @@ import {
 	type McpServerConfig,
 	type PromptOptions,
 	type RegisteredMcpServer,
+	type SessionEntry,
 	type SessionInfo,
 	SessionManager,
 	SettingsManager,
@@ -1601,21 +1602,37 @@ async function listBaselineSessionInfos(cwd: string): Promise<SessionInfo[]> {
 	}
 }
 
+interface CollectedSessionState {
+	record: SessionStateRecord;
+	branch: () => readonly SessionEntry[];
+	manager?: SessionManager;
+}
+
 async function collectSessionStates(
 	workspaces: readonly SessionStateWorkspace[],
 	baseline: boolean,
 ): Promise<SessionStateRecord[]> {
-	const records: SessionStateRecord[] = [];
+	return (await collectSessionStateSources(workspaces, baseline)).map(({ record }) => record);
+}
+
+async function collectSessionStateSources(
+	workspaces: readonly SessionStateWorkspace[],
+	baseline: boolean,
+): Promise<CollectedSessionState[]> {
+	const records: CollectedSessionState[] = [];
 	const liveIds = new Set<string>();
 	for (const [sessionId, entry] of sessions) {
 		if (isSessionDeleted(sessionId, entry.workspaceId)) continue;
 		const workspace = workspaces.find((candidate) => candidate.id === entry.workspaceId);
 		if (!workspace) continue;
 		records.push({
-			sessionId,
-			workspaceId: entry.workspaceId,
-			projectId: workspace.projectId,
-			state: stateFromEntry(entry),
+			record: {
+				sessionId,
+				workspaceId: entry.workspaceId,
+				projectId: workspace.projectId,
+				state: stateFromEntry(entry),
+			},
+			branch: () => entry.session.sessionManager.getBranch(),
 		});
 		liveIds.add(sessionId);
 	}
@@ -1632,15 +1649,111 @@ async function collectSessionStates(
 			) {
 				continue;
 			}
+			const manager = SessionManager.open(info.path);
 			records.push({
-				sessionId: info.id,
-				workspaceId: workspace.id,
-				projectId: workspace.projectId,
-				state: stateFromDisk(info.id, SessionManager.open(info.path), baseline),
+				record: {
+					sessionId: info.id,
+					workspaceId: workspace.id,
+					projectId: workspace.projectId,
+					state: stateFromDisk(info.id, manager, baseline),
+				},
+				branch: () => manager.getBranch(),
+				manager,
 			});
 		}
 	}
 	return records;
+}
+
+function currentCollectedState(source: CollectedSessionState): SessionStateRecord {
+	const live = sessions.get(source.record.sessionId);
+	if (live) return stateRecordForEntry(live);
+	const state = source.manager
+		? stateFromDisk(source.record.sessionId, source.manager)
+		: source.record.state;
+	return { ...source.record, state };
+}
+
+function publishCollectedState(source: CollectedSessionState): SessionStateRecord {
+	const live = sessions.get(source.record.sessionId);
+	if (live) {
+		publishEntryState(live);
+		return stateRecordForEntry(live);
+	}
+	const record = currentCollectedState(source);
+	publishState(record);
+	return record;
+}
+
+function lastActivityAt(source: CollectedSessionState): number {
+	const last = source.branch().at(-1);
+	return last ? Date.parse(last.timestamp) || 0 : 0;
+}
+
+function canRelightCompletion(state: SessionState): boolean {
+	return (
+		state.execution === "idle" &&
+		state.needsInput === null &&
+		!state.backgroundWork &&
+		state.completion !== null &&
+		state.completion.outcome !== "cancelled" &&
+		!state.completionUnread
+	);
+}
+
+function initializedReceipts(): SessionReceipts {
+	const current = receipts();
+	if (!current?.baselineComplete) throw new Error("Session state is not initialized");
+	return current;
+}
+
+export async function markWorkspaceUnread(
+	workspace: SessionStateWorkspace,
+): Promise<SessionStateRecord | null> {
+	initializedReceipts();
+	const sources = await collectSessionStateSources([workspace], false);
+	const ranked = sources
+		.map((source) => ({ source, at: lastActivityAt(source) }))
+		.sort((a, b) => b.at - a.at);
+	for (const { source } of ranked) {
+		const state = currentCollectedState(source).state;
+		if (!canRelightCompletion(state)) continue;
+		const currentReceipts = initializedReceipts();
+		const nextReceipts: SessionReceipts = {
+			...currentReceipts,
+			handledCompletionBySession: omitMetadataKey(
+				currentReceipts.handledCompletionBySession,
+				source.record.sessionId,
+			),
+		};
+		saveSessionReceipts(nextReceipts);
+		sessionReceipts = nextReceipts;
+		return publishCollectedState(source);
+	}
+	return null;
+}
+
+export async function markWorkspaceRead(
+	workspace: SessionStateWorkspace,
+): Promise<SessionStateRecord[]> {
+	initializedReceipts();
+	const sources = await collectSessionStateSources([workspace], false);
+	const unread = sources.flatMap((source) => {
+		const { state } = currentCollectedState(source);
+		return state.completionUnread && state.completion
+			? [{ source, completionId: state.completion.completionId }]
+			: [];
+	});
+	if (unread.length === 0) return [];
+	const currentReceipts = initializedReceipts();
+	const handledCompletionBySession = { ...currentReceipts.handledCompletionBySession };
+	for (const { source, completionId } of unread) {
+		handledCompletionBySession[source.record.sessionId] = completionId;
+	}
+	const nextReceipts: SessionReceipts = { ...currentReceipts, handledCompletionBySession };
+	saveSessionReceipts(nextReceipts);
+	sessionReceipts = nextReceipts;
+	return unread.map(({ source }) => publishCollectedState(source));
 }
 
 export async function initializeSessionStates(
