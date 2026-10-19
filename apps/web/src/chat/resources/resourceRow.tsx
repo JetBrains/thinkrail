@@ -9,7 +9,12 @@ import {
 	RiTerminalBoxLine,
 	RiTimeLine,
 } from "@remixicon/react";
-import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
+import type {
+	BackgroundCommandStatus,
+	BackgroundCommandSummary,
+	DelegationRunStatus,
+	SubagentResourceSummary,
+} from "@thinkrail/contracts";
 import { cn } from "@thinkrail/ui/utils";
 import type { KeyboardEvent, ReactNode } from "react";
 
@@ -30,16 +35,19 @@ export function actionKey(resource: Resource): string {
 	return `${resource.kind}:${resourceId(resource)}`;
 }
 
-export function resourceState(resource: Resource): ResourceState {
-	if (resource.kind === "command") {
-		const { status, exitCode } = resource.summary;
-		if (status === "running") return "working";
-		if (status === "stopping") return "stopping";
-		if (status === "stopped") return "stopped";
-		if (status === "error") return "failed";
-		return exitCode === 0 ? "done" : "failed";
-	}
-	switch (resource.summary.status) {
+export function commandState(
+	status: BackgroundCommandStatus,
+	exitCode: number | null | undefined,
+): ResourceState {
+	if (status === "running") return "working";
+	if (status === "stopping") return "stopping";
+	if (status === "stopped") return "stopped";
+	if (status === "error") return "failed";
+	return exitCode === 0 ? "done" : "failed";
+}
+
+export function subagentState(status: DelegationRunStatus): ResourceState {
+	switch (status) {
 		case "queued":
 			return "queued";
 		case "running":
@@ -51,6 +59,12 @@ export function resourceState(resource: Resource): ResourceState {
 		case "aborted":
 			return "stopped";
 	}
+}
+
+export function resourceState(resource: Resource): ResourceState {
+	return resource.kind === "command"
+		? commandState(resource.summary.status, resource.summary.exitCode)
+		: subagentState(resource.summary.status);
 }
 
 export function isLiveState(state: ResourceState): boolean {
@@ -206,15 +220,17 @@ export function ExitBadge({ exitCode }: { exitCode: number }) {
 }
 
 export function KindGlyph({
-	resource,
+	kind,
 	state,
 	className,
+	dotRingClassName = "ring-container-elevated-bg",
 }: {
-	resource: Resource;
+	kind: Resource["kind"];
 	state: ResourceState;
 	className?: string;
+	dotRingClassName?: string;
 }) {
-	const Icon = resource.kind === "command" ? RiTerminalBoxLine : RiRobot2Line;
+	const Icon = kind === "command" ? RiTerminalBoxLine : RiRobot2Line;
 	return (
 		<span
 			className={cn("relative inline-flex size-16 shrink-0 items-center justify-center", className)}
@@ -223,7 +239,8 @@ export function KindGlyph({
 			<span
 				aria-hidden
 				className={cn(
-					"-right-2 -bottom-2 absolute size-6 rounded-full ring-2 ring-container-elevated-bg",
+					"-right-2 -bottom-2 absolute size-6 rounded-full ring-2",
+					dotRingClassName,
 					STATE_DOT[state],
 				)}
 			/>
@@ -389,7 +406,7 @@ export function ResourceRow({
 					onKeyDown={onKeyDown}
 					className="grid min-w-0 cursor-default grid-cols-[auto_minmax(0,1fr)] items-center gap-8 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
 				>
-					<KindGlyph resource={resource} state={state} />
+					<KindGlyph kind={resource.kind} state={state} />
 					<span className="flex min-w-0 flex-col">
 						<span className="flex min-w-0 items-baseline gap-8">
 							<span className={cn("min-w-0 flex-1 truncate", nameClass)} title={name}>
@@ -409,7 +426,7 @@ export function ResourceRow({
 	}
 	return (
 		<li {...dataAttributes} className={cn(rowClass, "grid-cols-[auto_minmax(0,1fr)_auto]")}>
-			<KindGlyph resource={resource} state={state} />
+			<KindGlyph kind={resource.kind} state={state} />
 			<span className="flex min-w-0 flex-col">
 				<button
 					type="button"
