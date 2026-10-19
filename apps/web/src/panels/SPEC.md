@@ -1107,7 +1107,7 @@ a project picker, the prompt hero, and the reused
   renders the plan's shipping funnel — **Build (`d/t done`) → Review (`r/k reviewed`,
   `plan-review-progress`, only when the plan has reviewable items) → PR (`plan-pr-stage`,
   `data-state`)** — each stage wearing a glyph for its state: done (check), active (the stage the
-  plan is currently at), pending (muted). The PR stage reads the same `useOpenBranchReview` lookup
+  plan is currently at), pending (muted). The PR stage reads the same `useBranchStatus` lookup
   as the button and shows `PR #N` once one is open; "merged" is unknowable (the lookup only
   sees OPEN reviews), so the funnel honestly ends at PR-open. Under the stepper sits the **work
   CONTEXT line** (`plan-context`): `baseBranch ← branch · N commits · +A −R` — the arrow points at the
@@ -1315,6 +1315,26 @@ own section. The kebab menu (`plan-menu`, a
   `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`shiki`,
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
+
+- **Ship — the branch's delivery state and actions, one implementation for topbar and Plan pane.**
+  `useBranchStatus(workspace, status)` (replacing `useOpenBranchReview`; the keyed state, request
+  generation, `noteOpenReview`, focus/fs/reconnect freshness rules above carry over unchanged) reads
+  `workspace.branchStatus` on a v86 host and falls back to `workspace.openReview` below it, exposing the
+  resolved review (`resolveBranchReview`, snapshot-authoritative) plus the review-independent remote counts.
+  `shipActions(status, workspace)` is the pure derivation of each segment's `{ primary, secondary }` —
+  remote arm (Publish / Push N / Sync…) and review arm (Open PR / Create MR / Open draft PR / the
+  disabled Merge-locally stub / Settle) — unit-tested over the full scenario table. `useShipRunner`
+  executes them and owns their dialogs: the shared `PrComposeDialog` (now also used for first-time
+  creation from the topbar), `PrSetupDialog`, the diverged Sync dialog, and the base-push confirmation.
+  The Plan pane's Open PR / *Push updates* / diverged handling runs through the same runner, so the
+  `lastPrSubmit` retry, `PUSH_AUTH_FAILED`, `ghProblem`, and compare hand-off rules above have one home.
+  The Plan pane alone keeps its plan-specific emphasis and its body-refreshing *Push updates*
+  (`pr.open` without a body); the topbar's Push is `workspace.push` and never touches a PR description.
+  **Compose sources:** the dialog's *Description from* switch re-fetches `pr.preview` with `source` —
+  *Chat plan* (default when the session has a plan; the active chat's session from the topbar), *Commits*,
+  *Template* (the host's discovered PR/MR templates, one picker), *Empty* — and **Generate with agent** /
+  **Fill template with agent** (`pr.generate`) replaces the field's text with the host's one-shot draft;
+  nothing is pushed until submit, and a `null` draft toasts instead of clearing the field.
 
 ## Get right
 

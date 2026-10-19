@@ -19,7 +19,7 @@ all` / `--all`, five rows, the most recently merged or closed one wins). Two bou
 one combined page because a combined page is ordered by creation: a branch with an older still-open
 review and several newer settled ones would present only the settled ones, and a host trusting that
 answer would shelve a workspace whose PR is still open. The answer carries `state` and `changedAt`
-(merge or close time) on the `OpenBranchReview`: one lookup serves the topbar chip (open = success,
+(merge or close time) on the `OpenBranchReview`: one lookup serves `workspace.branchStatus` / `openReview`, the topbar chip (open = success,
 merged = info, closed = neutral) and the Settled shelf's "PR merged/closed" rule, instead of two polls
 disagreeing. A merged/closed row is reliable only with its matching merge/close timestamp; without that
 ordering fact the host cannot prove whether later work should stay live, so it rejects the answer rather

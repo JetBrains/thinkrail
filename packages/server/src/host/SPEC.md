@@ -579,13 +579,17 @@ enabled/confirmed choice before entering analytics attribution.
   answer remains live and refreshable; a reopened complete review is caught on activation) — bounded to a
   few concurrent provider calls and riding the module's 60 s cache. Idle refresh pacing is branch-aware,
   so switching branches never inherits the old branch's 30-minute delay; a fresh
-  `workspace.openReview` for the active workspace also writes the snapshot, so the active row is always
-  current. Both writers pass the branch the lookup was made for, and `workspaces` drops an answer whose
+  `workspace.openReview` or `workspace.branchStatus` for the active workspace also writes the snapshot, so the
+  active row is always current. Both writers pass the branch the lookup was made for, and `workspaces` drops an answer whose
   branch has moved underneath it. **Protocol skew:** `RequestContext.protocolVersion` is the socket's
   advertised protocol (absent for in-process callers, who speak the current one); `workspace.openReview`
-  answers a client older than `WORKSPACE_SETTLE_PROTOCOL_VERSION` with `null` for a merged or closed
+  (and `workspace.branchStatus`, whose callers are always newer) answers a client older than `WORKSPACE_SETTLE_PROTOCOL_VERSION` with `null` for a merged or closed
   review, because such a client reads any review as an open PR and its plan pane would offer *Push
-  updates* that creates a new PR — the host snapshot itself still records the true state. **Backfill:**
+  updates* that creates a new PR — the host snapshot itself still records the true state. **Branch status / push / generate (v86):**
+  `workspace.branchStatus` composes the same review lookup + divergence as `openReview` with `git`'s
+  `branchCounts` (published, ahead of base) and the uncommitted count; `workspace.push` stamps activity
+  like `pr.open` and drops the worktree's review cache through `pr`; `pr.generate` is composed here —
+  `pr` gathers the bounded input (`prDraftInput`), `assist` drafts — so `pr` gains no `assist` edge. **Backfill:**
   the same post-list pass gives records without `lastActiveAt` their
   stamp from the newest chat's `updatedAt` (`listSessions`), else the worktree's `.git` gitfile mtime
   (managed and external worktrees alike — only the Default row, whose `.git` is the repository itself,

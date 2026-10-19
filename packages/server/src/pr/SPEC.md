@@ -23,11 +23,30 @@ future pi extension exposes the same library to the agent.
 
 ## Behavior
 
-`previewPr({ workspaceId, sessionId, title? })` → `{ title, body }` (`pr.preview`): the exact
-title/body `openPr` would use (chat title falling back to the branch; `renderPrBody` over the wire
-plan), so the client's compose dialog can offer them for editing before anything is pushed.
+`previewPr({ workspaceId, sessionId?, title?, source?, template? })` → `{ title, body, templates,
+planAvailable }` (`pr.preview`): the exact title/body `openPr` would use, so the client's compose dialog
+can offer them for editing before anything is pushed. `source` picks the body: **`plan`** (`renderPrBody`
+over the session's wire plan — the default whenever a `sessionId` is given, which keeps an older
+client's call unchanged), **`commits`** (the subjects of `<base>..HEAD`, oldest first, as a bullet list —
+the default without a session), **`template`** (the chosen discovered template verbatim; the first one
+when `template` is absent), or **`empty`**. **Template discovery** reads the worktree, not the forge:
+GitHub's `pull_request_template.md` in `.github/`, the root, or `docs/` (any case) and every
+`.github/PULL_REQUEST_TEMPLATE/*.md`, plus GitLab's `.gitlab/merge_request_templates/*.md`; paths are
+worktree-relative, contained, size-capped, and listed in that order.
 
-`openPr({ workspaceId, sessionId, title?, body?, draft? })`, one call = one idempotent attempt
+`prDraftInput({ workspaceId, sessionId?, template? })` → the bounded input `assist.suggestPrDescription`
+drafts from (`pr.generate`, composed in `host`): branch + base, commit subjects, `git diff --stat` against
+the base clamped to a fixed line budget, the session plan's rendered body when present, and the chosen
+template's text.
+
+`pushBranch({ workspaceId, confirmBase? })` → `{ dirtyFiles }` (`workspace.push`): the safe-ref guard and
+`refreshUserOwnedWorkspace` revalidation, then the same `--set-upstream origin <branch>` push, env, and
+`PUSH_AUTH_FAILED` classification as step 2 below — one implementation that `openPr` also calls. A branch
+that IS its base is refused unless `confirmBase` is set (the client confirms first, naming the shared
+branch); it never reads, edits, or creates a PR, and drops the worktree's review cache like every push.
+
+`openPr({ workspaceId, sessionId?, title?, body?, draft? })` (`sessionId` only matters when `body` is
+absent), one call = one idempotent attempt
 (`body` — the user-edited description from that dialog — replaces the rendered plan body verbatim
 when present; the title/body defaults come from ONE place — openPr consumes `previewPr`, so the
 previewed draft and the pushed PR can never diverge). The call opens with **`assertSafeRef(ws.branch)`**:
@@ -110,7 +129,7 @@ value. Then:
    strips it before the wire response. Capturing branch before the dirty-read await is unsound for
    user-owned checkouts because `openPr` deliberately refreshes after that await.
 
-The open-PR *read* side stays `workspace.openReview` (`branch-review`) — this module persists
+The open-PR *read* side stays `workspace.branchStatus` / `workspace.openReview` (`branch-review`) — this module persists
 nothing; the client re-derives button/chip state from that lookup plus this call's result. That
 lookup is cached, so every successful push drops the worktree's prior answer: pushing may change the
 branch's remote configuration even when the remote is not GitHub or the action falls back to compare.
@@ -119,9 +138,9 @@ an update, a create, or an ambiguous create result.
 
 ## Boundary
 
-- **Owns:** the push + PR action, PR-body rendering from the wire plan, GitHub slug/compare-URL
-  derivation.
-- **Public surface (barrel):** `openPr`, `previewPr`.
+- **Owns:** the push (with or without a PR) + PR action, PR-body rendering from the wire plan, commit and
+  template body sources, PR/MR template discovery, the generation input, GitHub slug/compare-URL derivation.
+- **Public surface (barrel):** `openPr`, `previewPr`, `pushBranch`, `prDraftInput`.
 - **Allowed deps:** `workspaces` (workspace record, `refreshUserOwnedWorkspace`), `git` (exec + status), `todos` (`listTodos` for
   the body), `branch-review` (provider detection, existing-PR lookup, the shared command runner,
   `forgetOpenBranchReview`),
