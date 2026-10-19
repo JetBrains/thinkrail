@@ -214,7 +214,13 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     unusable needs-input marker.
 
     `listSessionStates` returns every top-level live/disk session; `acknowledgeCompletion`
-    compare-and-sets only the current exact unread completion; `nudgeSession` atomically skips needs-input,
+    compare-and-sets only the current exact unread completion; `markWorkspaceUnread` drops the receipt of
+    the workspace's most recently active session (latest branch-entry timestamp) that
+    `canMarkCompletionUnread` admits — idle, unblocked, background-free, a non-cancelled read result —
+    and `markWorkspaceRead` receipts every unread completion in the workspace; both cover disk-only sessions
+    and publish each changed record. The shared collector awaits disk discovery *first* and then assembles
+    live and disk sources in one synchronous pass (live wins by id), so a chat that attaches mid-scan is
+    counted once instead of slipping between the two lists — the same holds for `listSessionStates`; `nudgeSession` atomically skips needs-input,
     queues while running, or prompts while idle. `SessionSummary.state` and `session.state` use the same
     derivation, so a client proves the exact rendered completion by id rather than inventing lifecycle.
 
@@ -797,7 +803,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
   helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
   `buildAnswersMessage`/`awaitingQuestionToolCallId`); normalized-state operations
-  (`listSessionStates`/`acknowledgeCompletion`/`nudgeSession` + publisher/project seams);
+  (`listSessionStates`/`acknowledgeCompletion`/`markWorkspaceUnread`/`markWorkspaceRead`/`nudgeSession` +
+  publisher/project seams);
   `repairDanglingToolCalls`; `liveParentContext` + `readChildTranscript`
   (the delegation embedding); the skill catalog helpers
   `listSkillCommands(cwd, admission)` (filtered, pre-session autocomplete) / `listSkillCatalog(cwd, admission)`

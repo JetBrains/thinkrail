@@ -38,6 +38,7 @@ export type * from "./nativeClient";
 export type * from "./piProtocol";
 export {
 	assistantToolCallsAreExecutable,
+	canMarkCompletionUnread,
 	isSessionWorking,
 	isTranscriptMessageRole,
 	sameModel,

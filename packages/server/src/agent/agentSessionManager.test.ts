@@ -658,6 +658,27 @@ test("marking a workspace unread relights its most recent result and read clears
 		}
 	}));
 
+test("marking a live chat's workspace read and unread publishes through the live entry", () =>
+	withFreshDataDir(async () => {
+		const cwd = tmpCwd("trpi-mark-read-live-ws-");
+		const workspace = { id: "ws-mark-read-live", projectId: "p-mark-read-live", cwd };
+		await initializeSessionStates([workspace]);
+		const { id } = writeFinishedDiskSession(cwd);
+		expect(await ensureSessionAttached(id, workspace.id, cwd)).toBe(true);
+		expect(getSessionState(id).completionUnread).toBe(true);
+		try {
+			expect((await markWorkspaceRead(workspace)).map((record) => record.sessionId)).toEqual([id]);
+			expect(getSessionState(id).completionUnread).toBe(false);
+			expect(await markWorkspaceUnread(workspace)).toMatchObject({
+				sessionId: id,
+				state: { completionUnread: true },
+			});
+			expect(getSessionState(id).completionUnread).toBe(true);
+		} finally {
+			removeSession(id);
+		}
+	}));
+
 test("the startup baseline skips an unreadable transcript instead of failing", () =>
 	withFreshDataDir(async (dataDir) => {
 		const cwd = tmpCwd("trpi-baseline-broken-ws-");
