@@ -240,7 +240,10 @@ ref off the workspace-create critical path.
   deadline. **`readBlobSizeAtAsync`** performs the same
   bounded, strict-miss read through `git cat-file -s` before the host admits an immutable blob response;
   **`readPathModeAtAsync`** reads one path's tree mode with bounded `git ls-tree` so `changes` can reject
-  symlinks and restore Git's executable bit without deriving tree metadata itself;
+  symlinks and restore Git's executable bit without deriving tree metadata itself. Every `<ref>:<path>`
+  object name these reads form uses `/`. Git reads a Windows `\` there as part of the name and reports the
+  file absent, so on win32 the path's `\` becomes `/`; on POSIX a backslash is a legal file-name character
+  and is kept (architecture Decision 22);
   **`gitCommitPaths(workspaceId, message, paths)`** → `{ sha } | null` — commit **exactly `paths`** as one
   commit for the TODO change-set feature (see [[submodule-server-todos]]): stage them (`git add -A --
   <paths>`, so a deletion stages as one), then `git commit --no-verify -- <paths>` (the host's commit must
