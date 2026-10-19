@@ -1,4 +1,4 @@
-export { ERROR_SOURCES, type ErrorSource } from "./errors";
+export type { ErrorSource } from "./errors";
 export type {
 	AcquisitionCampaignProperties,
 	AdditionalAnalyticsCapture,
@@ -34,8 +34,6 @@ export {
 } from "./events";
 export {
 	type AnalyticsOptions,
-	type ClientErrorInput,
-	clientError,
 	type ErrorReport,
 	getAdditionalAnalyticsCapture,
 	initializeAnalytics,

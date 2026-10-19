@@ -2,8 +2,7 @@ import { homedir, hostname, userInfo } from "node:os";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const ERROR_SOURCES = ["host_crash", "host_logged", "request", "ui", "desktop"] as const;
-export type ErrorSource = (typeof ERROR_SOURCES)[number];
+export type ErrorSource = "host_crash" | "host_logged" | "request" | "ui" | "desktop";
 
 export const EXTERNAL_FRAME = "<external>";
 const MAX_MESSAGE_LENGTH = 300;

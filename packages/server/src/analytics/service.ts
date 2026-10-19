@@ -247,7 +247,7 @@ function boundedString(value: unknown, max: number): string {
 	return typeof value === "string" ? value.slice(0, max) : "";
 }
 
-export function clientError(input: ClientErrorInput): Error {
+function clientError(input: ClientErrorInput): Error {
 	const error = new Error(boundedString(input.message, 2_000));
 	error.name = boundedString(input.type, 128) || "Error";
 	error.stack = toV8Stack(boundedString(input.stack, 16_000));

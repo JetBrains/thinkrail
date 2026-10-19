@@ -16,7 +16,7 @@ exception sanitization, delivery, consent gates and bounded shutdown. Host alone
 modules remain analytics-free. Sibling dependency edges belong to [[module-server]].
 
 - **Public surface:** initialization, basic capture, consent-scoped additional capture, additional-data
-  enablement, error reports (`reportError`, `reportFatalError`, `reportClientError`, `ERROR_SOURCES`),
+  enablement, error reports (`reportError`, `reportFatalError`, `reportClientError`, `ErrorReport`, `ErrorSource`),
   shutdown/test reset, event types, bucket helpers and `BuildKind`.
 - **Allowed deps:** persistence, log, contracts types, pi-ai's built-in catalog, Node, and `posthog-node`
   inside the sink only (`errors.ts` is SDK-free; the sink adapts it into `before_send`).
