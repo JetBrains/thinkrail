@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
-import { createOpenBranchReviewState } from "./openBranchReviewState";
+import { type BranchAnswer, createBranchStatusState } from "./branchStatusState";
 import {
+	branchAnswer,
 	isOpenBranchReview,
 	openReviewLabel,
 	resolveBranchReview,
-	startOpenBranchReviewSync,
-} from "./useOpenBranchReview";
+	startBranchStatusSync,
+} from "./useBranchStatus";
 
 test("formats provider-native review references", () => {
 	expect(openReviewLabel({ kind: "pull-request", number: 214 })).toBe("PR #214");
@@ -52,11 +53,11 @@ test("only an open review (or a pre-v78 one without state) is an open review for
 });
 
 test("activation opts into cache reuse while focus performs a fresh read", async () => {
-	const state = createOpenBranchReviewState();
+	const state = createBranchStatusState();
 	const focusTarget = new EventTarget();
 	const calls: Array<{ workspaceId: string; allowCached?: true }> = [];
-	const releases: Array<(review: { kind: "pull-request"; number: number } | null) => void> = [];
-	const controller = startOpenBranchReviewSync({
+	const releases: Array<(answer: BranchAnswer) => void> = [];
+	const controller = startBranchStatusSync({
 		workspaceId: "w1",
 		key: "w1\0feature",
 		state,
@@ -71,8 +72,8 @@ test("activation opts into cache reuse while focus performs a fresh read", async
 	expect(calls).toEqual([{ workspaceId: "w1", allowCached: true }]);
 	focusTarget.dispatchEvent(new Event("focus"));
 	expect(calls).toEqual([{ workspaceId: "w1", allowCached: true }, { workspaceId: "w1" }]);
-	releases[0]?.({ kind: "pull-request", number: 1 });
-	releases[1]?.({ kind: "pull-request", number: 2 });
+	releases[0]?.({ review: { kind: "pull-request", number: 1 }, status: null });
+	releases[1]?.({ review: { kind: "pull-request", number: 2 }, status: null });
 	await Promise.resolve();
 	await Promise.resolve();
 	expect(state.getSnapshot("w1\0feature")?.review).toEqual({
@@ -97,10 +98,10 @@ test("activation opts into cache reuse while focus performs a fresh read", async
 
 test("reload re-reads cache-eligible and is dropped while disconnected", () => {
 	const calls: Array<{ workspaceId: string; allowCached?: true }> = [];
-	const controller = startOpenBranchReviewSync({
+	const controller = startBranchStatusSync({
 		workspaceId: "w1",
 		key: "w1\0feature",
-		state: createOpenBranchReviewState(),
+		state: createBranchStatusState(),
 		focusTarget: new EventTarget(),
 		connected: true,
 		request: (params) => {
@@ -123,4 +124,25 @@ test("reload re-reads cache-eligible and is dropped while disconnected", () => {
 		{ workspaceId: "w1", allowCached: true },
 	]);
 	controller.stop();
+});
+
+test("a v86 branch status folds its counts onto the review and keeps the facts review-free", () => {
+	const base = {
+		hasOrigin: true,
+		provider: "github" as const,
+		published: true,
+		aheadOfBase: 4,
+		onBase: false,
+	};
+	expect(branchAnswer({ ...base, ahead: 2, behind: 1, review: null })).toEqual({
+		review: null,
+		status: { ...base, ahead: 2, behind: 1 },
+	});
+	const review = { kind: "pull-request" as const, number: 5, state: "open" as const };
+	const folded = { ...review, unpushedCommits: 2, behindCommits: 1 };
+	expect(branchAnswer({ ...base, ahead: 2, behind: 1, review })).toEqual({
+		review: folded,
+		status: { ...base, ahead: 2, behind: 1 },
+	});
+	expect(branchAnswer({ ...base, ahead: 0, behind: 0, review }).review).toEqual(review);
 });

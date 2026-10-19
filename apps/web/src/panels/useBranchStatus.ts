@@ -1,25 +1,36 @@
-import type { OpenBranchReview, Workspace } from "@thinkrail/contracts";
+import {
+	BRANCH_STATUS_PROTOCOL_VERSION,
+	type BranchStatus,
+	type OpenBranchReview,
+	type Workspace,
+} from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import { useAppStore } from "../store";
 import { type ConnectionStatus, getTransport } from "../transport";
-import { type OpenBranchReviewStateStore, openBranchReviewState } from "./openBranchReviewState";
+import {
+	type BranchAnswer,
+	type BranchFacts,
+	type BranchStatusStateStore,
+	branchStatusState,
+} from "./branchStatusState";
 
-type OpenReviewRequestParams = { workspaceId: string; allowCached?: true };
-type OpenReviewRequest = (params: OpenReviewRequestParams) => Promise<OpenBranchReview | null>;
+type BranchStatusRequestParams = { workspaceId: string; allowCached?: true };
+type BranchStatusRequest = (params: BranchStatusRequestParams) => Promise<BranchAnswer>;
 
-export interface OpenBranchReviewState {
+export interface BranchStatusHookState {
 	review: OpenBranchReview | null;
 	url?: string;
+	status: BranchFacts | null;
 	noteOpenReview: (review: OpenBranchReview, url?: string) => void;
-	refreshOpenReview: () => void;
+	refreshBranchStatus: () => void;
 }
 
-function requestOpenBranchReview(options: {
+function requestBranchStatus(options: {
 	workspaceId: string;
 	key: string;
 	allowCached: boolean;
-	request: OpenReviewRequest;
-	state: OpenBranchReviewStateStore;
+	request: BranchStatusRequest;
+	state: BranchStatusStateStore;
 }): void {
 	const generation = options.state.beginRequest(options.key);
 	void options
@@ -28,20 +39,20 @@ function requestOpenBranchReview(options: {
 			...(options.allowCached ? { allowCached: true as const } : {}),
 		})
 		.then(
-			(review) => {
-				options.state.resolveRequest(options.key, generation, review);
+			(answer) => {
+				options.state.resolveRequest(options.key, generation, answer);
 			},
 			() => {
-				options.state.resolveRequest(options.key, generation, null);
+				options.state.resolveRequest(options.key, generation, { review: null, status: null });
 			},
 		);
 }
 
-export function startOpenBranchReviewSync(options: {
+export function startBranchStatusSync(options: {
 	workspaceId: string;
 	key: string;
-	request: OpenReviewRequest;
-	state: OpenBranchReviewStateStore;
+	request: BranchStatusRequest;
+	state: BranchStatusStateStore;
 	focusTarget: EventTarget;
 	connected: boolean;
 }): {
@@ -53,7 +64,7 @@ export function startOpenBranchReviewSync(options: {
 	let connected = options.connected;
 	let freshOnReconnect = false;
 	const load = (allowCached: boolean) =>
-		requestOpenBranchReview({
+		requestBranchStatus({
 			workspaceId: options.workspaceId,
 			key: options.key,
 			allowCached,
@@ -81,31 +92,51 @@ export function startOpenBranchReviewSync(options: {
 	return { setConnected, refresh, reload, stop };
 }
 
-const transportRequest: OpenReviewRequest = (params) =>
-	getTransport().request("workspace.openReview", params);
+export function supportsBranchStatus(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= BRANCH_STATUS_PROTOCOL_VERSION;
+}
 
-type OpenBranchReviewSync = ReturnType<typeof startOpenBranchReviewSync>;
+export function branchAnswer({ review, ...facts }: BranchStatus): BranchAnswer {
+	const ahead = facts.ahead ?? 0;
+	const behind = facts.behind ?? 0;
+	return {
+		review: review
+			? {
+					...review,
+					...(ahead > 0 ? { unpushedCommits: ahead } : {}),
+					...(behind > 0 ? { behindCommits: behind } : {}),
+				}
+			: null,
+		status: facts,
+	};
+}
 
-export function useOpenBranchReview(
+const transportRequest: BranchStatusRequest = async (params) => {
+	if (supportsBranchStatus(useAppStore.getState().protocolVersion)) {
+		return branchAnswer(await getTransport().request("workspace.branchStatus", params));
+	}
+	return { review: await getTransport().request("workspace.openReview", params), status: null };
+};
+
+type BranchStatusSync = ReturnType<typeof startBranchStatusSync>;
+
+export function useBranchStatus(
 	workspace: Workspace | null,
 	status: ConnectionStatus,
-): OpenBranchReviewState {
+): BranchStatusHookState {
 	const workspaceId = workspace?.id ?? null;
 	const key = workspace ? `${workspace.id}\0${workspace.branch}` : null;
 	const currentKey = useRef(key);
-	const connected = status === "connected";
+	const connected = useAppStore((s) => status === "connected" && s.protocolVersion !== null);
 	const connectedRef = useRef(connected);
-	const sync = useRef<OpenBranchReviewSync | null>(null);
+	const sync = useRef<BranchStatusSync | null>(null);
 	currentKey.current = key;
 	connectedRef.current = connected;
 	const subscribe = useCallback(
-		(listener: () => void) => (key ? openBranchReviewState.subscribe(key, listener) : () => {}),
+		(listener: () => void) => (key ? branchStatusState.subscribe(key, listener) : () => {}),
 		[key],
 	);
-	const getSnapshot = useCallback(
-		() => (key ? openBranchReviewState.getSnapshot(key) : null),
-		[key],
-	);
+	const getSnapshot = useCallback(() => (key ? branchStatusState.getSnapshot(key) : null), [key]);
 	const loaded = useSyncExternalStore(subscribe, getSnapshot, () => null);
 
 	useEffect(() => {
@@ -113,11 +144,11 @@ export function useOpenBranchReview(
 			sync.current = null;
 			return;
 		}
-		const controller = startOpenBranchReviewSync({
+		const controller = startBranchStatusSync({
 			workspaceId,
 			key,
 			request: transportRequest,
-			state: openBranchReviewState,
+			state: branchStatusState,
 			focusTarget: window,
 			connected: connectedRef.current,
 		});
@@ -149,11 +180,11 @@ export function useOpenBranchReview(
 
 	const noteOpenReview = useCallback(
 		(review: OpenBranchReview, url?: string) => {
-			if (key && currentKey.current === key) openBranchReviewState.noteOpenReview(key, review, url);
+			if (key && currentKey.current === key) branchStatusState.noteOpenReview(key, review, url);
 		},
 		[key],
 	);
-	const refreshOpenReview = useCallback(() => {
+	const refreshBranchStatus = useCallback(() => {
 		if (key && currentKey.current === key) sync.current?.refresh();
 	}, [key]);
 
@@ -161,8 +192,9 @@ export function useOpenBranchReview(
 	return {
 		review: current?.review ?? null,
 		...(current?.url ? { url: current.url } : {}),
+		status: current?.status ?? null,
 		noteOpenReview,
-		refreshOpenReview,
+		refreshBranchStatus,
 	};
 }
 

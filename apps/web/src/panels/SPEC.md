@@ -1231,7 +1231,7 @@ own section. The kebab menu (`plan-menu`, a
   unauthenticated GitHub CLI with install/sign-in commands and offers the compare page as an
   in-dialog link (`pr-setup-compare` — a real anchor, so no popup-blocker risk) instead of the
   blind `window.open`. Both variants keep a **Try again** (`pr-setup-retry`) that re-runs the same
-  flow — always with the LAST edited title/body (the `lastPrSubmit` ref, set on every submit,
+  flow — always with the LAST edited title/body (the runner's `lastSubmit` ref, set on every submit,
   cleared only when the flow fully succeeded, when the user explicitly cancels the compose dialog,
   or when they take the compare-page hand-off (external completion the client can't observe) — a
   `ghProblem` outcome otherwise keeps it, so the gh dialog's Try again actually re-submits;
@@ -1317,18 +1317,24 @@ own section. The kebab menu (`plan-menu`, a
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
 
 - **Ship — the branch's delivery state and actions, one implementation for topbar and Plan pane.**
-  `useBranchStatus(workspace, status)` (replacing `useOpenBranchReview`; the keyed state, request
+  `useBranchStatus(workspace, status)` (the keyed `branchStatusState`, request
   generation, `noteOpenReview`, focus/fs/reconnect freshness rules above carry over unchanged) reads
-  `workspace.branchStatus` on a v86 host and falls back to `workspace.openReview` below it, exposing the
-  resolved review (`resolveBranchReview`, snapshot-authoritative) plus the review-independent remote counts.
-  `shipActions(status, workspace)` is the pure derivation of each segment's `{ primary, secondary }` —
+  `workspace.branchStatus` on a v86 host and falls back to `workspace.openReview` below it. It counts as
+  connected only once the welcome has named the protocol, so a reconnect never asks the old method of a
+  new host. It exposes the lookup's review — callers resolve it against the snapshot with
+  `resolveBranchReview` — with v86's ahead/behind folded onto it, plus the review-free `BranchFacts`.
+  `shipActions(context)` is the pure derivation of each segment's `{ primary, secondary }` —
   remote arm (Publish / Push N / Sync…) and review arm (Open PR / Create MR / Open draft PR / the
   disabled Merge-locally stub / Settle) — unit-tested over the full scenario table. `useShipRunner`
   executes them and owns their dialogs: the shared `PrComposeDialog` (now also used for first-time
   creation from the topbar), `PrSetupDialog`, the diverged Sync dialog, and the base-push confirmation.
   The Plan pane's Open PR / *Push updates* / diverged handling runs through the same runner, so the
-  `lastPrSubmit` retry, `PUSH_AUTH_FAILED`, `ghProblem`, and compare hand-off rules above have one home.
-  The Plan pane alone keeps its plan-specific emphasis and its body-refreshing *Push updates*
+  `lastSubmit` reuse, `PUSH_AUTH_FAILED`, `ghProblem`, and compare hand-off rules above have one home.
+  **Try again** re-runs the mutation that actually failed — a PR submit or a push, recorded when it fails
+  and dropped when the setup dialog closes — never whichever PR the user last composed; `lastSubmit`
+  only restores the compose dialog's edits, including its description sources.
+  The Plan pane alone asks for its plan body explicitly (`bodySource: "plan"`, so a plan of adopted commits
+  only still opens on it) and keeps its plan-specific emphasis and its body-refreshing *Push updates*
   (`pr.open` without a body); the topbar's Push is `workspace.push` and never touches a PR description.
   **Compose sources:** the dialog's *Description from* switch re-fetches `pr.preview` with `source` —
   *Chat plan* (default when the session has a plan; the active chat's session from the topbar), *Commits*,

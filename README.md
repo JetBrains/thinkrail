@@ -29,7 +29,9 @@ create the tools it needs based on how you actually work.
   checkout; merge the good branch, delete the rest. You can also attach existing worktrees or explicitly
   work in the project folder itself. Finished and dormant workspaces settle onto a per-project shelf on
   their own — when their pull request merges or closes, or after a quiet week — and come back the moment
-  you work in them.
+  you work in them. The topbar shows where the active branch stands against `origin` and its pull request,
+  with the next step one click away: publish, push, or open a PR described from the plan, the commits,
+  your PR template, or an agent-written draft.
 - **A real IDE around the agent.** A splittable workbench of Monaco editor tabs, a Files tree with live git
   change marks and a Changed view, terminals, and documents — all scoped to the active workspace. Leave
   anchored review comments on files and diffs and send them to a chat as structured context, or open the

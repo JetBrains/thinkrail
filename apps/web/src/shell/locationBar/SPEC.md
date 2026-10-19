@@ -30,11 +30,12 @@ actions through the panels-owned ship runner; it owns no host state.
   `@thinkrail/ui/*`, `@remixicon/react`, contracts types, and these `panels` files per-file:
   `workspaceActions` (the one implementation of open-in / rename / reveal / remove / `editor.list` /
   `workspace.list`, shared with `ProjectTree`), `RemoveWorkspaceDialog`, `BranchPicker` + `branches`,
-  `useOpenProject`, `useBranchStatus` (`openReviewLabel`, `resolveBranchReview`), and `ship` (the
-  `shipActions` derivation and the action runner with its dialogs, shared with the Plan pane).
+  `useOpenProject`, `useBranchStatus` (`openReviewLabel`, `resolveBranchReview`), `shipActions` (the
+  derivation), and `useShipRunner` (the action runner with its dialogs, shared with the Plan pane;
+  `LocationBar` owns it, so a compose draft survives the segments unmounting on a disconnect).
 - **Forbidden:** server/shared/pi; layout engine, intents, or frame state; being imported by anything
   other than `Shell`; a second implementation of a workspace action that `panels/workspaceActions` has,
-  or of a ship action (push, open PR, sync) that `panels/ship` has.
+  or of a ship action (push, open PR, sync) that `panels/useShipRunner` has.
 
 ## Grammar
 
@@ -61,12 +62,14 @@ actions through the panels-owned ship runner; it owns no host state.
 - Captions stay part of the header drag region; every pill, chip, link, and the inline rename
   input opts out with `window-no-drag` (unit-tested), which is the deliberate relaxation of the shell's
   "buttons only in `topbar-actions`" rule for this strip alone.
-- Drop order as the window narrows: project segment below `sm`, branch segment below `md`, and a
-  Remote segment **without an action** below `md`. The workspace segment, the Pull request segment, and a
-  Remote segment carrying an action never hide; below `md` their split buttons collapse to the icon (e2e
-  `topbar-chrome` keeps `scope-name` visible at phone width with insets). Inside the row the branch shrinks
-  first (`shrink-[4]`), then the project (`shrink-[3]`), then the workspace, each capped by a `max-w`; the
-  Remote and Pull request segments do not shrink. Against a host without `workspace.branchStatus` the old
+- Drop order as the window narrows: project segment below `sm`, branch segment below `md`, a Remote
+  segment **without an action** below `md`, and a Pull request segment with neither a review nor a next
+  action below `sm`. The workspace segment, a Pull request segment with a review or a next action, and a
+  Remote segment carrying an action never hide; below `md` their split buttons collapse to the icon. The
+  workspace keeps a 64px minimum, so a strip squeezed by native insets clips its trailing segments, never
+  the workspace name (e2e `topbar-chrome` keeps `scope-name` visible at phone width with insets). Inside the
+  row the branch shrinks first (`shrink-[4]`), then the project (`shrink-[3]`), then the workspace, each
+  capped by a `max-w`; the Remote and Pull request segments do not shrink. Against a host without `workspace.branchStatus` the old
   rule holds: Remote and the review chip render only with a review, hiding below `md` / `sm`.
 
 ## Behaviour
@@ -114,10 +117,11 @@ actions through the panels-owned ship runner; it owns no host state.
   description — the Plan pane's *Push updates* still refreshes it from the plan. A Publish/Push action
   replaces the value; Sync sits beside the chips.
 - **Pull request** (v86) renders for every workspace. Without a review its value is — on a branch that is
-  its base and *No PR* / *No MR* otherwise; its split button carries the `shipActions` review arm: **Open
+  its base and *No PR* / *No MR* otherwise, giving way to the primary action when there is one; its split
+  button carries the `shipActions` review arm: **Open
   PR** (commits ahead of the base, GitHub origin — the shared compose dialog; without a usable `gh` the
-  host's compare / gh-setup outcome, as in the Plan pane), **Create MR** (GitLab: pushes, then opens the
-  provider's new-MR page), **Open draft PR** in ▾, and the inactive **Merge into <base> locally** stub
+  host's compare / gh-setup outcome, as in the Plan pane), **Create MR** (GitLab: the same compose dialog; the
+  host pushes and opens GitLab's prefilled new-MR page), **Open draft PR** in ▾, and the inactive **Merge into <base> locally** stub
   ("coming soon", a separate task). A merged or closed review offers **Settle** (▾ Keep active / Remove)
   through the shared `workspaceActions`.
 - On a pre-v86 host the review-only rule holds: **Remote** renders only while `unpushedCommits` (warning

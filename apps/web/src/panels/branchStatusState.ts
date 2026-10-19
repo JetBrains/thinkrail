@@ -1,13 +1,18 @@
-import type { OpenBranchReview } from "@thinkrail/contracts";
+import type { BranchStatus, OpenBranchReview } from "@thinkrail/contracts";
 
-export type OpenBranchReviewSnapshot = {
+export type BranchFacts = Omit<BranchStatus, "review">;
+
+export type BranchStatusSnapshot = {
 	review: OpenBranchReview | null;
 	url?: string;
+	status?: BranchFacts;
 };
+
+export type BranchAnswer = { review: OpenBranchReview | null; status: BranchFacts | null };
 
 type Entry = {
 	generation: number;
-	snapshot: OpenBranchReviewSnapshot | null;
+	snapshot: BranchStatusSnapshot | null;
 };
 
 type Listener = () => void;
@@ -18,7 +23,7 @@ function sameReview(left: OpenBranchReview | null, right: OpenBranchReview | nul
 	);
 }
 
-export function createOpenBranchReviewState() {
+export function createBranchStatusState() {
 	const entries = new Map<string, Entry>();
 	const listeners = new Map<string, Set<Listener>>();
 	const entry = (key: string): Entry => {
@@ -28,13 +33,13 @@ export function createOpenBranchReviewState() {
 		entries.set(key, created);
 		return created;
 	};
-	const publish = (key: string, snapshot: OpenBranchReviewSnapshot): void => {
+	const publish = (key: string, snapshot: BranchStatusSnapshot): void => {
 		entry(key).snapshot = snapshot;
 		for (const listener of listeners.get(key) ?? []) listener();
 	};
 
 	return {
-		getSnapshot(key: string): OpenBranchReviewSnapshot | null {
+		getSnapshot(key: string): BranchStatusSnapshot | null {
 			return entries.get(key)?.snapshot ?? null;
 		},
 		subscribe(key: string, listener: Listener): () => void {
@@ -51,26 +56,32 @@ export function createOpenBranchReviewState() {
 			current.generation += 1;
 			return current.generation;
 		},
-		resolveRequest(key: string, generation: number, review: OpenBranchReview | null): boolean {
+		resolveRequest(key: string, generation: number, answer: BranchAnswer): boolean {
 			const current = entry(key);
 			if (current.generation !== generation) return false;
+			const { review, status } = answer;
 			const carried =
 				review !== null && sameReview(current.snapshot?.review ?? null, review)
 					? current.snapshot?.url
 					: undefined;
 			const url = review?.url ?? carried;
-			publish(key, { review, ...(url ? { url } : {}) });
+			publish(key, { review, ...(url ? { url } : {}), ...(status ? { status } : {}) });
 			return true;
 		},
 		noteOpenReview(key: string, review: OpenBranchReview, url?: string): void {
 			const current = entry(key);
 			current.generation += 1;
 			const resolved = url ?? review.url;
-			publish(key, { review, ...(resolved ? { url: resolved } : {}) });
+			const status = current.snapshot?.status;
+			publish(key, {
+				review,
+				...(resolved ? { url: resolved } : {}),
+				...(status ? { status } : {}),
+			});
 		},
 	};
 }
 
-export type OpenBranchReviewStateStore = ReturnType<typeof createOpenBranchReviewState>;
+export type BranchStatusStateStore = ReturnType<typeof createBranchStatusState>;
 
-export const openBranchReviewState = createOpenBranchReviewState();
+export const branchStatusState = createBranchStatusState();

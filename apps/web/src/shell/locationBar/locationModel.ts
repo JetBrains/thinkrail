@@ -1,5 +1,5 @@
 import type { OpenBranchReview } from "@thinkrail/contracts";
-import { isOpenBranchReview } from "../../panels/useOpenBranchReview";
+import { isOpenBranchReview } from "../../panels/useBranchStatus";
 
 export interface RemoteCounts {
 	unpushed: number;

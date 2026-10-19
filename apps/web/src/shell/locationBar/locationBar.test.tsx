@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import type { OpenBranchReview, Project, Workspace } from "@thinkrail/contracts";
+import type { BranchStatus, OpenBranchReview, Project, Workspace } from "@thinkrail/contracts";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { LocationBar } from "./LocationBar";
@@ -39,13 +39,20 @@ const review: OpenBranchReview = {
 	behindCommits: 0,
 };
 
-function render(workspace: Workspace | null, openReview: OpenBranchReview | null = null) {
+function render(
+	workspace: Workspace | null,
+	openReview: OpenBranchReview | null = null,
+	branchStatus: BranchStatus | null = null,
+) {
 	return renderToStaticMarkup(
 		<TooltipProvider>
 			<LocationBar
 				project={project}
 				workspace={workspace}
 				review={openReview}
+				branchStatus={branchStatus}
+				noteOpenReview={() => {}}
+				refreshBranchStatus={() => {}}
 				onNewWorkspace={() => {}}
 			/>
 		</TooltipProvider>,
@@ -179,6 +186,7 @@ test("the location bar never hard-codes typography or colour outside the token s
 		"BranchSegment.tsx",
 		"WorkspaceSegment.tsx",
 		"ProjectSegment.tsx",
+		"ShipSegments.tsx",
 	]) {
 		const source = readFileSync(new URL(`./${file}`, import.meta.url), "utf8");
 		expect(source).not.toMatch(/\btext-\[|\bfont-(?:mono|sans|medium|semibold)\b|#[0-9a-f]{3,8}\b/);
@@ -237,4 +245,70 @@ test("project initials and commit plurals", () => {
 	expect(projectInitial("")).toBe("?");
 	expect(pluralCommits(1)).toBe("1 commit");
 	expect(pluralCommits(2)).toBe("2 commits");
+});
+
+const status = (over: Partial<BranchStatus> = {}): BranchStatus => ({
+	hasOrigin: true,
+	provider: "github",
+	published: true,
+	ahead: 0,
+	behind: 0,
+	aheadOfBase: 2,
+	onBase: false,
+	review: null,
+	...over,
+});
+
+test("v86: Remote and Pull request render for a review-free branch with the next action", () => {
+	const html = render(
+		worktree,
+		null,
+		status({ published: false, ahead: undefined, behind: undefined }),
+	);
+	const ids = testids(html);
+	expect(ids).toContain("scope-remote-segment");
+	expect(ids).toContain("scope-review-segment");
+	expect(html).toMatch(/data-testid="scope-ship-remote-primary"[^>]*data-action="publish"/);
+	expect(html).toMatch(/data-testid="scope-ship-review-primary"[^>]*data-action="openPr"/);
+	expect(ids).toContain("scope-ship-review-menu");
+	expect(ids).not.toContain("scope-review-value");
+	for (const tag of html.matchAll(/<(?:button|a|input)\b[^>]*class="([^"]*)"/g)) {
+		expect(tag[1]?.split(/\s+/)).toContain("window-no-drag");
+	}
+});
+
+test("v86: an in-sync branch states it; Default on its base shows — and no PR action", () => {
+	const synced = render(worktree, null, status());
+	expect(synced).toMatch(/data-testid="scope-remote-value"[^>]*data-kind="inSync"/);
+	expect(synced).toContain("In sync");
+	const base = render(userOwned, null, status({ onBase: true, aheadOfBase: 0 }));
+	expect(base).toMatch(/data-testid="scope-review-value"[^>]*data-kind="base"/);
+	expect(testids(base)).not.toContain("scope-ship-review-primary");
+});
+
+test("v86: a diverged branch keeps its chips beside Sync; an open review keeps its chip", () => {
+	const html = render(worktree, review, status({ ahead: 1, behind: 2, review }));
+	expect(testids(html)).toContain("scope-remote-unpushed");
+	expect(testids(html)).toContain("scope-remote-behind");
+	expect(html).toMatch(/data-testid="scope-ship-remote-primary"[^>]*data-action="sync"/);
+	expect(testids(html)).toContain("scope-review");
+	expect(testids(html)).not.toContain("scope-ship-review-primary");
+});
+
+test("v86: without an origin the Remote says so and the PR segment only holds the merge stub", () => {
+	const html = render(
+		worktree,
+		null,
+		status({
+			hasOrigin: false,
+			provider: null,
+			published: false,
+			ahead: undefined,
+			behind: undefined,
+		}),
+	);
+	expect(html).toMatch(/data-kind="noOrigin"/);
+	expect(html).toContain("No remote");
+	expect(testids(html)).toContain("scope-ship-review-menu");
+	expect(testids(html)).not.toContain("scope-ship-review-primary");
 });
