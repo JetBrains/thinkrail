@@ -39,6 +39,7 @@ export {
 	type ErrorReport,
 	getAdditionalAnalyticsCapture,
 	initializeAnalytics,
+	reportClientError,
 	reportError,
 	reportFatalError,
 	resetAnalyticsForTests,

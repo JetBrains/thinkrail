@@ -4,8 +4,8 @@ import { homedir, tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { EXTERNAL_FRAME } from "./errors";
 import {
-	clientError,
 	initializeAnalyticsWithSinkFactoryForTests,
+	reportClientError,
 	reportError,
 	reportFatalError,
 	resetAnalyticsForTests,
@@ -168,16 +168,25 @@ test("a fatal report is sent immediately as level fatal with the CodedError-styl
 test("client errors keep WebKit stacks parseable and their frames web-relative", async () => {
 	const sent: BatchEntry[] = [];
 	boot(sent);
-	reportError(
-		clientError({
-			type: "TypeError",
-			message: "undefined is not an object (evaluating 'jane.name')",
-			stack: "render@http://127.0.0.1:4317/assets/index-abc.js:10:5\nhttps://evil.example/x.js:1:1",
-		}),
-		{ source: "ui", handled: false, scope: "chat" },
-	);
+	reportClientError({
+		kind: "render",
+		boundary: "plan rail",
+		type: "TypeError",
+		message: "undefined is not an object (evaluating 'jane.name')",
+		stack: "render@http://127.0.0.1:4317/assets/index-abc.js:10:5\nhttps://evil.example/x.js:1:1",
+	});
+	reportClientError({ kind: "bogus", type: 42, message: { jane: true } });
 	await shutdownAnalytics();
-	const list = exceptions(sent)[0]?.properties.$exception_list as Array<Record<string, unknown>>;
+	expect(
+		exceptions(sent)
+			.map((entry) => [entry.properties.scope, entry.properties.handled])
+			.sort(),
+	).toEqual([
+		["render:plan_rail", true],
+		["window", false],
+	]);
+	const render = exceptions(sent).find((entry) => entry.properties.scope === "render:plan_rail");
+	const list = render?.properties.$exception_list as Array<Record<string, unknown>>;
 	expect(list[0]?.type).toBe("TypeError");
 	expect(list[0]?.value).toBe("undefined is not an object (evaluating <str>)");
 	const frames = (list[0]?.stacktrace as { frames: Array<Record<string, unknown>> }).frames;

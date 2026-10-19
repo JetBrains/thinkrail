@@ -165,9 +165,11 @@ export interface ErrorReport {
 }
 
 export interface ClientErrorInput {
-	type?: string;
-	message?: string;
-	stack?: string;
+	kind?: unknown;
+	type?: unknown;
+	message?: unknown;
+	stack?: unknown;
+	boundary?: unknown;
 }
 
 const MAX_ERROR_REPORTS = 100;
@@ -239,11 +241,28 @@ export async function reportFatalError(error: unknown): Promise<void> {
 	}
 }
 
+const CLIENT_ERROR_KINDS = new Set(["render", "window", "rejection"]);
+
+function boundedString(value: unknown, max: number): string {
+	return typeof value === "string" ? value.slice(0, max) : "";
+}
+
 export function clientError(input: ClientErrorInput): Error {
-	const error = new Error(typeof input.message === "string" ? input.message : "");
-	error.name = typeof input.type === "string" && input.type ? input.type : "Error";
-	error.stack = typeof input.stack === "string" ? toV8Stack(input.stack) : "";
+	const error = new Error(boundedString(input.message, 2_000));
+	error.name = boundedString(input.type, 128) || "Error";
+	error.stack = toV8Stack(boundedString(input.stack, 16_000));
 	return error;
+}
+
+export function reportClientError(input: ClientErrorInput): void {
+	const kind =
+		typeof input.kind === "string" && CLIENT_ERROR_KINDS.has(input.kind) ? input.kind : "window";
+	const boundary = boundedString(input.boundary, 64).trim().replace(/\s+/g, "_");
+	reportError(clientError(input), {
+		source: "ui",
+		handled: kind === "render",
+		scope: boundary ? `${kind}:${boundary}` : kind,
+	});
 }
 
 export function getAdditionalAnalyticsCapture(): AdditionalAnalyticsCapture | null {
