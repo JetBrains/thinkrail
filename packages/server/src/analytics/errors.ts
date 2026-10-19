@@ -122,7 +122,9 @@ export interface NormalizedFrameFile {
 export function normalizeFrameFilename(filename: unknown, roots: FrameRoots): NormalizedFrameFile {
 	const external = { filename: EXTERNAL_FRAME, inApp: false, web: false };
 	if (typeof filename !== "string" || !filename) return external;
-	if (/^node:[a-z_/]+$/i.test(filename)) return { filename, inApp: false, web: false };
+	if (/^node:[a-z_/]+$/i.test(filename) || filename === "native") {
+		return { filename, inApp: false, web: false };
+	}
 	if (/^[a-z][a-z0-9+.-]*:\/\//i.test(filename) && !/^file:\/\//i.test(filename)) {
 		try {
 			const url = new URL(filename);
@@ -157,7 +159,7 @@ function remappedFrame(raw: string, roots: FrameRoots): NormalizedFrameFile {
 	if (!roots.remapBase) return external;
 	const relative = posix.normalize(posix.join(roots.remapBase, toSlashes(raw)));
 	if (relative.startsWith("../") || relative.startsWith("/") || relative === "..") return external;
-	if (!/^[A-Za-z0-9_\-./@$~+]+$/.test(relative)) return external;
+	if (!/^[A-Za-z0-9_\-./@$~+]+\.[cm]?[jt]sx?$/.test(relative)) return external;
 	return { filename: relative, inApp: !relative.includes("node_modules/"), web: false };
 }
 
