@@ -682,6 +682,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 							kind: "backgroundCommandCompletion",
 							id: crypto.randomUUID(),
 							details: event.message.details,
+							timestamp: event.message.timestamp,
 						},
 					],
 				};
@@ -696,6 +697,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 							id: crypto.randomUUID(),
 							details: event.message.details,
 							text: customMessageText(event.message.content),
+							timestamp: event.message.timestamp,
 						},
 					],
 				};
@@ -710,6 +712,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 							id: crypto.randomUUID(),
 							details: event.message.details,
 							text: customMessageText(event.message.content),
+							timestamp: event.message.timestamp,
 						},
 					],
 				};

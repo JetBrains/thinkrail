@@ -37,6 +37,38 @@ describe("deriveMessageActions", () => {
 		expect([...state.finalAnswerRowIds].sort()).toEqual(["answer-1", "answer-2"]);
 	});
 
+	test("an incoming result opens its own round, so the answer before it stays final", () => {
+		const rows: ChatRow[] = [
+			user("user-1"),
+			markdown("answer-1"),
+			{
+				kind: "divider",
+				id: "divider-1",
+				data: { elapsedMs: 1, toolCount: 0, specs: [], changedFiles: [], receipt: null },
+			},
+			{
+				kind: "backgroundCommandCompletion",
+				id: "result-1",
+				details: {
+					id: "bg-1",
+					sessionId: "s",
+					name: "e2e",
+					status: "completed",
+					startedAt: 0,
+					finishedAt: 1,
+					exitCode: 0,
+					output: { text: "", truncated: false },
+				},
+			},
+			markdown("reaction-1"),
+		];
+
+		const state = deriveMessageActions(rows, false);
+
+		expect([...state.finalAnswerRowIds].sort()).toEqual(["answer-1", "reaction-1"]);
+		expect(state.agentRespondedByUserId.get("user-1")).toBe(true);
+	});
+
 	test("marks only the trailing unanswered prompt as responded while streaming", () => {
 		const state = deriveMessageActions([user("user-1"), user("user-2")], true);
 

@@ -76,7 +76,12 @@ export function messagesToRuntime(
 			askAnswers[message.details.toolCallId] = message.details.result;
 		} else if (isBackgroundCommandCompletionMessage(message)) {
 			turnId = transcriptTurnId(message, index, options);
-			turns.push({ kind: "backgroundCommandCompletion", id: turnId, details: message.details });
+			turns.push({
+				kind: "backgroundCommandCompletion",
+				id: turnId,
+				details: message.details,
+				timestamp: message.timestamp,
+			});
 		} else if (isSubagentCompletionMessage(message)) {
 			turnId = transcriptTurnId(message, index, options);
 			turns.push({
@@ -84,6 +89,7 @@ export function messagesToRuntime(
 				id: turnId,
 				details: message.details,
 				text: customMessageText(message.content),
+				timestamp: message.timestamp,
 			});
 		} else if (isTodoReviewFixMessage(message)) {
 			turnId = transcriptTurnId(message, index, options);
@@ -92,6 +98,7 @@ export function messagesToRuntime(
 				id: turnId,
 				details: message.details,
 				text: customMessageText(message.content),
+				timestamp: message.timestamp,
 			});
 		}
 		turnIdByMessageIndex.push(turnId);

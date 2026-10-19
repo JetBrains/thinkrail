@@ -117,6 +117,24 @@ function nestRoutineRun(steps: ActivityStep[]): ActivityStep[] {
 	return nested;
 }
 
+export function opensRound(turn: ChatTurn): boolean {
+	switch (turn.kind) {
+		case "user":
+		case "backgroundCommandCompletion":
+		case "subagentCompletion":
+		case "reviewFix":
+			return true;
+		default:
+			return false;
+	}
+}
+
+function roundStartMs(turn: ChatTurn): number | null {
+	if (!opensRound(turn)) return null;
+	const at = turn.kind === "user" ? turn.message.timestamp : "timestamp" in turn ? turn.timestamp : null;
+	return typeof at === "number" && Number.isFinite(at) ? at : null;
+}
+
 export function deriveRows(
 	turns: ChatTurn[],
 	toolResults: Record<string, ToolResultState>,
@@ -210,7 +228,7 @@ export function deriveRows(
 					});
 					break;
 				case "backgroundCommandCompletion":
-					rows.push(turn);
+					rows.push({ kind: "backgroundCommandCompletion", id: turn.id, details: turn.details });
 					break;
 				case "subagentCompletion":
 					rows.push({
@@ -225,9 +243,10 @@ export function deriveRows(
 					break;
 			}
 		}
+		const next = turns[i + 1];
 		const roundEnded =
-			turn.kind !== "user" &&
-			(turns[i + 1]?.kind === "user" || (i === turns.length - 1 && !isStreaming));
+			!opensRound(turn) &&
+			(next ? opensRound(next) : !isStreaming);
 		if (roundEnded) {
 			flushRun();
 			const data = turnDivider(turns, i, isSpec, agentTurns, workspaceRoot);
@@ -288,19 +307,21 @@ export function turnDivider(
 	agentTurns: readonly TurnChangeSet[] = [],
 	workspaceRoot?: string,
 ): TurnDividerData | null {
-	let userIdx = -1;
+	let openerIdx = -1;
 	for (let i = endIndex; i >= 0; i--) {
-		if (turns[i]?.kind === "user") {
-			userIdx = i;
+		const turn = turns[i];
+		if (turn && opensRound(turn)) {
+			openerIdx = i;
 			break;
 		}
 	}
-	if (userIdx < 0) return null;
+	const opener = turns[openerIdx];
+	if (!opener) return null;
 
 	let toolCount = 0;
 	const written = new Map<string, boolean>();
 	let endMs: number | null = null;
-	for (let i = userIdx + 1; i <= endIndex; i++) {
+	for (let i = openerIdx + 1; i <= endIndex; i++) {
 		const turn = turns[i];
 		if (turn?.kind === "assistant") {
 			if (turn.message.timestamp) endMs = turn.message.timestamp;
@@ -320,13 +341,12 @@ export function turnDivider(
 		}
 	}
 
-	const user = turns[userIdx];
-	const startMs = user?.kind === "user" ? user.message.timestamp : null;
+	const startMs = roundStartMs(opener);
 	const elapsedMs = startMs != null && endMs != null ? endMs - startMs : null;
 
-	const nextUser = turns[endIndex + 1];
-	const nextStartMs = nextUser?.kind === "user" ? (nextUser.message.timestamp ?? null) : null;
-	const receipt = matchTurnReceipt(agentTurns, startMs ?? null, nextStartMs);
+	const next = turns[endIndex + 1];
+	const nextStartMs = next && opensRound(next) ? roundStartMs(next) : null;
+	const receipt = matchTurnReceipt(agentTurns, startMs, nextStartMs);
 	const specs: string[] = [];
 	const changedFiles: string[] = [];
 	for (const [path, isSpecPath] of written) (isSpecPath ? specs : changedFiles).push(path);

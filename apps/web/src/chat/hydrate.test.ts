@@ -225,6 +225,7 @@ test("a subagent-completion custom message hydrates as its own subagentCompletio
 	const turn = turns[1];
 	expect(turn?.kind === "subagentCompletion" && turn.details.childSessionId).toBe("child-1");
 	expect(turn?.kind === "subagentCompletion" && turn.text).toContain("the report");
+	expect(turn?.kind === "subagentCompletion" && turn.timestamp).toBe(2);
 	expect(turnIdByMessageIndex[1]).toBe(turns[1]?.id ?? null);
 });
 

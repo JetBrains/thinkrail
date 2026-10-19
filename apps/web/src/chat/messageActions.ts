@@ -38,6 +38,11 @@ export function deriveMessageActions(
 			case "divider":
 				sawRespondingRow = true;
 				break;
+			case "backgroundCommandCompletion":
+			case "subagentCompletion":
+			case "reviewFix":
+				roundHasLaterContent = false;
+				break;
 		}
 	}
 

@@ -683,6 +683,7 @@ test("a subagent-completion custom message_end appends a subagentCompletion turn
 				content: 'Subagent "scout" (child-1) completed:\n\nthe report',
 				display: true,
 				details,
+				timestamp: 4_200,
 			},
 		} as unknown as PiEvent,
 		"a",
@@ -691,6 +692,7 @@ test("a subagent-completion custom message_end appends a subagentCompletion turn
 	expect(turn?.kind).toBe("subagentCompletion");
 	expect(turn?.kind === "subagentCompletion" && turn.details.childSessionId).toBe("child-1");
 	expect(turn?.kind === "subagentCompletion" && turn.text).toContain("the report");
+	expect(turn?.kind === "subagentCompletion" && turn.timestamp).toBe(4_200);
 
 	const before = rt("a");
 	store.handlePiEvent(
