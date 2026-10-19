@@ -331,6 +331,10 @@ behind the next scenario. Consent tests reset the choice over the real settings 
 Done/ordinary-close acceptance, immediate off refusal, persistence failures and retries, confirmed reloads,
 cross-client convergence, prompt priority, and pre-v65 fallback.
 
+Each scenario's app reset also removes the lane fixture repository's `origin` remote: the topbar's Remote /
+Pull request segments read the shared repo config, so an origin a push scenario added must never reshape a
+later scenario's topbar.
+
 Every concurrent lane derives a distinct data dir, HOME, pi-agent dir, fixture repository, binary cache,
 desktop cache/state plus ready/control files, Playwright transform cache, restart artifacts,
 picker/editor/provider control files, host/restart/binary/desktop ports, and Central fixture artifacts. The

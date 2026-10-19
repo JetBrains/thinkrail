@@ -74,6 +74,10 @@ function resetState(): void {
 		}
 	} catch {}
 
+	try {
+		gitQuiet(E2E_FIXTURE_REPO, "remote", "remove", "origin");
+	} catch {}
+
 	git(E2E_FIXTURE_REPO, "worktree", "prune");
 	for (let sweep = 0; sweep < 2; sweep += 1) {
 		const branches = gitText(
