@@ -42,6 +42,7 @@ import {
 	TODO_REVIEW_FIX_CUSTOM_TYPE,
 	TURN_CHANGES_PROTOCOL_VERSION,
 	WINDOWS_SHELL_SETTINGS_PROTOCOL_VERSION,
+	WORKSPACE_READ_STATE_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	WS_CHANNELS,
 	WS_METHODS,
@@ -196,8 +197,15 @@ test("the project trust summary and pi-level resource consent are pinned to v81"
 	expect(WS_METHODS.projectTrustSummary).toBe("project.trustSummary");
 });
 
+test("workspace read state is pinned to v86", () => {
+	expect(PROTOCOL_VERSION).toBe(86);
+	expect(WORKSPACE_READ_STATE_PROTOCOL_VERSION).toBe(86);
+	expect(WS_METHODS.workspaceMarkUnread).toBe("workspace.markUnread");
+	expect(WS_METHODS.workspaceMarkRead).toBe("workspace.markRead");
+});
+
 test("project rename is pinned to v85", () => {
-	expect(PROTOCOL_VERSION).toBe(85);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_RENAME_PROTOCOL_VERSION);
 	expect(PROJECT_RENAME_PROTOCOL_VERSION).toBe(85);
 	expect(WS_METHODS.projectRename).toBe("project.rename");
 });

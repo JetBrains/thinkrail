@@ -930,6 +930,13 @@ acknowledgeable. `session.nudge` atomically no-ops for needs-input, queues durin
 an idle session. These coordinated methods start at `SESSION_STATE_PROTOCOL_VERSION`; older hosts simply
 provide no cross-workspace state.
 
+`workspace.markUnread` / `workspace.markRead` (`{ id }`, v86, **`WORKSPACE_READ_STATE_PROTOCOL_VERSION`**)
+are the explicit read gestures over the same receipts. *Unread* relights the workspace's most recently
+active idle, unblocked, background-free session whose latest completion is read and not cancelled, and
+answers that `record` (or `null` when none qualifies); *read* acknowledges every unread completion in the
+workspace and answers the changed `records`. Both cover disk-only sessions, never touch needs-input, and
+converge other clients through `session.state` pushes. A pre-v86 host offers neither, so clients hide them.
+
 The request registry also keeps `session.activityList` returning literal `[]` for one compatibility window,
 so an already-loaded old client clears retired markers after reconnect. No activity push or type returns.
 

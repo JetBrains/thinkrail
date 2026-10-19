@@ -112,7 +112,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 85;
+export const PROTOCOL_VERSION = 86;
+export const WORKSPACE_READ_STATE_PROTOCOL_VERSION = 86;
 export const PROJECT_RENAME_PROTOCOL_VERSION = 85;
 export const MCP_TOOL_GRANTS_PROTOCOL_VERSION = 84;
 export const MCP_PROTOCOL_VERSION = 83;
@@ -213,6 +214,8 @@ export const WS_METHODS = {
 	workspaceSetDiffBase: "workspace.setDiffBase",
 	workspaceSettle: "workspace.settle",
 	workspaceUnsettle: "workspace.unsettle",
+	workspaceMarkUnread: "workspace.markUnread",
+	workspaceMarkRead: "workspace.markRead",
 	workspaceWatchReady: "workspace.watchReady",
 	workspaceOpenIn: "workspace.openIn",
 	workspaceReveal: "workspace.reveal",
@@ -587,6 +590,8 @@ export interface WsMethodMap {
 	"workspace.setDiffBase": { params: { id: string; ref: string | null }; result: Workspace };
 	"workspace.settle": { params: { id: string }; result: Workspace };
 	"workspace.unsettle": { params: { id: string }; result: Workspace };
+	"workspace.markUnread": { params: { id: string }; result: { record: SessionStateRecord | null } };
+	"workspace.markRead": { params: { id: string }; result: { records: SessionStateRecord[] } };
 	"workspace.watchReady": {
 		params: { workspaceId: string; prewarm?: boolean };
 		result: WorkspaceWatchReadyResult;
