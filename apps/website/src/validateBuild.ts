@@ -128,7 +128,7 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 		{
 			name: "introducingThinkRail",
 			html: pages.introducingThinkRail,
-			expectedDownloads: 1,
+			expectedDownloads: 2,
 		},
 		...islandPages.map((name) => ({ name, html: pages[name], expectedDownloads: 1 })),
 	] as const;
@@ -202,6 +202,16 @@ export async function validateBuild(distDirectory = `${import.meta.dir}/../dist`
 			if (pages[name].includes(redundantCopy)) {
 				failures.push(`${name}: retained redundant install copy: ${redundantCopy}`);
 			}
+		}
+	}
+	if (!pages.landing.includes('data-install-picker="hero"')) {
+		failures.push("landing: hero install picker is missing");
+	}
+	for (const [path, html] of htmlPages) {
+		if (!/^blog\/[^/]+\/index\.html$/.test(path)) continue;
+		const picker = html.indexOf('data-install-picker="blog"');
+		if (picker < 0 || html.indexOf("Browser UI via command line", picker) < 0) {
+			failures.push(`${path}: blog install picker is missing`);
 		}
 	}
 	if (!pages.landing.includes("Browser UI via command line")) {

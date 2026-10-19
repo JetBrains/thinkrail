@@ -61,7 +61,7 @@ export type WebsiteInstallCtaClickedProperties = {
 
 export type WebsiteInstallCommandCopiedProperties = {
 	content_key: string;
-	cta_location: "hero" | "install_section";
+	cta_location: "hero" | "install_section" | "blog_post";
 	shell: "sh" | "powershell" | "cmd";
 };
 

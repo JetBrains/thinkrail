@@ -215,6 +215,19 @@ describe("CTA classification", () => {
 				install_method: "cli",
 			},
 		});
+		expect(
+			cliDisclosureOpenedEvent(
+				"blog/thinkrail-0-2-0-review-the-turn",
+				disclosure(true, ".blog-post details.cli-disclosure"),
+			),
+		).toEqual({
+			event: "install_cta_clicked",
+			properties: {
+				content_key: "blog/thinkrail-0-2-0-review-the-turn",
+				cta_location: "blog_post",
+				install_method: "cli",
+			},
+		});
 		expect(cliDisclosureOpenedEvent(contentKey, disclosure(true, "details.other"))).toBeUndefined();
 	});
 });
@@ -277,6 +290,20 @@ describe("install command copies and link shares", () => {
 		expect(installCommandCopiedEvent("landing", button)).toEqual({
 			event: "install_command_copied",
 			properties: { content_key: "landing", cta_location: "install_section", shell },
+		});
+	});
+
+	test("attributes a copy from the blog install picker to the post", () => {
+		const button = attributeElement(".blog-post", "[data-copy]", {
+			"data-copy": installCommands.windows.powershell,
+		});
+		expect(installCommandCopiedEvent("blog/thinkrail-0-2-0-review-the-turn", button)).toEqual({
+			event: "install_command_copied",
+			properties: {
+				content_key: "blog/thinkrail-0-2-0-review-the-turn",
+				cta_location: "blog_post",
+				shell: "powershell",
+			},
 		});
 	});
 

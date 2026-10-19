@@ -2594,6 +2594,10 @@ html:not(.anim) .term-caret {
 
 /* ── Blog Post Navigation ───────────────────────────────────────────────── */
 
+.blog-post-install {
+	margin-top: var(--space-2xl);
+}
+
 .blog-post-nav {
 	display: grid;
 	grid-template-columns: 1fr auto 1fr;

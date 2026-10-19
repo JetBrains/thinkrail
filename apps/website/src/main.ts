@@ -310,7 +310,9 @@ if (installPicker) {
 	const shellTabs = installPicker.querySelectorAll<HTMLButtonElement>("[data-windows-shell]");
 	const shellPanels = installPicker.querySelectorAll<HTMLElement>("[data-windows-shell-panel]");
 
+	const drivesTerminal = installPicker.dataset.installPicker === "hero";
 	const syncActiveCommand = () => {
+		if (!drivesTerminal) return;
 		const osPanel = Array.from(platformPanels).find((panel) => !panel.hidden);
 		const shellPanel = osPanel?.querySelector<HTMLElement>(
 			"[data-windows-shell-panel]:not([hidden])",

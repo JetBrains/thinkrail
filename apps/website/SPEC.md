@@ -206,10 +206,10 @@ section, quick start, final CTA, or blog post; one recognized activation emits `
 (`desktop`) followed by `download_started`. When a consented journey context is available, the activation
 creates and stores a canonical per-download bridge ID before `download_started`, and that event carries
 the same ID. A later desktop download replaces only the stored latest bridge ID; a download without
-consent remains bridge-less. Opening either landing command-line disclosure emits only
+consent remains bridge-less. Opening a command-line disclosure (the hero or blog-post picker's, or the install section's) emits only
 `install_cta_clicked` (`cli`); closing it does not. That open is browsing, not install intent: a
 primary-button click on a `[data-copy]` control whose value is a known install command emits
-`install_command_copied` with its `sh`/`powershell`/`cmd` shell and hero or install-section location
+`install_command_copied` with its `sh`/`powershell`/`cmd` shell and hero, install-section, or blog-post location
 (other copy values emit nothing; selecting and copying the text manually is not observed). Any other
 link into the `JetBrains/thinkrail` repository (exact repo, `#`/`?` suffix, or sub-path; never a
 sibling repository or a desktop alias) emits `github_clicked` with a `repo`/`releases`/`other` target
@@ -319,7 +319,15 @@ current desktop-first hierarchy rather than freezing obsolete CLI-only instructi
   blog pages** (the landing keeps its section tabs; page-level Landing/Blog tabs were explicitly
   rejected for now). The right rail's Files list shows the published articles (current one
   active); the terminal keeps its static install transcript — `main.ts` guards make every
-  landing-only enhancement inert (no sections → no scroll-spy, no picker → no terminal replay).
+  landing-only enhancement inert (no sections → no scroll-spy; only the `hero` picker drives the
+  terminal replay).
+- **Every article ends with the landing's install picker.** `src/components/InstallPicker.astro` is the
+  one picker markup (OS tabs, desktop downloads, **Browser UI via command line** disclosure with Windows
+  shell tabs); the hero renders it with `idPrefix="hero"` and `src/pages/blog/[slug].astro` with
+  `idPrefix="blog"` in a `.blog-post-install` section after the post body. It sits inside `.blog-post`,
+  so its downloads, copies, and disclosure opens report `blog_post`, and outside `.blog-post-content`, so
+  the prose cascade never restyles it. `main.ts` drives whichever picker the page has; posts keep their
+  own prose install guidance, and `validateBuild.ts` requires the picker on every article.
   Post cards are whole-card links that signal hover on the border alone (no underline, no movement)
   and share the landing feature cards' surface, which keeps the `--elevated` tag chips visible on
   them. Theming: BaseHead (theme guard, fonts, analytics) + the `src/theme.ts` toggle via the

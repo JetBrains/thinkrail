@@ -1,6 +1,7 @@
 ---
 import BaseHead from "../components/BaseHead.astro";
 import IdeShell from "../components/IdeShell.astro";
+import InstallPicker from "../components/InstallPicker.astro";
 import { desktopInstallerPlatforms, installCommands, windowsShellLabels } from "../installCommands";
 ---
 
@@ -52,104 +53,7 @@ import { desktopInstallerPlatforms, installCommands, windowsShellLabels } from "
 						</button>
 						<p class="send-link-note">ThinkRail runs on macOS, Windows, and Linux.</p>
 					</div>
-					<div class="install-picker install-picker-hero" data-install-picker>
-						<div class="install-frame">
-							<div class="install-tabs">
-								<div class="install-os-tabs" role="tablist" aria-label="Choose your operating system">
-									{desktopInstallerPlatforms.map(({ id, label }) => (
-										<button
-											type="button"
-											class="install-tab"
-											role="tab"
-											id={`hero-install-${id}-tab`}
-											aria-controls={`hero-install-${id}`}
-											aria-selected={id === "linux" ? "true" : "false"}
-											tabindex={id === "linux" ? undefined : "-1"}
-											data-install-platform={id}
-										>
-											{label}
-										</button>
-									))}
-								</div>
-							</div>
-							{desktopInstallerPlatforms.map(({ id, label, detail, downloads }) => (
-								<div
-									class="install-panel"
-									id={`hero-install-${id}`}
-									role="tabpanel"
-									aria-labelledby={`hero-install-${id}-tab`}
-									data-install-panel={id}
-								>
-									<p class="install-fallback-heading">{label}</p>
-									<div class="desktop-install">
-										<span class="desktop-install-detail">{detail}</span>
-										<div class="desktop-install-actions">
-											{downloads.map((download) => (
-												<a class="btn btn-primary desktop-download-link" href={download.href} aria-label={`${download.label} for ${label}: ${detail}`}>
-													{download.label} ↓
-												</a>
-											))}
-										</div>
-									</div>
-									<details class="cli-disclosure">
-										<summary>Browser UI via command line</summary>
-										<div class="cli-disclosure-body">
-											<p class="browser-ui-note">Install the local launcher; run <code>thinkrail</code> to open the browser UI.</p>
-											{id === "windows" && (
-												<div class="windows-shell-tabs" role="tablist" aria-label="Choose your Windows shell">
-													<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-powershell-tab" aria-controls="hero-shell-powershell" aria-selected="true" data-windows-shell="powershell">{windowsShellLabels.powershell}</button>
-													<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-cmd-tab" aria-controls="hero-shell-cmd" aria-selected="false" tabindex="-1" data-windows-shell="cmd">{windowsShellLabels.cmd}</button>
-													<button type="button" class="windows-shell-tab" role="tab" id="hero-shell-wsl-tab" aria-controls="hero-shell-wsl" aria-selected="false" tabindex="-1" data-windows-shell="wsl">{windowsShellLabels.wsl}</button>
-												</div>
-											)}
-										{id === "windows" ? (
-											<div class="windows-shell-picker">
-												<div class="windows-shell-panel" id="hero-shell-powershell" role="tabpanel" aria-labelledby="hero-shell-powershell-tab" data-windows-shell-panel="powershell">
-													<p class="install-fallback-heading">{windowsShellLabels.powershell}</p>
-													<div class="install-line">
-														<code data-install-command tabindex="0">{installCommands.windows.powershell}</code>
-														<button type="button" class="copy-btn" data-copy={installCommands.windows.powershell} aria-label="Copy PowerShell install command">
-															<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
-															<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
-														</button>
-													</div>
-												</div>
-												<div class="windows-shell-panel" id="hero-shell-cmd" role="tabpanel" aria-labelledby="hero-shell-cmd-tab" data-windows-shell-panel="cmd">
-													<p class="install-fallback-heading">{windowsShellLabels.cmd}</p>
-													<div class="install-line">
-														<code data-install-command tabindex="0">{installCommands.windows.cmd}</code>
-														<button type="button" class="copy-btn" data-copy={installCommands.windows.cmd} aria-label="Copy Command Prompt (cmd) install command">
-															<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
-															<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
-														</button>
-													</div>
-												</div>
-												<div class="windows-shell-panel" id="hero-shell-wsl" role="tabpanel" aria-labelledby="hero-shell-wsl-tab" data-windows-shell-panel="wsl">
-													<p class="install-fallback-heading">{windowsShellLabels.wsl}</p>
-													<div class="install-line">
-														<code data-install-command tabindex="0">{installCommands.windows.wsl}</code>
-														<button type="button" class="copy-btn" data-copy={installCommands.windows.wsl} aria-label="Copy WSL install command">
-															<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
-															<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
-														</button>
-													</div>
-												</div>
-											</div>
-										) : (
-											<div class="install-line">
-												<code data-install-command tabindex="0">{installCommands[id]}</code>
-												<button type="button" class="copy-btn" data-copy={installCommands[id]} aria-label={`Copy ${label} CLI install command`}>
-													<svg class="i" aria-hidden="true"><use href="#i-copy" /></svg>
-													<svg class="i i-done" aria-hidden="true"><use href="#i-check" /></svg>
-												</button>
-											</div>
-											)}
-										</div>
-									</details>
-								</div>
-							))}
-						</div>
-					</div>
+					<InstallPicker idPrefix="hero" />
 					<div class="hero-ctas">
 						<a class="btn" href="https://github.com/JetBrains/thinkrail" target="_blank" rel="noopener noreferrer">
 							<svg class="i i-fill" aria-hidden="true"><use href="#i-github" /></svg>
