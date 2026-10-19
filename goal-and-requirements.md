@@ -93,7 +93,9 @@ What ThinkRail does, at product level; the linked spec owns the detail.
 - **Open PR** — push the workspace branch and open or update its GitHub PR through the user's `gh`,
   falling back to a prefilled compare URL (GitLab: the prefilled new-MR page), from the plan or straight
   from the topbar, whose Remote and Pull request segments always show the branch's next step — publish,
-  push, sync, open a PR described from the plan, commits, a template, or an agent draft
+  push, sync, open a PR described from the plan, commits, a template, or an agent draft — and, for an open
+  GitHub PR, its checks and review decision with mark ready, merge, fix failing checks or integrate a
+  diverged branch with the agent, reopen, and delete the remote branch
   ([[submodule-server-pr]], [[submodule-web-shell-location-bar]]).
 - **Specs** — the agent searches, navigates, and maintains the spec graph through `spec_*` tools; the
   read-only Specs tool renders it as a tree ([[module-spec-graph]], [[submodule-server-spec]]).
