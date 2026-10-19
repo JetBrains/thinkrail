@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { reportFatalError } from "../analytics";
 import { describeError } from "../log";
 import { dataDir } from "../persistence";
 
@@ -25,7 +26,8 @@ let installed = false;
 export function installCrashLog(appVersion?: string): void {
 	if (installed || process.env.NODE_ENV === "test") return;
 	installed = true;
-	const report = (kind: CrashKind, error: unknown): never => {
+	let crashing = false;
+	const report = (kind: CrashKind, error: unknown): void => {
 		const record = formatCrashRecord(kind, error, new Date(), process.uptime(), appVersion);
 		process.stderr.write(`\nthinkrail host: fatal ${kind}\n${record}`);
 		try {
@@ -36,7 +38,9 @@ export function installCrashLog(appVersion?: string): void {
 		} catch (writeError) {
 			process.stderr.write(`thinkrail host: could not write the crash report: ${writeError}\n`);
 		}
-		process.exit(1);
+		if (crashing) return;
+		crashing = true;
+		void reportFatalError(error).finally(() => process.exit(1));
 	};
 	process.on("uncaughtException", (error) => report("uncaughtException", error));
 	process.on("unhandledRejection", (reason) => report("unhandledRejection", reason));

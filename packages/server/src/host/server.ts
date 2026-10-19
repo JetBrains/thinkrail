@@ -59,6 +59,7 @@ import {
 import {
 	type AnalyticsOptions,
 	initializeAnalytics,
+	reportError,
 	shutdownAnalytics,
 	startAttributionClaim,
 	track,
@@ -74,7 +75,7 @@ import {
 import { forgetOpenBranchReview } from "../branch-review";
 import { redeliverInterview, releaseInterview, setFeedbackPublisher } from "../feedback";
 import { watchLocalLocales } from "../locales";
-import { logger } from "../log";
+import { logger, observeLoggedErrors } from "../log";
 import { loadWorkspaces } from "../persistence";
 import {
 	getProjects,
@@ -420,6 +421,11 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 							} catch (err) {
 								const error = err instanceof Error ? err.message : String(err);
 								log.debug(`ws ${methodDiagnostic} failed`);
+								reportError(err, {
+									source: "request",
+									handled: true,
+									...(methodDiagnostic === method ? { requestMethod: method } : {}),
+								});
 								const code = errorCodeOf(err);
 								return JSON.stringify({
 									id: requestId,
@@ -844,6 +850,9 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		...(analytics ?? {}),
 		additionalEnabled: initialAdditionalAnalyticsEnabled(initialConfig),
 	});
+	observeLoggedErrors((scope, error) =>
+		reportError(error, { source: "host_logged", handled: true, scope }),
+	);
 	reviveTerminalSessions();
 	for (const workspace of loadWorkspaces()) provisionInitialTerminal(workspace);
 
@@ -864,6 +873,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		setupObservation.clear();
 		runObservation.reset();
 		taskObservation.clear();
+		observeLoggedErrors(null);
 		void shutdownAnalytics();
 		stopHostUpdateChecks();
 		cancelAllLogins();

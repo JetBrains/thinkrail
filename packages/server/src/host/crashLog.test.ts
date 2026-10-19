@@ -124,3 +124,33 @@ test("a test runner's own process is left alone — it reports faults itself", a
 	expect(await new Response(proc.stderr).text()).toBe("0");
 	expect(await proc.exited).toBe(0);
 });
+
+test("a crash is reported to PostHog as a fatal exception before the process exits", async () => {
+	const batches: Array<{ event: string; properties: Record<string, unknown> }> = [];
+	const collector = Bun.serve({
+		port: 0,
+		hostname: "127.0.0.1",
+		async fetch(request) {
+			batches.push(...((await request.json()) as { batch: typeof batches }).batch);
+			return new Response("{}");
+		},
+	});
+	try {
+		const { exitCode, log } = await runCrashing(
+			`import { initializeAnalytics } from ${JSON.stringify(join(import.meta.dir, "..", "analytics", "index.ts"))};\n` +
+				`initializeAnalytics({ posthogApiKey: "phc_test", posthogHost: "http://127.0.0.1:${collector.port}", build: "binary", additionalEnabled: false, env: {} });\n` +
+				`setTimeout(() => { throw new Error("boom in " + ${JSON.stringify(tmpdir())} + "/private-project"); }, 0);`,
+		);
+		expect(exitCode).toBe(1);
+		expect(log).toContain("private-project");
+		const crash = batches.find((entry) => entry.event === "$exception");
+		expect(crash?.properties).toMatchObject({
+			source: "host_crash",
+			handled: false,
+			$exception_level: "fatal",
+		});
+		expect(JSON.stringify(crash)).not.toContain("private-project");
+	} finally {
+		collector.stop(true);
+	}
+});

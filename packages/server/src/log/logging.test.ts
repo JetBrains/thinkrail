@@ -15,6 +15,8 @@ import {
 	LOG_RETENTION_FILES,
 	LOG_SCHEMA_VERSION,
 	LOG_TOTAL_FILES,
+	logger,
+	observeLoggedErrors,
 	resolveLogLevel,
 	serializeLogError,
 	shouldLog,
@@ -158,4 +160,32 @@ describe("error normalization", () => {
 		});
 		expect(describeError({ reason: "odd" })).toBe('Non-Error thrown: {"reason":"odd"}');
 	});
+});
+
+test("the logged-error observer sees warn/error calls with an error, independent of the threshold", () => {
+	const seen: Array<[string, unknown]> = [];
+	const boom = new Error("boom");
+	const stderr = process.stderr.write;
+	process.stderr.write = (() => true) as typeof process.stderr.write;
+	try {
+		observeLoggedErrors((scope, error) => {
+			seen.push([scope, error]);
+			throw new Error("observer failure must not escape");
+		});
+		const log = logger("probe");
+		log.debug("debug with error", boom);
+		log.info("info with error", boom);
+		log.warn("warn without error");
+		log.warn("warn with error", boom);
+		log.error("error with error", boom);
+		observeLoggedErrors(null);
+		log.error("after reset", boom);
+	} finally {
+		observeLoggedErrors(null);
+		process.stderr.write = stderr;
+	}
+	expect(seen).toEqual([
+		["probe", boom],
+		["probe", boom],
+	]);
 });

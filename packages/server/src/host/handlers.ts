@@ -382,7 +382,7 @@ function fireTodoFixPrompt(
 			},
 		)
 		.catch((err) => {
-			console.warn(`todo fix rollback failed: ${err instanceof Error ? err.message : err}`);
+			log.warn("todo fix rollback failed", err);
 		})
 		.finally(() => releaseItemFix(p.sessionId, p.id));
 }
