@@ -1,7 +1,7 @@
 import MonacoReact, { type OnMount } from "@monaco-editor/react";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import type { editor } from "monaco-editor/esm/vs/editor/editor.api.js";
-import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { use, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useResourceHost, useResourcePreferences } from "../host";
 import type { ResourceViewProps, SurfaceReview } from "../registry";
 import { MonacoReviewZones } from "./MonacoReviewZones";
@@ -39,6 +39,7 @@ export default function MonacoEditor({
 }: ResourceViewProps) {
 	const { fileLineWidth, fileLineWidthBounded } = useResourcePreferences();
 	use(ensureMonaco(useResourceHost().code));
+	const modelScope = useId().replace(/[^\w-]/g, "");
 	const options = useMemo(
 		() => fileEditorOptions(fileLineWidth, fileLineWidthBounded, resource.path),
 		[fileLineWidth, fileLineWidthBounded, resource.path],
@@ -114,7 +115,7 @@ export default function MonacoEditor({
 		<>
 			<MonacoReact
 				height="100%"
-				path={resource.path}
+				path={`${modelScope}/${resource.path}`}
 				value={text}
 				language={languageForPath(resource.path)}
 				theme={EDITOR_THEME}

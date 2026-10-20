@@ -460,6 +460,30 @@ test("a file preview fits HTML to a design width and opens full screen and in a 
 	}
 });
 
+test("closing a full-screen code preview keeps the card's editor showing the file", async ({
+	page,
+}) => {
+	const cleanup = writeMockups({ "sample.ts": "export const cardGreeting = 1;\n" });
+	try {
+		const card = await openVisualization(page, "code preview", {
+			type: "file",
+			path: `${MOCKUP_DIR}/sample.ts`,
+		});
+		const lines = card.getByTestId("resource-preview").locator(".monaco-editor .view-lines");
+		await expect(lines).toContainText("cardGreeting");
+
+		await card.getByTestId("tool-visualize-fullscreen").click();
+		const dialog = page.getByTestId("tool-visualize-fullscreen-dialog");
+		await expect(dialog.locator(".monaco-editor .view-lines")).toContainText("cardGreeting");
+		await page.keyboard.press("Escape");
+		await expect(dialog).toBeHidden();
+
+		await expect(lines).toContainText("cardGreeting");
+	} finally {
+		cleanup();
+	}
+});
+
 test("a before/after preview opens as a diff tab over the two files that survives a reload", async ({
 	page,
 }) => {

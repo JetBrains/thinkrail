@@ -498,7 +498,10 @@ content's own height.
   context menu/copy, links, hover, word highlighting, sticky scroll, go-to-line/command palette, read-only
   messaging and Unicode highlighting); keeping word highlighting preserves F7. The TS/JS/JSON/CSS/HTML
   language-service contributions and their workers are absent, so this viewer emits no language-service
-  diagnostics by construction.
+  diagnostics by construction. Each editor mount owns its model: the model id is a per-mount `useId` scope
+  ahead of the path, because `@monaco-editor/react` shares one model per `path` and disposes it with
+  whichever editor unmounts first, which blanked the surviving view once the same file could be on screen
+  twice (a chat card and its full screen, a card and the file's tab).
 - **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` has the sole `EDITOR_THEME`.
   Themes own one TextMate scope definition: chat uses its live CSS-variable form, while Monaco resolves that
   same definition plus its complete editor/widget/menu/input colour map to hex, loads it into a dedicated
