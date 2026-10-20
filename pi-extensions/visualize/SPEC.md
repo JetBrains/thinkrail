@@ -38,7 +38,9 @@ result in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes
   workspace path (plus an optional `before` path for a before/after view, rejected when it names the same
   file) rather than inline HTML, so a
   host renders it with its existing file renderers and review comments anchor to a real file the agent
-  then edits in place. The tool's one `promptGuidelines` entry asks the agent to write a self-contained
+  then edits in place. The flip side is that a rendered file is always its current content: iterating on a
+  mockup updates every earlier card, so the guideline tells the agent to copy a proposal it wants to keep
+  visible and pass the copy as `before`. The tool's one `promptGuidelines` entry asks the agent to write a self-contained
   HTML mockup (inline CSS, `data:` images, controls drawn with styled elements because hosts may strip
   scripts, form controls and external resources) and show it this way whenever it proposes or asks
   about a UI change. The model-facing result and the terminal are one line naming the path(s); a

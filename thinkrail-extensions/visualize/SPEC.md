@@ -61,8 +61,12 @@ completed `type: "file"` call renders `FileCard`: the title, the `before → pat
 `onOpenFile`), and [[module-resource-renderers]]' `ResourcePreview` for the path and `before` — the same
 renderers, diff and review comments as diff review. The card frame is a fixed 480px box (Monaco and bounded
 diffs need a height) whose toolbar adds **Open in tab** (`host.openFile` keep, or `host.openComparison` for a
-before/after) and **Full screen** (a 95vw × 90vh dialog rendering the same preview with Split/Inline; renderer
-choice and view state, such as the HTML preview width, are shared with the card). The workspace and chat come from `useResourceScope`, which the chat transcript provides to
+before/after) and **Full screen** (a dialog rendering the same preview with Split/Inline; renderer choice and
+view state, such as the HTML preview width, are shared with the card). A card always shows the file's
+**current** content, never a snapshot from the tool call: editing a mockup updates every card that shows it
+(review comments follow the file), and a deleted mockup turns its cards into a load error. That is the price
+of anchoring review to real files; the tool guideline asks the agent to keep an earlier proposal as a copy
+passed as `before` when it should stay visible. The workspace and chat come from `useResourceScope`, which the chat transcript provides to
 its rows, so review sends land in the chat that shows the card; with no host or scope (a subagent transcript)
 the card shows only the links. The
 registration is primary and expanded by default; its title or diagram/comparison/file summary is available

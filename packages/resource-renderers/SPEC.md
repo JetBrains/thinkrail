@@ -25,48 +25,45 @@ diff panes, the file-comparison diff tab, and extension tool cards (visualize's 
 One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
 
 - the registry contract — types, `registerResourceRenderer`, `resolveRenderers`, `describeResource`,
-  `anchorLabel`, `isPlaceable`, `threadLabel`, `outdatedReason`, and the selection helpers
-  `selectResourceRenderer`, `rendererImplementationKey`, `rendererTestId`, and the content rules every surface
-  shares — `resourceContent(text, meta, url)` (no metadata yet is provisional text, a missing hash is an absent
-  side, a binary side without a byte URL is absent), `diffResourceMeta(original, modified)` (a diff is
-  described by its modified side unless that side is absent, and is text only when both present sides are)
-  and `PENDING_TEXT_META` — plus `registerBundledResourceRenderers()` (idempotent);
+  `anchorLabel`, `isPlaceable`, `threadLabel`, `outdatedReason`, `rendererImplementationKey`, and the content
+  rules every surface shares: `resourceContent(text, meta, url)` (no metadata yet is provisional text, a
+  missing hash is an absent side, a binary side without a byte URL is absent), `diffResourceMeta(original,
+  modified)` (a diff is described by its modified side unless that side is absent, and is text only when
+  both present sides are) and `PENDING_TEXT_META` — plus `registerBundledResourceRenderers()` (idempotent);
 - the host seam — `ResourceHostProvider`, `ResourcePreferencesProvider`, `ResourceEnvironmentProvider`,
-  `ResourceScopeProvider`, `useResourceHost`, `useOptionalResourceHost`, `useResourceScope` and the `ResourceHost`, `ResourcePreferences`, `ResourceScope`,
-  `ResourceFileReviewProps`, `ResourceReviewSendProps`, `ResourceMarkdown`, `ResourceCodeHost`,
-  `ResourceCodeLanguage`, `ResourceMarkdownProps`, `MarkdownRehypePlugins` types;
-- the large-diff policy — `isDiffTooExpensive`, `estimateChangedLines`, `surfaceChangedLines`,
-  `surfaceLineCount`, `LARGE_DIFF_CHANGED_LINES`, `VIRTUALIZED_DIFF_LINES` — and its `ExpensiveDiffNotice`
-  (`diff-too-large` / **Show diff anyway**, with a caller action slot), shared by the app's diff surface and
-  `ResourcePreview` so a huge comparison never runs the unrestricted diff on its own;
+  `ResourceScopeProvider`, `useOptionalResourceHost`, `useResourceScope` and the `ResourceHost`,
+  `ResourcePreferences`, `ResourceScope`, `ResourceFileReviewProps`, `ResourceReviewSendProps`,
+  `ResourceMarkdown`, `ResourceCodeHost`, `ResourceCodeLanguage`, `ResourceMarkdownProps`,
+  `MarkdownRehypePlugins` types;
 - `canonicalWorkspacePath` — the package's copy of the app's workspace-relative path identity (`lib`'s
   `projectRelativePath`: POSIX separators, no `.` or empty segments, inner `..` resolved;
   `apps/web/src/panels/pathIdentity.test.ts` keeps the two equal); `describeResource` and `ResourcePreview`
   use it, so a `./`-prefixed tool path reads, refreshes and anchors review comments under the same path the
   host's fs events, the review store and an opened tab use;
-- **`ResourcePreview`** — a self-loading file view, or with `before` (another file) a before/after diff of two workspace
-  files, with the registry's toggle, the unplaced strip, review commenting and Send review, and caller slots
-  (`leading`, `actions`, controlled `rendererId` / `layout`, and an opaque `viewState` it tags with the
-  renderer implementation that wrote it, so a renderer switch never restores another renderer's state and a
-  caller needs no reset); its diff mounts through the same `GuardedRendererDiff` as the app's diff surface;
-- the pieces panes compose around a renderer: the lazy `RendererView` / `RendererDiff` mounts (implementation
-  identity = renderer id + phone class) and `useRendererSelection(resource, intent, rendererId)` (candidates for
-  the environment's phone class, the selected renderer, its implementation key and placed-thread state — the
-  one selection sequence the file pane, the diff surface and `ResourcePreview` run); **`GuardedRendererDiff`** — the one diff mount every surface uses:
-  the expensive-diff notice until **Show diff anyway** (per mount, with a caller action slot), then
-  `RendererDiff` virtualized above `VIRTUALIZED_DIFF_LINES` of the caller's `lineCount`; **`RendererToggles`**
-  — the renderer candidate segments every toolbar shows, plus Split/Inline when the caller passes a diff
-  `layout`, the renderer supports layout and the viewport is not phone-class (one rule, so a phone never
-  shows a layout the diff refuses, and a single-file view never shows diff layout);
-  `usePlacedThreadIds`, `UnplacedReviewStrip` /
-  `unplacedReviewEntries` / `focusedUnplacedEntry`, `ReviewThreadCard`,
-  `ReviewDraftContext`/`ReviewDraftPersistence`, and `createAskAgentRequest`.
+- **`ResourcePreview`** — a self-loading file view, or with `before` (another file) a before/after diff of two
+  workspace files, with the registry's toggle, the unplaced strip, review commenting and Send review, and
+  caller slots (`leading`, `actions`, controlled `rendererId` / `layout`, and an opaque `viewState` it tags
+  with the renderer implementation that wrote it, so a renderer switch never restores another renderer's
+  state and a caller needs no reset);
+- the pieces every surface composes a renderer from, so a file tab, a diff tab, a Changes section and
+  `ResourcePreview` run one sequence:
+  - `useRendererSelection(resource, intent, rendererId)` — candidates for the environment's phone class, the
+    selected renderer, its implementation key (renderer id + phone class) and the placed-thread state;
+  - the lazy `RendererView` mount and **`GuardedRendererDiff`**, the one diff mount: the expensive-diff notice
+    (`diff-too-large` / **Show diff anyway**, per mount, with a caller action slot) until opted in, then the
+    lazy diff renderer, virtualized above `VIRTUALIZED_DIFF_LINES` of the caller's `lineCount`
+    (`surfaceLineCount`);
+  - **`RendererToggles`** — the renderer candidate segments, plus Split/Inline when the caller passes a diff
+    `layout`, the renderer supports layout and the viewport is not phone-class (one rule, so a phone never
+    shows a layout the diff refuses and a single-file view never shows diff layout);
+  - `UnplacedReviewStrip`, `ReviewThreadCard`, `ReviewDraftContext`/`ReviewDraftPersistence`, and
+    `createAskAgentRequest`.
 
 Renderer implementations are never exported; they stay behind each registration's dynamic
-`loadView`/`loadDiff`. The barrel's eager weight is registration metadata plus those pane-side pieces
-(`ResourcePreview` and the mounts, the unplaced strip, `ReviewThreadCard` with its composer, the draft context,
-`createAskAgentRequest` with `diff`), which the app's review panes and the chat's visualize card load eagerly
-anyway.
+`loadView`/`loadDiff`, and the large-diff estimate, the notice and the lazy diff mount stay behind
+`GuardedRendererDiff`. The barrel's eager weight is registration metadata plus those pane-side pieces, which
+the app's review panes and the chat's visualize card load eagerly anyway (the visualize card added about
+20 KiB to the web entry graph, measured with a production build).
 
 ## Host seam
 
@@ -199,6 +196,18 @@ stable ids, with an optional renderer-supplied id-to-ordinal map producing the l
 Paged regions are `p<page> region`; unpaged regions, lines, and files keep their existing forms. Registration
 carries only dispatch, geometry, viewport, and concrete diff-control capabilities; it has no unenforced
 provenance or execution-policy metadata. Sandboxing belongs to each renderer implementation.
+
+**Wide rewrites wait behind a notice.** Source diffs run on the main thread, and that cost tracks the number
+of changed lines, not the file size: a 10 MB all-added file diffs in ~0.1 s while ~10k changed lines take over
+20 s. Before mounting a diff renderer, `GuardedRendererDiff` estimates the changed lines (`largeDiff`: the
+linear multiset difference of the two sides' lines). Above `LARGE_DIFF_CHANGED_LINES` (2000, about a second of
+diffing), or when an order-sensitive check cannot finish within 50 ms / 2000 edits, it shows `diff-too-large`
+with **Show diff anyway** (per mount) and the caller's actions. A one-sided diff (added or deleted file) is
+never guarded: it costs no diffing. The bounded check closes the multiset estimate's blind spot for reordered
+lines. The notice says "This diff is too expensive to show automatically" without a line count; the guard
+answers only whether automatic rendering should wait. Every diff surface mounts through it, so the app's diff
+tabs and Changes sections, comparison tabs and chat cards cannot disagree.
+
 
 ## Bundled renderers
 
@@ -417,7 +426,7 @@ tall as its content, so its virtualizer "sees" every line and renders them all (
 text side's line count, including unchanged context) gets the same bounded `60vh` viewport as
 `"always"` renderers and owns its scroller. Counting source lines keeps expansions virtualized even
 when a large file has only a small edit, and covers untracked files without git's missing counts.
-The same threshold gates virtualization in every host: `DiffSurfaceBody` passes `virtualize` only
+The same threshold gates virtualization in every host: `GuardedRendererDiff` passes `virtualize` only
 above it, and below it `PierreDiff` withholds its virtualizer so the plain `FileDiff` renders every
 row, as before virtualization. Virtualizing small diffs bought nothing and cost two failures. A
 virtualized instance's hydrate measures its offset (forcing layout) while its container is still

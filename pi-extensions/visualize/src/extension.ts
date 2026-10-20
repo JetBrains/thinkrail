@@ -33,7 +33,7 @@ function promptGuidelines(scratchDir: string | undefined): string[] {
 		? `under \`${scratchDir}\``
 		: "in a scratch location outside version control";
 	return [
-		`When you propose or ask about a visual/UI change, write a self-contained HTML mockup ${where} (inline CSS and data: images only — hosts may strip scripts, form controls and external resources, so draw buttons and inputs with styled elements) and show it with visualize type 'file'; set \`before\` to a mockup of the current UI to show the change.`,
+		`When you propose or ask about a visual/UI change, write a self-contained HTML mockup ${where} (inline CSS and data: images only — hosts may strip scripts, form controls and external resources, so draw buttons and inputs with styled elements) and show it with visualize type 'file'; set \`before\` to a mockup of the current UI to show the change. Hosts render a file's current content, so editing a mockup updates every place it was shown; to keep an earlier proposal visible, copy it and pass the copy as \`before\`.`,
 	];
 }
 

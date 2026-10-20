@@ -190,6 +190,7 @@ describe("visualize extension", () => {
 
 	test("the prompt guideline names the host scratch directory when given", () => {
 		expect(loadTool().promptGuidelines?.[0]).toContain("outside version control");
+		expect(loadTool().promptGuidelines?.[0]).toContain("current content");
 		expect(
 			loadTool(undefined, { scratchDir: ".scratch/mockups/" }).promptGuidelines?.[0],
 		).toContain("`.scratch/mockups/`");

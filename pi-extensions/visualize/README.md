@@ -16,7 +16,8 @@ pi install npm:@thinkrail/pi-visualize
   workspace `path` (and an optional `before` path to a different file for a before/after view), plus an
   optional `title`.
   The tool's prompt guideline asks the agent to write a self-contained HTML mockup and show it this
-  way whenever it proposes a UI change.
+  way whenever it proposes a UI change. A host renders the file's current content, so a mockup the agent keeps
+  editing updates every place it was shown.
 - **Terminal rendering.** Flowcharts, state, sequence, class and ER diagrams, pies, mindmaps,
   timelines and git graphs are drawn as Unicode box-drawing right in the pi TUI, in your pi theme's
   colours (via [`lovely-mermaid`](https://github.com/xl0/lovely-mermaid), the same engine family pi uses

@@ -1822,17 +1822,9 @@ own section. The kebab menu (`plan-menu`, a
   is chosen in the Changes header and is part of the tab's identity), the file / `+ −` totals with the
   viewed count, *Collapse all* / *Expand all*, and `Send review (N)` over the workspace's drafts.
 
-  **Wide rewrites wait behind a notice.** Source diffs run on the main thread, and that cost
-  tracks the number of changed lines, not the file size: a 10 MB all-added file diffs in ~0.1 s while ~10k
-  changed lines take over 20 s. Before mounting a renderer, `DiffSurfaceBody` — and, through the same
-  [[module-resource-renderers]] `largeDiff` check and `ExpensiveDiffNotice`, `ResourcePreview`'s file
-  comparisons — estimates the changed lines (the linear multiset difference of the two sides' lines). Above
-  `LARGE_DIFF_CHANGED_LINES` (2000, about a second of diffing), or when an order-sensitive check cannot
-  finish within 50 ms / 2000 edits, it shows `diff-too-large` with **Show diff anyway** (per surface mount)
-  and, when a worktree-backed modified side exists, **Open file** into the desktop editor. A one-sided
-  diff (added or deleted file) is never guarded: it costs no diffing. The bounded check closes the multiset estimate's
-  blind spot for reordered lines. Both guards show “This diff is too expensive to show automatically”
-  without a line count; the guard returns only whether automatic rendering should wait.
+  **Wide rewrites wait behind a notice.** `DiffSurfaceBody` mounts its renderer through
+  [[module-resource-renderers]]' `GuardedRendererDiff` (the policy and its thresholds live there), adding
+  **Open file** into the desktop editor to the notice when a worktree-backed modified side exists.
 
   The bundled candidates and their behavior (code, markdown, binary, LFS, image, SVG, CSV, JSON, notebook,
   PDF, HTML, Pierre virtualization) are owned by [[module-resource-renderers]]; the panes only dispatch,

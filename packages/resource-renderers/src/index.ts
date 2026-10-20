@@ -14,7 +14,6 @@ export {
 	type ResourceScope,
 	ResourceScopeProvider,
 	useOptionalResourceHost,
-	useResourceHost,
 	useResourceScope,
 } from "./host";
 export {
@@ -40,26 +39,16 @@ export {
 	type ReviewThreadActions,
 	registerResourceRenderer,
 	rendererImplementationKey,
-	rendererTestId,
 	resolveRenderers,
 	resourceContent,
 	type SurfaceReview,
-	selectResourceRenderer,
 	threadLabel,
 } from "./registry";
 export { createAskAgentRequest } from "./renderers/code/changeBlocks";
 export { registerBundledResourceRenderers } from "./renderers/register";
 export { ReviewDraftContext, type ReviewDraftPersistence } from "./renderers/reviewDraftState";
-export { ExpensiveDiffNotice } from "./support/ExpensiveDiffNotice";
 export { GuardedRendererDiff } from "./support/GuardedRendererDiff";
-export {
-	estimateChangedLines,
-	isDiffTooExpensive,
-	LARGE_DIFF_CHANGED_LINES,
-	surfaceChangedLines,
-	surfaceLineCount,
-	VIRTUALIZED_DIFF_LINES,
-} from "./support/largeDiff";
+export { surfaceLineCount, VIRTUALIZED_DIFF_LINES } from "./support/largeDiff";
 export { type RendererLayout, RendererToggles } from "./support/RendererToggles";
 export {
 	ResourcePreview,
@@ -67,15 +56,5 @@ export {
 	type ResourcePreviewProps,
 } from "./support/ResourcePreview";
 export { ReviewThreadCard } from "./support/ReviewThreadCard";
-export {
-	RendererDiff,
-	RendererView,
-	usePlacedThreadIds,
-	useRendererSelection,
-} from "./support/rendererMount";
-export {
-	focusedUnplacedEntry,
-	type UnplacedReviewEntry,
-	UnplacedReviewStrip,
-	unplacedReviewEntries,
-} from "./support/UnplacedReviewStrip";
+export { RendererView, useRendererSelection } from "./support/rendererMount";
+export { UnplacedReviewStrip } from "./support/UnplacedReviewStrip";
