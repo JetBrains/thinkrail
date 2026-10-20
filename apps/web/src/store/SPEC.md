@@ -716,6 +716,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   it is measured against — the client-side mirror of the host's one resolution), **`selectDiffTabTargetRef`**
   (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for a
   commit/uncommitted one whose sides can't move — derived here, never re-assembled in a panel),
+  `selectChangesTabSection` (one Changes tab section by workspace, tab and path — the review-draft
+  persistence reads its scratch slots through it),
   `selectWorkspaceTick` (the sync-baseline snapshot), `selectWorkspaceSessionIds` (deduplicated local chat
   placement + history membership used as a reconnect-reconciliation baseline), normalized session-state
   selectors/actions (exact session + workspace/project needs-input/working/unread-finished rollups, direct

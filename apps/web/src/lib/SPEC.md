@@ -18,7 +18,9 @@ not this module; the theme-aware highlighter remains app-local.
   Monaco and xterm reject; `""` when unparseable). Plus the primitives that more than one module needs and
   none should re-state: **`normalizePath()`** / **`isAbsolutePath()`** (a path from a pi tool call or the
   host may use either separator and may be relative or absolute — every path predicate in the app starts
-  from these, so `chat`'s display helpers and `store`'s worktree matcher share one definition),
+  from these, so `chat`'s display helpers and `store`'s worktree matcher share one definition;
+  `@thinkrail/resource-renderers` keeps a one-line copy for `describeResource` because a package cannot
+  import the app's `lib`),
   **`viewport.ts`** → `isPhoneViewport()` plus the live `usePhoneViewport()` projection (coarse pointer
   or a viewport below 768px is phone-class; both media queries are observed), and **`shallowEqualArrays()`** (element-wise `Object.is` — the "did this really change?" test behind the
   store's snapshot-identity guard and `ErrorBoundary`'s reset keys), **`userText()`** (a user
@@ -71,8 +73,9 @@ not this module; the theme-aware highlighter remains app-local.
   cache on the client only (static renders, such as the rendered diff, stay plain), applies replies in
   request order, and shows the last highlight plus the newer streamed text as plain until the worker
   catches up. Both files stay out of the barrel and are imported per-file (`@/lib/highlighter`,
-  `@/lib/highlightCode`)
-  from lazy chunks only; theme
+  `@/lib/highlightCode`). Chat's markdown imports `highlightCode` statically and `shell/AppResourceHost` hands
+  the catalog to the resource renderers, so `@shikijs/core` is in the entry graph while every grammar and the
+  worker still load on first use; theme
   identity/palettes never live in `lib`. Collision-safe browser identity composition lives here too:
   **`tupleKey()`** length-prefixes independent strings, **`parseTupleKey()`** reads only its requested
   namespace, and **`layoutResourceIdentity()`** gives every frontend-local placement/cache alias one

@@ -24,34 +24,50 @@ diff panes consume it today, so a renderer fix lands everywhere at once.
 One barrel, `@thinkrail/resource-renderers` (`src/index.ts`): the registry contract (types,
 `registerResourceRenderer`, `resolveRenderers`, `describeResource`, `anchorLabel`, `isPlaceable`,
 `threadLabel`, `outdatedReason`), `registerBundledResourceRenderers()` (idempotent), the host seam
-(`ResourceHostProvider` and the `ResourceHost`, `ResourceMarkdown`, `ResourceCodeHost`, `ResourceCodeLanguage`,
-`ResourceMarkdownProps`, `MarkdownRehypePlugins` types), and the pieces panes compose around a renderer:
-`ReviewThreadCard`, `ReviewDraftContext`/`ReviewDraftPersistence`, and `createAskAgentRequest`. Renderer
-implementations are never exported; they stay behind each registration's dynamic `loadView`/`loadDiff`,
-so the barrel's eager weight is registration metadata only.
+(`ResourceHostProvider`, `ResourcePreferencesProvider` and the `ResourceHost`, `ResourcePreferences`,
+`ResourceMarkdown`, `ResourceCodeHost`, `ResourceCodeLanguage`, `ResourceMarkdownProps`, `MarkdownRehypePlugins`
+types), and the pieces panes compose around a renderer: `ReviewThreadCard`,
+`ReviewDraftContext`/`ReviewDraftPersistence`, and `createAskAgentRequest`. Renderer implementations are never
+exported; they stay behind each registration's dynamic `loadView`/`loadDiff`. The barrel's eager weight is
+registration metadata plus those pane-side pieces (`ReviewThreadCard` with its composer, the draft context,
+`createAskAgentRequest` with `diff`), which the app's review panes load eagerly anyway.
 
 ## Host seam
 
-A host wraps renderers in `ResourceHostProvider` with a `ResourceHost`:
+A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` value:
 
-- `loadMarkdown()` — resolves the component that renders markdown (`ResourceMarkdownProps`); the document
-  preview, rendered diff and notebook cells pass their plugins and components through it.
-- `loadCode()` — resolves the code-highlighting host (`languages` with grammar loaders, `languageId`
-  canonicalization, and the code `theme` resolved from CSS variables); Monaco initializes from it once
-  (`ensureMonaco`) and re-themes on every completed theme swap.
+- `markdown` — the component that renders markdown (`ResourceMarkdownProps`); the document preview, rendered
+  diff and notebook cells pass their plugins and components through it.
+- `code` — the code-highlighting host (`languages` with grammar loaders, `languageId` canonicalization, and
+  the code `theme` resolved from CSS variables). Monaco is page-global: the first `MonacoEditor` initializes it
+  from its host's `code` once (`ensureMonaco`), and every later editor reuses that setup; it re-themes on every
+  completed theme swap.
 - `bytesUrl(workspaceId, path, oid?)` — the host byte route for images, PDFs and relative markdown assets.
 - `openFile(workspaceId, path)` — where a relative document link navigates.
-- `fileLineWidth` / `fileLineWidthBounded` — the reader's line-width preference.
 
-Both loaders are **lazy**, cached per loader identity and read with `use`, because the host's markdown and
-the language catalog (with Shiki core) must stay out of the eager graph. The rendered markdown diff renders
-both sides with `renderToStaticMarkup`, outside the React tree, so it resolves the markdown component and
-links in its own render and passes them to `MarkdownDocument` explicitly — a context read or a lazy
-component inside a static render would throw (found by the Changes/rendered-diff e2e during extraction).
+Build the value once (the app does at module scope). Its functions are memo inputs: `documentComponents`
+defines its link and image components per call, so a new `bytesUrl`/`openFile` identity would remount every
+link and image in open previews and notebook cells. The reader's line-width preference
+(`fileLineWidth` / `fileLineWidthBounded`) arrives separately through `ResourcePreferencesProvider`; only
+`MonacoEditor` reads it, so a width change re-renders nothing else. The rendered markdown diff renders both
+sides with `renderToStaticMarkup`, outside the React tree, so it reads the markdown component and links in its
+own render and passes them to `MarkdownDocument` explicitly — a context read inside a static render would throw
+(found by the Changes/rendered-diff e2e during extraction).
 
 `ResourceRenderer.loadView(environment)` receives the same `ResourceEnvironment` (`{ mobile }`) used for
 resolution, so the code renderer picks Pierre `File` on phone-class viewports and Monaco otherwise without
 reading a viewport global.
+
+**Review-draft scratch is read per slot.** A pane that keeps transient authoring across remounts provides
+`ReviewDraftContext` with a `ReviewDraftPersistence` (`rendererId`, `read(key)`, `subscribe`, `update(key,
+change)`) that stays stable for the section's lifetime; without it every slot is local state.
+`useReviewDraftState` reads one slot through `useSyncExternalStore`, so a write re-renders only that slot's
+readers, not the renderer surface around them. A composer's text has its own slot next to its selection: the surface
+subscribes to the selection, and only `ReviewComposer` subscribes to the text, so a keystroke re-renders the
+composer alone instead of the surface and every annotation slot Pierre re-renders with it
+(`e2e/perf/changesComposerIsolation.perf.ts` pins this). Text writes land only while the selection that owns
+them is current; a new selection, a close or a stamp refresh retires the text; reopening the same selection
+keeps it.
 
 ## Decisions
 
@@ -59,13 +75,18 @@ reading a viewport global.
   through `@thinkrail/ext-visualize/web`; importing it would create a package → extension → package cycle
   once extensions render files. The package therefore owns only the props contract; its tests render through
   a test-only react-markdown + GFM helper.
-- **Code support is lazy.** An eager code host would pull `shiki/core` and the grammar catalog into the entry
-  graph that renderer chunks kept free; the web production eager graph stayed byte-equivalent across the
-  extraction (1,883 → 1,885 kB, the delta being registration and host code).
+- **Host values are plain and static.** The extraction first resolved markdown and code through lazy loaders
+  read with `use`, to keep chat's markdown and the Shiki catalog out of the entry graph. Both were already in
+  it — chat imports its markdown statically, and that pulls `lib/highlighter` and `@shikijs/core` — so the
+  loaders deferred nothing (rolldown reported the markdown import as ineffective) while costing a suspended
+  render on first mount and a loader-identity contract a host could break. Plain values removed both, and the
+  web eager graph shrank by about 1.5 kB. Preferences got their own context for the same reason the values are
+  static: a host value that changes re-renders every renderer that reads it.
 - **Small helpers moved with their only consumer or became primitives.** `stripFrontmatter`, `threadLabel`
   and `outdatedReason` live here; `ToggleSegment` and the one loading placeholder (`SkeletonRows` /
   `LoadingRegion`) became `@thinkrail/ui/toggle-segment` and `@thinkrail/ui/skeleton` because the app uses
-  them too. `describeResource` keeps a one-line local `normalizePath`.
+  them too. `describeResource` keeps a one-line local `normalizePath`, because the package cannot import the
+  app's `lib`.
 
 ## Boundary
 
@@ -134,7 +155,8 @@ whatever its extension) above the code renderer and shows a card — "Stored in 
 protocol in a Monaco editor explain nothing about why a `.png` has no image; Source stays one toggle
 away, and the renderer places no anchors, so a pointer's threads live in the unplaced strip.
 `RenderedDiff` keeps its worker-isolated htmldiff merge,
-loading/error states, and token styling, but advertises no diff anchors: both sides' threads stay in the
+loading/error states, and token styling (a text change keeps the previous merge on screen until the next one
+arrives, so a live refresh neither flashes the loading placeholder nor remounts the document), but advertises no diff anchors: both sides' threads stay in the
 pane's unplaced strip, **Show in Source** selects the code renderer, and diff authoring is available only
 in Source. It is selected by registry match rather than a path branch in the pane. Scopes whose modified
 side is historical receive no review surface or mutation actions.
@@ -411,12 +433,15 @@ content's own height.
   `align="left|right"` maps to a float utility rather than a presentational attribute. The source-line
   stamps for commenting are added **after** sanitizing, so the sanitizer can never strip them. The chat
   `Markdown` primitive is untouched: model output is not a document the user authored.
-- **Desktop file source wraps at the synchronized file column.** `MonacoEditor` uses `fileLineWidth` as
-  `wordWrapColumn` (40–240, default 120). The independent `fileLineWidthBounded` default maps to Monaco
+- **Desktop file source wraps at the synchronized file column.** `MonacoEditor` uses the reader preference
+  `fileLineWidth` as `wordWrapColumn` (40–240, default 120). The independent `fileLineWidthBounded` default maps to Monaco
   `wordWrap: "bounded"`, wrapping sooner at the mounted file pane; off maps to `"wordWrapColumn"`, preserving
   the selected column with horizontal scrolling in a narrower pane. Broadcast changes update a mounted
   desktop file editor. Pierre diffs and phone files own horizontal overflow and do not consume this Monaco
   preference. Rendered Markdown and rendered Markdown diffs retain their separate ~78ch reading measure.
+  `MonacoEditor` is a React Compiler bail-out, so it memoizes its options by hand on width, bounded and path;
+  the typography and spacing tokens the options read are static generated CSS (themes set only colours), and
+  a fresh options object would make `@monaco-editor/react` call `updateOptions` on every render.
 - **The desktop Monaco surface is a reader, not a language workstation.** Its file-only options keep the
   configured wrapping, generated code typography, minimap/overview-ruler removal and 6px shadowless scrollbar,
   and add read-only messaging, the path as its accessible label, an 8px top inset, three-character line-number
