@@ -14,7 +14,8 @@ type LayoutDiffScopeInput =
 
 type LayoutResourceIdentityInput =
 	| { kind: "file"; path: string }
-	| { kind: "diff"; path: string; before?: string | undefined; scope: LayoutDiffScopeInput }
+	| { kind: "diff"; path: string; before?: undefined; scope: LayoutDiffScopeInput }
+	| { kind: "diff"; path: string; before: string }
 	| { kind: "changes"; scope: LayoutDiffScopeInput }
 	| { kind: "chat"; sessionId: string }
 	| { kind: "document"; documentKind: string; sourceId: string }

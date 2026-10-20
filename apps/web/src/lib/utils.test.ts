@@ -112,12 +112,7 @@ test("layout resource identity ignores placement ids and separates delimiter-bea
 
 test("a file comparison is identified by its two paths, apart from the git diff of either", () => {
 	const compare = (before: string, path: string) =>
-		layoutResourceIdentity({
-			kind: "diff",
-			path,
-			before,
-			scope: { kind: "uncommitted" },
-		});
+		layoutResourceIdentity({ kind: "diff", path, before });
 	expect(compare("b.html", "a.html")).toBe(compare("b.html", "a.html"));
 	expect(compare("b.html", "a.html")).not.toBe(compare("c.html", "a.html"));
 	expect(compare("b.html", "a.html")).not.toBe(

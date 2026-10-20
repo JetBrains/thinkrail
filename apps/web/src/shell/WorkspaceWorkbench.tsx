@@ -29,7 +29,7 @@ import { startChatInTab } from "../panels/openChat";
 import { fileComparisonTab, openFileInTab } from "../panels/openTabs";
 import { ProjectTree } from "../panels/ProjectTree";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
-import { reviewFlags } from "../panels/reviewModel";
+import { reviewFlagForPaths, reviewFlags, tabReviewPaths } from "../panels/reviewModel";
 import { SpecsPanel } from "../panels/SpecsPanel";
 import { TerminalWorkbenchBody, useTerminalClose } from "../panels/TerminalWorkbench";
 import { useWorkspaceReview } from "../panels/useWorkspaceReview";
@@ -42,6 +42,7 @@ import {
 	isConnectedGeneration,
 	isDefaultWorkspace,
 	isExternalWorkspace,
+	isFileComparison,
 	type LayoutIntent,
 	selectCanRenameChat,
 	selectContextProject,
@@ -433,7 +434,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					});
 				continue;
 			}
-			if (tab.kind === "diff" && tab.before !== undefined) {
+			if (isFileComparison(tab)) {
 				useAppStore
 					.getState()
 					.openTab(
@@ -490,7 +491,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						const latest = useAppStore.getState();
 						if (!current || !isConnectedGeneration(latest, connectionGeneration)) return;
 						const placed = currentPlacement();
-						if (placed?.kind !== "diff" || cacheArrived()) return;
+						if (placed?.kind !== "diff" || isFileComparison(placed) || cacheArrived()) return;
 						useAppStore.getState().openTab(
 							{
 								kind: "diff",
@@ -653,7 +654,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				);
 			}
 			if (tab.kind !== "file" && tab.kind !== "diff") return null;
-			const flag = reviewFlagByPath.get(tab.path);
+			const flag = reviewFlagForPaths(reviewFlagByPath, tabReviewPaths(tab));
 			return flag ? (
 				<span
 					data-testid="review-tab-flag"

@@ -33,6 +33,7 @@ import {
 	type ReviewSurface,
 	reviewFileSurface,
 	statusLabel,
+	tabReviewPaths,
 } from "./reviewModel";
 import { sendReviewComment } from "./reviewSend";
 import { SendAllReviewsButton, SendReviewButton } from "./SendReviewButton";
@@ -306,7 +307,10 @@ function FileSection({
 export function selectActiveReviewedPath(
 	s: {
 		activeWorkspaceId: string | null;
-		tabsByWorkspace: Record<string, { id: string; kind: string; path?: string }[]>;
+		tabsByWorkspace: Record<
+			string,
+			{ id: string; kind: string; path?: string; before?: string | undefined }[]
+		>;
 		activeTabByWorkspace: Record<string, string | null>;
 		reviewsByWorkspace: Record<string, { comments: ReviewComment[] }>;
 	},
@@ -316,11 +320,13 @@ export function selectActiveReviewedPath(
 	const tab = (s.tabsByWorkspace[workspaceId] ?? []).find((t) => t.id === activeId);
 	if (!tab || (tab.kind !== "file" && tab.kind !== "diff") || !tab.path) return null;
 	const comments = s.reviewsByWorkspace[workspaceId]?.comments ?? [];
-	return comments.some(
-		(c) => (c.status === "draft" || c.status === "sent") && (c.anchor?.path ?? null) === tab.path,
-	)
-		? tab.path
-		: null;
+	return (
+		tabReviewPaths({ path: tab.path, before: tab.before }).find((path) =>
+			comments.some(
+				(c) => (c.status === "draft" || c.status === "sent") && (c.anchor?.path ?? null) === path,
+			),
+		) ?? null
+	);
 }
 
 function CommentRow({

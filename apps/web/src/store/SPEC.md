@@ -614,7 +614,9 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   plan live, so the page has no snapshot to go stale. **`DiffTab`** is one renderer-dispatched changed file over **one diff scope** (id `${workspaceId}:diff:${scopeKey}:${path}` — one tab per *(file,
 scope)*: **the scope is part of a tab's identity**, because a tab's content must never change meaning
 because the Changes tool's scope flipped underneath it; the tab carries its own `scope`, which is also what
-`DiffPane` re-reads with, never the panel's current one).
+`DiffPane` re-reads with, never the panel's current one). That is the `GitDiffTab` half of the `DiffTab` union;
+the other half, `FileComparisonTab`, compares two workspace files (`before` + `path`, no scope or loaded sides
+— see `panels/SPEC.md`), and `isFileComparison(tab)` tells them apart.
 **What a tab's identity fixes is *which scope* it shows — the kind, plus the sha for a commit scope.** A
 branch-scope tab means "this file vs the workspace's **current** review target", and that target moving —
 because commits landed on the branch, or because the user re-pointed it — is the same live-refresh contract

@@ -11,8 +11,8 @@ import {
 } from "@thinkrail/resource-renderers";
 import { useMemo, useState } from "react";
 import { copyText, isPhoneViewport } from "@/lib";
-import type { DiffTab } from "../store";
-import { selectDiffTabTargetRef, useAppStore } from "../store";
+import type { DiffTab, FileComparisonTab, GitDiffTab } from "../store";
+import { isFileComparison, selectDiffTabTargetRef, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { splitPath } from "./changesModel";
 import { DiffSurfaceBody, useDiffSurface } from "./DiffSurface";
@@ -22,14 +22,11 @@ import { SendReviewButton } from "./SendReviewButton";
 import { useLiveTabContent } from "./useLiveTabContent";
 
 export function DiffPane({ tab }: { tab: DiffTab }) {
-	return tab.before === undefined ? (
-		<GitDiffPane tab={tab} />
-	) : (
-		<FileComparisonPane tab={tab} before={tab.before} />
-	);
+	return isFileComparison(tab) ? <FileComparisonPane tab={tab} /> : <GitDiffPane tab={tab} />;
 }
 
-function FileComparisonPane({ tab, before }: { tab: DiffTab; before: string }) {
+function FileComparisonPane({ tab }: { tab: FileComparisonTab }) {
+	const { before } = tab;
 	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
 	const setDiffTabView = useAppStore((state) => state.setDiffTabView);
 	const setTabViewState = useAppStore((state) => state.setTabViewState);
@@ -60,7 +57,7 @@ function FileComparisonPane({ tab, before }: { tab: DiffTab; before: string }) {
 	);
 }
 
-function GitDiffPane({ tab }: { tab: DiffTab }) {
+function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
 	const setDiffTabView = useAppStore((state) => state.setDiffTabView);
 	const setDiffTabIgnoreWhitespace = useAppStore((state) => state.setDiffTabIgnoreWhitespace);

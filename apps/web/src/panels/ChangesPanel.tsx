@@ -8,6 +8,7 @@ import {
 	type ChangesTab,
 	type EditorTab,
 	isCenterNavigationCurrent,
+	isFileComparison,
 	matchesWorktreePath,
 	selectActiveEditorTab,
 	selectDiffBaseRef,
@@ -54,7 +55,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	const baseRef = useAppStore((s) => selectDiffBaseRef(s, workspaceId));
 	const activeDiffTab = useAppStore((state) => {
 		const tab = selectActiveEditorTab(state, workspaceId);
-		return tab?.kind === "diff" && tab.before === undefined ? tab : null;
+		return tab?.kind === "diff" && !isFileComparison(tab) ? tab : null;
 	});
 	const reviewTabId = changesTabId(workspaceId, scope);
 	const reviewActivePath = useAppStore(

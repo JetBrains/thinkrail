@@ -9,8 +9,10 @@ import {
 	groupComments,
 	lineRef,
 	reviewFileSurface,
+	reviewFlagForPaths,
 	reviewFlags,
 	statusLabel,
+	tabReviewPaths,
 } from "./reviewModel";
 
 function comment(over: Partial<ReviewComment>): ReviewComment {
@@ -205,4 +207,17 @@ test("fileSummaries: a fully-resolved file stays listed until marked done; a new
 	const overall = comment({ id: "rc_3", kind: "review", anchor: null, status: "resolved" });
 	expect(fileSummaries([overall], [""])).toEqual([]);
 	expect(fileSummaries([overall])).toEqual([{ path: null, total: 0, drafts: 0, resolved: 1 }]);
+});
+
+test("a file comparison is reviewed on both files, and its flag is the strongest of them", () => {
+	expect(tabReviewPaths({ path: "a.html" })).toEqual(["a.html"]);
+	expect(tabReviewPaths({ path: "a.html", before: "b.html" })).toEqual(["a.html", "b.html"]);
+	expect(tabReviewPaths({ path: "a.html", before: "a.html" })).toEqual(["a.html"]);
+	const flags = new Map([
+		["a.html", "sent" as const],
+		["b.html", "draft" as const],
+	]);
+	expect(reviewFlagForPaths(flags, ["a.html", "b.html"])).toBe("draft");
+	expect(reviewFlagForPaths(flags, ["a.html"])).toBe("sent");
+	expect(reviewFlagForPaths(flags, ["c.html"])).toBeNull();
 });

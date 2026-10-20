@@ -10,6 +10,7 @@ import {
 	type ChangesTab,
 	createChangesTab,
 	type EditorTab,
+	type FileComparisonTab,
 	isCenterNavigationCurrent,
 	layoutOpenOptionsForNavigation,
 	selectDiffTabTargetRef,
@@ -222,13 +223,11 @@ export function openDiffInTab(
 	);
 }
 
-export const FILE_COMPARISON_SCOPE: GitDiffScope = { kind: "uncommitted" };
-
 export function fileComparisonTab(
 	workspaceId: string,
 	before: string,
 	path: string,
-): Extract<EditorTab, { kind: "diff" }> {
+): FileComparisonTab {
 	return {
 		kind: "diff",
 		id: tupleKey("compare", workspaceId, before, path),
@@ -236,10 +235,6 @@ export function fileComparisonTab(
 		name: `${baseName(before)} → ${baseName(path)}`,
 		path,
 		before,
-		scope: FILE_COMPARISON_SCOPE,
-		loadedTarget: "",
-		original: "",
-		modified: "",
 	};
 }
 

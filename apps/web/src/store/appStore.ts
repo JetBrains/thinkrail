@@ -160,24 +160,36 @@ export interface DocTab {
 	sourceId: string;
 }
 export type DiffTabView = "split" | "inline";
-export interface DiffTab {
+interface DiffTabBase {
 	kind: "diff";
 	id: string;
 	workspaceId: string;
 	name: string;
 	path: string;
-	before?: string;
+	rendererId?: string;
+	viewState?: unknown;
+	view?: DiffTabView;
+	loadedTick?: number;
+}
+export interface GitDiffTab extends DiffTabBase {
+	before?: undefined;
 	scope: GitDiffScope;
 	loadedTarget: string;
 	original: string;
 	modified: string;
 	meta?: { original: ResourceMeta; modified: ResourceMeta };
 	originalOid?: string | null;
-	rendererId?: string;
-	viewState?: unknown;
-	view?: DiffTabView;
 	ignoreWhitespace?: boolean;
-	loadedTick?: number;
+}
+export interface FileComparisonTab extends DiffTabBase {
+	before: string;
+}
+export type DiffTab = GitDiffTab | FileComparisonTab;
+
+export function isFileComparison<T extends { kind: string; before?: string | undefined }>(
+	tab: T,
+): tab is T & { kind: "diff"; before: string } {
+	return tab.kind === "diff" && tab.before !== undefined;
 }
 export type ChangesLayout = "stacked" | "single";
 const TURNS_PER_WORKSPACE = 30;
@@ -1534,7 +1546,7 @@ function patchResourceTab(
 function patchDiffTab(
 	state: Pick<AppState, "activeWorkspaceId" | "tabsByWorkspace">,
 	id: string,
-	patch: Partial<Omit<DiffTab, "kind" | "id">>,
+	patch: (tab: DiffTab) => DiffTab,
 ): Partial<AppState> {
 	const wsId = state.activeWorkspaceId;
 	if (!wsId) return {};
@@ -1543,7 +1555,7 @@ function patchDiffTab(
 	return {
 		tabsByWorkspace: {
 			...state.tabsByWorkspace,
-			[wsId]: tabs.map((t) => (t.id === id && t.kind === "diff" ? { ...t, ...patch } : t)),
+			[wsId]: tabs.map((t) => (t.id === id && t.kind === "diff" ? patch(t) : t)),
 		},
 	};
 }
@@ -2854,9 +2866,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 				return next;
 			}),
 		),
-	setDiffTabView: (id, view) => set((s) => patchDiffTab(s, id, { view })),
+	setDiffTabView: (id, view) => set((s) => patchDiffTab(s, id, (tab) => ({ ...tab, view }))),
 	setDiffTabIgnoreWhitespace: (id, ignoreWhitespace) =>
-		set((s) => patchDiffTab(s, id, { ignoreWhitespace })),
+		set((s) =>
+			patchDiffTab(s, id, (tab) => (isFileComparison(tab) ? tab : { ...tab, ignoreWhitespace })),
+		),
 	setChangesTabView: (workspaceId, id, view) =>
 		set((s) => patchChangesTab(s, workspaceId, id, (tab) => ({ ...tab, view }))),
 	setChangesTabIgnoreWhitespace: (workspaceId, id, ignoreWhitespace) =>

@@ -10,14 +10,16 @@ export interface LayoutFileTab {
 	path: string;
 }
 
-export interface LayoutDiffTab {
-	kind: "diff";
-	id: string;
-	name: string;
-	path: string;
-	before?: string;
-	scope: GitDiffScope;
-}
+export type LayoutDiffTab =
+	| {
+			kind: "diff";
+			id: string;
+			name: string;
+			path: string;
+			before?: undefined;
+			scope: GitDiffScope;
+	  }
+	| { kind: "diff"; id: string; name: string; path: string; before: string };
 
 export interface LayoutChangesTab {
 	kind: "changes";

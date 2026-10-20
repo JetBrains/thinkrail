@@ -1922,14 +1922,17 @@ own section. The kebab menu (`plan-menu`, a
   would overflow the chip **invisibly to the layout** while spilling over the buttons on screen, so the
   basename pairs it with `max-w-full`: flex never steals the name's width, but max-width still clamps it to
   the row, which is also why the e2e pin measures the *chip's* `scrollWidth`, not the header's.
-- **A diff tab can compare two workspace files.** `DiffTab` (and its persisted `LayoutDiffTab`) carries an
-  optional `before` path; `openFileComparisonInTab` opens it (identity `compare:<before>:<path>`, named
-  `before → after`). `DiffPane` forks on it: a comparison renders [[module-resource-renderers]]'
-  `ResourcePreview` (both files read live from disk, no revert/hunk actions, comments on the two files'
-  worktree anchors, Split/Inline, renderer and view state on the tab) instead of the git-backed `DiffSurface`. Its `scope`
-  is an inert `uncommitted` placeholder, so every git-scope reader of diff tabs — `DiffPane`, the Changes
-  panel's active-diff match, layout identity and reload hydration (which installs a comparison without a
-  `git.diffFile` read) — checks `before` first.
+- **A diff tab can compare two workspace files.** `DiffTab` is a union — `GitDiffTab` (a git scope with its
+  loaded sides) or `FileComparisonTab` (a `before` path and no git fields at all) — and so is its persisted
+  `LayoutDiffTab`; `isFileComparison(tab)` is the one predicate. `openFileComparisonInTab` opens a comparison
+  (identity `compare:<before>:<path>`, named `before → after`), and `DiffPane` forks on it: a comparison renders
+  [[module-resource-renderers]]' `ResourcePreview` (both files read live from disk, no revert/hunk actions,
+  comments on the two files' worktree anchors, Split/Inline, renderer and view state on the tab) instead of the
+  git-backed `DiffSurface`. A comparison has no scope to misread, so the compiler finds every git-only reader
+  (`GitDiffPane`, the Changes panel's active-diff match, `updateDiffTabContent`, whitespace, reload hydration
+  — which installs a comparison without a `git.diffFile` read); an earlier revision gave it a placeholder
+  `uncommitted` scope and left each reader to remember a `before` check. Its review flag and the Review
+  panel's active path cover both files (`tabReviewPaths`).
 - **File tabs use the same renderer dispatch as diffs.** `FilePane` describes the first `fs.readFile`
   metadata (provisionally text before it lands — and permanently text against a host that predates
   `RESOURCE_META_PROTOCOL_VERSION` and never sends `meta`, which is that host's own legacy surface, so no
