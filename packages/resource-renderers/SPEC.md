@@ -121,8 +121,8 @@ keeps it.
 - **Small helpers moved with their only consumer or became primitives.** `stripFrontmatter`, `threadLabel`
   and `outdatedReason` live here; `ToggleSegment` and the one loading placeholder (`SkeletonRows` /
   `LoadingRegion`) became `@thinkrail/ui/toggle-segment` and `@thinkrail/ui/skeleton` because the app uses
-  them too. `describeResource` keeps a one-line local `normalizePath`, because the package cannot import the
-  app's `lib`.
+  them too. `describeResource` and `ResourcePreview` canonicalize paths through the package's own
+  `canonicalWorkspacePath`, because the package cannot import the app's `lib`.
 
 ## Boundary
 
