@@ -2,7 +2,57 @@ import { existsSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { FIELDS, list, parseFile, SpecIndex } from "pi-spec-graph/core";
-import ts from "typescript";
+import {
+	type BindingName,
+	type ClassDeclaration,
+	type EnumDeclaration,
+	type ExportAssignment,
+	type ExportDeclaration,
+	type FunctionDeclaration,
+	type ImportEqualsDeclaration,
+	type InterfaceDeclaration,
+	type ModuleBlock,
+	type ModuleDeclaration,
+	type Node,
+	ScriptTarget,
+	type SourceFile,
+	type Statement,
+	SyntaxKind,
+	type TypeAliasDeclaration,
+	type VariableStatement,
+} from "tsrs/ast";
+import {
+	isClassDeclaration,
+	isEnumDeclaration,
+	isExportAssignment,
+	isExportDeclaration,
+	isFunctionDeclaration,
+	isIdentifier,
+	isImportEqualsDeclaration,
+	isInterfaceDeclaration,
+	isModuleBlock,
+	isModuleDeclaration,
+	isNamedExports,
+	isNamespaceExport,
+	isNoSubstitutionTemplateLiteral,
+	isSourceFile,
+	isStringLiteral,
+	isTypeAliasDeclaration,
+	isVariableStatement,
+} from "tsrs/ast/is";
+import {
+	API,
+	type Checker,
+	type CompilerOptions,
+	type Diagnostic,
+	DiagnosticCategory,
+	ModuleKind,
+	ModuleResolutionKind,
+	type Program,
+	type ProjectReference,
+	SymbolFlags,
+	type Symbol as TsSymbol,
+} from "tsrs/async";
 
 export const PUBLIC_SURFACE_TAG = "public-surface-checked";
 
@@ -174,9 +224,9 @@ interface SurfaceCandidate {
 
 interface CompilerConfiguration {
 	key: string;
-	options: ts.CompilerOptions;
+	options: CompilerOptions;
 	rootNames: string[];
-	projectReferences?: readonly ts.ProjectReference[];
+	projectReferences?: ProjectReference[];
 	error?: string;
 }
 
@@ -206,21 +256,35 @@ function barrelFor(specFile: string): string | null {
 	return null;
 }
 
-function diagnosticText(diagnostic: ts.Diagnostic): string {
-	return ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n");
+function findConfigFile(start: string): string | undefined {
+	for (let directory = resolve(start); ; directory = dirname(directory)) {
+		const candidate = join(directory, "tsconfig.json");
+		if (fileExists(candidate)) return candidate;
+		if (dirname(directory) === directory) return undefined;
+	}
 }
 
-function compilerConfiguration(barrel: string, root: string): CompilerConfiguration {
-	const fallback: ts.CompilerOptions = {
+function diagnosticText(diagnostic: Diagnostic, indent = 0): string {
+	const prefix = indent === 0 ? "" : `\n${"  ".repeat(indent)}`;
+	const chain = (diagnostic.messageChain ?? []).map((next) => diagnosticText(next, indent + 1));
+	return `${prefix}${diagnostic.text}${chain.join("")}`;
+}
+
+async function compilerConfiguration(
+	api: API,
+	barrel: string,
+	root: string,
+): Promise<CompilerConfiguration> {
+	const fallback: CompilerOptions = {
 		allowJs: true,
 		allowImportingTsExtensions: true,
-		module: ts.ModuleKind.ESNext,
-		moduleResolution: ts.ModuleResolutionKind.Bundler,
+		module: ModuleKind.ESNext,
+		moduleResolution: ModuleResolutionKind.Bundler,
 		noEmit: true,
 		skipLibCheck: true,
-		target: ts.ScriptTarget.ESNext,
+		target: ScriptTarget.ESNext,
 	};
-	const found = ts.findConfigFile(dirname(barrel), ts.sys.fileExists);
+	const found = findConfigFile(dirname(barrel));
 	const rootPrefix = `${resolve(root)}${sep}`;
 	if (
 		found === undefined ||
@@ -228,167 +292,165 @@ function compilerConfiguration(barrel: string, root: string): CompilerConfigurat
 	) {
 		return { key: "<default>", options: fallback, rootNames: [] };
 	}
-	const loaded = ts.readConfigFile(found, ts.sys.readFile);
+	const loaded = await api.readConfigFile(found);
 	if (loaded.error !== undefined) {
 		return { key: found, options: fallback, rootNames: [], error: diagnosticText(loaded.error) };
 	}
-	const parsed = ts.parseJsonConfigFileContent(
-		loaded.config,
-		ts.sys,
-		dirname(found),
-		{
-			noEmit: true,
-		},
-		found,
-	);
+	const parsed = await api.parseJsonConfigFileContent(loaded.config, { configFileName: found });
 	const errors = parsed.errors.filter(
-		(diagnostic) =>
-			diagnostic.category === ts.DiagnosticCategory.Error && diagnostic.code !== 18003,
+		(diagnostic) => diagnostic.category === DiagnosticCategory.Error && diagnostic.code !== 18003,
 	);
 	return {
 		key: found,
-		options: parsed.options,
+		options: { ...parsed.options, noEmit: true },
 		rootNames: parsed.fileNames,
 		...(parsed.projectReferences !== undefined
 			? { projectReferences: parsed.projectReferences }
 			: {}),
-		...(errors.length > 0 ? { error: errors.map(diagnosticText).join("; ") } : {}),
+		...(errors.length > 0
+			? { error: errors.map((error) => diagnosticText(error)).join("; ") }
+			: {}),
 	};
 }
 
-type ExportContainer = ts.SourceFile | ts.ModuleBlock;
+type ExportContainer = SourceFile | ModuleBlock;
 
-function moduleContainers(symbol: ts.Symbol): ExportContainer[] {
+async function moduleContainers(symbol: TsSymbol): Promise<ExportContainer[]> {
 	const containers: ExportContainer[] = [];
-	for (const declaration of symbol.declarations ?? []) {
-		if (ts.isSourceFile(declaration)) {
+	for (const handle of symbol.declarations) {
+		const declaration = await handle.resolve();
+		if (declaration === undefined) continue;
+		if (isSourceFile(declaration)) {
 			containers.push(declaration);
 			continue;
 		}
-		if (!ts.isModuleDeclaration(declaration)) continue;
+		if (!isModuleDeclaration(declaration)) continue;
 		let body = declaration.body;
-		while (body !== undefined && ts.isModuleDeclaration(body)) body = body.body;
-		if (body !== undefined && ts.isModuleBlock(body)) containers.push(body);
+		while (body !== undefined && isModuleDeclaration(body)) body = body.body;
+		if (body !== undefined && isModuleBlock(body)) containers.push(body);
 	}
 	return containers;
 }
 
-function bindingNames(name: ts.BindingName, names: Set<string>): void {
-	if (ts.isIdentifier(name)) {
+function bindingNames(name: BindingName, names: Set<string>): void {
+	if (isIdentifier(name)) {
 		names.add(name.text);
 		return;
 	}
 	for (const element of name.elements) {
-		if (!ts.isOmittedExpression(element)) bindingNames(element.name, names);
+		if (element.name !== undefined) bindingNames(element.name, names);
 	}
 }
 
-function hasExportModifier(statement: ts.Statement): boolean {
+type ExportableStatement =
+	| VariableStatement
+	| ImportEqualsDeclaration
+	| FunctionDeclaration
+	| ClassDeclaration
+	| EnumDeclaration
+	| ModuleDeclaration
+	| TypeAliasDeclaration
+	| InterfaceDeclaration;
+
+function isExportableStatement(statement: Statement): statement is ExportableStatement {
 	return (
-		ts.canHaveModifiers(statement) &&
-		(ts.getModifiers(statement) ?? []).some(
-			(modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
-		)
+		isVariableStatement(statement) ||
+		isImportEqualsDeclaration(statement) ||
+		isFunctionDeclaration(statement) ||
+		isClassDeclaration(statement) ||
+		isEnumDeclaration(statement) ||
+		isModuleDeclaration(statement) ||
+		isTypeAliasDeclaration(statement) ||
+		isInterfaceDeclaration(statement)
 	);
 }
 
-function explicitExportNames(statements: readonly ts.Statement[]): Set<string> {
+function hasModifier(statement: ExportableStatement, kind: SyntaxKind): boolean {
+	return (statement.modifiers ?? []).some((modifier) => modifier.kind === kind);
+}
+
+function explicitExportNames(statements: readonly Statement[]): Set<string> {
 	const names = new Set<string>();
 	for (const statement of statements) {
-		if (ts.isExportAssignment(statement)) {
+		if (isExportAssignment(statement)) {
 			names.add("default");
 			continue;
 		}
-		if (ts.isExportDeclaration(statement)) {
+		if (isExportDeclaration(statement)) {
 			const clause = statement.exportClause;
 			if (clause !== undefined) {
-				if (ts.isNamespaceExport(clause)) names.add(clause.name.text);
+				if (isNamespaceExport(clause)) names.add(clause.name.text);
 				else for (const element of clause.elements) names.add(element.name.text);
 			}
 			continue;
 		}
-		if (!hasExportModifier(statement)) continue;
-		const modifiers = ts.canHaveModifiers(statement) ? (ts.getModifiers(statement) ?? []) : [];
-		if (modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword)) {
+		if (!isExportableStatement(statement) || !hasModifier(statement, SyntaxKind.ExportKeyword)) {
+			continue;
+		}
+		if (hasModifier(statement, SyntaxKind.DefaultKeyword)) {
 			names.add("default");
 			continue;
 		}
-		if (ts.isVariableStatement(statement)) {
+		if (isVariableStatement(statement)) {
 			for (const declaration of statement.declarationList.declarations) {
 				bindingNames(declaration.name, names);
 			}
 			continue;
 		}
-		if (ts.isImportEqualsDeclaration(statement)) {
-			names.add(statement.name.text);
-			continue;
-		}
-		if (
-			ts.isFunctionDeclaration(statement) ||
-			ts.isClassDeclaration(statement) ||
-			ts.isEnumDeclaration(statement) ||
-			ts.isModuleDeclaration(statement) ||
-			ts.isTypeAliasDeclaration(statement) ||
-			ts.isInterfaceDeclaration(statement)
-		) {
-			if (statement.name !== undefined) names.add(statement.name.text);
-		}
+		if (statement.name !== undefined) names.add(statement.name.text);
 	}
 	return names;
 }
 
-function resolvedAlias(symbol: ts.Symbol, checker: ts.TypeChecker): ts.Symbol {
-	return symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+async function resolvedAlias(symbol: TsSymbol, checker: Checker): Promise<TsSymbol> {
+	return symbol.flags & SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
 }
 
-function effectiveExportNames(
-	sourceFile: ts.SourceFile,
-	moduleSymbol: ts.Symbol,
-	checker: ts.TypeChecker,
-): string[] {
+async function effectiveExportNames(
+	sourceFile: SourceFile,
+	moduleSymbol: TsSymbol,
+	checker: Checker,
+): Promise<string[]> {
 	if (
 		sourceFile.statements.some(
-			(statement) => ts.isExportAssignment(statement) && statement.isExportEquals,
+			(statement) => isExportAssignment(statement) && statement.isExportEquals,
 		)
 	) {
 		return ["default"];
 	}
-	return checker
-		.getExportsOfModule(moduleSymbol)
-		.map((symbol) => symbol.getName())
-		.sort();
+	return (await checker.getExportsOfModule(moduleSymbol)).map((symbol) => symbol.name).sort();
 }
 
-type ExportStatement = ts.ExportDeclaration | ts.ExportAssignment;
+type ExportStatement = ExportDeclaration | ExportAssignment;
 
-function exportStatements(source: ts.SourceFile): ExportStatement[] {
+function exportStatements(source: SourceFile): ExportStatement[] {
 	const statements: ExportStatement[] = [];
-	const visit = (node: ts.Node): void => {
-		if (ts.isExportDeclaration(node) || ts.isExportAssignment(node)) statements.push(node);
-		ts.forEachChild(node, visit);
+	const visit = (node: Node): void => {
+		if (isExportDeclaration(node) || isExportAssignment(node)) statements.push(node);
+		node.forEachChild(visit);
 	};
 	visit(source);
 	return statements;
 }
 
-function exportGraphIssues(
+async function exportGraphIssues(
 	root: string,
-	moduleSymbol: ts.Symbol,
-	checker: ts.TypeChecker,
-	program: ts.Program,
-): string[] {
+	moduleSymbol: TsSymbol,
+	checker: Checker,
+	program: Program,
+): Promise<string[]> {
 	const issues = new Set<string>();
-	const seenSymbols = new Set<ts.Symbol>();
-	const seenSources = new Map<string, ts.SourceFile>();
+	const seenSymbols = new Set<TsSymbol>();
+	const seenSources = new Map<string, SourceFile>();
 	const rootPrefix = `${resolve(root)}${sep}`;
-	const shouldCheckDiagnostics = (source: ts.SourceFile): boolean => {
+	const shouldCheckDiagnostics = (source: SourceFile): boolean => {
 		const path = resolve(source.fileName);
 		return path.startsWith(rootPrefix) && !path.includes(`${sep}node_modules${sep}`);
 	};
-	const visit = (symbol: ts.Symbol): void => {
+	const visit = async (symbol: TsSymbol): Promise<void> => {
 		if (seenSymbols.has(symbol)) return;
 		seenSymbols.add(symbol);
-		const containers = moduleContainers(symbol);
+		const containers = await moduleContainers(symbol);
 		const statements = containers.flatMap((container) => [...container.statements]);
 		if (statements.length === 0) return;
 		for (const container of containers) {
@@ -398,26 +460,26 @@ function exportGraphIssues(
 		const firstSource = containers[0]?.getSourceFile();
 		const modulePath =
 			firstSource === undefined ? "unknown" : relativeTo(root, firstSource.fileName);
-		for (const exported of checker.getExportsOfModule(symbol)) {
-			if (!(exported.flags & ts.SymbolFlags.Alias)) continue;
-			const target = resolvedAlias(exported, checker);
-			if (target.name === "unknown" && target.declarations === undefined) {
-				issues.add(`invalid exported alias in ${modulePath}: ${exported.getName()}`);
+		for (const exported of await checker.getExportsOfModule(symbol)) {
+			if (!(exported.flags & SymbolFlags.Alias)) continue;
+			const target = await resolvedAlias(exported, checker);
+			if (await checker.isUnknownSymbol(target)) {
+				issues.add(`invalid exported alias in ${modulePath}: ${exported.name}`);
 			} else {
-				visit(target);
+				await visit(target);
 			}
 		}
 		const explicit = explicitExportNames(statements);
 		const direct = explicitExportNames(
-			statements.filter((statement) => !ts.isExportDeclaration(statement)),
+			statements.filter((statement) => !isExportDeclaration(statement)),
 		);
 		const explicitClauses = new Set<string>();
-		const starred = new Map<string, ts.Symbol>();
+		const starred = new Map<string, TsSymbol>();
 		for (const statement of statements) {
-			if (!ts.isExportDeclaration(statement)) continue;
+			if (!isExportDeclaration(statement)) continue;
 			const source = statement.getSourceFile();
 			const sourcePath = relativeTo(root, source.fileName);
-			if (statement.exportClause !== undefined && ts.isNamedExports(statement.exportClause)) {
+			if (statement.exportClause !== undefined && isNamedExports(statement.exportClause)) {
 				for (const element of statement.exportClause.elements) {
 					const name = element.name.text;
 					if (direct.has(name) || explicitClauses.has(name)) {
@@ -425,12 +487,9 @@ function exportGraphIssues(
 					} else {
 						explicitClauses.add(name);
 					}
-					const target = checker.getExportSpecifierLocalTargetSymbol(element);
-					const resolved = target === undefined ? undefined : resolvedAlias(target, checker);
-					if (
-						resolved === undefined ||
-						(resolved.name === "unknown" && resolved.declarations === undefined)
-					) {
+					const target = await checker.getExportSpecifierLocalTargetSymbol(element);
+					const resolved = target === undefined ? undefined : await resolvedAlias(target, checker);
+					if (resolved === undefined || (await checker.isUnknownSymbol(resolved))) {
 						issues.add(`invalid export specifier in ${sourcePath}: ${element.getText(source)}`);
 					}
 				}
@@ -442,20 +501,22 @@ function exportGraphIssues(
 					explicitClauses.add(name);
 				}
 			}
-			if (statement.moduleSpecifier === undefined) continue;
-			const specifier = ts.isStringLiteralLike(statement.moduleSpecifier)
-				? statement.moduleSpecifier.text
-				: statement.moduleSpecifier.getText(source);
-			const target = checker.getSymbolAtLocation(statement.moduleSpecifier);
+			const moduleSpecifier = statement.moduleSpecifier;
+			if (moduleSpecifier === undefined) continue;
+			const specifier =
+				isStringLiteral(moduleSpecifier) || isNoSubstitutionTemplateLiteral(moduleSpecifier)
+					? moduleSpecifier.text
+					: moduleSpecifier.getText(source);
+			const target = await checker.getSymbolAtLocation(moduleSpecifier);
 			if (target === undefined) {
 				issues.add(`re-export could not be resolved (${sourcePath} → ${specifier})`);
 				continue;
 			}
 			if (statement.exportClause === undefined) {
-				for (const exported of checker.getExportsOfModule(target)) {
-					const name = exported.getName();
+				for (const exported of await checker.getExportsOfModule(target)) {
+					const name = exported.name;
 					if (name === "default" || explicit.has(name)) continue;
-					const resolved = resolvedAlias(exported, checker);
+					const resolved = await resolvedAlias(exported, checker);
 					const prior = starred.get(name);
 					if (prior !== undefined && prior !== resolved) {
 						issues.add(`ambiguous star export in ${modulePath}: ${name}`);
@@ -464,19 +525,17 @@ function exportGraphIssues(
 					}
 				}
 			}
-			visit(target);
+			await visit(target);
 		}
 	};
-	visit(moduleSymbol);
+	await visit(moduleSymbol);
 	for (const source of seenSources.values()) {
 		const declarations = exportStatements(source);
-		for (const diagnostic of program.getSemanticDiagnostics(source)) {
-			if (diagnostic.start === undefined || diagnostic.code === 2307) continue;
+		for (const diagnostic of await program.getSemanticDiagnostics(source.fileName)) {
+			if (diagnostic.fileName === undefined || diagnostic.code === 2307) continue;
 			const declaration = declarations.find(
 				(candidate) =>
-					diagnostic.start !== undefined &&
-					diagnostic.start >= candidate.getStart(source) &&
-					diagnostic.start < candidate.end,
+					diagnostic.pos >= candidate.getStart(source) && diagnostic.pos < candidate.end,
 			);
 			if (declaration !== undefined) {
 				issues.add(
@@ -488,12 +547,13 @@ function exportGraphIssues(
 	return [...issues].sort();
 }
 
-function checkCompilerGroup(
+async function checkCompilerGroup(
+	api: API,
 	root: string,
 	configuration: CompilerConfiguration,
 	candidates: SurfaceCandidate[],
 	report: SurfaceCheckReport,
-): void {
+): Promise<void> {
 	if (configuration.error !== undefined) {
 		for (const candidate of candidates) {
 			report.violations.push(
@@ -502,35 +562,33 @@ function checkCompilerGroup(
 		}
 		return;
 	}
-	const program = ts.createProgram({
-		rootNames: [
-			...new Set([...configuration.rootNames, ...candidates.map((candidate) => candidate.barrel)]),
-		],
-		options: configuration.options,
-		...(configuration.projectReferences !== undefined
+	const program = await api.createProgram(
+		[...new Set([...configuration.rootNames, ...candidates.map((candidate) => candidate.barrel)])],
+		configuration.options,
+		configuration.projectReferences !== undefined
 			? { projectReferences: configuration.projectReferences }
-			: {}),
-	});
-	const checker = program.getTypeChecker();
+			: undefined,
+	);
+	const checker = program.getProject().checker;
 	for (const candidate of candidates) {
-		const sourceFile = program.getSourceFile(candidate.barrel);
+		const sourceFile = await program.getSourceFile(candidate.barrel);
 		if (sourceFile === undefined) {
 			report.violations.push(`${candidate.specPath}: barrel could not be loaded by TypeScript`);
 			continue;
 		}
-		const moduleSymbol = checker.getSymbolAtLocation(sourceFile);
+		const moduleSymbol = await checker.getSymbolAtLocation(sourceFile);
 		if (moduleSymbol === undefined) {
 			report.violations.push(`${candidate.specPath}: barrel is not a TypeScript module`);
 			continue;
 		}
-		const exportIssues = exportGraphIssues(root, moduleSymbol, checker, program);
+		const exportIssues = await exportGraphIssues(root, moduleSymbol, checker, program);
 		if (exportIssues.length > 0) {
 			for (const issue of exportIssues) {
 				report.violations.push(`${candidate.specPath}: ${issue}`);
 			}
 			continue;
 		}
-		const exported = effectiveExportNames(sourceFile, moduleSymbol, checker);
+		const exported = await effectiveExportNames(sourceFile, moduleSymbol, checker);
 		report.checked++;
 		const { promised, undeclared } = diffSurface(candidate.declared, exported);
 		if (promised.length > 0) {
@@ -553,7 +611,7 @@ function skippedReason(block: SurfaceBlock | null, barrel: string | null): strin
 	return "not enrolled";
 }
 
-export function checkSpecSurfaces(inputRoot: string): SurfaceCheckReport {
+export async function checkSpecSurfaces(inputRoot: string): Promise<SurfaceCheckReport> {
 	const root = resolve(inputRoot);
 	const report: SurfaceCheckReport = { enrolled: 0, checked: 0, skipped: [], violations: [] };
 	const candidates: SurfaceCandidate[] = [];
@@ -590,21 +648,28 @@ export function checkSpecSurfaces(inputRoot: string): SurfaceCheckReport {
 		candidates.push({ specPath: entry.path, barrel, declared: declaredNames(block) });
 	}
 
-	const groups = new Map<
-		string,
-		{ configuration: CompilerConfiguration; candidates: SurfaceCandidate[] }
-	>();
-	for (const candidate of candidates) {
-		const configuration = compilerConfiguration(candidate.barrel, root);
-		const group = groups.get(configuration.key);
-		if (group === undefined) {
-			groups.set(configuration.key, { configuration, candidates: [candidate] });
-		} else {
-			group.candidates.push(candidate);
+	if (candidates.length > 0) {
+		const api = new API({ cwd: root });
+		try {
+			const groups = new Map<
+				string,
+				{ configuration: CompilerConfiguration; candidates: SurfaceCandidate[] }
+			>();
+			for (const candidate of candidates) {
+				const configuration = await compilerConfiguration(api, candidate.barrel, root);
+				const group = groups.get(configuration.key);
+				if (group === undefined) {
+					groups.set(configuration.key, { configuration, candidates: [candidate] });
+				} else {
+					group.candidates.push(candidate);
+				}
+			}
+			for (const group of groups.values()) {
+				await checkCompilerGroup(api, root, group.configuration, group.candidates, report);
+			}
+		} finally {
+			await api.close();
 		}
-	}
-	for (const group of groups.values()) {
-		checkCompilerGroup(root, group.configuration, group.candidates, report);
 	}
 	report.skipped.sort((a, b) => a.path.localeCompare(b.path));
 	report.violations.sort();
