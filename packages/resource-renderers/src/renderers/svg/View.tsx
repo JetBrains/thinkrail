@@ -1,5 +1,6 @@
-import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { type CSSProperties, useEffect, useMemo } from "react";
 import type { ResourceViewProps } from "../../registry";
+import { useElementSize } from "../../support/useElementSize";
 import { RegionReviewSurface } from "../RegionReviewSurface";
 import { containedMediaRect, placedRegionThreadIds } from "../regionReview";
 import { contentStamp } from "../reviewComposerState";
@@ -9,39 +10,6 @@ import { useSvgTheme } from "./useSvgTheme";
 
 const NO_THREADS: ReadonlySet<string> = new Set();
 const MAX_WIDTH = 960;
-
-function contentBox(element: HTMLElement): { width: number; height: number } {
-	const style = getComputedStyle(element);
-	return {
-		width:
-			element.clientWidth -
-			Number.parseFloat(style.paddingLeft) -
-			Number.parseFloat(style.paddingRight),
-		height:
-			element.clientHeight -
-			Number.parseFloat(style.paddingTop) -
-			Number.parseFloat(style.paddingBottom),
-	};
-}
-
-function useContentBox() {
-	const [element, setElement] = useState<HTMLDivElement | null>(null);
-	const [box, setBox] = useState<{ width: number; height: number } | null>(null);
-	useLayoutEffect(() => {
-		if (!element) return;
-		const measure = () => {
-			const next = contentBox(element);
-			setBox((current) =>
-				current?.width === next.width && current.height === next.height ? current : next,
-			);
-		};
-		measure();
-		const observer = new ResizeObserver(measure);
-		observer.observe(element);
-		return () => observer.disconnect();
-	}, [element]);
-	return [setElement, box] as const;
-}
 
 export default function SvgView({
 	resource,
@@ -56,7 +24,7 @@ export default function SvgView({
 		[text, tokens],
 	);
 	const size = useMemo(() => (text === null ? null : svgIntrinsicSize(text)), [text]);
-	const [contentRef, box] = useContentBox();
+	const { ref: contentRef, size: box } = useElementSize<HTMLDivElement>("content");
 	const fitted = box
 		? containedMediaRect(size, {
 				x: 0,

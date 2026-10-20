@@ -363,7 +363,9 @@ Tablet 768 / Phone 390 / Fill, default Desktop, persisted as `{ viewport }` view
 the design width and is CSS-scaled down to its box (never up), keeping its own vertical scroll, so a narrow
 pane, a 2-up half or a chat card shows the true layout shrunk rather than an accidental mobile reflow; Fill
 is the old reflow. Scaling is pure geometry on the wrapper — the iframe keeps `sandbox=""` and nothing
-measures the document (no `allow-same-origin`). The sanitizer also strips form controls, so mockups draw
+measures the document (no `allow-same-origin`); the wrapper's box is measured in a layout effect (the package's
+one `useElementSize`, shared with the SVG view and the region surfaces), so the first paint is already fitted
+instead of reflowing the document at the pane width for a frame. The sanitizer also strips form controls, so mockups draw
 buttons and inputs with styled elements; spot (region) comments on HTML are not offered yet.
 
 Pierre parses the two complete text sides (`absent` → `null`) with the current ignore-whitespace value,

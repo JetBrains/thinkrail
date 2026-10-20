@@ -13,6 +13,7 @@ import {
 import type { AnchorDraft, SurfaceReview } from "../registry";
 import { ReviewComposer } from "../support/ReviewComposer";
 import { ReviewThreadCard } from "../support/ReviewThreadCard";
+import { useElementSize } from "../support/useElementSize";
 import {
 	containedMediaRect,
 	denormalizeRegion,
@@ -75,25 +76,9 @@ export function RegionReviewSurface({
 	const [drag, setDrag] = useState<DragState | null>(null);
 	const composer = useStampedComposer<Region>(contentStamp, selectionKey);
 	const cardsRef = useRef(new Map<string, HTMLDivElement>());
-	const mediaRef = useRef<HTMLDivElement>(null);
+	const { ref: mediaRef, element: media, size } = useElementSize<HTMLDivElement>();
 	const handledFocusRef = useRef<string | null>(null);
-	const [frame, setFrame] = useState<Rect | null>(null);
-
-	useEffect(() => {
-		const element = mediaRef.current;
-		if (!element) return;
-		const measure = () => {
-			const bounds = element.getBoundingClientRect();
-			setFrame((current) => {
-				if (current?.width === bounds.width && current.height === bounds.height) return current;
-				return { x: 0, y: 0, width: bounds.width, height: bounds.height };
-			});
-		};
-		measure();
-		const observer = new ResizeObserver(measure);
-		observer.observe(element);
-		return () => observer.disconnect();
-	}, []);
+	const frame = useMemo<Rect | null>(() => (size ? { x: 0, y: 0, ...size } : null), [size]);
 
 	useEffect(() => {
 		if (drag && drag.stamp !== contentStamp) setDrag(null);
@@ -273,7 +258,7 @@ export function RegionReviewSurface({
 							<ReviewThreadCard
 								thread={thread}
 								actions={surface.actions}
-								onActivate={() => mediaRef.current?.scrollIntoView({ block: "center" })}
+								onActivate={() => media?.scrollIntoView({ block: "center" })}
 							/>
 						</div>
 					))}

@@ -1,5 +1,8 @@
-import { type CSSProperties, useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
+import { useElementSize } from "../../support/useElementSize";
 import { type HtmlViewport, htmlFrameGeometry } from "./viewport";
+
+const NO_BOX = { width: 0, height: 0 };
 
 export function HtmlFrame({
 	title,
@@ -10,24 +13,8 @@ export function HtmlFrame({
 	document: string;
 	viewport?: HtmlViewport;
 }) {
-	const boxRef = useRef<HTMLDivElement>(null);
-	const [box, setBox] = useState({ width: 0, height: 0 });
-
-	useEffect(() => {
-		const element = boxRef.current;
-		if (!element) return;
-		const measure = () => {
-			const { width, height } = element.getBoundingClientRect();
-			setBox((current) =>
-				current.width === width && current.height === height ? current : { width, height },
-			);
-		};
-		measure();
-		const observer = new ResizeObserver(measure);
-		observer.observe(element);
-		return () => observer.disconnect();
-	}, []);
-
+	const { ref: boxRef, size } = useElementSize<HTMLDivElement>();
+	const box = size ?? NO_BOX;
 	const geometry = htmlFrameGeometry(viewport, box);
 	const fitted = viewport !== "responsive" && box.width > 0;
 	const vars = {
