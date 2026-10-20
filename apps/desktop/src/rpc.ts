@@ -21,6 +21,7 @@ export type DesktopRpc = {
 			downloadUpdate: { params: undefined; response: undefined };
 			restartToUpdate: { params: undefined; response: undefined };
 			showNotification: { params: NativeNotificationInput; response: undefined };
+			applyLocale: { params: { locale: string }; response: boolean };
 		};
 		messages: {
 			routeChanged: { hash: string };

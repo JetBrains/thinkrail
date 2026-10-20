@@ -1,4 +1,5 @@
 import type {
+	NativeLocaleBridge,
 	NativeNotificationBridge,
 	NativeNotificationInput,
 	NativeUpdateBridge,
@@ -12,6 +13,7 @@ import {
 	INITIAL_DESKTOP_PREFERENCES_GLOBAL,
 	isDesktopPreferenceKey,
 	isDesktopPreferenceValue,
+	NATIVE_LOCALE_GLOBAL,
 	STABLE_PREFERENCES_GLOBAL,
 } from "./preferenceAdapter";
 import { takePreloadGlobal } from "./preloadGlobals";
@@ -153,6 +155,19 @@ const preferenceAdapter: DesktopPreferenceAdapter = Object.freeze({
 });
 Object.defineProperty(globals, STABLE_PREFERENCES_GLOBAL, {
 	value: preferenceAdapter,
+	writable: false,
+	configurable: false,
+	enumerable: false,
+});
+/**
+ * The locale handshake. `applyLocale` resolves only after the desktop process has written the
+ * preference and rebuilt its menu, so reloading then re-seeds the preload script with the new value.
+ */
+const localeBridge: NativeLocaleBridge = Object.freeze({
+	applyLocale: (locale: string) => rpc.request.applyLocale({ locale }),
+});
+Object.defineProperty(globals, NATIVE_LOCALE_GLOBAL, {
+	value: localeBridge,
 	writable: false,
 	configurable: false,
 	enumerable: false,
