@@ -170,10 +170,18 @@ function stringLiteralValue(node: Argument | null | undefined): string | undefin
 	return undefined;
 }
 
-function importSpecifiers(path: string): SourceImport[] {
-	const { program } = parseSync(path, readFileSync(path, "utf8"), {
-		lang: path.endsWith("x") ? "tsx" : "ts",
+function parseLang(path: string) {
+	if (path.endsWith(".tsx")) return "tsx";
+	return /\.[mc]?ts$/.test(path) ? "ts" : "jsx";
+}
+
+function importSpecifiers(path: string, file: string): SourceImport[] {
+	const { program, errors } = parseSync(path, readFileSync(path, "utf8"), {
+		lang: parseLang(path),
 	});
+	if (errors.length > 0) {
+		throw new Error(`cannot parse ${file}: ${errors.map((error) => error.message).join("; ")}`);
+	}
 	const specifiers: SourceImport[] = [];
 	const add = (node: Argument | null | undefined, typeOnly = false): void => {
 		const specifier = stringLiteralValue(node);
@@ -363,7 +371,8 @@ export function moduleBoundaryViolations(root: string): string[] {
 			}
 		}
 		for (const path of sourceFiles(modulePath)) {
-			for (const sourceImport of importSpecifiers(path)) {
+			const file = normalized(relative(absoluteRoot, path));
+			for (const sourceImport of importSpecifiers(path, file)) {
 				const target = workspaceTarget(sourceImport.specifier, path, absoluteRoot, packages);
 				const violation = sourceViolation(
 					rule,
@@ -372,9 +381,7 @@ export function moduleBoundaryViolations(root: string): string[] {
 					target,
 				);
 				if (violation) {
-					violations.push(
-						`${normalized(relative(absoluteRoot, path))}: import ${JSON.stringify(sourceImport.specifier)} ${violation}`,
-					);
+					violations.push(`${file}: import ${JSON.stringify(sourceImport.specifier)} ${violation}`);
 				}
 			}
 		}
