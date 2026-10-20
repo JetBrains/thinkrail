@@ -5,6 +5,7 @@ import {
 	ResourcePreview,
 	type ResourcePreviewLayout,
 	useOptionalResourceHost,
+	useResourceScope,
 } from "@thinkrail/resource-renderers";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
@@ -58,10 +59,10 @@ function CardAction({
 
 function FilePreview({ path, before }: { path: string; before: string | undefined }) {
 	const host = useOptionalResourceHost();
+	const workspaceId = useResourceScope()?.workspaceId;
 	const [rendererId, setRendererId] = useState<string | undefined>(undefined);
 	const [layout, setLayout] = useState<ResourcePreviewLayout>("split");
 	const [fullscreen, setFullscreen] = useState(false);
-	const workspaceId = host?.scope?.workspaceId;
 	if (!host || !workspaceId) return null;
 	const openTab = () =>
 		before === undefined

@@ -3,11 +3,10 @@ import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
-import { type ResourceHost, useResourceEnvironment, useResourceHost } from "../host";
+import { useResourceEnvironment, useResourceHost, useResourceScope } from "../host";
 import {
 	canonicalWorkspacePath,
 	describeResource,
-	type ResourceContent,
 	type ResourceRenderer,
 	rendererImplementationKey,
 	rendererTestId,
@@ -19,13 +18,12 @@ import { ExpensiveDiffNotice } from "./ExpensiveDiffNotice";
 import { isDiffTooExpensive, surfaceLineCount, VIRTUALIZED_DIFF_LINES } from "./largeDiff";
 import { RendererDiff, RendererView, usePlacedThreadIds } from "./rendererMount";
 import { UnplacedReviewStrip } from "./UnplacedReviewStrip";
+import { type LoadedFile, type ReadyFile, startWorkspaceFileReads } from "./workspaceFileReads";
 
-type LoadedFile =
-	| { status: "loading" }
-	| { status: "ready"; content: ResourceContent; meta: ResourceMeta }
-	| { status: "error"; message: string };
-
-type ReadyFile = Extract<LoadedFile, { status: "ready" }>;
+interface FileState {
+	file: string;
+	loaded: LoadedFile;
+}
 
 export type ResourcePreviewLayout = "split" | "unified";
 
@@ -53,73 +51,29 @@ const LOADING: LoadedFile = { status: "loading" };
 
 const loading = <LoadingRegion rows={8} className="h-full p-12" />;
 
-function fileContent(
-	host: ResourceHost,
-	workspaceId: string,
-	path: string,
-	text: string,
-	meta: ResourceMeta,
-): ResourceContent {
-	if (meta.hash === null || meta.byteLength === null) return { kind: "absent" };
-	if (meta.text) return { kind: "text", text, hash: meta.hash };
-	return {
-		kind: "bytes",
-		url: host.bytesUrl(workspaceId, path),
-		hash: meta.hash,
-		byteLength: meta.byteLength,
-	};
-}
-
-function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
-}
-
 function useWorkspaceFile(workspaceId: string, path: string | undefined): LoadedFile {
-	const host = useResourceHost();
-	const [revision, setRevision] = useState(0);
-	const [loaded, setLoaded] = useState<{ file: string; key: string; loaded: LoadedFile } | null>(
-		null,
-	);
+	const { readFile, subscribeFileChanges, bytesUrl } = useResourceHost();
+	const [state, setState] = useState<FileState | null>(null);
 	const fileKey = `${workspaceId}\u0000${path ?? ""}`;
-	const key = `${fileKey}\u0000${revision}`;
 
 	useEffect(() => {
 		if (path === undefined) return;
-		return host.subscribeFileChanges(workspaceId, (paths) => {
-			if (paths === null || paths.includes(path)) setRevision((current) => current + 1);
-		});
-	}, [host, workspaceId, path]);
-
-	useEffect(() => {
-		if (path === undefined) return;
-		let cancelled = false;
-		host.readFile(workspaceId, path).then(
-			({ content, meta }) => {
-				if (cancelled) return;
-				const file: LoadedFile = {
-					status: "ready",
-					content: fileContent(host, workspaceId, path, content, meta),
-					meta,
-				};
-				setLoaded({ file: fileKey, key, loaded: file });
-			},
-			(error: unknown) => {
-				if (cancelled) return;
-				setLoaded({
+		return startWorkspaceFileReads({
+			read: () => readFile(workspaceId, path),
+			subscribe: (onChange) =>
+				subscribeFileChanges(workspaceId, (paths) => {
+					if (paths === null || paths.includes(path)) onChange();
+				}),
+			bytesUrl: () => bytesUrl(workspaceId, path),
+			update: (next) =>
+				setState((current) => ({
 					file: fileKey,
-					key,
-					loaded: { status: "error", message: errorMessage(error) },
-				});
-			},
-		);
-		return () => {
-			cancelled = true;
-		};
-	}, [host, workspaceId, path, fileKey, key]);
+					loaded: next(current?.file === fileKey ? current.loaded : null),
+				})),
+		});
+	}, [readFile, subscribeFileChanges, bytesUrl, workspaceId, path, fileKey]);
 
-	if (!loaded || loaded.file !== fileKey) return LOADING;
-	if (loaded.key === key || loaded.loaded.status === "ready") return loaded.loaded;
-	return LOADING;
+	return state?.file === fileKey ? state.loaded : LOADING;
 }
 
 function diffDescriptorMeta(original: ResourceMeta, modified: ResourceMeta): ResourceMeta {
@@ -127,13 +81,12 @@ function diffDescriptorMeta(original: ResourceMeta, modified: ResourceMeta): Res
 }
 
 export function ResourcePreview(props: ResourcePreviewProps) {
-	const host = useResourceHost();
-	const workspaceId = props.workspaceId ?? host.scope?.workspaceId;
+	const scope = useResourceScope();
+	const workspaceId = props.workspaceId ?? scope?.workspaceId;
 	if (!workspaceId)
 		throw new Error("ResourcePreview needs a workspace: pass workspaceId or a scope");
-	return (
-		<ScopedResourcePreview {...props} workspaceId={workspaceId} sessionId={host.scope?.sessionId} />
-	);
+	const sessionId = scope?.workspaceId === workspaceId ? scope.sessionId : undefined;
+	return <ScopedResourcePreview {...props} workspaceId={workspaceId} sessionId={sessionId} />;
 }
 
 function ScopedResourcePreview(

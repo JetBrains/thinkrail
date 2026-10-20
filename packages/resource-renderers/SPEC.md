@@ -29,7 +29,7 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   `selectResourceRenderer`, `rendererImplementationKey`, `rendererTestId` — plus
   `registerBundledResourceRenderers()` (idempotent);
 - the host seam — `ResourceHostProvider`, `ResourcePreferencesProvider`, `ResourceEnvironmentProvider`,
-  `useResourceHost`, `useOptionalResourceHost` and the `ResourceHost`, `ResourcePreferences`, `ResourceScope`,
+  `ResourceScopeProvider`, `useResourceHost`, `useOptionalResourceHost`, `useResourceScope` and the `ResourceHost`, `ResourcePreferences`, `ResourceScope`,
   `ResourceFileReviewProps`, `ResourceReviewSendProps`, `ResourceMarkdown`, `ResourceCodeHost`,
   `ResourceCodeLanguage`, `ResourceMarkdownProps`, `MarkdownRehypePlugins` types;
 - the large-diff policy — `isDiffTooExpensive`, `estimateChangedLines`, `surfaceChangedLines`,
@@ -73,19 +73,22 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
   `ReviewSend` — the host's review surface and Send review control; the optional session routes sends. The
   seam is a component, not a hook on the host object: passing hooks around as values breaks React's rules and
   made the React Compiler bail out of the preview; a before/after nests two `FileReview`s.
-- `scope?: { workspaceId, sessionId? }` — set by a nested provider when a subtree belongs to one workspace
-  and chat (the web chat wraps every tool renderer); `ResourcePreview` falls back to it when no
-  `workspaceId` prop is given.
-
-Build the value once (the app does at module scope); a nested scope provider spreads it, so every function
-keeps its identity. Its functions are memo inputs: `documentComponents`
+Build the value once (the app does at module scope). Its functions are memo inputs: `documentComponents`
 defines its link and image components per call, so a new `bytesUrl`/`openFile` identity would remount every
 link and image in open previews and notebook cells. The reader's line-width preference
 (`fileLineWidth` / `fileLineWidthBounded`) arrives separately through `ResourcePreferencesProvider`; only
 `MonacoEditor` reads it, so a width change re-renders nothing else. The phone class arrives the same way
 through `ResourceEnvironmentProvider` (the registry's `ResourceEnvironment`, `{ mobile }`); only
 `ResourcePreview` reads it — panes resolve with their own viewport reading — so a viewport flip re-renders
-only the previews that must re-resolve their renderer. The rendered markdown diff renders both
+only the previews that must re-resolve their renderer. A subtree that belongs to one workspace and chat
+sets `ResourceScopeProvider` (`{ workspaceId, sessionId? }`, read with `useResourceScope`; the web chat wraps
+its transcript list): `ResourcePreview` falls back to its workspace when no `workspaceId` prop is given and
+routes review sends to its session. The scope is its own context rather than a host field because a host
+spread per chat made every preview's reads and subscriptions restart whenever the chat's actions changed.
+`ResourcePreview` depends only on the host's stable `readFile` / `subscribeFileChanges` / `bytesUrl`; it
+applies reads in the order it issued them (a newer change event never discards the read in flight, so a
+burst of events cannot starve the first load), keeps the loaded file when a re-read returns the same hash,
+and keeps the last good content when a re-read fails, like a file tab. The rendered markdown diff renders both
 sides with `renderToStaticMarkup`, outside the React tree, so it reads the markdown component and links in its
 own render and passes them to `MarkdownDocument` explicitly — a context read inside a static render would throw
 (found by the Changes/rendered-diff e2e during extraction).

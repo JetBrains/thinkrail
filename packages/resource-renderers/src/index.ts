@@ -12,8 +12,10 @@ export {
 	ResourcePreferencesProvider,
 	type ResourceReviewSendProps,
 	type ResourceScope,
+	ResourceScopeProvider,
 	useOptionalResourceHost,
 	useResourceHost,
+	useResourceScope,
 } from "./host";
 export {
 	type AnchorDraft,

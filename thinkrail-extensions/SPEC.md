@@ -62,7 +62,8 @@ What a `./web` half may import:
   color/spacing/typography checks cover `packages/ui` and `thinkrail-extensions/*/web`.
 - `@thinkrail/resource-renderers` ([[module-resource-renderers]]) — the host's file and diff renderers:
   `ResourcePreview` shows a workspace file (or a before/after of two) with the same renderers and review
-  comments as diff review, and `useOptionalResourceHost` exposes the host's scope and tab actions. The
+  comments as diff review; `useResourceScope` gives the chat's workspace and session, and
+  `useOptionalResourceHost` the host's tab actions. The
   extension never loads files or saves comments itself; the host supplies both through the provider.
 - **Not in the SDK (yet):** the highlighted `CodeBlock` and the shiki highlighter — not dependency-closed
   (highlighter → theme barrel). They move together with the generic CSS-variable shiki map when a second

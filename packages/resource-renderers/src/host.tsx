@@ -70,7 +70,6 @@ export interface ResourceHost {
 	): () => void;
 	FileReview: ComponentType<ResourceFileReviewProps>;
 	ReviewSend: ComponentType<ResourceReviewSendProps>;
-	scope?: ResourceScope | undefined;
 }
 
 export interface ResourcePreferences {
@@ -81,10 +80,12 @@ export interface ResourcePreferences {
 const ResourceHostContext = createContext<ResourceHost | null>(null);
 const ResourcePreferencesContext = createContext<ResourcePreferences | null>(null);
 const ResourceEnvironmentContext = createContext<ResourceEnvironment | null>(null);
+const ResourceScopeContext = createContext<ResourceScope | null>(null);
 
 export const ResourceHostProvider = ResourceHostContext.Provider;
 export const ResourcePreferencesProvider = ResourcePreferencesContext.Provider;
 export const ResourceEnvironmentProvider = ResourceEnvironmentContext.Provider;
+export const ResourceScopeProvider = ResourceScopeContext.Provider;
 
 export function useOptionalResourceHost(): ResourceHost | null {
 	return useContext(ResourceHostContext);
@@ -100,6 +101,10 @@ export function useResourcePreferences(): ResourcePreferences {
 	const preferences = useContext(ResourcePreferencesContext);
 	if (!preferences) throw new Error("Resource renderers need a ResourcePreferencesProvider");
 	return preferences;
+}
+
+export function useResourceScope(): ResourceScope | null {
+	return useContext(ResourceScopeContext);
 }
 
 export function useResourceEnvironment(): ResourceEnvironment {

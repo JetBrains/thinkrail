@@ -432,9 +432,9 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   source candidates only from explicit tool args/details — never regex guesses over Bash output, code, or
   prose. A standalone renderer has no callback and therefore stays inert. The callback's preview-slot
   semantics belong to [[submodule-web-panels]].
-- **Tool file previews** — `ChatTranscript` puts the chat's `resourceScope` (`{ workspaceId, sessionId }`) on
-  `ChatActions`, and `ToolRendererBody` wraps every renderer in a nested `ResourceHostProvider` that adds that
-  scope to the shell's host (a no-op when no host is mounted). A tool card can then render
+- **Tool file previews** — `ChatTranscript` wraps its row list in [[module-resource-renderers]]'
+  `ResourceScopeProvider` with the chat's `{ workspaceId, sessionId }`, memoized on the two ids (one provider
+  above the list, like the fold geometry). A tool card can then render
   [[module-resource-renderers]]' `ResourcePreview` for a workspace path and its review sends route to this
   chat — the renderer never learns workspace or session ids through props, and chat never imports panels.
 - **`ChatActions`** — a React context (provided by `ChatTranscript`, `null` standalone): how a renderer talks
