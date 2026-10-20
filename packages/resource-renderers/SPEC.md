@@ -371,7 +371,8 @@ style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'; 
 'none'; child-src 'none'`. The diff is the shared visual frame constrained to 2-up sandboxed documents only.
 It advertises no anchor geometry, so HTML threads remain in the pane-owned unplaced strip and Source is the
 only authoring candidate. View and diff share a **preview width** switch in the notice bar — Desktop 1280 /
-Tablet 768 / Phone 390 / Fill, default Desktop, persisted as `{ viewport }` view state: the frame renders at
+Tablet 768 / Phone 390 / Fill, default Desktop, persisted as `{ viewport }` view state and adopted whenever the
+caller's view state changes (`useHtmlViewport`, so a chat card follows a width chosen in its full screen): the frame renders at
 the design width and is CSS-scaled down to its box (never up), keeping its own vertical scroll, so a narrow
 pane, a 2-up half or a chat card shows the true layout shrunk rather than an accidental mobile reflow; Fill
 is the old reflow. Scaling is pure geometry on the wrapper — the iframe keeps `sandbox=""` and nothing

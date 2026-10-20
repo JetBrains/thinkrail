@@ -1,18 +1,14 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { ResourceViewProps } from "../../registry";
 import { HtmlFrame } from "./HtmlFrame";
 import { buildHtmlPreviewDocument } from "./htmlDocument";
+import { useHtmlViewport } from "./useHtmlViewport";
 import { HtmlPreviewNotice } from "./ViewportSwitch";
-import { type HtmlViewport, htmlViewport } from "./viewport";
 
 export default function HtmlView({ resource, content, viewState, onViewState }: ResourceViewProps) {
 	const text = content.kind === "text" ? content.text : "";
 	const document = useMemo(() => buildHtmlPreviewDocument(text), [text]);
-	const [viewport, setViewport] = useState<HtmlViewport>(() => htmlViewport(viewState));
-	const selectViewport = (next: HtmlViewport) => {
-		setViewport(next);
-		onViewState?.({ viewport: next });
-	};
+	const [viewport, selectViewport] = useHtmlViewport(viewState, onViewState);
 	return (
 		<div data-testid="html-view" className="flex h-full min-h-0 flex-col bg-container-workspace-bg">
 			<HtmlPreviewNotice viewport={viewport} onViewport={selectViewport} />

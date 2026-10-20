@@ -1,11 +1,12 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { ResourceContent, ResourceDiffProps } from "../../registry";
 import { diffContentStamp } from "../reviewComposerState";
 import { VisualDiff, type VisualDiffSide } from "../VisualDiff";
 import { HtmlFrame } from "./HtmlFrame";
 import { buildHtmlPreviewDocument } from "./htmlDocument";
+import { useHtmlViewport } from "./useHtmlViewport";
 import { HtmlPreviewNotice } from "./ViewportSwitch";
-import { type HtmlViewport, htmlViewport } from "./viewport";
+import type { HtmlViewport } from "./viewport";
 
 function textOf(content: ResourceContent): string | null {
 	return content.kind === "text" ? content.text : null;
@@ -32,11 +33,7 @@ export default function HtmlDiff({
 	viewState,
 	onViewState,
 }: ResourceDiffProps) {
-	const [viewport, setViewport] = useState<HtmlViewport>(() => htmlViewport(viewState));
-	const selectViewport = (next: HtmlViewport) => {
-		setViewport(next);
-		onViewState?.({ viewport: next });
-	};
+	const [viewport, selectViewport] = useHtmlViewport(viewState, onViewState);
 	const originalText = textOf(original);
 	const modifiedText = textOf(modified);
 	const originalSide: VisualDiffSide = {

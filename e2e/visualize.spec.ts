@@ -527,7 +527,7 @@ test("a before/after preview opens as a diff tab over the two files that survive
 	}
 });
 
-test("an HTML preview width carries into full screen and survives a comparison tab switch", async ({
+test("an HTML preview width is shared by the card and its full screen and survives a comparison tab switch", async ({
 	page,
 }) => {
 	const cleanup = writeMockups({
@@ -548,8 +548,13 @@ test("an HTML preview width carries into full screen and survives a comparison t
 			"data-viewport",
 			"phone",
 		);
+		await dialog.getByTestId("html-viewport-tablet").click();
 		await page.keyboard.press("Escape");
 		await expect(dialog).toBeHidden();
+		await expect(diff.getByTestId("html-frame-box").first()).toHaveAttribute(
+			"data-viewport",
+			"tablet",
+		);
 
 		await diff.getByTestId("tool-visualize-open-tab").click();
 		const pane = page.locator('[data-testid="diff-pane"][data-compare]');
