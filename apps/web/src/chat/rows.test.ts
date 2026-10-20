@@ -478,7 +478,14 @@ describe("deriveRows dividers", () => {
 			assistant("a2", [text("fixed")], { timestamp: 8_000 }),
 		];
 		const rows = deriveRows(turns, {}, false);
-		expect(kinds(rows)).toEqual(["user", "markdown", "divider", "reviewFix", "markdown", "divider"]);
+		expect(kinds(rows)).toEqual([
+			"user",
+			"markdown",
+			"divider",
+			"reviewFix",
+			"markdown",
+			"divider",
+		]);
 		const last = rows.at(-1);
 		expect(last?.kind === "divider" && last.data.elapsedMs).toBe(3_000);
 	});

@@ -131,7 +131,8 @@ export function opensRound(turn: ChatTurn): boolean {
 
 function roundStartMs(turn: ChatTurn): number | null {
 	if (!opensRound(turn)) return null;
-	const at = turn.kind === "user" ? turn.message.timestamp : "timestamp" in turn ? turn.timestamp : null;
+	const at =
+		turn.kind === "user" ? turn.message.timestamp : "timestamp" in turn ? turn.timestamp : null;
 	return typeof at === "number" && Number.isFinite(at) ? at : null;
 }
 
@@ -244,9 +245,7 @@ export function deriveRows(
 			}
 		}
 		const next = turns[i + 1];
-		const roundEnded =
-			!opensRound(turn) &&
-			(next ? opensRound(next) : !isStreaming);
+		const roundEnded = !opensRound(turn) && (next ? opensRound(next) : !isStreaming);
 		if (roundEnded) {
 			flushRun();
 			const data = turnDivider(turns, i, isSpec, agentTurns, workspaceRoot);

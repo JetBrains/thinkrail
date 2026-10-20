@@ -150,16 +150,19 @@ test("natural command completion refreshes the closed inspector and survives tra
 	);
 	await expect(trigger).toHaveAttribute("data-active-count", "0", { timeout: 60_000 });
 	await expect(page.getByTestId("resources-dock")).toHaveCount(0);
-	await expect(page.getByTestId("background-command-completion")).toHaveAttribute(
-		"data-status",
-		"completed",
-		{ timeout: 60_000 },
-	);
+	const result = page.getByTestId("background-command-completion");
+	await expect(result).toHaveAttribute("data-status", "completed", { timeout: 60_000 });
+	await expect(result).toHaveAttribute("data-expanded", "false");
+	await expect(result.getByTestId("background-result-teaser")).toContainText("RESOURCE_DONE");
 	await waitForAgentSettled(page, 120_000);
-	await openResources(page);
+	await expect(page.getByTestId("turn-divider")).toHaveCount(2);
+	await result.getByTestId("background-result-toggle").click();
+	await expect(result.getByTestId("background-result-body")).toContainText("RESOURCE_DONE");
+	await result.getByTestId("background-result-open").click();
+	await expect(inspector).toBeVisible();
 	const row = inspector.locator(commandRows).filter({ hasText: "resource-finish" });
 	await expect(row).toHaveAttribute("data-status", "completed");
-	await row.getByRole("option").click();
+	await expect(row).toHaveAttribute("data-selected", "true");
 	await expect(inspector.getByTestId("command-log-output")).toContainText("RESOURCE_DONE");
 	await page.keyboard.press("Escape");
 	await page.reload();

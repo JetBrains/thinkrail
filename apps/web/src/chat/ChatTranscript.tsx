@@ -162,6 +162,7 @@ const ChatTranscript = forwardRef<
 		workspaceRoot: string | undefined;
 		focusComposer: () => void;
 		openSubagentTranscript: (childSessionId: string | null) => void;
+		resultOpener: ChatActions["resultOpener"];
 		onTryAgain: () => void;
 		historyOpen: boolean;
 		inspectorOpen: boolean;
@@ -179,6 +180,7 @@ const ChatTranscript = forwardRef<
 		workspaceRoot,
 		focusComposer,
 		openSubagentTranscript,
+		resultOpener,
 		onTryAgain,
 		historyOpen,
 		inspectorOpen,
@@ -561,6 +563,7 @@ const ChatTranscript = forwardRef<
 			cancelAutomaticReveal,
 			focusComposer,
 			openSubagentTranscript,
+			resultOpener,
 			revealChatElement: revealElement,
 			readMcpOutput,
 			openMcpSettings,
@@ -573,6 +576,7 @@ const ChatTranscript = forwardRef<
 			openProviderSettings,
 			openSubagentTranscript,
 			readMcpOutput,
+			resultOpener,
 			revealElement,
 			sessionId,
 		],

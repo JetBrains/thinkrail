@@ -1,7 +1,14 @@
 import { expect, test } from "bun:test";
 import type { DelegationRunDetails } from "@thinkrail/contracts";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
-import { agentSummary, readRunDetails, runCounters } from "./runDetails";
+import {
+	agentSummary,
+	completionReport,
+	readRunDetails,
+	reportTeaser,
+	runCounters,
+	usageCounters,
+} from "./runDetails";
 
 function details(overrides: Partial<DelegationRunDetails> = {}): DelegationRunDetails {
 	return {
@@ -106,4 +113,20 @@ test("agentSummary is the live collapsed-header line, per status", () => {
 			}),
 		),
 	).toBe("child-1");
+});
+
+test("usage counters leave run time to the caller; run counters append it", () => {
+	expect(usageCounters(details())).toEqual(["12 turns", "30k tok", "$0.040"]);
+	expect(runCounters(details())).toEqual([...usageCounters(details()), "45s"]);
+});
+
+test("the completion report drops pi-subagents' header and teases its first readable line", () => {
+	const report = completionReport(
+		'Subagent "reviewer" (01JX.child) completed:\n\n## **Verdict:** approve\n\n- nit: one owner',
+	);
+	expect(report).toBe("## **Verdict:** approve\n\n- nit: one owner");
+	expect(reportTeaser(report)).toBe("Verdict: approve");
+	expect(reportTeaser("\n\n- `first` item")).toBe("first item");
+	expect(completionReport("plain report without a header")).toBe("plain report without a header");
+	expect(reportTeaser("")).toBe("");
 });
