@@ -46,6 +46,7 @@ describe("settingsNavGroups", () => {
 					SettingsSection.Appearance,
 					SettingsSection.Layout,
 					SettingsSection.Terminal,
+					SettingsSection.Language,
 				],
 			],
 			[

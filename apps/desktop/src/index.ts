@@ -20,6 +20,7 @@ import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
 import { installExternalNavigation } from "./externalNavigation";
 import { preferNativeHostBridge, usesNativeHostBridge } from "./hostTransport";
 import { createKeyStateReader } from "./keyState";
+import { type MenuLocale, menuLabel, resolveMenuLocale } from "./menuLocale";
 import { createPageZoomGestureHandler, nextPageZoom } from "./pageZoom";
 import {
 	injectInitialDesktopPreferences,
@@ -99,14 +100,27 @@ function windowControlsProbeScript(target: { testId: string; label: string }): s
 })();`;
 }
 let startupQuitCoordinator: ReturnType<typeof createElectrobunQuitCoordinator> | undefined;
+/** Set once `start` reads the preference, so the startup-failure dialog can speak the same language. */
+let startupLocale: MenuLocale | null = null;
 
 function writeReady(path: string, payload: unknown): void {
 	mkdirSync(dirname(path), { recursive: true });
 	writeFileSync(path, JSON.stringify(payload));
 }
 
+/** Same file the window preferences live in, resolved the same way. */
+function preferencesPath(): string {
+	return join(process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData, "preferences.json");
+}
+
 async function start(): Promise<void> {
-	const applicationMenuInstalled = installDesktopApplicationMenu(ApplicationMenu, process.platform);
+	const menuLocale = resolveMenuLocale(preferencesPath());
+	startupLocale = menuLocale;
+	const applicationMenuInstalled = installDesktopApplicationMenu(
+		ApplicationMenu,
+		process.platform,
+		menuLocale,
+	);
 	let menuTarget: {
 		hintVisible(): boolean;
 		showHint(hint: NativeQuitHint): void;
@@ -153,7 +167,7 @@ async function start(): Promise<void> {
 			? { openExternal: (url: string) => Utils.openExternal(url) }
 			: {}),
 	});
-	const quitCoordinator = createElectrobunQuitCoordinator(() => host.server.shutdown());
+	const quitCoordinator = createElectrobunQuitCoordinator(() => host.server.shutdown(), menuLocale);
 	startupQuitCoordinator = quitCoordinator;
 	Electrobun.events.on("before-quit", (event: BeforeQuitEvent) => {
 		quitCoordinator.handleBeforeQuit(event);
@@ -445,12 +459,14 @@ try {
 	const message = error instanceof Error ? error.message : String(error);
 	console.error(message);
 	try {
+		// This dialog is drawn before any window exists, so it reads the menu locale directly.
+		const locale = startupLocale ?? resolveMenuLocale(preferencesPath());
 		await Utils.showMessageBox({
 			type: "error",
-			title: "ThinkRail could not start",
-			message: "ThinkRail could not start",
+			title: menuLabel(locale, "Could not start"),
+			message: menuLabel(locale, "Could not start"),
 			detail: message,
-			buttons: ["Quit"],
+			buttons: [menuLabel(locale, "QuitApp")],
 		});
 	} finally {
 		if (startupQuitCoordinator) await startupQuitCoordinator.quit();

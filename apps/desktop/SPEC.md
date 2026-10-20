@@ -105,6 +105,14 @@ are custom-action items, not roles; see Confirmed quit and close. The policy is 
 ready seam reports whether registration ran, so unit tests pin menu composition while expanded-app smoke
 pins production wiring.
 
+### Dialog language
+
+The startup-failure dialog and the restart-failure dialog are drawn by the desktop process before — or
+instead of — a loaded client, so they cannot reach the web catalog. Their copy comes from
+`src/menuLocale.ts`, the same persisted-preference lookup that localizes the menu, and falls back to the
+OS language and then to the build's default. The message detail stays as thrown: it is a host diagnostic,
+not product copy.
+
 ### Confirmed quit and close
 
 Command-Q (`quit-shortcut`) must be confirmed: hold it for 1200 ms, then release Q or Command; or press

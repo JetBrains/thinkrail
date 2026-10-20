@@ -1,5 +1,6 @@
 import type { NativeCommand } from "@thinkrail/contracts";
 import type { ApplicationMenuItemConfig } from "electrobun/main";
+import { type MenuLocale, menuLabel } from "./menuLocale";
 
 export const QUIT_SHORTCUT_ACTION = "quit-shortcut";
 const CLOSE_ITEM_COMMAND: NativeCommand = "close-item";
@@ -13,9 +14,9 @@ type ApplicationMenuApi = {
 	setApplicationMenu(menu: ApplicationMenuItemConfig[]): void;
 };
 
-function editMenu(): ApplicationMenuItemConfig {
+function editMenu(locale: MenuLocale): ApplicationMenuItemConfig {
 	return {
-		label: "Edit",
+		label: menuLabel(locale, "Edit"),
 		submenu: [
 			{ role: "undo" },
 			{ role: "redo" },
@@ -32,34 +33,43 @@ function editMenu(): ApplicationMenuItemConfig {
 
 export function desktopApplicationMenu(
 	platform: NodeJS.Platform,
+	locale: MenuLocale = "en",
 ): ApplicationMenuItemConfig[] | null {
-	if (platform === "win32") return [editMenu()];
+	if (platform === "win32") return [editMenu(locale)];
 	if (platform !== "darwin") return null;
 	return [
 		{
 			submenu: [
 				{ role: "about" },
 				{ type: "separator" },
-				{ label: "Settings…", action: OPEN_SETTINGS_COMMAND, accelerator: "CommandOrControl+," },
+				{
+					label: menuLabel(locale, "Settings…"),
+					action: OPEN_SETTINGS_COMMAND,
+					accelerator: "CommandOrControl+,",
+				},
 				{ type: "separator" },
 				{ role: "hide", accelerator: "CommandOrControl+H" },
 				{ role: "hideOthers", accelerator: "CommandOrControl+Alt+H" },
 				{ role: "showAll" },
 				{ type: "separator" },
 				{
-					label: "Quit ThinkRail",
+					label: menuLabel(locale, "Quit", ["ThinkRail"]),
 					action: QUIT_SHORTCUT_ACTION,
 					accelerator: "CommandOrControl+Q",
 				},
 			],
 		},
-		editMenu(),
+		editMenu(locale),
 		{
-			label: "Window",
+			label: menuLabel(locale, "Window"),
 			submenu: [
 				{ role: "minimize", accelerator: "CommandOrControl+M" },
 				{ role: "zoom" },
-				{ label: "Close", action: CLOSE_ITEM_COMMAND, accelerator: "CommandOrControl+W" },
+				{
+					label: menuLabel(locale, "Close"),
+					action: CLOSE_ITEM_COMMAND,
+					accelerator: "CommandOrControl+W",
+				},
 				{ type: "separator" },
 				{ role: "bringAllToFront" },
 			],
@@ -70,8 +80,9 @@ export function desktopApplicationMenu(
 export function installDesktopApplicationMenu(
 	applicationMenu: ApplicationMenuApi,
 	platform: NodeJS.Platform,
+	locale: MenuLocale = "en",
 ): boolean {
-	const menu = desktopApplicationMenu(platform);
+	const menu = desktopApplicationMenu(platform, locale);
 	if (!menu) return false;
 	applicationMenu.setApplicationMenu(menu);
 	return true;
