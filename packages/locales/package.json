@@ -25,7 +25,6 @@
 		"@types/react-dom": "catalog:",
 		"react": "catalog:",
 		"react-dom": "catalog:",
-		"tsrs": "catalog:",
-		"typescript": "catalog:"
+		"tsrs": "catalog:"
 	}
 }

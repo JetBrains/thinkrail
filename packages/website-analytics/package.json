@@ -12,7 +12,6 @@
 	},
 	"devDependencies": {
 		"@types/bun": "catalog:",
-		"tsrs": "catalog:",
-		"typescript": "catalog:"
+		"tsrs": "catalog:"
 	}
 }

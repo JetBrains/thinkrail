@@ -21,7 +21,6 @@
 		"@types/bun": "catalog:",
 		"electrobun": "2.0.5",
 		"resedit": "catalog:",
-		"tsrs": "catalog:",
-		"typescript": "catalog:"
+		"tsrs": "catalog:"
 	}
 }
