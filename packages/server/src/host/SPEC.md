@@ -165,8 +165,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   faults. It renders the throw via the `log` module's `describeError`, so crash reports and log lines
   agree, but keeps its own sync append — the death path must not depend on the logger's state);
   `boot.ts` (`bootHost` → await `initLogging` — debug level when the launcher passed `verbose` — then
-  install the crash report, resolve the login-shell environment when the launcher passed
-  `resolveShellEnv: true`, pre-warm the same Central watcher/runtime
+  install the crash report, await the login-shell environment when the launcher passed
+  `resolveShellEnv: true` (started before `initLogging`), pre-warm the same Central watcher/runtime
   initialization before choosing the serving port, await `createServer` (which idempotently enforces
   runtime bootstrap for low-level embedders), and write the `listening on` info line (see
   `submodule-server-log`). Its

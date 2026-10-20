@@ -27,7 +27,7 @@ engine architecture.
 - **Public surface:** the packaged desktop application and its installers. No test-helper library is
   exported by the application package.
 - **Allowed deps:** `server` for the embedded host and build-support manifest; `shared`
-  for release identity; `contracts` for
+  for release identity and the early `resolveShellEnv()` start; `contracts` for
   compatibility/native-bridge types and the shared `createQuitConfirmation` rule; the completed built web
   artifact; Electrobun `2.0.1` and its generated SDK; build-only `pe-library`/`resedit` for the
   Electrobun 2.0.1 Windows-uninstaller icon gap; build-only `@resvg/resvg-js` to rasterize the icon
@@ -55,12 +55,17 @@ another.
 1. Resolve app resources and set `BUN_PTY_LIB` to the staged current-target FFI library before any server
    import. Electrobun emits an ordinary JavaScript entry, not a `bun build --compile` executable, so it
    does not embed `bun-pty`'s library.
-2. Dynamically import the separately built, unpacked `server-runtime.ts` resource. That bundle is built with
-   pi's `PI_BUNDLED_NODE=true` define, which makes PI use its embedded-modules extension loader (static jiti
-   with Babel bundled, plus virtual modules) for external extensions such as Central. Without the define a
-   single-file bundle is treated as a plain Node runtime and PI's lazy Babel `require` cannot resolve inside
-   it ([[submodule-server-agent]] owns the seam). Flattening PI into Electrobun's normal entry is still
-   forbidden: it would load `bun-pty` before `BUN_PTY_LIB` is set.
+2. Start `resolveShellEnv()` at the top of `start()`, then dynamically import the separately built, unpacked
+   `server-runtime.ts` resource, and await the shell env before `startDesktopHost()`. A Dock/Finder launch
+   pays for the login-shell probe (~100 ms on a typical profile, seconds on a slow one); overlapping it
+   with the bundle import hides up to the import time. The bundle's own `shellEnv` copy is a separate
+   module instance, so the run is cached on a `Symbol.for` global key: its `bootHost()` call awaits the
+   same run instead of probing again. That bundle is built with pi's `PI_BUNDLED_NODE=true` define, which
+   makes PI use its embedded-modules extension loader (static jiti with Babel bundled, plus virtual modules)
+   for external extensions such as Central. Without the define a single-file bundle is treated as a plain
+   Node runtime and PI's lazy Babel `require` cannot resolve inside it ([[submodule-server-agent]] owns the
+   seam). Flattening PI into Electrobun's normal entry is still forbidden: it would load `bun-pty` before
+   `BUN_PTY_LIB` is set.
 3. The runtime value-imports the four bundled pi-package factories (`pi-web-access`, `pi-spec-graph`,
    `pi-thinkrail-workflow`, `pi-todos`) and calls `registerBundledRuntime()` with those factories, the
    `pi-web-access` factory needed by delegation children (picked by `BuildRuntimeSources.webAccessIndex`,

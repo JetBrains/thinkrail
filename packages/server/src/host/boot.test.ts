@@ -722,6 +722,7 @@ async function withFakeLoginShell(run: () => Promise<void>): Promise<void> {
 	process.env.SHELL = shell;
 	delete process.env.TERM;
 	delete process.env.BOOT_LOGIN_CANARY;
+	delete (globalThis as Record<symbol, unknown>)[Symbol.for("thinkrail.shellEnv.pending")];
 	try {
 		await run();
 	} finally {

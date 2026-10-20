@@ -8,6 +8,7 @@ import {
 	loginShellImports,
 	mergePath,
 	parseLoginShellEnv,
+	repairShellEnv,
 	resolveShellEnv,
 } from "./shellEnv";
 
@@ -40,6 +41,7 @@ beforeEach(() => {
 	process.env.PATH = LAUNCHD_DEFAULT_PATH;
 });
 afterEach(() => {
+	delete (globalThis as Record<symbol, unknown>)[Symbol.for("thinkrail.shellEnv.pending")];
 	rmSync(shellDir, { recursive: true, force: true });
 	if (originalPath === undefined) delete process.env.PATH;
 	else process.env.PATH = originalPath;
@@ -55,7 +57,7 @@ afterEach(() => {
 	for (const key of IMPORT_VARS) delete process.env[key];
 });
 
-const noProbe = () => null;
+const noProbe = async () => null;
 
 test("mergePath keeps explicit current entries ahead of the login PATH without duplicates", () => {
 	expect(mergePath("/venv/bin:/usr/bin:/bin", "/opt/homebrew/bin:/usr/bin:/bin")).toBe(
@@ -65,35 +67,35 @@ test("mergePath keeps explicit current entries ahead of the login PATH without d
 	expect(mergePath("/usr/bin::/bin", "/usr/bin:/bin")).toBe("/usr/bin:/bin");
 });
 
-test("resolveShellEnv adopts the login shell PATH from the launchd default", () => {
-	resolveShellEnv();
+test("repairShellEnv adopts the login shell PATH from the launchd default", async () => {
+	await repairShellEnv();
 
 	expect(process.env.PATH).toBe(`/Users/x/.pi/agent/bin:${LOGIN_PATH}`);
 });
 
-test("resolveShellEnv probes from a base PATH and keeps a terminal's extras in front", () => {
+test("repairShellEnv probes from a base PATH and keeps a terminal's extras in front", async () => {
 	fakeShell(`printf '${LOGIN_ENV_MARKER}PATH=/Users/x/.local/bin:%s\\0' "$PATH"`);
 	process.env.PATH = `/work/.venv/bin:${LOGIN_PATH}`;
 
-	resolveShellEnv();
+	await repairShellEnv();
 
 	expect(process.env.PATH).toBe(
 		"/work/.venv/bin:/opt/homebrew/bin:/Users/x/.bun/bin:/Users/x/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin",
 	);
 });
 
-test("resolveShellEnv falls back to a non-interactive login shell", () => {
+test("repairShellEnv falls back to a non-interactive login shell", async () => {
 	fakeShell(`case "$*" in *-i*) exit 1;; esac\nprintf '${LOGIN_ENV_MARKER}PATH=${LOGIN_PATH}\\0'`);
 
-	resolveShellEnv();
+	await repairShellEnv();
 
 	expect(process.env.PATH).toBe(`/Users/x/.pi/agent/bin:${LOGIN_PATH}`);
 });
 
-test("resolveShellEnv leaves PATH untouched when the login shell fails", () => {
+test("repairShellEnv leaves PATH untouched when the login shell fails", async () => {
 	fakeShell("exit 1");
 
-	resolveShellEnv();
+	await repairShellEnv();
 
 	expect(process.env.PATH).toBe(LAUNCHD_DEFAULT_PATH);
 });
@@ -108,20 +110,20 @@ test("localeRepair supplies a UTF-8 locale only when none is configured", () => 
 	expect(localeRepair({ LC_CTYPE: "ru_RU.UTF-8" }, "linux")).toBeNull();
 });
 
-test("resolveShellEnv installs LANG when the host has no locale at all", () => {
+test("repairShellEnv installs LANG when the host has no locale at all", async () => {
 	for (const key of LOCALE_VARS) delete process.env[key];
 
-	resolveShellEnv({ probe: noProbe });
+	await repairShellEnv({ probe: noProbe });
 
 	expect(process.env.LANG).toMatch(/UTF-8$/);
 	expect(process.env.LC_ALL).toBeUndefined();
 	expect(process.env.LC_CTYPE).toBeUndefined();
 });
 
-test("resolveShellEnv leaves an existing locale untouched", () => {
+test("repairShellEnv leaves an existing locale untouched", async () => {
 	process.env.LANG = "ru_RU.UTF-8";
 
-	resolveShellEnv({ probe: noProbe });
+	await repairShellEnv({ probe: noProbe });
 
 	expect(process.env.LANG).toBe("ru_RU.UTF-8");
 });
@@ -154,9 +156,9 @@ test("loginShellImports adds only what the process lacks and never host-reserved
 	expect(imports).toEqual({ GITHUB_TOKEN: "ghp_x" });
 });
 
-test("resolveShellEnv imports the login-shell environment only for a host launched without a terminal", () => {
+test("repairShellEnv imports the login-shell environment only for a host launched without a terminal", async () => {
 	process.env.TR_TEST_PRESET = "process";
-	const probe = () =>
+	const probe = async () =>
 		new Map([
 			["TR_TEST_IMPORTED", "from-shell"],
 			["TR_TEST_PRESET", "shell"],
@@ -165,27 +167,56 @@ test("resolveShellEnv imports the login-shell environment only for a host launch
 		]);
 
 	process.env.TERM = "xterm-256color";
-	resolveShellEnv({ probe });
+	await repairShellEnv({ probe });
 	expect(process.env.TR_TEST_IMPORTED).toBeUndefined();
 
 	delete process.env.TERM;
-	resolveShellEnv({ probe });
+	await repairShellEnv({ probe });
 	expect(process.env.TR_TEST_IMPORTED).toBe("from-shell");
 	expect(process.env.TR_TEST_PRESET).toBe("process");
 	expect(process.env.PI_TEST_SHELL).toBeUndefined();
 	expect(process.env.THINKRAIL_TEST_SHELL).toBeUndefined();
 });
 
-test("the PATH repair and the import share one login-shell probe", () => {
+test("the PATH repair and the import share one login-shell probe", async () => {
 	delete process.env.TERM;
 	process.env.PATH = "/usr/bin:/bin";
 	let probes = 0;
-	resolveShellEnv({
-		probe: () => {
+	await repairShellEnv({
+		probe: async () => {
 			probes += 1;
 			return new Map([["PATH", "/opt/homebrew/bin:/usr/bin:/bin"]]);
 		},
 	});
 	expect(probes).toBe(1);
 	expect(process.env.PATH).toBe("/opt/homebrew/bin:/usr/bin:/bin");
+});
+
+test("the login shell probe does not block the event loop", async () => {
+	fakeShell(`sleep 0.3; printf '${LOGIN_ENV_MARKER}PATH=${LOGIN_PATH}\\0'`);
+	const order: string[] = [];
+	const repair = repairShellEnv().then(() => order.push("repaired"));
+	await Bun.sleep(20);
+	order.push("timer");
+	await repair;
+	expect(order).toEqual(["timer", "repaired"]);
+	expect(process.env.PATH).toBe(`/Users/x/.pi/agent/bin:${LOGIN_PATH}`);
+});
+
+test("a background job holding stdout neither delays nor drops the login PATH", async () => {
+	fakeShell(`sleep 3 &\nprintf '${LOGIN_ENV_MARKER}PATH=${LOGIN_PATH}\\0'`);
+	const started = performance.now();
+	await repairShellEnv();
+	expect(process.env.PATH).toBe(`/Users/x/.pi/agent/bin:${LOGIN_PATH}`);
+	expect(performance.now() - started).toBeLessThan(1500);
+});
+
+test("every resolveShellEnv caller awaits the same run, across bundled copies", async () => {
+	const run = resolveShellEnv();
+	expect(resolveShellEnv()).toBe(run);
+	const copySpecifier = `${import.meta.dir}/shellEnv.ts?bundled-copy`;
+	const copy: typeof import("./shellEnv") = await import(copySpecifier);
+	expect(copy.resolveShellEnv).not.toBe(resolveShellEnv);
+	expect(copy.resolveShellEnv()).toBe(run);
+	await run;
 });

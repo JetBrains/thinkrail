@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { NativeCommand, NativeQuitHint, NativeWindowState } from "@thinkrail/contracts";
+import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
 import Electrobun, {
 	ApplicationMenu,
@@ -106,6 +107,7 @@ function writeReady(path: string, payload: unknown): void {
 }
 
 async function start(): Promise<void> {
+	const shellEnv = resolveShellEnv();
 	const applicationMenuInstalled = installDesktopApplicationMenu(ApplicationMenu, process.platform);
 	let menuTarget: {
 		hintVisible(): boolean;
@@ -143,6 +145,7 @@ async function start(): Promise<void> {
 	const serverRuntime = (await import(
 		pathToFileURL(join(runtimeDir, "server-runtime.ts")).href
 	)) as DesktopServerRuntime;
+	await shellEnv;
 	const host = await serverRuntime.startDesktopHost({
 		runtimeDir,
 		staticDir: join(PATHS.VIEWS_FOLDER, "web"),

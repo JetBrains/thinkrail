@@ -1,6 +1,9 @@
 import { delimiter } from "node:path";
 
 const PROBE_BASE_PATH = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+const PROBE_TIMEOUT_MS = 5000;
+const LAUNCHCTL_TIMEOUT_MS = 3000;
+const ORPHAN_PIPE_GRACE_MS = 100;
 
 export function mergePath(current: string, login: string): string {
 	const loginEntries = login.split(delimiter).filter(Boolean);
@@ -25,28 +28,53 @@ export function parseLoginShellEnv(stdout: string): Map<string, string> | null {
 	return env.size > 0 ? env : null;
 }
 
-function probeLoginShellEnv(shell: string, interactive: boolean): Map<string, string> | null {
-	const script = `printf '%s' '${LOGIN_ENV_MARKER}'; env -0`;
-	const args = interactive ? ["-l", "-i", "-c", script] : ["-l", "-c", script];
+async function readStdout(
+	argv: string[],
+	options: { timeout: number; env?: Record<string, string | undefined> },
+): Promise<string | null> {
 	try {
-		const result = Bun.spawnSync([shell, ...args], {
-			env: { ...process.env, PATH: PROBE_BASE_PATH, HISTFILE: "/dev/null", HISTSIZE: "0" },
-			timeout: 5000,
+		const child = Bun.spawn(argv, {
+			...options,
+			killSignal: "SIGKILL",
+			stdin: "ignore",
 			stdout: "pipe",
 			stderr: "ignore",
 		});
-		if (!result.success) return null;
-		return parseLoginShellEnv(new TextDecoder().decode(result.stdout));
+		const reader = child.stdout.getReader();
+		const decoder = new TextDecoder();
+		let text = "";
+		const drained = (async () => {
+			for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+				text += decoder.decode(chunk.value, { stream: true });
+			}
+		})().catch(() => {});
+		const code = await child.exited;
+		await Promise.race([drained, Bun.sleep(ORPHAN_PIPE_GRACE_MS)]);
+		void reader.cancel().catch(() => {});
+		return code === 0 ? text + decoder.decode() : null;
 	} catch {
 		return null;
 	}
 }
 
-export type LoginShellEnvProbe = () => Map<string, string> | null;
+async function probeLoginShellEnv(
+	shell: string,
+	interactive: boolean,
+): Promise<Map<string, string> | null> {
+	const script = `printf '%s' '${LOGIN_ENV_MARKER}'; env -0`;
+	const args = interactive ? ["-l", "-i", "-c", script] : ["-l", "-c", script];
+	const stdout = await readStdout([shell, ...args], {
+		timeout: PROBE_TIMEOUT_MS,
+		env: { ...process.env, PATH: PROBE_BASE_PATH, HISTFILE: "/dev/null", HISTSIZE: "0" },
+	});
+	return stdout === null ? null : parseLoginShellEnv(stdout);
+}
 
-function defaultLoginShellProbe(): Map<string, string> | null {
+export type LoginShellEnvProbe = () => Promise<Map<string, string> | null>;
+
+async function defaultLoginShellProbe(): Promise<Map<string, string> | null> {
 	const shell = process.env.SHELL ?? "/bin/zsh";
-	return probeLoginShellEnv(shell, true) ?? probeLoginShellEnv(shell, false);
+	return (await probeLoginShellEnv(shell, true)) ?? (await probeLoginShellEnv(shell, false));
 }
 
 const NEVER_IMPORTED_PREFIXES = ["PI_", "THINKRAIL_"];
@@ -79,40 +107,40 @@ function resolveLocale(): void {
 	if (lang) process.env.LANG = lang;
 }
 
-function resolveLoginShellImports(loginEnv: () => Map<string, string> | null): void {
-	if (process.env.TERM !== undefined) return;
-	const env = loginEnv();
-	if (!env) return;
-	Object.assign(process.env, loginShellImports(process.env, env));
+function resolveLoginShellImports(loginEnv: Map<string, string> | null): void {
+	if (process.env.TERM !== undefined || !loginEnv) return;
+	Object.assign(process.env, loginShellImports(process.env, loginEnv));
 }
 
-function resolvePath(loginEnv: () => Map<string, string> | null): void {
-	const login = loginEnv()?.get("PATH");
+function resolvePath(loginEnv: Map<string, string> | null): void {
+	const login = loginEnv?.get("PATH");
 	if (login) process.env.PATH = mergePath(process.env.PATH ?? "", login);
 }
 
-function resolveSshAgentSock(): void {
-	if (process.env.SSH_AUTH_SOCK || process.platform !== "darwin") return;
-	try {
-		const result = Bun.spawnSync(["launchctl", "getenv", "SSH_AUTH_SOCK"], {
-			timeout: 3000,
-			stdout: "pipe",
-			stderr: "ignore",
-		});
-		const sock = new TextDecoder().decode(result.stdout).trim();
-		if (result.success && sock) process.env.SSH_AUTH_SOCK = sock;
-	} catch {}
+async function launchdSshAgentSock(): Promise<string | undefined> {
+	if (process.env.SSH_AUTH_SOCK || process.platform !== "darwin") return undefined;
+	const stdout = await readStdout(["launchctl", "getenv", "SSH_AUTH_SOCK"], {
+		timeout: LAUNCHCTL_TIMEOUT_MS,
+	});
+	return stdout?.trim() || undefined;
 }
 
-export function resolveShellEnv(options: { probe?: LoginShellEnvProbe } = {}): void {
+export async function repairShellEnv(options: { probe?: LoginShellEnvProbe } = {}): Promise<void> {
 	if (process.platform === "win32") return;
-	let probed: Map<string, string> | null | undefined;
-	const loginEnv = () => {
-		if (probed === undefined) probed = (options.probe ?? defaultLoginShellProbe)();
-		return probed;
-	};
+	const [loginEnv, sshAgentSock] = await Promise.all([
+		(options.probe ?? defaultLoginShellProbe)(),
+		launchdSshAgentSock(),
+	]);
 	resolveLoginShellImports(loginEnv);
 	resolveLocale();
 	resolvePath(loginEnv);
-	resolveSshAgentSock();
+	if (sshAgentSock && !process.env.SSH_AUTH_SOCK) process.env.SSH_AUTH_SOCK = sshAgentSock;
+}
+
+const pendingKey = Symbol.for("thinkrail.shellEnv.pending");
+const processState = globalThis as typeof globalThis & { [pendingKey]?: Promise<void> };
+
+export function resolveShellEnv(): Promise<void> {
+	processState[pendingKey] ??= repairShellEnv();
+	return processState[pendingKey];
 }

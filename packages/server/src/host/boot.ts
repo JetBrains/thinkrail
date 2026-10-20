@@ -58,12 +58,13 @@ function attachProcessSignals(server: RunningServer): RunningServer {
 }
 
 export async function bootHost(options: BootHostOptions): Promise<BootedHost> {
+	const shellEnv = options.resolveShellEnv ? resolveShellEnv() : undefined;
 	await initLogging({
 		...(options.verbose ? { level: "debug" as const } : {}),
 		...(options.appVersion ? { appVersion: options.appVersion } : {}),
 	});
 	installCrashLog(options.appVersion);
-	if (options.resolveShellEnv) resolveShellEnv();
+	await shellEnv;
 	await initializeJbcentralRuntime();
 
 	const requested = options.port;
