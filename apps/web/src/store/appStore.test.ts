@@ -2557,7 +2557,8 @@ test("a result marked unread in the attended chat stays held until the chat is l
 	store.noteRenderedCompletion(sessionId, completionId);
 	const ready = () => selectReadyCompletionAck(useAppStore.getState(), workspace.id, sessionId);
 
-	store.beginMarkWorkspaceUnread(workspace.id);
+	expect(store.beginMarkWorkspaceUnread(workspace.id)).toBe(true);
+	expect(store.beginMarkWorkspaceUnread(workspace.id)).toBe(false);
 	store.applySessionState(record(true));
 	expect(ready()).toBeNull();
 	store.finishMarkWorkspaceUnread(workspace.id, record(true));

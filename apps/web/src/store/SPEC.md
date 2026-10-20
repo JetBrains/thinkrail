@@ -314,7 +314,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
     The one exception is a result this window **marked unread by hand** (`workspace.markUnread`):
     `beginMarkWorkspaceUnread` snapshots the workspace's relightable `candidates` (session → completion id)
     and which of them is attended; until the reply lands (the host's state push can arrive first) only those
-    exact candidate completions are suppressed, so a genuinely new result is never swallowed.
+    exact candidate completions are suppressed, so a genuinely new result is never swallowed. One mark per
+    workspace is in flight at a time: `beginMarkWorkspaceUnread` returns false while one is pending and the
+    caller sends no second request, whose reply could otherwise clear the attendance snapshot early.
     `finishMarkWorkspaceUnread` records `markedUnreadBySession[sessionId] = { completionId, held }`, where
     `held` means the relit chat was attended at mark time **and stayed attended throughout the request**. A
     held exact completion is never ready to acknowledge; a store subscription clears both the pending

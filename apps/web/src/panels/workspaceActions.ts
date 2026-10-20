@@ -57,8 +57,7 @@ export function unsettleWorkspace(workspaceId: string): void {
 }
 
 export function markWorkspaceUnread(workspaceId: string): void {
-	const store = useAppStore.getState();
-	store.beginMarkWorkspaceUnread(workspaceId);
+	if (!useAppStore.getState().beginMarkWorkspaceUnread(workspaceId)) return;
 	void getTransport()
 		.request("workspace.markUnread", { id: workspaceId })
 		.then(({ record }) => useAppStore.getState().finishMarkWorkspaceUnread(workspaceId, record))

@@ -1212,7 +1212,7 @@ interface AppState {
 	installSessionStateSnapshot: (records: readonly SessionStateRecord[]) => void;
 	applySessionState: (record: SessionStateRecord) => void;
 	noteRenderedCompletion: (sessionId: string, completionId: string) => void;
-	beginMarkWorkspaceUnread: (workspaceId: string) => void;
+	beginMarkWorkspaceUnread: (workspaceId: string) => boolean;
 	finishMarkWorkspaceUnread: (workspaceId: string, record: SessionStateRecord | null) => void;
 	releaseUnattendedUnreadHolds: () => void;
 	setChatObscured: (sessionId: string, obscured: boolean) => void;
@@ -3542,9 +3542,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
-	beginMarkWorkspaceUnread: (workspaceId) =>
+	beginMarkWorkspaceUnread: (workspaceId) => {
+		if (get().markingUnreadWorkspaces[workspaceId]) return false;
 		set((s) => {
-			if (s.markingUnreadWorkspaces[workspaceId]) return {};
 			const candidates: Record<string, string> = {};
 			for (const record of Object.values(s.sessionStateByWorkspace[workspaceId] ?? {})) {
 				const completionId = record.state.completion?.completionId;
@@ -3562,7 +3562,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 					[workspaceId]: { candidates, attendedSessionId },
 				},
 			};
-		}),
+		});
+		return true;
+	},
 	finishMarkWorkspaceUnread: (workspaceId, record) => {
 		set((s) => {
 			const completionId = record?.state.completion?.completionId;
