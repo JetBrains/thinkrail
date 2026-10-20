@@ -1,9 +1,13 @@
 import { expect, test } from "bun:test";
-import { type BranchAnswer, createBranchStatusState } from "./branchStatusState";
+import {
+	type BranchAnswer,
+	CI_DISCOVERY_POLLS,
+	createBranchStatusState,
+} from "./branchStatusState";
 import {
 	branchAnswer,
 	CI_POLL_INTERVAL_MS,
-	checksRunning,
+	ciPollWanted,
 	isOpenBranchReview,
 	openReviewLabel,
 	resolveBranchReview,
@@ -212,14 +216,8 @@ test("the CI poll ticks every 20 s, skips hidden windows, and stops cleanly", ()
 	expect(cleared).toBe(true);
 });
 
-test("only an open review with pending checks keeps the poll running", () => {
-	const checks = (pending: number) => ({
-		passing: 1,
-		pending,
-		failing: 0,
-		failingNames: [],
-	});
-	const review = (pending: number, state: "open" | "merged" = "open") => ({
+test("an open PR polls while checks run, and for a few polls after an action before any appear", () => {
+	const review = (pending: number | null, state: "open" | "merged" = "open") => ({
 		kind: "pull-request" as const,
 		number: 1,
 		state,
@@ -227,12 +225,27 @@ test("only an open review with pending checks keeps the poll running", () => {
 			draft: false,
 			reviewers: [],
 			mergeState: "unknown" as const,
-			checks: checks(pending),
+			...(pending === null
+				? {}
+				: { checks: { passing: 1, pending, failing: 0, failingNames: [] } }),
 		},
 	});
-	expect(checksRunning(review(2))).toBe(true);
-	expect(checksRunning(review(0))).toBe(false);
-	expect(checksRunning(review(2, "merged"))).toBe(false);
-	expect(checksRunning({ kind: "pull-request", number: 1 })).toBe(false);
-	expect(checksRunning(null)).toBe(false);
+	expect(ciPollWanted({ review: review(2) })).toBe(true);
+	expect(ciPollWanted({ review: review(0) })).toBe(false);
+	expect(ciPollWanted({ review: review(null) })).toBe(false);
+	expect(ciPollWanted({ review: review(null), discovery: 1 })).toBe(true);
+	expect(ciPollWanted({ review: review(2, "merged") })).toBe(false);
+	expect(ciPollWanted({ review: { kind: "pull-request", number: 1 }, discovery: 3 })).toBe(false);
+	expect(ciPollWanted(null)).toBe(false);
+
+	const state = createBranchStatusState();
+	const key = "w1\0discovery";
+	state.resolveRequest(key, state.beginRequest(key), { review: review(null), status: null });
+	state.startDiscovery(key);
+	expect(state.getSnapshot(key)?.discovery).toBe(CI_DISCOVERY_POLLS);
+	state.resolveRequest(key, state.beginRequest(key), { review: review(0), status: null });
+	expect(state.getSnapshot(key)?.discovery).toBe(CI_DISCOVERY_POLLS);
+	for (let poll = 0; poll < CI_DISCOVERY_POLLS; poll += 1) state.spendDiscovery(key);
+	expect(state.getSnapshot(key)?.discovery).toBeUndefined();
+	expect(ciPollWanted(state.getSnapshot(key))).toBe(false);
 });

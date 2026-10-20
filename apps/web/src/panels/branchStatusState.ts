@@ -6,7 +6,10 @@ export type BranchStatusSnapshot = {
 	review: OpenBranchReview | null;
 	url?: string;
 	status?: BranchFacts;
+	discovery?: number;
 };
+
+export const CI_DISCOVERY_POLLS = 3;
 
 export type BranchAnswer = { review: OpenBranchReview | null; status: BranchFacts | null };
 
@@ -23,6 +26,10 @@ function sameReview(left: OpenBranchReview | null, right: OpenBranchReview | nul
 	);
 }
 
+function withoutDiscovery({ discovery: _spent, ...snapshot }: BranchStatusSnapshot) {
+	return snapshot;
+}
+
 export function createBranchStatusState() {
 	const entries = new Map<string, Entry>();
 	const listeners = new Map<string, Set<Listener>>();
@@ -34,7 +41,13 @@ export function createBranchStatusState() {
 		return created;
 	};
 	const publish = (key: string, snapshot: BranchStatusSnapshot): void => {
-		entry(key).snapshot = snapshot;
+		const discovery = snapshot.discovery ?? entry(key).snapshot?.discovery ?? 0;
+		entry(key).snapshot = discovery > 0 ? { ...snapshot, discovery } : withoutDiscovery(snapshot);
+		for (const listener of listeners.get(key) ?? []) listener();
+	};
+	const setDiscovery = (key: string, discovery: number): void => {
+		const snapshot = entry(key).snapshot ?? { review: null };
+		entry(key).snapshot = discovery > 0 ? { ...snapshot, discovery } : withoutDiscovery(snapshot);
 		for (const listener of listeners.get(key) ?? []) listener();
 	};
 
@@ -67,6 +80,12 @@ export function createBranchStatusState() {
 			const url = review?.url ?? carried;
 			publish(key, { review, ...(url ? { url } : {}), ...(status ? { status } : {}) });
 			return true;
+		},
+		startDiscovery(key: string): void {
+			setDiscovery(key, CI_DISCOVERY_POLLS);
+		},
+		spendDiscovery(key: string): void {
+			setDiscovery(key, Math.max(0, (entry(key).snapshot?.discovery ?? 0) - 1));
 		},
 		noteOpenReview(key: string, review: OpenBranchReview, url?: string): void {
 			const current = entry(key);

@@ -147,7 +147,10 @@ actions through the panels-owned ship runner; it owns no host state.
   is information, never an action gate.
 - **CI polling** belongs to the topbar's `useBranchStatus` (the Shell's hook opts in; the Plan pane's
   instance of the same key does not, so nothing polls twice): every 20 s while the open review's checks are
-  pending and the window is visible, a fresh review read that skips the origin fetch.
+  pending and the window is visible, a fresh review read that skips the origin fetch. A ship action's
+  refresh (push, Open PR, Ready, …) also owes the key three **discovery** polls in the shared
+  `branchStatusState`, whichever surface ran it: GitHub creates a new head's check suites after the push
+  returns, so the first read after an action usually shows no pending checks yet.
 - On a pre-v87 host the review-only rule holds: **Remote** renders only while `unpushedCommits` (warning
   chip) or `behindCommits` (info chip) is non-zero and opens the same card. Both counts arrive on
   `OpenBranchReview`, so Remote (and the card's *Remote* row) can appear only alongside a review — a branch

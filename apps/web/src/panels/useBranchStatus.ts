@@ -10,6 +10,7 @@ import { type ConnectionStatus, getTransport } from "../transport";
 import {
 	type BranchAnswer,
 	type BranchFacts,
+	type BranchStatusSnapshot,
 	type BranchStatusStateStore,
 	branchStatusState,
 } from "./branchStatusState";
@@ -118,13 +119,10 @@ export function startCiPoll(options: {
 	return () => clear(handle);
 }
 
-export function checksRunning(review: OpenBranchReview | null | undefined): boolean {
-	return (
-		review !== null &&
-		review !== undefined &&
-		isOpenBranchReview(review) &&
-		(review.details?.checks?.pending ?? 0) > 0
-	);
+export function ciPollWanted(snapshot: BranchStatusSnapshot | null): boolean {
+	const review = snapshot?.review;
+	if (!review || !isOpenBranchReview(review) || !review.details) return false;
+	return (review.details.checks?.pending ?? 0) > 0 || (snapshot.discovery ?? 0) > 0;
 }
 
 export function supportsBranchStatus(protocolVersion: number | null): boolean {
@@ -214,14 +212,17 @@ export function useBranchStatus(
 		sync.current?.reload();
 	}, [fsTick, key, workspaceId]);
 
-	const pollChecks = options.pollChecks === true && connected && checksRunning(loaded?.review);
+	const pollChecks = options.pollChecks === true && connected && ciPollWanted(loaded);
 	useEffect(() => {
-		if (!pollChecks) return;
+		if (!pollChecks || !key) return;
 		return startCiPoll({
-			poll: () => sync.current?.poll(),
+			poll: () => {
+				branchStatusState.spendDiscovery(key);
+				sync.current?.poll();
+			},
 			visible: () => document.visibilityState === "visible",
 		});
-	}, [pollChecks]);
+	}, [pollChecks, key]);
 
 	const noteOpenReview = useCallback(
 		(review: OpenBranchReview, url?: string) => {
@@ -230,7 +231,9 @@ export function useBranchStatus(
 		[key],
 	);
 	const refreshBranchStatus = useCallback(() => {
-		if (key && currentKey.current === key) sync.current?.refresh();
+		if (!key || currentKey.current !== key) return;
+		branchStatusState.startDiscovery(key);
+		sync.current?.refresh();
 	}, [key]);
 
 	const current = connected ? loaded : null;
