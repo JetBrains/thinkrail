@@ -11,6 +11,7 @@ import {
 	reviewFileSurface,
 	reviewFlagForPaths,
 	reviewFlags,
+	sameThreads,
 	statusLabel,
 	tabReviewPaths,
 } from "./reviewModel";
@@ -220,4 +221,23 @@ test("a file comparison is reviewed on both files, and its flag is the strongest
 	expect(reviewFlagForPaths(flags, ["a.html", "b.html"])).toBe("draft");
 	expect(reviewFlagForPaths(flags, ["a.html"])).toBe("sent");
 	expect(reviewFlagForPaths(flags, ["c.html"])).toBeNull();
+});
+
+test("threads are the same when every thread matches, so an unrelated comment keeps a file's array", () => {
+	const thread = (id: string, body = "note") => ({
+		id,
+		anchor: {
+			path: "a.ts",
+			side: "worktree" as const,
+			contentHash: "h",
+			selectors: [{ kind: "lineRange" as const, startLine: 1, endLine: 1 }],
+		},
+		body,
+		status: "draft" as const,
+		anchorState: "anchored" as const,
+	});
+	expect(sameThreads([], [])).toBe(true);
+	expect(sameThreads([thread("1")], [thread("1")])).toBe(true);
+	expect(sameThreads([thread("1")], [thread("1", "edited")])).toBe(false);
+	expect(sameThreads([thread("1")], [thread("1"), thread("2")])).toBe(false);
 });

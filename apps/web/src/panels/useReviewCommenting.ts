@@ -5,10 +5,10 @@ import type {
 	ReviewThreadActions,
 	SurfaceReview,
 } from "@thinkrail/resource-renderers";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { toast, useAppStore } from "../store";
 import { errorText, getTransport, supportsRichAnchors } from "../transport";
-import { fileThreads } from "./reviewModel";
+import { fileThreads, sameThreads } from "./reviewModel";
 import { sendReviewComment } from "./reviewSend";
 
 export interface FileReview {
@@ -24,8 +24,12 @@ export function useFileReview(
 	chatSessionId?: string,
 ): FileReview {
 	const comments = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.comments);
-	const worktreeThreads = useMemo(() => fileThreads(comments, path, "worktree"), [comments, path]);
-	const baseThreads = useMemo(() => fileThreads(comments, path, "base"), [comments, path]);
+	const worktreeThreads = useStableThreads(
+		useMemo(() => fileThreads(comments, path, "worktree"), [comments, path]),
+	);
+	const baseThreads = useStableThreads(
+		useMemo(() => fileThreads(comments, path, "base"), [comments, path]),
+	);
 	const focusRequest = useAppStore((state) => state.reviewFocusRequest);
 	const focusId =
 		focusRequest && focusRequest.workspaceId === workspaceId ? focusRequest.commentId : null;
@@ -97,6 +101,13 @@ export function useFileReview(
 			baseFocus,
 		],
 	);
+}
+
+function useStableThreads(threads: ReviewThread[]): ReviewThread[] {
+	const [stable, setStable] = useState(threads);
+	if (stable === threads || sameThreads(stable, threads)) return stable;
+	setStable(threads);
+	return threads;
 }
 
 function resolveFocus(

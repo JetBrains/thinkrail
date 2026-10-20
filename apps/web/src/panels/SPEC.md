@@ -1502,7 +1502,11 @@ own section. The kebab menu (`plan-menu`, a
   uncommented file shows neither. There is no manual review mode to enter. Every send affordance (composer Send now, thread cards, sidebar rows/footer, tab
   Send all) goes through the one `reviewSend.ts` pair (`sendReviewComment`/`sendReviewBatch`: request
   → show the chat tab → toast on failure), and the panes integrate via the one **`useFileReview`** hook,
-  passing its anchor-keyed `worktree`/`base` surfaces through the registry props. The pair, the hook and
+  passing its anchor-keyed `worktree`/`base` surfaces through the registry props. The hook keeps a file's thread
+  arrays, and with them both surfaces, while their threads are unchanged (`sameThreads`): every review push
+  replaces the workspace's comment list, and rebuilding each open file's threads from it handed every mounted
+  renderer a new `review`. Monaco, which the compiler skips, re-rendered twice for one comment on another
+  file (`e2e/perf/reviewThreadIsolation.perf.ts` pins it at zero). The pair, the hook and
   `SendReviewButton` take an optional chat session id: without it a send targets the last open chat (else
   the file's pinned review chat); with it — a file shown in a chat tool card, whose `ResourcePreview` reads
   the chat's scope — the host's explicit `sessionId` wins over the pinned chat, so feedback lands in the chat

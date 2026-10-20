@@ -105,6 +105,16 @@ export function reviewFlagForPaths(
 	return flag;
 }
 
+export function sameThreads(
+	left: readonly ReviewThread[],
+	right: readonly ReviewThread[],
+): boolean {
+	return (
+		left.length === right.length &&
+		left.every((thread, index) => JSON.stringify(thread) === JSON.stringify(right[index]))
+	);
+}
+
 export function fileThreads(
 	comments: ReviewComment[] | undefined,
 	path: string,
