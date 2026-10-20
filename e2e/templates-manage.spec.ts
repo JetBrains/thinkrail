@@ -223,7 +223,7 @@ test.describe("templates management", () => {
 		await expect(
 			page
 				.locator('[data-testid="file-node"][data-kind="file"]')
-				.filter({ hasText: /^scoped-note\.md$/ }),
+				.filter({ hasText: /^scoped-note\.md[MAUR]?$/ }),
 		).toBeVisible();
 	});
 

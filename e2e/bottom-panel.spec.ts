@@ -820,7 +820,7 @@ test("an old host layout stays inert while a pristine surface starts Balanced", 
 	await expect(page.getByTestId("left-nav")).toBeVisible();
 	await expect(page.getByTestId("right-stack")).toContainText("Specs");
 	await expect(page.getByTestId("tool-rail-files")).toHaveAccessibleName("Files");
-	await expect(page.getByTestId("right-stack")).toContainText("Changes");
+	await expect(page.getByTestId("right-stack")).toContainText("Review");
 	await expect(page.getByTestId("bottom-panel")).toBeVisible();
 	await expect(page.getByTestId("bottom-new-terminal")).toBeVisible();
 	await expect(page.getByTestId("center-group")).toHaveCount(1);
