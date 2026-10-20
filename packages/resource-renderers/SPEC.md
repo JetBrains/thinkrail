@@ -39,9 +39,11 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   `surfaceLineCount`, `LARGE_DIFF_CHANGED_LINES`, `VIRTUALIZED_DIFF_LINES` — and its `ExpensiveDiffNotice`
   (`diff-too-large` / **Show diff anyway**, with a caller action slot), shared by the app's diff surface and
   `ResourcePreview` so a huge comparison never runs the unrestricted diff on its own;
-- `canonicalWorkspacePath` — the one workspace-path identity (POSIX separators, no `.` or empty segments,
-  inner `..` resolved); `describeResource` and `ResourcePreview` use it, so a `./`-prefixed tool path reads,
-  refreshes and anchors review comments under the same path the host's fs events and review store use;
+- `canonicalWorkspacePath` — the package's copy of the app's workspace-relative path identity (`lib`'s
+  `projectRelativePath`: POSIX separators, no `.` or empty segments, inner `..` resolved;
+  `apps/web/src/panels/pathIdentity.test.ts` keeps the two equal); `describeResource` and `ResourcePreview`
+  use it, so a `./`-prefixed tool path reads, refreshes and anchors review comments under the same path the
+  host's fs events, the review store and an opened tab use;
 - **`ResourcePreview`** — a self-loading file view, or with `before` (another file) a before/after diff of two workspace
   files, with the registry's toggle, the unplaced strip, review commenting and Send review, and caller slots
   (`leading`, `actions`, controlled `rendererId` / `layout`, and an opaque `viewState` it tags with the

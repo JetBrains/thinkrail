@@ -1,7 +1,6 @@
 import { RiFullscreenLine as Fullscreen, RiArrowRightUpLine as OpenTab } from "@remixicon/react";
 import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import {
-	canonicalWorkspacePath,
 	ResourcePreview,
 	type ResourcePreviewLayout,
 	useOptionalResourceHost,
@@ -67,12 +66,8 @@ function FilePreview({ path, before }: { path: string; before: string | undefine
 	if (!host || !workspaceId) return null;
 	const openTab = () =>
 		before === undefined
-			? host.openFile(workspaceId, canonicalWorkspacePath(path), { keep: true })
-			: host.openComparison(
-					workspaceId,
-					canonicalWorkspacePath(before),
-					canonicalWorkspacePath(path),
-				);
+			? host.openFile(workspaceId, path, { keep: true })
+			: host.openComparison(workspaceId, before, path);
 	const openTabAction = (
 		<CardAction
 			testid="tool-visualize-open-tab"

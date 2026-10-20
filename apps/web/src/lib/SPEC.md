@@ -20,7 +20,8 @@ not this module; the theme-aware highlighter remains app-local.
   host may use either separator and may be relative or absolute — every path predicate in the app starts
   from these, so `chat`'s display helpers and `store`'s worktree matcher share one definition;
   `@thinkrail/resource-renderers` keeps its own `canonicalWorkspacePath` for `describeResource` and
-  `ResourcePreview` because a package cannot import the app's `lib`),
+  `ResourcePreview` because a package cannot import the app's `lib`; `panels/pathIdentity.test.ts` pins it to
+  `projectRelativePath` for workspace-relative paths),
   **`viewport.ts`** → `isPhoneViewport()` plus the live `usePhoneViewport()` projection (coarse pointer
   or a viewport below 768px is phone-class; both media queries are observed), and **`shallowEqualArrays()`** (element-wise `Object.is` — the "did this really change?" test behind the
   store's snapshot-identity guard and `ErrorBoundary`'s reset keys), **`userText()`** (a user
