@@ -235,3 +235,27 @@ test("chunk ids reach PostHog: registered bundles via the SDK, browser chunks vi
 		delete registry._posthogChunkIds;
 	}
 });
+
+test("the report's handled flag reaches the root exception mechanism; causes stay handled", async () => {
+	const sent: BatchEntry[] = [];
+	boot(sent);
+	const fatal = new Error("fatal");
+	fatal.cause = new Error("root cause");
+	await reportFatalError(fatal);
+	reportClientError({ kind: "window", type: "TypeError", message: "x", stack: "" });
+	reportError(new Error("request"), { source: "request", handled: true });
+	await shutdownAnalytics();
+	const mechanisms = Object.fromEntries(
+		exceptions(sent).map((entry) => [
+			entry.properties.source,
+			(entry.properties.$exception_list as Array<{ mechanism?: { handled?: boolean } }>).map(
+				(exception) => exception.mechanism?.handled,
+			),
+		]),
+	);
+	expect(mechanisms).toEqual({
+		host_crash: [false, true],
+		ui: [false],
+		request: [true],
+	});
+});

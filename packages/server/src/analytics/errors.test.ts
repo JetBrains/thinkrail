@@ -225,7 +225,7 @@ test("sanitizeExceptionProperties rebuilds the event from an allow-list", () => 
 			{
 				type: "TypeError",
 				value: "bad <path>",
-				mechanism: { handled: false, synthetic: false, type: "generic" },
+				mechanism: { handled: true, synthetic: false, type: "generic" },
 				stacktrace: {
 					type: "raw",
 					frames: [

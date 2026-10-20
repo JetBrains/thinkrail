@@ -277,16 +277,25 @@ export function sanitizeExceptionProperties(
 	const list = Array.isArray(properties.$exception_list) ? properties.$exception_list : [];
 	const chunkIdsValue = properties[CHUNK_IDS_PROPERTY];
 	const chunkIds = isRecord(chunkIdsValue) ? chunkIdsValue : {};
+	const handled = typeof properties.handled === "boolean" ? properties.handled : undefined;
+	const exceptions = list
+		.slice(0, MAX_EXCEPTIONS)
+		.map((exception) => sanitizeException(exception, roots, scrub, chunkIds))
+		.filter((exception) => exception !== null);
+	const root = exceptions[0];
+	if (root && handled !== undefined) {
+		const mechanism = isRecord(root.mechanism)
+			? root.mechanism
+			: { synthetic: false, type: "generic" };
+		root.mechanism = { ...mechanism, handled };
+	}
 	const out: Record<string, unknown> = {
-		$exception_list: list
-			.slice(0, MAX_EXCEPTIONS)
-			.map((exception) => sanitizeException(exception, roots, scrub, chunkIds))
-			.filter((exception) => exception !== null),
+		$exception_list: exceptions,
 		$process_person_profile: false,
 	};
 	const level = properties.$exception_level;
 	if (typeof level === "string" && LEVELS.has(level)) out.$exception_level = level;
-	if (typeof properties.handled === "boolean") out.handled = properties.handled;
+	if (handled !== undefined) out.handled = handled;
 	for (const key of PASSTHROUGH_KEYS) {
 		const value = properties[key];
 		if (typeof value === "string" && SAFE_VALUE.test(value)) out[key] = value;
