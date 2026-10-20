@@ -117,6 +117,7 @@
         "@astrojs/sitemap": "3.7.3",
         "@fontsource-variable/geist": "catalog:",
         "@fontsource-variable/jetbrains-mono": "catalog:",
+        "@fontsource-variable/noto-sans-sc": "catalog:",
         "@fontsource-variable/orbitron": "catalog:",
         "@tailwindcss/vite": "catalog:",
         "@types/bun": "catalog:",
