@@ -1,6 +1,5 @@
 import type { ResourceMeta } from "@thinkrail/contracts";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { useResourceEnvironment, useResourceHost, useResourceScope } from "../host";
@@ -9,14 +8,14 @@ import {
 	describeResource,
 	type ResourceRenderer,
 	rendererImplementationKey,
-	rendererTestId,
 	resolveRenderers,
 	type SurfaceReview,
 	selectResourceRenderer,
 } from "../registry";
-import { ExpensiveDiffNotice } from "./ExpensiveDiffNotice";
-import { isDiffTooExpensive, surfaceLineCount, VIRTUALIZED_DIFF_LINES } from "./largeDiff";
-import { RendererDiff, RendererView, usePlacedThreadIds } from "./rendererMount";
+import { GuardedRendererDiff } from "./GuardedRendererDiff";
+import { surfaceLineCount } from "./largeDiff";
+import { type RendererLayout, RendererToggles } from "./RendererToggles";
+import { RendererView, usePlacedThreadIds } from "./rendererMount";
 import { UnplacedReviewStrip } from "./UnplacedReviewStrip";
 import { type LoadedFile, type ReadyFile, startWorkspaceFileReads } from "./workspaceFileReads";
 
@@ -184,23 +183,15 @@ function PreviewToolbar({
 	paths,
 	candidates,
 	renderer,
-	reviews,
+	layout,
 }: {
 	props: ResolvedProps;
 	paths: readonly string[];
 	candidates: readonly ResourceRenderer[];
 	renderer: ResourceRenderer;
-	reviews: readonly SurfaceReview[];
+	layout?: { value: RendererLayout; onChange: (layout: RendererLayout) => void } | undefined;
 }) {
 	const { ReviewSend } = useResourceHost();
-	const { workspaceId, sessionId, layout, onLayout } = props;
-	const hasDraft = reviews.some((review) =>
-		review.threads.some((thread) => thread.status === "draft"),
-	);
-	const showLayout = layout !== undefined && onLayout !== undefined && renderer.capabilities.layout;
-	if (candidates.length < 2 && !hasDraft && !props.actions && !props.leading && !showLayout) {
-		return null;
-	}
 	return (
 		<div
 			data-testid="resource-view-toggle"
@@ -209,34 +200,13 @@ function PreviewToolbar({
 			className="flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-12"
 		>
 			<div className="mr-auto flex min-w-0 items-center">{props.leading}</div>
-			<ReviewSend workspaceId={workspaceId} paths={paths} sessionId={sessionId} />
-			{candidates.length >= 2
-				? candidates.map((candidate) => (
-						<ToggleSegment
-							key={candidate.id}
-							testid={rendererTestId(candidate.id)}
-							label={candidate.label}
-							active={candidate.id === renderer.id}
-							onClick={() => props.onRendererId(candidate.id)}
-						/>
-					))
-				: null}
-			{showLayout ? (
-				<>
-					<ToggleSegment
-						testid="diff-toggle-split"
-						label="Split"
-						active={layout === "split"}
-						onClick={() => onLayout("split")}
-					/>
-					<ToggleSegment
-						testid="diff-toggle-inline"
-						label="Inline"
-						active={layout === "unified"}
-						onClick={() => onLayout("unified")}
-					/>
-				</>
-			) : null}
+			<ReviewSend workspaceId={props.workspaceId} paths={paths} sessionId={props.sessionId} />
+			<RendererToggles
+				candidates={candidates}
+				renderer={renderer}
+				onRendererId={props.onRendererId}
+				layout={layout}
+			/>
 			{props.actions}
 		</div>
 	);
@@ -278,13 +248,7 @@ function ReviewedPreviewView(props: ResolvedProps & { file: ReadyFile; review: S
 			testid="resource-preview"
 			className={props.className}
 			toolbar={
-				<PreviewToolbar
-					props={props}
-					paths={paths}
-					candidates={candidates}
-					renderer={renderer}
-					reviews={reviews}
-				/>
+				<PreviewToolbar props={props} paths={paths} candidates={candidates} renderer={renderer} />
 			}
 			strip={
 				<UnplacedReviewStrip
@@ -357,15 +321,11 @@ function ReviewedPreviewDiff(
 	const paths = useMemo(() => [path, before], [path, before]);
 	const reviews = useMemo(() => [after, prior], [after, prior]);
 	const layout = mobile ? "unified" : (props.layout ?? "unified");
-	const tooExpensive = useMemo(
-		() => isDiffTooExpensive(original.content, modified.content),
-		[original.content, modified.content],
-	);
+	const { onLayout } = props;
 	const lineCount = useMemo(
 		() => surfaceLineCount(original.content, modified.content),
 		[original.content, modified.content],
 	);
-	const [showAnyway, setShowAnyway] = useState(false);
 
 	return (
 		<PreviewFrame
@@ -377,7 +337,11 @@ function ReviewedPreviewDiff(
 					paths={paths}
 					candidates={candidates}
 					renderer={renderer}
-					reviews={reviews}
+					layout={
+						props.layout !== undefined && onLayout
+							? { value: props.layout, onChange: onLayout }
+							: undefined
+					}
 				/>
 			}
 			strip={
@@ -391,25 +355,20 @@ function ReviewedPreviewDiff(
 				/>
 			}
 		>
-			{tooExpensive && !showAnyway ? (
-				<ExpensiveDiffNotice onShowAnyway={() => setShowAnyway(true)} />
-			) : (
-				<RendererDiff
-					key={implementationKey}
-					renderer={renderer}
-					implementationKey={implementationKey}
-					resource={resource}
-					originalResource={originalResource}
-					original={original.content}
-					modified={modified.content}
-					layout={layout}
-					ignoreWhitespace={false}
-					review={review}
-					onPlacedThreadIds={onPlacedThreadIds}
-					virtualize={lineCount > VIRTUALIZED_DIFF_LINES}
-					{...implementationViewState(props, implementationKey)}
-				/>
-			)}
+			<GuardedRendererDiff
+				renderer={renderer}
+				implementationKey={implementationKey}
+				resource={resource}
+				originalResource={originalResource}
+				original={original.content}
+				modified={modified.content}
+				layout={layout}
+				ignoreWhitespace={false}
+				review={review}
+				onPlacedThreadIds={onPlacedThreadIds}
+				lineCount={lineCount}
+				{...implementationViewState(props, implementationKey)}
+			/>
 		</PreviewFrame>
 	);
 }

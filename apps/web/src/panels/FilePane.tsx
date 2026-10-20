@@ -1,16 +1,15 @@
 import {
 	describeResource,
+	RendererToggles,
 	RendererView,
 	type ResourceContent,
 	rendererImplementationKey,
-	rendererTestId,
 	resolveRenderers,
 	selectResourceRenderer,
 	UnplacedReviewStrip,
 	usePlacedThreadIds,
 } from "@thinkrail/resource-renderers";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { Suspense, useMemo } from "react";
 import { isPhoneViewport, usePhoneViewport } from "../lib";
 import type { FileTab } from "../store";
@@ -102,17 +101,11 @@ export function FilePane({ tab }: { tab: FileTab }) {
 					className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
 				>
 					<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
-					{candidates.length >= 2
-						? candidates.map((candidate) => (
-								<ToggleSegment
-									key={candidate.id}
-									testid={rendererTestId(candidate.id)}
-									label={candidate.label}
-									active={candidate.id === renderer.id}
-									onClick={() => setTabRenderer(tab.workspaceId, tab.id, candidate.id)}
-								/>
-							))
-						: null}
+					<RendererToggles
+						candidates={candidates}
+						renderer={renderer}
+						onRendererId={(rendererId) => setTabRenderer(tab.workspaceId, tab.id, rendererId)}
+					/>
 				</div>
 			) : null}
 			<UnplacedReviewStrip

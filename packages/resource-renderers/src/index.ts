@@ -48,6 +48,7 @@ export { createAskAgentRequest } from "./renderers/code/changeBlocks";
 export { registerBundledResourceRenderers } from "./renderers/register";
 export { ReviewDraftContext, type ReviewDraftPersistence } from "./renderers/reviewDraftState";
 export { ExpensiveDiffNotice } from "./support/ExpensiveDiffNotice";
+export { GuardedRendererDiff } from "./support/GuardedRendererDiff";
 export {
 	estimateChangedLines,
 	isDiffTooExpensive,
@@ -56,6 +57,7 @@ export {
 	surfaceLineCount,
 	VIRTUALIZED_DIFF_LINES,
 } from "./support/largeDiff";
+export { type RendererLayout, RendererToggles } from "./support/RendererToggles";
 export {
 	ResourcePreview,
 	type ResourcePreviewLayout,

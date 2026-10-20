@@ -43,10 +43,15 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   files, with the registry's toggle, the unplaced strip, review commenting and Send review, and caller slots
   (`leading`, `actions`, controlled `rendererId` / `layout`, and an opaque `viewState` it tags with the
   renderer implementation that wrote it, so a renderer switch never restores another renderer's state and a
-  caller needs no reset); its diff waits behind the expensive-diff notice
-  and virtualizes above `VIRTUALIZED_DIFF_LINES`, exactly like the app's diff surface;
+  caller needs no reset); its diff mounts through the same `GuardedRendererDiff` as the app's diff surface;
 - the pieces panes compose around a renderer: the lazy `RendererView` / `RendererDiff` mounts (implementation
-  identity = renderer id + phone class), `usePlacedThreadIds`, `UnplacedReviewStrip` /
+  identity = renderer id + phone class); **`GuardedRendererDiff`** — the one diff mount every surface uses:
+  the expensive-diff notice until **Show diff anyway** (per mount, with a caller action slot), then
+  `RendererDiff` virtualized above `VIRTUALIZED_DIFF_LINES` of the caller's `lineCount`; **`RendererToggles`**
+  — the renderer candidate segments every toolbar shows, plus Split/Inline when the caller passes a diff
+  `layout`, the renderer supports layout and the viewport is not phone-class (one rule, so a phone never
+  shows a layout the diff refuses, and a single-file view never shows diff layout);
+  `usePlacedThreadIds`, `UnplacedReviewStrip` /
   `unplacedReviewEntries` / `focusedUnplacedEntry`, `ReviewThreadCard`,
   `ReviewDraftContext`/`ReviewDraftPersistence`, and `createAskAgentRequest`.
 

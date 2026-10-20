@@ -2,11 +2,9 @@ import type { ChangeReceipt, GitDiffScope, ResourceMeta } from "@thinkrail/contr
 import {
 	createAskAgentRequest,
 	describeResource,
-	ExpensiveDiffNotice,
+	GuardedRendererDiff,
 	type HunkActions,
 	type HunkTriage,
-	isDiffTooExpensive,
-	RendererDiff,
 	type ResourceContent,
 	type ResourceDescriptor,
 	type ResourceRenderer,
@@ -16,11 +14,10 @@ import {
 	surfaceLineCount,
 	UnplacedReviewStrip,
 	usePlacedThreadIds,
-	VIRTUALIZED_DIFF_LINES,
 } from "@thinkrail/resource-renderers";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { Suspense, useCallback, useMemo, useState } from "react";
+import { Suspense, useCallback, useMemo } from "react";
 import { usePhoneViewport } from "@/lib";
 import { selectWorkspaceIsRunning, toast, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
@@ -293,11 +290,6 @@ export function DiffSurfaceBody({
 }) {
 	const { renderer, candidates, review, reviewable, hunkActions, placedThreadIds } = surface;
 	const reviews = reviewable ? [review.worktree, review.base] : [];
-	const tooExpensive = useMemo(
-		() => isDiffTooExpensive(surface.original, surface.modified),
-		[surface.original, surface.modified],
-	);
-	const [showLargeDiff, setShowLargeDiff] = useState(false);
 	const { workspaceId, path } = surface.resource;
 	return (
 		<>
@@ -310,10 +302,22 @@ export function DiffSurfaceBody({
 				onSelectRenderer={onSelectRenderer}
 			/>
 			<div className={bodyClassName}>
-				{tooExpensive && !showLargeDiff ? (
-					<ExpensiveDiffNotice
-						onShowAnyway={() => setShowLargeDiff(true)}
-						actions={
+				<Suspense fallback={loading}>
+					<GuardedRendererDiff
+						renderer={renderer}
+						implementationKey={surface.implementationKey}
+						resource={surface.resource}
+						original={surface.original}
+						modified={surface.modified}
+						layout={view === "split" ? "split" : "unified"}
+						ignoreWhitespace={ignoreWhitespace}
+						{...(reviewable ? { review } : {})}
+						{...(hunkActions ? { hunkActions } : {})}
+						onPlacedThreadIds={surface.onPlacedThreadIds}
+						viewState={viewState}
+						{...(onViewState ? { onViewState } : {})}
+						lineCount={surface.lineCount}
+						noticeActions={
 							surface.modified.kind === "text" && reviewable ? (
 								<Button
 									size="sm"
@@ -326,26 +330,7 @@ export function DiffSurfaceBody({
 							) : null
 						}
 					/>
-				) : (
-					<Suspense fallback={loading}>
-						<RendererDiff
-							key={surface.implementationKey}
-							renderer={renderer}
-							implementationKey={surface.implementationKey}
-							resource={surface.resource}
-							original={surface.original}
-							modified={surface.modified}
-							layout={view === "split" ? "split" : "unified"}
-							ignoreWhitespace={ignoreWhitespace}
-							{...(reviewable ? { review } : {})}
-							{...(hunkActions ? { hunkActions } : {})}
-							onPlacedThreadIds={surface.onPlacedThreadIds}
-							viewState={viewState}
-							{...(onViewState ? { onViewState } : {})}
-							virtualize={surface.lineCount > VIRTUALIZED_DIFF_LINES}
-						/>
-					</Suspense>
-				)}
+				</Suspense>
 			</div>
 		</>
 	);

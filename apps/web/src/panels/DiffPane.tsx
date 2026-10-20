@@ -5,11 +5,10 @@ import {
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
 import {
+	RendererToggles,
 	ResourcePreview,
 	rendererImplementationKey,
-	rendererTestId,
 } from "@thinkrail/resource-renderers";
-import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { useMemo, useState } from "react";
 import { copyText, isPhoneViewport } from "@/lib";
 import type { DiffTab } from "../store";
@@ -207,33 +206,15 @@ function GitDiffPane({ tab }: { tab: DiffTab }) {
 						)}
 					</HeaderIconButton>
 				) : null}
-				{candidates.length >= 2
-					? candidates.map((candidate) => (
-							<ToggleSegment
-								key={candidate.id}
-								testid={rendererTestId(candidate.id)}
-								label={candidate.label}
-								active={candidate.id === renderer.id}
-								onClick={() => setTabRenderer(tab.workspaceId, tab.id, candidate.id)}
-							/>
-						))
-					: null}
-				{renderer.capabilities.layout && !mobile ? (
-					<>
-						<ToggleSegment
-							testid="diff-toggle-split"
-							label="Split"
-							active={view === "split"}
-							onClick={() => setDiffTabView(tab.id, "split")}
-						/>
-						<ToggleSegment
-							testid="diff-toggle-inline"
-							label="Inline"
-							active={view === "inline"}
-							onClick={() => setDiffTabView(tab.id, "inline")}
-						/>
-					</>
-				) : null}
+				<RendererToggles
+					candidates={candidates}
+					renderer={renderer}
+					onRendererId={(rendererId) => setTabRenderer(tab.workspaceId, tab.id, rendererId)}
+					layout={{
+						value: view === "inline" ? "unified" : "split",
+						onChange: (layout) => setDiffTabView(tab.id, layout === "unified" ? "inline" : "split"),
+					}}
+				/>
 			</div>
 			<DiffSurfaceBody
 				surface={surface}
