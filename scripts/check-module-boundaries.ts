@@ -2,7 +2,7 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import ts from "typescript";
+import { type Argument, parseSync, Visitor } from "oxc-parser";
 
 interface Manifest {
 	name?: string;
@@ -162,57 +162,63 @@ interface SourceImport {
 	typeOnly: boolean;
 }
 
+function stringLiteralValue(node: Argument | null | undefined): string | undefined {
+	if (node?.type === "Literal" && typeof node.value === "string") return node.value;
+	if (node?.type === "TemplateLiteral" && node.expressions.length === 0) {
+		return node.quasis[0]?.value.cooked ?? undefined;
+	}
+	return undefined;
+}
+
 function importSpecifiers(path: string): SourceImport[] {
-	const source = ts.createSourceFile(
-		path,
-		readFileSync(path, "utf8"),
-		ts.ScriptTarget.Latest,
-		false,
-		path.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-	);
+	const { program } = parseSync(path, readFileSync(path, "utf8"), {
+		lang: path.endsWith("x") ? "tsx" : "ts",
+	});
 	const specifiers: SourceImport[] = [];
-	const add = (node: ts.Expression | undefined, typeOnly = false): void => {
-		if (node && ts.isStringLiteralLike(node)) specifiers.push({ specifier: node.text, typeOnly });
+	const add = (node: Argument | null | undefined, typeOnly = false): void => {
+		const specifier = stringLiteralValue(node);
+		if (specifier !== undefined) specifiers.push({ specifier, typeOnly });
 	};
-	const visit = (node: ts.Node): void => {
-		if (ts.isImportDeclaration(node)) {
-			const clause = node.importClause;
-			const bindings = clause?.namedBindings;
-			const typeOnly =
-				clause?.isTypeOnly ||
-				(!clause?.name &&
-					bindings &&
-					ts.isNamedImports(bindings) &&
-					bindings.elements.length > 0 &&
-					bindings.elements.every((element) => element.isTypeOnly));
-			add(node.moduleSpecifier, !!typeOnly);
-		} else if (ts.isExportDeclaration(node)) {
-			const clause = node.exportClause;
-			const typeOnly =
-				node.isTypeOnly ||
-				(clause &&
-					ts.isNamedExports(clause) &&
-					clause.elements.length > 0 &&
-					clause.elements.every((element) => element.isTypeOnly));
-			add(node.moduleSpecifier, !!typeOnly);
-		} else if (
-			ts.isImportEqualsDeclaration(node) &&
-			ts.isExternalModuleReference(node.moduleReference)
-		) {
-			add(node.moduleReference.expression, node.isTypeOnly);
-		} else if (ts.isCallExpression(node)) {
-			if (
-				node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-				(ts.isIdentifier(node.expression) && node.expression.text === "require")
-			) {
+	new Visitor({
+		ImportDeclaration(node) {
+			add(
+				node.source,
+				node.importKind === "type" ||
+					(node.specifiers.length > 0 &&
+						node.specifiers.every(
+							(specifier) =>
+								specifier.type === "ImportSpecifier" && specifier.importKind === "type",
+						)),
+			);
+		},
+		ExportNamedDeclaration(node) {
+			add(
+				node.source,
+				node.exportKind === "type" ||
+					(node.specifiers.length > 0 &&
+						node.specifiers.every((specifier) => specifier.exportKind === "type")),
+			);
+		},
+		ExportAllDeclaration(node) {
+			add(node.source, node.exportKind === "type");
+		},
+		TSImportEqualsDeclaration(node) {
+			if (node.moduleReference.type === "TSExternalModuleReference") {
+				add(node.moduleReference.expression, node.importKind === "type");
+			}
+		},
+		ImportExpression(node) {
+			add(node.source);
+		},
+		CallExpression(node) {
+			if (node.callee.type === "Identifier" && node.callee.name === "require") {
 				add(node.arguments[0]);
 			}
-		} else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
-			add(node.argument.literal, true);
-		}
-		ts.forEachChild(node, visit);
-	};
-	visit(source);
+		},
+		TSImportType(node) {
+			add(node.source, true);
+		},
+	}).visit(program);
 	return specifiers;
 }
 
