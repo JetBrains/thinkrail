@@ -1,7 +1,7 @@
 import MonacoReact, { type OnMount } from "@monaco-editor/react";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import type { editor } from "monaco-editor/esm/vs/editor/editor.api.js";
-import { use, useCallback, useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useResourceHost, useResourcePreferences } from "../host";
 import type { ResourceViewProps, SurfaceReview } from "../registry";
 import { MonacoReviewZones } from "./MonacoReviewZones";
@@ -39,6 +39,10 @@ export default function MonacoEditor({
 }: ResourceViewProps) {
 	const { fileLineWidth, fileLineWidthBounded } = useResourcePreferences();
 	use(ensureMonaco(useResourceHost().code));
+	const options = useMemo(
+		() => fileEditorOptions(fileLineWidth, fileLineWidthBounded, resource.path),
+		[fileLineWidth, fileLineWidthBounded, resource.path],
+	);
 	const stopThemeWatchRef = useRef<(() => void) | null>(null);
 	const menuIconsRef = useRef<{ dispose(): void } | null>(null);
 	const detachRef = useRef<(() => void) | null>(null);
@@ -116,7 +120,7 @@ export default function MonacoEditor({
 				theme={EDITOR_THEME}
 				onMount={onMount}
 				loading={<LoadingRegion rows={12} className="h-full w-full p-12" />}
-				options={fileEditorOptions(fileLineWidth, fileLineWidthBounded, resource.path)}
+				options={options}
 			/>
 			<MonacoReviewZones
 				zones={reviewZones}
