@@ -52,7 +52,7 @@ import {
 	type Symbol as TsSymbol,
 } from "tsrs/async";
 
-export type BarrelExports = { names: string[] } | { violations: string[] };
+type BarrelExports = { names: string[] } | { violations: string[] };
 
 interface CompilerConfiguration {
 	key: string;
