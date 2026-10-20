@@ -8,7 +8,7 @@
 	},
 	"scripts": {
 		"test": "bun test",
-		"typecheck": "tsc --noEmit"
+		"typecheck": "tsrs --noEmit"
 	},
 	"dependencies": {
 		"@thinkrail/cli": "workspace:*",
@@ -18,6 +18,7 @@
 	"devDependencies": {
 		"@types/bun": "catalog:",
 		"resedit": "catalog:",
+		"tsrs": "catalog:",
 		"typescript": "catalog:"
 	}
 }

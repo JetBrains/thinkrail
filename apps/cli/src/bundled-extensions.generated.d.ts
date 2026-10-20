@@ -1,6 +1,6 @@
 // Type contract for the build-time-generated bundled-extensions module (`src/bundled-extensions.generated.ts`),
 // which `bun run build:binary` writes just before `bun build --compile` and deletes afterward. This `.d.ts` is
-// committed so `tsc` can resolve `compiled-entry`'s import when the generated `.ts` is absent (the normal
+// committed so `tsrs` can resolve `compiled-entry`'s import when the generated `.ts` is absent (the normal
 // state in the repo); the compiler (`bun build`) uses the real `.ts` instead.
 
 import type { BundledExtensionFactory } from "@thinkrail/server";

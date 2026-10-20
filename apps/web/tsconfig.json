@@ -10,7 +10,7 @@
 		}
 	},
 	"include": ["src"],
-	// Tests run under `bun test` (which provides `bun:test` natively); keep them out of the browser
-	// `tsc` build so the DOM-typed app project doesn't need Bun types; `tsconfig.test.json` checks them.
+	// Keep tests out of the browser typecheck so the DOM-typed app project doesn't need Bun types;
+	// `tsconfig.test.json` checks them.
 	"exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]
 }

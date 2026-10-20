@@ -30,7 +30,7 @@ by tool name, so moving them later changes nothing on the wire.
   ([[submodule-server-agent]]). It must keep applying while this extension is off: that is exactly when a
   user's own install of `pi-web-access` runs.
 - **`piWebAccess.js` + `piWebAccess.d.ts`** — the package ships raw `.ts` that fails the repo's strict
-  `tsc`; the paired declaration types the `.js` as `ExtensionFactory`, so `tsc` never enters the
+  `tsrs`; the paired declaration types the `.js` as `ExtensionFactory`, so `tsrs` never enters the
   package. The `.js` loads the package lazily: under Bun (dev, tests, the compiled binary, the desktop
   bundle) through a literal `import("pi-web-access/index.ts")` that both bundlers include; under Node —
   only the workflow harness, which loads the server barrel there ([[module-workflow-tests]]) — through

@@ -44,7 +44,7 @@
 		"video": "https://github.com/JetBrains/thinkrail/raw/refs/heads/main/.github/readme-assets/pi-packages/visualize.mp4"
 	},
 	"scripts": {
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsrs --noEmit",
 		"test": "bun test"
 	},
 	"dependencies": {
@@ -59,6 +59,7 @@
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@earendil-works/pi-tui": "catalog:",
 		"@types/bun": "catalog:",
+		"tsrs": "catalog:",
 		"typebox": "catalog:",
 		"typescript": "catalog:"
 	}

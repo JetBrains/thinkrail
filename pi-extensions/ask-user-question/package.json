@@ -44,7 +44,7 @@
 		"video": "https://github.com/JetBrains/thinkrail/raw/refs/heads/main/.github/readme-assets/pi-packages/ask-user-question.mp4"
 	},
 	"scripts": {
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsrs --noEmit",
 		"test": "bun test"
 	},
 	"peerDependencies": {
@@ -58,6 +58,7 @@
 		"@earendil-works/pi-tui": "catalog:",
 		"@types/bun": "catalog:",
 		"typebox": "catalog:",
+		"tsrs": "catalog:",
 		"typescript": "catalog:"
 	}
 }
