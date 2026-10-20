@@ -33,4 +33,18 @@ describe("message copy layout", () => {
 		expect(html).toContain("right-0 bottom-8");
 		expect(html).not.toContain("pb-24");
 	});
+
+	test("wraps unbroken strings in user message bubbles using overflow-wrap anywhere", () => {
+		const html = renderRow(
+			{
+				kind: "user",
+				id: "prompt",
+				message: { role: "user", content: "a".repeat(100), timestamp: 0 },
+			},
+			false,
+		);
+
+		expect(html).toContain("[overflow-wrap:anywhere]");
+		expect(html).toContain("break-words");
+	});
 });
