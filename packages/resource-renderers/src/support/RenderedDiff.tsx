@@ -30,7 +30,6 @@ function useHtmldiffMerge(before: string, after: string): MergeState {
 	const [merge, setMerge] = useState<MergeState>(PENDING);
 
 	useEffect(() => {
-		setMerge(PENDING);
 		const worker = new Worker(new URL("./htmldiff.worker.ts", import.meta.url), {
 			type: "module",
 		});
