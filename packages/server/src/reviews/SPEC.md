@@ -12,7 +12,7 @@ tags: [review]
 
 The review layer: GitHub-style **draft comments** anchored to a workspace's files and diffs, collected
 without starting the agent, then sent — grouped **per file**, each file's comments into that file's one
-review chat — as a **structured context package**. Owns the per-workspace review store, anchor
+review chat, or all of them into the one chat a send names — as a **structured context package**. Owns the per-workspace review store, anchor
 re-anchoring, and package rendering.
 
 ## Model (mirrors the wire DTOs in `contracts`)

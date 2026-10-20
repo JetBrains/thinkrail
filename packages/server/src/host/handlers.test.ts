@@ -528,6 +528,59 @@ test("todo.requestFix on a chat that isn't on disk rolls the record back and nev
 	expect(after?.sessionId).toBeUndefined();
 });
 
+test("a review send that names its chat lands every file's drafts there as one package", async () => {
+	const cleanup = await setupDefaultModelRuntime();
+	let sessions = 0;
+	setSessionManagerFactory((cwd) => {
+		sessions += 1;
+		return SessionManager.inMemory(cwd, { id: `review-send-${sessions}` });
+	});
+	try {
+		const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
+		const workspace = rows[0];
+		if (!workspace) throw new Error("expected a workspace");
+		writeFileSync(join(repo, "NOTES.md"), "notes\n");
+		const chat = (await handleRequest(
+			"session.create",
+			{ workspaceId: workspace.id },
+			CTX,
+		)) as CreateSessionResult;
+		const draft = (path: string) =>
+			addComment({
+				workspaceId: workspace.id,
+				kind: "inline",
+				anchor: {
+					path,
+					side: "worktree",
+					contentHash: "",
+					selectors: [{ kind: "lineRange", startLine: 1, endLine: 1 }],
+				},
+				body: `about ${path}`,
+			});
+		const ids = [(await draft("README.md")).id, (await draft("NOTES.md")).id];
+
+		const sent = (await handleRequest(
+			"review.sendBatch",
+			{ workspaceId: workspace.id, sessionId: chat.sessionId },
+			CTX,
+		)) as { sessions: { sessionId: string }[] };
+
+		expect(sent.sessions.map((session) => session.sessionId)).toEqual([chat.sessionId]);
+		const comments = (await getReviewSnapshot(workspace.id)).comments.filter((comment) =>
+			ids.includes(comment.id),
+		);
+		expect(comments.map((comment) => [comment.status, comment.sessionId])).toEqual([
+			["sent", chat.sessionId],
+			["sent", chat.sessionId],
+		]);
+	} finally {
+		disposeAllSessions();
+		configurePiRuntime(null);
+		setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+		cleanup();
+	}
+});
+
 test("workspace mutation handlers reject the Default before any side effect", async () => {
 	const rows = (await handleRequest("workspace.list", { projectId: "p1" }, CTX)) as Workspace[];
 	const def = rows[0];
