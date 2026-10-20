@@ -265,11 +265,11 @@ test("a new workspace starts with one accessible terminal group in a 30% bottom 
 		.poll(async () => (await size(bottom, "height")) / (await size(workbench, "height")))
 		.toBeCloseTo(0.3, 1);
 
-	await page.getByTestId("tool-rail-changes").focus();
+	await page.getByTestId("tool-rail-review").focus();
 	await page.keyboard.press("Control+F6");
 	await expect(bottom.getByRole("tab", { name: /Terminal 1/ })).toBeFocused();
 	await page.keyboard.press("Control+Shift+F6");
-	await expect(page.getByTestId("tool-rail-changes")).toBeFocused();
+	await expect(page.getByTestId("tool-rail-review")).toBeFocused();
 });
 
 test("a hidden local frame keeps the host terminal reserved without attaching until shown", async ({
@@ -638,13 +638,13 @@ test("bottom groups arrange left-to-right, resize, fold to the edge rail, restor
 	page,
 }) => {
 	await openDefaultWorkbench(page);
-	await page.getByTestId("tab-changes").click({ button: "right" });
+	await page.getByTestId("tab-projects").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "New bottom group at right", exact: true }).click();
 	await expect(bottomGroups(page)).toHaveCount(2);
 	await expect(bottomGroups(page).nth(0)).toContainText("Terminal 1");
-	await expect(bottomGroups(page).nth(1)).toContainText("Changes");
+	await expect(bottomGroups(page).nth(1)).toContainText("Projects");
 
-	await page.getByTestId("tab-changes").click({ button: "right" });
+	await page.getByTestId("tab-projects").click({ button: "right" });
 	await expect(
 		page.getByRole("menuitem", {
 			name: /Move to bottom pane \(Terminal 1\) — Tools and terminals use separate panes\./,
@@ -704,7 +704,7 @@ test("a narrow viewport locally compresses bottom groups without rewriting their
 	page,
 }) => {
 	await openDefaultWorkbench(page);
-	await page.getByTestId("tab-changes").click({ button: "right" });
+	await page.getByTestId("tab-review").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "New bottom group at right", exact: true }).click();
 	await waitForLayoutSettled(page);
 	await page.getByTestId("tab-files").click({ button: "right" });

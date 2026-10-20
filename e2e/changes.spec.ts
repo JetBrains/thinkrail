@@ -15,6 +15,54 @@ import { largeRepetitiveMarkdownEdited } from "./fixtures/repo";
 const diffText = (page: Page, text: string) =>
 	page.getByTestId("diff-view").getByText(text, { exact: false }).last();
 
+test("Files All mode marks changed files, and Changed mode lists them with a count", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await expect(worktreeRows(page)).toHaveCount(1);
+
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	writeFileSync(join(worktree, "README.md"), "# sample-project\n\nmarked by e2e\n");
+
+	await revealWorkbenchTool(page, "files");
+	await expect(page.getByTestId("files-mode-all")).toHaveAttribute("aria-pressed", "true");
+	const readme = page.getByTestId("file-node").filter({ hasText: "README.md" });
+	await expect(readme.getByTestId("file-status")).toHaveText("M");
+	await expect(page.getByTestId("files-mode-changed")).toHaveText("Changed 1");
+
+	await page.getByTestId("files-mode-changed").click();
+	await expect(page.getByTestId("change-item").filter({ hasText: "README.md" })).toBeVisible();
+	await page.getByTestId("files-mode-all").click();
+	await expect(readme).toBeVisible();
+});
+
+test("Files All mode marks nested changes, remembers expanded folders across modes, and collapses all", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await expect(worktreeRows(page)).toHaveCount(1);
+
+	const worktree = join(E2E_DATA_DIR, "worktrees", "sample-project", "workspace-1");
+	writeFileSync(join(worktree, "styles", "COLOR.md"), "# colors\n\nedited by e2e\n");
+
+	await revealWorkbenchTool(page, "files");
+	const styles = page.getByTestId("file-node").filter({ hasText: /^styles$/ });
+	await expect(styles.getByTestId("file-folder-dot")).toBeVisible();
+	await styles.click();
+	const color = page.getByTestId("file-node").filter({ hasText: "COLOR.md" });
+	await expect(color.getByTestId("file-status")).toHaveText("M");
+
+	await page.getByTestId("files-mode-changed").click();
+	await page.getByTestId("files-mode-all").click();
+	await expect(color).toBeVisible();
+
+	await page.getByTestId("files-collapse-all").click();
+	await expect(color).toHaveCount(0);
+	await expect(styles.getByTestId("file-folder-dot")).toBeVisible();
+});
+
 test("Changes tab shows the active worktree's diff and swaps per workspace", async ({ page }) => {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);

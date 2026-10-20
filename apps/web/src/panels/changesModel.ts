@@ -23,6 +23,40 @@ export function statusNameClass(status: GitFileStatus): string {
 	}
 }
 
+const STATUS_LETTER: Record<GitFileStatus, string> = {
+	added: "A",
+	modified: "M",
+	deleted: "D",
+	renamed: "R",
+	untracked: "U",
+};
+
+export function statusLetter(status: GitFileStatus): string {
+	return STATUS_LETTER[status];
+}
+
+export function statusMarkClass(status: GitFileStatus): string {
+	return statusNameClass(status) || "text-feedback-warning";
+}
+
+export interface ChangeMarks {
+	files: ReadonlyMap<string, GitFileStatus>;
+	dirs: ReadonlySet<string>;
+}
+
+export function buildChangeMarks(changes: readonly GitFileChange[]): ChangeMarks {
+	const files = new Map<string, GitFileStatus>();
+	const dirs = new Set<string>();
+	for (const change of changes) {
+		if (change.status === "deleted") continue;
+		files.set(change.path, change.status);
+		const segments = change.path.split("/");
+		segments.pop();
+		for (let end = 1; end <= segments.length; end++) dirs.add(segments.slice(0, end).join("/"));
+	}
+	return { files, dirs };
+}
+
 export function scopeKey(scope: GitDiffScope): string {
 	if (scope.kind === "commit") return `commit:${scope.sha}`;
 	if (scope.kind === "pinned") return `pinned:${scope.baseRef}`;
@@ -224,4 +258,10 @@ export function buildChangesTree(changes: readonly GitFileChange[]): ChangeTreeN
 	};
 
 	return materialize(root, "");
+}
+
+export function changeTreeFolderPaths(nodes: readonly ChangeTreeNode[]): string[] {
+	return nodes.flatMap((node) =>
+		node.kind === "dir" ? [node.path, ...changeTreeFolderPaths(node.children)] : [],
+	);
 }

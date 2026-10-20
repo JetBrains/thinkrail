@@ -677,7 +677,17 @@ so a run that settled while the socket was down still arrives); every other cons
 `useWorkspaceTurns`.
 **`requestChangesView(workspaceId, path | null, scope?)`** gained two optional dimensions for the chat's
 *Review turn* action: a `scope` lands on `diffScopeByWorkspace` atomically with the reveal intent, and a
-`null` path means "open the review tab for that scope" rather than "reveal this file".
+`null` path means "open the review tab for that scope" rather than "reveal this file". It reveals the
+**Files** tool and sets **`filesMode: "changed"`** in the same write, as does **`revealChanges(workspaceId)`**
+(the chat's commit receipt); `filesMode` (`"all"` default) is app-wide and session-only like `changesView`.
+**`filesTreeByWorkspace`** (read through **`selectFilesTreeView`**, a stable empty view when absent) is the
+Files tree's remembered look per workspace: All-mode `expanded` folders, Changed-tree `changedCollapsed`
+folders (one set for every scope), `scroll` per view (`all` / `changedList` / `changedTree`, each tagged with
+the scope it belongs to so another scope starts at the top), and `seenActivePath`. **`revealInFiles`** expands
+every ancestor of a path and records it as seen in one write, so the auto-reveal can tell on return whether
+the active file changed meanwhile; every write is idempotent (an unchanged view keeps its identity) and a
+removed workspace's view is dropped in `applyWorkspaceRemoved`. Persistence lives outside the store, in
+`panels/filesTreeState`. **`selectActiveFilePath`** is the path of the active file or diff tab, else `null`.
 **`diffScopeByWorkspace`** + **`setDiffScope(workspaceId, scope)`** hold *what* each workspace's Changes
 panel is diffing (read through **`selectDiffScope`**, which defaults to the shared, referentially stable
 `BRANCH_SCOPE`); keyed **per workspace**, not app-wide like `changesView`, because a scope belongs to that

@@ -58,3 +58,4 @@ export {
 export { ReviewThreadCard } from "./support/ReviewThreadCard";
 export { RendererView, useRendererSelection } from "./support/rendererMount";
 export { UnplacedReviewStrip } from "./support/UnplacedReviewStrip";
+export { useScrollViewState } from "./support/useScrollViewState";

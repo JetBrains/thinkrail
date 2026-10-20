@@ -179,11 +179,18 @@ export async function enterDefaultWorkspace(page: Page): Promise<void> {
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 }
 
-// Use this helper when a pane must be visible; rail controls toggle on each click.
+// Use this helper when a pane must be visible; rail controls toggle on each click. "changes" means Files in Changed mode.
 export async function revealWorkbenchTool(
 	page: Page,
 	tool: "projects" | "specs" | "files" | "changes" | "review" | "plan",
 ): Promise<void> {
+	if (tool === "changes") {
+		await revealWorkbenchTool(page, "files");
+		const changed = page.getByTestId("files-mode-changed");
+		if ((await changed.getAttribute("aria-pressed")) !== "true") await changed.click();
+		await expect(changed).toHaveAttribute("aria-pressed", "true");
+		return;
+	}
 	const control = page.getByTestId(`tool-rail-${tool}`);
 	await expect(control).toBeVisible();
 	if ((await control.getAttribute("aria-pressed")) !== "true") await control.click();

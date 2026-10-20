@@ -45,6 +45,7 @@ import type {
 	ChangesTabSection,
 	ClosedChat,
 	EditorTab,
+	FilesTreeView,
 	MarkedUnread,
 	PendingMarkUnread,
 	RouteChatTarget,
@@ -834,6 +835,31 @@ export function selectDiffScope(
 	workspaceId: string,
 ): GitDiffScope {
 	return state.diffScopeByWorkspace[workspaceId] ?? BRANCH_SCOPE;
+}
+
+const EMPTY_FILES_TREE_VIEW: FilesTreeView = {
+	expanded: [],
+	changedCollapsed: [],
+	scroll: {},
+	seenActivePath: null,
+};
+
+export function selectFilesTreeView(
+	state: { filesTreeByWorkspace: Record<string, FilesTreeView> },
+	workspaceId: string,
+): FilesTreeView {
+	return state.filesTreeByWorkspace[workspaceId] ?? EMPTY_FILES_TREE_VIEW;
+}
+
+export function selectActiveFilePath(
+	state: {
+		tabsByWorkspace: Record<string, EditorTab[]>;
+		activeTabByWorkspace: Record<string, string | null>;
+	},
+	workspaceId: string,
+): string | null {
+	const tab = selectActiveEditorTab(state, workspaceId);
+	return tab?.kind === "file" || tab?.kind === "diff" ? normalizePath(tab.path) : null;
 }
 
 export function selectDiffBaseRef(state: ActiveWorkspaceState, workspaceId: string): string {
