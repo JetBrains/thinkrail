@@ -1,25 +1,20 @@
 import {
 	describeResource,
+	PENDING_TEXT_META,
 	RendererToggles,
 	RendererView,
-	type ResourceContent,
 	rendererImplementationKey,
-	resolveRenderers,
-	selectResourceRenderer,
+	resourceContent,
 	UnplacedReviewStrip,
-	usePlacedThreadIds,
+	useRendererSelection,
 } from "@thinkrail/resource-renderers";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Suspense, useMemo } from "react";
-import { isPhoneViewport, usePhoneViewport } from "../lib";
+import { isPhoneViewport } from "../lib";
 import type { FileTab } from "../store";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
-import {
-	PENDING_TEXT_META,
-	resourceBytesUrl,
-	useResetViewStateOnImplementationChange,
-} from "./resourcePane";
+import { resourceBytesUrl, useResetViewStateOnImplementationChange } from "./resourcePane";
 import { reviewFlagFor } from "./reviewModel";
 import { SendReviewButton } from "./SendReviewButton";
 import { useLiveTabContent } from "./useLiveTabContent";
@@ -27,21 +22,7 @@ import { useFileReview } from "./useReviewCommenting";
 
 const loading = <LoadingRegion rows={12} className="h-full p-12" />;
 
-function contentFor(tab: FileTab): ResourceContent {
-	const meta = tab.meta;
-	if (!meta) return { kind: "text", text: tab.content, hash: "" };
-	if (meta.hash === null || meta.byteLength === null) return { kind: "absent" };
-	if (meta.text) return { kind: "text", text: tab.content, hash: meta.hash };
-	return {
-		kind: "bytes",
-		url: resourceBytesUrl(tab.workspaceId, tab.path),
-		hash: meta.hash,
-		byteLength: meta.byteLength,
-	};
-}
-
 export function FilePane({ tab }: { tab: FileTab }) {
-	const mobile = usePhoneViewport();
 	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
 	const review = useFileReview(tab.workspaceId, tab.path, "inline");
 	const reviewComments = useAppStore(
@@ -67,15 +48,12 @@ export function FilePane({ tab }: { tab: FileTab }) {
 		() => describeResource(tab.workspaceId, tab.path, tab.meta ?? PENDING_TEXT_META),
 		[tab.workspaceId, tab.path, tab.meta],
 	);
-	const candidates = useMemo(
-		() => resolveRenderers(resource, "view", { mobile }),
-		[resource, mobile],
-	);
-	const renderer = selectResourceRenderer(candidates, tab.rendererId, tab.path);
-	const implementationKey = rendererImplementationKey(renderer.id, mobile);
-	const { placedThreadIds, onPlacedThreadIds } = usePlacedThreadIds(implementationKey);
+	const { mobile, candidates, renderer, implementationKey, placedThreadIds, onPlacedThreadIds } =
+		useRendererSelection(resource, "view", tab.rendererId);
 	useResetViewStateOnImplementationChange(tab.workspaceId, tab.id, implementationKey);
-	const content = contentFor(tab);
+	const content = resourceContent(tab.content, tab.meta, () =>
+		resourceBytesUrl(tab.workspaceId, tab.path),
+	);
 	const reviews = [review.worktree];
 	const showToolbar = candidates.length >= 2 || fileHasDraft;
 	const saveViewState = (state: unknown) => {

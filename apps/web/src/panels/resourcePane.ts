@@ -1,9 +1,7 @@
-import type { ResourceMeta } from "@thinkrail/contracts";
 import { useEffect, useRef } from "react";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
 
-export const PENDING_TEXT_META: ResourceMeta = { hash: null, byteLength: null, text: true };
 export const FILES_ROUTE = "/files";
 export const BLOB_ROUTE = "/blob";
 

@@ -1,21 +1,18 @@
-import type { ResourceMeta } from "@thinkrail/contracts";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
-import { useResourceEnvironment, useResourceHost, useResourceScope } from "../host";
+import { useResourceHost, useResourceScope } from "../host";
 import {
 	canonicalWorkspacePath,
 	describeResource,
+	diffResourceMeta,
 	type ResourceRenderer,
-	rendererImplementationKey,
-	resolveRenderers,
 	type SurfaceReview,
-	selectResourceRenderer,
 } from "../registry";
 import { GuardedRendererDiff } from "./GuardedRendererDiff";
 import { surfaceLineCount } from "./largeDiff";
 import { type RendererLayout, RendererToggles } from "./RendererToggles";
-import { RendererView, usePlacedThreadIds } from "./rendererMount";
+import { RendererView, useRendererSelection } from "./rendererMount";
 import { UnplacedReviewStrip } from "./UnplacedReviewStrip";
 import { type LoadedFile, type ReadyFile, startWorkspaceFileReads } from "./workspaceFileReads";
 
@@ -92,10 +89,6 @@ function useWorkspaceFile(workspaceId: string, path: string | undefined): Loaded
 	}, [readFile, subscribeFileChanges, bytesUrl, workspaceId, path, fileKey]);
 
 	return state?.file === fileKey ? state.loaded : LOADING;
-}
-
-function diffDescriptorMeta(original: ResourceMeta, modified: ResourceMeta): ResourceMeta {
-	return { ...modified, text: original.text && modified.text };
 }
 
 export function ResourcePreview(props: ResourcePreviewProps) {
@@ -228,18 +221,12 @@ function PreviewView(props: ResolvedProps & { file: ReadyFile }) {
 
 function ReviewedPreviewView(props: ResolvedProps & { file: ReadyFile; review: SurfaceReview }) {
 	const { workspaceId, path, file, rendererId, onRendererId, review } = props;
-	const { mobile } = useResourceEnvironment();
 	const resource = useMemo(
 		() => describeResource(workspaceId, path, file.meta),
 		[workspaceId, path, file.meta],
 	);
-	const candidates = useMemo(
-		() => resolveRenderers(resource, "view", { mobile }),
-		[resource, mobile],
-	);
-	const renderer = selectResourceRenderer(candidates, rendererId, path);
-	const implementationKey = rendererImplementationKey(renderer.id, mobile);
-	const { placedThreadIds, onPlacedThreadIds } = usePlacedThreadIds(implementationKey);
+	const { mobile, candidates, renderer, implementationKey, placedThreadIds, onPlacedThreadIds } =
+		useRendererSelection(resource, "view", rendererId);
 	const paths = useMemo(() => [path], [path]);
 	const reviews = useMemo(() => [review], [review]);
 
@@ -297,10 +284,9 @@ function ReviewedPreviewDiff(
 ) {
 	const { workspaceId, path, before, original, modified, rendererId, onRendererId, after, prior } =
 		props;
-	const { mobile } = useResourceEnvironment();
 	const review = useMemo(() => ({ worktree: after, base: prior }), [after, prior]);
 	const descriptorMeta = useMemo(
-		() => diffDescriptorMeta(original.meta, modified.meta),
+		() => diffResourceMeta(original.meta, modified.meta),
 		[original.meta, modified.meta],
 	);
 	const resource = useMemo(
@@ -311,13 +297,8 @@ function ReviewedPreviewDiff(
 		() => describeResource(workspaceId, before, original.meta),
 		[workspaceId, before, original.meta],
 	);
-	const candidates = useMemo(
-		() => resolveRenderers(resource, "diff", { mobile }),
-		[resource, mobile],
-	);
-	const renderer = selectResourceRenderer(candidates, rendererId, path);
-	const implementationKey = rendererImplementationKey(renderer.id, mobile);
-	const { placedThreadIds, onPlacedThreadIds } = usePlacedThreadIds(implementationKey);
+	const { mobile, candidates, renderer, implementationKey, placedThreadIds, onPlacedThreadIds } =
+		useRendererSelection(resource, "diff", rendererId);
 	const paths = useMemo(() => [path, before], [path, before]);
 	const reviews = useMemo(() => [after, prior], [after, prior]);
 	const layout = mobile ? "unified" : (props.layout ?? "unified");

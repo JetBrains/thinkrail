@@ -1,5 +1,22 @@
-import { type ComponentType, type LazyExoticComponent, lazy, useCallback, useState } from "react";
-import type { ResourceDiffProps, ResourceRenderer, ResourceViewProps } from "../registry";
+import {
+	type ComponentType,
+	type LazyExoticComponent,
+	lazy,
+	useCallback,
+	useMemo,
+	useState,
+} from "react";
+import { useResourceEnvironment } from "../host";
+import {
+	type ResourceDescriptor,
+	type ResourceDiffProps,
+	type ResourceIntent,
+	type ResourceRenderer,
+	type ResourceViewProps,
+	rendererImplementationKey,
+	resolveRenderers,
+	selectResourceRenderer,
+} from "../registry";
 
 const viewComponents = new Map<string, LazyExoticComponent<ComponentType<ResourceViewProps>>>();
 const diffComponents = new Map<string, LazyExoticComponent<ComponentType<ResourceDiffProps>>>();
@@ -66,4 +83,20 @@ export function usePlacedThreadIds(implementationKey: string): {
 	const placedThreadIds =
 		placement?.implementationKey === implementationKey ? placement.ids : undefined;
 	return { placedThreadIds, onPlacedThreadIds };
+}
+
+export function useRendererSelection(
+	resource: ResourceDescriptor,
+	intent: ResourceIntent,
+	rendererId: string | undefined,
+) {
+	const { mobile } = useResourceEnvironment();
+	const candidates = useMemo(
+		() => resolveRenderers(resource, intent, { mobile }),
+		[resource, intent, mobile],
+	);
+	const renderer = selectResourceRenderer(candidates, rendererId, resource.path);
+	const implementationKey = rendererImplementationKey(renderer.id, mobile);
+	const { placedThreadIds, onPlacedThreadIds } = usePlacedThreadIds(implementationKey);
+	return { mobile, candidates, renderer, implementationKey, placedThreadIds, onPlacedThreadIds };
 }

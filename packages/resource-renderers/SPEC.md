@@ -26,8 +26,11 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
 
 - the registry contract — types, `registerResourceRenderer`, `resolveRenderers`, `describeResource`,
   `anchorLabel`, `isPlaceable`, `threadLabel`, `outdatedReason`, and the selection helpers
-  `selectResourceRenderer`, `rendererImplementationKey`, `rendererTestId` — plus
-  `registerBundledResourceRenderers()` (idempotent);
+  `selectResourceRenderer`, `rendererImplementationKey`, `rendererTestId`, and the content rules every surface
+  shares — `resourceContent(text, meta, url)` (no metadata yet is provisional text, a missing hash is an absent
+  side, a binary side without a byte URL is absent), `diffResourceMeta(original, modified)` (a diff is
+  described by its modified side unless that side is absent, and is text only when both present sides are)
+  and `PENDING_TEXT_META` — plus `registerBundledResourceRenderers()` (idempotent);
 - the host seam — `ResourceHostProvider`, `ResourcePreferencesProvider`, `ResourceEnvironmentProvider`,
   `ResourceScopeProvider`, `useResourceHost`, `useOptionalResourceHost`, `useResourceScope` and the `ResourceHost`, `ResourcePreferences`, `ResourceScope`,
   `ResourceFileReviewProps`, `ResourceReviewSendProps`, `ResourceMarkdown`, `ResourceCodeHost`,
@@ -45,7 +48,9 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   renderer implementation that wrote it, so a renderer switch never restores another renderer's state and a
   caller needs no reset); its diff mounts through the same `GuardedRendererDiff` as the app's diff surface;
 - the pieces panes compose around a renderer: the lazy `RendererView` / `RendererDiff` mounts (implementation
-  identity = renderer id + phone class); **`GuardedRendererDiff`** — the one diff mount every surface uses:
+  identity = renderer id + phone class) and `useRendererSelection(resource, intent, rendererId)` (candidates for
+  the environment's phone class, the selected renderer, its implementation key and placed-thread state — the
+  one selection sequence the file pane, the diff surface and `ResourcePreview` run); **`GuardedRendererDiff`** — the one diff mount every surface uses:
   the expensive-diff notice until **Show diff anyway** (per mount, with a caller action slot), then
   `RendererDiff` virtualized above `VIRTUALIZED_DIFF_LINES` of the caller's `lineCount`; **`RendererToggles`**
   — the renderer candidate segments every toolbar shows, plus Split/Inline when the caller passes a diff

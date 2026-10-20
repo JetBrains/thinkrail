@@ -1,3 +1,4 @@
+export { diffResourceMeta, PENDING_TEXT_META, resourceContent } from "./content";
 export { describeResource } from "./describe";
 export { canonicalWorkspacePath } from "./paths";
 export { registerResourceRenderer, resolveRenderers } from "./registry";

@@ -22,10 +22,12 @@ export {
 	anchorLabel,
 	canonicalWorkspacePath,
 	describeResource,
+	diffResourceMeta,
 	type HunkActions,
 	type HunkTriage,
 	isPlaceable,
 	outdatedReason,
+	PENDING_TEXT_META,
 	type ResourceAnchorCapability,
 	type ResourceContent,
 	type ResourceDescriptor,
@@ -40,6 +42,7 @@ export {
 	rendererImplementationKey,
 	rendererTestId,
 	resolveRenderers,
+	resourceContent,
 	type SurfaceReview,
 	selectResourceRenderer,
 	threadLabel,
@@ -64,7 +67,12 @@ export {
 	type ResourcePreviewProps,
 } from "./support/ResourcePreview";
 export { ReviewThreadCard } from "./support/ReviewThreadCard";
-export { RendererDiff, RendererView, usePlacedThreadIds } from "./support/rendererMount";
+export {
+	RendererDiff,
+	RendererView,
+	usePlacedThreadIds,
+	useRendererSelection,
+} from "./support/rendererMount";
 export {
 	focusedUnplacedEntry,
 	type UnplacedReviewEntry,

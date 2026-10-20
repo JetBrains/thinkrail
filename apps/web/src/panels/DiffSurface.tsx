@@ -2,29 +2,28 @@ import type { ChangeReceipt, GitDiffScope, ResourceMeta } from "@thinkrail/contr
 import {
 	createAskAgentRequest,
 	describeResource,
+	diffResourceMeta,
 	GuardedRendererDiff,
 	type HunkActions,
 	type HunkTriage,
+	PENDING_TEXT_META,
 	type ResourceContent,
 	type ResourceDescriptor,
 	type ResourceRenderer,
-	rendererImplementationKey,
-	resolveRenderers,
-	selectResourceRenderer,
+	resourceContent,
 	surfaceLineCount,
 	UnplacedReviewStrip,
-	usePlacedThreadIds,
+	useRendererSelection,
 } from "@thinkrail/resource-renderers";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Suspense, useCallback, useMemo } from "react";
-import { usePhoneViewport } from "@/lib";
 import { selectWorkspaceIsRunning, toast, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { canOfferChangeMutations, scopeHasMutableModifiedSide } from "./changeMutationAvailability";
 import { splitPath } from "./changesModel";
 import { openFileInTab } from "./openTabs";
-import { PENDING_TEXT_META, resourceBytesUrl } from "./resourcePane";
+import { resourceBytesUrl } from "./resourcePane";
 import { type FileReview, useFileReview } from "./useReviewCommenting";
 
 const loading = <LoadingRegion rows={12} className="h-full p-12" />;
@@ -66,26 +65,6 @@ export interface DiffSurface {
 	onPlacedThreadIds: (ids: ReadonlySet<string>) => void;
 }
 
-function descriptorMetaFor(meta: DiffSurfaceContent["meta"]): ResourceMeta {
-	if (!meta) return PENDING_TEXT_META;
-	const present = [meta.original, meta.modified].filter((side) => side.hash !== null);
-	const representative =
-		meta.modified.hash !== null ? meta.modified : (present[0] ?? PENDING_TEXT_META);
-	return { ...representative, text: present.every((side) => side.text) };
-}
-
-function sideContent(
-	text: string,
-	meta: ResourceMeta | undefined,
-	url: string | null,
-): ResourceContent {
-	if (!meta) return { kind: "text", text, hash: "" };
-	if (meta.hash === null || meta.byteLength === null) return { kind: "absent" };
-	if (meta.text) return { kind: "text", text, hash: meta.hash };
-	if (!url) return { kind: "absent" };
-	return { kind: "bytes", url, hash: meta.hash, byteLength: meta.byteLength };
-}
-
 export function useDiffSurface({
 	workspaceId,
 	path,
@@ -95,7 +74,6 @@ export function useDiffSurface({
 	reload,
 	triage,
 }: DiffSurfaceInput): DiffSurface {
-	const mobile = usePhoneViewport();
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const agentWorking = useAppStore((state) => selectWorkspaceIsRunning(state, workspaceId));
 	const review = useFileReview(workspaceId, path, "diff", scope);
@@ -112,24 +90,23 @@ export function useDiffSurface({
 		protocolVersion,
 		mutationExpect !== null,
 	);
-	const descriptorMeta = useMemo(() => descriptorMetaFor(content.meta), [content.meta]);
+	const descriptorMeta = useMemo(
+		() =>
+			content.meta
+				? diffResourceMeta(content.meta.original, content.meta.modified)
+				: PENDING_TEXT_META,
+		[content.meta],
+	);
 	const resource = useMemo(
 		() => describeResource(workspaceId, path, descriptorMeta, scope),
 		[workspaceId, path, descriptorMeta, scope],
 	);
-	const candidates = useMemo(
-		() => resolveRenderers(resource, "diff", { mobile }),
-		[resource, mobile],
-	);
-	const renderer = selectResourceRenderer(candidates, rendererId, path);
-	const implementationKey = rendererImplementationKey(renderer.id, mobile);
-	const { placedThreadIds, onPlacedThreadIds } = usePlacedThreadIds(implementationKey);
+	const { mobile, candidates, renderer, implementationKey, placedThreadIds, onPlacedThreadIds } =
+		useRendererSelection(resource, "diff", rendererId);
 
 	const original = useMemo(
 		() =>
-			sideContent(
-				content.original,
-				content.meta?.original,
+			resourceContent(content.original, content.meta?.original, () =>
 				content.originalOid ? resourceBytesUrl(workspaceId, path, content.originalOid) : null,
 			),
 		[content.original, content.meta?.original, content.originalOid, workspaceId, path],
@@ -138,9 +115,7 @@ export function useDiffSurface({
 		scope.kind === "commit" ? scope.sha : scope.kind === "turn" ? scope.headTree : null;
 	const modified = useMemo(
 		() =>
-			sideContent(
-				content.modified,
-				content.meta?.modified,
+			resourceContent(content.modified, content.meta?.modified, () =>
 				resourceBytesUrl(workspaceId, path, modifiedOid),
 			),
 		[content.modified, content.meta?.modified, modifiedOid, workspaceId, path],
