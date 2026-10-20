@@ -401,11 +401,11 @@ function valueEqual(a: unknown, b: unknown): boolean {
 		for (let i = 0; i < a.length; i++) if (!valueEqual(a[i], b[i])) return false;
 		return true;
 	}
-	const aKeys = Object.keys(a as Record<string, unknown>);
-	const bKeys = Object.keys(b as Record<string, unknown>);
+	const aKeys = Object.keys(a);
+	const bKeys = Object.keys(b);
 	if (aKeys.length !== bKeys.length) return false;
 	for (const key of aKeys) {
-		if (!Object.hasOwn(b as Record<string, unknown>, key)) return false;
+		if (!Object.hasOwn(b, key)) return false;
 		if (!valueEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]))
 			return false;
 	}
