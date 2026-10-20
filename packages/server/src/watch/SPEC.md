@@ -38,7 +38,8 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   masquerade as a skill edit, while a skill path after the cap is still detected. The **startup nudge** — a
   fresh watcher publishes one synthetic **truncated / skill-unknown wildcard** after the platform stream's
   registration window (~750ms), because a write landing inside that window can lose its event forever.
-  Its readiness promise resolves only after that publish. The web's skill-loading flows await the typed
+  Its readiness promise resolves only after that publish. The web's resource-loading flows (session create,
+  resource reload; transcript reads send the preflight but do not wait on it) await the typed
   `workspace.watchReady` host preflight *before* capturing their start-of-load freshness tick, so startup
   uncertainty is absorbed into the new session's baseline instead of falsely marking it stale; a real edit
   after readiness stays newer than that baseline. Unless the watcher was already known ready, the result

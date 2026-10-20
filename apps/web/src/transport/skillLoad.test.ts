@@ -35,7 +35,7 @@ test("session-message loads reject a response for a different workspace or sessi
 	);
 });
 
-test("skill-load requests share startup, fold the replay fallback before the baseline, and guard every load", async () => {
+test("resource loads share startup, fold the replay fallback before the baseline, and wait for readiness", async () => {
 	let resolveReady: (result: WorkspaceWatchReadyResult) => void = () => {};
 	const firstReady = new Promise<WorkspaceWatchReadyResult>((resolve) => {
 		resolveReady = resolve;
@@ -87,21 +87,16 @@ test("skill-load requests share startup, fold the replay fallback before the bas
 	});
 
 	const creating = requests.createSession({ workspaceId: "ws1" });
-	const reading = requests.getSessionMessages({ workspaceId: "ws1", sessionId: "disk" });
 	expect(watchCalls).toBe(1);
 	expect(order).toEqual([]);
 
 	resolveReady({ startupNudge: true });
-	const [created, messages] = await Promise.all([creating, reading]);
+	const created = await creating;
 	expect(created.syncedTick).toBe(1);
-	expect(messages.syncedTick).toBe(1);
-	expect(order.slice(0, 2)).toEqual(["fallback", "baseline"]);
-	expect(order.filter((step) => step === "fallback")).toHaveLength(1);
+	expect(order).toEqual(["fallback", "baseline", "create"]);
 	expect(fallbacks).toEqual([
 		{ workspaceId: "ws1", paths: [], truncated: true, skillChange: "unknown" },
 	]);
-	expect(order).toContain("create");
-	expect(order).toContain("messages");
 	expect(tick).toBe(2);
 
 	const reloaded = await requests.reloadSessionResources("ws1", { sessionId: "created" });
@@ -203,4 +198,56 @@ test("a failed prewarm leaves the eventual session load able to retry preparatio
 	const loaded = await requests.getSessionMessages({ workspaceId: "ws1", sessionId: "disk" });
 	expect(watchCalls).toEqual([true, false]);
 	expect(loaded.syncedTick).toBe(7);
+});
+
+test("a transcript read starts the shared preparation but never waits for watcher readiness", async () => {
+	let resolveReady: (result: WorkspaceWatchReadyResult) => void = () => {};
+	const ready = new Promise<WorkspaceWatchReadyResult>((resolve) => {
+		resolveReady = resolve;
+	});
+	let tick = 5;
+	const order: string[] = [];
+	const requests = createSkillLoadRequests({
+		watchReady: () => {
+			order.push("watchReady");
+			return ready;
+		},
+		noteFsChanged: () => {
+			order.push("fallback");
+			tick += 1;
+		},
+		workspaceTick: () => tick,
+		createSession: async () => {
+			order.push("create");
+			return { sessionId: "created", model: null, thinkingLevel: "medium" };
+		},
+		getSessionMessages: async ({ sessionId, workspaceId }) => {
+			order.push("messages");
+			return {
+				summary: {
+					sessionId,
+					workspaceId,
+					title: "Chat",
+					model: null,
+					thinkingLevel: "medium",
+					isStreaming: false,
+					messageCount: 0,
+					updatedAt: 1,
+					live: true,
+				},
+				messages: [],
+			};
+		},
+		reloadSessionResources: async () => ({ ok: true }),
+	});
+
+	const read = await requests.getSessionMessages({ workspaceId: "ws1", sessionId: "disk" });
+	expect(read.syncedTick).toBe(5);
+	expect(order).toEqual(["watchReady", "messages"]);
+
+	const creating = requests.createSession({ workspaceId: "ws1" });
+	expect(order).toEqual(["watchReady", "messages"]);
+	resolveReady({ startupNudge: true });
+	expect((await creating).syncedTick).toBe(6);
+	expect(order).toEqual(["watchReady", "messages", "fallback", "create"]);
 });
