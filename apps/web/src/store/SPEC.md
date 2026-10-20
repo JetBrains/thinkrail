@@ -263,7 +263,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   steer/follow-up cannot settle work the host is still running. A *streaming* fault instead ends the run through
   **`reduceSessionEvent`** at `agent_settled`, using the host-projected final terminal metadata:
   `stopReason: "error"` carries Pi's `errorMessage`, and `stopReason: "length"` becomes an actionable
-  truncation error — neither may become "✓ Done". That settlement-created error turn alone carries the
+  truncation error — neither may become "✓ Done". The closer is placed by `chat`'s `insertRoundCloser`
+  (ahead of trailing results that woke nobody, the same rule hydration uses). That settlement-created error turn alone carries the
   web-local `recovery: "try-again"` marker; hydration gives the same marker only to its synthesized current
   final failure. `appendUserMessage` consumes every prior marker in the same optimistic write that adds the
   follow-on user turn, while `agent_start` consumes it for work begun by another client or a custom message.

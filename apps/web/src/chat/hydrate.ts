@@ -14,6 +14,7 @@ import {
 } from "@thinkrail/contracts";
 import { userText } from "../lib";
 import { assistantFailureText } from "./assistantFailure";
+import { insertRoundCloser } from "./roundCloser";
 import type { ChatTurn, ToolResultState } from "./types";
 
 export interface HydratedRuntime {
@@ -112,24 +113,16 @@ export function messagesToRuntime(
 	const failure = assistantFailureText(
 		lastSettlement === undefined ? persistedTerminal : lastSettlement,
 	);
-	if (failure) {
-		let at = turns.length;
-		while (at > 0 && isUnansweredResult(turns[at - 1])) at--;
-		turns.splice(at, 0, {
-			kind: "error",
-			id: options.idScope
-				? `${options.idScope}:error:${persistedTerminal?.timestamp ?? "settlement"}`
-				: crypto.randomUUID(),
-			text: failure,
-			recovery: "try-again",
-		});
-	}
+	const closed = failure
+		? insertRoundCloser(turns, {
+				kind: "error",
+				id: options.idScope
+					? `${options.idScope}:error:${persistedTerminal?.timestamp ?? "settlement"}`
+					: crypto.randomUUID(),
+				text: failure,
+				recovery: "try-again",
+			})
+		: turns;
 
-	return { turns, toolResults, askAnswers, turnIdByMessageIndex };
-}
-
-function isUnansweredResult(turn: ChatTurn | undefined): boolean {
-	if (turn?.kind === "backgroundCommandCompletion") return turn.details.status === "stopped";
-	if (turn?.kind === "subagentCompletion") return turn.details.abortReason === "user";
-	return false;
+	return { turns: closed, toolResults, askAnswers, turnIdByMessageIndex };
 }

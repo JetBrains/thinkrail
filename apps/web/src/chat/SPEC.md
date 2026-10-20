@@ -488,10 +488,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `HydratedRuntime`) from a persisted transcript so a reconnecting/second client renders identically to
   the live path (same `raw` result shape). One-shot consumers keep freshly minted ids; a repeated-snapshot
   consumer supplies its session scope to derive stable role/timestamp/index ids for persisted turns. When supplied, the live summary's `lastSettlement` is authoritative; otherwise only the
-  final conversational assistant can synthesize an error/length turn. That turn lands where the live
-  reducer put it at settlement: before any trailing results that woke nobody (a stopped command, a
-  user-aborted subagent — the extensions' own no-`triggerTurn` cases), so a failed round keeps its error
-  and divider ahead of a later reaction-less result. Compacted historical length attempts
+  final conversational assistant can synthesize an error/length turn, placed by the same
+  `insertRoundCloser` rule as the live settlement marker (below). Compacted historical length attempts
   followed by later messages remain history, not a stale current warning. One retry-presentation rule on
   both paths: pi persists a superseded auto-retry attempt ("keep in session for history") that the live
   reducer dropped on `auto_retry_start`, so hydration hides an errored assistant message immediately
@@ -1515,7 +1513,11 @@ message's true terminal is **`message_end`**: the reducer adopts the final messa
 `stopReason`, how renderers spot dead tool calls) and clears that message's `streaming` flag **there**.
 `agent_end` is only an attempt boundary (for a tool-calling message it arrives after its tools ran, but
 it can still precede auto-compaction/retry); `agent_settled` alone closes the automatic run, clears the
-session loader, and appends one success/error marker. A successful overflow `compaction_end` with
+session loader, and adds one success/error marker through `insertRoundCloser` (`roundCloser.ts`, shared with
+hydration): the marker goes before any trailing results that woke nobody (a stopped command, a
+user-aborted subagent — the extensions' no-`triggerTurn` cases). Such a result may be appended before or
+after settlement depending on delivery timing; one rule on both paths keeps a round's closer and divider
+ahead of it, so live and reloaded rows agree. A successful overflow `compaction_end` with
 `willRetry: true` removes the superseded errored/truncated attempt, matching Pi's rebuilt context. Tool results are
 indexed by `toolCallId` in `toolResults`; `ask-user-answers` custom messages index into `askAnswers`
 (never the turn list — the questionnaire card is their rendering); `subagent-completion` custom messages
