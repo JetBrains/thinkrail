@@ -93,6 +93,23 @@ export function reviewFixCommentsToItems(comments: ReviewFixComment[]): ReviewPa
 	}));
 }
 
+export function packageFileLabels(items: readonly ReviewPackageItem[]): Map<string, string> {
+	const files = [...new Set(items.flatMap((item) => (item.path === null ? [] : [item.path])))];
+	const labels = new Map<string, string>();
+	if (files.length < 2) return labels;
+	const deepest = Math.max(...files.map((file) => file.split("/").length));
+	for (let depth = 1; depth <= deepest && labels.size < files.length; depth += 1) {
+		const tail = (file: string) => file.split("/").slice(-depth).join("/");
+		const counts = new Map<string, number>();
+		for (const file of files) counts.set(tail(file), (counts.get(tail(file)) ?? 0) + 1);
+		for (const file of files) {
+			if (!labels.has(file) && counts.get(tail(file)) === 1) labels.set(file, tail(file));
+		}
+	}
+	for (const file of files) if (!labels.has(file)) labels.set(file, file);
+	return labels;
+}
+
 export function reviewPackageLabel(summary: Pick<ReviewPackageSummary, "count" | "files">): string {
 	const noun = summary.count === 1 ? "review comment" : "review comments";
 	const where =
