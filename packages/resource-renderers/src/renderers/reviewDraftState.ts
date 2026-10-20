@@ -1,33 +1,67 @@
-import { createContext, useCallback, useContext, useState } from "react";
+import {
+	createContext,
+	useCallback,
+	useContext,
+	useMemo,
+	useState,
+	useSyncExternalStore,
+} from "react";
 
 export interface ReviewDraftPersistence {
 	rendererId: string;
-	values: Readonly<Record<string, unknown>> | undefined;
+	read: (key: string) => unknown;
+	subscribe: (onChange: () => void) => () => void;
 	update: (key: string, change: (current: unknown) => unknown) => void;
 }
 
 export const ReviewDraftContext = createContext<ReviewDraftPersistence | null>(null);
 
-export function useReviewDraftState<T>(key: string, initial: T, rendererScoped = false) {
+export interface ReviewDraftSlot<T> {
+	read: () => T | undefined;
+	subscribe: (onChange: () => void) => () => void;
+	update: (change: (current: T | undefined) => T | undefined) => void;
+}
+
+const NO_SUBSCRIPTION = () => () => {};
+const NOTHING = () => undefined;
+
+export function useReviewDraftSlot<T>(
+	key: string,
+	rendererScoped = false,
+): ReviewDraftSlot<T> | null {
 	const persistence = useContext(ReviewDraftContext);
-	const [local, setLocal] = useState(initial);
 	const slot = JSON.stringify([rendererScoped ? persistence?.rendererId : null, key]);
-	const value = persistence ? ((persistence.values?.[slot] as T | undefined) ?? initial) : local;
-	const update = persistence?.update;
+	return useMemo(
+		() =>
+			persistence && {
+				read: () => persistence.read(slot) as T | undefined,
+				subscribe: persistence.subscribe,
+				update: (change) => persistence.update(slot, (current) => change(current as T | undefined)),
+			},
+		[persistence, slot],
+	);
+}
+
+export function useReviewDraftState<T>(key: string, initial: T, rendererScoped = false) {
+	const draft = useReviewDraftSlot<T>(key, rendererScoped);
+	const [local, setLocal] = useState(initial);
+	const read = draft?.read ?? NOTHING;
+	const stored = useSyncExternalStore(draft?.subscribe ?? NO_SUBSCRIPTION, read, read);
+	const value = draft ? (stored ?? initial) : local;
 	const change = useCallback(
 		(reduce: (current: T) => T | undefined) => {
-			if (update) {
-				update(slot, (current) => {
-					const next = reduce((current as T | undefined) ?? initial);
+			if (draft) {
+				draft.update((current) => {
+					const next = reduce(current ?? initial);
 					return next === initial ? undefined : next;
 				});
 			} else {
 				setLocal((current) => reduce(current) ?? initial);
 			}
 		},
-		[initial, slot, update],
+		[draft, initial],
 	);
-	return [value, change, persistence !== null] as const;
+	return [value, change, draft !== null] as const;
 }
 
 export interface ReviewTextState {
@@ -39,9 +73,15 @@ export interface ReviewTextState {
 }
 
 export interface ReviewTextBinding {
-	value: ReviewTextState | undefined;
+	read: () => ReviewTextState | undefined;
+	subscribe: (onChange: () => void) => () => void;
 	onChange: (value: ReviewTextState) => void;
 	restored?: boolean;
+}
+
+export function useReviewText(binding: ReviewTextBinding | undefined): ReviewTextState | undefined {
+	const read = binding?.read ?? NOTHING;
+	return useSyncExternalStore(binding?.subscribe ?? NO_SUBSCRIPTION, read, read);
 }
 
 export function reviewTextState(text: string): ReviewTextState {

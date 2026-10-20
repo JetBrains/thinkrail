@@ -8,7 +8,7 @@ import {
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
 import type { GitDiffScope, GitFileChange } from "@thinkrail/contracts";
-import type { HunkTriage } from "@thinkrail/resource-renderers";
+import type { HunkTriage, ReviewDraftPersistence } from "@thinkrail/resource-renderers";
 import { ReviewDraftContext } from "@thinkrail/resource-renderers";
 import {
 	DropdownMenu,
@@ -24,6 +24,7 @@ import { statusLetter } from "../chat/planView";
 import {
 	type ChangesTabSection,
 	type DiffTabView,
+	selectChangesTabSection,
 	selectDiffTabTargetRef,
 	selectWorkspaceTick,
 	useAppStore,
@@ -177,9 +178,17 @@ export const ChangesFileSection = memo(function ChangesFileSection({
 		triage,
 	});
 	const { renderer, candidates, implementationKey, mobile, hunkActions } = surface;
-	const reviewDrafts = useMemo(
-		() => ({ rendererId: renderer.id, values: section?.reviewDrafts, update: updateReviewDraft }),
-		[renderer.id, section?.reviewDrafts, updateReviewDraft],
+	const reviewDrafts = useMemo<ReviewDraftPersistence>(
+		() => ({
+			rendererId: renderer.id,
+			read: (key) =>
+				selectChangesTabSection(useAppStore.getState(), workspaceId, tabId, path)?.reviewDrafts?.[
+					key
+				],
+			subscribe: useAppStore.subscribe,
+			update: updateReviewDraft,
+		}),
+		[path, renderer.id, tabId, updateReviewDraft, workspaceId],
 	);
 	const view = mobile ? "inline" : (tabView ?? "split");
 	const { dir, base } = splitPath(path);

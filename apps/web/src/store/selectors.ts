@@ -42,6 +42,7 @@ import type {
 	WorkspaceLayoutDocument,
 } from "../shell/layout";
 import type {
+	ChangesTabSection,
 	ClosedChat,
 	EditorTab,
 	MarkedUnread,
@@ -845,6 +846,16 @@ export function selectDiffTabTargetRef(
 	tab: { workspaceId: string; scope: GitDiffScope },
 ): string {
 	return tab.scope.kind === "branch" ? selectDiffBaseRef(state, tab.workspaceId) : "";
+}
+
+export function selectChangesTabSection(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	workspaceId: string,
+	tabId: string,
+	path: string,
+): ChangesTabSection | undefined {
+	const tab = state.tabsByWorkspace[workspaceId]?.find((candidate) => candidate.id === tabId);
+	return tab?.kind === "changes" ? tab.sections[path] : undefined;
 }
 
 export function matchesWorktreePath(reported: string, rel: string): boolean {

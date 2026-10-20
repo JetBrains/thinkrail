@@ -26,7 +26,8 @@ function persistence(
 	const section = JSON.stringify([workspace, id, path]);
 	return {
 		rendererId,
-		values: sections.get(section),
+		read: (key) => sections.get(section)?.[key],
+		subscribe: () => () => {},
 		update: (key, update) => {
 			const values = { ...sections.get(section) };
 			const next = update(values[key]);
@@ -60,12 +61,12 @@ function typeText(composer: Composer, text = "unsaved review") {
 test("selection, side, text, caret and pending submission survive a fresh section mount", () => {
 	mount().select({ side: "base", anchor: "L3–6" });
 	expect(mount().input?.restored).toBe(true);
-	expect(mount().input?.value).toBeUndefined();
+	expect(mount().input?.read()).toBeUndefined();
 	typeText(mount());
 	const restored = mount();
 	expect(restored.composing).toBe(true);
 	expect(restored.selection).toEqual({ side: "base", anchor: "L3–6" });
-	expect(restored.input?.value).toEqual({
+	expect(restored.input?.read()).toEqual({
 		text: "unsaved review",
 		start: 2,
 		end: 6,
@@ -73,12 +74,13 @@ test("selection, side, text, caret and pending submission survive a fresh sectio
 		busy: false,
 	});
 	const input = restored.input;
-	if (!input?.value) throw new Error("Missing input");
-	input.onChange({ ...input.value, busy: true });
-	expect(mount().input?.value?.busy).toBe(true);
-	input.onChange({ ...input.value, busy: false });
-	expect(mount().input?.value?.text).toBe("unsaved review");
-	expect(mount().input?.value?.busy).toBe(false);
+	const typed = input?.read();
+	if (!input || !typed) throw new Error("Missing input");
+	input.onChange({ ...typed, busy: true });
+	expect(mount().input?.read()?.busy).toBe(true);
+	input.onChange({ ...typed, busy: false });
+	expect(mount().input?.read()?.text).toBe("unsaved review");
+	expect(mount().input?.read()?.busy).toBe(false);
 });
 
 test("draft scratch is isolated by workspace, tab scope, file, renderer and surface slot", () => {
@@ -91,13 +93,13 @@ test("draft scratch is isolated by workspace, tab scope, file, renderer and surf
 		persistence("file.ts", "thinkrail/code", "ws", "uncommitted"),
 	]) {
 		expect(mount(scope).selection).toBeNull();
-		expect(mount(scope).input?.value).toBeUndefined();
+		expect(mount(scope).input?.read()).toBeUndefined();
 	}
 	mount(persistence(), "content-hash", "page 1:base").select({ side: "base", anchor: "region" });
 	typeText(mount(persistence(), "content-hash", "page 1:base"), "old page region");
 	expect(mount(persistence(), "content-hash", "page 1:worktree").selection).toBeNull();
 	expect(mount(persistence(), "content-hash", "page 2:base").selection).toBeNull();
-	expect(mount().input?.value?.text).toBe("unsaved review");
+	expect(mount().input?.read()?.text).toBe("unsaved review");
 });
 
 test("Cancel or completed Save/Send clears scratch after unmount, and cannot close a newer composer", () => {
@@ -108,15 +110,38 @@ test("Cancel or completed Save/Send clears scratch after unmount, and cannot clo
 		expect(mount().composing).toBe(true);
 		beforeUnmount.close();
 		expect(mount().selection).toBeNull();
-		expect(mount().input?.value).toBeUndefined();
+		expect(mount().input?.read()).toBeUndefined();
 		typeText(beforeUnmount, "late failed request");
-		expect(mount().input?.value).toBeUndefined();
+		expect(mount().input?.read()).toBeUndefined();
 		mount().select({ side: "worktree", anchor: "new selection" });
 		typeText(mount(), "new text");
 		beforeUnmount.close();
-		expect(mount().input?.value?.text).toBe("new text");
+		expect(mount().input?.read()?.text).toBe("new text");
 		mount().close();
 	}
+});
+
+test("typing writes only the composer's text slot, never the selection slot a surface reads", () => {
+	mount().select({ side: "worktree", anchor: "L2" });
+	const selectionSlot = JSON.stringify(["thinkrail/code", "selection"]);
+	const selection = persistence().read(selectionSlot);
+	typeText(mount(), "a");
+	typeText(mount(), "ab");
+	expect(persistence().read(selectionSlot)).toBe(selection);
+	expect(mount().input?.read()?.text).toBe("ab");
+});
+
+test("a new selection or a close retires the text, while re-opening the same selection keeps it", () => {
+	mount().select({ side: "worktree", anchor: "L2" }, false);
+	typeText(mount(), "kept");
+	mount().open();
+	expect(mount().composing).toBe(true);
+	expect(mount().input?.read()?.text).toBe("kept");
+	mount().select({ side: "worktree", anchor: "L5" });
+	expect(mount().input?.read()).toBeUndefined();
+	typeText(mount(), "retired by close");
+	mount().close();
+	expect(mount().input?.read()).toBeUndefined();
 });
 
 test("a changed content stamp never restores a selection against a different revision", () => {
@@ -133,7 +158,7 @@ test("rich composers retain the same scratch across renderer switches", () => {
 	typeText(mount(persistence("file.json", "thinkrail/json")), "structural note");
 	expect(mount(persistence("file.json", "thinkrail/code")).selection).toBeNull();
 	expect(mount(persistence("file.json", "thinkrail/json")).selection?.anchor).toBe("/value");
-	expect(mount(persistence("file.json", "thinkrail/json")).input?.value?.text).toBe(
+	expect(mount(persistence("file.json", "thinkrail/json")).input?.read()?.text).toBe(
 		"structural note",
 	);
 });

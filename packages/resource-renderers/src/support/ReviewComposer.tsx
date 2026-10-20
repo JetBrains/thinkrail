@@ -5,6 +5,7 @@ import {
 	type ReviewTextBinding,
 	reviewTextState,
 	selectedReviewText,
+	useReviewText,
 } from "../renderers/reviewDraftState";
 
 function grow(el: HTMLTextAreaElement): void {
@@ -31,12 +32,13 @@ export function ReviewComposer({
 	onClose: () => void;
 	className?: string;
 }) {
+	const stored = useReviewText(input);
 	const [initial] = useState(() => ({
-		value: input?.value ?? reviewTextState(initialText),
-		restored: input?.restored === true || input?.value !== undefined,
+		value: stored ?? reviewTextState(initialText),
+		restored: input?.restored === true || stored !== undefined,
 	}));
 	const [local, setLocal] = useState(initial.value);
-	const state = input?.value ?? local;
+	const state = stored ?? local;
 	const { text, busy } = state;
 	const setInput = input?.onChange ?? setLocal;
 	const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -61,7 +63,7 @@ export function ReviewComposer({
 		return () => rendered.disconnect();
 	}, [initial]);
 	useEffect(() => {
-		if (input && !input.value) input.onChange(initial.value);
+		if (input && input.read() === undefined) input.onChange(initial.value);
 	}, [initial, input]);
 
 	const submit = (action: SurfaceReview["commenting"]["onSave"]) => {
