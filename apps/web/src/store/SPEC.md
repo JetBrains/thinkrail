@@ -311,6 +311,19 @@ re-read while a server starts. The state vocabulary and the attention/active pre
     tick ordering: a result that arrives while the user follows clears at once, scrolling back to the latest
     edge clears it later, and an unfocused window keeps it lit (and notifying) until the user returns. The
     host compare-and-sets the exact id, so a stale view can never clear a newer result.
+    The one exception is a result this window **marked unread by hand** (`workspace.markUnread`):
+    `beginMarkWorkspaceUnread` snapshots the workspace's relightable `candidates` (session → completion id)
+    and which of them is attended; until the reply lands (the host's state push can arrive first) only those
+    exact candidate completions are suppressed, so a genuinely new result is never swallowed. One mark per
+    workspace is in flight at a time: `beginMarkWorkspaceUnread` returns false while one is pending and the
+    caller sends no second request, whose reply could otherwise clear the attendance snapshot early.
+    `finishMarkWorkspaceUnread` records `markedUnreadBySession[sessionId] = { completionId, held }`, where
+    `held` means the relit chat was attended at mark time **and stayed attended throughout the request**. A
+    held exact completion is never ready to acknowledge; a store subscription clears both the pending
+    attendance and `held` as soon as the chat stops being attended, so it clears on the next visit — "stay
+    lit until you come back". `selectWorkspaceReadAction` derives the menu item from the snapshot (`markRead` when any result is
+    unread, else `markUnread` when contracts' `canMarkCompletionUnread` admits one, else hidden), and
+    `selectCompletionMarkedUnread` is the shared self-marked test.
   Closed chats are reopenable: the workbench close command atomically removes local placement and invokes
   **`closeChatToHistory`**, which **keeps the runtime + host session alive**, records it in
   **`closedChatsByWorkspace`** (`ClosedChat[]`, per workspace, most-recent-first), and clears pending

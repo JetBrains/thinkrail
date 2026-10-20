@@ -43,6 +43,8 @@ import {
 	listSessions,
 	listSkillCatalog,
 	listSkillCommands,
+	markWorkspaceRead,
+	markWorkspaceUnread,
 	notifyExtUi,
 	nudgeSession,
 	projectTrustSummary,
@@ -406,6 +408,10 @@ async function sendToFileChat(
 	return { ...created, reused: false };
 }
 
+function sessionStateWorkspace(workspace: Workspace) {
+	return { id: workspace.id, projectId: workspace.projectId, cwd: workspace.worktreePath };
+}
+
 function resourceCwd(workspaceId: string): string {
 	try {
 		return getWorkspace(workspaceId).worktreePath;
@@ -513,6 +519,12 @@ const handlers: WsHandlers = {
 	},
 	"workspace.settle": (params) => settleWorkspace(params.id),
 	"workspace.unsettle": (params) => unsettleWorkspace(params.id),
+	"workspace.markUnread": async (params) => ({
+		record: await markWorkspaceUnread(sessionStateWorkspace(getWorkspace(params.id))),
+	}),
+	"workspace.markRead": async (params) => ({
+		records: await markWorkspaceRead(sessionStateWorkspace(getWorkspace(params.id))),
+	}),
 	"workspace.remove": (params) => {
 		const id = params.id;
 		const ws = forgetWorkspace(id);
@@ -912,13 +924,7 @@ const handlers: WsHandlers = {
 		});
 	},
 	"session.stateList": () =>
-		listSessionStates(
-			listAllWorkspaceRecords().map((workspace) => ({
-				id: workspace.id,
-				projectId: workspace.projectId,
-				cwd: workspace.worktreePath,
-			})),
-		),
+		listSessionStates(listAllWorkspaceRecords().map(sessionStateWorkspace)),
 	"session.acknowledgeCompletion": (p) => {
 		return acknowledgeCompletion(p.sessionId, p.completionId);
 	},

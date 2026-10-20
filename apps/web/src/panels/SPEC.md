@@ -82,6 +82,11 @@ treatment.
   (`merged` / `closed` / `idle 2w` / `by you`, long form in its tooltip), a hover **↩ Keep active** beside the kebab — ten at
   a time with a *Show 25 more* row. Live rows gain a hover **✓ Settle** beside the kebab (also in the menu
   and on right-click); it is disabled while the row's agent works or a result is unread, absent on Default.
+  On a v86+ host the same menu section carries one read toggle from `selectWorkspaceReadAction`: **Mark as
+  read** while any chat in the workspace has an unread result, else **Mark as unread** when a finished,
+  non-cancelled result can be relit, else nothing (`markWorkspaceRead` / `markWorkspaceUnread` in
+  `workspaceActions.ts`, shared with the topbar). Unread relights only the most recently active chat, so
+  one visit clears it; read never dismisses a needs-input blocker.
   The partition re-evaluates on the shared 30-second `useNow` clock so idle rows cross the window without
   a click and the rail stays in lockstep with the topbar, and
   selecting a settled row expands the shelf and pages far enough to show it. **The first automatic move

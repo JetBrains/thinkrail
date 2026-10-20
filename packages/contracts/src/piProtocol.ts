@@ -93,6 +93,16 @@ export function isSessionWorking(state: SessionState): boolean {
 	return state.execution === "running" || state.backgroundWork === true;
 }
 
+export function canMarkCompletionUnread(state: SessionState): boolean {
+	return (
+		!isSessionWorking(state) &&
+		state.needsInput === null &&
+		state.completion !== null &&
+		state.completion.outcome !== "cancelled" &&
+		!state.completionUnread
+	);
+}
+
 type WithWireMessage<E> = E extends { message: AgentMessage }
 	? Omit<E, "message"> & { message: WireAgentMessage }
 	: E;

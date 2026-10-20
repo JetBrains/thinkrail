@@ -6,6 +6,8 @@ import {
 	RiFolderOpenLine as FolderOpen,
 	RiGitBranchLine as GitBranch,
 	RiHome2Line as House,
+	RiMailOpenLine as MailOpen,
+	RiMailUnreadLine as MailUnread,
 	RiPencilLine as Pencil,
 	RiAddLine as Plus,
 	RiCheckboxCircleLine,
@@ -32,6 +34,8 @@ import {
 	canRenameWorkspace,
 	canSettleWorkspace,
 	loadProjectWorkspaces,
+	markWorkspaceRead,
+	markWorkspaceUnread,
 	openWorkspaceIn,
 	renameWorkspace,
 	revealWorkspace,
@@ -46,8 +50,10 @@ import {
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
 	selectWorkspacePartition,
+	selectWorkspaceReadAction,
 	selectWorkspaceSettledReason,
 	settledReasonLabel,
+	supportsWorkspaceReadState,
 	useAppStore,
 } from "../../store";
 import { PillChevron, pillClass, Segment } from "./Segment";
@@ -90,6 +96,11 @@ export function WorkspaceSegment({
 			(selectWorkspaceIsRunning(s, workspace.id) || selectWorkspaceNeedsAttention(s, workspace.id)),
 	);
 	const canSettle = workspace !== null && canSettleWorkspace(protocolVersion, workspace);
+	const readAction = useAppStore((s) =>
+		workspace !== null && supportsWorkspaceReadState(protocolVersion)
+			? selectWorkspaceReadAction(s, workspace.id)
+			: null,
+	);
 	const editors = useEditors();
 	const [removing, setRemoving] = useState<Workspace | null>(null);
 	const workspaceId = workspace?.id ?? null;
@@ -228,6 +239,23 @@ export function WorkspaceSegment({
 									<FolderOpen />
 									Reveal in file manager
 								</DropdownMenuItem>
+								{readAction === "markRead" ? (
+									<DropdownMenuItem
+										data-testid="scope-workspace-mark-read"
+										onSelect={() => markWorkspaceRead(workspace.id)}
+									>
+										<MailOpen />
+										Mark as read
+									</DropdownMenuItem>
+								) : readAction === "markUnread" ? (
+									<DropdownMenuItem
+										data-testid="scope-workspace-mark-unread"
+										onSelect={() => markWorkspaceUnread(workspace.id)}
+									>
+										<MailUnread />
+										Mark as unread
+									</DropdownMenuItem>
+								) : null}
 								{canSettle ? (
 									activeSettled ? (
 										<DropdownMenuItem

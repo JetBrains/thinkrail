@@ -39,6 +39,7 @@ import type {
 	WorkspaceFsChangedPayload,
 } from "@thinkrail/contracts";
 import {
+	canMarkCompletionUnread,
 	customMessageText,
 	DEFAULT_CONFIG,
 	isAskUserAnswersMessage,
@@ -107,6 +108,7 @@ import {
 	type ModelRef,
 	SETTLED_SHELF_PAGE,
 	selectActiveWorkspaceProjectId,
+	selectChatAttended,
 	selectLayoutResourcePlacement,
 	selectSupportsMcp,
 	selectWorkspaceById,
@@ -408,6 +410,17 @@ export interface ChatLocationRequest {
 	messageIndex: number;
 	anchorText: string;
 	navigation?: CenterNavigationStamp | null;
+}
+
+export interface PendingMarkUnread {
+	candidates: Record<string, string>;
+	attendedSessionId: string | null;
+}
+
+export interface MarkedUnread {
+	workspaceId: string;
+	completionId: string;
+	held: boolean;
 }
 
 export interface SessionRuntime {
@@ -935,6 +948,8 @@ interface AppState {
 	sessionStateClock: number;
 	sessionStateSnapshotInstalled: boolean;
 	renderedCompletionBySession: Record<string, string>;
+	markingUnreadWorkspaces: Record<string, PendingMarkUnread>;
+	markedUnreadBySession: Record<string, MarkedUnread>;
 	obscuredChatSessions: Record<string, true>;
 	extUiOrphans: ExtUiRequest[];
 	models: WireModel[];
@@ -1197,6 +1212,9 @@ interface AppState {
 	installSessionStateSnapshot: (records: readonly SessionStateRecord[]) => void;
 	applySessionState: (record: SessionStateRecord) => void;
 	noteRenderedCompletion: (sessionId: string, completionId: string) => void;
+	beginMarkWorkspaceUnread: (workspaceId: string) => boolean;
+	finishMarkWorkspaceUnread: (workspaceId: string, record: SessionStateRecord | null) => void;
+	releaseUnattendedUnreadHolds: () => void;
 	setChatObscured: (sessionId: string, obscured: boolean) => void;
 	reopenChat: (workspaceId: string, sessionId: string, options?: LayoutOpenOptions) => void;
 	restorePlacedChatCache: (
@@ -2108,6 +2126,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	sessionStateClock: 0,
 	sessionStateSnapshotInstalled: false,
 	renderedCompletionBySession: {},
+	markingUnreadWorkspaces: {},
+	markedUnreadBySession: {},
 	obscuredChatSessions: {},
 	extUiOrphans: [],
 	models: [],
@@ -3522,6 +3542,79 @@ export const useAppStore = create<AppState>((set, get) => ({
 				},
 			};
 		}),
+	beginMarkWorkspaceUnread: (workspaceId) => {
+		if (get().markingUnreadWorkspaces[workspaceId]) return false;
+		set((s) => {
+			const candidates: Record<string, string> = {};
+			for (const record of Object.values(s.sessionStateByWorkspace[workspaceId] ?? {})) {
+				const completionId = record.state.completion?.completionId;
+				if (completionId && canMarkCompletionUnread(record.state)) {
+					candidates[record.sessionId] = completionId;
+				}
+			}
+			const attendedSessionId =
+				Object.keys(candidates).find((sessionId) =>
+					selectChatAttended(s, workspaceId, sessionId),
+				) ?? null;
+			return {
+				markingUnreadWorkspaces: {
+					...s.markingUnreadWorkspaces,
+					[workspaceId]: { candidates, attendedSessionId },
+				},
+			};
+		});
+		return true;
+	},
+	finishMarkWorkspaceUnread: (workspaceId, record) => {
+		set((s) => {
+			const completionId = record?.state.completion?.completionId;
+			const pending = s.markingUnreadWorkspaces[workspaceId];
+			return {
+				markingUnreadWorkspaces: omitKey(s.markingUnreadWorkspaces, workspaceId),
+				...(record && completionId
+					? {
+							markedUnreadBySession: {
+								...s.markedUnreadBySession,
+								[record.sessionId]: {
+									workspaceId: record.workspaceId,
+									completionId,
+									held: pending?.attendedSessionId === record.sessionId,
+								},
+							},
+						}
+					: {}),
+			};
+		});
+		if (record) get().applySessionState(record);
+	},
+	releaseUnattendedUnreadHolds: () =>
+		set((s) => {
+			let markingUnreadWorkspaces = s.markingUnreadWorkspaces;
+			for (const [workspaceId, pending] of Object.entries(s.markingUnreadWorkspaces)) {
+				if (
+					pending.attendedSessionId !== null &&
+					!selectChatAttended(s, workspaceId, pending.attendedSessionId)
+				) {
+					markingUnreadWorkspaces = {
+						...markingUnreadWorkspaces,
+						[workspaceId]: { ...pending, attendedSessionId: null },
+					};
+				}
+			}
+			let markedUnreadBySession = s.markedUnreadBySession;
+			for (const [sessionId, mark] of Object.entries(s.markedUnreadBySession)) {
+				if (mark.held && !selectChatAttended(s, mark.workspaceId, sessionId)) {
+					markedUnreadBySession = {
+						...markedUnreadBySession,
+						[sessionId]: { ...mark, held: false },
+					};
+				}
+			}
+			return markingUnreadWorkspaces === s.markingUnreadWorkspaces &&
+				markedUnreadBySession === s.markedUnreadBySession
+				? {}
+				: { markingUnreadWorkspaces, markedUnreadBySession };
+		}),
 	setChatObscured: (sessionId, obscured) =>
 		set((s) => {
 			if (obscured === Boolean(s.obscuredChatSessions[sessionId])) return {};
@@ -4176,6 +4269,19 @@ export const useAppStore = create<AppState>((set, get) => ({
 			s.toasts.some((t) => t.id === id) ? { toasts: s.toasts.filter((t) => t.id !== id) } : {},
 		),
 }));
+
+useAppStore.subscribe((state) => {
+	const unattended =
+		Object.entries(state.markingUnreadWorkspaces).some(
+			([workspaceId, pending]) =>
+				pending.attendedSessionId !== null &&
+				!selectChatAttended(state, workspaceId, pending.attendedSessionId),
+		) ||
+		Object.entries(state.markedUnreadBySession).some(
+			([sessionId, mark]) => mark.held && !selectChatAttended(state, mark.workspaceId, sessionId),
+		);
+	if (unattended) state.releaseUnattendedUnreadHolds();
+});
 
 export const toast = {
 	error: (message: string, title?: string) =>

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	MODEL_PICKER_PROTOCOL_VERSION,
 	type Project,
+	type SessionState,
 	type SessionStateRecord,
 	type WireModel,
 	type Workspace,
@@ -24,6 +25,7 @@ import {
 	selectCanRenameChat,
 	selectCatalogModel,
 	selectChatAttended,
+	selectCompletionMarkedUnread,
 	selectContextProject,
 	selectHistoryTarget,
 	selectKnownChatLocation,
@@ -37,6 +39,7 @@ import {
 	selectSupportsModelPicker,
 	selectWorkspaceIsRunning,
 	selectWorkspaceNeedsAttention,
+	selectWorkspaceReadAction,
 	specPathMatcher,
 } from "./selectors";
 
@@ -117,6 +120,90 @@ test("normalized rail flags keep attention binary and working orthogonal", () =>
 	expect(selectProjectIsRunning(state, "p3")).toBe(true);
 });
 
+test("the workspace read action offers read over unread and hides with nothing to relight", () => {
+	const base = {
+		execution: "idle" as const,
+		runId: "u1",
+		needsInput: null,
+		queuedCount: 0,
+		backgroundWork: false,
+	};
+	const finished = (id: string, unread: boolean) => ({
+		...base,
+		completion: { completionId: `completion:${id}`, outcome: "succeeded" as const },
+		completionUnread: unread,
+	});
+	const cancelled = {
+		...base,
+		completion: { completionId: "interrupted:u1", outcome: "cancelled" as const },
+		completionUnread: false,
+	};
+	const row = (sessionId: string, state: SessionState) => ({
+		sessionId,
+		workspaceId: "w",
+		projectId: "p",
+		state,
+	});
+	const action = (...states: SessionState[]) =>
+		selectWorkspaceReadAction(
+			{
+				sessionStateByWorkspace: {
+					w: Object.fromEntries(states.map((st, i) => [`s${i}`, row(`s${i}`, st)])),
+				},
+			},
+			"w",
+		);
+	expect(action(finished("a", false))).toBe("markUnread");
+	expect(action(finished("a", false), finished("b", true))).toBe("markRead");
+	expect(action(cancelled)).toBeNull();
+	expect(action({ ...finished("a", false), backgroundWork: true })).toBeNull();
+	expect(action({ ...finished("a", false), execution: "running" })).toBeNull();
+	expect(action()).toBeNull();
+});
+
+test("a result counts as marked unread only for the exact completion this window relit", () => {
+	const state = {
+		execution: "idle" as const,
+		runId: "u1",
+		needsInput: null,
+		completion: { completionId: "completion:a", outcome: "succeeded" as const },
+		completionUnread: true,
+		queuedCount: 0,
+		backgroundWork: false,
+	};
+	const record = { sessionId: "s", workspaceId: "w", projectId: "p", state };
+	const none = { markingUnreadWorkspaces: {}, markedUnreadBySession: {} };
+	const mark = { workspaceId: "w", completionId: "completion:a", held: false };
+	expect(selectCompletionMarkedUnread(none, record)).toBe(false);
+	const pending = (candidates: Record<string, string>) => ({
+		...none,
+		markingUnreadWorkspaces: { w: { candidates, attendedSessionId: null } },
+	});
+	expect(selectCompletionMarkedUnread(pending({ s: "completion:a" }), record)).toBe(true);
+	expect(selectCompletionMarkedUnread(pending({ s: "completion:old" }), record)).toBe(false);
+	expect(selectCompletionMarkedUnread(pending({ other: "completion:a" }), record)).toBe(false);
+	expect(
+		selectCompletionMarkedUnread({ ...none, markedUnreadBySession: { s: mark } }, record),
+	).toBe(true);
+	expect(
+		selectCompletionMarkedUnread({ ...none, markedUnreadBySession: { s: mark } }, record, {
+			heldOnly: true,
+		}),
+	).toBe(false);
+	expect(
+		selectCompletionMarkedUnread(
+			{ ...none, markedUnreadBySession: { s: { ...mark, completionId: "completion:old" } } },
+			record,
+		),
+	).toBe(false);
+	expect(
+		selectCompletionMarkedUnread(
+			{ ...none, markedUnreadBySession: { s: mark } },
+			{ ...record, state: { ...state, completionUnread: false } },
+		),
+	).toBe(false);
+});
+
 test("completion acknowledgement requires the exact current result to have rendered", () => {
 	const completion = { completionId: "completion:a1", outcome: "succeeded" as const };
 	const hostState = {
@@ -138,8 +225,50 @@ test("completion acknowledgement requires the exact current result to have rende
 			s1: { ...EMPTY_RUNTIME, hostState, syncedConnectionGeneration: 4 },
 		},
 		renderedCompletionBySession: { s1: completion.completionId },
+		markingUnreadWorkspaces: {},
+		markedUnreadBySession: {},
 	};
 	expect(selectReadyCompletionAck(state, "w1", "s1")).toBe(completion.completionId);
+	expect(
+		selectReadyCompletionAck(
+			{
+				...state,
+				markingUnreadWorkspaces: {
+					w1: { candidates: { s1: completion.completionId }, attendedSessionId: null },
+				},
+			},
+			"w1",
+			"s1",
+		),
+	).toBeNull();
+	expect(
+		selectReadyCompletionAck(
+			{
+				...state,
+				markingUnreadWorkspaces: { w1: { candidates: { s1: "older" }, attendedSessionId: null } },
+			},
+			"w1",
+			"s1",
+		),
+	).toBe(completion.completionId);
+	const mark = { workspaceId: "w1", completionId: completion.completionId, held: true };
+	expect(
+		selectReadyCompletionAck({ ...state, markedUnreadBySession: { s1: mark } }, "w1", "s1"),
+	).toBeNull();
+	expect(
+		selectReadyCompletionAck(
+			{ ...state, markedUnreadBySession: { s1: { ...mark, held: false } } },
+			"w1",
+			"s1",
+		),
+	).toBe(completion.completionId);
+	expect(
+		selectReadyCompletionAck(
+			{ ...state, markedUnreadBySession: { s1: { ...mark, completionId: "older" } } },
+			"w1",
+			"s1",
+		),
+	).toBe(completion.completionId);
 	expect(
 		selectReadyCompletionAck(
 			{ ...state, renderedCompletionBySession: { s1: "older" } },
