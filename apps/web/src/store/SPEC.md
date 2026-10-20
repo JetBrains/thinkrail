@@ -240,7 +240,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   one chat's `turns` (pi-canonical) / `toolResults` / `askAnswers` (the `ask-user-answers` replies keyed
   by tool call id — indexed by the reducer and hydration, never turned into bubbles; the sibling
   `subagent-completion` custom message is instead **appended as a `subagentCompletion` turn** — a
-  detached subagent's terminal report is transcript-positioned, rendered by `chat`'s completion card —
+  detached subagent's terminal report is transcript-positioned, rendered as `chat`'s background result
+  row; it, `backgroundCommandCompletion` and `reviewFix` turns keep the message `timestamp` so the chat can
+  open a round there —
   both narrowed by the shared contracts guards) /
   `currentAssistantId` / `attemptAssistantId` (scopes overflow removal to the attempt actually observed) /
   `isStreaming` / **`settlementTick`** (browser-local, monotonically incremented for every

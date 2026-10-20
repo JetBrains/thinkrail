@@ -450,7 +450,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   shape check — the web's Agent-card reader
   narrows through it too — plus **`customMessageText`** — the one text extraction over
   `WireCustomMessage.content` (string | blocks), shared by the web's event reducer and hydration so the
-  completion card's text derives once.
+  background result row's report text derives once.
   **history-search read DTOs** — **`HistoryScope`** (the overlay's cycle: this chat → workspace →
   project → everywhere); **`PromptHit`** (a recalled prompt; carries optional `messageIndex` +
   `anchorText` — the kept-newest occurrence's jump anchor) and **`MessageHit`** (a full-text
