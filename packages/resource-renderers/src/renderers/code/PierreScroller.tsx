@@ -11,7 +11,7 @@ function mirrorScroll(
 	const sync = () => {
 		content.style.transform = `translateY(${-scroller.scrollTop}px)`;
 	};
-	const fit = () => {
+	const fitHeight = () => {
 		sizer.style.height = `${content.offsetHeight}px`;
 		viewport.style.height = `${scroller.clientHeight}px`;
 		sync();
@@ -36,10 +36,10 @@ function mirrorScroll(
 		});
 	}
 	scroller.addEventListener("scroll", sync, { passive: true });
-	const resize = new ResizeObserver(fit);
+	const resize = new ResizeObserver(fitHeight);
 	resize.observe(scroller);
 	resize.observe(content);
-	fit();
+	fitHeight();
 	return () => {
 		resize.disconnect();
 		scroller.removeEventListener("scroll", sync);

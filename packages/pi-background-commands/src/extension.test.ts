@@ -875,7 +875,8 @@ test("a rejected waking send keeps the wake for the retry instead of losing it",
 		await session.prompt("Start two.");
 		executor.call(0).options.onData?.(Buffer.from("NATURAL_RESULT"));
 		executor.call(0).resolve({ exitCode: 0 });
-		service.list()[1] && service.find(service.list()[1]?.id ?? "")?.stop();
+		const second = service.list()[1];
+		if (second) service.find(second.id)?.stop();
 		executor.call(1).resolve({ exitCode: null });
 		await waitFor(() => service.list().every((snapshot) => snapshot.finishedAt !== undefined));
 		allowed = true;

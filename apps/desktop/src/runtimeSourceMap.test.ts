@@ -19,7 +19,7 @@ test("chunk ids are deterministic UUIDs of the code, its map and the release", (
 
 test("identical code with a different map never reuses a chunk id", async () => {
 	const source = join(dir, "map-only.ts");
-	const builds = [];
+	const builds: { code: string; map: SourceMapJson }[] = [];
 	for (const padding of ["", "\n\n\n"]) {
 		writeFileSync(source, `${padding}export const start = () => 1;\n`);
 		const built = await Bun.build({
