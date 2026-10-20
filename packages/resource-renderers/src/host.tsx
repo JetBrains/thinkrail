@@ -1,5 +1,5 @@
 import type { ComponentProps, ComponentType } from "react";
-import { createContext, use, useContext } from "react";
+import { createContext, useContext } from "react";
 import type ReactMarkdown from "react-markdown";
 import type { LanguageRegistration, ThemeRegistration } from "shiki/core";
 
@@ -37,17 +37,22 @@ export interface ResourceCodeHost {
 }
 
 export interface ResourceHost {
-	loadMarkdown(): Promise<ResourceMarkdown>;
-	loadCode(): Promise<ResourceCodeHost>;
+	markdown: ResourceMarkdown;
+	code: ResourceCodeHost;
 	bytesUrl(workspaceId: string, path: string, oid?: string | null): string;
 	openFile(workspaceId: string, path: string): void;
+}
+
+export interface ResourcePreferences {
 	fileLineWidth: number;
 	fileLineWidthBounded: boolean;
 }
 
 const ResourceHostContext = createContext<ResourceHost | null>(null);
+const ResourcePreferencesContext = createContext<ResourcePreferences | null>(null);
 
 export const ResourceHostProvider = ResourceHostContext.Provider;
+export const ResourcePreferencesProvider = ResourcePreferencesContext.Provider;
 
 export function useResourceHost(): ResourceHost {
 	const host = useContext(ResourceHostContext);
@@ -55,21 +60,8 @@ export function useResourceHost(): ResourceHost {
 	return host;
 }
 
-const loaded = new WeakMap<() => Promise<unknown>, Promise<unknown>>();
-
-function once<T>(load: () => Promise<T>): Promise<T> {
-	let pending = loaded.get(load) as Promise<T> | undefined;
-	if (!pending) {
-		pending = load();
-		loaded.set(load, pending);
-	}
-	return pending;
-}
-
-export function useResourceCode(): ResourceCodeHost {
-	return use(once(useResourceHost().loadCode));
-}
-
-export function useResourceMarkdown(): ResourceMarkdown {
-	return use(once(useResourceHost().loadMarkdown));
+export function useResourcePreferences(): ResourcePreferences {
+	const preferences = useContext(ResourcePreferencesContext);
+	if (!preferences) throw new Error("Resource renderers need a ResourcePreferencesProvider");
+	return preferences;
 }

@@ -2,7 +2,7 @@ import MonacoReact, { type OnMount } from "@monaco-editor/react";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import type { editor } from "monaco-editor/esm/vs/editor/editor.api.js";
 import { use, useCallback, useEffect, useRef, useState } from "react";
-import { useResourceCode, useResourceHost } from "../host";
+import { useResourceHost, useResourcePreferences } from "../host";
 import type { ResourceViewProps, SurfaceReview } from "../registry";
 import { MonacoReviewZones } from "./MonacoReviewZones";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
@@ -37,8 +37,8 @@ export default function MonacoEditor({
 	viewState,
 	onViewState,
 }: ResourceViewProps) {
-	const { fileLineWidth, fileLineWidthBounded } = useResourceHost();
-	use(ensureMonaco(useResourceCode()));
+	const { fileLineWidth, fileLineWidthBounded } = useResourcePreferences();
+	use(ensureMonaco(useResourceHost().code));
 	const stopThemeWatchRef = useRef<(() => void) | null>(null);
 	const menuIconsRef = useRef<{ dispose(): void } | null>(null);
 	const detachRef = useRef<(() => void) | null>(null);

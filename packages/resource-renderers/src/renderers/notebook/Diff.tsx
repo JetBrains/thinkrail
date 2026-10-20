@@ -1,7 +1,7 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useMemo, useRef } from "react";
-import { useResourceCode } from "../../host";
+import { useResourceHost } from "../../host";
 import type { ResourceDiffProps, ReviewThread, SurfaceReview } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
@@ -99,7 +99,7 @@ function NotebookDiffSurface({
 }: ResourceDiffProps) {
 	const originalText = original.kind === "text" ? original.text : null;
 	const modifiedText = modified.kind === "text" ? modified.text : null;
-	const { languageId } = useResourceCode();
+	const { languageId } = useResourceHost().code;
 	const originalDocument = useMemo(
 		() => (originalText === null ? null : parseNotebook(originalText, languageId)),
 		[originalText, languageId],

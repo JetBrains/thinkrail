@@ -6,6 +6,8 @@ export {
 	ResourceHostProvider,
 	type ResourceMarkdown,
 	type ResourceMarkdownProps,
+	type ResourcePreferences,
+	ResourcePreferencesProvider,
 } from "./host";
 export {
 	type AnchorDraft,

@@ -1,10 +1,5 @@
 import { useMemo } from "react";
-import {
-	type ResourceHost,
-	type ResourceMarkdown,
-	useResourceHost,
-	useResourceMarkdown,
-} from "../host";
+import { type ResourceHost, type ResourceMarkdown, useResourceHost } from "../host";
 import type { ResourceViewProps } from "../registry";
 import { stripFrontmatter } from "./frontmatter";
 import { alertComponents, remarkGithubAlerts } from "./markdownAlerts";
@@ -124,8 +119,7 @@ export default function MarkdownPreview({
 }: ResourceViewProps) {
 	const { workspaceId, path } = resource;
 	const text = content.kind === "text" ? content.text : "";
-	const { bytesUrl, openFile } = useResourceHost();
-	const Markdown = useResourceMarkdown();
+	const { markdown: Markdown, bytesUrl, openFile } = useResourceHost();
 	const links = useMemo(() => ({ bytesUrl, openFile }), [bytesUrl, openFile]);
 	const components = useMemo(
 		() => documentComponents({ workspaceId, path }, links),

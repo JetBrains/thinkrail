@@ -1,7 +1,7 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useMemo, useRef } from "react";
-import { useResourceCode } from "../../host";
+import { useResourceHost } from "../../host";
 import { anchorLabel, type ResourceViewProps, type ReviewThread } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
 import { ReviewThreadCard } from "../../support/ReviewThreadCard";
@@ -28,7 +28,7 @@ export default function NotebookView({
 	onViewState,
 }: ResourceViewProps) {
 	const text = content.kind === "text" ? content.text : "";
-	const { languageId } = useResourceCode();
+	const { languageId } = useResourceHost().code;
 	const document = useMemo(() => parseNotebook(text, languageId), [text, languageId]);
 	const composer = useStampedComposer<NotebookCell>(contentStamp(content));
 	const cellRefs = useRef(new Map<string, HTMLElement>());

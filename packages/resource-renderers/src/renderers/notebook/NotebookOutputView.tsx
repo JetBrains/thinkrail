@@ -1,6 +1,6 @@
 import { type ReactNode, useMemo } from "react";
 import type { Components } from "react-markdown";
-import { useResourceHost, useResourceMarkdown } from "../../host";
+import { useResourceHost } from "../../host";
 import { classifyHref, resolveRelativePath } from "../../support/markdownLinks";
 import type { NotebookCell, NotebookOutput } from "./notebookModel";
 import {
@@ -233,8 +233,7 @@ export function NotebookCellBody({
 	language: string;
 	resource: NotebookResourceContext;
 }) {
-	const { bytesUrl } = useResourceHost();
-	const Markdown = useResourceMarkdown();
+	const { markdown: Markdown, bytesUrl } = useResourceHost();
 	const components = useMemo(
 		() =>
 			notebookMarkdownComponents(

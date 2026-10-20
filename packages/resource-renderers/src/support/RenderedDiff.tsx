@@ -2,7 +2,7 @@ import { RiExpandUpDownLine as Expand } from "@remixicon/react";
 import { diffArrays } from "diff";
 import { createElement, type ReactNode, useEffect, useMemo, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { useResourceHost, useResourceMarkdown } from "../host";
+import { useResourceHost } from "../host";
 import type { ResourceDiffProps } from "../registry";
 import { MarkdownDocument } from "./MarkdownPreview";
 import { focusSegments } from "./renderedDiffFocus";
@@ -255,8 +255,7 @@ export default function RenderedDiff({
 }: ResourceDiffProps) {
 	const originalText = original.kind === "text" ? original.text : "";
 	const modifiedText = modified.kind === "text" ? modified.text : "";
-	const { bytesUrl, openFile } = useResourceHost();
-	const Markdown = useResourceMarkdown();
+	const { markdown: Markdown, bytesUrl, openFile } = useResourceHost();
 	const [before, after] = useMemo(
 		() => [
 			renderToStaticMarkup(
