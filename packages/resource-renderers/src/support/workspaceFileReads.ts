@@ -1,5 +1,5 @@
 import type { ResourceMeta } from "@thinkrail/contracts";
-import { type ResourceContent, resourceContent } from "../registry";
+import { PENDING_TEXT_META, type ResourceContent, resourceContent } from "../registry";
 
 export type LoadedFile =
 	| { status: "loading" }
@@ -9,7 +9,7 @@ export type LoadedFile =
 export type ReadyFile = Extract<LoadedFile, { status: "ready" }>;
 
 export interface WorkspaceFileReads {
-	read: () => Promise<{ content: string; meta: ResourceMeta }>;
+	read: () => Promise<{ content: string; meta?: ResourceMeta | undefined }>;
 	subscribe: (onChange: () => void) => () => void;
 	bytesUrl: () => string;
 	update: (next: (current: LoadedFile | null) => LoadedFile) => void;
@@ -44,8 +44,14 @@ export function startWorkspaceFileReads({
 			({ content, meta }) =>
 				settle(ticket, (current) => {
 					const previous = ready(current);
-					if (previous && meta.hash !== null && previous.meta.hash === meta.hash) return previous;
-					return { status: "ready", content: resourceContent(content, meta, bytesUrl), meta };
+					if (previous && meta && meta.hash !== null && previous.meta.hash === meta.hash) {
+						return previous;
+					}
+					return {
+						status: "ready",
+						content: resourceContent(content, meta, bytesUrl),
+						meta: meta ?? PENDING_TEXT_META,
+					};
 				}),
 			(error: unknown) =>
 				settle(

@@ -3,7 +3,7 @@ import type { ResourceMeta } from "@thinkrail/contracts";
 import { type LoadedFile, startWorkspaceFileReads } from "./workspaceFileReads";
 
 interface PendingRead {
-	resolve: (value: { content: string; meta: ResourceMeta }) => void;
+	resolve: (value: { content: string; meta?: ResourceMeta }) => void;
 	reject: (error: unknown) => void;
 }
 
@@ -104,6 +104,21 @@ test("binary metadata becomes a byte URL, a missing hash an absent side", async 
 	file.reads[1]?.resolve({ content: "", meta: { hash: null, byteLength: null, text: true } });
 	await settle();
 	expect(file.state()).toMatchObject({ status: "ready", content: { kind: "absent" } });
+});
+
+test("a host that predates resource metadata reads as provisional text, like a file tab", async () => {
+	const file = harness();
+	file.reads[0]?.resolve({ content: "legacy body" });
+	await settle();
+	expect(file.state()).toMatchObject({
+		status: "ready",
+		content: { kind: "text", text: "legacy body", hash: "" },
+		meta: { hash: null, byteLength: null, text: true },
+	});
+	file.change();
+	file.reads[1]?.resolve({ content: "legacy edit" });
+	await settle();
+	expect(text(file.state())).toBe("legacy edit");
 });
 
 test("stopping unsubscribes and ignores reads still in flight", async () => {

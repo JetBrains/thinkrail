@@ -63,7 +63,10 @@ export interface ResourceHost {
 	bytesUrl(workspaceId: string, path: string, oid?: string | null): string;
 	openFile(workspaceId: string, path: string, options?: { keep?: boolean }): void;
 	openComparison(workspaceId: string, before: string, path: string): void;
-	readFile(workspaceId: string, path: string): Promise<{ content: string; meta: ResourceMeta }>;
+	readFile(
+		workspaceId: string,
+		path: string,
+	): Promise<{ content: string; meta?: ResourceMeta | undefined }>;
 	subscribeFileChanges(
 		workspaceId: string,
 		onChange: (paths: readonly string[] | null) => void,
