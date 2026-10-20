@@ -13,7 +13,7 @@
 		"dev": "bun run --watch src/index.ts",
 		"build": "bun build src/index.ts --outdir dist --target bun",
 		"build:binary": "bun run scripts/build-binary.ts",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsrs --noEmit",
 		"test": "bun test"
 	},
 	"dependencies": {
@@ -22,6 +22,7 @@
 	},
 	"devDependencies": {
 		"@types/bun": "catalog:",
+		"tsrs": "catalog:",
 		"typescript": "catalog:"
 	}
 }

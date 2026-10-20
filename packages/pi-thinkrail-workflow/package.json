@@ -12,7 +12,7 @@
 		"workflow"
 	],
 	"scripts": {
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsrs --noEmit",
 		"test": "bun test"
 	},
 	"peerDependencies": {
@@ -21,6 +21,7 @@
 	"devDependencies": {
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@types/bun": "catalog:",
+		"tsrs": "catalog:",
 		"typescript": "catalog:"
 	},
 	"pi": {

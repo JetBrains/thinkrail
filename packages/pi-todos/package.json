@@ -18,7 +18,7 @@
 		"todos"
 	],
 	"scripts": {
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsrs --noEmit",
 		"test": "bun test"
 	},
 	"peerDependencies": {
@@ -30,6 +30,7 @@
 		"@earendil-works/pi-ai": "catalog:",
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@types/bun": "catalog:",
+		"tsrs": "catalog:",
 		"typebox": "catalog:",
 		"typescript": "catalog:"
 	},
