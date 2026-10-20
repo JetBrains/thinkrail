@@ -239,7 +239,8 @@ treatment.
   the editor. A failed first status read shows no marks; a failed refresh keeps the last ones, like the
   Changed list. The tree's look is remembered per workspace across reloads (`store.filesTreeByWorkspace`:
   All expanded folders, Changed-tree collapsed folders shared by every scope, scroll per view through
-  `RememberedScrollArea`), persisted by the `filesTreeState` module (native stable preferences, else
+  `RememberedScrollArea` — a Changed view's scroll belongs to its scope and compare target, so changing
+  either starts at the top), persisted by the `filesTreeState` module (native stable preferences, else
   localStorage under a host-qualified key; hydrated from `main.tsx`, debounced writes plus a `pagehide`
   flush; windows share it, last write wins, no live sync). A **Collapse all folders** `HeaderIconButton` at the
   right of the switch row collapses All, or \— only in Changed's Tree view with at least one change \—

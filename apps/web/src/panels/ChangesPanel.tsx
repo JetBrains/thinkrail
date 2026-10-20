@@ -59,12 +59,12 @@ export function ChangesPanel({
 	const scope = useAppStore((s) => selectDiffScope(s, workspaceId));
 	const workspace = useAppStore((s) => selectWorkspaceById(s, workspaceId));
 	const baseRef = useAppStore((s) => selectDiffBaseRef(s, workspaceId));
-	const highlightKey = `${scopeKey(scope)}:${baseRef}`;
+	const viewKey = `${scopeKey(scope)}:${baseRef}`;
 	const [highlight, setHighlight] = useState<{ key: string; path: string } | null>(null);
-	const highlighted = highlight?.key === highlightKey ? highlight.path : null;
+	const highlighted = highlight?.key === viewKey ? highlight.path : null;
 	const setHighlighted = useCallback(
-		(path: string | null) => setHighlight(path === null ? null : { key: highlightKey, path }),
-		[highlightKey],
+		(path: string | null) => setHighlight(path === null ? null : { key: viewKey, path }),
+		[viewKey],
 	);
 	const activeDiffTab = useAppStore((state) => {
 		const tab = selectActiveEditorTab(state, workspaceId);
@@ -190,10 +190,10 @@ export function ChangesPanel({
 				/>
 			</div>
 			<RememberedScrollArea
-				key={`${changesView}:${scopeKey(scope)}`}
+				key={`${changesView}:${viewKey}`}
 				workspaceId={workspaceId}
 				view={changesView === "tree" ? "changedTree" : "changedList"}
-				scope={scopeKey(scope)}
+				scope={viewKey}
 				className="min-h-0 flex-1"
 				viewportClassName="p-panel-inset"
 			>

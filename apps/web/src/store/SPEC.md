@@ -683,7 +683,7 @@ so a run that settled while the socket was down still arrives); every other cons
 **`filesTreeByWorkspace`** (read through **`selectFilesTreeView`**, a stable empty view when absent) is the
 Files tree's remembered look per workspace: All-mode `expanded` folders, Changed-tree `changedCollapsed`
 folders (one set for every scope), `scroll` per view (`all` / `changedList` / `changedTree`, each tagged with
-the scope it belongs to so another scope starts at the top), and `seenActivePath`. **`revealInFiles`** expands
+the scope and compare target it belongs to, so another scope or target branch starts at the top), and `seenActivePath`. **`revealInFiles`** expands
 every ancestor of a path and records it as seen in one write, so the auto-reveal can tell on return whether
 the active file changed meanwhile; every write is idempotent (an unchanged view keeps its identity) and a
 removed workspace's view is dropped in `applyWorkspaceRemoved`. Persistence lives outside the store, in
