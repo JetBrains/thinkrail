@@ -52,7 +52,10 @@ function listJsFiles(dir: string): string[] {
 }
 
 function opaqueImportsIn(fileName: string, source: string): string[] {
-	const { program } = parseSync(fileName, source, { lang: "js" });
+	const { program, errors } = parseSync(fileName, source, { lang: "jsx" });
+	if (errors.length > 0) {
+		throw new Error(`cannot parse ${fileName}: ${errors.map((error) => error.message).join("; ")}`);
+	}
 	const found: string[] = [];
 	new Visitor({
 		ImportExpression({ source: specifier }) {
@@ -102,7 +105,7 @@ for (const [name, root] of roots) {
 		}
 		const source = readFileSync(file, "utf8");
 		if (!/\bimport\s*\(/.test(source)) continue;
-		const imports = opaqueImportsIn(file, source);
+		const imports = opaqueImportsIn(id, source);
 		if (imports.length === 0) continue;
 		found.set(id, imports);
 	}
