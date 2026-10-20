@@ -10,11 +10,16 @@ export interface ChatRevealOptions {
 	topInset?: number;
 }
 
+export type ResultTarget =
+	| { kind: "command"; id: string }
+	| { kind: "subagent"; childSessionId: string };
+
 export interface ChatActions {
 	answerQuestion: (toolCallId: string, result: AskUserQuestionResult) => Promise<void>;
 	cancelAutomaticReveal: () => void;
 	focusComposer: () => void;
 	openSubagentTranscript: (childSessionId: string) => void;
+	resultOpener: (target: ResultTarget) => (() => void) | undefined;
 	revealChatElement: (element: HTMLElement, options: ChatRevealOptions) => void;
 	readMcpOutput?: ((toolCallId: string) => Promise<McpReadOutputResult>) | undefined;
 	openMcpSettings?: (() => void) | undefined;

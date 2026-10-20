@@ -45,6 +45,7 @@ function actions(overrides: Partial<ChatActions> = {}): ChatActions {
 		cancelAutomaticReveal: () => {},
 		focusComposer: () => {},
 		openSubagentTranscript: () => {},
+		resultOpener: () => undefined,
 		revealChatElement: () => {},
 		readMcpOutput: async () => ({ available: false, reason: "expired" }),
 		openMcpSettings: () => {},

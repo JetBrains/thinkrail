@@ -97,7 +97,7 @@ function DetailHeader({
 	return (
 		<div className="flex shrink-0 flex-col gap-8 border-border-muted border-b p-12">
 			<div className="flex min-w-0 items-center gap-8">
-				<KindGlyph resource={resource} state={state} />
+				<KindGlyph kind={resource.kind} state={state} />
 				<span className="min-w-0 truncate tr-title-dialog" title={resourceName(resource)}>
 					{resourceName(resource)}
 				</span>

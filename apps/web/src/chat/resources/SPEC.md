@@ -17,16 +17,18 @@ scrolling to old tool calls, and stoppable, without confusing it with user-owned
 they show the chat's MCP servers with their per-chat actions.
 
 All three render one host-reported snapshot through one row grammar; none is a permanent pane or a
-workbench tab. The inspector lives inside the chat column and leaves the composer usable.
+workbench tab. The inspector lives inside the chat column and leaves the composer usable. The same
+grammar also owns the transcript's **result row** (below), so a finished command or background
+subagent reads the same in the chat as in Finished.
 
 ## Boundary
 
 - **Owns:** props-driven `ResourcesButton`, `ResourcesAttention`, `ResourcesDock`, `ResourcesInspector`,
-  and `CommandLogView`, exported through `index.ts`, plus the private row/state vocabulary they share and
-  the private MCP rows (`mcpRow.tsx`). The inspector renders the roster and a detail *header*; the detail
-  *body* is a slot the parent fills.
+  `CommandLogView` and `ResultRow`, exported through `index.ts`, plus the private row/state vocabulary
+  they share and the private MCP rows (`mcpRow.tsx`). The inspector renders the roster and a detail
+  *header*; the detail *body* is a slot the parent fills, and so is the result row's expanded body.
 - **Public surface:** `ResourcesButton`, `ResourcesAttention`, `ResourcesDock`, `ResourcesInspector`,
-  `CommandLogView`.
+  `CommandLogView`, `ResultRow`, `ResultSource`.
 - **Allowed external deps:** contracts, React, Remix icons, shared UI primitives and theme utilities, and
   `lib` (the shared MCP state vocabulary). Time arrives as a `now` prop so formatting stays pure.
 - **Forbidden:** store/transport, server/portable extension packages, Pi value imports, process
@@ -102,6 +104,18 @@ authority, one request per server is in flight, and errors stay on the row.
 **Receipts.** The transcript's turn divider may carry a "N still running" chip supplied by the parent;
 it opens the inspector and is the only chat-body roster hint — there is no inline list.
 
+**Result row.** `ResultRow` renders one historical completion notice (the details of a
+`background-command-completion` or `subagent-completion` message) for the transcript: chevron · kind
+glyph with status dot · `Background` / `Subagent` · name · state · run time (the same coarse
+`formatElapsed` the Finished row shows) · exit badge (commands) · optional parent-supplied `meta` ·
+a one-line teaser · an optional open action ("Open log" / "Transcript"). The command teaser is the
+excerpt's last non-empty line with ANSI CSI sequences removed; a subagent teaser comes from the parent,
+which owns the report text. The teaser hides while expanded, gives way first at narrow widths, and keeps
+the code face for command output. The row is **controlled**: `expanded`, `onToggle` and `toggleRef` come
+from the parent's transcript fold state, and without `onToggle` there is nothing to expand. It never
+claims current authority — whether the open action exists is the parent's call from its own snapshot.
+Its status-dot ring is drawn against the transcript canvas, not the elevated roster surface.
+
 Command output is plain monospaced text, not an interactive terminal or interpreted markup. Show when
 only a bounded tail remains, and distinguish empty output, loading, transient read failure and
 permanently unavailable/evicted output. The history limit is runtime history, not a promise of retained
@@ -130,6 +144,7 @@ headless), or arbitrary shell-process discovery. Ordinary workspace terminal tab
 Cover empty/active/finished/stale/unavailable states, exact live counts, the dock's collapse and
 hidden-while-inspecting rule, the trigger's breathing-only-while-working and unknown-count marks, the MCP
 section's per-state actions, absence for older hosts and the attention marker, keyboard navigation and
-focus return, safe plain-text logs, row-specific stop failures and stop-all confirmation.
+focus return, safe plain-text logs, row-specific stop failures and stop-all confirmation, and the
+result row's state mapping, teaser derivation, controlled expansion and optional open action.
 Browser coverage must prove current-chat isolation, reload/reconnect rehydration, late completion while
 the inspector is closed, and no cancellation from view closure.

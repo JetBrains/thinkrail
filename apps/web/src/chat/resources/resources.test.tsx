@@ -311,6 +311,89 @@ test("command logs distinguish loading, empty, retry, permanent unavailability, 
 	expect(html).not.toContain("<strong>");
 });
 
+test("the result row maps a completion to the shared states, teases the last output line and stays collapsed unless told", () => {
+	const finished = {
+		id: "bg-1",
+		sessionId: "chat",
+		name: "full e2e <b>",
+		status: "completed" as const,
+		startedAt: 0,
+		finishedAt: 12 * 60_000 + 4_000,
+		exitCode: 1,
+		output: { text: "  1 failed\n\u001b[32m141 passed (12.1m)\u001b[39m\n\n", truncated: true },
+	};
+	const row = (overrides: Partial<ComponentProps<typeof resources.ResultRow>>) =>
+		renderToStaticMarkup(
+			<resources.ResultRow
+				source={{ kind: "command", details: finished }}
+				expanded={false}
+				{...overrides}
+			>
+				<pre>BODY</pre>
+			</resources.ResultRow>,
+		);
+	const collapsed = row({ onToggle: () => {} });
+	expect(collapsed).toContain("Failed");
+	expect(collapsed).toContain("12 min");
+	expect(collapsed).toContain("exit 1");
+	expect(collapsed).toContain("full e2e &lt;b&gt;");
+	expect(collapsed).toContain('data-testid="background-result-teaser"');
+	expect(collapsed).toContain(">141 passed (12.1m)<");
+	expect(collapsed).toContain('aria-expanded="false"');
+	expect(collapsed).not.toContain("BODY");
+	expect(collapsed).not.toContain('data-testid="background-result-open"');
+
+	const open = row({ onToggle: () => {}, expanded: true, onOpen: () => {} });
+	expect(open).toContain("BODY");
+	expect(open).not.toContain('data-testid="background-result-teaser"');
+	expect(open).toContain("Open log");
+
+	expect(row({})).not.toContain('data-testid="background-result-toggle"');
+	expect(row({ source: { kind: "command", details: { ...finished, exitCode: 0 } } })).toContain(
+		"Done",
+	);
+	expect(
+		row({
+			source: { kind: "command", details: { ...finished, status: "stopped", exitCode: null } },
+		}),
+	).toContain("Stopped");
+
+	const subagent = renderToStaticMarkup(
+		<resources.ResultRow
+			source={{
+				kind: "subagent",
+				details: {
+					childSessionId: "child",
+					roleName: "reviewer",
+					task: "review",
+					status: "aborted",
+					usage: {
+						input: 0,
+						output: 0,
+						cacheRead: 0,
+						cacheWrite: 0,
+						cost: 0,
+						turns: 0,
+						contextTokens: 0,
+					},
+					durationMs: 0,
+				},
+			}}
+			expanded={false}
+			meta="12 turns"
+			teaser="Verdict: approve"
+			onOpen={() => {}}
+		/>,
+	);
+	expect(subagent).toContain("Subagent");
+	expect(subagent).toContain("reviewer");
+	expect(subagent).toContain("Stopped");
+	expect(subagent).toContain("12 turns");
+	expect(subagent).toContain("Verdict: approve");
+	expect(subagent).toContain("Transcript");
+	expect(subagent).not.toContain("min<");
+});
+
 test("the trigger counts connected MCP servers without breathing, and the attention marker names what needs the user", () => {
 	const html = renderToStaticMarkup(
 		<TooltipProvider>

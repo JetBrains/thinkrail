@@ -27,9 +27,20 @@ export type ChatTurn =
 	| { kind: "system"; id: string; text: string; endedAt?: number }
 	| ({ kind: "compaction"; id: string } & CompactionState)
 	| { kind: "error"; id: string; text: string; recovery?: FailureRecovery }
-	| { kind: "backgroundCommandCompletion"; id: string; details: BackgroundCommandCompletionDetails }
-	| { kind: "subagentCompletion"; id: string; details: DelegationRunDetails; text: string }
-	| { kind: "reviewFix"; id: string; details: ReviewFixDetails; text: string }
+	| {
+			kind: "backgroundCommandCompletion";
+			id: string;
+			details: BackgroundCommandCompletionDetails;
+			timestamp: number;
+	  }
+	| {
+			kind: "subagentCompletion";
+			id: string;
+			details: DelegationRunDetails;
+			text: string;
+			timestamp: number;
+	  }
+	| { kind: "reviewFix"; id: string; details: ReviewFixDetails; text: string; timestamp: number }
 	| {
 			kind: "retry";
 			id: string;

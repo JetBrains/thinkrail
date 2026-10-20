@@ -206,8 +206,8 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
 - **The five `todo_*` tools** deliberately keep routine fallback receipts: their connected product surface
   is the chat plan, not a second renderer system in this module.
 - **`subagent/`** — delegation renderers for `pi-subagents`: `AgentCard` (the `Agent` tool — **primary**;
-  also registered for `get_subagent_result`, routine), the `SubagentCompletionCard` turn card, and the
-  pure `runDetails` readers/formatters; own child spec ([subagent/SPEC.md](subagent/SPEC.md)).
+  also registered for `get_subagent_result`, routine) and the pure `runDetails` readers/formatters (the
+  parent chat's background result row reuses them); own child spec ([subagent/SPEC.md](subagent/SPEC.md)).
 - **Shared pieces** — `CodeBlock` (shiki), `Collapsible` ("Show all N lines" fold for long output;
   callers supply a stable tool-call-derived id so state and geometry anchoring survive virtualization),
   `ToolFileLink` + exact-reference linked text backed by the parent chat module's shared

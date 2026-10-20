@@ -13,7 +13,7 @@ export function isTerminalRunStatus(status: DelegationRunStatus): boolean {
 	return status === "completed" || status === "error" || status === "aborted";
 }
 
-export function runCounters(
+export function usageCounters(
 	details: DelegationRunDetails,
 	tokens: "total" | "split" = "total",
 ): string[] {
@@ -28,8 +28,34 @@ export function runCounters(
 		);
 	}
 	if (u.cost > 0) parts.push(formatCost(u.cost));
+	return parts;
+}
+
+export function runCounters(
+	details: DelegationRunDetails,
+	tokens: "total" | "split" = "total",
+): string[] {
+	const parts = usageCounters(details, tokens);
 	if (details.durationMs > 0) parts.push(formatElapsed(details.durationMs));
 	return parts;
+}
+
+const COMPLETION_HEADER = /^Subagent "[^"\n]*" \([^)\n]*\) \w+:\n\n/;
+
+export function completionReport(text: string): string {
+	return text.replace(COMPLETION_HEADER, "").trim();
+}
+
+export function reportTeaser(report: string): string {
+	for (const raw of report.split("\n")) {
+		const line = raw
+			.trim()
+			.replace(/^(?:#{1,6}\s+|>\s*|[-*+]\s+|\d+[.)]\s+)/, "")
+			.replace(/\*\*|__|`/g, "")
+			.trim();
+		if (line) return line;
+	}
+	return "";
 }
 
 export function agentSummary({ args, result }: ToolRenderProps): string {

@@ -71,6 +71,28 @@ const text = (t: string): Block => ({ type: "text", text: t });
 
 const kinds = (rows: ReturnType<typeof deriveRows>) => rows.map((r) => r.kind);
 
+function commandResult(
+	id: string,
+	timestamp: number,
+	status: "completed" | "stopped" = "completed",
+): ChatTurn {
+	return {
+		kind: "backgroundCommandCompletion",
+		id,
+		timestamp,
+		details: {
+			id: `bg-${id}`,
+			sessionId: "s",
+			name: "e2e",
+			status,
+			startedAt: 0,
+			finishedAt: timestamp,
+			exitCode: status === "completed" ? 0 : null,
+			output: { text: "", truncated: false },
+		},
+	};
+}
+
 function messageRow(id: string, kind: "user" | "markdown"): ChatRow {
 	return kind === "user"
 		? { kind, id, message: { role: "user", content: id, timestamp: 0 } }
@@ -224,7 +246,7 @@ describe("deriveRows grouping", () => {
 		expect(rows[4]?.kind === "activity" && rows[4].steps.length).toBe(1);
 	});
 
-	test("a subagentCompletion turn breaks the run and maps 1:1 to its own row", () => {
+	test("a subagentCompletion turn closes the run's round and maps 1:1 to its own row", () => {
 		const details = {
 			childSessionId: "child-1",
 			roleName: "scout",
@@ -244,12 +266,12 @@ describe("deriveRows grouping", () => {
 		const turns: ChatTurn[] = [
 			user("u1"),
 			assistant("a1", [tc("t1")]),
-			{ kind: "subagentCompletion", id: "sc1", details, text: "the report" },
+			{ kind: "subagentCompletion", id: "sc1", details, text: "the report", timestamp: 0 },
 			assistant("a2", [tc("t2")]),
 		];
 		const rows = deriveRows(turns, {}, true);
-		expect(kinds(rows)).toEqual(["user", "activity", "subagentCompletion", "activity"]);
-		const row = rows[2];
+		expect(kinds(rows)).toEqual(["user", "activity", "divider", "subagentCompletion", "activity"]);
+		const row = rows[3];
 		expect(row?.kind === "subagentCompletion" && row.details.childSessionId).toBe("child-1");
 		expect(row?.kind === "subagentCompletion" && row.text).toBe("the report");
 	});
@@ -420,6 +442,84 @@ describe("deriveRows dividers", () => {
 		expect(divider.id).toBe("s1:divider");
 	});
 
+	test("a result after a settled round keeps that round's divider and opens its own round", () => {
+		const turns: ChatTurn[] = [
+			user("u1", 1_000),
+			assistant("a1", [tc("t1")], { timestamp: 3_000 }),
+			commandResult("r1", 600_000),
+			assistant("a2", [text("e2e is green")], { timestamp: 612_000 }),
+		];
+		const rows = deriveRows(turns, {}, false);
+		expect(kinds(rows)).toEqual([
+			"user",
+			"activity",
+			"divider",
+			"backgroundCommandCompletion",
+			"markdown",
+			"divider",
+		]);
+		const [first, second] = rows.filter((row) => row.kind === "divider");
+		if (first?.kind !== "divider" || second?.kind !== "divider") throw new Error("dividers");
+		expect(first.data).toMatchObject({ toolCount: 1, elapsedMs: 2_000 });
+		expect(second.data).toMatchObject({ toolCount: 0, elapsedMs: 12_000 });
+	});
+
+	test("a review-fix request and a subagent result open rounds too", () => {
+		const turns: ChatTurn[] = [
+			user("u1", 0),
+			assistant("a1", [text("done")], { timestamp: 1_000 }),
+			{
+				kind: "reviewFix",
+				id: "f1",
+				details: { itemId: "i", itemTitle: "t", comments: [] },
+				text: "",
+				timestamp: 5_000,
+			},
+			assistant("a2", [text("fixed")], { timestamp: 8_000 }),
+		];
+		const rows = deriveRows(turns, {}, false);
+		expect(kinds(rows)).toEqual([
+			"user",
+			"markdown",
+			"divider",
+			"reviewFix",
+			"markdown",
+			"divider",
+		]);
+		const last = rows.at(-1);
+		expect(last?.kind === "divider" && last.data.elapsedMs).toBe(3_000);
+	});
+
+	test("a result nobody reacts to (a user stop) gets no divider of its own", () => {
+		const turns: ChatTurn[] = [
+			user("u1", 0),
+			assistant("a1", [text("started")], { timestamp: 1_000 }),
+			commandResult("r1", 9_000, "stopped"),
+		];
+		expect(kinds(deriveRows(turns, {}, false))).toEqual([
+			"user",
+			"markdown",
+			"divider",
+			"backgroundCommandCompletion",
+		]);
+	});
+
+	test("a result delivered while the agent reacts closes the earlier round at once", () => {
+		const turns: ChatTurn[] = [
+			user("u1", 0),
+			assistant("a1", [text("renamed")], { timestamp: 1_000 }),
+			commandResult("r1", 2_000),
+			assistant("a2", [text("by the way…")], { streaming: true, timestamp: 2_500 }),
+		];
+		expect(kinds(deriveRows(turns, {}, true))).toEqual([
+			"user",
+			"markdown",
+			"divider",
+			"backgroundCommandCompletion",
+			"markdown",
+		]);
+	});
+
 	test("no divider while the round still streams", () => {
 		const rows = deriveRows(
 			[user("u1"), assistant("a1", [text("answering…")], { streaming: true })],
@@ -447,7 +547,7 @@ function assistantWithPaths(
 	);
 }
 
-test("turnDivider is null with no user turn to open the round (nothing to summarize)", () => {
+test("turnDivider is null with no turn to open the round (nothing to summarize)", () => {
 	expect(turnDivider([done("s1", 1000)], 0)).toBeNull();
 });
 
@@ -673,6 +773,21 @@ test("each run belongs to the round whose prompt started it, even across a quick
 	// a round that failed before any assistant message still ends at the next prompt
 	const failed: ChatTurn[] = [user("u1", 10_000), user("u2", 12_000), done("s2", 25_000)];
 	expect(turnDivider(failed, 2, () => false, records)?.receipt?.scope.id).toBe("r2");
+});
+
+test("a result splits receipts: the earlier run stays with its prompt, the wake-up run with the result", () => {
+	const turns: ChatTurn[] = [
+		user("u1", 10_000),
+		assistantWithPaths("a1", [{ name: "write", path: "x.ts" }], 12_000),
+		commandResult("r1", 60_000),
+		assistantWithPaths("a2", [{ name: "edit", path: "y.ts" }], 65_000),
+	];
+	const records = [agentTurn("run1", 10_200, ["x.ts"]), agentTurn("run2", 60_050, ["y.ts"], "c")];
+	expect(turnDivider(turns, 1, () => false, records)?.receipt?.scope.id).toBe("run1");
+	const reaction = turnDivider(turns, 3, () => false, records);
+	expect(reaction?.receipt?.scope.id).toBe("run2");
+	expect(reaction?.changedFiles).toEqual(["y.ts"]);
+	expect(reaction?.elapsedMs).toBe(5_000);
 });
 
 test("prompts less than one second apart cannot steal one another's receipts", () => {

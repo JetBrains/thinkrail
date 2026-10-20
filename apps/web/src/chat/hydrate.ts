@@ -14,6 +14,7 @@ import {
 } from "@thinkrail/contracts";
 import { userText } from "../lib";
 import { assistantFailureText } from "./assistantFailure";
+import { insertRoundCloser } from "./roundCloser";
 import type { ChatTurn, ToolResultState } from "./types";
 
 export interface HydratedRuntime {
@@ -76,7 +77,12 @@ export function messagesToRuntime(
 			askAnswers[message.details.toolCallId] = message.details.result;
 		} else if (isBackgroundCommandCompletionMessage(message)) {
 			turnId = transcriptTurnId(message, index, options);
-			turns.push({ kind: "backgroundCommandCompletion", id: turnId, details: message.details });
+			turns.push({
+				kind: "backgroundCommandCompletion",
+				id: turnId,
+				details: message.details,
+				timestamp: message.timestamp,
+			});
 		} else if (isSubagentCompletionMessage(message)) {
 			turnId = transcriptTurnId(message, index, options);
 			turns.push({
@@ -84,6 +90,7 @@ export function messagesToRuntime(
 				id: turnId,
 				details: message.details,
 				text: customMessageText(message.content),
+				timestamp: message.timestamp,
 			});
 		} else if (isTodoReviewFixMessage(message)) {
 			turnId = transcriptTurnId(message, index, options);
@@ -92,6 +99,7 @@ export function messagesToRuntime(
 				id: turnId,
 				details: message.details,
 				text: customMessageText(message.content),
+				timestamp: message.timestamp,
 			});
 		}
 		turnIdByMessageIndex.push(turnId);
@@ -105,15 +113,16 @@ export function messagesToRuntime(
 	const failure = assistantFailureText(
 		lastSettlement === undefined ? persistedTerminal : lastSettlement,
 	);
-	if (failure)
-		turns.push({
-			kind: "error",
-			id: options.idScope
-				? `${options.idScope}:error:${persistedTerminal?.timestamp ?? "settlement"}`
-				: crypto.randomUUID(),
-			text: failure,
-			recovery: "try-again",
-		});
+	const closed = failure
+		? insertRoundCloser(turns, {
+				kind: "error",
+				id: options.idScope
+					? `${options.idScope}:error:${persistedTerminal?.timestamp ?? "settlement"}`
+					: crypto.randomUUID(),
+				text: failure,
+				recovery: "try-again",
+			})
+		: turns;
 
-	return { turns, toolResults, askAnswers, turnIdByMessageIndex };
+	return { turns: closed, toolResults, askAnswers, turnIdByMessageIndex };
 }

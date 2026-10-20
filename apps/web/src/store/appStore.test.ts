@@ -683,6 +683,7 @@ test("a subagent-completion custom message_end appends a subagentCompletion turn
 				content: 'Subagent "scout" (child-1) completed:\n\nthe report',
 				display: true,
 				details,
+				timestamp: 4_200,
 			},
 		} as unknown as PiEvent,
 		"a",
@@ -691,6 +692,7 @@ test("a subagent-completion custom message_end appends a subagentCompletion turn
 	expect(turn?.kind).toBe("subagentCompletion");
 	expect(turn?.kind === "subagentCompletion" && turn.details.childSessionId).toBe("child-1");
 	expect(turn?.kind === "subagentCompletion" && turn.text).toContain("the report");
+	expect(turn?.kind === "subagentCompletion" && turn.timestamp).toBe(4_200);
 
 	const before = rt("a");
 	store.handlePiEvent(
@@ -936,6 +938,46 @@ test("a turn that ends in a provider error surfaces the error (not a false ✓ D
 	expect(err?.kind === "error" && err.text).toContain("gpt-5.5");
 	expect(failureRecovery("a")).toBe("try-again");
 	expect(after.turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(false);
+});
+
+test("a run's closer lands before a mid-run result that woke nobody, as hydration orders it", () => {
+	const store = useAppStore.getState();
+	const stopped = {
+		type: "message_end",
+		message: {
+			role: "custom",
+			customType: "background-command-completion",
+			content: "Cancelled background command",
+			display: true,
+			timestamp: 3,
+			details: {
+				id: "bg-1",
+				sessionId: "a",
+				name: "e2e",
+				status: "stopped",
+				startedAt: 1,
+				finishedAt: 3,
+				exitCode: null,
+				output: { text: "", truncated: false },
+			},
+		},
+	} as unknown as PiEvent;
+	for (const [terminal, closer] of [
+		[{ stopReason: "error", errorMessage: "provider overloaded" }, "error"],
+		[null, "system"],
+	] as const) {
+		store.openChatSession("ws1", "a", null, "medium");
+		store.handlePiEvent(agentStart, "a");
+		store.handlePiEvent(stopped, "a");
+		store.handlePiEvent(agentEnd, "a");
+		store.handlePiEvent(agentSettled(terminal), "a");
+		expect(
+			rt("a")
+				.turns.map((turn) => turn.kind)
+				.slice(-2),
+		).toEqual([closer, "backgroundCommandCompletion"]);
+		store.closeChatRuntime("a");
+	}
 });
 
 test("a terminal length stop is a visible failure, never a false ✓ Done", () => {

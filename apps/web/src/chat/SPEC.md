@@ -161,7 +161,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   user bubble, the markdown `text` for an assistant row — never the collapsed preview or any UI chrome.
   Only the **final** `markdown` row of a round is copyable, not the intermediate narration the agent emits
   between tool steps: `deriveMessageActions` marks a markdown row final when no later
-  `markdown`/`tool`/`activity` row precedes the next user turn (`finalAnswerRowIds`, supplied by every
+  `markdown`/`tool`/`activity` row precedes the next round opener (see `divider`) (`finalAnswerRowIds`, supplied by every
   transcript integration as `isFinalAnswer`); a non-final markdown row renders plain, without the action.
   Both go through **one shared layout**, `MessageWithCopy` (in `turns.tsx`): a `relative` wrapper that
   overlays the action **inside the role's bottom corner on the same line as content** — bottom-left for
@@ -207,11 +207,20 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   still renders directly. Non-empty text, primary tools, and non-assistant turns break the outer run. Only
   its trailing instance carries the live ticker. Errored routine tools get **no special treatment**
   (deliberate — agents often recover; `ErrorTurn` and primary error-auto-expand are the safety nets).
-- `subagentCompletion` — a `subagent-completion` custom message: a detached (background) subagent run's
-  terminal report, injected into the parent by `pi-subagents` when the run finishes. Rendered as a compact
-  self-framed card (`tools/subagent/SubagentCompletionCard`) — **the** terminal signal for a background
-  run, whose `Agent` tool card froze at its ack (why + card anatomy:
-  [tools/subagent/SPEC.md](tools/subagent/SPEC.md)). Never folded into activity groups.
+- `backgroundCommandCompletion` / `subagentCompletion` — the **result** of background work: a
+  `background-command-completion` or `subagent-completion` custom message, the terminal report of a
+  background command or detached subagent whose start (a routine tool call / a frozen `Agent` card) and
+  live phase (the Resources dock) live elsewhere. Both render as **one collapsed row** in the Resources
+  grammar (`BackgroundResult.tsx` wrapping `resources`' `ResultRow`, [[submodule-web-chat-resources]]):
+  state, run time, exit badge or usage counters, and a one-line teaser (the command's last output line,
+  the report's first line). **Always collapsed by default, failures included** — the red state carries
+  the signal and the agent's reaction follows directly; the old always-open 240px log read as an
+  unexplained box. Expanding shows the bounded excerpt (escaped plain text, wrapped, natural height, no
+  inner scroll) or the report Markdown without pi-subagents' `Subagent "x" (id) status:` header. The open
+  action comes from `ChatActions.resultOpener`: `ChatView` opens the Resources inspector at that row while
+  the snapshot holds it, a subagent that left the in-memory registry (host restart, older than the latest
+  twenty) falls back to the transcript dialog, and a command has no fallback (no action). The rows never
+  infer current resource authority. Never folded into activity groups.
 - `reviewFix` — a `todo-review-fix` custom message (#363): a plan-review verdict's fix request the host
   delivers to the worker chat as **structured `ReviewFixDetails`** (not a synthetic user turn). Rendered as
   a compact `ReviewFixCard` (`turns.tsx`, `data-testid="review-fix-card"`) — a one-line summary
@@ -223,6 +232,14 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   Distinct from the file-chat review-comments card above: that path stays a `<review …>` **user** message
   parsed by `reviewPackage.ts` (own `review-package-*` testids); only the todo-fix path is structured.
   Never folded into activity groups.
+- **Round openers.** A round opens at a user prompt *or* at an incoming event that wakes the agent on
+  its own — a background result or a `reviewFix` request (`opensRound` in `rows.ts`). Before this, a
+  result arriving after a settled round silently merged into it: that round's divider vanished and
+  reappeared below the reaction with the whole background wait in its elapsed time. Now the earlier
+  divider stays put, the reaction gets its own divider timed from the event's message timestamp, and an
+  opener never closes a round itself (a user-stopped result with no reaction gets no divider). The same
+  boundary drives `deriveMessageActions` and receipt matching. A wake-up delivered while the agent is busy
+  shares that pi run, so its receipt stays with the preceding round (accepted).
 - `divider` — the round-end summary (`TurnDivider` + pure `turnDivider` deriver), anchored the instant a
   round ends: elapsed time, tool-call count, and the round's written files as **two chips split by owning
   tool** — “N specs” and “N files changed”. The split is a **partition** (a path lands on exactly
@@ -248,7 +265,7 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
 - **The host's turn receipt beats tool arguments.** `deriveRows` also takes **this chat's** recorded agent
   runs (`store.turnsByWorkspace` filtered by `sessionId` in `ChatTranscript` — a workspace's other chats write
   files too); `matchTurnReceipt` joins them to a round by the run's start time, from the
-  prompt up to (excluding) the *next* prompt. Both timestamps come from the host, and pi timestamps
+  round's opener up to (excluding) the *next* opener. Both timestamps come from the host, and pi timestamps
   the user message before starting the run, so no clock-skew allowance belongs here: shifting the
   interval backwards steals receipts when prompts are less than a second apart. The canonical user echo
   replaces the optimistic message while retaining its row identity and attachment labels, so live receipts
@@ -471,7 +488,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `HydratedRuntime`) from a persisted transcript so a reconnecting/second client renders identically to
   the live path (same `raw` result shape). One-shot consumers keep freshly minted ids; a repeated-snapshot
   consumer supplies its session scope to derive stable role/timestamp/index ids for persisted turns. When supplied, the live summary's `lastSettlement` is authoritative; otherwise only the
-  final conversational assistant can synthesize an error/length turn. Compacted historical length attempts
+  final conversational assistant can synthesize an error/length turn, placed by the same
+  `insertRoundCloser` rule as the live settlement marker (below). Compacted historical length attempts
   followed by later messages remain history, not a stale current warning. One retry-presentation rule on
   both paths: pi persists a superseded auto-retry attempt ("keep in session for history") that the live
   reducer dropped on `auto_retry_start`, so hydration hides an errored assistant message immediately
@@ -487,8 +505,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   the two stay aligned), and a message that
   ended in `stopReason: "error"` maps to its own assistant turn's id, never the synthesized error turn's.
   `custom` messages: `ask-user-answers` indexes into `askAnswers` (never a turn — the questionnaire card
-  is its rendering); `subagent-completion` **becomes its own `subagentCompletion` turn** (the completion
-  card is transcript-positioned, so it maps its message index too); `todo-review-fix` **becomes its own
+  is its rendering); `subagent-completion` **becomes its own `subagentCompletion` turn** (the result
+  row is transcript-positioned, so it maps its message index too); `todo-review-fix` **becomes its own
   `reviewFix` turn** (same positioning); unknown customTypes are ignored. No
   store/transport/shiki.
 - **Jump-to-message** (`chatLocationRequest` — set by `useHistorySearch.ts`'s `openMessage` on Enter over
@@ -1388,7 +1406,8 @@ connecting, and the `mcp.list` re-read is what makes it refresh status and push 
 The divider's "still running" chip and the dock keep counting work only. No PID is shown — pi exposes
 none — and there is no immediate per-server stop.
 
-The dependency edges are `ChatView`/`useChatResources` → `resources`, `store`, `transport`, and
+The dependency edges are `ChatView`/`useChatResources` → `resources`, `store`, `transport`,
+`BackgroundResult` → `resources` (`ResultRow`) and `tools/subagent` (`runDetails` helpers), and
 `ChatView` → the transcript pane. The `resources` child stays props-only and imports no sibling tool
 implementation; it receives the shared 30 s clock as a `now` prop. Command logs are fetched by the
 integration hook and passed into its read-only view; the module never loads xterm.
@@ -1407,9 +1426,10 @@ to their action and current connection; acknowledgement and detail-close focus s
 [[submodule-web-chat-resources]]. No per-token subagent progress or tool-result rewriting is needed
 for the header count.
 
-`backgroundCommandCompletion` is a fold-breaking historical row, recognized by the contracts guard
-in both live reduction and hydration. `BackgroundCommandCompletion` is props-only and renders the
-terminal summary and bounded output as escaped monospaced plain text, never Markdown or live authority.
+`backgroundCommandCompletion` is a fold-breaking historical row and a round opener, recognized by the
+contracts guard in both live reduction and hydration and carrying the message `timestamp`. Its row
+(`BackgroundCommandResult`) renders the terminal summary and bounded output as escaped plain text, never
+Markdown or live authority.
 Unknown custom messages retain their existing behavior.
 
 ## Boundary
@@ -1494,11 +1514,16 @@ message's true terminal is **`message_end`**: the reducer adopts the final messa
 `stopReason`, how renderers spot dead tool calls) and clears that message's `streaming` flag **there**.
 `agent_end` is only an attempt boundary (for a tool-calling message it arrives after its tools ran, but
 it can still precede auto-compaction/retry); `agent_settled` alone closes the automatic run, clears the
-session loader, and appends one success/error marker. A successful overflow `compaction_end` with
+session loader, and adds one success/error marker through `insertRoundCloser` (`roundCloser.ts`, shared with
+hydration): the marker goes before any trailing results that woke nobody (a stopped command, a
+user-aborted subagent — the extensions' no-`triggerTurn` cases). Such a result may be appended before or
+after settlement depending on delivery timing; one rule on both paths keeps a round's closer and divider
+ahead of it, so live and reloaded rows agree. A successful overflow `compaction_end` with
 `willRetry: true` removes the superseded errored/truncated attempt, matching Pi's rebuilt context. Tool results are
 indexed by `toolCallId` in `toolResults`; `ask-user-answers` custom messages index into `askAnswers`
 (never the turn list — the questionnaire card is their rendering); `subagent-completion` custom messages
-append a `subagentCompletion` turn (the shared contracts guard narrows both, on the live and read paths). The view re-derives rows each render
+append a `subagentCompletion` turn with the message `timestamp` (the shared contracts guard narrows both,
+on the live and read paths). The view re-derives rows each render
 (`deriveRows` is pure; `ChatTranscript` memoizes it, then reuses unchanged row objects via `stabilizeRows`
 kept in state) — stable row/step ids keep fold state across snapshots.
 
