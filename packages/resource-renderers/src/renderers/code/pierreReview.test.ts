@@ -23,8 +23,7 @@ function thread(id: string, line: number): ReviewThread {
 	};
 }
 
-function surface(threads: ReviewThread[], focusId?: string): SurfaceReview {
-	const focused = focusId ? threads.find((candidate) => candidate.id === focusId) : undefined;
+function surface(threads: ReviewThread[]): SurfaceReview {
 	return {
 		threads,
 		commenting: {
@@ -36,7 +35,7 @@ function surface(threads: ReviewThread[], focusId?: string): SurfaceReview {
 			onDeleteComment: async () => {},
 			onUpdateComment: async () => {},
 		},
-		focus: focused ? { id: focused.id, anchor: focused.anchor } : null,
+		focus: null,
 		onFocusHandled: () => {},
 	};
 }
