@@ -349,7 +349,7 @@ async function recordVerdict(
 				at: Date.now(),
 			});
 		} catch (error) {
-			log.warn(`review guide was not recorded for ${params.workspaceId}`, error as Error);
+			log.warn(`review guide was not recorded for ${params.workspaceId}`, error);
 		}
 	};
 	if (result.verdict === "approve") {

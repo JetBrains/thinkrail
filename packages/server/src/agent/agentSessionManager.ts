@@ -1030,7 +1030,7 @@ export async function applyPiResourceTrust(
 			dispositions[sessionId] = await requestSessionReload(sessionId);
 		} catch (error) {
 			if (!entry.disposed && !entry.resourcesClosing && !hasFailedMcpReload(sessionId)) {
-				log.warn(`trust reload failed for ${sessionId}`, error as Error);
+				log.warn(`trust reload failed for ${sessionId}`, error);
 			}
 			dispositions[sessionId] = "failed";
 		}
@@ -1424,7 +1424,7 @@ async function createParentSessionInternal(
 			try {
 				mcpToolGrantWriter(workspaceId, server, target, tool);
 			} catch (error) {
-				log.warn(`could not save the MCP grant for ${tool}`, error as Error);
+				log.warn(`could not save the MCP grant for ${tool}`, error);
 			}
 		},
 	});
