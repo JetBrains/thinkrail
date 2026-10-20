@@ -488,7 +488,10 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `HydratedRuntime`) from a persisted transcript so a reconnecting/second client renders identically to
   the live path (same `raw` result shape). One-shot consumers keep freshly minted ids; a repeated-snapshot
   consumer supplies its session scope to derive stable role/timestamp/index ids for persisted turns. When supplied, the live summary's `lastSettlement` is authoritative; otherwise only the
-  final conversational assistant can synthesize an error/length turn. Compacted historical length attempts
+  final conversational assistant can synthesize an error/length turn. That turn lands where the live
+  reducer put it at settlement: before any trailing results that woke nobody (a stopped command, a
+  user-aborted subagent — the extensions' own no-`triggerTurn` cases), so a failed round keeps its error
+  and divider ahead of a later reaction-less result. Compacted historical length attempts
   followed by later messages remain history, not a stale current warning. One retry-presentation rule on
   both paths: pi persists a superseded auto-retry attempt ("keep in session for history") that the live
   reducer dropped on `auto_retry_start`, so hydration hides an errored assistant message immediately

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { TranscriptMessage } from "@thinkrail/contracts";
 import { ASK_USER_ANSWERS_CUSTOM_TYPE } from "@thinkrail/contracts";
 import { messagesToRuntime } from "./hydrate";
+import { deriveRows } from "./rows";
 import { readRunDetails } from "./tools/subagent/runDetails";
 
 type Message = TranscriptMessage;
@@ -69,6 +70,52 @@ test("an assistant turn that ended in a provider error hydrates a following erro
 	const err = turns.find((t) => t.kind === "error");
 	expect(err?.kind === "error" && err.text).toContain("gpt-5.5");
 	expect(err?.kind === "error" ? err.recovery : undefined).toBe("try-again");
+});
+
+test("a failed round keeps its error before a later user-stopped result that woke nobody", () => {
+	const user = { role: "user", content: "start it", timestamp: 1 } as const;
+	const failed = {
+		role: "assistant",
+		content: [],
+		stopReason: "error",
+		errorMessage: "provider overloaded",
+		timestamp: 2,
+	};
+	const stopped = {
+		role: "custom",
+		customType: "background-command-completion",
+		content: "Cancelled background command",
+		display: true,
+		timestamp: 3,
+		details: {
+			id: "bg-1",
+			sessionId: "s",
+			name: "e2e",
+			status: "stopped",
+			startedAt: 1,
+			finishedAt: 3,
+			exitCode: null,
+			output: { text: "", truncated: false },
+		},
+	};
+	const hydrated = messagesToRuntime([user, failed, stopped] as unknown as Message[]);
+	expect(hydrated.turns.map((t) => t.kind)).toEqual([
+		"user",
+		"assistant",
+		"error",
+		"backgroundCommandCompletion",
+	]);
+	expect(deriveRows(hydrated.turns, hydrated.toolResults, false).map((r) => r.kind)).toEqual([
+		"user",
+		"error",
+		"divider",
+		"backgroundCommandCompletion",
+	]);
+
+	const woke = { ...stopped, details: { ...stopped.details, status: "completed", exitCode: 0 } };
+	expect(messagesToRuntime([user, failed, woke] as unknown as Message[]).turns.at(-1)?.kind).toBe(
+		"error",
+	);
 });
 
 test("an assistant turn that ended at length hydrates a visible truncation failure", () => {

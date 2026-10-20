@@ -112,8 +112,10 @@ export function messagesToRuntime(
 	const failure = assistantFailureText(
 		lastSettlement === undefined ? persistedTerminal : lastSettlement,
 	);
-	if (failure)
-		turns.push({
+	if (failure) {
+		let at = turns.length;
+		while (at > 0 && isUnansweredResult(turns[at - 1])) at--;
+		turns.splice(at, 0, {
 			kind: "error",
 			id: options.idScope
 				? `${options.idScope}:error:${persistedTerminal?.timestamp ?? "settlement"}`
@@ -121,6 +123,13 @@ export function messagesToRuntime(
 			text: failure,
 			recovery: "try-again",
 		});
+	}
 
 	return { turns, toolResults, askAnswers, turnIdByMessageIndex };
+}
+
+function isUnansweredResult(turn: ChatTurn | undefined): boolean {
+	if (turn?.kind === "backgroundCommandCompletion") return turn.details.status === "stopped";
+	if (turn?.kind === "subagentCompletion") return turn.details.abortReason === "user";
+	return false;
 }
