@@ -62,6 +62,7 @@ function FilePreview({ path, before }: { path: string; before: string | undefine
 	const workspaceId = useResourceScope()?.workspaceId;
 	const [rendererId, setRendererId] = useState<string | undefined>(undefined);
 	const [layout, setLayout] = useState<ResourcePreviewLayout>("split");
+	const [viewState, setViewState] = useState<unknown>(undefined);
 	const [fullscreen, setFullscreen] = useState(false);
 	if (!host || !workspaceId) return null;
 	const openTab = () =>
@@ -81,7 +82,14 @@ function FilePreview({ path, before }: { path: string; before: string | undefine
 			<OpenTab className="size-14" />
 		</CardAction>
 	);
-	const shared = { path, before, rendererId, onRendererId: setRendererId };
+	const shared = {
+		path,
+		before,
+		rendererId,
+		onRendererId: setRendererId,
+		viewState,
+		onViewState: setViewState,
+	};
 	return (
 		<>
 			<ResourcePreview

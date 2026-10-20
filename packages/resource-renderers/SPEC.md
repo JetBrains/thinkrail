@@ -41,7 +41,9 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   refreshes and anchors review comments under the same path the host's fs events and review store use;
 - **`ResourcePreview`** — a self-loading file view, or with `before` a before/after diff of two workspace
   files, with the registry's toggle, the unplaced strip, review commenting and Send review, and caller slots
-  (`leading`, `actions`, controlled `rendererId` / `layout`); its diff waits behind the expensive-diff notice
+  (`leading`, `actions`, controlled `rendererId` / `layout`, and an opaque `viewState` it tags with the
+  renderer implementation that wrote it, so a renderer switch never restores another renderer's state and a
+  caller needs no reset); its diff waits behind the expensive-diff notice
   and virtualizes above `VIRTUALIZED_DIFF_LINES`, exactly like the app's diff surface;
 - the pieces panes compose around a renderer: the lazy `RendererView` / `RendererDiff` mounts (implementation
   identity = renderer id + phone class), `usePlacedThreadIds`, `UnplacedReviewStrip` /

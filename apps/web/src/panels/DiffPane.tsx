@@ -33,6 +33,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 function FileComparisonPane({ tab, before }: { tab: DiffTab; before: string }) {
 	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
 	const setDiffTabView = useAppStore((state) => state.setDiffTabView);
+	const setTabViewState = useAppStore((state) => state.setTabViewState);
 	return (
 		<div data-testid="diff-pane" data-compare className="flex h-full min-h-0 flex-col">
 			<ResourcePreview
@@ -43,6 +44,8 @@ function FileComparisonPane({ tab, before }: { tab: DiffTab; before: string }) {
 				onRendererId={(rendererId) => setTabRenderer(tab.workspaceId, tab.id, rendererId)}
 				layout={tab.view === "inline" ? "unified" : "split"}
 				onLayout={(layout) => setDiffTabView(tab.id, layout === "unified" ? "inline" : "split")}
+				viewState={tab.viewState}
+				onViewState={(viewState) => setTabViewState(tab.workspaceId, tab.id, viewState)}
 				leading={
 					<span
 						data-testid="diff-path"

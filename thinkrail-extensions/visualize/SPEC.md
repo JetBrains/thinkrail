@@ -59,7 +59,7 @@ completed `type: "file"` call renders `FileCard`: the title, the `before → pat
 renderers, diff and review comments as diff review. The card frame is a fixed 480px box (Monaco and bounded
 diffs need a height) whose toolbar adds **Open in tab** (`host.openFile` keep, or `host.openComparison` for a
 before/after) and **Full screen** (a 95vw × 90vh dialog rendering the same preview with Split/Inline; renderer
-choice is shared). The workspace and chat come from `useResourceScope`, which the chat transcript provides to
+choice and view state, such as the HTML preview width, are shared with the card). The workspace and chat come from `useResourceScope`, which the chat transcript provides to
 its rows, so review sends land in the chat that shows the card; with no host or scope (a subagent transcript)
 the card shows only the links. The
 registration is primary and expanded by default; its title or diagram/comparison/file summary is available

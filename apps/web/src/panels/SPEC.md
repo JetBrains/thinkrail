@@ -1926,7 +1926,7 @@ own section. The kebab menu (`plan-menu`, a
   optional `before` path; `openFileComparisonInTab` opens it (identity `compare:<before>:<path>`, named
   `before → after`). `DiffPane` forks on it: a comparison renders [[module-resource-renderers]]'
   `ResourcePreview` (both files read live from disk, no revert/hunk actions, comments on the two files'
-  worktree anchors, Split/Inline and renderer on the tab) instead of the git-backed `DiffSurface`. Its `scope`
+  worktree anchors, Split/Inline, renderer and view state on the tab) instead of the git-backed `DiffSurface`. Its `scope`
   is an inert `uncommitted` placeholder, so every git-scope reader of diff tabs — `DiffPane`, the Changes
   panel's active-diff match, layout identity and reload hydration (which installs a comparison without a
   `git.diffFile` read) — checks `before` first.

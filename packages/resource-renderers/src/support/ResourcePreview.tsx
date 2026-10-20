@@ -35,6 +35,8 @@ export interface ResourcePreviewProps {
 	onRendererId?: ((rendererId: string) => void) | undefined;
 	layout?: ResourcePreviewLayout | undefined;
 	onLayout?: ((layout: ResourcePreviewLayout) => void) | undefined;
+	viewState?: unknown;
+	onViewState?: ((viewState: unknown) => void) | undefined;
 	leading?: ReactNode;
 	actions?: ReactNode;
 	className?: string | undefined;
@@ -48,6 +50,23 @@ interface ResolvedProps extends ResourcePreviewProps {
 }
 
 const LOADING: LoadedFile = { status: "loading" };
+
+function implementationViewState(
+	props: Pick<ResourcePreviewProps, "viewState" | "onViewState">,
+	implementation: string,
+): { viewState: unknown; onViewState?: (state: unknown) => void } {
+	const { viewState, onViewState } = props;
+	const own =
+		typeof viewState === "object" &&
+		viewState !== null &&
+		Reflect.get(viewState, "implementation") === implementation;
+	return {
+		viewState: own ? Reflect.get(viewState, "state") : undefined,
+		...(onViewState
+			? { onViewState: (state: unknown) => onViewState({ implementation, state }) }
+			: {}),
+	};
+}
 
 const loading = <LoadingRegion rows={8} className="h-full p-12" />;
 
@@ -284,6 +303,7 @@ function ReviewedPreviewView(props: ResolvedProps & { file: ReadyFile; review: S
 				content={file.content}
 				review={review}
 				onPlacedThreadIds={onPlacedThreadIds}
+				{...implementationViewState(props, implementationKey)}
 			/>
 		</PreviewFrame>
 	);
@@ -384,6 +404,7 @@ function ReviewedPreviewDiff(
 					review={review}
 					onPlacedThreadIds={onPlacedThreadIds}
 					virtualize={lineCount > VIRTUALIZED_DIFF_LINES}
+					{...implementationViewState(props, implementationKey)}
 				/>
 			)}
 		</PreviewFrame>

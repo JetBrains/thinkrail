@@ -527,6 +527,52 @@ test("a before/after preview opens as a diff tab over the two files that survive
 	}
 });
 
+test("an HTML preview width carries into full screen and survives a comparison tab switch", async ({
+	page,
+}) => {
+	const cleanup = writeMockups({
+		"before.html": mockupHtml("Save"),
+		"after.html": mockupHtml("Save settings"),
+	});
+	try {
+		const card = await openVisualization(page, "file widths", {
+			type: "file",
+			path: `${MOCKUP_DIR}/after.html`,
+			before: `${MOCKUP_DIR}/before.html`,
+		});
+		const diff = card.getByTestId("resource-preview-diff");
+		await diff.getByTestId("html-viewport-phone").click();
+		await diff.getByTestId("tool-visualize-fullscreen").click();
+		const dialog = page.getByTestId("tool-visualize-fullscreen-dialog");
+		await expect(dialog.getByTestId("html-frame-box").first()).toHaveAttribute(
+			"data-viewport",
+			"phone",
+		);
+		await page.keyboard.press("Escape");
+		await expect(dialog).toBeHidden();
+
+		await diff.getByTestId("tool-visualize-open-tab").click();
+		const pane = page.locator('[data-testid="diff-pane"][data-compare]');
+		await pane.getByTestId("html-viewport-tablet").click();
+		await expect(pane.getByTestId("html-frame-box").first()).toHaveAttribute(
+			"data-viewport",
+			"tablet",
+		);
+		await page.locator('[data-testid="editor-tab"][data-kind="chat"]').first().click();
+		await expect(pane).toHaveCount(0);
+		await page
+			.locator('[data-testid="editor-tab"][data-kind="diff"]')
+			.filter({ hasText: "before.html → after.html" })
+			.click();
+		await expect(pane.getByTestId("html-frame-box").first()).toHaveAttribute(
+			"data-viewport",
+			"tablet",
+		);
+	} finally {
+		cleanup();
+	}
+});
+
 test("a huge before/after comparison waits behind the expensive-diff notice", async ({ page }) => {
 	const lines = (mark: string) =>
 		`${Array.from({ length: 3_000 }, (_, index) => `${mark} line ${index + 1}`).join("\n")}\n`;
