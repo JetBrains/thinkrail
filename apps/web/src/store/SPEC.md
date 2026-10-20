@@ -576,7 +576,8 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   change has been observed, never falsely clearing. That
   `syncedTick` is the workspace tick captured at the **start** of the skill-loading round-trip, immediately
   after the shared `workspace.watchReady` preparation (`selectWorkspaceTick`, snapshot by the caller before
-  `session.create`/`reloadResources`/`getMessages`), **not** at completion — so a skill change whose
+  `session.create`/`reloadResources`; a `getMessages` transcript read snapshots before its request and does
+  not wait for readiness), **not** at completion — so a skill change whose
   `fsChanged` frame folds while the load is in flight (which the load did not see) stays past the baseline
   and keeps the badge lit rather than being silently absorbed.
   The selector
