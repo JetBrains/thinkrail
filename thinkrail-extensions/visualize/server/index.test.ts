@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -137,6 +137,25 @@ describe("visualize server half", () => {
 		await expect(run({ type: "file", path: join(cwd, "before.html") })).rejects.toThrow(
 			/relative to the workspace/,
 		);
+	});
+
+	test("file checks follow the host's read guard: dot-dot names pass, .git and escaping links do not", async () => {
+		const root = mkdtempSync(join(tmpdir(), "visualize-guard-"));
+		const cwd = join(root, "workspace");
+		const outside = join(root, "outside");
+		mkdirSync(join(cwd, ".git"), { recursive: true });
+		mkdirSync(outside);
+		writeFileSync(join(cwd, "..draft.html"), "<p>draft</p>");
+		writeFileSync(join(cwd, ".git", "config"), "[core]");
+		writeFileSync(join(outside, "secret.html"), "<p>secret</p>");
+		symlinkSync(outside, join(cwd, "linked"), "junction");
+		const tool = loadTool();
+		const run = (path: string) =>
+			tool.execute("id", { type: "file", path }, undefined, undefined, { cwd });
+
+		await expect(run("..draft.html")).resolves.toBeDefined();
+		await expect(run(".git/config")).rejects.toThrow(/\.git directory is not shown/);
+		await expect(run("linked/secret.html")).rejects.toThrow(/a link points outside it/);
 	});
 
 	test("points the mockup guideline at the gitignored scratch directory", () => {

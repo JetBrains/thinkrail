@@ -13,7 +13,8 @@ pi install npm:@thinkrail/pi-visualize
 
 - **`visualize` tool** — `type: "diagram"` with raw Mermaid source, or `type: "comparison"` with options
   (name, description, pros, cons, `recommended`, optional inline Mermaid), or `type: "file"` with a
-  workspace `path` (and an optional `before` path for a before/after view), plus an optional `title`.
+  workspace `path` (and an optional `before` path to a different file for a before/after view), plus an
+  optional `title`.
   The tool's prompt guideline asks the agent to write a self-contained HTML mockup and show it this
   way whenever it proposes a UI change.
 - **Terminal rendering.** Flowcharts, state, sequence, class and ER diagrams, pies, mindmaps,

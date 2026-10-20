@@ -112,14 +112,17 @@ function ScopedResourcePreview(
 	props: ResourcePreviewProps & { workspaceId: string; sessionId: string | undefined },
 ) {
 	const [localRenderer, setLocalRenderer] = useState<string | undefined>(undefined);
+	const path = canonicalWorkspacePath(props.path);
+	const requested = props.before === undefined ? undefined : canonicalWorkspacePath(props.before);
+	const before = requested === path ? undefined : requested;
 	const resolved: ResolvedProps = {
 		...props,
-		path: canonicalWorkspacePath(props.path),
-		before: props.before === undefined ? undefined : canonicalWorkspacePath(props.before),
+		path,
+		before,
 		rendererId: props.onRendererId ? props.rendererId : localRenderer,
 		onRendererId: props.onRendererId ?? setLocalRenderer,
 	};
-	const { workspaceId, path, before } = resolved;
+	const { workspaceId } = resolved;
 	const modified = useWorkspaceFile(workspaceId, path);
 	const original = useWorkspaceFile(workspaceId, before);
 	const failure =

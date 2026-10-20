@@ -39,6 +39,9 @@ describe("validateShape", () => {
 		expect(() => validateShape({ type: "file" })).toThrow(/`path` is required/);
 		expect(() => validateShape({ type: "file", path: " " })).toThrow(/`path` is required/);
 		expect(() => validateShape({ type: "file", path: "a.html", before: "" })).toThrow(/`before`/);
+		expect(() => validateShape({ type: "file", path: "a.html", before: "./a.html" })).toThrow(
+			/names the same file/,
+		);
 	});
 });
 

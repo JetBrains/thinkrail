@@ -35,7 +35,8 @@ result in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes
 ## Decisions
 
 - **File previews reference workspace files; they never carry content.** `type: "file"` takes a
-  workspace path (plus an optional `before` path for a before/after view) rather than inline HTML, so a
+  workspace path (plus an optional `before` path for a before/after view, rejected when it names the same
+  file) rather than inline HTML, so a
   host renders it with its existing file renderers and review comments anchor to a real file the agent
   then edits in place. The tool's one `promptGuidelines` entry asks the agent to write a self-contained
   HTML mockup (inline CSS, `data:` images, controls drawn with styled elements because hosts may strip

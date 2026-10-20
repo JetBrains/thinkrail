@@ -42,8 +42,11 @@ its defensive fallback.
 - Invalid syntax surfaces as the package's `isError` tool result asking the model to correct and retry;
   the extension injects no prompt and forces no retry.
 
-File previews get `workspaceFileChecker`: a path must be relative, stay inside the session cwd and name a
-regular file, else the tool result asks the model to write it first. `scratchDir` is
+File previews get `workspaceFileChecker`: a path must be relative, stay inside the session cwd (lexically
+and after resolving links, with the host read guard's containment rule, so `..draft.html` is a name and not
+a parent), name a regular file and stay out of `.git`, else the tool result asks the model to write it first
+— the same paths the host's `fs.readFile` then serves, so the card never reports what the tool accepted as
+unreadable. `scratchDir` is
 `.thinkrail/context/mockups/`, inside the host's gitignored scratch dir, so mockups never become
 project changes.
 

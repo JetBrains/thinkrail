@@ -27,6 +27,15 @@ export function mermaidSources(params: VisualizeParams): MermaidSource[] {
 	);
 }
 
+function samePath(left: string, right: string): boolean {
+	const normalize = (path: string) =>
+		path
+			.trim()
+			.replaceAll("\\", "/")
+			.replace(/^(\.\/)+/, "");
+	return normalize(left) === normalize(right);
+}
+
 export function validateShape(params: VisualizeParams): void {
 	if (params.type === "diagram") {
 		if (!params.mermaid || params.mermaid.trim() === "") {
@@ -45,6 +54,11 @@ export function validateShape(params: VisualizeParams): void {
 		}
 		if (params.before !== undefined && params.before.trim() === "") {
 			throw new Error("visualize: `before` must be a non-empty path when given.");
+		}
+		if (params.before !== undefined && samePath(params.before, params.path)) {
+			throw new Error(
+				"visualize: `before` names the same file as `path`; omit `before` to show one file, or point it at a copy of the previous version.",
+			);
 		}
 		return;
 	}
