@@ -147,7 +147,7 @@ describe("workspace layout model", () => {
 			visible: true,
 			groups: [{ id: "bottom-folded", weight: 1, folded: true, tabs: [] }],
 		};
-		const attention = reconcileAttention(document);
+		const attention = reconcileAttention(document, undefined);
 		expect(
 			mutation(showSide(document, "right", 6, attention)).document.right.groups[0]?.folded,
 		).toBe(false);
