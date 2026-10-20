@@ -18,10 +18,11 @@ class MockNotification {
 	static throwOnConstruct = false;
 	onclick: ((event: { preventDefault: () => void }) => void) | null = null;
 	closed = false;
-	constructor(
-		public title: string,
-		public options: { body: string; tag: string; icon?: string },
-	) {
+	title: string;
+	options: { body: string; tag: string; icon?: string };
+	constructor(title: string, options: { body: string; tag: string; icon?: string }) {
+		this.title = title;
+		this.options = options;
 		if (MockNotification.throwOnConstruct) throw new TypeError("unsupported");
 		MockNotification.instances.push(this);
 	}
