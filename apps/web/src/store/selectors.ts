@@ -897,6 +897,29 @@ export function selectWorkspaceTick(
 	return state.fsChangesByWorkspace[workspaceId]?.tick ?? 0;
 }
 
+export function fsChangedPaths(change: {
+	paths: readonly string[];
+	truncated: boolean;
+}): readonly string[] | null {
+	return change.truncated || change.paths.length === 0 ? null : change.paths;
+}
+
+interface FileChangeState {
+	connectionGeneration: number;
+	fsChangesByWorkspace: Record<string, { paths: readonly string[]; truncated: boolean }>;
+}
+
+export function selectFileChangeSince(
+	state: FileChangeState,
+	previous: FileChangeState,
+	workspaceId: string,
+): readonly string[] | null | undefined {
+	if (state.connectionGeneration !== previous.connectionGeneration) return null;
+	const change = state.fsChangesByWorkspace[workspaceId];
+	if (!change || change === previous.fsChangesByWorkspace[workspaceId]) return undefined;
+	return fsChangedPaths(change);
+}
+
 export function selectCurrentRouteChatTarget(state: {
 	routeChatTarget: RouteChatTarget | null;
 	activeWorkspaceId: string | null;

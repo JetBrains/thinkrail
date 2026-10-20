@@ -10,6 +10,7 @@ import {
 import type { WorkspaceLayoutDocument } from "../shell/layout";
 import { type EditorTab, EMPTY_RUNTIME } from "./appStore";
 import {
+	fsChangedPaths,
 	isConnectedGeneration,
 	isDefaultWorkspace,
 	isExternalWorkspace,
@@ -27,6 +28,7 @@ import {
 	selectChatAttended,
 	selectCompletionMarkedUnread,
 	selectContextProject,
+	selectFileChangeSince,
 	selectHistoryTarget,
 	selectKnownChatLocation,
 	selectLayoutResourcePlacement,
@@ -766,5 +768,26 @@ describe("selectSupportsModelPicker", () => {
 		expect(selectSupportsModelPicker({ protocolVersion: MODEL_PICKER_PROTOCOL_VERSION })).toBe(
 			true,
 		);
+	});
+});
+
+describe("file change signal", () => {
+	const batch = (paths: string[], truncated = false) => ({ tick: 1, paths, truncated });
+
+	test("a truncated or pathless batch means anything may have changed", () => {
+		expect(fsChangedPaths(batch(["a.html"]))).toEqual(["a.html"]);
+		expect(fsChangedPaths(batch(["a.html"], true))).toBeNull();
+		expect(fsChangedPaths(batch([]))).toBeNull();
+	});
+
+	test("a new connection reports anything; an untouched workspace reports nothing", () => {
+		const previous = { connectionGeneration: 1, fsChangesByWorkspace: { ws: batch(["a.html"]) } };
+		expect(selectFileChangeSince(previous, previous, "ws")).toBeUndefined();
+		expect(
+			selectFileChangeSince({ ...previous, connectionGeneration: 2 }, previous, "ws"),
+		).toBeNull();
+		const next = { ...previous, fsChangesByWorkspace: { ws: batch(["b.html"]) } };
+		expect(selectFileChangeSince(next, previous, "ws")).toEqual(["b.html"]);
+		expect(selectFileChangeSince(next, previous, "other")).toBeUndefined();
 	});
 });

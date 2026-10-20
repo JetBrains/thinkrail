@@ -17,7 +17,7 @@ import { openFileComparisonInTab, openFileInTab } from "../panels/openTabs";
 import { resourceBytesUrl } from "../panels/resourcePane";
 import { SendReviewButton } from "../panels/SendReviewButton";
 import { useFileReview } from "../panels/useReviewCommenting";
-import { useAppStore } from "../store";
+import { selectFileChangeSince, useAppStore } from "../store";
 import { resolveThinkrailShikiTheme } from "../themes";
 import { getTransport } from "../transport";
 
@@ -48,9 +48,8 @@ const HOST: ResourceHost = {
 	readFile: (workspaceId, path) => getTransport().request("fs.readFile", { workspaceId, path }),
 	subscribeFileChanges: (workspaceId, onChange) =>
 		useAppStore.subscribe((state, previous) => {
-			const change = state.fsChangesByWorkspace[workspaceId];
-			if (!change || change === previous.fsChangesByWorkspace[workspaceId]) return;
-			onChange(change.truncated || change.paths.length === 0 ? null : change.paths);
+			const paths = selectFileChangeSince(state, previous, workspaceId);
+			if (paths !== undefined) onChange(paths);
 		}),
 	FileReview,
 	ReviewSend,

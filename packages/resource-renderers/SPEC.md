@@ -68,7 +68,8 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
 - `openFile(workspaceId, path, { keep? })` and `openComparison(workspaceId, before, path)` — navigation for
   relative document links (preview) and explicit Open-in-tab actions (keep).
 - `readFile(workspaceId, path)` and `subscribeFileChanges(workspaceId, onChange)` — `ResourcePreview`'s
-  content and live refresh (`null` paths mean "anything may have changed").
+  content and live refresh (`null` paths mean "anything may have changed": a truncated batch or a new
+  connection, whose missed pushes are never replayed).
 - `FileReview` (a render-prop component: `{ workspaceId, path, kind, sessionId?, children(review) }`) and
   `ReviewSend` — the host's review surface and Send review control; the optional session routes sends. The
   seam is a component, not a hook on the host object: passing hooks around as values breaks React's rules and
