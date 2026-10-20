@@ -83,6 +83,7 @@ export interface HunkTriage {
 
 export interface ResourceDiffProps {
 	resource: ResourceDescriptor;
+	originalResource?: ResourceDescriptor;
 	original: ResourceContent;
 	modified: ResourceContent;
 	layout: "split" | "unified";

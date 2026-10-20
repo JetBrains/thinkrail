@@ -32,9 +32,17 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   `useResourceHost`, `useOptionalResourceHost` and the `ResourceHost`, `ResourcePreferences`, `ResourceScope`,
   `ResourceFileReviewProps`, `ResourceReviewSendProps`, `ResourceMarkdown`, `ResourceCodeHost`,
   `ResourceCodeLanguage`, `ResourceMarkdownProps`, `MarkdownRehypePlugins` types;
+- the large-diff policy — `isDiffTooExpensive`, `estimateChangedLines`, `surfaceChangedLines`,
+  `surfaceLineCount`, `LARGE_DIFF_CHANGED_LINES`, `VIRTUALIZED_DIFF_LINES` — and its `ExpensiveDiffNotice`
+  (`diff-too-large` / **Show diff anyway**, with a caller action slot), shared by the app's diff surface and
+  `ResourcePreview` so a huge comparison never runs the unrestricted diff on its own;
+- `canonicalWorkspacePath` — the one workspace-path identity (POSIX separators, no `.` or empty segments,
+  inner `..` resolved); `describeResource` and `ResourcePreview` use it, so a `./`-prefixed tool path reads,
+  refreshes and anchors review comments under the same path the host's fs events and review store use;
 - **`ResourcePreview`** — a self-loading file view, or with `before` a before/after diff of two workspace
   files, with the registry's toggle, the unplaced strip, review commenting and Send review, and caller slots
-  (`leading`, `actions`, controlled `rendererId` / `layout`);
+  (`leading`, `actions`, controlled `rendererId` / `layout`); its diff waits behind the expensive-diff notice
+  and virtualizes above `VIRTUALIZED_DIFF_LINES`, exactly like the app's diff surface;
 - the pieces panes compose around a renderer: the lazy `RendererView` / `RendererDiff` mounts (implementation
   identity = renderer id + phone class), `usePlacedThreadIds`, `UnplacedReviewStrip` /
   `unplacedReviewEntries` / `focusedUnplacedEntry`, `ReviewThreadCard`,
@@ -146,7 +154,10 @@ a setter, and a sink for the renderer's hunk content keys; a renderer without it
 is never represented by a byte payload without a URL. `SurfaceReview` carries authoritative anchors; a
 renderer only projects selectors into geometry. `isPlaceable` answers whether at least one positioned
 selector has a geometry the renderer advertises for the requested view or diff intent, while `anchorLabel`
-is the shared compact reference. A diff renderer may report the thread ids it actually placed through
+is the shared compact reference. `ResourceDiffProps.originalResource` describes the original side when it is
+a different file (a file comparison); renderers that resolve relative assets or links from the document
+path — the rendered markdown diff — use it for the original side, and the visual diffs title that side with
+it; absent, both sides share `resource`. A diff renderer may report the thread ids it actually placed through
 `ResourceViewProps.onPlacedThreadIds` or `ResourceDiffProps.onPlacedThreadIds`; the pane treats
 capability-matching ids omitted from that set as unplaced too, covering renderer-local geometry such as a
 removed JSON pointer, deleted table cell, or collapsed context. A virtualized paged renderer reports against

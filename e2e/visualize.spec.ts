@@ -1,5 +1,5 @@
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
 	enterDefaultWorkspace,
@@ -8,6 +8,7 @@ import {
 	openPersistedChat,
 } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
+import { pierreLines } from "./fixtures/pierre";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const BASE_TS = 1_700_920_000_000;
@@ -75,7 +76,10 @@ const MOCKUP_DIR = ".thinkrail/context/mockups";
 function writeMockups(files: Record<string, string>): () => void {
 	const dir = join(E2E_FIXTURE_REPO, MOCKUP_DIR);
 	mkdirSync(dir, { recursive: true });
-	for (const [name, content] of Object.entries(files)) writeFileSync(join(dir, name), content);
+	for (const [name, content] of Object.entries(files)) {
+		mkdirSync(dirname(join(dir, name)), { recursive: true });
+		writeFileSync(join(dir, name), content);
+	}
 	return () => rmSync(join(E2E_FIXTURE_REPO, ".thinkrail"), { recursive: true, force: true });
 }
 
@@ -494,6 +498,70 @@ test("a before/after preview opens as a diff tab over the two files that survive
 		await expect(
 			page.locator('[data-testid="diff-pane"][data-compare]').locator("iframe"),
 		).toHaveCount(2);
+	} finally {
+		cleanup();
+	}
+});
+
+test("a huge before/after comparison waits behind the expensive-diff notice", async ({ page }) => {
+	const lines = (mark: string) =>
+		`${Array.from({ length: 3_000 }, (_, index) => `${mark} line ${index + 1}`).join("\n")}\n`;
+	const cleanup = writeMockups({
+		"huge-before.txt": lines("before"),
+		"huge-after.txt": lines("after"),
+	});
+	try {
+		const card = await openVisualization(page, "huge comparison", {
+			type: "file",
+			path: `${MOCKUP_DIR}/huge-after.txt`,
+			before: `${MOCKUP_DIR}/huge-before.txt`,
+		});
+		const diff = card.getByTestId("resource-preview-diff");
+		await expect(diff.getByTestId("diff-too-large")).toBeVisible();
+		await diff.getByTestId("diff-show-anyway").click();
+		await expect(diff.getByTestId("diff-too-large")).toHaveCount(0);
+		const diffView = diff.getByTestId("diff-view");
+		await expect(pierreLines(diffView, "before line 1").first()).toBeVisible({ timeout: 20_000 });
+		expect(await pierreLines(diffView).count()).toBeLessThan(1_000);
+	} finally {
+		cleanup();
+	}
+});
+
+test("a dot-relative mockup path still refreshes live when the file changes", async ({ page }) => {
+	const cleanup = writeMockups({ "live.html": mockupHtml("First draft") });
+	try {
+		const card = await openVisualization(page, "dot path", {
+			type: "file",
+			path: `./${MOCKUP_DIR}/live.html`,
+		});
+		const frame = card.getByTestId("resource-preview").frameLocator("iframe");
+		await expect(frame.getByText("First draft")).toBeVisible();
+		writeFileSync(join(E2E_FIXTURE_REPO, MOCKUP_DIR, "live.html"), mockupHtml("Second draft"));
+		await expect(frame.getByText("Second draft")).toBeVisible({ timeout: 15_000 });
+	} finally {
+		cleanup();
+	}
+});
+
+test("a markdown comparison resolves each side's images against its own file", async ({ page }) => {
+	const cleanup = writeMockups({
+		"before/doc.md": "# Flow\n\n![diagram](picture.svg)\n\nOld text.\n",
+		"after/doc.md": "# Flow\n\n![diagram](picture.svg)\n\nNew text.\n",
+	});
+	try {
+		const card = await openVisualization(page, "markdown comparison", {
+			type: "file",
+			path: `${MOCKUP_DIR}/after/doc.md`,
+			before: `${MOCKUP_DIR}/before/doc.md`,
+		});
+		const rendered = card.getByTestId("rendered-diff");
+		await expect(rendered.locator("ins").filter({ hasText: "New" }).first()).toBeVisible();
+		const sources = await rendered
+			.locator("img")
+			.evaluateAll((images) => images.map((image) => image.getAttribute("src") ?? ""));
+		expect(sources.some((src) => src.includes("/before/picture.svg"))).toBe(true);
+		expect(sources.some((src) => src.includes("/after/picture.svg"))).toBe(true);
 	} finally {
 		cleanup();
 	}

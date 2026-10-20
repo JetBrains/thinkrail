@@ -2,8 +2,10 @@ import type { ChangeReceipt, GitDiffScope, ResourceMeta } from "@thinkrail/contr
 import {
 	createAskAgentRequest,
 	describeResource,
+	ExpensiveDiffNotice,
 	type HunkActions,
 	type HunkTriage,
+	isDiffTooExpensive,
 	RendererDiff,
 	type ResourceContent,
 	type ResourceDescriptor,
@@ -11,8 +13,10 @@ import {
 	rendererImplementationKey,
 	resolveRenderers,
 	selectResourceRenderer,
+	surfaceLineCount,
 	UnplacedReviewStrip,
 	usePlacedThreadIds,
+	VIRTUALIZED_DIFF_LINES,
 } from "@thinkrail/resource-renderers";
 import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
@@ -22,7 +26,6 @@ import { selectWorkspaceIsRunning, toast, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { canOfferChangeMutations, scopeHasMutableModifiedSide } from "./changeMutationAvailability";
 import { splitPath } from "./changesModel";
-import { isDiffTooExpensive, surfaceLineCount, VIRTUALIZED_DIFF_LINES } from "./largeDiff";
 import { openFileInTab } from "./openTabs";
 import { PENDING_TEXT_META, resourceBytesUrl } from "./resourcePane";
 import { type FileReview, useFileReview } from "./useReviewCommenting";
@@ -308,21 +311,10 @@ export function DiffSurfaceBody({
 			/>
 			<div className={bodyClassName}>
 				{tooExpensive && !showLargeDiff ? (
-					<div data-testid="diff-too-large" className="flex flex-col items-start gap-8 px-12 py-8">
-						<p className="tr-text-ui text-text-muted">
-							This diff is too expensive to show automatically. Rendering it can freeze the app for
-							a while.
-						</p>
-						<div className="flex gap-8">
-							<Button
-								size="sm"
-								variant="outline"
-								data-testid="diff-show-anyway"
-								onClick={() => setShowLargeDiff(true)}
-							>
-								Show diff anyway
-							</Button>
-							{surface.modified.kind === "text" && reviewable ? (
+					<ExpensiveDiffNotice
+						onShowAnyway={() => setShowLargeDiff(true)}
+						actions={
+							surface.modified.kind === "text" && reviewable ? (
 								<Button
 									size="sm"
 									variant="ghost"
@@ -331,9 +323,9 @@ export function DiffSurfaceBody({
 								>
 									Open file
 								</Button>
-							) : null}
-						</div>
-					</div>
+							) : null
+						}
+					/>
 				) : (
 					<Suspense fallback={loading}>
 						<RendererDiff

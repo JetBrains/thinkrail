@@ -37,6 +37,7 @@ function caption(label: string, text: string | null): string {
 
 export default function SvgDiff({
 	resource,
+	originalResource = resource,
 	original,
 	modified,
 	review,
@@ -54,7 +55,7 @@ export default function SvgDiff({
 		present: originalText !== null,
 		content:
 			originalText === null ? null : (
-				<SvgContent text={originalText} tokens={tokens} path={resource.path} />
+				<SvgContent text={originalText} tokens={tokens} path={originalResource.path} />
 			),
 		caption: caption("Old", originalText),
 		intrinsicSize: originalSize,

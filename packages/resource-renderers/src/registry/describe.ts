@@ -1,9 +1,6 @@
 import type { GitDiffScope, ResourceMeta } from "@thinkrail/contracts";
+import { canonicalWorkspacePath } from "./paths";
 import type { ResourceDescriptor } from "./types";
-
-function normalizePath(path: string): string {
-	return path.replaceAll("\\", "/").replace(/^\.\/+/, "");
-}
 
 const LANGUAGE_BY_EXTENSION: Readonly<Record<string, string>> = {
 	ts: "typescript",
@@ -65,7 +62,7 @@ const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
 };
 
 function extension(path: string): string {
-	const name = normalizePath(path).split("/").at(-1) ?? path;
+	const name = canonicalWorkspacePath(path).split("/").at(-1) ?? path;
 	const dot = name.lastIndexOf(".");
 	return dot > 0 ? name.slice(dot + 1).toLowerCase() : "";
 }
@@ -84,7 +81,7 @@ export function describeResource(
 	const mime = meta.mime ?? inferredMime(path);
 	return {
 		workspaceId,
-		path: normalizePath(path),
+		path: canonicalWorkspacePath(path),
 		text: meta.text,
 		...(mime ? { mime } : {}),
 		...(meta.text && LANGUAGE_BY_EXTENSION[ext] ? { language: LANGUAGE_BY_EXTENSION[ext] } : {}),

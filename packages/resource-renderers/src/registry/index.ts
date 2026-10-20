@@ -1,4 +1,5 @@
 export { describeResource } from "./describe";
+export { canonicalWorkspacePath } from "./paths";
 export { registerResourceRenderer, resolveRenderers } from "./registry";
 export { anchorLabel, isPlaceable, outdatedReason, threadLabel } from "./review";
 export { rendererImplementationKey, rendererTestId, selectResourceRenderer } from "./selection";

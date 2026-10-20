@@ -26,6 +26,7 @@ function HtmlSide({
 
 export default function HtmlDiff({
 	resource,
+	originalResource = resource,
 	original,
 	modified,
 	viewState,
@@ -44,7 +45,7 @@ export default function HtmlDiff({
 			originalText === null ? null : (
 				<HtmlSide
 					text={originalText}
-					title={`Original preview of ${resource.path}`}
+					title={`Original preview of ${originalResource.path}`}
 					viewport={viewport}
 				/>
 			),

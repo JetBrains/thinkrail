@@ -5,9 +5,9 @@ import type {
 	GitFileStatus,
 	TurnChangeSet,
 } from "@thinkrail/contracts";
+import { VIRTUALIZED_DIFF_LINES } from "@thinkrail/resource-renderers";
 import { tupleKey } from "../lib";
 import { extendFolderChain, startFolderChain } from "./folderChains";
-import { VIRTUALIZED_DIFF_LINES } from "./largeDiff";
 
 export function statusNameClass(status: GitFileStatus): string {
 	switch (status) {

@@ -5,6 +5,7 @@ import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { type ResourceHost, useResourceEnvironment, useResourceHost } from "../host";
 import {
+	canonicalWorkspacePath,
 	describeResource,
 	type ResourceContent,
 	type ResourceRenderer,
@@ -14,6 +15,8 @@ import {
 	type SurfaceReview,
 	selectResourceRenderer,
 } from "../registry";
+import { ExpensiveDiffNotice } from "./ExpensiveDiffNotice";
+import { isDiffTooExpensive, surfaceLineCount, VIRTUALIZED_DIFF_LINES } from "./largeDiff";
 import { RendererDiff, RendererView, usePlacedThreadIds } from "./rendererMount";
 import { UnplacedReviewStrip } from "./UnplacedReviewStrip";
 
@@ -139,6 +142,8 @@ function ScopedResourcePreview(
 	const [localRenderer, setLocalRenderer] = useState<string | undefined>(undefined);
 	const resolved: ResolvedProps = {
 		...props,
+		path: canonicalWorkspacePath(props.path),
+		before: props.before === undefined ? undefined : canonicalWorkspacePath(props.before),
 		rendererId: props.onRendererId ? props.rendererId : localRenderer,
 		onRendererId: props.onRendererId ?? setLocalRenderer,
 	};
@@ -362,6 +367,10 @@ function ReviewedPreviewDiff(
 		() => describeResource(workspaceId, path, descriptorMeta),
 		[workspaceId, path, descriptorMeta],
 	);
+	const originalResource = useMemo(
+		() => describeResource(workspaceId, before, original.meta),
+		[workspaceId, before, original.meta],
+	);
 	const candidates = useMemo(
 		() => resolveRenderers(resource, "diff", { mobile }),
 		[resource, mobile],
@@ -372,6 +381,15 @@ function ReviewedPreviewDiff(
 	const paths = useMemo(() => [path, before], [path, before]);
 	const reviews = useMemo(() => [after, prior], [after, prior]);
 	const layout = mobile ? "unified" : (props.layout ?? "unified");
+	const tooExpensive = useMemo(
+		() => isDiffTooExpensive(original.content, modified.content),
+		[original.content, modified.content],
+	);
+	const lineCount = useMemo(
+		() => surfaceLineCount(original.content, modified.content),
+		[original.content, modified.content],
+	);
+	const [showAnyway, setShowAnyway] = useState(false);
 
 	return (
 		<PreviewFrame
@@ -397,18 +415,24 @@ function ReviewedPreviewDiff(
 				/>
 			}
 		>
-			<RendererDiff
-				key={implementationKey}
-				renderer={renderer}
-				implementationKey={implementationKey}
-				resource={resource}
-				original={original.content}
-				modified={modified.content}
-				layout={layout}
-				ignoreWhitespace={false}
-				review={review}
-				onPlacedThreadIds={onPlacedThreadIds}
-			/>
+			{tooExpensive && !showAnyway ? (
+				<ExpensiveDiffNotice onShowAnyway={() => setShowAnyway(true)} />
+			) : (
+				<RendererDiff
+					key={implementationKey}
+					renderer={renderer}
+					implementationKey={implementationKey}
+					resource={resource}
+					originalResource={originalResource}
+					original={original.content}
+					modified={modified.content}
+					layout={layout}
+					ignoreWhitespace={false}
+					review={review}
+					onPlacedThreadIds={onPlacedThreadIds}
+					virtualize={lineCount > VIRTUALIZED_DIFF_LINES}
+				/>
+			)}
 		</PreviewFrame>
 	);
 }

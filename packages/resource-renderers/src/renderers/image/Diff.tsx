@@ -57,6 +57,7 @@ function caption(label: string, size: Size | null, content: ResourceContent): st
 
 export default function ImageDiff({
 	resource,
+	originalResource = resource,
 	original,
 	modified,
 	review,
@@ -83,7 +84,7 @@ export default function ImageDiff({
 		content: (
 			<ImageContent
 				content={original}
-				path={resource.path}
+				path={originalResource.path}
 				identity={originalIdentity}
 				onSize={setLoadedOriginal}
 			/>

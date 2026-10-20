@@ -1820,8 +1820,9 @@ own section. The kebab menu (`plan-menu`, a
 
   **Wide rewrites wait behind a notice.** Source diffs run on the main thread, and that cost
   tracks the number of changed lines, not the file size: a 10 MB all-added file diffs in ~0.1 s while ~10k
-  changed lines take over 20 s. Before mounting a renderer, `DiffSurfaceBody` estimates the changed lines
-  (`largeDiff.ts`: the linear multiset difference of the two sides' lines). Above
+  changed lines take over 20 s. Before mounting a renderer, `DiffSurfaceBody` — and, through the same
+  [[module-resource-renderers]] `largeDiff` check and `ExpensiveDiffNotice`, `ResourcePreview`'s file
+  comparisons — estimates the changed lines (the linear multiset difference of the two sides' lines). Above
   `LARGE_DIFF_CHANGED_LINES` (2000, about a second of diffing), or when an order-sensitive check cannot
   finish within 50 ms / 2000 edits, it shows `diff-too-large` with **Show diff anyway** (per surface mount)
   and, when a worktree-backed modified side exists, **Open file** into the desktop editor. A one-sided

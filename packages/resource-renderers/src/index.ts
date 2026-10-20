@@ -18,6 +18,7 @@ export {
 export {
 	type AnchorDraft,
 	anchorLabel,
+	canonicalWorkspacePath,
 	describeResource,
 	type HunkActions,
 	type HunkTriage,
@@ -44,6 +45,15 @@ export {
 export { createAskAgentRequest } from "./renderers/code/changeBlocks";
 export { registerBundledResourceRenderers } from "./renderers/register";
 export { ReviewDraftContext, type ReviewDraftPersistence } from "./renderers/reviewDraftState";
+export { ExpensiveDiffNotice } from "./support/ExpensiveDiffNotice";
+export {
+	estimateChangedLines,
+	isDiffTooExpensive,
+	LARGE_DIFF_CHANGED_LINES,
+	surfaceChangedLines,
+	surfaceLineCount,
+	VIRTUALIZED_DIFF_LINES,
+} from "./support/largeDiff";
 export {
 	ResourcePreview,
 	type ResourcePreviewLayout,
