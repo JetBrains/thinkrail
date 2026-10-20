@@ -1,7 +1,7 @@
 ---
 id: module-resource-renderers
 type: module-design
-status: draft
+status: active
 title: "@thinkrail/resource-renderers — file and diff renderers, registry and review surfaces"
 parent: architecture
 depends-on: [module-contracts, module-ui]
