@@ -28,7 +28,6 @@
 		"@resvg/resvg-js": "2.6.2",
 		"@types/bun": "catalog:",
 		"resedit": "catalog:",
-		"tsrs": "catalog:",
-		"typescript": "catalog:"
+		"tsrs": "catalog:"
 	}
 }

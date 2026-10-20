@@ -31,8 +31,7 @@
 		"@earendil-works/pi-coding-agent": "catalog:",
 		"@types/bun": "catalog:",
 		"tsrs": "catalog:",
-		"typebox": "catalog:",
-		"typescript": "catalog:"
+		"typebox": "catalog:"
 	},
 	"pi": {
 		"extensions": [

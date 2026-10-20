@@ -198,7 +198,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     ranges (`^` `~` `>` `<` `.x` `*`). Rationale: `pi` ships breaking releases daily, so a floating range is
     a live wire; more broadly, a silent minor/patch bump is the classic irreproducible-build trap. Exact
     pins make the lockfile the single source of a dependency's version and turn every upgrade into an
-    explicit, reviewable diff. Cross-cutting deps (pi, TypeScript, typebox, bun types) are pinned **once** in
+    explicit, reviewable diff. Cross-cutting deps (pi, `tsrs`, typebox, bun types) are pinned **once** in
     the root `workspaces.catalog` and referenced via `catalog:`, so their version lives in exactly one place 
     **and only there: specs never restate it.** A spec that depends on pi behavior names *what* it verified
     (the dist file, the function, the observed rule) and says "re-verify on a pi bump"; it does not carry

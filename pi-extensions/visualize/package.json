@@ -61,7 +61,6 @@
 		"@earendil-works/pi-tui": "catalog:",
 		"@types/bun": "catalog:",
 		"tsrs": "catalog:",
-		"typebox": "catalog:",
-		"typescript": "catalog:"
+		"typebox": "catalog:"
 	}
 }
