@@ -49,7 +49,7 @@ export function buildHistoryScope(
 			filter = (cwd: string) => pathSet.has(cwd);
 		}
 	} else {
-		scope satisfies never;
+		void (scope satisfies never);
 		filter = () => false;
 	}
 
