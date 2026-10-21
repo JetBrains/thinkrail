@@ -3,7 +3,12 @@ import { PENDING_TEXT_META, type ResourceContent, resourceContent } from "../reg
 
 export type LoadedFile =
 	| { status: "loading" }
-	| { status: "ready"; content: ResourceContent; meta: ResourceMeta }
+	| {
+			status: "ready";
+			content: ResourceContent;
+			meta: ResourceMeta;
+			stale?: string | undefined;
+	  }
 	| { status: "error"; message: string };
 
 export type ReadyFile = Extract<LoadedFile, { status: "ready" }>;
@@ -45,7 +50,9 @@ export function startWorkspaceFileReads({
 				settle(ticket, (current) => {
 					const previous = ready(current);
 					if (previous && meta && meta.hash !== null && previous.meta.hash === meta.hash) {
-						return previous;
+						return previous.stale === undefined
+							? previous
+							: { status: "ready", content: previous.content, meta: previous.meta };
 					}
 					return {
 						status: "ready",
@@ -54,10 +61,11 @@ export function startWorkspaceFileReads({
 					};
 				}),
 			(error: unknown) =>
-				settle(
-					ticket,
-					(current) => ready(current) ?? { status: "error", message: errorMessage(error) },
-				),
+				settle(ticket, (current) => {
+					const previous = ready(current);
+					const message = errorMessage(error);
+					return previous ? { ...previous, stale: message } : { status: "error", message };
+				}),
 		);
 	};
 	const unsubscribe = subscribe(load);

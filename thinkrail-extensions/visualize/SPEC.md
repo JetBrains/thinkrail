@@ -64,7 +64,8 @@ diffs need a height) whose toolbar adds **Open in tab** (`host.openFile` keep, o
 before/after) and **Full screen** (a dialog rendering the same preview with Split/Inline; renderer choice and
 view state, such as the HTML preview width, are shared with the card). A card always shows the file's
 **current** content, never a snapshot from the tool call: editing a mockup updates every card that shows it
-(review comments follow the file), and a deleted mockup turns its cards into a load error. That is the price
+(review comments follow the file). A mockup deleted under a mounted card leaves it on its last loaded version
+under a "Couldn't refresh" notice; a card mounted afterwards shows the load error. That is the price
 of anchoring review to real files; the tool guideline asks the agent to keep an earlier proposal as a copy
 passed as `before` when it should stay visible. The workspace and chat come from `useResourceScope`, which the chat transcript provides to
 its rows, so review sends land in the chat that shows the card; with no host or scope (a subagent transcript)

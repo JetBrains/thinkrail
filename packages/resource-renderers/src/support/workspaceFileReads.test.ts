@@ -41,6 +41,10 @@ function harness() {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+function staleOf(file: LoadedFile | null): string | undefined {
+	return file?.status === "ready" ? file.stale : undefined;
+}
+
 function text(file: LoadedFile | null): string | null {
 	return file?.status === "ready" && file.content.kind === "text" ? file.content.text : null;
 }
@@ -78,7 +82,7 @@ test("a re-read with the same hash keeps the loaded object", async () => {
 	expect(file.state()).toBe(first);
 });
 
-test("a failed re-read keeps the last good content; a failed first read shows the error", async () => {
+test("a failed re-read keeps the last good content marked stale; a failed first read shows the error", async () => {
 	const file = harness();
 	file.reads[0]?.reject(new Error("offline"));
 	await settle();
@@ -86,10 +90,16 @@ test("a failed re-read keeps the last good content; a failed first read shows th
 	file.change();
 	file.reads[1]?.resolve({ content: "back", meta: meta("a") });
 	await settle();
+	expect(staleOf(file.state())).toBeUndefined();
 	file.change();
-	file.reads[2]?.reject(new Error("timed out"));
+	file.reads[2]?.reject(new Error("no such file"));
 	await settle();
 	expect(text(file.state())).toBe("back");
+	expect(staleOf(file.state())).toBe("no such file");
+	file.change();
+	file.reads[3]?.resolve({ content: "back", meta: meta("a") });
+	await settle();
+	expect(staleOf(file.state())).toBeUndefined();
 });
 
 test("binary metadata becomes a byte URL, a missing hash an absent side", async () => {

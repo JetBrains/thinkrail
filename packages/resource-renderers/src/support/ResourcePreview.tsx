@@ -144,16 +144,36 @@ function ScopedResourcePreview(
 	);
 }
 
+function StaleNotice({ files }: { files: readonly { path: string; file: ReadyFile }[] }) {
+	const stale = files.filter(({ file }) => file.stale !== undefined);
+	if (stale.length === 0) return null;
+	return (
+		<div
+			data-testid="resource-preview-stale"
+			role="status"
+			className="shrink-0 border-border-default border-b bg-feedback-warning-subtle px-12 py-4 tr-text-metadata text-feedback-warning"
+		>
+			{stale.map(({ path, file }) => (
+				<p key={path}>
+					Couldn't refresh {path}: {file.stale}. Showing the last loaded version.
+				</p>
+			))}
+		</div>
+	);
+}
+
 function PreviewFrame({
 	testid,
 	className,
 	toolbar,
+	notice,
 	strip,
 	children,
 }: {
 	testid: string;
 	className: string | undefined;
 	toolbar: ReactNode;
+	notice: ReactNode;
 	strip: ReactNode;
 	children: ReactNode;
 }) {
@@ -163,6 +183,7 @@ function PreviewFrame({
 			className={cn("flex min-h-0 flex-col overflow-hidden bg-container-workspace-bg", className)}
 		>
 			{toolbar}
+			{notice}
 			{strip}
 			<div className="min-h-0 flex-1">
 				<Suspense fallback={loading}>{children}</Suspense>
@@ -234,6 +255,7 @@ function ReviewedPreviewView(props: ResolvedProps & { file: ReadyFile; review: S
 		<PreviewFrame
 			testid="resource-preview"
 			className={props.className}
+			notice={<StaleNotice files={[{ path, file }]} />}
 			toolbar={
 				<PreviewToolbar props={props} paths={paths} candidates={candidates} renderer={renderer} />
 			}
@@ -312,6 +334,14 @@ function ReviewedPreviewDiff(
 		<PreviewFrame
 			testid="resource-preview-diff"
 			className={props.className}
+			notice={
+				<StaleNotice
+					files={[
+						{ path: before, file: original },
+						{ path, file: modified },
+					]}
+				/>
+			}
 			toolbar={
 				<PreviewToolbar
 					props={props}

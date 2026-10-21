@@ -619,6 +619,28 @@ test("a dot-relative mockup path still refreshes live when the file changes", as
 	}
 });
 
+test("a mockup deleted under its card keeps the last version, marked as stale", async ({
+	page,
+}) => {
+	const cleanup = writeMockups({ "gone.html": mockupHtml("Last proposal") });
+	try {
+		const card = await openVisualization(page, "deleted mockup", {
+			type: "file",
+			path: `${MOCKUP_DIR}/gone.html`,
+		});
+		const preview = card.getByTestId("resource-preview");
+		await expect(preview.frameLocator("iframe").getByText("Last proposal")).toBeVisible();
+		rmSync(join(E2E_FIXTURE_REPO, MOCKUP_DIR, "gone.html"));
+		await expect(preview.getByTestId("resource-preview-stale")).toContainText(
+			`Couldn't refresh ${MOCKUP_DIR}/gone.html`,
+			{ timeout: 15_000 },
+		);
+		await expect(preview.frameLocator("iframe").getByText("Last proposal")).toBeVisible();
+	} finally {
+		cleanup();
+	}
+});
+
 test("a markdown comparison resolves each side's images against its own file", async ({ page }) => {
 	const cleanup = writeMockups({
 		"before/doc.md": "# Flow\n\n![diagram](picture.svg)\n\nOld text.\n",

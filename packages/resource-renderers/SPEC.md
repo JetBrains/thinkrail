@@ -101,7 +101,9 @@ spread per chat made every preview's reads and subscriptions restart whenever th
 `ResourcePreview` depends only on the host's stable `readFile` / `subscribeFileChanges` / `bytesUrl`; it
 applies reads in the order it issued them (a newer change event never discards the read in flight, so a
 burst of events cannot starve the first load), keeps the loaded file when a re-read returns the same hash,
-and keeps the last good content when a re-read fails, like a file tab. The rendered markdown diff renders both
+and keeps the last good content when a re-read fails, like a file tab, but marked stale: the failure is named
+above it (`resource-preview-stale`, "Couldn't refresh <path>: <reason>"), so a moved or deleted file never
+silently passes for current. The rendered markdown diff renders both
 sides with `renderToStaticMarkup`, outside the React tree, so it reads the markdown component and links in its
 own render and passes them to `MarkdownDocument` explicitly — a context read inside a static render would throw
 (found by the Changes/rendered-diff e2e during extraction).
