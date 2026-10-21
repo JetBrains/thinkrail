@@ -68,6 +68,7 @@ import type {
 	ToolResultState,
 } from "../chat/types";
 import {
+	ancestorPaths,
 	isPreviewCompatibleTabKind,
 	type LayoutAttention,
 	layoutResourceIdentity,
@@ -1531,6 +1532,20 @@ function withPathMembership(
 	if (member) return [...list, ...changed];
 	const removed = new Set(changed);
 	return list.filter((path) => !removed.has(path));
+}
+
+function revealChangedFilesPatch(
+	state: Pick<AppState, "layoutIntents">,
+	workspaceId: string,
+): Pick<AppState, "layoutIntents" | "filesMode"> {
+	return {
+		layoutIntents: appendLayoutIntent(state.layoutIntents, {
+			kind: "reveal-tool",
+			workspaceId,
+			tool: "files",
+		}),
+		filesMode: "changed",
+	};
 }
 
 function patchFilesTreeView(
@@ -3058,9 +3073,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	revealInFiles: (workspaceId, path) =>
 		set((s) =>
 			patchFilesTreeView(s, workspaceId, (view) => {
-				const segments = path.split("/").slice(0, -1);
-				const ancestors = segments.map((_, index) => segments.slice(0, index + 1).join("/"));
-				const expanded = withPathMembership(view.expanded, ancestors, true);
+				const expanded = withPathMembership(view.expanded, ancestorPaths(path), true);
 				return expanded === view.expanded && view.seenActivePath === path
 					? view
 					: { ...view, expanded, seenActivePath: path };
@@ -4223,12 +4236,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const advanced = advanceCenterNavigation(s, workspaceId);
 			return {
-				layoutIntents: appendLayoutIntent(s.layoutIntents, {
-					kind: "reveal-tool",
-					workspaceId,
-					tool: "files",
-				}),
-				filesMode: "changed",
+				...revealChangedFilesPatch(s, workspaceId),
 				changesRequest: {
 					workspaceId,
 					path,
@@ -4242,18 +4250,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			};
 		}),
 	revealChanges: (workspaceId) =>
-		set((s) =>
-			s.removedWorkspaceIds[workspaceId]
-				? {}
-				: {
-						layoutIntents: appendLayoutIntent(s.layoutIntents, {
-							kind: "reveal-tool",
-							workspaceId,
-							tool: "files",
-						}),
-						filesMode: "changed",
-					},
-		),
+		set((s) => (s.removedWorkspaceIds[workspaceId] ? {} : revealChangedFilesPatch(s, workspaceId))),
 	clearChangesRequest: () => set({ changesRequest: null }),
 	requestChatLocation: (req) =>
 		set((state) => {

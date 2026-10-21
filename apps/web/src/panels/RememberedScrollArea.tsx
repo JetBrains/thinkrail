@@ -1,4 +1,4 @@
-import { useScrollViewState } from "@thinkrail/resource-renderers";
+import { useScrollViewState, viewStateScrollTop } from "@thinkrail/resource-renderers";
 import { type ReactNode, useEffect, useState } from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
 import { type FilesScrollView, selectFilesTreeView, useAppStore } from "../store";
@@ -28,10 +28,8 @@ export function RememberedScrollArea({
 		return saved && saved.scope === scope ? { scrollTop: saved.top } : null;
 	});
 	const { elementRef, attach } = useScrollViewState<HTMLDivElement>(initial, (state) => {
-		const top = Reflect.get(Object(state), "scrollTop");
-		if (typeof top === "number") {
-			useAppStore.getState().setFilesTreeScroll(workspaceId, view, top, scope);
-		}
+		const top = viewStateScrollTop(state);
+		if (top !== null) useAppStore.getState().setFilesTreeScroll(workspaceId, view, top, scope);
 	});
 
 	useEffect(() => {

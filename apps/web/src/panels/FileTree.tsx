@@ -1,9 +1,10 @@
 import type { FileNode } from "@thinkrail/contracts";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { useMemo, useRef, useState } from "react";
+import { statusLetter } from "../chat/planView";
 import { selectFilesTreeView, type TabIntent, useAppStore } from "../store";
 import { getTransport } from "../transport";
-import { type ChangeMarks, statusLetter, statusMarkClass } from "./changesModel";
+import { type ChangeMarks, statusMarkClass } from "./changesModel";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
@@ -111,6 +112,7 @@ function FileNodeRow({
 	const open = (intent: TabIntent) => void openFileInTab(workspaceId, node.path, intent);
 	const fileStatus = isDir ? undefined : marks.files.get(node.path);
 	const dirChanged = isDir && marks.dirs.has(directory?.path ?? node.path);
+	const ignored = (directory?.deepest ?? node).gitignored === true;
 	const revealRow =
 		!isDir && focus.revealTarget === node.path
 			? (row: HTMLButtonElement | null) => {
@@ -127,8 +129,8 @@ function FileNodeRow({
 				testid="file-node"
 				kind={isDir ? "dir" : "file"}
 				active={!isDir && focus.activePath === node.path}
-				subtle={node.gitignored === true}
-				dataStatus={node.gitignored ? "ignored" : undefined}
+				subtle={ignored}
+				dataStatus={ignored ? "ignored" : undefined}
 				expanded={expanded}
 				label={label}
 				labelClassName={

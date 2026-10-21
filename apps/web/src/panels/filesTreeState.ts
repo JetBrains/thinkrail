@@ -1,5 +1,6 @@
 import { getStablePreferenceAdapter, type StablePreferenceAdapter } from "../clientPreferences";
 import { STORAGE_PREFIX } from "../constants/branding";
+import { isRecord } from "../lib";
 import { type FilesScrollView, type FilesTreeView, useAppStore } from "../store";
 import { getTransport } from "../transport";
 
@@ -12,10 +13,6 @@ const SCROLL_VIEWS: readonly FilesScrollView[] = ["all", "changedList", "changed
 interface FilesTreeStorage {
 	read: () => string | null;
 	write: (value: string) => void;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function pathList(value: unknown): readonly string[] {

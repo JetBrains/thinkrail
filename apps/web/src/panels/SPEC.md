@@ -227,11 +227,14 @@ treatment.
   in one store write. `FilesPanel` owns the single `git.status` read (`useGitStatus`, scope-keyed, including
   the unknown-commit scope fallback) and feeds `ChangesPanel` and the **All** marks from it, so count, marks
   and the Changed list cannot disagree. **All** follows VS Code's Explorer: the plain tree plus marks derived
-  once by the pure `changesModel.buildChangeMarks` \— a changed file shows its name and a trailing
-  `M`/`A`/`U`/`R` letter in the status colour (modified amber, added/untracked green, renamed blue); every
+  once by the pure `changesModel.buildChangeMarks` — a changed file shows its name and a trailing
+  `M`/`A`/`U`/`R` letter in the status colour (modified amber, added/untracked green, renamed blue; the one
+  `chat/planView.statusLetter`, shared with the Changes review tab and plan rows, so untracked reads `U`
+  and added `A` everywhere); every
   ancestor folder, expanded or collapsed, shows its name and a dot in one amber "contains changes" colour
   (a compact row as a whole); deleted files are neither shown nor mark folders, as in VS Code. Git-ignored
-  entries (the host's `FileNode.gitignored`, and everything inside them) render in `text-subtle`. The
+  entries (the host's `FileNode.gitignored` — for a compact row, that of the deepest directory it
+  represents — and everything inside them) render in `text-subtle`. The
   active file or diff tab (`selectActiveFilePath`) gets the selected row look, and when it changes while All
   is showing its folders expand (and stay expanded) and it scrolls `nearest` into view; on return All
   reveals only if the active file differs from the persisted `seenActivePath`, and then skips the scroll
@@ -243,7 +246,7 @@ treatment.
   either starts at the top), persisted by the `filesTreeState` module (native stable preferences, else
   localStorage under a host-qualified key; hydrated from `main.tsx`, debounced writes plus a `pagehide`
   flush; windows share it, last write wins, no live sync). A **Collapse all folders** `HeaderIconButton` at the
-  right of the switch row collapses All, or \— only in Changed's Tree view with at least one change \—
+  right of the switch row collapses All, or — only in Changed's Tree view with at least one change —
   every changed-tree folder (`changeTreeFolderPaths`)), `FileTree`, `SpecsPanel`, `ReviewPanel`,
   `ChangesPanel` (the changed files under a fixed **panel-header row** — `h-panel-header-row`
   (`--panel-header-row-height`, currently 28px), shared structural geometry with workbench Group Headers

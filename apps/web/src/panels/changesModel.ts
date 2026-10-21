@@ -6,7 +6,7 @@ import type {
 	TurnChangeSet,
 } from "@thinkrail/contracts";
 import { VIRTUALIZED_DIFF_LINES } from "@thinkrail/resource-renderers";
-import { tupleKey } from "../lib";
+import { ancestorPaths, tupleKey } from "../lib";
 import { extendFolderChain, startFolderChain } from "./folderChains";
 
 export function statusNameClass(status: GitFileStatus): string {
@@ -21,18 +21,6 @@ export function statusNameClass(status: GitFileStatus): string {
 		default:
 			return "";
 	}
-}
-
-const STATUS_LETTER: Record<GitFileStatus, string> = {
-	added: "A",
-	modified: "M",
-	deleted: "D",
-	renamed: "R",
-	untracked: "U",
-};
-
-export function statusLetter(status: GitFileStatus): string {
-	return STATUS_LETTER[status];
 }
 
 export function statusMarkClass(status: GitFileStatus): string {
@@ -50,9 +38,7 @@ export function buildChangeMarks(changes: readonly GitFileChange[]): ChangeMarks
 	for (const change of changes) {
 		if (change.status === "deleted") continue;
 		files.set(change.path, change.status);
-		const segments = change.path.split("/");
-		segments.pop();
-		for (let end = 1; end <= segments.length; end++) dirs.add(segments.slice(0, end).join("/"));
+		for (const dir of ancestorPaths(change.path)) dirs.add(dir);
 	}
 	return { files, dirs };
 }
