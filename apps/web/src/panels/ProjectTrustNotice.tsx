@@ -31,13 +31,10 @@ export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 	const run = async (request: () => Promise<Project>, failure: string) => {
 		if (busy) return;
 		setBusy(true);
-		try {
-			useAppStore.getState().applyProjectUpdated(await request());
-		} catch (err) {
-			toast.error(errorText(err), failure);
-		} finally {
-			setBusy(false);
-		}
+		const apply = async () => useAppStore.getState().applyProjectUpdated(await request());
+		await apply()
+			.catch((err: unknown) => toast.error(errorText(err), failure))
+			.finally(() => setBusy(false));
 	};
 
 	const stopTrusting = canStopTrusting(project) ? (

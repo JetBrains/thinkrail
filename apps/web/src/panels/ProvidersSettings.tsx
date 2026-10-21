@@ -48,17 +48,19 @@ export function ProvidersSettings() {
 			sequence === loadSequence.current &&
 			providerVersion === useAppStore.getState().providerVersion;
 		setRefreshing(true);
-		try {
+		const read = async () => {
 			const next = await getTransport().request("provider.status", {});
 			if (!isCurrent()) return;
 			setReport(next);
 			setFailed(false);
-		} catch {
-			if (!isCurrent()) return;
-			setFailed(true);
-		} finally {
-			if (sequence === loadSequence.current) setRefreshing(false);
-		}
+		};
+		await read()
+			.catch(() => {
+				if (isCurrent()) setFailed(true);
+			})
+			.finally(() => {
+				if (sequence === loadSequence.current) setRefreshing(false);
+			});
 	}, []);
 
 	useEffect(() => {
@@ -76,28 +78,34 @@ export function ProvidersSettings() {
 	const startLogin = useCallback(async (providerId: string, type: "oauth" | "api_key") => {
 		if (!useAppStore.getState().reserveLogin()) return;
 		setBusyProvider(providerId);
-		try {
+		const start = async () => {
 			const { loginId } = await getTransport().request("provider.loginStart", { providerId, type });
 			useAppStore.getState().beginLogin(loginId, providerId);
-		} catch (err) {
-			toast.error(errorText(err), translate("settings.providers.startFailed"));
-		} finally {
-			useAppStore.getState().finishLoginStart();
-			setBusyProvider(null);
-		}
+		};
+		await start()
+			.catch((err: unknown) =>
+				toast.error(errorText(err), translate("settings.providers.startFailed")),
+			)
+			.finally(() => {
+				useAppStore.getState().finishLoginStart();
+				setBusyProvider(null);
+			});
 	}, []);
 
 	const logout = useCallback(
 		async (providerId: string) => {
 			setBusyProvider(providerId);
-			try {
+			const signOut = async () => {
 				await getTransport().request("provider.logout", { providerId });
-			} catch (err) {
-				toast.error(errorText(err), translate("settings.providers.signOutFailed"));
-				return;
-			} finally {
-				setBusyProvider(null);
-			}
+				return true;
+			};
+			const signedOut = await signOut()
+				.catch((err: unknown) => {
+					toast.error(errorText(err), translate("settings.providers.signOutFailed"));
+					return false;
+				})
+				.finally(() => setBusyProvider(null));
+			if (!signedOut) return;
 			await load();
 		},
 		[load],

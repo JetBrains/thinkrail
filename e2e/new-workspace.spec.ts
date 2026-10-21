@@ -336,6 +336,9 @@ test("a base whose fetch fails reports git's error, not a request timeout", asyn
 		await expect(toast).toContainText("Couldn't create workspace");
 		await expect(toast).toContainText("Could not fetch origin/main");
 		await expect(worktreeRows(page)).toHaveCount(0);
+		await expect(dialog).toBeVisible();
+		await expect(page.getByTestId("create-workspace")).toBeEnabled();
+		await expect(page.getByTestId("worktree-creating-row")).toHaveCount(0);
 	} finally {
 		writeFileSync(E2E_PICK_DIR_POINTER, E2E_FIXTURE_REPO);
 		rmSync(repo, { recursive: true, force: true });

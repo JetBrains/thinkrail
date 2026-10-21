@@ -76,12 +76,9 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 
 	const sendOne = async (comment: ReviewComment) => {
 		setSending(true);
-		try {
-			await sendReviewComment(workspaceId, comment.id);
-		} catch {
-		} finally {
-			setSending(false);
-		}
+		await sendReviewComment(workspaceId, comment.id)
+			.catch(() => {})
+			.finally(() => setSending(false));
 	};
 
 	if (failed && !snapshot) {
@@ -97,8 +94,9 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 
 	const files = fileSummaries(snapshot.comments, snapshot.review.doneFiles);
 	const finishFile = async (path: string | null) => {
+		const params = { workspaceId, path: path ?? "" };
 		try {
-			await getTransport().request("review.fileDone", { workspaceId, path: path ?? "" });
+			await getTransport().request("review.fileDone", params);
 		} catch (err) {
 			toast.error(errorText(err), t("review.panel.finishFailed"));
 		}
