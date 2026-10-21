@@ -73,6 +73,8 @@ export default function MonacoEditor({
 	}, []);
 
 	const commentLabel = t("review.widget.commentOnSelection");
+	const commentLabelRef = useRef(commentLabel);
+	commentLabelRef.current = commentLabel;
 	useEffect(() => {
 		commentingRef.current?.setLabel(commentLabel);
 	}, [commentLabel]);
@@ -84,7 +86,11 @@ export default function MonacoEditor({
 		if (isEditorViewState(viewState)) codeEditor.restoreViewState(viewState);
 		if (review) {
 			threadsRef.current = attachReviewThreads(codeEditor, setReviewZones);
-			commentingRef.current = attachReviewCommenting(codeEditor, threadsRef.current, commentLabel);
+			commentingRef.current = attachReviewCommenting(
+				codeEditor,
+				threadsRef.current,
+				commentLabelRef.current,
+			);
 			syncThreads(review);
 			const line = focusLine(review);
 			if (line !== null) {
