@@ -55,13 +55,38 @@ another.
 1. Resolve app resources and set `BUN_PTY_LIB` to the staged current-target FFI library before any server
    import. Electrobun emits an ordinary JavaScript entry, not a `bun build --compile` executable, so it
    does not embed `bun-pty`'s library.
-2. Dynamically import the separately built, unpacked `server-runtime.ts` resource. That bundle is built with
+2. Read Electrobun's bundle metadata, then leave the bundle. Electrobun's launcher starts the main
+   process with cwd inside the replaceable bundle (`app/bin`, `Contents/MacOS`), and Electrobun 2.0.1
+   resolves `../Resources/*.json` against cwd and caches the result: `PATHS` and `BuildConfig` at import,
+   and `Utils.paths` version info and `Updater.getLocalInfo()` on first use. Startup reads
+   `Utils.paths.userData` and creates the update controller, keeping its first `getLocalInfo()` and its
+   status subscription in one continuation. Only then does it `chdir` to the user's home, on every
+   platform and before the server import, so every later child starts outside the bundle. That covers
+   host-owned spawns, in-process extensions, MCP servers and editors alike. A failed `chdir` is logged and
+   startup continues. An update-metadata failure here precedes host acquisition and quits directly.
+   Unless the neutral or hidden artifact modes are set, startup then opens a small, centered, frameless
+   splash.
+   - It reads "Starting ThinkRail…", or "Finishing update to X…" when the update journal is pending,
+     from the saved native labels (`desktop.splash.*`, the desktop fills in `{{version}}`).
+   - Its content is a `data:` URL given at creation. The SDK delays `html:` content behind a 100 ms timer,
+     which the synchronous server import would block. Startup awaits the splash's own `dom-ready`,
+     bounded to 500 ms, before that import.
+   - It closes when the main window first reaches `dom-ready`, and the main window is activated.
+   - Before the startup error dialog it is hidden, not closed: as the last window it would trigger
+     `exitOnLastWindowClosed` before the dialog appears.
+   - Closing the splash before the main window exists quits ThinkRail. Closing the main window before
+     it is ready also closes the splash, so the last window still goes and quit runs through the
+     coordinator. A splash the user closed natively is never closed again.
+   - The main window, RPC, navigation rules and first-`dom-ready` readiness are unchanged. Creating the
+     main window early on a splash page was rejected: it would move origin-dependent navigation, readiness
+     and host-bound RPC ahead of host boot.
+3. Dynamically import the separately built, unpacked `server-runtime.ts` resource. That bundle is built with
    pi's `PI_BUNDLED_NODE=true` define, which makes PI use its embedded-modules extension loader (static jiti
    with Babel bundled, plus virtual modules) for external extensions such as Central. Without the define a
    single-file bundle is treated as a plain Node runtime and PI's lazy Babel `require` cannot resolve inside
    it ([[submodule-server-agent]] owns the seam). Flattening PI into Electrobun's normal entry is still
    forbidden: it would load `bun-pty` before `BUN_PTY_LIB` is set.
-3. The runtime value-imports the four bundled pi-package factories (`pi-web-access`, `pi-spec-graph`,
+4. The runtime value-imports the four bundled pi-package factories (`pi-web-access`, `pi-spec-graph`,
    `pi-thinkrail-workflow`, `pi-todos`) and calls `registerBundledRuntime()` with those factories, the
    `pi-web-access` factory needed by delegation children (picked by `BuildRuntimeSources.webAccessIndex`,
    never by position), the staged skills (every `BuildRuntimeSources.skillRoots` entry flattened into one
@@ -75,7 +100,7 @@ another.
    `DesktopHostOptions` and the generated runtime. The first native-window `dom-ready` explicitly calls the
    proxied `host.server.startAttributionClaim()` readiness method; host boot and elapsed time do not start a
    saved-choice claim. No deep-link or RPC surface is added.
-4. Restore the valid route fragment and bounded client-preference map for
+5. Restore the valid route fragment and bounded client-preference map for
    `{ backendProfileId: "local", windowId: "main" }`. The route is appended to the fresh origin; the
    preference map is serialized as data and prepended to the preload source so the web client can hydrate
    before React mounts despite the changing port. Open one normal native `BrowserWindow` with the system
@@ -103,7 +128,7 @@ there; WebKitGTK keeps its renderer-native editing behavior. macOS Command-H, Op
 accelerators because role items get no default shortcut. Settings… (Command-comma, after About), Quit, and Close
 are custom-action items, not roles; see Confirmed quit and close. Their labels, plus the Edit and Window menu
 titles, are the `DESKTOP_MENU_KEYS` of [[module-locales]]; the native error dialogs (startup failed,
-restart-to-update failed) use its `DESKTOP_DIALOG_KEYS`. The web pushes the active language's labels for both
+restart-to-update failed) and the startup splash use its `DESKTOP_DIALOG_KEYS`. The web pushes the active language's labels for both
 through the preload's `__THINKRAIL_NATIVE_MENU__` bridge (`menuLabelsChanged`); the main process sanitizes
 each label (non-blank, ≤ 80 chars for menu items and ≤ 200 for dialog text, else English), reinstalls the
 menu, and — outside the neutral e2e host — saves them to `<userData>/native-labels.json`. The next start
@@ -440,7 +465,9 @@ Electrobun calls and lifecycle state stay behind the desktop `updates` module; c
 and graceful host shutdown stays in server. The frozen optional `__THINKRAIL_NATIVE_UPDATES__` preload bridge
 exposes typed state, check/download/install actions, and subscription without importing the desktop SDK into
 web code. **Install & Restart** applies the prepared release through the existing quit coordinator; active
-agents and PTYs may terminate, with no second confirmation or renderer-preparation handshake.
+agents and PTYs may terminate, with no second confirmation or renderer-preparation handshake. The bridge
+also carries the attempt's steps and log and the durable post-relaunch result, which the web presents.
+[[submodule-desktop-updates]] owns the attempt and its journal.
 
 Quit coordination preserves its completion action. Electrobun 2.0.1's first `applyUpdate()` returns on the
 asynchronous `before-quit` veto before arming its replacement helper. The update intent waits for the same
@@ -449,6 +476,16 @@ completed guard; ordinary completion still calls only `Utils.quit()`. A failed s
 native error and exits instead of leaving a serverless window. SDK replacement rollback is not
 application-health or user-data rollback. Existing installations without update code/feed identity require
 one manual bootstrap installation.
+
+The swap is a directory rename, and Windows refuses to rename a directory while any live process's current
+directory is inside it. Before startup left the bundle (startup step 2), long-lived children inherited `app\bin`:
+the JetBrains Central proxy daemon started from a pi `session_start`, editors, MCP servers. Any of them
+made the helper's `app → app.previous` rename fail with `AccessDenied` for its whole retry window, roll
+back, and relaunch the old build. POSIX renames are unaffected. Children started by a build without this
+rule keep the old cwd, so the first update from such a build may still need them ended once. The step is an
+Electrobun 2.0.1 workaround with two removal gates. The read-before-`chdir` ordering goes once Electrobun
+resolves resources from the executable path. The `chdir` itself goes once its launcher starts the main
+process outside the replaceable bundle.
 
 Reference: [pinned updater handoff](https://github.com/blackboardsh/electrobun/blob/v2.0.1/package/src/sdks/main/core/Updater.ts#L2220-L2330).
 

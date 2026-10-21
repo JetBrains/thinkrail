@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { Updater, Utils } from "electrobun/main";
 import type { DesktopDialogLabels } from "../nativeLabels";
 import {
@@ -6,6 +7,7 @@ import {
 	type NativeUpdaterDependency,
 } from "./controller";
 import { hasDesktopArtifactTestSeam, nativeUpdatesEnabled } from "./enablement";
+import { createUpdateJournalStore, UPDATE_JOURNAL_FILE } from "./journal";
 import { createDesktopQuitCoordinator, type DesktopQuitCoordinator } from "./quitCoordinator";
 
 export interface ElectrobunUpdateControllerOptions {
@@ -14,7 +16,19 @@ export interface ElectrobunUpdateControllerOptions {
 	channel: string;
 	platform: NodeJS.Platform;
 	arch: string;
-	restartToUpdate(): Promise<void>;
+	userData: string;
+	restartToUpdate(): Promise<boolean>;
+}
+
+function updateJournal(userData: string) {
+	return createUpdateJournalStore(join(userData, UPDATE_JOURNAL_FILE), (error) => {
+		console.error("[desktop] update journal failed", error);
+	});
+}
+
+export function readPendingInstallVersion(userData: string): string | null {
+	const journal = updateJournal(userData).read();
+	return journal?.state === "pending" ? journal.toVersion : null;
 }
 
 const electrobunUpdater: NativeUpdaterDependency = {
@@ -71,5 +85,6 @@ export async function createElectrobunUpdateController(
 		channel: local.channel || options.channel,
 		updater: electrobunUpdater,
 		restartToUpdate: options.restartToUpdate,
+		journal: updateJournal(options.userData),
 	});
 }

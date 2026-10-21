@@ -82,6 +82,7 @@ const updateBridge: NativeUpdateBridge = Object.freeze({
 	checkForUpdates: () => rpc.request.checkForUpdates(),
 	downloadUpdate: () => rpc.request.downloadUpdate(),
 	restartToUpdate: () => rpc.request.restartToUpdate(),
+	dismissInstallResult: () => rpc.request.dismissInstallResult(),
 	subscribe: (listener: (state: NativeUpdateState) => void) => {
 		updateListeners.add(listener);
 		return () => updateListeners.delete(listener);

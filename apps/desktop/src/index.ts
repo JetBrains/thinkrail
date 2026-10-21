@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { NativeCommand, NativeQuitHint, NativeWindowState } from "@thinkrail/contracts";
@@ -41,10 +42,20 @@ import type { DesktopRpc } from "./rpc";
 import { ptyLibraryName, runtimeTarget } from "./runtimeTarget";
 import type { DesktopServerRuntime } from "./serverRuntime";
 import {
+	handOffStartupSplash,
+	openStartupSplash,
+	type StartupSplash,
+	splashMessage,
+} from "./splash";
+import {
 	createTitleBarDoubleClickHandler,
 	type TitleBarDoubleClickResult,
 } from "./titleBarDoubleClick";
-import { createElectrobunQuitCoordinator, createElectrobunUpdateController } from "./updates";
+import {
+	createElectrobunQuitCoordinator,
+	createElectrobunUpdateController,
+	readPendingInstallVersion,
+} from "./updates";
 import {
 	desktopWindowChrome,
 	injectInitialWindowChrome,
@@ -106,6 +117,7 @@ function windowControlsProbeScript(target: { testId: string; label: string }): s
 })();`;
 }
 let startupQuitCoordinator: ReturnType<typeof createElectrobunQuitCoordinator> | undefined;
+let startupSplash: StartupSplash | undefined;
 
 function desktopUserData(): string {
 	return process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData;
@@ -161,6 +173,30 @@ async function start(): Promise<void> {
 		runtimeDir,
 		ptyLibraryName(runtimeTarget(process.platform, process.arch)),
 	);
+	const userData = desktopUserData();
+	const pendingInstallVersion = readPendingInstallVersion(userData);
+	const neutral = process.env.THINKRAIL_DESKTOP_E2E_HOST === "1";
+	const updateController = await createElectrobunUpdateController({
+		isPackaged: Electrobun.app.isPackaged,
+		version,
+		channel,
+		platform: process.platform,
+		arch: process.arch,
+		userData,
+		restartToUpdate: () => quitCoordinator.restartToUpdate(),
+	});
+	// Electrobun resolves and caches ../Resources from cwd; leave the bundle only after those reads.
+	try {
+		process.chdir(homedir());
+	} catch (error) {
+		console.error("[desktop] could not leave the app bundle working directory", error);
+	}
+	if (!neutral && process.env.THINKRAIL_DESKTOP_HIDDEN !== "1") {
+		startupSplash = await openStartupSplash(
+			(options) => new BrowserWindow(options),
+			splashMessage(dialogLabels, pendingInstallVersion),
+		);
+	}
 	const serverRuntime = (await import(
 		pathToFileURL(join(runtimeDir, "server-runtime.ts")).href
 	)) as DesktopServerRuntime;
@@ -183,12 +219,10 @@ async function start(): Promise<void> {
 		quitCoordinator.handleBeforeQuit(event);
 	});
 	const origin = `http://127.0.0.1:${host.port}`;
-	const userData = desktopUserData();
 	const routes = new RouteStore(join(userData, "routes.json"));
 	const preferences = new PreferenceStore(join(userData, "preferences.json"));
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);
 	const initialPreferences = preferences.read(BACKEND_PROFILE_ID, WINDOW_ID);
-	const neutral = process.env.THINKRAIL_DESKTOP_E2E_HOST === "1";
 	const titleBarProbePath = neutral
 		? undefined
 		: process.env.THINKRAIL_DESKTOP_TITLE_BAR_PROBE_FILE;
@@ -214,14 +248,6 @@ async function start(): Promise<void> {
 	const handlePageZoomGesture = createPageZoomGestureHandler({
 		getPageZoom: () => mainWindow.getPageZoom(),
 		setPageZoom: (zoom) => mainWindow.setPageZoom(zoom),
-	});
-	const updateController = await createElectrobunUpdateController({
-		isPackaged: Electrobun.app.isPackaged,
-		version,
-		channel,
-		platform: process.platform,
-		arch: process.arch,
-		restartToUpdate: quitCoordinator.restartToUpdate,
 	});
 	let handleTitleBarDoubleClick: () => Promise<void> = async () => {};
 	const rpc = BrowserView.defineRPC<DesktopRpc>({
@@ -256,6 +282,10 @@ async function start(): Promise<void> {
 				},
 				restartToUpdate: async () => {
 					await updateController.restartToUpdate();
+					return undefined;
+				},
+				dismissInstallResult: async () => {
+					await updateController.dismissInstallResult();
 					return undefined;
 				},
 				showNotification: (input): undefined => {
@@ -399,6 +429,9 @@ async function start(): Promise<void> {
 		},
 	);
 	mainWindow.on("close", removeNavigationListeners);
+	const releaseStartupSplash = startupSplash
+		? handOffStartupSplash(startupSplash, mainWindow)
+		: undefined;
 	mainWindow.on("focus", () => rpc.send.windowFocusChanged({ focused: true }));
 	mainWindow.on("blur", () => rpc.send.windowFocusChanged({ focused: false }));
 	updateController.subscribe((state) => rpc.send.updateStateChanged(state));
@@ -415,6 +448,8 @@ async function start(): Promise<void> {
 	mainWindow.webview.on("dom-ready", () => {
 		if (ready) return;
 		ready = true;
+		releaseStartupSplash?.();
+		startupSplash = undefined;
 		startAttributionClaim();
 		updateController.start();
 		const readyPath = process.env.THINKRAIL_DESKTOP_READY_FILE;
@@ -476,6 +511,7 @@ try {
 } catch (error) {
 	const message = error instanceof Error ? error.message : String(error);
 	console.error(message);
+	startupSplash?.hide();
 	try {
 		const labels = readDialogLabels(readNativeLabels(nativeLabelsPath()));
 		await Utils.showMessageBox({

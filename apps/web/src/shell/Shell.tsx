@@ -28,7 +28,7 @@ import {
 	writeThemeHint,
 } from "../themes";
 import { type ConnectionStatus, runHostUpdate, supportsHostUpdateRun } from "../transport";
-import { UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
+import { UpdateInstallSurfaces, UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
 import { AppShortcuts } from "./AppShortcuts";
 import { BrandLogo } from "./BrandLogo";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
@@ -249,6 +249,7 @@ export function Shell() {
 			/>
 			<NotificationPermissionPrompt />
 			<Toaster />
+			<UpdateInstallSurfaces updates={updates} />
 			<AppShortcuts />
 		</div>
 	);
