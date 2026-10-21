@@ -1,5 +1,6 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { RiCloseLine as X } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import type * as React from "react";
 import { useSyncExternalStore } from "react";
 import { cn } from "./utils";
@@ -49,6 +50,7 @@ function DialogContent({
 	hideClose = false,
 	...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & { hideClose?: boolean }) {
+	const t = useT();
 	return (
 		<DialogPrimitive.Portal>
 			<DialogOverlay />
@@ -63,7 +65,7 @@ function DialogContent({
 				{hideClose ? null : (
 					<DialogPrimitive.Close className="absolute top-12 right-12 rounded-sm p-4 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary">
 						<X className="size-16" />
-						<span className="sr-only">Close</span>
+						<span className="sr-only">{t("common.close")}</span>
 					</DialogPrimitive.Close>
 				)}
 			</DialogPrimitive.Content>

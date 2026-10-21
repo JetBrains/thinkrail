@@ -1,3 +1,4 @@
+import { t } from "@thinkrail/locales/react";
 import { useEffect } from "react";
 import type { LayoutAttention } from "../../lib";
 import {
@@ -353,7 +354,10 @@ export function useLayoutIntentProcessing(
 									!latest.removedWorkspaceIds[workspaceId] &&
 									!latest.deletedSessionsByWorkspace[workspaceId]?.[placed.sessionId]
 								) {
-									toast.error("The chat could not be restored.", "Couldn't open chat history");
+									toast.error(
+										t("workbench.chat.restoreFailed"),
+										t("workbench.chat.openHistoryFailed"),
+									);
 								}
 								latest.clearHistoryOpen();
 							})
@@ -373,7 +377,7 @@ export function useLayoutIntentProcessing(
 									!latest.removedWorkspaceIds[workspaceId] &&
 									!latest.deletedSessionsByWorkspace[workspaceId]?.[placed.sessionId]
 								) {
-									toast.error(errorText(error), "Couldn't open chat history");
+									toast.error(errorText(error), t("workbench.chat.openHistoryFailed"));
 								}
 								latest.clearHistoryOpen();
 							});

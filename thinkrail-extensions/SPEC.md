@@ -65,6 +65,9 @@ What a `./web` half may import:
   comments as diff review; `useResourceScope` gives the chat's workspace and session, and
   `useOptionalResourceHost` the host's tab actions. The
   extension never loads files or saves comments itself; the host supplies both through the provider.
+- `@thinkrail/locales/react` ([[module-locales]]) — `useT` / `<T>` / `t` over the one shared i18next
+  instance; an extension's UI text is keys in `packages/locales/en.json` under its own prefix
+  (`visualize.*`), held by `check:i18n` like the app.
 - **Not in the SDK (yet):** the highlighted `CodeBlock` and the shiki highlighter — not dependency-closed
   (highlighter → theme barrel). They move together with the generic CSS-variable shiki map when a second
   extension needs highlighting.

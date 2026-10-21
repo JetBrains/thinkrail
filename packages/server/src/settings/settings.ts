@@ -5,6 +5,7 @@ import {
 	isComposerGrowthLimit,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
+	isLocalePreference,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isSystemThemePair,
@@ -53,6 +54,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	jbcentralQuotaRefreshSeconds: true,
 	settleIdleDays: true,
 	disabledExtensions: true,
+	locale: true,
 	chatMessageOrder: true,
 	layout: true,
 	recentModels: true,
@@ -217,6 +219,9 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		!isSettleIdleDays(runtimeUpdate.settleIdleDays)
 	) {
 		throw new Error("settleIdleDays must be a whole number of days from 1 to 365, or null");
+	}
+	if (runtimeUpdate.locale !== undefined && !isLocalePreference(runtimeUpdate.locale)) {
+		throw new Error('locale must be "system" or a canonical BCP-47 language tag');
 	}
 	if (themeMode !== undefined && !isThemeMode(themeMode)) {
 		throw new Error("themeMode must be fixed or system");

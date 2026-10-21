@@ -1,4 +1,5 @@
 import type { LayoutPreset } from "@thinkrail/contracts";
+import { t } from "@thinkrail/locales/react";
 import { useEffect, useLayoutEffect } from "react";
 import { getStablePreferenceAdapter, type StablePreferenceAdapter } from "../../clientPreferences";
 import { type LayoutAttention, randomId, sameLayoutAttention } from "../../lib";
@@ -504,7 +505,7 @@ function persistCurrentLayout(): void {
 	try {
 		if (activeStablePreferences) {
 			if (encoded.length > NATIVE_LAYOUT_MAX_CHARACTERS) {
-				throw new Error("The local layout is too large to save in this native window");
+				throw new Error(t("workbench.layoutState.tooLargeForNative"));
 			}
 			activeStablePreferences.setItem(NATIVE_LAYOUT_PREFERENCE_KEY, encoded);
 			return;
@@ -513,7 +514,7 @@ function persistCurrentLayout(): void {
 		if (!storage || !persistenceKey) return;
 		storage.local.setItem(persistenceKey, encoded);
 	} catch (error) {
-		toast.error(errorText(error), "Couldn't save the local layout");
+		toast.error(errorText(error), t("workbench.layoutState.saveFailed"));
 	}
 }
 
@@ -869,7 +870,7 @@ export async function commitWorkspaceLayout(
 export function useLocalLayoutState(): void {
 	useEffect(() => {
 		void initializeLocalLayoutState().catch((error) => {
-			toast.error(errorText(error), "Couldn't load the local layout");
+			toast.error(errorText(error), t("workbench.layoutState.loadFailed"));
 		});
 	}, []);
 }
@@ -878,7 +879,7 @@ export function useWorkspaceLayoutState(workspaceId: string): void {
 	useLayoutEffect(() => {
 		const report = (error: unknown) => {
 			if (!useAppStore.getState().removedWorkspaceIds[workspaceId]) {
-				toast.error(errorText(error), "Couldn't load the local layout");
+				toast.error(errorText(error), t("workbench.layoutState.loadFailed"));
 			}
 		};
 		if (useAppStore.getState().layoutStateReady) {

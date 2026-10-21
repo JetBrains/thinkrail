@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: Web UI client
 parent: architecture
-depends-on: [module-contracts, module-ui, module-extension-api, module-ext-visualize, module-resource-renderers]
+depends-on: [module-contracts, module-locales, module-ui, module-extension-api, module-ext-visualize, module-resource-renderers]
 tags: [ui]
 ---
 
@@ -18,8 +18,9 @@ event stream as a chat-centric, multi-session IDE shell.
 - **Owns:** the browser UI — client-local navigation and workbench state, transport client, store, panels, the responsive shell, branding tokens.
 - **Public surface:** the built static bundle (`dist/`) — a deployable artifact that dials a host.
 - **Allowed deps:** `@thinkrail/contracts` (types plus its small pure runtime: WS constants, versions,
-  guards, `createQuitConfirmation`; see [[module-contracts]]), `@thinkrail/ui/*`,
-  `@thinkrail/extension-api/web`, and `@thinkrail/ext-*/web`; React / Zustand / Vite / etc.
+  guards, `createQuitConfirmation`; see [[module-contracts]]), `@thinkrail/locales` (UI strings + the
+  shared i18next instance; see [[module-locales]]), `@thinkrail/ui/*`, `@thinkrail/extension-api/web`,
+  and `@thinkrail/ext-*/web`; React / Zustand / Vite / etc.
 - **Deployment obligation:** one built client serves every launcher and future deployment. Endpoint selection
   belongs to the transport bootstrap; panels, stores, and feature flows never branch on `cli`, `desktop`, or
   a deployment name.
@@ -48,6 +49,7 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `components` | dependency-light app primitives: error isolation, status icons, custom icons, quiet scroll frames, preloaded split chunks | no | [components/SPEC.md](src/components/SPEC.md) |
 | `extensions` | ordered composition of web extension descriptors into the chat registry | yes | [extensions/SPEC.md](src/extensions/SPEC.md) |
 | `themes` | validated single-file manifests, bundled catalog + atomic token application | yes | [themes/SPEC.md](src/themes/SPEC.md) |
+| `i18n` | active language: synced preference + browser languages + bundled/local catalogs → the shared i18next instance, `<html lang>`, desktop menu labels | yes | [i18n/SPEC.md](src/i18n/SPEC.md) |
 | `lib` | shared path/array primitives + highlighting | yes | [lib/SPEC.md](src/lib/SPEC.md) |
 
 Leaf utilities without their own spec: `constants/` (branding — the product name, storage/event prefixes, and the one
@@ -148,7 +150,7 @@ change. `dist/` therefore has no profiler timers (`actualStartTime` is absent fr
 - `shell/layout` → `contracts` (`LayoutPreset` + `GitDiffScope` types only), `lib` (attention/id primitives), `ui` (including `@thinkrail/ui/resizable`), and React / `@dnd-kit/core`; `shell/layoutState` → `shell/layout`, `store`, `transport` (browser endpoint identity + error normalization), `clientPreferences` (native-stable persistence), `contracts` (`LayoutPreset` type only), `lib`, and React. The parent injects store state and feature renderers, so the pure layout child has no feature-module runtime edge
 - `updates` → `contracts` (native bridge + host notice types), `store` (host notice), `ui`, React, and Remix Icon; native snapshots remain shell-local
 - `notifications` → `store` (session-state reads, prompt + `activateWorkspaceFromRoute` / `openSessionSwitcher` actions), `ui` (the permission preface dialog), `contracts` (type-only — `SessionState`/`SessionCompletion`/`NativeNotificationBridge`), React, and Remix Icon; the master-toggle Settings panel lives in `panels`, and `shell` mounts the observer/preface. It emits through a capability-selected channel: the page Notifications API, or the native desktop channel when the optional `__THINKRAIL_NATIVE_NOTIFICATIONS__` bridge is present (capability detection only, no `desktop` branch). No Service Worker: a closed app has no live client to notify
-- `panels` → `@thinkrail/resource-renderers` (registry, review contract, `ReviewThreadCard`, draft context, `createAskAgentRequest`), `store`, `transport`, `ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `prompt` (`NewWorkspaceDialog` consumes the shared slash/template behavior), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelEffortPicker`+`useModelCatalog`+`useModelPreferences`, `ModelsSettings` the older `ModelSelector`+`ThinkingSelector`, `VisibleModelsSettings` `chat/modelPicker`'s `formatContext` + `chat/ProviderGlyph`, and `ProvidersSettings` the `chat/modelPicker` connection-kind vocabulary — all shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph; `ProjectTrustNotice` and `NewWorkspaceDialog` share `chat/projectTrust` + `chat/useProjectTrustSummary` with the Skills dialog's trust banner), `auth` (`ProvidersSettings` and `McpSettings` mount `auth/LoginDialog`), `notifications` (`NotificationsSettings` requests browser permission on enable via the barrel), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping), and `react-virtuoso` (the lazily loaded Changes review list); the renderer engines are [[module-resource-renderers]]' own dependencies
+- `panels` → `@thinkrail/resource-renderers` (registry, review contract, `ReviewThreadCard`, draft context, `createAskAgentRequest`), `store`, `transport`, `ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `prompt` (`NewWorkspaceDialog` consumes the shared slash/template behavior), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelEffortPicker`+`useModelCatalog`+`useModelPreferences`, `ModelsSettings` the older `ModelSelector`+`ThinkingSelector`, `VisibleModelsSettings` `chat/modelPicker`'s `formatContext` + `chat/ProviderGlyph`, and `ProvidersSettings` the `chat/modelPicker` connection-kind vocabulary — all shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph; `ProjectTrustNotice` and `NewWorkspaceDialog` share `chat/projectTrust` + `chat/useProjectTrustSummary` with the Skills dialog's trust banner), `auth` (`ProvidersSettings` and `McpSettings` mount `auth/LoginDialog`), `notifications` (`NotificationsSettings` requests browser permission on enable via the barrel), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping), `i18n` (`LanguageSettings` renders its language derivations and `useSystemLanguages`), and `react-virtuoso` (the lazily loaded Changes review list); the renderer engines are [[module-resource-renderers]]' own dependencies
 - `chat` → `contracts` (pi message types, **type-only**), `ui`, `extension-api/web`, `@thinkrail/resource-renderers` (`ChatTranscript` provides the chat's `ResourceScope` to its rows), `ext-visualize/web`, `extensions` (registration only), `components` (`useNow`, and the `RunningIcon` badge in the stream footer), `prompt` (shared slash/template behavior), `lib`, `clientPreferences`; `store` + `transport`  (**app-integration files only** — the renderers stay store-free; see `chat/SPEC.md` for the current set)
 - `prompt` → `contracts` (slash/template types only), `@thinkrail/ui/utils` (`cn`), and React; it has no lifecycle integration dependency
 - `extensions` → `ext-*/web`, `extension-api/web`, `chat/toolRegistry` (registration only; no ChatView import)
@@ -159,6 +161,8 @@ change. `dist/` therefore has no profiler timers (`actualStartTime` is absent fr
 - `components` → `lib` (`ErrorBoundary`'s `shallowEqualArrays` for its reset keys) and `constants` (`RunningIcon` draws the shared brand monogram) — both leaves, so any region can still wrap in it; presentational controls consume `ui`
 - `lib` → `themes` (the lazy highlighter uses the one generic CSS-variable Shiki registration), React (the phone-viewport hook only), and `contracts` (types only, e.g. the MCP state vocabulary's `McpServerState`)
 - `themes` → `constants` (the branding storage prefix scopes the first-paint hint), `clientPreferences` (native-stable hint storage)
+- `i18n` → `store`, `contracts` (types), `@thinkrail/locales`; `transport` hydrates the store's local-language snapshot, `main.tsx`'s `App` mounts `useLocaleSync` once and `panels` renders the Language page from its pure derivations
+- **Any module may → `@thinkrail/locales/react`** (`useT`, `<T>`, `currentLocale`) for its UI text — the one cross-cutting edge besides `lib`; user-facing text is never a literal ([[architecture]] Decision 23)
 - leaves (`clientPreferences`, `constants`, `utils`, `styles`) → none internal
 
 Rules: a panel never imports another panel sideways; nothing imports `shell` (it's the composition root).

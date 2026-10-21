@@ -1,3 +1,4 @@
+import { useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useRef } from "react";
 import {
 	anchorLabel,
@@ -51,6 +52,7 @@ export function UnplacedReviewStrip({
 	placedThreadIds?: ReadonlySet<string>;
 	onSelectRenderer: (rendererId: string) => void;
 }) {
+	const t = useT();
 	const rootRef = useRef<HTMLDivElement>(null);
 	const entries = useMemo(
 		() => unplacedReviewEntries(reviews, renderer, intent, placedThreadIds),
@@ -74,7 +76,7 @@ export function UnplacedReviewStrip({
 			className="max-h-[40vh] shrink-0 overflow-auto border-border-default border-b bg-container-header-bg p-8"
 		>
 			<p className="px-4 tr-text-eyebrow text-text-muted">
-				Comments not placed in {renderer.label}
+				{t("panels.unplacedReview.title", { renderer: t(renderer.labelKey) })}
 			</p>
 			{entries.map(({ review, thread }) => {
 				const target = candidates.find(
@@ -94,7 +96,7 @@ export function UnplacedReviewStrip({
 								className="ml-12 rounded-sm px-8 py-4 tr-text-action text-primary hover:bg-control-bg-hovered"
 								onClick={() => onSelectRenderer(target.id)}
 							>
-								Show in {target.label}
+								{t("panels.unplacedReview.showIn", { renderer: t(target.labelKey) })}
 							</button>
 						) : null}
 					</div>

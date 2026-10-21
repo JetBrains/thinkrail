@@ -1,4 +1,5 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import {
@@ -57,7 +58,7 @@ export function RegionReviewSurface({
 	className,
 	style,
 	testid,
-	label = "image",
+	commentLabel,
 	draftForRegion = regionDraft,
 	additionalReviews = [],
 }: {
@@ -70,9 +71,11 @@ export function RegionReviewSurface({
 	className?: string | undefined;
 	style?: CSSProperties | undefined;
 	testid?: string | undefined;
-	label?: string | undefined;
+	commentLabel?: string | undefined;
 	draftForRegion?: ((region: Region) => AnchorDraft) | undefined;
 }) {
+	const t = useT();
+	const commentText = commentLabel ?? t("viewer.region.commentOnImage");
 	const [drag, setDrag] = useState<DragState | null>(null);
 	const composer = useStampedComposer<Region>(contentStamp, selectionKey);
 	const cardsRef = useRef(new Map<string, HTMLDivElement>());
@@ -198,7 +201,7 @@ export function RegionReviewSurface({
 							>
 								<button
 									type="button"
-									aria-label={`Show comment ${index + 1}`}
+									aria-label={t("viewer.region.showComment", { number: index + 1 })}
 									data-testid="region-comment-marker"
 									className="pointer-events-auto absolute -top-12 -right-12 flex size-24 items-center justify-center rounded-full bg-primary tr-text-action text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
 									onPointerDown={(event) => event.stopPropagation()}
@@ -215,11 +218,11 @@ export function RegionReviewSurface({
 								style={regionStyle(composer.selection, primaryBounds)}
 							>
 								{!drag && !composer.composing ? (
-									<IconTooltip label={`Comment on this ${label}`}>
+									<IconTooltip label={commentText}>
 										<button
 											type="button"
 											data-testid="review-add-icon"
-											aria-label={`Comment on this ${label}`}
+											aria-label={commentText}
 											className="pointer-events-auto absolute -right-12 -bottom-12 flex size-24 items-center justify-center rounded-sm bg-primary text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
 											onPointerDown={(event) => event.stopPropagation()}
 											onClick={composer.open}

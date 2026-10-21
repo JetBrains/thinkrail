@@ -5,7 +5,9 @@ import type {
 	McpServerSummary,
 	WsParams,
 } from "@thinkrail/contracts";
-import { MCP_STATE_LABEL, type McpStateTone, mcpStateTone, mcpToolCountLabel } from "@/lib";
+import type { MessageKey } from "@thinkrail/locales";
+import { type Translator, t } from "@thinkrail/locales/react";
+import { type McpStateTone, mcpStateLabel, mcpStateTone, mcpToolCountLabel } from "@/lib";
 import type { McpServerRow } from "@/store";
 import { type McpEditableExposure, withEnabled, withExposure } from "./mcpEntries";
 
@@ -29,10 +31,10 @@ export interface McpRowView {
 
 const DISABLED_IN_PI_SETTINGS = "pi settings (-builtin:mcp)";
 
-export function mcpHandledElsewhereText(by: string): string {
+export function mcpHandledElsewhereText(t: Translator, by: string): string {
 	return by === DISABLED_IN_PI_SETTINGS
-		? "MCP is turned off in pi settings (-builtin:mcp); remove that entry to manage servers here."
-		: `MCP is handled by ${by} in this workspace; ThinkRail's MCP management is read-only.`;
+		? t("mcp.handledElsewhere.piSettings")
+		: t("mcp.handledElsewhere.by", { by });
 }
 
 export interface McpChatFailure {
@@ -71,18 +73,14 @@ function mcpDetailReason(detail: string | undefined, name: string): string | und
 	return body.replace(STATUS_LINE_TAIL, "").replace(STATE_PREFIX, "").trim() || undefined;
 }
 
-export function formatStartingElapsed(ms: number): string {
+export function formatStartingElapsed(t: Translator, ms: number): string {
 	const minutes = Math.floor(Math.max(0, ms) / 60_000);
-	return minutes < 1 ? "<1 min" : `${minutes} min`;
+	return minutes < 1 ? t("mcp.elapsed.underMinute") : t("mcp.elapsed.minutes", { minutes });
 }
 
-function inChats(row: McpServerRow, count: number): string {
-	return row.sessions.total > 1 ? ` in ${count} of ${row.sessions.total} chats` : "";
-}
-
-export function mcpRowView(row: McpServerRow, now: number): McpRowView {
+export function mcpRowView(t: Translator, row: McpServerRow, now: number): McpRowView {
 	const { summary } = row;
-	const view = baseView(row, now);
+	const view = baseView(t, row, now);
 	if (
 		row.approvalPending &&
 		row.state !== "pending-approval" &&
@@ -92,121 +90,143 @@ export function mcpRowView(row: McpServerRow, now: number): McpRowView {
 			...view,
 			reason:
 				summary.approval?.state === "changed"
-					? "The repository's override changed since you approved it — review it again."
-					: "The repository overrides this server's settings — review the change.",
+					? t("mcp.row.overrideChanged")
+					: t("mcp.row.overridePending"),
 			action: "review",
 		};
 	}
 	return view;
 }
 
-function baseView(row: McpServerRow, now: number): McpRowView {
+function baseView(t: Translator, row: McpServerRow, now: number): McpRowView {
 	const { summary } = row;
 	const http = summary.transport === "http";
 	switch (row.state) {
 		case "replaced":
 			return {
-				label: "Replaced by project",
+				label: t("mcp.row.replaced"),
 				tone: "neutral",
-				reason: "This project's own entry runs instead.",
+				reason: t("mcp.row.replacedReason"),
 			};
 		case "handled-elsewhere":
-			return { label: MCP_STATE_LABEL["handled-elsewhere"], tone: "neutral" };
+			return { label: mcpStateLabel(t, "handled-elsewhere"), tone: "neutral" };
 		case "starting":
 			return {
-				label: `Starting · ${formatStartingElapsed(now - (row.startingSince ?? now))}`,
+				label: t("mcp.row.starting", {
+					elapsed: formatStartingElapsed(t, now - (row.startingSince ?? now)),
+				}),
 				tone: "working",
 				...(row.sessions.total > 1
-					? { reason: `Starting${inChats(row, row.sessions.reporting.length)}.` }
+					? {
+							reason: t("mcp.row.startingInChats", {
+								count: row.sessions.reporting.length,
+								total: row.sessions.total,
+							}),
+						}
 					: {}),
 			};
 		case "connected": {
-			const tools = row.toolCount === undefined ? "" : ` · ${mcpToolCountLabel(row.toolCount)}`;
+			const tools = row.toolCount === undefined ? "" : ` · ${mcpToolCountLabel(t, row.toolCount)}`;
+			const connected =
+				row.sessions.total > 1
+					? t("mcp.row.connectedInChats", {
+							count: row.sessions.connected,
+							total: row.sessions.total,
+						})
+					: t("mcp.row.connected");
 			return {
-				label: `Connected${inChats(row, row.sessions.connected)}${tools}`,
+				label: `${connected}${tools}`,
 				tone: mcpStateTone("connected", row.toolCount),
-				...(row.toolCount === 0 ? { reason: "The server reports no tools." } : {}),
+				...(row.toolCount === 0 ? { reason: t("mcp.row.noTools") } : {}),
 			};
 		}
 		case "needs-sign-in":
 			return {
-				label: MCP_STATE_LABEL["needs-sign-in"],
+				label: mcpStateLabel(t, "needs-sign-in"),
 				tone: "warning",
-				reason: "Sign in to let chats use this server.",
+				reason: t("mcp.row.signInReason"),
 				...(row.effective && summary.oauth ? { action: "sign-in" as const } : {}),
 			};
 		case "failed":
 			return {
-				label: MCP_STATE_LABEL.failed,
+				label: mcpStateLabel(t, "failed"),
 				tone: "error",
-				reason: mcpDetailReason(row.detail, summary.name) ?? "The server failed to start.",
+				reason: mcpDetailReason(row.detail, summary.name) ?? t("mcp.row.failedReason"),
 				action: "reconnect",
 				secondary: "show-log",
 			};
 		case "disconnected":
 			return {
-				label: MCP_STATE_LABEL.disconnected,
+				label: mcpStateLabel(t, "disconnected"),
 				tone: "warning",
-				reason: "Reconnects on the next call.",
+				reason: t("mcp.row.disconnectedReason"),
 				action: "reconnect",
 			};
 		case "disabled":
-			return { label: MCP_STATE_LABEL.disabled, tone: "neutral", reason: "Turned off." };
+			return {
+				label: mcpStateLabel(t, "disabled"),
+				tone: "neutral",
+				reason: t("mcp.row.disabledReason"),
+			};
 		case "disabled-in-project":
 			return {
-				label: MCP_STATE_LABEL["disabled-in-project"],
+				label: mcpStateLabel(t, "disabled-in-project"),
 				tone: "neutral",
-				reason: "Turned off for this project only.",
+				reason: t("mcp.row.disabledInProjectReason"),
 			};
 		case "disabled-in-chat":
 			return {
-				label: `Disabled in ${row.sessions.total > 1 ? `${row.sessions.reporting.length} of ${row.sessions.total} chats` : "1 chat"}`,
+				label:
+					row.sessions.total > 1
+						? t("mcp.row.disabledInChats", {
+								count: row.sessions.reporting.length,
+								total: row.sessions.total,
+							})
+						: t("mcp.row.disabledInOneChat"),
 				tone: "neutral",
-				reason: "Turned off from a chat's Resources.",
+				reason: t("mcp.row.disabledInChatReason"),
 			};
 		case "pending-approval":
 			return summary.approval?.state === "changed"
 				? {
-						label: "Changed since approval",
+						label: t("mcp.row.changedSinceApproval"),
 						tone: "warning",
-						reason: "The entry changed since you approved it — review it again.",
+						reason: t("mcp.row.changedSinceApprovalReason"),
 						action: "review",
 					}
 				: {
-						label: MCP_STATE_LABEL["pending-approval"],
+						label: mcpStateLabel(t, "pending-approval"),
 						tone: "warning",
-						reason: "Defined by this repository — review what it runs before it starts.",
+						reason: t("mcp.row.pendingApprovalReason"),
 						action: "review",
 					};
 		case "invalid-config":
 			return {
-				label: MCP_STATE_LABEL["invalid-config"],
+				label: mcpStateLabel(t, "invalid-config"),
 				tone: "error",
-				reason: firstLine(summary.configError ?? row.detail) ?? "pi rejected this entry.",
+				reason: firstLine(summary.configError ?? row.detail) ?? t("mcp.row.invalidConfigReason"),
 				...(summary.scope === "project" ? { action: "edit" as const } : {}),
 			};
 		case "pending-reload":
 			return {
-				label: MCP_STATE_LABEL["pending-reload"],
+				label: mcpStateLabel(t, "pending-reload"),
 				tone: "info",
-				reason: "Applies when the chat is idle.",
+				reason: t("mcp.row.pendingReloadReason"),
 				action: "reload",
 			};
 		case "not-running":
 			return {
-				label: MCP_STATE_LABEL["not-running"],
+				label: mcpStateLabel(t, "not-running"),
 				tone: "neutral",
-				reason: "Starts when a chat opens in this workspace.",
+				reason: t("mcp.row.notRunningReason"),
 				action: "open-chat",
 				...(row.effective && http ? { secondary: "test-connection" as const } : {}),
 			};
 		case "unknown":
 			return {
-				label: MCP_STATE_LABEL.unknown,
+				label: mcpStateLabel(t, "unknown"),
 				tone: "neutral",
-				reason: row.startingStalled
-					? "Still starting after a minute — pi has not answered."
-					: "pi has not reported this server yet.",
+				reason: row.startingStalled ? t("mcp.row.stalledReason") : t("mcp.row.unknownReason"),
 			};
 	}
 }
@@ -257,16 +277,20 @@ export function mcpSettingWrite(
 
 export function mcpSaveFeedback(result: McpListResult): string {
 	return result.statuses.length === 0
-		? "Saved — applies when a chat starts in this workspace."
-		: "Saved — applies to open chats as they reload; a busy chat waits until it is idle.";
+		? t("mcp.saveFeedback.noChats")
+		: t("mcp.saveFeedback.openChats");
 }
 
-export function mcpExposureLabel(exposure: McpEditableExposure): string {
-	return exposure.charAt(0).toUpperCase() + exposure.slice(1);
+const EXPOSURE_LABEL = {
+	deferred: "mcp.exposure.deferred",
+	direct: "mcp.exposure.direct",
+	hidden: "mcp.exposure.hidden",
+} as const satisfies Record<McpEditableExposure, MessageKey>;
+
+export function mcpExposureLabel(t: Translator, exposure: McpEditableExposure): string {
+	return t(EXPOSURE_LABEL[exposure]);
 }
 
-export function mcpConfiguredExposureText(summary: McpServerSummary): string {
-	return summary.exposure === "codemode"
-		? "codemode — treated as deferred (codemode not available yet)"
-		: summary.exposure;
+export function mcpConfiguredExposureText(t: Translator, summary: McpServerSummary): string {
+	return summary.exposure === "codemode" ? t("mcp.exposure.codemodeConfigured") : summary.exposure;
 }

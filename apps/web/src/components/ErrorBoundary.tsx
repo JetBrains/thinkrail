@@ -3,6 +3,7 @@ import {
 	RiRefreshLine as RefreshCw,
 	RiArrowGoBackLine as RotateCcw,
 } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { shallowEqualArrays } from "../lib";
 
@@ -72,6 +73,7 @@ function PanelErrorFallback({
 	reset: () => void;
 	isChunkError: boolean;
 }) {
+	const t = useT();
 	return (
 		<div
 			data-testid="error-boundary-fallback"
@@ -80,12 +82,14 @@ function PanelErrorFallback({
 		>
 			<AlertTriangle className="size-24 text-feedback-error" />
 			<p className="tr-title-compact text-text-default">
-				{label ? `The ${label} panel hit an error` : "Something went wrong"}
+				{label
+					? t("components.errorBoundary.panelTitle", { label })
+					: t("components.errorBoundary.title")}
 			</p>
 			<p className="max-w-[28rem] tr-text-metadata text-text-muted">
 				{isChunkError
-					? "Failed to load part of the app (a stale or unreachable resource). Reloading usually fixes it."
-					: error.message || "An unexpected error occurred while rendering this view."}
+					? t("components.errorBoundary.chunkError")
+					: error.message || t("components.errorBoundary.unexpected")}
 			</p>
 			<div className="mt-4 flex items-center gap-8">
 				{isChunkError ? (
@@ -95,7 +99,7 @@ function PanelErrorFallback({
 						onClick={() => window.location.reload()}
 						className="flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
-						<RefreshCw className="size-16" /> Reload page
+						<RefreshCw className="size-16" /> {t("components.errorBoundary.reload")}
 					</button>
 				) : (
 					<button
@@ -104,7 +108,7 @@ function PanelErrorFallback({
 						onClick={reset}
 						className="flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
-						<RotateCcw className="size-16" /> Try again
+						<RotateCcw className="size-16" /> {t("components.errorBoundary.tryAgain")}
 					</button>
 				)}
 			</div>

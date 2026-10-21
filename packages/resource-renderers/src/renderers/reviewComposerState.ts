@@ -7,8 +7,6 @@ import {
 	useReviewDraftState,
 } from "./reviewDraftState";
 
-export const FILE_CHANGED_NOTICE = "The file changed — select again.";
-
 export function contentStamp(content: ResourceContent): string {
 	return content.kind === "absent"
 		? JSON.stringify(["absent"])

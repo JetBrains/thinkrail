@@ -41,8 +41,8 @@ not here — `auth` stays presentational + types, so nothing here imports `store
     the dialog's proxy for "the browser runs on the ThinkRail host machine"; `redirectsToLoopback`:
     whether an authorize URL's `redirect_uri` / `callback_url` is an `http:` loopback address.
 - **Public surface (barrel `index.ts`):** `LoginDialog`; `LoginState`/`LoginInput*` (types).
-- **Allowed deps:** `@thinkrail/ui/dialog` and `@thinkrail/ui/button`; `lib` (`copyText`). (The state types
-  need no imports.)
+- **Allowed deps:** `@thinkrail/ui/dialog` and `@thinkrail/ui/button`; `lib` (`copyText`);
+  `@thinkrail/locales/react` (`useT`/`<T>` for the dialog's own copy). (The state types need no imports.)
 - **Forbidden:** importing `store`/`transport` (the dialog stays presentational — the **panel** is the
   integration piece, exactly as `chat/ChatView` is for the chat renderers); any `pi`/`server` import.
 

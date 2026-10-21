@@ -8,6 +8,7 @@ import {
 	useSensor,
 	useSensors,
 } from "@dnd-kit/core";
+import { useT } from "@thinkrail/locales/react";
 import {
 	type ImperativePanelGroupHandle,
 	ResizableHandle,
@@ -108,6 +109,7 @@ export function Workbench({
 	onNewTerminal,
 	onGestureCanceled,
 }: WorkbenchProps) {
+	const t = useT();
 	const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 	const [draggingTab, setDraggingTab] = useState<LayoutTab | null>(null);
 	const tabSelectionEpoch = useRef(0);
@@ -413,7 +415,7 @@ export function Workbench({
 			case "split":
 				result =
 					tab.kind === "tool"
-						? { reason: "Tools stay in a side region." }
+						? { reason: t("workbench.layout.toolsStayInSide") }
 						: splitCenterGroup(document, target.groupId, target.direction, tab);
 				break;
 			case "auxiliary-edge":
@@ -426,7 +428,7 @@ export function Workbench({
 								target.index,
 								target.region === "bottom" ? maxBottomGroups : maxSideGroups,
 							)
-						: { reason: "That tab type cannot move to an auxiliary region." };
+						: { reason: t("workbench.drag.tabTypeAuxiliary") };
 				break;
 		}
 		if (isLayoutUnavailable(result)) return;
@@ -1038,7 +1040,7 @@ export function Workbench({
 				{draggingTab ? (
 					<div className="flex max-w-224 items-center gap-4 rounded-sm border border-primary bg-container-elevated-bg px-8 py-4 tr-text-ui text-text-default shadow-lg">
 						{tabIcon(draggingTab)}
-						<span className="truncate">{layoutTabName(draggingTab)}</span>
+						<span className="truncate">{layoutTabName(t, draggingTab)}</span>
 					</div>
 				) : null}
 			</DragOverlay>

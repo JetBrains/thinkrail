@@ -2,7 +2,7 @@ import type { ResourceRenderer } from "../../registry";
 
 export const pdfRenderer: ResourceRenderer = {
 	id: "thinkrail/pdf",
-	label: "PDF",
+	labelKey: "viewer.renderer.pdf",
 	match: { mime: ["application/pdf"], text: false },
 	rank: 120,
 	capabilities: {

@@ -1,5 +1,6 @@
 import { RiLinksLine as LinkIcon } from "@remixicon/react";
 import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
+import { useT } from "@thinkrail/locales/react";
 import { ToolFileLink } from "../ToolFileLink";
 import { WebResultBody } from "./WebResultBody";
 
@@ -31,9 +32,12 @@ export function WebFetchCard({
 	workspaceRoot,
 	onOpenFile,
 }: ToolRenderProps) {
+	const t = useT();
 	const url = firstUrl(args);
 	const external = httpUrl(url);
-	const label = external ? external.hostname.replace(/^www\./, "") : "fetch";
+	const label = external
+		? external.hostname.replace(/^www\./, "")
+		: t("tools.webFetch.fallbackLabel");
 	const output = resultText(result);
 
 	return (
@@ -66,8 +70,8 @@ export function WebFetchCard({
 				id={`${toolCallId}:content`}
 				output={output}
 				status={status}
-				runningLabel="Fetching…"
-				emptyLabel="(no content)"
+				runningLabel={t("tools.webFetch.running")}
+				emptyLabel={t("tools.webFetch.empty")}
 			/>
 		</div>
 	);

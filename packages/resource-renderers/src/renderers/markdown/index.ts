@@ -2,7 +2,7 @@ import type { ResourceRenderer } from "../../registry";
 
 export const markdownRenderer: ResourceRenderer = {
 	id: "thinkrail/markdown",
-	label: "Preview",
+	labelKey: "viewer.renderer.preview",
 	match: { glob: ["*.md", "*.mdx"], text: true },
 	rank: 110,
 	capabilities: {

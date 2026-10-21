@@ -342,7 +342,7 @@ test("session creation publishes a domain summary for other frontends", async ()
 		expect(published[0]).toMatchObject({
 			sessionId: created.sessionId,
 			workspaceId: "ws-created-push",
-			title: "Chat",
+			title: "",
 			live: true,
 		});
 		removeSession(created.sessionId);

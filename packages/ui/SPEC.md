@@ -4,7 +4,7 @@ type: module-design
 status: draft
 title: Shared host UI primitives
 parent: architecture
-depends-on: [module-contracts]
+depends-on: [module-contracts, module-locales]
 references: [web-color, web-spacing, web-typography]
 ---
 
@@ -20,7 +20,8 @@ lazy chunks independent and preserves the shadcn convention. `./utils` exposes `
 only `onThemeSwap`, a DOM MutationObserver subscription to the completed `data-theme` signal, with
 explicit cleanup. It knows nothing about the theme catalog or preferences.
 
-Workspace imports may reach `contracts` only. External dependencies are React, Radix, cmdk,
+Workspace imports may reach `contracts` and `@thinkrail/locales/react` (the shared i18next instance, for
+primitive-owned strings such as the dialog's screen-reader Close and the toast's Dismiss label) only. External dependencies are React, Radix, cmdk,
 react-resizable-panels, Remix Icon, class-variance-authority, clsx and tailwind-merge. Host internals,
 pi, app stores, transport and theme runtime are forbidden. Tokens remain global CSS variables generated
 under `apps/web/src/styles`; utilities follow [[web-color]], [[web-spacing]] and [[web-typography]].

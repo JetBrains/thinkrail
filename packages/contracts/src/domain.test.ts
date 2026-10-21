@@ -7,6 +7,7 @@ import {
 	isDelegationRunDetails,
 	isJbcentralConnected,
 	isJbcentralQuotaRefreshSeconds,
+	isLocalePreference,
 	isPlanReviewResult,
 	isRetriedAttempt,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
@@ -236,4 +237,14 @@ describe("isDelegationRunDetails", () => {
 			expect(isDelegationRunDetails({ ...valid, [field]: { malformed: true } })).toBe(false);
 		}
 	});
+});
+
+test("isLocalePreference accepts system and canonical BCP-47 tags only", () => {
+	expect(isLocalePreference("system")).toBe(true);
+	expect(isLocalePreference("de")).toBe(true);
+	expect(isLocalePreference("pt-BR")).toBe(true);
+	expect(isLocalePreference("pt-br")).toBe(false);
+	expect(isLocalePreference("")).toBe(false);
+	expect(isLocalePreference("not a tag")).toBe(false);
+	expect(isLocalePreference(7)).toBe(false);
 });

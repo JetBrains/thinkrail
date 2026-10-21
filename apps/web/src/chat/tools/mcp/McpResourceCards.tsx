@@ -1,5 +1,7 @@
 import { RiFileTextLine, RiStackLine } from "@remixicon/react";
 import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
+import type { MessageKey } from "@thinkrail/locales";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import { useFold } from "../../foldState";
 import { McpActions, McpCliActionButton, useMcpFailureText } from "./McpActions";
@@ -15,12 +17,29 @@ import {
 
 const ROW_LIMIT = 20;
 
+type ListingKind = "resources" | "templates";
+
+const LISTING_TEXT = {
+	resources: {
+		empty: "mcp.listing.resources.empty",
+		showAll: "mcp.listing.resources.showAll",
+		more: "mcp.listing.resources.more",
+		running: "mcp.listing.resources.running",
+	},
+	templates: {
+		empty: "mcp.listing.templates.empty",
+		showAll: "mcp.listing.templates.showAll",
+		more: "mcp.listing.templates.more",
+		running: "mcp.listing.templates.running",
+	},
+} as const satisfies Record<ListingKind, Record<string, MessageKey>>;
+
 function listingServer(args: Record<string, unknown>, result: unknown): string {
 	return strArg(args, "server") || readMcpToolDetails(result)?.server || "";
 }
 
-export function mcpListingSummary({ args, result }: ToolRenderProps): string {
-	return listingServer(args, result) || "all servers";
+export function mcpListingSummary({ args, result }: ToolRenderProps, t: Translator): string {
+	return listingServer(args, result) || t("mcp.listing.allServersSummary");
 }
 
 export function mcpReadSummary({ args }: ToolRenderProps): string {
@@ -60,13 +79,15 @@ function ListingView({
 	id,
 	listing,
 	showServer,
-	noun,
+	kind,
 }: {
 	id: string;
 	listing: McpListing;
 	showServer: boolean;
-	noun: string;
+	kind: ListingKind;
 }) {
+	const t = useT();
+	const text = LISTING_TEXT[kind];
 	const [all, toggleAll, toggleRef] = useFold(`${id}:all`);
 	const items = all ? listing.items : listing.items.slice(0, ROW_LIMIT);
 	return (
@@ -77,7 +98,7 @@ function ListingView({
 			className="flex min-w-0 flex-col gap-4 tr-text-metadata"
 		>
 			{listing.items.length === 0 ? (
-				<span className="text-text-muted italic">No {noun}.</span>
+				<span className="text-text-muted italic">{t(text.empty)}</span>
 			) : (
 				<ul
 					className={cn(
@@ -102,12 +123,10 @@ function ListingView({
 					onClick={toggleAll}
 					className="self-start rounded-xs text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-primary"
 				>
-					{all ? "Show fewer" : `Show all ${listing.items.length} ${noun}`}
+					{all ? t("mcp.card.showFewer") : t(text.showAll, { count: listing.items.length })}
 				</button>
 			) : null}
-			{listing.nextCursor ? (
-				<span className="text-text-muted">More {noun} on the next page.</span>
-			) : null}
+			{listing.nextCursor ? <span className="text-text-muted">{t(text.more)}</span> : null}
 			{listing.errors.map((entry) => (
 				<ListingError key={`${entry.server}\u0000${entry.error}`} entry={entry} />
 			))}
@@ -137,8 +156,9 @@ export function McpResourceListCard({
 	result,
 	status,
 }: ToolRenderProps) {
+	const t = useT();
 	const server = listingServer(args, result);
-	const noun = toolName === "list_mcp_resource_templates" ? "resource templates" : "resources";
+	const kind: ListingKind = toolName === "list_mcp_resource_templates" ? "templates" : "resources";
 	const listing = status === "done" ? readMcpListing(toolName, result) : null;
 	const failed = status === "error";
 	const raw = mcpText(result);
@@ -147,20 +167,20 @@ export function McpResourceListCard({
 		<div data-testid={`tool-${toolName}`} className="flex min-w-0 flex-col gap-4">
 			<McpHeader icon={<RiStackLine className="size-12 shrink-0 text-text-muted" />}>
 				<span className={cn("min-w-0 truncate", server ? "text-primary" : "text-text-muted")}>
-					{server || "All servers"}
+					{server || t("mcp.listing.allServers")}
 				</span>
 				{strArg(args, "cursor") ? (
-					<span className="shrink-0 text-text-subtle">next page</span>
+					<span className="shrink-0 text-text-subtle">{t("mcp.listing.nextPage")}</span>
 				) : null}
 			</McpHeader>
 			{status === "running" ? (
-				<McpRunning label={`Listing ${noun}…`} />
+				<McpRunning label={t(LISTING_TEXT[kind].running)} />
 			) : listing ? (
 				<ListingView
 					id={`${toolCallId}:listing`}
 					listing={listing}
 					showServer={!server}
-					noun={noun}
+					kind={kind}
 				/>
 			) : (
 				<McpOutput id={`${toolCallId}:content`} text={text} result={result} failed={failed} />
@@ -168,7 +188,7 @@ export function McpResourceListCard({
 			{status === "running" ? null : (
 				<McpActions
 					toolCallId={toolCallId}
-					title={`${toolName} · ${server || "all servers"}`}
+					title={`${toolName} · ${server || t("mcp.listing.allServersSummary")}`}
 					result={result}
 					failureText={failed ? raw : ""}
 				/>
@@ -177,7 +197,14 @@ export function McpResourceListCard({
 	);
 }
 
-export function McpReadResourceCard({ toolCallId, args, result, status }: ToolRenderProps) {
+export function McpReadResourceCard({
+	toolCallId,
+	toolName,
+	args,
+	result,
+	status,
+}: ToolRenderProps) {
+	const t = useT();
 	const server = listingServer(args, result);
 	const uri = strArg(args, "uri");
 	const failed = status === "error";
@@ -194,13 +221,13 @@ export function McpReadResourceCard({ toolCallId, args, result, status }: ToolRe
 				) : null}
 			</McpHeader>
 			{status === "running" ? (
-				<McpRunning label="Reading the resource…" />
+				<McpRunning label={t("mcp.readResource.reading")} />
 			) : (
 				<>
 					<McpOutput id={`${toolCallId}:content`} text={text} result={result} failed={failed} />
 					<McpActions
 						toolCallId={toolCallId}
-						title={[server, uri].filter(Boolean).join(" · ") || "read_mcp_resource"}
+						title={[server, uri].filter(Boolean).join(" · ") || toolName}
 						result={result}
 						failureText={failed ? raw : ""}
 					/>

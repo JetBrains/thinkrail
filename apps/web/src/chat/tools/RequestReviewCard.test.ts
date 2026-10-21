@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import type { PlanReviewResult } from "@thinkrail/contracts";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { RequestReviewCard, readPlanReview, requestReviewSummary } from "./RequestReviewCard";
@@ -47,13 +48,13 @@ describe("RequestReviewCard", () => {
 	});
 
 	it("summarizes approve and request_changes verdicts", () => {
-		expect(requestReviewSummary(props({ details: APPROVE }))).toBe(
+		expect(requestReviewSummary(props({ details: APPROVE }), currentTranslator())).toBe(
 			"Approved “Wire login redirect”",
 		);
-		expect(requestReviewSummary(props({ details: CHANGES }))).toBe(
+		expect(requestReviewSummary(props({ details: CHANGES }), currentTranslator())).toBe(
 			"Changes requested on “Debounce search” · 1 finding",
 		);
-		expect(requestReviewSummary(props(undefined))).toBe("");
+		expect(requestReviewSummary(props(undefined), currentTranslator())).toBe("");
 	});
 
 	it("renders an approve verdict with no findings", () => {

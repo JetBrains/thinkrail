@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { packageFileLabels, parseReviewPackage, reviewPackageLabel } from "./reviewPackage";
 
 const REAL_PACKAGE =
@@ -18,7 +19,7 @@ test("parses the renderer's verbatim output — the real thing, not a lookalike"
 			},
 		],
 	});
-	expect(reviewPackageLabel({ count: 1, files: ["src/a.ts"] })).toBe(
+	expect(reviewPackageLabel(currentTranslator(), { count: 1, files: ["src/a.ts"] })).toBe(
 		"Sent 1 review comment on src/a.ts",
 	);
 });
@@ -115,11 +116,13 @@ test("ordinary user text — even text QUOTING a review tag mid-line — is not 
 });
 
 test("labels read naturally for one/many comments and one/many files", () => {
-	expect(reviewPackageLabel({ count: 1, files: ["a.ts"] })).toBe("Sent 1 review comment on a.ts");
-	expect(reviewPackageLabel({ count: 3, files: ["a.ts", "b.md"] })).toBe(
+	expect(reviewPackageLabel(currentTranslator(), { count: 1, files: ["a.ts"] })).toBe(
+		"Sent 1 review comment on a.ts",
+	);
+	expect(reviewPackageLabel(currentTranslator(), { count: 3, files: ["a.ts", "b.md"] })).toBe(
 		"Sent 3 review comments on 2 files",
 	);
-	expect(reviewPackageLabel({ count: 2, files: [] })).toBe(
+	expect(reviewPackageLabel(currentTranslator(), { count: 2, files: [] })).toBe(
 		"Sent 2 review comments on the change set",
 	);
 });

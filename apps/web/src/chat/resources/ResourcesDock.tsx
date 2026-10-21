@@ -6,6 +6,7 @@ import {
 	RiTerminalBoxLine,
 } from "@remixicon/react";
 import type { BackgroundCommandSummary, SubagentResourceSummary } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { useState } from "react";
 import { actionKey, type ResourceActions, ResourceRow, sortLive, toResources } from "./resourceRow";
 
@@ -30,6 +31,7 @@ export function ResourcesDock({
 	onStopCommand: (commandId: string) => void;
 	onStopSubagent: (childSessionId: string) => void;
 }) {
+	const t = useT();
 	const [collapsedChoice, setCollapsedChoice] = useState<boolean | null>(null);
 	const rows = sortLive(toResources(commands, subagents));
 	if (rows.length === 0) return null;
@@ -83,7 +85,9 @@ export function ResourcesDock({
 					<RiLoader4Line className="size-12 shrink-0 animate-spin motion-reduce:animate-none" />
 				)}
 				<span>
-					{rows.length} active{authoritative ? "" : " · reconnecting"}
+					{authoritative
+						? t("resources.dock.active", { count: rows.length })
+						: t("resources.dock.activeReconnecting", { count: rows.length })}
 				</span>
 				{commands.length > 0 ? (
 					<span className="inline-flex items-center gap-4">
@@ -98,7 +102,9 @@ export function ResourcesDock({
 					</span>
 				) : null}
 				<span className="flex-1" />
-				<span className="text-text-subtle">{collapsed ? "show" : "hide"}</span>
+				<span className="text-text-subtle">
+					{collapsed ? t("resources.dock.show") : t("resources.dock.hide")}
+				</span>
 				<Chevron className="size-14 shrink-0" />
 			</button>
 		</div>

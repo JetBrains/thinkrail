@@ -1,5 +1,6 @@
 import { RiPencilLine as Pencil } from "@remixicon/react";
 import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
+import { useT } from "@thinkrail/locales/react";
 import { Collapsible } from "./Collapsible";
 import { ToolFileLink } from "./ToolFileLink";
 
@@ -86,6 +87,7 @@ function EditHeader({
 	onOpenFile?: ((path: string) => void) | undefined;
 	disabled: boolean;
 }) {
+	const t = useT();
 	return (
 		<div className="flex items-center gap-4 tr-text-metadata">
 			<Pencil className="size-12 shrink-0 text-feedback-warning" />
@@ -96,7 +98,7 @@ function EditHeader({
 				disabled={disabled}
 				className="text-text-default"
 			/>
-			<span className="shrink-0 text-text-muted">edited</span>
+			<span className="shrink-0 text-text-muted">{t("tools.edit.edited")}</span>
 		</div>
 	);
 }

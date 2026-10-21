@@ -497,7 +497,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   transport state.
 - **Hydration** (`hydrate.ts`) — the pure
   `messagesToRuntime(TranscriptMessage[], lastSettlement?, { idScope? })` converter (read-side counterpart
-  of the event reducer): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }` (a
+  of the event reducer; a synthesized failure turn carries its `failure` kind and the provider message, worded at render by `errorTurnText`): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }` (a
   `HydratedRuntime`) from a persisted transcript so a reconnecting/second client renders identically to
   the live path (same `raw` result shape). One-shot consumers keep freshly minted ids; a repeated-snapshot
   consumer supplies its session scope to derive stable role/timestamp/index ids for persisted turns. When supplied, the live summary's `lastSettlement` is authoritative; otherwise only the

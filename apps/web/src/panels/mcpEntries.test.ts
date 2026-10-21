@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { McpServerSummary } from "@thinkrail/contracts";
+import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	buildMcpEntry,
 	emptyMcpDraft,
@@ -93,7 +94,7 @@ test("malformed and escaped references are hidden and rejected in env, headers a
 			headers: { Authorization: MCP_HIDDEN_VALUE },
 			oauth: { clientSecret: MCP_HIDDEN_VALUE },
 		});
-		expect(mcpSecretIssues(entry)).toEqual([
+		expect(mcpSecretIssues(currentTranslator(), entry)).toEqual([
 			`env TOKEN, header Authorization and oauth clientSecret are not references. ${HINT}`,
 		]);
 	}
@@ -105,7 +106,7 @@ test("malformed and escaped references are hidden and rejected in env, headers a
 		oauth: { clientSecret: reference },
 	};
 	expect(hideMcpLiterals(entry)).toEqual(entry);
-	expect(mcpSecretIssues(entry)).toEqual([]);
+	expect(mcpSecretIssues(currentTranslator(), entry)).toEqual([]);
 });
 
 test("literal values are found in env, headers, oauth secrets and URL credentials", () => {
@@ -122,11 +123,13 @@ test("literal values are found in env, headers, oauth secrets and URL credential
 	};
 	expect(mcpLiteralValues(remote)).toEqual(["header Authorization", "oauth clientSecret"]);
 	expect(mcpUrlCredentials(remote)).toEqual(["user info", 'query "token"']);
-	expect(mcpSecretIssues(remote)).toEqual([
+	expect(mcpSecretIssues(currentTranslator(), remote)).toEqual([
 		`header Authorization and oauth clientSecret are not references. ${HINT}`,
 		`The URL carries a credential (user info, query "token"). pi sends the URL as written — pass the secret in a header instead, such as Authorization: Bearer \${TOKEN}.`,
 	]);
-	expect(mcpSecretIssues({ command: "x", env: { A: `\${A}`, B: "!op read b" } })).toEqual([]);
+	expect(
+		mcpSecretIssues(currentTranslator(), { command: "x", env: { A: `\${A}`, B: "!op read b" } }),
+	).toEqual([]);
 });
 
 test("values already written are not new literals; changed or added ones are", () => {
@@ -134,7 +137,7 @@ test("values already written are not new literals; changed or added ones are", (
 		url: "https://example.com/mcp?token=abc",
 		headers: { Authorization: "Bearer abc" },
 	};
-	expect(mcpSecretIssues(written, written)).toEqual([]);
+	expect(mcpSecretIssues(currentTranslator(), written, written)).toEqual([]);
 	expect(
 		mcpLiteralValues({ ...written, headers: { Authorization: "Bearer xyz" } }, written),
 	).toEqual(["header Authorization"]);
@@ -178,29 +181,47 @@ test("the run list names every host command line and every !command value", () =
 });
 
 test("names follow pi's charset, are unique per file, and never twin another name across - and _", () => {
-	expect(mcpNameIssue("", "user", existing)).toBe("Name the server.");
-	expect(mcpNameIssue("bad name", "user", existing)).toBe("Use letters, digits, - and _ only.");
-	expect(mcpNameIssue("linear", "user", existing)).toContain("already exists");
-	expect(mcpNameIssue("linear", "project", existing)).toBeUndefined();
-	expect(mcpNameIssue("repo-tools", "user", existing)).toContain('Clashes with "repo_tools"');
-	expect(mcpNameIssue("a-b", "user", [], ["a_b"])).toContain('Clashes with "a_b"');
-	expect(mcpNameWarning("linear", "project", existing)).toContain("Replaces your user-level");
-	expect(mcpNameWarning("repo_tools", "user", existing)).toContain("takes precedence");
-	expect(mcpNameWarning("fresh", "user", existing)).toBeUndefined();
+	expect(mcpNameIssue(currentTranslator(), "", "user", existing)).toBe("Name the server.");
+	expect(mcpNameIssue(currentTranslator(), "bad name", "user", existing)).toBe(
+		"Use letters, digits, - and _ only.",
+	);
+	expect(mcpNameIssue(currentTranslator(), "linear", "user", existing)).toContain("already exists");
+	expect(mcpNameIssue(currentTranslator(), "linear", "project", existing)).toBeUndefined();
+	expect(mcpNameIssue(currentTranslator(), "repo-tools", "user", existing)).toContain(
+		'Clashes with "repo_tools"',
+	);
+	expect(mcpNameIssue(currentTranslator(), "a-b", "user", [], ["a_b"])).toContain(
+		'Clashes with "a_b"',
+	);
+	expect(mcpNameWarning(currentTranslator(), "linear", "project", existing)).toContain(
+		"Replaces your user-level",
+	);
+	expect(mcpNameWarning(currentTranslator(), "repo_tools", "user", existing)).toContain(
+		"takes precedence",
+	);
+	expect(mcpNameWarning(currentTranslator(), "fresh", "user", existing)).toBeUndefined();
 });
 
 test("the form validates transport fields and value names, blank rows included, and builds the entry from the validated rows", () => {
-	expect(validateMcpDraft(draft({ name: "docs", transport: "http" }), "user", [])).toEqual({
+	expect(
+		validateMcpDraft(currentTranslator(), draft({ name: "docs", transport: "http" }), "user", []),
+	).toEqual({
 		url: "Enter the server URL.",
 	});
 	expect(
-		validateMcpDraft(draft({ name: "docs", transport: "http", url: "ftp://x" }), "user", []).url,
+		validateMcpDraft(
+			currentTranslator(),
+			draft({ name: "docs", transport: "http", url: "ftp://x" }),
+			"user",
+			[],
+		).url,
 	).toBe("Use an http:// or https:// URL.");
-	expect(validateMcpDraft(draft({ name: "docs" }), "user", []).command).toBe(
+	expect(validateMcpDraft(currentTranslator(), draft({ name: "docs" }), "user", []).command).toBe(
 		"Enter the executable to run.",
 	);
 	expect(
 		validateMcpDraft(
+			currentTranslator(),
 			draft({
 				name: "docs",
 				command: "bun",
@@ -215,6 +236,7 @@ test("the form validates transport fields and value names, blank rows included, 
 	).toBe("Name every variable.");
 	expect(
 		validateMcpDraft(
+			currentTranslator(),
 			draft({
 				name: "docs",
 				transport: "http",
@@ -227,6 +249,7 @@ test("the form validates transport fields and value names, blank rows included, 
 	).toBe("Name every header.");
 	expect(
 		validateMcpDraft(
+			currentTranslator(),
 			draft({
 				name: "docs",
 				transport: "http",
@@ -263,6 +286,7 @@ test("the form validates transport fields and value names, blank rows included, 
 	).toEqual({ url: "https://x/mcp", exposure: "deferred" });
 	expect(
 		validateMcpDraft(
+			currentTranslator(),
 			draft({
 				name: "docs",
 				transport: "http",
@@ -277,10 +301,10 @@ test("the form validates transport fields and value names, blank rows included, 
 			[],
 		),
 	).toEqual({});
-	expect(mcpDraftWarnings(draft({ command: "npx -y foo" }))).toHaveLength(1);
-	expect(mcpDraftWarnings(draft({ transport: "http", url: "https://x/sse" }))).toEqual([
-		"SSE is not supported — use the server's streamable HTTP URL (often /mcp).",
-	]);
+	expect(mcpDraftWarnings(currentTranslator(), draft({ command: "npx -y foo" }))).toHaveLength(1);
+	expect(
+		mcpDraftWarnings(currentTranslator(), draft({ transport: "http", url: "https://x/sse" })),
+	).toEqual(["SSE is not supported — use the server's streamable HTTP URL (often /mcp)."]);
 });
 
 test("the form saves references only: a plain or empty value, or a credential in the URL, blocks it", () => {
@@ -288,6 +312,7 @@ test("the form saves references only: a plain or empty value, or a credential in
 		rows.map(([name, value], index) => ({ id: String(index), name, value }));
 	expect(
 		validateMcpDraft(
+			currentTranslator(),
 			draft({ name: "docs", command: "bun", values: values([["API_KEY", "sk-live-123"]]) }),
 			"user",
 			[],
@@ -295,6 +320,7 @@ test("the form saves references only: a plain or empty value, or a credential in
 	).toBe(`"API_KEY" is not a reference. ${HINT}`);
 	expect(
 		validateMcpDraft(
+			currentTranslator(),
 			draft({
 				name: "docs",
 				command: "bun",
@@ -311,6 +337,7 @@ test("the form saves references only: a plain or empty value, or a credential in
 	).toBe(`"API_KEY", "EMPTY" and "MODE" are not references. ${HINT}`);
 	expect(
 		validateMcpDraft(
+			currentTranslator(),
 			draft({ name: "docs", transport: "http", url: "https://ada:pw@x.example/mcp?api_key=k" }),
 			"user",
 			[],
@@ -322,44 +349,65 @@ test("the form saves references only: a plain or empty value, or a credential in
 
 test("pasted JSON accepts the mcpServers wrapper or a bare map and reports per-server problems", () => {
 	const wrapped = parseMcpServersJson(
+		currentTranslator(),
 		JSON.stringify({ mcpServers: { a: { command: "x" }, b: { url: "https://b/mcp" } } }),
 	);
 	expect(wrapped.ok && wrapped.servers.map((server) => [server.name, server.errors])).toEqual([
 		["a", []],
 		["b", []],
 	]);
-	const bare = parseMcpServersJson('{ "sse": { "type": "sse", "url": "https://s/sse" } }');
+	const bare = parseMcpServersJson(
+		currentTranslator(),
+		'{ "sse": { "type": "sse", "url": "https://s/sse" } }',
+	);
 	expect(bare.ok && bare.servers[0]?.errors).toEqual([
 		"SSE is not supported — use the streamable HTTP URL.",
 	]);
-	expect(parseMcpServersJson("{")).toMatchObject({ ok: false });
-	expect(parseMcpServersJson("[]")).toEqual({
+	expect(parseMcpServersJson(currentTranslator(), "{")).toMatchObject({ ok: false });
+	expect(parseMcpServersJson(currentTranslator(), "[]")).toEqual({
 		ok: false,
 		error: "Paste a JSON object of servers.",
 	});
-	expect(parseMcpServersJson("{}")).toEqual({ ok: false, error: "No servers found." });
-	expect(parseMcpServersJson('{ "command": "npx", "args": [] }')).toMatchObject({
+	expect(parseMcpServersJson(currentTranslator(), "{}")).toEqual({
+		ok: false,
+		error: "No servers found.",
+	});
+	expect(
+		parseMcpServersJson(currentTranslator(), '{ "command": "npx", "args": [] }'),
+	).toMatchObject({
 		ok: false,
 		error: expect.stringContaining("one server's settings"),
 	});
-	expect(parseMcpServersJson('{ "mcpServers": [] }')).toEqual({
+	expect(parseMcpServersJson(currentTranslator(), '{ "mcpServers": [] }')).toEqual({
 		ok: false,
 		error: '"mcpServers" must be an object.',
 	});
 	expect(
-		mcpEntryErrors({ command: "x", args: "nope", env: { A: 1 }, exposure: "loud", enabled: "y" }),
+		mcpEntryErrors(currentTranslator(), {
+			command: "x",
+			args: "nope",
+			env: { A: 1 },
+			exposure: "loud",
+			enabled: "y",
+		}),
 	).toEqual([
 		'"args" must be a list of strings.',
 		'"env" must map names to strings.',
 		'"exposure" must be deferred, direct or hidden.',
 		'"enabled" must be true or false.',
 	]);
-	expect(mcpEntryErrors({ type: "http" })).toEqual(['Needs "command" (stdio) or "url" (HTTP).']);
-	expect(mcpEntryErrors({ url: "file:///x" })).toEqual(['"url" must be an http or https URL.']);
-	expect(mcpEntryErrors({ command: "x", headers: "h" })).toEqual([
+	expect(mcpEntryErrors(currentTranslator(), { type: "http" })).toEqual([
+		'Needs "command" (stdio) or "url" (HTTP).',
+	]);
+	expect(mcpEntryErrors(currentTranslator(), { url: "file:///x" })).toEqual([
+		'"url" must be an http or https URL.',
+	]);
+	expect(mcpEntryErrors(currentTranslator(), { command: "x", headers: "h" })).toEqual([
 		'"headers" must map names to strings.',
 	]);
-	expect(mcpEntryErrors({ command: "x", exposure: "codemode-deferred" })).toEqual([]);
+	expect(
+		mcpEntryErrors(currentTranslator(), { command: "x", exposure: "codemode-deferred" }),
+	).toEqual([]);
 });
 
 test("import issues add name rules for the chosen scope and the project-file auth ban", () => {
@@ -368,17 +416,24 @@ test("import issues add name rules for the chosen scope and the project-file aut
 		entry: { url: "https://l/mcp", auth: { provider: "x" } },
 		errors: [],
 	};
-	expect(importIssues(server, "user", existing, ["linear"])).toEqual([
+	expect(importIssues(currentTranslator(), server, "user", existing, ["linear"])).toEqual([
 		'"linear" already exists in your user servers.',
 	]);
-	expect(importIssues(server, "project", existing, ["linear"])).toEqual([
+	expect(importIssues(currentTranslator(), server, "project", existing, ["linear"])).toEqual([
 		'"auth" is only allowed in your user servers.',
 	]);
 	expect(
-		importIssues({ name: "a-b", entry: { command: "x" }, errors: [] }, "user", [], ["a-b", "a_b"]),
+		importIssues(
+			currentTranslator(),
+			{ name: "a-b", entry: { command: "x" }, errors: [] },
+			"user",
+			[],
+			["a-b", "a_b"],
+		),
 	).toEqual(['Clashes with "a_b" — names that differ only in - and _ share tools.']);
 	expect(
 		importIssues(
+			currentTranslator(),
 			{
 				name: "gh",
 				entry: { command: "npx", env: { GITHUB_TOKEN: "ghp_abc", HOME_DIR: `\${HOME}` } },
@@ -406,22 +461,28 @@ test("dialogs show plain values hidden; an untouched marker keeps the written va
 		oauth: { clientId: "c", clientSecret: MCP_HIDDEN_VALUE },
 	});
 	expect(Object.keys(shown)).toEqual(Object.keys(written));
-	expect(mcpEditedEntry({ ...shown, exposure: "direct" }, written)).toEqual({
+	expect(mcpEditedEntry(currentTranslator(), { ...shown, exposure: "direct" }, written)).toEqual({
 		entry: { ...written, exposure: "direct" },
 		issues: [],
 	});
 	const moved = mcpEditedEntry(
+		currentTranslator(),
 		{ ...shown, env: { API_TOKEN: MCP_HIDDEN_VALUE, REF: `Bearer ${MCP_HIDDEN_VALUE}` } },
 		written,
 	);
 	expect(moved.issues).toEqual([
 		`env API_TOKEN and env REF still show ${MCP_HIDDEN_VALUE}, which keeps only a value the file already has under that name. ${HINT}`,
 	]);
-	expect(mcpEditedEntry({ ...shown, env: { ...shown.env, MODE: "prod" } }, written).issues).toEqual(
-		[`env MODE is not a reference. ${HINT}`],
-	);
 	expect(
-		mcpEditedEntry({ ...shown, env: { ...shown.env, API_KEY: `\${API_KEY}` } }, written),
+		mcpEditedEntry(currentTranslator(), { ...shown, env: { ...shown.env, MODE: "prod" } }, written)
+			.issues,
+	).toEqual([`env MODE is not a reference. ${HINT}`]);
+	expect(
+		mcpEditedEntry(
+			currentTranslator(),
+			{ ...shown, env: { ...shown.env, API_KEY: `\${API_KEY}` } },
+			written,
+		),
 	).toEqual({
 		entry: { ...written, env: { ...written.env, API_KEY: `\${API_KEY}` } },
 		issues: [],

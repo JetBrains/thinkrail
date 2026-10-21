@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: "@thinkrail/resource-renderers — file and diff renderers, registry and review surfaces"
 parent: architecture
-depends-on: [module-contracts, module-ui]
+depends-on: [module-contracts, module-locales, module-ui]
 references: [submodule-web-panels, submodule-web-chat]
 ---
 
@@ -148,12 +148,17 @@ keeps it.
 
 ## Boundary
 
-- **Allowed deps:** `@thinkrail/contracts` (types), `@thinkrail/ui` primitives, React, and the renderer
+- **Allowed deps:** `@thinkrail/contracts` (types), `@thinkrail/locales` (the `MessageKey` type and
+  `./react` for its UI strings — `useT`, `<T>`, `localeOf`), `@thinkrail/ui` primitives, React, and the renderer
   engines (`@monaco-editor/react`, `monaco-editor`, `@shikijs/monaco`, `shiki`, `@pierre/diffs`, `pdfjs-dist`,
   `react-markdown`, `rehype-raw`, `rehype-sanitize`, `diff`, `jsondiffpatch`, `react-virtuoso`,
   `node-htmldiff`).
 - **Forbidden:** the web app (store, transport, panels, chat, shell, lib, themes), extensions, the server, and
   pi packages. `scripts/check-module-boundaries.ts` enforces it; only `apps/web` consumes the package today.
+- UI text follows [[architecture]] Decision 23: renderer chrome renders through `useT()`'s translator
+  (`viewer.*` keys) and `check:i18n` scans `packages/resource-renderers/src` like the app. A renderer's
+  `labelKey` is a catalog key, never translated text: registration happens once at module load, so the
+  view-toggle, candidate pickers and unplaced strip translate it at render with their own translator.
 - Styling follows the app's token rules: the Tailwind `@source`, the colour/spacing/typography guards and the
   React Compiler census all scan `packages/resource-renderers/src`.
 

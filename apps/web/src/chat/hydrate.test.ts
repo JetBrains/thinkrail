@@ -126,7 +126,7 @@ test("an assistant turn that ended at length hydrates a visible truncation failu
 
 	expect(turns.map((turn) => turn.kind)).toEqual(["user", "assistant", "error"]);
 	const error = turns.find((turn) => turn.kind === "error");
-	expect(error?.kind === "error" && error.text.toLowerCase()).toContain("truncated");
+	expect(error?.kind === "error" && error.failure).toBe("truncated");
 	expect(error?.kind === "error" ? error.recovery : undefined).toBe("try-again");
 });
 

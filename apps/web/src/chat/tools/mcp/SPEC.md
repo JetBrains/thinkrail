@@ -80,7 +80,7 @@ standalone render) or a host older than MCP hides them.
 - **Allowed deps:** parent chat primitives (`toolRegistry`, `ChatActions`, `foldState`), sibling
   `Collapsible`; `@thinkrail/extension-api/web`; `contracts` (type-only — `McpToolDetails`,
   `McpResultSummary`, `McpContentBlockSummary`, `McpReadOutputResult`); `@thinkrail/ui/*`;
-  `@remixicon/react`.
+  `@remixicon/react`; `@thinkrail/locales` (UI strings).
 - **Forbidden:** value-importing pi or any MCP package; `store`/`transport`. Listing rows are local parse
   views of pi's text JSON, not a wire contract.
 

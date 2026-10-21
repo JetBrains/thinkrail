@@ -19,6 +19,7 @@ import type {
 	UserMessage,
 } from "@thinkrail/contracts";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
@@ -32,6 +33,7 @@ import {
 import { CustomIcon } from "@/components/CustomIcon";
 import { parseSkillInvocation, projectRelativePath, type SkillInvocation, userText } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
+import { type AssistantFailure, errorTurnText } from "./assistantFailure";
 import { AssistantMarkdown } from "./assistantLinks";
 import { BackgroundCommandResult, SubagentResult } from "./BackgroundResult";
 import { CopyButton } from "./CopyButton";
@@ -90,6 +92,7 @@ function ChatTurnViewImpl({
 			return (
 				<ErrorTurn
 					text={row.text}
+					failure={row.failure}
 					onTryAgain={row.recovery === "try-again" ? onTryAgain : undefined}
 				/>
 			);
@@ -205,13 +208,14 @@ const USER_SIDE_UNBOUNDED_CLAMP =
 	"[[data-line-width-bounded=false]_&]:max-w-[calc(100cqw-2*var(--chat-gutter))]";
 
 function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
+	const t = useT();
 	const [open, setOpen] = useState(false);
 	return (
 		<>
 			<FileChip
 				data-testid="chat-attachment-chip"
 				title={label}
-				aria-label={`View attachment ${label}`}
+				aria-label={t("chat.turn.viewAttachment", { label })}
 				onClick={() => setOpen(true)}
 				label={label}
 			/>
@@ -280,6 +284,7 @@ function UserTurn({
 	attachmentNames?: string[] | undefined;
 	agentResponded: boolean;
 }) {
+	const t = useT();
 	const text = userText(message.content);
 	const attachments = userAttachments(message.content, attachmentNames);
 	const skill = parseSkillInvocation(text);
@@ -320,7 +325,7 @@ function UserTurn({
 					) : null}
 					<div data-testid="review-package-card" className="whitespace-normal">
 						<span data-testid="review-package-summary" className="block text-text-default">
-							{reviewPackageLabel(review)}
+							{reviewPackageLabel(t, review)}
 						</span>
 						<ReviewPackageComments foldPrefix={id} items={review.items} />
 					</div>
@@ -345,6 +350,7 @@ function PlainUserTurn({
 	attachments: ReturnType<typeof userAttachments>;
 	agentResponded: boolean;
 }) {
+	const t = useT();
 	const large = text.length > LARGE_USER_MESSAGE;
 	const [expanded, toggle, toggleRef] = useFold(`${id}:user-collapse`, !agentResponded);
 	const collapsed = large && !expanded;
@@ -384,7 +390,7 @@ function PlainUserTurn({
 							) : (
 								<ChevronDown className="size-16 shrink-0" />
 							)}
-							{expanded ? "Show less" : "Show more"}
+							{expanded ? t("chat.turn.showLess") : t("chat.turn.showMore")}
 						</button>
 					) : null}
 				</div>
@@ -400,6 +406,7 @@ function SkillInvocationCard({
 	foldId: string;
 	invocation: SkillInvocation;
 }) {
+	const t = useT();
 	const [expanded, toggle, toggleRef] = useFold(foldId);
 	return (
 		<div
@@ -413,12 +420,16 @@ function SkillInvocationCard({
 				type="button"
 				data-testid="skill-invocation-toggle"
 				aria-expanded={expanded}
-				aria-label={`${expanded ? "Hide" : "Show"} instructions for ${invocation.name}`}
+				aria-label={
+					expanded
+						? t("chat.turn.hideSkillInstructions", { skill: invocation.name })
+						: t("chat.turn.showSkillInstructions", { skill: invocation.name })
+				}
 				onClick={toggle}
 				className="flex w-full items-center gap-4 px-12 py-8 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<BookOpen className="size-14 shrink-0 text-text-muted" aria-hidden="true" />
-				<span className="shrink-0 tr-text-ui text-text-muted">Skill</span>
+				<span className="shrink-0 tr-text-ui text-text-muted">{t("chat.turn.skill")}</span>
 				<span className="shrink-0 text-text-subtle" aria-hidden="true">
 					·
 				</span>
@@ -447,12 +458,15 @@ function SkillInvocationCard({
 }
 
 function ReviewFixCard({ id, details }: { id: string; details: ReviewFixDetails }) {
+	const t = useT();
 	const items = reviewFixCommentsToItems(details.comments);
-	const noun = details.comments.length === 1 ? "finding" : "findings";
 	const summary =
 		details.comments.length > 0
-			? `Requested a fix on \u201c${details.itemTitle}\u201d \u00b7 ${details.comments.length} ${noun}`
-			: `Requested a fix on \u201c${details.itemTitle}\u201d`;
+			? t("chat.turn.reviewFixFindings", {
+					item: details.itemTitle,
+					count: details.comments.length,
+				})
+			: t("chat.turn.reviewFix", { item: details.itemTitle });
 	return (
 		<div
 			data-testid="review-fix-card"
@@ -483,6 +497,7 @@ function ToolRow({
 	workspaceRoot?: string | undefined;
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
+	const t = useT();
 	if (getToolChrome(row.toolName) === "bare") {
 		const renderProps: ToolRenderProps = {
 			toolCallId: row.toolCallId,
@@ -496,7 +511,10 @@ function ToolRow({
 		};
 		return (
 			<div className="tr-text-ui text-text-default">
-				<ToolRendererBody {...renderProps} imageLabel={getToolSummary(row.toolName, renderProps)} />
+				<ToolRendererBody
+					{...renderProps}
+					imageLabel={getToolSummary(t, row.toolName, renderProps)}
+				/>
 				<ToolPromptSlot toolCallId={row.toolCallId} className="mt-8" />
 			</div>
 		);
@@ -515,14 +533,15 @@ function ToolRow({
 	);
 }
 
-function SystemTurn({ text }: { text: string }) {
+function SystemTurn({ text }: { text?: string | undefined }) {
+	const t = useT();
 	return (
 		<div
 			data-testid="chat-message"
 			data-role="system"
 			className="text-center text-text-muted tr-text-metadata"
 		>
-			{text}
+			{text ?? t("chat.turn.done")}
 		</div>
 	);
 }
@@ -540,12 +559,16 @@ function CompactionTurn({
 	tokensAfter?: number | undefined;
 	resuming?: boolean | undefined;
 }) {
+	const t = useT();
 	const [open, toggle, toggleRef] = useFold(id);
-	const label = resuming ? "Context compacted — resuming…" : "Context compacted";
+	const label = resuming ? t("chat.compaction.resuming") : t("chat.compaction.done");
 	const tokens =
 		tokensAfter === undefined
-			? `${formatTokens(tokensBefore)} tokens`
-			: `${formatTokens(tokensBefore)} → ${formatTokens(tokensAfter)} tokens`;
+			? t("chat.compaction.tokens", { tokens: formatTokens(tokensBefore) })
+			: t("chat.compaction.tokensChange", {
+					before: formatTokens(tokensBefore),
+					after: formatTokens(tokensAfter),
+				});
 	return (
 		<div data-testid="chat-compaction" data-chat-fold-root className="flex flex-col gap-8">
 			<button
@@ -571,7 +594,16 @@ function CompactionTurn({
 	);
 }
 
-function ErrorTurn({ text, onTryAgain }: { text: string; onTryAgain?: (() => void) | undefined }) {
+function ErrorTurn({
+	text,
+	failure,
+	onTryAgain,
+}: {
+	text: string;
+	failure?: AssistantFailure | undefined;
+	onTryAgain?: (() => void) | undefined;
+}) {
+	const t = useT();
 	return (
 		<div
 			data-testid="chat-message"
@@ -580,13 +612,15 @@ function ErrorTurn({ text, onTryAgain }: { text: string; onTryAgain?: (() => voi
 		>
 			<div className="flex items-start gap-8">
 				<CircleAlert className="mt-2 size-12 shrink-0 text-feedback-error" aria-hidden />
-				<span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{text}</span>
+				<span className="min-w-0 flex-1 whitespace-pre-wrap break-words">
+					{errorTurnText(t, { text, failure })}
+				</span>
 			</div>
 			{onTryAgain ? (
 				<div className="flex justify-end">
 					<Button variant="outline" size="sm" data-testid="agent-try-again" onClick={onTryAgain}>
 						<RotateCw className="size-12" />
-						Try again
+						{t("chat.turn.tryAgain")}
 					</Button>
 				</div>
 			) : null}
@@ -601,6 +635,7 @@ function CompactionNotice({
 	tokensAfter,
 	resuming,
 }: CompactionState) {
+	const t = useT();
 	if (status === "failed") {
 		return (
 			<div
@@ -610,22 +645,25 @@ function CompactionNotice({
 			>
 				<CircleAlert className="mt-2 size-12 shrink-0 text-feedback-error" aria-hidden />
 				<span className="min-w-0 whitespace-pre-wrap break-words">
-					{detail || "Compaction failed."}
+					{detail || t("chat.compaction.failed")}
 				</span>
 			</div>
 		);
 	}
 	const label =
 		status === "running"
-			? "Compacting context…"
+			? t("chat.compaction.running")
 			: status === "cancelled"
-				? "Compaction cancelled"
+				? t("chat.compaction.cancelled")
 				: resuming
-					? "Context compacted — resuming…"
-					: "Context compacted";
+					? t("chat.compaction.resuming")
+					: t("chat.compaction.done");
 	const tokens =
 		tokensBefore != null && tokensAfter != null
-			? `${formatTokens(tokensBefore)} → ${formatTokens(tokensAfter)} tokens`
+			? t("chat.compaction.tokensChange", {
+					before: formatTokens(tokensBefore),
+					after: formatTokens(tokensAfter),
+				})
 			: null;
 	return (
 		<div
@@ -655,6 +693,7 @@ function RetryIndicator({
 	maxAttempts: number;
 	delayMs: number;
 }) {
+	const t = useT();
 	const [draining, setDraining] = useState(false);
 	useEffect(() => {
 		const raf = requestAnimationFrame(() => setDraining(true));
@@ -669,8 +708,9 @@ function RetryIndicator({
 		>
 			<span className="flex items-center gap-4">
 				<RotateCw className="size-12 shrink-0" />
-				{source === "summarization" ? "Retrying summarization" : "Retrying"} ({attempt}/
-				{maxAttempts})…
+				{source === "summarization"
+					? t("chat.retry.summarization", { attempt, max: maxAttempts })
+					: t("chat.retry.turn", { attempt, max: maxAttempts })}
 			</span>
 			<div className="h-4 w-full overflow-hidden rounded-full bg-border-default">
 				<div
@@ -808,6 +848,7 @@ export function TurnDivider({
 	onReveal: (tab: "specs" | "changes") => void;
 	stillRunning?: StillRunning | undefined;
 }) {
+	const t = useT();
 	const { elapsedMs, toolCount, specs, changedFiles, receipt } = data;
 	const [selected, select] = useSelection(`${id}:artifacts`);
 	const stats = receipt
@@ -835,7 +876,7 @@ export function TurnDivider({
 			id: "specs",
 			icon: FileText,
 			paths: specs,
-			label: (n) => `${n} ${n === 1 ? "spec" : "specs"}`,
+			label: (n) => t("chat.divider.specs", { count: n }),
 			expanded: selected === "specs",
 			onOpen: onOpenSpec,
 			reveal: () => onReveal("specs"),
@@ -845,9 +886,13 @@ export function TurnDivider({
 			icon: FileDiffGlyph,
 			paths: changedFiles,
 			label: (n) =>
-				`${n} ${n === 1 ? "file changed" : "files changed"}${
-					totals ? ` · +${totals.added} −${totals.removed}` : ""
-				}`,
+				totals
+					? t("chat.divider.filesChangedWithTotals", {
+							count: n,
+							added: totals.added,
+							removed: totals.removed,
+						})
+					: t("chat.divider.filesChanged", { count: n }),
 			expanded: selected === "files",
 			onOpen: onOpenChange,
 			reveal: () => onReveal("changes"),
@@ -876,7 +921,7 @@ export function TurnDivider({
 				{toolCount > 0 ? (
 					<span className="flex items-center gap-4">
 						<Wrench className="size-12 shrink-0" />
-						{toolCount} {toolCount === 1 ? "tool call" : "tool calls"}
+						{t("chat.divider.toolCalls", { count: toolCount })}
 					</span>
 				) : null}
 				{groups.map((group) => (
@@ -895,13 +940,13 @@ export function TurnDivider({
 						className="flex items-center gap-4 rounded-sm px-4 text-primary hover:bg-control-bg-hovered"
 					>
 						<Eye className="size-12 shrink-0" />
-						Review turn
+						{t("chat.divider.reviewTurn")}
 					</button>
 				) : null}
 				{elapsedMs != null && elapsedMs >= 1000 ? (
 					<span className="flex items-center gap-4">
 						<Clock className="size-12 shrink-0" />
-						{formatElapsed(elapsedMs)}
+						{formatElapsed(t, elapsedMs)}
 					</span>
 				) : null}
 				{running ? (
@@ -912,7 +957,7 @@ export function TurnDivider({
 						className="flex items-center gap-4 rounded-full border border-primary-muted bg-primary-subtle px-8 text-primary hover:bg-primary-soft"
 					>
 						<Stack className="size-12 shrink-0 motion-safe:animate-working" />
-						{running.count} still running
+						{t("chat.divider.stillRunning", { count: running.count })}
 					</button>
 				) : null}
 				<span className="h-px flex-1 bg-border-muted" />

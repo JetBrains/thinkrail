@@ -12,6 +12,7 @@ import type {
 } from "@thinkrail/contracts";
 import {
 	FEEDBACK_INTERVIEW_PROTOCOL_VERSION,
+	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	WS_CHANNELS,
@@ -72,6 +73,7 @@ import {
 } from "../auth";
 import { forgetOpenBranchReview } from "../branch-review";
 import { redeliverInterview, releaseInterview, setFeedbackPublisher } from "../feedback";
+import { watchLocalLocales } from "../locales";
 import { logger } from "../log";
 import { loadWorkspaces } from "../persistence";
 import {
@@ -335,6 +337,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 				ws.subscribe(WS_CHANNELS.reviewFailed);
 				ws.subscribe(WS_CHANNELS.turnChanged);
 				if (ws.data.protocolVersion >= MCP_PROTOCOL_VERSION) ws.subscribe(WS_CHANNELS.mcpStatus);
+				if (ws.data.protocolVersion >= LOCALES_PROTOCOL_VERSION)
+					ws.subscribe(WS_CHANNELS.localesChanged);
 				const hostPlatform: HostPlatform =
 					process.platform === "darwin" || process.platform === "win32"
 						? process.platform
@@ -646,6 +650,13 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		}
 	};
 	const stopUserMcpWatch = watchUserMcpConfig();
+	const stopLocalesWatch = watchLocalLocales({
+		onChange: () =>
+			server.publish(
+				WS_CHANNELS.localesChanged,
+				JSON.stringify({ channel: WS_CHANNELS.localesChanged, data: {} }),
+			),
+	});
 	setWatchPublisher(publishFsChanged);
 	setSkillPathClassifier(isProjectSkillPath);
 	setFsNudgePublisher(publishFsChanged);
@@ -860,6 +871,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		stopJbcentralRuntime();
 		stopAllWatches();
 		stopUserMcpWatch();
+		stopLocalesWatch();
 		disposeAllSessions();
 		for (const timer of reapTimers.values()) clearTimeout(timer);
 		reapTimers.clear();

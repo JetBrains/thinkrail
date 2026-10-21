@@ -16,6 +16,7 @@
 		"@remixicon/react": "catalog:",
 		"@shikijs/monaco": "4.2.0",
 		"@thinkrail/contracts": "workspace:*",
+		"@thinkrail/locales": "workspace:*",
 		"@thinkrail/ui": "workspace:*",
 		"diff": "catalog:",
 		"jsondiffpatch": "0.7.3",

@@ -6,6 +6,7 @@ import type {
 	ReviewCommentStatus,
 	ReviewSelector,
 } from "@thinkrail/contracts";
+import type { MessageKey } from "@thinkrail/locales";
 import type { ComponentType } from "react";
 
 export interface ResourceDescriptor {
@@ -100,7 +101,7 @@ export type ResourceAnchorCapability = "line" | `structural:${string}` | "region
 
 export interface ResourceRenderer {
 	id: string;
-	label: string;
+	labelKey: MessageKey;
 	match: {
 		glob?: string[];
 		mime?: string[];

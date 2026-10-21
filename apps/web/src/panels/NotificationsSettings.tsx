@@ -1,4 +1,5 @@
 import { RiArrowDownSLine, RiArrowRightSLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { useId, useState } from "react";
 import {
@@ -13,6 +14,7 @@ import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
 import { SettingsSwitch } from "./SettingsSwitch";
 
 function HowToEnableInstructions() {
+	const t = useT();
 	const [expanded, setExpanded] = useState(false);
 	const stepsId = useId();
 
@@ -30,17 +32,17 @@ function HowToEnableInstructions() {
 				) : (
 					<RiArrowRightSLine className="size-14" />
 				)}
-				How to enable
+				{t("settings.notifications.howToEnable")}
 			</button>
 			{expanded ? (
 				<ol
 					id={stepsId}
 					className="mt-8 ml-24 list-decimal space-y-4 tr-text-metadata text-text-muted"
 				>
-					<li>Click the lock or info icon in your browser's address bar</li>
-					<li>Find "Notifications" in the site permissions</li>
-					<li>Change the setting from "Block" to "Allow"</li>
-					<li>Refresh this page</li>
+					<li>{t("settings.notifications.step.lock")}</li>
+					<li>{t("settings.notifications.step.find")}</li>
+					<li>{t("settings.notifications.step.allow")}</li>
+					<li>{t("settings.notifications.step.refresh")}</li>
 				</ol>
 			) : null}
 		</div>
@@ -48,6 +50,7 @@ function HowToEnableInstructions() {
 }
 
 export function NotificationsSettings() {
+	const t = useT();
 	const enabled = useAppStore((s) => s.notificationsEnabled);
 	const [channelKind] = useState<NotificationChannel["kind"]>(
 		() => selectNotificationChannel().kind,
@@ -63,8 +66,8 @@ export function NotificationsSettings() {
 				setPermission(result);
 				if (result === "denied") {
 					toast.error(
-						"Notifications are blocked. Re-enable in browser site settings.",
-						"Notifications blocked",
+						t("settings.notifications.blockedToast"),
+						t("settings.notifications.blockedToastTitle"),
 					);
 				}
 			});
@@ -73,7 +76,7 @@ export function NotificationsSettings() {
 	const setEnabled = (notificationsEnabled: boolean) => {
 		getTransport()
 			.request("settings.update", { config: { notificationsEnabled } })
-			.catch(() => toast.error("Couldn't change the notification setting"));
+			.catch(() => toast.error(t("settings.notifications.changeFailed")));
 		if (notificationsEnabled && permission === "default") {
 			requestPermission();
 		}
@@ -84,16 +87,16 @@ export function NotificationsSettings() {
 	return (
 		<div data-testid="settings-notifications" className={SETTINGS_ROWS_CONTAINER}>
 			<SettingsRow
-				label="Enable notifications"
+				label={t("settings.notifications.enable")}
 				description={
 					channelKind === "os"
-						? "Delivered by your operating system."
-						: "Get notified when a worktree needs your attention."
+						? t("settings.notifications.osDescription")
+						: t("settings.notifications.browserDescription")
 				}
 				control={
 					<SettingsSwitch
 						checked={enabled}
-						label="Enable notifications"
+						label={t("settings.notifications.enable")}
 						testId="notifications-toggle"
 						onChange={setEnabled}
 					/>
@@ -112,11 +115,11 @@ export function NotificationsSettings() {
 								data-testid="notifications-allow"
 								onClick={requestPermission}
 							>
-								Allow in browser
+								{t("settings.notifications.allowInBrowser")}
 							</Button>
 						}
 					>
-						Your browser hasn't granted permission yet.
+						{t("settings.notifications.notGranted")}
 					</SettingsNotice>
 				</div>
 			) : browserPermission === "denied" || browserPermission === "unsupported" ? (
@@ -127,8 +130,8 @@ export function NotificationsSettings() {
 						action={browserPermission === "denied" ? <HowToEnableInstructions /> : null}
 					>
 						{browserPermission === "unsupported"
-							? "This browser doesn't support notifications."
-							: "Notifications are blocked by your browser."}
+							? t("settings.notifications.unsupported")
+							: t("settings.notifications.blocked")}
 					</SettingsNotice>
 				</div>
 			) : null}

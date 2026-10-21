@@ -1,5 +1,7 @@
 import { RiGitMergeLine as GitMerge, RiLoader4Line as Loader2 } from "@remixicon/react";
 import type { MergeMethod } from "@thinkrail/contracts";
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -28,11 +30,11 @@ export interface MergePrSubmit {
 	deleteBranch: boolean;
 }
 
-const METHOD_LABEL: Record<MergeMethod, string> = {
-	squash: "Squash and merge",
-	merge: "Create a merge commit",
-	rebase: "Rebase and merge",
-};
+const METHOD_LABEL = {
+	squash: "panels.mergePr.method.squash",
+	merge: "panels.mergePr.method.merge",
+	rebase: "panels.mergePr.method.rebase",
+} satisfies Record<MergeMethod, MessageKey>;
 
 function MergeForm({
 	state,
@@ -43,6 +45,7 @@ function MergeForm({
 	busy: boolean;
 	onSubmit: (submit: MergePrSubmit) => void;
 }) {
+	const t = useT();
 	const [method, setMethod] = useState(state.method);
 	const [deleteBranch, setDeleteBranch] = useState(state.deleteBranch);
 	return (
@@ -50,15 +53,15 @@ function MergeForm({
 			<DialogHeader>
 				<DialogTitle>
 					{state.base
-						? `Merge PR #${state.number} into ${state.base}?`
-						: `Merge PR #${state.number}?`}
+						? t("panels.mergePr.titleInto", { number: state.number, base: state.base })
+						: t("panels.mergePr.title", { number: state.number })}
 				</DialogTitle>
 				<DialogDescription>
-					GitHub merges the pull request. This workspace keeps its local {state.branch} branch.
+					{t("panels.mergePr.description", { branch: state.branch })}
 				</DialogDescription>
 			</DialogHeader>
 			<fieldset
-				aria-label="Merge method"
+				aria-label={t("panels.mergePr.methodLabel")}
 				data-testid="merge-pr-method"
 				className="m-0 flex min-w-0 flex-col gap-2 rounded-sm border border-control-border-default bg-control-bg p-2"
 			>
@@ -77,20 +80,22 @@ function MergeForm({
 								: "text-text-muted hover:text-text-default",
 						)}
 					>
-						{METHOD_LABEL[option]}
+						{t(METHOD_LABEL[option])}
 					</button>
 				))}
 			</fieldset>
 			{state.autoDeletes ? (
 				<p data-testid="merge-pr-auto-delete" className="m-0 tr-text-metadata text-text-subtle">
-					GitHub deletes {state.branch} after the merge — a repository setting.
+					{t("panels.mergePr.autoDeletes", { branch: state.branch })}
 				</p>
 			) : (
 				<div className="flex items-center justify-between gap-12">
-					<span className="tr-text-ui text-text-default">Delete {state.branch} on GitHub</span>
+					<span className="tr-text-ui text-text-default">
+						{t("panels.mergePr.deleteBranch", { branch: state.branch })}
+					</span>
 					<Switch
 						checked={deleteBranch}
-						label={`Delete ${state.branch} on GitHub`}
+						label={t("panels.mergePr.deleteBranch", { branch: state.branch })}
 						testId="merge-pr-delete-branch"
 						disabled={busy}
 						onCheckedChange={setDeleteBranch}
@@ -104,7 +109,7 @@ function MergeForm({
 					onClick={() => onSubmit({ method, deleteBranch: !state.autoDeletes && deleteBranch })}
 				>
 					{busy ? <Loader2 className="size-14 animate-spin" /> : <GitMerge className="size-14" />}
-					{METHOD_LABEL[method]}
+					{t(METHOD_LABEL[method])}
 				</Button>
 			</DialogFooter>
 		</>

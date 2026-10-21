@@ -1,5 +1,6 @@
 import type { WsMethodName, WsParams, WsResult, WsServerMessage } from "@thinkrail/contracts";
 import { PROTOCOL_VERSION, WS_CHANNELS } from "@thinkrail/contracts";
+import { t } from "@thinkrail/locales/react";
 import { randomId } from "../lib";
 import { RequestError } from "./requestError";
 
@@ -117,7 +118,7 @@ export class WsTransport {
 		return new Promise<WsResult<M>>((resolve, reject) => {
 			const timer = setTimeout(() => {
 				this.pending.delete(id);
-				reject(new Error(`request "${method}" timed out`));
+				reject(new Error(t("app.transport.timedOut", { method })));
 			}, timeoutMs);
 			this.pending.set(id, {
 				frame,
@@ -192,7 +193,7 @@ export class WsTransport {
 			entry.resolve(msg.result);
 			return;
 		}
-		const message = msg.error ?? "request failed";
+		const message = msg.error ?? t("app.transport.requestFailed");
 		entry.reject(msg.errorCode ? new RequestError(msg.errorCode, message) : new Error(message));
 	}
 }
