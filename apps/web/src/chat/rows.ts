@@ -41,7 +41,7 @@ export type ActivityStep = RoutineToolStep | ThinkingStep;
 
 export type ChatRow =
 	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }
-	| { kind: "system"; id: string }
+	| { kind: "system"; id: string; text?: string }
 	| {
 			kind: "error";
 			id: string;
@@ -212,7 +212,11 @@ export function deriveRows(
 					});
 					break;
 				case "system":
-					rows.push({ kind: "system", id: turn.id });
+					rows.push({
+						kind: "system",
+						id: turn.id,
+						...(turn.text !== undefined ? { text: turn.text } : {}),
+					});
 					break;
 				case "error":
 					rows.push({

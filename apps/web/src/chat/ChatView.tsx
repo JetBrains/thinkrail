@@ -32,6 +32,7 @@ import {
 	selectWorkspaceById,
 	toast,
 	useAppStore,
+	workspaceName,
 } from "@/store";
 import { errorText, getTransport, watchMcpWorkspace } from "@/transport";
 import type { ResultTarget } from "./ChatActions";
@@ -149,10 +150,10 @@ export default function ChatView({
 	const workspaceNames = useMemo(() => {
 		const map: Record<string, string> = {};
 		for (const list of Object.values(workspaces)) {
-			for (const w of list) map[w.id] = w.name;
+			for (const w of list) map[w.id] = workspaceName(t, w);
 		}
 		return map;
-	}, [workspaces]);
+	}, [t, workspaces]);
 
 	const currentModel = selectCatalogModel(models, sessionModel) ?? sessionModel;
 	const refreshStats = useSessionStats({

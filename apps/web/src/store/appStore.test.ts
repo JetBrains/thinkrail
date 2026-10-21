@@ -276,10 +276,10 @@ test("pi events route to the right session runtime; chats stay independent", () 
 
 	store.handlePiEvent(agentEnd, "a");
 	expect(rt("a").isStreaming).toBe(true);
-	expect(rt("a").turns.some((t) => t.kind === "system")).toBe(false);
+	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === undefined)).toBe(false);
 	store.handlePiEvent(agentSettled(), "a");
 	expect(rt("a").isStreaming).toBe(false);
-	expect(rt("a").turns.some((t) => t.kind === "system")).toBe(true);
+	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === undefined)).toBe(true);
 	expect(rt("b").isStreaming).toBe(true);
 	expect(rt("b").turns).toHaveLength(0);
 });
@@ -560,7 +560,7 @@ test("an assistant turn is built (and replaced, not duplicated) from message_upd
 	const after = rt("a");
 	expect(after.isStreaming).toBe(false);
 	expect(after.currentAssistantId).toBeNull();
-	expect(after.turns.some((t) => t.kind === "system")).toBe(true);
+	expect(after.turns.some((t) => t.kind === "system" && t.text === undefined)).toBe(true);
 });
 
 test("a multi-message turn leaves no assistant turn flagged streaming (no stray live indicator)", () => {
@@ -850,7 +850,7 @@ test("a lingering retry countdown is swept up only when the run settles", () => 
 	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(true);
 	store.handlePiEvent(agentSettled(), "a");
 	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(false);
-	expect(rt("a").turns.some((t) => t.kind === "system")).toBe(true);
+	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === undefined)).toBe(true);
 });
 
 test("auto-retry drops the failed attempt's turn — the retried message must not render twice", () => {
@@ -904,7 +904,7 @@ test("auto-retry drops the failed attempt's turn — the retried message must no
 			assistants[0].message.content.some((c) => c.type === "text" && c.text === "The answer is 4"),
 	).toBe(true);
 	expect(after.turns.some((t) => t.kind === "retry")).toBe(false);
-	expect(after.turns.some((t) => t.kind === "system")).toBe(true);
+	expect(after.turns.some((t) => t.kind === "system" && t.text === undefined)).toBe(true);
 });
 
 test("auto-retry with no assistant message yet (error before message_start) drops nothing", () => {
@@ -939,7 +939,7 @@ test("a turn that ends in a provider error surfaces the error (not a false ✓ D
 	const err = after.turns.find((t) => t.kind === "error");
 	expect(err?.kind === "error" && err.text).toContain("gpt-5.5");
 	expect(failureRecovery("a")).toBe("try-again");
-	expect(after.turns.some((t) => t.kind === "system")).toBe(false);
+	expect(after.turns.some((t) => t.kind === "system" && t.text === undefined)).toBe(false);
 });
 
 test("a run's closer lands before a mid-run result that woke nobody, as hydration orders it", () => {
@@ -994,7 +994,7 @@ test("a terminal length stop is a visible failure, never a false ✓ Done", () =
 	const error = after.turns.find((turn) => turn.kind === "error");
 	expect(error?.kind === "error" && error.failure).toBe("truncated");
 	expect(failureRecovery("a")).toBe("try-again");
-	expect(after.turns.some((turn) => turn.kind === "system")).toBe(false);
+	expect(after.turns.some((turn) => turn.kind === "system" && turn.text === undefined)).toBe(false);
 	expect(after.isStreaming).toBe(false);
 });
 
@@ -1116,7 +1116,9 @@ test("compaction lifecycle: a running notice settles in place (same id) with the
 	const running = compactionTurns("a");
 	expect(running).toMatchObject([{ status: "running" }]);
 	expect(rt("a").isStreaming).toBe(true);
-	expect(rt("a").turns.filter((turn) => turn.kind === "system")).toHaveLength(0);
+	expect(
+		rt("a").turns.filter((turn) => turn.kind === "system" && turn.text === undefined),
+	).toHaveLength(0);
 
 	store.handlePiEvent(compactionEnd(), "a");
 	expect(compactionTurns("a")).toMatchObject([
@@ -1156,7 +1158,9 @@ test("the incident sequence: truncated response → compacting → compacted-res
 	]);
 	expect(rt("a").turns.filter((turn) => turn.kind === "assistant")).toHaveLength(0);
 	expect(rt("a").isStreaming).toBe(true);
-	expect(rt("a").turns.filter((turn) => turn.kind === "system")).toHaveLength(0);
+	expect(
+		rt("a").turns.filter((turn) => turn.kind === "system" && turn.text === undefined),
+	).toHaveLength(0);
 
 	store.handlePiEvent(agentStart, "a");
 	store.handlePiEvent(assistantStart, "a");
@@ -1227,10 +1231,14 @@ test("compact-and-retry produces one completion marker at final settlement", () 
 	store.handlePiEvent(recoveredOverflow, "a");
 	store.handlePiEvent(agentStart, "a");
 	store.handlePiEvent(agentEnd, "a");
-	expect(rt("a").turns.filter((turn) => turn.kind === "system")).toHaveLength(0);
+	expect(
+		rt("a").turns.filter((turn) => turn.kind === "system" && turn.text === undefined),
+	).toHaveLength(0);
 
 	store.handlePiEvent(agentSettled(), "a");
-	expect(rt("a").turns.filter((turn) => turn.kind === "system")).toHaveLength(1);
+	expect(
+		rt("a").turns.filter((turn) => turn.kind === "system" && turn.text === undefined),
+	).toHaveLength(1);
 });
 
 test("appendErrorTurn surfaces a failed send (a rejected prompt) as a visible error turn", () => {

@@ -25,7 +25,7 @@ export type FailureRecovery = "try-again";
 export type ChatTurn =
 	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }
 	| { kind: "assistant"; id: string; message: AssistantMessage; streaming: boolean }
-	| { kind: "system"; id: string; endedAt?: number }
+	| { kind: "system"; id: string; text?: string; endedAt?: number }
 	| ({ kind: "compaction"; id: string } & CompactionState)
 	| {
 			kind: "error";

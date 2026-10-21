@@ -87,7 +87,7 @@ function ChatTurnViewImpl({
 				/>
 			);
 		case "system":
-			return <SystemTurn />;
+			return <SystemTurn text={row.text} />;
 		case "error":
 			return (
 				<ErrorTurn
@@ -533,7 +533,7 @@ function ToolRow({
 	);
 }
 
-function SystemTurn() {
+function SystemTurn({ text }: { text?: string | undefined }) {
 	const t = useT();
 	return (
 		<div
@@ -541,7 +541,7 @@ function SystemTurn() {
 			data-role="system"
 			className="text-center text-text-muted tr-text-metadata"
 		>
-			{t("chat.turn.done")}
+			{text ?? t("chat.turn.done")}
 		</div>
 	);
 }

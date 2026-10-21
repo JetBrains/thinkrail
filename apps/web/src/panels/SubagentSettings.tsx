@@ -9,6 +9,7 @@ import {
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { useEffect, useState } from "react";
+import { workspaceName } from "../store";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsRow } from "./SettingsRow";
 import { SettingsSwitch } from "./SettingsSwitch";
@@ -164,6 +165,7 @@ export function SubagentSettings({
 	const workspaceEnabled = enabledOverride === undefined ? globalEnabled : enabledOverride === "on";
 	const rawLimitOverride = workspace?.subagentMaxConcurrentOverride;
 	const limitOverride = isSubagentMaxConcurrent(rawLimitOverride) ? rawLimitOverride : undefined;
+	const workspaceLabel = workspace ? workspaceName(t, workspace) : "";
 
 	return (
 		<SettingsGroup
@@ -207,14 +209,14 @@ export function SubagentSettings({
 			{workspace ? (
 				<div
 					data-testid="subagents-workspace-heading"
-					title={workspace.name}
+					title={workspaceLabel}
 					className="flex min-w-0 flex-col gap-2 pt-16 pb-4"
 				>
 					<span className="tr-text-ui text-text-default">
 						{t("settings.subagents.workspaceHeading")}
 					</span>
 					<span className="break-words text-text-muted tr-text-metadata">
-						{t("settings.subagents.workspaceDescription", { name: workspace.name })}
+						{t("settings.subagents.workspaceDescription", { name: workspaceLabel })}
 					</span>
 				</div>
 			) : null}
@@ -225,13 +227,13 @@ export function SubagentSettings({
 						<span className="flex items-center gap-8">
 							<SourceTag
 								custom={enabledOverride !== undefined}
-								resetLabel={t("settings.subagents.resetEnabled", { name: workspace.name })}
+								resetLabel={t("settings.subagents.resetEnabled", { name: workspaceLabel })}
 								testId="subagents-workspace-source"
 								onReset={() => onWorkspaceEnabledChange(null)}
 							/>
 							<SettingsSwitch
 								checked={workspaceEnabled}
-								label={t("settings.subagents.allowInWorkspace", { name: workspace.name })}
+								label={t("settings.subagents.allowInWorkspace", { name: workspaceLabel })}
 								testId="subagents-workspace-toggle"
 								onChange={(enabled) => onWorkspaceEnabledChange(enabled ? "on" : "off")}
 							/>
@@ -247,7 +249,7 @@ export function SubagentSettings({
 							<span className="flex h-32 items-center">
 								<SourceTag
 									custom={limitOverride !== undefined}
-									resetLabel={t("settings.subagents.resetLimit", { name: workspace.name })}
+									resetLabel={t("settings.subagents.resetLimit", { name: workspaceLabel })}
 									testId="subagent-limit-workspace-source"
 									onReset={() => onWorkspaceLimitChange(null)}
 								/>
@@ -257,7 +259,7 @@ export function SubagentSettings({
 								placeholder={globalLimit}
 								allowEmpty
 								disabled={!workspaceEnabled}
-								label={t("settings.subagents.workspaceLimitLabel", { name: workspace.name })}
+								label={t("settings.subagents.workspaceLimitLabel", { name: workspaceLabel })}
 								testId="subagent-limit-workspace-input"
 								onCommit={onWorkspaceLimitChange}
 							/>

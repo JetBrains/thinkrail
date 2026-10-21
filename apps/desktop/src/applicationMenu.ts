@@ -1,30 +1,18 @@
 import type { NativeCommand } from "@thinkrail/contracts";
-import { DESKTOP_MENU_KEYS, EN } from "@thinkrail/locales";
+import { DESKTOP_MENU_KEYS } from "@thinkrail/locales";
 import type { ApplicationMenuItemConfig } from "electrobun/main";
+import { readLabels } from "./nativeLabels";
 
 const MENU_LABEL_KEYS = DESKTOP_MENU_KEYS;
 const MAX_MENU_LABEL_LENGTH = 80;
 
 export type DesktopMenuLabels = Readonly<Record<(typeof MENU_LABEL_KEYS)[number], string>>;
 
-export const DEFAULT_MENU_LABELS: DesktopMenuLabels = Object.fromEntries(
-	MENU_LABEL_KEYS.map((key) => [key, EN[key] ?? key]),
-) as DesktopMenuLabels;
-
 export function readMenuLabels(raw: unknown): DesktopMenuLabels {
-	const source = typeof raw === "object" && raw !== null ? raw : {};
-	return Object.fromEntries(
-		MENU_LABEL_KEYS.map((key) => {
-			const value: unknown = Reflect.get(source, key);
-			return [
-				key,
-				typeof value === "string" && value.trim() && value.length <= MAX_MENU_LABEL_LENGTH
-					? value
-					: DEFAULT_MENU_LABELS[key],
-			];
-		}),
-	) as DesktopMenuLabels;
+	return readLabels(MENU_LABEL_KEYS, MAX_MENU_LABEL_LENGTH, raw);
 }
+
+export const DEFAULT_MENU_LABELS: DesktopMenuLabels = readMenuLabels({});
 
 export const QUIT_SHORTCUT_ACTION = "quit-shortcut";
 const CLOSE_ITEM_COMMAND: NativeCommand = "close-item";

@@ -107,11 +107,12 @@ function windowControlsProbeScript(target: { testId: string; label: string }): s
 }
 let startupQuitCoordinator: ReturnType<typeof createElectrobunQuitCoordinator> | undefined;
 
+function desktopUserData(): string {
+	return process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData;
+}
+
 function nativeLabelsPath(): string {
-	return join(
-		process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData,
-		"native-labels.json",
-	);
+	return join(desktopUserData(), "native-labels.json");
 }
 
 function writeReady(path: string, payload: unknown): void {
@@ -182,7 +183,7 @@ async function start(): Promise<void> {
 		quitCoordinator.handleBeforeQuit(event);
 	});
 	const origin = `http://127.0.0.1:${host.port}`;
-	const userData = process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData;
+	const userData = desktopUserData();
 	const routes = new RouteStore(join(userData, "routes.json"));
 	const preferences = new PreferenceStore(join(userData, "preferences.json"));
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);

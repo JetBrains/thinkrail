@@ -27,7 +27,6 @@ interface TranscriptScope {
 }
 
 function useSubagentTranscript({ workspaceId, parentSessionId, childSessionId }: TranscriptScope) {
-	const t = useT();
 	const connectionGeneration = useAppStore((state) => state.connectionGeneration);
 	const status = useAppStore((state) => state.status);
 	const [messages, setMessages] = useState<TranscriptMessage[] | null>(null);
@@ -65,7 +64,7 @@ function useSubagentTranscript({ workspaceId, parentSessionId, childSessionId }:
 			messages
 				? messagesToRuntime(messages, undefined, { idScope: `subagent:${childSessionId}` })
 				: null,
-		[t, messages, childSessionId],
+		[messages, childSessionId],
 	);
 	const rows = useMemo(
 		() => (runtime ? deriveRows(runtime.turns, runtime.toolResults, live) : []),
