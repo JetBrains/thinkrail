@@ -1,4 +1,5 @@
 import { describe, expect, it, mock } from "bun:test";
+import { isAbsolute } from "node:path";
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { defineServerExtension, type ServerExtension } from "@thinkrail/extension-api/server";
 
@@ -59,6 +60,7 @@ describe("defineServerExtension", () => {
 					name: "record-runtime-imports",
 					setup(builder) {
 						builder.onResolve({ filter: /^[^./]/ }, ({ path }) => {
+							if (isAbsolute(path)) return undefined;
 							imports.push(path);
 							return undefined;
 						});

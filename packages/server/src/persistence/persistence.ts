@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, resolve } from "node:path";
 import {
 	type AppConfig,
 	DEFAULT_CONFIG,
@@ -43,7 +43,12 @@ export {
 export type { InstallationRecord } from "./installation";
 
 export function dataDir(): string {
-	return process.env.THINKRAIL_DATA_DIR ?? join(homedir(), ".thinkrail");
+	return resolve(process.env.THINKRAIL_DATA_DIR ?? join(homedir(), ".thinkrail"));
+}
+
+function storedDirectory(path: string): string {
+	if (typeof path !== "string" || !isAbsolute(path)) return path;
+	return resolve(path);
 }
 
 function readJson<T>(file: string, fallback: T): T {
@@ -268,7 +273,10 @@ export function saveTurns(turns: PersistedTurns): void {
 }
 
 export function loadProjects(): Project[] {
-	return readJson<Project[]>("projects.json", []);
+	return readJson<Project[]>("projects.json", []).map((project) => ({
+		...project,
+		path: storedDirectory(project.path),
+	}));
 }
 
 export function saveProjects(projects: Project[]): void {
@@ -276,7 +284,10 @@ export function saveProjects(projects: Project[]): void {
 }
 
 export function loadWorkspaces(): Workspace[] {
-	return readJson<Workspace[]>("workspaces.json", []);
+	return readJson<Workspace[]>("workspaces.json", []).map((workspace) => ({
+		...workspace,
+		worktreePath: storedDirectory(workspace.worktreePath),
+	}));
 }
 
 export function saveWorkspaces(workspaces: Workspace[]): void {
