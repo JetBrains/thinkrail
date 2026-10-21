@@ -1,5 +1,11 @@
 import { afterEach, expect, test } from "bun:test";
-import { type OneShotRunner, setOneShotRunner, suggestPlanSummary } from "./assist";
+import {
+	type OneShotRunner,
+	setOneShotRunner,
+	suggestPlanSummary,
+	suggestPrDescription,
+	toPrDescription,
+} from "./assist";
 
 function fakeRunner(fn: OneShotRunner): void {
 	setOneShotRunner(fn);
@@ -100,4 +106,50 @@ test("suggestPlanSummary returns null without calling the runner when there are 
 	});
 	expect(await suggestPlanSummary([{ title: "   " }])).toBeNull();
 	expect(called).toBe(false);
+});
+
+test("suggestPrDescription sends the branch facts and template to the cheap runner", async () => {
+	let seen = "";
+	let tier = "";
+	fakeRunner(async (req) => {
+		seen = req.prompt;
+		tier = req.tier ?? "";
+		return {
+			text: "```markdown\n## Why\n\nShips the topbar segment.\n```",
+			model: { provider: "p", id: "m" },
+		};
+	});
+	const out = await suggestPrDescription({
+		branch: "feature/ship",
+		base: "main",
+		commits: ["Add the ship segment", "  "],
+		diffStat: " a.ts | 3 +++\n 1 file changed",
+		plan: "## Plan\n- [x] Ship it",
+		template: "## Why\n\n## Checklist\n- [ ] tests",
+	});
+	expect(out).toBe("## Why\n\nShips the topbar segment.");
+	expect(tier).toBe("cheap");
+	expect(seen).toContain("Branch: feature/ship \u2192 main");
+	expect(seen).toContain("- Add the ship segment");
+	expect(seen).toContain("a.ts | 3");
+	expect(seen).toContain("Work plan:\n## Plan");
+	expect(seen).toContain("TEMPLATE:\n## Why");
+});
+
+test("suggestPrDescription is best-effort: nothing to describe, a throw, or empty output is null", async () => {
+	let calls = 0;
+	fakeRunner(async () => {
+		calls += 1;
+		throw new Error("no auth");
+	});
+	expect(
+		await suggestPrDescription({ branch: "b", base: "main", commits: [], diffStat: "" }),
+	).toBeNull();
+	expect(calls).toBe(0);
+	expect(
+		await suggestPrDescription({ branch: "b", base: "main", commits: ["x"], diffStat: "" }),
+	).toBeNull();
+	expect(calls).toBe(1);
+	expect(toPrDescription("```\n\n```")).toBeNull();
+	expect(toPrDescription("  ## Summary\n\nDone. ")).toBe("## Summary\n\nDone.");
 });

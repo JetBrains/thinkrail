@@ -1107,7 +1107,7 @@ a project picker, the prompt hero, and the reused
   renders the plan's shipping funnel — **Build (`d/t done`) → Review (`r/k reviewed`,
   `plan-review-progress`, only when the plan has reviewable items) → PR (`plan-pr-stage`,
   `data-state`)** — each stage wearing a glyph for its state: done (check), active (the stage the
-  plan is currently at), pending (muted). The PR stage reads the same `useOpenBranchReview` lookup
+  plan is currently at), pending (muted). The PR stage reads the same `useBranchStatus` lookup
   as the button and shows `PR #N` once one is open; "merged" is unknowable (the lookup only
   sees OPEN reviews), so the funnel honestly ends at PR-open. Under the stepper sits the **work
   CONTEXT line** (`plan-context`): `baseBranch ← branch · N commits · +A −R` — the arrow points at the
@@ -1231,7 +1231,7 @@ own section. The kebab menu (`plan-menu`, a
   unauthenticated GitHub CLI with install/sign-in commands and offers the compare page as an
   in-dialog link (`pr-setup-compare` — a real anchor, so no popup-blocker risk) instead of the
   blind `window.open`. Both variants keep a **Try again** (`pr-setup-retry`) that re-runs the same
-  flow — always with the LAST edited title/body (the `lastPrSubmit` ref, set on every submit,
+  flow — always with the LAST edited title/body (the runner's `lastSubmit` ref, set on every submit,
   cleared only when the flow fully succeeded, when the user explicitly cancels the compose dialog,
   or when they take the compare-page hand-off (external completion the client can't observe) — a
   `ghProblem` outcome otherwise keeps it, so the gh dialog's Try again actually re-submits;
@@ -1315,6 +1315,49 @@ own section. The kebab menu (`plan-menu`, a
   `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`shiki`,
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
+
+- **Ship — the branch's delivery state and actions, one implementation for topbar and Plan pane.**
+  `useBranchStatus(workspace, status)` (the keyed `branchStatusState`, request
+  generation, `noteOpenReview`, focus/fs/reconnect freshness rules above carry over unchanged) reads
+  `workspace.branchStatus` on a v87 host and falls back to `workspace.openReview` below it. It counts as
+  connected only once the welcome has named the protocol, so a reconnect never asks the old method of a
+  new host. It exposes the lookup's review — callers resolve it against the snapshot with
+  `resolveBranchReview` — with v87's ahead/behind folded onto it, plus the review-free `BranchFacts`.
+  `shipActions(context)` is the pure derivation of each segment's `{ primary, secondary }` —
+  remote arm (Publish / Push N / Sync…) and review arm (Open PR / Create MR / Open draft PR / the
+  disabled Merge-locally stub / Settle; on a v88 host Fix with agent / Ready / Merge PR for an open GitHub
+  PR and Reopen / Delete remote branch after it) — unit-tested over the full scenario table, as are the
+  agent prompt texts it builds (`fixChecksPrompt`, `integratePrompt`). `useShipRunner`
+  executes them and owns their dialogs: the shared `PrComposeDialog` (now also used for first-time
+  creation from the topbar), `PrSetupDialog`, the diverged Sync dialog, the base-push confirmation,
+  `MergePrDialog`, and the remote-branch deletion confirmation. The merge dialog and its toasts name the
+  PR's current base from `details.base`, never the workspace's base (a PR can be retargeted on GitHub),
+  and make no target claim when it is unknown. Review actions act on the `review` the
+  caller shows (its number) and the branch the runner is bound to. **Merge PR** offers only the methods
+  the repository allows (every method when the host could not tell) and defaults to the last method used
+  for the project — `mergePrefs`, client-side per host + project (a project is one repository), falling back
+  to squash → merge → rebase; *delete the branch on GitHub* is remembered with it and starts on, and hides
+  when GitHub deletes merged branches itself. **Fix with agent** and the Sync dialog's **Ask agent to
+  integrate** hand a prompt to the runner's chat through `openChat`'s `promptWorkspaceChat` — a follow-up
+  while that chat streams, otherwise a prompt; with no chat, a new one starts with it — and show the chat.
+  Integration may rebase or merge but never force-push or drop commits, and leaves the push to the user.
+  The Plan pane's Open PR / *Push updates* / diverged handling runs through the same runner, so the
+  `lastSubmit` reuse, `PUSH_AUTH_FAILED`, `ghProblem`, and compare hand-off rules above have one home.
+  **Try again** re-runs the mutation that actually failed — a PR submit or a push, recorded when it fails
+  and dropped when the setup dialog closes — never whichever PR the user last composed; `lastSubmit`
+  only restores the compose dialog's edits, including its description sources, and only on the branch they
+  were composed for. Every mutation carries the branch it was made for — the compose dialog's branch at
+  preview time, the base-push confirmation's named branch, the failed attempt's branch on retry — and the
+  host refuses it once the checkout has moved, so neither a terminal switch nor a retry can push a branch
+  the user didn't see or confirm.
+  The Plan pane alone asks for its plan body explicitly (`bodySource: "plan"`, so a plan of adopted commits
+  only still opens on it) and keeps its plan-specific emphasis and its body-refreshing *Push updates*
+  (`pr.open` without a body); the topbar's Push is `workspace.push` and never touches a PR description.
+  **Compose sources:** the dialog's *Description from* switch re-fetches `pr.preview` with `source` —
+  *Chat plan* (default when the session has a plan; the active chat's session from the topbar), *Commits*,
+  *Template* (the host's discovered PR/MR templates, one picker), *Empty* — and **Generate with agent** /
+  **Fill template with agent** (`pr.generate`) replaces the field's text with the host's one-shot draft;
+  nothing is pushed until submit, and a `null` draft toasts instead of clearing the field.
 
 ## Get right
 

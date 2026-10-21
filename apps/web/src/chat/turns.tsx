@@ -115,9 +115,20 @@ function ChatTurnViewImpl({
 				/>
 			);
 		case "markdown":
-			return isFinalAnswer ? (
-				<MessageWithCopy messageRole="assistant" side="left" getText={() => row.text}>
-					<div className="w-full min-w-0 pl-24 tr-text-reading text-text-default [&>div>*:last-child]:mb-0 [&_ol]:list-inside [&_ul]:list-inside">
+			return (
+				<MessageWithCopy
+					messageRole="assistant"
+					side="left"
+					copyable={isFinalAnswer}
+					getText={() => row.text}
+				>
+					<div
+						className={cn(
+							"tr-text-reading text-text-default",
+							isFinalAnswer &&
+								"w-full min-w-0 pl-24 [&>div>*:last-child]:mb-0 [&_ol]:list-inside [&_ul]:list-inside",
+						)}
+					>
 						<AssistantMarkdown
 							text={row.text}
 							workspaceRoot={workspaceRoot}
@@ -125,18 +136,6 @@ function ChatTurnViewImpl({
 						/>
 					</div>
 				</MessageWithCopy>
-			) : (
-				<div
-					data-testid="chat-message"
-					data-role="assistant"
-					className="tr-text-reading text-text-default"
-				>
-					<AssistantMarkdown
-						text={row.text}
-						workspaceRoot={workspaceRoot}
-						onOpenFile={onOpenFile}
-					/>
-				</div>
 			);
 		case "backgroundCommandCompletion":
 			return <BackgroundCommandResult id={row.id} details={row.details} />;
@@ -239,11 +238,13 @@ function AttachmentChip({ label, img }: { label: string; img: ImageContent }) {
 function MessageWithCopy({
 	messageRole,
 	side,
+	copyable = true,
 	getText,
 	children,
 }: {
 	messageRole: "user" | "assistant";
 	side: "left" | "right";
+	copyable?: boolean;
 	getText: () => string;
 	children: ReactNode;
 }) {
@@ -252,16 +253,18 @@ function MessageWithCopy({
 			data-testid="chat-message"
 			data-role={messageRole}
 			className={cn(
-				"group relative flex flex-col",
-				side === "right" ? "items-end" : "items-start",
+				copyable && "group relative flex flex-col",
+				copyable && (side === "right" ? "items-end" : "items-start"),
 				side === "right" && USER_SIDE_UNBOUNDED_CLAMP,
 			)}
 		>
 			{children}
-			<CopyButton
-				getText={getText}
-				className={cn("absolute z-10", side === "right" ? "right-0 bottom-8" : "bottom-0 left-0")}
-			/>
+			{copyable ? (
+				<CopyButton
+					getText={getText}
+					className={cn("absolute z-10", side === "right" ? "right-0 bottom-8" : "bottom-0 left-0")}
+				/>
+			) : null}
 		</div>
 	);
 }

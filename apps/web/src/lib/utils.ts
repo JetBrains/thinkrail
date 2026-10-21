@@ -106,6 +106,18 @@ export function userText(content: UserMessage["content"]): string {
 		.join("");
 }
 
+export function firstNonBlankLine(text: string): string | undefined {
+	let start = 0;
+	while (start < text.length) {
+		const newline = text.indexOf("\n", start);
+		const end = newline === -1 ? text.length : newline;
+		const line = text.slice(start, end).trim();
+		if (line) return line;
+		start = end + 1;
+	}
+	return undefined;
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }

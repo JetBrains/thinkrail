@@ -668,6 +668,79 @@ export async function listCommitsSince(
 	return commits;
 }
 
+export interface OriginUrls {
+	fetch: string | null;
+	push: string | null;
+}
+
+export async function originUrls(worktreePath: string): Promise<OriginUrls> {
+	const [url, pushurl] = await Promise.all([
+		gitAsync(worktreePath, ["config", "--get", "remote.origin.url"]),
+		gitAsync(worktreePath, ["config", "--get", "remote.origin.pushurl"]),
+	]);
+	const fetch = url.ok && url.out ? url.out : null;
+	return { fetch, push: pushurl.ok && pushurl.out ? pushurl.out : fetch };
+}
+
+export type PushTargetStatus =
+	| { published: false }
+	| ({ published: true } & Partial<PushDivergence>);
+
+export async function countPushTargetDivergence(
+	worktreePath: string,
+	branch: string,
+	pushUrl: string,
+): Promise<PushTargetStatus> {
+	if (!isSafeRef(branch)) throw new Error(`Not a usable git ref: ${branch}`);
+	const ref = `refs/heads/${branch}`;
+	const listed = await gitAsync(worktreePath, ["ls-remote", "--end-of-options", pushUrl, ref], {
+		network: true,
+	});
+	if (!listed.ok) throw new Error(`Could not read the push target: ${listed.err || "git failed"}`);
+	const tip = listed.out
+		.split("\n")
+		.find((line) => line.endsWith(`\t${ref}`))
+		?.split("\t")[0];
+	if (!tip) return { published: false };
+	const present = async () =>
+		(await gitAsync(worktreePath, ["cat-file", "-e", "--end-of-options", `${tip}^{commit}`])).ok;
+	if (!(await present())) {
+		await gitAsync(
+			worktreePath,
+			["fetch", "--no-tags", "--no-write-fetch-head", "--end-of-options", pushUrl, ref],
+			{ network: true },
+		);
+		if (!(await present())) return { published: true };
+	}
+	const counted = await gitAsync(worktreePath, [
+		"rev-list",
+		"--left-right",
+		"--count",
+		"--end-of-options",
+		`${tip}...HEAD`,
+		"--",
+	]);
+	const [behindStr, aheadStr] = counted.out.split(/\s+/);
+	const behind = Number(behindStr);
+	const ahead = Number(aheadStr);
+	return counted.ok && Number.isSafeInteger(ahead) && Number.isSafeInteger(behind)
+		? { published: true, ahead, behind }
+		: { published: true };
+}
+
+export async function commitsAheadOf(worktreePath: string, baseRef: string): Promise<number> {
+	if (!isSafeRef(baseRef)) return 0;
+	const counted = await gitAsync(worktreePath, [
+		"rev-list",
+		"--count",
+		"--end-of-options",
+		`${baseRef}..HEAD`,
+		"--",
+	]);
+	const count = counted.ok ? Number(counted.out) : 0;
+	return Number.isSafeInteger(count) && count > 0 ? count : 0;
+}
+
 export interface PushDivergence {
 	/** Local commits origin/<branch> lacks (a plain push would deliver these). */
 	ahead: number;

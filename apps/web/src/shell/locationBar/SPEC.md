@@ -12,15 +12,18 @@ tags: [ui, topbar, public-surface-checked]
 
 The persistent "where am I / what state is it in" strip after the ThinkRail mark: one row of captioned
 segments — **Project · Workspace · Branch · from base · Remote · Pull request** — whose values are the
-controls for switching project or workspace, acting on the workspace, and reading or retargeting the
-branch. It renders what the store and `workspace.openReview` already report; it owns no host state.
+controls for switching project or workspace, acting on the workspace, reading or retargeting the
+branch, and taking the branch's **next delivery step** (publish, push, open a PR, sync, fix checks, mark
+ready, merge, settle). It renders
+what the store and `workspace.branchStatus` (older hosts: `workspace.openReview`) already report and runs
+actions through the panels-owned ship runner; it owns no host state.
 
 ## Boundary
 
 - **Owns:** the segment grammar (caption over a 20px value row, segments separated by space alone),
-  the pill/chip classes every value uses, the project switcher menu, the workspace menu (actions + sibling
-  switcher + New workspace), the branch card (copy, based-on, compare-to picker, remote and review rows),
-  the Remote and Pull request chips, and the responsive drop order.
+  the pill/chip/split-button classes every value uses, the project switcher menu, the workspace menu
+  (actions + sibling switcher + New workspace), the branch card (copy, based-on, compare-to picker, remote
+  and review rows), the Remote and Pull request segments, and the responsive drop order.
 - **Public surface (`index.ts`):**
   - `LocationBar`
 - **Allowed deps:** `store` (projects, workspaces, session state, diff base selector, toasts), `transport`
@@ -28,9 +31,15 @@ branch. It renders what the store and `workspace.openReview` already report; it 
   `@thinkrail/ui/*`, `@remixicon/react`, contracts types, and these `panels` files per-file:
   `workspaceActions` (the one implementation of open-in / rename / reveal / remove / `editor.list` /
   `workspace.list`, shared with `ProjectTree`), `RemoveWorkspaceDialog`, `BranchPicker` + `branches`,
-  `useOpenProject`, `useOpenBranchReview` (`openReviewLabel`).
+  `useOpenProject`, `useBranchStatus` (`openReviewLabel`, `resolveBranchReview`), `shipActions` (the
+  derivation), and `useShipRunner` (the action runner with its dialogs, shared with the Plan pane). A
+  `ShipStrip` keyed by the workspace id owns the runner: a compose draft survives the segments unmounting on a
+  disconnect, while moving to another workspace discards the draft, its retry, and any pending preview with
+  it, so a submit can never send one workspace's draft for another (the same binding rule as rename and
+  Remove).
 - **Forbidden:** server/shared/pi; layout engine, intents, or frame state; being imported by anything
-  other than `Shell`; a second implementation of a workspace action that `panels/workspaceActions` has.
+  other than `Shell`; a second implementation of a workspace action that `panels/workspaceActions` has,
+  or of a ship action (push, open PR, sync) that `panels/useShipRunner` has.
 
 ## Grammar
 
@@ -46,7 +55,9 @@ branch. It renders what the store and `workspace.openReview` already report; it 
 - Values are pills (`pillClass`: 20px, `window-no-drag`, hover `control-bg-hovered`, open
   `control-bg-selected`; the chevron is hidden at rest and appears on hover, keyboard focus, or while open)
   or status chips (`chipClass`: 20px, rounded-full, `tr-text-emphasis`, feedback-tinted `-subtle` fill with
-  the solid feedback text; interactive chips hover to the `-muted` step). Every pill value is one style and one
+  the solid feedback text; interactive chips hover to the `-muted` step), or a segment's **split button**
+  (20px, rounded-sm, bordered: the next action in `primary-subtle` — `feedback-warning-subtle` for Sync —
+  plus a ▾ menu of the segment's other actions; ▾ alone when there is no next action). Every pill value is one style and one
   resting colour, `tr-title-section` in `text-muted` — the colour of workspace names in the Projects tree —
   brightening to `text-default` only on hover or while open: mixed resting greys read as accidental, so the
   only resting tonal step in the strip is caption (`text-subtle`) versus value. The project initial is a neutral tile (`control-bg-selected` / `text-muted`) so the
@@ -55,10 +66,15 @@ branch. It renders what the store and `workspace.openReview` already report; it 
 - Captions stay part of the header drag region; every pill, chip, link, and the inline rename
   input opts out with `window-no-drag` (unit-tested), which is the deliberate relaxation of the shell's
   "buttons only in `topbar-actions`" rule for this strip alone.
-- Drop order as the window narrows: project segment below `sm`, review chip below `sm`, branch and remote
-  segments below `md`; the workspace segment never hides (e2e `topbar-chrome` keeps `scope-name` visible at
-  phone width with insets). Inside the row the branch shrinks first (`shrink-[4]`), then the project
-  (`shrink-[3]`), then the workspace, each capped by a `max-w`.
+- Drop order as the window narrows: project segment below `sm`, branch segment below `md`, a Remote
+  segment **without an action** below `md`, and a Pull request segment with neither a review nor a next
+  action below `sm`. The workspace segment, a Pull request segment with a review or a next action, and a
+  Remote segment carrying an action never hide; below `md` their split buttons collapse to the icon. The
+  workspace keeps a 64px minimum, so a strip squeezed by native insets clips its trailing segments, never
+  the workspace name (e2e `topbar-chrome` keeps `scope-name` visible at phone width with insets). Inside the
+  row the branch shrinks first (`shrink-[4]`), then the project (`shrink-[3]`), then the workspace, each
+  capped by a `max-w`; the Remote and Pull request segments do not shrink. Against a host without `workspace.branchStatus` the old
+  rule holds: Remote and the review chip render only with a review, hiding below `md` / `sm`.
 
 ## Behaviour
 
@@ -92,12 +108,53 @@ branch. It renders what the store and `workspace.openReview` already report; it 
 - **Branch · from base** opens the git card, moving focus onto the card itself (not its first button, which
   would pop the copy tooltip) so one Tab reaches the actions: branch (copy → success toast), *Based on* (hidden for
   user-owned workspaces, whose caption is plain "Branch"), *Compare to* (the Changes panel's `BranchPicker`
-  bound to `workspace.setDiffBase`, so the two controls can never disagree), and — only when the host has a
-  review — *Remote* (`n commits to push · n commits behind origin` or "In sync with origin") and the
-  PR/MR row with its link.
-- **Remote** renders only while `unpushedCommits` (warning chip) or `behindCommits` (info chip) is non-zero
-  and opens the same card. Both counts arrive on `OpenBranchReview`, so Remote (and the card's *Remote*
-  row) can appear only alongside a review — a branch without one shows no remote state, not "in sync".
+  bound to `workspace.setDiffBase`, so the two controls can never disagree), *Remote* (`n commits to push ·
+  n commits behind origin`, "In sync with origin", "Not published", or "No origin remote" — on a pre-v87
+  host only alongside a review), and — with a review — the PR/MR row with its link.
+- **Remote** (v87 `workspace.branchStatus`) renders for every workspace, including Default on its base.
+  Its value reads *No remote* (no `origin`), *Unreachable* (a split origin's push repository couldn't be
+  read — no action offered), *Not published* (origin lacks the branch), *In sync*, or the
+  ↑N warning / ↓N info chips. Its next action is the `shipActions` remote arm: **Publish** (unpublished
+  with commits ahead of the base), **Push N** (ahead, not behind), or **Sync…** (behind: the diverged
+  dialog with the Plan pane's shell-inert `git pull --rebase origin <branch>` rule, never a force command;
+  no pull command at all when `pushesElsewhere`, since pulling origin would integrate the fetch repository
+  while the counts describe the push repository — `shipActions`' `syncCommand` is the one rule).
+  Publish/Push call `workspace.push` with the branch the strip shows (the host pushes nothing if the
+  checkout has moved since); when the branch **is** its base (Default on `main`) the runner first
+  confirms, naming the shared branch, and only then sends `confirmBase`. A topbar push never rewrites the PR
+  description — the Plan pane's *Push updates* still refreshes it from the plan. A Publish/Push action
+  replaces the value; Sync sits beside the chips.
+- **Pull request** (v87) renders for every workspace. Without a review its value is — on a branch that is
+  its base and *No PR* / *No MR* otherwise, giving way to the primary action when there is one; its split
+  button carries the `shipActions` review arm: **Open
+  PR** (commits ahead of the base, GitHub origin — the shared compose dialog; without a usable `gh` the
+  host's compare / gh-setup outcome, as in the Plan pane), **Create MR** (GitLab: the same compose dialog; the
+  host pushes and opens GitLab's prefilled new-MR page), **Open draft PR** in ▾, and the inactive **Merge into <base> locally** stub
+  ("coming soon", a separate task). A merged or closed review offers **Settle** (▾ Keep active / Remove)
+  through the shared `workspaceActions`; on a v88 host ▾ also holds **Reopen PR on GitHub** (closed) and
+  **Delete remote branch…** (still published; a confirmation names `origin/<branch>` and promises the local
+  branch stays).
+- **An open GitHub PR** (v88 `details`) reads `Draft #N` in the neutral tone while a draft, and its chip's
+  trailing glyph is the checks verdict (✕ failing, spinner running, ✓ passed — tooltip and accessible name
+  carry the count and failing names) instead of the link icon. Its arm, in order: **Fix with agent**
+  (failing checks), **Ready for review** (draft), **Merge PR…** (`mergeState` clean / unstable / has_hooks,
+  and the branch known to match origin) — the first is the primary, the rest sit in ▾. While the branch is
+  ahead of or behind origin the PR has no primary: the Remote segment's Push / Sync is the next step, and
+  merging then would skip the unpushed commits. A branch that is its own base gets no PR actions (and no
+  Reopen): its review is a same-named branch's PR, a fork's for instance, never its own. Merge is decided by the merge state, never by approvals,
+  so a repository without required review can merge once CI allows. The branch card adds a **Checks** row
+  and a **Review** row (approved / changes requested by whom, or waiting for review) — the review decision
+  is information, never an action gate.
+- **CI polling** belongs to the topbar's `useBranchStatus` (the Shell's hook opts in; the Plan pane's
+  instance of the same key does not, so nothing polls twice): every 20 s while the open review's checks are
+  pending and the window is visible, a fresh review read that skips the origin fetch. A ship action's
+  refresh (push, Open PR, Ready, …) also owes the key three **discovery** polls in the shared
+  `branchStatusState`, whichever surface ran it: GitHub creates a new head's check suites after the push
+  returns, so the first read after an action usually shows no pending checks yet.
+- On a pre-v87 host the review-only rule holds: **Remote** renders only while `unpushedCommits` (warning
+  chip) or `behindCommits` (info chip) is non-zero and opens the same card. Both counts arrive on
+  `OpenBranchReview`, so Remote (and the card's *Remote* row) can appear only alongside a review — a branch
+  without one shows no remote state, not "in sync".
   **Pull request** is the `openReviewLabel` chip — success while the review is open, **info** reading
   *Merged #N* and **neutral** reading *Closed #N* once `OpenBranchReview.state` says so (a pre-v78 host
   omits `state` and the chip stays the open form) — a link when the provider reported a URL. Remote chips
@@ -107,5 +164,5 @@ branch. It renders what the store and `workspace.openReview` already report; it 
   be masked by a stale hook cache, while a `gh` hiccup never blanks a chip the shelf still acts on. Without
   matching live details the PR row remains but the Remote summary hides — absent lookup-only counts mean
   unknown, never "In sync with origin." Pre-v78 hosts use the lookup alone and ignore rollback-stale snapshot
-  fields. There is deliberately no "Open PR…" affordance: `pr.open` is a plan-session action and
-  stays on the plan pane.
+  fields. On v87 the same resolution runs over `workspace.branchStatus.review`, and the remote counts come
+  from `BranchStatus` itself, so they no longer depend on a review.

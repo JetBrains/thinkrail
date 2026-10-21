@@ -11,7 +11,7 @@ import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
-import { useOpenBranchReview } from "../panels/useOpenBranchReview";
+import { useBranchStatus } from "../panels/useBranchStatus";
 import {
 	SettingsSection,
 	selectActiveWorkspace,
@@ -63,7 +63,13 @@ export function Shell() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const contextProject = useAppStore(selectContextProject);
-	const { review: openReview, url: openReviewUrl } = useOpenBranchReview(activeWorkspace, status);
+	const {
+		review: openReview,
+		url: openReviewUrl,
+		status: branchStatus,
+		noteOpenReview,
+		refreshBranchStatus,
+	} = useBranchStatus(activeWorkspace, status, { pollChecks: true });
 	const locationReview =
 		openReview && openReviewUrl ? { ...openReview, url: openReviewUrl } : openReview;
 	const hasActiveWorkspace = activeWorkspaceId != null;
@@ -144,6 +150,9 @@ export function Shell() {
 							project={contextProject}
 							workspace={activeWorkspace}
 							review={activeWorkspace ? locationReview : null}
+							branchStatus={branchStatus}
+							noteOpenReview={noteOpenReview}
+							refreshBranchStatus={refreshBranchStatus}
 							onNewWorkspace={() => setNewWorkspaceProjectId(contextProject.id)}
 						/>
 					) : null}
