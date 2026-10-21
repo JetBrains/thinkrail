@@ -72,6 +72,8 @@ export {
 	USER_FONT_UPLOAD_HEADER,
 	USER_FONTS_ROUTE,
 } from "./domain";
+export type { FieldMatch, MatchField, MatchRange, MatchResult, MatchTier } from "./match";
+export { compareMatches, MATCH_TIER, matchFields, parseMatchTerms } from "./match";
 export type * from "./nativeClient";
 export type * from "./piProtocol";
 export {
