@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { NativeCommand, NativeQuitHint, NativeWindowState } from "@thinkrail/contracts";
@@ -161,6 +162,21 @@ async function start(): Promise<void> {
 		runtimeDir,
 		ptyLibraryName(runtimeTarget(process.platform, process.arch)),
 	);
+	const userData = desktopUserData();
+	const updateController = await createElectrobunUpdateController({
+		isPackaged: Electrobun.app.isPackaged,
+		version,
+		channel,
+		platform: process.platform,
+		arch: process.arch,
+		restartToUpdate: () => quitCoordinator.restartToUpdate(),
+	});
+	// Electrobun resolves and caches ../Resources from cwd; leave the bundle only after those reads.
+	try {
+		process.chdir(homedir());
+	} catch (error) {
+		console.error("[desktop] could not leave the app bundle working directory", error);
+	}
 	const serverRuntime = (await import(
 		pathToFileURL(join(runtimeDir, "server-runtime.ts")).href
 	)) as DesktopServerRuntime;
@@ -183,7 +199,6 @@ async function start(): Promise<void> {
 		quitCoordinator.handleBeforeQuit(event);
 	});
 	const origin = `http://127.0.0.1:${host.port}`;
-	const userData = desktopUserData();
 	const routes = new RouteStore(join(userData, "routes.json"));
 	const preferences = new PreferenceStore(join(userData, "preferences.json"));
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);
@@ -214,14 +229,6 @@ async function start(): Promise<void> {
 	const handlePageZoomGesture = createPageZoomGestureHandler({
 		getPageZoom: () => mainWindow.getPageZoom(),
 		setPageZoom: (zoom) => mainWindow.setPageZoom(zoom),
-	});
-	const updateController = await createElectrobunUpdateController({
-		isPackaged: Electrobun.app.isPackaged,
-		version,
-		channel,
-		platform: process.platform,
-		arch: process.arch,
-		restartToUpdate: quitCoordinator.restartToUpdate,
 	});
 	let handleTitleBarDoubleClick: () => Promise<void> = async () => {};
 	const rpc = BrowserView.defineRPC<DesktopRpc>({
