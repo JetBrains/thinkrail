@@ -13,7 +13,11 @@ import type {
 	Workspace,
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
-import { WORKSPACE_SETTLE_PROTOCOL_VERSION, WS_METHODS } from "@thinkrail/contracts";
+import {
+	BRANCH_STATUS_PROTOCOL_VERSION,
+	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+	WS_METHODS,
+} from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import {
 	type CreateSessionResult,
@@ -154,6 +158,195 @@ test("starting a PR mutation reactivates a parked workspace before any network a
 	const after = rows.find((row) => row.id === workspace.id);
 	expect(after?.settledOverride).toBeUndefined();
 	expect(after?.lastActiveAt ?? 0).toBeGreaterThanOrEqual(workspace.lastActiveAt ?? 0);
+});
+
+test("branch status reports a review-free branch, and workspace.push publishes it", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Ship segment" },
+		CTX,
+	)) as Workspace;
+	writeFileSync(join(workspace.worktreePath, "ship.txt"), "ship\n");
+	git(workspace.worktreePath, "add", "-A");
+	git(workspace.worktreePath, "commit", "-m", "ship");
+	writeFileSync(join(workspace.worktreePath, "dirty.txt"), "dirty\n");
+
+	const local = await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX);
+	expect(local).toEqual({
+		hasOrigin: false,
+		provider: null,
+		published: false,
+		pushesElsewhere: false,
+		aheadOfBase: 1,
+		onBase: false,
+		review: null,
+	});
+
+	const remote = join(dataDir, "origin.git");
+	mkdirSync(remote);
+	git(remote, "init", "--bare");
+	git(repo, "remote", "add", "origin", remote);
+	expect(
+		await handleRequest(
+			"workspace.push",
+			{ workspaceId: workspace.id, branch: workspace.branch },
+			CTX,
+		),
+	).toEqual({
+		dirtyFiles: 1,
+	});
+	const published = await handleRequest(
+		"workspace.branchStatus",
+		{ workspaceId: workspace.id },
+		CTX,
+	);
+	expect(published).toMatchObject({
+		hasOrigin: true,
+		provider: null,
+		published: true,
+		ahead: 0,
+		behind: 0,
+		aheadOfBase: 1,
+		review: null,
+	});
+});
+
+test("a CI poll re-reads the review without fetching origin; a focus read still fetches", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Poll" },
+		CTX,
+	)) as Workspace;
+	const remote = join(dataDir, "poll.git");
+	mkdirSync(remote);
+	git(remote, "init", "--bare");
+	git(repo, "remote", "add", "origin", remote);
+	await handleRequest(
+		"workspace.push",
+		{ workspaceId: workspace.id, branch: workspace.branch },
+		CTX,
+	);
+	const other = join(dataDir, "poll-other");
+	git(dataDir, "clone", "--branch", workspace.branch, remote, other);
+	git(other, "config", "user.email", "t@thinkrail.test");
+	git(other, "config", "user.name", "test");
+	writeFileSync(join(other, "teammate.txt"), "teammate\n");
+	git(other, "add", "-A");
+	git(other, "commit", "-m", "teammate");
+	git(other, "push", "origin", workspace.branch);
+
+	expect(
+		await handleRequest(
+			"workspace.branchStatus",
+			{ workspaceId: workspace.id, skipFetch: true },
+			CTX,
+		),
+	).toMatchObject({ published: true, behind: 0 });
+	expect(
+		await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
+	).toMatchObject({ published: true, behind: 1 });
+});
+
+test("a split origin measures the branch against where it is pushed, not where it is fetched", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Split origin" },
+		CTX,
+	)) as Workspace;
+	writeFileSync(join(workspace.worktreePath, "ship.txt"), "ship\n");
+	git(workspace.worktreePath, "add", "-A");
+	git(workspace.worktreePath, "commit", "-m", "ship");
+	const fetchRepo = join(dataDir, "fetch.git");
+	const pushRepo = join(dataDir, "push.git");
+	for (const bare of [fetchRepo, pushRepo]) {
+		mkdirSync(bare);
+		git(bare, "init", "--bare");
+	}
+	git(repo, "remote", "add", "origin", fetchRepo);
+	git(repo, "remote", "set-url", "--push", "origin", pushRepo);
+	git(repo, "push", fetchRepo, "main");
+	await handleRequest(
+		"workspace.push",
+		{ workspaceId: workspace.id, branch: workspace.branch },
+		CTX,
+	);
+
+	const other = join(dataDir, "other");
+	git(dataDir, "clone", fetchRepo, other);
+	git(other, "config", "user.email", "t@thinkrail.test");
+	git(other, "config", "user.name", "test");
+	git(other, "switch", "-c", workspace.branch);
+	writeFileSync(join(other, "unrelated.txt"), "unrelated\n");
+	git(other, "add", "-A");
+	git(other, "commit", "-m", "unrelated on the fetch side");
+	git(other, "push", "origin", workspace.branch);
+	git(workspace.worktreePath, "fetch", "origin");
+	git(other, "push", "origin", "--delete", workspace.branch);
+
+	expect(
+		await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX),
+	).toMatchObject({ published: true, pushesElsewhere: true, ahead: 0, behind: 0 });
+
+	const pushed = join(dataDir, "pushed");
+	git(dataDir, "clone", "--branch", workspace.branch, pushRepo, pushed);
+	git(pushed, "config", "user.email", "t@thinkrail.test");
+	git(pushed, "config", "user.name", "test");
+	writeFileSync(join(pushed, "later.txt"), "later\n");
+	git(pushed, "add", "-A");
+	git(pushed, "commit", "-m", "later on the push side");
+	git(pushed, "push", "origin", workspace.branch);
+
+	git(workspace.worktreePath, "fetch", "--prune", "origin");
+
+	expect(
+		await handleRequest(
+			"workspace.branchStatus",
+			{ workspaceId: workspace.id, allowCached: true },
+			CTX,
+		),
+	).toMatchObject({ published: true, ahead: 0, behind: 1 });
+});
+
+test("a split origin whose push repository can't be read reports publication as unknown", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Unreachable push" },
+		CTX,
+	)) as Workspace;
+	const fetchRepo = join(dataDir, "fetch-only.git");
+	mkdirSync(fetchRepo);
+	git(fetchRepo, "init", "--bare");
+	git(repo, "remote", "add", "origin", fetchRepo);
+	git(workspace.worktreePath, "push", fetchRepo, `HEAD:refs/heads/${workspace.branch}`);
+	git(workspace.worktreePath, "fetch", "origin");
+	git(repo, "remote", "set-url", "--push", "origin", join(dataDir, "missing.git"));
+
+	const status = await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX);
+	expect(status).toMatchObject({ hasOrigin: true, pushesElsewhere: true, published: null });
+	expect(status).not.toHaveProperty("ahead");
+});
+
+test("a pre-v87 client's source-less PR preview keeps the session's plan body", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Legacy preview" },
+		CTX,
+	)) as Workspace;
+	writeFileSync(join(workspace.worktreePath, "ship.txt"), "ship\n");
+	git(workspace.worktreePath, "add", "-A");
+	git(workspace.worktreePath, "commit", "-m", "ship it");
+	const params = { workspaceId: workspace.id, sessionId: "legacy-session" };
+
+	const legacy = (await handleRequest("pr.preview", params, {
+		...CTX,
+		protocolVersion: BRANCH_STATUS_PROTOCOL_VERSION - 1,
+	})) as { body: string };
+	expect(legacy.body).toContain("## Committed outside the plan");
+	const current = (await handleRequest("pr.preview", params, CTX)) as {
+		body: string;
+		source: string;
+	};
+	expect(current).toMatchObject({ source: "commits", body: "- ship it" });
 });
 
 test("request diagnostics expose only registered method names", async () => {

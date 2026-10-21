@@ -58,27 +58,25 @@ import {
 import { StatusIcon } from "../chat/TodoList";
 import { AskUserQuestionCard } from "../chat/tools/AskUserQuestionCard";
 import { hydrateSessionRuntime, useChatTodos } from "../chat/useChatTodos";
-import { isShellInert } from "../lib";
 import {
 	selectAgentReviewCommentCount,
 	selectChatTitle,
 	selectWorkspaceById,
 	useAppStore,
 } from "../store";
-import { errorText, getTransport, supportsPlanReview, wsErrorCode } from "../transport";
+import { errorText, getTransport, supportsPlanReview } from "../transport";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openChatInTab } from "./openChat";
 import { openDiffInTab } from "./openTabs";
 import { PlanCommitsMenu } from "./PlanCommitsMenu";
-import { PrComposeDialog, type PrComposeState } from "./PrComposeDialog";
-import { PrSetupDialog, type PrSetupState } from "./PrSetupDialog";
 import { FileRow } from "./planFileRow";
 import {
 	isOpenBranchReview,
 	openReviewLabel,
 	resolveBranchReview,
-	useOpenBranchReview,
-} from "./useOpenBranchReview";
+	useBranchStatus,
+} from "./useBranchStatus";
+import { useShipRunner } from "./useShipRunner";
 
 function ChangeSetBlock({
 	item,
@@ -861,16 +859,16 @@ export default function PlanPane({
 		if (connection !== "connected" || hasRuntime) return;
 		hydrateSessionRuntime(workspaceId, sessionId).catch(() => {});
 	}, [connection, hasRuntime, workspaceId, sessionId]);
-	const hostPlatform = useAppStore((s) => s.hostPlatform);
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const workspaceSettlingSupported = useAppStore((s) => s.workspaceSettlingSupported);
 	const canReview = supportsPlanReview(protocolVersion);
 	const {
 		review: branchReview,
 		url: branchReviewUrl,
+		status: branchStatus,
 		noteOpenReview,
-		refreshOpenReview,
-	} = useOpenBranchReview(workspace, connection);
+		refreshBranchStatus,
+	} = useBranchStatus(workspace, connection);
 	const branchReviewWithUrl =
 		branchReview && branchReviewUrl ? { ...branchReview, url: branchReviewUrl } : branchReview;
 	const resolvedBranchReview = resolveBranchReview(
@@ -883,15 +881,18 @@ export default function PlanPane({
 			? resolvedBranchReview.review
 			: null;
 	const openReviewUrl = openReview?.url;
-	const [prBusy, setPrBusy] = useState(false);
-	const [prSetup, setPrSetup] = useState<PrSetupState | null>(null);
-	const [prCompose, setPrCompose] = useState<PrComposeState | null>(null);
-	const lastPrSubmit = useRef<{
-		draft: boolean;
-		title?: string | undefined;
-		body?: string | undefined;
-		titleEdited: boolean;
-	} | null>(null);
+	const ship = useShipRunner({
+		workspace,
+		sessionId,
+		title,
+		bodySource: "plan",
+		openReview,
+		status: branchStatus,
+		analyticsSource: "plan_page",
+		noteOpenReview,
+		refresh: refreshBranchStatus,
+	});
+	const prBusy = ship.busy;
 	const [focusRequest, setFocusRequest] = useState<{ id: string; tick: number } | null>(null);
 	const agentComments = useAppStore((s) => selectAgentReviewCommentCount(s, workspaceId));
 	const reviewComments = useAppStore((s) => s.reviewsByWorkspace[workspaceId]?.comments);
@@ -947,145 +948,7 @@ export default function PlanPane({
 	const unpushed = openReview?.unpushedCommits ?? 0;
 	const diverged = (openReview?.behindCommits ?? 0) > 0;
 	const branch = workspace?.branch ?? "";
-	const integrateCommand = isShellInert(branch) ? `git pull --rebase origin ${branch}` : null;
-	const copyIntegrateCommand = () => {
-		if (!integrateCommand) return;
-		void navigator.clipboard
-			.writeText(integrateCommand)
-			.then(() =>
-				pushToast({
-					variant: "success",
-					title: "Command copied",
-					message: "Run it in a terminal to integrate the remote changes, then push.",
-				}),
-			)
-			.catch(() =>
-				pushToast({
-					variant: "error",
-					title: "Copy failed",
-					message: "Couldn't write to the clipboard.",
-				}),
-			);
-	};
-	const openPrFlow = async (draft: boolean): Promise<void> => {
-		if (openReview) {
-			await submitPr({ draft: false });
-			return;
-		}
-		const edited = lastPrSubmit.current;
-		if (
-			edited &&
-			edited.title !== undefined &&
-			edited.body !== undefined &&
-			edited.draft === draft
-		) {
-			setPrCompose({
-				draft,
-				title: edited.title,
-				body: edited.body,
-				titleEdited: edited.titleEdited,
-			});
-			return;
-		}
-		setPrBusy(true);
-		try {
-			const preview = await getTransport().request("pr.preview", { workspaceId, sessionId, title });
-			setPrCompose({ draft, ...preview });
-		} catch (err) {
-			pushToast({ variant: "error", title: "Couldn't prepare the PR", message: errorText(err) });
-		} finally {
-			setPrBusy(false);
-		}
-	};
-	const submitPr = async (opts: {
-		draft: boolean;
-		title?: string | undefined;
-		body?: string | undefined;
-		titleEdited?: boolean | undefined;
-	}): Promise<void> => {
-		const { draft, title: prTitle, body: prBody, titleEdited } = opts;
-		lastPrSubmit.current = {
-			draft,
-			title: prTitle,
-			body: prBody,
-			titleEdited: Boolean(titleEdited),
-		};
-		setPrBusy(true);
-		try {
-			const result = await getTransport().request(
-				"pr.open",
-				{
-					workspaceId,
-					sessionId,
-					...(prTitle !== undefined ? { title: prTitle } : {}),
-					...(titleEdited ? { titleEdited: true } : {}),
-					...(prBody !== undefined ? { body: prBody } : {}),
-					...(draft ? { draft: true } : {}),
-					source: "plan_page",
-				},
-				{ timeoutMs: 180_000 },
-			);
-			setPrCompose(null);
-			if (result.review) noteOpenReview(result.review, result.url);
-			refreshOpenReview();
-			const dirty =
-				result.dirtyFiles > 0
-					? `${result.dirtyFiles} uncommitted ${result.dirtyFiles === 1 ? "file" : "files"} stayed local.`
-					: "";
-			if (dirty) pushToast({ variant: "info", title: "Uncommitted changes", message: dirty });
-			if (result.action === "compare" && result.ghProblem) {
-				setPrSetup({
-					kind: "gh",
-					problem: result.ghProblem,
-					...(result.compareUrl ? { compareUrl: result.compareUrl } : {}),
-				});
-				return;
-			}
-			lastPrSubmit.current = null;
-			if (result.action === "compare" && result.compareUrl) {
-				window.open(result.compareUrl, "_blank", "noopener,noreferrer");
-			}
-			const toastByAction = {
-				created: {
-					title: "PR opened",
-					message: `${result.review ? openReviewLabel(result.review) : "The PR"} is open — its description came from this plan.`,
-				},
-				updated: {
-					title: "PR updated",
-					message: `Pushed new commits to ${result.review ? openReviewLabel(result.review) : "the open PR"}${result.bodyRefreshed === false ? " — refreshing its description failed." : " and refreshed its description."}`,
-				},
-				pushed: {
-					title: "Branch pushed",
-					message:
-						"The branch is on origin. The remote isn't GitHub — open the review on your forge.",
-				},
-				compare: {
-					title: "Branch pushed",
-					message:
-						"GitHub's compare page opened with the plan prefilled — finish creating the PR there.",
-				},
-			} as const;
-			pushToast({ variant: "success", ...toastByAction[result.action] });
-		} catch (err) {
-			if (wsErrorCode(err) === "PUSH_AUTH_FAILED") {
-				setPrCompose(null);
-				setPrSetup({ kind: "push-auth", detail: errorText(err) });
-			} else {
-				pushToast({ variant: "error", title: "Open PR failed", message: errorText(err) });
-			}
-		} finally {
-			setPrBusy(false);
-		}
-	};
-	const retryPrSetup = () => {
-		setPrSetup(null);
-		const last = lastPrSubmit.current;
-		if (last) void submitPr(last);
-	};
-	const runPrSetupCommand = (command: string) => {
-		setPrSetup(null);
-		useAppStore.getState().addTerminal(workspaceId, command);
-	};
+	const { integrateCommand, copyIntegrateCommand, openPr: openPrFlow } = ship;
 	const startReview = async (id: string): Promise<void> =>
 		plan.startReview(id).then(
 			() => {
@@ -1183,30 +1046,7 @@ export default function PlanPane({
 			data-testid="plan-pane"
 			className="h-full overflow-auto bg-container-content-bg motion-safe:animate-reveal"
 		>
-			<PrComposeDialog
-				state={prCompose}
-				updating={Boolean(openReview)}
-				busy={prBusy}
-				onClose={() => {
-					setPrCompose(null);
-					lastPrSubmit.current = null;
-				}}
-				onSubmit={(prTitle, prBody, titleEdited) => {
-					if (prCompose)
-						void submitPr({ draft: prCompose.draft, title: prTitle, body: prBody, titleEdited });
-				}}
-			/>
-			<PrSetupDialog
-				state={prSetup}
-				platform={hostPlatform}
-				onClose={() => setPrSetup(null)}
-				onRetry={retryPrSetup}
-				onRun={runPrSetupCommand}
-				onCompareOpen={() => {
-					setPrSetup(null);
-					lastPrSubmit.current = null;
-				}}
-			/>
+			{ship.dialogs}
 			<div className="mx-auto max-w-[52rem] px-16 py-16">
 				<header className="mb-16 flex items-center gap-12">
 					<div className="min-w-0 flex-1">
@@ -1323,7 +1163,7 @@ export default function PlanPane({
 						) : (
 							<GitPullRequestArrow className="size-14" />
 						)}
-						{prBusy && (prCompose || openReview)
+						{ship.submitting
 							? "Pushing…"
 							: openReview
 								? diverged

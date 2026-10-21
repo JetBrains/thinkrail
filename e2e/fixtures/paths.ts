@@ -59,6 +59,9 @@ export const E2E_HOME_DIR = join(E2E_DATA_DIR, "home");
 
 export const E2E_FAKE_BIN_DIR = join(E2E_DATA_DIR, ".bun", "bin");
 
+export const E2E_GH_SCENARIO = join(E2E_DATA_DIR, "gh-scenario.json");
+export const E2E_GH_LOG = join(E2E_DATA_DIR, "gh.log");
+
 export const E2E_CENTRAL_EXTENSION_SOURCE = join(E2E_DATA_DIR, "synthetic-central-extension.ts");
 export const E2E_CENTRAL_BAD_EXTENSION_SOURCE = join(
 	E2E_DATA_DIR,
