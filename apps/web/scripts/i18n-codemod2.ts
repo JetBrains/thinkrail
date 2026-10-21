@@ -18,8 +18,14 @@ import { join } from "node:path";
 import * as ts from "typescript";
 
 const shouldWrite = process.argv.includes("--write");
-const ROOTS = ["src", "../desktop/src"];
+const ROOTS = ["src"];
 
+/**
+ * Web sources only. Desktop copy is a separate, much smaller surface — the native menu and the
+ * crash/restart dialogs in `apps/desktop/src/menuLocale.ts` — and it must go through that module
+ * rather than this codemod: desktop has no `@/*` alias, and its SPEC forbids runtime imports of web
+ * source, so an inserted `import { t } from "@/i18n"` would not even resolve there.
+ */
 const SKIP =
 	/(?:^|\/)(?:generated|node_modules|dist|i18n)(?:\/|$)|\.(?:test|spec)\.[cm]?tsx?$|\.d\.ts$/;
 

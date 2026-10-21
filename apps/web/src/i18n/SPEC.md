@@ -49,6 +49,18 @@ application menu and `document` metadata as well as by components; a re-render w
 subscription would turn every `t` call site into a hook. One reload is the only change that makes all of them
 agree, and it costs nothing in a local app.
 
+In the desktop client the reload waits for a native handshake. The preload script seeds the page's preference
+snapshot from values captured when the window was created, so a reload alone would replay the previous
+language and undo the switch. `applyLocale` therefore calls the `NativeLocaleBridge`
+(`packages/contracts/src/nativeClient.ts`) first, which persists `thinkrail-locale` and rebuilds the native
+menu, and reloads only once that resolves. A failed handshake still reloads: `localStorage` already carries the
+choice for this session, and the only consequence is that the next launch falls back to the previous language.
+
+`storedLocale` reads `localStorage` before the native adapter for the same reason. The adapter is the window-creation
+snapshot and cannot see a choice made during this session; `localStorage` is written synchronously by `setLocale`,
+survives the reload, and is per-launch because the desktop client is served from a fresh loopback port each time.
+The adapter remains the fallback, so a choice persisted in an earlier launch still wins over `navigator.language`.
+
 The resolved locale also drives `document.documentElement.lang` (`main.tsx`), which is what selects CJK glyphs
 and line-breaking rules in the browser and what a screen reader uses to pick a voice. `index.html` keeps a
 static `lang="en"` as the pre-boot default.
@@ -67,7 +79,10 @@ equals the English one (product names, CLI commands) are listed in the catalog's
 `scripts/i18n-codemod.ts` and `scripts/i18n-codemod2.ts` wrap existing JSX text and string literals in `t()`
 so a locale can be added to a component tree that predates this module; they are deliberately conservative
 (they refuse CSS class lists, storage keys, commands, ANSI escapes and already-Chinese strings) because a
-wrongly wrapped identifier breaks a build, while a missed label is only cosmetic. `keys.ts` is generated and
+wrongly wrapped identifier breaks a build, while a missed label is only cosmetic. Both codemods rewrite **web
+sources only**: desktop copy is a much smaller surface that belongs to `apps/desktop/src/menuLocale.ts`, and
+desktop has no `@/*` alias and may not import web source at runtime, so an inserted `import { t } from "@/i18n"`
+would not resolve there. `keys.ts` is generated and
 therefore excluded from Biome: formatting it would put the checked-in file and the generator's output out of
 sync, and `i18n:check` would report a drift that is only whitespace.
 

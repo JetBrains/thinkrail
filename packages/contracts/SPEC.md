@@ -519,7 +519,10 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   focused in-app item, and `open-settings`, open Settings unless a modal is open), and its one action `quit()` asks the host for an ordinary coordinated quit. The
   notification bridge exposes `show({ title, subtitle?, body, silent? })` (fire-and-forget OS notification,
   no callback or id) and an optional `isWindowFocused()` that reports OS-level window focus — true even
-  when DevTools has renderer focus, unlike `document.hasFocus()`. A browser
+  when DevTools has renderer focus, unlike `document.hasFocus()`. The locale bridge exposes
+  `applyLocale(locale): Promise<boolean>`, which resolves once the host has persisted the preference and
+  rebuilt its native menu — the acknowledgement a client waits for before reloading, so the reloaded preload
+  re-seeds the new value instead of the snapshot taken when the window was created. A browser
   connection has none of these bridges and renders none of their affordances.
 - **quitConfirmation.ts** — the single home of the quit-confirmation gesture shared by the desktop main
   process (macOS Cmd+Q, key state polled through CoreGraphics) and the web shell (Linux Ctrl+Q, key state
