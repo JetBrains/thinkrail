@@ -23,7 +23,14 @@ const INPUT_CLASS =
 function isValidTemplateName(name: string): boolean {
 	if (name.length === 0) return false;
 	if (name.startsWith(".")) return false;
-	return !name.includes("/") && !name.includes("\\") && !name.includes("\0");
+	// Keep in sync with the server: ":" is rejected on every OS so saved
+	// templates stay portable (NTFS reads "a:b.md" as an alternate data stream).
+	return (
+		!name.includes("/") &&
+		!name.includes("\\") &&
+		!name.includes("\0") &&
+		!name.includes(":")
+	);
 }
 
 export function TemplateEditorDialog({
@@ -97,7 +104,7 @@ export function TemplateEditorDialog({
 		if (saving) return;
 		const finalName = template ? template.name : name.trim();
 		if (!isValidTemplateName(finalName)) {
-			setError('Name can\'t be empty, start with ".", or contain "/", "\\", or a null byte.');
+			setError('Name can\'t be empty, start with ".", or contain "/", "\\", ":", or a null byte.');
 			return;
 		}
 		if (scope === "project" && !workspaceId) {
