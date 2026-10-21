@@ -63,7 +63,7 @@ function useSubagentTranscript({ workspaceId, parentSessionId, childSessionId }:
 	const runtime = useMemo(
 		() =>
 			messages
-				? messagesToRuntime(t, messages, undefined, { idScope: `subagent:${childSessionId}` })
+				? messagesToRuntime(messages, undefined, { idScope: `subagent:${childSessionId}` })
 				: null,
 		[t, messages, childSessionId],
 	);

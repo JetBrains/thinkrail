@@ -6,15 +6,22 @@ interface AssistantTerminal {
 	errorMessage?: string;
 }
 
-export function assistantFailureText(
-	t: Translator,
+export type AssistantFailure = "error" | "truncated";
+
+export function assistantFailure(
 	terminal: AssistantTerminal | null | undefined,
-): string | null {
-	if (terminal?.stopReason === "error") {
-		return terminal.errorMessage || t("chat.failure.error");
-	}
-	if (terminal?.stopReason === "length") {
-		return t("chat.failure.truncated");
-	}
+): { failure: AssistantFailure; message: string } | null {
+	if (terminal?.stopReason === "error")
+		return { failure: "error", message: terminal.errorMessage ?? "" };
+	if (terminal?.stopReason === "length") return { failure: "truncated", message: "" };
 	return null;
+}
+
+export function errorTurnText(
+	t: Translator,
+	turn: { text: string; failure?: AssistantFailure | undefined },
+): string {
+	if (turn.failure === "truncated") return t("chat.failure.truncated");
+	if (turn.failure === "error") return turn.text || t("chat.failure.error");
+	return turn.text;
 }

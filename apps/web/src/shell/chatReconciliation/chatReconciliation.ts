@@ -1,4 +1,4 @@
-import { currentTranslator, t } from "@thinkrail/locales/react";
+import { t } from "@thinkrail/locales/react";
 import { useEffect, useRef } from "react";
 import { messagesToRuntime } from "../../chat/hydrate";
 import { type LayoutAttention, readLayoutSelection, tupleKey } from "../../lib";
@@ -78,7 +78,7 @@ export function hydrateChatResource(workspaceId: string, sessionId: string): Pro
 			if (!stillPlaced) return false;
 			current.hydrateSession(
 				summary,
-				messagesToRuntime(currentTranslator(), messages, summary.lastSettlement),
+				messagesToRuntime(messages, summary.lastSettlement),
 				false,
 				summary.live ? undefined : syncedTick,
 				{ activate: false },
@@ -314,7 +314,7 @@ export function useWorkspaceChatCatalogReconciliation(
 									.getState()
 									.hydrateSession(
 										summary,
-										messagesToRuntime(currentTranslator(), messages, summary.lastSettlement),
+										messagesToRuntime(messages, summary.lastSettlement),
 										true,
 										summary.live ? undefined : loaded.syncedTick,
 										targetOptions,
@@ -390,7 +390,7 @@ export function useWorkspaceChatCatalogReconciliation(
 							.getState()
 							.hydrateSession(
 								summary,
-								messagesToRuntime(currentTranslator(), messages, summary.lastSettlement),
+								messagesToRuntime(messages, summary.lastSettlement),
 								false,
 								summary.live ? undefined : loaded.syncedTick,
 								{ activate: false },
@@ -601,7 +601,7 @@ export function useChatLocationReconciliation(
 				}
 				currentState.hydrateSession(
 					summary,
-					messagesToRuntime(currentTranslator(), messages, summary.lastSettlement),
+					messagesToRuntime(messages, summary.lastSettlement),
 					true,
 					summary.live ? undefined : syncedTick,
 					layoutOpenOptionsForNavigation(currentState, workspaceId, navigation),

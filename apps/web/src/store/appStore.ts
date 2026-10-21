@@ -56,10 +56,10 @@ import {
 	normalizeThemePreference,
 	sameModel,
 } from "@thinkrail/contracts";
-import { currentTranslator, t } from "@thinkrail/locales/react";
+import { t } from "@thinkrail/locales/react";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
-import { assistantFailureText } from "../chat/assistantFailure";
+import { assistantFailure } from "../chat/assistantFailure";
 import type { ChatMessageOrder } from "../chat/chatPreferences";
 import type { HydratedRuntime } from "../chat/hydrate";
 import { insertRoundCloser } from "../chat/roundCloser";
@@ -535,7 +535,7 @@ function removeSupersededAssistant(
 		(turn) =>
 			turn.id === attemptAssistantId &&
 			turn.kind === "assistant" &&
-			assistantFailureText(currentTranslator(), turn.message) !== null,
+			assistantFailure(turn.message) !== null,
 	);
 	return index < 0 ? turns : [...turns.slice(0, index), ...turns.slice(index + 1)];
 }
@@ -799,15 +799,16 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 		case "agent_end":
 			return rt;
 		case "agent_settled": {
-			const failure = assistantFailureText(currentTranslator(), event.terminal);
+			const failure = assistantFailure(event.terminal);
 			const closer: ChatTurn = failure
 				? {
 						kind: "error",
 						id: crypto.randomUUID(),
-						text: failure,
+						text: failure.message,
+						failure: failure.failure,
 						recovery: "try-again",
 					}
-				: { kind: "system", id: crypto.randomUUID(), text: "✓ Done", endedAt: Date.now() };
+				: { kind: "system", id: crypto.randomUUID(), endedAt: Date.now() };
 			return {
 				...rt,
 				turns: insertRoundCloser(

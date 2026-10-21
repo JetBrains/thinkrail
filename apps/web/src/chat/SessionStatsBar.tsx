@@ -1,5 +1,5 @@
 import type { ContextUsage, SessionStats } from "@thinkrail/contracts";
-import { useT } from "@thinkrail/locales/react";
+import { type Translator, useT } from "@thinkrail/locales/react";
 
 export function formatTokens(count: number): string {
 	if (count < 1_000) return count.toString();
@@ -13,11 +13,13 @@ export function formatCost(cost: number): string {
 	return `$${cost.toFixed(3)}`;
 }
 
-export function formatElapsed(ms: number): string {
+export function formatElapsed(t: Translator, ms: number): string {
 	const totalSec = Math.round(ms / 1000);
-	const m = Math.floor(totalSec / 60);
-	const s = totalSec % 60;
-	return m > 0 ? `${m}m ${s}s` : `${s}s`;
+	const minutes = Math.floor(totalSec / 60);
+	const seconds = totalSec % 60;
+	return minutes > 0
+		? t("chat.elapsed.minutesSeconds", { minutes, seconds })
+		: t("chat.elapsed.seconds", { seconds });
 }
 
 export function usageParts(stats: SessionStats): string[] {

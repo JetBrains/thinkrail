@@ -496,8 +496,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   intended read (you returned to the chat that needs you), not just a side effect. It carries no store or
   transport state.
 - **Hydration** (`hydrate.ts`) — the pure
-  `messagesToRuntime(t, TranscriptMessage[], lastSettlement?, { idScope? })` converter (read-side counterpart
-  of the event reducer; `t` words a synthesized failure turn): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }` (a
+  `messagesToRuntime(TranscriptMessage[], lastSettlement?, { idScope? })` converter (read-side counterpart
+  of the event reducer; a synthesized failure turn carries its `failure` kind and the provider message, worded at render by `errorTurnText`): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }` (a
   `HydratedRuntime`) from a persisted transcript so a reconnecting/second client renders identically to
   the live path (same `raw` result shape). One-shot consumers keep freshly minted ids; a repeated-snapshot
   consumer supplies its session scope to derive stable role/timestamp/index ids for persisted turns. When supplied, the live summary's `lastSettlement` is authoritative; otherwise only the

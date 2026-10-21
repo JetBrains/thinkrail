@@ -10,6 +10,7 @@ import {
 } from "@thinkrail/contracts";
 import { strArg } from "@thinkrail/extension-api/web";
 import { projectRelativePath } from "../lib";
+import type { AssistantFailure } from "./assistantFailure";
 import type { ChatMessageOrder } from "./chatPreferences";
 import { resolveProminence } from "./toolRegistry";
 import type { ChatTurn, CompactionState, FailureRecovery, ToolResultState } from "./types";
@@ -40,8 +41,14 @@ export type ActivityStep = RoutineToolStep | ThinkingStep;
 
 export type ChatRow =
 	| { kind: "user"; id: string; message: UserMessage; attachmentNames?: string[] }
-	| { kind: "system"; id: string; text: string }
-	| { kind: "error"; id: string; text: string; recovery?: FailureRecovery }
+	| { kind: "system"; id: string }
+	| {
+			kind: "error";
+			id: string;
+			text: string;
+			failure?: AssistantFailure;
+			recovery?: FailureRecovery;
+	  }
 	| ({ kind: "compaction"; id: string } & CompactionState)
 	| {
 			kind: "retry";
@@ -205,13 +212,14 @@ export function deriveRows(
 					});
 					break;
 				case "system":
-					rows.push({ kind: "system", id: turn.id, text: turn.text });
+					rows.push({ kind: "system", id: turn.id });
 					break;
 				case "error":
 					rows.push({
 						kind: "error",
 						id: turn.id,
 						text: turn.text,
+						...(turn.failure ? { failure: turn.failure } : {}),
 						...(turn.recovery ? { recovery: turn.recovery } : {}),
 					});
 					break;

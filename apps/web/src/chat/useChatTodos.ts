@@ -6,7 +6,7 @@ import type {
 	TodoPlan,
 } from "@thinkrail/contracts";
 import { TODO_NUDGE_PREFIX, WS_CHANNELS } from "@thinkrail/contracts";
-import { currentTranslator, t as translate } from "@thinkrail/locales/react";
+import { t as translate } from "@thinkrail/locales/react";
 import { useCallback, useEffect, useInsertionEffect, useRef, useState } from "react";
 import { tupleKey } from "../lib";
 import {
@@ -378,7 +378,7 @@ export function hydrateSessionRuntime(workspaceId: string, sessionId: string): P
 			}
 			current.hydrateSession(
 				summary,
-				messagesToRuntime(currentTranslator(), messages, summary.lastSettlement),
+				messagesToRuntime(messages, summary.lastSettlement),
 				false,
 				summary.live ? undefined : syncedTick,
 				{ activate: false },

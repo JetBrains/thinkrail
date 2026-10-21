@@ -1,8 +1,15 @@
 import { describe, expect, it } from "bun:test";
 import type { SessionStats } from "@thinkrail/contracts";
+import { applyLocale, currentTranslator } from "@thinkrail/locales/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { contextPart, formatTokens, SessionStatsBar, usageParts } from "./SessionStatsBar";
+import {
+	contextPart,
+	formatElapsed,
+	formatTokens,
+	SessionStatsBar,
+	usageParts,
+} from "./SessionStatsBar";
 
 function stats(overrides: Partial<SessionStats> = {}): SessionStats {
 	return {
@@ -65,4 +72,15 @@ describe("SessionStatsBar pi-style formatting", () => {
 		expect(markup).toContain("flex-nowrap");
 		expect(markup.match(/whitespace-nowrap/g)).toHaveLength(4);
 	});
+});
+
+it("formats a turn's elapsed time with the interface language's units", () => {
+	expect(formatElapsed(currentTranslator(), 5_000)).toBe("5s");
+	expect(formatElapsed(currentTranslator(), 65_000)).toBe("1m 5s");
+	applyLocale("ru", { ru: { "chat.elapsed.minutesSeconds": "{{minutes}} мин {{seconds}} с" } });
+	try {
+		expect(formatElapsed(currentTranslator(), 65_000)).toBe("1 мин 5 с");
+	} finally {
+		applyLocale("en", {});
+	}
 });

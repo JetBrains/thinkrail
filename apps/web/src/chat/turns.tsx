@@ -33,6 +33,7 @@ import {
 import { CustomIcon } from "@/components/CustomIcon";
 import { parseSkillInvocation, projectRelativePath, type SkillInvocation, userText } from "@/lib";
 import { ActivityGroup } from "./ActivityGroup";
+import { type AssistantFailure, errorTurnText } from "./assistantFailure";
 import { AssistantMarkdown } from "./assistantLinks";
 import { BackgroundCommandResult, SubagentResult } from "./BackgroundResult";
 import { CopyButton } from "./CopyButton";
@@ -86,11 +87,12 @@ function ChatTurnViewImpl({
 				/>
 			);
 		case "system":
-			return <SystemTurn text={row.text} />;
+			return <SystemTurn />;
 		case "error":
 			return (
 				<ErrorTurn
 					text={row.text}
+					failure={row.failure}
 					onTryAgain={row.recovery === "try-again" ? onTryAgain : undefined}
 				/>
 			);
@@ -531,14 +533,15 @@ function ToolRow({
 	);
 }
 
-function SystemTurn({ text }: { text: string }) {
+function SystemTurn() {
+	const t = useT();
 	return (
 		<div
 			data-testid="chat-message"
 			data-role="system"
 			className="text-center text-text-muted tr-text-metadata"
 		>
-			{text}
+			{t("chat.turn.done")}
 		</div>
 	);
 }
@@ -591,7 +594,15 @@ function CompactionTurn({
 	);
 }
 
-function ErrorTurn({ text, onTryAgain }: { text: string; onTryAgain?: (() => void) | undefined }) {
+function ErrorTurn({
+	text,
+	failure,
+	onTryAgain,
+}: {
+	text: string;
+	failure?: AssistantFailure | undefined;
+	onTryAgain?: (() => void) | undefined;
+}) {
 	const t = useT();
 	return (
 		<div
@@ -601,7 +612,9 @@ function ErrorTurn({ text, onTryAgain }: { text: string; onTryAgain?: (() => voi
 		>
 			<div className="flex items-start gap-8">
 				<CircleAlert className="mt-2 size-12 shrink-0 text-feedback-error" aria-hidden />
-				<span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{text}</span>
+				<span className="min-w-0 flex-1 whitespace-pre-wrap break-words">
+					{errorTurnText(t, { text, failure })}
+				</span>
 			</div>
 			{onTryAgain ? (
 				<div className="flex justify-end">
@@ -933,7 +946,7 @@ export function TurnDivider({
 				{elapsedMs != null && elapsedMs >= 1000 ? (
 					<span className="flex items-center gap-4">
 						<Clock className="size-12 shrink-0" />
-						{formatElapsed(elapsedMs)}
+						{formatElapsed(t, elapsedMs)}
 					</span>
 				) : null}
 				{running ? (

@@ -12,9 +12,8 @@ import {
 	isSubagentCompletionMessage,
 	isTodoReviewFixMessage,
 } from "@thinkrail/contracts";
-import type { Translator } from "@thinkrail/locales/react";
 import { userText } from "../lib";
-import { assistantFailureText } from "./assistantFailure";
+import { assistantFailure } from "./assistantFailure";
 import { insertRoundCloser } from "./roundCloser";
 import type { ChatTurn, ToolResultState } from "./types";
 
@@ -40,7 +39,6 @@ function transcriptTurnId(
 }
 
 export function messagesToRuntime(
-	t: Translator,
 	messages: TranscriptMessage[],
 	lastSettlement?: AgentSettlement | null,
 	options: HydrationOptions = {},
@@ -112,8 +110,7 @@ export function messagesToRuntime(
 	);
 	const persistedTerminal =
 		lastConversationMessage?.role === "assistant" ? lastConversationMessage : null;
-	const failure = assistantFailureText(
-		t,
+	const failure = assistantFailure(
 		lastSettlement === undefined ? persistedTerminal : lastSettlement,
 	);
 	const closed = failure
@@ -122,7 +119,8 @@ export function messagesToRuntime(
 				id: options.idScope
 					? `${options.idScope}:error:${persistedTerminal?.timestamp ?? "settlement"}`
 					: crypto.randomUUID(),
-				text: failure,
+				text: failure.message,
+				failure: failure.failure,
 				recovery: "try-again",
 			})
 		: turns;

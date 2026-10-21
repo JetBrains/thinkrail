@@ -1,14 +1,11 @@
 import { expect, test } from "bun:test";
 import type { TranscriptMessage } from "@thinkrail/contracts";
 import { ASK_USER_ANSWERS_CUSTOM_TYPE } from "@thinkrail/contracts";
-import { currentTranslator } from "@thinkrail/locales/react";
 import { messagesToRuntime } from "./hydrate";
 import { deriveRows } from "./rows";
 import { readRunDetails } from "./tools/subagent/runDetails";
 
 type Message = TranscriptMessage;
-
-const t = currentTranslator();
 
 const messages = [
 	{ role: "user", content: "do it", timestamp: 1 },
@@ -25,7 +22,7 @@ const messages = [
 ] as unknown as Message[];
 
 test("messagesToRuntime folds a transcript into ordered turns + a toolResults map", () => {
-	const { turns, toolResults } = messagesToRuntime(t, messages);
+	const { turns, toolResults } = messagesToRuntime(messages);
 
 	expect(turns.map((t) => t.kind)).toEqual(["user", "assistant", "assistant"]);
 	expect(turns.every((t) => typeof t.id === "string" && t.id.length > 0)).toBe(true);
@@ -39,9 +36,8 @@ test("messagesToRuntime folds a transcript into ordered turns + a toolResults ma
 });
 
 test("a scoped append-only hydration preserves existing turn ids", () => {
-	const first = messagesToRuntime(t, messages, undefined, { idScope: "subagent:child-1" });
+	const first = messagesToRuntime(messages, undefined, { idScope: "subagent:child-1" });
 	const second = messagesToRuntime(
-		t,
 		[
 			...messages,
 			{
@@ -61,7 +57,7 @@ test("a scoped append-only hydration preserves existing turn ids", () => {
 });
 
 test("an assistant turn that ended in a provider error hydrates a following error turn", () => {
-	const { turns } = messagesToRuntime(t, [
+	const { turns } = messagesToRuntime([
 		{ role: "user", content: "hi", timestamp: 1 },
 		{
 			role: "assistant",
@@ -102,11 +98,7 @@ test("a failed round keeps its error before a later user-stopped result that wok
 			output: { text: "", truncated: false },
 		},
 	};
-	const hydrated = messagesToRuntime(currentTranslator(), [
-		user,
-		failed,
-		stopped,
-	] as unknown as Message[]);
+	const hydrated = messagesToRuntime([user, failed, stopped] as unknown as Message[]);
 	expect(hydrated.turns.map((t) => t.kind)).toEqual([
 		"user",
 		"assistant",
@@ -121,25 +113,25 @@ test("a failed round keeps its error before a later user-stopped result that wok
 	]);
 
 	const woke = { ...stopped, details: { ...stopped.details, status: "completed", exitCode: 0 } };
-	expect(
-		messagesToRuntime(t, [user, failed, woke] as unknown as Message[]).turns.at(-1)?.kind,
-	).toBe("error");
+	expect(messagesToRuntime([user, failed, woke] as unknown as Message[]).turns.at(-1)?.kind).toBe(
+		"error",
+	);
 });
 
 test("an assistant turn that ended at length hydrates a visible truncation failure", () => {
-	const { turns } = messagesToRuntime(t, [
+	const { turns } = messagesToRuntime([
 		{ role: "user", content: "hi", timestamp: 1 },
 		{ role: "assistant", content: [], stopReason: "length" },
 	] as unknown as Message[]);
 
 	expect(turns.map((turn) => turn.kind)).toEqual(["user", "assistant", "error"]);
 	const error = turns.find((turn) => turn.kind === "error");
-	expect(error?.kind === "error" && error.text.toLowerCase()).toContain("truncated");
+	expect(error?.kind === "error" && error.failure).toBe("truncated");
 	expect(error?.kind === "error" ? error.recovery : undefined).toBe("try-again");
 });
 
 test("a recovered historical length stop does not become the current chat failure", () => {
-	const { turns } = messagesToRuntime(t, [
+	const { turns } = messagesToRuntime([
 		{
 			role: "assistant",
 			content: [{ type: "text", text: "old truncated attempt" }],
@@ -160,14 +152,13 @@ test("a recovered historical length stop does not become the current chat failur
 });
 
 test("settlement metadata restores a failure Pi removed from a live session's context", () => {
-	const { turns } = messagesToRuntime(t, [], { stopReason: "length" });
+	const { turns } = messagesToRuntime([], { stopReason: "length" });
 
 	expect(turns.map((turn) => turn.kind)).toEqual(["error"]);
 });
 
 test("settlement metadata does not duplicate a failure already represented by the transcript", () => {
 	const { turns } = messagesToRuntime(
-		t,
 		[
 			{
 				role: "assistant",
@@ -184,7 +175,6 @@ test("settlement metadata does not duplicate a failure already represented by th
 
 test("an explicit live null suppresses a stale persisted failure while a resumed run is active", () => {
 	const { turns } = messagesToRuntime(
-		t,
 		[{ role: "assistant", content: [], stopReason: "length" }] as unknown as Message[],
 		null,
 	);
@@ -193,7 +183,7 @@ test("an explicit live null suppresses a stale persisted failure while a resumed
 });
 
 test("a persisted failed attempt superseded by a successful retry hydrates as one assistant turn", () => {
-	const { turns, turnIdByMessageIndex } = messagesToRuntime(t, [
+	const { turns, turnIdByMessageIndex } = messagesToRuntime([
 		{ role: "user", content: "hi", timestamp: 1 },
 		{
 			role: "assistant",
@@ -208,7 +198,7 @@ test("a persisted failed attempt superseded by a successful retry hydrates as on
 });
 
 test("exhausted retries hydrate as the final attempt + its error turn; earlier attempts stay hidden", () => {
-	const { turns } = messagesToRuntime(t, [
+	const { turns } = messagesToRuntime([
 		{ role: "user", content: "hi", timestamp: 1 },
 		{ role: "assistant", content: [], stopReason: "error", errorMessage: "attempt 1" },
 		{ role: "assistant", content: [], stopReason: "error", errorMessage: "attempt 2" },
@@ -219,7 +209,7 @@ test("exhausted retries hydrate as the final attempt + its error turn; earlier a
 });
 
 test("turnIdByMessageIndex maps each message's position to its own turn id, null for non-turn messages, and the assistant's id (not the injected error turn's) when the message ended in an error", () => {
-	const { turns, turnIdByMessageIndex } = messagesToRuntime(t, [
+	const { turns, turnIdByMessageIndex } = messagesToRuntime([
 		{ role: "user", content: "hi", timestamp: 1 },
 		{
 			role: "toolResult",
@@ -267,7 +257,7 @@ test("a subagent-completion custom message hydrates as its own subagentCompletio
 		},
 		durationMs: 4200,
 	};
-	const { turns, turnIdByMessageIndex } = messagesToRuntime(t, [
+	const { turns, turnIdByMessageIndex } = messagesToRuntime([
 		{ role: "user", content: "go", timestamp: 1 },
 		{
 			role: "custom",
@@ -294,7 +284,7 @@ test("a todo-review-fix custom message hydrates as its own reviewFix turn", () =
 		note: "Two findings below.",
 		comments: [{ id: "c_1", kind: "inline", body: "off-by-one", path: "src/a.ts", startLine: 4 }],
 	};
-	const { turns, turnIdByMessageIndex } = messagesToRuntime(t, [
+	const { turns, turnIdByMessageIndex } = messagesToRuntime([
 		{ role: "user", content: "go", timestamp: 1 },
 		{
 			role: "custom",
@@ -314,7 +304,7 @@ test("a todo-review-fix custom message hydrates as its own reviewFix turn", () =
 });
 
 test("a failed tool result maps to error status", () => {
-	const { toolResults } = messagesToRuntime(t, [
+	const { toolResults } = messagesToRuntime([
 		{
 			role: "toolResult",
 			toolCallId: "x",
@@ -344,7 +334,7 @@ test("a failed Agent result keeps its run details — the transcript stays opena
 		},
 		durationMs: 10,
 	};
-	const { toolResults } = messagesToRuntime(t, [
+	const { toolResults } = messagesToRuntime([
 		{
 			role: "toolResult",
 			toolCallId: "ag1",
@@ -360,7 +350,7 @@ test("a failed Agent result keeps its run details — the transcript stays opena
 });
 
 test("a toolCall with no matching toolResult has no entry — the call renders as still running", () => {
-	const { turns, toolResults } = messagesToRuntime(t, [
+	const { turns, toolResults } = messagesToRuntime([
 		{
 			role: "assistant",
 			content: [
@@ -377,7 +367,7 @@ test("a resolved toolResult keeps its structured `details` (a legacy blocking-er
 		answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
 		cancelled: false,
 	};
-	const { toolResults } = messagesToRuntime(t, [
+	const { toolResults } = messagesToRuntime([
 		{
 			role: "toolResult",
 			toolCallId: "ask2",
@@ -397,7 +387,7 @@ test("an ask-user-answers custom message indexes into askAnswers and never becom
 		answers: [{ questionIndex: 0, question: "Q?", kind: "option", answer: "A" }],
 		cancelled: false,
 	};
-	const { turns, askAnswers } = messagesToRuntime(t, [
+	const { turns, askAnswers } = messagesToRuntime([
 		{
 			role: "assistant",
 			content: [{ type: "toolCall", id: "ask3", name: "ask_user_question", arguments: {} }],
@@ -416,7 +406,7 @@ test("an ask-user-answers custom message indexes into askAnswers and never becom
 });
 
 test("an answers message with malformed details is ignored — the guard validates shape, not just tag", () => {
-	const { askAnswers } = messagesToRuntime(t, [
+	const { askAnswers } = messagesToRuntime([
 		{
 			role: "custom",
 			customType: ASK_USER_ANSWERS_CUSTOM_TYPE,
@@ -437,7 +427,7 @@ test("an answers message with malformed details is ignored — the guard validat
 });
 
 test("unknown custom messages are ignored entirely", () => {
-	const { turns, askAnswers } = messagesToRuntime(t, [
+	const { turns, askAnswers } = messagesToRuntime([
 		{
 			role: "custom",
 			customType: "someone-elses-extension",
@@ -451,7 +441,7 @@ test("unknown custom messages are ignored entirely", () => {
 });
 
 test("a compaction summary becomes its own turn without claiming a jump anchor", () => {
-	const { turns, turnIdByMessageIndex } = messagesToRuntime(t, [
+	const { turns, turnIdByMessageIndex } = messagesToRuntime([
 		{ role: "user", content: "start", timestamp: 1 },
 		{ role: "compactionSummary", summary: "## Goal\nship it", tokensBefore: 148_000, timestamp: 2 },
 		{ role: "assistant", content: [{ type: "text", text: "carrying on" }] },

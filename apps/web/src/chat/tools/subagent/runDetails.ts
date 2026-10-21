@@ -42,7 +42,7 @@ export function runCounters(
 	tokens: "total" | "split" = "total",
 ): string[] {
 	const parts = usageCounters(t, details, tokens);
-	if (details.durationMs > 0) parts.push(formatElapsed(details.durationMs));
+	if (details.durationMs > 0) parts.push(formatElapsed(t, details.durationMs));
 	return parts;
 }
 

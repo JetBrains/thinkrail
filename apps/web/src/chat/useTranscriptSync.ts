@@ -1,4 +1,4 @@
-import { currentTranslator, t } from "@thinkrail/locales/react";
+import { t } from "@thinkrail/locales/react";
 import { useEffect, useRef, useState } from "react";
 import { type SessionRuntime, toast, useAppStore } from "../store";
 import {
@@ -52,7 +52,7 @@ export async function synchronizeTranscript(
 	if (result.summary.isStreaming) return "deferred-streaming";
 	const applied = state.reconcileSession(
 		result.summary,
-		deps.hydrate(currentTranslator(), result.messages, result.summary.lastSettlement),
+		deps.hydrate(result.messages, result.summary.lastSettlement),
 		input.expectedEventRevision,
 		input.connectionGeneration,
 	);
