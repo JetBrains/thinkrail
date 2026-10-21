@@ -1829,6 +1829,12 @@ own section. The kebab menu (`plan-menu`, a
   (`V` toggles viewed and advances when it marks, `Alt+↓` / `Alt+↑` step files). Both modes read one model —
   the scope's ordered file list, `viewed`, `activePath`, collapse overrides, `Split | Inline`, ¶ — so
   switching never loses review progress; a second tab kind per mode was rejected for exactly that reason.
+  A switch reuses the pane's section-content cache and the renderers' render caches, so the new mode
+  paints finished diffs on its first frame. Returning to Stacked is double-buffered: the freshly mounted
+  list measures its viewport and scrolls to the active file while `invisible` beneath the still-shown
+  One-file view, which is dropped only once that file's header has held the list's top for two frames
+  (capped at 30). Shown directly, the list painted its first file and footer at scroll 0 and then
+  visibly scrolled to the active one.
   **Transient authoring belongs to the tab section, not its mounted renderer.** An optional scoped
   review-draft context retains the stamped selection, composer text/caret, pending submission, and
   unsaved thread edits across virtualization, collapse, renderer and Stacked/One-file switches. The
