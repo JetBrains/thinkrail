@@ -2,6 +2,7 @@ import type {
 	NativeUpdateInstallResult,
 	NativeUpdateInstallStep,
 	NativeUpdateLogEntry,
+	NativeUpdateLogEvent,
 	NativeUpdateState,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
@@ -40,11 +41,9 @@ const FAILURE_CAUSES = {
 	unknown: ["updates.cause.unknown.title", "updates.cause.unknown.advice"],
 } as const satisfies Record<string, readonly [MessageKey, MessageKey]>;
 
-export type InstallFailureCause = keyof typeof FAILURE_CAUSES;
-
-export function installFailureCause(
+function installFailureCause(
 	result: Pick<NativeUpdateInstallResult, "outcome" | "failedStep" | "detail">,
-): InstallFailureCause {
+): keyof typeof FAILURE_CAUSES {
 	if (result.outcome === "unreported") return "unreported";
 	switch (result.failedStep) {
 		case "swapping":
@@ -126,8 +125,46 @@ export function logTime(at: number): string {
 	return `${twoDigits(date.getHours())}:${twoDigits(date.getMinutes())}:${twoDigits(date.getSeconds())}`;
 }
 
-export function formatInstallLog(entries: readonly NativeUpdateLogEntry[]): string {
+const LOG_SOURCES = {
+	update: "updates.log.source.update",
+	host: "updates.log.source.host",
+	installer: "updates.log.source.installer",
+} as const satisfies Record<NativeUpdateLogEntry["source"], MessageKey>;
+
+export function installLogSource(t: Translator, source: NativeUpdateLogEntry["source"]): string {
+	return t(LOG_SOURCES[source]);
+}
+
+export function installLogText(t: Translator, event: NativeUpdateLogEvent): string {
+	switch (event.kind) {
+		case "installStarted":
+			return t("updates.log.event.installStarted", { version: event.version });
+		case "hostStopping":
+			return t("updates.log.event.hostStopping");
+		case "hostStopped":
+			return t("updates.log.event.hostStopped", { seconds: event.seconds.toFixed(1) });
+		case "handoffStarted":
+			return t("updates.log.event.handoffStarted");
+		case "restarting":
+			return t("updates.log.event.restarting");
+		case "installed":
+			return t("updates.log.event.installed", { version: event.version });
+		case "installFailed":
+			return t("updates.log.event.installFailed", {
+				version: event.version,
+				step: event.step,
+				detail: event.detail,
+			});
+		case "diagnostic":
+			return event.text;
+	}
+}
+
+export function formatInstallLog(t: Translator, entries: readonly NativeUpdateLogEntry[]): string {
 	return entries
-		.map((entry) => `${logTime(entry.at)} ${entry.source.padEnd(9)} ${entry.text}`)
+		.map((entry) => {
+			const source = installLogSource(t, entry.source).padEnd(9);
+			return `${logTime(entry.at)} ${source} ${installLogText(t, entry.event)}`;
+		})
 		.join("\n");
 }

@@ -1,5 +1,9 @@
 import { readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
-import type { NativeUpdateInstallResult, NativeUpdateLogEntry } from "@thinkrail/contracts";
+import type {
+	NativeUpdateInstallResult,
+	NativeUpdateLogEntry,
+	NativeUpdateLogEvent,
+} from "@thinkrail/contracts";
 
 export const UPDATE_JOURNAL_FILE = "update-journal.json";
 export const MAX_UPDATE_LOG_ENTRIES = 200;
@@ -36,15 +40,48 @@ function nullableText(value: unknown): string | null | undefined {
 	return boundedText(value) ?? undefined;
 }
 
+function readEvent(value: unknown): NativeUpdateLogEvent | null {
+	if (!isRecord(value)) return null;
+	switch (value.kind) {
+		case "hostStopping":
+		case "handoffStarted":
+		case "restarting":
+			return { kind: value.kind };
+		case "hostStopped":
+			return typeof value.seconds === "number" && Number.isFinite(value.seconds)
+				? { kind: "hostStopped", seconds: value.seconds }
+				: null;
+		case "installStarted":
+		case "installed": {
+			const version = boundedText(value.version);
+			return version ? { kind: value.kind, version } : null;
+		}
+		case "installFailed": {
+			const version = boundedText(value.version);
+			const step = boundedText(value.step);
+			const detail = boundedText(value.detail);
+			return version && step !== null && detail !== null
+				? { kind: "installFailed", version, step, detail }
+				: null;
+		}
+		case "diagnostic": {
+			const text = boundedText(value.text);
+			return text === null ? null : { kind: "diagnostic", text };
+		}
+		default:
+			return null;
+	}
+}
+
 function readLog(value: unknown): NativeUpdateLogEntry[] | null {
 	if (!Array.isArray(value) || value.length > MAX_UPDATE_LOG_ENTRIES) return null;
 	const entries: NativeUpdateLogEntry[] = [];
 	for (const entry of value) {
 		if (!isRecord(entry)) return null;
-		const text = boundedText(entry.text);
+		const event = readEvent(entry.event);
 		const { at, source, level } = entry;
 		if (
-			text === null ||
+			event === null ||
 			typeof at !== "number" ||
 			!Number.isFinite(at) ||
 			(source !== "update" && source !== "host" && source !== "installer") ||
@@ -52,7 +89,7 @@ function readLog(value: unknown): NativeUpdateLogEntry[] | null {
 		) {
 			return null;
 		}
-		entries.push({ at, source, level, text });
+		entries.push({ at, source, level, event });
 	}
 	return entries;
 }

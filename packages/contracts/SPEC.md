@@ -520,7 +520,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   update bridge exposes a monotonic state snapshot, prompt check/download/install actions, failed-operation
   identity, and state subscription without exposing feed selection. Available, byte-transfer, preparation,
   ready, and installing are distinct states. While installing, the snapshot carries a coarse install step
-  and a bounded log. After a relaunch it carries the durable last-install result as data, never as display
+  and a bounded log of structured events (`diagnostic` alone carries raw SDK text). After a relaunch it carries the durable last-install result as data, never as display
   text: outcome, from/to version, native failed step, raw cause, and saved log. Only
   `dismissInstallResult()` clears it. The window-controls bridge exposes the same
   snapshot/action/subscription shape for window state. The shortcuts bridge pushes quit-hint changes

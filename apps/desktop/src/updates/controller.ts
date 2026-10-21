@@ -225,7 +225,7 @@ export function createNativeUpdateController(
 							at: now(),
 							source: "update",
 							level: "error",
-							text: message,
+							event: { kind: "diagnostic", text: message },
 						}),
 					}
 				: {}),
@@ -246,42 +246,49 @@ export function createNativeUpdateController(
 		if (!success && !failure) return;
 		const toVersion =
 			dependencies.updater.updateInfo().version || success?.[1] || failure?.[1] || state.version;
+		const failedStep = failure?.[2] ?? null;
+		const detail = failure ? entry.details?.errorMessage || failure[3] || null : null;
 		resolveInstall({
 			outcome: failure ? "failed" : "installed",
 			fromVersion: pendingJournal?.fromVersion ?? null,
 			toVersion,
-			failedStep: failure?.[2] ?? null,
-			detail: failure ? entry.details?.errorMessage || failure[3] || null : null,
+			failedStep,
+			detail,
 			log: appendLog(pendingJournal?.log ?? [], {
 				at: now(),
 				source: "installer",
 				level: failure ? "error" : "info",
-				text: entry.message,
+				event: failure
+					? {
+							kind: "installFailed",
+							version: toVersion,
+							step: failedStep ?? "",
+							detail: detail ?? "",
+						}
+					: { kind: "installed", version: toVersion },
 			}),
 		});
 	};
 
 	const handleInstallStatus = (entry: NativeUpdaterStatusEntry): void => {
 		if (!installAttempt) return;
-		const line = (source: NativeUpdateLogEntry["source"], text: string): NativeUpdateLogEntry => ({
-			at: now(),
-			source,
-			level: "info",
-			text,
-		});
+		const line = (
+			source: NativeUpdateLogEntry["source"],
+			event: NativeUpdateLogEntry["event"],
+		): NativeUpdateLogEntry => ({ at: now(), source, level: "info", event });
 		if (entry.status === "applying") {
-			const stoppedSeconds = ((now() - installAttempt.startedAt) / 1000).toFixed(1);
+			const seconds = Math.round((now() - installAttempt.startedAt) / 100) / 10;
 			publish({
 				installStep: "handoff",
 				log: appendLog(
-					appendLog(state.log, line("host", `Stopped in ${stoppedSeconds} s`)),
-					line("update", entry.message),
+					appendLog(state.log, line("host", { kind: "hostStopped", seconds })),
+					line("update", { kind: "handoffStarted" }),
 				),
 			});
 			return;
 		}
 		if (entry.status === "launching-new-version") {
-			const log = appendLog(state.log, line("update", entry.message));
+			const log = appendLog(state.log, line("update", { kind: "restarting" }));
 			journal?.write({
 				schemaVersion: 1,
 				state: "pending",
@@ -612,13 +619,13 @@ export function createNativeUpdateController(
 						at: startedAt,
 						source: "update",
 						level: "info",
-						text: `Installing ThinkRail ${expectedVersion}`,
+						event: { kind: "installStarted", version: expectedVersion },
 					},
 					{
 						at: startedAt,
 						source: "host",
 						level: "info",
-						text: "Stopping agents and terminals",
+						event: { kind: "hostStopping" },
 					},
 				],
 			});

@@ -51,7 +51,8 @@ lazy chunk. All wording is web-owned and lives in `packages/locales/en.json`
 (`updates.install`, `.log`, `.result`, `.recovery`, `.cause`); desktop sends only data.
 - **While `installing`:** a dialog that can't be dismissed. It shows the four steps (prepared, stopping,
   handoff, restarting) as a determinate bar, says up front that ThinkRail will close
-  and reopen, and offers a log console with **Copy log**. It has no Cancel: Install & Restart was the
+  and reopen, and offers a log console with **Copy log**. The console translates each structured log
+  event and source label; only `diagnostic` events, which hold raw SDK or helper errors, appear verbatim. It has no Cancel: Install & Restart was the
   consent, and quit stays coordinated. It closes as soon as the state leaves `installing`, so an error
   never traps the user.
 - **`lastInstall: installed`:** one success toast with **Details**, then an immediate dismiss. Details

@@ -50,8 +50,9 @@ started, and that decides whether the attempt continues. Only the process exitin
 ends a continuing attempt.
 
 During the attempt, `installStep` follows the SDK statuses: `stopping` from acceptance, `handoff` at
-`applying`, and `restarting` at `launching-new-version`. The bounded `log` records the steps and how
-long host shutdown took. Any `error` status, including the second handoff's helper-start failure, ends
+`applying`, and `restarting` at `launching-new-version`. The bounded `log` records structured events, never
+wording: the steps, plus how long host shutdown took. The only free text is a `diagnostic` event carrying
+an SDK or helper error verbatim. Any `error` status, including the second handoff's helper-start failure, ends
 the attempt as an `install` failure. A handoff that never started shutdown fails with the SDK's error,
 or else "couldn't start the installer". The final two transitions happen in one synchronous SDK block
 before quit, so their pushes are best-effort.

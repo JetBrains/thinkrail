@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
-import type { NativeUpdateState } from "@thinkrail/contracts";
+import type { NativeUpdateLogEvent, NativeUpdateState } from "@thinkrail/contracts";
 import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	formatInstallLog,
 	INSTALL_STEPS,
 	installFailureCopy,
+	installLogSource,
+	installLogText,
 	installProgress,
 	installRecovery,
 	installStepIndex,
@@ -100,9 +102,50 @@ test("release notes and copied logs use stable, readable forms", () => {
 	);
 	const at = new Date(2026, 9, 21, 12, 54, 4).getTime();
 	expect(
-		formatInstallLog([
-			{ at, source: "host", level: "info", text: "Stopped in 1.9 s" },
-			{ at, source: "installer", level: "error", text: "failed" },
+		formatInstallLog(t, [
+			{ at, source: "host", level: "info", event: { kind: "hostStopped", seconds: 1.94 } },
+			{
+				at,
+				source: "installer",
+				level: "error",
+				event: {
+					kind: "installFailed",
+					version: "0.3.0-nightly.4",
+					step: "swapping",
+					detail: "AccessDenied",
+				},
+			},
+			{
+				at,
+				source: "update",
+				level: "error",
+				event: { kind: "diagnostic", text: "Raw SDK error" },
+			},
 		]),
-	).toBe("12:54:04 host      Stopped in 1.9 s\n12:54:04 installer failed");
+	).toBe(
+		[
+			"12:54:04 host      Stopped in 1.9 s",
+			"12:54:04 installer Update to 0.3.0-nightly.4 failed during swapping: AccessDenied",
+			"12:54:04 update    Raw SDK error",
+		].join("\n"),
+	);
+});
+
+test("every structured log event renders translated text; only diagnostics stay verbatim", () => {
+	const version = "1.1.0";
+	const events: NativeUpdateLogEvent[] = [
+		{ kind: "installStarted", version },
+		{ kind: "hostStopping" },
+		{ kind: "handoffStarted" },
+		{ kind: "restarting" },
+		{ kind: "installed", version },
+	];
+	expect(events.map((event) => installLogText(t, event))).toEqual([
+		"Installing ThinkRail 1.1.0",
+		"Stopping agents and terminals",
+		"Preparing the installer handoff",
+		"Installer ready; restarting ThinkRail",
+		"Update to 1.1.0 completed successfully",
+	]);
+	expect(installLogSource(t, "installer")).toBe("installer");
 });

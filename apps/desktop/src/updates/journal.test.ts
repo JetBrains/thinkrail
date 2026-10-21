@@ -13,7 +13,19 @@ const resolved: UpdateJournal = {
 		toVersion: "1.1.0",
 		failedStep: "swapping",
 		detail: "AccessDenied",
-		log: [{ at: 1, source: "installer", level: "error", text: "failed" }],
+		log: [
+			{
+				at: 1,
+				source: "installer",
+				level: "error",
+				event: {
+					kind: "installFailed",
+					version: "1.1.0",
+					step: "swapping",
+					detail: "AccessDenied",
+				},
+			},
+		],
 	},
 };
 
@@ -39,7 +51,28 @@ test("journal parsing accepts only bounded pending and resolved shapes", () => {
 	expect(
 		parseUpdateJournal({
 			...resolved,
-			result: { ...resolved.result, log: [{ at: 1, source: "shell", level: "info", text: "x" }] },
+			result: {
+				...resolved.result,
+				log: [{ at: 1, source: "shell", level: "info", event: { kind: "restarting" } }],
+			},
+		}),
+	).toBeNull();
+	expect(
+		parseUpdateJournal({
+			...resolved,
+			result: {
+				...resolved.result,
+				log: [{ at: 1, source: "host", level: "info", event: { kind: "hostStopped" } }],
+			},
+		}),
+	).toBeNull();
+	expect(
+		parseUpdateJournal({
+			...resolved,
+			result: {
+				...resolved.result,
+				log: [{ at: 1, source: "host", level: "info", text: "Stopped in 1 s" }],
+			},
 		}),
 	).toBeNull();
 	expect(

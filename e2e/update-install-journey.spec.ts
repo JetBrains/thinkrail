@@ -53,13 +53,13 @@ async function installFakeBridge(page: Page, initial: Partial<NativeUpdateState>
 							at: Date.now(),
 							source: "update",
 							level: "info",
-							text: "Installing ThinkRail 0.3.0-nightly.4",
+							event: { kind: "installStarted", version: "0.3.0-nightly.4" },
 						},
 						{
 							at: Date.now(),
 							source: "host",
 							level: "info",
-							text: "Stopping agents and terminals",
+							event: { kind: "hostStopping" },
 						},
 					],
 				});
@@ -101,13 +101,18 @@ const failedSwap: NativeUpdateInstallResult = {
 			at: 1_760_000_000_000,
 			source: "update",
 			level: "info",
-			text: "Update prepared; restarting application...",
+			event: { kind: "restarting" },
 		},
 		{
 			at: 1_760_000_030_000,
 			source: "installer",
 			level: "error",
-			text: "Update to 0.3.0-nightly.4 failed during swapping: AccessDenied",
+			event: {
+				kind: "installFailed",
+				version: "0.3.0-nightly.4",
+				step: "swapping",
+				detail: "AccessDenied",
+			},
 		},
 	],
 };
@@ -220,5 +225,7 @@ test("a successful install after relaunch toasts once and keeps Details from the
 		"href",
 		"https://github.com/JetBrains/thinkrail/releases/tag/v0.3.0-nightly.4",
 	);
-	await expect(page.getByTestId("update-log")).toContainText("Update prepared");
+	await expect(page.getByTestId("update-log")).toContainText(
+		"Installer ready; restarting ThinkRail",
+	);
 });

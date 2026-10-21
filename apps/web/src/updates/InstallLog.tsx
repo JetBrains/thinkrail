@@ -7,7 +7,7 @@ import type { NativeUpdateLogEntry } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
-import { formatInstallLog, logTime } from "./installCopy";
+import { formatInstallLog, installLogSource, installLogText, logTime } from "./installCopy";
 
 export function InstallLogToggle({
 	open,
@@ -60,7 +60,8 @@ export function InstallLog({
 							)}
 						>
 							<span className="text-text-subtle">{logTime(entry.at)}</span>{" "}
-							<span className="text-feedback-info">{entry.source}</span> {entry.text}
+							<span className="text-feedback-info">{installLogSource(t, entry.source)}</span>{" "}
+							{installLogText(t, entry.event)}
 						</p>
 					))
 				)}
@@ -73,7 +74,7 @@ export function InstallLog({
 					data-testid="update-log-copy"
 					disabled={entries.length === 0}
 					onClick={() => {
-						void navigator.clipboard?.writeText(formatInstallLog(entries)).catch(() => {});
+						void navigator.clipboard?.writeText(formatInstallLog(t, entries)).catch(() => {});
 					}}
 				>
 					<Copy className="size-14" />

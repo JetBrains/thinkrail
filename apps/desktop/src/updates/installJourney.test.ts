@@ -112,7 +112,14 @@ const pendingJournal: UpdateJournal = {
 	fromVersion: "1.0.0",
 	toVersion: "1.1.0",
 	startedAt: 10,
-	log: [{ at: 10, source: "update", level: "info", text: "Installing ThinkRail 1.1.0" }],
+	log: [
+		{
+			at: 10,
+			source: "update",
+			level: "info",
+			event: { kind: "installStarted", version: "1.1.0" },
+		},
+	],
 };
 
 test("an install attempt spans the vetoed first call and journals the handoff before quit", async () => {
@@ -141,12 +148,12 @@ test("an install attempt spans the vetoed first call and journals the handoff be
 	});
 	const state = await controller.getState();
 	expect(state.installStep).toBe("restarting");
-	expect(state.log.map((entry) => [entry.source, entry.text])).toEqual([
-		["update", "Installing ThinkRail 1.1.0"],
-		["host", "Stopping agents and terminals"],
-		["host", "Stopped in 0.5 s"],
-		["update", "Preparing update handoff..."],
-		["update", "Update prepared; restarting application..."],
+	expect(state.log.map((entry) => [entry.source, entry.event])).toEqual([
+		["update", { kind: "installStarted", version: "1.1.0" }],
+		["host", { kind: "hostStopping" }],
+		["host", { kind: "hostStopped", seconds: 0.5 }],
+		["update", { kind: "handoffStarted" }],
+		["update", { kind: "restarting" }],
 	]);
 	expect(journal.value).toMatchObject({
 		state: "pending",
@@ -174,7 +181,7 @@ test("a second-handoff error ends the attempt instead of leaving it installing",
 	});
 	expect(state.log.at(-1)).toMatchObject({
 		level: "error",
-		text: "Failed to start update helper: denied",
+		event: { kind: "diagnostic", text: "Failed to start update helper: denied" },
 	});
 	expect(journal.value).toBeNull();
 });
@@ -213,9 +220,9 @@ test("a reconciled failure after relaunch becomes a durable result merged with t
 		failedStep: "swapping",
 		detail: "AccessDenied",
 	});
-	expect(result.log.map((entry) => entry.text)).toEqual([
-		"Installing ThinkRail 1.1.0",
-		"Update to 1.1.0 failed during swapping: AccessDenied",
+	expect(result.log.map((entry) => entry.event)).toEqual([
+		{ kind: "installStarted", version: "1.1.0" },
+		{ kind: "installFailed", version: "1.1.0", step: "swapping", detail: "AccessDenied" },
 	]);
 	expect(journal.value).toEqual({ schemaVersion: 1, state: "resolved", result });
 	expect(scheduled[0]?.cancelled).toBe(true);

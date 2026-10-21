@@ -2,11 +2,21 @@ export type NativeUpdateFailedPhase = "check" | "download" | "install" | null;
 
 export type NativeUpdateInstallStep = "stopping" | "handoff" | "restarting";
 
+export type NativeUpdateLogEvent =
+	| { kind: "installStarted"; version: string }
+	| { kind: "hostStopping" }
+	| { kind: "hostStopped"; seconds: number }
+	| { kind: "handoffStarted" }
+	| { kind: "restarting" }
+	| { kind: "installed"; version: string }
+	| { kind: "installFailed"; version: string; step: string; detail: string }
+	| { kind: "diagnostic"; text: string };
+
 export interface NativeUpdateLogEntry {
 	at: number;
 	source: "update" | "host" | "installer";
 	level: "info" | "error";
-	text: string;
+	event: NativeUpdateLogEvent;
 }
 
 export interface NativeUpdateInstallResult {
