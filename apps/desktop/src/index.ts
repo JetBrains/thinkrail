@@ -169,6 +169,7 @@ async function start(): Promise<void> {
 		channel,
 		platform: process.platform,
 		arch: process.arch,
+		userData,
 		restartToUpdate: () => quitCoordinator.restartToUpdate(),
 	});
 	// Electrobun resolves and caches ../Resources from cwd; leave the bundle only after those reads.
@@ -263,6 +264,10 @@ async function start(): Promise<void> {
 				},
 				restartToUpdate: async () => {
 					await updateController.restartToUpdate();
+					return undefined;
+				},
+				dismissInstallResult: async () => {
+					await updateController.dismissInstallResult();
 					return undefined;
 				},
 				showNotification: (input): undefined => {

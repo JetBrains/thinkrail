@@ -1,5 +1,23 @@
 export type NativeUpdateFailedPhase = "check" | "download" | "install" | null;
 
+export type NativeUpdateInstallStep = "stopping" | "handoff" | "restarting";
+
+export interface NativeUpdateLogEntry {
+	at: number;
+	source: "update" | "host" | "installer";
+	level: "info" | "error";
+	text: string;
+}
+
+export interface NativeUpdateInstallResult {
+	outcome: "installed" | "failed" | "unreported";
+	fromVersion: string | null;
+	toVersion: string;
+	failedStep: string | null;
+	detail: string | null;
+	log: readonly NativeUpdateLogEntry[];
+}
+
 export interface NativeUpdateState {
 	revision: number;
 	status:
@@ -18,6 +36,9 @@ export interface NativeUpdateState {
 	progress: number | null;
 	error: string | null;
 	failedPhase: NativeUpdateFailedPhase;
+	installStep: NativeUpdateInstallStep | null;
+	log: readonly NativeUpdateLogEntry[];
+	lastInstall: NativeUpdateInstallResult | null;
 }
 
 export interface NativeUpdateBridge {
@@ -25,6 +46,7 @@ export interface NativeUpdateBridge {
 	checkForUpdates(): Promise<void>;
 	downloadUpdate(): Promise<void>;
 	restartToUpdate(): Promise<void>;
+	dismissInstallResult(): Promise<void>;
 	subscribe(listener: (state: NativeUpdateState) => void): () => void;
 }
 
