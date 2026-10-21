@@ -217,41 +217,36 @@ function PierreDiffSurface({
 	const modifiedText = textSide(modified);
 	const originalHash = contentHash(original);
 	const modifiedHash = contentHash(modified);
-	const fileDiff = useMemo(
-		() =>
-			parseDiffFromFile(
-				originalText === null
-					? null
-					: {
-							name: resource.path,
-							contents: originalText,
-							...(resource.language ? { lang: resource.language } : {}),
-							...(originalHash
-								? { cacheKey: `${resource.language ?? resource.path}:${originalHash}` }
-								: {}),
-						},
-				modifiedText === null
-					? null
-					: {
-							name: resource.path,
-							contents: modifiedText,
-							...(resource.language ? { lang: resource.language } : {}),
-							...(modifiedHash
-								? { cacheKey: `${resource.language ?? resource.path}:${modifiedHash}` }
-								: {}),
-						},
-				{ ignoreWhitespace },
-			),
-		[
-			ignoreWhitespace,
-			modifiedHash,
-			modifiedText,
-			originalHash,
-			originalText,
-			resource.language,
-			resource.path,
-		],
-	);
+	const fileDiff = useMemo(() => {
+		const sideKey = (hash: string | undefined) =>
+			hash ? `${resource.language ?? resource.path}:${hash}` : undefined;
+		const originalKey = sideKey(originalHash);
+		const modifiedKey = sideKey(modifiedHash);
+		const side = (contents: string, cacheKey: string | undefined) => ({
+			name: resource.path,
+			contents,
+			...(resource.language ? { lang: resource.language } : {}),
+			...(cacheKey ? { cacheKey } : {}),
+		});
+		const parsed = parseDiffFromFile(
+			originalText === null ? null : side(originalText, originalKey),
+			modifiedText === null ? null : side(modifiedText, modifiedKey),
+			{ ignoreWhitespace },
+		);
+		const oneSidedKey =
+			originalText === null ? modifiedKey : modifiedText === null ? originalKey : undefined;
+		return parsed.cacheKey === undefined && oneSidedKey
+			? { ...parsed, cacheKey: `${parsed.type}:${oneSidedKey}` }
+			: parsed;
+	}, [
+		ignoreWhitespace,
+		modifiedHash,
+		modifiedText,
+		originalHash,
+		originalText,
+		resource.language,
+		resource.path,
+	]);
 	const blocks = useMemo(
 		() => computeActionBlocks(originalText, modifiedText, ignoreWhitespace),
 		[ignoreWhitespace, modifiedText, originalText],

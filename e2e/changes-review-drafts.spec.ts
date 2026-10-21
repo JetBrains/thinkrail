@@ -209,6 +209,7 @@ test("rich Changes composers share the same preservation and cancellation policy
 	await rich.getByTestId("view-toggle-json").click();
 	await expect(rich.getByTestId("review-composer-input")).toHaveValue("Unsaved structural note");
 	await page.getByTestId("changes-review-layout-stacked").click();
+	await expect(page.getByTestId("changes-review-walk")).toHaveCount(0);
 	await expect(rich.getByTestId("review-composer-input")).toHaveValue("Unsaved structural note");
 	expect(mutations).toEqual([]);
 	await rich.getByTestId("review-composer-cancel").click();

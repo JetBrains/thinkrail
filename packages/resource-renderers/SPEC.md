@@ -59,7 +59,9 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   - `UnplacedReviewStrip`, `ReviewThreadCard`, `ReviewDraftContext`/`ReviewDraftPersistence`, and
     `createAskAgentRequest`;
 - `useScrollViewState` — the one scroll view-state hook (restores a saved offset once the content is tall
-  enough, gives way to user input, reports the offset on detach) and `viewStateScrollTop`, its validating
+  enough, gives way to user input, reports the offset on detach, and adopts a newer saved offset — one a
+  sibling instance of the same slot reported on its detach, as the Changes review's Stacked handoff does —
+  while its own scroller is still where it was restored to) and `viewStateScrollTop`, its validating
   reader of a reported/saved offset; renderers use them, and so does the web app's Files panel
   (`RememberedScrollArea`), so app and renderers keep one restore rule.
 
@@ -234,7 +236,9 @@ protocol in a Monaco editor explain nothing about why a `.png` has no image; Sou
 away, and the renderer places no anchors, so a pointer's threads live in the unplaced strip.
 `RenderedDiff` keeps its worker-isolated htmldiff merge,
 loading/error states, and token styling (a text change keeps the previous merge on screen until the next one
-arrives, so a live refresh neither flashes the loading placeholder nor remounts the document), but advertises no diff anchors: both sides' threads stay in the
+arrives, so a live refresh neither flashes the loading placeholder nor remounts the document; finished
+merges live in a small module-level LRU keyed by both sides, so a remount of an unchanged diff renders
+synchronously without the placeholder or a replayed reveal fade), but advertises no diff anchors: both sides' threads stay in the
 pane's unplaced strip, **Show in Source** selects the code renderer, and diff authoring is available only
 in Source. It is selected by registry match rather than a path branch in the pane. Scopes whose modified
 side is historical receive no review surface or mutation actions.
@@ -413,7 +417,10 @@ virtualised review list reaches that moment on every jump or fast scroll into fi
 loaded yet; each rebuild spawned the workers again, re-fetched the WASM, theme and grammars, dropped
 every highlighted AST, and painted nothing until initialised — the stacked view's "loading forever".
 Four idle workers are the price of never paying that again; the list mounts a handful of sections at a
-time, so four keep up. The phone code-file implementation is Pierre `File` with the same theme and
+time, so four keep up. The pool's highlight cache is keyed by the diff's `cacheKey`, which Pierre derives
+only when both sides carry one; `PierreDiff` keys a one-sided (added or deleted) diff itself from its
+present side's hash, so a remount — a Stacked/One-file switch, or a section scrolling back in — paints
+highlighted on its first frame instead of plain text followed by a colour pop. The phone code-file implementation is Pierre `File` with the same theme and
 review grammar; desktop files alone load Monaco.
 
 **Pierre surfaces are virtualized.** Unvirtualized Pierre puts every line in the DOM (≈400k nodes for a
