@@ -21,19 +21,25 @@ const outcomes = {
 } as const;
 
 const cases = [
-	{ failure: "updates", userData: "override", home: "present" },
-	{ failure: "boot", userData: "getter", home: "present" },
-	{ failure: "listener", userData: "override", home: "present" },
-	{ failure: "listener", userData: "getter", home: "present" },
-	{ failure: "listener", userData: "override", home: "missing" },
+	{ failure: "updates", userData: "override", home: "present", pendingInstall: false },
+	{ failure: "boot", userData: "getter", home: "present", pendingInstall: false },
+	{ failure: "listener", userData: "override", home: "present", pendingInstall: true },
+	{ failure: "listener", userData: "getter", home: "present", pendingInstall: false },
+	{ failure: "listener", userData: "override", home: "missing", pendingInstall: false },
 ] as const;
 
-for (const { failure, userData, home } of cases) {
+for (const { failure, userData, home, pendingInstall } of cases) {
 	const location =
 		home === "missing"
 			? "stays in the launch directory when home is missing"
 			: "reads bundle metadata before leaving for home";
-	test(`${outcomes[failure]} even if the error dialog fails; ${location} (user data from ${userData})`, () => {
+	const splash =
+		failure === "updates"
+			? "before any splash"
+			: pendingInstall
+				? "behind an update splash"
+				: "behind a startup splash";
+	test(`${outcomes[failure]} even if the error dialog fails; ${location} ${splash} (user data from ${userData})`, () => {
 		const root = mkdtempSync(join(tmpdir(), "thinkrail-desktop-startup-"));
 		try {
 			const runtimePath = join(root, "app", "runtime", "server-runtime.ts");
@@ -42,11 +48,25 @@ for (const { failure, userData, home } of cases) {
 			mkdirSync(join(root, "app", "runtime"), { recursive: true });
 			mkdirSync(userDataPath);
 			writeFileSync(runtimePath, "export {};\n");
+			if (pendingInstall) {
+				writeFileSync(
+					join(userDataPath, "update-journal.json"),
+					JSON.stringify({
+						schemaVersion: 1,
+						state: "pending",
+						fromVersion: "0.0.1",
+						toVersion: "0.0.2",
+						startedAt: 1,
+						log: [],
+					}),
+				);
+			}
 			const script = `
 import { mock } from "bun:test";
 const failure = ${JSON.stringify(failure)};
 const calls = [];
 const cwd = {};
+let splashText = null;
 const listeners = [];
 mock.module(${JSON.stringify(runtimePath)}, () => {
   cwd.runtime = process.cwd();
@@ -78,7 +98,20 @@ mock.module("electrobun/main", () => ({
   },
   ApplicationMenu: { setApplicationMenu() {}, on() {} },
   BrowserView: {},
-  BrowserWindow: class {},
+  BrowserWindow: class {
+    constructor(options) {
+      calls.push("splash");
+      splashText = decodeURIComponent(options.url);
+      this.webview = { on: (event, listener) => event === "dom-ready" && listener() };
+    }
+    center() {}
+    hide() {
+      calls.push("splash-hidden");
+    }
+    close() {
+      calls.push("splash-closed");
+    }
+  },
   PATHS: { RESOURCES_FOLDER: ${JSON.stringify(root)}, VIEWS_FOLDER: ${JSON.stringify(root)} },
   Updater: {
     getLocalInfo: async () => {
@@ -112,7 +145,7 @@ mock.module("electrobun/main", () => ({
 try { await import("./src/index.ts"); } catch (error) {
   if (!(error instanceof Error) || error.message !== "dialog failed") throw error;
 }
-console.log(JSON.stringify({ calls, cwd }));
+console.log(JSON.stringify({ calls, cwd, splashText }));
 `;
 			const result = Bun.spawnSync([process.execPath, "--eval", script], {
 				cwd: desktopDir,
@@ -132,11 +165,18 @@ console.log(JSON.stringify({ calls, cwd }));
 			const run = JSON.parse(result.stdout.toString()) as {
 				calls: string[];
 				cwd: Record<string, string>;
+				splashText: string | null;
 			};
+			if (failure !== "updates") {
+				expect(run.splashText).toContain(
+					pendingInstall ? "Finishing update to 0.0.2…" : "Starting ThinkRail…",
+				);
+			}
 			expect(run.calls).toEqual([
 				"updates",
-				...(failure === "updates" ? [] : ["host"]),
+				...(failure === "updates" ? [] : ["splash", "host"]),
 				...(failure === "listener" ? ["listener"] : []),
+				...(failure === "updates" ? [] : ["splash-hidden"]),
 				"dialog",
 				...(failure === "listener" ? ["shutdown-start", "shutdown-end"] : []),
 				"quit",

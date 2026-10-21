@@ -1,6 +1,7 @@
 import { readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import type { NativeUpdateInstallResult, NativeUpdateLogEntry } from "@thinkrail/contracts";
 
+export const UPDATE_JOURNAL_FILE = "update-journal.json";
 export const MAX_UPDATE_LOG_ENTRIES = 200;
 const MAX_JOURNAL_BYTES = 256 * 1024;
 const MAX_TEXT_LENGTH = 4096;
