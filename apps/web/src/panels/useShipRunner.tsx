@@ -81,6 +81,10 @@ export interface ShipRunner {
 	dialogs: ReactNode;
 }
 
+function mergedInto(base: string | null): string {
+	return base ? `Merged into ${base}` : "Merged";
+}
+
 function commits(count: number): string {
 	return `${count} commit${count === 1 ? "" : "s"}`;
 }
@@ -372,7 +376,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 		setMerging({
 			number: review.number,
 			branch,
-			base,
+			base: details?.base ?? null,
 			methods,
 			method: defaultMergeMethod(methods, remembered.method),
 			deleteBranch: remembered.deleteBranch ?? true,
@@ -400,7 +404,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 						pushToast({
 							variant: "info",
 							title: `Queued PR #${state.number}`,
-							message: `GitHub merges it into ${state.base} once the queue's requirements pass; origin/${branch} stays until then.`,
+							message: `GitHub merges it${state.base ? ` into ${state.base}` : ""} once the queue's requirements pass; origin/${state.branch} stays until then.`,
 						});
 						return;
 					}
@@ -416,8 +420,8 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 						variant: "success",
 						title: `Merged PR #${state.number}`,
 						message: result.branchDeleted
-							? `Merged into ${state.base} and deleted origin/${state.branch}.`
-							: `Merged into ${state.base}.`,
+							? `${mergedInto(state.base)} and deleted origin/${state.branch}.`
+							: `${mergedInto(state.base)}.`,
 					});
 				},
 				(err) => pushToast({ variant: "error", title: "Merge failed", message: errorText(err) }),
@@ -487,7 +491,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 				setRemoving(workspace);
 				return;
 			case "fixChecks":
-				if (review) askAgent(fixChecksPrompt(review, branch, base));
+				if (review) askAgent(fixChecksPrompt(review, branch, review.details?.base ?? base));
 				return;
 			case "ready":
 				reviewAction("ready", "Couldn't mark it ready", (label) => ({

@@ -125,7 +125,7 @@ test("queries an open GitHub PR for the explicit branch, and only that when one 
 			"--state",
 			"open",
 			"--json",
-			"number,url,state,mergedAt,closedAt,createdAt,isDraft,reviewDecision,mergeStateStatus,statusCheckRollup,latestReviews,headRepositoryOwner,headRepository",
+			"number,url,state,mergedAt,closedAt,createdAt,isDraft,baseRefName,reviewDecision,mergeStateStatus,statusCheckRollup,latestReviews,headRepositoryOwner,headRepository",
 			"--limit",
 			"1",
 		],
@@ -565,6 +565,7 @@ test("an open GitHub PR carries draft, checks, review decision, merge state and 
 	const { run, commands } = githubRunner(
 		openPrRow("acme/details", {
 			isDraft: true,
+			baseRefName: "release/2",
 			reviewDecision: "CHANGES_REQUESTED",
 			mergeStateStatus: "BLOCKED",
 			statusCheckRollup: [
@@ -604,6 +605,7 @@ test("an open GitHub PR carries draft, checks, review decision, merge state and 
 	const review = await findOpenBranchReviewWithRunner(cwd, "feature", run);
 	expect(review?.details).toEqual({
 		draft: true,
+		base: "release/2",
 		checks: { passing: 1, pending: 2, failing: 2, failingNames: ["lint", "ci/legacy"] },
 		reviewDecision: "changes_requested",
 		reviewers: [

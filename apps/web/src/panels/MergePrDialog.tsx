@@ -16,7 +16,7 @@ import { useState } from "react";
 export interface MergePrState {
 	number: number;
 	branch: string;
-	base: string;
+	base: string | null;
 	methods: MergeMethod[];
 	method: MergeMethod;
 	deleteBranch: boolean;
@@ -49,7 +49,9 @@ function MergeForm({
 		<>
 			<DialogHeader>
 				<DialogTitle>
-					Merge PR #{state.number} into {state.base}?
+					{state.base
+						? `Merge PR #${state.number} into ${state.base}?`
+						: `Merge PR #${state.number}?`}
 				</DialogTitle>
 				<DialogDescription>
 					GitHub merges the pull request. This workspace keeps its local {state.branch} branch.

@@ -38,7 +38,7 @@ type ParsedReviewRows = { valid: true; rows: ReviewRow[] } | { valid: false };
 const SETTLED_REVIEW_ROW_LIMIT = "5";
 const GITHUB_ROW_FIELDS = "number,url,state,mergedAt,closedAt,createdAt";
 const GITHUB_DETAIL_FIELDS =
-	"isDraft,reviewDecision,mergeStateStatus,statusCheckRollup,latestReviews,headRepositoryOwner,headRepository";
+	"isDraft,baseRefName,reviewDecision,mergeStateStatus,statusCheckRollup,latestReviews,headRepositoryOwner,headRepository";
 const FAILING_NAMES_LIMIT = 10;
 const REVIEWERS_LIMIT = 5;
 
@@ -427,8 +427,10 @@ function reviewRowDetails(
 	const mergeState = text(row.mergeStateStatus).toLowerCase() as ReviewMergeState;
 	const checks = reviewChecks(row.statusCheckRollup);
 	const decision = REVIEW_DECISIONS[text(row.reviewDecision).toUpperCase()];
+	const base = text(row.baseRefName);
 	return {
 		draft: row.isDraft,
+		...(base ? { base } : {}),
 		...(checks ? { checks } : {}),
 		...(decision ? { reviewDecision: decision } : {}),
 		reviewers: reviewers(row.latestReviews),

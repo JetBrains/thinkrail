@@ -249,7 +249,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   **`OpenBranchReview`** (the review reference for the active branch: PR vs MR + number, plus an optional
   **`state`** — `"open" | "merged" | "closed"`, absent on a pre-v78 host and read as open — and
   **`changedAt`**, the ms time the provider merged or closed it; v88 adds lookup-only **`details`** for an
-  open GitHub PR — `draft`, `checks` (passing / pending / failing counts plus bounded failing names),
+  open GitHub PR — `draft`, `base` (the branch it merges into now, which GitHub may have retargeted),
+  `checks` (passing / pending / failing counts plus bounded failing names),
   `reviewDecision`, the approving / change-requesting `reviewers`, `mergeState` (GitHub's
   `mergeStateStatus`, lower-cased), the repository's `mergeMethods` and `deleteBranchOnMerge`; details ride
   `workspace.branchStatus` only (the `workspace.openReview` answer strips them) and never enter the host-kept `Workspace.review` snapshot, whose state the

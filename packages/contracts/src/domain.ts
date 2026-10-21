@@ -142,6 +142,8 @@ export interface ReviewChecks {
 
 export interface ReviewDetails {
 	draft: boolean;
+	/** The branch the PR merges into now — it may have been retargeted since the workspace was made. */
+	base?: string;
 	/** Absent when the PR has no checks. */
 	checks?: ReviewChecks;
 	/** Absent when the repository requires no review and nobody decided. */

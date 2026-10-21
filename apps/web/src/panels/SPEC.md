@@ -1330,7 +1330,9 @@ own section. The kebab menu (`plan-menu`, a
   agent prompt texts it builds (`fixChecksPrompt`, `integratePrompt`). `useShipRunner`
   executes them and owns their dialogs: the shared `PrComposeDialog` (now also used for first-time
   creation from the topbar), `PrSetupDialog`, the diverged Sync dialog, the base-push confirmation,
-  `MergePrDialog`, and the remote-branch deletion confirmation. Review actions act on the `review` the
+  `MergePrDialog`, and the remote-branch deletion confirmation. The merge dialog and its toasts name the
+  PR's current base from `details.base`, never the workspace's base (a PR can be retargeted on GitHub),
+  and make no target claim when it is unknown. Review actions act on the `review` the
   caller shows (its number) and the branch the runner is bound to. **Merge PR** offers only the methods
   the repository allows (every method when the host could not tell) and defaults to the last method used
   for the project — `mergePrefs`, client-side per host + project (a project is one repository), falling back
