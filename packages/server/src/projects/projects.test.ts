@@ -460,3 +460,37 @@ test("MCP tool grants: deduplicated per server, reset by a new target, removed w
 	expect(cleared.mcpToolGrants).toBeUndefined();
 	expect(storedProjects()[0]).not.toHaveProperty("mcpToolGrants");
 });
+
+test("recent projects omit entries whose folders no longer exist", () => {
+	const repo = join(dataDir, "repo");
+	makeRepo(repo);
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{ id: "gone", name: "gone", path: join(dataDir, "gone"), slug: "gone", lastOpened: 2 },
+			{ id: "kept", name: "repo", path: repo, slug: "repo", lastOpened: 1 },
+		]),
+	);
+
+	expect(listRecentProjects().map((project) => project.id)).toEqual(["kept"]);
+});
+
+test("recent projects omit entries whose path is not a directory", () => {
+	const blocker = join(dataDir, "blocker");
+	writeFileSync(blocker, "not a folder");
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{ id: "file", name: "file", path: blocker, slug: "file", lastOpened: 1 },
+			{
+				id: "nested",
+				name: "nested",
+				path: join(blocker, "child"),
+				slug: "nested",
+				lastOpened: 2,
+			},
+		]),
+	);
+
+	expect(listRecentProjects()).toEqual([]);
+});
