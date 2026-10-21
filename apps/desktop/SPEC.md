@@ -55,13 +55,22 @@ another.
 1. Resolve app resources and set `BUN_PTY_LIB` to the staged current-target FFI library before any server
    import. Electrobun emits an ordinary JavaScript entry, not a `bun build --compile` executable, so it
    does not embed `bun-pty`'s library.
-2. Dynamically import the separately built, unpacked `server-runtime.ts` resource. That bundle is built with
+2. Read Electrobun's bundle metadata, then leave the bundle. Electrobun's launcher starts the main
+   process with cwd inside the replaceable bundle (`app/bin`, `Contents/MacOS`), and Electrobun 2.0.1
+   resolves `../Resources/*.json` against cwd and caches the result: `PATHS` and `BuildConfig` at import,
+   and `Utils.paths` version info and `Updater.getLocalInfo()` on first use. Startup reads
+   `Utils.paths.userData` and creates the update controller, keeping its first `getLocalInfo()` and its
+   status subscription in one continuation. Only then does it `chdir` to the user's home, on every
+   platform and before the server import, so every later child starts outside the bundle. That covers
+   host-owned spawns, in-process extensions, MCP servers and editors alike. A failed `chdir` is logged and
+   startup continues. An update-metadata failure here precedes host acquisition and quits directly.
+3. Dynamically import the separately built, unpacked `server-runtime.ts` resource. That bundle is built with
    pi's `PI_BUNDLED_NODE=true` define, which makes PI use its embedded-modules extension loader (static jiti
    with Babel bundled, plus virtual modules) for external extensions such as Central. Without the define a
    single-file bundle is treated as a plain Node runtime and PI's lazy Babel `require` cannot resolve inside
    it ([[submodule-server-agent]] owns the seam). Flattening PI into Electrobun's normal entry is still
    forbidden: it would load `bun-pty` before `BUN_PTY_LIB` is set.
-3. The runtime value-imports the four bundled pi-package factories (`pi-web-access`, `pi-spec-graph`,
+4. The runtime value-imports the four bundled pi-package factories (`pi-web-access`, `pi-spec-graph`,
    `pi-thinkrail-workflow`, `pi-todos`) and calls `registerBundledRuntime()` with those factories, the
    `pi-web-access` factory needed by delegation children (picked by `BuildRuntimeSources.webAccessIndex`,
    never by position), the staged skills (every `BuildRuntimeSources.skillRoots` entry flattened into one
@@ -75,7 +84,7 @@ another.
    `DesktopHostOptions` and the generated runtime. The first native-window `dom-ready` explicitly calls the
    proxied `host.server.startAttributionClaim()` readiness method; host boot and elapsed time do not start a
    saved-choice claim. No deep-link or RPC surface is added.
-4. Restore the valid route fragment and bounded client-preference map for
+5. Restore the valid route fragment and bounded client-preference map for
    `{ backendProfileId: "local", windowId: "main" }`. The route is appended to the fresh origin; the
    preference map is serialized as data and prepended to the preload source so the web client can hydrate
    before React mounts despite the changing port. Open one normal native `BrowserWindow` with the system
@@ -449,6 +458,16 @@ completed guard; ordinary completion still calls only `Utils.quit()`. A failed s
 native error and exits instead of leaving a serverless window. SDK replacement rollback is not
 application-health or user-data rollback. Existing installations without update code/feed identity require
 one manual bootstrap installation.
+
+The swap is a directory rename, and Windows refuses to rename a directory while any live process's current
+directory is inside it. Before startup left the bundle (startup step 2), long-lived children inherited `app\bin`:
+the JetBrains Central proxy daemon started from a pi `session_start`, editors, MCP servers. Any of them
+made the helper's `app → app.previous` rename fail with `AccessDenied` for its whole retry window, roll
+back, and relaunch the old build. POSIX renames are unaffected. Children started by a build without this
+rule keep the old cwd, so the first update from such a build may still need them ended once. The step is an
+Electrobun 2.0.1 workaround with two removal gates. The read-before-`chdir` ordering goes once Electrobun
+resolves resources from the executable path. The `chdir` itself goes once its launcher starts the main
+process outside the replaceable bundle.
 
 Reference: [pinned updater handoff](https://github.com/blackboardsh/electrobun/blob/v2.0.1/package/src/sdks/main/core/Updater.ts#L2220-L2330).
 
