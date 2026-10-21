@@ -174,3 +174,9 @@ test("a partly translated counter stays in its language instead of falling back 
 		"最初の4行",
 	]);
 });
+
+test("a terminal group with several sessions names its position and count", () => {
+	expect(t("workbench.rail.terminalGroup", { position: 2, count: 3 })).toBe(
+		"Terminal group 2, 3 sessions",
+	);
+});

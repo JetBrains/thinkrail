@@ -1373,7 +1373,7 @@ export default function PlanPane({
 				{sections.doneGroups.length > 0 || sections.doneLoose.length > 0 ? (
 					<PlanCardSection
 						testId="plan-done-section"
-						label={t("common.done")}
+						label={t("chat.todo.status.done")}
 						Icon={CircleCheck}
 						iconClass="text-feedback-success"
 					>

@@ -181,3 +181,14 @@ describe("plural forms", () => {
 		expect(completePlurals("ru", { "future.key_one": "x" })).toEqual({ "future.key_one": "x" });
 	});
 });
+
+test("no catalog placeholder is named like an i18next option, which t() would consume instead", () => {
+	const reserved = new Set(["context", "ordinal", "lng", "lngs", "ns", "defaultValue", "replace"]);
+	const clashes = Object.entries(EN).flatMap(([key, value]) =>
+		[...value.matchAll(/\{\{\s*-?\s*([^\s,}]+)/g)]
+			.map((match) => match[1] ?? "")
+			.filter((name) => reserved.has(name))
+			.map((name) => `${key}: ${name}`),
+	);
+	expect(clashes).toEqual([]);
+});

@@ -103,10 +103,10 @@ export function AuxiliaryRailButton({
 		entry.kind === "tool"
 			? layoutTabName(t, toolTab(entry.tool))
 			: entry.kind === "terminals"
-				? t("workbench.rail.terminalGroup", { ordinal, count: entry.tabs.length })
+				? t("workbench.rail.terminalGroup", { position: ordinal, count: entry.tabs.length })
 				: entry.region === "bottom"
 					? t("workbench.rail.terminal")
-					: t(EMPTY_GROUP_LABELS[entry.region], { ordinal });
+					: t(EMPTY_GROUP_LABELS[entry.region], { position: ordinal });
 	return (
 		<div data-active={active} className={railEntryFrameClass(entry.region)}>
 			{active ? <AuxiliaryRailIndicator region={entry.region} /> : null}
@@ -145,7 +145,7 @@ export function AuxiliaryRailButton({
 					{...control}
 					onClick={onActivate}
 					data-drop-label={
-						dropEnabled ? t(JOIN_GROUP_LABELS[entry.region], { ordinal }) : undefined
+						dropEnabled ? t(JOIN_GROUP_LABELS[entry.region], { position: ordinal }) : undefined
 					}
 					data-drop-active={isOver || undefined}
 					data-drop-hint={(dropEnabled && !isOver) || undefined}

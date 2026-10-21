@@ -122,7 +122,7 @@ export function stateLabel(t: Translator, state: ResourceState, kind: Resource["
 		case "stopping":
 			return t("resources.state.stopping");
 		case "done":
-			return t("common.done");
+			return t("resources.state.done");
 		case "failed":
 			return t("resources.state.failed");
 		case "stopped":

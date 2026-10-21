@@ -36,7 +36,7 @@ export type ChangeTarget = { sha: string } | { path: string };
 const STATUS_LABEL = {
 	in_progress: "chat.todo.status.inProgress",
 	pending: "chat.todo.status.pending",
-	done: "common.done",
+	done: "chat.todo.status.done",
 } satisfies Record<TodoStatus, MessageKey>;
 
 export function glanceIcon(
@@ -270,7 +270,7 @@ export function TodoRows({
 				<GroupBlock key={group.id} group={group} {...rowProps} />
 			))}
 			<LooseList items={s.pendingLoose} {...rowProps} />
-			{hasDone ? <SectionLabel label={t("common.done")} /> : null}
+			{hasDone ? <SectionLabel label={t("chat.todo.status.done")} /> : null}
 			{s.doneGroups.map((group) => (
 				<DoneGroup key={group.id} group={group} {...rowProps} />
 			))}
