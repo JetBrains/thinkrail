@@ -191,6 +191,9 @@ test.skipIf(process.platform !== "win32")(
 		try {
 			expect(inspectProjectPath("~\\repo")).toEqual({ kind: "repo" });
 			expect(openProject("~\\repo").path).toBe(realpathSync(repo));
+			expect(() => openProject("relative\\project")).toThrow(
+				"must be absolute or start with ~/ or ~\\",
+			);
 		} finally {
 			if (savedUserProfile === undefined) delete process.env.USERPROFILE;
 			else process.env.USERPROFILE = savedUserProfile;
