@@ -14,8 +14,9 @@ tags: [ui]
 The layout-agnostic, store-driven feature views. A panel fills its container and never knows its
 arrangement (so the mobile shell is an additive layer, not a rewrite).
 
-Changes and Review keep their fixed toolbars outside a panel-owned `components/QuietScrollArea`; Projects,
-Files, and Specs expose content for the shell-owned scroll wrapper described in `shell/SPEC.md`.
+Files (both modes) and Review keep their fixed toolbars outside a panel-owned `components/QuietScrollArea`
+(Files through `RememberedScrollArea`); Projects and Specs expose content for the shell-owned scroll wrapper
+described in `shell/SPEC.md`.
 `TerminalInstance` wraps xterm with `QuietScrollFrame`, which skins xterm's descendant custom scroll control
 without shrinking its hit target; top/bottom state comes from xterm's public `buffer.active.viewportY/baseY`
 and `onScroll`/`onWriteParsed` API rather than pretending its non-native viewport has DOM scroll metrics.
@@ -219,7 +220,34 @@ treatment.
   cached push is correctly treated as the read baseline. Only explicit `terminal.close` kills a PTY, with the existing busy-shell confirmation; confirming a force-close retains
   the active request until it settles (the dialog may close, but a second request cannot orphan it), failures
   surface to the user, and an authoritative catalog removal dismisses a now-stale confirmation instead of
-  leaving a modal for a terminal another client already closed. Also `FileTree`, `SpecsPanel`, `ReviewPanel`,
+  leaving a modal for a terminal another client already closed. Also `FilesPanel` (the **Files** tool: a
+  fixed panel-header row with an **All | Changed** `ToggleSegment` pair — `Changed` carries the changed-file
+  count when non-zero — over `FileTree` or `ChangesPanel`; the mode is app-wide, session-only,
+  `store.filesMode`, default All, and `requestChangesView` / `revealChanges` reveal Files and select Changed
+  in one store write. `FilesPanel` owns the single `git.status` read (`useGitStatus`, scope-keyed, including
+  the unknown-commit scope fallback) and feeds `ChangesPanel` and the **All** marks from it, so count, marks
+  and the Changed list cannot disagree. **All** follows VS Code's Explorer: the plain tree plus marks derived
+  once by the pure `changesModel.buildChangeMarks` — a changed file shows its name and a trailing
+  `M`/`A`/`U`/`R` letter in the status colour (modified amber, added/untracked green, renamed blue; the one
+  `chat/planView.statusLetter`, shared with the Changes review tab and plan rows, so untracked reads `U`
+  and added `A` everywhere); every
+  ancestor folder, expanded or collapsed, shows its name and a dot in one amber "contains changes" colour
+  (a compact row as a whole); deleted files are neither shown nor mark folders, as in VS Code. Git-ignored
+  entries (the host's `FileNode.gitignored` — for a compact row, that of the deepest directory it
+  represents — and everything inside them) render in `text-subtle`. The
+  active file or diff tab (`selectActiveFilePath`) gets the selected row look, and when it changes while All
+  is showing its folders expand (and stay expanded) and it scrolls `nearest` into view; on return All
+  reveals only if the active file differs from the persisted `seenActivePath`, and then skips the scroll
+  restore so the two cannot fight. Auto-reveal never switches the side tab or the mode. Clicks still open
+  the editor. A failed first status read shows no marks; a failed refresh keeps the last ones, like the
+  Changed list. The tree's look is remembered per workspace across reloads (`store.filesTreeByWorkspace`:
+  All expanded folders, Changed-tree collapsed folders shared by every scope, scroll per view through
+  `RememberedScrollArea` — a Changed view's scroll belongs to its scope and compare target, so changing
+  either starts at the top), persisted by the `filesTreeState` module (native stable preferences, else
+  localStorage under a host-qualified key; hydrated from `main.tsx`, debounced writes plus a `pagehide`
+  flush; windows share it, last write wins, no live sync). A **Collapse all folders** `HeaderIconButton` at the
+  right of the switch row collapses All, or — only in Changed's Tree view with at least one change —
+  every changed-tree folder (`changeTreeFolderPaths`)), `FileTree`, `SpecsPanel`, `ReviewPanel`,
   `ChangesPanel` (the changed files under a fixed **panel-header row** — `h-panel-header-row`
   (`--panel-header-row-height`, currently 28px), shared structural geometry with workbench Group Headers
   and the chat header, not a value pinned here — that says **what** is being diffed via the
@@ -896,7 +924,7 @@ a project picker, the prompt hero, and the reused
   (`auth` module).
 
   Panels compose their own sub-panels
-  (e.g. side tools → `FileTree`/`ChangesPanel`, resource panes → registered bundled renderers) — an internal hierarchy.
+  (e.g. side tools → `FilesPanel` → `FileTree`/`ChangesPanel`, resource panes → registered bundled renderers) — an internal hierarchy.
   When a center group has no resource tab, the workbench asks panels for the empty surface as a persistent
   creation/orientation receipt rather than a generic placeholder: **“Workspace ready”**, the display name,
   `branch · from baseBranch`, and **“Files, chats, changes, and terminals are scoped to this workspace,”**
@@ -1317,7 +1345,8 @@ own section. The kebab menu (`plan-menu`, a
   strip; its action switches to the first candidate that advertises matching anchor geometry for that intent.
   Bundled registration happens once in the shell's `AppResourceHost`, while renderer implementation imports
   stay lazy.
-- The singleton side-tool renderers are **Projects | Specs | Files | Changes | Review**. Their current
+- The singleton side-tool renderers are **Projects | Specs | Files | Review** (the changed-files list is
+  Files' **Changed** mode, not a tool of its own). Their current
   location and local selection are supplied by the shell; Review exposes its store-derived pending-draft
   count as tab metadata. A renderer remains the same when its singleton moves to the opposite side.
 - **`ReviewPanel`** is the review sidebar (see [[submodule-server-reviews]] for the model) — **ONE screen, a per-file ACCORDION**: each row a path +
@@ -1542,7 +1571,8 @@ own section. The kebab menu (`plan-menu`, a
   *paused* read. A visible `FileTree` directory probes while collapsed only as far as needed to identify
   its compact single-directory run; descendants below the run's deepest directory mount and read only
   when that compact row is expanded. No tick has to be threaded down as a prop.
-  Its users — `FileTree` (root + each visible directory chain), `ChangesPanel` (`git.status`),
+  Its users — `FileTree` (root + each visible directory chain), `FilesPanel` (`git.status`, via
+  `useGitStatus`, feeding both modes),
   `useWorkspaceSpecs` (`spec.graph`) — plus `FilePane`/`DiffPane`, which follow the same tick contract per
   open tab. Agent edits,
   terminal commands, and Finder changes all land without a manual step.
@@ -1569,9 +1599,10 @@ own section. The kebab menu (`plan-menu`, a
   would rather branch on it than close over the parameter; ignoring it — as `ChangesPanel` does, its `scope`
   being an object the key merely names — is expected. Refetches **preserve view state**: `FileTree` re-reads
   the root + the directory probes backing each visible compact row and expanded branch. Expansion lives
-  above individual rows and is keyed by every directory path a compact row represents, so shortening or
+  above individual rows (in the store, so it also survives remounts and reloads) and is keyed by every
+  directory path a compact row represents, so shortening or
   lengthening a chain cannot hide descendants that were visible before the refetch; vanished dirs drop out
-  via their parent. `ChangesPanel` re-reads
+  via their parent. `FilesPanel` re-reads
   `git.status` (list-only — the diff renders as a center resource, not under the list), `SpecsPanel`
   refetches without remounting (expansion survives), and `FilePane`/`DiffPane` re-read an
   open resource's content when the workspace ticked past its loaded tick (live while visible;
@@ -1854,7 +1885,8 @@ own section. The kebab menu (`plan-menu`, a
 - **Changes: List | Tree.** A header toggle (`store.changesView`, app-wide — persisted in the store, not
   per workspace, so it survives workspace switches) switches the flat **List** and a folder **Tree**
   (`ChangesTree`), both built from the same `git.status` list. The Tree is styled exactly like the
-  Files tree (shared `TreeRow`); folders **default expanded** (change sets are small), and a
+  Files tree (shared `TreeRow`); folders **default expanded** (change sets are small) and the ones you
+  collapse are remembered per workspace for every scope (`filesTreeByWorkspace.changedCollapsed`), and a
   single-directory run is one slash-joined compact row (based on the changed-file tree, regardless of
   unchanged siblings on disk), matching `FileTree`. **Status is shown on the file name, not a letter glyph**
   (the git-decoration convention — `changesModel.statusNameClass`, shared by both views):

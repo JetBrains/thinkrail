@@ -58,7 +58,7 @@ export function readDir(workspaceId: string, path: string): FileNode[] {
 		.filter((entry) => entry.name !== ".git")
 		.map(
 			(entry): FileNode => ({
-				path: relative(root, join(abs, entry.name)),
+				path: relative(root, join(abs, entry.name)).split(sep).join("/"),
 				name: entry.name,
 				kind: entry.isDirectory() ? "dir" : "file",
 			}),

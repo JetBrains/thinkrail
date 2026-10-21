@@ -251,7 +251,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   **`changedAt`**, the ms time the provider merged or closed it; no actions),
   **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
   `detached` row the chooser disables),
-  `FileNode` (file-tree node),
+  `FileNode` (file-tree node; worktree-relative `/` path, `gitignored` set by the host when git ignores it),
   **`ResourceMeta`** (what a resource's bytes *are*, host-decided and pinned by
   `RESOURCE_META_PROTOCOL_VERSION` = v75: sha-256 `hash` + `byteLength`, both `null` when the resource is
   absent; `text` = valid UTF-8, BOM-aware, and not claimed by a recognized binary magic number (an ASCII

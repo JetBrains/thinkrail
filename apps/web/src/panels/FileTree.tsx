@@ -1,8 +1,10 @@
 import type { FileNode } from "@thinkrail/contracts";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { useRef, useState } from "react";
-import type { TabIntent } from "../store";
+import { useMemo, useRef, useState } from "react";
+import { statusLetter } from "../chat/planView";
+import { selectFilesTreeView, type TabIntent, useAppStore } from "../store";
 import { getTransport } from "../transport";
+import { type ChangeMarks, statusMarkClass } from "./changesModel";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
@@ -10,20 +12,23 @@ import { useWorkspaceRead } from "./useWorkspaceRead";
 
 type SetPathsExpanded = (paths: readonly string[], expanded: boolean) => void;
 
-export function FileTree({ workspaceId }: { workspaceId: string }) {
-	const [nodes, setNodes] = useState<FileNode[] | null>(null);
-	const [expandedPaths, setExpandedPaths] = useState<ReadonlySet<string>>(() => new Set());
+interface TreeFocus {
+	activePath: string | null;
+	revealTarget: string | null;
+	onRevealed: () => void;
+}
 
-	const setPathsExpanded: SetPathsExpanded = (paths, expanded) => {
-		setExpandedPaths((current) => {
-			const next = new Set(current);
-			for (const path of paths) {
-				if (expanded) next.add(path);
-				else next.delete(path);
-			}
-			return next;
-		});
-	};
+export function FileTree({
+	workspaceId,
+	marks,
+	...focus
+}: TreeFocus & { workspaceId: string; marks: ChangeMarks }) {
+	const [nodes, setNodes] = useState<FileNode[] | null>(null);
+	const expanded = useAppStore((s) => selectFilesTreeView(s, workspaceId).expanded);
+	const expandedPaths = useMemo(() => new Set(expanded), [expanded]);
+
+	const setPathsExpanded: SetPathsExpanded = (paths, next) =>
+		useAppStore.getState().setFilesTreeExpanded(workspaceId, paths, next);
 
 	useWorkspaceRead(
 		workspaceId,
@@ -45,6 +50,8 @@ export function FileTree({ workspaceId }: { workspaceId: string }) {
 					key={node.path}
 					node={node}
 					workspaceId={workspaceId}
+					marks={marks}
+					focus={focus}
 					expandedPaths={expandedPaths}
 					setPathsExpanded={setPathsExpanded}
 				/>
@@ -56,11 +63,15 @@ export function FileTree({ workspaceId }: { workspaceId: string }) {
 function FileNodeRow({
 	node,
 	workspaceId,
+	marks,
+	focus,
 	expandedPaths,
 	setPathsExpanded,
 }: {
 	node: FileNode;
 	workspaceId: string;
+	marks: ChangeMarks;
+	focus: TreeFocus;
 	expandedPaths: ReadonlySet<string>;
 	setPathsExpanded: SetPathsExpanded;
 }) {
@@ -99,14 +110,47 @@ function FileNodeRow({
 		if (nextExpanded) reload();
 	};
 	const open = (intent: TabIntent) => void openFileInTab(workspaceId, node.path, intent);
+	const fileStatus = isDir ? undefined : marks.files.get(node.path);
+	const dirChanged = isDir && marks.dirs.has(directory?.path ?? node.path);
+	const ignored = (directory?.deepest ?? node).gitignored === true;
+	const revealRow =
+		!isDir && focus.revealTarget === node.path
+			? (row: HTMLButtonElement | null) => {
+					if (!row) return;
+					row.scrollIntoView({ block: "nearest" });
+					focus.onRevealed();
+				}
+			: undefined;
 
 	return (
 		<li>
 			<TreeRow
+				ref={revealRow}
 				testid="file-node"
 				kind={isDir ? "dir" : "file"}
+				active={!isDir && focus.activePath === node.path}
+				subtle={ignored}
+				dataStatus={ignored ? "ignored" : undefined}
 				expanded={expanded}
 				label={label}
+				labelClassName={
+					fileStatus ? statusMarkClass(fileStatus) : dirChanged ? statusMarkClass("modified") : ""
+				}
+				trailing={
+					fileStatus ? (
+						<span
+							data-testid="file-status"
+							className={`shrink-0 tr-text-metadata ${statusMarkClass(fileStatus)}`}
+						>
+							{statusLetter(fileStatus)}
+						</span>
+					) : dirChanged ? (
+						<span
+							data-testid="file-folder-dot"
+							className="mr-4 size-6 shrink-0 rounded-full bg-feedback-warning"
+						/>
+					) : undefined
+				}
 				onClick={isDir ? toggleDirectory : () => open("preview")}
 				onDoubleClick={isDir ? undefined : () => open("keep")}
 			/>
@@ -117,6 +161,8 @@ function FileNodeRow({
 							key={child.path}
 							node={child}
 							workspaceId={workspaceId}
+							marks={marks}
+							focus={focus}
 							expandedPaths={expandedPaths}
 							setPathsExpanded={setPathsExpanded}
 						/>

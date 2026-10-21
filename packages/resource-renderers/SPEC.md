@@ -57,7 +57,11 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
     `layout`, the renderer supports layout and the viewport is not phone-class (one rule, so a phone never
     shows a layout the diff refuses and a single-file view never shows diff layout);
   - `UnplacedReviewStrip`, `ReviewThreadCard`, `ReviewDraftContext`/`ReviewDraftPersistence`, and
-    `createAskAgentRequest`.
+    `createAskAgentRequest`;
+- `useScrollViewState` — the one scroll view-state hook (restores a saved offset once the content is tall
+  enough, gives way to user input, reports the offset on detach) and `viewStateScrollTop`, its validating
+  reader of a reported/saved offset; renderers use them, and so does the web app's Files panel
+  (`RememberedScrollArea`), so app and renderers keep one restore rule.
 
 Renderer implementations are never exported; they stay behind each registration's dynamic
 `loadView`/`loadDiff`, and the large-diff estimate, the notice and the lazy diff mount stay behind

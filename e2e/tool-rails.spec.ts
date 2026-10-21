@@ -62,11 +62,11 @@ test("folding, hiding, and showing regions keep the center and the other panes m
 		await expectStillMounted(page, survivors);
 	};
 
-	await toggle([...center, "left-nav", "changes-view-toggle"], async () => {
+	await toggle([...center, "left-nav", "review-panel"], async () => {
 		await specs.click();
 		await expect(specs).toHaveAttribute("aria-pressed", "false");
 	});
-	await toggle([...center, "left-nav", "changes-view-toggle"], async () => {
+	await toggle([...center, "left-nav", "review-panel"], async () => {
 		await specs.click();
 		await expect(specs).toHaveAttribute("aria-pressed", "true");
 	});
@@ -78,19 +78,19 @@ test("folding, hiding, and showing regions keep the center and the other panes m
 		await pressPlatformShortcut(page, "j");
 		await expect(page.getByTestId("right-stack")).toBeVisible();
 	});
-	await toggle([...center, "changes-view-toggle"], async () => {
+	await toggle([...center, "review-panel"], async () => {
 		await pressPlatformShortcut(page, "b");
 		await expect(page.getByTestId("left-nav")).toHaveCount(0);
 	});
-	await toggle([...center, "changes-view-toggle"], async () => {
+	await toggle([...center, "review-panel"], async () => {
 		await pressPlatformShortcut(page, "b");
 		await expect(page.getByTestId("left-nav")).toBeVisible();
 	});
-	await toggle(["center-tabs", "chat-input", "left-nav", "changes-view-toggle"], async () => {
+	await toggle(["center-tabs", "chat-input", "left-nav", "review-panel"], async () => {
 		await pressPlatformShortcut(page, "Shift+j");
 		await expect(page.getByTestId("bottom-panel")).toHaveCount(0);
 	});
-	await toggle(["center-tabs", "chat-input", "left-nav", "changes-view-toggle"], async () => {
+	await toggle(["center-tabs", "chat-input", "left-nav", "review-panel"], async () => {
 		await pressPlatformShortcut(page, "Shift+j");
 		await waitTerminalReady(page);
 	});
@@ -116,7 +116,7 @@ test("edge tools hide only their pane while terminal sessions stay grouped", asy
 	await expect(specs).toHaveAttribute("aria-pressed", "true");
 	await specs.click();
 	await expect(specs).toHaveAttribute("aria-pressed", "false");
-	await expect(page.getByTestId("changes-view-toggle")).toBeVisible();
+	await expect(page.getByTestId("review-panel")).toBeVisible();
 	await specs.click();
 	await expect(specs).toHaveAttribute("aria-pressed", "true");
 	await expect(page.getByTestId("spec-node").first()).toBeVisible();
@@ -230,7 +230,7 @@ test("rail clusters include unplaced tools, boundary drops create panes, and too
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(2);
 	expect(await railClusters(page, "right-layout-rail")).toEqual([
 		["tool-rail-specs", "tool-rail-files"],
-		["tool-rail-changes", "tool-rail-review"],
+		["tool-rail-review"],
 		["tool-rail-plan"],
 	]);
 
@@ -244,7 +244,7 @@ test("rail clusters include unplaced tools, boundary drops create panes, and too
 	expect(await railClusters(page, "right-layout-rail")).toEqual([
 		["tool-rail-specs"],
 		["tool-rail-files"],
-		["tool-rail-changes", "tool-rail-review"],
+		["tool-rail-review"],
 		["tool-rail-plan"],
 	]);
 
@@ -254,7 +254,7 @@ test("rail clusters include unplaced tools, boundary drops create panes, and too
 	expect(await railClusters(page, "right-layout-rail")).toEqual([
 		["tool-rail-specs"],
 		["empty-rail-group"],
-		["tool-rail-changes", "tool-rail-review", "tool-rail-files"],
+		["tool-rail-review", "tool-rail-files"],
 		["tool-rail-plan"],
 	]);
 	await expect(page.locator('[data-side="right"][data-group-id]')).toHaveCount(3);
@@ -273,7 +273,7 @@ test("rail clusters include unplaced tools, boundary drops create panes, and too
 	expect(await railClusters(page, "right-layout-rail")).toEqual([
 		["tool-rail-specs"],
 		["empty-rail-group"],
-		["tool-rail-changes"],
+		["empty-rail-group"],
 		["tool-rail-review", "tool-rail-plan"],
 	]);
 	await expect(page.getByTestId("tool-rail-review")).toHaveClass(/text-text-subtle/);
@@ -329,7 +329,7 @@ test("rail keyboard navigation changes focus without selection and keeps collaps
 	await expect(files).toHaveAttribute("aria-pressed", "false");
 	await expect(panel).toBeHidden();
 	await expect(panel).toHaveAttribute("aria-labelledby", (await files.getAttribute("id")) ?? "");
-	await expect(page.getByTestId("changes-view-toggle")).toBeVisible();
+	await expect(page.getByTestId("review-panel")).toBeVisible();
 	await page.keyboard.press("Enter");
 	await expect(panel).toBeVisible();
 	await expect(rail.locator('[data-rail-entry][tabindex="0"]')).toHaveCount(1);

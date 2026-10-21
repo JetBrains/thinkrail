@@ -1,9 +1,11 @@
 import { expect, test } from "bun:test";
 import {
+	ancestorPaths,
 	compactAge,
 	cssColorToHex,
 	hasPlatformModifier,
 	isAbsolutePath,
+	isRecord,
 	isShellInert,
 	layoutResourceIdentity,
 	normalizePath,
@@ -216,4 +218,16 @@ test("relativeTime measures against the given now, not the clock", () => {
 	expect(compactAge(now - 13 * 86_400_000, now)).toBe("13d");
 	expect(compactAge(now - 20 * 86_400_000, now)).toBe("2w");
 	expect(compactAge(now - 100 * 86_400_000, now)).toBe("3mo");
+});
+
+test("ancestorPaths lists a path's parent folders outermost first", () => {
+	expect(ancestorPaths("src/auth/login.ts")).toEqual(["src", "src/auth"]);
+	expect(ancestorPaths("README.md")).toEqual([]);
+});
+
+test("isRecord accepts plain objects only", () => {
+	expect(isRecord({ a: 1 })).toBe(true);
+	expect(isRecord([])).toBe(false);
+	expect(isRecord(null)).toBe(false);
+	expect(isRecord("x")).toBe(false);
 });

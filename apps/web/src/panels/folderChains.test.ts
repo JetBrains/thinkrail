@@ -26,6 +26,7 @@ test("resolveFolderChain joins a run of single-directory children and returns th
 		label: "apps/web/src",
 		path: "apps/web/src",
 		paths: ["apps", "apps/web", "apps/web/src"],
+		deepest: dir("src", "apps/web/src"),
 		children: [file("index.ts", "apps/web/src/index.ts")],
 	});
 	expect(reads).toEqual(["apps", "apps/web", "apps/web/src"]);
@@ -33,7 +34,13 @@ test("resolveFolderChain joins a run of single-directory children and returns th
 
 test("resolveFolderChain stops at empty, file-only, and branching directories", async () => {
 	const empty = await resolveFolderChain(dir("empty"), async () => []);
-	expect(empty).toEqual({ label: "empty", path: "empty", paths: ["empty"], children: [] });
+	expect(empty).toEqual({
+		label: "empty",
+		path: "empty",
+		paths: ["empty"],
+		deepest: dir("empty"),
+		children: [],
+	});
 
 	const fileOnly = await resolveFolderChain(dir("docs"), async () => [
 		file("guide.md", "docs/guide.md"),
@@ -42,5 +49,11 @@ test("resolveFolderChain stops at empty, file-only, and branching directories", 
 
 	const branched = [dir("client", "src/client"), dir("server", "src/server")];
 	const branch = await resolveFolderChain(dir("src"), async () => branched);
-	expect(branch).toEqual({ label: "src", path: "src", paths: ["src"], children: branched });
+	expect(branch).toEqual({
+		label: "src",
+		path: "src",
+		paths: ["src"],
+		deepest: dir("src"),
+		children: branched,
+	});
 });

@@ -290,7 +290,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 		const store = useAppStore.getState();
 		if ("sha" in target) {
 			store.setDiffScope(workspaceId, { kind: "commit", sha: target.sha });
-			store.enqueueLayoutIntent({ kind: "reveal-tool", workspaceId, tool: "changes" });
+			store.revealChanges(workspaceId);
 			return;
 		}
 		store.setDiffScope(workspaceId, { kind: "branch" });

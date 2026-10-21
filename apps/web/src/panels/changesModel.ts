@@ -6,7 +6,7 @@ import type {
 	TurnChangeSet,
 } from "@thinkrail/contracts";
 import { VIRTUALIZED_DIFF_LINES } from "@thinkrail/resource-renderers";
-import { tupleKey } from "../lib";
+import { ancestorPaths, tupleKey } from "../lib";
 import { extendFolderChain, startFolderChain } from "./folderChains";
 
 export function statusNameClass(status: GitFileStatus): string {
@@ -21,6 +21,26 @@ export function statusNameClass(status: GitFileStatus): string {
 		default:
 			return "";
 	}
+}
+
+export function statusMarkClass(status: GitFileStatus): string {
+	return statusNameClass(status) || "text-feedback-warning";
+}
+
+export interface ChangeMarks {
+	files: ReadonlyMap<string, GitFileStatus>;
+	dirs: ReadonlySet<string>;
+}
+
+export function buildChangeMarks(changes: readonly GitFileChange[]): ChangeMarks {
+	const files = new Map<string, GitFileStatus>();
+	const dirs = new Set<string>();
+	for (const change of changes) {
+		if (change.status === "deleted") continue;
+		files.set(change.path, change.status);
+		for (const dir of ancestorPaths(change.path)) dirs.add(dir);
+	}
+	return { files, dirs };
 }
 
 export function scopeKey(scope: GitDiffScope): string {
@@ -224,4 +244,10 @@ export function buildChangesTree(changes: readonly GitFileChange[]): ChangeTreeN
 	};
 
 	return materialize(root, "");
+}
+
+export function changeTreeFolderPaths(nodes: readonly ChangeTreeNode[]): string[] {
+	return nodes.flatMap((node) =>
+		node.kind === "dir" ? [node.path, ...changeTreeFolderPaths(node.children)] : [],
+	);
 }

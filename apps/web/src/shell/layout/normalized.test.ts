@@ -230,7 +230,7 @@ describe("normalized workbench layout", () => {
 			bottom: {
 				...preset.bottom,
 				groups: [
-					{ id: "changes-slot", weight: 0.5, folded: false, tools: ["changes" as const] },
+					{ id: "changes-slot", weight: 0.5, folded: false, tools: ["plan" as const] },
 					{ id: "shells", weight: 0.5, folded: false, tools: [] },
 				],
 			},
@@ -246,7 +246,7 @@ describe("normalized workbench layout", () => {
 			toolSlotDocument.bottom.groups.map((group) =>
 				group.tabs.map((tab) => (tab.kind === "tool" ? tab.tool : tab.id)),
 			),
-		).toEqual([["changes"], ["first-shell", "second-shell", "third"]]);
+		).toEqual([["plan"], ["first-shell", "second-shell", "third"]]);
 	});
 
 	test("a slotless preset keeps its frame slotless and reflows terminals into center", () => {

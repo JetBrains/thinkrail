@@ -2,7 +2,7 @@ import { type RefCallback, type RefObject, useCallback, useEffect, useRef } from
 
 const TAKEOVER_EVENTS = ["wheel", "touchmove", "pointerdown", "keydown"] as const;
 
-function scrollTop(state: unknown): number | null {
+export function viewStateScrollTop(state: unknown): number | null {
 	if (typeof state !== "object" || state === null) return null;
 	const value = Reflect.get(state, "scrollTop");
 	return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
@@ -41,7 +41,7 @@ export function useScrollViewState<T extends HTMLElement>(
 	onViewState: ((state: unknown) => void) | undefined,
 ): { elementRef: RefObject<T | null>; attach: RefCallback<T> } {
 	const elementRef = useRef<T>(null);
-	const savedTopRef = useRef(scrollTop(viewState));
+	const savedTopRef = useRef(viewStateScrollTop(viewState));
 	const pendingRef = useRef<(() => void) | null>(null);
 	const onViewStateRef = useRef(onViewState);
 	onViewStateRef.current = onViewState;

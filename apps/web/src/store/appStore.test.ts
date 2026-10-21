@@ -36,10 +36,12 @@ import {
 	useAppStore,
 } from "./appStore";
 import {
+	selectActiveFilePath,
 	selectChatAttended,
 	selectCompactionTurnIds,
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
+	selectFilesTreeView,
 	selectLastOpenChatSession,
 	selectReadyCompletionAck,
 	selectSkillsStale,
@@ -3136,6 +3138,80 @@ test("applyWorkspaceRemoved drops the removed workspace's cached spec graph", ()
 	expect(s.specsByWorkspace.other).toEqual([]);
 });
 
+test("files tree state keeps per-workspace folders and scroll, and drops a removed workspace", () => {
+	useAppStore.setState({
+		filesTreeByWorkspace: {},
+		removedWorkspaceIds: Object.create(null),
+		workspaces: { p1: [pushedWorkspace()] },
+	});
+	const view = () => selectFilesTreeView(useAppStore.getState(), "w1");
+	const store = useAppStore.getState();
+
+	store.setFilesTreeExpanded("w1", ["src", "src/auth"], true);
+	const expanded = view().expanded;
+	store.setFilesTreeExpanded("w1", ["src"], true);
+	expect(view().expanded).toBe(expanded);
+	store.setFilesTreeExpanded("w1", ["src/auth"], false);
+	expect(view().expanded).toEqual(["src"]);
+	store.collapseAllFiles("w1");
+	expect(view().expanded).toEqual([]);
+
+	store.setChangedTreeCollapsed("w1", ["apps/web"], true);
+	store.setFilesTreeScroll("w1", "changedTree", 120, "branch");
+	expect(view()).toMatchObject({
+		changedCollapsed: ["apps/web"],
+		scroll: { changedTree: { top: 120, scope: "branch" } },
+	});
+	expect(selectFilesTreeView(useAppStore.getState(), "w2").expanded).toEqual([]);
+
+	useAppStore.getState().applyWorkspaceRemoved("p1", "w1");
+	expect(useAppStore.getState().filesTreeByWorkspace.w1).toBeUndefined();
+	useAppStore.getState().setFilesTreeExpanded("w1", ["src"], true);
+	expect(useAppStore.getState().filesTreeByWorkspace.w1).toBeUndefined();
+});
+
+test("revealInFiles expands every ancestor folder and records the revealed file", () => {
+	useAppStore.setState({ filesTreeByWorkspace: {}, removedWorkspaceIds: Object.create(null) });
+	useAppStore.getState().setFilesTreeExpanded("w1", ["docs"], true);
+	useAppStore.getState().revealInFiles("w1", "src/auth/login.ts");
+	const view = selectFilesTreeView(useAppStore.getState(), "w1");
+	expect(view.expanded).toEqual(["docs", "src", "src/auth"]);
+	expect(view.seenActivePath).toBe("src/auth/login.ts");
+	useAppStore.getState().revealInFiles("w1", "src/auth/login.ts");
+	expect(selectFilesTreeView(useAppStore.getState(), "w1")).toBe(view);
+});
+
+test("selectActiveFilePath follows the active file tab and ignores other tabs", () => {
+	const file: FileTab = {
+		kind: "file",
+		id: "f",
+		workspaceId: "w1",
+		name: "a",
+		path: "./src/a.ts",
+		content: "",
+	};
+	const tabsByWorkspace = { w1: [file] };
+	expect(selectActiveFilePath({ tabsByWorkspace, activeTabByWorkspace: { w1: "f" } }, "w1")).toBe(
+		"src/a.ts",
+	);
+	expect(
+		selectActiveFilePath({ tabsByWorkspace, activeTabByWorkspace: { w1: "chat" } }, "w1"),
+	).toBeNull();
+});
+
+test("revealChanges and requestChangesView reveal Files in Changed mode", () => {
+	useAppStore.setState({ filesMode: "all", layoutIntents: [] });
+	useAppStore.getState().revealChanges("w1");
+	expect(useAppStore.getState().filesMode).toBe("changed");
+	expect(useAppStore.getState().layoutIntents).toMatchObject([
+		{ kind: "reveal-tool", workspaceId: "w1", tool: "files" },
+	]);
+
+	useAppStore.setState({ filesMode: "all", layoutIntents: [] });
+	useAppStore.getState().requestChangesView("w1", null);
+	expect(useAppStore.getState().filesMode).toBe("changed");
+});
+
 test("requestChangesView / requestSpecView pair independent path requests with reveal intents", () => {
 	useAppStore.setState({ changesRequest: null, specRequest: null, layoutIntents: [] });
 
@@ -3157,7 +3233,7 @@ test("requestChangesView / requestSpecView pair independent path requests with r
 	expect(
 		s.layoutIntents.map(({ kind, workspaceId, ...intent }) => ({ kind, workspaceId, ...intent })),
 	).toMatchObject([
-		{ kind: "reveal-tool", workspaceId: "w1", tool: "changes" },
+		{ kind: "reveal-tool", workspaceId: "w1", tool: "files" },
 		{ kind: "reveal-tool", workspaceId: "w1", tool: "specs" },
 	]);
 

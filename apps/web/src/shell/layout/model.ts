@@ -71,7 +71,6 @@ export const LAYOUT_TOOLS: readonly LayoutToolId[] = [
 	"projects",
 	"specs",
 	"files",
-	"changes",
 	"review",
 	"plan",
 ];
@@ -80,7 +79,6 @@ export const LAYOUT_TOOL_DEFAULT_SIDES: Record<LayoutToolId, LayoutSide> = {
 	projects: "left",
 	specs: "right",
 	files: "right",
-	changes: "right",
 	review: "right",
 	plan: "right",
 };
@@ -89,7 +87,6 @@ const LAYOUT_TOOL_NAMES: Record<LayoutToolId, string> = {
 	projects: "Projects",
 	specs: "Specs",
 	files: "Files",
-	changes: "Changes",
 	review: "Review",
 	plan: "TODO List",
 };
