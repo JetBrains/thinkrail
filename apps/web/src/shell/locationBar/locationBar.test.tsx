@@ -260,7 +260,7 @@ const status = (over: Partial<BranchStatus> = {}): BranchStatus => ({
 	...over,
 });
 
-test("v86: Remote and Pull request render for a review-free branch with the next action", () => {
+test("v87: Remote and Pull request render for a review-free branch with the next action", () => {
 	const html = render(
 		worktree,
 		null,
@@ -278,7 +278,7 @@ test("v86: Remote and Pull request render for a review-free branch with the next
 	}
 });
 
-test("v86: an in-sync branch states it; Default on its base shows — and no PR action", () => {
+test("v87: an in-sync branch states it; Default on its base shows — and no PR action", () => {
 	const synced = render(worktree, null, status());
 	expect(synced).toMatch(/data-testid="scope-remote-value"[^>]*data-kind="inSync"/);
 	expect(synced).toContain("In sync");
@@ -287,7 +287,7 @@ test("v86: an in-sync branch states it; Default on its base shows — and no PR 
 	expect(testids(base)).not.toContain("scope-ship-review-primary");
 });
 
-test("v86: a diverged branch keeps its chips beside Sync; an open review keeps its chip", () => {
+test("v87: a diverged branch keeps its chips beside Sync; an open review keeps its chip", () => {
 	const html = render(worktree, review, status({ ahead: 1, behind: 2, review }));
 	expect(testids(html)).toContain("scope-remote-unpushed");
 	expect(testids(html)).toContain("scope-remote-behind");
@@ -296,7 +296,7 @@ test("v86: a diverged branch keeps its chips beside Sync; an open review keeps i
 	expect(testids(html)).not.toContain("scope-ship-review-primary");
 });
 
-test("v86: without an origin the Remote says so and the PR segment only holds the merge stub", () => {
+test("v87: without an origin the Remote says so and the PR segment only holds the merge stub", () => {
 	const html = render(
 		worktree,
 		null,

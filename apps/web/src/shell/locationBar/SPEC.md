@@ -108,9 +108,9 @@ actions through the panels-owned ship runner; it owns no host state.
   would pop the copy tooltip) so one Tab reaches the actions: branch (copy → success toast), *Based on* (hidden for
   user-owned workspaces, whose caption is plain "Branch"), *Compare to* (the Changes panel's `BranchPicker`
   bound to `workspace.setDiffBase`, so the two controls can never disagree), *Remote* (`n commits to push ·
-  n commits behind origin`, "In sync with origin", "Not published", or "No origin remote" — on a pre-v86
+  n commits behind origin`, "In sync with origin", "Not published", or "No origin remote" — on a pre-v87
   host only alongside a review), and — with a review — the PR/MR row with its link.
-- **Remote** (v86 `workspace.branchStatus`) renders for every workspace, including Default on its base.
+- **Remote** (v87 `workspace.branchStatus`) renders for every workspace, including Default on its base.
   Its value reads *No remote* (no `origin`), *Not published* (origin lacks the branch), *In sync*, or the
   ↑N warning / ↓N info chips. Its next action is the `shipActions` remote arm: **Publish** (unpublished
   with commits ahead of the base), **Push N** (ahead, not behind), or **Sync…** (behind: the diverged
@@ -122,7 +122,7 @@ actions through the panels-owned ship runner; it owns no host state.
   confirms, naming the shared branch, and only then sends `confirmBase`. A topbar push never rewrites the PR
   description — the Plan pane's *Push updates* still refreshes it from the plan. A Publish/Push action
   replaces the value; Sync sits beside the chips.
-- **Pull request** (v86) renders for every workspace. Without a review its value is — on a branch that is
+- **Pull request** (v87) renders for every workspace. Without a review its value is — on a branch that is
   its base and *No PR* / *No MR* otherwise, giving way to the primary action when there is one; its split
   button carries the `shipActions` review arm: **Open
   PR** (commits ahead of the base, GitHub origin — the shared compose dialog; without a usable `gh` the
@@ -130,7 +130,7 @@ actions through the panels-owned ship runner; it owns no host state.
   host pushes and opens GitLab's prefilled new-MR page), **Open draft PR** in ▾, and the inactive **Merge into <base> locally** stub
   ("coming soon", a separate task). A merged or closed review offers **Settle** (▾ Keep active / Remove)
   through the shared `workspaceActions`.
-- On a pre-v86 host the review-only rule holds: **Remote** renders only while `unpushedCommits` (warning
+- On a pre-v87 host the review-only rule holds: **Remote** renders only while `unpushedCommits` (warning
   chip) or `behindCommits` (info chip) is non-zero and opens the same card. Both counts arrive on
   `OpenBranchReview`, so Remote (and the card's *Remote* row) can appear only alongside a review — a branch
   without one shows no remote state, not "in sync".
@@ -143,5 +143,5 @@ actions through the panels-owned ship runner; it owns no host state.
   be masked by a stale hook cache, while a `gh` hiccup never blanks a chip the shelf still acts on. Without
   matching live details the PR row remains but the Remote summary hides — absent lookup-only counts mean
   unknown, never "In sync with origin." Pre-v78 hosts use the lookup alone and ignore rollback-stale snapshot
-  fields. On v86 the same resolution runs over `workspace.branchStatus.review`, and the remote counts come
+  fields. On v87 the same resolution runs over `workspace.branchStatus.review`, and the remote counts come
   from `BranchStatus` itself, so they no longer depend on a review.

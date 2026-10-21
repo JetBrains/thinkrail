@@ -126,7 +126,7 @@ test("reload re-reads cache-eligible and is dropped while disconnected", () => {
 	controller.stop();
 });
 
-test("a v86 branch status folds its counts onto the review and keeps the facts review-free", () => {
+test("a v87 branch status folds its counts onto the review and keeps the facts review-free", () => {
 	const base = {
 		hasOrigin: true,
 		provider: "github" as const,

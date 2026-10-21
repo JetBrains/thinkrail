@@ -1319,10 +1319,10 @@ own section. The kebab menu (`plan-menu`, a
 - **Ship — the branch's delivery state and actions, one implementation for topbar and Plan pane.**
   `useBranchStatus(workspace, status)` (the keyed `branchStatusState`, request
   generation, `noteOpenReview`, focus/fs/reconnect freshness rules above carry over unchanged) reads
-  `workspace.branchStatus` on a v86 host and falls back to `workspace.openReview` below it. It counts as
+  `workspace.branchStatus` on a v87 host and falls back to `workspace.openReview` below it. It counts as
   connected only once the welcome has named the protocol, so a reconnect never asks the old method of a
   new host. It exposes the lookup's review — callers resolve it against the snapshot with
-  `resolveBranchReview` — with v86's ahead/behind folded onto it, plus the review-free `BranchFacts`.
+  `resolveBranchReview` — with v87's ahead/behind folded onto it, plus the review-free `BranchFacts`.
   `shipActions(context)` is the pure derivation of each segment's `{ primary, secondary }` —
   remote arm (Publish / Push N / Sync…) and review arm (Open PR / Create MR / Open draft PR / the
   disabled Merge-locally stub / Settle) — unit-tested over the full scenario table. `useShipRunner`

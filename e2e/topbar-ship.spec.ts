@@ -11,7 +11,7 @@ import {
 import { commitFile, gitAs } from "./fixtures/git";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
 
-// The topbar's Remote and Pull request segments without a forge review (v86 `workspace.branchStatus`).
+// The topbar's Remote and Pull request segments without a forge review (v87 `workspace.branchStatus`).
 // Every journey wires `origin` into the lane's SHARED fixture repo config (worktrees share remotes); the
 // app fixture's reset removes it before the next test. A GitHub-looking origin pushes into a local bare repo
 // (`pushInsteadOf`) and refuses https fetches (`protocol.https.allow never`), so nothing leaves the machine;

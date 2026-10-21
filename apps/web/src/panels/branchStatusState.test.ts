@@ -98,7 +98,7 @@ test("a url already known survives a lookup for the same review that reports non
 	});
 });
 
-test("a v86 answer keeps its branch facts across a noted review", () => {
+test("a v87 answer keeps its branch facts across a noted review", () => {
 	const state = createBranchStatusState();
 	const status: BranchFacts = {
 		hasOrigin: true,

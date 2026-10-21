@@ -199,7 +199,7 @@ test("the project trust summary and pi-level resource consent are pinned to v81"
 });
 
 test("workspace read state is pinned to v86", () => {
-	expect(PROTOCOL_VERSION).toBe(86);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKSPACE_READ_STATE_PROTOCOL_VERSION);
 	expect(WORKSPACE_READ_STATE_PROTOCOL_VERSION).toBe(86);
 	expect(WS_METHODS.workspaceMarkUnread).toBe("workspace.markUnread");
 	expect(WS_METHODS.workspaceMarkRead).toBe("workspace.markRead");
@@ -211,9 +211,9 @@ test("project rename is pinned to v85", () => {
 	expect(WS_METHODS.projectRename).toBe("project.rename");
 });
 
-test("branch status, review-free push, and PR description sources are pinned to v86", () => {
-	expect(PROTOCOL_VERSION).toBe(86);
-	expect(BRANCH_STATUS_PROTOCOL_VERSION).toBe(86);
+test("branch status, review-free push, and PR description sources are pinned to v87", () => {
+	expect(PROTOCOL_VERSION).toBe(87);
+	expect(BRANCH_STATUS_PROTOCOL_VERSION).toBe(87);
 	expect(WS_METHODS.workspaceBranchStatus).toBe("workspace.branchStatus");
 	expect(WS_METHODS.workspacePush).toBe("workspace.push");
 	expect(WS_METHODS.prGenerate).toBe("pr.generate");

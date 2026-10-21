@@ -125,11 +125,11 @@ export interface PrDraft {
 export type PrBodySource = "plan" | "commits" | "template" | "empty";
 
 export interface PrPreview extends PrDraft {
-	/** v86: worktree-relative PR/MR templates the host found, in discovery order. */
+	/** v87: worktree-relative PR/MR templates the host found, in discovery order. */
 	templates?: string[];
-	/** v86: whether the session (when one was given) has a plan body to render. */
+	/** v87: whether the session (when one was given) has a plan body to render. */
 	planAvailable?: boolean;
-	/** v86: the source the body was rendered from. */
+	/** v87: the source the body was rendered from. */
 	source?: PrBodySource;
 }
 
