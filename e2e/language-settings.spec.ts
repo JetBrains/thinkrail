@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
-import { enterDefaultWorkspace, openFixtureProject } from "./fixtures/app";
+import { enterDefaultWorkspace, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
 import { E2E_DATA_DIR } from "./fixtures/paths";
 
 const LOCALES_DIR = join(E2E_DATA_DIR, "locales");
@@ -80,25 +80,32 @@ test("a local language file is listed, selectable, live-reloaded, and survives d
 	await expect(page.locator("html")).toHaveAttribute("lang", "de");
 });
 
-test("switching language re-renders cached labels and markup strings, including live catalog edits", async ({
+test("switching language re-renders cached labels, markup strings and a mounted editor's controls, including live catalog edits", async ({
 	page,
 }) => {
 	const german = (files: string) =>
 		JSON.stringify({
 			"workbench.tool.files": files,
 			"settings.language.add.steps": "Lade <0>en.json</0> herunter und übersetze die Werte.",
+			"review.widget.commentOnSelection": "Auswahl kommentieren",
 		});
 	writeLocale("de.json", german("Dateien"));
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
 	const filesTool = page.getByTestId("tool-rail-files");
 	await expect(filesTool).toHaveAccessibleName(/Files/);
+	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
+	const commentButton = page.getByTestId("review-add-icon");
+	await expect(commentButton).toHaveAttribute("title", "Comment on selection");
 
 	const section = await openLanguageSettings(page);
 	await section.getByTestId("language-de").click();
 	await expect(section.getByTestId("language-add")).toContainText("Lade en.json herunter");
 	await page.keyboard.press("Escape");
 	await expect(filesTool).toHaveAccessibleName(/Dateien/);
+	await expect(commentButton).toHaveAttribute("title", "Auswahl kommentieren");
+	await expect(commentButton).toHaveAttribute("aria-label", "Auswahl kommentieren");
 
 	writeLocale("de.json", german("Dateiliste"));
 	await expect(filesTool).toHaveAccessibleName(/Dateiliste/);

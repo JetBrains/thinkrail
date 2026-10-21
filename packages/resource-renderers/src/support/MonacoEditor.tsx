@@ -19,6 +19,7 @@ import {
 	attachReviewCommenting,
 	attachReviewThreads,
 	type MonacoReviewZoneState,
+	type ReviewCommenting,
 } from "./reviewWidgets";
 
 function focusLine(review: SurfaceReview): number | null {
@@ -48,7 +49,7 @@ export default function MonacoEditor({
 	);
 	const stopThemeWatchRef = useRef<(() => void) | null>(null);
 	const menuIconsRef = useRef<{ dispose(): void } | null>(null);
-	const detachRef = useRef<(() => void) | null>(null);
+	const commentingRef = useRef<ReviewCommenting | null>(null);
 	const threadsRef = useRef<ReturnType<typeof attachReviewThreads> | null>(null);
 	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
 	const decorationsRef = useRef<string[]>([]);
@@ -71,6 +72,11 @@ export default function MonacoEditor({
 		);
 	}, []);
 
+	const commentLabel = t("review.widget.commentOnSelection");
+	useEffect(() => {
+		commentingRef.current?.setLabel(commentLabel);
+	}, [commentLabel]);
+
 	const onMount: OnMount = (codeEditor) => {
 		stopThemeWatchRef.current = watchThemeSwap();
 		editorRef.current = codeEditor;
@@ -78,7 +84,7 @@ export default function MonacoEditor({
 		if (isEditorViewState(viewState)) codeEditor.restoreViewState(viewState);
 		if (review) {
 			threadsRef.current = attachReviewThreads(codeEditor, setReviewZones);
-			detachRef.current = attachReviewCommenting(codeEditor, threadsRef.current);
+			commentingRef.current = attachReviewCommenting(codeEditor, threadsRef.current, commentLabel);
 			syncThreads(review);
 			const line = focusLine(review);
 			if (line !== null) {
@@ -106,7 +112,7 @@ export default function MonacoEditor({
 			if (saved) onViewStateRef.current?.(saved);
 			stopThemeWatchRef.current?.();
 			menuIconsRef.current?.dispose();
-			detachRef.current?.();
+			commentingRef.current?.dispose();
 			threadsRef.current?.dispose();
 		},
 		[],
