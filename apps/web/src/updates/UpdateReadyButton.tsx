@@ -16,8 +16,11 @@ export function UpdateReadyButton({
 	const hostRequestFailed = updates.source === "host" && updates.requestFailed;
 	const nativeState = updates.source === "native" ? updates.state : null;
 	const nativeNeedsAttention = updates.source === "native" && updates.requestError !== null;
+	const lastInstall = nativeState?.lastInstall ?? null;
+	const installFailed = lastInstall !== null && lastInstall.outcome !== "installed";
 	const nativeActionable =
 		nativeNeedsAttention ||
+		installFailed ||
 		nativeState?.status === "available" ||
 		nativeState?.status === "downloading" ||
 		nativeState?.status === "preparing" ||
@@ -51,6 +54,9 @@ export function UpdateReadyButton({
 				? t("updates.button.hostAvailableVersionLabel", { version: availableVersion })
 				: t("updates.button.hostAvailableLabel");
 		}
+	} else if (installFailed) {
+		label = t("updates.button.installFailed");
+		ariaLabel = t("updates.button.installFailedLabel");
 	} else if (!nativeNeedsAttention && nativeState) {
 		switch (nativeState.status) {
 			case "available":

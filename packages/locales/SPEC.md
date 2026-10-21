@@ -25,7 +25,7 @@ onto separate instances.
   - `BUNDLED_LOCALES` — the tags shipped with this build (`["en"]` today) and `bundledCatalog(tag)`.
   - `SYSTEM_LOCALE` (`"system"`), `canonicalLocale(tag)`, `languageName(tag)` (own-language name via
     `Intl.DisplayNames`, first letter upper-cased), `DESKTOP_MENU_KEYS` and `DESKTOP_DIALOG_KEYS` — the keys the
-    desktop's native menu and error dialogs render, one list each for the desktop and the web that pushes
+    desktop's native menu, error dialogs, and startup splash render, one list each for the desktop and the web that pushes
     their translations.
   - `localeTagFromFileName(name)` — `de.json` → `"de"`, canonicalized through `Intl.getCanonicalLocales`;
     `null` for a non-`.json`, dot-prefixed, or non-BCP-47 name.
