@@ -608,15 +608,16 @@ export default function ChatView({
 			.catch(() => {});
 	};
 
-	// The history button toggles the overlay: a second click closes it again.
-	const onHistoryOpen = () => (historyState.open ? closeHistory() : openOverlay(draft));
-
-	const onManageTemplates = () => useAppStore.getState().openSettings(SettingsSection.Templates);
-
 	const onDismissHistory = () => {
 		closeHistory();
 		composerRef.current?.refocus();
 	};
+
+	// The history button toggles the overlay: a second click closes it again through
+	// the same dismiss path, returning focus to the composer.
+	const onHistoryOpen = () => (historyState.open ? onDismissHistory() : openOverlay(draft));
+
+	const onManageTemplates = () => useAppStore.getState().openSettings(SettingsSection.Templates);
 
 	const onInsertHit = (hit: PromptHit) => {
 		composerRef.current?.insertText(hit.text);
