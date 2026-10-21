@@ -6,6 +6,7 @@ import {
 	type TemplateInfo,
 	type ThinkingLevel,
 } from "@thinkrail/contracts";
+import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -85,6 +86,7 @@ export default function ChatView({
 	workspaceId: string;
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
+	const t = useT();
 	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
 	const isStreaming = useAppStore((s) => s.sessions[sessionId]?.isStreaming ?? false);
 	const draft = useAppStore((s) => s.sessions[sessionId]?.draft ?? "");
@@ -358,13 +360,14 @@ export default function ChatView({
 	const mergedCommands = useMemo(
 		() =>
 			mergeNativeChatCommands(
+				t,
 				[
 					...commands.filter((command) => command.source !== "prompt"),
 					...templates.map(templateToSlashCommand),
 				],
 				canRenameChat,
 			),
-		[canRenameChat, commands, templates],
+		[canRenameChat, commands, t, templates],
 	);
 
 	useEffect(() => {
@@ -409,7 +412,7 @@ export default function ChatView({
 					if (useAppStore.getState().sessions[sessionId]?.thinkingLevel === level) {
 						useAppStore.getState().setThinkingLevel(sessionId, previous);
 					}
-					toast.error(errorText(error), "Couldn't change the effort level");
+					toast.error(errorText(error), translate("chat.view.effortChangeFailed"));
 				}),
 		[sessionId],
 	);
@@ -463,7 +466,10 @@ export default function ChatView({
 							useAppStore.getState().setThinkingLevel(sessionId, previous.level);
 						}
 					}
-					toast.error(errorText(error), `Couldn't switch to ${model.name}`);
+					toast.error(
+						errorText(error),
+						translate("chat.view.modelSwitchFailed", { model: model.name }),
+					);
 				},
 			)
 			.then(() => refreshStats());
@@ -640,7 +646,7 @@ export default function ChatView({
 			closeHistory();
 			useAppStore.getState().deleteChat(targetWorkspaceId, targetSessionId);
 		} catch (err) {
-			toast.error(errorText(err), "Couldn't delete the chat");
+			toast.error(errorText(err), translate("chat.view.deleteFailed"));
 		}
 	};
 
@@ -845,14 +851,13 @@ export default function ChatView({
 			/>
 			<Dialog open={stopAllOpen} onOpenChange={setStopAllOpen}>
 				<DialogContent onCloseAutoFocus={returnToResources}>
-					<DialogTitle>Stop all subagents?</DialogTitle>
+					<DialogTitle>{t("chat.view.stopAllTitle")}</DialogTitle>
 					<DialogDescription>
-						Stop {resources.groups.subagents.length} active subagents in this chat? The main chat
-						and future delegation are unaffected.
+						{t("chat.view.stopAllDescription", { count: resources.groups.subagents.length })}
 					</DialogDescription>
 					<DialogFooter>
 						<Button variant="ghost" onClick={() => setStopAllOpen(false)}>
-							Cancel
+							{t("common.cancel")}
 						</Button>
 						<Button
 							data-testid="resources-stop-all-confirm"
@@ -866,7 +871,7 @@ export default function ChatView({
 								setStopAllOpen(false);
 							}}
 						>
-							Stop {resources.groups.subagents.length} subagents
+							{t("chat.view.stopAllConfirm", { count: resources.groups.subagents.length })}
 						</Button>
 					</DialogFooter>
 				</DialogContent>

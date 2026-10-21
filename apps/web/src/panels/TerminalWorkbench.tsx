@@ -1,6 +1,7 @@
 import { RiAddLine as Plus } from "@remixicon/react";
 import type { TerminalTabsPush } from "@thinkrail/contracts";
 import { WS_CHANNELS } from "@thinkrail/contracts";
+import { i18n, useT } from "@thinkrail/locales/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { TerminalTab } from "../store";
@@ -60,13 +61,14 @@ export function useTerminalCatalog(workspaceId: string | null): boolean {
 }
 
 export function TerminalWorkbenchBody({ tab, onAdd }: { tab: TerminalTab; onAdd: () => void }) {
+	const t = useT();
 	return (
 		<div data-testid="terminal-panel" className="relative h-full min-h-0 bg-container-terminal-bg">
-			<IconTooltip label="New terminal">
+			<IconTooltip label={t("panels.terminalWorkbench.newTerminal")}>
 				<button
 					type="button"
 					data-testid="terminal-add"
-					aria-label="New terminal"
+					aria-label={t("panels.terminalWorkbench.newTerminal")}
 					onClick={onAdd}
 					className="absolute top-4 right-4 z-10 flex size-20 items-center justify-center rounded-sm bg-container-elevated-bg text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
@@ -98,6 +100,7 @@ export function useTerminalClose(): {
 	requestClose: (tab: TerminalTab, onClosed: () => void) => void;
 	confirmation: ReactNode;
 } {
+	const t = useT();
 	const [closeState, setCloseState] = useState<TerminalCloseState | null>(null);
 	const completed = useRef(new WeakSet<PendingTerminalClose>());
 	const activeRequest = useRef<PendingTerminalClose | null>(null);
@@ -120,7 +123,7 @@ export function useTerminalClose(): {
 		if (forceSubmitted.current === request) forceSubmitted.current = null;
 		setCloseState((current) => (current?.request === request ? null : current));
 		if (!useAppStore.getState().removedWorkspaceIds[request.tab.workspaceId]) {
-			toast.error(errorText(error), "Couldn't close the terminal");
+			toast.error(errorText(error), i18n.t("panels.terminalWorkbench.closeFailed"));
 		}
 	}, []);
 	const pending = closeState?.phase === "confirming" ? closeState.request : null;
@@ -151,7 +154,7 @@ export function useTerminalClose(): {
 				.then(({ busy }) => {
 					if (completed.current.has(request)) return;
 					if (busy && force) {
-						fail(request, new Error("The terminal refused the forced close"));
+						fail(request, new Error(i18n.t("panels.terminalWorkbench.forceCloseRefused")));
 						return;
 					}
 					if (busy) {
@@ -181,9 +184,13 @@ export function useTerminalClose(): {
 					if (activeRequest.current === pending) activeRequest.current = null;
 					setCloseState(null);
 				}}
-				title="Something is running"
-				description={`“${pending?.tab.title ?? "This terminal"}” has a running process. Closing the tab ends it.`}
-				confirmLabel="Close anyway"
+				title={t("panels.terminalWorkbench.busyTitle")}
+				description={
+					pending
+						? t("panels.terminalWorkbench.busyDescription", { title: pending.tab.title })
+						: t("panels.terminalWorkbench.busyDescriptionUntitled")
+				}
+				confirmLabel={t("panels.terminalWorkbench.closeAnyway")}
 				confirmTestId="terminal-close-busy-confirm"
 				destructive
 				onConfirm={() => {

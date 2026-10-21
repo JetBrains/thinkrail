@@ -1,4 +1,5 @@
 import { RiChat2Line as Chat, RiFolderLine as Folder } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { Command, CommandGroup, CommandItem, CommandList } from "@thinkrail/ui/command";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { useCallback } from "react";
@@ -12,6 +13,7 @@ export interface SessionSwitcherProps {
 }
 
 export function SessionSwitcher({ open, onOpenChange }: SessionSwitcherProps) {
+	const t = useT();
 	const handleClose = useCallback(() => {
 		onOpenChange(false);
 	}, [onOpenChange]);
@@ -32,13 +34,13 @@ export function SessionSwitcher({ open, onOpenChange }: SessionSwitcherProps) {
 				}}
 			>
 				<DialogTitle className="border-border-default border-b px-16 py-12 tr-title-dialog text-text-default">
-					Switch session
+					{t("shell.sessionSwitcher.title")}
 				</DialogTitle>
 				<Command className="bg-transparent" loop shouldFilter={false} vimBindings={false}>
 					<CommandList className="max-h-[min(60vh,420px)] px-8 pt-4 pb-8">
 						{groups.length === 0 ? (
 							<div className="px-8 py-12 text-center text-text-muted tr-text-ui">
-								No active sessions
+								{t("shell.sessionSwitcher.empty")}
 							</div>
 						) : (
 							groups.map((project) => (
@@ -72,7 +74,7 @@ export function SessionSwitcher({ open, onOpenChange }: SessionSwitcherProps) {
 												)}
 												<span className="flex min-w-0 flex-1 flex-col">
 													<span className="truncate tr-text-ui text-text-default leading-tight group-data-[selected=true]:text-primary">
-														{session.chatTitle || "Untitled chat"}
+														{session.chatTitle || t("shell.sessionSwitcher.untitled")}
 													</span>
 													{session.workspaceName ? (
 														<span className="truncate text-text-subtle tr-text-metadata leading-tight">

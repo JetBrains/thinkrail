@@ -1,4 +1,5 @@
 import MonacoReact, { type OnMount } from "@monaco-editor/react";
+import { useT } from "@thinkrail/locales/react";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import type { editor } from "monaco-editor/esm/vs/editor/editor.api.js";
 import { use, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
@@ -37,12 +38,13 @@ export default function MonacoEditor({
 	viewState,
 	onViewState,
 }: ResourceViewProps) {
+	const t = useT();
 	const { fileLineWidth, fileLineWidthBounded } = useResourcePreferences();
 	use(ensureMonaco(useResourceHost().code));
 	const modelScope = useId().replace(/[^\w-]/g, "");
 	const options = useMemo(
-		() => fileEditorOptions(fileLineWidth, fileLineWidthBounded, resource.path),
-		[fileLineWidth, fileLineWidthBounded, resource.path],
+		() => fileEditorOptions(t, fileLineWidth, fileLineWidthBounded, resource.path),
+		[t, fileLineWidth, fileLineWidthBounded, resource.path],
 	);
 	const stopThemeWatchRef = useRef<(() => void) | null>(null);
 	const menuIconsRef = useRef<{ dispose(): void } | null>(null);

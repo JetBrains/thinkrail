@@ -15,6 +15,7 @@ import type {
 	DelegationRunStatus,
 	SubagentResourceSummary,
 } from "@thinkrail/contracts";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import type { KeyboardEvent, ReactNode } from "react";
 
@@ -102,40 +103,42 @@ export function sortSettled(resources: readonly Resource[]): Resource[] {
 		.sort((a, b) => (finishedAt(b) ?? startedAt(b)) - (finishedAt(a) ?? startedAt(a)));
 }
 
-export function resourceName(resource: Resource): string {
+export function resourceName(t: Translator, resource: Resource): string {
 	return resource.kind === "command"
 		? resource.summary.name
-		: (resource.summary.roleName ?? "Subagent");
+		: (resource.summary.roleName ?? t("resources.subagent.defaultName"));
 }
 
 export function resourceActivity(resource: Resource): string {
 	return resource.kind === "command" ? resource.summary.command : resource.summary.task;
 }
 
-export function stateLabel(state: ResourceState, kind: Resource["kind"]): string {
+export function stateLabel(t: Translator, state: ResourceState, kind: Resource["kind"]): string {
 	switch (state) {
 		case "working":
-			return kind === "command" ? "Running" : "Working";
+			return kind === "command" ? t("resources.state.running") : t("resources.state.working");
 		case "queued":
-			return "Queued";
+			return t("resources.state.queued");
 		case "stopping":
-			return "Stopping…";
+			return t("resources.state.stopping");
 		case "done":
-			return "Done";
+			return t("common.done");
 		case "failed":
-			return "Failed";
+			return t("resources.state.failed");
 		case "stopped":
-			return "Stopped";
+			return t("resources.state.stopped");
 	}
 }
 
-export function formatElapsed(ms: number): string {
+export function formatElapsed(t: Translator, ms: number): string {
 	const minutes = Math.max(0, Math.floor(ms / 60_000));
-	if (minutes < 1) return "<1 min";
-	if (minutes < 60) return `${minutes} min`;
+	if (minutes < 1) return t("resources.elapsed.underMinute");
+	if (minutes < 60) return t("resources.elapsed.minutes", { minutes });
 	const hours = Math.floor(minutes / 60);
 	const rest = minutes % 60;
-	return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+	return rest === 0
+		? t("resources.elapsed.hours", { hours })
+		: t("resources.elapsed.hoursMinutes", { hours, minutes: rest });
 }
 
 function runMs(resource: Resource, now: number): number | null {
@@ -150,9 +153,9 @@ function runMs(resource: Resource, now: number): number | null {
 	return end === undefined ? null : end - start;
 }
 
-export function elapsedLabel(resource: Resource, now: number): string | null {
+export function elapsedLabel(t: Translator, resource: Resource, now: number): string | null {
 	const ms = runMs(resource, now);
-	return ms === null ? null : formatElapsed(ms);
+	return ms === null ? null : formatElapsed(t, ms);
 }
 
 const STATE_TEXT: Record<ResourceState, string> = {
@@ -196,15 +199,17 @@ export function StateIcon({ state }: { state: ResourceState }) {
 }
 
 export function StateText({ state, kind }: { state: ResourceState; kind: Resource["kind"] }) {
+	const t = useT();
 	return (
 		<span className={cn("inline-flex items-center gap-4 whitespace-nowrap", STATE_TEXT[state])}>
 			<StateIcon state={state} />
-			{stateLabel(state, kind)}
+			{stateLabel(t, state, kind)}
 		</span>
 	);
 }
 
 export function ExitBadge({ exitCode }: { exitCode: number }) {
+	const t = useT();
 	return (
 		<span
 			className={cn(
@@ -214,7 +219,7 @@ export function ExitBadge({ exitCode }: { exitCode: number }) {
 					: "border-feedback-error-muted text-feedback-error",
 			)}
 		>
-			exit {exitCode}
+			{t("resources.row.exit", { code: exitCode })}
 		</span>
 	);
 }
@@ -303,12 +308,12 @@ export interface ResourceRowProps {
 
 const ACCESSIBLE_ACTIVITY_LIMIT = 80;
 
-function accessibleName(name: string, activity: string, state: string): string {
+function accessibleName(t: Translator, name: string, activity: string, state: string): string {
 	const trimmed =
 		activity.length > ACCESSIBLE_ACTIVITY_LIMIT
 			? `${activity.slice(0, ACCESSIBLE_ACTIVITY_LIMIT - 1)}…`
 			: activity;
-	return `${name}: ${trimmed}, ${state}`;
+	return t("resources.row.accessibleName", { name, activity: trimmed, state });
 }
 
 export function ResourceRow({
@@ -322,13 +327,14 @@ export function ResourceRow({
 	onSelect,
 	onStop,
 }: ResourceRowProps) {
+	const t = useT();
 	const state = resourceState(resource);
 	const live = isLiveState(state);
 	const id = resourceId(resource);
-	const name = resourceName(resource);
+	const name = resourceName(t, resource);
 	const activity = resourceActivity(resource);
-	const label = stateLabel(state, resource.kind);
-	const elapsed = elapsedLabel(resource, now);
+	const label = stateLabel(t, state, resource.kind);
+	const elapsed = elapsedLabel(t, resource, now);
 	const exitCode = resource.kind === "command" ? resource.summary.exitCode : undefined;
 	const stopDisabled =
 		!authoritative ||
@@ -360,7 +366,7 @@ export function ResourceRow({
 		<span className="hidden shrink-0 items-center gap-2 group-hover:inline-flex group-focus-within:inline-flex">
 			{live ? (
 				<RowActionButton
-					label={action?.pending ? "Stopping…" : "Stop"}
+					label={action?.pending ? t("resources.action.stopping") : t("resources.action.stop")}
 					testId="resource-stop"
 					disabled={stopDisabled}
 					danger
@@ -400,7 +406,7 @@ export function ResourceRow({
 				<div
 					role="option"
 					aria-selected={selected}
-					aria-label={accessibleName(name, activity, label)}
+					aria-label={accessibleName(t, name, activity, label)}
 					tabIndex={0}
 					onClick={onSelect}
 					onKeyDown={onKeyDown}
@@ -431,7 +437,7 @@ export function ResourceRow({
 				<button
 					type="button"
 					data-testid="resource-inspect"
-					title={`Inspect ${name}`}
+					title={t("resources.row.inspect", { name })}
 					onClick={onSelect}
 					className="flex min-w-0 items-baseline gap-8 rounded-xs text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"
 				>

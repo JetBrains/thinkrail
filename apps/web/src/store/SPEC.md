@@ -763,5 +763,6 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   invocation parser/matcher for user-message echo reconciliation, the MCP attention/active predicates; a
   leaf, so the edge adds no cycle); `chat`
   (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
-  (`ConnectionStatus`, **type-only**); `zustand`.
+  (`ConnectionStatus`, **type-only**); `@thinkrail/locales` (default chat/terminal names, settled-reason
+  copy and toasts, resolved when created); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`, shell runtime (the web-local layout state edge is type-only), or transport runtime.

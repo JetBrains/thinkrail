@@ -1,5 +1,7 @@
 import { RiPlugLine } from "@remixicon/react";
 import type { McpServerResourceSummary } from "@thinkrail/contracts";
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import { useId } from "react";
 import { type McpStateTone, mcpStateTone, mcpStatusLabel } from "@/lib";
@@ -7,30 +9,28 @@ import type { ResourceActions } from "./resourceRow";
 
 type McpRowActionId = "disable" | "enable" | "reconnect" | "settings";
 
-const DISABLE = { id: "disable", label: "Disable in this chat" } as const;
+type McpRowAction = { id: McpRowActionId; label: MessageKey };
 
-export function mcpRowActions(
-	server: McpServerResourceSummary,
-): { id: McpRowActionId; label: string }[] {
+const DISABLE = { id: "disable", label: "resources.mcp.disable" } as const satisfies McpRowAction;
+
+export function mcpRowActions(server: McpServerResourceSummary): McpRowAction[] {
 	const actions = stateActions(server.state);
 	return server.registered ? actions.filter((action) => action.id !== DISABLE.id) : actions;
 }
 
-function stateActions(
-	state: McpServerResourceSummary["state"],
-): { id: McpRowActionId; label: string }[] {
+function stateActions(state: McpServerResourceSummary["state"]): McpRowAction[] {
 	switch (state) {
 		case "disabled-in-chat":
-			return [{ id: "enable", label: "Enable in this chat" }];
+			return [{ id: "enable", label: "resources.mcp.enable" }];
 		case "needs-sign-in":
-			return [{ id: "settings", label: "Sign in" }, DISABLE];
+			return [{ id: "settings", label: "resources.mcp.signIn" }, DISABLE];
 		case "failed":
 		case "disconnected":
-			return [{ id: "reconnect", label: "Reconnect" }, DISABLE];
+			return [{ id: "reconnect", label: "resources.mcp.reconnect" }, DISABLE];
 		case "pending-approval":
-			return [{ id: "settings", label: "Review" }];
+			return [{ id: "settings", label: "resources.mcp.review" }];
 		case "invalid-config":
-			return [{ id: "settings", label: "Edit" }];
+			return [{ id: "settings", label: "common.edit" }];
 		case "connected":
 		case "starting":
 		case "unknown":
@@ -75,6 +75,7 @@ function McpRow({
 	describedBy: string;
 	onAction: (id: McpRowActionId) => void;
 }) {
+	const t = useT();
 	const tone = mcpStateTone(server.state, server.toolCount);
 	const action = actions[mcpActionKey(server.name)];
 	return (
@@ -106,13 +107,13 @@ function McpRow({
 						data-testid="resource-mcp-state"
 						className={cn("whitespace-nowrap tr-text-metadata", STATE_TEXT[tone])}
 					>
-						{mcpStatusLabel(server.state, server.toolCount)}
+						{mcpStatusLabel(t, server.state, server.toolCount)}
 					</span>
 				</span>
 				<span className="flex min-w-0 flex-wrap items-center gap-x-8 gap-y-2 text-text-muted tr-text-metadata">
 					<span>
-						{server.transport === "http" ? "HTTP" : "stdio · runs on host"}
-						{server.state === "pending-reload" ? " · applies when the chat is idle" : ""}
+						{server.transport === "http" ? t("mcp.transport.http") : t("resources.mcp.stdioOnHost")}
+						{server.state === "pending-reload" ? ` · ${t("resources.mcp.pendingReload")}` : ""}
 					</span>
 					{mcpRowActions(server).map((item) => (
 						<button
@@ -124,7 +125,7 @@ function McpRow({
 							onClick={() => onAction(item.id)}
 							className="rounded-xs px-4 text-primary outline-none hover:bg-control-bg focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text disabled:hover:bg-transparent"
 						>
-							{item.label}
+							{t(item.label)}
 						</button>
 					))}
 				</span>
@@ -153,11 +154,16 @@ export function McpServerSection({
 	onReconnect: (name: string) => void;
 	onOpenSettings: () => void;
 }) {
+	const t = useT();
 	const hintId = useId();
 	return (
-		<section data-testid="resources-mcp" aria-label="MCP servers" className="flex flex-col gap-2">
+		<section
+			data-testid="resources-mcp"
+			aria-label={t("resources.mcp.title")}
+			className="flex flex-col gap-2"
+		>
 			<div className="flex items-baseline gap-4 px-8 pt-8 pb-2 text-text-subtle">
-				<h3 className="tr-text-eyebrow">MCP servers</h3>
+				<h3 className="tr-text-eyebrow">{t("resources.mcp.title")}</h3>
 				<span className="tr-text-metadata">· {servers.length}</span>
 				<span className="flex-1" />
 				<button
@@ -166,11 +172,11 @@ export function McpServerSection({
 					onClick={onOpenSettings}
 					className="rounded-xs px-4 text-primary tr-text-metadata outline-none hover:bg-control-bg focus-visible:ring-2 focus-visible:ring-primary"
 				>
-					Settings
+					{t("resources.mcp.settings")}
 				</button>
 			</div>
 			{servers.length === 0 ? (
-				<p className="px-8 py-4 text-text-subtle tr-text-metadata">No MCP servers in this chat.</p>
+				<p className="px-8 py-4 text-text-subtle tr-text-metadata">{t("resources.mcp.empty")}</p>
 			) : (
 				<>
 					<ul className="flex flex-col gap-2">
@@ -190,7 +196,7 @@ export function McpServerSection({
 						))}
 					</ul>
 					<p id={hintId} className="px-8 text-text-subtle tr-text-metadata">
-						Disabling applies when the chat is idle — restarts this chat's other servers.
+						{t("resources.mcp.disableHint")}
 					</p>
 				</>
 			)}

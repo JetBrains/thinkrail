@@ -24,6 +24,7 @@ import {
 	type ThinkingLevel,
 	type WireModel,
 } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import {
 	Command,
 	CommandEmpty,
@@ -195,6 +196,7 @@ function EffortSlider({
 	defaultLevel: ThinkingLevel | undefined;
 	onSelectLevel: (level: ThinkingLevel) => void;
 }) {
+	const t = useT();
 	const levels = model.thinkingLevels;
 	const index = levels.indexOf(level);
 	const Glyph = LEVEL_GLYPH[level];
@@ -204,7 +206,7 @@ function EffortSlider({
 			className="flex shrink-0 flex-col gap-4 border-border-default border-t px-12 pt-8 pb-4"
 		>
 			<div className="flex items-center gap-4 text-text-muted tr-text-metadata">
-				<span>Effort</span>
+				<span>{t("chat.modelPicker.effort")}</span>
 				<span aria-hidden>·</span>
 				<span className="truncate">{model.name}</span>
 			</div>
@@ -234,7 +236,7 @@ function EffortSlider({
 					max={levels.length - 1}
 					step={1}
 					value={Math.max(0, index)}
-					aria-label={`Effort for ${model.name}`}
+					aria-label={t("chat.modelPicker.effortFor", { model: model.name })}
 					aria-valuetext={level}
 					data-testid="thinking-slider"
 					onChange={(event) => {
@@ -290,11 +292,11 @@ function EffortSlider({
 				})}
 			</div>
 			<div className="flex items-center gap-8 text-text-subtle tr-text-metadata">
-				<span className="truncate">{LEVEL_HINT[level]}</span>
+				<span className="truncate">{t(LEVEL_HINT[level])}</span>
 				{COSTLY_LEVELS.has(level) ? (
 					<span className="flex shrink-0 items-center gap-4 text-feedback-warning">
 						<Flash className="size-12" />
-						uses your limits faster
+						{t("chat.modelPicker.costlyWarning")}
 					</span>
 				) : null}
 			</div>
@@ -303,7 +305,8 @@ function EffortSlider({
 }
 
 function RowMeta({ model, withProvider }: { model: WireModel; withProvider: boolean }) {
-	const kind = kindLabel(model);
+	const t = useT();
+	const kind = kindLabel(t, model);
 	const cost = costLabel(model);
 	return (
 		<span className="flex min-w-0 items-center gap-4 truncate text-text-muted tr-text-metadata">
@@ -318,7 +321,7 @@ function RowMeta({ model, withProvider }: { model: WireModel; withProvider: bool
 			{cost ? (
 				<>
 					{withProvider || kind ? <span aria-hidden>·</span> : null}
-					<span className="shrink-0">{cost} per M</span>
+					<span className="shrink-0">{t("chat.modelPicker.costPerMillion", { cost })}</span>
 				</>
 			) : null}
 			{withProvider || kind || cost ? <span aria-hidden>·</span> : null}
@@ -347,6 +350,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 		},
 		handleRef,
 	) {
+		const t = useT();
 		const [open, setOpen] = useState(false);
 		const [query, setQuery] = useState("");
 		const [showAll, setShowAll] = useState(false);
@@ -369,11 +373,11 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 			setShowAll(false);
 		};
 
-		const providers = useMemo(() => groupByProvider(models).map((g) => g.provider), [models]);
+		const providers = useMemo(() => groupByProvider(t, models).map((g) => g.provider), [t, models]);
 		const shortlist = preferences.favorites.length > 0 || preferences.recents.length > 0;
 		const folded = shortlist && !showAll && query.trim() === "";
 		const searching = query !== "";
-		const groups = pickerGroups(models, {
+		const groups = pickerGroups(t, models, {
 			pinned: preferences.favorites,
 			query,
 			expansion,
@@ -408,7 +412,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					data-testid="model-option"
 					data-model-id={model.id}
 					data-provider={model.provider}
-					title={describeAuth(model) ?? undefined}
+					title={describeAuth(t, model) ?? undefined}
 					onSelect={() => pickModel(model)}
 					className={cn(
 						"group/row items-start gap-8 py-4",
@@ -429,7 +433,11 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							type="button"
 							data-testid="model-favorite-toggle"
 							data-favorite={favorite}
-							aria-label={favorite ? `Unpin ${model.name}` : `Pin ${model.name}`}
+							aria-label={
+								favorite
+									? t("chat.modelPicker.unpin", { model: model.name })
+									: t("chat.modelPicker.pin", { model: model.name })
+							}
 							aria-pressed={favorite}
 							onClick={(event) => {
 								event.stopPropagation();
@@ -500,7 +508,9 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 						<ProviderGlyph provider={pillModel.provider} className="size-14 text-text-muted" />
 					) : null}
 					<span className="truncate">
-						{defaultOption?.active ? "Default" : (pillModel?.name ?? "Select model")}
+						{defaultOption?.active
+							? t("common.default")
+							: (pillModel?.name ?? t("chat.modelPicker.selectModel"))}
 					</span>
 					{pillModel ? (
 						<>
@@ -520,7 +530,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 								{pillLevel}
 							</span>
 							{hasKindGlyph(pillModel) ? (
-								<IconTooltip label={describeAuth(pillModel)} wrapTrigger>
+								<IconTooltip label={describeAuth(t, pillModel)} wrapTrigger>
 									<KindGlyph model={pillModel} className="text-text-muted" />
 								</IconTooltip>
 							) : null}
@@ -538,15 +548,17 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 						filter={pickerFilter(groups, groupRow)}
 					>
 						<CommandInput
-							placeholder="Search models… (append a level: opus high)"
+							placeholder={t("chat.modelPicker.searchWithLevel")}
 							value={query}
 							onValueChange={setQuery}
 						/>
 						<CommandList className="max-h-340 min-h-0 flex-1">
-							{emptyState === "no-match" ? <CommandEmpty>No models found.</CommandEmpty> : null}
+							{emptyState === "no-match" ? (
+								<CommandEmpty>{t("chat.modelPicker.noMatch")}</CommandEmpty>
+							) : null}
 							{emptyState === "no-models" ? (
 								<p className="px-8 py-12 text-center text-text-muted tr-text-ui">
-									{NO_MODELS_HINT}
+									{t(NO_MODELS_HINT)}
 								</p>
 							) : null}
 							{defaultOption ? (
@@ -567,11 +579,14 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 									>
 										<Sparkles className="mt-2 size-16 shrink-0 text-text-muted" />
 										<span className="flex min-w-0 flex-1 flex-col">
-											<span>Default</span>
+											<span>{t("common.default")}</span>
 											<span className="truncate text-text-muted tr-text-metadata">
 												{defaultOption.resolved?.model
-													? `Follows Settings → Models · ${defaultOption.resolved.model.name} · ${defaultOption.resolved.thinkingLevel}`
-													: "Follows Settings → Models"}
+													? t("chat.modelPicker.followsDefaultPair", {
+															model: defaultOption.resolved.model.name,
+															level: defaultOption.resolved.thinkingLevel,
+														})
+													: t("chat.modelPicker.followsDefault")}
 											</span>
 										</span>
 										{defaultOption.active ? (
@@ -581,12 +596,12 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 								</CommandGroup>
 							) : null}
 							{preferences.favorites.length > 0 ? (
-								<CommandGroup heading="Pinned">
+								<CommandGroup heading={t("chat.modelPicker.pinned")}>
 									{preferences.favorites.map((m) => renderModel(m, "fav"))}
 								</CommandGroup>
 							) : null}
 							{preferences.recents.length > 0 ? (
-								<CommandGroup heading="Recent">
+								<CommandGroup heading={t("chat.modelPicker.recent")}>
 									{preferences.recents.map((m) => renderModel(m, "recent"))}
 								</CommandGroup>
 							) : null}
@@ -600,7 +615,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 									>
 										<ChevronRight className="mt-2 size-16 shrink-0" />
 										<span className="flex min-w-0 flex-1 flex-col">
-											<span>All models</span>
+											<span>{t("chat.modelPicker.allModels")}</span>
 											<span className="truncate tr-text-metadata">
 												{providers.join(" · ")} · {models.length}
 											</span>
@@ -640,7 +655,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 								) : (
 									<Pin className="size-12 shrink-0" />
 								)}
-								{isDefaultPair ? "Default for new chats" : "Set as default"}
+								{isDefaultPair ? t("chat.modelPicker.isDefault") : t("chat.modelPicker.setDefault")}
 							</button>
 						) : null}
 						{resetLevel ? (
@@ -651,7 +666,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 								className={FOOTER_LINK}
 							>
 								<RefreshCw className="size-12 shrink-0" />
-								reset to {resetLevel}
+								{t("chat.modelPicker.resetTo", { level: resetLevel })}
 							</button>
 						) : null}
 						<span className="flex-1" />
@@ -664,7 +679,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							className="inline-flex items-center gap-4 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-metadata text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 						>
 							<RefreshCw className={cn("size-12 shrink-0", refreshing && "animate-spin")} />
-							{refreshing ? "Updating…" : "Refresh"}
+							{refreshing ? t("chat.modelPicker.updating") : t("chat.modelPicker.refresh")}
 						</button>
 					</div>
 				</PopoverContent>

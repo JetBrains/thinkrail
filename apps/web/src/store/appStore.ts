@@ -7,6 +7,7 @@ import type {
 	HostPlatform,
 	HostUpdateNotice,
 	LayoutPreset,
+	LocalLocalesSnapshot,
 	LoginFrame,
 	LoginPush,
 	McpListResult,
@@ -46,6 +47,7 @@ import {
 	isBackgroundCommandCompletionMessage,
 	isControlMessage,
 	isLineWidth,
+	isLocalePreference,
 	isSettleIdleDays,
 	isSubagentCompletionMessage,
 	isSubagentMaxConcurrent,
@@ -54,6 +56,7 @@ import {
 	normalizeThemePreference,
 	sameModel,
 } from "@thinkrail/contracts";
+import { currentTranslator, t } from "@thinkrail/locales/react";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
 import { assistantFailureText } from "../chat/assistantFailure";
@@ -387,6 +390,7 @@ export const SettingsSection = {
 	Mcp: "mcp",
 	Github: "github",
 	Appearance: "appearance",
+	Language: "language",
 	LineWidth: "line-width",
 	Chat: "chat",
 	Layout: "layout",
@@ -529,7 +533,7 @@ function removeSupersededAssistant(
 		(turn) =>
 			turn.id === attemptAssistantId &&
 			turn.kind === "assistant" &&
-			assistantFailureText(turn.message) !== null,
+			assistantFailureText(currentTranslator(), turn.message) !== null,
 	);
 	return index < 0 ? turns : [...turns.slice(0, index), ...turns.slice(index + 1)];
 }
@@ -793,7 +797,7 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 		case "agent_end":
 			return rt;
 		case "agent_settled": {
-			const failure = assistantFailureText(event.terminal);
+			const failure = assistantFailureText(currentTranslator(), event.terminal);
 			const closer: ChatTurn = failure
 				? {
 						kind: "error",
@@ -936,6 +940,7 @@ interface AppState {
 	welcomeGeneration: number;
 	protocolVersion: number | null;
 	hostPlatform: HostPlatform | null;
+	hostAppVersion: string | null;
 	hostUpdate: HostUpdateNotice | null;
 	projects: Project[];
 	recentProjects: Project[];
@@ -1040,6 +1045,9 @@ interface AppState {
 	reviewAutoFix: boolean;
 	agentReviewEnabled: boolean;
 	disabledExtensions: string[];
+	locale: string;
+	localLocales: LocalLocalesSnapshot | null;
+	installLocalLocales: (snapshot: LocalLocalesSnapshot | null) => void;
 	customLayoutPresets: LayoutPreset[];
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
@@ -1050,6 +1058,7 @@ interface AppState {
 		config?: AppConfig,
 		hostPlatform?: HostPlatform,
 		hostUpdate?: HostUpdateNotice,
+		hostAppVersion?: string,
 	) => void;
 	applyHostUpdate: (hostUpdate: HostUpdateNotice) => void;
 	installProjectSnapshot: (projects: Project[], recentProjects: Project[]) => void;
@@ -1414,6 +1423,7 @@ function configPatch(config: AppConfig) {
 		disabledExtensions: Array.isArray(config.disabledExtensions)
 			? config.disabledExtensions
 			: DEFAULT_CONFIG.disabledExtensions,
+		locale: isLocalePreference(config.locale) ? config.locale : DEFAULT_CONFIG.locale,
 	};
 }
 
@@ -2160,11 +2170,17 @@ function foldLoginFrame(state: LoginState, frame: LoginFrame): LoginState {
 	}
 }
 
+function terminalTitleIndex(title: string): number {
+	const index = Number.parseInt(/\d+/.exec(title)?.[0] ?? "", 10);
+	const isDefault =
+		title === t("store.terminal.defaultTitle", { index }) ||
+		title === t("store.terminal.defaultTitle", { index, lng: "en" });
+	return Number.isInteger(index) && isDefault ? index : Number.NaN;
+}
+
 function nextTerminalTitle(list: TerminalTab[]): string {
-	const used = list
-		.map((tab) => Number.parseInt(/^Terminal (\d+)$/.exec(tab.title)?.[1] ?? "", 10))
-		.filter((n) => Number.isInteger(n));
-	return `Terminal ${Math.max(0, ...used) + 1}`;
+	const used = list.map((tab) => terminalTitleIndex(tab.title)).filter((n) => Number.isInteger(n));
+	return t("store.terminal.defaultTitle", { index: Math.max(0, ...used) + 1 });
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -2173,6 +2189,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	welcomeGeneration: 0,
 	protocolVersion: null,
 	hostPlatform: null,
+	hostAppVersion: null,
 	hostUpdate: null,
 	projects: [],
 	recentProjects: [],
@@ -2274,6 +2291,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
+	locale: DEFAULT_CONFIG.locale,
+	localLocales: null,
+	installLocalLocales: (snapshot) => set({ localLocales: snapshot }),
 	toasts: [],
 	resourceSnapshots: {},
 	resourceRevision: 0,
@@ -2421,6 +2441,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		config,
 		hostPlatform,
 		hostUpdate,
+		hostAppVersion,
 	) =>
 		set((state) => {
 			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
@@ -2435,6 +2456,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				recentProjects: sortProjects(recentProjects),
 				hostPlatform: hostPlatform ?? null,
 				hostUpdate: hostUpdate ?? null,
+				hostAppVersion: hostAppVersion ?? null,
 				...(config ? configPatch(config) : {}),
 				...reconcileProjectNavigation(state, openProjects),
 				...pruneExpandedProjects(state, openProjects),
@@ -2560,7 +2582,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		if (wasActive) {
 			if (fallbackWorkspace) set((state) => workspaceActivationPatch(state, fallbackWorkspace));
 			else s.selectProject(projectId);
-			toast.info(`Workspace "${name ?? "?"}" was removed`);
+			toast.info(t("store.workspace.removed", { name: name ?? "?" }));
 		}
 	},
 	selectProject: (selectedProjectId, opts) =>
@@ -3461,7 +3483,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				kind: "chat",
 				id: chatTabId(workspaceId, sessionId),
 				workspaceId,
-				name: "Chat",
+				name: t("store.chatTab.defaultName"),
 				sessionId,
 			};
 			const id = existing?.id ?? availableEditorTabId(tabs, preferred);
@@ -4081,7 +4103,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			let sessions = s.sessions;
 			for (const { event, sessionId } of payloads) {
 				if (event.type === "session_info_changed") {
-					const title = event.name?.trim() || "Chat";
+					const title = event.name?.trim() || t("store.chatTab.defaultName");
 					const renamed = renameChat(state, sessionId, title);
 					if (renamed && Object.keys(renamed).length > 0) state = { ...state, ...renamed };
 				}
@@ -4290,7 +4312,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					kind: "chat",
 					id: target.tabId,
 					workspaceId: target.workspaceId,
-					name: "Chat",
+					name: t("store.chatTab.defaultName"),
 					sessionId: target.sessionId,
 				} satisfies ChatTab);
 			const resourcePlacement = selectLayoutResourcePlacement(s, target.workspaceId, resource);

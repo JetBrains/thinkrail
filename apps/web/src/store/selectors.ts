@@ -23,6 +23,7 @@ import {
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
+import type { Translator } from "@thinkrail/locales/react";
 import type { LoginState } from "../auth";
 import {
 	compactAge,
@@ -289,27 +290,29 @@ export type SettledReason =
 	| { kind: "idle"; since: number };
 
 /** Chip text; `settledReasonTitle` is the long form. */
-export function settledReasonLabel(reason: SettledReason, now: number): string {
+export function settledReasonLabel(t: Translator, reason: SettledReason, now: number): string {
 	switch (reason.kind) {
 		case "override":
-			return "by you";
+			return t("store.settled.byYou");
 		case "review":
-			return reason.state;
+			return reason.state === "merged" ? t("store.settled.merged") : t("store.settled.closed");
 		case "idle":
-			return `idle ${compactAge(reason.since, now)}`;
+			return t("store.settled.idle", { age: compactAge(t, reason.since, now) });
 	}
 }
 
-export function settledReasonTitle(reason: SettledReason, now: number): string {
+export function settledReasonTitle(t: Translator, reason: SettledReason, now: number): string {
 	switch (reason.kind) {
 		case "override":
 			return reason.since === undefined
-				? "Settled by you"
-				: `Settled by you ${relativeTime(reason.since, now)}`;
+				? t("store.settled.byYouTitle")
+				: t("store.settled.byYouTitleAt", { time: relativeTime(t, reason.since, now) });
 		case "review":
-			return reason.state === "merged" ? "Pull request merged" : "Pull request closed";
+			return reason.state === "merged"
+				? t("store.settled.prMergedTitle")
+				: t("store.settled.prClosedTitle");
 		case "idle":
-			return `Idle for ${compactAge(reason.since, now)}`;
+			return t("store.settled.idleTitle", { age: compactAge(t, reason.since, now) });
 	}
 }
 
@@ -896,13 +899,14 @@ export function specPathMatcher(nodes: SpecGraphNode[]): (path: string) => boole
 }
 
 export function selectChatTitle(
+	t: Translator,
 	state: { tabsByWorkspace: Record<string, EditorTab[]> },
 	workspaceId: string,
 	sessionId: string,
 ): string {
 	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
-	const chatTab = tabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
-	return (chatTab?.name ?? "Chat").trim() || "Chat";
+	const chatTab = tabs.find((tab) => tab.kind === "chat" && tab.sessionId === sessionId);
+	return (chatTab?.name ?? t("store.chatTab.defaultName")).trim() || t("store.chatTab.defaultName");
 }
 
 export function selectCompactionTurnIds(

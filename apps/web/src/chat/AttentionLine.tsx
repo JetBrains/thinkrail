@@ -1,4 +1,5 @@
 import { RiQuestionnaireLine as MessageCircleQuestion } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 
 export function AttentionLine({
 	announced = false,
@@ -7,16 +8,17 @@ export function AttentionLine({
 	announced?: boolean;
 	live?: boolean;
 }) {
+	const t = useT();
 	return (
 		<div className="flex items-center gap-4 text-primary tr-text-action">
 			<span aria-hidden={!live || announced || undefined} className="flex items-center gap-4">
 				<MessageCircleQuestion className="size-14 shrink-0" />
-				<span>Your input is needed</span>
-				<span className="text-text-muted tr-text-metadata">· Agent is waiting</span>
+				<span>{t("chat.attention.needed")}</span>
+				<span className="text-text-muted tr-text-metadata">{t("chat.attention.waiting")}</span>
 			</span>
 			{live ? (
 				<span role="status" aria-live="polite" className="sr-only">
-					{announced ? "Your input is needed — the agent is waiting." : ""}
+					{announced ? t("chat.attention.announcement") : ""}
 				</span>
 			) : null}
 		</div>

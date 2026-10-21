@@ -5,6 +5,8 @@ import {
 	RiSparkling2Line as Sparkles,
 } from "@remixicon/react";
 import type { PrBodySource } from "@thinkrail/contracts";
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -51,12 +53,12 @@ export interface PrComposeSources {
 	generate: (template: string | undefined) => Promise<string | null>;
 }
 
-const SOURCE_LABEL: Record<PrBodySource, string> = {
-	plan: "Chat plan",
-	commits: "Commits",
-	template: "Template",
-	empty: "Empty",
-};
+const SOURCE_LABEL = {
+	plan: "panels.prCompose.source.plan",
+	commits: "panels.prCompose.source.commits",
+	template: "panels.prCompose.source.template",
+	empty: "panels.prCompose.source.empty",
+} satisfies Record<PrBodySource, MessageKey>;
 
 function SourceSwitch({
 	value,
@@ -69,9 +71,10 @@ function SourceSwitch({
 	disabled: boolean;
 	onChange: (source: PrBodySource) => void;
 }) {
+	const t = useT();
 	return (
 		<fieldset
-			aria-label="Description from"
+			aria-label={t("panels.prCompose.sourceLabel")}
 			data-testid="open-pr-compose-source"
 			className="m-0 inline-flex min-w-0 rounded-sm border border-control-border-default bg-control-bg p-2"
 		>
@@ -90,7 +93,7 @@ function SourceSwitch({
 							: "text-text-muted hover:text-text-default",
 					)}
 				>
-					{SOURCE_LABEL[option]}
+					{t(SOURCE_LABEL[option])}
 				</button>
 			))}
 		</fieldset>
@@ -108,13 +111,14 @@ function ComposeForm({
 	sources: PrComposeSources;
 	onSubmit: (submit: PrComposeSubmit) => void;
 }) {
+	const t = useT();
 	const { sourcing } = state;
 	const [title, setTitle] = useState(state.title);
 	const [body, setBody] = useState(state.body);
 	const [source, setSource] = useState(sourcing?.source);
 	const [template, setTemplate] = useState(sourcing?.templates[0]);
 	const [working, setWorking] = useState<"source" | "generate" | null>(null);
-	const action = state.draft ? "Open draft PR" : "Open PR";
+	const action = state.draft ? t("panels.prCompose.openDraft") : t("panels.prCompose.open");
 	const templates = sourcing?.templates ?? [];
 	const options: PrBodySource[] = [
 		...(sourcing?.planAvailable ? (["plan"] as const) : []),
@@ -142,12 +146,12 @@ function ComposeForm({
 				<DialogTitle>{action}</DialogTitle>
 				<DialogDescription>
 					{sourcing
-						? "Review the title and description before the PR is created."
-						: "Review the title and description before the PR is created — both came from this plan."}
+						? t("panels.prCompose.reviewDescription")
+						: t("panels.prCompose.createDescription")}
 				</DialogDescription>
 			</DialogHeader>
 			<label className="flex flex-col gap-4">
-				<span className="tr-text-eyebrow text-text-subtle">Title</span>
+				<span className="tr-text-eyebrow text-text-subtle">{t("panels.prCompose.titleLabel")}</span>
 				<input
 					type="text"
 					data-testid="open-pr-compose-title"
@@ -158,7 +162,9 @@ function ComposeForm({
 			</label>
 			{source ? (
 				<div className="flex flex-col gap-4">
-					<span className="tr-text-eyebrow text-text-subtle">Description from</span>
+					<span className="tr-text-eyebrow text-text-subtle">
+						{t("panels.prCompose.sourceLabel")}
+					</span>
 					<div className="flex flex-wrap items-center gap-8">
 						<SourceSwitch
 							value={source}
@@ -195,7 +201,7 @@ function ComposeForm({
 			) : null}
 			<div className="flex min-h-0 flex-1 flex-col gap-4">
 				<label htmlFor="open-pr-compose-body" className="tr-text-eyebrow text-text-subtle">
-					Description
+					{t("panels.prCompose.bodyLabel")}
 				</label>
 				<Textarea
 					id="open-pr-compose-body"
@@ -223,12 +229,14 @@ function ComposeForm({
 						) : (
 							<Sparkles className="size-14" />
 						)}
-						{source === "template" ? "Fill template with agent" : "Generate with agent"}
+						{source === "template"
+							? t("panels.prCompose.fillTemplate")
+							: t("panels.prCompose.generate")}
 					</Button>
 					<span className="tr-text-metadata text-text-subtle">
 						{working === "generate"
-							? "Writing from the diff, commits, and plan…"
-							: "Replaces the description; nothing is sent until you open the PR."}
+							? t("panels.prCompose.generating")
+							: t("panels.prCompose.generateHint")}
 					</span>
 				</div>
 			) : null}

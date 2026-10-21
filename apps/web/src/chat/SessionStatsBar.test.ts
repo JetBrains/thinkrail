@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { SessionStats } from "@thinkrail/contracts";
+import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { contextPart, formatTokens, SessionStatsBar, usageParts } from "./SessionStatsBar";
 
@@ -59,7 +60,7 @@ describe("SessionStatsBar pi-style formatting", () => {
 			cost: 0.125,
 			contextUsage: { tokens: 120_000, contextWindow: 200_000, percent: 60 },
 		});
-		const markup = renderToStaticMarkup(SessionStatsBar({ stats: value }));
+		const markup = renderToStaticMarkup(createElement(SessionStatsBar, { stats: value }));
 		expect(markup.replace(/<[^>]+>/g, "")).toBe("↑12k·↓342·$0.125·▰▰▰▱▱60.0%/200k");
 		expect(markup).toContain("flex-nowrap");
 		expect(markup.match(/whitespace-nowrap/g)).toHaveLength(4);

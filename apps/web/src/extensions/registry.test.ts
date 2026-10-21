@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import visualize, { MermaidView } from "@thinkrail/ext-visualize/web";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
+import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	DefaultToolRenderer,
 	getToolChrome,
@@ -44,6 +45,6 @@ test("visualize summaries preserve titles and diagram/comparison fallbacks", () 
 		[{ type: "comparison", options: [{ name: "One" }, { name: "Two" }] }, "comparison — 2 options"],
 		[{ type: "comparison", title: "Trade-offs" }, "Trade-offs"],
 	] as const) {
-		expect(getToolSummary("visualize", { ...props, args })).toBe(summary);
+		expect(getToolSummary(currentTranslator(), "visualize", { ...props, args })).toBe(summary);
 	}
 });

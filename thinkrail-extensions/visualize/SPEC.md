@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: Visualize extension
 parent: module-thinkrail-extensions
-depends-on: [module-ui, module-extension-api, module-pi-visualize]
+depends-on: [module-ui, module-extension-api, module-pi-visualize, module-locales]
 references: [submodule-web-chat, submodule-server-extensions]
 ---
 
@@ -21,7 +21,8 @@ Two entrypoints and no root barrel. `@thinkrail/ext-visualize/server` default-ex
 — no children, no skill packages — and may import `extension-api/server`, `@thinkrail/pi-visualize`,
 `mermaid`, `linkedom`, and `node:fs`/`node:path`. `@thinkrail/ext-visualize/web` default-exports a `defineWebExtension` descriptor plus
 named `MermaidView` for fenced mermaid in chat markdown, and consumes `extension-api/web`, per-file UI
-primitives, `@thinkrail/resource-renderers` (`ResourcePreview` and the host seam), contracts, React and
+primitives, `@thinkrail/resource-renderers` (`ResourcePreview` and the host seam), contracts,
+`@thinkrail/locales/react` for its strings (`visualize.*` keys), React and
 Remix Icon. Neither half imports the other, app/host internals, or (web)
 any pi package; the browser loads `mermaid` lazily inside the renderer, never in the eager entry chunk.
 

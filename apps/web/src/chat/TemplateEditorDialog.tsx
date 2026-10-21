@@ -1,4 +1,5 @@
 import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -14,8 +15,6 @@ import { useEffect, useState } from "react";
 import { assembleTemplate, stripFrontmatter } from "@/prompt";
 import { useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
-
-const SYNTAX_HINT = `$1, $ARGUMENTS, \${1:-default} — pi prompt-template syntax`;
 
 const INPUT_CLASS =
 	"w-full rounded-sm border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active disabled:bg-control-disabled-bg disabled:text-control-disabled-text";
@@ -41,6 +40,7 @@ export function TemplateEditorDialog({
 	initialScope?: TemplateScope;
 	initialBody?: string;
 }) {
+	const t = useT();
 	const [name, setName] = useState("");
 	const [scope, setScope] = useState<TemplateScope>("global");
 	const [description, setDescription] = useState("");
@@ -70,11 +70,11 @@ export function TemplateEditorDialog({
 					name: template.name,
 					scope: template.scope,
 				})
-				.then((t) => {
+				.then((loaded) => {
 					if (cancelled) return;
-					setDescription(t.description ?? "");
-					setArgumentHint(t.argumentHint ?? "");
-					setBody(stripFrontmatter(t.content));
+					setDescription(loaded.description ?? "");
+					setArgumentHint(loaded.argumentHint ?? "");
+					setBody(stripFrontmatter(loaded.content));
 					setLoading(false);
 				})
 				.catch((err) => {
@@ -97,11 +97,11 @@ export function TemplateEditorDialog({
 		if (saving) return;
 		const finalName = template ? template.name : name.trim();
 		if (!isValidTemplateName(finalName)) {
-			setError('Name can\'t be empty, start with ".", or contain "/", "\\", or a null byte.');
+			setError(t("chat.templateEditor.invalidName"));
 			return;
 		}
 		if (scope === "project" && !workspaceId) {
-			setError("Open a workspace first — a project-scoped template needs one.");
+			setError(t("chat.templateEditor.projectNeedsWorkspace"));
 			return;
 		}
 		setSaving(true);
@@ -126,36 +126,42 @@ export function TemplateEditorDialog({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent data-testid="template-editor-dialog" className="max-w-[36rem] gap-12">
 				<DialogHeader>
-					<DialogTitle>{editing ? `Edit ${template.name}` : "New template"}</DialogTitle>
+					<DialogTitle>
+						{editing
+							? t("chat.templateEditor.editTitle", { name: template.name })
+							: t("chat.templateEditor.newTitle")}
+					</DialogTitle>
 				</DialogHeader>
 
 				<div className="flex max-h-[60vh] flex-col gap-12 overflow-y-auto">
-					<Field id="template-name" label="Name">
+					<Field id="template-name" label={t("chat.templateEditor.name")}>
 						<input
 							id="template-name"
 							data-testid="template-name-input"
 							value={name}
 							disabled={editing}
 							onChange={(e) => setName(e.target.value)}
-							placeholder="standup"
+							placeholder={t("chat.templateEditor.namePlaceholder")}
 							spellCheck={false}
 							className={INPUT_CLASS}
 						/>
 					</Field>
 
 					<div className="flex flex-col gap-4">
-						<span className="tr-title-compact text-text-default">Scope</span>
+						<span className="tr-title-compact text-text-default">
+							{t("chat.templateEditor.scope")}
+						</span>
 						<div className="flex gap-8">
 							<ScopeOption
 								id="global"
-								label="Global"
+								label={t("chat.templateEditor.scopeGlobal")}
 								active={scope === "global"}
 								disabled={editing}
 								onSelect={() => setScope("global")}
 							/>
 							<ScopeOption
 								id="project"
-								label="This project"
+								label={t("chat.templateEditor.scopeProject")}
 								active={scope === "project"}
 								disabled={editing || !workspaceId}
 								onSelect={() => setScope("project")}
@@ -163,49 +169,51 @@ export function TemplateEditorDialog({
 						</div>
 						{!workspaceId && !editing ? (
 							<p className="text-text-muted tr-text-metadata">
-								Open a workspace to save a project-scoped template.
+								{t("chat.templateEditor.projectScopeHint")}
 							</p>
 						) : null}
 					</div>
 
-					<Field id="template-description" label="Description">
+					<Field id="template-description" label={t("chat.templateEditor.description")}>
 						<input
 							id="template-description"
 							data-testid="template-description-input"
 							disabled={loading}
 							value={description}
 							onChange={(e) => setDescription(e.target.value)}
-							placeholder="What this template is for"
+							placeholder={t("chat.templateEditor.descriptionPlaceholder")}
 							spellCheck={false}
 							className={INPUT_CLASS}
 						/>
 					</Field>
 
-					<Field id="template-argument-hint" label="Argument hint">
+					<Field id="template-argument-hint" label={t("chat.templateEditor.argumentHint")}>
 						<input
 							id="template-argument-hint"
 							data-testid="template-argument-hint-input"
 							disabled={loading}
 							value={argumentHint}
 							onChange={(e) => setArgumentHint(e.target.value)}
-							placeholder="[file] [scope]"
+							placeholder={t("chat.templateEditor.argumentHintPlaceholder")}
 							spellCheck={false}
 							className={INPUT_CLASS}
 						/>
 					</Field>
 
-					<Field id="template-body" label="Body">
+					<Field id="template-body" label={t("chat.templateEditor.body")}>
 						<Textarea
 							id="template-body"
 							data-testid="template-body-input"
 							disabled={loading}
 							value={body}
 							onChange={(e) => setBody(e.target.value)}
-							placeholder="Prompt body…"
+							placeholder={t("chat.templateEditor.bodyPlaceholder")}
 							spellCheck={false}
 							rows={8}
 						/>
-						<p className="text-text-muted tr-text-metadata">{SYNTAX_HINT}</p>
+						<p className="text-text-muted tr-text-metadata">
+							{t("chat.templateEditor.syntaxHint")}
+						</p>
 					</Field>
 
 					{error ? (
@@ -221,14 +229,14 @@ export function TemplateEditorDialog({
 						variant="outline"
 						onClick={() => onOpenChange(false)}
 					>
-						Cancel
+						{t("common.cancel")}
 					</Button>
 					<Button
 						data-testid="template-save"
 						disabled={saving || loading || (!editing && !name.trim())}
 						onClick={() => void save()}
 					>
-						Save
+						{t("common.save")}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

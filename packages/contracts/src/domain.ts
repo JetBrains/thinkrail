@@ -924,6 +924,8 @@ export interface AppConfig extends ThemePreference {
 	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
 	settleIdleDays: number | null;
 	disabledExtensions: string[];
+	/** UI language: `"system"` (follow the browser) or a BCP-47 tag; an unavailable tag renders English. */
+	locale: string;
 }
 
 export interface ExtensionCatalogEntry {
@@ -974,6 +976,51 @@ export function isSettleIdleDays(value: unknown): value is number | null {
 	);
 }
 
+export const SYSTEM_LOCALE_PREFERENCE = "system";
+
+export function isLocalePreference(value: unknown): value is string {
+	if (value === SYSTEM_LOCALE_PREFERENCE) return true;
+	if (typeof value !== "string" || value.length === 0 || value.length > 35) return false;
+	try {
+		return Intl.getCanonicalLocales(value)[0] === value;
+	} catch {
+		return false;
+	}
+}
+
+export interface LocalLocaleFileOk {
+	fileName: string;
+	tag: string;
+	ok: true;
+	strings: Record<string, string>;
+}
+
+export type LocalLocaleFileErrorCode =
+	| "invalid-name"
+	| "duplicate"
+	| "too-large"
+	| "too-many"
+	| "unreadable"
+	| "invalid-json"
+	| "not-object";
+
+export interface LocalLocaleFileError {
+	fileName: string;
+	tag: string | null;
+	ok: false;
+	error: LocalLocaleFileErrorCode;
+	/** Parser or OS detail for `invalid-json` / `unreadable`, untranslated. */
+	detail?: string;
+}
+
+export type LocalLocaleFile = LocalLocaleFileOk | LocalLocaleFileError;
+
+/** The host's local language files (`<dataDir>/locales/`), as `locales.list` reports them. */
+export interface LocalLocalesSnapshot {
+	dir: string;
+	files: LocalLocaleFile[];
+}
+
 export const SUBAGENT_MAX_CONCURRENT = { min: 1, max: 16, default: 4 } as const;
 
 export function isSubagentMaxConcurrent(value: unknown): value is number {
@@ -1020,6 +1067,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 	settleIdleDays: SETTLE_IDLE_DAYS.default,
 	disabledExtensions: [],
+	locale: SYSTEM_LOCALE_PREFERENCE,
 };
 
 export function normalizeThemePreference(value: unknown): ThemePreference {

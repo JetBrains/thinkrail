@@ -9,6 +9,7 @@ import {
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { ReviewComment } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { outdatedReason } from "@thinkrail/resource-renderers";
 import { PopoverTrigger } from "@thinkrail/ui/popover";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
@@ -39,6 +40,7 @@ import { sendReviewComment } from "./reviewSend";
 import { SendAllReviewsButton, SendReviewButton } from "./SendReviewButton";
 
 export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; failed: boolean }) {
+	const t = useT();
 	const snapshot = useAppStore((s) => s.reviewsByWorkspace[workspaceId]);
 	const activeReviewedPath = useAppStore((s) => selectActiveReviewedPath(s, workspaceId));
 	const [sending, setSending] = useState(false);
@@ -85,7 +87,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 	if (failed && !snapshot) {
 		return (
 			<p data-testid="review-failed" className="px-8 py-4 tr-text-metadata text-text-subtle">
-				Couldn't load the review — check the connection and switch back to retry.
+				{t("review.panel.loadFailed")}
 			</p>
 		);
 	}
@@ -98,14 +100,14 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 		try {
 			await getTransport().request("review.fileDone", { workspaceId, path: path ?? "" });
 		} catch (err) {
-			toast.error(errorText(err), "Couldn't finish the file's review");
+			toast.error(errorText(err), t("review.panel.finishFailed"));
 		}
 	};
 	const clearReview = async () => {
 		try {
 			await getTransport().request("review.close", { workspaceId });
 		} catch (err) {
-			toast.error(errorText(err), "Couldn't clear the review");
+			toast.error(errorText(err), t("review.panel.clearFailed"));
 		}
 	};
 	const hasDrafts = allDraftIds(snapshot.comments).length > 0;
@@ -128,24 +130,24 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 					<ConfirmPopover
 						open={clearing}
 						onOpenChange={setClearing}
-						title="Clear this review?"
-						description="Archives sent and completed comments and starts a fresh review. Unsent drafts are discarded."
-						confirmLabel="Clear"
+						title={t("review.panel.clearTitle")}
+						description={t("review.panel.clearDescription")}
+						confirmLabel={t("review.panel.clear")}
 						destructive
 						confirmTestId="review-clear-confirm"
 						onConfirm={() => void clearReview()}
 						align="end"
 					>
-						<IconTooltip label="Clear review — archive sent comments" wrapTrigger>
+						<IconTooltip label={t("review.panel.clearTooltip")} wrapTrigger>
 							<PopoverTrigger asChild>
 								<button
 									type="button"
 									data-testid="review-clear"
-									aria-label="Clear review"
+									aria-label={t("review.panel.clearLabel")}
 									className="flex shrink-0 items-center gap-4 px-4 tr-text-metadata text-text-subtle hover:text-feedback-error"
 								>
 									<Trash2 className="size-14" />
-									Clear
+									{t("review.panel.clear")}
 								</button>
 							</PopoverTrigger>
 						</IconTooltip>
@@ -155,9 +157,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 			<QuietScrollArea className="min-h-0 flex-1" viewportClassName="p-panel-inset">
 				{files.length === 0 ? (
 					<p data-testid="review-empty" className="px-8 py-4 tr-text-metadata text-text-subtle">
-						{hasComments
-							? "All reviewed files are finished — Clear to archive them and start a fresh review."
-							: "No review comments yet. Select lines in a file or diff and click the comment icon."}
+						{hasComments ? t("review.panel.allFinished") : t("review.panel.empty")}
 					</p>
 				) : (
 					<ul className="motion-safe:animate-reveal">
@@ -184,24 +184,25 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 												<ChevronRight className="size-16 shrink-0 text-text-subtle" />
 											)}
 											<span className="min-w-0 flex-1 truncate text-text-muted">
-												{file.path ?? "Whole change set"}
+												{file.path ?? t("review.panel.wholeChangeSet")}
 											</span>
 											<span className="shrink-0 tr-text-metadata text-text-subtle">
 												{[
-													file.drafts > 0 && `${file.drafts} draft${file.drafts > 1 ? "s" : ""}`,
-													file.total > file.drafts && `${file.total - file.drafts} sent`,
-													file.resolved > 0 && `${file.resolved} resolved`,
+													file.drafts > 0 && t("review.panel.drafts", { count: file.drafts }),
+													file.total > file.drafts &&
+														t("review.panel.sent", { count: file.total - file.drafts }),
+													file.resolved > 0 && t("review.panel.resolved", { count: file.resolved }),
 												]
 													.filter(Boolean)
 													.join(" · ")}
 											</span>
 										</button>
 										{finishable && (
-											<IconTooltip label="Done — finish this file's review">
+											<IconTooltip label={t("review.panel.finishFile")}>
 												<button
 													type="button"
 													data-testid="review-file-done"
-													aria-label="Done — finish this file's review"
+													aria-label={t("review.panel.finishFile")}
 													onClick={() => void finishFile(file.path)}
 													className="flex shrink-0 items-center py-4 pr-4 pl-4 text-text-subtle hover:text-feedback-success"
 												>
@@ -248,6 +249,7 @@ function FileSection({
 	onOpenChat: (sessionId: string) => void;
 	onNavigate: (comment: ReviewComment) => void;
 }) {
+	const t = useT();
 	const fileComments = comments.filter((c) => (c.anchor?.path ?? null) === path);
 	const inProgress = fileComments.filter((c) => c.status === "sent");
 	const drafts = fileComments.filter((c) => c.status === "draft");
@@ -261,7 +263,7 @@ function FileSection({
 			)}
 			{drafts.length > 0 && (
 				<>
-					<SectionLabel label="Drafts" />
+					<SectionLabel label={t("review.panel.draftsSection")} />
 					{drafts.map((comment, index) => (
 						<CommentRow
 							key={comment.id}
@@ -278,7 +280,7 @@ function FileSection({
 			)}
 			{inProgress.length > 0 && (
 				<>
-					<SectionLabel label="In progress" />
+					<SectionLabel label={t("review.panel.inProgressSection")} />
 					{inProgress.map((comment) => (
 						<CommentRow
 							key={comment.id}
@@ -294,7 +296,7 @@ function FileSection({
 			)}
 			{resolved.length > 0 && (
 				<>
-					<SectionLabel label="Resolved" />
+					<SectionLabel label={t("review.panel.resolvedSection")} />
 					{resolved.map((comment) => (
 						<ResolvedRow key={comment.id} comment={comment} onOpenChat={onOpenChat} />
 					))}
@@ -346,6 +348,7 @@ function CommentRow({
 	onOpenChat: (sessionId: string) => void;
 	onNavigate: () => void;
 }) {
+	const t = useT();
 	const isDraft = comment.status === "draft";
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const ref = lineRef(comment);
@@ -362,7 +365,7 @@ function CommentRow({
 				...patch,
 			});
 		} catch (err) {
-			toast.error(errorText(err), "Couldn't update the comment");
+			toast.error(errorText(err), t("review.panel.updateFailed"));
 		}
 	};
 
@@ -370,7 +373,7 @@ function CommentRow({
 		try {
 			await getTransport().request("review.commentDelete", { workspaceId, id: comment.id });
 		} catch (err) {
-			toast.error(errorText(err), "Couldn't delete the draft");
+			toast.error(errorText(err), t("review.panel.deleteFailed"));
 		}
 	};
 
@@ -385,7 +388,7 @@ function CommentRow({
 				type="button"
 				data-testid="review-comment-open"
 				onClick={() => (comment.sessionId ? onOpenChat(comment.sessionId) : onNavigate())}
-				title={comment.sessionId ? "Open the discussion" : "Show in file"}
+				title={comment.sessionId ? t("review.panel.openDiscussion") : t("review.panel.showInFile")}
 				className="flex w-full items-start gap-8 rounded-sm px-4 py-4 text-left hover:bg-control-bg-hovered"
 			>
 				{ordinal !== undefined ? (
@@ -403,7 +406,7 @@ function CommentRow({
 						{comment.author === "agent" && (
 							<span
 								data-testid="review-comment-agent"
-								title="Filed by ThinkRail's reviewer agent — not by you"
+								title={t("review.panel.agentFiled")}
 								className="flex items-center gap-2 tr-text-eyebrow text-text-subtle"
 							>
 								<Bot className="size-12" /> ThinkRail
@@ -413,18 +416,18 @@ function CommentRow({
 						{comment.stale ? (
 							<span
 								data-testid="review-comment-stale"
-								title="The code this finding was filed against was rewritten after review — it won't ride the auto-fix cycle"
+								title={t("review.panel.staleTitle")}
 								className="tr-text-eyebrow text-feedback-warning"
 							>
-								changed since review
+								{t("review.panel.stale")}
 							</span>
 						) : (
 							comment.anchorState === "outdated" && (
 								<span
 									className="tr-text-eyebrow text-text-subtle"
-									title={outdatedReason(comment.anchor)}
+									title={outdatedReason(t, comment.anchor)}
 								>
-									outdated
+									{t("review.panel.outdated")}
 								</span>
 							)
 						)}
@@ -434,11 +437,11 @@ function CommentRow({
 			<span className="absolute top-4 right-8 flex items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100 has-[[data-state=open]]:opacity-100">
 				{isDraft && (
 					<>
-						<IconTooltip label="Send this comment to the file's review chat" wrapTrigger>
+						<IconTooltip label={t("review.comment.send")} wrapTrigger>
 							<button
 								type="button"
 								data-testid="review-comment-send"
-								aria-label="Send this comment to the file's review chat"
+								aria-label={t("review.comment.send")}
 								disabled={sending}
 								onClick={onSend}
 								className="text-text-subtle hover:text-text-default disabled:pointer-events-none"
@@ -449,19 +452,19 @@ function CommentRow({
 						<ConfirmPopover
 							open={confirmDelete}
 							onOpenChange={setConfirmDelete}
-							title="Delete this draft?"
-							confirmLabel="Delete"
+							title={t("review.panel.deleteTitle")}
+							confirmLabel={t("common.delete")}
 							destructive
 							confirmTestId="review-comment-delete-confirm"
 							onConfirm={() => void removeDraft()}
 							align="end"
 						>
-							<IconTooltip label="Delete draft" wrapTrigger>
+							<IconTooltip label={t("review.comment.deleteDraft")} wrapTrigger>
 								<PopoverTrigger asChild>
 									<button
 										type="button"
 										data-testid="review-comment-delete"
-										aria-label="Delete draft"
+										aria-label={t("review.comment.deleteDraft")}
 										className="text-text-subtle hover:text-feedback-error"
 									>
 										<Trash2 className="size-14" />
@@ -472,11 +475,11 @@ function CommentRow({
 					</>
 				)}
 				{comment.sessionId && (
-					<IconTooltip label="Show in file">
+					<IconTooltip label={t("review.panel.showInFile")}>
 						<button
 							type="button"
 							data-testid="review-comment-file"
-							aria-label="Show in file"
+							aria-label={t("review.panel.showInFile")}
 							onClick={onNavigate}
 							className="text-text-subtle hover:text-text-default"
 						>
@@ -485,11 +488,11 @@ function CommentRow({
 					</IconTooltip>
 				)}
 				{comment.status === "sent" && (
-					<IconTooltip label="Mark resolved">
+					<IconTooltip label={t("review.panel.markResolved")}>
 						<button
 							type="button"
 							data-testid="review-comment-resolve"
-							aria-label="Mark resolved"
+							aria-label={t("review.panel.markResolved")}
 							onClick={() => void update({ status: "resolved" })}
 							className="text-text-subtle hover:text-feedback-success"
 						>
@@ -509,6 +512,7 @@ function ResolvedRow({
 	comment: ReviewComment;
 	onOpenChat: (sessionId: string) => void;
 }) {
+	const t = useT();
 	return (
 		<div
 			data-testid="review-comment-resolved"
@@ -523,11 +527,11 @@ function ResolvedRow({
 			</span>
 			<span className="flex shrink-0 items-center gap-4 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
 				{comment.sessionId && (
-					<IconTooltip label="Open the linked chat">
+					<IconTooltip label={t("review.panel.openLinkedChat")}>
 						<button
 							type="button"
 							data-testid="review-comment-chat"
-							aria-label="Open the linked chat"
+							aria-label={t("review.panel.openLinkedChat")}
 							onClick={() => comment.sessionId && onOpenChat(comment.sessionId)}
 							className="text-text-subtle hover:text-text-default"
 						>
@@ -541,7 +545,8 @@ function ResolvedRow({
 }
 
 function GlanceGlyph({ glance }: { glance: ReturnType<typeof sessionGlance> }) {
-	const { Icon, className, label } = glanceIcon(glance);
+	const t = useT();
+	const { Icon, className, label } = glanceIcon(t, glance);
 	return (
 		<Icon data-glance={glance} aria-label={label} className={cn("size-16 shrink-0", className)} />
 	);

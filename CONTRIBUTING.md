@@ -109,6 +109,24 @@ repo alongside the code — top-level specs at the root
 decision updates the relevant `SPEC.md` first, then the code and the tests that pin
 it. See [`AGENTS.md`](AGENTS.md) for the spec workflow.
 
+## Translations
+
+ThinkRail's interface strings live in one file,
+[`packages/locales/en.json`](packages/locales/en.json): a flat JSON object of named keys
+(`"settings.language.title": "Language"`). A translation is the same file with the values translated.
+
+1. Copy `en.json` into `~/.thinkrail/locales/` as your language's code — `de.json`, `pt-BR.json`,
+   `zh-Hant.json`. Keep the keys; translate the values. Strings you leave out stay in English.
+2. Keep every `{{placeholder}}` exactly as written (a string whose placeholders differ from English is
+   ignored) and keep `<0>…</0>` markers around the same words. Plurals use `_one` / `_other` keys; add the
+   other CLDR forms your language needs (`_few`, `_many`, …).
+3. Open **Settings → Language** and pick your language. ThinkRail reloads the file every time you save,
+   and the page shows a problem with the file if it can't be read.
+
+To ship a translation built-in for everyone, open a pull request that adds it as
+`packages/locales/<code>.json` and registers it in `BUNDLED` in `packages/locales/src/index.ts`. Agent
+replies, tool output, skills, and prompts are not part of the interface and are not translated.
+
 ## Submitting changes
 
 1. [Fork the repository](https://docs.github.com/articles/fork-a-repo) and create a

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { GitFileChange } from "@thinkrail/contracts";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { VIRTUALIZED_DIFF_LINES } from "@thinkrail/resource-renderers";
 import {
 	buildChangeMarks,
@@ -121,17 +122,23 @@ test("scopeLabel keeps a commit scope short (sha), with the subject in the toolt
 			committedAt: "",
 		},
 	];
-	expect(scopeLabel({ kind: "branch" })).toBe("All changes");
-	expect(scopeLabel({ kind: "uncommitted" })).toBe("Uncommitted");
-	expect(scopeLabel({ kind: "commit", sha: "abc1234567" }, commits)).toBe("abc1234");
-	expect(scopeLabel({ kind: "commit", sha: "abc1234567" })).toBe("abc1234");
-	expect(scopeTitle({ kind: "commit", sha: "abc1234567" }, commits)).toBe(
+	expect(scopeLabel(currentTranslator(), { kind: "branch" })).toBe("All changes");
+	expect(scopeLabel(currentTranslator(), { kind: "uncommitted" })).toBe("Uncommitted");
+	expect(scopeLabel(currentTranslator(), { kind: "commit", sha: "abc1234567" }, commits)).toBe(
+		"abc1234",
+	);
+	expect(scopeLabel(currentTranslator(), { kind: "commit", sha: "abc1234567" })).toBe("abc1234");
+	expect(scopeTitle(currentTranslator(), { kind: "commit", sha: "abc1234567" }, commits)).toBe(
 		"abc1234 · Fix the thing",
 	);
-	expect(scopeTitle({ kind: "commit", sha: "abc1234567" })).toBe("abc1234");
-	expect(scopeTitle({ kind: "uncommitted" })).toBe("Diff scope: Uncommitted");
-	expect(scopeLabel({ kind: "pinned", baseRef: "abc1234567" })).toBe("abc1234");
-	expect(scopeTitle({ kind: "pinned", baseRef: "abc1234567" })).toBe("Diff scope: abc1234");
+	expect(scopeTitle(currentTranslator(), { kind: "commit", sha: "abc1234567" })).toBe("abc1234");
+	expect(scopeTitle(currentTranslator(), { kind: "uncommitted" })).toBe("Diff scope: Uncommitted");
+	expect(scopeLabel(currentTranslator(), { kind: "pinned", baseRef: "abc1234567" })).toBe(
+		"abc1234",
+	);
+	expect(scopeTitle(currentTranslator(), { kind: "pinned", baseRef: "abc1234567" })).toBe(
+		"Diff scope: abc1234",
+	);
 });
 
 test("splitPath separates the muted directory prefix from the bright basename", () => {
@@ -169,9 +176,11 @@ test("a turn scope is keyed by its id, labelled Last turn only while it is the n
 	expect(diffTabId("ws1", scope, "src/a.ts")).not.toBe(
 		diffTabId("ws1", turnScope(newer), "src/a.ts"),
 	);
-	expect(scopeLabel(turnScope(newer), [], [older, newer])).toBe("Last turn");
-	expect(scopeLabel(scope, [], [older, newer])).toMatch(/^Turn /);
-	expect(scopeTitle(scope, [], [older, newer])).toMatch(/^Agent turn at .* · 1 file$/);
+	expect(scopeLabel(currentTranslator(), turnScope(newer), [], [older, newer])).toBe("Last turn");
+	expect(scopeLabel(currentTranslator(), scope, [], [older, newer])).toMatch(/^Turn /);
+	expect(scopeTitle(currentTranslator(), scope, [], [older, newer])).toMatch(
+		/^Agent turn at .* · 1 file$/,
+	);
 	expect(changesTabName(scope)).toMatch(/^Changes · turn /);
 	expect(diffTabName(scope, "src/a.ts")).toMatch(/^a\.ts · turn /);
 });

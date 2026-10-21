@@ -19,7 +19,7 @@ afterEach(() => {
 function renderer(id: string, overrides: Partial<ResourceRenderer> = {}): ResourceRenderer {
 	return {
 		id,
-		label: id,
+		labelKey: "viewer.renderer.source",
 		match: {},
 		rank: 0,
 		capabilities: {
@@ -42,7 +42,7 @@ function register(value: ResourceRenderer): void {
 function registerFallbacks(): void {
 	register(
 		renderer("thinkrail/code", {
-			label: "Source",
+			labelKey: "viewer.renderer.source",
 			match: { text: true },
 			rank: 100,
 			capabilities: {
@@ -58,7 +58,7 @@ function registerFallbacks(): void {
 	);
 	register(
 		renderer("thinkrail/binary", {
-			label: "File",
+			labelKey: "viewer.renderer.file",
 			match: { text: false },
 		}),
 	);

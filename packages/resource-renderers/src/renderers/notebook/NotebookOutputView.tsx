@@ -1,3 +1,4 @@
+import { useT } from "@thinkrail/locales/react";
 import { type ReactNode, useMemo } from "react";
 import type { Components } from "react-markdown";
 import { useResourceHost } from "../../host";
@@ -63,20 +64,21 @@ export function notebookMarkdownComponents(
 		alt?: string | undefined;
 		title?: string | undefined;
 	}) {
+		const t = useT();
 		const source = notebookImageSource(src, ctx, bytesUrl);
 		if (source.kind === "image") return <img src={source.src} alt={alt ?? ""} title={title} />;
 		if (source.kind === "svg") {
 			return (
 				<NotebookFrame
-					title={title ?? alt ?? "Notebook SVG image"}
+					title={title ?? alt ?? t("viewer.notebook.svgImage")}
 					document={buildNotebookSvgDocument(source.svg)}
 				/>
 			);
 		}
+		const target = src ?? t("viewer.notebook.missingUrl");
 		return (
 			<span data-testid="notebook-disabled-image" className="text-text-muted">
-				{alt ? `${alt}: ` : "Image disabled: "}
-				{src ?? "missing URL"}
+				{alt ? `${alt}: ${target}` : t("viewer.notebook.imageDisabled", { src: target })}
 			</span>
 		);
 	}
@@ -211,13 +213,14 @@ function codeFence(source: string): string {
 }
 
 export function NotebookOutputs({ cell }: { cell: NotebookCell }) {
+	const t = useT();
 	return cell.outputs.length > 0 ? (
 		<div className="flex flex-col gap-4 border-border-muted border-t p-8">
 			{cell.outputs.map((output, index) => (
 				<NotebookOutputItem
 					key={`${output.kind}:${index}`}
 					output={output}
-					title={`Output ${index + 1} of cell ${cell.index + 1}`}
+					title={t("viewer.notebook.outputTitle", { output: index + 1, cell: cell.index + 1 })}
 				/>
 			))}
 		</div>

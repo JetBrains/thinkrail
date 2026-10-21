@@ -15,6 +15,7 @@ import {
 	isNativeCommand,
 	QUIT_SHORTCUT_ACTION,
 	readMenuAction,
+	readMenuLabels,
 } from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
 import { installExternalNavigation } from "./externalNavigation";
@@ -255,6 +256,15 @@ async function start(): Promise<void> {
 					mainWindow.setPageZoom(nextPageZoom(mainWindow.getPageZoom(), action));
 				},
 				pageZoomGestureRequested: handlePageZoomGesture,
+				menuLabelsChanged: ({ labels }) => {
+					if (applicationMenuInstalled) {
+						installDesktopApplicationMenu(
+							ApplicationMenu,
+							process.platform,
+							readMenuLabels(labels),
+						);
+					}
+				},
 				routeChanged: ({ hash }) => {
 					if (!neutral) routes.write(BACKEND_PROFILE_ID, WINDOW_ID, hash);
 				},

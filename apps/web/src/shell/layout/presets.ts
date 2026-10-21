@@ -5,6 +5,8 @@ import type {
 	LayoutPresetSideRegion,
 	LayoutToolId,
 } from "@thinkrail/contracts";
+import type { MessageKey } from "@thinkrail/locales";
+import type { Translator } from "@thinkrail/locales/react";
 import { isPreviewCompatibleTabKind } from "../../lib";
 import {
 	collectAllGroups,
@@ -102,6 +104,19 @@ export const BUILTIN_LAYOUT_PRESETS: readonly LayoutPreset[] = [
 		bottom: bottom(true, [{ id: "review-bottom", tools: [] }]),
 	},
 ] as const;
+
+const BUILTIN_PRESET_NAME_KEYS: Readonly<Record<string, MessageKey>> = {
+	balanced: "workbench.preset.balanced",
+	focus: "workbench.preset.focus",
+	review: "workbench.preset.review",
+};
+
+export function layoutPresetName(t: Translator, preset: LayoutPreset): string {
+	const key = BUILTIN_LAYOUT_PRESETS.some((builtin) => builtin.id === preset.id)
+		? BUILTIN_PRESET_NAME_KEYS[preset.id]
+		: undefined;
+	return key ? t(key) : preset.name;
+}
 
 export function minimumSideGroupLimit(preset: LayoutPreset): number {
 	return Math.max(1, preset.left.groups.length, preset.right.groups.length);

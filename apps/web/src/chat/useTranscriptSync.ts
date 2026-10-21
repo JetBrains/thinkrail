@@ -1,3 +1,4 @@
+import { currentTranslator, t } from "@thinkrail/locales/react";
 import { useEffect, useRef, useState } from "react";
 import { type SessionRuntime, toast, useAppStore } from "../store";
 import {
@@ -51,7 +52,7 @@ export async function synchronizeTranscript(
 	if (result.summary.isStreaming) return "deferred-streaming";
 	const applied = state.reconcileSession(
 		result.summary,
-		deps.hydrate(result.messages, result.summary.lastSettlement),
+		deps.hydrate(currentTranslator(), result.messages, result.summary.lastSettlement),
 		input.expectedEventRevision,
 		input.connectionGeneration,
 	);
@@ -157,7 +158,7 @@ export function useTranscriptSync({
 				}
 				const state = useAppStore.getState();
 				if (state.status === "connected" && state.connectionGeneration === connectionGeneration) {
-					toast.error(errorText(error), "Couldn't refresh this chat");
+					toast.error(errorText(error), t("chat.transcript.refreshFailed"));
 				}
 			});
 		return () => {

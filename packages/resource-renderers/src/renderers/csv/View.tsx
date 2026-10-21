@@ -1,3 +1,4 @@
+import { useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useRef } from "react";
 import { TableVirtuoso, type TableVirtuosoHandle } from "react-virtuoso";
 import type { ResourceViewProps, ReviewThread } from "../../registry";
@@ -33,6 +34,7 @@ export default function CsvView({
 	review,
 	onPlacedThreadIds,
 }: ResourceViewProps) {
+	const t = useT();
 	const text = content.kind === "text" ? content.text : "";
 	const table = useMemo(
 		() => parseCsv(text, sniffDelimiter(resource.path, text)),
@@ -120,7 +122,7 @@ export default function CsvView({
 							<button
 								key={entry.thread.id}
 								type="button"
-								aria-label={`Show comment ${entry.number}`}
+								aria-label={t("viewer.region.showComment", { number: entry.number })}
 								className="flex size-20 items-center justify-center rounded-full bg-primary tr-text-metadata text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
 								onClick={(event) => {
 									event.stopPropagation();
@@ -181,7 +183,7 @@ export default function CsvView({
 					/>
 				</div>
 			) : (
-				<p className="p-12 tr-text-ui text-text-muted">Empty table</p>
+				<p className="p-12 tr-text-ui text-text-muted">{t("viewer.csv.emptyTable")}</p>
 			)}
 			<StaleComposerNotice visible={composer.stale} />
 			{composer.composing && draft && review ? (

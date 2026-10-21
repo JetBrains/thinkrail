@@ -1,5 +1,6 @@
 import { RiCheckLine as Check, RiArrowDownSLine as ChevronDown } from "@remixicon/react";
 import type { ThinkingLevel } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
@@ -19,6 +20,7 @@ export function ThinkingSelector({
 	className?: string;
 	disabled?: boolean;
 }) {
+	const t = useT();
 	const [open, setOpen] = useState(false);
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
@@ -31,7 +33,7 @@ export function ThinkingSelector({
 					className,
 				)}
 			>
-				<span className="tr-text-eyebrow text-text-muted">Effort</span>
+				<span className="tr-text-eyebrow text-text-muted">{t("chat.modelPicker.effort")}</span>
 				<span className="capitalize">{level}</span>
 				<ChevronDown className="size-16 shrink-0 text-text-muted" />
 			</PopoverTrigger>

@@ -1,4 +1,5 @@
 import { type CollisionDetection, pointerWithin, useDroppable } from "@dnd-kit/core";
+import type { Translator } from "@thinkrail/locales/react";
 import {
 	type ImperativePanelGroupHandle,
 	ResizableHandle,
@@ -349,8 +350,8 @@ export function useHorizontalOverflow(
 	return overflow;
 }
 
-export function tabSearchKeywords(tab: LayoutTab): string[] {
-	const name = layoutTabName(tab);
+export function tabSearchKeywords(t: Translator, tab: LayoutTab): string[] {
+	const name = layoutTabName(t, tab);
 	switch (tab.kind) {
 		case "file":
 		case "diff":

@@ -1,3 +1,4 @@
+import { currentTranslator, t } from "@thinkrail/locales/react";
 import { useEffect, useRef } from "react";
 import { messagesToRuntime } from "../../chat/hydrate";
 import { type LayoutAttention, readLayoutSelection, tupleKey } from "../../lib";
@@ -77,7 +78,7 @@ export function hydrateChatResource(workspaceId: string, sessionId: string): Pro
 			if (!stillPlaced) return false;
 			current.hydrateSession(
 				summary,
-				messagesToRuntime(messages, summary.lastSettlement),
+				messagesToRuntime(currentTranslator(), messages, summary.lastSettlement),
 				false,
 				summary.live ? undefined : syncedTick,
 				{ activate: false },
@@ -236,7 +237,7 @@ export function useWorkspaceChatCatalogReconciliation(
 		};
 		const fetchMessages = (sessionId: string) =>
 			getSessionMessagesWithSkillBaseline({ sessionId, workspaceId }).catch((error: unknown) => {
-				if (live()) toast.error(errorText(error), "Couldn't load this chat");
+				if (live()) toast.error(errorText(error), t("workbench.chat.loadFailed"));
 				return null;
 			});
 		void getTransport()
@@ -313,7 +314,7 @@ export function useWorkspaceChatCatalogReconciliation(
 									.getState()
 									.hydrateSession(
 										summary,
-										messagesToRuntime(messages, summary.lastSettlement),
+										messagesToRuntime(currentTranslator(), messages, summary.lastSettlement),
 										true,
 										summary.live ? undefined : loaded.syncedTick,
 										targetOptions,
@@ -389,7 +390,7 @@ export function useWorkspaceChatCatalogReconciliation(
 							.getState()
 							.hydrateSession(
 								summary,
-								messagesToRuntime(messages, summary.lastSettlement),
+								messagesToRuntime(currentTranslator(), messages, summary.lastSettlement),
 								false,
 								summary.live ? undefined : loaded.syncedTick,
 								{ activate: false },
@@ -427,7 +428,7 @@ export function useWorkspaceChatCatalogReconciliation(
 				);
 			})
 			.catch((error: unknown) => {
-				if (live()) toast.error(errorText(error), "Couldn't load this workspace's chats");
+				if (live()) toast.error(errorText(error), t("workbench.chat.loadWorkspaceFailed"));
 			});
 		return () => {
 			current = false;
@@ -539,7 +540,7 @@ export function useChatLocationReconciliation(
 							!latest.removedWorkspaceIds[workspaceId] &&
 							!latest.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
 						) {
-							toast.error("The chat could not be restored.", "Couldn't open the chat");
+							toast.error(t("workbench.chat.restoreFailed"), t("workbench.chat.openFailed"));
 						}
 						latest.clearChatLocation();
 					})
@@ -552,7 +553,7 @@ export function useChatLocationReconciliation(
 							!latest.removedWorkspaceIds[workspaceId] &&
 							!latest.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
 						) {
-							toast.error(errorText(error), "Couldn't open the chat");
+							toast.error(errorText(error), t("workbench.chat.openFailed"));
 						}
 						latest.clearChatLocation();
 					});
@@ -600,7 +601,7 @@ export function useChatLocationReconciliation(
 				}
 				currentState.hydrateSession(
 					summary,
-					messagesToRuntime(messages, summary.lastSettlement),
+					messagesToRuntime(currentTranslator(), messages, summary.lastSettlement),
 					true,
 					summary.live ? undefined : syncedTick,
 					layoutOpenOptionsForNavigation(currentState, workspaceId, navigation),
@@ -619,7 +620,7 @@ export function useChatLocationReconciliation(
 						!settled.removedWorkspaceIds[workspaceId] &&
 						!settled.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
 					) {
-						toast.error("The chat could not be restored.", "Couldn't open the chat");
+						toast.error(t("workbench.chat.restoreFailed"), t("workbench.chat.openFailed"));
 					}
 					settled.clearChatLocation();
 				}
@@ -639,7 +640,7 @@ export function useChatLocationReconciliation(
 					!latest.removedWorkspaceIds[workspaceId] &&
 					!latest.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
 				) {
-					toast.error(errorText(error), "Couldn't open the chat");
+					toast.error(errorText(error), t("workbench.chat.openFailed"));
 				}
 				if (latest.chatLocationRequest === chatLocationRequest) latest.clearChatLocation();
 			});

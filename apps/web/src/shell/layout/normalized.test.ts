@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { closeLayoutTab, removeLayoutGroup, toolTab } from "./model";
 import {
 	applyProjectedLayoutDocument,
@@ -139,7 +140,10 @@ describe("normalized workbench layout", () => {
 			previewTabId: "hidden",
 		};
 		const secondView = workspaceViewFromDocument(second);
-		const removed = removeLayoutGroup(first, { area: "center", groupId: "center-b" });
+		const removed = removeLayoutGroup(currentTranslator(), first, {
+			area: "center",
+			groupId: "center-b",
+		});
 		if ("reason" in removed) throw new Error(removed.reason);
 		const next = applyProjectedLayoutDocument(
 			{ frame, viewsByWorkspace: { a: firstView, b: secondView } },
@@ -279,7 +283,10 @@ describe("normalized workbench layout", () => {
 		const previous = document();
 		const previousFrame = workbenchFrameFromDocument(previous);
 		const view = workspaceViewFromDocument(previous);
-		const next = removeLayoutGroup(previous, { area: "left", groupId: "left-terminals" });
+		const next = removeLayoutGroup(currentTranslator(), previous, {
+			area: "left",
+			groupId: "left-terminals",
+		});
 		expect(next).toEqual({ reason: "Move or hide this group's tabs before removing it." });
 
 		const withoutLeft = {

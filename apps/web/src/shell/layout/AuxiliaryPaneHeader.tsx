@@ -1,5 +1,6 @@
 import { useDraggable } from "@dnd-kit/core";
 import { RiCloseLine as X } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { type ComponentPropsWithoutRef, forwardRef, type ReactNode } from "react";
@@ -66,12 +67,13 @@ export function AuxiliaryPaneHideButton({
 	testId: string;
 	onClick: () => void;
 }) {
+	const t = useT();
 	return (
-		<IconTooltip label="Hide pane">
+		<IconTooltip label={t("workbench.pane.hide")}>
 			<button
 				type="button"
 				data-testid={testId}
-				aria-label="Hide pane"
+				aria-label={t("workbench.pane.hide")}
 				aria-controls={controls}
 				aria-expanded="true"
 				onClick={onClick}

@@ -12,6 +12,7 @@ import {
 	isSubagentCompletionMessage,
 	isTodoReviewFixMessage,
 } from "@thinkrail/contracts";
+import type { Translator } from "@thinkrail/locales/react";
 import { userText } from "../lib";
 import { assistantFailureText } from "./assistantFailure";
 import { insertRoundCloser } from "./roundCloser";
@@ -39,6 +40,7 @@ function transcriptTurnId(
 }
 
 export function messagesToRuntime(
+	t: Translator,
 	messages: TranscriptMessage[],
 	lastSettlement?: AgentSettlement | null,
 	options: HydrationOptions = {},
@@ -111,6 +113,7 @@ export function messagesToRuntime(
 	const persistedTerminal =
 		lastConversationMessage?.role === "assistant" ? lastConversationMessage : null;
 	const failure = assistantFailureText(
+		t,
 		lastSettlement === undefined ? persistedTerminal : lastSettlement,
 	);
 	const closed = failure

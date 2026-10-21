@@ -4,6 +4,7 @@ import {
 	type BackgroundCommandCompletionDetails,
 	type TranscriptMessage,
 } from "@thinkrail/contracts";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { EMPTY_RUNTIME, reduceSessionEvent } from "@/store";
 import { BackgroundCommandResult, SubagentResult } from "./BackgroundResult";
@@ -32,7 +33,9 @@ const message: TranscriptMessage = {
 
 test("live and hydrated command completion messages produce the same historical row and never resource authority", () => {
 	const live = reduceSessionEvent(EMPTY_RUNTIME, { type: "message_end", message });
-	const hydrated = messagesToRuntime([message], undefined, { idScope: "chat" });
+	const hydrated = messagesToRuntime(currentTranslator(), [message], undefined, {
+		idScope: "chat",
+	});
 	for (const runtime of [live, hydrated]) {
 		expect(runtime.turns).toHaveLength(1);
 		expect(runtime.turns[0]).toMatchObject({ kind: "backgroundCommandCompletion", details });
@@ -42,9 +45,9 @@ test("live and hydrated command completion messages produce the same historical 
 		});
 	}
 	expect(hydrated.turnIdByMessageIndex[0]).toBe(hydrated.turns[0]?.id ?? null);
-	expect(messagesToRuntime([message], undefined, { idScope: "chat" }).turns[0]?.id).toBe(
-		hydrated.turns[0]?.id,
-	);
+	expect(
+		messagesToRuntime(currentTranslator(), [message], undefined, { idScope: "chat" }).turns[0]?.id,
+	).toBe(hydrated.turns[0]?.id);
 	expect(live.isStreaming).toBe(false);
 	expect(live.toolResults).toBe(EMPTY_RUNTIME.toolResults);
 });
@@ -56,7 +59,7 @@ test("invalid and unknown custom notices keep their prior ignored behavior in bo
 		{ ...message, details: { ...details, status: "running" } },
 		{ ...message, display: false },
 	]) {
-		expect(messagesToRuntime([ignored]).turns).toEqual([]);
+		expect(messagesToRuntime(currentTranslator(), [ignored]).turns).toEqual([]);
 		expect(
 			reduceSessionEvent(EMPTY_RUNTIME, { type: "message_end", message: ignored }).turns,
 		).toEqual([]);

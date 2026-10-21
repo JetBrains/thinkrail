@@ -34,7 +34,7 @@ not this module; the theme-aware highlighter remains app-local.
   anchored browser-side mirror of Pi's canonical expanded `<skill>` user-message grammar, shared by
   `chat`'s compact renderer and `store`'s optimistic-echo reconciliation; malformed/quoted blocks fail
   closed),
-  **`relativeTime(ms, now)`** (`just now` / `5m ago` / `2d ago` against an explicit `now`, never `Date.now`
+  **`relativeTime(t, ms, now)`** (`just now` / `5m ago` / `2d ago` against an explicit `now`, never `Date.now`
   — shared by chat history, the tab strip's closed chats, and the Changes scope menu's commit rows; it lives
   here because `chat/` may not import from `panels/`, which is what let three private twins of it
   accumulate), **`platformShortcutLabel()`** +
@@ -49,8 +49,9 @@ not this module; the theme-aware highlighter remains app-local.
   — do nothing loud, the text stays visible/selectable), **`randomId()`** (16 random bytes through
   `getRandomValues`, which remains available to a plain-HTTP remote client),
   **`DOUBLE_CLICK_SETTLE_MS`** (the one click→double-click arbitration window shared by cached and
-  host-read tab opens), **`mcpState.ts`** (the MCP server-state vocabulary — `MCP_STATE_LABEL`,
-  `mcpStateTone` (a connected server reporting zero tools warns), `mcpStatusLabel` / `mcpToolCountLabel`,
+  host-read tab opens), **`mcpState.ts`** (the MCP server-state vocabulary — `MCP_STATE_KEY` / `mcpStateLabel(t, state)`,
+  `mcpStateTone` (a connected server reporting zero tools warns), `mcpStatusLabel` / `mcpToolCountLabel`
+  (the text helpers here take the caller's translator first, so render output follows a language change),
   and the `isMcpAttentionState` (needs sign-in, failed, pending approval) / `isMcpActiveState` (connected,
   starting) predicates — shared by `store`'s selectors, Settings, and the props-only chat Resources rows,
   which may import nothing else in common), and the
@@ -91,8 +92,8 @@ not this module; the theme-aware highlighter remains app-local.
   `shallowEqualArrays`, `userText`, `firstNonBlankLine` (first trimmed non-empty line, `undefined` when
   the text is blank — shared by chat's thinking-heading extraction and history prompt rows), `isShellInert` (a value made only of characters that stay literal in POSIX, PowerShell,
   and cmd, so it may be interpolated into a command a human copies and runs), `parseSkillInvocation`, `matchesSkillInvocationCommand`,
-  `relativeTime`, `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
-  `MCP_STATE_LABEL`, `mcpStateTone`, `mcpStatusLabel`, `mcpToolCountLabel`, `isMcpAttentionState`,
+  `relativeTime`, `compactAge`, `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
+  `MCP_STATE_KEY`, `mcpStateLabel`, `mcpStateTone`, `mcpStatusLabel`, `mcpToolCountLabel`, `isMcpAttentionState`,
   `isMcpActiveState`, the `McpStateTone` type,
   `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
   `readLayoutSelection`, `readLayoutNavigationClock`, `sameLayoutAttention`, the `LayoutAttention`
@@ -100,7 +101,8 @@ not this module; the theme-aware highlighter remains app-local.
   shortcuts: `MODAL_LAYER_SELECTOR` + `hasLayer` (an open modal/dialog/alertdialog owns the keyboard)
   and `isTextEntryTarget` (inputs, textareas, selects and contenteditable keep their letters) —
   duck-typed on the target so it holds in DOM-less tests.
-- **Allowed deps:** React (the viewport subscription hook only);
+- **Allowed deps:** React (the viewport subscription hook only); `@thinkrail/locales` (the relative-time,
+  compact-age and MCP state labels, resolved in the active locale at call time);
   `@thinkrail/contracts` (types only for canonical messages and `McpServerState`; the layout-resource identity input is a local structural type); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
   through the barrel).
 - **Forbidden:** every app-internal module — this is a leaf.

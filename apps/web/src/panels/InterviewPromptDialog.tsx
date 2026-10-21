@@ -1,5 +1,6 @@
 import { RiExternalLinkLine as ExternalLink } from "@remixicon/react";
 import type { InterviewResponse } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { Button, buttonVariants } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -13,9 +14,10 @@ import { cn } from "@thinkrail/ui/utils";
 import { type MouseEvent, useRef, useState } from "react";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
-import { INTERVIEW_BOOKING_URL, INTERVIEW_INVITATION_COPY } from "./interview";
+import { INTERVIEW_BOOKING_URL, INTERVIEW_INVITATION_KEY } from "./interview";
 
 export function InterviewPromptDialog() {
+	const t = useT();
 	const open = useAppStore((state) => state.interviewPromptOpen);
 	const [pendingAction, setPendingAction] = useState<InterviewResponse | null>(null);
 	const pendingRef = useRef(false);
@@ -28,7 +30,7 @@ export function InterviewPromptDialog() {
 		void getTransport()
 			.request("feedback.respond", { action })
 			.then(() => useAppStore.getState().hideInterviewPrompt())
-			.catch((error) => toast.error(errorText(error), "Couldn't save your response"))
+			.catch((error) => toast.error(errorText(error), t("panels.interview.saveFailed")))
 			.finally(() => {
 				pendingRef.current = false;
 				setPendingAction(null);
@@ -59,8 +61,8 @@ export function InterviewPromptDialog() {
 				}}
 			>
 				<DialogHeader>
-					<DialogTitle>Help shape ThinkRail</DialogTitle>
-					<DialogDescription>{INTERVIEW_INVITATION_COPY}</DialogDescription>
+					<DialogTitle>{t("panels.interview.title")}</DialogTitle>
+					<DialogDescription>{t(INTERVIEW_INVITATION_KEY)}</DialogDescription>
 				</DialogHeader>
 				<DialogFooter className="flex-col gap-8 sm:flex-row sm:justify-between">
 					<Button
@@ -69,7 +71,7 @@ export function InterviewPromptDialog() {
 						data-testid="interview-never"
 						onClick={() => respond("never")}
 					>
-						Never show again
+						{t("panels.interview.never")}
 					</Button>
 					<div className="flex flex-col gap-8 sm:flex-row">
 						<Button
@@ -79,7 +81,7 @@ export function InterviewPromptDialog() {
 							data-testid="interview-postpone"
 							onClick={() => respond("postpone")}
 						>
-							Not now
+							{t("panels.interview.postpone")}
 						</Button>
 						<a
 							href={INTERVIEW_BOOKING_URL}
@@ -95,7 +97,7 @@ export function InterviewPromptDialog() {
 							onAuxClick={book}
 						>
 							<ExternalLink className="size-14" />
-							Schedule an interview
+							{t("panels.interview.book")}
 						</a>
 					</div>
 				</DialogFooter>

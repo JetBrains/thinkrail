@@ -1,4 +1,5 @@
 import { RiAlertLine as TriangleAlert } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -15,8 +16,8 @@ export function ConfirmDialog({
 	onOpenChange,
 	title,
 	description,
-	confirmLabel = "Confirm",
-	cancelLabel = "Cancel",
+	confirmLabel,
+	cancelLabel,
 	destructive = false,
 	confirmTestId,
 	onConfirm,
@@ -33,6 +34,7 @@ export function ConfirmDialog({
 	onConfirm: () => void;
 	onClosedAutoFocus?: () => void;
 }) {
+	const t = useT();
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent
@@ -60,7 +62,7 @@ export function ConfirmDialog({
 				</DialogHeader>
 				<DialogFooter>
 					<Button variant="outline" onClick={() => onOpenChange(false)}>
-						{cancelLabel}
+						{cancelLabel ?? t("common.cancel")}
 					</Button>
 					<Button
 						variant={destructive ? "destructive" : "default"}
@@ -70,7 +72,7 @@ export function ConfirmDialog({
 							onOpenChange(false);
 						}}
 					>
-						{confirmLabel}
+						{confirmLabel ?? t("common.confirm")}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

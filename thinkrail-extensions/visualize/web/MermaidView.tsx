@@ -1,4 +1,5 @@
 import { RiFullscreenLine as Maximize2 } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { onThemeSwap } from "@thinkrail/ui/theme";
 import { type ReactNode, useEffect, useState } from "react";
@@ -14,6 +15,7 @@ export function MermaidView({
 	title?: string;
 	fallback?: ReactNode;
 }) {
+	const t = useT();
 	const [svg, setSvg] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [open, setOpen] = useState(false);
@@ -27,7 +29,7 @@ export function MermaidView({
 					setSvg(res.svg);
 					setError(null);
 				} else {
-					setError(res.error ?? "Failed to render diagram");
+					setError(res.error ?? "");
 				}
 			});
 		};
@@ -45,7 +47,9 @@ export function MermaidView({
 		return (
 			<div data-testid="mermaid-error" className="flex flex-col gap-4">
 				<span className="text-feedback-error tr-text-metadata">
-					Diagram failed to render: {error}
+					{t("visualize.mermaid.renderFailed", {
+						error: error || t("visualize.mermaid.renderFailedFallback"),
+					})}
 				</span>
 				<pre className="overflow-auto rounded-sm bg-container-header-bg p-8 tr-code-text text-text-default">
 					{source}
@@ -54,7 +58,11 @@ export function MermaidView({
 		);
 	}
 	if (svg === null) {
-		return fallback ?? <span className="text-text-muted tr-text-metadata">Rendering diagram…</span>;
+		return (
+			fallback ?? (
+				<span className="text-text-muted tr-text-metadata">{t("visualize.mermaid.rendering")}</span>
+			)
+		);
 	}
 	return (
 		<div className="relative">
@@ -66,8 +74,8 @@ export function MermaidView({
 			<button
 				type="button"
 				data-testid="mermaid-fullscreen"
-				aria-label="View diagram full screen"
-				title="Full screen"
+				aria-label={t("visualize.mermaid.fullScreenLabel")}
+				title={t("visualize.mermaid.fullScreen")}
 				onClick={() => setOpen(true)}
 				className="absolute top-4 right-4 rounded-sm border border-border-default bg-container-elevated-bg p-4 text-text-muted transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 			>
@@ -79,7 +87,7 @@ export function MermaidView({
 					className="flex h-[90vh] w-[95vw] max-w-[95vw] flex-col gap-8"
 				>
 					<DialogHeader>
-						<DialogTitle>{title || "Diagram"}</DialogTitle>
+						<DialogTitle>{title || t("visualize.mermaid.dialogTitle")}</DialogTitle>
 					</DialogHeader>
 					<PanZoomView svg={svg} />
 				</DialogContent>

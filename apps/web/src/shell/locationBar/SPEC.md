@@ -28,7 +28,7 @@ actions through the panels-owned ship runner; it owns no host state.
   - `LocationBar`
 - **Allowed deps:** `store` (projects, workspaces, session state, diff base selector, toasts), `transport`
   (`workspace.setDiffBase`), `lib` (`copyText`, `platformShortcutLabel`), `components/RunningIcon`,
-  `@thinkrail/ui/*`, `@remixicon/react`, contracts types, and these `panels` files per-file:
+  `@thinkrail/ui/*`, `@remixicon/react`, `@thinkrail/locales` (UI strings), contracts types, and these `panels` files per-file:
   `workspaceActions` (the one implementation of open-in / rename / reveal / remove / `editor.list` /
   `workspace.list`, shared with `ProjectTree`), `RemoveWorkspaceDialog`, `BranchPicker` + `branches`,
   `useOpenProject`, `useBranchStatus` (`openReviewLabel`, `resolveBranchReview`), `shipActions` (the

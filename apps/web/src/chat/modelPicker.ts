@@ -1,4 +1,6 @@
 import type { ProviderAuthKind, ThinkingLevel, WireModel } from "@thinkrail/contracts";
+import type { MessageKey } from "@thinkrail/locales";
+import type { Translator } from "@thinkrail/locales/react";
 
 export function formatContext(tokens: number): string {
 	if (tokens >= 1_000_000) return `${Math.round(tokens / 100_000) / 10}M`.replace(".0", "");
@@ -17,13 +19,13 @@ export function billsPerToken(kind: ProviderAuthKind | undefined): boolean {
 }
 
 /** The one vocabulary for how a provider is connected, shared with Settings → Providers. */
-export const AUTH_KIND_LABEL: Record<ProviderAuthKind, string> = {
-	oauth: "subscription",
-	"api-key": "API key",
-	env: "environment key",
-	central: "JetBrains AI",
-	other: "configured",
-};
+export const AUTH_KIND_LABEL = {
+	oauth: "chat.modelPicker.authKind.oauth",
+	"api-key": "chat.modelPicker.authKind.apiKey",
+	env: "chat.modelPicker.authKind.env",
+	central: "chat.modelPicker.authKind.central",
+	other: "chat.modelPicker.authKind.other",
+} satisfies Record<ProviderAuthKind, MessageKey>;
 
 /** The tag models routed through JetBrains AI (the Central proxy) wear where other kinds show a glyph. */
 export const CENTRAL_KIND_TAG = "JCP";
@@ -36,39 +38,39 @@ export function costLabel(model: WireModel): string | null {
 }
 
 /** The short word that sits beside the connection glyph in a row: what this model draws on. */
-export function kindLabel(model: WireModel): string | null {
+export function kindLabel(t: Translator, model: WireModel): string | null {
 	const auth = model.auth;
 	if (!auth) return null;
 	switch (auth.kind) {
 		case "oauth":
-			return auth.detail ?? "plan";
+			return auth.detail ?? t("chat.modelPicker.kind.plan");
 		case "central":
-			return "quota";
+			return t("chat.modelPicker.kind.quota");
 		case "env":
 			return auth.detail ?? "env";
 		case "api-key":
-			return auth.detail ?? "API key";
+			return auth.detail ?? t("chat.modelPicker.kind.apiKey");
 		default:
 			return null;
 	}
 }
 
 /** The full sentence for tooltips and group headings: kind word plus pi's detail. */
-export function describeAuth(model: WireModel): string | null {
+export function describeAuth(t: Translator, model: WireModel): string | null {
 	if (!model.auth) return null;
-	const label = AUTH_KIND_LABEL[model.auth.kind];
+	const label = t(AUTH_KIND_LABEL[model.auth.kind]);
 	return model.auth.detail ? `${label} · ${model.auth.detail}` : label;
 }
 
-export const LEVEL_HINT: Record<ThinkingLevel, string> = {
-	off: "No reasoning — fastest, cheapest",
-	minimal: "Briefest reasoning",
-	low: "Light reasoning — fastest",
-	medium: "Balanced reasoning",
-	high: "Deep reasoning",
-	xhigh: "Extra-deep reasoning",
-	max: "Maximum reasoning",
-};
+export const LEVEL_HINT = {
+	off: "chat.modelPicker.levelHint.off",
+	minimal: "chat.modelPicker.levelHint.minimal",
+	low: "chat.modelPicker.levelHint.low",
+	medium: "chat.modelPicker.levelHint.medium",
+	high: "chat.modelPicker.levelHint.high",
+	xhigh: "chat.modelPicker.levelHint.xhigh",
+	max: "chat.modelPicker.levelHint.max",
+} satisfies Record<ThinkingLevel, MessageKey>;
 
 /** Levels whose cost deserves a warning beside the hint (what Codex and Claude.ai flag). */
 export const COSTLY_LEVELS: ReadonlySet<ThinkingLevel> = new Set<ThinkingLevel>(["xhigh", "max"]);
@@ -105,7 +107,7 @@ export interface ProviderGroup {
 	auth: string | null;
 }
 
-export function groupByProvider(models: readonly WireModel[]): ProviderGroup[] {
+export function groupByProvider(t: Translator, models: readonly WireModel[]): ProviderGroup[] {
 	const groups = new Map<string, WireModel[]>();
 	for (const model of models) {
 		const list = groups.get(model.provider);
@@ -115,7 +117,7 @@ export function groupByProvider(models: readonly WireModel[]): ProviderGroup[] {
 	return [...groups].map(([provider, list]) => ({
 		provider,
 		models: list,
-		auth: list.map(describeAuth).find((auth) => auth !== null) ?? null,
+		auth: list.map((model) => describeAuth(t, model)).find((auth) => auth !== null) ?? null,
 	}));
 }
 

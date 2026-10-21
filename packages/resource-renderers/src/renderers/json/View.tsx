@@ -1,3 +1,5 @@
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useRef } from "react";
 import type { ResourceViewProps, ReviewThread } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
@@ -16,11 +18,9 @@ import {
 
 const NO_THREADS: ReadonlySet<string> = new Set();
 
-function dialectNotice(path: string, dialect: JsonDialect): string | null {
+function dialectNotice(path: string, dialect: JsonDialect): MessageKey | null {
 	if (dialect !== "jsonc") return null;
-	return path.toLowerCase().endsWith(".jsonc")
-		? null
-		: "Parsed as JSONC: this file uses comments or trailing commas, which strict JSON parsers reject.";
+	return path.toLowerCase().endsWith(".jsonc") ? null : "viewer.json.jsoncNotice";
 }
 
 export default function JsonView({
@@ -29,6 +29,7 @@ export default function JsonView({
 	review,
 	onPlacedThreadIds,
 }: ResourceViewProps) {
+	const t = useT();
 	const text = content.kind === "text" ? content.text : "";
 	const document = useMemo(() => scanJson(text), [text]);
 	const composer = useStampedComposer<JsonNode>(contentStamp(content));
@@ -81,7 +82,7 @@ export default function JsonView({
 				data-testid="json-invalid"
 				className="h-full overflow-auto bg-container-workspace-bg p-12 tr-text-ui text-text-muted"
 			>
-				Not valid JSON or JSONC — switch to Source to inspect the file.
+				{t("viewer.json.invalid")}
 			</div>
 		);
 	}
@@ -105,7 +106,7 @@ export default function JsonView({
 		>
 			{notice ? (
 				<div data-testid="json-dialect" className="pb-8 tr-text-metadata text-text-muted">
-					{notice}
+					{t(notice)}
 				</div>
 			) : null}
 			<JsonTree

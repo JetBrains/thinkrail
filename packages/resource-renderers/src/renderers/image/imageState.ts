@@ -1,3 +1,5 @@
+import type { Translator } from "@thinkrail/locales/react";
+
 export const MIN_IMAGE_ZOOM = 0.1;
 export const MAX_IMAGE_ZOOM = 8;
 
@@ -23,8 +25,9 @@ export function imageSourceUrl(url: string, hash: string): string {
 	return `${base}${base.includes("?") ? "&" : "?"}h=${encodeURIComponent(hash)}${fragment}`;
 }
 
-export function formatByteLength(bytes: number | undefined): string {
-	if (bytes === undefined || !Number.isFinite(bytes) || bytes < 0) return "Unknown size";
+export function formatByteLength(t: Translator, bytes: number | undefined): string {
+	if (bytes === undefined || !Number.isFinite(bytes) || bytes < 0)
+		return t("viewer.fileInfo.unknownSize");
 	if (bytes < 1024) return `${bytes} B`;
 	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
 	return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;

@@ -24,6 +24,7 @@ import {
 	RiCloseLine as X,
 } from "@remixicon/react";
 import type { EditorInfo, Project, Workspace } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
 	ContextMenu,
@@ -100,11 +101,11 @@ import {
 	useInlineRename,
 } from "./workspaceActions";
 
-const CREATE_WORKSPACE_LABEL = `Create workspace (${platformShortcutLabel("N")} or ${platformShortcutLabel("N", { alt: true })})`;
 const HOVER_CONTROL_CLASS =
 	"flex size-20 shrink-0 items-center justify-center rounded-sm text-text-muted opacity-100 outline-none transition hover:bg-container-elevated-bg hover:text-text-default [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary data-[state=open]:opacity-100 disabled:pointer-events-none disabled:opacity-0";
 
 export function ProjectTree() {
+	const t = useT();
 	const projects = useAppStore((s) => s.projects);
 	const recentProjects = useAppStore((s) => s.recentProjects);
 	const selectedProjectId = useAppStore((s) => s.selectedProjectId);
@@ -232,7 +233,7 @@ export function ProjectTree() {
 			projectId: workspace.projectId,
 		});
 		const attached = rows.find((candidate) => candidate.id === workspace.id);
-		if (!attached) throw new Error("The attached worktree is missing from the workspace list");
+		if (!attached) throw new Error(t("panels.projectTree.attachedWorktreeMissing"));
 		const store = useAppStore.getState();
 		store.expandProject(workspace.projectId);
 		store.setWorkspaces(workspace.projectId, rows);
@@ -248,7 +249,7 @@ export function ProjectTree() {
 					pendingCloseFocusProjectIdRef.current = null;
 				}
 				focusProjectNameOrAdd(project.id);
-				toast.error(errorText(err, `Couldn't close ${project.name}`));
+				toast.error(errorText(err, t("panels.projectTree.closeFailed", { name: project.name })));
 			});
 	};
 
@@ -265,7 +266,7 @@ export function ProjectTree() {
 	return (
 		<nav data-testid="project-tree" className="flex flex-col gap-4">
 			<header className="flex h-panel-row items-center justify-between pr-4 pl-8">
-				<span className="tr-text-eyebrow text-text-muted">Projects</span>
+				<span className="tr-text-eyebrow text-text-muted">{t("panels.projectTree.title")}</span>
 				<AddProjectMenu
 					recentProjects={recentProjects}
 					onOpen={() => void pickAndOpen()}
@@ -278,7 +279,7 @@ export function ProjectTree() {
 						size="icon"
 						className="size-panel-row"
 						data-testid="add-project-menu"
-						aria-label="Add project"
+						aria-label={t("panels.projectTree.addProject")}
 					>
 						<Plus className="size-14" />
 					</Button>
@@ -358,7 +359,7 @@ export function ProjectTree() {
 									className="flex items-center gap-8 py-4 pr-8 pl-16 tr-text-ui text-text-muted"
 								>
 									<Loader2 className="size-14 shrink-0 animate-spin motion-reduce:animate-none" />
-									Creating worktree…
+									{t("panels.projectTree.creatingWorktree")}
 								</div>
 							)}
 						</li>
@@ -415,6 +416,7 @@ function SettledPartition({
 	shelfShown: number;
 	renderRow: (workspace: Workspace, settled: SettledReason | null) => ReactNode;
 }) {
+	const t = useT();
 	if (!enabled) {
 		return (
 			<ul className="mt-2 flex flex-col gap-2 motion-safe:animate-reveal">
@@ -447,13 +449,17 @@ function SettledPartition({
 						<ChevronRight className="size-14 shrink-0" />
 					)}
 					<RiCheckboxCircleLine className="size-14 shrink-0" />
-					<span className="truncate">Settled · {settledCount}</span>
+					<span className="truncate">
+						{t("panels.projectTree.settledShelf", { total: settledCount })}
+					</span>
 				</button>
 			</div>
 			{shelfExpanded ? (
 				<ul className="flex flex-col gap-2" data-testid="settled-shelf-rows">
 					{settledCount === 0 ? (
-						<li className="py-4 pr-4 pl-24 text-text-subtle tr-text-metadata">Nothing settled</li>
+						<li className="py-4 pr-4 pl-24 text-text-subtle tr-text-metadata">
+							{t("panels.projectTree.nothingSettled")}
+						</li>
 					) : (
 						shown.map((row) => renderRow(row.workspace, row.reason))
 					)}
@@ -467,7 +473,9 @@ function SettledPartition({
 								}
 								className="flex h-panel-row w-full items-center rounded-sm pl-24 text-left text-text-subtle tr-text-metadata hover:bg-control-bg-hovered hover:text-text-muted"
 							>
-								Show {Math.min(SETTLED_SHELF_MORE, remaining)} more
+								{t("panels.projectTree.showMore", {
+									count: Math.min(SETTLED_SHELF_MORE, remaining),
+								})}
 							</button>
 						</li>
 					) : null}
@@ -512,6 +520,11 @@ function ProjectRow({
 	onRegisterNameButton: (element: HTMLButtonElement | null) => void;
 	onRestoreFocus: () => void;
 }) {
+	const t = useT();
+	const createWorkspaceLabel = t("panels.projectTree.createWorkspaceShortcut", {
+		shortcut: platformShortcutLabel("N"),
+		altShortcut: platformShortcutLabel("N", { alt: true }),
+	});
 	const Chevron = isExpanded ? ChevronDown : ChevronRight;
 	const Folder = isSelected ? RiFolderFill : RiFolderLine;
 	const [menuOpen, setMenuOpen] = useState(false);
@@ -552,7 +565,11 @@ function ProjectRow({
 			<button
 				type="button"
 				data-testid="project-expand"
-				aria-label={isExpanded ? "Collapse project" : "Expand project"}
+				aria-label={
+					isExpanded
+						? t("panels.projectTree.collapseProject")
+						: t("panels.projectTree.expandProject")
+				}
 				onClick={onToggle}
 				className="flex size-16 shrink-0 items-center justify-center rounded-sm text-text-muted transition-colors hover:text-text-default focus-visible:text-text-default"
 				data-expanded={isExpanded}
@@ -567,7 +584,7 @@ function ProjectRow({
 						data-testid="project-name-input"
 						type="text"
 						spellCheck={false}
-						aria-label="Project name"
+						aria-label={t("panels.projectTree.projectName")}
 						defaultValue={project.name}
 						{...renameInputProps}
 						className={cn("w-full min-w-0 border-0 bg-transparent p-0 outline-none", nameClass)}
@@ -594,13 +611,13 @@ function ProjectRow({
 					{workspaceCount}
 				</span>
 			)}
-			<IconTooltip label={CREATE_WORKSPACE_LABEL}>
+			<IconTooltip label={createWorkspaceLabel}>
 				<Button
 					variant="ghost"
 					size="icon"
 					className="size-panel-row shrink-0"
 					data-testid="add-workspace"
-					aria-label={CREATE_WORKSPACE_LABEL}
+					aria-label={createWorkspaceLabel}
 					onClick={onAddWorkspace}
 				>
 					<Plus className="size-14" />
@@ -644,7 +661,7 @@ function ProjectRow({
 						}}
 					>
 						<Plus />
-						Create workspace
+						{t("panels.projectTree.createWorkspace")}
 					</ContextMenuItem>
 					<ContextMenuItem
 						data-testid="project-menu-open-existing-worktree"
@@ -654,7 +671,7 @@ function ProjectRow({
 						}}
 					>
 						<FolderOpen />
-						Open existing worktree…
+						{t("panels.projectTree.openExistingWorktree")}
 					</ContextMenuItem>
 					<ContextMenuSeparator />
 					{canRename ? (
@@ -666,7 +683,7 @@ function ProjectRow({
 							}}
 						>
 							<Pencil />
-							Rename
+							{t("common.rename")}
 						</ContextMenuItem>
 					) : null}
 					<ContextMenuItem
@@ -677,16 +694,16 @@ function ProjectRow({
 						}}
 					>
 						<X />
-						Close project
+						{t("panels.projectTree.closeProject")}
 					</ContextMenuItem>
 				</ContextMenuContent>
 			</ContextMenu>
 			<ConfirmDialog
 				open={confirmOpen}
 				onOpenChange={setConfirmOpen}
-				title={`Close ${project.name}?`}
-				description="Removes this project from the open projects list. Its repository, workspaces, chats, and running activity are kept. Reopen it from Add project → Recents."
-				confirmLabel="Close project"
+				title={t("panels.projectTree.closeTitle", { name: project.name })}
+				description={t("panels.projectTree.closeDescription")}
+				confirmLabel={t("panels.projectTree.closeProject")}
 				confirmTestId="confirm-close-project"
 				onConfirm={() => {
 					closeConfirmedRef.current = true;
@@ -742,6 +759,7 @@ function WorkspaceRow({
 	onMarkRead: () => void;
 	onMarkUnread: () => void;
 }) {
+	const t = useT();
 	const isDefault = isDefaultWorkspace(workspace);
 	const isExternal = isExternalWorkspace(workspace);
 	const isSettled = settled !== null;
@@ -799,7 +817,7 @@ function WorkspaceRow({
 		<span
 			data-testid="workspace-settled-reason"
 			data-reason={settled.kind}
-			title={settledReasonTitle(settled, now)}
+			title={settledReasonTitle(t, settled, now)}
 			className={cn(
 				"shrink-0 rounded-full border px-4 tr-text-caption",
 				settled.kind === "review" && settled.state === "merged"
@@ -809,15 +827,15 @@ function WorkspaceRow({
 						: "border-border-default text-text-subtle",
 			)}
 		>
-			{settledReasonLabel(settled, now)}
+			{settledReasonLabel(t, settled, now)}
 		</span>
 	) : null;
 	const hoverAction = isSettled ? (
-		<IconTooltip label="Keep active">
+		<IconTooltip label={t("panels.projectTree.keepActive")}>
 			<button
 				type="button"
 				data-testid="workspace-keep-active"
-				aria-label={`Keep ${workspace.name} active`}
+				aria-label={t("panels.projectTree.keepActiveLabel", { name: workspace.name })}
 				onClick={onKeepActive}
 				className={HOVER_CONTROL_CLASS}
 			>
@@ -825,11 +843,13 @@ function WorkspaceRow({
 			</button>
 		</IconTooltip>
 	) : canSettle ? (
-		<IconTooltip label={settleBlocked ? "Finish or read the result first" : "Settle"}>
+		<IconTooltip
+			label={settleBlocked ? t("panels.projectTree.settleBlocked") : t("panels.projectTree.settle")}
+		>
 			<button
 				type="button"
 				data-testid="workspace-settle"
-				aria-label={`Settle ${workspace.name}`}
+				aria-label={t("panels.projectTree.settleLabel", { name: workspace.name })}
 				disabled={settleBlocked}
 				onClick={onSettle}
 				className={HOVER_CONTROL_CLASS}
@@ -865,7 +885,7 @@ function WorkspaceRow({
 								data-editing
 								type="text"
 								spellCheck={false}
-								aria-label="Workspace name"
+								aria-label={t("panels.projectTree.workspaceName")}
 								defaultValue={workspace.name}
 								{...renameInputProps}
 								className={`w-full min-w-0 truncate border-0 bg-transparent p-0 tr-text-ui leading-tight outline-none ${isActive ? "text-primary" : "text-text-muted"}`}
@@ -904,7 +924,7 @@ function WorkspaceRow({
 					<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 						<DropdownMenuTrigger
 							data-testid="workspace-menu"
-							aria-label={`Actions for ${workspace.name}`}
+							aria-label={t("panels.projectTree.workspaceActions", { name: workspace.name })}
 							className={HOVER_CONTROL_CLASS}
 						>
 							<MoreVertical className="size-14" />
@@ -918,7 +938,7 @@ function WorkspaceRow({
 								<DropdownMenuSub>
 									<DropdownMenuSubTrigger data-testid="workspace-open-in">
 										<ExternalLink />
-										Open in
+										{t("panels.projectTree.openIn")}
 									</DropdownMenuSubTrigger>
 									<DropdownMenuSubContent>
 										{editors.map((editor) => (
@@ -936,27 +956,27 @@ function WorkspaceRow({
 							{canRename ? (
 								<DropdownMenuItem data-testid="workspace-rename" onSelect={startRename}>
 									<Pencil />
-									Rename
+									{t("common.rename")}
 								</DropdownMenuItem>
 							) : null}
 							<DropdownMenuItem data-testid="workspace-copy-path" onSelect={onCopyPath}>
 								<Copy />
-								Copy path
+								{t("panels.projectTree.copyPath")}
 							</DropdownMenuItem>
 							<DropdownMenuItem data-testid="workspace-reveal" onSelect={onReveal}>
 								<FolderOpen />
-								Reveal in file manager
+								{t("panels.projectTree.reveal")}
 							</DropdownMenuItem>
 							{readAction !== null || canSettle ? <DropdownMenuSeparator /> : null}
 							{readAction === "markRead" ? (
 								<DropdownMenuItem data-testid="workspace-mark-read" onSelect={onMarkRead}>
 									<MailOpen />
-									Mark as read
+									{t("panels.projectTree.markRead")}
 								</DropdownMenuItem>
 							) : readAction === "markUnread" ? (
 								<DropdownMenuItem data-testid="workspace-mark-unread" onSelect={onMarkUnread}>
 									<MailUnread />
-									Mark as unread
+									{t("panels.projectTree.markUnread")}
 								</DropdownMenuItem>
 							) : null}
 							{canSettle ? (
@@ -966,7 +986,7 @@ function WorkspaceRow({
 										onSelect={onKeepActive}
 									>
 										<ArrowGoBack />
-										Keep active
+										{t("panels.projectTree.keepActive")}
 									</DropdownMenuItem>
 								) : (
 									<DropdownMenuItem
@@ -975,7 +995,7 @@ function WorkspaceRow({
 										onSelect={onSettle}
 									>
 										<Check />
-										Settle
+										{t("panels.projectTree.settle")}
 									</DropdownMenuItem>
 								)
 							) : null}
@@ -991,7 +1011,9 @@ function WorkspaceRow({
 										}}
 									>
 										<Trash2 />
-										{isExternal ? "Remove from ThinkRail" : "Remove workspace"}
+										{isExternal
+											? t("panels.projectTree.removeExternal")
+											: t("panels.projectTree.removeWorkspace")}
 									</DropdownMenuItem>
 								</>
 							)}

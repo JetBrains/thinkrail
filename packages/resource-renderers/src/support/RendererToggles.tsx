@@ -1,3 +1,4 @@
+import { useT } from "@thinkrail/locales/react";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { useResourceEnvironment } from "../host";
 import { type ResourceRenderer, rendererTestId } from "../registry";
@@ -15,6 +16,7 @@ export function RendererToggles({
 	onRendererId: (rendererId: string) => void;
 	layout?: { value: RendererLayout; onChange: (layout: RendererLayout) => void } | undefined;
 }) {
+	const t = useT();
 	const { mobile } = useResourceEnvironment();
 	return (
 		<>
@@ -23,7 +25,7 @@ export function RendererToggles({
 						<ToggleSegment
 							key={candidate.id}
 							testid={rendererTestId(candidate.id)}
-							label={candidate.label}
+							label={t(candidate.labelKey)}
 							active={candidate.id === renderer.id}
 							onClick={() => onRendererId(candidate.id)}
 						/>
@@ -33,13 +35,13 @@ export function RendererToggles({
 				<>
 					<ToggleSegment
 						testid="diff-toggle-split"
-						label="Split"
+						label={t("panels.diffPane.split")}
 						active={layout.value === "split"}
 						onClick={() => layout.onChange("split")}
 					/>
 					<ToggleSegment
 						testid="diff-toggle-inline"
-						label="Inline"
+						label={t("panels.diffPane.inline")}
 						active={layout.value === "unified"}
 						onClick={() => layout.onChange("unified")}
 					/>
