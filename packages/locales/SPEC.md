@@ -94,12 +94,22 @@ wording fix must not orphan translations. `en.json` stays sorted.
   `MCP_STATE_KEY`) that consumers translate. `check:i18n` enforces this with a typed reachability check.
   Rejected: remounting the app on a language change — it discarded unsent attachments and plan input and
   re-ran lifecycle effects such as terminal attachment, which can take a terminal from another client.
-- Persisted or wire identifiers never carry translated text: built-in layout preset names translate only
-  at render, a default terminal title is recognized in the current language and in English so numbering
-  survives a switch, and markers matched on save (MCP's hidden-value placeholder) stay literal.
+- Persisted or wire identifiers never carry translated text. Defaults are stored language-neutral and
+  worded at render: built-in layout preset names; an untitled chat stores an empty name; a default
+  terminal stores the pattern `Terminal N` (its title is shared through the host with other clients, so
+  numbering reads the pattern back); Changes / diff tab names derive from their scope; a plan document
+  stores the raw chat name; the host-named default workspace keeps `DEFAULT_WORKSPACE_NAME`; chat turns
+  carry kinds (the round closer, a failure's `error` / `truncated` kind) rather than English text, while a
+  provider's or agent's own message is shown verbatim. Markers matched on save (MCP's hidden-value
+  placeholder) stay literal.
+- Placeholders never use an i18next option name (`count` aside): `t()` consumes `ordinal`, `context`,
+  `lng`, … as options — `{{ordinal}}` switched a terminal-group label to ordinal plural rules and rendered
+  its raw key. A catalog test rejects such names.
 
 ## Deferred
 
-Bundled non-English catalogs (the `BUNDLED` map is the seam), RTL layout (`dir`), a first-paint locale
+Bundled non-English catalogs (the `BUNDLED` map is the seam), locale-aware number formats (token
+counts, cost and context percentages still use English separators), composite phrases that embed a
+translated count fragment (`chat.trust.untrustedNotice` interpolates a "1 skill" list), RTL layout (`dir`), a first-paint locale
 hint (until the host answers `locales.list`, a local language renders English for a moment), and
 translating server error text (errors would move to codes the client renders).

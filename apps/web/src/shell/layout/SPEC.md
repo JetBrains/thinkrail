@@ -41,7 +41,9 @@ a tab's `name` remains non-identity metadata. Singleton tool names resolve from 
 at presentation time, so copy updates never rewrite local layout state. Unavailable reasons are localized copy
 resolved when the operation runs, never persisted. Helpers evaluated during render (`layoutTabName`,
 `describeLayoutGroup`, `removeLayoutGroup`, `separatePanesReason`, `layoutPresetName`) take the caller's
-translator as their first argument, so a language change recomputes them.
+translator as their first argument, so a language change recomputes them. `layoutTabName` words every
+default name at render from the tab's kind (tool, untitled chat, default terminal, Changes / diff scope,
+plan document) through `lib`'s default-name helpers, and shows a name set by the user or agent verbatim.
 
 A click that may become a browser `dblclick` waits the shared 250 ms settle window. The upgraded gesture emits
 only its final keep while retaining the leading preview-slot claim, whether content was cached or required a

@@ -407,7 +407,10 @@ dependency. This keeps test process drivers outside both launchers and the serve
     ([[submodule-server-locales]]) and serves them over the wire; the web merges them over the bundled
     catalogs ([[submodule-web-i18n]]) with per-string fallback *local exact → bundled exact → bundled
     base → English*. The choice (`AppConfig.locale`, default `"system"`) follows the user like the
-    theme. Agent, tool, skill, prompt output and server error text are never translated. This is the
+    theme. Agent, tool, skill, prompt output and server error text are never translated. Stored and wire
+    data never carry translated text: defaults ThinkRail writes (untitled chats, default terminals, the
+    host-named default workspace, chat round notices) are worded at render, so a switch re-words all of
+    them, while names set by the user or the agent show verbatim. This is the
     one runtime-loaded user resource; code extensions and themes stay compiled in (Decision 21 and the
     themes non-goal) because a string map renders as escaped text and carries no executable surface.
     Rejected: English-text keys (a wording fix orphans every translation); a host-served bundled catalog

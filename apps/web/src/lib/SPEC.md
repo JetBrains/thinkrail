@@ -92,7 +92,10 @@ not this module; the theme-aware highlighter remains app-local.
   `shallowEqualArrays`, `userText`, `firstNonBlankLine` (first trimmed non-empty line, `undefined` when
   the text is blank — shared by chat's thinking-heading extraction and history prompt rows), `isShellInert` (a value made only of characters that stay literal in POSIX, PowerShell,
   and cmd, so it may be interpolated into a command a human copies and runs), `parseSkillInvocation`, `matchesSkillInvocationCommand`,
-  `relativeTime`, `compactAge`, `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
+  `relativeTime`, `compactAge`, the render-time default names `chatName` / `terminalName` (+ the
+  language-neutral `defaultTerminalTitle` / `defaultTerminalIndex`) / `changesTabName` / `diffTabName` /
+  `turnTimeLabel` / `planDocumentName` (stored tab names carry no translated text; these word them for the
+  caller's translator), `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
   `MCP_STATE_KEY`, `mcpStateLabel`, `mcpStateTone`, `mcpStatusLabel`, `mcpToolCountLabel`, `isMcpAttentionState`,
   `isMcpActiveState`, the `McpStateTone` type,
   `DOUBLE_CLICK_SETTLE_MS`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
@@ -103,6 +106,7 @@ not this module; the theme-aware highlighter remains app-local.
   duck-typed on the target so it holds in DOM-less tests.
 - **Allowed deps:** React (the viewport subscription hook only); `@thinkrail/locales` (the relative-time,
   compact-age and MCP state labels, resolved in the active locale at call time);
-  `@thinkrail/contracts` (types only for canonical messages and `McpServerState`; the layout-resource identity input is a local structural type); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
+  `@thinkrail/contracts` (types only for canonical messages, `McpServerState`, and the `GitDiffScope` the
+  default tab names read; the layout-resource identity input is a local structural type); `shiki`/`@shikijs/*` (the per-file shiki modules only — never reachable
   through the barrel).
 - **Forbidden:** every app-internal module — this is a leaf.
