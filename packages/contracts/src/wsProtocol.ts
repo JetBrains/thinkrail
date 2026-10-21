@@ -32,6 +32,8 @@ import type {
 	McpServerLog,
 	McpServerScope,
 	McpStatusSnapshot,
+	MergeMethod,
+	MergePrResult,
 	OpenBranchReview,
 	OpenPrResult,
 	PrBodySource,
@@ -114,7 +116,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 87;
+export const PROTOCOL_VERSION = 88;
+export const REVIEW_ACTIONS_PROTOCOL_VERSION = 88;
 export const BRANCH_STATUS_PROTOCOL_VERSION = 87;
 export const WORKSPACE_READ_STATE_PROTOCOL_VERSION = 86;
 export const PROJECT_RENAME_PROTOCOL_VERSION = 85;
@@ -211,6 +214,7 @@ export const WS_METHODS = {
 	workspaceOpenReview: "workspace.openReview",
 	workspaceBranchStatus: "workspace.branchStatus",
 	workspacePush: "workspace.push",
+	workspaceDeleteRemoteBranch: "workspace.deleteRemoteBranch",
 	workspaceRemove: "workspace.remove",
 	workspaceDiffStats: "workspace.diffStats",
 	workspaceSetSkillOverride: "workspace.setSkillOverride",
@@ -232,6 +236,9 @@ export const WS_METHODS = {
 	prPreview: "pr.preview",
 	prOpen: "pr.open",
 	prGenerate: "pr.generate",
+	prReady: "pr.ready",
+	prMerge: "pr.merge",
+	prReopen: "pr.reopen",
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
 	specGraph: "spec.graph",
@@ -580,12 +587,16 @@ export interface WsMethodMap {
 		result: OpenBranchReview | null;
 	};
 	"workspace.branchStatus": {
-		params: { workspaceId: string; allowCached?: boolean };
+		params: { workspaceId: string; allowCached?: boolean; skipFetch?: boolean };
 		result: BranchStatus;
 	};
 	"workspace.push": {
 		params: { workspaceId: string; branch: string; confirmBase?: boolean };
 		result: { dirtyFiles: number };
+	};
+	"workspace.deleteRemoteBranch": {
+		params: { workspaceId: string; branch: string };
+		result: Ack;
 	};
 	"workspace.remove": { params: { id: string }; result: Ack };
 	"workspace.diffStats": { params: { id: string }; result: DiffStats };
@@ -630,6 +641,24 @@ export interface WsMethodMap {
 	"pr.generate": {
 		params: { workspaceId: string; sessionId?: string; template?: string };
 		result: { body: string | null };
+	};
+	"pr.ready": {
+		params: { workspaceId: string; branch: string; number: number };
+		result: Ack;
+	};
+	"pr.merge": {
+		params: {
+			workspaceId: string;
+			branch: string;
+			number: number;
+			method: MergeMethod;
+			deleteBranch: boolean;
+		};
+		result: MergePrResult;
+	};
+	"pr.reopen": {
+		params: { workspaceId: string; branch: string; number: number };
+		result: Ack;
 	};
 	"pr.open": {
 		params: {

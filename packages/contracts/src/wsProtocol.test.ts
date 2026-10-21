@@ -33,6 +33,7 @@ import {
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
+	REVIEW_ACTIONS_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
@@ -212,12 +213,21 @@ test("project rename is pinned to v85", () => {
 });
 
 test("branch status, review-free push, and PR description sources are pinned to v87", () => {
-	expect(PROTOCOL_VERSION).toBe(87);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(BRANCH_STATUS_PROTOCOL_VERSION);
 	expect(BRANCH_STATUS_PROTOCOL_VERSION).toBe(87);
 	expect(WS_METHODS.workspaceBranchStatus).toBe("workspace.branchStatus");
 	expect(WS_METHODS.workspacePush).toBe("workspace.push");
 	expect(WS_METHODS.prGenerate).toBe("pr.generate");
 	expect(WS_METHODS.workspaceOpenReview).toBe("workspace.openReview");
+});
+
+test("review details and the GitHub review actions are pinned to v88", () => {
+	expect(PROTOCOL_VERSION).toBe(88);
+	expect(REVIEW_ACTIONS_PROTOCOL_VERSION).toBe(88);
+	expect(WS_METHODS.prReady).toBe("pr.ready");
+	expect(WS_METHODS.prMerge).toBe("pr.merge");
+	expect(WS_METHODS.prReopen).toBe("pr.reopen");
+	expect(WS_METHODS.workspaceDeleteRemoteBranch).toBe("workspace.deleteRemoteBranch");
 });
 
 test("MCP server management, status and chat resources are pinned to v83", () => {
