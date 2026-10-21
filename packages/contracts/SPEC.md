@@ -601,7 +601,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   `confirmBase: true`, and `branch` — the one the user saw and confirmed — must still be the live branch; `PUSH_AUTH_FAILED` as for `pr.open`) / **`pr.preview`** (v87 adds optional
   `source: "plan" | "commits" | "template" | "empty"` and `template`, makes `sessionId` optional, and
   returns the discovered `templates` and `planAvailable`; an older client's `{ sessionId }` call keeps the
-  plan body) / **`pr.generate`** (v87, `{ workspaceId, sessionId?, template? }` → `{ body: string | null }`,
+  plan body — `host` sends it `source: "plan"` explicitly, since a v87 source-less default may be `commits`) / **`pr.generate`** (v87, `{ workspaceId, sessionId?, template? }` → `{ body: string | null }`,
   a best-effort one-shot draft; `null` when no model answered; `pr.open` v87 accepts no `sessionId` when
   the caller supplies the `body`, and an optional `branch` — the branch the draft was composed for — that
   must still be the live branch, as for `workspace.push`) /

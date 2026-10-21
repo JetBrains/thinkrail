@@ -13,7 +13,11 @@ import type {
 	Workspace,
 	WorkspaceWatchReadyResult,
 } from "@thinkrail/contracts";
-import { WORKSPACE_SETTLE_PROTOCOL_VERSION, WS_METHODS } from "@thinkrail/contracts";
+import {
+	BRANCH_STATUS_PROTOCOL_VERSION,
+	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+	WS_METHODS,
+} from "@thinkrail/contracts";
 import { TodoStore } from "pi-todos/core";
 import {
 	type CreateSessionResult,
@@ -284,6 +288,29 @@ test("a split origin whose push repository can't be read reports publication as 
 	const status = await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX);
 	expect(status).toMatchObject({ hasOrigin: true, pushesElsewhere: true, published: null });
 	expect(status).not.toHaveProperty("ahead");
+});
+
+test("a pre-v87 client's source-less PR preview keeps the session's plan body", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Legacy preview" },
+		CTX,
+	)) as Workspace;
+	writeFileSync(join(workspace.worktreePath, "ship.txt"), "ship\n");
+	git(workspace.worktreePath, "add", "-A");
+	git(workspace.worktreePath, "commit", "-m", "ship it");
+	const params = { workspaceId: workspace.id, sessionId: "legacy-session" };
+
+	const legacy = (await handleRequest("pr.preview", params, {
+		...CTX,
+		protocolVersion: BRANCH_STATUS_PROTOCOL_VERSION - 1,
+	})) as { body: string };
+	expect(legacy.body).toContain("## Committed outside the plan");
+	const current = (await handleRequest("pr.preview", params, CTX)) as {
+		body: string;
+		source: string;
+	};
+	expect(current).toMatchObject({ source: "commits", body: "- ship it" });
 });
 
 test("request diagnostics expose only registered method names", async () => {

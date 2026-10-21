@@ -11,7 +11,11 @@ import type {
 	WsParams,
 	WsResult,
 } from "@thinkrail/contracts";
-import { isControlMessage, WORKSPACE_SETTLE_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import {
+	BRANCH_STATUS_PROTOCOL_VERSION,
+	isControlMessage,
+	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+} from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	abortSession,
@@ -614,7 +618,12 @@ const handlers: WsHandlers = {
 	},
 	"github.authStatus": () => githubAuthStatus(),
 	"github.refresh": () => githubRefresh(),
-	"pr.preview": (params) => previewPr(params),
+	"pr.preview": (params, ctx) =>
+		previewPr(
+			params.sessionId && !params.source && !supportsBranchStatus(ctx.protocolVersion)
+				? { ...params, source: "plan" }
+				: params,
+		),
 	"pr.generate": async (params) => ({
 		body: await suggestPrDescription(await prDraftInput(params)),
 	}),
@@ -1288,6 +1297,10 @@ function dispatch<M extends WsMethodName>(method: M, params: WsParams<M>, ctx: R
 
 export function requestMethodDiagnostic(method: string): string {
 	return isWsMethod(method) ? method : "unknown method";
+}
+
+function supportsBranchStatus(protocolVersion: number | undefined): boolean {
+	return protocolVersion === undefined || protocolVersion >= BRANCH_STATUS_PROTOCOL_VERSION;
 }
 
 export function shouldRefreshOpenReview(allowCached: boolean | undefined): boolean {

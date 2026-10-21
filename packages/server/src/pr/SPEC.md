@@ -28,7 +28,9 @@ planAvailable, source }` (`pr.preview`): the exact title/body `openPr` would use
 dialog can offer them for editing before anything is pushed. `source` picks the body: **`plan`**
 (`renderPrBody` over the session's wire plan, adopted commits included — the default whenever that plan
 has items; `planAvailable` reports whether it renders anything at all), **`commits`** (the subjects of `<base>..HEAD`, oldest first, as a
-bullet list — the default otherwise, so a plan-less or empty-plan PR still gets an honest body), **`template`** (the chosen discovered template verbatim; the first one
+bullet list — the default otherwise, so a plan-less or empty-plan PR still gets an honest body; `host`
+asks for `plan` explicitly on a session-backed preview from a pre-v87 client, which only ever saw the plan
+body), **`template`** (the chosen discovered template verbatim; the first one
 when `template` is absent), or **`empty`**. **Template discovery** reads the worktree, not the forge:
 GitHub's `pull_request_template.md` in `.github/`, the root, or `docs/` (any case) and every
 `.github/PULL_REQUEST_TEMPLATE/*.md`, plus GitLab's `.gitlab/merge_request_templates/*.md`; paths are
