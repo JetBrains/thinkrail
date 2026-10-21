@@ -4,6 +4,7 @@ export type Catalog = Readonly<Record<string, string>>;
 export type EnglishCatalog = typeof en;
 
 const PLURAL_SUFFIX = /_(?:zero|one|two|few|many|other)$/;
+const PLURAL_KEY = /^(.+)_(zero|one|two|few|many|other)$/;
 
 export type MessageKey = keyof EnglishCatalog extends infer K
 	? K extends `${infer Base}_${"zero" | "one" | "two" | "few" | "many" | "other"}`
@@ -66,10 +67,10 @@ export function languageName(tag: string): string {
 	return name.charAt(0).toLocaleUpperCase(tag) + name.slice(1);
 }
 
-function placeholders(text: string): string {
+function placeholders(text: string, ignoreCount: boolean): string {
 	const names = new Set<string>();
 	for (const match of text.matchAll(/\{\{\s*([^\s,}]+)[^}]*\}\}/g)) {
-		if (match[1]) names.add(match[1]);
+		if (match[1] && !(ignoreCount && match[1] === "count")) names.add(match[1]);
 	}
 	if (/\{\{(?![^{}]*\}\})/.test(text)) names.add("{{");
 	return [...names].sort().join("\u0000");
@@ -92,11 +93,9 @@ function own(catalog: Catalog, key: string): string | undefined {
 }
 
 function englishReference(key: string): string | undefined {
-	const exact = own(EN, key);
-	if (exact !== undefined) return exact;
-	if (!PLURAL_SUFFIX.test(key)) return undefined;
+	if (!PLURAL_SUFFIX.test(key)) return own(EN, key);
 	const base = key.replace(PLURAL_SUFFIX, "");
-	return own(EN, `${base}_other`) ?? own(EN, base);
+	return own(EN, `${base}_other`) ?? own(EN, key) ?? own(EN, base);
 }
 
 function acceptable(key: string, value: string): boolean {
@@ -105,7 +104,40 @@ function acceptable(key: string, value: string): boolean {
 	if (shape === null) return false;
 	const reference = englishReference(key);
 	if (reference === undefined) return shape === "";
-	return placeholders(reference) === placeholders(value) && markup(reference) === shape;
+	const plural = PLURAL_SUFFIX.test(key);
+	return (
+		placeholders(reference, plural) === placeholders(value, plural) && markup(reference) === shape
+	);
+}
+
+function pluralCategories(tag: string): readonly string[] {
+	try {
+		return new Intl.PluralRules(tag).resolvedOptions().pluralCategories;
+	} catch {
+		return [];
+	}
+}
+
+export function completePlurals(tag: string, strings: Catalog): Catalog {
+	const families = new Map<string, Map<string, string>>();
+	for (const [key, value] of Object.entries(strings)) {
+		const match = PLURAL_KEY.exec(key);
+		if (!match?.[1] || !match[2] || own(EN, `${match[1]}_other`) === undefined) continue;
+		const forms = families.get(match[1]) ?? new Map<string, string>();
+		forms.set(match[2], value);
+		families.set(match[1], forms);
+	}
+	if (families.size === 0) return strings;
+	const categories = pluralCategories(tag);
+	const completed: Record<string, string> = { ...strings };
+	for (const [base, forms] of families) {
+		const source = forms.get("other") ?? forms.values().next().value;
+		if (source === undefined) continue;
+		for (const category of categories) {
+			if (!forms.has(category)) completed[`${base}_${category}`] = source;
+		}
+	}
+	return completed;
 }
 
 export type CatalogValidation = { ok: true; strings: Catalog } | { ok: false; error: "not-object" };

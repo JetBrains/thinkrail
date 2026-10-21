@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+	completePlurals,
 	EN,
 	fallbackChain,
 	languageName,
@@ -136,4 +137,47 @@ describe("validateCatalog hardening", () => {
 test("the bundled English catalog passes its own validation", () => {
 	const result = validateCatalog(EN);
 	expect(result.ok && Object.keys(result.strings).length).toBe(Object.keys(EN).length);
+});
+
+describe("plural forms", () => {
+	test("any plural form may show or omit the number; other placeholders stay strict", () => {
+		const result = validateCatalog({
+			"tools.read.firstLines_one": "первая {{count}} строка",
+			"tools.read.firstLines_few": "первые {{count}} строки",
+			"tools.read.firstLines_many": "первые {{count}} строк",
+			"changes.review.end_zero": "نهاية التغييرات · لا ملفات",
+			"changes.review.end_one": "نهاية التغييرات · ملف واحد",
+			"mcp.entries.notReference_few": "{{labels}} — не ссылки.",
+		});
+		expect(result.ok && Object.keys(result.strings).sort()).toEqual([
+			"changes.review.end_one",
+			"changes.review.end_zero",
+			"tools.read.firstLines_few",
+			"tools.read.firstLines_many",
+			"tools.read.firstLines_one",
+		]);
+	});
+
+	test("a translated family gets every form its language needs from its own other form", () => {
+		const completed = completePlurals("ru", {
+			"tools.read.firstLines_one": "первая {{count}} строка",
+			"tools.read.firstLines_other": "первые {{count}} строк",
+			"desktop.menu.edit": "Правка",
+		});
+		expect(completed).toEqual({
+			"tools.read.firstLines_one": "первая {{count}} строка",
+			"tools.read.firstLines_other": "первые {{count}} строк",
+			"tools.read.firstLines_few": "первые {{count}} строк",
+			"tools.read.firstLines_many": "первые {{count}} строк",
+			"desktop.menu.edit": "Правка",
+		});
+	});
+
+	test("a family with only a singular form fills the rest from it; non-families are left alone", () => {
+		expect(completePlurals("de", { "tools.read.firstLines_one": "erste Zeile" })).toEqual({
+			"tools.read.firstLines_one": "erste Zeile",
+			"tools.read.firstLines_other": "erste Zeile",
+		});
+		expect(completePlurals("ru", { "future.key_one": "x" })).toEqual({ "future.key_one": "x" });
+	});
 });

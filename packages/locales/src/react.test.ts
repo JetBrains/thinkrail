@@ -134,3 +134,43 @@ test("interpolation can never complete a tag: a value-built attributed tag is re
 	);
 	expect(markup).toBe("· from <code>0</code>");
 });
+
+test("plural forms follow the language's own rules, with or without the number", () => {
+	applyLocale("ru", {
+		ru: {
+			"tools.read.firstLines_one": "первая {{count}} строка",
+			"tools.read.firstLines_few": "первые {{count}} строки",
+			"tools.read.firstLines_many": "первые {{count}} строк",
+		},
+	});
+	expect([1, 2, 5, 21].map((count) => t("tools.read.firstLines", { count }))).toEqual([
+		"первая 1 строка",
+		"первые 2 строки",
+		"первые 5 строк",
+		"первая 21 строка",
+	]);
+	applyLocale("ar", {
+		ar: {
+			"changes.review.end_zero": "لا ملفات",
+			"changes.review.end_one": "ملف واحد",
+			"changes.review.end_two": "ملفان",
+			"changes.review.end_other": "{{count}} ملفات",
+		},
+	});
+	expect([0, 1, 2, 7].map((count) => t("changes.review.end", { count }))).toEqual([
+		"لا ملفات",
+		"ملف واحد",
+		"ملفان",
+		"7 ملفات",
+	]);
+});
+
+test("a partly translated counter stays in its language instead of falling back to English", () => {
+	applyLocale("ru", { ru: { "tools.read.firstLines_other": "первые {{count}} строк" } });
+	expect(t("tools.read.firstLines", { count: 3 })).toBe("первые 3 строк");
+	applyLocale("ja", { ja: { "tools.read.firstLines_other": "最初の{{count}}行" } });
+	expect([1, 4].map((count) => t("tools.read.firstLines", { count }))).toEqual([
+		"最初の1行",
+		"最初の4行",
+	]);
+});

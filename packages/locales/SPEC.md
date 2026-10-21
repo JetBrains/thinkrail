@@ -31,12 +31,18 @@ onto separate instances.
   - `validateCatalog(raw)` — `{ ok: true, strings } | { ok: false, error: "not-object" }`. The value
     must be a JSON object. Dropped, silently: non-string and empty values (English shows instead); a string
     for a known key whose `{{placeholder}}` set or indexed-markup set (`<0>`, `</0>`, `<1/>`) differs from
-    English's; any tag that is not a bare indexed marker (no attributes, no named tags — a catalog must not
+    English's (a plural form `key_<category>` is compared with English `key_other`, and `{{count}}` may be
+    present or absent in any form, so a translator can show or omit the number); any tag that is not a
+    bare indexed marker (no attributes, no named tags — a catalog must not
     override a code-owned component's props such as a link's `href`; tags are found with react-i18next's own
     quote-aware parser pattern, and a `<` followed by `{{` is rejected so interpolation can never complete a
     tag). Values containing `$t(` nesting are dropped. Unknown keys are kept as data (a file
     may be older or newer than the app); key lookups use own properties only, so `constructor` or
     `__proto__` are ordinary keys. The bundled English catalog passes this same validation.
+  - `completePlurals(tag, strings)` — for every English plural family a catalog translates, fills each
+    CLDR category `tag` needs (`Intl.PluralRules`) but lacks from that family's `_other` (else any
+    present form), so a partly translated counter stays in its language instead of falling back to
+    English. `applyLocale` runs it on every overlay.
   - `resolveLocale(preference, available, systemLanguages)` — `"system"` walks `systemLanguages` and
     takes the first exact available tag, else its base language; an explicit tag is used only when
     available; otherwise `"en"`.
@@ -58,8 +64,8 @@ onto separate instances.
 Flat i18next JSON v4: one level of `"dotted.named.key": "text"`; `{{name}}` interpolation;
 `key_one`/`key_other` (and other CLDR categories) plurals resolved through `Intl.PluralRules`; `<0>…</0>`
 indexed markup only for `<T>` strings. No metadata block. The instance runs with `keySeparator: false`,
-`nsSeparator: false`, `escapeValue: false` (React escapes), and `bindI18nStore: "added"` so a live file edit
-re-renders. It initializes **synchronously with English at import**, so any surface — including tests with
+`nsSeparator: false` and `escapeValue: false` (React escapes); a live file edit re-renders because
+`applyLocale` publishes a new translator. It initializes **synchronously with English at import**, so any surface — including tests with
 no setup — renders English.
 
 Keys are named by surface (`settings.language.title`, `chat.composer.placeholder`), never English text: a

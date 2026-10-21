@@ -1,7 +1,14 @@
 import i18next, { type TFunction } from "i18next";
 import { type ComponentProps, useSyncExternalStore } from "react";
 import { Trans } from "react-i18next";
-import { bundledCatalog, type Catalog, EN, type EnglishCatalog, fallbackChain } from "./index";
+import {
+	bundledCatalog,
+	type Catalog,
+	completePlurals,
+	EN,
+	type EnglishCatalog,
+	fallbackChain,
+} from "./index";
 
 declare module "i18next" {
 	interface CustomTypeOptions {
@@ -93,7 +100,8 @@ export function applyLocale(tag: string, overlays: LocaleOverlays): void {
 	const languages = new Set([...touched, ...chain, ...Object.keys(overlays)]);
 	for (const language of languages) {
 		const bundled = bundledCatalog(language);
-		const overlay = overlays[language];
+		const local = overlays[language];
+		const overlay = local ? completePlurals(language, local) : undefined;
 		i18n.removeResourceBundle(language, NAMESPACE);
 		if (bundled || overlay) {
 			i18n.addResourceBundle(language, NAMESPACE, { ...bundled, ...overlay }, false, true);
