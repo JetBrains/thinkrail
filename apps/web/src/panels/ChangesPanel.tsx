@@ -1,23 +1,25 @@
 import type { GitStatus } from "@thinkrail/contracts";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { QuietScrollArea } from "@/components/QuietScrollArea";
-import { LoadingRegion } from "../components/Skeleton";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
 	type CenterNavigationStamp,
 	type ChangesTab,
 	type EditorTab,
 	isCenterNavigationCurrent,
+	isFileComparison,
 	matchesWorktreePath,
 	selectActiveEditorTab,
 	selectDiffBaseRef,
 	selectDiffScope,
+	selectFilesTreeView,
 	selectWorkspaceById,
 	selectWorkspaceNavTick,
 	type TabIntent,
 	toast,
 	useAppStore,
 } from "../store";
-import { errorText, getTransport, wsErrorCode } from "../transport";
+import { errorText, getTransport } from "../transport";
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
 import { ChangeRowActions } from "./ChangeRowActions";
@@ -26,8 +28,7 @@ import { ChangesTree } from "./ChangesTree";
 import { changesTabId, scopeKey, splitPath, statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openChangesTab, openDiffInTab } from "./openTabs";
-import { ToggleSegment } from "./ToggleSegment";
-import { useWorkspaceRead } from "./useWorkspaceRead";
+import { RememberedScrollArea } from "./RememberedScrollArea";
 import { ViewedMark } from "./ViewedMark";
 
 function selectReviewTab(
@@ -40,11 +41,17 @@ function selectReviewTab(
 	);
 }
 
-export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
-	const [status, setStatus] = useState<GitStatus | null>(null);
-	const [error, setError] = useState<string | null>(null);
-	const warnedRef = useRef(false);
-	const [highlighted, setHighlighted] = useState<string | null>(null);
+export function ChangesPanel({
+	workspaceId,
+	status,
+	error,
+	reload,
+}: {
+	workspaceId: string;
+	status: GitStatus | null;
+	error: string | null;
+	reload: () => void;
+}) {
 	const changesRequest = useAppStore((s) => s.changesRequest);
 	const changesView = useAppStore((s) => s.changesView);
 	const setChangesView = useAppStore((s) => s.setChangesView);
@@ -52,9 +59,16 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	const scope = useAppStore((s) => selectDiffScope(s, workspaceId));
 	const workspace = useAppStore((s) => selectWorkspaceById(s, workspaceId));
 	const baseRef = useAppStore((s) => selectDiffBaseRef(s, workspaceId));
+	const viewKey = `${scopeKey(scope)}:${baseRef}`;
+	const [highlight, setHighlight] = useState<{ key: string; path: string } | null>(null);
+	const highlighted = highlight?.key === viewKey ? highlight.path : null;
+	const setHighlighted = useCallback(
+		(path: string | null) => setHighlight(path === null ? null : { key: viewKey, path }),
+		[viewKey],
+	);
 	const activeDiffTab = useAppStore((state) => {
 		const tab = selectActiveEditorTab(state, workspaceId);
-		return tab?.kind === "diff" ? tab : null;
+		return tab?.kind === "diff" && !isFileComparison(tab) ? tab : null;
 	});
 	const reviewTabId = changesTabId(workspaceId, scope);
 	const reviewActivePath = useAppStore(
@@ -67,41 +81,8 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 		(state) => state.activeTabByWorkspace[workspaceId] === reviewTabId,
 	);
 	const viewed = useMemo(() => new Set(reviewViewed ?? []), [reviewViewed]);
-
-	const { reload } = useWorkspaceRead(
-		workspaceId,
-		(id) => getTransport().request("git.status", { workspaceId: id, scope }),
-		{
-			onResult: (result) => {
-				setStatus(result);
-				setError(null);
-				warnedRef.current = false;
-			},
-			onFailure: (_id, failure) => {
-				if (wsErrorCode(failure) === "UNKNOWN_COMMIT") {
-					setDiffScope(workspaceId, { kind: "branch" });
-					toast.info(
-						scope.kind === "turn"
-							? "That agent turn's snapshot is no longer in this repository — showing all changes."
-							: "That commit is no longer in this branch — showing all changes.",
-					);
-					return;
-				}
-				if (status && !warnedRef.current) {
-					warnedRef.current = true;
-					toast.error(`Could not refresh the changes: ${errorText(failure)}`);
-				}
-				setError(errorText(failure));
-			},
-			onSwitch: () => {
-				setStatus(null);
-				setError(null);
-				setHighlighted(null);
-				warnedRef.current = false;
-			},
-		},
-		`${scopeKey(scope)}:${baseRef}`,
-	);
+	const collapsedList = useAppStore((s) => selectFilesTreeView(s, workspaceId).changedCollapsed);
+	const collapsed = useMemo(() => new Set(collapsedList), [collapsedList]);
 
 	const {
 		branches,
@@ -131,7 +112,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 			}
 			void openChangesTab(workspaceId, scope, { revealPath: path }, intent, navigation);
 		},
-		[workspaceId, scope],
+		[workspaceId, scope, setHighlighted],
 	);
 
 	useEffect(() => {
@@ -153,11 +134,11 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 			else setHighlighted(match ? match.path : want);
 		}
 		useAppStore.getState().clearChangesRequest();
-	}, [changesRequest, status, workspaceId, openDiff, scope]);
+	}, [changesRequest, status, workspaceId, openDiff, scope, setHighlighted]);
 
 	useEffect(() => {
 		if (activeDiffTab || reviewTabActive) setHighlighted(null);
-	}, [activeDiffTab, reviewTabActive]);
+	}, [activeDiffTab, reviewTabActive, setHighlighted]);
 
 	const isActive = (path: string) =>
 		reviewTabActive && reviewActivePath !== undefined
@@ -208,7 +189,14 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 					onClick={() => setChangesView("tree")}
 				/>
 			</div>
-			<QuietScrollArea className="min-h-0 flex-1" viewportClassName="p-panel-inset">
+			<RememberedScrollArea
+				key={`${changesView}:${viewKey}`}
+				workspaceId={workspaceId}
+				view={changesView === "tree" ? "changedTree" : "changedList"}
+				scope={viewKey}
+				className="min-h-0 flex-1"
+				viewportClassName="p-panel-inset"
+			>
 				{status === null && error !== null ? (
 					<div data-testid="changes-error" className="flex flex-col items-start gap-4 px-8 py-4">
 						<p className="tr-text-metadata text-feedback-error">
@@ -235,6 +223,10 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 						onOpen={(path, intent, claimPreview) => openDiff(path, intent, undefined, claimPreview)}
 						isActive={isActive}
 						isViewed={isViewed}
+						isCollapsed={(path) => collapsed.has(path)}
+						onSetCollapsed={(path, next) =>
+							useAppStore.getState().setChangedTreeCollapsed(workspaceId, [path], next)
+						}
 					/>
 				) : (
 					<ul className="motion-safe:animate-reveal">
@@ -289,7 +281,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 						})}
 					</ul>
 				)}
-			</QuietScrollArea>
+			</RememberedScrollArea>
 		</div>
 	);
 }

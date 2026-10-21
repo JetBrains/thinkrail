@@ -29,7 +29,7 @@ dials it over the network; a phone reaches the selected host over Tailscale.
 
 ```
 apps/cli        browser host launcher: boot server + open browser ── depends on ─▶ packages/server
-apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/contracts, packages/ui, packages/extension-api/web, thinkrail-extensions/*/web
+apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/contracts, packages/ui, packages/extension-api/web, packages/resource-renderers, thinkrail-extensions/*/web
 apps/desktop    Electrobun local-host launcher                     ── depends on ─▶ packages/server, packages/contracts, packages/shared
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
@@ -55,6 +55,8 @@ thinkrail-extensions/*  ThinkRail extensions: a pi capability + ./server and ./w
                     packages/extension-api, packages/ui
 packages/extension-api  types + define* helpers for extension halves ── depends on ─▶ packages/contracts
 packages/ui         owned shadcn/Radix primitives + cn + onThemeSwap ── may depend on ─▶ packages/contracts
+packages/resource-renderers  file/diff renderers, registry + review surfaces behind a host seam ── may depend on ─▶
+                    packages/contracts, packages/ui
 ```
 
 Artifact verification is a separate source-only workspace, [[module-artifact-tests]]. It depends on
@@ -65,8 +67,8 @@ dependency. This keeps test process drivers outside both launchers and the serve
 ## Decisions
 
 1. **Client/host split.** Engine host owns `pi` and state; the UI is a portable client; the wire is the
-   only coupling. **Rule: `apps/web` depends on `contracts`, `ui`, `extension-api/web`, and
-   `thinkrail-extensions/*/web` only** — never on `server` or `shared`. All added edges are browser-safe
+   only coupling. **Rule: `apps/web` depends on `contracts`, `ui`, `extension-api/web`,
+   `resource-renderers`, and `thinkrail-extensions/*/web` only** — never on `server` or `shared`. All added edges are browser-safe
    presentation packages; the UI remains shippable without the host.
 2. **Launchers are thin; the host is a library.** `apps/cli` and `apps/desktop` both embed the shared
    boot path in-process. CLI opens a browser; desktop opens a native system webview on a fresh one-origin
@@ -310,7 +312,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     [[submodule-server-agent]], and command lifetime/retention to [[module-pi-background-commands]].
 
 19. **The review surface is engine-neutral; renderers are registered, not hard-wired.** A resource (a
-    file or one side-pair of a diff) is shown by the renderer the web's `resources` registry selects by
+    file or one side-pair of a diff) is shown by the renderer the `@thinkrail/resource-renderers` registry selects by
     match, rank and capabilities for the current intent and viewport class; review comments anchor
     through `contracts`' `ReviewSelector` set (`lineRange`/`textQuote` for text, `structural` schemes
     such as `json-pointer`/`table-cell`/`ipynb-cell`, `region` geometry), which every renderer maps onto
@@ -321,7 +323,10 @@ dependency. This keeps test process drivers outside both launchers and the serve
     (`change.revert`/`change.undo`, [[submodule-server-changes]]); the client never sends bytes to
     write. ThinkRail hosts no VS Code extensions: language intelligence (TextMate grammars, Shiki) is
     imported as libraries. Active content (HTML, SVG, notebook outputs) renders only inside sandboxed,
-    network-denying frames. Detail: [[submodule-web-resources]], [[submodule-web-panels]],
+    network-denying frames. The renderers, registry and review surfaces are one package
+    ([[module-resource-renderers]]) behind a host seam (markdown, code highlighting, byte URLs, link
+    navigation), so every surface that shows a file uses the same stack. Detail:
+    [[module-resource-renderers]], [[submodule-web-panels]],
     [[submodule-server-reviews]].
 
 20. **Portable pi packages are published, scoped, and held to a vanilla-parity bar.** Capabilities the
@@ -368,6 +373,25 @@ dependency. This keeps test process drivers outside both launchers and the serve
     best-effort validation in the portable package, strict `mermaid`+`linkedom` validation injected by
     the ThinkRail server half through `createVisualizeExtension({ validateMermaid })`; the old
     `packages/pi-visualize` is deleted. Detail: [[module-thinkrail-extensions]].
+
+22. **A path's spelling follows its kind.** A directory identity (`Project.path`,
+    `Workspace.worktreePath`) is the host's **resolved** spelling (`path.resolve`), exactly what pi records as a
+    transcript's cwd (pi resolves the cwd it is handed), so comparing it with a pi-reported cwd is a plain
+    `===`. Paths that enter in another spelling are resolved where they enter: git prints `C:/…` on Windows,
+    `THINKRAIL_DATA_DIR` may be relative, and records written before this rule are healed on load
+    ([[submodule-server-persistence]]). A **workspace-relative** path on the wire or in a store (file tree,
+    changes, review anchors and reading order, fs events) is POSIX `/` and contained in the worktree; the
+    server converts native `path.relative` output and model-written paths where they enter, and git object
+    names (`<ref>:<path>`) use `/`. Absolute paths pi reports (tool arguments, transcript cwd) stay pi's and
+    may use either separator; the browser reads them through `projectRelativePath` ([[submodule-web-lib]]),
+    and in agent-written prose or paths a backslash is a separator, never a Markdown escape. Why: two
+    spellings of one Windows directory broke every raw comparison (#766), so chats in Default and external
+    workspaces could not be listed, reopened, renamed, deleted, or scoped in history. Rejected: normalizing at
+    each comparison (every future comparison must remember; the first patch missed nine of twelve sites);
+    `realpath` as the canonical form (diverges from headers already on disk wherever a stored path crosses a
+    symlink or 8.3 name); folding case (pi's own cwd identity is case-sensitive, and git and `resolve` both
+    keep on-disk case). Accepted cost: an older ThinkRail sharing `~/.thinkrail` fails reopen-from-Recent
+    (`ALREADY_OPEN`) for a healed project until it updates.
 
 ## Invariants
 

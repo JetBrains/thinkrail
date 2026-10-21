@@ -7,11 +7,11 @@ import {
 import type { Project, SkillCatalogEntry, Workspace } from "@thinkrail/contracts";
 import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useState } from "react";
-import { LoadingRegion } from "@/components/Skeleton";
 import { toast, useAppStore } from "@/store";
 import { errorText, getTransport, reloadSessionResourcesWithSkillBaseline } from "@/transport";
 import {

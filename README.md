@@ -30,9 +30,10 @@ create the tools it needs based on how you actually work.
   work in the project folder itself. Finished and dormant workspaces settle onto a per-project shelf on
   their own — when their pull request merges or closes, or after a quiet week — and come back the moment
   you work in them.
-- **A real IDE around the agent.** A splittable workbench of Monaco editor tabs, a live git Changes view,
-  terminals, and documents — all scoped to the active workspace. Leave anchored review comments on files
-  and diffs and send them to a chat as structured context, or open the worktree in your installed IDE.
+- **A real IDE around the agent.** A splittable workbench of Monaco editor tabs, a Files tree with live git
+  change marks and a Changed view, terminals, and documents — all scoped to the active workspace. Leave
+  anchored review comments on files and diffs and send them to a chat as structured context, or open the
+  worktree in your installed IDE.
 - **Chats that stream like the engine thinks.** Several concurrent `pi` sessions per workspace, each with
   its own model and live token and cost readout. Steer a running turn or queue a follow-up, delegate to
   subagents, and work a shared plan the agent updates and you edit — each completed step can be committed
@@ -43,8 +44,9 @@ create the tools it needs based on how you actually work.
 - **Skills and workflows.** Portable Agent Skills you already keep for other coding agents are read in
   place, and bundled workflows guide project setup, design brainstorming, and shipping a pull request —
   pushing the workspace branch and opening or updating its GitHub PR through your own `gh`.
-- **Agent tools beyond the shell.** Web research, and inline diagrams and option comparisons rendered right
-  in the chat. Settings → Extensions lists the ThinkRail extensions the agent gets and lets you switch
+- **Agent tools beyond the shell.** Web research, and inline diagrams, option comparisons and file previews
+  rendered right in the chat — when the agent proposes a UI change it shows a before/after mockup you can
+  comment on like a diff. Settings → Extensions lists the ThinkRail extensions the agent gets and lets you switch
   each one off.
 - **MCP servers.** Connect the MCP servers in your `pi` `mcp.json` (or add them, and a few presets, from
   Settings): ThinkRail asks in the chat before calls the server does not mark read-only (or always allows

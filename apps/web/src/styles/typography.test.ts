@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { normalizeEol } from "../../scripts/generatedFiles";
 import type { Style, StyleRef, Typography } from "../../scripts/typography";
 import {
@@ -20,7 +21,7 @@ import {
 } from "../../scripts/typography";
 
 const typography = loadTypography();
-const SRC = new URL("..", import.meta.url).pathname;
+const SRC = fileURLToPath(new URL("..", import.meta.url));
 const GENERATED = normalizeEol(readFileSync(GENERATED_PATH, "utf8"));
 
 const read = (p: string) => readFileSync(p, "utf8");
@@ -431,7 +432,9 @@ describe("generated CSS", () => {
 		expect(GENERATED).toContain("--tr-font-size-s13: 13px;");
 		expect(GENERATED).toContain("--tr-line-height-default: 1.3;");
 		expect(GENERATED).toContain("--tr-code-row-height: 14px;");
-		const monaco = read(join(SRC, "panels/monacoSetup.ts"));
+		const monaco = read(
+			join(SRC, "../../../packages/resource-renderers/src/support/monacoSetup.ts"),
+		);
 		const xterm = read(join(SRC, "panels/TerminalInstance.tsx"));
 		expect(monaco).toContain('cssVar("--tr-font-size-s11")');
 		expect(xterm).toContain('cssVar("--tr-font-size-s13")');

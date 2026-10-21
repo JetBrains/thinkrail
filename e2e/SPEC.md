@@ -300,7 +300,7 @@ pane order, boundary drops create panes while entry-half drops join one, a tool 
 terminal strip, the pane-header title drags its tool, an unplaced tool sits dimmed in a trailing cluster),
 a terminal pane's selected session surviving fold and reload, linked collapsed regions, keyboard focus without implicit activation, a browser
 history workspace switch during a singleton drag, and DOM continuity across shape changes: it stamps the
-center tabs, chat input, terminal, Projects tree, and Changes toolbar before each fold/hide/show and asserts
+center tabs, chat input, terminal, Projects tree, and Review panel before each fold/hide/show and asserts
 the same nodes survive, which fails if any panel group is remounted. The compressed-resize matrix uses independent cases
 with explicit compression assertions, avoiding accidental collapse caused by the rails' occupied width.
 `rail-layout-regressions.spec.ts` covers node replacement before bottom measurement, explicit drops into
@@ -407,13 +407,19 @@ fullscreen SVG growth, pan/reset/Escape and claimed WebKit pinch gestures, exact
 and recommendation, and assistant mermaid fences alongside tool diagrams re-rendering to the host's
 `--container-elevated-bg` after selecting a discovered opposite appearance in real settings. Malformed
 source is seeded as a successful historical tool result (`isError: false`) so both tool and chat exercise
-the renderer's plain-source fallback, not the tool-error branch. These regressions need no provider,
+the renderer's plain-source fallback, not the tool-error branch. File previews write mockups into the shared
+fixture repository (removed in `finally`) and pin the HTML renderer in the card, the before/after 2-up diff,
+a region comment's Send carrying the card's chat `sessionId` over the wire, HTML design-width scaling and the
+width switch, full screen, Open in tab, and a before/after opened as a comparison diff tab that survives a
+reload. These regressions need no provider,
 prompt submission, route mock, or screenshot. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
 real Settings → Extensions switch through `settings.update`, proves it survives a reload, and seeds a
 historical `visualize` call that must still render its diagram while the extension is off; each test restores
 the switch in `afterEach` because the shard shares one host. The provider-backed counterpart in
 `visualize.live.spec.ts` runs first: with the extension off the agent is never offered `visualize`, and the
-existing diagram/comparison tests that follow re-prove the restored tool in the same chat. MCP tool-card coverage
+existing diagram/comparison tests that follow re-prove the restored tool in the same chat; a last test
+asks for a before/after UI proposal without naming the tool and expects mockup files under
+`.thinkrail/context/mockups/` shown as a rendered diff, which pins the tool's prompt guideline. MCP tool-card coverage
 (`mcp-tool-cards.spec.ts`) seeds historical `mcp__*`, resource and `tool_search` results the same way and pins
 the single shared image strip, the collapsed JSON tree, Full output through the real `mcp.readOutput`
 (a recorded file and an expired one), Sign in deep links into Settings › MCP servers or Providers according

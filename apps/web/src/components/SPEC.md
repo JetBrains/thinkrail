@@ -27,9 +27,10 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
 - **`CustomIcon.tsx`** — renders an SVG from `public/custom-icons/` as a themeable `currentColor` glyph
   via a CSS `mask-image` span (`.custom-icon*` classes in `index.css`), so a custom glyph sizes with
   `size-*` and colours with `text-*` exactly like a Remix icon. Names are a typed union
-  (`CustomIconName`); today: `file-diff-line`/`file-diff-fill` (the Changes tool glyph).
+  (`CustomIconName`); today: `file-diff-line`/`file-diff-fill` (the Changes review tab glyph).
 - **`QuietScrollArea.tsx`** — the store-free overflow observer and two presentation surfaces:
-  `QuietScrollArea` owns an ordinary native scroll viewport, while `QuietScrollFrame` observes a
+  `QuietScrollArea` owns an ordinary native scroll viewport (an optional `viewportRef` callback hands that
+  element to a caller that saves/restores its scroll, e.g. `panels/RememberedScrollArea`), while `QuietScrollFrame` observes a
   third-party descendant scroll control without taking over its content or input and can receive the
   library's authoritative edge state. `styles/global.css` owns the single scrollbar definition for every
   native scroll container: a 6px gutter, transparent track, transparent resting thumb, `--border-default`
@@ -62,13 +63,14 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
   dimming folder reads as “disabled” at 14px. Callers pass only size/colour classes and decide from
   normalized host state whether a top-level session is running; the icon renders no dot, spinner, count,
   tooltip, or idle state.
-- **Also owns:** `Skeleton.tsx` — `SkeletonRows`, the one pulsing-rows placeholder every loading surface
+- **Also governs (implementation in `@thinkrail/ui/skeleton`, [[module-ui]], so the app and
+  [[module-resource-renderers]] share it):** `SkeletonRows`, the one pulsing-rows placeholder every loading surface
   uses, and `LoadingRegion`, the sized-wrapper shape around it that most call sites actually want (a
   `className` for the region's own padding/sizing, an optional `label` threaded to `SkeletonRows`'
   `role="status"` region rather than opening a second one, and an optional `testId`). The full loading
   vocabulary and its rules are below.
-- **Public surface:** `ErrorBoundary`, `isChunkLoadError`, `SkeletonRows`, `LoadingRegion` — imported
-  directly via `@/components/ErrorBoundary` / `@/components/Skeleton` (no barrel); `AttentionDot` via
+- **Public surface:** `ErrorBoundary`, `isChunkLoadError` — imported directly via
+  `@/components/ErrorBoundary` (no barrel; the placeholders come from `@thinkrail/ui/skeleton`); `AttentionDot` via
   `@/components/AttentionDot`; `RunningIcon` via `@/components/RunningIcon`; `CustomIcon`,
   `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the
   `QuietScrollEdges` type via `@/components/QuietScrollArea`; `useNow()` via `@/components/useNow` (the

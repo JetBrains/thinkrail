@@ -1,5 +1,5 @@
 import type { GitDiffScope, ReviewAnchor, ReviewComment } from "@thinkrail/contracts";
-import { anchorLabel, type ReviewThread } from "@/resources";
+import { anchorLabel, type ReviewThread, threadLabel } from "@thinkrail/resource-renderers";
 
 export type ReviewSurface = { kind: "file" } | { kind: "diff"; scope?: GitDiffScope };
 
@@ -53,28 +53,9 @@ export function lineRef(comment: ReviewComment): string {
 export function statusLabel(
 	comment: Pick<ReviewComment, "status" | "anchorState" | "stale">,
 ): string {
-	if (comment.status !== "resolved" && comment.status !== "dismissed") {
-		if (comment.stale) return `${comment.status} · stale`;
-		if (comment.anchorState === "outdated") return `${comment.status} · outdated`;
-	}
-	return comment.status;
-}
-
-export function threadLabel(t: Pick<ReviewThread, "status" | "anchorState" | "stale">): string {
-	if (t.stale) return `${t.status} · stale`;
-	if (t.anchorState === "outdated") return `${t.status} · outdated`;
-	return t.status;
-}
-
-export function outdatedReason(anchor: ReviewAnchor | null | undefined): string {
-	const kinds = new Set((anchor?.selectors ?? []).map((selector) => selector.kind));
-	if (kinds.has("textQuote")) {
-		return "The file changed or is gone, and this comment's text was not found again; it keeps its original snapshot.";
-	}
-	if (kinds.has("region") || kinds.has("structural") || kinds.has("lineRange")) {
-		return "The file's bytes changed or it is gone; a position in an image, PDF or notebook cannot be re-verified, so the comment keeps its original snapshot.";
-	}
-	return "The file this comment was about is gone.";
+	return comment.status === "resolved" || comment.status === "dismissed"
+		? comment.status
+		: threadLabel(comment);
 }
 
 export type ReviewFlag = "draft" | "sent";
@@ -105,6 +86,33 @@ export function reviewFlagFor(
 	path: string,
 ): ReviewFlag | null {
 	return reviewFlags(comments).get(path) ?? null;
+}
+
+export function tabReviewPaths(tab: { path: string; before?: string | undefined }): string[] {
+	return tab.before === undefined || tab.before === tab.path ? [tab.path] : [tab.path, tab.before];
+}
+
+export function reviewFlagForPaths(
+	flags: ReadonlyMap<string, ReviewFlag>,
+	paths: readonly string[],
+): ReviewFlag | null {
+	let flag: ReviewFlag | null = null;
+	for (const path of paths) {
+		const next = flags.get(path);
+		if (next === "draft") return "draft";
+		flag ??= next ?? null;
+	}
+	return flag;
+}
+
+export function sameThreads(
+	left: readonly ReviewThread[],
+	right: readonly ReviewThread[],
+): boolean {
+	return (
+		left.length === right.length &&
+		left.every((thread, index) => JSON.stringify(thread) === JSON.stringify(right[index]))
+	);
 }
 
 export function fileThreads(

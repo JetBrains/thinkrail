@@ -1,7 +1,7 @@
 import type { ExtensionCatalogEntry } from "@thinkrail/contracts";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { useEffect, useState } from "react";
-import { LoadingRegion } from "@/components/Skeleton";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
 

@@ -14,8 +14,9 @@ tags: [ui]
 The layout-agnostic, store-driven feature views. A panel fills its container and never knows its
 arrangement (so the mobile shell is an additive layer, not a rewrite).
 
-Changes and Review keep their fixed toolbars outside a panel-owned `components/QuietScrollArea`; Projects,
-Files, and Specs expose content for the shell-owned scroll wrapper described in `shell/SPEC.md`.
+Files (both modes) and Review keep their fixed toolbars outside a panel-owned `components/QuietScrollArea`
+(Files through `RememberedScrollArea`); Projects and Specs expose content for the shell-owned scroll wrapper
+described in `shell/SPEC.md`.
 `TerminalInstance` wraps xterm with `QuietScrollFrame`, which skins xterm's descendant custom scroll control
 without shrinking its hit target; top/bottom state comes from xterm's public `buffer.active.viewportY/baseY`
 and `onScroll`/`onWriteParsed` API rather than pretending its non-native viewport has DOM scroll metrics.
@@ -219,7 +220,34 @@ treatment.
   cached push is correctly treated as the read baseline. Only explicit `terminal.close` kills a PTY, with the existing busy-shell confirmation; confirming a force-close retains
   the active request until it settles (the dialog may close, but a second request cannot orphan it), failures
   surface to the user, and an authoritative catalog removal dismisses a now-stale confirmation instead of
-  leaving a modal for a terminal another client already closed. Also `FileTree`, `SpecsPanel`, `ReviewPanel`,
+  leaving a modal for a terminal another client already closed. Also `FilesPanel` (the **Files** tool: a
+  fixed panel-header row with an **All | Changed** `ToggleSegment` pair — `Changed` carries the changed-file
+  count when non-zero — over `FileTree` or `ChangesPanel`; the mode is app-wide, session-only,
+  `store.filesMode`, default All, and `requestChangesView` / `revealChanges` reveal Files and select Changed
+  in one store write. `FilesPanel` owns the single `git.status` read (`useGitStatus`, scope-keyed, including
+  the unknown-commit scope fallback) and feeds `ChangesPanel` and the **All** marks from it, so count, marks
+  and the Changed list cannot disagree. **All** follows VS Code's Explorer: the plain tree plus marks derived
+  once by the pure `changesModel.buildChangeMarks` — a changed file shows its name and a trailing
+  `M`/`A`/`U`/`R` letter in the status colour (modified amber, added/untracked green, renamed blue; the one
+  `chat/planView.statusLetter`, shared with the Changes review tab and plan rows, so untracked reads `U`
+  and added `A` everywhere); every
+  ancestor folder, expanded or collapsed, shows its name and a dot in one amber "contains changes" colour
+  (a compact row as a whole); deleted files are neither shown nor mark folders, as in VS Code. Git-ignored
+  entries (the host's `FileNode.gitignored` — for a compact row, that of the deepest directory it
+  represents — and everything inside them) render in `text-subtle`. The
+  active file or diff tab (`selectActiveFilePath`) gets the selected row look, and when it changes while All
+  is showing its folders expand (and stay expanded) and it scrolls `nearest` into view; on return All
+  reveals only if the active file differs from the persisted `seenActivePath`, and then skips the scroll
+  restore so the two cannot fight. Auto-reveal never switches the side tab or the mode. Clicks still open
+  the editor. A failed first status read shows no marks; a failed refresh keeps the last ones, like the
+  Changed list. The tree's look is remembered per workspace across reloads (`store.filesTreeByWorkspace`:
+  All expanded folders, Changed-tree collapsed folders shared by every scope, scroll per view through
+  `RememberedScrollArea` — a Changed view's scroll belongs to its scope and compare target, so changing
+  either starts at the top), persisted by the `filesTreeState` module (native stable preferences, else
+  localStorage under a host-qualified key; hydrated from `main.tsx`, debounced writes plus a `pagehide`
+  flush; windows share it, last write wins, no live sync). A **Collapse all folders** `HeaderIconButton` at the
+  right of the switch row collapses All, or — only in Changed's Tree view with at least one change —
+  every changed-tree folder (`changeTreeFolderPaths`)), `FileTree`, `SpecsPanel`, `ReviewPanel`,
   `ChangesPanel` (the changed files under a fixed **panel-header row** — `h-panel-header-row`
   (`--panel-header-row-height`, currently 28px), shared structural geometry with workbench Group Headers
   and the chat header, not a value pinned here — that says **what** is being diffed via the
@@ -230,13 +258,11 @@ treatment.
   row carries the shared **`ChangeRowActions`** menu. The row wrapper paints the complete hover/selected
   band, including the trailing menu slot; its inner open-file button remains transparent so that band
   cannot look clipped before the menu),
-  `FilePane` and `DiffPane` as resource-registry dispatchers, the bundled lazy renderers under
-  `panels/resources`, plus lazy `TerminalInstance`. Monaco's desktop-file plumbing — editor worker, curated
-  reader contributions, Shiki adapter/languages, local loader, sole token-driven `EDITOR_THEME`, and
-  `[data-theme]` re-theme observer — lives once in `monacoSetup.ts`; Pierre's lazy workbench provider owns its
-  shared worker pool and CSS-variable theme.
+  `FilePane` and `DiffPane` as resource-registry dispatchers over [[module-resource-renderers]] (the bundled
+  lazy renderers, Monaco's desktop-file plumbing and Pierre's provider live there), plus lazy
+  `TerminalInstance`.
   The slim header view-toggle segment (the ordered resource
-  candidates, `Split|Inline`, `List|Tree`) is the shared `ToggleSegment` — whose active segment reuses the tab
+  candidates, `Split|Inline`, `List|Tree`) is the shared `@thinkrail/ui/toggle-segment` `ToggleSegment` — whose active segment reuses the tab
   grammar's `control-bg-selected` (below), never a container surface, so the selected fill survives the
   high-contrast themes where `container-elevated-bg` collapses onto the toolbar surface.
   The `ChangesPanel` secondary toolbar paints **no surface of its own**: like the right-panel tab strip
@@ -898,7 +924,7 @@ a project picker, the prompt hero, and the reused
   (`auth` module).
 
   Panels compose their own sub-panels
-  (e.g. side tools → `FileTree`/`ChangesPanel`, resource panes → registered bundled renderers) — an internal hierarchy.
+  (e.g. side tools → `FilesPanel` → `FileTree`/`ChangesPanel`, resource panes → registered bundled renderers) — an internal hierarchy.
   When a center group has no resource tab, the workbench asks panels for the empty surface as a persistent
   creation/orientation receipt rather than a generic placeholder: **“Workspace ready”**, the display name,
   `branch · from baseBranch`, and **“Files, chats, changes, and terminals are scoped to this workspace,”**
@@ -1284,10 +1310,9 @@ own section. The kebab menu (`plan-menu`, a
   reused by `NewWorkspaceDialog`; `ModelSelector`/`ThinkingSelector`, still mounted by
   `ModelsSettings`; `modelPicker`'s `AUTH_KIND_LABEL`, the one connection-kind vocabulary
   `ProvidersSettings` shares with the picker, and its `formatContext` plus `ProviderGlyph`, reused by
-  `VisibleModelsSettings`' rows; `Markdown`,
-  reused by `MarkdownPreview`; `TemplateEditorDialog`, reused by `TemplatesSettings`), `auth` (`LoginDialog`, mounted by
-  `ProvidersSettings` and `McpSettings`), `resources`, `lib`, `themes` (catalog + generic application contract),
-  `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`monaco-editor`, `shiki`,
+  `VisibleModelsSettings`' rows; `TemplateEditorDialog`, reused by `TemplatesSettings`), `auth` (`LoginDialog`, mounted by
+  `ProvidersSettings` and `McpSettings`), `@thinkrail/resource-renderers`, `lib`, `themes` (catalog + generic application contract),
+  `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`shiki`,
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
 
@@ -1309,7 +1334,7 @@ own section. The kebab menu (`plan-menu`, a
   resolves the registry for its intent and phone class, lazily mounts the selected candidate, and keeps
   `rendererId` plus opaque view state on the tab. The lazy implementation identity includes renderer id and
   phone class, so crossing the breakpoint swaps the code implementation and discards incompatible state.
-  Scroll-backed view state goes through the one `useScrollViewState` hook: the offset is saved when the
+  Scroll-backed view state goes through the renderers' one `useScrollViewState` hook ([[module-resource-renderers]]): the offset is saved when the
   scroller detaches and re-applied when a scroller attaches. A renderer may fill its scroller only after
   mount — the Pierre surfaces render nothing until their shared worker pool has initialized — so a
   restore the scroller cannot yet hold stays pending until its
@@ -1318,8 +1343,10 @@ own section. The kebab menu (`plan-menu`, a
   Two or more candidates become one ordered toggle whose ids are the test hooks. Threads whose selectors
   the selected renderer cannot place for the pane's view or diff intent remain visible in an unplaced
   strip; its action switches to the first candidate that advertises matching anchor geometry for that intent.
-  Bundled registration is a workbench-mount side effect, while renderer implementation imports stay lazy.
-- The singleton side-tool renderers are **Projects | Specs | Files | Changes | Review**. Their current
+  Bundled registration happens once in the shell's `AppResourceHost`, while renderer implementation imports
+  stay lazy.
+- The singleton side-tool renderers are **Projects | Specs | Files | Review** (the changed-files list is
+  Files' **Changed** mode, not a tool of its own). Their current
   location and local selection are supplied by the shell; Review exposes its store-derived pending-draft
   count as tab metadata. A renderer remains the same when its singleton moves to the opposite side.
 - **`ReviewPanel`** is the review sidebar (see [[submodule-server-reviews]] for the model) — **ONE screen, a per-file ACCORDION**: each row a path +
@@ -1345,7 +1372,7 @@ own section. The kebab menu (`plan-menu`, a
   as waiting) → **Resolved** (muted Done styling: primary check + struck hint text;
   the chat action reveals on hover — resolved is final, no reopen). No per-row status words — the section names the status; rows carry
   only the glyph, the clamped text, and the `L3` ref (+ an `outdated` eyebrow when the anchor died,
-  whose native tooltip — `reviewModel.outdatedReason`, shared with the thread card's label — says what
+  whose native tooltip — `outdatedReason` from [[module-resource-renderers]], shared with the thread card's label — says what
   could not be re-found, by the anchor's own selectors: text that was not matched again, a position in
   bytes that changed, or a whole file that is gone. The wire carries no cause, only the state, so the
   text and byte wordings both admit "or the file is gone" rather than claim a precision the client does
@@ -1504,7 +1531,16 @@ own section. The kebab menu (`plan-menu`, a
   uncommented file shows neither. There is no manual review mode to enter. Every send affordance (composer Send now, thread cards, sidebar rows/footer, tab
   Send all) goes through the one `reviewSend.ts` pair (`sendReviewComment`/`sendReviewBatch`: request
   → show the chat tab → toast on failure), and the panes integrate via the one **`useFileReview`** hook,
-  passing its anchor-keyed `worktree`/`base` surfaces through the registry props.
+  passing its anchor-keyed `worktree`/`base` surfaces through the registry props. The hook keeps a file's thread
+  arrays, and with them both surfaces, while their threads are unchanged (`sameThreads`): every review push
+  replaces the workspace's comment list, and rebuilding each open file's threads from it handed every mounted
+  renderer a new `review`. Monaco, which the compiler skips, re-rendered twice for one comment on another
+  file (`e2e/perf/reviewThreadIsolation.perf.ts` pins it at zero). The pair, the hook and
+  `SendReviewButton` take an optional chat session id: without it a send targets the last open chat (else
+  the file's pinned review chat); with it — a file shown in a chat tool card, whose `ResourcePreview` reads
+  the chat's scope — the host's explicit `sessionId` wins over the pinned chat, so feedback lands in the chat
+  that showed the file. The shell's `AppResourceHost` exposes exactly these (bound per call) as the
+  renderers' `FileReview` / `ReviewSend` host capabilities.
   A batch answers with EVERY session it touched (one per group), so a multi-file batch opens every chat
   it started and focuses the first — a chat the user never saw would still be an agent working on their
   comments. **Showing each chat forks on the result's `reused` flag:** a chat this send CREATED opens straight
@@ -1535,7 +1571,8 @@ own section. The kebab menu (`plan-menu`, a
   *paused* read. A visible `FileTree` directory probes while collapsed only as far as needed to identify
   its compact single-directory run; descendants below the run's deepest directory mount and read only
   when that compact row is expanded. No tick has to be threaded down as a prop.
-  Its users — `FileTree` (root + each visible directory chain), `ChangesPanel` (`git.status`),
+  Its users — `FileTree` (root + each visible directory chain), `FilesPanel` (`git.status`, via
+  `useGitStatus`, feeding both modes),
   `useWorkspaceSpecs` (`spec.graph`) — plus `FilePane`/`DiffPane`, which follow the same tick contract per
   open tab. Agent edits,
   terminal commands, and Finder changes all land without a manual step.
@@ -1562,9 +1599,10 @@ own section. The kebab menu (`plan-menu`, a
   would rather branch on it than close over the parameter; ignoring it — as `ChangesPanel` does, its `scope`
   being an object the key merely names — is expected. Refetches **preserve view state**: `FileTree` re-reads
   the root + the directory probes backing each visible compact row and expanded branch. Expansion lives
-  above individual rows and is keyed by every directory path a compact row represents, so shortening or
+  above individual rows (in the store, so it also survives remounts and reloads) and is keyed by every
+  directory path a compact row represents, so shortening or
   lengthening a chain cannot hide descendants that were visible before the refetch; vanished dirs drop out
-  via their parent. `ChangesPanel` re-reads
+  via their parent. `FilesPanel` re-reads
   `git.status` (list-only — the diff renders as a center resource, not under the list), `SpecsPanel`
   refetches without remounting (expansion survives), and `FilePane`/`DiffPane` re-read an
   open resource's content when the workspace ticked past its loaded tick (live while visible;
@@ -1743,7 +1781,8 @@ own section. The kebab menu (`plan-menu`, a
   newer reveal, or the pane unmounting withdraws its pending `reviewFocusRequest`, so a thread that mounts
   later never yanks the viewport to a finding nobody is waiting for. Each section receives only its own
   path's slice of the tab (scratch, kept keys, flags) behind `memo`, so a keystroke in one section's
-  composer re-renders that section, not its siblings; a stacked section whose body has natural height saves
+  composer re-renders that section, not its siblings — and inside it only the composer, because the renderer
+  surface and its annotations read scratch per slot ([[module-resource-renderers]]); a stacked section whose body has natural height saves
   no view state — only One-file and bounded renderers own a scroller; `changesView` defaults to **Tree**, and a
   file row is `change-item` in both views because it is the same thing. When the shown file leaves the
   scope (reverted, or the agent removed its change), One-file mode stays at that position rather than
@@ -1814,268 +1853,13 @@ own section. The kebab menu (`plan-menu`, a
   is chosen in the Changes header and is part of the tab's identity), the file / `+ −` totals with the
   viewed count, *Collapse all* / *Expand all*, and `Send review (N)` over the workspace's drafts.
 
-  **Wide rewrites wait behind a notice.** Source diffs run on the main thread, and that cost
-  tracks the number of changed lines, not the file size: a 10 MB all-added file diffs in ~0.1 s while ~10k
-  changed lines take over 20 s. Before mounting a renderer, `DiffSurfaceBody` estimates the changed lines
-  (`largeDiff.ts`: the linear multiset difference of the two sides' lines). Above
-  `LARGE_DIFF_CHANGED_LINES` (2000, about a second of diffing), or when an order-sensitive check cannot
-  finish within 50 ms / 2000 edits, it shows `diff-too-large` with **Show diff anyway** (per surface mount)
-  and, when a worktree-backed modified side exists, **Open file** into the desktop editor. A one-sided
-  diff (added or deleted file) is never guarded: it costs no diffing. The bounded check closes the multiset estimate's
-  blind spot for reordered lines. Both guards show “This diff is too expensive to show automatically”
-  without a line count; the guard returns only whether automatic rendering should wait.
+  **Wide rewrites wait behind a notice.** `DiffSurfaceBody` mounts its renderer through
+  [[module-resource-renderers]]' `GuardedRendererDiff` (the policy and its thresholds live there), adding
+  **Open file** into the desktop editor to the notice when a worktree-backed modified side exists.
 
-  Bundled candidates are registered once from `panels/resources/register.ts`: `thinkrail/code` renders
-  every source diff with Pierre `FileDiff` and supports copy, layout, and whitespace controls;
-  `thinkrail/markdown` supplies `RenderedDiff`, and `thinkrail/binary` reports both sides' byte sizes. Rich
-  renderers omit those controls, except CSV, JSON, and notebook diffs support modified-source copy.
-  `thinkrail/lfs` claims the host's `application/vnd.git-lfs` text (a file that *is* a Git LFS pointer,
-  whatever its extension) above the code renderer and shows a card — "Stored in Git LFS", size, object id,
-  `git lfs pull` hint — in the view and one card per side in the diff, because three lines of pointer
-  protocol in a Monaco editor explain nothing about why a `.png` has no image; Source stays one toggle
-  away, and the renderer places no anchors, so a pointer's threads live in the unplaced strip.
-  `RenderedDiff` keeps its worker-isolated htmldiff merge,
-  loading/error states, and token styling, but advertises no diff anchors: both sides' threads stay in the
-  pane's unplaced strip, **Show in Source** selects the code renderer, and diff authoring is available only
-  in Source. It is selected by registry match rather than a path branch in the pane. Scopes whose modified
-  side is historical receive no review surface or mutation actions.
-
-  **The rendered diff focuses on its changes the way Pierre does.** The merged document is parsed once
-  and a prose-root block is *changed* when it is or contains `ins`, `del`, or a `[data-diff-node]`
-  element, **or** when its exact rendered HTML differs from the before unit it aligns with
-  (`changedUnits`). Alignment is positional: the before and merged unit sequences (blocks, then each
-  list's items) are matched one-to-one by an LCS over their attribute-stripped HTML (`shapeKey`), so an
-  identical twin elsewhere in the document cannot vouch for a block, swapping `open` between two
-  otherwise identical `<details>` flags both, and a unit with no aligned counterpart stays visible. The
-  second clause exists because htmldiff keys ordinary tags by tag name alone and emits the *after*
-  tokens for equal runs: a ticked task checkbox, `<details>` → `<details open>`, a list's `start`, or
-  an image's `alt` never earn a mark, so without it they would collapse as "unchanged" and the empty
-  notice would claim an identical preview. Such a block is kept visible in its after state (unmarked,
-  since the merge has nothing to highlight). Runs of unchanged
-  blocks collapse with git hunk semantics (`renderedDiffFocus.focusSegments`):
-  `FOCUS_CONTEXT_BLOCKS` (2) blocks stay visible on each side of a change, a leading or trailing run keeps
-  context only on the side that touches one, and a run of a single block is never hidden, because an
-  expander that replaces one paragraph saves nothing and costs a click. The same rule applies one level
-  down to the items of a changed `ul`/`ol` when at least one item changed — a markdown spec routinely
-  carries a thirty-bullet list with one edited bullet — while a list whose only difference is its own
-  attributes, and tables, quotes, and nested lists, render whole; ordered items keep their number
-  (`start` and an explicit `value` are read with HTML's integer-parsing rules, so the invalid values
-  React leaves in the DOM — `start=""`, `value=""` — fall back to `1` / the running count exactly as
-  the browser does; a `value` wins, the rest count on) so hiding items never renumbers the rest.
-  Each hidden run is one `rendered-diff-collapsed` button naming the count and, for block runs, the last
-  heading it hides (the section the visible content below it belongs to — the analogue of Pierre's
-  line-info separators).
-  Clicking expands the run in place, one-way; expansion is component-local and positional, so a live
-  refresh keeps an expansion whose run still starts at the same position and resets the rest. Nothing
-  offers the whole merged document at once: Source and the file preview already do. A merge in which no
-  block changed — front matter is stripped before rendering, and whitespace or HTML comments don't
-  render — shows the `rendered-diff-empty` notice pointing at Source and collapses the document to a
-  single expander rather than presenting an unmarked full document as a diff. Visible blocks are
-  re-created from the parsed elements (tag, attributes, `innerHTML`), never wrapped, so the DOM the
-  prose styles target is unchanged; the boolean attributes the sanitizer lets through (`details[open]`, a
-  standalone checkbox's `checked`/`disabled`) are mapped to `true` because React drops an empty-string
-  boolean.
-
-  `thinkrail/image` renders host-backed byte URLs with fit, natural-size, button/wheel zoom, intrinsic
-  dimensions, and byte size, always on the `.media-backdrop` transparency checkerboard (the view's image
-  and both diff frames; the difference blend keeps a flat canvas so the checker cannot leak into the
-  subtraction), because on a solid dark canvas a dark logo on a transparent PNG is indistinguishable from
-  an image that failed to load. A drag over the rendered intrinsic box produces one normalized `region`
-  selector; placed threads project that selector back to outlined rectangles and numbered markers, with
-  cards below the image. Its diff defaults to 2-up and also offers swipe, onion-skin, and difference-blend
-  modes. Two-up anchors directly to the side drawn on; overlaid modes expose the active old/new anchor space
-  explicitly, so base and worktree coordinates are never translated. An absent side is a labelled empty
-  frame. Image zoom, rendered intrinsic aspect bounds, region rectangles, swipe clipping/divider position,
-  and onion opacity are measured geometry and therefore the bounded exception to the no-inline-style rule:
-  those values alone are inline,
-  while every colour, border, spacing, and control skin remains a token utility.
-
-  `thinkrail/svg` is the higher-ranked SVG candidate while Source remains available through
-  `thinkrail/code`. Its `sandbox=""` iframe receives a minimal `srcdoc` document whose only image is a
-  percent-encoded `data:image/svg+xml` URL; SVG source never enters the document's HTML stream. The frame
-  has no script or same-origin capability and a CSP of `default-src 'none'; img-src data:; style-src
-  'unsafe-inline'`, so SVG scripts and external references remain inert. The document receives only
-  resolved workspace/content background and foreground semantic token values and is rebuilt via
-  `onThemeSwap` from `@thinkrail/ui/theme`. A drag over the frame authors the same normalized `region`
-  selector a raster image does, measured against the intrinsic size parsed from the root's
-  `width`/`height`/`viewBox` (the frame is sized to that aspect, so the contained rectangle is the frame).
-  It never degrades to a whole-file draft: an earlier revision did (`selectors: []`, label `file`, pending
-  a source-span mapping), and a dragged rectangle that reached the agent as "the whole file" read as lost
-  coordinates. SVG element source spans are still not mapped, so the anchor is geometry, not a line range;
-  the fractions are of the SVG's root viewport, and the send package tells the agent to invert the
-  viewport-to-viewBox transform (viewBox origin plus `preserveAspectRatio`) to find the elements under
-  them. Its diff uses the same four visual modes and two anchor spaces as raster images; each side's
-  overlays project through its own object-contain rectangle, and only measured aspect bounds plus
-  swipe/divider/opacity overlay geometry use inline values.
-
-  `thinkrail/csv` parses CSV/TSV locally with an RFC-4180 state machine, including escaped quotes, CRLF, and
-  quoted fields spanning source lines. The delimiter is **inferred from the shape of the first twenty
-  non-empty records** (`sniffDelimiter`, BOM ignored): a candidate among `,` `;` `\t` `|` qualifies only
-  if it splits every sampled record into the same number of fields, at least two; comma wins whenever it
-  qualifies, otherwise the single widest qualifier, otherwise comma — so a header value that happens to
-  contain semicolons never reclassifies a comma file, while a locale export of `id;name;score` is a table
-  and not one column; `.tsv` is always tab. A diff samples the modified side first and falls back to the
-  original, so both sides parse with one delimiter. The view keeps the header fixed and virtualizes data rows with
-  `react-virtuoso`. A selected cell or shift-extended rectangle emits the selected rows' raw-file
-  `lineRange` plus `structural { scheme: "table-cell", ref: "<row>:<column>" }`, with header row zero; a
-  missing cell, or a coordinate whose row no longer intersects the host-reanchored line range, is omitted
-  from actual placement rather than guessed. The unified diff aligns complete raw-row keys with
-  `diffArrays`, pairs equal-length remove/add runs as changed rows, and highlights only differing cells;
-  unmatched rows use success/error subtle surfaces. Diff selections use modified source lines except removed
-  rows, which remain in the base anchor space.
-
-  `thinkrail/json` matches `*.json` and `*.jsonc` only. Its scanner is **JSONC-tolerant by design** —
-  `tsconfig.json`, `.vscode/*.json` and most editor settings files carry comments and trailing commas,
-  and a tree that refused them would send exactly those files to Source — but it is honest about it:
-  the document records the `dialect` it needed, and a `.json` file that only parsed as JSONC shows a
-  `json-dialect` notice above the tree (a `.jsonc` file does not, because there it is the point); a
-  file that is not even JSONC renders an explicit `json-invalid` notice pointing to Source instead of a
-  blank pane, in both the view and the diff. The scanner builds the parsed value and an RFC-6901
-  pointer-to-source-line index in one pass; duplicate object keys resolve to the last occurrence,
-  matching JSON value semantics. Selecting a non-root node emits
-  its mandatory `lineRange` plus `structural { scheme: "json-pointer", ref }`; a pointer absent after an edit,
-  or one now naming a node outside the host-reanchored line range, is reported unplaced. The collapsible
-  unified diff comes from a `jsondiffpatch` instance with move detection
-  and stable object hashes, tinting added/removed/changed/moved nodes and showing primitive replacements as
-  old → new. Removed nodes and comments stay on `review.base` with base scanner lines; all other selections
-  use the modified document and `review.worktree`. Invalid source renders no tree, leaving Source as the
-  alternate candidate.
-
-  `thinkrail/notebook` accepts nbformat-4 JSON and reuses the tolerant positional JSON scanner to bind every
-  rendered cell to its raw cell-object line range. Nbformat 4.5 ids are the `ipynb-cell` structural ref;
-  older notebooks use `index:<zero-based>`. Markdown cells use the shared Markdown parser without raw HTML.
-  Its notebook component map (`notebookMarkdownComponents(resource)`, built per notebook because image
-  resolution is relative to the notebook's own path, as in Jupyter) permits base64 PNG/JPEG/GIF/WebP/AVIF
-  images in the app document, routes SVG data images through the empty-sandbox `NotebookFrame`, loads
-  **relative** images from the host `/files` route through the same injected byte-URL composer the
-  markdown preview uses (a traversal above the worktree is inert text, never a request), and renders
-  links plus every remote image URL as inert text — a notebook's `![plot](figures/x.png)` is repository
-  content, a third-party URL is not. Notebook language metadata must resolve through the shared Shiki catalog; missing
-  metadata defaults to Python and unknown values render as plain text. ANSI is removed from stream and error
-  output. MIME bundles choose image (PNG, JPEG, GIF, SVG), HTML, JSON, then plain text. SVG output stays a
-  data image inside the inert frame document.
-  HTML output uses the same sanitized empty-capability document as the HTML renderer. Cell review emits both
-  the raw line range and structural ref, keeps cards below the resolved cell, reports only actual placements,
-  and hash-stamps an open composer. Diffs align ids first and exact normalized source second. Remaining runs
-  are aligned in order by bounded line-token similarity; no character-level all-pairs diff is used. Changed
-  source uses one provider-backed unified Pierre cell diff, image output reuses visual comparison modes, text
-  output uses Pierre, and HTML/JSON output stays side-by-side. Original cell selectors remain in `review.base`;
-  neither side is translated.
-
-  `thinkrail/pdf` matches byte PDFs and lazy-loads both pdf.js and its Vite-emitted worker. Placement is not
-  reported until page-count metadata is known. A page-region thread is placeable exactly when its one-based
-  page exists, independent of whether that page currently owns a canvas. A focused page is forced into the
-  render window and focus is consumed only after its region card mounts. The render window is the visible
-  pages plus two pages on each side. Work leaving it is cancelled; canvases and bitmaps are released, and
-  diff object URLs are revoked. Composer identity uses document identity plus page, never zoom. The toolbar's
-  current page is the first visible page (the navigation target until any page reports visibility), so it
-  follows scrolling as well as navigation; that page and the zoom are written to tab view state when the
-  view unmounts, like the other scroll-restoring renderers. PDF diffs use one synchronized page sequence: each page pair
-  starts in 2-up and can switch among the shared swipe, onion, and difference modes, with an absent side
-  represented by an explicit empty page frame.
-
-  `thinkrail/html` parses source into a document before previewing it in an empty-capability `sandbox=""`
-  iframe. The sanitizer removes active, navigational, embedding, and form elements; strips event handlers and
-  non-`data:` resource URLs; and turns anchors into inert text-bearing elements. Styles remain. Notebook HTML
-  output uses this same sanitizer. The injected CSP is exactly `default-src 'none'; img-src data: blob:;
-  style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'; object-src 'none'; frame-src
-  'none'; child-src 'none'`. The diff is the shared visual frame constrained to 2-up sandboxed documents only.
-  It advertises no anchor geometry, so HTML threads remain in the pane-owned unplaced strip and Source is the
-  only authoring candidate.
-
-  Pierre parses the two complete text sides (`absent` → `null`) with the current ignore-whitespace value,
-  uses the `thinkrail` CSS-variable Shiki theme, word-level inline changes, collapsed unchanged regions with
-  line-info hunk separators, and split/unified layout; phone-class viewports force unified and hide the
-  Split/Inline segments, so no control promises a layout the viewport refuses. The collapse threshold
-  (`COLLAPSED_CONTEXT_THRESHOLD`, 3 lines) is git's own default hunk context (`-U3`), so what Pierre
-  keeps visible around a change is what a reviewer already expects from `git diff`, and the same number
-  feeds `renderedDiffLineNumbers`, which decides whether a thread's end line is on screen or parked in the
-  unplaced strip — one constant, so the two can never disagree. The focus reveal (`usePierreFocus`)
-  installs a subtree `MutationObserver` plus a `ResizeObserver` only while a focus request is pending
-  and disconnects both the moment the card is revealed; it is not a standing listener, so Pierre
-  re-rendering on every annotation change costs nothing once focus has settled. A diff whose
-  two sides are identical (a file that left the change set after an out-of-band commit) shows an explicit
-  `diff-empty` notice above Pierre's surface instead of a blank pane. The lazy Pierre file/diff modules
-  mount `PierreProvider` only when their surface renders; it hands Pierre's `WorkerPoolContext` the module
-  singleton (`getOrCreateWorkerPoolSingleton`, four module workers from `@pierre/diffs/worker/worker.js`)
-  and **never terminates it**: the pool is created the first time any code surface renders and then lives
-  for the page. Pierre's own provider tears the pool down the moment its last instance unmounts, and the
-  virtualised review list reaches that moment on every jump or fast scroll into files that have not
-  loaded yet; each rebuild spawned the workers again, re-fetched the WASM, theme and grammars, dropped
-  every highlighted AST, and painted nothing until initialised — the stacked view's "loading forever".
-  Four idle workers are the price of never paying that again; the list mounts a handful of sections at a
-  time, so four keep up. The phone code-file implementation is Pierre `File` with the same theme and
-  review grammar; desktop files alone load Monaco.
-
-  **Pierre surfaces are virtualized.** Unvirtualized Pierre puts every line in the DOM (≈400k nodes for a
-  100k-line file), which WebKit — the desktop shell's engine — cannot style or lay out, hanging the app.
-  `pierreVirtualizer.ts` owns one `PierreVirtualizer` (a core `Virtualizer` subclass) per surface,
-  provided through `VirtualizerContext` so `FileDiff`/`File` build their virtualized instances, and set up
-  from the same ref callback as `useScrollViewState` so scroll restoration keeps working. The scroller's
-  first child is the content container and must give the Pierre element a non-zero height from the first
-  frame (`flex-1` in a `min-h-full` column): Pierre's scroll anchor treats a zero-height file as lying
-  above the viewport and jumps to its end once the height lands. The scroller opts out of browser scroll
-  anchoring (`overflow-anchor: none`, as Pierre's own `CodeView` does) because Pierre corrects scroll
-  itself. Annotation children stay in the light DOM but lay out only inside the render window, so the
-  focus reveal first asks the virtualizer to center the thread's end line (`revealLine`, through the
-  connected instance's `getLinePosition`) and then centers the card once it renders. A freshly opened
-  diff composer gets the same treatment — Ask agent anchors it at the hunk's end line, which for a tall
-  hunk lies outside the window — and `ReviewComposer` defers its initial focus until its textarea has a
-  box, since focusing an unrendered element is a silent no-op. Restored composers keep the restored
-  scroll position instead.
-  A virtualizer windows only against a real scroller: a stacked Changes section at natural height is as
-  tall as its content, so its virtualizer "sees" every line and renders them all (≈72k rows for a
-  100k-line added file, freezing the app once it lands). The code renderer therefore declares
-  `boundedDiff: "large"`, and a stacked section above `VIRTUALIZED_DIFF_LINES` (1000, by the larger
-  text side's line count, including unchanged context) gets the same bounded `60vh` viewport as
-  `"always"` renderers and owns its scroller. Counting source lines keeps expansions virtualized even
-  when a large file has only a small edit, and covers untracked files without git's missing counts.
-  The same threshold gates virtualization in every host: `DiffSurfaceBody` passes `virtualize` only
-  above it, and below it `PierreDiff` withholds its virtualizer so the plain `FileDiff` renders every
-  row, as before virtualization. Virtualizing small diffs bought nothing and cost two failures. A
-  virtualized instance's hydrate measures its offset (forcing layout) while its container is still
-  empty; in the stacked list, whose end sits at maximum scroll so the last header can reach the top,
-  that collapsed layout clamps `scrollTop`, and Virtuoso's size correction compounds the jump until the
-  reviewed section leaves the render window. And `@pierre/diffs` 1.5.1's virtualized in-place column
-  re-render can drop annotation rows that the instance still records, leaving a just-opened composer
-  slotted nowhere until something forces a `rerender()`. Large diffs still carry that annotation risk.
-
-  **Virtualized scrolling is tuned for chunk cost.** Pierre lays each code column out as a subgrid with
-  one item per row, so every render-window shift relays out the whole rendered grid, and the cost of a
-  shift tracks the rows inserted, not the rows kept. Split layout pays it twice whenever the new rows
-  carry an annotation (hunk toolbars, threads): Pierre's `ResizeManager` pairs each annotation row across
-  both columns with a forced `getBoundingClientRect` and then syncs the pair's
-  `--diffs-annotation-min-height`, forcing a second layout. With Pierre's 50-line chunks that was a
-  ~90 ms long task per shift under the Chromium profiler and ~80–95 ms hitches in WebKit.
-  `usePierreVirtualizer` therefore passes `hunkLineCount: 5` and a 400 px overscroll (Pierre defaults: 50
-  lines, 1000 px), measured with wheel flings over a 6k-line, 150-hunk diff: inline and added-file
-  scrolling drop from 12–34 to 2–3 dropped frames in WebKit, and the worst split hitch roughly halves
-  (~45 ms). Split scrolling over dense hunk toolbars still drops frames in WebKit; without the toolbars
-  it is smooth, and `overflow: "wrap"` (which skips the pairing because both sides share grid rows) helps
-  moderate scrolling but not flings. The virtualizer's `lineHeight` metric is the real row height:
-  `.pierre-code-surface` rounds `--diffs-line-height` to whole pixels (`s11` × `default` = 14 px,
-  matching Monaco's rounding), and `codeLineHeight()` derives the same number from the tokens. Against
-  Pierre's 20 px default estimate the scroll height of a 20k-line file started ~40% too tall and shrank
-  while scrolling as rows were measured. Rejected after measurement: mirroring an invisible spacer onto
-  the opposite split column (it cut paint area but not dropped frames in either engine) and a larger
-  overscroll (about twice the dropped split frames at 5-line chunks, and no fewer blank frames in fast
-  flings).
-
-  **`PierreScroller` keeps the compositor from showing unpainted rows.** WebKit (the desktop shell)
-  scrolls overflow off the main thread: a scrollbar drag in a 20k-line file jumps ~2,600 px per step,
-  and each step showed one fully blank frame before the main thread painted the new window. No
-  overscroll covers that, and painting Pierre's spacer elements like rows did not help: the blank was
-  unrasterized space, not the spacers. The scroller therefore keeps native scrolling (scrollbar, wheel,
-  keys, momentum, autoscroll) but holds a sizer measured to the content height, a `sticky` viewport
-  clipped to the scroller's height, and the content translated by `-scrollTop` on the main thread.
-  Off-thread scrolling moves only the sizer, so the pinned viewport keeps showing the last painted rows
-  until the main thread moves the content in the same frame it renders the window — a fast drag lags,
-  never blanks. Pierre corrects the scroll position inside its rAF pass and `useScrollViewState`
-  restores it from a ResizeObserver, both after that frame's scroll event, so the scroller's own
-  `scrollTo` and `scrollTop` re-sync the transform synchronously; otherwise Pierre would measure rows
-  against a stale offset. Natural-height stacked sections run the same structure without scrolling:
-  the viewport's height is read back from the scroller after the sizer is set, so it never feeds the
-  content's own height.
+  The bundled candidates and their behavior (code, markdown, binary, LFS, image, SVG, CSV, JSON, notebook,
+  PDF, HTML, Pierre virtualization) are owned by [[module-resource-renderers]]; the panes only dispatch,
+  persist view state, own the unplaced strip, and supply `hunkActions`.
 
   Mutable scopes (`branch`, `uncommitted`, `pinned`) receive `hunkActions` only after the current welcome
   advertises `CHANGE_MUTATIONS_PROTOCOL_VERSION` and the diff metadata carrying both hashes has landed.
@@ -2101,7 +1885,8 @@ own section. The kebab menu (`plan-menu`, a
 - **Changes: List | Tree.** A header toggle (`store.changesView`, app-wide — persisted in the store, not
   per workspace, so it survives workspace switches) switches the flat **List** and a folder **Tree**
   (`ChangesTree`), both built from the same `git.status` list. The Tree is styled exactly like the
-  Files tree (shared `TreeRow`); folders **default expanded** (change sets are small), and a
+  Files tree (shared `TreeRow`); folders **default expanded** (change sets are small) and the ones you
+  collapse are remembered per workspace for every scope (`filesTreeByWorkspace.changedCollapsed`), and a
   single-directory run is one slash-joined compact row (based on the changed-file tree, regardless of
   unchanged siblings on disk), matching `FileTree`. **Status is shown on the file name, not a letter glyph**
   (the git-decoration convention — `changesModel.statusNameClass`, shared by both views):
@@ -2165,6 +1950,17 @@ own section. The kebab menu (`plan-menu`, a
   would overflow the chip **invisibly to the layout** while spilling over the buttons on screen, so the
   basename pairs it with `max-w-full`: flex never steals the name's width, but max-width still clamps it to
   the row, which is also why the e2e pin measures the *chip's* `scrollWidth`, not the header's.
+- **A diff tab can compare two workspace files.** `DiffTab` is a union — `GitDiffTab` (a git scope with its
+  loaded sides) or `FileComparisonTab` (a `before` path and no git fields at all) — and so is its persisted
+  `LayoutDiffTab`; `isFileComparison(tab)` is the one predicate. `openFileComparisonInTab` opens a comparison
+  (identity `compare:<before>:<path>`, named `before → after`), and `DiffPane` forks on it: a comparison renders
+  [[module-resource-renderers]]' `ResourcePreview` (both files read live from disk, no revert/hunk actions,
+  comments on the two files' worktree anchors, Split/Inline, renderer and view state on the tab) instead of the
+  git-backed `DiffSurface`. A comparison has no scope to misread, so the compiler finds every git-only reader
+  (`GitDiffPane`, the Changes panel's active-diff match, `updateDiffTabContent`, whitespace, reload hydration
+  — which installs a comparison without a `git.diffFile` read); an earlier revision gave it a placeholder
+  `uncommitted` scope and left each reader to remember a `before` check. Its review flag and the Review
+  panel's active path cover both files (`tabReviewPaths`).
 - **File tabs use the same renderer dispatch as diffs.** `FilePane` describes the first `fs.readFile`
   metadata (provisionally text before it lands — and permanently text against a host that predates
   `RESOURCE_META_PROTOCOL_VERSION` and never sends `meta`, which is that host's own legacy surface, so no
@@ -2178,73 +1974,6 @@ own section. The kebab menu (`plan-menu`, a
   `MarkdownPreview` retains the document typography, frontmatter stripping, alerts, Mermaid rendering,
   source-line stamps, review commenting, and bounded reading measure described above. These are renderer
   behavior, not dispatch policy.
-- **Rendered markdown navigates.** In the preview, links + images resolve against the file's own path
-  (via `markdownLinks`, passed as the `a`/`img` renderers): a **relative link** opens the target file in
-  the **preview** tab through the shared **`openFileInTab`** (the same flow `FileTree` uses) — following a
-  link is browsing, so the slot is reused rather than promoting the source doc the way VS Code does; an
-  accepted file target is a button styled as document-link text, never an anchor with a raw relative
-  `href`, because that URL is not a ThinkRail route and native navigation would escape to the Main page;
-  URL pathnames are decoded once and both path-separator forms are normalized before resolution, while
-  malformed encoding and traversal above the worktree root produce an inert control instead of opening the
-  wrong file; the slot is the slot, whatever
-  the open came from — an **in-doc `#` link**
-  scrolls the preview (headings carry slug ids from the in-repo `remarkHeadingIds` transform), an
-  **external** link opens a new tab, and a **relative image** rewrites to the host **`/files/…`** route
-  (through `resourcePane.resourceBytesUrl`, injected into `documentComponents` so the markdown layer never
-  reaches for the transport itself). A cross-file link's `#fragment` is not yet followed (opens the
-  file only).
-- **Document markdown renders sanitized raw HTML; chat markdown does not.** READMEs place logos and
-  banners with `<p align="center"><img src width>`, float images with `<img align="right">`, fold
-  sections in `<details>`, and ship theme-aware logos as `<picture><source media srcset>`; shown as
-  literal tags, those documents lose exactly their most visible content. `markdownHtml.documentRehypePlugins`
-  runs `rehype-raw` and then `rehype-sanitize` on GitHub's `defaultSchema` with three deltas: the alert
-  element the in-repo remark transform emits (`mdalert` + `variant`) is allowed and `<source>` keeps
-  `srcset`/`media`/`type`/`sizes`. GitHub's **`user-content-` clobber prefix stays on** every `id`/`name`
-  (a document must not be able to mint `window.MonacoEnvironment` or shadow a global by naming an
-  element after it), so in-document `#slug` links resolve through `scrollToAnchor`, which tries the
-  prefixed id first and the bare slug second. Everything active or stylistic — `script`, `iframe`,
-  `style`, event handlers, inline `style`, `javascript:` URLs — is dropped, and `data:` images with it
-  (the schema's `src` protocols are http/https/relative). Raw `<img>`/`<source>` go through the same
-  relative-URL rewrite as markdown images, so a README logo loads from the worktree; `srcset` is parsed
-  with the HTML candidate grammar (`srcsetCandidates`: commas inside URLs, descriptor parentheses) and,
-  because neither the sanitizer nor react-markdown protocol-checks `srcset`, every candidate is
-  re-admitted only as a worktree URL or an `http(s)`/protocol-relative one — `javascript:`/`data:`
-  candidates are dropped, as is a bare `src` of those kinds; `width`/`height` survive, and
-  `align="left|right"` maps to a float utility rather than a presentational attribute. The source-line
-  stamps for commenting are added **after** sanitizing, so the sanitizer can never strip them. The chat
-  `Markdown` primitive is untouched: model output is not a document the user authored.
-- **Desktop file source wraps at the synchronized file column.** `MonacoEditor` uses `fileLineWidth` as
-  `wordWrapColumn` (40–240, default 120). The independent `fileLineWidthBounded` default maps to Monaco
-  `wordWrap: "bounded"`, wrapping sooner at the mounted file pane; off maps to `"wordWrapColumn"`, preserving
-  the selected column with horizontal scrolling in a narrower pane. Broadcast changes update a mounted
-  desktop file editor. Pierre diffs and phone files own horizontal overflow and do not consume this Monaco
-  preference. Rendered Markdown and rendered Markdown diffs retain their separate ~78ch reading measure.
-- **The desktop Monaco surface is a reader, not a language workstation.** Its file-only options keep the
-  configured wrapping, generated code typography, minimap/overview-ruler removal and 6px shadowless scrollbar,
-  and add read-only messaging, the path as its accessible label, an 8px top inset, three-character line-number
-  gutter, full active-line paint, smooth scrolling, active bracket-pair + indentation guides, single-file
-  occurrence highlighting, and ambiguous-Unicode suppression. Opaque `viewState` is restored only after its
-  editor-state shape is validated and is saved on unmount, so tab switches round-trip scroll and folding.
-  Monaco is imported from `editor.api` with only the reading contributions (find, folding, bracket matching,
-  context menu/copy, links, hover, word highlighting, sticky scroll, go-to-line/command palette, read-only
-  messaging and Unicode highlighting); keeping word highlighting preserves F7. The TS/JS/JSON/CSS/HTML
-  language-service contributions and their workers are absent, so this viewer emits no language-service
-  diagnostics by construction.
-- **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` has the sole `EDITOR_THEME`.
-  Themes own one TextMate scope definition: chat uses its live CSS-variable form, while Monaco resolves that
-  same definition plus its complete editor/widget/menu/input colour map to hex, loads it into a dedicated
-  JS-regex Shiki highlighter, and installs `@shikijs/monaco` once per page. Its curated language catalog is
-  shared with the chat highlighter and extended for the desktop file formats; missing Monaco language ids are
-  registered with their file associations before Shiki installs providers. A theme swap replaces the
-  highlighter theme under the same name, redefines Monaco, and selects `EDITOR_THEME`. The normal/high-contrast
-  base comes from manifest appearance/contrast metadata—never a known id—and remains inherited for specialist
-  colours outside the explicit map. Reads pass through `lib.cssColorToHex`; an absent or unparseable token is
-  omitted so the selected base palette wins rather than crashing the panel. Pierre's one registered
-  `thinkrail` CSS-variable Shiki theme emits variable references instead of catalog colours; inherited
-  `--diffs-*` properties map foreground/syntax to `--code-*`, canvases to the workspace/content roles, and
-  addition/deletion paint to feedback roles, so a theme swap needs no re-highlight. `TerminalInstance`
-  similarly rebuilds from the complete 16-slot ANSI variable set. Monaco and xterm consume the nullable
-  editor selection-foreground override when provided.
 - **Terminal renderer + font measurement.** `TerminalInstance` runs xterm's **default DOM renderer** on
   purpose — `addon-webgl` is *not* loaded, and loading it would be a regression (see `architecture.md`
   Decision #11: the DOM renderer is a prerequisite for touch, and `WebglAddon.dispose()` leaks its WebGL2

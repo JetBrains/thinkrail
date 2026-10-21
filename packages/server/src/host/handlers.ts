@@ -95,6 +95,7 @@ import {
 	countPushDivergence,
 	gitDiffFile,
 	gitStatus,
+	ignoredPaths,
 	listBranches,
 	listCommits,
 	prefetchBranch,
@@ -364,6 +365,20 @@ function fireTodoFixPrompt(
 		.finally(() => releaseItemFix(p.sessionId, p.id));
 }
 
+function reviewSendGroups(
+	comments: ReviewComment[],
+	sessionId: string | undefined,
+): ReviewComment[][] {
+	if (comments.length === 0) return [];
+	if (sessionId) return [comments];
+	const groups = new Map<string, ReviewComment[]>();
+	for (const comment of comments) {
+		const key = reviewSessionKey(comment);
+		groups.set(key, [...(groups.get(key) ?? []), comment]);
+	}
+	return [...groups.values()];
+}
+
 async function sendToFileChat(
 	workspaceId: string,
 	comments: ReviewComment[],
@@ -577,9 +592,16 @@ const handlers: WsHandlers = {
 	},
 	"dialog.selectDirectory": () =>
 		observeSetupAction("directory_pick", selectDirectory, directoryPickOutcome),
-	"fs.readDir": (p) => {
+	"fs.readDir": async (p) => {
 		void ensureWatch(p.workspaceId);
-		return readDir(p.workspaceId, p.path);
+		const nodes = readDir(p.workspaceId, p.path);
+		const ignored = await ignoredPaths(
+			getWorkspace(p.workspaceId).worktreePath,
+			nodes.map((node) => node.path),
+		);
+		return ignored.size === 0
+			? nodes
+			: nodes.map((node) => (ignored.has(node.path) ? { ...node, gitignored: true } : node));
 	},
 	"fs.readFile": (p) => {
 		void ensureWatch(p.workspaceId);
@@ -1186,13 +1208,8 @@ const handlers: WsHandlers = {
 		const capture = additionalCapture();
 		return withReviewLock(p.workspaceId, async () => {
 			const comments = await sendableComments(p.workspaceId, p.commentIds);
-			const groups = new Map<string, typeof comments>();
-			for (const comment of comments) {
-				const key = reviewSessionKey(comment);
-				groups.set(key, [...(groups.get(key) ?? []), comment]);
-			}
 			const sessions: ReviewSendResult[] = [];
-			for (const group of groups.values()) {
+			for (const group of reviewSendGroups(comments, p.sessionId)) {
 				sessions.push(await sendToFileChat(p.workspaceId, group, p, capture));
 			}
 			if (sessions.length === 0) throw new Error("No draft comments to send.");

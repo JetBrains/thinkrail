@@ -14,7 +14,8 @@ type LayoutDiffScopeInput =
 
 type LayoutResourceIdentityInput =
 	| { kind: "file"; path: string }
-	| { kind: "diff"; path: string; scope: LayoutDiffScopeInput }
+	| { kind: "diff"; path: string; before?: undefined; scope: LayoutDiffScopeInput }
+	| { kind: "diff"; path: string; before: string }
 	| { kind: "changes"; scope: LayoutDiffScopeInput }
 	| { kind: "chat"; sessionId: string }
 	| { kind: "document"; documentKind: string; sourceId: string }
@@ -43,13 +44,15 @@ export function layoutResourceIdentity<T extends LayoutResourceIdentityInput>(ta
 		case "file":
 			return tupleKey("layout-resource", "file", tab.path);
 		case "diff":
-			return tupleKey(
-				"layout-resource",
-				"diff",
-				tab.path,
-				tab.scope.kind,
-				layoutScopeReference(tab.scope),
-			);
+			return tab.before === undefined
+				? tupleKey(
+						"layout-resource",
+						"diff",
+						tab.path,
+						tab.scope.kind,
+						layoutScopeReference(tab.scope),
+					)
+				: tupleKey("layout-resource", "compare", tab.before, tab.path);
 		case "changes":
 			return tupleKey(
 				"layout-resource",
@@ -103,6 +106,16 @@ export function userText(content: UserMessage["content"]): string {
 		.join("");
 }
 
+export function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function ancestorPaths(path: string): string[] {
+	const segments = path.split("/");
+	segments.pop();
+	return segments.map((_, index) => segments.slice(0, index + 1).join("/"));
+}
+
 export function normalizePath(path: string): string {
 	return path.replaceAll("\\", "/").replace(/^\.\/+/, "");
 }
@@ -125,7 +138,7 @@ export function shallowEqualArrays(
 	return a.every((value, i) => Object.is(value, b[i]));
 }
 
-function fileName(path: string): string {
+export function fileName(path: string): string {
 	const parts = normalizePath(path).split("/").filter(Boolean);
 	return parts.at(-1) ?? path;
 }
@@ -225,11 +238,6 @@ export function cssColorToHex(color: string): string {
 	const channels = [Number(r), Number(g), Number(b), Math.round(Number(a) * 255)];
 	if (channels.some((c) => !Number.isFinite(c))) return "";
 	return `#${channels.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
-}
-
-export function stripFrontmatter(text: string): string {
-	const match = /^---[ \t]*\r?\n([\s\S]*?)\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(text);
-	return match ? text.slice(match[0].length) : text;
 }
 
 const APPLE_PLATFORM = /Mac|iPhone|iPad|iPod/;

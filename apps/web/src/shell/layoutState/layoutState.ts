@@ -346,9 +346,11 @@ function isWorkspaceView(value: unknown): value is WorkspaceViewState {
 				return hasOnlyKeys(tab, ["kind", "id", "name", "path"]) && typeof tab.path === "string";
 			case "diff":
 				return (
-					hasOnlyKeys(tab, ["kind", "id", "name", "path", "scope"]) &&
 					typeof tab.path === "string" &&
-					validDiffScope(tab.scope)
+					(tab.before === undefined
+						? hasOnlyKeys(tab, ["kind", "id", "name", "path", "scope"]) && validDiffScope(tab.scope)
+						: hasOnlyKeys(tab, ["kind", "id", "name", "path", "before"]) &&
+							typeof tab.before === "string")
 				);
 			case "changes":
 				return hasOnlyKeys(tab, ["kind", "id", "name", "scope"]) && validDiffScope(tab.scope);

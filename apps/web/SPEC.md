@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: Web UI client
 parent: architecture
-depends-on: [module-contracts, module-ui, module-extension-api, module-ext-visualize]
+depends-on: [module-contracts, module-ui, module-extension-api, module-ext-visualize, module-resource-renderers]
 tags: [ui]
 ---
 
@@ -28,7 +28,7 @@ event stream as a chat-centric, multi-session IDE shell.
 
 ## Internal modules
 
-Each is a bounded sub-module; `navigation`/`transport`/`store`/`updates`/`prompt`/`resources`/`lib`/`extensions` expose an `index.ts` **barrel** (their only public
+Each is a bounded sub-module; `navigation`/`transport`/`store`/`updates`/`prompt`/`lib`/`extensions` expose an `index.ts` **barrel** (their only public
 surface). `panels`/`chat` are imported **per-file by design** — barreling them would pull
 the lazily-loaded Monaco/shiki/xterm chunks into the eager bundle and break the shadcn per-primitive
 convention; their boundary is held by convention + spec. Sibling edges live here, not in the leaves.
@@ -39,7 +39,6 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `transport` | the WS client + its singleton/store wiring | yes | [transport/SPEC.md](src/transport/SPEC.md) |
 | `store` | Zustand: domain projections, one local workbench frame, per-workspace views/attention, chat runtimes | yes | [store/SPEC.md](src/store/SPEC.md) |
 | `panels` | layout-agnostic, store-driven feature views | no | [panels/SPEC.md](src/panels/SPEC.md) |
-| `resources` | resource descriptors, renderer resolution, and renderer-agnostic review surface types | yes | [resources/SPEC.md](src/resources/SPEC.md) |
 | `chat` | pi conversation UI primitives: content-block renderers + the tool-renderer registry | no | [chat/SPEC.md](src/chat/SPEC.md) |
 | `prompt` | lifecycle-neutral slash completion + prompt-template slot editing | yes | [prompt/SPEC.md](src/prompt/SPEC.md) |
 | `auth` | in-app provider login: the presentational OAuth dialog + its client-side state reducer | yes | [auth/SPEC.md](src/auth/SPEC.md) |
@@ -145,12 +144,12 @@ change. `dist/` therefore has no profiler timers (`actualStartTime` is absent fr
 ### Dependency graph
 
 - `navigation` → `store`, `transport`, `contracts` (type-only); neither dependency imports it, and `main.tsx` initializes the integration
-- `shell` → children `shell/layout` + `shell/layoutState`, `updates` (one optional-capability hook + props-driven Settings content and durable status affordance), `notifications` (mounts the attention observer + permission preface once), `panels`, `chat` (app-integration render/hydration only), `store`, `transport` (domain hydration + endpoint identity), `contracts` (types + the shared `createQuitConfirmation` rule), `ui`, `components` (`ErrorBoundary` around each mounted region + `QuietScrollArea` around shell-owned tool bodies), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of catalog/media resolution and atomic theme application, driven by the hydrated store preference or pre-hydration hint)
+- `shell` → children `shell/layout` + `shell/layoutState`, `@thinkrail/resource-renderers` (`AppResourceHost` registers the bundled renderers and provides one module-level `ResourceHost` — `chat/Markdown`, a code host over `lib/highlighter` + `themes`, `panels/resourcePane` byte URLs, `panels/openTabs` navigation (`openFileInTab` / `openFileComparisonInTab`), `fs.readFile` + the fs-change subscription, and the session-aware `useFileReview` (as the `FileReview` render-prop) + `SendReviewButton` — plus the line-width preferences through `ResourcePreferencesProvider` and the phone class through `ResourceEnvironmentProvider`; `main.tsx` wraps `Shell` in it), `updates` (one optional-capability hook + props-driven Settings content and durable status affordance), `notifications` (mounts the attention observer + permission preface once), `panels`, `chat` (app-integration render/hydration only), `store`, `transport` (domain hydration + endpoint identity), `contracts` (types + the shared `createQuitConfirmation` rule), `ui`, `components` (`ErrorBoundary` around each mounted region + `QuietScrollArea` around shell-owned tool bodies), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of catalog/media resolution and atomic theme application, driven by the hydrated store preference or pre-hydration hint)
 - `shell/layout` → `contracts` (`LayoutPreset` + `GitDiffScope` types only), `lib` (attention/id primitives), `ui` (including `@thinkrail/ui/resizable`), and React / `@dnd-kit/core`; `shell/layoutState` → `shell/layout`, `store`, `transport` (browser endpoint identity + error normalization), `clientPreferences` (native-stable persistence), `contracts` (`LayoutPreset` type only), `lib`, and React. The parent injects store state and feature renderers, so the pure layout child has no feature-module runtime edge
 - `updates` → `contracts` (native bridge + host notice types), `store` (host notice), `ui`, React, and Remix Icon; native snapshots remain shell-local
 - `notifications` → `store` (session-state reads, prompt + `activateWorkspaceFromRoute` / `openSessionSwitcher` actions), `ui` (the permission preface dialog), `contracts` (type-only — `SessionState`/`SessionCompletion`/`NativeNotificationBridge`), React, and Remix Icon; the master-toggle Settings panel lives in `panels`, and `shell` mounts the observer/preface. It emits through a capability-selected channel: the page Notifications API, or the native desktop channel when the optional `__THINKRAIL_NATIVE_NOTIFICATIONS__` bridge is present (capability detection only, no `desktop` branch). No Service Worker: a closed app has no live client to notify
-- `panels` → `resources`, `store`, `transport`, `ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `prompt` (`NewWorkspaceDialog` consumes the shared slash/template behavior), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelEffortPicker`+`useModelCatalog`+`useModelPreferences`, `ModelsSettings` the older `ModelSelector`+`ThinkingSelector`, `VisibleModelsSettings` `chat/modelPicker`'s `formatContext` + `chat/ProviderGlyph`, and `ProvidersSettings` the `chat/modelPicker` connection-kind vocabulary — all shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph; `ProjectTrustNotice` and `NewWorkspaceDialog` share `chat/projectTrust` + `chat/useProjectTrustSummary` with the Skills dialog's trust banner), `auth` (`ProvidersSettings` and `McpSettings` mount `auth/LoginDialog`), `notifications` (`NotificationsSettings` requests browser permission on enable via the barrel), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping), `@shikijs/monaco` (the desktop file renderer's TextMate adapter), `@pierre/diffs` (all source diffs + phone code files), `diff` (engine-neutral mutation blocks, CSV row alignment, and notebook cell similarity), `jsondiffpatch` (structural JSON deltas with move detection), `react-virtuoso` (CSV rows and the lazily loaded Changes review list), and `pdfjs-dist` (PDF canvas rendering)
-- `chat` → `contracts` (pi message types, **type-only**), `ui`, `extension-api/web`, `ext-visualize/web`, `extensions` (registration only), `components` (`useNow`, and the `RunningIcon` badge in the stream footer), `prompt` (shared slash/template behavior), `lib`, `clientPreferences`; `store` + `transport`  (**app-integration files only** — the renderers stay store-free; see `chat/SPEC.md` for the current set)
+- `panels` → `@thinkrail/resource-renderers` (registry, review contract, `ReviewThreadCard`, draft context, `createAskAgentRequest`), `store`, `transport`, `ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `prompt` (`NewWorkspaceDialog` consumes the shared slash/template behavior), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelEffortPicker`+`useModelCatalog`+`useModelPreferences`, `ModelsSettings` the older `ModelSelector`+`ThinkingSelector`, `VisibleModelsSettings` `chat/modelPicker`'s `formatContext` + `chat/ProviderGlyph`, and `ProvidersSettings` the `chat/modelPicker` connection-kind vocabulary — all shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph; `ProjectTrustNotice` and `NewWorkspaceDialog` share `chat/projectTrust` + `chat/useProjectTrustSummary` with the Skills dialog's trust banner), `auth` (`ProvidersSettings` and `McpSettings` mount `auth/LoginDialog`), `notifications` (`NotificationsSettings` requests browser permission on enable via the barrel), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping), and `react-virtuoso` (the lazily loaded Changes review list); the renderer engines are [[module-resource-renderers]]' own dependencies
+- `chat` → `contracts` (pi message types, **type-only**), `ui`, `extension-api/web`, `@thinkrail/resource-renderers` (`ChatTranscript` provides the chat's `ResourceScope` to its rows), `ext-visualize/web`, `extensions` (registration only), `components` (`useNow`, and the `RunningIcon` badge in the stream footer), `prompt` (shared slash/template behavior), `lib`, `clientPreferences`; `store` + `transport`  (**app-integration files only** — the renderers stay store-free; see `chat/SPEC.md` for the current set)
 - `prompt` → `contracts` (slash/template types only), `@thinkrail/ui/utils` (`cn`), and React; it has no lifecycle integration dependency
 - `extensions` → `ext-*/web`, `extension-api/web`, `chat/toolRegistry` (registration only; no ChatView import)
 - `auth` → `ui`, `lib` (`copyText`; the dialog is store/transport-free — the panel integrates it; the state types need no imports)
@@ -158,15 +157,15 @@ change. `dist/` therefore has no profiler timers (`actualStartTime` is absent fr
 - `transport` → `contracts`, `store` (welcome routing; the `store → transport` back-edge is type-only, so
   the runtime graph is acyclic), `lib` (plain-HTTP-safe random page identity)
 - `components` → `lib` (`ErrorBoundary`'s `shallowEqualArrays` for its reset keys) and `constants` (`RunningIcon` draws the shared brand monogram) — both leaves, so any region can still wrap in it; presentational controls consume `ui`
-- `resources` → `contracts` (types only), `lib`; it owns no store, transport, shell, or renderer implementation
 - `lib` → `themes` (the lazy highlighter uses the one generic CSS-variable Shiki registration), React (the phone-viewport hook only), and `contracts` (types only, e.g. the MCP state vocabulary's `McpServerState`)
 - `themes` → `constants` (the branding storage prefix scopes the first-paint hint), `clientPreferences` (native-stable hint storage)
 - leaves (`clientPreferences`, `constants`, `utils`, `styles`) → none internal
 
 Rules: a panel never imports another panel sideways; nothing imports `shell` (it's the composition root).
 
-`@pierre/diffs`, `diff`, `jsondiffpatch`, `react-virtuoso`, `pdfjs-dist`, and `@shikijs/monaco` are
-exact-pinned runtime dependencies. `pdfjs-dist` and its `pdf.worker.min.mjs` worker URL are reached only from
+The renderer engines (`@pierre/diffs`, `jsondiffpatch`, `pdfjs-dist`, `@shikijs/monaco`, `monaco-editor`) are
+[[module-resource-renderers]]' dependencies; the app keeps `react-virtuoso` for its own panes
+(catalog-pinned, shared with the package). The chunking contract still holds for the app build. `pdfjs-dist` and its `pdf.worker.min.mjs` worker URL are reached only from
 the lazy PDF renderer chunks; neither belongs in the entry graph. Pierre, its Shiki
 language/theme graph and worker entry, plus Monaco, its curated Shiki grammars and adapter, remain behind
 resource-loader dynamic imports. Only lazy Pierre renderer modules mount the provider, and every mounted
@@ -316,7 +315,7 @@ themselves.
   class a component names is one the generator actually emits (an unknown class is dropped silently by
   Tailwind, so the element renders unstyled while the class list claims otherwise).
 - **A primitive font family may only be named for a documented third-party integration.** Monaco
-  (`panels/monacoSetup.ts`) reads the code family, `s11`, and the default line-height; Pierre receives the
+  (`resource-renderers/support/monacoSetup.ts`) reads the code family, `s11`, and the default line-height; Pierre receives the
   same primitives through the `.pierre-code-surface` custom-property bridge in `index.css`; xterm
   (`panels/TerminalInstance.tsx`) reads the code family + `s13` and owns its row height; mermaid
   (`thinkrail-extensions/visualize/web/mermaid.ts`) reads the code family. These third-party integrations are the exhaustive

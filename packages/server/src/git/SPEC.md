@@ -240,7 +240,10 @@ ref off the workspace-create critical path.
   deadline. **`readBlobSizeAtAsync`** performs the same
   bounded, strict-miss read through `git cat-file -s` before the host admits an immutable blob response;
   **`readPathModeAtAsync`** reads one path's tree mode with bounded `git ls-tree` so `changes` can reject
-  symlinks and restore Git's executable bit without deriving tree metadata itself;
+  symlinks and restore Git's executable bit without deriving tree metadata itself. Every `<ref>:<path>`
+  object name these reads form uses `/`. Git reads a Windows `\` there as part of the name and reports the
+  file absent, so on win32 the path's `\` becomes `/`; on POSIX a backslash is a legal file-name character
+  and is kept (architecture Decision 22);
   **`gitCommitPaths(workspaceId, message, paths)`** → `{ sha } | null` — commit **exactly `paths`** as one
   commit for the TODO change-set feature (see [[submodule-server-todos]]): stage them (`git add -A --
   <paths>`, so a deletion stages as one), then `git commit --no-verify -- <paths>` (the host's commit must
@@ -280,6 +283,12 @@ ref off the workspace-create critical path.
   `null`. Returning the canonical sha lets the adopted-commit review resolver reject an abbreviated /
   non-canonical id, and the shared cap guarantees it never accepts a commit past the newest
   `COMMIT_LIST_MAX` — for which no adopted item is ever emitted. Kept in lock-step with `listCommits`.
+  **`ignoredPaths(worktreePath, paths)`** → the subset git ignores (`git -c core.quotePath=false
+  check-ignore -- <paths>`, arguments chunked under 24k chars for Windows' command-line limit; tracked files
+  never count, and a path inside an ignored folder does). The host uses it to mark `fs.readDir` nodes
+  `gitignored`, so the Files tree can dim them. It never throws: a non-repository, a failure or a timeout
+  reports nothing. Names git must C-quote (a `"`, `\` or control character) are never reported, because
+  `check-ignore -z` needs stdin, which the bounded runners do not offer.
 - **Public surface (barrel):** `git`, `gitAsync`, `gitAsyncBytes`, `gitAsyncStream`, `nonInteractiveGitEnv`, `remoteRefOid`, `remoteTrackingRef`, `gitStatus`,
   `gitUncommittedPaths`, `gitDiffFile`,
   `readBlobAt`, `readBlobBytesAt`, `readBlobBytesAtAsync`, `readBlobStreamAtAsync`, `readBlobSizeAtAsync`,
@@ -288,7 +297,7 @@ ref off the workspace-create critical path.
   `resolveDiffRange`, `changedFileArgs`, `diffBaseRef`, `resolveCommitOid`, `DiffRange`, `isSafeRef`,
   `assertSafeRef`, `listBranches`, `resolveDefaultBranch`, `tryCurrentBranch`, `currentBranch`,
   `canonicalPath`, `resolveListedCommit`, `prefetchBranch`, `countPushDivergence`, `listRemotes`, `remoteNameOf`,
-  `snapshotWorktree`.
+  `snapshotWorktree`, `ignoredPaths`.
 - **Allowed deps:** `persistence` (workspace + project lookup), `log`; `fs` (`resourceMeta`/`decodeText` —
   the one content classification, so a diff side's metadata cannot disagree with `fs.readFile`'s);
   `contracts` (`Git*`/`BranchList`/`ResourceMeta` types);

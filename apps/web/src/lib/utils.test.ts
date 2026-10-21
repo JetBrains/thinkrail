@@ -1,9 +1,12 @@
 import { expect, test } from "bun:test";
 import {
+	ancestorPaths,
 	compactAge,
 	cssColorToHex,
+	fileName,
 	hasPlatformModifier,
 	isAbsolutePath,
+	isRecord,
 	isShellInert,
 	layoutResourceIdentity,
 	normalizePath,
@@ -13,7 +16,6 @@ import {
 	projectRelativePath,
 	relativeTime,
 	shallowEqualArrays,
-	stripFrontmatter,
 	tupleKey,
 } from "./utils";
 
@@ -58,21 +60,6 @@ test("isShellInert accepts only names that stay literal in POSIX, PowerShell, an
 	]) {
 		expect(isShellInert(hostile)).toBe(false);
 	}
-});
-
-test("stripFrontmatter drops a leading YAML block, keeping the body", () => {
-	const doc = "---\nid: x\ntitle: X\n---\n\n# Heading\n\nbody\n";
-	expect(stripFrontmatter(doc)).toBe("\n# Heading\n\nbody\n");
-});
-
-test("stripFrontmatter handles a `...` close and CRLF newlines", () => {
-	expect(stripFrontmatter("---\nid: x\n...\nbody")).toBe("body");
-	expect(stripFrontmatter("---\r\nid: x\r\n---\r\nbody")).toBe("body");
-});
-
-test("stripFrontmatter leaves content without frontmatter untouched", () => {
-	expect(stripFrontmatter("# Heading\n\nbody")).toBe("# Heading\n\nbody");
-	expect(stripFrontmatter("intro\n---\nid: x\n---\n")).toBe("intro\n---\nid: x\n---\n");
 });
 
 test("cssColorToHex expands short hex and passes full hex through", () => {
@@ -126,6 +113,16 @@ test("layout resource identity ignores placement ids and separates delimiter-bea
 	);
 });
 
+test("a file comparison is identified by its two paths, apart from the git diff of either", () => {
+	const compare = (before: string, path: string) =>
+		layoutResourceIdentity({ kind: "diff", path, before });
+	expect(compare("b.html", "a.html")).toBe(compare("b.html", "a.html"));
+	expect(compare("b.html", "a.html")).not.toBe(compare("c.html", "a.html"));
+	expect(compare("b.html", "a.html")).not.toBe(
+		layoutResourceIdentity({ kind: "diff", path: "a.html", scope: { kind: "uncommitted" } }),
+	);
+});
+
 test("a changes review tab is identified by its scope alone, apart from any file diff", () => {
 	const branch = layoutResourceIdentity({
 		kind: "changes",
@@ -158,6 +155,14 @@ test("a changes review tab is identified by its scope alone, apart from any file
 			scope: { kind: "branch" },
 		}),
 	);
+});
+
+test("fileName is a path's last segment whichever separator wrote it", () => {
+	expect(fileName("C:\\Users\\me\\repo")).toBe("repo");
+	expect(fileName("/home/me/repo/")).toBe("repo");
+	expect(fileName("src/foo.ts")).toBe("foo.ts");
+	expect(fileName("C:\\")).toBe("C:");
+	expect(fileName("")).toBe("");
 });
 
 test("normalizePath brings both separator styles to one form and drops a leading ./", () => {
@@ -222,4 +227,16 @@ test("relativeTime measures against the given now, not the clock", () => {
 	expect(compactAge(now - 13 * 86_400_000, now)).toBe("13d");
 	expect(compactAge(now - 20 * 86_400_000, now)).toBe("2w");
 	expect(compactAge(now - 100 * 86_400_000, now)).toBe("3mo");
+});
+
+test("ancestorPaths lists a path's parent folders outermost first", () => {
+	expect(ancestorPaths("src/auth/login.ts")).toEqual(["src", "src/auth"]);
+	expect(ancestorPaths("README.md")).toEqual([]);
+});
+
+test("isRecord accepts plain objects only", () => {
+	expect(isRecord({ a: 1 })).toBe(true);
+	expect(isRecord([])).toBe(false);
+	expect(isRecord(null)).toBe(false);
+	expect(isRecord("x")).toBe(false);
 });

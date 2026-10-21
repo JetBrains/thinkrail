@@ -1,10 +1,13 @@
 import { expect, test } from "bun:test";
 import type { GitFileChange } from "@thinkrail/contracts";
+import { VIRTUALIZED_DIFF_LINES } from "@thinkrail/resource-renderers";
 import {
+	buildChangeMarks,
 	buildChangesTree,
 	type ChangeTreeDir,
 	changesTabId,
 	changesTabName,
+	changeTreeFolderPaths,
 	diffTabId,
 	diffTabName,
 	estimatedSectionHeight,
@@ -16,7 +19,6 @@ import {
 	stackedDiffBounded,
 	turnScope,
 } from "./changesModel";
-import { VIRTUALIZED_DIFF_LINES } from "./largeDiff";
 
 function change(path: string, over: Partial<GitFileChange> = {}): GitFileChange {
 	return { path, status: "modified", added: 1, removed: 0, ...over };
@@ -202,4 +204,28 @@ test("a stacked section bounds its diff only when the renderer needs a viewport"
 	expect(stackedDiffBounded("large", VIRTUALIZED_DIFF_LINES)).toBe(false);
 	expect(stackedDiffBounded("large", VIRTUALIZED_DIFF_LINES + 1)).toBe(true);
 	expect(stackedDiffBounded(undefined, 1_000_000)).toBe(false);
+});
+
+test("buildChangeMarks marks changed files and every ancestor folder, skipping deletions", () => {
+	const marks = buildChangeMarks([
+		change("src/auth/login.ts"),
+		change("tests/new.test.ts", { status: "untracked" }),
+		change("legacy/old.ts", { status: "deleted" }),
+		change("README.md", { status: "renamed" }),
+	]);
+	expect([...marks.files]).toEqual([
+		["src/auth/login.ts", "modified"],
+		["tests/new.test.ts", "untracked"],
+		["README.md", "renamed"],
+	]);
+	expect([...marks.dirs].sort()).toEqual(["src", "src/auth", "tests"]);
+});
+
+test("changeTreeFolderPaths lists every folder row of the changed tree, compact rows once", () => {
+	const tree = buildChangesTree([
+		change("apps/web/src/a.ts"),
+		change("apps/web/src/b/c.ts"),
+		change("README.md"),
+	]);
+	expect(changeTreeFolderPaths(tree)).toEqual(["apps/web/src", "apps/web/src/b"]);
 });

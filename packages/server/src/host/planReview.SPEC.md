@@ -68,7 +68,8 @@ resolution, failure is a rejection, and the whole recovery surface collapses int
   Any invalid output is a failed review, not a silent approve: the mark is cleared and the item returns to
   unreviewed. `parseVerdict` also **constructs the result explicitly** (verdict/summary/readingOrder/findings only — `readingOrder`
   is the reviewer's optional ordered `{ path, why }` list, capped at `REVIEW_READING_ORDER_LIMIT` by the
-  contract validator; **every accepted verdict** replaces the workspace review's `guide` through
+  contract validator; a backslash in any finding or reading-order path is read as a separator and turned
+  into `/` here, since the model may write Windows paths on any host (architecture Decision 22); **every accepted verdict** replaces the workspace review's `guide` through
   `reviews.setReviewGuide` — summary and order empty when the reviewer gave none — in the SAME
   `withReviewLock` hold as its findings and successful verdict record. A queued Clear therefore removes
   guide and findings together, never only the guide before filing resumes. Rejected, filing/record-failed,

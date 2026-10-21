@@ -42,8 +42,10 @@ import type {
 	WorkspaceLayoutDocument,
 } from "../shell/layout";
 import type {
+	ChangesTabSection,
 	ClosedChat,
 	EditorTab,
+	FilesTreeView,
 	MarkedUnread,
 	PendingMarkUnread,
 	RouteChatTarget,
@@ -835,6 +837,31 @@ export function selectDiffScope(
 	return state.diffScopeByWorkspace[workspaceId] ?? BRANCH_SCOPE;
 }
 
+const EMPTY_FILES_TREE_VIEW: FilesTreeView = {
+	expanded: [],
+	changedCollapsed: [],
+	scroll: {},
+	seenActivePath: null,
+};
+
+export function selectFilesTreeView(
+	state: { filesTreeByWorkspace: Record<string, FilesTreeView> },
+	workspaceId: string,
+): FilesTreeView {
+	return state.filesTreeByWorkspace[workspaceId] ?? EMPTY_FILES_TREE_VIEW;
+}
+
+export function selectActiveFilePath(
+	state: {
+		tabsByWorkspace: Record<string, EditorTab[]>;
+		activeTabByWorkspace: Record<string, string | null>;
+	},
+	workspaceId: string,
+): string | null {
+	const tab = selectActiveEditorTab(state, workspaceId);
+	return tab?.kind === "file" || tab?.kind === "diff" ? normalizePath(tab.path) : null;
+}
+
 export function selectDiffBaseRef(state: ActiveWorkspaceState, workspaceId: string): string {
 	const workspace = selectWorkspaceById(state, workspaceId);
 	return workspace ? (workspace.diffBase ?? workspace.baseBranch) : "";
@@ -845,6 +872,16 @@ export function selectDiffTabTargetRef(
 	tab: { workspaceId: string; scope: GitDiffScope },
 ): string {
 	return tab.scope.kind === "branch" ? selectDiffBaseRef(state, tab.workspaceId) : "";
+}
+
+export function selectChangesTabSection(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	workspaceId: string,
+	tabId: string,
+	path: string,
+): ChangesTabSection | undefined {
+	const tab = state.tabsByWorkspace[workspaceId]?.find((candidate) => candidate.id === tabId);
+	return tab?.kind === "changes" ? tab.sections[path] : undefined;
 }
 
 export function matchesWorktreePath(reported: string, rel: string): boolean {
@@ -884,6 +921,29 @@ export function selectWorkspaceTick(
 	workspaceId: string,
 ): number {
 	return state.fsChangesByWorkspace[workspaceId]?.tick ?? 0;
+}
+
+export function fsChangedPaths(change: {
+	paths: readonly string[];
+	truncated: boolean;
+}): readonly string[] | null {
+	return change.truncated || change.paths.length === 0 ? null : change.paths;
+}
+
+interface FileChangeState {
+	connectionGeneration: number;
+	fsChangesByWorkspace: Record<string, { paths: readonly string[]; truncated: boolean }>;
+}
+
+export function selectFileChangeSince(
+	state: FileChangeState,
+	previous: FileChangeState,
+	workspaceId: string,
+): readonly string[] | null | undefined {
+	if (state.connectionGeneration !== previous.connectionGeneration) return null;
+	const change = state.fsChangesByWorkspace[workspaceId];
+	if (!change || change === previous.fsChangesByWorkspace[workspaceId]) return undefined;
+	return fsChangedPaths(change);
 }
 
 export function selectCurrentRouteChatTarget(state: {

@@ -44,8 +44,9 @@ export function itemRevisions(item: TodoItem): ItemRevision[] {
 export function statusLetter(status: GitFileChange["status"]): string {
 	switch (status) {
 		case "added":
-		case "untracked":
 			return "A";
+		case "untracked":
+			return "U";
 		case "deleted":
 			return "D";
 		case "renamed":
