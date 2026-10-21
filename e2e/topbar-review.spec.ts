@@ -74,7 +74,7 @@ test("a draft PR shows its running checks and becomes ready for review", async (
 		await shoot(page, testInfo, "review-draft");
 
 		await primary.click();
-		await expect.poll(ghMutations).toEqual([["pr", "ready", "128"]]);
+		await expect.poll(ghMutations).toEqual([["pr", "ready", "128", "--repo", "acme/sample"]]);
 		await expect(chip).toContainText("PR #128");
 		await expect(chip).toHaveAttribute("data-state-tone", "success");
 		await expect(primary).toHaveAttribute("data-action", "mergePr");
@@ -165,7 +165,9 @@ test("Merge PR offers the allowed methods, deletes the branch on GitHub, and rem
 		const head = gitAs(workspace.worktreePath, "rev-parse", "HEAD");
 		await expect
 			.poll(ghMutations)
-			.toEqual([["pr", "merge", "128", "--merge", "--match-head-commit", head]]);
+			.toEqual([
+				["pr", "merge", "128", "--repo", "acme/no-rebase", "--merge", "--match-head-commit", head],
+			]);
 		await expect.poll(() => remoteHead(origin.bare, branch)).toBe("");
 		await expect(page.getByTestId("scope-review")).toContainText("Merged #128");
 		await expect(primary).toHaveAttribute("data-action", "settle");
@@ -222,7 +224,7 @@ test("a closed PR deletes its remote branch only after a confirmation, then reop
 		await menu.click();
 		await expect(item("deleteRemote")).toHaveCount(0);
 		await item("reopen").click();
-		await expect.poll(ghMutations).toEqual([["pr", "reopen", "128"]]);
+		await expect.poll(ghMutations).toEqual([["pr", "reopen", "128", "--repo", "acme/sample"]]);
 		await expect(page.getByTestId("scope-review")).toContainText("PR #128");
 	} finally {
 		origin.dispose();

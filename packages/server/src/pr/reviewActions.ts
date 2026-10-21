@@ -33,6 +33,8 @@ const MERGE_FLAGS: Record<MergeMethod, string> = {
 	rebase: "--rebase",
 };
 
+const HEAD_FIELDS = "headRepositoryOwner,headRepository";
+
 function branchWorkspace(workspaceId: string, branch: string) {
 	const ws = refreshedWorkspace(workspaceId, undefined);
 	if (ws.branch !== branch) {
@@ -57,75 +59,104 @@ function ghFailure(what: string, result: { out: string; err?: string }): Error {
 	);
 }
 
-function login(value: unknown): string {
-	const owner = value as { login?: unknown } | null | undefined;
-	return typeof owner?.login === "string" ? owner.login : "";
+function headSlug(pr: Record<string, unknown>): string {
+	const owner = pr.headRepositoryOwner as { login?: unknown } | null | undefined;
+	const repo = pr.headRepository as { name?: unknown } | null | undefined;
+	const login = typeof owner?.login === "string" ? owner.login : "";
+	const name = typeof repo?.name === "string" ? repo.name : "";
+	return `${login}/${name}`.toLowerCase();
 }
 
-function repoName(value: unknown): string {
-	const repo = value as { name?: unknown } | null | undefined;
-	return typeof repo?.name === "string" ? repo.name : "";
+async function pushRepository(cwd: string): Promise<string | null> {
+	const origin = (await originUrls(cwd)).push;
+	return origin ? githubSlug(origin) : null;
 }
 
-async function viewPr(cwd: string, number: number, run: PrCommandRunner) {
+async function viewPr(cwd: string, slug: string, number: number, run: PrCommandRunner) {
 	const viewed = await run(cwd, [
 		"gh",
 		"pr",
 		"view",
 		String(number),
+		"--repo",
+		slug,
 		"--json",
-		"headRefName,state,headRepositoryOwner,headRepository",
+		`headRefName,state,${HEAD_FIELDS}`,
 	]);
 	if (!viewed.ok) throw ghFailure(`Couldn't read PR #${number}`, viewed);
 	try {
 		const pr = JSON.parse(viewed.out) as Record<string, unknown>;
-		return {
-			headRefName: pr.headRefName,
-			state: String(pr.state) as PrState,
-			head: `${login(pr.headRepositoryOwner)}/${repoName(pr.headRepository)}`.toLowerCase(),
-		};
+		return { headRefName: pr.headRefName, state: String(pr.state) as PrState, head: headSlug(pr) };
 	} catch {
 		throw new Error(`Couldn't read PR #${number}: gh answered something unexpected.`);
 	}
 }
 
-async function assertBranchPr(
+/** `null` when gh could not answer — never read as "no open PR". */
+async function headsOpenPr(
 	cwd: string,
-	params: ReviewActionParams,
-	states: PrState[],
+	slug: string,
+	branch: string,
 	run: PrCommandRunner,
-): Promise<void> {
-	const origin = (await originUrls(cwd)).push;
-	const slug = origin ? githubSlug(origin) : null;
-	if (!slug)
-		throw new Error("This workspace's origin isn't a GitHub repository — nothing was changed.");
-	const pr = await viewPr(cwd, params.number, run);
-	if (pr.headRefName !== params.branch || pr.head !== slug.toLowerCase()) {
-		throw new Error(
-			`PR #${params.number} is not the pull request of ${slug}:${params.branch} — nothing was changed.`,
+): Promise<boolean | null> {
+	const listed = await run(cwd, [
+		"gh",
+		"pr",
+		"list",
+		"--repo",
+		slug,
+		"--head",
+		branch,
+		"--state",
+		"open",
+		"--json",
+		`number,${HEAD_FIELDS}`,
+		"--limit",
+		"20",
+	]);
+	if (!listed.ok) return null;
+	try {
+		const rows: unknown = JSON.parse(listed.out);
+		if (!Array.isArray(rows)) return null;
+		return rows.some(
+			(row) =>
+				typeof row === "object" &&
+				row !== null &&
+				headSlug(row as Record<string, unknown>) === slug.toLowerCase(),
 		);
-	}
-	if (!states.includes(pr.state)) {
-		throw new Error(
-			`PR #${params.number} is ${pr.state.toLowerCase()} on GitHub now — refresh and try again.`,
-		);
+	} catch {
+		return null;
 	}
 }
 
 async function mutate(
 	params: ReviewActionParams,
 	states: PrState[],
-	command: (cwd: string) => string[],
+	command: (cwd: string, slug: string) => string[],
 	what: string,
 	run: PrCommandRunner,
-): Promise<string> {
+): Promise<{ cwd: string; slug: string }> {
 	const ws = branchWorkspace(params.workspaceId, params.branch);
 	const cwd = ws.worktreePath;
 	try {
-		await assertBranchPr(cwd, params, states, run);
-		const result = await run(cwd, command(cwd), MUTATION_TIMEOUT_MS);
+		const slug = await pushRepository(cwd);
+		if (!slug) {
+			throw new Error("This workspace's origin isn't a GitHub repository — nothing was changed.");
+		}
+		const pr = await viewPr(cwd, slug, params.number, run);
+		if (pr.headRefName !== params.branch || pr.head !== slug.toLowerCase()) {
+			throw new Error(
+				`PR #${params.number} is not the pull request of ${slug}:${params.branch} — nothing was changed.`,
+			);
+		}
+		if (!states.includes(pr.state)) {
+			throw new Error(
+				`PR #${params.number} is ${pr.state.toLowerCase()} on GitHub now — refresh and try again.`,
+			);
+		}
+		const result = await run(cwd, command(cwd, slug), MUTATION_TIMEOUT_MS);
 		if (!result.ok) throw ghFailure(what, result);
-		return cwd;
+		return { cwd, slug };
 	} finally {
 		forgetOpenBranchReview(cwd);
 	}
@@ -138,7 +169,7 @@ export async function readyPr(
 	await mutate(
 		params,
 		["OPEN"],
-		() => ["gh", "pr", "ready", String(params.number)],
+		(_cwd, slug) => ["gh", "pr", "ready", String(params.number), "--repo", slug],
 		`Couldn't mark PR #${params.number} ready`,
 		run,
 	);
@@ -151,7 +182,7 @@ export async function reopenPr(
 	await mutate(
 		params,
 		["CLOSED"],
-		() => ["gh", "pr", "reopen", String(params.number)],
+		(_cwd, slug) => ["gh", "pr", "reopen", String(params.number), "--repo", slug],
 		`Couldn't reopen PR #${params.number}`,
 		run,
 	);
@@ -163,10 +194,10 @@ export async function mergePr(
 	run: PrCommandRunner = runProviderCommand,
 ): Promise<MergePrResult> {
 	let mergedHead = "";
-	const cwd = await mutate(
+	const { cwd, slug } = await mutate(
 		params,
 		["OPEN"],
-		(worktree) => {
+		(worktree, repo) => {
 			const head = git(worktree, ["rev-parse", "HEAD"]);
 			if (!head.ok) throw new Error(`Couldn't read HEAD: ${head.err || "git failed"}`);
 			mergedHead = head.out;
@@ -175,6 +206,8 @@ export async function mergePr(
 				"pr",
 				"merge",
 				String(params.number),
+				"--repo",
+				repo,
 				MERGE_FLAGS[params.method],
 				"--match-head-commit",
 				head.out,
@@ -183,9 +216,21 @@ export async function mergePr(
 		`Couldn't merge PR #${params.number}`,
 		run,
 	);
-	const merged = (await viewPr(cwd, params.number, run).catch(() => null))?.state === "MERGED";
+	const after = await viewPr(cwd, slug, params.number, run).catch(() => null);
+	const merged = after?.state === "MERGED";
 	if (!merged || !params.deleteBranch) return { merged, branchDeleted: false };
 	try {
+		const stillOpen = await headsOpenPr(cwd, slug, params.branch, run);
+		if (stillOpen !== false) {
+			return {
+				merged,
+				branchDeleted: false,
+				deleteError:
+					stillOpen === null
+						? "couldn't confirm that no other pull request still uses it."
+						: "another open pull request still uses it.",
+			};
+		}
 		const deleted = await deleteOrigin(cwd, params.branch, mergedHead);
 		return deleted === true
 			? { merged, branchDeleted: true }
@@ -223,22 +268,35 @@ async function deleteOrigin(cwd: string, branch: string, expected: string): Prom
 	return `origin/${branch} moved since this checkout last saw it — fetch and review it first. Nothing was deleted.`;
 }
 
-export async function deleteRemoteBranch(params: {
-	workspaceId: string;
-	branch: string;
-}): Promise<void> {
+async function assertNoOpenReview(
+	cwd: string,
+	branch: string,
+	run: PrCommandRunner,
+): Promise<void> {
+	const slug = await pushRepository(cwd);
+	const open = slug
+		? await headsOpenPr(cwd, slug, branch, run)
+		: await findBranchReviewOutcome(cwd, branch, { fresh: true }).then((review) =>
+				review.reliable ? review.value !== null && (review.value.state ?? "open") === "open" : null,
+			);
+	if (open === null) {
+		throw new Error(
+			`Couldn't confirm that "${branch}" has no open pull request — nothing was deleted. Try again in a moment.`,
+		);
+	}
+	if (open) {
+		throw new Error(
+			`"${branch}" still has an open pull request — deleting the branch would close it. Nothing was deleted.`,
+		);
+	}
+}
+
+export async function deleteRemoteBranch(
+	params: { workspaceId: string; branch: string },
+	run: PrCommandRunner = runProviderCommand,
+): Promise<void> {
 	const ws = branchWorkspace(params.workspaceId, params.branch);
-	const review = await findBranchReviewOutcome(ws.worktreePath, ws.branch, { fresh: true });
-	if (!review.reliable) {
-		throw new Error(
-			`Couldn't confirm that "${ws.branch}" has no open pull request — nothing was deleted. Try again in a moment.`,
-		);
-	}
-	if (review.value && (review.value.state ?? "open") === "open") {
-		throw new Error(
-			`"${ws.branch}" still has an open ${review.value.kind === "pull-request" ? "PR" : "MR"} — deleting the branch would close it. Nothing was deleted.`,
-		);
-	}
+	await assertNoOpenReview(ws.worktreePath, ws.branch, run);
 	const tip = remoteRefOid(ws.worktreePath, `origin/${ws.branch}`);
 	if (!tip) {
 		throw new Error(

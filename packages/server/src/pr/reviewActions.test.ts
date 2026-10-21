@@ -49,7 +49,14 @@ function seedWorkspaces(rows: Record<string, unknown>[]): void {
 }
 
 type Call = { command: string[]; timeoutMs: number | undefined };
-type FakePr = { headRefName: string; state: string; owner?: string; queued?: boolean };
+type FakePr = {
+	headRefName: string;
+	state: string;
+	owner?: string;
+	queued?: boolean;
+	openHeads?: string[];
+	listFails?: boolean;
+};
 
 function fakeGh(
 	pr: FakePr,
@@ -68,6 +75,15 @@ function fakeGh(
 					headRepository: { name: "app" },
 				}),
 			};
+		}
+		if (command[2] === "list") {
+			if (pr.listFails) return { ok: false, out: "" };
+			const rows = (pr.openHeads ?? []).map((owner, index) => ({
+				number: 40 + index,
+				headRepositoryOwner: { login: owner },
+				headRepository: { name: "app" },
+			}));
+			return { ok: true, out: JSON.stringify(rows) };
 		}
 		if (command[2] === "merge" && mutation.ok && !pr.queued) pr.state = "MERGED";
 		return mutation;
@@ -105,14 +121,24 @@ afterEach(() => {
 });
 
 const params = { workspaceId: "w1", branch: "feature", number: 12 };
+const closed: FakePr = { headRefName: "feature", state: "CLOSED" };
 
 describe("readyPr / reopenPr", () => {
 	test("Ready checks the number still heads the branch, then mutates under the long timeout", async () => {
 		const { run, calls } = fakeGh({ headRefName: "feature", state: "OPEN" });
 		await readyPr(params, run);
 		expect(calls.map((call) => call.command)).toEqual([
-			["gh", "pr", "view", "12", "--json", "headRefName,state,headRepositoryOwner,headRepository"],
-			["gh", "pr", "ready", "12"],
+			[
+				"gh",
+				"pr",
+				"view",
+				"12",
+				"--repo",
+				"acme/app",
+				"--json",
+				"headRefName,state,headRepositoryOwner,headRepository",
+			],
+			["gh", "pr", "ready", "12", "--repo", "acme/app"],
 		]);
 		expect(calls[1]?.timeoutMs).toBe(60_000);
 	});
@@ -175,6 +201,8 @@ describe("mergePr", () => {
 			"pr",
 			"merge",
 			"12",
+			"--repo",
+			"acme/app",
 			"--rebase",
 			"--match-head-commit",
 			sh(repo, "rev-parse", "HEAD"),
@@ -227,7 +255,17 @@ describe("mergePr", () => {
 
 describe("deleteRemoteBranch", () => {
 	test("deletes origin's branch and leaves the local one", async () => {
-		await deleteRemoteBranch({ workspaceId: "w1", branch: "feature" });
+		const { run, calls } = fakeGh({ headRefName: "feature", state: "CLOSED", openHeads: ["fork"] });
+		await deleteRemoteBranch({ workspaceId: "w1", branch: "feature" }, run);
+		expect(calls[0]?.command.slice(0, 7)).toEqual([
+			"gh",
+			"pr",
+			"list",
+			"--repo",
+			"acme/app",
+			"--head",
+			"feature",
+		]);
 		expect(sh(remote, "for-each-ref", "refs/heads/feature")).toBe("");
 		expect(sh(repo, "rev-parse", "--verify", "refs/heads/feature")).not.toBe("");
 	});
@@ -237,9 +275,9 @@ describe("deleteRemoteBranch", () => {
 		seedWorkspaces([
 			{ id: "w0", kind: "default", name: "Default", branch: "main", baseBranch: "main" },
 		]);
-		await expect(deleteRemoteBranch({ workspaceId: "w0", branch: "main" })).rejects.toThrow(
-			/base branch/,
-		);
+		await expect(
+			deleteRemoteBranch({ workspaceId: "w0", branch: "main" }, fakeGh(closed).run),
+		).rejects.toThrow(/base branch/);
 		expect(sh(remote, "for-each-ref", "--format=%(refname)", "refs/heads/main")).toBe(
 			"refs/heads/main",
 		);
@@ -275,14 +313,49 @@ describe("remote deletion is leased to the tip this checkout saw", () => {
 
 	test("a standalone deletion refuses a remote that moved or holds commits HEAD lacks", async () => {
 		const tip = teammatePush("unseen.txt");
-		await expect(deleteRemoteBranch({ workspaceId: "w1", branch: "feature" })).rejects.toThrow(
-			/moved since this checkout last saw it/,
-		);
+		await expect(
+			deleteRemoteBranch({ workspaceId: "w1", branch: "feature" }, fakeGh(closed).run),
+		).rejects.toThrow(/moved since this checkout last saw it/);
 		expect(sh(remote, "rev-parse", "refs/heads/feature")).toBe(tip);
 		sh(repo, "fetch", "-q", "origin");
-		await expect(deleteRemoteBranch({ workspaceId: "w1", branch: "feature" })).rejects.toThrow(
-			/has commits this checkout doesn't/,
-		);
+		await expect(
+			deleteRemoteBranch({ workspaceId: "w1", branch: "feature" }, fakeGh(closed).run),
+		).rejects.toThrow(/has commits this checkout doesn't/);
 		expect(sh(remote, "rev-parse", "refs/heads/feature")).toBe(tip);
+	});
+});
+
+describe("the open-PR check before a deletion asks the push repository itself", () => {
+	test("an open PR from this branch in the push repository blocks the deletion", async () => {
+		const { run } = fakeGh({ ...closed, openHeads: ["acme"] });
+		await expect(deleteRemoteBranch({ workspaceId: "w1", branch: "feature" }, run)).rejects.toThrow(
+			/still has an open pull request/,
+		);
+		expect(sh(remote, "for-each-ref", "--format=%(refname)", "refs/heads/feature")).toBe(
+			"refs/heads/feature",
+		);
+	});
+
+	test("an unanswered check deletes nothing", async () => {
+		const { run } = fakeGh({ ...closed, listFails: true });
+		await expect(deleteRemoteBranch({ workspaceId: "w1", branch: "feature" }, run)).rejects.toThrow(
+			/Couldn't confirm/,
+		);
+		expect(sh(remote, "for-each-ref", "--format=%(refname)", "refs/heads/feature")).toBe(
+			"refs/heads/feature",
+		);
+	});
+
+	test("after a merge, another open PR from the branch keeps it on origin", async () => {
+		const { run } = fakeGh({ headRefName: "feature", state: "OPEN", openHeads: ["acme"] });
+		const result = await mergePr({ ...params, method: "squash", deleteBranch: true }, run);
+		expect(result).toEqual({
+			merged: true,
+			branchDeleted: false,
+			deleteError: "another open pull request still uses it.",
+		});
+		expect(sh(remote, "for-each-ref", "--format=%(refname)", "refs/heads/feature")).toBe(
+			"refs/heads/feature",
+		);
 	});
 });

@@ -161,7 +161,9 @@ Merge only while the branch matches origin), then re-reads the PR: `gh pr merge`
 queue or auto-merge only **queued** it, so `MergePrResult.merged` reports the state GitHub shows and the
 branch is deleted only after a real merge — deleting a queued PR's head branch would close it. Mutations run under the 60 s timeout through
 the injected runner, surface gh's stderr when refused, and drop the worktree's review cache whatever the
-outcome. **The remote branch is deleted with git, never `gh pr merge --delete-branch`**: gh would also
+outcome. Like `openPr`'s gh flow, every review-action `gh` call carries **`--repo <push slug>`**: the branch
+is deleted from the push repository, so the PR it is checked against must live there too — gh alone
+resolves the fetch repository, which on a split origin is another repository's PRs. **The remote branch is deleted with git, never `gh pr merge --delete-branch`**: gh would also
 delete the local branch and switch the checkout — fatal for a worktree and for the user's own checkout.
 Both paths run `git push --force-with-lease=refs/heads/<branch>:<tip> origin --delete refs/heads/<branch>`
 (the full ref, so a same-named tag is never the one deleted) through `pushOrigin`, the one push helper
@@ -170,9 +172,11 @@ validated against — the merged HEAD after a merge, the remote-tracking `origin
 deletion, which must also be contained in HEAD — so a commit someone pushed in between is never the
 remote's only copy to be deleted: the lease rejects and nothing is deleted. A rejected lease whose ref is
 already gone (`ls-remote` on the push URL) counts as deleted — GitHub's own auto-delete may have won. After a successful merge a failed deletion is reported in `MergePrResult.deleteError`, not
-thrown. The standalone deletion refuses the base branch, a branch whose review the fresh lookup reports
-open, and — when that lookup did not answer — any branch at all, since deleting a PR's head branch closes
-it and an unanswered lookup cannot rule that out.
+thrown. Before either deletion, `gh pr list --repo <push slug> --head <branch> --state open` must answer
+that no open PR there is headed by this branch from that repository (a fork's same-named PR is not):
+deleting a PR's head branch closes it, and an unanswered check deletes nothing. A non-GitHub origin uses
+the fresh `branch-review` lookup instead, with the same unanswered-means-refuse rule. The standalone
+deletion also refuses the base branch.
 
 The open-PR *read* side stays `workspace.branchStatus` / `workspace.openReview` (`branch-review`) — this module persists
 nothing; the client re-derives button/chip state from that lookup plus this call's result. That
