@@ -30,6 +30,12 @@ test("a positioned draft keeps its surface kind and a bare draft is a file comme
 	expect(commentKindForDraft("inline", { selectors: [], label: "file" })).toBe("file");
 	expect(
 		commentKindForDraft("diff", {
+			selectors: [{ kind: "diffHunk", hunkHeader: "@@ -1,1 +1,0 @@" }],
+			label: "removed lines",
+		}),
+	).toBe("file");
+	expect(
+		commentKindForDraft("diff", {
 			selectors: [{ kind: "region", x: 0, y: 0, width: 1, height: 1 }],
 			label: "region",
 		}),

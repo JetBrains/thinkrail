@@ -19,6 +19,7 @@ import {
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
 import { Textarea } from "@thinkrail/ui/textarea";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { randomId } from "@/lib";
@@ -48,7 +49,6 @@ import {
 } from "./mcpEntries";
 import { GITHUB_MCP_RECIPE_JSON, MCP_PRESETS, type McpPreset } from "./mcpPresets";
 import { type McpRowView, mcpConfiguredExposureText, mcpExposureLabel } from "./mcpServerView";
-import { ToggleSegment } from "./ToggleSegment";
 
 const MCP_INPUT_CLASS =
 	"w-full min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text";

@@ -9,7 +9,9 @@ import {
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { ReviewComment } from "@thinkrail/contracts";
+import { outdatedReason } from "@thinkrail/resource-renderers";
 import { PopoverTrigger } from "@thinkrail/ui/popover";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
@@ -17,7 +19,6 @@ import { QuietScrollArea } from "@/components/QuietScrollArea";
 import { PlanStatusIcon, SectionLabel } from "../chat/planKit";
 import { sessionGlance } from "../chat/planView";
 import { glanceIcon } from "../chat/TodoList";
-import { LoadingRegion } from "../components/Skeleton";
 import { selectDiffScope, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { ConfirmPopover } from "./ConfirmPopover";
@@ -28,11 +29,11 @@ import {
 	commentSurface,
 	fileSummaries,
 	lineRef,
-	outdatedReason,
 	type ReviewFileSummary,
 	type ReviewSurface,
 	reviewFileSurface,
 	statusLabel,
+	tabReviewPaths,
 } from "./reviewModel";
 import { sendReviewComment } from "./reviewSend";
 import { SendAllReviewsButton, SendReviewButton } from "./SendReviewButton";
@@ -306,7 +307,10 @@ function FileSection({
 export function selectActiveReviewedPath(
 	s: {
 		activeWorkspaceId: string | null;
-		tabsByWorkspace: Record<string, { id: string; kind: string; path?: string }[]>;
+		tabsByWorkspace: Record<
+			string,
+			{ id: string; kind: string; path?: string; before?: string | undefined }[]
+		>;
 		activeTabByWorkspace: Record<string, string | null>;
 		reviewsByWorkspace: Record<string, { comments: ReviewComment[] }>;
 	},
@@ -316,11 +320,13 @@ export function selectActiveReviewedPath(
 	const tab = (s.tabsByWorkspace[workspaceId] ?? []).find((t) => t.id === activeId);
 	if (!tab || (tab.kind !== "file" && tab.kind !== "diff") || !tab.path) return null;
 	const comments = s.reviewsByWorkspace[workspaceId]?.comments ?? [];
-	return comments.some(
-		(c) => (c.status === "draft" || c.status === "sent") && (c.anchor?.path ?? null) === tab.path,
-	)
-		? tab.path
-		: null;
+	return (
+		tabReviewPaths({ path: tab.path, before: tab.before }).find((path) =>
+			comments.some(
+				(c) => (c.status === "draft" || c.status === "sent") && (c.anchor?.path ?? null) === path,
+			),
+		) ?? null
+	);
 }
 
 function CommentRow({

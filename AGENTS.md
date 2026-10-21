@@ -39,8 +39,8 @@ Clear, fractal module boundaries are a top-priority requirement:
 
 ## Repo-wide invariants
 
-- `apps/web` depends on `contracts`, `ui`, `extension-api/web`, and `thinkrail-extensions/*/web` only,
-  never `server` or `shared`.
+- `apps/web` depends on `contracts`, `ui`, `extension-api/web`, `resource-renderers`, and
+  `thinkrail-extensions/*/web` only, never `server` or `shared`.
 - Never value-import `pi` into browser-bundled code. Import types only from the `pi-ai` /
   `pi-agent-core` package roots; `@earendil-works/pi-coding-agent` is server-only.
 - One id model: UI tab id versus `session.sessionId`; there is no separate pi UUID.
@@ -62,7 +62,8 @@ utilities mapped to generated semantic CSS-var tokens: never inline style object
 palette names, or unknown token utilities. Read `apps/web/src/styles/COLOR.md` for color work and
 `apps/web/src/styles/SPACING.md` for spacing work. Use `@remixicon/react` icons (Line by default, Fill
 when active) and owned shadcn/Radix primitives from `@thinkrail/ui/<primitive>`; `cn()` lives in
-`@thinkrail/ui/utils`. These rules also apply to `packages/ui` and extension web halves.
+`@thinkrail/ui/utils`. These rules also apply to `packages/ui`, `packages/resource-renderers`, and extension
+web halves.
 
 For conversation rendering or tool presentation, read `apps/web/src/chat/SPEC.md`. Presentational
 renderers remain props-driven; only `ChatView` integrates store and transport. A server capability and

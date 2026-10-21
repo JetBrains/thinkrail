@@ -549,7 +549,11 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   **`noteFsChanged(payload)`** (folds a `workspace.fsChanged` push: `tick` increments per frame;
   `paths`/`truncated` are the last batch) — panels select their workspace's entry and refetch on `tick`
   change (the store holds only the signal, never fetches; `applyWorkspaceRemoved` drops a removed
-  workspace's entry). The **review slice** — **`reviewsByWorkspace: Record<workspaceId,
+  workspace's entry). **`fsChangedPaths(batch)`** reads a batch as its paths, or `null` when it is truncated
+  or pathless (anything may have changed) — one rule for `useLiveTabContent` and the resource host.
+  **`selectFileChangeSince(state, previous, workspaceId)`** answers a store transition the same way and
+  also answers `null` for a new connection, because pushes lost while disconnected are never replayed; the
+  resource host's `subscribeFileChanges` uses it, so a mounted `ResourcePreview` re-reads after a reconnect. The **review slice** — **`reviewsByWorkspace: Record<workspaceId,
 ReviewSnapshot>`** with **`setWorkspaceReview`** (a `review.get` read landing) and
 **`applyReviewChanged`** (folds a `review.changed` push — full snapshot, idempotent; every client,
 including a mutation's initiator, converges here — no optimism); `applyWorkspaceRemoved` drops the
@@ -610,7 +614,9 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   plan live, so the page has no snapshot to go stale. **`DiffTab`** is one renderer-dispatched changed file over **one diff scope** (id `${workspaceId}:diff:${scopeKey}:${path}` — one tab per *(file,
 scope)*: **the scope is part of a tab's identity**, because a tab's content must never change meaning
 because the Changes tool's scope flipped underneath it; the tab carries its own `scope`, which is also what
-`DiffPane` re-reads with, never the panel's current one).
+`DiffPane` re-reads with, never the panel's current one). That is the `GitDiffTab` half of the `DiffTab` union;
+the other half, `FileComparisonTab`, compares two workspace files (`before` + `path`, no scope or loaded sides
+— see `panels/SPEC.md`), and `isFileComparison(tab)` tells them apart.
 **What a tab's identity fixes is *which scope* it shows — the kind, plus the sha for a commit scope.** A
 branch-scope tab means "this file vs the workspace's **current** review target", and that target moving —
 because commits landed on the branch, or because the user re-pointed it — is the same live-refresh contract
@@ -717,6 +723,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   it is measured against — the client-side mirror of the host's one resolution), **`selectDiffTabTargetRef`**
   (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for a
   commit/uncommitted one whose sides can't move — derived here, never re-assembled in a panel),
+  `selectChangesTabSection` (one Changes tab section by workspace, tab and path — the review-draft
+  persistence reads its scratch slots through it),
   `selectWorkspaceTick` (the sync-baseline snapshot), `selectWorkspaceSessionIds` (deduplicated local chat
   placement + history membership used as a reconnect-reconciliation baseline), normalized session-state
   selectors/actions (exact session + workspace/project needs-input/working/unread-finished rollups, direct

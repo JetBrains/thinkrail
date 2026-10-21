@@ -13,7 +13,6 @@ import {
 	projectRelativePath,
 	relativeTime,
 	shallowEqualArrays,
-	stripFrontmatter,
 	tupleKey,
 } from "./utils";
 
@@ -58,21 +57,6 @@ test("isShellInert accepts only names that stay literal in POSIX, PowerShell, an
 	]) {
 		expect(isShellInert(hostile)).toBe(false);
 	}
-});
-
-test("stripFrontmatter drops a leading YAML block, keeping the body", () => {
-	const doc = "---\nid: x\ntitle: X\n---\n\n# Heading\n\nbody\n";
-	expect(stripFrontmatter(doc)).toBe("\n# Heading\n\nbody\n");
-});
-
-test("stripFrontmatter handles a `...` close and CRLF newlines", () => {
-	expect(stripFrontmatter("---\nid: x\n...\nbody")).toBe("body");
-	expect(stripFrontmatter("---\r\nid: x\r\n---\r\nbody")).toBe("body");
-});
-
-test("stripFrontmatter leaves content without frontmatter untouched", () => {
-	expect(stripFrontmatter("# Heading\n\nbody")).toBe("# Heading\n\nbody");
-	expect(stripFrontmatter("intro\n---\nid: x\n---\n")).toBe("intro\n---\nid: x\n---\n");
 });
 
 test("cssColorToHex expands short hex and passes full hex through", () => {
@@ -123,6 +107,16 @@ test("layout resource identity ignores placement ids and separates delimiter-bea
 			path: "a:commit:x",
 			scope: { kind: "commit", sha: "y" },
 		}),
+	);
+});
+
+test("a file comparison is identified by its two paths, apart from the git diff of either", () => {
+	const compare = (before: string, path: string) =>
+		layoutResourceIdentity({ kind: "diff", path, before });
+	expect(compare("b.html", "a.html")).toBe(compare("b.html", "a.html"));
+	expect(compare("b.html", "a.html")).not.toBe(compare("c.html", "a.html"));
+	expect(compare("b.html", "a.html")).not.toBe(
+		layoutResourceIdentity({ kind: "diff", path: "a.html", scope: { kind: "uncommitted" } }),
 	);
 });
 

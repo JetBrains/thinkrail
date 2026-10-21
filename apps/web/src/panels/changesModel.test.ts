@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { GitFileChange } from "@thinkrail/contracts";
+import { VIRTUALIZED_DIFF_LINES } from "@thinkrail/resource-renderers";
 import {
 	buildChangesTree,
 	type ChangeTreeDir,
@@ -16,7 +17,6 @@ import {
 	stackedDiffBounded,
 	turnScope,
 } from "./changesModel";
-import { VIRTUALIZED_DIFF_LINES } from "./largeDiff";
 
 function change(path: string, over: Partial<GitFileChange> = {}): GitFileChange {
 	return { path, status: "modified", added: 1, removed: 0, ...over };

@@ -473,7 +473,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   client's **last open chat** (the optional `sessionId` the send carries — the conversation the user
   is already in), else the key's pinned chat (`reviews.fileReviewSession`), else a NEW chat; whatever
   received the package becomes the key's pin (`markCommentsSent`), so the sidebar's "open the
-  discussion" always follows the comments. **`review.sendBatch` answers with every session it touched**, in group
+  discussion" always follows the comments. **A send that names its chat is one package**: when the client
+  passes `sessionId` (a chat card's own chat, or the last open chat) every comment goes into that chat in one
+  structured message, because grouping exists to route each key to its own chat, and per-key packages into
+  the same chat made the agent take one review — a before/after mockup's two files — in separate turns.
+  **`review.sendBatch` answers with every session it touched**, in group
   order: a batch spanning two files starts two chats, and naming only the first left the other one
   running unseen while its comments already read as sent (the client opens them all, focusing the
   first). A linked chat that is merely **detached** is

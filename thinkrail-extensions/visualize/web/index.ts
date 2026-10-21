@@ -18,6 +18,11 @@ export default defineWebExtension({
 						const count = Array.isArray(args.options) ? args.options.length : 0;
 						return `comparison — ${count} option${count === 1 ? "" : "s"}`;
 					}
+					if (strArg(args, "type") === "file") {
+						const path = strArg(args, "path");
+						const before = strArg(args, "before");
+						return before && path ? `${before} → ${path}` : path || "file";
+					}
 					return "diagram";
 				},
 			},

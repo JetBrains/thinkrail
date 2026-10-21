@@ -10,7 +10,7 @@ tags: [pi-extension, visualization, mermaid]
 ## Responsibility
 
 The published, portable half of the visualization capability: one tool, `visualize`, that validates a
-diagram or comparison request, returns a markdown fallback as the model-facing result, and draws the
+diagram, comparison or file-preview request, returns a markdown fallback as the model-facing result, and draws the
 result in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes it through [[module-ext-visualize]]'s server half
 (the successor of the deleted `packages/pi-visualize`), injecting its strict validator.
 
@@ -18,18 +18,33 @@ result in pi's terminal UI. It knows nothing about ThinkRail. ThinkRail composes
 
 - **Default export** — the pi `ExtensionFactory` with the default configuration; what `pi install`
   loads through the `pi` manifest.
-- **`createVisualizeExtension({ validateMermaid? })`** — returns an `ExtensionFactory` with an injected
+- **`createVisualizeExtension({ validateMermaid?, checkFile?, scratchDir? })`** — returns an `ExtensionFactory` with an injected
   `MermaidValidator: (source) => void | Promise<void>`. The validator **replaces** the default check
   (never supplements it, so a stricter engine can accept syntax the probe would reject). The package
   keeps shape checks, empty-source rejection, source enumeration, awaiting the callback and wrapping any
   throw into the field-specific diagnostic (`` `mermaid` `` / `` `options[N].mermaid` ``) that asks the
-  model to correct and retry.
+  model to correct and retry. `checkFile: (path, cwd) => void | Promise<void>` is the same seam for
+  file previews (every `path`/`before`, wrapped into a `` cannot show `path` `` diagnostic asking the
+  model to write the file first); without it paths are not checked, because the package stays
+  `node:`-free. `scratchDir` names where the prompt guideline sends mockups.
 - **The tool contract** renderers key on: the name `"visualize"`, its argument shape
-  (`type: "diagram" | "comparison"`, `title?`, `mermaid?`, `options?[]`), and `details` = the validated
-  params. Changing this shape is a breaking change for every renderer, including ThinkRail's.
+  (`type: "diagram" | "comparison" | "file"`, `title?`, `mermaid?`, `options?[]`, `path?`, `before?`),
+  and `details` = the validated params. Changing this shape is a breaking change for every renderer,
+  including ThinkRail's.
 
 ## Decisions
 
+- **File previews reference workspace files; they never carry content.** `type: "file"` takes a
+  workspace path (plus an optional `before` path for a before/after view, rejected when it names the same
+  file) rather than inline HTML, so a
+  host renders it with its existing file renderers and review comments anchor to a real file the agent
+  then edits in place. The flip side is that a rendered file is always its current content: iterating on a
+  mockup updates every earlier card, so the guideline tells the agent to copy a proposal it wants to keep
+  visible and pass the copy as `before`. The tool's one `promptGuidelines` entry asks the agent to write a self-contained
+  HTML mockup (inline CSS, `data:` images, controls drawn with styled elements because hosts may strip
+  scripts, form controls and external resources) and show it this way whenever it proposes or asks
+  about a UI change. The model-facing result and the terminal are one line naming the path(s); a
+  terminal user opens them in a browser.
 - **Dependency-light for vanilla users: `lovely-mermaid`.** The package depends on `lovely-mermaid` only
   (zero dependencies, ~1 MB, synchronous, Apache-2.0). It is the maintained successor of `grok-mermaid`,
   the engine pi itself uses to draw ```` ```mermaid ```` fences in chat messages — pi never applies that

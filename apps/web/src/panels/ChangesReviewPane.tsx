@@ -8,10 +8,11 @@ import {
 	RiParagraph as Pilcrow,
 } from "@remixicon/react";
 import type { GitFileChange, GitStatus } from "@thinkrail/contracts";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { useCallback, useEffect, useInsertionEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { usePhoneViewport } from "@/lib";
-import { LoadingRegion } from "../components/Skeleton";
 import {
 	type ChangesTab,
 	selectDiffBaseRef,
@@ -28,7 +29,6 @@ import { HeaderIconButton } from "./HeaderIconButton";
 import { ownsReviewShortcut } from "./reviewShortcuts";
 import { SendAllReviewsButton } from "./SendReviewButton";
 import { createSectionContentCache } from "./sectionContentCache";
-import { ToggleSegment } from "./ToggleSegment";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 import { useWorkspaceTurns } from "./useWorkspaceTurns";
 

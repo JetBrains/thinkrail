@@ -496,3 +496,35 @@ test("accepts SDK edges, extension manifest unions, same-half sources, and publi
 	);
 	expect(moduleBoundaryViolations(root)).toEqual([]);
 });
+
+test("keeps resource renderers on contracts and ui, consumed by the web app only", () => {
+	const root = fixture();
+	write(
+		root,
+		"packages/ui/package.json",
+		JSON.stringify({
+			name: "@thinkrail/ui",
+			dependencies: { "@thinkrail/contracts": "workspace:*" },
+		}),
+	);
+	write(
+		root,
+		"packages/resource-renderers/package.json",
+		JSON.stringify({
+			name: "@thinkrail/resource-renderers",
+			dependencies: { "@thinkrail/contracts": "workspace:*", "@thinkrail/ui": "workspace:*" },
+		}),
+	);
+	write(
+		root,
+		"packages/resource-renderers/src/view.tsx",
+		'import type { ReviewAnchor } from "@thinkrail/contracts"; import "@thinkrail/ui/button";',
+	);
+	write(root, "apps/web/src/pane.tsx", 'import "@thinkrail/resource-renderers";');
+	expect(moduleBoundaryViolations(root)).toEqual([]);
+
+	write(root, "packages/resource-renderers/src/leak.ts", 'import "@thinkrail/server";');
+	expect(moduleBoundaryViolations(root)).toEqual([
+		'packages/resource-renderers/src/leak.ts: import "@thinkrail/server" creates forbidden packages/resource-renderers -> packages/server edge',
+	]);
+});

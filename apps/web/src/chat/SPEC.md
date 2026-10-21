@@ -38,9 +38,11 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   `packageRender` emits — the parser is the read half of that format, pinned in unit tests against the
   renderer's verbatim output) renders as a **compact card**: the one-sentence
   summary ("Sent 3 review comments on script.ts") with the COMMENT rows right under it — no file
-  level, because a send is ONE MESSAGE PER FILE (`review.sendBatch` groups by file and fires each
-  group as its own message), so a file row would always hold exactly one entry the summary already
-  names. Each row is one comment (`▸ L2 · the remark…`, one line), unfolding to its full text plus
+  level: a send is one message per file, or one message for every file when it names its chat (a chat
+  card's own chat or the open chat — see the host's send routing), and a package that spans several files
+  prefixes each row with its file instead (`packageFileLabels`: the shortest trailing path that tells the
+  package's files apart, the full path as its tooltip), so a before/after review's rows stay attributable
+  without a file row that would mostly hold one entry. Each row is one comment (`▸ L2 · the remark…`, one line), unfolding to its full text plus
   the quoted `<fragment>` verbatim — or the comment's `<locator>` line(s) when the position has no
   source text — in monospace, height-capped. Attribute and locator values are read back through the
   renderer's own escaping, so a path or node ref carrying `" < > &` or a newline round-trips exactly.
@@ -432,6 +434,11 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   source candidates only from explicit tool args/details — never regex guesses over Bash output, code, or
   prose. A standalone renderer has no callback and therefore stays inert. The callback's preview-slot
   semantics belong to [[submodule-web-panels]].
+- **Tool file previews** — `ChatTranscript` wraps its row list in [[module-resource-renderers]]'
+  `ResourceScopeProvider` with the chat's `{ workspaceId, sessionId }`, memoized on the two ids (one provider
+  above the list, like the fold geometry). A tool card can then render
+  [[module-resource-renderers]]' `ResourcePreview` for a workspace path and its review sends route to this
+  chat — the renderer never learns workspace or session ids through props, and chat never imports panels.
 - **`ChatActions`** — a React context (provided by `ChatTranscript`, `null` standalone): how a renderer talks
   **back** to the agent — or asks the integration layer to open something — without importing
   store/transport. Today: `answerQuestion(toolCallId, result)` —
@@ -1438,7 +1445,8 @@ Unknown custom messages retain their existing behavior.
   (`fileTargets`), and the renderers (incl. the presentational
   `Markdown` — GFM + shiki, no store/transport; the rendering is fixed but the **prose skin** is the
   caller's via an optional `className` — chat uses the compact bubble skin (`tr-prose-chat`),
-  `panels/MarkdownPreview` the document skin (`tr-prose-doc`). A skin names exactly one generated
+  [[module-resource-renderers]]' document preview the document skin (`tr-prose-doc`) — the shell injects this
+  component as the renderers' `ResourceHost.markdown`, so chat never imports the package. A skin names exactly one generated
   `tr-prose-*` system and then carries only spacing/measure/chrome — no size, weight, leading or
   tracking (see `styles/TYPOGRAPHY.md`); a caller may
   also **extend** the render with an optional `urlTransform`, extra `remarkPlugins`, and `components`, e.g.

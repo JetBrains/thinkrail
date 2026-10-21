@@ -26,12 +26,12 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useMemo, useState } from "react";
 import { LoginDialog } from "@/auth";
-import { SkeletonRows } from "@/components/Skeleton";
 import { useNow } from "@/components/useNow";
 import type { McpStateTone } from "@/lib";
 import {

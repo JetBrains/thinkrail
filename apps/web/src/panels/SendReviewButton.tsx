@@ -7,20 +7,28 @@ import { sendReviewBatch } from "./reviewSend";
 export function SendReviewButton({
 	workspaceId,
 	path,
+	chatSessionId,
 	testid = "send-review-button",
 }: {
 	workspaceId: string;
-	path: string | null;
+	path: string | readonly string[] | null;
+	chatSessionId?: string | undefined;
 	testid?: string;
 }) {
 	const comments = useAppStore((s) => s.reviewsByWorkspace[workspaceId]?.comments);
-	const draftIds = useMemo(() => fileDraftIds(comments, path), [comments, path]);
+	const draftIds = useMemo(
+		() =>
+			typeof path === "string" || path === null
+				? fileDraftIds(comments, path)
+				: path.flatMap((each) => fileDraftIds(comments, each)),
+		[comments, path],
+	);
 	return (
 		<SendButtonBase
 			testid={testid}
 			label={`Send review (${draftIds.length})`}
 			count={draftIds.length}
-			send={() => sendReviewBatch(workspaceId, draftIds)}
+			send={() => sendReviewBatch(workspaceId, draftIds, chatSessionId)}
 		/>
 	);
 }

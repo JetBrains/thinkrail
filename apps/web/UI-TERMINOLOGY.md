@@ -176,11 +176,11 @@ Tab-body components:
 | Canonical name | Implementation | Tab kind | Responsibility |
 |---|---|---|---|
 | File Pane | `panels/FilePane.tsx` → `FilePane` | `FileTab` | Registry-dispatched file viewer; richer formats get renderer toggles |
-| — Code File | `panels/MonacoEditor.tsx` / `panels/resources/code/PierreFile.tsx` (lazy) | — | Read-only Monaco source on desktop, Pierre source on phones |
-| — Markdown Preview | `panels/MarkdownPreview.tsx` → `MarkdownPreview` (lazy) | — | Rendered markdown (document skin) |
+| — Code File | `resource-renderers/support/MonacoEditor.tsx` / `resource-renderers/renderers/code/PierreFile.tsx` (lazy) | — | Read-only Monaco source on desktop, Pierre source on phones |
+| — Markdown Preview | `resource-renderers/support/MarkdownPreview.tsx` → `MarkdownPreview` (lazy) | — | Rendered markdown (document skin) |
 | Diff Pane | `panels/DiffPane.tsx` → `DiffPane` | `DiffTab` | File diff; Split\|Inline or Source\|Rendered toggle |
-| — Source Diff | `panels/resources/code/PierreDiff.tsx` (lazy) | — | Read-only Pierre split/unified source diff with review and hunk actions |
-| — Rendered Diff | `panels/RenderedDiff.tsx` → `RenderedDiff` (lazy) | — | Rich markdown diff (`<ins>`/`<del>`) |
+| — Source Diff | `resource-renderers/renderers/code/PierreDiff.tsx` (lazy) | — | Read-only Pierre split/unified source diff with review and hunk actions |
+| — Rendered Diff | `resource-renderers/support/RenderedDiff.tsx` → `RenderedDiff` (lazy) | — | Rich markdown diff (`<ins>`/`<del>`) |
 | Changes Review Pane | `panels/ChangesReviewPane.tsx` → `ChangesReviewPane` | `ChangesTab` | Every changed file of one scope as sections; **Stacked** \| **One file** modes (its own section below) |
 | Chat View | `chat/ChatView.tsx` → `ChatView` (lazy) | `chat` | The agent conversation (its own section below) |
 | Document Pane | `WorkspaceWorkbench` reference renderer | `document` | Rehydratable virtual documents such as TODO plans |
@@ -374,7 +374,7 @@ its navigator.
 | — Viewed | inline toggle button | `changes-section-viewed` (`aria-pressed`) | Marks the file viewed in this tab |
 | — Collapsed Notice | inline | `changes-section-collapsed` / `changes-section-expand` | Large or generated file collapsed by default: Expand / Open as tab |
 | — Section states | inline | `changes-section-loading` / `changes-section-error` / `changes-section-retry` | Height-reserving placeholder; failed read + Retry |
-| Hunk Toolbar | `HunkToolbar` in `panels/resources/code/PierreDiff.tsx` | `hunk-toolbar` (`data-kept`) | Per-hunk Source Diff actions: Revert (`hunk-revert`), Ask agent (`hunk-ask-agent`) |
+| Hunk Toolbar | `HunkToolbar` in `resource-renderers/renderers/code/PierreDiff.tsx` | `hunk-toolbar` (`data-kept`) | Per-hunk Source Diff actions: Revert (`hunk-revert`), Ask agent (`hunk-ask-agent`) |
 | — Keep | inline toggle button | `hunk-keep` (`aria-pressed`) | "Keep" / "Kept" hunk triage; review tab in a mutable scope only |
 | Triage Bar | inline in `ChangesReviewPane` (Stacked) | `changes-review-triage` | Bottom bar: `n of N reviewed` |
 | — Progress Bar | inline | `changes-review-progress` | Viewed fraction |
@@ -439,7 +439,7 @@ the per-file diff tab. `ChangesPanel` remains arrangement-agnostic; only its sid
 | — Last Turn | menu item | `changes-scope-last-turn` | "Last turn · N files": the newest agent run; disabled until a run changed files |
 | — Agent Turns | menu items under "Agent turns" | `changes-scope-turn` (`data-turn`) | Recent agent runs, newest first (only when there is more than one) |
 | Branch Picker | `panels/BranchPicker.tsx` → `BranchPicker` | `changes-target-picker` | Target branch (`vs <base>`) |
-| Changes View Toggle | `panels/ToggleSegment.tsx` | `changes-toggle-list` / `changes-toggle-tree` | List \| Tree |
+| Changes View Toggle | `ui/toggle-segment.tsx` | `changes-toggle-list` / `changes-toggle-tree` | List \| Tree |
 | Changes List Row | inline in `ChangesPanel` | `change-item` (`data-active`, `data-viewed`) | Flat changed-file row |
 | Changes Tree | `panels/ChangesTree.tsx` | file rows `change-item`, folders `change-tree-folder` | Folder tree of changed files |
 | Viewed Mark | `panels/ViewedMark.tsx` → `ViewedMark` | `change-viewed` | Check glyph on a row the review tab marked viewed |

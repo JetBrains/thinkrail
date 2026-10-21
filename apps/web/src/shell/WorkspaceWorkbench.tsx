@@ -4,6 +4,7 @@ import {
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import {
 	Fragment,
@@ -19,18 +20,16 @@ import { prepareChatTitle } from "../chat/chatTitle";
 import { useAutoPlanSummary } from "../chat/useChatTodos";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { QuietScrollArea } from "../components/QuietScrollArea";
-import { LoadingRegion } from "../components/Skeleton";
 import { type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { ChangesPanel } from "../panels/ChangesPanel";
 import { DiffPane } from "../panels/DiffPane";
 import { FilePane } from "../panels/FilePane";
 import { FileTree } from "../panels/FileTree";
 import { startChatInTab } from "../panels/openChat";
-import { openFileInTab } from "../panels/openTabs";
+import { fileComparisonTab, openFileInTab } from "../panels/openTabs";
 import { ProjectTree } from "../panels/ProjectTree";
-import "../panels/resources/register";
 import { ReviewPanel, selectActiveReviewedPath } from "../panels/ReviewPanel";
-import { reviewFlags } from "../panels/reviewModel";
+import { reviewFlagForPaths, reviewFlags, tabReviewPaths } from "../panels/reviewModel";
 import { SpecsPanel } from "../panels/SpecsPanel";
 import { TerminalWorkbenchBody, useTerminalClose } from "../panels/TerminalWorkbench";
 import { useWorkspaceReview } from "../panels/useWorkspaceReview";
@@ -43,6 +42,7 @@ import {
 	isConnectedGeneration,
 	isDefaultWorkspace,
 	isExternalWorkspace,
+	isFileComparison,
 	type LayoutIntent,
 	selectCanRenameChat,
 	selectContextProject,
@@ -434,6 +434,17 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					});
 				continue;
 			}
+			if (isFileComparison(tab)) {
+				useAppStore
+					.getState()
+					.openTab(
+						{ ...fileComparisonTab(workspaceId, tab.before, tab.path), id: tab.id },
+						"keep",
+						false,
+						{ activate: false },
+					);
+				continue;
+			}
 			const cacheArrived = () =>
 				(useAppStore.getState().tabsByWorkspace[workspaceId] ?? []).some((item) => {
 					const resource = toLayoutTab(item);
@@ -480,7 +491,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						const latest = useAppStore.getState();
 						if (!current || !isConnectedGeneration(latest, connectionGeneration)) return;
 						const placed = currentPlacement();
-						if (placed?.kind !== "diff" || cacheArrived()) return;
+						if (placed?.kind !== "diff" || isFileComparison(placed) || cacheArrived()) return;
 						useAppStore.getState().openTab(
 							{
 								kind: "diff",
@@ -643,7 +654,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				);
 			}
 			if (tab.kind !== "file" && tab.kind !== "diff") return null;
-			const flag = reviewFlagByPath.get(tab.path);
+			const flag = reviewFlagForPaths(reviewFlagByPath, tabReviewPaths(tab));
 			return flag ? (
 				<span
 					data-testid="review-tab-flag"

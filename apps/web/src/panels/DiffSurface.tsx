@@ -1,40 +1,29 @@
 import type { ChangeReceipt, GitDiffScope, ResourceMeta } from "@thinkrail/contracts";
-import { Button } from "@thinkrail/ui/button";
 import {
-	type ComponentType,
-	type LazyExoticComponent,
-	lazy,
-	Suspense,
-	useCallback,
-	useMemo,
-	useState,
-} from "react";
-import { usePhoneViewport } from "@/lib";
-import {
+	createAskAgentRequest,
 	describeResource,
+	diffResourceMeta,
+	GuardedRendererDiff,
 	type HunkActions,
 	type HunkTriage,
+	PENDING_TEXT_META,
 	type ResourceContent,
 	type ResourceDescriptor,
-	type ResourceDiffProps,
 	type ResourceRenderer,
-	resolveRenderers,
-} from "@/resources";
-import { LoadingRegion } from "../components/Skeleton";
+	resourceContent,
+	surfaceLineCount,
+	UnplacedReviewStrip,
+	useRendererSelection,
+} from "@thinkrail/resource-renderers";
+import { Button } from "@thinkrail/ui/button";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { Suspense, useCallback, useMemo } from "react";
 import { selectWorkspaceIsRunning, toast, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { canOfferChangeMutations, scopeHasMutableModifiedSide } from "./changeMutationAvailability";
 import { splitPath } from "./changesModel";
-import { isDiffTooExpensive, surfaceLineCount, VIRTUALIZED_DIFF_LINES } from "./largeDiff";
 import { openFileInTab } from "./openTabs";
-import {
-	PENDING_TEXT_META,
-	rendererImplementationKey,
-	resourceBytesUrl,
-	selectResourceRenderer,
-} from "./resourcePane";
-import { createAskAgentRequest } from "./resources/code/changeBlocks";
-import { UnplacedReviewStrip } from "./UnplacedReviewStrip";
+import { resourceBytesUrl } from "./resourcePane";
 import { type FileReview, useFileReview } from "./useReviewCommenting";
 
 const loading = <LoadingRegion rows={12} className="h-full p-12" />;
@@ -76,50 +65,6 @@ export interface DiffSurface {
 	onPlacedThreadIds: (ids: ReadonlySet<string>) => void;
 }
 
-function descriptorMetaFor(meta: DiffSurfaceContent["meta"]): ResourceMeta {
-	if (!meta) return PENDING_TEXT_META;
-	const present = [meta.original, meta.modified].filter((side) => side.hash !== null);
-	const representative =
-		meta.modified.hash !== null ? meta.modified : (present[0] ?? PENDING_TEXT_META);
-	return { ...representative, text: present.every((side) => side.text) };
-}
-
-function sideContent(
-	text: string,
-	meta: ResourceMeta | undefined,
-	url: string | null,
-): ResourceContent {
-	if (!meta) return { kind: "text", text, hash: "" };
-	if (meta.hash === null || meta.byteLength === null) return { kind: "absent" };
-	if (meta.text) return { kind: "text", text, hash: meta.hash };
-	if (!url) return { kind: "absent" };
-	return { kind: "bytes", url, hash: meta.hash, byteLength: meta.byteLength };
-}
-
-function sameIds(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
-	if (left.size !== right.size) return false;
-	for (const id of left) if (!right.has(id)) return false;
-	return true;
-}
-
-const diffComponents = new Map<string, LazyExoticComponent<ComponentType<ResourceDiffProps>>>();
-
-function RendererDiff({
-	renderer,
-	implementationKey,
-	...props
-}: ResourceDiffProps & { renderer: ResourceRenderer; implementationKey: string }) {
-	let Component = diffComponents.get(implementationKey);
-	if (!Component) {
-		if (!renderer.loadDiff) {
-			throw new Error(`Resource renderer has no diff loader: ${renderer.id}`);
-		}
-		Component = lazy(renderer.loadDiff);
-		diffComponents.set(implementationKey, Component);
-	}
-	return <Component {...props} />;
-}
-
 export function useDiffSurface({
 	workspaceId,
 	path,
@@ -129,7 +74,6 @@ export function useDiffSurface({
 	reload,
 	triage,
 }: DiffSurfaceInput): DiffSurface {
-	const mobile = usePhoneViewport();
 	const protocolVersion = useAppStore((state) => state.protocolVersion);
 	const agentWorking = useAppStore((state) => selectWorkspaceIsRunning(state, workspaceId));
 	const review = useFileReview(workspaceId, path, "diff", scope);
@@ -146,40 +90,23 @@ export function useDiffSurface({
 		protocolVersion,
 		mutationExpect !== null,
 	);
-	const descriptorMeta = useMemo(() => descriptorMetaFor(content.meta), [content.meta]);
+	const descriptorMeta = useMemo(
+		() =>
+			content.meta
+				? diffResourceMeta(content.meta.original, content.meta.modified)
+				: PENDING_TEXT_META,
+		[content.meta],
+	);
 	const resource = useMemo(
 		() => describeResource(workspaceId, path, descriptorMeta, scope),
 		[workspaceId, path, descriptorMeta, scope],
 	);
-	const candidates = useMemo(
-		() => resolveRenderers(resource, "diff", { mobile }),
-		[resource, mobile],
-	);
-	const renderer = selectResourceRenderer(candidates, rendererId, path);
-	const implementationKey = rendererImplementationKey(renderer.id, mobile);
-	const [placement, setPlacement] = useState<{
-		implementationKey: string;
-		ids: ReadonlySet<string>;
-	} | null>(null);
-	const onPlacedThreadIds = useCallback(
-		(ids: ReadonlySet<string>) => {
-			setPlacement((current) => {
-				if (current?.implementationKey === implementationKey && sameIds(current.ids, ids)) {
-					return current;
-				}
-				return { implementationKey, ids: new Set(ids) };
-			});
-		},
-		[implementationKey],
-	);
-	const placedThreadIds =
-		placement?.implementationKey === implementationKey ? placement.ids : undefined;
+	const { mobile, candidates, renderer, implementationKey, placedThreadIds, onPlacedThreadIds } =
+		useRendererSelection(resource, "diff", rendererId);
 
 	const original = useMemo(
 		() =>
-			sideContent(
-				content.original,
-				content.meta?.original,
+			resourceContent(content.original, content.meta?.original, () =>
 				content.originalOid ? resourceBytesUrl(workspaceId, path, content.originalOid) : null,
 			),
 		[content.original, content.meta?.original, content.originalOid, workspaceId, path],
@@ -188,9 +115,7 @@ export function useDiffSurface({
 		scope.kind === "commit" ? scope.sha : scope.kind === "turn" ? scope.headTree : null;
 	const modified = useMemo(
 		() =>
-			sideContent(
-				content.modified,
-				content.meta?.modified,
+			resourceContent(content.modified, content.meta?.modified, () =>
 				resourceBytesUrl(workspaceId, path, modifiedOid),
 			),
 		[content.modified, content.meta?.modified, modifiedOid, workspaceId, path],
@@ -340,11 +265,6 @@ export function DiffSurfaceBody({
 }) {
 	const { renderer, candidates, review, reviewable, hunkActions, placedThreadIds } = surface;
 	const reviews = reviewable ? [review.worktree, review.base] : [];
-	const tooExpensive = useMemo(
-		() => isDiffTooExpensive(surface.original, surface.modified),
-		[surface.original, surface.modified],
-	);
-	const [showLargeDiff, setShowLargeDiff] = useState(false);
 	const { workspaceId, path } = surface.resource;
 	return (
 		<>
@@ -357,22 +277,23 @@ export function DiffSurfaceBody({
 				onSelectRenderer={onSelectRenderer}
 			/>
 			<div className={bodyClassName}>
-				{tooExpensive && !showLargeDiff ? (
-					<div data-testid="diff-too-large" className="flex flex-col items-start gap-8 px-12 py-8">
-						<p className="tr-text-ui text-text-muted">
-							This diff is too expensive to show automatically. Rendering it can freeze the app for
-							a while.
-						</p>
-						<div className="flex gap-8">
-							<Button
-								size="sm"
-								variant="outline"
-								data-testid="diff-show-anyway"
-								onClick={() => setShowLargeDiff(true)}
-							>
-								Show diff anyway
-							</Button>
-							{surface.modified.kind === "text" && reviewable ? (
+				<Suspense fallback={loading}>
+					<GuardedRendererDiff
+						renderer={renderer}
+						implementationKey={surface.implementationKey}
+						resource={surface.resource}
+						original={surface.original}
+						modified={surface.modified}
+						layout={view === "split" ? "split" : "unified"}
+						ignoreWhitespace={ignoreWhitespace}
+						{...(reviewable ? { review } : {})}
+						{...(hunkActions ? { hunkActions } : {})}
+						onPlacedThreadIds={surface.onPlacedThreadIds}
+						viewState={viewState}
+						{...(onViewState ? { onViewState } : {})}
+						lineCount={surface.lineCount}
+						noticeActions={
+							surface.modified.kind === "text" && reviewable ? (
 								<Button
 									size="sm"
 									variant="ghost"
@@ -381,29 +302,10 @@ export function DiffSurfaceBody({
 								>
 									Open file
 								</Button>
-							) : null}
-						</div>
-					</div>
-				) : (
-					<Suspense fallback={loading}>
-						<RendererDiff
-							key={surface.implementationKey}
-							renderer={renderer}
-							implementationKey={surface.implementationKey}
-							resource={surface.resource}
-							original={surface.original}
-							modified={surface.modified}
-							layout={view === "split" ? "split" : "unified"}
-							ignoreWhitespace={ignoreWhitespace}
-							{...(reviewable ? { review } : {})}
-							{...(hunkActions ? { hunkActions } : {})}
-							onPlacedThreadIds={surface.onPlacedThreadIds}
-							viewState={viewState}
-							{...(onViewState ? { onViewState } : {})}
-							virtualize={surface.lineCount > VIRTUALIZED_DIFF_LINES}
-						/>
-					</Suspense>
-				)}
+							) : null
+						}
+					/>
+				</Suspense>
 			</div>
 		</>
 	);

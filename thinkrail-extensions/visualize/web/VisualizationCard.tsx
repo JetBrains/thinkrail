@@ -1,6 +1,7 @@
 import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { ComparisonCard } from "./ComparisonCard";
 import { DiagramCard } from "./DiagramCard";
+import { FileCard } from "./FileCard";
 
 export function VisualizationCard(props: ToolRenderProps) {
 	const { args, result, status } = props;
@@ -18,7 +19,13 @@ export function VisualizationCard(props: ToolRenderProps) {
 	const type = strArg(args, "type");
 	return (
 		<div data-testid="tool-visualize" data-status={status}>
-			{type === "comparison" ? <ComparisonCard {...props} /> : <DiagramCard {...props} />}
+			{type === "comparison" ? (
+				<ComparisonCard {...props} />
+			) : type === "file" ? (
+				<FileCard {...props} />
+			) : (
+				<DiagramCard {...props} />
+			)}
 		</div>
 	);
 }

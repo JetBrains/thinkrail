@@ -1,12 +1,14 @@
 import type { GitStatus } from "@thinkrail/contracts";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { QuietScrollArea } from "@/components/QuietScrollArea";
-import { LoadingRegion } from "../components/Skeleton";
 import {
 	type CenterNavigationStamp,
 	type ChangesTab,
 	type EditorTab,
 	isCenterNavigationCurrent,
+	isFileComparison,
 	matchesWorktreePath,
 	selectActiveEditorTab,
 	selectDiffBaseRef,
@@ -26,7 +28,6 @@ import { ChangesTree } from "./ChangesTree";
 import { changesTabId, scopeKey, splitPath, statusNameClass } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
 import { openChangesTab, openDiffInTab } from "./openTabs";
-import { ToggleSegment } from "./ToggleSegment";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 import { ViewedMark } from "./ViewedMark";
 
@@ -54,7 +55,7 @@ export function ChangesPanel({ workspaceId }: { workspaceId: string }) {
 	const baseRef = useAppStore((s) => selectDiffBaseRef(s, workspaceId));
 	const activeDiffTab = useAppStore((state) => {
 		const tab = selectActiveEditorTab(state, workspaceId);
-		return tab?.kind === "diff" ? tab : null;
+		return tab?.kind === "diff" && !isFileComparison(tab) ? tab : null;
 	});
 	const reviewTabId = changesTabId(workspaceId, scope);
 	const reviewActivePath = useAppStore(
