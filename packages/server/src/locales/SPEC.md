@@ -38,7 +38,8 @@ translation logic: validation and file naming come from [[module-locales]].
 - A broken file never blocks the others — including one whose validation throws: invalid JSON (with line/column when the parser reports one), a
   non-object root, an invalid file name, or an oversize file becomes an `ok: false` entry.
 - Change detection polls, it does not use `fs.watch`: once a second (`intervalMs`) it compares a
-  signature of the folder's locale files (name, inode, size, mtime) and nudges when it differs. A burst
+  signature of the folder's locale files (name, inode, size, mtime, ctime — ctime catches a `chmod`
+  repair or a rewrite that restores its mtime) and nudges when it differs. A burst
   (editor save = write + rename) inside one tick is one nudge; an empty folder appearing or vanishing is
   none. Bun on Linux shares one inotify watch per path across every `fs.watch` in the process, so after
   the folder or the whole data dir is deleted and recreated, re-watching the path can return a dead

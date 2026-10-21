@@ -74,7 +74,7 @@ function folderSignature(dir: string): string {
 		.map((name) => {
 			try {
 				const stat = statSync(join(dir, name));
-				return `${name}:${stat.ino}:${stat.size}:${stat.mtimeMs}`;
+				return `${name}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
 			} catch {
 				return `${name}:gone`;
 			}

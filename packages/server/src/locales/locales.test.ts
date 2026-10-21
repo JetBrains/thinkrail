@@ -1,5 +1,15 @@
 import { afterEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, watch, writeFileSync } from "node:fs";
+import {
+	chmodSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	rmSync,
+	statSync,
+	utimesSync,
+	watch,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MAX_LOCALE_FILE_BYTES, readLocalLocales, watchLocalLocales } from "./locales";
@@ -144,6 +154,29 @@ test("the watcher survives its whole data folder being replaced while another wa
 		expect(nudges).toBeGreaterThan(afterCreate);
 	} finally {
 		neighbor.close();
+		stop();
+	}
+});
+
+test("the watcher notices a permission repair and a rewrite that keeps its size and mtime", async () => {
+	const dir = join(tempDir(), "locales");
+	const file = join(dir, "de.json");
+	let nudges = 0;
+	const stop = watchLocalLocales({ dir, onChange: () => nudges++, intervalMs: POLL });
+	try {
+		writeFileSync(file, '{"a":"1"}');
+		await Bun.sleep(POLL * 4);
+		const before = nudges;
+		chmodSync(file, 0o644);
+		await Bun.sleep(POLL * 4);
+		expect(nudges).toBeGreaterThan(before);
+		const { mtime } = statSync(file);
+		const afterChmod = nudges;
+		writeFileSync(file, '{"a":"2"}');
+		utimesSync(file, mtime, mtime);
+		await Bun.sleep(POLL * 4);
+		expect(nudges).toBeGreaterThan(afterChmod);
+	} finally {
 		stop();
 	}
 });
