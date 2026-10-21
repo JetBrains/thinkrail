@@ -33,7 +33,7 @@ bytes are** — the one byte-level classification every content read in the host
   safety; its callers own the streaming and the writing. **`workspaceRelativePath(root, path)`** is the one
   conversion from a native or absolute path to the wire's worktree-relative POSIX form (architecture
   Decision 22): resolved against the root, `null` when outside (a name such as `..env` is inside), `""` for
-  the root itself. `readDir` emits that form, and `reviews` normalizes anchors through it. It keeps host
+  the root itself. `reviews` normalizes anchors through it. It keeps host
   semantics, so a backslash on POSIX stays part of a file name; callers that hold model-written paths turn
   `\` into `/` themselves.
   **Content classification** (`content.ts`, pure, no dependency): `CONTENT_SNIFF_BYTES` names the shared
