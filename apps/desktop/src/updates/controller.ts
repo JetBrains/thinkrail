@@ -147,7 +147,7 @@ export function createNativeUpdateController(
 	});
 	let pendingJournal: PendingJournal | null = saved?.state === "pending" ? saved : null;
 	let cancelResultFallback: CancelSchedule | undefined;
-	let installTarget: { version: string; startedAt: number } | null = null;
+	let installAttempt: { version: string; startedAt: number } | null = null;
 	let preparedVersion: string | null = null;
 	let started = false;
 	let disposed = false;
@@ -155,7 +155,6 @@ export function createNativeUpdateController(
 	let cancelScheduled: CancelSchedule | undefined;
 	let activeCheck: ActiveCheck | undefined;
 	let activeDownload: ActiveDownload | undefined;
-	let restarting = false;
 
 	const publish = (patch: StatePatch): void => {
 		if (disposed) return;
@@ -263,7 +262,7 @@ export function createNativeUpdateController(
 	};
 
 	const handleInstallStatus = (entry: NativeUpdaterStatusEntry): void => {
-		if (!installTarget) return;
+		if (!installAttempt) return;
 		const line = (source: NativeUpdateLogEntry["source"], text: string): NativeUpdateLogEntry => ({
 			at: now(),
 			source,
@@ -271,7 +270,7 @@ export function createNativeUpdateController(
 			text,
 		});
 		if (entry.status === "applying") {
-			const stoppedSeconds = ((now() - installTarget.startedAt) / 1000).toFixed(1);
+			const stoppedSeconds = ((now() - installAttempt.startedAt) / 1000).toFixed(1);
 			publish({
 				installStep: "handoff",
 				log: appendLog(
@@ -287,15 +286,15 @@ export function createNativeUpdateController(
 				schemaVersion: 1,
 				state: "pending",
 				fromVersion: state.version,
-				toVersion: installTarget.version,
-				startedAt: installTarget.startedAt,
+				toVersion: installAttempt.version,
+				startedAt: installAttempt.startedAt,
 				log,
 			});
 			publish({ installStep: "restarting", log });
 			return;
 		}
 		if (entry.status === "error") {
-			restarting = false;
+			installAttempt = null;
 			fail(
 				"install",
 				dependencies.updater.updateInfo().error || entry.details?.errorMessage || entry.message,
@@ -403,7 +402,7 @@ export function createNativeUpdateController(
 	};
 
 	const scheduleRegularCheck = (): void => {
-		if (!started || disposed || restarting) return;
+		if (!started || disposed || installAttempt) return;
 		retryIndex = 0;
 		const unit = Math.min(1, Math.max(0, random()));
 		const jitter = (unit * 2 - 1) * AUTO_CHECK_INTERVAL_MS * AUTO_CHECK_JITTER_RATIO;
@@ -411,7 +410,7 @@ export function createNativeUpdateController(
 	};
 
 	const scheduleAfterCheck = (succeeded: boolean): void => {
-		if (!started || disposed || restarting) return;
+		if (!started || disposed || installAttempt) return;
 		const retryDelay = succeeded ? undefined : RETRY_DELAYS_MS[retryIndex];
 		if (retryDelay !== undefined) {
 			retryIndex += 1;
@@ -422,7 +421,7 @@ export function createNativeUpdateController(
 	};
 
 	function launchCheck(): boolean {
-		if (!dependencies.enabled || disposed || activeCheck || activeDownload || restarting) {
+		if (!dependencies.enabled || disposed || activeCheck || activeDownload || installAttempt) {
 			return false;
 		}
 		const token: ActiveCheck = {};
@@ -437,7 +436,7 @@ export function createNativeUpdateController(
 	}
 
 	const launchDownload = (): boolean => {
-		if (!dependencies.enabled || disposed || activeCheck || activeDownload || restarting) {
+		if (!dependencies.enabled || disposed || activeCheck || activeDownload || installAttempt) {
 			return false;
 		}
 		const version = state.availableVersion;
@@ -541,7 +540,7 @@ export function createNativeUpdateController(
 	const handleStatus = (entry: NativeUpdaterStatusEntry): void => {
 		if (!dependencies.enabled || disposed) return;
 		if (activeDownload && handleDownloadStatus(activeDownload, entry)) return;
-		if (restarting) handleInstallStatus(entry);
+		if (installAttempt) handleInstallStatus(entry);
 		else handleReconciliation(entry);
 	};
 
@@ -571,7 +570,7 @@ export function createNativeUpdateController(
 				clearScheduled();
 				return;
 			}
-			if (!activeDownload && !restarting) {
+			if (!activeDownload && !installAttempt) {
 				clearScheduled();
 				launchCheck();
 			}
@@ -583,7 +582,7 @@ export function createNativeUpdateController(
 			if (
 				!dependencies.enabled ||
 				disposed ||
-				restarting ||
+				installAttempt ||
 				activeCheck ||
 				!preparedVersion ||
 				(activeDownload !== undefined && activeDownload.version !== preparedVersion)
@@ -591,11 +590,11 @@ export function createNativeUpdateController(
 				return;
 			}
 			clearScheduled();
-			restarting = true;
 			const expectedVersion = preparedVersion;
 			const pendingDownload = activeDownload?.operation;
 			const startedAt = now();
-			installTarget = { version: expectedVersion, startedAt };
+			const attempt = { version: expectedVersion, startedAt };
+			installAttempt = attempt;
 			if (state.lastInstall || pendingJournal) journal?.clear();
 			pendingJournal = null;
 			cancelResultFallback?.();
@@ -633,18 +632,18 @@ export function createNativeUpdateController(
 					}
 					if (disposed) return false;
 					if (await dependencies.restartToUpdate()) return true;
-					if (!disposed && restarting) {
+					if (!disposed && installAttempt === attempt) {
 						fail("install", dependencies.updater.updateInfo().error || INSTALLER_NOT_STARTED);
 					}
 				} catch (error) {
-					if (!disposed && restarting) fail("install", error);
+					if (!disposed && installAttempt === attempt) fail("install", error);
 				}
 				return false;
 			})();
 			void operation.then((continues) => {
 				if (continues) return;
-				restarting = false;
-				if (state.status === "error" && state.failedPhase === "install") {
+				if (installAttempt === attempt) installAttempt = null;
+				if (!installAttempt && state.status === "error" && state.failedPhase === "install") {
 					scheduleRegularCheck();
 				}
 			});

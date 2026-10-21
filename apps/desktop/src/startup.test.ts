@@ -105,6 +105,7 @@ mock.module("electrobun/main", () => ({
       this.webview = { on: (event, listener) => event === "dom-ready" && listener() };
     }
     center() {}
+    on() {}
     hide() {
       calls.push("splash-hidden");
     }

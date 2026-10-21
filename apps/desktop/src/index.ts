@@ -41,7 +41,12 @@ import { RouteStore } from "./routeStore";
 import type { DesktopRpc } from "./rpc";
 import { ptyLibraryName, runtimeTarget } from "./runtimeTarget";
 import type { DesktopServerRuntime } from "./serverRuntime";
-import { openStartupSplash, type StartupSplash, splashMessage } from "./splash";
+import {
+	handOffStartupSplash,
+	openStartupSplash,
+	type StartupSplash,
+	splashMessage,
+} from "./splash";
 import {
 	createTitleBarDoubleClickHandler,
 	type TitleBarDoubleClickResult,
@@ -424,6 +429,9 @@ async function start(): Promise<void> {
 		},
 	);
 	mainWindow.on("close", removeNavigationListeners);
+	const releaseStartupSplash = startupSplash
+		? handOffStartupSplash(startupSplash, mainWindow)
+		: undefined;
 	mainWindow.on("focus", () => rpc.send.windowFocusChanged({ focused: true }));
 	mainWindow.on("blur", () => rpc.send.windowFocusChanged({ focused: false }));
 	updateController.subscribe((state) => rpc.send.updateStateChanged(state));
@@ -440,11 +448,8 @@ async function start(): Promise<void> {
 	mainWindow.webview.on("dom-ready", () => {
 		if (ready) return;
 		ready = true;
-		if (startupSplash) {
-			startupSplash.close();
-			startupSplash = undefined;
-			mainWindow.activate();
-		}
+		releaseStartupSplash?.();
+		startupSplash = undefined;
 		startAttributionClaim();
 		updateController.start();
 		const readyPath = process.env.THINKRAIL_DESKTOP_READY_FILE;

@@ -5,7 +5,13 @@ export interface SplashWindow {
 	center(): void;
 	hide(): void;
 	close(): void;
+	on(event: "close", listener: () => void): void;
 	webview: { on(event: "dom-ready", listener: () => void): void };
+}
+
+export interface SplashMainWindow {
+	on(event: "close", listener: () => void): void;
+	activate(): void;
 }
 
 export interface SplashWindowOptions {
@@ -69,6 +75,9 @@ export async function openStartupSplash(
 		});
 	});
 	let closed = false;
+	window.on("close", () => {
+		closed = true;
+	});
 	return {
 		hide: () => {
 			if (!closed) window.hide();
@@ -79,4 +88,19 @@ export async function openStartupSplash(
 			window.close();
 		},
 	};
+}
+
+export function handOffStartupSplash(
+	splash: StartupSplash,
+	mainWindow: SplashMainWindow,
+): () => void {
+	let released = false;
+	const release = (activate: boolean): void => {
+		if (released) return;
+		released = true;
+		splash.close();
+		if (activate) mainWindow.activate();
+	};
+	mainWindow.on("close", () => release(false));
+	return () => release(true);
 }
