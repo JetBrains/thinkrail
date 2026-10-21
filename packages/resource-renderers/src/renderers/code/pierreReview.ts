@@ -1,4 +1,6 @@
 import type { AnnotationSide, FileDiffMetadata, Hunk, SelectedLineRange } from "@pierre/diffs";
+import type { MessageKey } from "@thinkrail/locales";
+import { t } from "@thinkrail/locales/react";
 import { type RefObject, useEffect } from "react";
 import type { AnchorDraft, ResourceDiffProps, ReviewThread, SurfaceReview } from "../../registry";
 import type { PierreVirtualizer } from "./pierreVirtualizer";
@@ -24,7 +26,9 @@ export function draftLineLabel(startLine: number, endLine: number): string {
 }
 
 export function composerLineLabel(startLine: number, endLine: number): string {
-	return startLine === endLine ? `Line ${startLine}` : `Lines ${startLine}–${endLine}`;
+	return startLine === endLine
+		? t("viewer.code.line", { line: startLine })
+		: t("viewer.code.lines", { start: startLine, end: endLine });
 }
 
 export interface OpenComposer {
@@ -43,11 +47,10 @@ export interface BlockedSelection {
 	id: number;
 	side: AnnotationSide;
 	lineNumber: number;
-	message: string;
+	message: MessageKey;
 }
 
-export const CROSS_SIDE_MESSAGE =
-	"A comment anchors to one side of the diff. Select lines in either the original or the new text.";
+export const CROSS_SIDE_MESSAGE = "viewer.code.crossSide" satisfies MessageKey;
 
 export function selectionComposer(
 	range: SelectedLineRange,

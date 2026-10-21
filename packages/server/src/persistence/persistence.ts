@@ -8,6 +8,7 @@ import {
 	isComposerGrowthLimit,
 	isJbcentralQuotaRefreshSeconds,
 	isLineWidth,
+	isLocalePreference,
 	isSettleIdleDays,
 	isSubagentMaxConcurrent,
 	isTerminalWindowsShell,
@@ -405,6 +406,7 @@ export function loadConfig(): AppConfig {
 			? value.settleIdleDays
 			: DEFAULT_CONFIG.settleIdleDays,
 		disabledExtensions: storedExtensionNames(value.disabledExtensions),
+		locale: isLocalePreference(value.locale) ? value.locale : DEFAULT_CONFIG.locale,
 	};
 }
 

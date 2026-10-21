@@ -39,8 +39,10 @@ Clear, fractal module boundaries are a top-priority requirement:
 
 ## Repo-wide invariants
 
-- `apps/web` depends on `contracts`, `ui`, `extension-api/web`, `resource-renderers`, and
+- `apps/web` depends on `contracts`, `locales`, `ui`, `extension-api/web`, `resource-renderers`, and
   `thinkrail-extensions/*/web` only, never `server` or `shared`.
+- User-facing UI text is a key in `packages/locales/en.json` rendered through `@thinkrail/locales/react`;
+  the lint gate rejects hardcoded JSX text and text attributes.
 - Never value-import `pi` into browser-bundled code. Import types only from the `pi-ai` /
   `pi-agent-core` package roots; `@earendil-works/pi-coding-agent` is server-only.
 - One id model: UI tab id versus `session.sessionId`; there is no separate pi UUID.

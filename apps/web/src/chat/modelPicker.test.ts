@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { WireModel } from "@thinkrail/contracts";
+import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	billsPerToken,
 	COSTLY_LEVELS,
@@ -14,6 +15,8 @@ import {
 	litBars,
 	trailingLevel,
 } from "./modelPicker";
+
+const t = currentTranslator();
 
 const model = (overrides: Partial<WireModel> & Pick<WireModel, "id">): WireModel => ({
 	name: overrides.id,
@@ -54,15 +57,15 @@ describe("costLabel / kindLabel", () => {
 	});
 
 	test("names what the model draws on: plan, quota, the env variable, or the key", () => {
-		expect(kindLabel(model({ id: "m", auth: { kind: "oauth" } }))).toBe("plan");
-		expect(kindLabel(model({ id: "m", auth: { kind: "oauth", detail: "Pro/Max" } }))).toBe(
+		expect(kindLabel(t, model({ id: "m", auth: { kind: "oauth" } }))).toBe("plan");
+		expect(kindLabel(t, model({ id: "m", auth: { kind: "oauth", detail: "Pro/Max" } }))).toBe(
 			"Pro/Max",
 		);
-		expect(kindLabel(model({ id: "m", auth: { kind: "central" } }))).toBe("quota");
-		expect(kindLabel(model({ id: "m", auth: { kind: "env", detail: "X_KEY" } }))).toBe("X_KEY");
-		expect(kindLabel(model({ id: "m", auth: { kind: "api-key" } }))).toBe("API key");
-		expect(kindLabel(model({ id: "m", auth: { kind: "other" } }))).toBeNull();
-		expect(kindLabel(model({ id: "m" }))).toBeNull();
+		expect(kindLabel(t, model({ id: "m", auth: { kind: "central" } }))).toBe("quota");
+		expect(kindLabel(t, model({ id: "m", auth: { kind: "env", detail: "X_KEY" } }))).toBe("X_KEY");
+		expect(kindLabel(t, model({ id: "m", auth: { kind: "api-key" } }))).toBe("API key");
+		expect(kindLabel(t, model({ id: "m", auth: { kind: "other" } }))).toBeNull();
+		expect(kindLabel(t, model({ id: "m" }))).toBeNull();
 	});
 });
 
@@ -97,9 +100,9 @@ describe("litBars", () => {
 
 describe("describeAuth", () => {
 	test("spells out the kind and appends pi's detail", () => {
-		expect(describeAuth(model({ id: "m" }))).toBeNull();
-		expect(describeAuth(model({ id: "m", auth: { kind: "oauth" } }))).toBe("subscription");
-		expect(describeAuth(model({ id: "m", auth: { kind: "env", detail: "X_KEY" } }))).toBe(
+		expect(describeAuth(t, model({ id: "m" }))).toBeNull();
+		expect(describeAuth(t, model({ id: "m", auth: { kind: "oauth" } }))).toBe("subscription");
+		expect(describeAuth(t, model({ id: "m", auth: { kind: "env", detail: "X_KEY" } }))).toBe(
 			"environment key · X_KEY",
 		);
 	});
@@ -107,7 +110,7 @@ describe("describeAuth", () => {
 
 describe("groupByProvider", () => {
 	test("keeps catalog order and lifts the first known auth per provider", () => {
-		const groups = groupByProvider([
+		const groups = groupByProvider(t, [
 			model({ id: "a", provider: "openai" }),
 			model({ id: "b", provider: "anthropic", auth: { kind: "oauth" } }),
 			model({ id: "c", provider: "openai", auth: { kind: "api-key", detail: "OPENAI_API_KEY" } }),

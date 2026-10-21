@@ -29,6 +29,7 @@ export type DesktopRpc = {
 			titleBarDoubleClick: undefined;
 			pageZoomRequested: { action: PageZoomAction };
 			pageZoomGestureRequested: PageZoomGesture;
+			menuLabelsChanged: { labels: Record<string, string> };
 		};
 	};
 	webview: {

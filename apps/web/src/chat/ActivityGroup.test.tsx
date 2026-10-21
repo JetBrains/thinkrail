@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { summarizeSteps } from "./ActivityGroup";
 import type { ChatRow, RoutineToolStep } from "./rows";
@@ -17,13 +18,17 @@ const tool = (id: string, toolName: string): RoutineToolStep => ({
 
 describe("activity disclosure summaries", () => {
 	it("counts steps and tallies per tool name in first-seen order", () => {
-		expect(summarizeSteps([tool("a", "bash"), tool("b", "read"), tool("c", "bash")])).toBe(
-			"3 steps · bash ×2, read",
-		);
+		expect(
+			summarizeSteps(currentTranslator(), [
+				tool("a", "bash"),
+				tool("b", "read"),
+				tool("c", "bash"),
+			]),
+		).toBe("3 steps · bash ×2, read");
 	});
 
 	it("uses the singular 'step' for one step", () => {
-		expect(summarizeSteps([tool("a", "read")])).toBe("1 step · read");
+		expect(summarizeSteps(currentTranslator(), [tool("a", "read")])).toBe("1 step · read");
 	});
 
 	it("caps the name list at 4 with a '+k more' overflow", () => {
@@ -35,7 +40,9 @@ describe("activity disclosure summaries", () => {
 			tool("e", "grep"),
 			tool("f", "glob"),
 		];
-		expect(summarizeSteps(steps)).toBe("6 steps · bash, read, edit, write, +2 more");
+		expect(summarizeSteps(currentTranslator(), steps)).toBe(
+			"6 steps · bash, read, edit, write, +2 more",
+		);
 	});
 
 	it("counts nested thinking and tools in one outer N-step disclosure", () => {

@@ -1,4 +1,5 @@
 import type { GitStatus } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -52,6 +53,7 @@ export function ChangesPanel({
 	error: string | null;
 	reload: () => void;
 }) {
+	const t = useT();
 	const changesRequest = useAppStore((s) => s.changesRequest);
 	const changesView = useAppStore((s) => s.changesView);
 	const setChangesView = useAppStore((s) => s.setChangesView);
@@ -94,7 +96,7 @@ export function ChangesPanel({
 		try {
 			await getTransport().request("workspace.setDiffBase", { id: workspaceId, ref });
 		} catch (error) {
-			toast.error(`Could not change the target branch: ${errorText(error)}`);
+			toast.error(t("changes.panel.setBaseFailed", { error: errorText(error) }));
 		}
 	};
 
@@ -153,7 +155,7 @@ export function ChangesPanel({
 			<div
 				data-testid="changes-view-toggle"
 				role="toolbar"
-				aria-label="Changes scope and view"
+				aria-label={t("changes.panel.toolbar")}
 				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b px-12"
 			>
 				<div className="mr-auto flex min-w-0 items-center gap-4">
@@ -168,7 +170,7 @@ export function ChangesPanel({
 							branches={branches}
 							selected={baseRef}
 							refreshing={branchesRefreshing}
-							label="vs"
+							label={t("changes.panel.versus")}
 							testid="changes-target-picker"
 							triggerClassName="flex h-24 min-w-0 max-w-[200px] items-center gap-4 rounded-sm px-4 outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:bg-control-bg-selected"
 							onSelect={(ref) => void pointAt(ref)}
@@ -178,13 +180,13 @@ export function ChangesPanel({
 				</div>
 				<ToggleSegment
 					testid="changes-toggle-list"
-					label="List"
+					label={t("changes.panel.list")}
 					active={changesView === "list"}
 					onClick={() => setChangesView("list")}
 				/>
 				<ToggleSegment
 					testid="changes-toggle-tree"
-					label="Tree"
+					label={t("changes.panel.tree")}
 					active={changesView === "tree"}
 					onClick={() => setChangesView("tree")}
 				/>
@@ -200,7 +202,7 @@ export function ChangesPanel({
 				{status === null && error !== null ? (
 					<div data-testid="changes-error" className="flex flex-col items-start gap-4 px-8 py-4">
 						<p className="tr-text-metadata text-feedback-error">
-							Could not read the changes: {error}
+							{t("changes.readFailed", { error })}
 						</p>
 						<button
 							type="button"
@@ -208,14 +210,14 @@ export function ChangesPanel({
 							onClick={reload}
 							className="rounded-sm px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
 						>
-							Retry
+							{t("common.retry")}
 						</button>
 					</div>
 				) : status === null ? (
 					<LoadingRegion rows={5} className="px-8 py-4" />
 				) : status.changes.length === 0 ? (
 					<p data-testid="changes-empty" className="px-8 py-4 tr-text-metadata text-text-muted">
-						No changes in this scope.
+						{t("changes.empty")}
 					</p>
 				) : changesView === "tree" ? (
 					<ChangesTree

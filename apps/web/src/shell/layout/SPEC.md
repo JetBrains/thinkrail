@@ -38,7 +38,12 @@ command patches the active workspace view. A frame command returns the frame plu
 retained-workspace remap; the store installs that result atomically through
 [[submodule-web-shell-layout-state]]. Components never splice groups or tabs. Stable ids are placement keys;
 a tab's `name` remains non-identity metadata. Singleton tool names resolve from the current web-owned catalog
-at presentation time, so copy updates never rewrite local layout state.
+at presentation time, so copy updates never rewrite local layout state. Unavailable reasons are localized copy
+resolved when the operation runs, never persisted. Helpers evaluated during render (`layoutTabName`,
+`describeLayoutGroup`, `removeLayoutGroup`, `separatePanesReason`, `layoutPresetName`) take the caller's
+translator as their first argument, so a language change recomputes them. `layoutTabName` words every
+default name at render from the tab's kind (tool, untitled chat, default terminal, Changes / diff scope,
+plan document) through `lib`'s default-name helpers, and shows a name set by the user or agent verbatim.
 
 A click that may become a browser `dblclick` waits the shared 250 ms settle window. The upgraded gesture emits
 only its final keep while retaining the leading preview-slot claim, whether content was cached or required a
@@ -217,7 +222,9 @@ Balanced and Review show it; Focus hides it. Balanced and Focus start with one c
 its deliberate vertical pair. Custom presets use the same grammar and capture geometry,
 topology, tools, folds, and empty structural slots, never workspace resources or terminal count. Preset node
 ids are template-local labels: instantiation mints frontend-local frame ids and returns the old→new group map
-used to rehome every workspace view. Only custom definitions cross the wire through settings.
+used to rehome every workspace view. Only custom definitions cross the wire through settings. Built-in preset
+names are display copy: `layoutPresetName` renders them through the locale catalog by preset id while the
+definition keeps its stable `name`; custom preset names are user data and render verbatim.
 
 Applying a preset creates one replacement frame, raises this surface's local side/bottom limits if required, and remaps all retained workspace views atomically. Center resources preserve visual order and distribute across destination leaves; terminals map into compatible slots; singleton tool placement ids survive where possible. Omitted tools receive deterministic restore targets, so a sparse preset cannot strand Projects or another tool. The local default preset is the target of the explicit Reset frame command; ordinary workspace switches retain the current frame. Default selection and limits persist locally, not in host settings.
 

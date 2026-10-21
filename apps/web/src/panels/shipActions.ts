@@ -1,4 +1,5 @@
 import type { OpenBranchReview, ReviewMergeState } from "@thinkrail/contracts";
+import type { Translator } from "@thinkrail/locales/react";
 import { isShellInert } from "../lib";
 import type { BranchFacts } from "./branchStatusState";
 import { isOpenBranchReview } from "./useBranchStatus";
@@ -77,23 +78,43 @@ function remoteValue(status: BranchFacts): RemoteValue {
 	return { kind: "counts", ahead: status.ahead, behind: status.behind };
 }
 
-function remotePrimary(status: BranchFacts): ShipAction | null {
+function remotePrimary(t: Translator, status: BranchFacts): ShipAction | null {
 	if (!status.hasOrigin || status.published === null) return null;
 	if (!status.published) {
 		return status.aheadOfBase > 0
-			? { id: "publish", label: "Publish branch", short: "Publish", tone: "primary" }
+			? {
+					id: "publish",
+					label: t("panels.ship.publish.label"),
+					short: t("panels.ship.publish.short"),
+					tone: "primary",
+				}
 			: null;
 	}
 	const ahead = status.ahead ?? 0;
 	if ((status.behind ?? 0) > 0) {
-		return { id: "sync", label: "Sync with origin…", short: "Sync…", tone: "warning" };
+		return {
+			id: "sync",
+			label: t("panels.ship.sync.label"),
+			short: t("panels.ship.sync.short"),
+			tone: "warning",
+		};
 	}
 	return ahead > 0
-		? { id: "push", label: `Push ${commits(ahead)}`, short: `Push ${ahead}`, tone: "primary" }
+		? {
+				id: "push",
+				label: t("panels.ship.push.label", { count: ahead }),
+				short: t("panels.ship.push.short", { ahead }),
+				tone: "primary",
+			}
 		: null;
 }
 
-function finale(context: ShipContext, review: OpenBranchReview, noun: "PR" | "MR"): ShipArm {
+function finale(
+	t: Translator,
+	context: ShipContext,
+	review: OpenBranchReview,
+	noun: "PR" | "MR",
+): ShipArm {
 	const extra: ShipAction[] = [];
 	if (
 		context.reviewActions &&
@@ -104,27 +125,39 @@ function finale(context: ShipContext, review: OpenBranchReview, noun: "PR" | "MR
 	) {
 		extra.push({
 			id: "reopen",
-			label: `Reopen ${noun} on GitHub`,
-			short: "Reopen",
+			label: t("panels.ship.reopen.label", { noun }),
+			short: t("panels.ship.reopen.short"),
 			tone: "neutral",
 		});
 	}
 	if (context.reviewActions && context.status.published && !context.status.onBase) {
 		extra.push({
 			id: "deleteRemote",
-			label: "Delete remote branch…",
-			short: "Delete branch",
+			label: t("panels.ship.deleteRemote.label"),
+			short: t("panels.ship.deleteRemote.short"),
 			tone: "danger",
 		});
 	}
 	const remove: ShipAction[] = context.removable
-		? [{ id: "remove", label: "Remove workspace…", short: "Remove", tone: "danger" }]
+		? [
+				{
+					id: "remove",
+					label: t("panels.ship.remove.label"),
+					short: t("panels.ship.remove.short"),
+					tone: "danger",
+				},
+			]
 		: [];
 	if (context.settled) {
 		return {
 			primary: null,
 			secondary: [
-				{ id: "keepActive", label: "Keep active", short: "Keep active", tone: "neutral" },
+				{
+					id: "keepActive",
+					label: t("panels.ship.keepActive"),
+					short: t("panels.ship.keepActive"),
+					tone: "neutral",
+				},
 				...extra,
 				...remove,
 			],
@@ -132,13 +165,23 @@ function finale(context: ShipContext, review: OpenBranchReview, noun: "PR" | "MR
 	}
 	return context.canSettle
 		? {
-				primary: { id: "settle", label: "Settle workspace", short: "Settle", tone: "primary" },
+				primary: {
+					id: "settle",
+					label: t("panels.ship.settle.label"),
+					short: t("panels.ship.settle.short"),
+					tone: "primary",
+				},
 				secondary: [...extra, ...remove],
 			}
 		: { primary: null, secondary: [...extra, ...remove] };
 }
 
-function openReviewArm(context: ShipContext, review: OpenBranchReview, noun: "PR" | "MR"): ShipArm {
+function openReviewArm(
+	t: Translator,
+	context: ShipContext,
+	review: OpenBranchReview,
+	noun: "PR" | "MR",
+): ShipArm {
 	const { status } = context;
 	const details = review.details;
 	if (!context.reviewActions || review.kind !== "pull-request" || !details || status.onBase) {
@@ -148,13 +191,18 @@ function openReviewArm(context: ShipContext, review: OpenBranchReview, noun: "PR
 	if ((details.checks?.failing ?? 0) > 0) {
 		candidates.push({
 			id: "fixChecks",
-			label: "Fix with agent",
-			short: "Fix checks",
+			label: t("panels.ship.fixChecks.label"),
+			short: t("panels.ship.fixChecks.short"),
 			tone: "warning",
 		});
 	}
 	if (details.draft) {
-		candidates.push({ id: "ready", label: "Ready for review", short: "Ready", tone: "primary" });
+		candidates.push({
+			id: "ready",
+			label: t("panels.ship.ready.label"),
+			short: t("panels.ship.ready.short"),
+			tone: "primary",
+		});
 	} else if (
 		MERGEABLE_STATES.has(details.mergeState) &&
 		status.ahead === 0 &&
@@ -162,8 +210,8 @@ function openReviewArm(context: ShipContext, review: OpenBranchReview, noun: "PR
 	) {
 		candidates.push({
 			id: "mergePr",
-			label: `Merge ${noun} on GitHub…`,
-			short: `Merge ${noun}`,
+			label: t("panels.ship.mergePr.label", { noun }),
+			short: t("panels.ship.mergePr.short", { noun }),
 			tone: "primary",
 		});
 	}
@@ -173,29 +221,34 @@ function openReviewArm(context: ShipContext, review: OpenBranchReview, noun: "PR
 	return { primary, secondary };
 }
 
-function reviewArm(context: ShipContext, noun: "PR" | "MR"): ShipArm {
+function reviewArm(t: Translator, context: ShipContext, noun: "PR" | "MR"): ShipArm {
 	const { status, review } = context;
 	if (review)
 		return isOpenBranchReview(review)
-			? openReviewArm(context, review, noun)
-			: finale(context, review, noun);
+			? openReviewArm(t, context, review, noun)
+			: finale(t, context, review, noun);
 	if (status.onBase || status.aheadOfBase === 0) return { primary: null, secondary: [] };
 	const mergeLocal: ShipAction = {
 		id: "mergeLocal",
-		label: `Merge into ${context.base} locally`,
-		short: `Merge into ${context.base}`,
+		label: t("panels.ship.mergeLocal.label", { base: context.base }),
+		short: t("panels.ship.mergeLocal.short", { base: context.base }),
 		tone: "neutral",
 		disabled: true,
-		hint: "Coming soon",
+		hint: t("panels.ship.mergeLocal.hint"),
 	};
 	if (status.provider === "github") {
 		return {
-			primary: { id: "openPr", label: `Open ${noun}`, short: `Open ${noun}`, tone: "primary" },
+			primary: {
+				id: "openPr",
+				label: t("panels.ship.openPr", { noun }),
+				short: t("panels.ship.openPr", { noun }),
+				tone: "primary",
+			},
 			secondary: [
 				{
 					id: "openDraftPr",
-					label: `Open draft ${noun}`,
-					short: `Open draft ${noun}`,
+					label: t("panels.ship.openDraftPr", { noun }),
+					short: t("panels.ship.openDraftPr", { noun }),
 					tone: "neutral",
 				},
 				mergeLocal,
@@ -206,8 +259,8 @@ function reviewArm(context: ShipContext, noun: "PR" | "MR"): ShipArm {
 		return {
 			primary: {
 				id: "createMr",
-				label: "Create MR on GitLab",
-				short: "Create MR",
+				label: t("panels.ship.createMr.label"),
+				short: t("panels.ship.createMr.short"),
 				tone: "primary",
 			},
 			secondary: [mergeLocal],
@@ -216,16 +269,16 @@ function reviewArm(context: ShipContext, noun: "PR" | "MR"): ShipArm {
 	return { primary: null, secondary: [mergeLocal] };
 }
 
-export function shipActions(context: ShipContext): ShipModel {
+export function shipActions(t: Translator, context: ShipContext): ShipModel {
 	const { status, review } = context;
 	const noun =
 		review?.kind === "merge-request" || (!review && status.provider === "gitlab") ? "MR" : "PR";
 	return {
 		noun,
-		remote: { value: remoteValue(status), primary: remotePrimary(status), secondary: [] },
+		remote: { value: remoteValue(status), primary: remotePrimary(t, status), secondary: [] },
 		review: {
 			value: review ? "review" : status.onBase ? "base" : "none",
-			...reviewArm(context, noun),
+			...reviewArm(t, context, noun),
 		},
 	};
 }

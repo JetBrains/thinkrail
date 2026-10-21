@@ -13,8 +13,8 @@ The server-synchronized app config: opaque fixed-theme selection, fixed/system m
 pair, additional-analytics preference and first-run dialog completion marker, host-owned new-chat model and
 effort defaults, terminal replay budget and Windows shell preference, chat composer growth preset, chat/file
 visual line widths plus independent pane bounds, bounded custom layout-preset catalog, JetBrains quota
-display/cadence, the host-wide subagent default, plan-review policy, and the host-registry extensions the
-user turned off. `defaultModel` / `defaultEffort`
+display/cadence, the host-wide subagent default, plan-review policy, the host-registry extensions the
+user turned off, and the UI language preference (`locale`). `defaultModel` / `defaultEffort`
 select the defaults every new chat receives (unset model means first available; unset effort means medium);
 `reviewModel` / `reviewEffort`
 select the reviewer runtime (unset means that same new-chat default); `reviewAutoFix: false` records a `request_changes`
@@ -62,6 +62,11 @@ interval (`1–3600`, default 30), because those values govern host process cade
   means, so a stale entry for a removed extension never breaks boot or a later update. A malformed stored
   list keeps its valid names. Settings owns only the list; `host` turns it into the agent's resolver and the
   live tool refresh ([[module-server]] § host-mediated policy).
+- `locale` is `"system"` (default) or a canonical BCP-47 tag (`isLocalePreference`: `pt-BR`, not
+  `pt-br`). Settings never checks that a language is available — bundled catalogs belong to the web build
+  and local files to [[submodule-server-locales]] — so a tag whose file was deleted persists and returns
+  with the file. A malformed stored value falls back to `"system"`; a malformed update rejects the whole
+  mutation.
 - JetBrains quota display defaults on and its interval defaults to 30 seconds when either stored field is absent/invalid. Wire updates reject a non-boolean flag or a non-integer/out-of-range interval atomically; they never clamp a caller's value into a different persisted choice.
 - Theme availability/labels/palettes, operating-system appearance, and the effective theme are not server concerns. `theme` remains the opaque fixed choice; `themeMode` defaults to `"fixed"`, and `systemThemePair` remains absent until first use. A persisted pair is retained only when both slots are strings; malformed pairs are dropped, and system mode without a retained pair normalizes to fixed without replacing a valid fixed id. A missing/invalid mode also normalizes to fixed while an independently valid dormant pair may survive. Entering system mode requires a complete valid-shaped existing-or-incoming pair; a pair mutation replaces both slots atomically. Unknown ids remain persisted for each independently shipped frontend to resolve by required appearance.
 - A `settings.update` carrying `theme` without explicit `themeMode` is a legacy-compatible fixed-theme action and sets mode to `"fixed"`. Thus an old client connected to a system-configured host can never appear to change only itself: its deliberate theme choice exits system mode through the ordinary persist-before-broadcast path.

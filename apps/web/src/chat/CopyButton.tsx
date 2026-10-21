@@ -1,17 +1,20 @@
 import { RiCheckLine as Check, RiFileCopyLine as Copy } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useRef, useState } from "react";
 import { copyText } from "@/lib";
 
 export function CopyButton({
 	getText,
-	label = "Copy message",
+	label,
 	className,
 }: {
 	getText: () => string;
 	label?: string;
 	className?: string | undefined;
 }) {
+	const t = useT();
+	const accessibleLabel = label ?? t("chat.copyMessage");
 	const [copied, setCopied] = useState(false);
 	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	useEffect(() => () => (timer.current ? clearTimeout(timer.current) : undefined), []);
@@ -21,8 +24,8 @@ export function CopyButton({
 			type="button"
 			data-testid="chat-copy"
 			data-copied={copied || undefined}
-			aria-label={label}
-			title={label}
+			aria-label={accessibleLabel}
+			title={accessibleLabel}
 			onClick={() => {
 				void (async () => {
 					if (!(await copyText(getText()))) return;

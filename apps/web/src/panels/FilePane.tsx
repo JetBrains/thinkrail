@@ -1,3 +1,4 @@
+import { useT } from "@thinkrail/locales/react";
 import {
 	describeResource,
 	PENDING_TEXT_META,
@@ -23,6 +24,7 @@ import { useFileReview } from "./useReviewCommenting";
 const loading = <LoadingRegion rows={12} className="h-full p-12" />;
 
 export function FilePane({ tab }: { tab: FileTab }) {
+	const t = useT();
 	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
 	const review = useFileReview(tab.workspaceId, tab.path, "inline");
 	const reviewComments = useAppStore(
@@ -75,7 +77,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 				<div
 					data-testid="resource-view-toggle"
 					role="toolbar"
-					aria-label="Resource view"
+					aria-label={t("panels.filePane.resourceView")}
 					className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
 				>
 					<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />

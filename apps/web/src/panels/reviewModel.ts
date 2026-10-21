@@ -1,5 +1,5 @@
 import type { GitDiffScope, ReviewAnchor, ReviewComment } from "@thinkrail/contracts";
-import { anchorLabel, type ReviewThread, threadLabel } from "@thinkrail/resource-renderers";
+import { anchorLabel, type ReviewThread } from "@thinkrail/resource-renderers";
 
 export type ReviewSurface = { kind: "file" } | { kind: "diff"; scope?: GitDiffScope };
 
@@ -53,9 +53,11 @@ export function lineRef(comment: ReviewComment): string {
 export function statusLabel(
 	comment: Pick<ReviewComment, "status" | "anchorState" | "stale">,
 ): string {
-	return comment.status === "resolved" || comment.status === "dismissed"
-		? comment.status
-		: threadLabel(comment);
+	if (comment.status !== "resolved" && comment.status !== "dismissed") {
+		if (comment.stale) return `${comment.status} · stale`;
+		if (comment.anchorState === "outdated") return `${comment.status} · outdated`;
+	}
+	return comment.status;
 }
 
 export type ReviewFlag = "draft" | "sent";

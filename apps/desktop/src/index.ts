@@ -16,11 +16,18 @@ import {
 	isNativeCommand,
 	QUIT_SHORTCUT_ACTION,
 	readMenuAction,
+	readMenuLabels,
 } from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
 import { installExternalNavigation } from "./externalNavigation";
 import { preferNativeHostBridge, usesNativeHostBridge } from "./hostTransport";
 import { createKeyStateReader } from "./keyState";
+import {
+	type DesktopDialogLabels,
+	readDialogLabels,
+	readNativeLabels,
+	writeNativeLabels,
+} from "./nativeLabels";
 import { createPageZoomGestureHandler, nextPageZoom } from "./pageZoom";
 import {
 	injectInitialDesktopPreferences,
@@ -101,6 +108,14 @@ function windowControlsProbeScript(target: { testId: string; label: string }): s
 }
 let startupQuitCoordinator: ReturnType<typeof createElectrobunQuitCoordinator> | undefined;
 
+function desktopUserData(): string {
+	return process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData;
+}
+
+function nativeLabelsPath(): string {
+	return join(desktopUserData(), "native-labels.json");
+}
+
 function writeReady(path: string, payload: unknown): void {
 	mkdirSync(dirname(path), { recursive: true });
 	writeFileSync(path, JSON.stringify(payload));
@@ -108,7 +123,13 @@ function writeReady(path: string, payload: unknown): void {
 
 async function start(): Promise<void> {
 	const shellEnv = resolveShellEnv();
-	const applicationMenuInstalled = installDesktopApplicationMenu(ApplicationMenu, process.platform);
+	const savedLabels = readNativeLabels(nativeLabelsPath());
+	let dialogLabels: DesktopDialogLabels = readDialogLabels(savedLabels);
+	const applicationMenuInstalled = installDesktopApplicationMenu(
+		ApplicationMenu,
+		process.platform,
+		readMenuLabels(savedLabels),
+	);
 	let menuTarget: {
 		hintVisible(): boolean;
 		showHint(hint: NativeQuitHint): void;
@@ -156,13 +177,16 @@ async function start(): Promise<void> {
 			? { openExternal: (url: string) => Utils.openExternal(url) }
 			: {}),
 	});
-	const quitCoordinator = createElectrobunQuitCoordinator(() => host.server.shutdown());
+	const quitCoordinator = createElectrobunQuitCoordinator(
+		() => host.server.shutdown(),
+		() => dialogLabels,
+	);
 	startupQuitCoordinator = quitCoordinator;
 	Electrobun.events.on("before-quit", (event: BeforeQuitEvent) => {
 		quitCoordinator.handleBeforeQuit(event);
 	});
 	const origin = `http://127.0.0.1:${host.port}`;
-	const userData = process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData;
+	const userData = desktopUserData();
 	const routes = new RouteStore(join(userData, "routes.json"));
 	const preferences = new PreferenceStore(join(userData, "preferences.json"));
 	const initialRoute = routes.read(BACKEND_PROFILE_ID, WINDOW_ID);
@@ -258,6 +282,14 @@ async function start(): Promise<void> {
 					mainWindow.setPageZoom(nextPageZoom(mainWindow.getPageZoom(), action));
 				},
 				pageZoomGestureRequested: handlePageZoomGesture,
+				menuLabelsChanged: ({ labels }) => {
+					const menuLabels = readMenuLabels(labels);
+					dialogLabels = readDialogLabels(labels);
+					if (!neutral) writeNativeLabels(nativeLabelsPath(), { ...menuLabels, ...dialogLabels });
+					if (applicationMenuInstalled) {
+						installDesktopApplicationMenu(ApplicationMenu, process.platform, menuLabels);
+					}
+				},
 				routeChanged: ({ hash }) => {
 					if (!neutral) routes.write(BACKEND_PROFILE_ID, WINDOW_ID, hash);
 				},
@@ -448,12 +480,13 @@ try {
 	const message = error instanceof Error ? error.message : String(error);
 	console.error(message);
 	try {
+		const labels = readDialogLabels(readNativeLabels(nativeLabelsPath()));
 		await Utils.showMessageBox({
 			type: "error",
-			title: "ThinkRail could not start",
-			message: "ThinkRail could not start",
+			title: labels["desktop.dialog.startFailed"],
+			message: labels["desktop.dialog.startFailed"],
 			detail: message,
-			buttons: ["Quit"],
+			buttons: [labels["desktop.dialog.quit"]],
 		});
 	} finally {
 		if (startupQuitCoordinator) await startupQuitCoordinator.quit();

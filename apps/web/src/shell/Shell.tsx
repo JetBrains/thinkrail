@@ -3,6 +3,8 @@ import {
 	RiCircleFill,
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useState } from "react";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
@@ -42,11 +44,11 @@ import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { useNativeWindowControls } from "./useNativeWindowControls";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
 
-const STATUS_LABEL: Record<ConnectionStatus, string> = {
-	connected: "Connected",
-	connecting: "Connecting…",
-	disconnected: "Disconnected",
-};
+const STATUS_LABEL = {
+	connected: "shell.connection.connected",
+	connecting: "shell.connection.connecting",
+	disconnected: "shell.connection.disconnected",
+} satisfies Record<ConnectionStatus, MessageKey>;
 
 const STATUS_DOT: Record<ConnectionStatus, string> = {
 	connected: "text-feedback-success",
@@ -55,6 +57,7 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 };
 
 export function Shell() {
+	const t = useT();
 	useLocalLayoutState();
 	useAttentionNotifications();
 	const status = useAppStore((s) => s.status);
@@ -172,7 +175,7 @@ export function Shell() {
 						data-testid="connection-status"
 						data-status={status}
 						role="status"
-						aria-label={STATUS_LABEL[status]}
+						aria-label={t(STATUS_LABEL[status])}
 						className="inline-flex items-center gap-8 tr-text-ui text-text-muted"
 					>
 						<StatusDot
@@ -180,14 +183,20 @@ export function Shell() {
 							className={`size-8 shrink-0 fill-current ${STATUS_DOT[status]}`}
 						/>
 						<span aria-hidden="true" className="hidden sm:inline">
-							{STATUS_LABEL[status]}
+							{t(STATUS_LABEL[status])}
 						</span>
 					</span>
-					<IconTooltip label={settingsShortcut ? `Settings (${settingsShortcut})` : "Settings"}>
+					<IconTooltip
+						label={
+							settingsShortcut
+								? t("shell.topbar.settingsWithShortcut", { shortcut: settingsShortcut })
+								: t("shell.topbar.settings")
+						}
+					>
 						<button
 							type="button"
 							data-testid="open-settings"
-							aria-label="Settings"
+							aria-label={t("shell.topbar.settings")}
 							onClick={() => useAppStore.getState().openSettings()}
 							className="flex size-28 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 						>

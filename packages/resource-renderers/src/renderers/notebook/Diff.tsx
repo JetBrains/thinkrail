@@ -1,4 +1,6 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useMemo, useRef } from "react";
 import { useResourceHost } from "../../host";
@@ -33,6 +35,13 @@ interface ThreadEntry {
 	thread: ReviewThread;
 	side: Side;
 }
+
+const STATE_LABELS = {
+	added: "viewer.notebook.stateAdded",
+	removed: "viewer.notebook.stateRemoved",
+	changed: "viewer.notebook.stateChanged",
+	unchanged: "viewer.notebook.stateUnchanged",
+} as const satisfies Record<AlignedNotebookCell["state"], MessageKey>;
 
 function entryKey(entry: AlignedNotebookCell): string {
 	if (entry.state === "added") return `added:${entry.modified.index}:${entry.modified.ref}`;
@@ -71,7 +80,11 @@ function CellCommentButton({
 	side: Side;
 	onSelect: (selection: SelectedCell) => void;
 }) {
-	const label = `Comment on ${side === "base" ? "old" : "new"} cell ${cell.index + 1}`;
+	const t = useT();
+	const label = t(
+		side === "base" ? "viewer.notebook.commentOnOldCell" : "viewer.notebook.commentOnNewCell",
+		{ number: cell.index + 1 },
+	);
 	return (
 		<IconTooltip label={label}>
 			<button
@@ -97,6 +110,7 @@ function NotebookDiffSurface({
 	viewState,
 	onViewState,
 }: ResourceDiffProps) {
+	const t = useT();
 	const originalText = original.kind === "text" ? original.text : null;
 	const modifiedText = modified.kind === "text" ? modified.text : null;
 	const { languageId } = useResourceHost().code;
@@ -229,7 +243,11 @@ function NotebookDiffSurface({
 						>
 							<header className="flex min-h-32 items-center gap-4 border-border-muted border-b bg-container-header-bg px-8">
 								<span className="tr-text-eyebrow text-text-muted">
-									{entry.state} · cell {current.index + 1} · {current.type}
+									{t("viewer.notebook.cellHeader", {
+										state: t(STATE_LABELS[entry.state]),
+										number: current.index + 1,
+										type: current.type,
+									})}
 								</span>
 								{review ? (
 									<span className="ml-auto flex gap-2">

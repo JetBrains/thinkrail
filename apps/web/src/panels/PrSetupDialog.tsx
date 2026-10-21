@@ -6,6 +6,8 @@ import {
 	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
 import type { GhSetupProblem, HostPlatform } from "@thinkrail/contracts";
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
 import { Button, buttonVariants } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -23,6 +25,7 @@ export type PrSetupState =
 	| { kind: "gh"; problem: GhSetupProblem; compareUrl?: string };
 
 function CommandRow({ command, onRun }: { command: string; onRun: (command: string) => void }) {
+	const t = useT();
 	const [copied, setCopied] = useState(false);
 	const copy = async () => {
 		if (await copyText(command)) {
@@ -37,7 +40,7 @@ function CommandRow({ command, onRun }: { command: string; onRun: (command: stri
 				variant="ghost"
 				size="icon"
 				data-testid="open-pr-setup-copy"
-				aria-label="Copy command"
+				aria-label={t("panels.prSetup.copyCommand")}
 				onClick={() => void copy()}
 			>
 				{copied ? (
@@ -50,27 +53,25 @@ function CommandRow({ command, onRun }: { command: string; onRun: (command: stri
 				variant="outline"
 				size="sm"
 				data-testid="open-pr-setup-run"
-				title="Run this command in a workspace terminal — answer its prompts there"
+				title={t("panels.prSetup.runTitle")}
 				onClick={() => onRun(command)}
 			>
 				<Play className="size-14" />
-				Run
+				{t("panels.prSetup.run")}
 			</Button>
 		</div>
 	);
 }
 
-const GH_TITLE: Record<GhSetupProblem, string> = {
-	missing: "GitHub CLI isn't installed",
-	unauthenticated: "GitHub CLI isn't signed in",
-};
+const GH_TITLE = {
+	missing: "panels.prSetup.ghMissingTitle",
+	unauthenticated: "panels.prSetup.ghUnauthenticatedTitle",
+} satisfies Record<GhSetupProblem, MessageKey>;
 
-const GH_DESCRIPTION: Record<GhSetupProblem, string> = {
-	missing:
-		"The branch was pushed, but creating the PR directly needs the GitHub CLI on this machine. Install it and sign in, then Open PR creates and updates PRs in one click.",
-	unauthenticated:
-		"The branch was pushed, but the GitHub CLI on this machine isn't signed in, so the PR can't be created directly. Sign in, then try again.",
-};
+const GH_DESCRIPTION = {
+	missing: "panels.prSetup.ghMissingDescription",
+	unauthenticated: "panels.prSetup.ghUnauthenticatedDescription",
+} satisfies Record<GhSetupProblem, MessageKey>;
 
 const SSH_ADD_COMMAND: Record<HostPlatform, string> = {
 	darwin: "ssh-add --apple-use-keychain ~/.ssh/id_ed25519",
@@ -78,11 +79,11 @@ const SSH_ADD_COMMAND: Record<HostPlatform, string> = {
 	win32: "ssh-add $env:USERPROFILE\\.ssh\\id_ed25519",
 };
 
-const SSH_ADD_HINT: Record<HostPlatform, string> = {
-	darwin: "SSH remote: load your key into the agent once — Keychain remembers the passphrase.",
-	linux: "SSH remote: load your key into the ssh-agent once.",
-	win32: "SSH remote: load your key into the ssh-agent once (needs the OpenSSH Agent service).",
-};
+const SSH_ADD_HINT = {
+	darwin: "panels.prSetup.sshAddHintDarwin",
+	linux: "panels.prSetup.sshAddHint",
+	win32: "panels.prSetup.sshAddHintWin32",
+} satisfies Record<HostPlatform, MessageKey>;
 
 const GH_INSTALL_COMMAND: Record<HostPlatform, string | null> = {
 	darwin: "brew install gh",
@@ -90,9 +91,9 @@ const GH_INSTALL_COMMAND: Record<HostPlatform, string | null> = {
 	win32: "winget install --id GitHub.cli",
 };
 
-const GH_INSTALL_HINT: Record<HostPlatform, string | null> = {
+const GH_INSTALL_HINT: Record<HostPlatform, MessageKey | null> = {
 	darwin: null,
-	linux: "apt is the Debian/Ubuntu route — use your distro's package manager otherwise.",
+	linux: "panels.prSetup.ghInstallHintLinux",
 	win32: null,
 };
 
@@ -102,8 +103,8 @@ function sshAddCommand(platform: HostPlatform | null): string {
 	return platform ? SSH_ADD_COMMAND[platform] : "ssh-add ~/.ssh/id_ed25519";
 }
 
-function sshAddHint(platform: HostPlatform | null): string {
-	return platform ? SSH_ADD_HINT[platform] : "SSH remote: load your key into the ssh-agent once.";
+function sshAddHint(platform: HostPlatform | null): MessageKey {
+	return platform ? SSH_ADD_HINT[platform] : "panels.prSetup.sshAddHint";
 }
 
 function ghCommands(problem: GhSetupProblem, platform: HostPlatform | null): string[] {
@@ -111,9 +112,9 @@ function ghCommands(problem: GhSetupProblem, platform: HostPlatform | null): str
 	return problem === "missing" && install ? [install, "gh auth login"] : ["gh auth login"];
 }
 
-function ghInstallHint(problem: GhSetupProblem, platform: HostPlatform | null): string | null {
+function ghInstallHint(problem: GhSetupProblem, platform: HostPlatform | null): MessageKey | null {
 	if (problem !== "missing") return null;
-	if (!platform) return "Install the GitHub CLI first — cli.github.com — then sign in:";
+	if (!platform) return "panels.prSetup.ghInstallHint";
 	return GH_INSTALL_HINT[platform];
 }
 
@@ -132,6 +133,8 @@ export function PrSetupDialog({
 	onRun: (command: string) => void;
 	onCompareOpen: () => void;
 }) {
+	const t = useT();
+	const installHint = state?.kind === "gh" ? ghInstallHint(state.problem, platform) : null;
 	return (
 		<Dialog open={state !== null} onOpenChange={(open) => !open && onClose()}>
 			<DialogContent
@@ -141,11 +144,8 @@ export function PrSetupDialog({
 				{state?.kind === "push-auth" ? (
 					<>
 						<DialogHeader>
-							<DialogTitle>Git push couldn't authenticate</DialogTitle>
-							<DialogDescription>
-								ThinkRail pushes without a terminal, so SSH passphrase and credential prompts can't
-								appear. Make your git auth non-interactive, then try again.
-							</DialogDescription>
+							<DialogTitle>{t("panels.prSetup.pushAuthTitle")}</DialogTitle>
+							<DialogDescription>{t("panels.prSetup.pushAuthDescription")}</DialogDescription>
 						</DialogHeader>
 						<pre
 							data-testid="open-pr-setup-detail"
@@ -156,42 +156,30 @@ export function PrSetupDialog({
 						<div className="flex flex-col gap-8">
 							{HOST_KEY_PATTERN.test(state.detail) ? (
 								<>
-									<p className="tr-text-ui text-text-muted">
-										This host's SSH key isn't in known_hosts yet — connect once and answer "yes" to
-										approve it:
-									</p>
+									<p className="tr-text-ui text-text-muted">{t("panels.prSetup.hostKeyHint")}</p>
 									<CommandRow command="ssh -T git@github.com" onRun={onRun} />
 								</>
 							) : null}
-							<p className="tr-text-ui text-text-muted">{sshAddHint(platform)}</p>
+							<p className="tr-text-ui text-text-muted">{t(sshAddHint(platform))}</p>
 							<CommandRow command={sshAddCommand(platform)} onRun={onRun} />
-							<p className="tr-text-ui text-text-muted">
-								HTTPS remote: sign in with the GitHub CLI instead.
-							</p>
+							<p className="tr-text-ui text-text-muted">{t("panels.prSetup.httpsHint")}</p>
 							<CommandRow command="gh auth login" onRun={onRun} />
 						</div>
 					</>
 				) : state?.kind === "gh" ? (
 					<>
 						<DialogHeader>
-							<DialogTitle>{GH_TITLE[state.problem]}</DialogTitle>
-							<DialogDescription>{GH_DESCRIPTION[state.problem]}</DialogDescription>
+							<DialogTitle>{t(GH_TITLE[state.problem])}</DialogTitle>
+							<DialogDescription>{t(GH_DESCRIPTION[state.problem])}</DialogDescription>
 						</DialogHeader>
 						<div className="flex flex-col gap-8">
-							{ghInstallHint(state.problem, platform) ? (
-								<p className="tr-text-ui text-text-muted">
-									{ghInstallHint(state.problem, platform)}
-								</p>
-							) : null}
+							{installHint ? <p className="tr-text-ui text-text-muted">{t(installHint)}</p> : null}
 							{ghCommands(state.problem, platform).map((command) => (
 								<CommandRow key={command} command={command} onRun={onRun} />
 							))}
 						</div>
 						{state.compareUrl ? (
-							<p className="tr-text-ui text-text-muted">
-								No rush — GitHub's compare page can create this PR right now, prefilled from the
-								plan.
-							</p>
+							<p className="tr-text-ui text-text-muted">{t("panels.prSetup.compareHint")}</p>
 						) : null}
 					</>
 				) : null}
@@ -206,12 +194,12 @@ export function PrSetupDialog({
 							className={buttonVariants({ variant: "outline" })}
 						>
 							<ExternalLink className="size-14" />
-							Open compare page
+							{t("panels.prSetup.openCompare")}
 						</a>
 					) : null}
 					<Button data-testid="open-pr-setup-retry" onClick={onRetry}>
 						<RefreshCw className="size-14" />
-						Try again
+						{t("panels.prSetup.tryAgain")}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

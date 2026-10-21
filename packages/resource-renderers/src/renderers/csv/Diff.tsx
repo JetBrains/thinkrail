@@ -1,3 +1,4 @@
+import { useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useRef } from "react";
 import type { ResourceDiffProps, ReviewThread, SurfaceReview } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
@@ -59,6 +60,7 @@ export default function CsvDiff({
 	review,
 	onPlacedThreadIds,
 }: ResourceDiffProps) {
+	const t = useT();
 	const originalText = useMemo(() => (original.kind === "text" ? original.text : ""), [original]);
 	const modifiedText = useMemo(() => (modified.kind === "text" ? modified.text : ""), [modified]);
 	const delimiter = useMemo(
@@ -237,7 +239,9 @@ export default function CsvDiff({
 															<button
 																key={entry.thread.id}
 																type="button"
-																aria-label={`Show comment ${entry.number}`}
+																aria-label={t("viewer.region.showComment", {
+																	number: entry.number,
+																})}
 																className="flex size-20 items-center justify-center rounded-full bg-primary tr-text-metadata text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
 																onClick={() => scrollToCard(entry.thread.id)}
 															>

@@ -1,4 +1,5 @@
 import type { GitDiffScope, ReviewAnchor } from "@thinkrail/contracts";
+import { t } from "@thinkrail/locales/react";
 import type {
 	AnchorDraft,
 	ReviewThread,
@@ -53,7 +54,7 @@ export function useFileReview(
 				try {
 					await getTransport().request("review.commentDelete", { workspaceId, id });
 				} catch (error) {
-					toast.error(errorText(error), "Couldn't delete the draft");
+					toast.error(errorText(error), t("panels.reviewCommenting.deleteFailed"));
 					throw error;
 				}
 			},
@@ -61,7 +62,7 @@ export function useFileReview(
 				try {
 					await getTransport().request("review.commentUpdate", { workspaceId, id, body });
 				} catch (error) {
-					toast.error(errorText(error), "Couldn't update the comment");
+					toast.error(errorText(error), t("panels.reviewCommenting.updateFailed"));
 					throw error;
 				}
 			},
@@ -131,9 +132,6 @@ export function commentKindForDraft(
 		: "file";
 }
 
-export const RICH_ANCHOR_HOST_TOO_OLD =
-	"This host is older than the review surface: it would not keep a region or cell comment. Update the host, or comment on the source instead.";
-
 export function draftNeedsRichAnchors(draft: AnchorDraft): boolean {
 	return draft.selectors.some(
 		(selector) => selector.kind === "region" || selector.kind === "structural",
@@ -153,7 +151,7 @@ function sideCommenting(
 			draftNeedsRichAnchors(draft) &&
 			!supportsRichAnchors(useAppStore.getState().protocolVersion)
 		) {
-			return Promise.reject(new Error(RICH_ANCHOR_HOST_TOO_OLD));
+			return Promise.reject(new Error(t("panels.reviewCommenting.hostTooOld")));
 		}
 		return getTransport().request("review.commentAdd", {
 			workspaceId,
@@ -168,7 +166,7 @@ function sideCommenting(
 			try {
 				await add(draft, text);
 			} catch (error) {
-				toast.error(errorText(error), "Couldn't save the comment");
+				toast.error(errorText(error), t("panels.reviewCommenting.saveFailed"));
 				throw error;
 			}
 		},
@@ -177,7 +175,7 @@ function sideCommenting(
 			try {
 				comment = await add(draft, text);
 			} catch (error) {
-				toast.error(errorText(error), "Couldn't save the comment");
+				toast.error(errorText(error), t("panels.reviewCommenting.saveFailed"));
 				throw error;
 			}
 			await sendReviewComment(workspaceId, comment.id, chatSessionId);

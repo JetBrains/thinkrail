@@ -14,6 +14,7 @@ import {
 	RiDeleteBin6Line as Trash2,
 } from "@remixicon/react";
 import type { Project, Workspace } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -54,6 +55,7 @@ import {
 	settledReasonLabel,
 	supportsWorkspaceReadState,
 	useAppStore,
+	workspaceName,
 } from "../../store";
 import { PillChevron, pillClass, Segment } from "./Segment";
 
@@ -88,6 +90,7 @@ export function WorkspaceSegment({
 	now: number;
 	onNewWorkspace: () => void;
 }) {
+	const t = useT();
 	const [menuOpen, setMenuOpen] = useState(false);
 	const siblings = useAppStore((s) => s.workspaces[project.id]);
 	const sessionStateByWorkspace = useAppStore((s) => (menuOpen ? s.sessionStateByWorkspace : null));
@@ -121,7 +124,7 @@ export function WorkspaceSegment({
 	const canRename = workspace !== null && canRenameWorkspace(protocolVersion, workspace);
 	const isDefault = workspace !== null && isDefaultWorkspace(workspace);
 	const isExternal = workspace !== null && isExternalWorkspace(workspace);
-	const name = workspace?.name ?? "Project home";
+	const name = workspace ? workspaceName(t, workspace) : t("shell.location.project.home");
 	const {
 		editing,
 		nameRef,
@@ -162,10 +165,10 @@ export function WorkspaceSegment({
 		<Segment
 			caption={
 				<>
-					Workspace
+					{t("shell.location.workspace.caption")}
 					{activeSettled ? (
 						<span data-testid="scope-workspace-settled" className="text-feedback-warning">
-							· settled
+							{t("shell.location.workspace.settledSuffix")}
 						</span>
 					) : null}
 				</>
@@ -180,7 +183,7 @@ export function WorkspaceSegment({
 					data-editing
 					type="text"
 					spellCheck={false}
-					aria-label="Workspace name"
+					aria-label={t("shell.location.workspace.nameInput")}
 					defaultValue={workspace.name}
 					{...renameInputProps}
 					className="window-no-drag h-20 w-full min-w-0 truncate rounded-sm border-0 bg-control-bg px-8 text-text-default tr-title-section outline-none ring-1 ring-control-border-active"
@@ -189,7 +192,7 @@ export function WorkspaceSegment({
 				<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 					<DropdownMenuTrigger
 						data-testid="scope-workspace"
-						aria-label={`Workspace ${name}`}
+						aria-label={t("shell.location.workspace.label", { name })}
 						className={pillClass}
 					>
 						<span data-testid="scope-name" className="truncate tr-title-section">
@@ -204,12 +207,14 @@ export function WorkspaceSegment({
 					>
 						{workspace ? (
 							<>
-								<DropdownMenuLabel className="truncate">{workspace.name}</DropdownMenuLabel>
+								<DropdownMenuLabel className="truncate">
+									{workspaceName(t, workspace)}
+								</DropdownMenuLabel>
 								{editors.length > 0 ? (
 									<DropdownMenuSub>
 										<DropdownMenuSubTrigger data-testid="scope-workspace-open-in">
 											<ExternalLink />
-											Open in
+											{t("shell.location.workspace.openIn")}
 										</DropdownMenuSubTrigger>
 										<DropdownMenuSubContent>
 											{editors.map((editor) => (
@@ -227,7 +232,7 @@ export function WorkspaceSegment({
 								{canRename ? (
 									<DropdownMenuItem data-testid="scope-workspace-rename" onSelect={startRename}>
 										<Pencil />
-										Rename
+										{t("common.rename")}
 									</DropdownMenuItem>
 								) : null}
 								<DropdownMenuItem
@@ -235,14 +240,14 @@ export function WorkspaceSegment({
 									onSelect={() => void copyText(workspace.worktreePath)}
 								>
 									<Copy />
-									Copy path
+									{t("shell.location.workspace.copyPath")}
 								</DropdownMenuItem>
 								<DropdownMenuItem
 									data-testid="scope-workspace-reveal"
 									onSelect={() => revealWorkspace(workspace)}
 								>
 									<FolderOpen />
-									Reveal in file manager
+									{t("shell.location.workspace.reveal")}
 								</DropdownMenuItem>
 								{readAction === "markRead" ? (
 									<DropdownMenuItem
@@ -250,7 +255,7 @@ export function WorkspaceSegment({
 										onSelect={() => markWorkspaceRead(workspace.id)}
 									>
 										<MailOpen />
-										Mark as read
+										{t("shell.location.workspace.markRead")}
 									</DropdownMenuItem>
 								) : readAction === "markUnread" ? (
 									<DropdownMenuItem
@@ -258,7 +263,7 @@ export function WorkspaceSegment({
 										onSelect={() => markWorkspaceUnread(workspace.id)}
 									>
 										<MailUnread />
-										Mark as unread
+										{t("shell.location.workspace.markUnread")}
 									</DropdownMenuItem>
 								) : null}
 								{canSettle ? (
@@ -268,7 +273,7 @@ export function WorkspaceSegment({
 											onSelect={() => unsettleWorkspace(workspace.id)}
 										>
 											<ArrowGoBack />
-											Keep active
+											{t("shell.location.workspace.keepActive")}
 										</DropdownMenuItem>
 									) : (
 										<DropdownMenuItem
@@ -277,7 +282,7 @@ export function WorkspaceSegment({
 											onSelect={() => settleWorkspace(workspace.id)}
 										>
 											<Check />
-											Settle
+											{t("shell.location.workspace.settle")}
 										</DropdownMenuItem>
 									)
 								) : null}
@@ -288,17 +293,19 @@ export function WorkspaceSegment({
 										onSelect={() => setRemoving(workspace)}
 									>
 										<Trash2 />
-										{isExternal ? "Remove from ThinkRail" : "Remove workspace"}
+										{isExternal
+											? t("shell.location.workspace.removeExternal")
+											: t("shell.location.workspace.remove")}
 									</DropdownMenuItem>
 								)}
 								<DropdownMenuSeparator />
 							</>
 						) : null}
-						<DropdownMenuLabel>Switch to</DropdownMenuLabel>
+						<DropdownMenuLabel>{t("shell.location.workspace.switchTo")}</DropdownMenuLabel>
 						{partition === null ? (
-							<DropdownMenuItem disabled>Loading…</DropdownMenuItem>
+							<DropdownMenuItem disabled>{t("common.loading")}</DropdownMenuItem>
 						) : partition.live.length === 0 && partition.settled.length === 0 ? (
-							<DropdownMenuItem disabled>No other workspaces</DropdownMenuItem>
+							<DropdownMenuItem disabled>{t("shell.location.workspace.noOthers")}</DropdownMenuItem>
 						) : (
 							partition.live.map((candidate) => {
 								const running =
@@ -316,7 +323,7 @@ export function WorkspaceSegment({
 										onSelect={() => useAppStore.getState().activateWorkspace(candidate)}
 									>
 										{running ? <RunningIcon className="size-14 text-primary" /> : <Icon />}
-										<span className="truncate">{candidate.name}</span>
+										<span className="truncate">{workspaceName(t, candidate)}</span>
 										{candidate.branch !== candidate.name ? (
 											<span className="ml-auto truncate pl-8 text-text-subtle tr-code-text-small">
 												{candidate.branch}
@@ -330,7 +337,7 @@ export function WorkspaceSegment({
 							<DropdownMenuSub>
 								<DropdownMenuSubTrigger data-testid="scope-workspace-settled-group">
 									<RiCheckboxCircleLine />
-									Settled · {partition.settled.length}
+									{t("shell.location.workspace.settledGroup", { count: partition.settled.length })}
 								</DropdownMenuSubTrigger>
 								<DropdownMenuSubContent className="max-h-[60vh] overflow-y-auto">
 									{partition.settled.map(({ workspace: candidate, reason }) => (
@@ -340,9 +347,9 @@ export function WorkspaceSegment({
 											onSelect={() => useAppStore.getState().activateWorkspace(candidate)}
 										>
 											{isExternalWorkspace(candidate) ? <FolderOpen /> : <GitBranch />}
-											<span className="truncate">{candidate.name}</span>
+											<span className="truncate">{workspaceName(t, candidate)}</span>
 											<span className="ml-auto shrink-0 pl-8 text-text-subtle tr-text-caption">
-												{settledReasonLabel(reason, partition.now)}
+												{settledReasonLabel(t, reason, partition.now)}
 											</span>
 										</DropdownMenuItem>
 									))}
@@ -352,7 +359,7 @@ export function WorkspaceSegment({
 						<DropdownMenuSeparator />
 						<DropdownMenuItem data-testid="scope-workspace-new" onSelect={onNewWorkspace}>
 							<Plus />
-							New workspace
+							{t("shell.location.workspace.new")}
 							<span className="ml-auto pl-8 text-text-subtle tr-text-metadata">
 								{platformShortcutLabel("N")}
 							</span>

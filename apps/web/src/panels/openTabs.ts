@@ -1,6 +1,7 @@
 import type { GitDiffScope } from "@thinkrail/contracts";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
+	fileName,
 	layoutResourceIdentity,
 	projectRelativePath,
 	tupleKey,
@@ -21,7 +22,7 @@ import {
 	useAppStore,
 } from "../store";
 import { getTransport } from "../transport";
-import { changesTabId, changesTabName, diffTabId, diffTabName } from "./changesModel";
+import { changesTabId, diffTabId } from "./changesModel";
 
 function baseName(path: string): string {
 	return path.split("/").pop() || path;
@@ -198,7 +199,7 @@ export function openDiffInTab(
 		layoutResourceIdentity({
 			kind: "diff",
 			id,
-			name: diffTabName(scope, canonicalPath),
+			name: fileName(canonicalPath),
 			path: canonicalPath,
 			scope,
 		}),
@@ -210,7 +211,7 @@ export function openDiffInTab(
 			workspaceId,
 			path: canonicalPath,
 			scope,
-			name: diffTabName(scope, canonicalPath),
+			name: fileName(canonicalPath),
 			original,
 			modified,
 			meta,
@@ -288,7 +289,7 @@ export async function openChangesTab(
 	const existing = (state.tabsByWorkspace[workspaceId] ?? []).find(
 		(tab): tab is ChangesTab => tab.id === id && tab.kind === "changes",
 	);
-	const base = existing ?? createChangesTab(workspaceId, id, changesTabName(scope), scope);
+	const base = existing ?? createChangesTab(workspaceId, id, "", scope);
 	const tab: ChangesTab = revealPath
 		? { ...base, reveal: { path: revealPath, tick: (base.reveal?.tick ?? 0) + 1 } }
 		: base;

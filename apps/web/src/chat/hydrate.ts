@@ -13,7 +13,7 @@ import {
 	isTodoReviewFixMessage,
 } from "@thinkrail/contracts";
 import { userText } from "../lib";
-import { assistantFailureText } from "./assistantFailure";
+import { assistantFailure } from "./assistantFailure";
 import { insertRoundCloser } from "./roundCloser";
 import type { ChatTurn, ToolResultState } from "./types";
 
@@ -110,7 +110,7 @@ export function messagesToRuntime(
 	);
 	const persistedTerminal =
 		lastConversationMessage?.role === "assistant" ? lastConversationMessage : null;
-	const failure = assistantFailureText(
+	const failure = assistantFailure(
 		lastSettlement === undefined ? persistedTerminal : lastSettlement,
 	);
 	const closed = failure
@@ -119,7 +119,8 @@ export function messagesToRuntime(
 				id: options.idScope
 					? `${options.idScope}:error:${persistedTerminal?.timestamp ?? "settlement"}`
 					: crypto.randomUUID(),
-				text: failure,
+				text: failure.message,
+				failure: failure.failure,
 				recovery: "try-again",
 			})
 		: turns;

@@ -1,3 +1,5 @@
+import { useT } from "@thinkrail/locales/react";
+
 const ROWS = [
 	{ key: "r1", width: "w-3/4" },
 	{ key: "r2", width: "w-1/2" },
@@ -13,11 +15,12 @@ const ROWS = [
 	{ key: "r12", width: "w-3/4" },
 ] as const;
 
-export function SkeletonRows({ rows = 6, label = "Loading" }: { rows?: number; label?: string }) {
+export function SkeletonRows({ rows = 6, label }: { rows?: number; label?: string }) {
+	const t = useT();
 	return (
 		<div
 			role="status"
-			aria-label={label}
+			aria-label={label ?? t("components.skeleton.loading")}
 			aria-busy="true"
 			data-testid="skeleton-rows"
 			className="flex flex-col gap-8"

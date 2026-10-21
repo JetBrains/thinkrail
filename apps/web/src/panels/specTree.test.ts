@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { SpecGraphNode } from "@thinkrail/contracts";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { buildSpecTree, specDisplayTitle, specRoleLabel, specRoleTag } from "./specTree";
 
 function node(id: string, over: Partial<SpecGraphNode> = {}): SpecGraphNode {
@@ -17,16 +18,16 @@ function node(id: string, over: Partial<SpecGraphNode> = {}): SpecGraphNode {
 }
 
 test("humanizes known and extension-defined spec roles", () => {
-	expect(specRoleLabel("goal-and-requirements")).toBe("Goal");
-	expect(specRoleLabel("architecture-design")).toBe("Architecture");
-	expect(specRoleLabel("module-design")).toBe("Module");
-	expect(specRoleLabel("submodule-design")).toBe("Submodule");
-	expect(specRoleLabel("task-spec")).toBe("Task");
-	expect(specRoleLabel("risk_register")).toBe("Risk Register");
-	expect(specRoleLabel("---")).toBe("Spec");
-	expect(specRoleTag("architecture-design")).toBe("ARCH");
-	expect(specRoleTag("module-design")).toBe("MODULE");
-	expect(specRoleTag("risk_register")).toBe("RISK REGISTER");
+	expect(specRoleLabel(currentTranslator(), "goal-and-requirements")).toBe("Goal");
+	expect(specRoleLabel(currentTranslator(), "architecture-design")).toBe("Architecture");
+	expect(specRoleLabel(currentTranslator(), "module-design")).toBe("Module");
+	expect(specRoleLabel(currentTranslator(), "submodule-design")).toBe("Submodule");
+	expect(specRoleLabel(currentTranslator(), "task-spec")).toBe("Task");
+	expect(specRoleLabel(currentTranslator(), "risk_register")).toBe("Risk Register");
+	expect(specRoleLabel(currentTranslator(), "---")).toBe("Spec");
+	expect(specRoleTag(currentTranslator(), "architecture-design")).toBe("ARCH");
+	expect(specRoleTag(currentTranslator(), "module-design")).toBe("MODULE");
+	expect(specRoleTag(currentTranslator(), "risk_register")).toBe("RISK REGISTER");
 });
 
 test("renders dashed titles with a compact dot separator", () => {

@@ -14,7 +14,8 @@ export interface SwitcherSession {
 	workspaceId: string;
 	projectId: string;
 	workspaceName: string;
-	chatTitle: string;
+	workspaceKind: Workspace["kind"] | undefined;
+	chatTitle: string | null;
 	attention: SessionAttention;
 }
 
@@ -69,20 +70,18 @@ function resolveChatTitle(
 			return null;
 		};
 		const fromLayout = visit(document.center);
-		if (fromLayout) return fromLayout;
+		if (fromLayout !== null) return fromLayout;
 	}
 	const closed = state.closedChatsByWorkspace[workspaceId] ?? [];
 	return closed.find((chat) => chat.sessionId === sessionId)?.title ?? null;
 }
 
-function resolveWorkspaceName(
+function resolveWorkspace(
 	state: SwitcherGroupsState,
 	projectId: string,
 	workspaceId: string,
-): string | null {
-	return (
-		state.workspaces[projectId]?.find((workspace) => workspace.id === workspaceId)?.name ?? null
-	);
+): Workspace | undefined {
+	return state.workspaces[projectId]?.find((workspace) => workspace.id === workspaceId);
 }
 
 export function selectSwitcherGroups(state: SwitcherGroupsState): SwitcherProject[] {
@@ -92,12 +91,14 @@ export function selectSwitcherGroups(state: SwitcherGroupsState): SwitcherProjec
 			const attention = getSessionAttention(record.state);
 			if (!attention) continue;
 			const sessions = sessionsByProject.get(record.projectId) ?? [];
+			const workspace = resolveWorkspace(state, record.projectId, record.workspaceId);
 			sessions.push({
 				sessionId: record.sessionId,
 				workspaceId: record.workspaceId,
 				projectId: record.projectId,
-				workspaceName: resolveWorkspaceName(state, record.projectId, record.workspaceId) ?? "",
-				chatTitle: resolveChatTitle(state, record.workspaceId, record.sessionId) ?? "",
+				workspaceName: workspace?.name ?? "",
+				workspaceKind: workspace?.kind,
+				chatTitle: resolveChatTitle(state, record.workspaceId, record.sessionId),
 				attention,
 			});
 			sessionsByProject.set(record.projectId, sessions);

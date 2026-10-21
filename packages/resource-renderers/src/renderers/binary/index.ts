@@ -2,7 +2,7 @@ import type { ResourceRenderer } from "../../registry";
 
 export const binaryRenderer: ResourceRenderer = {
 	id: "thinkrail/binary",
-	label: "File",
+	labelKey: "viewer.renderer.file",
 	match: { text: false },
 	rank: 0,
 	capabilities: {

@@ -63,3 +63,8 @@ export interface NativeShortcutsBridge {
 	subscribeCommand(listener: (command: NativeCommand) => void): () => void;
 	quit(): Promise<void>;
 }
+
+/** Translated labels for the desktop's custom native menu items, keyed by catalog key. */
+export interface NativeMenuBridge {
+	setLabels(labels: Readonly<Record<string, string>>): void;
+}

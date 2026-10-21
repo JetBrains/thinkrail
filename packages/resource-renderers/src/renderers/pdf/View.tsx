@@ -1,3 +1,4 @@
+import { useT } from "@thinkrail/locales/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ResourceViewProps } from "../../registry";
 import type { Size } from "../regionReview";
@@ -28,6 +29,7 @@ export default function PdfView({
 	viewState,
 	onViewState,
 }: ResourceViewProps) {
+	const t = useT();
 	const initial = pdfViewState(viewState);
 	const [page, setPage] = useState(initial.page);
 	const [zoom, setZoom] = useState(initial.zoom);
@@ -112,14 +114,14 @@ export default function PdfView({
 	if (loaded.error) {
 		return (
 			<div className="flex h-full items-center justify-center bg-container-workspace-bg tr-text-ui text-feedback-error">
-				PDF preview failed.
+				{t("viewer.pdf.previewFailed")}
 			</div>
 		);
 	}
 	if (!loaded.document) {
 		return (
 			<div className="flex h-full items-center justify-center bg-container-workspace-bg tr-text-ui text-text-muted">
-				Loading PDF…
+				{t("viewer.pdf.loading")}
 			</div>
 		);
 	}

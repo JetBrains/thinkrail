@@ -1,3 +1,4 @@
+import { t } from "@thinkrail/locales/react";
 import { messagesToRuntime } from "../chat/hydrate";
 import {
 	type CenterNavigationStamp,
@@ -48,7 +49,7 @@ export async function startChatInTab(
 			layoutOpenOptionsForNavigation(state, workspaceId, navigation).activate !== false &&
 			!state.removedWorkspaceIds[workspaceId]
 		) {
-			toast.error("The agent session could not be created.", "Couldn't start the chat");
+			toast.error(t("panels.openChat.sessionCreateFailed"), t("panels.openChat.startFailed"));
 		}
 	} finally {
 		useAppStore.getState().endChatStart(workspaceId);
@@ -80,7 +81,7 @@ export async function openChatInTab(
 		? { ...routedOptions, activate: false }
 		: routedOptions;
 	const tab = (store.tabsByWorkspace[workspaceId] ?? []).find(
-		(t) => t.kind === "chat" && t.sessionId === sessionId,
+		(candidate) => candidate.kind === "chat" && candidate.sessionId === sessionId,
 	);
 	if (tab) {
 		store.openTab(tab, "keep", true, options);
@@ -128,7 +129,7 @@ export async function openChatInTab(
 			!settled.removedWorkspaceIds[workspaceId] &&
 			!settled.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
 		) {
-			toast.error("The chat could not be restored.", "Couldn't open the chat");
+			toast.error(t("panels.openChat.restoreFailed"), t("panels.openChat.openFailed"));
 		}
 	} catch (err) {
 		const current = useAppStore.getState();
@@ -138,7 +139,7 @@ export async function openChatInTab(
 			!current.removedWorkspaceIds[workspaceId] &&
 			!current.deletedSessionsByWorkspace[workspaceId]?.[sessionId]
 		) {
-			toast.error(errorText(err), "Couldn't open the chat");
+			toast.error(errorText(err), t("panels.openChat.openFailed"));
 		}
 	} finally {
 		useAppStore.getState().endChatStart(workspaceId);

@@ -4,6 +4,7 @@ import {
 	RiStackLine as Layers,
 	RiToolsLine as Tools,
 } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { useCallback, useEffect, useState } from "react";
 
 export type ActivityBreadcrumbKind = "activity" | "thinking" | "tool";
@@ -88,9 +89,10 @@ export function ActivityBreadcrumbBar({
 	onJump: (id: string) => void;
 	onToggle: (id: string) => void;
 }) {
+	const t = useT();
 	return (
 		<nav
-			aria-label="Current chat activity path"
+			aria-label={t("chat.breadcrumbs.label")}
 			data-testid="activity-breadcrumb-trail"
 			className="pointer-events-auto border-border-default border-b bg-container-header-bg shadow-[var(--shadow-md)]"
 		>
@@ -114,7 +116,11 @@ export function ActivityBreadcrumbBar({
 							>
 								<button
 									type="button"
-									aria-label={`${segment.expanded ? "Collapse" : "Expand"} ${segment.label}`}
+									aria-label={
+										segment.expanded
+											? t("chat.breadcrumbs.collapse", { label: segment.label })
+											: t("chat.breadcrumbs.expand", { label: segment.label })
+									}
 									onClick={() => onToggle(segment.id)}
 									className="flex size-20 shrink-0 items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
 								>
@@ -125,7 +131,7 @@ export function ActivityBreadcrumbBar({
 								</button>
 								<button
 									type="button"
-									aria-label={`Jump to ${segment.label}`}
+									aria-label={t("chat.breadcrumbs.jump", { label: segment.label })}
 									title={segment.meta ? `${segment.label} · ${segment.meta}` : segment.label}
 									onClick={() => onJump(segment.id)}
 									className="flex min-w-0 items-center gap-4 rounded-sm py-2 pr-4 text-left outline-none focus-visible:ring-2 focus-visible:ring-primary"

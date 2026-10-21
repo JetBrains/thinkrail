@@ -1,3 +1,4 @@
+import { useT } from "@thinkrail/locales/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ResourceDiffProps } from "../../registry";
 import { PdfDiffPage } from "./PdfDiffPage";
@@ -28,6 +29,7 @@ export default function PdfDiff({
 	viewState,
 	onViewState,
 }: ResourceDiffProps) {
+	const t = useT();
 	const initial = pdfViewState(viewState);
 	const [page, setPage] = useState(initial.page);
 	const [zoom, setZoom] = useState(initial.zoom);
@@ -128,14 +130,14 @@ export default function PdfDiff({
 	if (originalLoaded.error || modifiedLoaded.error) {
 		return (
 			<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-feedback-error">
-				PDF diff failed.
+				{t("viewer.pdf.diffFailed")}
 			</div>
 		);
 	}
 	if (!originalLoaded.settled || !modifiedLoaded.settled) {
 		return (
 			<div className="flex h-full items-center justify-center bg-container-content-bg tr-text-ui text-text-muted">
-				Loading PDF diff…
+				{t("viewer.pdf.loadingDiff")}
 			</div>
 		);
 	}

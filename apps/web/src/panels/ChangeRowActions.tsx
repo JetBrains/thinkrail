@@ -4,6 +4,7 @@ import {
 	RiFileScanLine as FileDiff,
 	RiExternalLinkLine as OpenAsTab,
 } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -29,6 +30,7 @@ export function ChangeRowActions({
 	onOpenTab: () => void;
 	children: (rowProps: { onContextMenu: (event: MouseEvent) => void }) => ReactNode;
 }) {
+	const t = useT();
 	const [open, setOpen] = useState(false);
 	const onContextMenu = (event: MouseEvent) => {
 		event.preventDefault();
@@ -46,7 +48,7 @@ export function ChangeRowActions({
 				{children({ onContextMenu })}
 				<DropdownMenuTrigger
 					data-testid="change-row-menu"
-					aria-label={`Actions for ${path}`}
+					aria-label={t("panels.changeRowActions.menuLabel", { path })}
 					className={`${ROW_MENU_SLOT} flex items-center justify-center rounded-sm text-text-muted opacity-0 outline-none transition hover:bg-container-elevated-bg hover:text-text-default focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary group-hover:opacity-100 data-[state=open]:opacity-100`}
 				>
 					<ChevronDown className="size-16" />
@@ -55,11 +57,11 @@ export function ChangeRowActions({
 			<DropdownMenuContent align="end" data-testid="change-row-actions">
 				<DropdownMenuItem data-testid="change-action-view" onSelect={onView}>
 					<FileDiff />
-					Review
+					{t("panels.changeRowActions.review")}
 				</DropdownMenuItem>
 				<DropdownMenuItem data-testid="change-action-open-tab" onSelect={onOpenTab}>
 					<OpenAsTab />
-					Open as tab
+					{t("panels.changeRowActions.openAsTab")}
 				</DropdownMenuItem>
 				<DropdownMenuItem
 					data-testid="change-action-copy-path"
@@ -68,7 +70,7 @@ export function ChangeRowActions({
 					}}
 				>
 					<Copy />
-					Copy path
+					{t("panels.changeRowActions.copyPath")}
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>

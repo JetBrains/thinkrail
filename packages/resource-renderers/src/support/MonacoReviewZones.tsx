@@ -1,3 +1,4 @@
+import { useT } from "@thinkrail/locales/react";
 import { useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
 import type { SurfaceReview } from "../registry";
@@ -16,6 +17,7 @@ export function MonacoReviewZones({
 	onCloseComposer: () => void;
 	onRendered: () => void;
 }) {
+	const t = useT();
 	useLayoutEffect(onRendered, [onRendered, review, zones]);
 	if (!review) return null;
 	const threads = new Map(review.threads.map((thread) => [thread.id, thread]));
@@ -44,8 +46,11 @@ export function MonacoReviewZones({
 							}}
 							label={
 								composer.selection.startLine === composer.selection.endLine
-									? `Line ${composer.selection.startLine}`
-									: `Lines ${composer.selection.startLine}–${composer.selection.endLine}`
+									? t("panels.reviewZones.line", { line: composer.selection.startLine })
+									: t("panels.reviewZones.lines", {
+											start: composer.selection.startLine,
+											end: composer.selection.endLine,
+										})
 							}
 							commenting={review.commenting}
 							onClose={onCloseComposer}

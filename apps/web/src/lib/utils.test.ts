@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	ancestorPaths,
 	compactAge,
@@ -219,15 +220,16 @@ test("shallowEqualArrays compares element-wise and treats absent as unequal", ()
 
 test("relativeTime measures against the given now, not the clock", () => {
 	const now = 1_000_000_000_000;
-	expect(relativeTime(now - 59_000, now)).toBe("just now");
-	expect(relativeTime(now - 5 * 60_000, now)).toBe("5m ago");
-	expect(relativeTime(now - 3 * 3_600_000, now)).toBe("3h ago");
-	expect(relativeTime(now - 2 * 86_400_000, now)).toBe("2d ago");
-	expect(compactAge(now - 20 * 60_000, now)).toBe("<1h");
-	expect(compactAge(now - 5 * 3_600_000, now)).toBe("5h");
-	expect(compactAge(now - 13 * 86_400_000, now)).toBe("13d");
-	expect(compactAge(now - 20 * 86_400_000, now)).toBe("2w");
-	expect(compactAge(now - 100 * 86_400_000, now)).toBe("3mo");
+	const t = currentTranslator();
+	expect(relativeTime(t, now - 59_000, now)).toBe("just now");
+	expect(relativeTime(t, now - 5 * 60_000, now)).toBe("5m ago");
+	expect(relativeTime(t, now - 3 * 3_600_000, now)).toBe("3h ago");
+	expect(relativeTime(t, now - 2 * 86_400_000, now)).toBe("2d ago");
+	expect(compactAge(t, now - 20 * 60_000, now)).toBe("<1h");
+	expect(compactAge(t, now - 5 * 3_600_000, now)).toBe("5h");
+	expect(compactAge(t, now - 13 * 86_400_000, now)).toBe("13d");
+	expect(compactAge(t, now - 20 * 86_400_000, now)).toBe("2w");
+	expect(compactAge(t, now - 100 * 86_400_000, now)).toBe("3mo");
 });
 
 test("ancestorPaths lists a path's parent folders outermost first", () => {

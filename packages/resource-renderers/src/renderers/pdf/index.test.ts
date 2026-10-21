@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ReviewAnchor } from "@thinkrail/contracts";
+import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	anchorLabel,
 	type ResourceRenderer,
@@ -27,9 +28,10 @@ import {
 import { releasePdfCanvas } from "./pdfRender";
 
 test("PDF renderer registration declares MIME matching and paged region anchors", () => {
+	expect(currentTranslator()(pdfRenderer.labelKey)).toBe("PDF");
 	expect(pdfRenderer).toMatchObject({
 		id: "thinkrail/pdf",
-		label: "PDF",
+		labelKey: "viewer.renderer.pdf",
 		match: { mime: ["application/pdf"], text: false },
 		rank: 120,
 		capabilities: {
@@ -45,7 +47,7 @@ test("PDF renderer registration declares MIME matching and paged region anchors"
 test("a .pdf extension resolves through inferred MIME metadata", () => {
 	const binary: ResourceRenderer = {
 		id: "thinkrail/binary",
-		label: "File",
+		labelKey: "viewer.renderer.file",
 		match: { text: false },
 		rank: 0,
 		capabilities: {

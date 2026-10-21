@@ -1,13 +1,15 @@
+import type { MessageKey } from "@thinkrail/locales";
+
 export const HTML_VIEWPORTS = ["desktop", "tablet", "phone", "responsive"] as const;
 
 export type HtmlViewport = (typeof HTML_VIEWPORTS)[number];
 
-export const HTML_VIEWPORT_LABELS: Record<HtmlViewport, string> = {
-	desktop: "Desktop",
-	tablet: "Tablet",
-	phone: "Phone",
-	responsive: "Fill",
-};
+export const HTML_VIEWPORT_LABELS = {
+	desktop: "viewer.html.viewport.desktop",
+	tablet: "viewer.html.viewport.tablet",
+	phone: "viewer.html.viewport.phone",
+	responsive: "viewer.html.viewport.fill",
+} as const satisfies Record<HtmlViewport, MessageKey>;
 
 const DESIGN_WIDTHS: Record<Exclude<HtmlViewport, "responsive">, number> = {
 	desktop: 1280,

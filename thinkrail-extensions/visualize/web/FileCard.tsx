@@ -1,5 +1,6 @@
 import { RiFullscreenLine as Fullscreen, RiArrowRightUpLine as OpenTab } from "@remixicon/react";
 import { strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
+import { useT } from "@thinkrail/locales/react";
 import {
 	ResourcePreview,
 	type ResourcePreviewLayout,
@@ -57,6 +58,7 @@ function CardAction({
 }
 
 function FilePreview({ path, before }: { path: string; before: string | undefined }) {
+	const t = useT();
 	const host = useOptionalResourceHost();
 	const workspaceId = useResourceScope()?.workspaceId;
 	const [rendererId, setRendererId] = useState<string | undefined>(undefined);
@@ -71,7 +73,7 @@ function FilePreview({ path, before }: { path: string; before: string | undefine
 	const openTabAction = (
 		<CardAction
 			testid="tool-visualize-open-tab"
-			label={before === undefined ? "Open in tab" : "Open diff in tab"}
+			label={t(before === undefined ? "visualize.file.openInTab" : "visualize.file.openDiffInTab")}
 			onClick={openTab}
 		>
 			<OpenTab className="size-14" />
@@ -95,7 +97,7 @@ function FilePreview({ path, before }: { path: string; before: string | undefine
 						{openTabAction}
 						<CardAction
 							testid="tool-visualize-fullscreen"
-							label="Full screen"
+							label={t("visualize.file.fullScreen")}
 							onClick={() => setFullscreen(true)}
 						>
 							<Fullscreen className="size-14" />
@@ -109,7 +111,11 @@ function FilePreview({ path, before }: { path: string; before: string | undefine
 					className="flex h-[90vh] w-[95vw] max-w-[95vw] flex-col gap-8"
 				>
 					<DialogHeader>
-						<DialogTitle>{before === undefined ? path : `${before} → ${path}`}</DialogTitle>
+						<DialogTitle>
+							{before === undefined
+								? path
+								: t("visualize.summary.fileComparison", { before, path })}
+						</DialogTitle>
 					</DialogHeader>
 					{fullscreen ? (
 						<ResourcePreview
@@ -127,6 +133,7 @@ function FilePreview({ path, before }: { path: string; before: string | undefine
 }
 
 export function FileCard({ args, status, onOpenFile }: ToolRenderProps) {
+	const t = useT();
 	const title = strArg(args, "title");
 	const path = strArg(args, "path");
 	const before = strArg(args, "before") || undefined;
@@ -134,7 +141,7 @@ export function FileCard({ args, status, onOpenFile }: ToolRenderProps) {
 	if (!path || status !== "done") {
 		return (
 			<span className="text-text-muted tr-text-metadata italic">
-				{status === "running" ? "Rendering…" : "(no file)"}
+				{status === "running" ? t("visualize.file.rendering") : t("visualize.file.empty")}
 			</span>
 		);
 	}

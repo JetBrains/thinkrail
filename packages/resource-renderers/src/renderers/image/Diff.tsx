@@ -1,3 +1,4 @@
+import { type Translator, useT } from "@thinkrail/locales/react";
 import { useEffect, useRef, useState } from "react";
 import type { ResourceContent, ResourceDiffProps } from "../../registry";
 import type { Size } from "../regionReview";
@@ -49,10 +50,18 @@ function ImageContent({
 	);
 }
 
-function caption(label: string, size: Size | null, content: ResourceContent): string {
-	const dimensions = size ? `${size.width} × ${size.height}` : "No dimensions";
-	const bytes = content.kind === "bytes" ? formatByteLength(content.byteLength) : "No image";
-	return `${label}: ${dimensions} · ${bytes}`;
+function caption(
+	t: Translator,
+	side: "old" | "new",
+	size: Size | null,
+	content: ResourceContent,
+): string {
+	const dimensions = size ? `${size.width} × ${size.height}` : t("viewer.image.noDimensions");
+	const bytes =
+		content.kind === "bytes" ? formatByteLength(t, content.byteLength) : t("viewer.image.noImage");
+	return t(side === "old" ? "viewer.side.oldCaption" : "viewer.side.newCaption", {
+		detail: `${dimensions} · ${bytes}`,
+	});
 }
 
 export default function ImageDiff({
@@ -65,6 +74,7 @@ export default function ImageDiff({
 	viewState,
 	onViewState,
 }: ResourceDiffProps) {
+	const t = useT();
 	const originalIdentity = imageIdentity(original);
 	const modifiedIdentity = imageIdentity(modified);
 	const [loadedOriginal, setLoadedOriginal] = useState<LoadedSize>(null);
@@ -89,7 +99,7 @@ export default function ImageDiff({
 				onSize={setLoadedOriginal}
 			/>
 		),
-		caption: caption("Old", originalSize, original),
+		caption: caption(t, "old", originalSize, original),
 		intrinsicSize: originalSize,
 		review: review?.base,
 	};
@@ -103,7 +113,7 @@ export default function ImageDiff({
 				onSize={setLoadedModified}
 			/>
 		),
-		caption: caption("New", modifiedSize, modified),
+		caption: caption(t, "new", modifiedSize, modified),
 		intrinsicSize: modifiedSize,
 		review: review?.worktree,
 	};
@@ -111,7 +121,8 @@ export default function ImageDiff({
 		<VisualDiff
 			prefix="image"
 			noun="image"
-			regionLabel="image region"
+			selectionKey="image region"
+			commentLabel={t("viewer.region.commentOnImageRegion")}
 			original={originalSide}
 			modified={modifiedSide}
 			contentStamp={diffContentStamp(original, modified)}

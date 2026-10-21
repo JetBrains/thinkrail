@@ -20,6 +20,7 @@ import type {
 import {
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
+	LOCALES_PROTOCOL_VERSION,
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
@@ -135,6 +136,22 @@ function hydrateSessionStates(connectionGeneration: number): void {
 	attempt();
 }
 
+function refreshLocalLocales(connectionGeneration: number): void {
+	const store = useAppStore.getState();
+	if (store.protocolVersion === null || store.protocolVersion < LOCALES_PROTOCOL_VERSION) {
+		store.installLocalLocales(null);
+		return;
+	}
+	void getTransport()
+		.request("locales.list", {})
+		.then((snapshot) => {
+			const current = useAppStore.getState();
+			if (isConnectedGeneration(current, connectionGeneration))
+				current.installLocalLocales(snapshot);
+		})
+		.catch(() => {});
+}
+
 function refreshLoadedWorkspaceLists(connectionGeneration: number): void {
 	const snapshot = useAppStore.getState();
 	const openProjectIds = new Set(snapshot.projects.map((project) => project.id));
@@ -189,9 +206,11 @@ export function initTransport(): WsTransport {
 					? welcome.hostPlatform
 					: undefined,
 				welcome.hostUpdate,
+				typeof welcome.appVersion === "string" ? welcome.appVersion : undefined,
 			);
 		const connectionGeneration = useAppStore.getState().connectionGeneration;
 		refreshLoadedWorkspaceLists(connectionGeneration);
+		refreshLocalLocales(connectionGeneration);
 		if (welcome.protocolVersion >= SESSION_STATE_PROTOCOL_VERSION) {
 			hydrateSessionStates(connectionGeneration);
 		} else {
@@ -270,6 +289,10 @@ export function initTransport(): WsTransport {
 			.request("model.list", {})
 			.then((models) => useAppStore.getState().setModelsForProviderVersion(providerVersion, models))
 			.catch(() => {});
+	});
+
+	transport.subscribe(WS_CHANNELS.localesChanged, () => {
+		refreshLocalLocales(useAppStore.getState().connectionGeneration);
 	});
 
 	transport.subscribe(WS_CHANNELS.feedbackInterview, () => {

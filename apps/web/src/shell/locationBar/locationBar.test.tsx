@@ -7,6 +7,7 @@ import type {
 	ReviewDetails,
 	Workspace,
 } from "@thinkrail/contracts";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import { renderToStaticMarkup } from "react-dom/server";
 import { LocationBar } from "./LocationBar";
@@ -208,9 +209,11 @@ test("a merged review turns the Pull request chip info and drops the Remote segm
 	expect(html).toMatch(/data-testid="scope-review"[^>]*data-state-tone="info"/);
 	expect(testids(html)).not.toContain("scope-remote-segment");
 	expect(reviewTone({ ...review, state: "closed" })).toBe("neutral");
-	expect(reviewChipLabel({ ...review, state: "closed" })).toBe("Closed #648");
-	expect(reviewChipLabel({ kind: "merge-request", number: 7, state: "merged" })).toBe("Merged !7");
-	expect(reviewChipLabel({ kind: "merge-request", number: 7 })).toBe("MR !7");
+	expect(reviewChipLabel(currentTranslator(), { ...review, state: "closed" })).toBe("Closed #648");
+	expect(
+		reviewChipLabel(currentTranslator(), { kind: "merge-request", number: 7, state: "merged" }),
+	).toBe("Merged !7");
+	expect(reviewChipLabel(currentTranslator(), { kind: "merge-request", number: 7 })).toBe("MR !7");
 	expect(remoteCounts(merged)).toBeNull();
 });
 
@@ -357,15 +360,20 @@ test("before the host advertises review actions the open PR keeps its chip witho
 });
 
 test("checks and review decision read as information", () => {
-	expect(checksSummary({ passing: 6, pending: 0, failing: 0, failingNames: [] })).toBe(
-		"6 checks passed",
-	);
-	expect(checksSummary({ passing: 1, pending: 1, failing: 0, failingNames: [] })).toBe(
-		"1 of 2 checks running",
-	);
-	expect(checksSummary({ passing: 3, pending: 1, failing: 2, failingNames: ["lint", "e2e"] })).toBe(
-		"2 checks failing: lint, e2e",
-	);
+	expect(
+		checksSummary(currentTranslator(), { passing: 6, pending: 0, failing: 0, failingNames: [] }),
+	).toBe("6 checks passed");
+	expect(
+		checksSummary(currentTranslator(), { passing: 1, pending: 1, failing: 0, failingNames: [] }),
+	).toBe("1 of 2 checks running");
+	expect(
+		checksSummary(currentTranslator(), {
+			passing: 3,
+			pending: 1,
+			failing: 2,
+			failingNames: ["lint", "e2e"],
+		}),
+	).toBe("2 checks failing: lint, e2e");
 	const details = (over: Partial<ReviewDetails>): ReviewDetails => ({
 		draft: false,
 		reviewers: [],
@@ -374,11 +382,13 @@ test("checks and review decision read as information", () => {
 	});
 	expect(
 		reviewSummary(
+			currentTranslator(),
 			details({ reviewDecision: "approved", reviewers: [{ login: "anna", state: "approved" }] }),
 		),
 	).toEqual({ text: "Approved by @anna", tone: "success" });
 	expect(
 		reviewSummary(
+			currentTranslator(),
 			details({
 				reviewDecision: "changes_requested",
 				reviewers: [
@@ -388,13 +398,20 @@ test("checks and review decision read as information", () => {
 			}),
 		),
 	).toEqual({ text: "Changes requested by @bob", tone: "warning" });
-	expect(reviewSummary(details({ reviewDecision: "review_required" }))).toEqual({
+	expect(
+		reviewSummary(currentTranslator(), details({ reviewDecision: "review_required" })),
+	).toEqual({
 		text: "Waiting for review",
 		tone: "muted",
 	});
-	expect(reviewSummary(details({ reviewers: [{ login: "cy", state: "approved" }] }))).toEqual({
+	expect(
+		reviewSummary(
+			currentTranslator(),
+			details({ reviewers: [{ login: "cy", state: "approved" }] }),
+		),
+	).toEqual({
 		text: "Approved by @cy",
 		tone: "success",
 	});
-	expect(reviewSummary(details({}))).toBeNull();
+	expect(reviewSummary(currentTranslator(), details({}))).toBeNull();
 });

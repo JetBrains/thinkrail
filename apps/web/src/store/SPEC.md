@@ -217,7 +217,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   repair cache/history labels or a still-queued open, but cannot recreate a locally closed placement or steal
   focus. **The durable-title fold** routes
   `session_info_changed` through the same one-home chat-label mutation already used by extension-UI
-  `setTitle`: normalize an absent name to the `Chat` fallback; update the cached `ChatTab`, its existing local
+  `setTitle`: normalize an absent name to the empty untitled name (worded at render by `lib`'s `chatName`, as
+  `selectChatTitle` does; `selectChatName` returns the stored name, and `workspaceName(t, ws)` words the
+  host-named default workspace); update the cached `ChatTab`, its existing local
   placement, any queued open, or its `closedChatsByWorkspace` row; and change no recency, runtime, placement,
   navigation clock, or attention. The durable Pi event may supersede an extension's presentation-only title.
   An event for a session this surface has never listed remains a no-op—`session.list`/`session.getMessages`
@@ -763,5 +765,6 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   invocation parser/matcher for user-message echo reconciliation, the MCP attention/active predicates; a
   leaf, so the edge adds no cycle); `chat`
   (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
-  (`ConnectionStatus`, **type-only**); `zustand`.
+  (`ConnectionStatus`, **type-only**); `@thinkrail/locales` (default chat/terminal names, settled-reason
+  copy and toasts, resolved when created); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`, shell runtime (the web-local layout state edge is type-only), or transport runtime.

@@ -5,6 +5,7 @@ import {
 	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
 import type { ExistingWorktreeCandidate, Workspace } from "@thinkrail/contracts";
+import { i18n, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -29,6 +30,7 @@ export function ExistingWorktreeDialog({
 	onOpenChange: (open: boolean) => void;
 	onOpened: (workspace: Workspace) => Promise<void>;
 }) {
+	const t = useT();
 	const [candidates, setCandidates] = useState<ExistingWorktreeCandidate[] | null>(null);
 	const [loadError, setLoadError] = useState<string | null>(null);
 	const [openError, setOpenError] = useState<string | null>(null);
@@ -49,7 +51,7 @@ export function ExistingWorktreeDialog({
 			})
 			.catch((error) => {
 				if (requestRef.current === request) {
-					setLoadError(errorText(error, "Couldn't list existing worktrees"));
+					setLoadError(errorText(error, i18n.t("panels.existingWorktree.listFailed")));
 				}
 			});
 	}, [projectId]);
@@ -84,7 +86,7 @@ export function ExistingWorktreeDialog({
 			await onOpened(workspace);
 			onOpenChange(false);
 		} catch (error) {
-			setOpenError(errorText(error, "Couldn't finish opening the existing worktree"));
+			setOpenError(errorText(error, t("panels.existingWorktree.openFailed")));
 			setOpeningPath(null);
 		}
 	};
@@ -100,18 +102,15 @@ export function ExistingWorktreeDialog({
 				<DialogHeader>
 					<div className="flex items-center gap-8">
 						<FolderOpen className="size-16 shrink-0 text-primary" />
-						<DialogTitle>Open existing worktree</DialogTitle>
+						<DialogTitle>{t("panels.existingWorktree.title")}</DialogTitle>
 					</div>
-					<DialogDescription>
-						Choose a checkout already registered with this Git repository. ThinkRail will use it in
-						place without moving, renaming, or taking ownership of it.
-					</DialogDescription>
+					<DialogDescription>{t("panels.existingWorktree.description")}</DialogDescription>
 				</DialogHeader>
 
 				{candidates === null && loadError === null ? (
 					<LoadingRegion
 						rows={4}
-						label="Reading Git worktrees"
+						label={t("panels.existingWorktree.loading")}
 						className="min-h-112 p-4"
 						testId="existing-worktree-loading"
 					/>
@@ -127,7 +126,7 @@ export function ExistingWorktreeDialog({
 							onClick={loadCandidates}
 						>
 							<RefreshCw className="size-14" />
-							Retry
+							{t("common.retry")}
 						</Button>
 					</div>
 				) : null}
@@ -137,7 +136,7 @@ export function ExistingWorktreeDialog({
 						className="rounded-sm border border-border-default bg-control-bg p-12 text-text-muted tr-text-ui"
 						data-testid="existing-worktree-empty"
 					>
-						No unattached worktrees found. Create one with Git, then reopen this chooser.
+						{t("panels.existingWorktree.empty")}
 					</div>
 				) : null}
 
@@ -169,14 +168,14 @@ export function ExistingWorktreeDialog({
 									</div>
 									<span className="flex min-w-0 flex-1 flex-col gap-2">
 										<span className="truncate text-text-default tr-text-ui">
-											{available ? candidate.branch : "Detached HEAD"}
+											{available ? candidate.branch : t("panels.existingWorktree.detachedHead")}
 										</span>
 										<span className="truncate text-text-subtle tr-text-metadata">
 											{candidate.path}
 										</span>
 										{available ? null : (
 											<span className="text-feedback-warning tr-text-metadata">
-												Create a branch in this worktree before opening it.
+												{t("panels.existingWorktree.detachedHint")}
 											</span>
 										)}
 									</span>
@@ -201,7 +200,7 @@ export function ExistingWorktreeDialog({
 						disabled={openingPath !== null}
 						onClick={() => handleOpenChange(false)}
 					>
-						Cancel
+						{t("common.cancel")}
 					</Button>
 				</DialogFooter>
 			</DialogContent>
