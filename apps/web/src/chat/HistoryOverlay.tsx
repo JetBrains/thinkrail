@@ -358,6 +358,7 @@ export function HistoryOverlay({
 	const { open, stage, query, scope, result, selected, error } = state;
 	const inputRef = useRef<HTMLInputElement>(null);
 	const resultsRef = useRef<HTMLDivElement>(null);
+	const rootRef = useRef<HTMLDivElement>(null);
 	const [scopeMenuOpen, setScopeMenuOpen] = useState(false);
 
 	useEffect(() => {
@@ -379,6 +380,23 @@ export function HistoryOverlay({
 		window.addEventListener("keydown", onWindowKeyDown, true);
 		return () => window.removeEventListener("keydown", onWindowKeyDown, true);
 	}, [open, scopeMenuOpen, onClose]);
+
+	useEffect(() => {
+		if (!open) return;
+		const onWindowPointerDown = (e: PointerEvent) => {
+			const target = e.target as Element | null;
+			if (!target) return;
+			if (rootRef.current?.contains(target)) return;
+			// The history button toggles the overlay on click; closing here too
+			// would fight that toggle. The scope menu renders in a portal outside
+			// the overlay root, so its clicks must not count as "outside" either.
+			if (target.closest('[data-testid="history-open"]')) return;
+			if (target.closest('[role="menu"], [data-radix-popper-content-wrapper]')) return;
+			onClose();
+		};
+		window.addEventListener("pointerdown", onWindowPointerDown, true);
+		return () => window.removeEventListener("pointerdown", onWindowPointerDown, true);
+	}, [open, onClose]);
 
 	const selectedKey = useMemo(() => {
 		const sel = resolveHistorySelection(stage, result, selected);
@@ -516,6 +534,7 @@ export function HistoryOverlay({
 
 	return (
 		<div
+			ref={rootRef}
 			data-testid="history-overlay"
 			data-stage={stage}
 			className="absolute bottom-full left-8 right-8 z-20 mb-4 flex flex-col overflow-hidden rounded-lg border border-border-default bg-container-elevated-bg shadow-[var(--shadow-md)]"
