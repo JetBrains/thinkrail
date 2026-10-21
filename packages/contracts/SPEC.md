@@ -951,6 +951,11 @@ so an already-loaded old client clears retired markers after reconnect. No activ
 - **Type-only, from the package roots, always** (type-only imports are erased by
   `verbatimModuleSyntax`, so the web bundle stays provider-free; the pi-ai provider/API subpaths
   statically import the Node SDKs — never touch them). The `/base` entries existed only in 0.79.8–0.79.9.
+- **Path fields carry a spelling contract** (architecture Decision 22). `Project.path` and
+  `Workspace.worktreePath` are the host's resolved absolute spelling. Every workspace-relative `path`
+  (`FileNode`, `GitFileChange`, `ReviewAnchor`, `ReviewReadingStep`, `WorkspaceFsChangedPayload.paths`) is
+  POSIX `/` and inside the worktree. Absolute paths pi reports (tool arguments, a transcript `cwd`) may use
+  either separator; consumers compare them only after normalizing.
 - `Model` is generic — expose as `Model<any>`.
 - `AssistantMessageEvent` (the streaming deltas) is nested under `message_update.assistantMessageEvent`,
   never a top-level event `type`.

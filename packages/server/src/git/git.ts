@@ -371,8 +371,12 @@ export async function gitStatus(workspaceId: string, scope?: GitDiffScope): Prom
 	return { branch, changes };
 }
 
+function objectName(ref: string, path: string): string {
+	return `${ref}:${process.platform === "win32" ? path.replaceAll("\\", "/") : path}`;
+}
+
 function blobArgs(ref: string, path: string): string[] {
-	return ["cat-file", "blob", "--", `${ref}:${path}`];
+	return ["cat-file", "blob", "--", objectName(ref, path)];
 }
 
 export function readBlobAt(worktreePath: string, ref: string, path: string): string | null {
@@ -484,7 +488,7 @@ export async function readBlobSizeAtAsync(
 	path: string,
 ): Promise<number | null> {
 	const output = strictBlobFrom(
-		await gitAsync(worktreePath, ["cat-file", "-s", "--", `${ref}:${path}`], {
+		await gitAsync(worktreePath, ["cat-file", "-s", "--", objectName(ref, path)], {
 			env: { ...nonInteractiveGitEnv(), LC_ALL: "C" },
 		}),
 	);

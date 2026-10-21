@@ -88,6 +88,10 @@ export function itemTitleOf(
 	});
 }
 
+function agentPath(path: string): string {
+	return path.replaceAll("\\", "/");
+}
+
 export function parseVerdict(
 	finalText: string | undefined,
 	itemId: string,
@@ -109,7 +113,7 @@ export function parseVerdict(
 		id: f.id,
 		kind: f.kind ?? "inline",
 		body: f.body,
-		...(f.path ? { path: f.path } : {}),
+		...(f.path ? { path: agentPath(f.path) } : {}),
 		...(f.startLine !== undefined ? { startLine: f.startLine } : {}),
 		...(f.endLine !== undefined ? { endLine: f.endLine } : {}),
 	}));
@@ -121,7 +125,12 @@ export function parseVerdict(
 		itemTitle,
 		...(candidate.summary !== undefined ? { summary: candidate.summary } : {}),
 		...(candidate.readingOrder !== undefined
-			? { readingOrder: candidate.readingOrder.map((step) => ({ path: step.path, why: step.why })) }
+			? {
+					readingOrder: candidate.readingOrder.map((step) => ({
+						path: agentPath(step.path),
+						why: step.why,
+					})),
+				}
 			: {}),
 		findings,
 	};

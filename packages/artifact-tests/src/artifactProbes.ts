@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
+import { delimiter, dirname, join, resolve } from "node:path";
 import { defaultSessionDirFor, writeFixtureSession } from "@thinkrail/server/history-test-fixtures";
 import { removeTree } from "@thinkrail/shared/removeTree";
 import { within } from "./lifecycle";
@@ -474,7 +474,7 @@ export default function syntheticExternalExtension(pi) {
 		const workspace = workspaces.find((entry) => entry.kind === "default");
 		assert(workspace?.id && workspace.worktreePath, "Default workspace is missing");
 		const transcript = writeFixtureSession(defaultSessionDirFor(agentDir, workspace.worktreePath), {
-			cwd: workspace.worktreePath,
+			cwd: resolve(workspace.worktreePath),
 			name: "artifact trash probe",
 			messages: [{ role: "user", text: "move to trash", timestamp: Date.now() }],
 		});

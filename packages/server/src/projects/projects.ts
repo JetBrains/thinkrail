@@ -27,16 +27,19 @@ function emit(project: Project): void {
 function resolveProjectPath(path: string): string {
 	const home =
 		(process.platform === "win32" ? process.env.USERPROFILE : process.env.HOME) || homedir();
-	const expanded = path === "~" ? home : path.startsWith("~/") ? join(home, path.slice(2)) : path;
+	const underHome =
+		path.startsWith("~/") || (process.platform === "win32" && path.startsWith("~\\"));
+	const expanded = path === "~" ? home : underHome ? join(home, path.slice(2)) : path;
 	if (!isAbsolute(expanded)) {
-		throw new Error(`Project path must be absolute or start with ~/: ${path}`);
+		const homeForms = process.platform === "win32" ? "~/ or ~\\" : "~/";
+		throw new Error(`Project path must be absolute or start with ${homeForms}: ${path}`);
 	}
 	return resolve(expanded);
 }
 
 function gitToplevel(path: string): string | null {
 	const result = git(path, ["rev-parse", "--show-toplevel"]);
-	return result.ok ? result.out || null : null;
+	return result.ok && result.out ? resolve(result.out) : null;
 }
 
 function slugify(name: string): string {
