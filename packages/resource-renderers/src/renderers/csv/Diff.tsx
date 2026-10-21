@@ -59,19 +59,14 @@ export default function CsvDiff({
 	review,
 	onPlacedThreadIds,
 }: ResourceDiffProps) {
-	const delimiter = sniffDelimiter(
-		resource.path,
-		modified.kind === "text" ? modified.text : "",
-		original.kind === "text" ? original.text : "",
+	const originalText = useMemo(() => (original.kind === "text" ? original.text : ""), [original]);
+	const modifiedText = useMemo(() => (modified.kind === "text" ? modified.text : ""), [modified]);
+	const delimiter = useMemo(
+		() => sniffDelimiter(resource.path, modifiedText, originalText),
+		[resource.path, originalText, modifiedText],
 	);
-	const originalTable = useMemo(
-		() => parseCsv(original.kind === "text" ? original.text : "", delimiter),
-		[delimiter, original],
-	);
-	const modifiedTable = useMemo(
-		() => parseCsv(modified.kind === "text" ? modified.text : "", delimiter),
-		[delimiter, modified],
-	);
+	const originalTable = useMemo(() => parseCsv(originalText, delimiter), [delimiter, originalText]);
+	const modifiedTable = useMemo(() => parseCsv(modifiedText, delimiter), [delimiter, modifiedText]);
 	const aligned = useMemo(
 		() => alignCsvRows(originalTable.rows, modifiedTable.rows),
 		[originalTable.rows, modifiedTable.rows],
@@ -157,11 +152,13 @@ export default function CsvDiff({
 		if (!cell) return;
 		rowRefs.current.get(`${side}:${cell.row}`)?.scrollIntoView({ block: "center" });
 	};
-	const maxColumns = Math.max(
-		1,
-		...originalTable.rows.map((row) => row.cells.length),
-		...modifiedTable.rows.map((row) => row.cells.length),
-	);
+	const maxColumns = useMemo(() => {
+		let max = 1;
+		for (const row of [...originalTable.rows, ...modifiedTable.rows]) {
+			max = Math.max(max, row.cells.length);
+		}
+		return max;
+	}, [originalTable.rows, modifiedTable.rows]);
 
 	return (
 		<div data-testid="csv-diff" className="flex h-full min-h-0 flex-col bg-container-content-bg">

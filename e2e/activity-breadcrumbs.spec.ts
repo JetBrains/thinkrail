@@ -607,9 +607,9 @@ test("sticky activity breadcrumbs expose the off-screen Activity â†’ Thinking â†
 				scroller.scrollTop +=
 					element.getBoundingClientRect().top - scroller.getBoundingClientRect().top + 80;
 			});
-			return trail.count();
+			return trail.isVisible();
 		})
-		.toBe(1);
+		.toBe(true);
 	await expect(trail).toBeVisible();
 	await expect(trail.getByTestId("activity-breadcrumb-segment")).toHaveCount(3);
 	await expect(trail.locator('[data-kind="activity"]')).toBeVisible();
