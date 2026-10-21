@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { TodoItem, TodoPlan } from "@thinkrail/contracts";
+import { applyLocale, currentTranslator } from "@thinkrail/locales/react";
 import { planToMarkdown } from "./planMarkdown";
 
 const item = (title: string, status: TodoItem["status"] = "pending"): TodoItem => ({
@@ -23,7 +24,7 @@ test("compiles groups + loose with a progress header and GFM checkboxes", () => 
 			{ id: "g2", title: "Payments", todos: [item("Wire the route", "in_progress")] },
 		],
 	};
-	expect(planToMarkdown(plan, "My chat")).toBe(
+	expect(planToMarkdown(currentTranslator(), plan, "My chat")).toBe(
 		[
 			"# TODO — My chat",
 			"",
@@ -45,13 +46,13 @@ test("compiles groups + loose with a progress header and GFM checkboxes", () => 
 
 test("loose-only plan lists items directly (no Other heading)", () => {
 	const plan: TodoPlan = { todos: [item("a", "done"), item("b")], groups: [] };
-	expect(planToMarkdown(plan, "c")).toBe(
+	expect(planToMarkdown(currentTranslator(), plan, "c")).toBe(
 		["# TODO — c", "", "Progress: 1/2", "", "- [x] a", "- [ ] b", ""].join("\n"),
 	);
 });
 
 test("an empty plan renders a placeholder", () => {
-	expect(planToMarkdown({ todos: [], groups: [] }, "c")).toBe(
+	expect(planToMarkdown(currentTranslator(), { todos: [], groups: [] }, "c")).toBe(
 		["# TODO — c", "", "Progress: 0/0", "", "_No items yet._", ""].join("\n"),
 	);
 });
@@ -72,7 +73,7 @@ test("a committed done item renders sha + summary + status-lettered file rows wi
 		],
 	};
 	const plan: TodoPlan = { todos: [done], groups: [] };
-	expect(planToMarkdown(plan, "c")).toBe(
+	expect(planToMarkdown(currentTranslator(), plan, "c")).toBe(
 		[
 			"# TODO — c",
 			"",
@@ -95,7 +96,7 @@ test("a fallback done item (change artifacts, no commit) lists bare paths — no
 		...item("Fix bar", "done"),
 		artifacts: [{ kind: "change", path: "src/bar.ts" }],
 	};
-	expect(planToMarkdown({ todos: [done], groups: [] }, "c")).toBe(
+	expect(planToMarkdown(currentTranslator(), { todos: [done], groups: [] }, "c")).toBe(
 		[
 			"# TODO — c",
 			"",
@@ -119,7 +120,7 @@ test("multiline (bullet) summary and verification flatten to one export line eac
 		verification:
 			"- alembic upgrade head applies f3a5\n- pytest → 3 pass\n- ruff + pyright → clean",
 	};
-	expect(planToMarkdown({ todos: [done], groups: [] }, "c")).toBe(
+	expect(planToMarkdown(currentTranslator(), { todos: [done], groups: [] }, "c")).toBe(
 		[
 			"# TODO — c",
 			"",
@@ -138,7 +139,7 @@ test("a commit artifact without decorated files (unresolvable sha) degrades to a
 		...item("Old step", "done"),
 		artifacts: [{ kind: "commit", sha: "deadbeef", label: "Old step" }],
 	};
-	expect(planToMarkdown({ todos: [done], groups: [] }, "c")).toBe(
+	expect(planToMarkdown(currentTranslator(), { todos: [done], groups: [] }, "c")).toBe(
 		["# TODO — c", "", "Progress: 1/1", "", "- [x] Old step", ""].join("\n"),
 	);
 });
@@ -149,7 +150,7 @@ test("a completed plan's agent summary exports under a ## Summary heading with a
 		groups: [],
 		summary: "Shipped the whole thing end to end.",
 	};
-	expect(planToMarkdown(plan, "c")).toBe(
+	expect(planToMarkdown(currentTranslator(), plan, "c")).toBe(
 		[
 			"# TODO — c",
 			"",
@@ -181,7 +182,9 @@ test("adopted commits compile as their own section; an all-adopted plan drops th
 			},
 		],
 	};
-	expect(planToMarkdown({ todos: [], groups: [], adoptedCommits: [adopted] }, "c")).toBe(
+	expect(
+		planToMarkdown(currentTranslator(), { todos: [], groups: [], adoptedCommits: [adopted] }, "c"),
+	).toBe(
 		[
 			"# TODO — c",
 			"",
@@ -204,7 +207,7 @@ test("unattributed changes compile as their own section, after the items", () =>
 			{ path: "NOTES.md", status: "untracked" },
 		],
 	};
-	expect(planToMarkdown(plan, "c")).toBe(
+	expect(planToMarkdown(currentTranslator(), plan, "c")).toBe(
 		[
 			"# TODO — c",
 			"",
@@ -218,4 +221,31 @@ test("unattributed changes compile as their own section, after the items", () =>
 			"",
 		].join("\n"),
 	);
+});
+
+test("the export follows the interface language, plural forms included", () => {
+	applyLocale("ru", {
+		ru: {
+			"chat.planExport.title": "План — {{title}}",
+			"chat.planExport.progress": "Готово: {{done}} из {{total}}",
+			"chat.planExport.summary": "Итог",
+			"chat.planExport.stepsDone_one": "{{count}} шаг готов",
+			"chat.planExport.stepsDone_few": "{{count}} шага готово",
+			"chat.planExport.stepsDone_many": "{{count}} шагов готово",
+		},
+	});
+	try {
+		const plan: TodoPlan = {
+			todos: [item("a", "done"), item("b", "done")],
+			groups: [],
+			summary: "Shipped.",
+		};
+		const markdown = planToMarkdown(currentTranslator(), plan, "Чат");
+		expect(markdown).toContain("# План — Чат");
+		expect(markdown).toContain("Готово: 2 из 2");
+		expect(markdown).toContain("## Итог");
+		expect(markdown).toContain("2 шага готово");
+	} finally {
+		applyLocale("en", {});
+	}
 });

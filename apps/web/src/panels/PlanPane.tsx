@@ -1023,7 +1023,7 @@ export default function PlanPane({
 				}),
 			);
 	};
-	const exportMarkdown = () => planToMarkdown(data, title);
+	const exportMarkdown = () => planToMarkdown(t, data, title);
 	const renderGroup = (group: TodoGroupItem): ReactNode => (
 		<GroupSection
 			key={group.id}
