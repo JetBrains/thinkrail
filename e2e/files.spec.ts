@@ -23,7 +23,7 @@ test("shows files and compacts single-directory runs in the Files tree", async (
 	const compactFolder = folderRows.filter({ hasText: /^compact\/only\/here$/ });
 	const leaf = page
 		.locator('[data-testid="file-node"][data-kind="file"]')
-		.filter({ hasText: /^leaf\.txt$/ });
+		.filter({ hasText: /^leaf\.txt[MAUR]?$/ });
 	await expect(compactFolder).toBeVisible();
 	await compactFolder.click();
 	await expect(leaf).toBeVisible();

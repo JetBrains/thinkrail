@@ -147,7 +147,7 @@ test("workbench strips and feature toolbars keep one-row geometry with ARIA tabs
 	const centerScroller = centerStrip.getByRole("tablist");
 	await expect(centerScroller).toHaveCSS("overflow-x", "auto");
 	await expect(centerScroller).toHaveCSS("overflow-y", "hidden");
-	for (const tool of ["projects", "specs", "files", "changes", "review"]) {
+	for (const tool of ["projects", "specs", "files", "review"]) {
 		await expect(
 			page.getByTestId(`tab-${tool}`).getByRole("button", { name: /^Close / }),
 		).toHaveCount(0);
@@ -227,7 +227,7 @@ test("auxiliary panel scrollbars stay quiet at rest and expose only clipped edge
 }) => {
 	await page.setViewportSize({ width: 900, height: 420 });
 	await openDefaultWorkbench(page);
-	for (const tool of ["projects", "specs", "files", "changes", "review"] as const) {
+	for (const tool of ["projects", "specs", "files", "review"] as const) {
 		const tab = page.getByTestId(`tool-rail-${tool}`);
 		await revealWorkbenchTool(page, tool);
 		const panelId = await tab.getAttribute("aria-controls");
@@ -505,11 +505,11 @@ test("the side group menu shows tools for its own side and opens a terminal pane
 
 	await page.getByTestId("tab-projects").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Remove tool from group", exact: true }).click();
-	await page.getByTestId("tab-changes").click({ button: "right" });
+	await page.getByTestId("tab-review").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Remove tool from group", exact: true }).click();
 
 	await specsGroup.getByRole("button", { name: "Add to this group" }).click();
-	await expect(page.getByTestId("show-tool-changes")).toBeVisible();
+	await expect(page.getByTestId("show-tool-review")).toBeVisible();
 	await expect(page.getByTestId("show-tool-projects")).toHaveCount(0);
 });
 
@@ -602,8 +602,8 @@ test("side groups expose broad per-panel above and below split targets", async (
 	await expect(page.getByRole("menuitem", { name: "New group below", exact: true })).toBeEnabled();
 	await page.keyboard.press("Escape");
 
-	const changesGroup = sideGroups(page, "right").and(page.locator('[data-tools~="changes"]'));
-	const aboveTarget = changesGroup.locator('[data-drop-label="Create right group above"]');
+	const reviewGroup = sideGroups(page, "right").and(page.locator('[data-tools~="review"]'));
+	const aboveTarget = reviewGroup.locator('[data-drop-label="Create right group above"]');
 	const aboveHeight = await dragTabToTarget(page, files, aboveTarget);
 	expect(aboveHeight).toBeGreaterThan(40);
 
@@ -611,33 +611,33 @@ test("side groups expose broad per-panel above and below split targets", async (
 	await expect(groups).toHaveCount(3);
 	await expect(groups.nth(0)).toHaveAttribute("data-tools", "specs");
 	await expect(groups.nth(1)).toHaveAttribute("data-tools", "files");
-	await expect(groups.nth(2)).toHaveAttribute("data-tools", /changes/);
+	await expect(groups.nth(2)).toHaveAttribute("data-tools", /review/);
 
-	const belowTarget = changesGroup.locator('[data-drop-label="Create right group below"]');
+	const belowTarget = reviewGroup.locator('[data-drop-label="Create right group below"]');
 	const belowHeight = await dragTabToTarget(page, page.getByTestId("tab-files"), belowTarget);
 	expect(belowHeight).toBeGreaterThan(40);
 
 	await expect(groups).toHaveCount(4);
 	await expect(groups.nth(0)).toHaveAttribute("data-tools", "specs");
 	await expect(groups.nth(1)).toContainText("Empty group");
-	await expect(groups.nth(2)).toHaveAttribute("data-tools", /changes/);
+	await expect(groups.nth(2)).toHaveAttribute("data-tools", /review/);
 	await expect(groups.nth(3)).toHaveAttribute("data-tools", "files");
 
 	await waitForLayoutSettled(page);
-	await changesGroup.getByTestId("side-group-fold").press("Space", { delay: 100 });
-	await expect(changesGroup).toHaveCount(0);
-	const boundaryAboveFoldedChanges = page
+	await reviewGroup.getByTestId("side-group-fold").press("Space", { delay: 100 });
+	await expect(reviewGroup).toHaveCount(0);
+	const boundaryAboveFoldedReview = page
 		.getByTestId("right-layout-rail")
 		.locator('[data-drop-label="New right pane here"]')
 		.nth(2);
-	await dragTabToTarget(page, page.getByTestId("tab-files"), boundaryAboveFoldedChanges);
+	await dragTabToTarget(page, page.getByTestId("tab-files"), boundaryAboveFoldedReview);
 	await expect(groups).toHaveCount(4);
-	await expect(page.getByTestId("tool-rail-changes")).toHaveAttribute("aria-pressed", "false");
-	await page.getByTestId("tool-rail-changes").click({ delay: 100 });
+	await expect(page.getByTestId("tool-rail-review")).toHaveAttribute("aria-pressed", "false");
+	await page.getByTestId("tool-rail-review").click({ delay: 100 });
 	await expect(groups).toHaveCount(5);
 	await expect(groups.nth(0)).toHaveAttribute("data-tools", "specs");
 	await expect(groups.nth(2)).toHaveAttribute("data-tools", "files");
-	await expect(groups.nth(3)).toHaveAttribute("data-tools", /changes/);
+	await expect(groups.nth(3)).toHaveAttribute("data-tools", /review/);
 });
 
 test("Mod+B and Mod+J hide and restore local sides without affecting bottom", async ({ page }) => {
@@ -678,13 +678,13 @@ test("keyboard and menu commands reorder, search, recursively split, and explici
 	await page.getByTestId("tab-files").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Remove tool from group", exact: true }).click();
 	await expect(page.getByTestId("tab-files")).toHaveCount(0);
-	await page.getByTestId("tab-changes").click({ button: "right" });
+	await page.getByTestId("tab-review").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Show Files" }).click();
 	await expect(page.getByTestId("tab-files")).toBeVisible();
 	await page.getByTestId("tool-rail-specs").focus();
 	await page.keyboard.press("Delete");
 	await expect(page.getByTestId("tab-specs")).toHaveCount(0);
-	await page.getByTestId("tab-changes").click({ button: "right" });
+	await page.getByTestId("tab-review").click({ button: "right" });
 	await page.getByRole("menuitem", { name: "Show Specs" }).click();
 	await expect(page.getByTestId("tab-specs")).toBeVisible();
 
@@ -1235,8 +1235,8 @@ test("local layout transitions with no gesture in progress never announce a canc
 	await expect(filesGroup).toHaveCount(0);
 	await page.getByTestId("tool-rail-files").click();
 	await expect(filesGroup).toHaveAttribute("data-folded", "false");
-	await revealWorkbenchTool(page, "changes");
-	await expect(page.getByTestId("tab-changes")).toHaveAttribute("data-active", "true");
+	await revealWorkbenchTool(page, "review");
+	await expect(page.getByTestId("tab-review")).toHaveAttribute("data-active", "true");
 	await expect(page.getByTestId("toast")).toHaveCount(0);
 });
 

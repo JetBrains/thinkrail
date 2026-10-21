@@ -81,7 +81,7 @@ for (const allFolded of [false, true]) {
 		const destination = await terminalRail.getAttribute("data-group-id");
 		if (!destination) throw new Error("Missing terminal group identity");
 		if (!allFolded) {
-			await page.getByTestId("tool-rail-changes").click({ button: "right" });
+			await page.getByTestId("tool-rail-review").click({ button: "right" });
 			await page.getByRole("menuitem", { name: "New bottom group at right", exact: true }).click();
 		}
 		await terminalRail.click();
@@ -131,7 +131,7 @@ test("a terminal dropped on a rail boundary beside a folded tool pane gets its o
 		1,
 	);
 	await expect(specs).toHaveAttribute("aria-pressed", "false");
-	await expect(page.getByTestId("changes-view-toggle")).toBeVisible();
+	await expect(page.getByTestId("review-panel")).toBeVisible();
 });
 
 test("a fresh resize remains writable after its previous handle was removed during cancellation", async ({
@@ -200,7 +200,7 @@ for (const kind of [
 			await page.getByRole("menuitemradio", { name: "Full width", exact: true }).click();
 		}
 		if (kind === "bottom-groups") {
-			await page.getByTestId("tool-rail-changes").click({ button: "right" });
+			await page.getByTestId("tool-rail-review").click({ button: "right" });
 			await page.getByRole("menuitem", { name: "New bottom group at right", exact: true }).click();
 		}
 		if (kind === "center-split") {

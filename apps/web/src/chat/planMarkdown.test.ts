@@ -214,7 +214,7 @@ test("unattributed changes compile as their own section, after the items", () =>
 			"",
 			"## Outside the plan",
 			"- `M` src/loose.ts · +4 −1",
-			"- `A` NOTES.md",
+			"- `U` NOTES.md",
 			"",
 		].join("\n"),
 	);

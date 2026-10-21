@@ -732,7 +732,7 @@ export function isSystemThemePair(value: unknown): value is SystemThemePair {
 	);
 }
 
-export type LayoutToolId = "projects" | "specs" | "files" | "changes" | "review" | "plan";
+export type LayoutToolId = "projects" | "specs" | "files" | "review" | "plan";
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
 

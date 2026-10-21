@@ -1,5 +1,4 @@
 import type { GitFileChange } from "@thinkrail/contracts";
-import { useState } from "react";
 import type { TabIntent } from "../store";
 import { ChangeRowActions, ROW_MENU_SLOT } from "./ChangeRowActions";
 import { buildChangesTree, type ChangeTreeNode, statusNameClass } from "./changesModel";
@@ -7,44 +6,29 @@ import { DiffStatBadge } from "./DiffStatBadge";
 import { TreeRow } from "./TreeRow";
 import { ViewedMark } from "./ViewedMark";
 
-export function ChangesTree({
-	changes,
-	onOpen,
-	isActive,
-	isViewed,
-}: {
-	changes: readonly GitFileChange[];
+interface ChangeRowProps {
 	onOpen: (path: string, intent: TabIntent, claimPreview?: boolean) => void;
 	isActive: (path: string) => boolean;
 	isViewed: (path: string) => boolean;
-}) {
+	isCollapsed: (path: string) => boolean;
+	onSetCollapsed: (path: string, collapsed: boolean) => void;
+}
+
+export function ChangesTree({
+	changes,
+	...rowProps
+}: ChangeRowProps & { changes: readonly GitFileChange[] }) {
 	return (
 		<ul className="flex flex-col motion-safe:animate-reveal">
 			{buildChangesTree(changes).map((node) => (
-				<ChangeNodeRow
-					key={node.path}
-					node={node}
-					onOpen={onOpen}
-					isActive={isActive}
-					isViewed={isViewed}
-				/>
+				<ChangeNodeRow key={node.path} node={node} {...rowProps} />
 			))}
 		</ul>
 	);
 }
 
-function ChangeNodeRow({
-	node,
-	onOpen,
-	isActive,
-	isViewed,
-}: {
-	node: ChangeTreeNode;
-	onOpen: (path: string, intent: TabIntent, claimPreview?: boolean) => void;
-	isActive: (path: string) => boolean;
-	isViewed: (path: string) => boolean;
-}) {
-	const [expanded, setExpanded] = useState(true);
+function ChangeNodeRow({ node, ...rowProps }: ChangeRowProps & { node: ChangeTreeNode }) {
+	const { onOpen, isActive, isViewed, isCollapsed, onSetCollapsed } = rowProps;
 
 	if (node.kind === "file") {
 		return (
@@ -81,6 +65,7 @@ function ChangeNodeRow({
 		);
 	}
 
+	const expanded = !isCollapsed(node.path);
 	return (
 		<li>
 			<div className="flex min-w-0 items-center">
@@ -89,7 +74,7 @@ function ChangeNodeRow({
 					kind="dir"
 					expanded={expanded}
 					label={node.name}
-					onClick={() => setExpanded((v) => !v)}
+					onClick={() => onSetCollapsed(node.path, expanded)}
 					trailing={expanded ? null : <DiffStatBadge added={node.added} removed={node.removed} />}
 				/>
 				<span className={ROW_MENU_SLOT} />
@@ -97,13 +82,7 @@ function ChangeNodeRow({
 			{expanded && (
 				<ul className="flex flex-col pl-tree-indent">
 					{node.children.map((child) => (
-						<ChangeNodeRow
-							key={child.path}
-							node={child}
-							onOpen={onOpen}
-							isActive={isActive}
-							isViewed={isViewed}
-						/>
+						<ChangeNodeRow key={child.path} node={child} {...rowProps} />
 					))}
 				</ul>
 			)}

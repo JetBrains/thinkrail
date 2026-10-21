@@ -27,9 +27,10 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
 - **`CustomIcon.tsx`** — renders an SVG from `public/custom-icons/` as a themeable `currentColor` glyph
   via a CSS `mask-image` span (`.custom-icon*` classes in `index.css`), so a custom glyph sizes with
   `size-*` and colours with `text-*` exactly like a Remix icon. Names are a typed union
-  (`CustomIconName`); today: `file-diff-line`/`file-diff-fill` (the Changes tool glyph).
+  (`CustomIconName`); today: `file-diff-line`/`file-diff-fill` (the Changes review tab glyph).
 - **`QuietScrollArea.tsx`** — the store-free overflow observer and two presentation surfaces:
-  `QuietScrollArea` owns an ordinary native scroll viewport, while `QuietScrollFrame` observes a
+  `QuietScrollArea` owns an ordinary native scroll viewport (an optional `viewportRef` callback hands that
+  element to a caller that saves/restores its scroll, e.g. `panels/RememberedScrollArea`), while `QuietScrollFrame` observes a
   third-party descendant scroll control without taking over its content or input and can receive the
   library's authoritative edge state. `styles/global.css` owns the single scrollbar definition for every
   native scroll container: a 6px gutter, transparent track, transparent resting thumb, `--border-default`
