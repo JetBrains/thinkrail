@@ -4,6 +4,7 @@ import {
 	compactAge,
 	cssColorToHex,
 	fileName,
+	firstNonBlankLine,
 	hasPlatformModifier,
 	isAbsolutePath,
 	isRecord,
@@ -239,4 +240,11 @@ test("isRecord accepts plain objects only", () => {
 	expect(isRecord([])).toBe(false);
 	expect(isRecord(null)).toBe(false);
 	expect(isRecord("x")).toBe(false);
+});
+
+test("firstNonBlankLine skips blank lines and trims", () => {
+	expect(firstNonBlankLine("first\nsecond")).toBe("first");
+	expect(firstNonBlankLine("\n  \n  hello  \nworld")).toBe("hello");
+	expect(firstNonBlankLine(" \n\t\n")).toBeUndefined();
+	expect(firstNonBlankLine("")).toBeUndefined();
 });
