@@ -1,13 +1,5 @@
-import {
-	existsSync,
-	type FSWatcher,
-	mkdirSync,
-	readdirSync,
-	readFileSync,
-	statSync,
-	watch,
-} from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import type {
 	LocalLocaleFile,
 	LocalLocaleFileErrorCode,
@@ -21,8 +13,7 @@ const log = logger("locales");
 
 export const MAX_LOCALE_FILE_BYTES = 2 * 1024 * 1024;
 export const MAX_LOCALE_FILES = 64;
-const DEBOUNCE_MS = 150;
-const RETRY_MS = 1_000;
+const POLL_MS = 1_000;
 
 export function localesDir(root: string = dataDir()): string {
 	return join(root, "locales");
@@ -68,15 +59,31 @@ function readLocaleFile(dir: string, fileName: string): LocalLocaleFile {
 	return { fileName, tag, ok: true, strings: { ...result.strings } };
 }
 
-export function readLocalLocales(dir: string = localesDir()): LocalLocalesSnapshot {
-	let names: string[];
+function localeFileNames(dir: string): string[] {
 	try {
-		names = readdirSync(dir)
+		return readdirSync(dir)
 			.filter((name) => name.endsWith(".json") && !name.startsWith("."))
 			.sort();
 	} catch {
-		names = [];
+		return [];
 	}
+}
+
+function folderSignature(dir: string): string {
+	return localeFileNames(dir)
+		.map((name) => {
+			try {
+				const stat = statSync(join(dir, name));
+				return `${name}:${stat.ino}:${stat.size}:${stat.mtimeMs}`;
+			} catch {
+				return `${name}:gone`;
+			}
+		})
+		.join("\n");
+}
+
+export function readLocalLocales(dir: string = localesDir()): LocalLocalesSnapshot {
+	const names = localeFileNames(dir);
 	const seen = new Set<string>();
 	const files = names.map((fileName, index) => {
 		if (index >= MAX_LOCALE_FILES) {
@@ -95,84 +102,26 @@ export function readLocalLocales(dir: string = localesDir()): LocalLocalesSnapsh
 export interface LocalesWatchOptions {
 	dir?: string;
 	onChange: () => void;
+	intervalMs?: number;
 }
 
 export function watchLocalLocales({
 	dir = localesDir(),
 	onChange,
+	intervalMs = POLL_MS,
 }: LocalesWatchOptions): () => void {
-	let folder: FSWatcher | undefined;
-	let parent: FSWatcher | undefined;
-	let debounce: ReturnType<typeof setTimeout> | undefined;
-	let retry: ReturnType<typeof setTimeout> | undefined;
-	let stopped = false;
-	let restarted = false;
-	const nudge = () => {
-		clearTimeout(debounce);
-		debounce = setTimeout(onChange, DEBOUNCE_MS);
-	};
-	const attachFolder = () => {
-		folder?.close();
-		folder = undefined;
-		if (stopped || !existsSync(dir)) return;
-		try {
-			folder = watch(dir, { persistent: false }, (_event, filename) => {
-				if (filename === basename(dir)) attachFolder();
-				nudge();
-			});
-			folder.on("error", () => {
-				folder?.close();
-				folder = undefined;
-				nudge();
-			});
-		} catch {
-			log.warn(`could not watch locale folder ${dir}`);
-		}
-	};
-	const restart = () => {
-		parent?.close();
-		parent = undefined;
-		if (stopped || retry !== undefined) return;
-		retry = setTimeout(() => {
-			retry = undefined;
-			start();
-		}, RETRY_MS);
-	};
-	const start = () => {
-		if (stopped) return;
-		try {
-			parent = watch(dirname(dir), { persistent: false }, (_event, filename) => {
-				if (filename === basename(dirname(dir))) {
-					restart();
-					return;
-				}
-				if (filename !== null && filename !== basename(dir)) return;
-				attachFolder();
-				nudge();
-			});
-			parent.on("error", () => {
-				log.warn(`locale data-folder watcher failed for ${dirname(dir)}`);
-				restart();
-			});
-		} catch {
-			log.warn(`could not watch the data folder ${dirname(dir)}`);
-			restart();
-		}
-		attachFolder();
-		if (restarted) nudge();
-		restarted = true;
-	};
 	try {
 		mkdirSync(dir, { recursive: true });
 	} catch {
 		log.warn(`could not create locale folder ${dir}`);
 	}
-	start();
-	return () => {
-		stopped = true;
-		clearTimeout(debounce);
-		clearTimeout(retry);
-		folder?.close();
-		parent?.close();
-	};
+	let signature = folderSignature(dir);
+	const timer = setInterval(() => {
+		const next = folderSignature(dir);
+		if (next === signature) return;
+		signature = next;
+		onChange();
+	}, intervalMs);
+	timer.unref();
+	return () => clearInterval(timer);
 }

@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, watch, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MAX_LOCALE_FILE_BYTES, readLocalLocales, watchLocalLocales } from "./locales";
@@ -62,16 +62,23 @@ test("oversize files and duplicate tags are reported", () => {
 	expect(byName["it.json"]).toMatchObject({ ok: false, error: "too-large" });
 });
 
+const POLL = 50;
+
 test("the watcher creates the folder and nudges once per burst", async () => {
 	const dir = join(tempDir(), "locales");
 	let nudges = 0;
-	const stop = watchLocalLocales({ dir, onChange: () => nudges++ });
+	const stop = watchLocalLocales({ dir, onChange: () => nudges++, intervalMs: POLL });
 	try {
-		await Bun.sleep(50);
+		expect(existsSync(dir)).toBe(true);
+		await Bun.sleep(POLL * 2);
+		expect(nudges).toBe(0);
 		writeFileSync(join(dir, "de.json"), "{}");
 		writeFileSync(join(dir, "de.json"), '{"a":"b"}');
-		await Bun.sleep(400);
+		await Bun.sleep(POLL * 4);
 		expect(nudges).toBe(1);
+		writeFileSync(join(dir, "de.json"), '{"a":"c"}');
+		await Bun.sleep(POLL * 4);
+		expect(nudges).toBe(2);
 	} finally {
 		stop();
 	}
@@ -97,43 +104,46 @@ test("prototype-named keys stay data and never break a neighboring file", () => 
 test("the watcher survives the folder being deleted and recreated, without recreating it itself", async () => {
 	const dir = join(tempDir(), "locales");
 	let nudges = 0;
-	const stop = watchLocalLocales({ dir, onChange: () => nudges++ });
+	const stop = watchLocalLocales({ dir, onChange: () => nudges++, intervalMs: POLL });
 	try {
-		await Bun.sleep(50);
-		rmSync(dir, { recursive: true, force: true });
-		await Bun.sleep(400);
-		expect(readLocalLocales(dir).files).toEqual([]);
-		const afterDelete = nudges;
-		expect(afterDelete).toBeGreaterThan(0);
-		mkdirSync(dir);
-		await Bun.sleep(400);
-		const afterRecreate = nudges;
 		writeFileSync(join(dir, "de.json"), "{}");
-		await Bun.sleep(400);
-		expect(nudges).toBeGreaterThan(afterRecreate);
+		await Bun.sleep(POLL * 4);
+		const beforeDelete = nudges;
+		rmSync(dir, { recursive: true, force: true });
+		await Bun.sleep(POLL * 4);
+		expect(existsSync(dir)).toBe(false);
+		expect(nudges).toBeGreaterThan(beforeDelete);
+		const afterDelete = nudges;
+		mkdirSync(dir);
+		writeFileSync(join(dir, "de.json"), '{"a":"1"}');
+		await Bun.sleep(POLL * 4);
+		expect(nudges).toBeGreaterThan(afterDelete);
 	} finally {
 		stop();
 	}
 });
 
-test("the watcher survives its whole data folder being deleted and recreated", async () => {
+test("the watcher survives its whole data folder being replaced while another watcher holds that path", async () => {
 	const root = join(tempDir(), "data");
 	const dir = join(root, "locales");
 	let nudges = 0;
-	const stop = watchLocalLocales({ dir, onChange: () => nudges++ });
+	const stop = watchLocalLocales({ dir, onChange: () => nudges++, intervalMs: POLL });
+	const neighbor = watch(root, { persistent: false }, () => {});
+	neighbor.on("error", () => {});
 	try {
-		await Bun.sleep(100);
+		await Bun.sleep(POLL * 2);
 		rmSync(root, { recursive: true, force: true });
-		mkdirSync(root, { recursive: true });
+		mkdirSync(root);
 		await Bun.sleep(1_500);
 		mkdirSync(dir);
 		writeFileSync(join(dir, "de.json"), '{"a":"1"}');
-		await Bun.sleep(500);
+		await Bun.sleep(POLL * 4);
 		const afterCreate = nudges;
-		writeFileSync(join(dir, "de.json"), '{"a":"2"}');
-		await Bun.sleep(500);
+		writeFileSync(join(dir, "de.json"), '{"a":"22"}');
+		await Bun.sleep(POLL * 4);
 		expect(nudges).toBeGreaterThan(afterCreate);
 	} finally {
+		neighbor.close();
 		stop();
 	}
 });
