@@ -43,3 +43,8 @@ translation logic: validation and file naming come from [[module-locales]].
   non-recursive watcher on the data dir reattaches the folder watcher whenever the `locales` entry changes
   and nudges. The host creates the folder once at start and never again — re-creating a deleted folder
   itself would make a later `mv` nest the replacement inside it.
+- Linux watches a directory's inode, so a watcher dies silently with the directory it watches (macOS
+  watches by path and survives). The last event a dying watcher reports names the watched directory
+  itself: the folder watcher then reattaches, and the data-dir watcher restarts — retrying until the data
+  dir exists again — and nudges. This also covers the whole data dir being deleted and recreated while the
+  host runs, which the e2e global setup does after the host has started.

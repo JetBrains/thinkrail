@@ -106,6 +106,7 @@ export function watchLocalLocales({
 	let debounce: ReturnType<typeof setTimeout> | undefined;
 	let retry: ReturnType<typeof setTimeout> | undefined;
 	let stopped = false;
+	let restarted = false;
 	const nudge = () => {
 		clearTimeout(debounce);
 		debounce = setTimeout(onChange, DEBOUNCE_MS);
@@ -115,7 +116,10 @@ export function watchLocalLocales({
 		folder = undefined;
 		if (stopped || !existsSync(dir)) return;
 		try {
-			folder = watch(dir, { persistent: false }, nudge);
+			folder = watch(dir, { persistent: false }, (_event, filename) => {
+				if (filename === basename(dir)) attachFolder();
+				nudge();
+			});
 			folder.on("error", () => {
 				folder?.close();
 				folder = undefined;
@@ -138,6 +142,10 @@ export function watchLocalLocales({
 		if (stopped) return;
 		try {
 			parent = watch(dirname(dir), { persistent: false }, (_event, filename) => {
+				if (filename === basename(dirname(dir))) {
+					restart();
+					return;
+				}
 				if (filename !== null && filename !== basename(dir)) return;
 				attachFolder();
 				nudge();
@@ -151,6 +159,8 @@ export function watchLocalLocales({
 			restart();
 		}
 		attachFolder();
+		if (restarted) nudge();
+		restarted = true;
 	};
 	try {
 		mkdirSync(dir, { recursive: true });

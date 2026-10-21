@@ -115,3 +115,25 @@ test("the watcher survives the folder being deleted and recreated, without recre
 		stop();
 	}
 });
+
+test("the watcher survives its whole data folder being deleted and recreated", async () => {
+	const root = join(tempDir(), "data");
+	const dir = join(root, "locales");
+	let nudges = 0;
+	const stop = watchLocalLocales({ dir, onChange: () => nudges++ });
+	try {
+		await Bun.sleep(100);
+		rmSync(root, { recursive: true, force: true });
+		mkdirSync(root, { recursive: true });
+		await Bun.sleep(1_500);
+		mkdirSync(dir);
+		writeFileSync(join(dir, "de.json"), '{"a":"1"}');
+		await Bun.sleep(500);
+		const afterCreate = nudges;
+		writeFileSync(join(dir, "de.json"), '{"a":"2"}');
+		await Bun.sleep(500);
+		expect(nudges).toBeGreaterThan(afterCreate);
+	} finally {
+		stop();
+	}
+});
