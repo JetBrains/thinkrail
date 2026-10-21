@@ -23,7 +23,7 @@ instance ([[module-locales]] `./react`). Components never do this themselves: th
   `Intl.DisplayNames` and its source: `builtin`, `local`, `builtin+local`, or a broken/missing entry),
   the effective-tag derivation (`resolveLocale` over the browser's `navigator.languages`, re-read on
   `languagechange`), and the one apply effect — install overlays, switch language, set `<html lang>`,
-  push desktop menu labels through the optional `__THINKRAIL_NATIVE_MENU__` bridge (`pushNativeMenuLabels`).
+  push the desktop menu and dialog labels through the optional `__THINKRAIL_NATIVE_MENU__` bridge (`pushNativeMenuLabels`).
 - **Public surface (barrel):** `useLocaleSync()` (mounted once by `main.tsx`'s `App`),
   `useSystemLanguages()`, `localeSignature`, and the pure `languageOptions`, `effectiveLocale`,
   `availableLocales`, `localOverlays`.

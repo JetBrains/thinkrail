@@ -21,6 +21,12 @@ import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
 import { installExternalNavigation } from "./externalNavigation";
 import { preferNativeHostBridge, usesNativeHostBridge } from "./hostTransport";
 import { createKeyStateReader } from "./keyState";
+import {
+	type DesktopDialogLabels,
+	readDialogLabels,
+	readNativeLabels,
+	writeNativeLabels,
+} from "./nativeLabels";
 import { createPageZoomGestureHandler, nextPageZoom } from "./pageZoom";
 import {
 	injectInitialDesktopPreferences,
@@ -101,13 +107,26 @@ function windowControlsProbeScript(target: { testId: string; label: string }): s
 }
 let startupQuitCoordinator: ReturnType<typeof createElectrobunQuitCoordinator> | undefined;
 
+function nativeLabelsPath(): string {
+	return join(
+		process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData,
+		"native-labels.json",
+	);
+}
+
 function writeReady(path: string, payload: unknown): void {
 	mkdirSync(dirname(path), { recursive: true });
 	writeFileSync(path, JSON.stringify(payload));
 }
 
 async function start(): Promise<void> {
-	const applicationMenuInstalled = installDesktopApplicationMenu(ApplicationMenu, process.platform);
+	const savedLabels = readNativeLabels(nativeLabelsPath());
+	let dialogLabels: DesktopDialogLabels = readDialogLabels(savedLabels);
+	const applicationMenuInstalled = installDesktopApplicationMenu(
+		ApplicationMenu,
+		process.platform,
+		readMenuLabels(savedLabels),
+	);
 	let menuTarget: {
 		hintVisible(): boolean;
 		showHint(hint: NativeQuitHint): void;
@@ -154,7 +173,10 @@ async function start(): Promise<void> {
 			? { openExternal: (url: string) => Utils.openExternal(url) }
 			: {}),
 	});
-	const quitCoordinator = createElectrobunQuitCoordinator(() => host.server.shutdown());
+	const quitCoordinator = createElectrobunQuitCoordinator(
+		() => host.server.shutdown(),
+		() => dialogLabels,
+	);
 	startupQuitCoordinator = quitCoordinator;
 	Electrobun.events.on("before-quit", (event: BeforeQuitEvent) => {
 		quitCoordinator.handleBeforeQuit(event);
@@ -257,12 +279,11 @@ async function start(): Promise<void> {
 				},
 				pageZoomGestureRequested: handlePageZoomGesture,
 				menuLabelsChanged: ({ labels }) => {
+					const menuLabels = readMenuLabels(labels);
+					dialogLabels = readDialogLabels(labels);
+					if (!neutral) writeNativeLabels(nativeLabelsPath(), { ...menuLabels, ...dialogLabels });
 					if (applicationMenuInstalled) {
-						installDesktopApplicationMenu(
-							ApplicationMenu,
-							process.platform,
-							readMenuLabels(labels),
-						);
+						installDesktopApplicationMenu(ApplicationMenu, process.platform, menuLabels);
 					}
 				},
 				routeChanged: ({ hash }) => {
@@ -455,12 +476,13 @@ try {
 	const message = error instanceof Error ? error.message : String(error);
 	console.error(message);
 	try {
+		const labels = readDialogLabels(readNativeLabels(nativeLabelsPath()));
 		await Utils.showMessageBox({
 			type: "error",
-			title: "ThinkRail could not start",
-			message: "ThinkRail could not start",
+			title: labels["desktop.dialog.startFailed"],
+			message: labels["desktop.dialog.startFailed"],
 			detail: message,
-			buttons: ["Quit"],
+			buttons: [labels["desktop.dialog.quit"]],
 		});
 	} finally {
 		if (startupQuitCoordinator) await startupQuitCoordinator.quit();

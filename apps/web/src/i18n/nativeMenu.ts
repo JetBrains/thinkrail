@@ -1,5 +1,5 @@
 import type { NativeMenuBridge } from "@thinkrail/contracts";
-import { DESKTOP_MENU_KEYS } from "@thinkrail/locales";
+import { DESKTOP_DIALOG_KEYS, DESKTOP_MENU_KEYS } from "@thinkrail/locales";
 import { t } from "@thinkrail/locales/react";
 
 function menuBridge(): NativeMenuBridge | undefined {
@@ -12,5 +12,6 @@ function menuBridge(): NativeMenuBridge | undefined {
 }
 
 export function pushNativeMenuLabels(): void {
-	menuBridge()?.setLabels(Object.fromEntries(DESKTOP_MENU_KEYS.map((key) => [key, t(key)])));
+	const keys = [...DESKTOP_MENU_KEYS, ...DESKTOP_DIALOG_KEYS];
+	menuBridge()?.setLabels(Object.fromEntries(keys.map((key) => [key, t(key)])));
 }

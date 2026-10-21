@@ -25,6 +25,13 @@ export const DESKTOP_MENU_KEYS = [
 	"desktop.menu.close",
 ] as const satisfies readonly (keyof EnglishCatalog)[];
 
+export const DESKTOP_DIALOG_KEYS = [
+	"desktop.dialog.quit",
+	"desktop.dialog.startFailed",
+	"desktop.dialog.updateRestartFailed",
+	"desktop.dialog.updateRestartFailedTitle",
+] as const satisfies readonly (keyof EnglishCatalog)[];
+
 const BUNDLED: Readonly<Record<string, Catalog>> = { en: EN };
 
 export const BUNDLED_LOCALES: readonly string[] = Object.keys(BUNDLED);

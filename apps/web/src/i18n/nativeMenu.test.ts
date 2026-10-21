@@ -7,7 +7,7 @@ afterEach(() => {
 	applyLocale("en", {});
 });
 
-test("pushes the active language's desktop menu labels when the native bridge exists", () => {
+test("pushes the active language's desktop menu and dialog labels when the native bridge exists", () => {
 	const sent: Record<string, string>[] = [];
 	Reflect.set(globalThis, "__THINKRAIL_NATIVE_MENU__", {
 		setLabels: (labels: Record<string, string>) => sent.push(labels),
@@ -16,6 +16,7 @@ test("pushes the active language's desktop menu labels when the native bridge ex
 	pushNativeMenuLabels();
 	expect(sent[0]?.["desktop.menu.edit"]).toBe("Bearbeiten");
 	expect(sent[0]?.["desktop.menu.window"]).toBe("Window");
+	expect(sent[0]?.["desktop.dialog.startFailed"]).toBe("ThinkRail could not start");
 });
 
 test("is a no-op without the bridge", () => {
