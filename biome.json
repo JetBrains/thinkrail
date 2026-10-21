@@ -12,7 +12,8 @@
 			"!designs",
 			"!**/.claude",
 			"!apps/web/src/styles/generated",
-			"!apps/web/src/chat/generated"
+			"!apps/web/src/chat/generated",
+			"!apps/web/src/i18n/keys.ts"
 		]
 	},
 	"formatter": {
@@ -45,6 +46,16 @@
 		}
 	},
 	"overrides": [
+		{
+			"includes": ["apps/web/src/i18n/keys.ts", "apps/web/src/i18n/catalogs/*.ts"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noTemplateCurlyInString": "off"
+					}
+				}
+			}
+		},
 		{
 			"includes": ["**/*.astro"],
 			"linter": {

@@ -2,6 +2,8 @@ import { prependPreloadGlobal } from "./preloadGlobals";
 
 export const INITIAL_DESKTOP_PREFERENCES_GLOBAL = "__THINKRAIL_INITIAL_DESKTOP_PREFERENCES__";
 export const STABLE_PREFERENCES_GLOBAL = "__THINKRAIL_STABLE_PREFERENCES__";
+/** Must match `apps/web/src/clientPreferences.ts`. */
+export const NATIVE_LOCALE_GLOBAL = "__THINKRAIL_NATIVE_LOCALE__";
 export const MAX_DESKTOP_PREFERENCE_KEY_LENGTH = 128;
 export const MAX_DESKTOP_PREFERENCE_VALUE_LENGTH = 256 * 1024;
 export const MAX_DESKTOP_PREFERENCE_SCOPE_ID_LENGTH = 128;

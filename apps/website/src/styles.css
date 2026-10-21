@@ -2,6 +2,7 @@
 
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist/wght-italic.css";
+@import "@fontsource-variable/noto-sans-sc";
 @import "@fontsource-variable/jetbrains-mono";
 @import "@fontsource-variable/jetbrains-mono/wght-italic.css";
 @import "@fontsource-variable/orbitron";
@@ -9,7 +10,10 @@
 /* ── Theme palettes ─────────────────────────────────────────────────────── */
 
 :root {
-	--font-sans: "Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	/* Mirrors apps/web typography.json: Latin from Geist, CJK from Noto Sans SC. */
+	--font-sans:
+		"Geist Variable", "Geist", "Noto Sans SC Variable", "Noto Sans SC", "PingFang SC",
+		"Hiragino Sans GB", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 	--font-mono:
 		"JetBrains Mono Variable", "JetBrains Mono", "Fira Code", "SF Mono", "Cascadia Code", monospace;
 	--font-display:

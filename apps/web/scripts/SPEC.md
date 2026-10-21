@@ -13,8 +13,9 @@ machine or in CI, never in the browser bundle. They read files from `src/`, writ
 into `src/`, and exit with a status code.
 
 The directory holds four pipelines — typography, colour, spacing and provider glyphs — built the same way, plus the
-React Compiler census: a diagnostic whose baseline is a ratchet gate. They live here rather than in `src/` because
-they are *generators*: they use `node:fs` and `node:path`, which must never reach browser-bundled code.
+React Compiler census: a diagnostic whose baseline is a ratchet gate, and the i18n pipeline: a key extractor, a
+coverage report and two codemods. They live here rather than in `src/` because they are *generators*: they use
+`node:fs` and `node:path`, which must never reach browser-bundled code.
 
 ## What it owns
 
@@ -36,6 +37,9 @@ they are *generators*: they use `node:fs` and `node:path`, which must never reac
 | `compiler-census.ts` | CLI. Runs `babel-plugin-react-compiler` with a logger over app, shared UI, and extension web sources (tests, stories and generated data excluded) and prints every function the compiler bails out on as `file:line: [fn] category: reason`, plus totals; `--json` prints the full census. Run: `bun run --cwd apps/web compiler:census [--json]`. `--write` renders the bailed-out functions to `compiler-census.baseline.txt` as `file fnName`, line-free so edits above them don't churn it. `fnName` is lexical, never positional: the binding a function is assigned to (through wrapping calls like `memo(…)`), else its own name, qualified by its named enclosing functions (`factory.Row`). Two compiler units in one file with the same identity fail the census, because neither a line nor an ordinal survives an insertion above them. `--check` (`bun run check:compiler`, CI) fails on any drift and names each function that newly bails out or now compiles. A new bail-out is fixed, or accepted by regenerating (`bun run compiler:census:generate`). |
 | `compiler-census.baseline.txt` | The committed census baseline. |
 | `compiler-census.test.ts` | pins that a function's baseline identity survives inserting a sibling before it, that nested functions are qualified by their owners, and that indistinguishable compiler units are rejected. |
+| `i18n-keys.ts` | CLI. Walks the app's `t("…")` call sites and renders `src/i18n/keys.ts`, the message registry. Also reads module-level string tables passed as `t(TABLE[key])`, nullish fallbacks, conditional expressions, and the built-in extensions' `title`/`description` from the host manifest, because those are copy the UI renders without a literal at the call site. `--write` regenerates; the default mode fails on drift. |
+| `i18n-coverage.ts` | CLI. Reports each catalog's coverage against the registry and lists the keys a locale still renders in English (`--missing`); `--check` fails below `--min` (default 100). |
+| `i18n-codemod.ts`, `i18n-codemod2.ts` | CLIs. Wrap JSX text and string literals in `t()` — deliberately conservative, refusing CSS class lists, storage keys, commands, ANSI escapes and already-Chinese strings, because a wrongly wrapped identifier breaks a build while a missed label is only cosmetic. |
 
 `designSources.ts` owns the shared adoption-guard and compiler-census source scan: app source, `packages/ui`, and every
 `thinkrail-extensions/*/web` source tree, excluding tests, generated output, and installed dependencies.
@@ -61,6 +65,14 @@ in agreement about the same functions.
   (non-dev) dependency, and any network or shell access. Adoption guards read source as data; generators
   read only their declared inputs. A generator that needed one of those would be
   the wrong shape.
+- **i18n exception:** the i18n pipeline is the one place a script *imports* `src/` at runtime, because the
+  registry, the catalogs and the locale list are the inputs it measures — reading them as text would mean
+  re-implementing the module graph, and a second implementation is exactly what would let the reported
+  coverage drift from the copy the app renders. The exception is bounded to three data-only entries:
+  `src/i18n/registry.ts` (the catalogs and `MESSAGE_KEYS`), `src/i18n/catalogs/*` (for `IDENTICAL_KEYS`) and
+  `src/i18n/locale.ts` (for `LOCALES`). None of them touches the DOM, React, the transport or the store, so
+  importing them in Bun resolves no browser global — `registry.ts` exists as a separate barrel for this.
+  Anything else under `src/` stays read-as-data only.
 - **Census exception:** `compiler-census.ts` also uses `@babel/core` and `babel-plugin-react-compiler`
   and reads authored TypeScript from the shared source scan as *text*, so extracting a component into
   the SDK or an extension does not silently remove it from the report. It must pass the compiler the same options as
@@ -68,12 +80,15 @@ in agreement about the same functions.
   the real build. Build-time compiler validations differ from the lint rules (for example
   `StaticComponents` is lint-only), so its counts differ from an oxlint React scan by design.
 - **Imported by:** `apps/web/package.json` scripts (`typography:generate` / `:validate` / `:check`,
-  `colors:generate` / `:check`, `spacing:generate` / `:check`, `provider-glyphs:generate` / `:check`, `compiler:census:generate`, re-exported from the root `package.json`, plus `compiler:census:check` as the root `check:compiler`; `compiler:census` itself is web-only), and
+  `colors:generate` / `:check`, `spacing:generate` / `:check`, `provider-glyphs:generate` / `:check`, `compiler:census:generate`, re-exported from the root `package.json`, plus `compiler:census:check` as the root `check:compiler`; `compiler:census` itself is web-only, and `i18n:keys` / `i18n:coverage` / `i18n:keys:check` / `i18n:codemod`, with `i18n:check` chaining the key extractor and the coverage gate into `bun run build`), and
   `src/styles/typography.test.ts` + `src/styles/typographyUsage.test.ts` +
   `src/styles/colorUsage.test.ts` + `src/styles/spacingUsage.test.ts`. Nothing in the shipped app may import from here — the generated
   CSS is the interface.
-- **Writes:** `src/styles/generated/` and `src/chat/generated/`, plus the census's `compiler-census.baseline.txt`. Both directories are committed (so every typography, colour, spacing
-  or glyph change is reviewable as a diff) and excluded from biome in `biome.json`.
+- **Writes:** `src/styles/generated/` and `src/chat/generated/`, the census's `compiler-census.baseline.txt`,
+  and the i18n pipeline's `src/i18n/keys.ts`. The two generated directories are committed (so every
+  typography, colour, spacing or glyph change is reviewable as a diff) and excluded from biome in
+  `biome.json`; `keys.ts` is committed and excluded for the same reason — formatting it would put the
+  checked-in file and the generator's output out of sync.
 
 ## Invariants
 

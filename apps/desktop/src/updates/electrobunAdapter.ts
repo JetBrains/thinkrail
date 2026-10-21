@@ -1,4 +1,6 @@
 import { Updater, Utils } from "electrobun/main";
+import type { MenuLocale } from "../menuLocale";
+import { menuLabel } from "../menuLocale";
 import {
 	createNativeUpdateController,
 	type NativeUpdateController,
@@ -27,7 +29,10 @@ const electrobunUpdater: NativeUpdaterDependency = {
 
 export function createElectrobunQuitCoordinator(
 	shutdown: () => Promise<void>,
+	locale: MenuLocale | (() => MenuLocale),
 ): DesktopQuitCoordinator {
+	// The menu language can change while the app runs, so the dialogs read it at the moment they open.
+	const currentLocale = typeof locale === "function" ? locale : () => locale;
 	return createDesktopQuitCoordinator({
 		shutdown,
 		quit: () => {
@@ -38,10 +43,11 @@ export function createElectrobunQuitCoordinator(
 		reportUpdateFailure: async (message) => {
 			await Utils.showMessageBox({
 				type: "error",
-				title: "ThinkRail could not restart",
-				message: "ThinkRail could not restart to install the update",
+				title: menuLabel(currentLocale(), "Could not restart"),
+				message: menuLabel(currentLocale(), "Could not restart to install the update"),
+				// The detail is the host's own diagnostic text, not product copy.
 				detail: message,
-				buttons: ["Quit"],
+				buttons: [menuLabel(currentLocale(), "QuitApp")],
 			});
 		},
 		reportLifecycleError: (error) => {

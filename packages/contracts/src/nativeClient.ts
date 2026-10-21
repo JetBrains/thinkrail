@@ -56,6 +56,17 @@ export interface NativeNotificationBridge {
 
 export type NativeQuitHint = "hidden" | "armed" | "release" | "quitting";
 
+/**
+ * The interface language, handed to the desktop process.
+ *
+ * A locale switch is the one preference the native side also acts on: it names every native menu item
+ * and the start-up failure dialogs. The call resolves once the value is persisted and the menu has
+ * been rebuilt, so the client can reload knowing the preload script will re-seed the new value.
+ */
+export interface NativeLocaleBridge {
+	applyLocale(locale: string): Promise<boolean>;
+}
+
 export type NativeCommand = "close-item" | "open-settings";
 
 export interface NativeShortcutsBridge {

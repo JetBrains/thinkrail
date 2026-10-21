@@ -14,6 +14,7 @@ import {
 	RiPuzzle2Line,
 	RiShieldCheckLine,
 	RiTerminalBoxLine,
+	RiTranslate2,
 } from "@remixicon/react";
 import {
 	DEFAULT_MODEL_PROTOCOL_VERSION,
@@ -63,6 +64,7 @@ const NAV_GROUPS: SettingsNavGroup[] = [
 			{ id: SettingsSection.Appearance, label: "Appearance", icon: RiPaletteLine },
 			{ id: SettingsSection.Layout, label: "Layout", icon: RiLayoutTop2Line },
 			{ id: SettingsSection.Terminal, label: "Terminal", icon: RiTerminalBoxLine },
+			{ id: SettingsSection.Language, label: "Language", icon: RiTranslate2 },
 		],
 	},
 	{

@@ -7,6 +7,7 @@ import { ChatSettings } from "./ChatSettings";
 import { ExtensionsSettings } from "./ExtensionsSettings";
 import { FeedbackSettings } from "./FeedbackSettings";
 import { GithubSettings } from "./GithubSettings";
+import { LanguageSettings } from "./LanguageSettings";
 import { McpSettings } from "./McpSettings";
 import { ModelsSettings } from "./ModelsSettings";
 import { NotificationsSettings } from "./NotificationsSettings";
@@ -123,6 +124,8 @@ export function SettingsDialog({
 							layoutSettings
 						) : selectedSection === SettingsSection.Terminal ? (
 							<TerminalSettings />
+						) : selectedSection === SettingsSection.Language ? (
+							<LanguageSettings />
 						) : selectedSection === SettingsSection.Workspaces ? (
 							<WorkspacesSettings />
 						) : selectedSection === SettingsSection.Github ? (

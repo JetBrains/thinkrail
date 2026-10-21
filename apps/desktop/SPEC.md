@@ -105,6 +105,15 @@ are custom-action items, not roles; see Confirmed quit and close. The policy is 
 ready seam reports whether registration ran, so unit tests pin menu composition while expanded-app smoke
 pins production wiring.
 
+### Dialog language
+
+The startup-failure dialog and the restart-failure dialog are drawn by the desktop process before — or
+instead of — a loaded client, so they cannot reach the web catalog. Their copy comes from
+`src/menuLocale.ts`, the same persisted-preference lookup that localizes the menu, and falls back to the
+OS language and then to the build's default. The message detail stays as thrown: it is a host diagnostic,
+not product copy. Role items carry an explicit `label` from that table, because Electrobun's own role labels
+are English and a non-empty label is what overrides them without losing the role's behaviour.
+
 ### Confirmed quit and close
 
 Command-Q (`quit-shortcut`) must be confirmed: hold it for 1200 ms, then release Q or Command; or press
@@ -285,6 +294,17 @@ size/shape and never learns feature meaning. Its frozen preload adapter exposes 
 are ignored; a filesystem refusal is logged without changing the in-memory document or terminating the
 client. The web feature still owns each value's validation and default. The web router remains the route
 grammar validator, and the preload exposes no host/domain capability.
+
+**The locale is the one bounded exception.** Every other preference is opaque to this process, but
+`thinkrail-locale` names the language of the native menu and the failure dialogs, so the process must read and
+action it. `src/desktopLocale.ts` owns that switch: `apply(locale)` persists the value through the same
+preference store and then rebuilds the menu, refusing a locale the build does not speak *before* writing
+anything, and `follow(locale)` rebuilds the menu for a write that arrived through the general preference
+channel (already persisted). The order is deliberate — a stored preference the next launch disagrees with is
+worse than one session in the old language. A client asks for the switch through the `NativeLocaleBridge`
+request/response (`packages/contracts/src/nativeClient.ts`), which resolves only once the write landed and the
+menu was rebuilt; that acknowledgement is what makes the client's reload safe, since the preload re-seeds the
+new value. The quit coordinator reads the same tracked value, so the quit-hint copy matches the menu.
 
 On Windows, webview-to-main RPC (requests and one-way messages) rides Electrobun's native host bridge,
 not its loopback WebSocket. Electrobun 2.0.1's core binds its fixed default socket port `50000` with

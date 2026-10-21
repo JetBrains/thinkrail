@@ -19,6 +19,7 @@
 			"@earendil-works/pi-tui": "1.2.0",
 			"@fontsource-variable/geist": "5.3.0",
 			"@fontsource-variable/jetbrains-mono": "5.3.0",
+			"@fontsource-variable/noto-sans-sc": "5.3.0",
 			"@fontsource-variable/orbitron": "5.3.0",
 			"@remixicon/react": "4.9.0",
 			"@tailwindcss/vite": "4.3.1",
