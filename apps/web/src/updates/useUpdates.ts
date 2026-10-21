@@ -25,6 +25,7 @@ export type UpdatesController =
 			checkForUpdates(): void;
 			downloadUpdate(): void;
 			restartToUpdate(): void;
+			dismissInstallResult(): void;
 	  }
 	| {
 			source: "host";
@@ -41,6 +42,7 @@ export function getNativeUpdateBridge(value: unknown): NativeUpdateBridge | null
 			typeof Reflect.get(value, "checkForUpdates") === "function" &&
 			typeof Reflect.get(value, "downloadUpdate") === "function" &&
 			typeof Reflect.get(value, "restartToUpdate") === "function" &&
+			typeof Reflect.get(value, "dismissInstallResult") === "function" &&
 			typeof Reflect.get(value, "subscribe") === "function"
 			? (value as NativeUpdateBridge)
 			: null;
@@ -163,6 +165,9 @@ export function useUpdates(hostUpdateRunner: HostUpdateRunner | null): UpdatesCo
 			checkForUpdates: () => request("check", () => bridge.checkForUpdates()),
 			downloadUpdate: () => request("download", () => bridge.downloadUpdate()),
 			restartToUpdate: () => request("install", () => bridge.restartToUpdate()),
+			dismissInstallResult: () => {
+				void bridge.dismissInstallResult().catch(() => {});
+			},
 		};
 	}
 	if (source === "host" && hostUpdate) {

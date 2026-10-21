@@ -6,6 +6,7 @@ import {
 import type { HostUpdateNotice, NativeUpdateState } from "@thinkrail/contracts";
 import { T, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { installFailureCopy } from "./installCopy";
 import type { NativeUpdateAction, UpdatesController } from "./useUpdates";
 
 interface UpdateSettingsProps {
@@ -124,6 +125,9 @@ export function UpdateSettings({ updates }: UpdateSettingsProps) {
 	const nativeStatus = nativeState?.status ?? "loading";
 	const hostStatus = hostNotice?.status;
 	const error = nativeRequestError?.message ?? nativeState?.error ?? null;
+	const lastInstall = nativeState?.lastInstall ?? null;
+	const installFailure =
+		lastInstall && lastInstall.outcome !== "installed" ? installFailureCopy(lastInstall) : null;
 	const failedAction: NativeUpdateAction | null =
 		nativeRequestError?.action ?? nativeState?.failedPhase ?? null;
 	const copy = hostNotice
@@ -223,6 +227,18 @@ export function UpdateSettings({ updates }: UpdateSettingsProps) {
 					<p data-testid="update-error" role="alert" className="text-feedback-error tr-text-ui">
 						{error}
 					</p>
+				) : null}
+
+				{installFailure ? (
+					<div
+						data-testid="update-last-install"
+						className="flex flex-col gap-2 rounded-sm border border-feedback-error-muted bg-feedback-error-subtle p-8"
+					>
+						<p className="tr-title-compact text-text-default">
+							The last update didn't install: {installFailure.cause}
+						</p>
+						<p className="text-text-muted tr-text-metadata">{installFailure.advice}</p>
+					</div>
 				) : null}
 
 				{showHostManualGuidance ? (
