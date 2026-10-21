@@ -93,7 +93,9 @@ Download the `thinkrail-desktop-*` asset for your platform:
 
 Packaged stable and nightly desktop builds check for updates in the background and offer them in
 **Settings → Updates**: **Download** → **Preparing update** → **Install & Restart**. Nothing is applied until
-you choose **Install & Restart**. The updater appears only when the package carries a valid HTTPS feed
+you choose **Install & Restart**. ThinkRail then shows the installation's progress and log, closes, and
+reopens on the new version. After the restart it tells you whether the update installed. If it didn't, it
+explains why and offers to retry. The updater appears only when the package carries a valid HTTPS feed
 identity; installations that predate that identity need one manual installation first.
 
 ### Command line

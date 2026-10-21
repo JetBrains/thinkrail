@@ -64,6 +64,21 @@ another.
    platform and before the server import, so every later child starts outside the bundle. That covers
    host-owned spawns, in-process extensions, MCP servers and editors alike. A failed `chdir` is logged and
    startup continues. An update-metadata failure here precedes host acquisition and quits directly.
+   Unless the neutral or hidden artifact modes are set, startup then opens a small, centered, frameless
+   splash.
+   - It reads "Starting ThinkRail…", or "Finishing update to X…" when the update journal is pending.
+   - Its content is a `data:` URL given at creation. The SDK delays `html:` content behind a 100 ms timer,
+     which the synchronous server import would block. Startup awaits the splash's own `dom-ready`,
+     bounded to 500 ms, before that import.
+   - It closes when the main window first reaches `dom-ready`, and the main window is activated.
+   - Before the startup error dialog it is hidden, not closed: as the last window it would trigger
+     `exitOnLastWindowClosed` before the dialog appears.
+   - Closing the splash before the main window exists quits ThinkRail. Closing the main window before
+     it is ready also closes the splash, so the last window still goes and quit runs through the
+     coordinator. A splash the user closed natively is never closed again.
+   - The main window, RPC, navigation rules and first-`dom-ready` readiness are unchanged. Creating the
+     main window early on a splash page was rejected: it would move origin-dependent navigation, readiness
+     and host-bound RPC ahead of host boot.
 3. Dynamically import the separately built, unpacked `server-runtime.ts` resource. That bundle is built with
    pi's `PI_BUNDLED_NODE=true` define, which makes PI use its embedded-modules extension loader (static jiti
    with Babel bundled, plus virtual modules) for external extensions such as Central. Without the define a
@@ -449,7 +464,9 @@ Electrobun calls and lifecycle state stay behind the desktop `updates` module; c
 and graceful host shutdown stays in server. The frozen optional `__THINKRAIL_NATIVE_UPDATES__` preload bridge
 exposes typed state, check/download/install actions, and subscription without importing the desktop SDK into
 web code. **Install & Restart** applies the prepared release through the existing quit coordinator; active
-agents and PTYs may terminate, with no second confirmation or renderer-preparation handshake.
+agents and PTYs may terminate, with no second confirmation or renderer-preparation handshake. The bridge
+also carries the attempt's steps and log and the durable post-relaunch result, which the web presents.
+[[submodule-desktop-updates]] owns the attempt and its journal.
 
 Quit coordination preserves its completion action. Electrobun 2.0.1's first `applyUpdate()` returns on the
 asynchronous `before-quit` veto before arming its replacement helper. The update intent waits for the same
