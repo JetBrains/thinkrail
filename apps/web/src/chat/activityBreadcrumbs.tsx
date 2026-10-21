@@ -264,9 +264,9 @@ export function ActivityBreadcrumbTrail({
 		[scroller],
 	);
 
-	if (!scroller || path.length === 0) return null;
+	if (!scroller) return null;
 	return (
-		<div className="pointer-events-none absolute inset-x-0 top-0 z-20">
+		<div hidden={path.length === 0} className="pointer-events-none absolute inset-x-0 top-0 z-20">
 			<ActivityBreadcrumbBar
 				segments={compressBreadcrumbPath(path, compact)}
 				measureClassName={measureClassName}

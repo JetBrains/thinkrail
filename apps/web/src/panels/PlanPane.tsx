@@ -735,6 +735,7 @@ function SessionBlock({
 	const hasActive = activeGroups.length > 0 || activeLoose.length > 0;
 	const hasPending = pendingGroups.length > 0 || pendingLoose.length > 0;
 	const hasAny = hasActive || hasPending;
+	const idleEmpty = glance === "waiting" && !hasAny && !allDone;
 	return (
 		<section data-testid="plan-now-executing" className={PLAN_CARD_CLASS}>
 			<div className="mb-8 flex items-center gap-8">
@@ -794,24 +795,23 @@ function SessionBlock({
 					) : null}
 				</>
 			) : null}
-			{glance === "waiting_question" ? null : glance === "waiting" && !hasAny && !allDone ? (
-				!adding ? (
-					<button
-						type="button"
-						data-testid="plan-now-idle"
-						data-glance="waiting"
-						onClick={() => setAdding(true)}
-						title="Add a task"
-						className="group flex w-full items-center gap-8 rounded-sm px-4 py-2 text-left tr-text-ui text-text-subtle transition-colors hover:bg-control-bg-hovered hover:text-text-default"
-					>
-						<span className="min-w-0 flex-1">No steps yet — add one to get started.</span>
-						<span className="flex shrink-0 items-center gap-4 text-text-muted opacity-0 transition-opacity group-hover:opacity-100">
-							<Plus className="size-14" />
-							Add a task
-						</span>
-					</button>
-				) : null
-			) : (
+			{idleEmpty && !adding ? (
+				<button
+					type="button"
+					data-testid="plan-now-idle"
+					data-glance="waiting"
+					onClick={() => setAdding(true)}
+					title="Add a task"
+					className="group flex w-full items-center gap-8 rounded-sm px-4 py-2 text-left tr-text-ui text-text-subtle transition-colors hover:bg-control-bg-hovered hover:text-text-default"
+				>
+					<span className="min-w-0 flex-1">No steps yet — add one to get started.</span>
+					<span className="flex shrink-0 items-center gap-4 text-text-muted opacity-0 transition-opacity group-hover:opacity-100">
+						<Plus className="size-14" />
+						Add a task
+					</span>
+				</button>
+			) : null}
+			<div hidden={glance === "waiting_question" || idleEmpty}>
 				<PlanComposer
 					icon={MessageSquare}
 					testId="plan-session-chat"
@@ -822,7 +822,7 @@ function SessionBlock({
 					}
 					onSubmit={onSend}
 				/>
-			)}
+			</div>
 			{adding ? (
 				<PlanComposer
 					icon={Plus}

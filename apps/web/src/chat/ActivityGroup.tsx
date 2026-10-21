@@ -9,6 +9,7 @@ import {
 import type { ToolRenderProps, ToolStatus } from "@thinkrail/extension-api/web";
 import { cn } from "@thinkrail/ui/utils";
 import { useContext } from "react";
+import { firstNonBlankLine } from "@/lib";
 import type { ActivityBreadcrumbKind } from "./activityBreadcrumbs";
 import { PendingExtUiContext, ToolPromptSlot } from "./ExtUiPrompt";
 import { useFold } from "./foldState";
@@ -277,10 +278,7 @@ function AwaitingStep({
 }
 
 function extractThinkingHeading(text: string): string | undefined {
-	const firstLine = text
-		.split(/\r?\n/)
-		.find((line) => line.trim().length > 0)
-		?.trim();
+	const firstLine = firstNonBlankLine(text);
 	if (!firstLine) return undefined;
 	for (const delimiter of ["**", "__"]) {
 		if (!firstLine.startsWith(delimiter) || !firstLine.endsWith(delimiter)) continue;
