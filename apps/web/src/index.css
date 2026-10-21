@@ -69,6 +69,17 @@
 		}
 	}
 
+	/* The loading placeholder stays invisible through a short grace so fast reads never flash it. */
+	--animate-loading-in: loading-in 150ms ease-out 300ms both;
+	@keyframes loading-in {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+
 	/* The "agent working" brand badge (`components/RunningIcon`): the split frame and the six monogram strokes draw and erase on one 3.263s cycle. */
 	--animate-loader-frame: loader-frame 3.263s infinite;
 	@keyframes loader-frame {

@@ -125,6 +125,11 @@ third thing, never bare text, never nothing:
 
 Beyond picking the right tier:
 
+- **The skeleton fades in after a grace, never flashes.** `SkeletonRows` carries `animate-loading-in`
+  (`index.css`: invisible for 300ms, then a 150ms opacity fade), so a read that resolves within the grace
+  goes straight from the blank, already-sized region to the revealed content instead of blinking a
+  skeleton for a frame or two (opening a Changes tab was the visible case). It stays mounted throughout, so
+  its `role="status"` region and test ids are present from the first paint; only its opacity waits.
 - **No layout jump.** A loading state occupies the same footprint the arriving content will — a skeleton
   sized/shaped for its region, a `CardSkeleton` sized like the card it precedes — so the data replacing it
   never shifts anything around it.
