@@ -226,7 +226,11 @@ treatment.
   `store.filesMode`, default All, and `requestChangesView` / `revealChanges` reveal Files and select Changed
   in one store write. `FilesPanel` owns the single `git.status` read (`useGitStatus`, scope-keyed, including
   the unknown-commit scope fallback) and feeds `ChangesPanel` and the **All** marks from it, so count, marks
-  and the Changed list cannot disagree. **All** follows VS Code's Explorer: the plain tree plus marks derived
+  and the Changed list cannot disagree. Both `git.status` readers — `useGitStatus` and `ChangesReviewPane` —
+  record their latest result in `gitStatusCache`, keyed by *(workspace, scope, target ref)*, and the review
+  tab starts from that entry, then refreshes it with its own read. That way, opening a scope the panel has
+  already read renders its sections on first paint, not after a skeleton round-trip. An `UNKNOWN_COMMIT`
+  rejection forgets the entry, so a vanished scope is never seeded. **All** follows VS Code's Explorer: the plain tree plus marks derived
   once by the pure `changesModel.buildChangeMarks` — a changed file shows its name and a trailing
   `M`/`A`/`U`/`R` letter in the status colour (modified amber, added/untracked green, renamed blue; the one
   `chat/planView.statusLetter`, shared with the Changes review tab and plan rows, so untracked reads `U`

@@ -26,6 +26,7 @@ import { ChangesFileSection } from "./ChangesFileSection";
 import { ChangesReviewGuide, guideSteps } from "./ChangesReviewGuide";
 import { LARGE_SCOPE_FILES, scopeKey, scopeLabel, sectionCollapsedByDefault } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
+import { forgetGitStatus, peekGitStatus, rememberGitStatus } from "./gitStatusCache";
 import { HeaderIconButton } from "./HeaderIconButton";
 import { ownsReviewShortcut } from "./reviewShortcuts";
 import { SendAllReviewsButton } from "./SendReviewButton";
@@ -64,12 +65,14 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const t = useT();
 	const { workspaceId, scope } = tab;
 	const mobile = usePhoneViewport();
-	const [status, setStatus] = useState<GitStatus | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [scopeGone, setScopeGone] = useState(false);
 	const warnedRef = useRef(false);
 	const baseRef = useAppStore((state) => selectDiffBaseRef(state, workspaceId));
 	const targetRef = useAppStore((state) => selectDiffTabTargetRef(state, { workspaceId, scope }));
+	const [status, setStatus] = useState<GitStatus | null>(() =>
+		peekGitStatus(workspaceId, scope, targetRef),
+	);
 	const layout = useAppStore((state) => state.changesLayout);
 	const setLayout = useAppStore((state) => state.setChangesLayout);
 	const setView = useAppStore((state) => state.setChangesTabView);
@@ -97,6 +100,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		(id) => getTransport().request("git.status", { workspaceId: id, scope }),
 		{
 			onResult: (result) => {
+				rememberGitStatus(workspaceId, scope, targetRef, result);
 				setStatus(result);
 				setError(null);
 				setScopeGone(false);
@@ -104,6 +108,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 			},
 			onFailure: (_id, failure) => {
 				if (wsErrorCode(failure) === "UNKNOWN_COMMIT") {
+					forgetGitStatus(workspaceId, scope, targetRef);
 					setStatus(null);
 					setScopeGone(true);
 					setError(
@@ -118,7 +123,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 				setError(errorText(failure));
 			},
 			onSwitch: () => {
-				setStatus(null);
+				setStatus(peekGitStatus(workspaceId, scope, targetRef));
 				setError(null);
 				setScopeGone(false);
 				warnedRef.current = false;

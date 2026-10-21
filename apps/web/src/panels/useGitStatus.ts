@@ -1,9 +1,16 @@
 import type { GitStatus } from "@thinkrail/contracts";
 import { t } from "@thinkrail/locales/react";
 import { useRef, useState } from "react";
-import { selectDiffBaseRef, selectDiffScope, toast, useAppStore } from "../store";
+import {
+	selectDiffBaseRef,
+	selectDiffScope,
+	selectDiffTabTargetRef,
+	toast,
+	useAppStore,
+} from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
 import { scopeKey } from "./changesModel";
+import { forgetGitStatus, rememberGitStatus } from "./gitStatusCache";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
 export function useGitStatus(workspaceId: string) {
@@ -13,18 +20,21 @@ export function useGitStatus(workspaceId: string) {
 	const setDiffScope = useAppStore((s) => s.setDiffScope);
 	const scope = useAppStore((s) => selectDiffScope(s, workspaceId));
 	const baseRef = useAppStore((s) => selectDiffBaseRef(s, workspaceId));
+	const targetRef = useAppStore((s) => selectDiffTabTargetRef(s, { workspaceId, scope }));
 
 	const { reload } = useWorkspaceRead(
 		workspaceId,
 		(id) => getTransport().request("git.status", { workspaceId: id, scope }),
 		{
 			onResult: (result) => {
+				rememberGitStatus(workspaceId, scope, targetRef, result);
 				setStatus(result);
 				setError(null);
 				warnedRef.current = false;
 			},
 			onFailure: (_id, failure) => {
 				if (wsErrorCode(failure) === "UNKNOWN_COMMIT") {
+					forgetGitStatus(workspaceId, scope, targetRef);
 					setDiffScope(workspaceId, { kind: "branch" });
 					toast.info(
 						scope.kind === "turn" ? t("changes.panel.turnGone") : t("changes.panel.commitGone"),
