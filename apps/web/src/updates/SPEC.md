@@ -47,7 +47,8 @@ back to Settings throughout actionable native and host phases, not only after a 
 `UpdateInstallSurfaces` is mounted once by Shell and is the only part that pushes toasts or calls
 `dismissInstallResult`. The dialogs are props-driven and live in the main bundle. That matters because
 the host socket closes during shutdown while the RPC bridge keeps working, so nothing they use may be a
-lazy chunk. All wording is web-owned; desktop sends only data.
+lazy chunk. All wording is web-owned and lives in `packages/locales/en.json`
+(`updates.install`, `.log`, `.result`, `.recovery`, `.cause`); desktop sends only data.
 - **While `installing`:** a dialog that can't be dismissed. It shows the four steps (prepared, stopping,
   handoff, restarting) as a determinate bar, says up front that ThinkRail will close
   and reopen, and offers a log console with **Copy log**. It has no Cancel: Install & Restart was the

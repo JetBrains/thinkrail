@@ -55,8 +55,8 @@ export function UpdateReadyButton({
 				: t("updates.button.hostAvailableLabel");
 		}
 	} else if (installFailed) {
-		label = "Update didn't install";
-		ariaLabel = "The last ThinkRail update didn't install";
+		label = t("updates.button.installFailed");
+		ariaLabel = t("updates.button.installFailedLabel");
 	} else if (!nativeNeedsAttention && nativeState) {
 		switch (nativeState.status) {
 			case "available":

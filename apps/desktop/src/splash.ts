@@ -1,3 +1,5 @@
+import type { DesktopDialogLabels } from "./nativeLabels";
+
 const SPLASH_SIZE = { width: 360, height: 200 } as const;
 export const SPLASH_READY_TIMEOUT_MS = 500;
 
@@ -34,10 +36,13 @@ function escapeHtml(text: string): string {
 		.replaceAll('"', "&quot;");
 }
 
-export function splashMessage(pendingInstallVersion: string | null): string {
+export function splashMessage(
+	labels: Pick<DesktopDialogLabels, "desktop.splash.finishingUpdate" | "desktop.splash.starting">,
+	pendingInstallVersion: string | null,
+): string {
 	return pendingInstallVersion
-		? `Finishing update to ${pendingInstallVersion}…`
-		: "Starting ThinkRail…";
+		? labels["desktop.splash.finishingUpdate"].replaceAll("{{version}}", pendingInstallVersion)
+		: labels["desktop.splash.starting"];
 }
 
 export function splashDocument(message: string): string {

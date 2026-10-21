@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { DEFAULT_DIALOG_LABELS, readDialogLabels } from "./nativeLabels";
 import {
 	handOffStartupSplash,
 	openStartupSplash,
@@ -41,8 +42,16 @@ function fakeWindow(readyOnCreate: boolean) {
 }
 
 test("the splash message names a pending update target or a plain start", () => {
-	expect(splashMessage("0.3.0-nightly.4")).toBe("Finishing update to 0.3.0-nightly.4…");
-	expect(splashMessage(null)).toBe("Starting ThinkRail…");
+	expect(splashMessage(DEFAULT_DIALOG_LABELS, "0.3.0-nightly.4")).toBe(
+		"Finishing update to 0.3.0-nightly.4…",
+	);
+	expect(splashMessage(DEFAULT_DIALOG_LABELS, null)).toBe("Starting ThinkRail…");
+	const translated = readDialogLabels({
+		"desktop.splash.finishingUpdate": "Update auf {{version}} wird abgeschlossen…",
+		"desktop.splash.starting": "ThinkRail startet…",
+	});
+	expect(splashMessage(translated, "0.4.0")).toBe("Update auf 0.4.0 wird abgeschlossen…");
+	expect(splashMessage(translated, null)).toBe("ThinkRail startet…");
 	expect(splashDocument("<b>&")).toContain("&lt;b&gt;&amp;");
 	expect(splashDocument("x")).toContain("prefers-color-scheme: light");
 });

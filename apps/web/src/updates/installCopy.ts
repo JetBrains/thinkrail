@@ -4,13 +4,15 @@ import type {
 	NativeUpdateLogEntry,
 	NativeUpdateState,
 } from "@thinkrail/contracts";
+import type { MessageKey } from "@thinkrail/locales";
+import type { Translator } from "@thinkrail/locales/react";
 
 export const INSTALL_STEPS = [
-	{ key: "prepared", label: "Update downloaded and prepared" },
-	{ key: "stopping", label: "Stopping agents and terminals" },
-	{ key: "handoff", label: "Handing off to the installer" },
-	{ key: "restarting", label: "Closing ThinkRail, then reopening the new version" },
-] as const;
+	{ key: "prepared", labelKey: "updates.install.step.prepared" },
+	{ key: "stopping", labelKey: "updates.install.step.stopping" },
+	{ key: "handoff", labelKey: "updates.install.step.handoff" },
+	{ key: "restarting", labelKey: "updates.install.step.restarting" },
+] as const satisfies readonly { key: string; labelKey: MessageKey }[];
 
 export function installStepIndex(step: NativeUpdateInstallStep | null): number {
 	const index = INSTALL_STEPS.findIndex((candidate) => candidate.key === step);
@@ -26,98 +28,86 @@ export interface InstallFailureCopy {
 	advice: string;
 }
 
-export function installFailureCopy(
+const FAILURE_CAUSES = {
+	unreported: ["updates.cause.unreported.title", "updates.cause.unreported.advice"],
+	folderInUse: ["updates.cause.folderInUse.title", "updates.cause.folderInUse.advice"],
+	swapFailed: ["updates.cause.swapFailed.title", "updates.cause.swapFailed.advice"],
+	invalidPackage: ["updates.cause.invalidPackage.title", "updates.cause.invalidPackage.advice"],
+	unpackFailed: ["updates.cause.unpackFailed.title", "updates.cause.unpackFailed.advice"],
+	closeTimeout: ["updates.cause.closeTimeout.title", "updates.cause.closeTimeout.advice"],
+	registerFailed: ["updates.cause.registerFailed.title", "updates.cause.registerFailed.advice"],
+	launchFailed: ["updates.cause.launchFailed.title", "updates.cause.launchFailed.advice"],
+	unknown: ["updates.cause.unknown.title", "updates.cause.unknown.advice"],
+} as const satisfies Record<string, readonly [MessageKey, MessageKey]>;
+
+export type InstallFailureCause = keyof typeof FAILURE_CAUSES;
+
+export function installFailureCause(
 	result: Pick<NativeUpdateInstallResult, "outcome" | "failedStep" | "detail">,
-): InstallFailureCopy {
-	if (result.outcome === "unreported") {
-		return {
-			cause: "The installer didn't report a result",
-			advice:
-				"ThinkRail closed to install the update, but the installer never reported back. It may have been stopped or blocked. Try again.",
-		};
-	}
+): InstallFailureCause {
+	if (result.outcome === "unreported") return "unreported";
 	switch (result.failedStep) {
 		case "swapping":
-			return /access\s*denied/i.test(result.detail ?? "")
-				? {
-						cause: "Another program is using ThinkRail's install folder",
-						advice:
-							"The installer couldn't replace ThinkRail while another program held its folder open. This is usually a background program started from ThinkRail, such as an editor or the JetBrains Central proxy. Close it and try again.",
-					}
-				: {
-						cause: "The installer couldn't replace ThinkRail's files",
-						advice:
-							"Check that ThinkRail's install folder isn't read-only or locked by another program, then try again.",
-					};
+			return /access\s*denied/i.test(result.detail ?? "") ? "folderInUse" : "swapFailed";
 		case "validating":
 		case "validating_payload":
-			return {
-				cause: "The downloaded update was invalid",
-				advice: "The package didn't pass the installer's checks. Download it again and retry.",
-			};
+			return "invalidPackage";
 		case "extracting":
-			return {
-				cause: "The update couldn't be unpacked",
-				advice: "Make sure there is enough free disk space, then try again.",
-			};
+			return "unpackFailed";
 		case "waiting_for_parent":
-			return {
-				cause: "ThinkRail took too long to close",
-				advice: "The installer stopped waiting for ThinkRail to exit. Try again.",
-			};
+			return "closeTimeout";
 		case "integrating":
-			return {
-				cause: "The new version couldn't be registered",
-				advice:
-					"The update was unpacked, but its shortcuts or uninstall entry couldn't be updated, so the installer restored the previous version.",
-			};
+			return "registerFailed";
 		case "launching":
-			return {
-				cause: "The new version didn't start",
-				advice: "The installer restored the previous version after the new one failed to start.",
-			};
+			return "launchFailed";
 		default:
-			return {
-				cause: "The installer couldn't finish",
-				advice: "The installer stopped and restored the previous version. Try again.",
-			};
+			return "unknown";
 	}
+}
+
+export function installFailureCopy(
+	t: Translator,
+	result: Pick<NativeUpdateInstallResult, "outcome" | "failedStep" | "detail">,
+): InstallFailureCopy {
+	const [cause, advice] = FAILURE_CAUSES[installFailureCause(result)];
+	return { cause: t(cause), advice: t(advice) };
 }
 
 export type InstallRecovery =
 	| { kind: "install" | "download" | "check"; label: string; detail: string | null }
 	| { kind: "pending"; label: string; detail: null };
 
-export function installRecovery(state: NativeUpdateState): InstallRecovery | null {
+export function installRecovery(t: Translator, state: NativeUpdateState): InstallRecovery | null {
+	const version = state.availableVersion;
 	switch (state.status) {
 		case "ready":
 			return {
 				kind: "install",
-				label: "Try again",
-				detail: state.availableVersion ? `Installs ThinkRail ${state.availableVersion}.` : null,
+				label: t("updates.recovery.install"),
+				detail: version ? t("updates.recovery.installDetail", { version }) : null,
 			};
 		case "available":
 			return {
 				kind: "download",
-				label: "Download again",
-				detail: state.availableVersion ? `Downloads ThinkRail ${state.availableVersion}.` : null,
+				label: t("updates.recovery.download"),
+				detail: version ? t("updates.recovery.downloadDetail", { version }) : null,
 			};
 		case "idle":
 		case "error":
-			return { kind: "check", label: "Check again", detail: null };
+			return { kind: "check", label: t("updates.recovery.check"), detail: null };
 		case "checking":
-			return { kind: "pending", label: "Checking for updates…", detail: null };
+			return { kind: "pending", label: t("updates.recovery.checking"), detail: null };
 		case "downloading":
 			return {
 				kind: "pending",
 				label:
 					typeof state.progress === "number"
-						? `Downloading ${Math.round(state.progress)}%`
-						: "Downloading…",
+						? t("updates.recovery.downloadingPercent", { percent: Math.round(state.progress) })
+						: t("updates.recovery.downloading"),
 				detail: null,
 			};
 		case "preparing":
-			return { kind: "pending", label: "Preparing update…", detail: null };
+			return { kind: "pending", label: t("updates.recovery.preparing"), detail: null };
 		default:
 			return null;
 	}

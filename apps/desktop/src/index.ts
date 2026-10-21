@@ -194,7 +194,7 @@ async function start(): Promise<void> {
 	if (!neutral && process.env.THINKRAIL_DESKTOP_HIDDEN !== "1") {
 		startupSplash = await openStartupSplash(
 			(options) => new BrowserWindow(options),
-			splashMessage(pendingInstallVersion),
+			splashMessage(dialogLabels, pendingInstallVersion),
 		);
 	}
 	const serverRuntime = (await import(

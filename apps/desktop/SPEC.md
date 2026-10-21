@@ -66,7 +66,8 @@ another.
    startup continues. An update-metadata failure here precedes host acquisition and quits directly.
    Unless the neutral or hidden artifact modes are set, startup then opens a small, centered, frameless
    splash.
-   - It reads "Starting ThinkRail…", or "Finishing update to X…" when the update journal is pending.
+   - It reads "Starting ThinkRail…", or "Finishing update to X…" when the update journal is pending,
+     from the saved native labels (`desktop.splash.*`, the desktop fills in `{{version}}`).
    - Its content is a `data:` URL given at creation. The SDK delays `html:` content behind a 100 ms timer,
      which the synchronous server import would block. Startup awaits the splash's own `dom-ready`,
      bounded to 500 ms, before that import.
@@ -127,7 +128,7 @@ there; WebKitGTK keeps its renderer-native editing behavior. macOS Command-H, Op
 accelerators because role items get no default shortcut. Settings… (Command-comma, after About), Quit, and Close
 are custom-action items, not roles; see Confirmed quit and close. Their labels, plus the Edit and Window menu
 titles, are the `DESKTOP_MENU_KEYS` of [[module-locales]]; the native error dialogs (startup failed,
-restart-to-update failed) use its `DESKTOP_DIALOG_KEYS`. The web pushes the active language's labels for both
+restart-to-update failed) and the startup splash use its `DESKTOP_DIALOG_KEYS`. The web pushes the active language's labels for both
 through the preload's `__THINKRAIL_NATIVE_MENU__` bridge (`menuLabelsChanged`); the main process sanitizes
 each label (non-blank, ≤ 80 chars for menu items and ≤ 200 for dialog text, else English), reinstalls the
 menu, and — outside the neutral e2e host — saves them to `<userData>/native-labels.json`. The next start

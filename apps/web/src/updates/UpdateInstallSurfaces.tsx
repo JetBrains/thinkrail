@@ -1,4 +1,5 @@
 import type { NativeUpdateInstallResult } from "@thinkrail/contracts";
+import { t as translateNow, useT } from "@thinkrail/locales/react";
 import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "../store";
 import { InstallDialog } from "./InstallDialog";
@@ -11,6 +12,7 @@ function resultKey(result: NativeUpdateInstallResult): string {
 }
 
 export function UpdateInstallSurfaces({ updates }: { updates: UpdatesController | null }) {
+	const t = useT();
 	const native = updates?.source === "native" ? updates : null;
 	const [details, setDetails] = useState<NativeUpdateInstallResult | null>(null);
 	const announced = useRef<string | null>(null);
@@ -25,11 +27,14 @@ export function UpdateInstallSurfaces({ updates }: { updates: UpdatesController 
 		announced.current = key;
 		useAppStore.getState().pushToast({
 			variant: "success",
-			title: `Updated to ${installed.toVersion}`,
+			title: translateNow("updates.result.toast.title", { version: installed.toVersion }),
 			message: installed.fromVersion
-				? `from ${installed.fromVersion}`
-				: "ThinkRail restarted on the new version.",
-			action: { label: "Details", onClick: () => setDetails(installed) },
+				? translateNow("updates.result.toast.from", { version: installed.fromVersion })
+				: translateNow("updates.result.toast.fromUnknown"),
+			action: {
+				label: translateNow("updates.result.toast.details"),
+				onClick: () => setDetails(installed),
+			},
 		});
 		dismiss();
 	}, [installed, dismiss]);
@@ -43,7 +48,7 @@ export function UpdateInstallSurfaces({ updates }: { updates: UpdatesController 
 				<InstallFailedDialog
 					result={failed}
 					currentVersion={native.state.version}
-					recovery={installRecovery(native.state)}
+					recovery={installRecovery(t, native.state)}
 					onRecover={(kind) => {
 						if (kind === "install") native.restartToUpdate();
 						else if (kind === "download") native.downloadUpdate();

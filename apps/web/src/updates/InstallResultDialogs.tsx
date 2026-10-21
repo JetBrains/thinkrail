@@ -6,6 +6,7 @@ import {
 	RiRestartLine as Restart,
 } from "@remixicon/react";
 import type { NativeUpdateInstallResult } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -32,8 +33,9 @@ export function InstallFailedDialog({
 	onRecover(kind: "install" | "download" | "check"): void;
 	onLater(): void;
 }) {
+	const t = useT();
 	const [showLog, setShowLog] = useState(false);
-	const copy = installFailureCopy(result);
+	const copy = installFailureCopy(t, result);
 	const RecoverIcon =
 		recovery?.kind === "install"
 			? Restart
@@ -56,11 +58,11 @@ export function InstallFailedDialog({
 				className="max-w-[32rem]"
 			>
 				<DialogHeader>
-					<DialogTitle>The update didn't install</DialogTitle>
+					<DialogTitle>{t("updates.result.failed.title")}</DialogTitle>
 					<DialogDescription>
 						{result.outcome === "unreported"
-							? `ThinkRail is still on version ${currentVersion}.`
-							: `ThinkRail restored version ${currentVersion}, so nothing was lost.`}
+							? t("updates.result.failed.unchanged", { version: currentVersion })
+							: t("updates.result.failed.restored", { version: currentVersion })}
 					</DialogDescription>
 				</DialogHeader>
 				<div className="flex gap-8 rounded-sm border border-feedback-error-muted bg-feedback-error-subtle p-8">
@@ -84,7 +86,10 @@ export function InstallFailedDialog({
 							entries={result.log}
 							note={
 								result.detail
-									? `Installer result: ${result.failedStep ?? "unknown step"} · ${result.detail}`
+									? t("updates.result.failed.installerResult", {
+											step: result.failedStep ?? t("updates.result.failed.unknownStep"),
+											detail: result.detail,
+										})
 									: undefined
 							}
 						/>
@@ -92,7 +97,7 @@ export function InstallFailedDialog({
 				</div>
 				<DialogFooter>
 					<Button variant="outline" data-testid="update-install-later" onClick={onLater}>
-						Later
+						{t("updates.result.later")}
 					</Button>
 					{recovery ? (
 						<Button
@@ -120,6 +125,7 @@ export function InstallDetailsDialog({
 	result: NativeUpdateInstallResult;
 	onClose(): void;
 }) {
+	const t = useT();
 	return (
 		<Dialog
 			open
@@ -129,11 +135,13 @@ export function InstallDetailsDialog({
 		>
 			<DialogContent data-testid="update-install-details" className="max-w-[32rem]">
 				<DialogHeader>
-					<DialogTitle>ThinkRail {result.toVersion} is installed</DialogTitle>
+					<DialogTitle>
+						{t("updates.result.installed.title", { version: result.toVersion })}
+					</DialogTitle>
 					<DialogDescription>
 						{result.fromVersion
-							? `Updated from ${result.fromVersion}.`
-							: "The update finished and ThinkRail restarted."}
+							? t("updates.result.installed.from", { version: result.fromVersion })
+							: t("updates.result.installed.fromUnknown")}
 					</DialogDescription>
 				</DialogHeader>
 				<InstallLog entries={result.log} />
@@ -144,7 +152,7 @@ export function InstallDetailsDialog({
 						rel="noopener noreferrer"
 						className="inline-flex items-center gap-4 text-primary tr-text-ui"
 					>
-						What's new
+						{t("updates.result.whatsNew")}
 						<ExternalLink aria-hidden="true" className="size-14" />
 					</a>
 				</DialogFooter>

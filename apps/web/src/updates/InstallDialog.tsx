@@ -4,6 +4,7 @@ import {
 	RiCheckboxBlankCircleLine as Pending,
 } from "@remixicon/react";
 import type { NativeUpdateState } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import {
 	Dialog,
 	DialogContent,
@@ -17,12 +18,14 @@ import { InstallLog, InstallLogToggle } from "./InstallLog";
 import { INSTALL_STEPS, installProgress, installStepIndex } from "./installCopy";
 
 export function InstallDialog({ state }: { state: NativeUpdateState }) {
+	const t = useT();
 	const [showLog, setShowLog] = useState(false);
 	const open = state.status === "installing";
 	const current = installStepIndex(state.installStep);
 	const progress = installProgress(state.installStep);
 	const version = state.availableVersion;
-	const currentLabel = INSTALL_STEPS[current]?.label ?? INSTALL_STEPS[1].label;
+	const currentLabel = t(INSTALL_STEPS[current]?.labelKey ?? INSTALL_STEPS[1].labelKey);
+	const stepPosition = { current: current + 1, total: INSTALL_STEPS.length };
 
 	return (
 		<Dialog open={open}>
@@ -35,24 +38,20 @@ export function InstallDialog({ state }: { state: NativeUpdateState }) {
 			>
 				<DialogHeader>
 					<DialogTitle>
-						{version ? `Installing ThinkRail ${version}` : "Installing the update"}
+						{version ? t("updates.install.title", { version }) : t("updates.install.titleUnknown")}
 					</DialogTitle>
-					<DialogDescription>
-						ThinkRail will close and reopen by itself. This usually takes less than a minute.
-					</DialogDescription>
+					<DialogDescription>{t("updates.install.description")}</DialogDescription>
 				</DialogHeader>
 				<div className="flex flex-col gap-4">
 					<progress
 						max={100}
 						value={progress}
-						aria-label={`${currentLabel}, step ${current + 1} of ${INSTALL_STEPS.length}`}
+						aria-label={t("updates.install.progressLabel", { step: currentLabel, ...stepPosition })}
 						className="h-4 w-full accent-primary"
 					/>
 					<div className="flex justify-between gap-8 text-text-muted tr-text-metadata">
-						<span>{currentLabel}…</span>
-						<span>
-							Step {current + 1} of {INSTALL_STEPS.length}
-						</span>
+						<span>{t("updates.install.stepActive", { step: currentLabel })}</span>
+						<span>{t("updates.install.stepCount", stepPosition)}</span>
 					</div>
 				</div>
 				<ol className="flex flex-col gap-4" data-testid="update-install-steps">
@@ -77,7 +76,7 @@ export function InstallDialog({ state }: { state: NativeUpdateState }) {
 										status === "active" && "animate-spin text-primary",
 									)}
 								/>
-								{step.label}
+								{t(step.labelKey)}
 							</li>
 						);
 					})}
@@ -86,12 +85,7 @@ export function InstallDialog({ state }: { state: NativeUpdateState }) {
 					<div>
 						<InstallLogToggle open={showLog} onOpenChange={setShowLog} />
 					</div>
-					{showLog ? (
-						<InstallLog
-							entries={state.log}
-							note="The same log is saved and shown again after the restart."
-						/>
-					) : null}
+					{showLog ? <InstallLog entries={state.log} note={t("updates.install.logNote")} /> : null}
 				</div>
 			</DialogContent>
 		</Dialog>

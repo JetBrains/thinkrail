@@ -4,6 +4,7 @@ import {
 	RiFileCopyLine as Copy,
 } from "@remixicon/react";
 import type { NativeUpdateLogEntry } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { formatInstallLog, logTime } from "./installCopy";
@@ -15,6 +16,7 @@ export function InstallLogToggle({
 	open: boolean;
 	onOpenChange(open: boolean): void;
 }) {
+	const t = useT();
 	const Icon = open ? ChevronDown : ChevronRight;
 	return (
 		<Button
@@ -25,7 +27,7 @@ export function InstallLogToggle({
 			onClick={() => onOpenChange(!open)}
 		>
 			<Icon className="size-14" />
-			{open ? "Hide details" : "Show details"}
+			{open ? t("updates.log.hide") : t("updates.log.show")}
 		</Button>
 	);
 }
@@ -37,16 +39,17 @@ export function InstallLog({
 	entries: readonly NativeUpdateLogEntry[];
 	note?: string | undefined;
 }) {
+	const t = useT();
 	return (
 		<div className="flex flex-col gap-4">
 			<div
 				role="log"
-				aria-label="Update log"
+				aria-label={t("updates.log.label")}
 				data-testid="update-log"
 				className="max-h-[12rem] overflow-auto rounded-sm border border-border-default bg-container-terminal-bg p-8 tr-code-text-small"
 			>
 				{entries.length === 0 ? (
-					<p className="text-text-muted">No log was saved for this update.</p>
+					<p className="text-text-muted">{t("updates.log.empty")}</p>
 				) : (
 					entries.map((entry, index) => (
 						<p
@@ -74,7 +77,7 @@ export function InstallLog({
 					}}
 				>
 					<Copy className="size-14" />
-					Copy log
+					{t("updates.log.copy")}
 				</Button>
 			</div>
 		</div>

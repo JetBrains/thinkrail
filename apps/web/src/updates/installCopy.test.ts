@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { NativeUpdateState } from "@thinkrail/contracts";
+import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	formatInstallLog,
 	INSTALL_STEPS,
@@ -9,6 +10,8 @@ import {
 	installStepIndex,
 	releaseNotesUrl,
 } from "./installCopy";
+
+const t = currentTranslator();
 
 function state(
 	status: NativeUpdateState["status"],
@@ -50,7 +53,7 @@ test("install steps advance a determinate bar from stopping to restarting", () =
 
 test("installer results become a plain cause, never the raw text as the headline", () => {
 	const failed = (failedStep: string | null, detail: string | null = null) =>
-		installFailureCopy({ outcome: "failed", failedStep, detail });
+		installFailureCopy(t, { outcome: "failed", failedStep, detail });
 	expect(failed("swapping", "AccessDenied").cause).toBe(
 		"Another program is using ThinkRail's install folder",
 	);
@@ -65,30 +68,30 @@ test("installer results become a plain cause, never the raw text as the headline
 	expect(failed("integrating").cause).toBe("The new version couldn't be registered");
 	expect(failed("launching").cause).toBe("The new version didn't start");
 	expect(failed("something_new", "Weird").cause).toBe("The installer couldn't finish");
-	expect(installFailureCopy({ outcome: "unreported", failedStep: null, detail: null }).cause).toBe(
-		"The installer didn't report a result",
-	);
+	expect(
+		installFailureCopy(t, { outcome: "unreported", failedStep: null, detail: null }).cause,
+	).toBe("The installer didn't report a result");
 });
 
 test("recovery follows the live update state and names the version it acts on", () => {
-	expect(installRecovery(state("ready"))).toEqual({
+	expect(installRecovery(t, state("ready"))).toEqual({
 		kind: "install",
 		label: "Try again",
 		detail: "Installs ThinkRail 0.3.0-nightly.4.",
 	});
-	expect(installRecovery(state("available"))).toMatchObject({
+	expect(installRecovery(t, state("available"))).toMatchObject({
 		kind: "download",
 		label: "Download again",
 	});
-	expect(installRecovery(state("idle"))).toMatchObject({ kind: "check", label: "Check again" });
-	expect(installRecovery(state("error"))).toMatchObject({ kind: "check" });
-	expect(installRecovery(state("checking"))).toMatchObject({ kind: "pending" });
-	expect(installRecovery(state("downloading", { progress: 41.6 }))).toMatchObject({
+	expect(installRecovery(t, state("idle"))).toMatchObject({ kind: "check", label: "Check again" });
+	expect(installRecovery(t, state("error"))).toMatchObject({ kind: "check" });
+	expect(installRecovery(t, state("checking"))).toMatchObject({ kind: "pending" });
+	expect(installRecovery(t, state("downloading", { progress: 41.6 }))).toMatchObject({
 		kind: "pending",
 		label: "Downloading 42%",
 	});
-	expect(installRecovery(state("preparing"))).toMatchObject({ kind: "pending" });
-	expect(installRecovery(state("disabled"))).toBeNull();
+	expect(installRecovery(t, state("preparing"))).toMatchObject({ kind: "pending" });
+	expect(installRecovery(t, state("disabled"))).toBeNull();
 });
 
 test("release notes and copied logs use stable, readable forms", () => {
