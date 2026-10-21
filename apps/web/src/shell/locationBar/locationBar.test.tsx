@@ -330,7 +330,7 @@ const openPr = (details: Partial<ReviewDetails>): OpenBranchReview => ({
 	details: { draft: false, reviewers: [], mergeState: "blocked", ...details },
 });
 
-test("v87: a draft PR reads Draft #N in the neutral tone and carries its checks glyph", () => {
+test("v88: a draft PR reads Draft #N in the neutral tone and carries its checks glyph", () => {
 	const draft = openPr({
 		draft: true,
 		mergeState: "draft",

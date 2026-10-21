@@ -147,7 +147,7 @@ pushes nothing rather than opening a PR for another branch with this one's title
    strips it before the wire response. Capturing branch before the dirty-read await is unsound for
    user-owned checkouts because `openPr` deliberately refreshes after that await.
 
-**Review actions** (`reviewActions.ts`, v87): `readyPr` (`pr.ready`), `reopenPr` (`pr.reopen`),
+**Review actions** (`reviewActions.ts`, v88): `readyPr` (`pr.ready`), `reopenPr` (`pr.reopen`),
 `mergePr({ …, method, deleteBranch })` (`pr.merge`) and `deleteRemoteBranch` (`workspace.deleteRemoteBranch`).
 Every PR mutation is bound to what the user saw: the refreshed live branch must still be the request's
 `branch` (a terminal switch changes nothing) and must not be its own base, and `gh pr view <number>`

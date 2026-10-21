@@ -14,7 +14,7 @@ import {
 	writeGhScenario,
 } from "./fixtures/github";
 
-// v87 review details and actions against the GitHub seam described in e2e/SPEC.md (fake gh + github-ssh).
+// v88 review details and actions against the GitHub seam described in e2e/SPEC.md (fake gh + github-ssh).
 
 async function revalidate(page: Page): Promise<void> {
 	await page.evaluate(() => window.dispatchEvent(new Event("focus")));

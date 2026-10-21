@@ -1325,7 +1325,7 @@ own section. The kebab menu (`plan-menu`, a
   `resolveBranchReview` — with v87's ahead/behind folded onto it, plus the review-free `BranchFacts`.
   `shipActions(context)` is the pure derivation of each segment's `{ primary, secondary }` —
   remote arm (Publish / Push N / Sync…) and review arm (Open PR / Create MR / Open draft PR / the
-  disabled Merge-locally stub / Settle; on a v87 host Fix with agent / Ready / Merge PR for an open GitHub
+  disabled Merge-locally stub / Settle; on a v88 host Fix with agent / Ready / Merge PR for an open GitHub
   PR and Reopen / Delete remote branch after it) — unit-tested over the full scenario table, as are the
   agent prompt texts it builds (`fixChecksPrompt`, `integratePrompt`). `useShipRunner`
   executes them and owns their dialogs: the shared `PrComposeDialog` (now also used for first-time
