@@ -1,6 +1,6 @@
 import type { FileNode } from "@thinkrail/contracts";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { useRef, useState } from "react";
-import { LoadingRegion } from "../components/Skeleton";
 import type { TabIntent } from "../store";
 import { getTransport } from "../transport";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";

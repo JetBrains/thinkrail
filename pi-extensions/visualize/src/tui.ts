@@ -32,6 +32,10 @@ export function callSummary(args: Partial<VisualizeParams> | undefined): string 
 		const count = Array.isArray(args.options) ? args.options.length : 0;
 		return `comparison — ${count} option${count === 1 ? "" : "s"}`;
 	}
+	if (args?.type === "file") {
+		if (typeof args.path !== "string") return "file";
+		return typeof args.before === "string" ? `${args.before} → ${args.path}` : args.path;
+	}
 	return "diagram";
 }
 

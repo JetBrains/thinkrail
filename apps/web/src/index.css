@@ -7,6 +7,7 @@
 @import "./styles/global.css";
 
 @source "../../../packages/ui";
+@source "../../../packages/resource-renderers/src";
 @source "../../../thinkrail-extensions/*/web/**/*.{ts,tsx}";
 
 /*

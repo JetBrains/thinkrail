@@ -364,6 +364,20 @@ function fireTodoFixPrompt(
 		.finally(() => releaseItemFix(p.sessionId, p.id));
 }
 
+function reviewSendGroups(
+	comments: ReviewComment[],
+	sessionId: string | undefined,
+): ReviewComment[][] {
+	if (comments.length === 0) return [];
+	if (sessionId) return [comments];
+	const groups = new Map<string, ReviewComment[]>();
+	for (const comment of comments) {
+		const key = reviewSessionKey(comment);
+		groups.set(key, [...(groups.get(key) ?? []), comment]);
+	}
+	return [...groups.values()];
+}
+
 async function sendToFileChat(
 	workspaceId: string,
 	comments: ReviewComment[],
@@ -1186,13 +1200,8 @@ const handlers: WsHandlers = {
 		const capture = additionalCapture();
 		return withReviewLock(p.workspaceId, async () => {
 			const comments = await sendableComments(p.workspaceId, p.commentIds);
-			const groups = new Map<string, typeof comments>();
-			for (const comment of comments) {
-				const key = reviewSessionKey(comment);
-				groups.set(key, [...(groups.get(key) ?? []), comment]);
-			}
 			const sessions: ReviewSendResult[] = [];
-			for (const group of groups.values()) {
+			for (const group of reviewSendGroups(comments, p.sessionId)) {
 				sessions.push(await sendToFileChat(p.workspaceId, group, p, capture));
 			}
 			if (sessions.length === 0) throw new Error("No draft comments to send.");

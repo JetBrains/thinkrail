@@ -1,0 +1,120 @@
+import type { LineSpan } from "@thinkrail/contracts";
+import { structuredPatch } from "diff";
+import type { AnchorDraft } from "../../registry";
+
+export interface ChangeBlock {
+	original: LineSpan;
+	modified: LineSpan;
+}
+
+export interface AskAgentRequest {
+	draft: AnchorDraft;
+	initialText: string;
+	notice?: string;
+}
+
+export function computeChangeBlocks(
+	original: string,
+	modified: string,
+	ignoreWhitespace: boolean,
+): ChangeBlock[] {
+	const patch = structuredPatch("original", "modified", original, modified, undefined, undefined, {
+		context: 0,
+		ignoreWhitespace,
+	});
+	return patch.hunks.map((hunk) => ({
+		original: { start: Math.max(1, hunk.oldStart), count: hunk.oldLines },
+		modified: { start: Math.max(1, hunk.newStart), count: hunk.newLines },
+	}));
+}
+
+export function computeActionBlocks(
+	original: string | null,
+	modified: string | null,
+	ignoreWhitespace: boolean,
+): ChangeBlock[] {
+	return modified === null ? [] : computeChangeBlocks(original ?? "", modified, ignoreWhitespace);
+}
+
+export function changeBlockId(block: ChangeBlock): string {
+	return `${block.original.start}:${block.original.count}:${block.modified.start}:${block.modified.count}`;
+}
+
+export function changeBlockContentKeys(
+	blocks: readonly ChangeBlock[],
+	original: string,
+	modified: string,
+): Map<string, string> {
+	const originalLines = original.split("\n");
+	const modifiedLines = modified.split("\n");
+	const contents = blocks.map(
+		(block) =>
+			`${fnv1a(spanText(originalLines, block.original))}-${fnv1a(spanText(modifiedLines, block.modified))}`,
+	);
+	const counts = new Map<string, number>();
+	for (const content of contents) counts.set(content, (counts.get(content) ?? 0) + 1);
+	return new Map(
+		blocks.map((block, index) => {
+			const content = contents[index] ?? "";
+			const count = counts.get(content) ?? 1;
+			return [
+				changeBlockId(block),
+				count === 1 ? content : `${content}#${count}@${block.original.start}`,
+			];
+		}),
+	);
+}
+
+function spanText(lines: readonly string[], span: LineSpan): string {
+	if (span.count === 0) return "";
+	return lines.slice(span.start - 1, span.start - 1 + span.count).join("\n");
+}
+
+function fnv1a(text: string): string {
+	let hash = 0x811c9dc5;
+	for (let index = 0; index < text.length; index += 1) {
+		hash ^= text.charCodeAt(index);
+		hash = Math.imul(hash, 0x01000193) >>> 0;
+	}
+	return `${text.length.toString(36)}:${hash.toString(36)}`;
+}
+
+export function createAskAgentRequest(block: ChangeBlock, modifiedText: string): AskAgentRequest {
+	const lineCount = textLineCount(modifiedText);
+	const nearestLine = Math.min(lineCount, Math.max(1, block.modified.start - 1));
+	const lineRange =
+		block.modified.count > 0
+			? {
+					kind: "lineRange" as const,
+					startLine: block.modified.start,
+					endLine: block.modified.start + block.modified.count - 1,
+				}
+			: lineCount > 0
+				? {
+						kind: "lineRange" as const,
+						startLine: nearestLine,
+						endLine: nearestLine,
+					}
+				: null;
+	const hunk = {
+		kind: "diffHunk" as const,
+		hunkHeader: `@@ -${block.original.start},${block.original.count} +${block.modified.start},${block.modified.count} @@`,
+	};
+	return {
+		draft: {
+			selectors: lineRange ? [lineRange, hunk] : [hunk],
+			label: lineRange
+				? lineRange.startLine === lineRange.endLine
+					? `L${lineRange.startLine}`
+					: `L${lineRange.startLine}–${lineRange.endLine}`
+				: "file",
+		},
+		initialText: "Please revise this change: ",
+		...(block.modified.count === 0 ? { notice: "This comment refers to removed lines." } : {}),
+	};
+}
+
+function textLineCount(text: string): number {
+	if (text.length === 0) return 0;
+	return text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
+}

@@ -10,6 +10,7 @@ import {
 	type ChangesTab,
 	createChangesTab,
 	type EditorTab,
+	type FileComparisonTab,
 	isCenterNavigationCurrent,
 	layoutOpenOptionsForNavigation,
 	selectDiffTabTargetRef,
@@ -219,6 +220,43 @@ export function openDiffInTab(
 		}),
 		requestedNavigation,
 		options.claimPreview,
+	);
+}
+
+export function fileComparisonTab(
+	workspaceId: string,
+	before: string,
+	path: string,
+): FileComparisonTab {
+	return {
+		kind: "diff",
+		id: tupleKey("compare", workspaceId, before, path),
+		workspaceId,
+		name: `${baseName(before)} → ${baseName(path)}`,
+		path,
+		before,
+	};
+}
+
+export function openFileComparisonInTab(
+	workspaceId: string,
+	before: string,
+	path: string,
+	intent: TabIntent,
+): Promise<void> {
+	const worktree = selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath;
+	const tab = fileComparisonTab(
+		workspaceId,
+		projectRelativePath(before, worktree),
+		projectRelativePath(path, worktree),
+	);
+	return openReadTab(
+		workspaceId,
+		tab.id,
+		layoutResourceIdentity(tab),
+		intent,
+		() => Promise.resolve(null),
+		(_payload, loadedTick) => ({ ...tab, loadedTick }),
 	);
 }
 

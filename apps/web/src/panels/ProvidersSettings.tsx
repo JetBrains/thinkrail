@@ -12,11 +12,11 @@ import {
 	type ProviderStatusReport,
 } from "@thinkrail/contracts";
 import { Button } from "@thinkrail/ui/button";
+import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LoginDialog } from "@/auth";
 import { AUTH_KIND_LABEL } from "@/chat/modelPicker";
-import { SkeletonRows } from "@/components/Skeleton";
 import { selectLoginBusy, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { JetBrainsAiCard } from "./JetBrainsAiCard";

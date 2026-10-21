@@ -25,6 +25,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { AskStatesContext, deriveAskStates } from "../chat/askState";
@@ -57,7 +58,6 @@ import {
 import { StatusIcon } from "../chat/TodoList";
 import { AskUserQuestionCard } from "../chat/tools/AskUserQuestionCard";
 import { hydrateSessionRuntime, useChatTodos } from "../chat/useChatTodos";
-import { LoadingRegion } from "../components/Skeleton";
 import { isShellInert } from "../lib";
 import {
 	selectAgentReviewCommentCount,

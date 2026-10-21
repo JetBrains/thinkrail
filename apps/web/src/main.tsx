@@ -7,6 +7,7 @@ import { initModelVisibilityPersistence } from "./chat/modelVisibility";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { initNavigation } from "./navigation";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
+import { AppResourceHost } from "./shell/AppResourceHost";
 import { Shell } from "./shell/Shell";
 import { applyThemePreference, initializeBundledThemes, readThemeHint } from "./themes";
 import { initTransport } from "./transport";
@@ -25,7 +26,9 @@ if (root) {
 		<StrictMode>
 			<ErrorBoundary label="app">
 				<TooltipProvider delayDuration={250} skipDelayDuration={400}>
-					<Shell />
+					<AppResourceHost>
+						<Shell />
+					</AppResourceHost>
 				</TooltipProvider>
 			</ErrorBoundary>
 		</StrictMode>,

@@ -98,8 +98,9 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   ([[module-thinkrail-workflow]]).
 - **Providers** — in-app sign-in and API keys through pi's auth, and JetBrains AI through the user's
   `central` CLI ([[submodule-server-auth]], [[central-integration]]).
-- **Agent tools** — web research and inline diagrams and comparisons in chat
-  ([[submodule-web-chat-tools-web]], [[module-ext-visualize]]).
+- **Agent tools** — web research, and inline diagrams, comparisons and file previews in chat; a proposed
+  UI change is shown as a rendered before/after mockup through the same renderers and review comments
+  as diff review ([[submodule-web-chat-tools-web]], [[module-ext-visualize]]).
 - **MCP servers** — pi's built-in MCP, read from the user's `mcp.json`, managed from Settings and visible
   per chat next to background commands and subagents; a confirm in the chat, on the call, before calls
   that may change data, with a per-project "Always allow" for tools the user trusts

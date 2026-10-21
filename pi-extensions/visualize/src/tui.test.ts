@@ -154,6 +154,8 @@ describe("renderVisualizeCall / renderVisualizeResult", () => {
 			"comparison — 2 options",
 		);
 		expect(callSummary({ type: "diagram" })).toBe("diagram");
+		expect(callSummary({ type: "file", path: "a.html" })).toBe("a.html");
+		expect(callSummary({ type: "file", path: "a.html", before: "b.html" })).toBe("b.html → a.html");
 		const call = plain(renderVisualizeCall({ type: "diagram", mermaid: FLOW }, theme).render(80));
 		expect(call[0]).toBe("*visualize *diagram");
 		const narrow = renderVisualizeCall(

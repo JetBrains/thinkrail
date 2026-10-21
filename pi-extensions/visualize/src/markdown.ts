@@ -1,4 +1,4 @@
-import type { ComparisonOption } from "./schema.ts";
+import type { ComparisonOption, VisualizeParams } from "./schema.ts";
 
 export function mermaidFence(title: string | undefined, mermaid: string): string {
 	const body = `\`\`\`mermaid\n${mermaid.trim()}\n\`\`\``;
@@ -26,4 +26,12 @@ export function comparisonMarkdown(title: string | undefined, options: Compariso
 	}
 
 	return blocks.join("\n\n");
+}
+
+export function fileMarkdown(params: Pick<VisualizeParams, "title" | "path" | "before">): string {
+	const subject = params.before
+		? `\`${params.path}\` (before: \`${params.before}\`)`
+		: `\`${params.path}\``;
+	const body = `Showing ${subject} rendered${params.before ? " as a before/after diff" : ""}.`;
+	return params.title ? `### ${params.title}\n\n${body}` : body;
 }

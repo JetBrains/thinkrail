@@ -176,7 +176,7 @@ naming its own type. Two exist:
 
 | | `chat` (`.tr-prose-chat`) | `doc` (`.tr-prose-doc`) |
 |---|---|---|
-| mounted by | `chat/Markdown.tsx` | `panels/MarkdownPreview.tsx` |
+| mounted by | `chat/Markdown.tsx` | `resource-renderers/support/MarkdownPreview.tsx` |
 | body, blockquote, lists | 14 / 370 / 1.45 | 14 / 370 / 1.45 |
 | h1 | 18 / 600 | **24 / 600** |
 | h2 | 14 / 600 | **20 / 600** |
@@ -208,7 +208,7 @@ and colour inherit from the enclosing element, so bold in a heading keeps the he
 a cell keeps the table's.
 
 A "prose skin" at a call site carries only spacing, measure and chrome (`chat/Markdown.tsx` = bubble
-rhythm, `panels/MarkdownPreview.tsx` = document rhythm, heading rules, table chrome). Never add a
+rhythm, `resource-renderers/support/MarkdownPreview.tsx` = document rhythm, heading rules, table chrome). Never add a
 typography class or value to a skin; change `proseSystems` instead. Adding a third surface means adding a
 JSON entry — the generator, the naming and the guards all follow.
 
@@ -262,8 +262,8 @@ The allowlist is deliberately tiny, and each entry is enforced by name in
 
 | Surface | Why it cannot use a semantic class |
 |---|---|
-| `panels/monacoSetup.ts` | Monaco takes `fontFamily` / `fontSize` / `lineHeight` as JS options — it reads `--tr-font-family-code`, `--tr-font-size-s11`, `--tr-line-height-default`, so it cannot drift from a code block |
-| `panels/resources/code/pierreVirtualizer.ts` | Pierre's virtualizer takes its row height as a JS metric — it reads the generated `--tr-code-row-height`, the same value `.pierre-code-surface` gives `--diffs-line-height` |
+| `resource-renderers/support/monacoSetup.ts` | Monaco takes `fontFamily` / `fontSize` / `lineHeight` as JS options — it reads `--tr-font-family-code`, `--tr-font-size-s11`, `--tr-line-height-default`, so it cannot drift from a code block |
+| `resource-renderers/renderers/code/pierreVirtualizer.ts` | Pierre's virtualizer takes its row height as a JS metric — it reads the generated `--tr-code-row-height`, the same value `.pierre-code-surface` gives `--diffs-line-height` |
 | `panels/TerminalInstance.tsx` | xterm, same reason — it reads `--tr-font-family-code` + `--tr-font-size-s13` (the primitives behind `code.text`), and owns row height through its own `lineHeight` option rather than a CSS line-height |
 | `thinkrail-extensions/visualize/web/mermaid.ts` | mermaid's theme config takes a family string (`--tr-font-family-code`) |
 | `index.css`, `styles/tokens.css`, `styles/global.css` | the mapping layers themselves; `.pierre-code-surface` passes the code family, `s11`, and the default line-height (rounded to whole pixels) into Pierre's Shadow DOM |

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import { selectWorkspaceTick, useAppStore } from "../store";
+import { fsChangedPaths, selectWorkspaceTick, useAppStore } from "../store";
 import { createLatestOperation, type LatestOperation } from "./latestOperation";
 
 export function useLiveTabContent<T>(
@@ -27,8 +27,8 @@ export function useLiveTabContent<T>(
 		const loaded = tab.loadedTick ?? 0;
 		if (change.tick <= loaded) return;
 		const { read, applyFresh, keepCurrent } = opsRef.current;
-		const namesOtherFiles = change.paths.length > 0 && !change.paths.includes(tab.path);
-		if (change.tick === loaded + 1 && !change.truncated && namesOtherFiles) {
+		const paths = fsChangedPaths(change);
+		if (change.tick === loaded + 1 && paths !== null && !paths.includes(tab.path)) {
 			keepCurrent(change.tick);
 			return;
 		}

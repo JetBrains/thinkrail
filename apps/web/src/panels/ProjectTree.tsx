@@ -42,13 +42,13 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { type MouseEvent, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
 import { copyText, platformShortcutLabel } from "@/lib";
-import { LoadingRegion } from "../components/Skeleton";
 import { useNow } from "../components/useNow";
 import {
 	isDefaultWorkspace,
