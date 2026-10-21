@@ -14,78 +14,91 @@ import {
 	RiPuzzle2Line,
 	RiShieldCheckLine,
 	RiTerminalBoxLine,
+	RiTranslate2,
 } from "@remixicon/react";
 import {
 	DEFAULT_MODEL_PROTOCOL_VERSION,
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
+	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
+import type { MessageKey } from "@thinkrail/locales";
 import { SettingsSection } from "@/store";
 
 export interface SettingsNavSection {
 	id: SettingsSection;
-	label: string;
+	label: MessageKey;
 	icon: RemixiconComponentType;
 	requiresInjectedContent?: true;
 	requiresProtocolVersion?: number;
 }
 
 export interface SettingsNavGroup {
-	label: string;
+	label: MessageKey;
 	sections: SettingsNavSection[];
 }
 
 const NAV_GROUPS: SettingsNavGroup[] = [
 	{
-		label: "Agent",
+		label: "settings.nav.group.agent",
 		sections: [
 			{
 				id: SettingsSection.Models,
-				label: "Models",
+				label: "settings.nav.models",
 				icon: RiBrainLine,
 				requiresProtocolVersion: DEFAULT_MODEL_PROTOCOL_VERSION,
 			},
-			{ id: SettingsSection.Providers, label: "Providers", icon: RiKeyLine },
+			{ id: SettingsSection.Providers, label: "settings.nav.providers", icon: RiKeyLine },
 			{
 				id: SettingsSection.Mcp,
-				label: "MCP servers",
+				label: "settings.nav.mcp",
 				icon: RiPlugLine,
 				requiresProtocolVersion: MCP_PROTOCOL_VERSION,
 			},
-			{ id: SettingsSection.Templates, label: "Prompt templates", icon: RiLayoutGridLine },
+			{ id: SettingsSection.Templates, label: "settings.nav.templates", icon: RiLayoutGridLine },
 		],
 	},
 	{
-		label: "Interface",
+		label: "settings.nav.group.interface",
 		sections: [
-			{ id: SettingsSection.Chat, label: "Chat", icon: RiChat2Line },
-			{ id: SettingsSection.Appearance, label: "Appearance", icon: RiPaletteLine },
-			{ id: SettingsSection.Layout, label: "Layout", icon: RiLayoutTop2Line },
-			{ id: SettingsSection.Terminal, label: "Terminal", icon: RiTerminalBoxLine },
+			{ id: SettingsSection.Chat, label: "settings.nav.chat", icon: RiChat2Line },
+			{ id: SettingsSection.Appearance, label: "settings.nav.appearance", icon: RiPaletteLine },
+			{
+				id: SettingsSection.Language,
+				label: "settings.nav.language",
+				icon: RiTranslate2,
+				requiresProtocolVersion: LOCALES_PROTOCOL_VERSION,
+			},
+			{ id: SettingsSection.Layout, label: "settings.nav.layout", icon: RiLayoutTop2Line },
+			{ id: SettingsSection.Terminal, label: "settings.nav.terminal", icon: RiTerminalBoxLine },
 		],
 	},
 	{
-		label: "System",
+		label: "settings.nav.group.system",
 		sections: [
 			{
 				id: SettingsSection.Workspaces,
-				label: "Workspaces",
+				label: "settings.nav.workspaces",
 				icon: RiGitRepositoryLine,
 				requiresProtocolVersion: WORKSPACE_SETTLE_PROTOCOL_VERSION,
 			},
-			{ id: SettingsSection.Github, label: "Integrations", icon: RiApps2Line },
+			{ id: SettingsSection.Github, label: "settings.nav.github", icon: RiApps2Line },
 			{
 				id: SettingsSection.Extensions,
-				label: "Extensions",
+				label: "settings.nav.extensions",
 				icon: RiPuzzle2Line,
 				requiresProtocolVersion: EXTENSION_CATALOG_PROTOCOL_VERSION,
 			},
-			{ id: SettingsSection.Notifications, label: "Notifications", icon: RiNotification3Line },
-			{ id: SettingsSection.Privacy, label: "Privacy", icon: RiShieldCheckLine },
+			{
+				id: SettingsSection.Notifications,
+				label: "settings.nav.notifications",
+				icon: RiNotification3Line,
+			},
+			{ id: SettingsSection.Privacy, label: "settings.nav.privacy", icon: RiShieldCheckLine },
 			{
 				id: SettingsSection.Updates,
-				label: "Updates",
+				label: "settings.nav.updates",
 				icon: RiDownloadCloud2Line,
 				requiresInjectedContent: true,
 			},

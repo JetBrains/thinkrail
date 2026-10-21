@@ -5,6 +5,7 @@ import type {
 	McpServerResourceSummary,
 	SubagentResourceSummary,
 } from "@thinkrail/contracts";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { TooltipProvider } from "@thinkrail/ui/tooltip";
 import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -68,7 +69,7 @@ test("resource primitives keep their props-only import boundary", () => {
 		const source = readFileSync(`${import.meta.dir}/${file}`, "utf8");
 		for (const [, dependency] of source.matchAll(/from\s+["']([^"']+)["']/g)) {
 			expect(dependency).toMatch(
-				/^(?:@thinkrail\/contracts|react|@remixicon\/react|@thinkrail\/ui\/|@\/lib$|\.\/)/,
+				/^(?:@thinkrail\/contracts|@thinkrail\/locales(?:\/react)?$|react|@remixicon\/react|@thinkrail\/ui\/|@\/lib$|\.\/)/,
 			);
 		}
 		expect(source).not.toMatch(
@@ -93,10 +94,11 @@ test("the row vocabulary collapses wire statuses into one live and three settled
 	expect(childState("completed")).toBe("done");
 	expect(childState("error")).toBe("failed");
 	expect(childState("aborted")).toBe("stopped");
-	expect(formatElapsed(20_000)).toBe("<1 min");
-	expect(formatElapsed(4 * 60_000 + 5_000)).toBe("4 min");
-	expect(formatElapsed(125 * 60_000)).toBe("2 h 5 min");
-	const elapsed = (resource: Parameters<typeof elapsedLabel>[0]) => elapsedLabel(resource, NOW);
+	expect(formatElapsed(currentTranslator(), 20_000)).toBe("<1 min");
+	expect(formatElapsed(currentTranslator(), 4 * 60_000 + 5_000)).toBe("4 min");
+	expect(formatElapsed(currentTranslator(), 125 * 60_000)).toBe("2 h 5 min");
+	const elapsed = (resource: Parameters<typeof elapsedLabel>[1]) =>
+		elapsedLabel(currentTranslator(), resource, NOW);
 	expect(elapsed({ kind: "command", summary: command })).toBe("4 min");
 	expect(
 		elapsed({

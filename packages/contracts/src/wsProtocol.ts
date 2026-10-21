@@ -24,6 +24,7 @@ import type {
 	JbcentralConnectResult,
 	JbcentralLoginResult,
 	JbcentralQuotaSnapshot,
+	LocalLocalesSnapshot,
 	LoginReply,
 	McpExposure,
 	McpListResult,
@@ -116,7 +117,8 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 88;
+export const PROTOCOL_VERSION = 89;
+export const LOCALES_PROTOCOL_VERSION = 89;
 export const REVIEW_ACTIONS_PROTOCOL_VERSION = 88;
 export const BRANCH_STATUS_PROTOCOL_VERSION = 87;
 export const WORKSPACE_READ_STATE_PROTOCOL_VERSION = 86;
@@ -267,6 +269,8 @@ export const WS_METHODS = {
 	skillList: "skill.list",
 	skillsState: "skills.state",
 	extensionList: "extension.list",
+	localesList: "locales.list",
+	localesReveal: "locales.reveal",
 	sessionCreate: "session.create",
 	sessionPrompt: "session.prompt",
 	sessionSteer: "session.steer",
@@ -373,6 +377,7 @@ export const WS_CHANNELS = {
 	reviewFailed: "review.failed",
 	turnChanged: "turn.changed",
 	mcpStatus: "mcp.status",
+	localesChanged: "locales.changed",
 } as const;
 
 type SameUnion<A extends B, B extends C, C = A> = A;
@@ -769,6 +774,8 @@ export interface WsMethodMap {
 	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
 	"skills.state": { params: { workspaceId: string }; result: SkillCatalogEntry[] };
 	"extension.list": { params: Record<string, never>; result: ExtensionCatalogEntry[] };
+	"locales.list": { params: Record<string, never>; result: LocalLocalesSnapshot };
+	"locales.reveal": { params: Record<string, never>; result: Ack };
 	"session.create": {
 		params: { workspaceId: string; model?: WireModel; thinkingLevel?: ThinkingLevel };
 		result: { sessionId: string; model: WireModel | null; thinkingLevel: ThinkingLevel };

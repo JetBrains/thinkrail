@@ -1,5 +1,7 @@
 import { useDroppable } from "@dnd-kit/core";
 import { RiAddLine as Plus, RiCloseLine as X } from "@remixicon/react";
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -50,6 +52,33 @@ import {
 } from "./workbenchShared";
 import { TabStrip } from "./workbenchTabs";
 
+const CREATE_GROUP_LABELS = {
+	left: {
+		above: "workbench.side.createLeftGroupAbove",
+		below: "workbench.side.createLeftGroupBelow",
+	},
+	right: {
+		above: "workbench.side.createRightGroupAbove",
+		below: "workbench.side.createRightGroupBelow",
+	},
+} as const satisfies Record<LayoutSide, Record<"above" | "below", MessageKey>>;
+
+const PANE_LABELS = {
+	left: "workbench.side.leftPane",
+	right: "workbench.side.rightPane",
+} as const satisfies Record<LayoutSide, MessageKey>;
+
+const WORKBENCH_LABELS = {
+	left: "workbench.side.leftWorkbench",
+	right: "workbench.side.rightWorkbench",
+} as const satisfies Record<LayoutSide, MessageKey>;
+
+const JOIN_GROUP_LABELS = {
+	left: "workbench.pane.joinLeftGroup",
+	right: "workbench.pane.joinRightGroup",
+	bottom: "workbench.pane.joinBottomGroup",
+} as const satisfies Record<LayoutAuxiliaryRegion, MessageKey>;
+
 export const SideGroupView = memo(function SideGroupView({
 	side,
 	group,
@@ -66,6 +95,7 @@ export const SideGroupView = memo(function SideGroupView({
 	renderToolBody: WorkbenchProps["renderToolBody"];
 	onFold: () => void;
 }) {
+	const t = useT();
 	const location: LayoutGroupLocation = { area: side, groupId: group.id };
 	const selected = group.tabs.find((tab) => tab.id === selectedId) ?? group.tabs[0];
 	const draggedSideTab =
@@ -95,7 +125,7 @@ export const SideGroupView = memo(function SideGroupView({
 					<DropZone
 						id={tupleKey("dnd-side-group", side, group.id, "above")}
 						target={{ kind: "auxiliary-edge", region: side, index: groupIndex }}
-						label={`Create ${side} group above`}
+						label={t(CREATE_GROUP_LABELS[side].above)}
 						className="absolute inset-x-4 top-4 bottom-1/2"
 					/>
 				) : null}
@@ -103,7 +133,7 @@ export const SideGroupView = memo(function SideGroupView({
 					<DropZone
 						id={tupleKey("dnd-side-group", side, group.id, "below")}
 						target={{ kind: "auxiliary-edge", region: side, index: groupIndex + 1 }}
-						label={`Create ${side} group below`}
+						label={t(CREATE_GROUP_LABELS[side].below)}
 						className="absolute inset-x-4 top-1/2 bottom-4"
 					/>
 				) : null}
@@ -113,7 +143,9 @@ export const SideGroupView = memo(function SideGroupView({
 		<section
 			id={groupDomId(location)}
 			tabIndex={-1}
-			aria-label={`${side} pane: ${selected ? layoutTabName(selected) : "Tools"}`}
+			aria-label={t(PANE_LABELS[side], {
+				name: selected ? layoutTabName(t, selected) : t("workbench.pane.tools"),
+			})}
 			data-testid={
 				group.tabs.some((tab) => tab.kind === "tool" && tab.tool === "specs")
 					? "right-panel"
@@ -150,7 +182,7 @@ export const SideGroupView = memo(function SideGroupView({
 					/>
 				) : (
 					<div className="flex h-full items-center justify-center tr-text-metadata text-text-muted">
-						Empty group
+						{t("workbench.group.empty")}
 					</div>
 				)}
 				{creationTargets}
@@ -175,15 +207,20 @@ export function SideGroupMenu({
 	onNewTerminal: WorkbenchProps["onNewTerminal"];
 	onRevealTool: (tool: LayoutToolId) => void;
 }) {
+	const t = useT();
 	const missing = unplacedToolsForRegion(document, side);
 	const toolPane = group.tabs.some((tab) => tab.kind === "tool");
 	const paneBelowAvailable = !toolPane || document[side].groups.length < limit;
+	const newTerminalPaneLabel =
+		side === "bottom"
+			? t("workbench.group.newTerminalPaneRight")
+			: t("workbench.group.newTerminalPaneBelow");
 	return (
 		<DropdownMenu>
-			<IconTooltip label="Add to this group" wrapTrigger>
+			<IconTooltip label={t("workbench.group.addTo")} wrapTrigger>
 				<DropdownMenuTrigger
 					data-testid="side-group-menu"
-					aria-label="Add to this group"
+					aria-label={t("workbench.group.addTo")}
 					className="flex w-panel-header-row shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
 				>
 					<Plus className="size-16" />
@@ -196,8 +233,13 @@ export function SideGroupMenu({
 					onSelect={() => onNewTerminal(group.id, side, toolPane ? { newPaneBelow: true } : {})}
 				>
 					{toolPane
-						? `New terminal pane ${side === "bottom" ? "to the right" : "below"}${paneBelowAvailable ? "" : ` — limited to ${limit}`}`
-						: "New terminal"}
+						? paneBelowAvailable
+							? newTerminalPaneLabel
+							: t("workbench.menu.unavailable", {
+									label: newTerminalPaneLabel,
+									reason: t("workbench.tab.limitedTo", { limit }),
+								})
+						: t("workbench.group.newTerminal")}
 				</DropdownMenuItem>
 				{missing.length > 0 ? <DropdownMenuSeparator /> : null}
 				{missing.map((tool) => (
@@ -206,7 +248,7 @@ export function SideGroupMenu({
 						data-testid={`show-tool-${tool}`}
 						onSelect={() => onRevealTool(tool)}
 					>
-						Show {toolTab(tool).name}
+						{t("workbench.tab.showTool", { name: layoutTabName(t, toolTab(tool)) })}
 					</DropdownMenuItem>
 				))}
 			</DropdownMenuContent>
@@ -229,6 +271,7 @@ export function AuxiliaryGroupHeader({
 	onFold: () => void;
 	trailing?: ReactNode;
 }) {
+	const t = useT();
 	const location: LayoutGroupLocation = { area: region, groupId: group.id };
 	const terminals = group.tabs.filter((tab): tab is LayoutTerminalTab => tab.kind === "terminal");
 	const dropEnabled =
@@ -241,7 +284,7 @@ export function AuxiliaryGroupHeader({
 		data: { target: { kind: "group", location } satisfies DropTarget },
 		disabled: !dropEnabled,
 	});
-	const removal = removeLayoutGroup(shared.document, location);
+	const removal = removeLayoutGroup(t, shared.document, location);
 	const actions = (
 		<>
 			<SideGroupMenu
@@ -254,11 +297,13 @@ export function AuxiliaryGroupHeader({
 			/>
 			{trailing}
 			{group.tabs.length === 0 ? (
-				<IconTooltip label={isLayoutUnavailable(removal) ? removal.reason : "Remove group"}>
+				<IconTooltip
+					label={isLayoutUnavailable(removal) ? removal.reason : t("workbench.group.remove")}
+				>
 					<button
 						type="button"
 						data-testid="remove-layout-group"
-						aria-label="Remove group"
+						aria-label={t("workbench.group.remove")}
 						disabled={isLayoutUnavailable(removal)}
 						onClick={() => {
 							if (!isLayoutUnavailable(removal)) shared.onApply(removal);
@@ -306,11 +351,17 @@ export function AuxiliaryGroupHeader({
 	return (
 		<AuxiliaryPaneHeader
 			ref={setNodeRef}
-			title={selected ? layoutTabName(selected) : region === "bottom" ? "Terminal" : "Tools"}
+			title={
+				selected
+					? layoutTabName(t, selected)
+					: region === "bottom"
+						? t("workbench.rail.terminal")
+						: t("workbench.pane.tools")
+			}
 			{...(selected?.kind === "tool" ? { dragTab: selected } : {})}
 			actions={actions}
 			data-group-id={group.id}
-			data-drop-label={dropEnabled ? `Join ${region} group` : undefined}
+			data-drop-label={dropEnabled ? t(JOIN_GROUP_LABELS[region]) : undefined}
 			data-drop-active={isOver || undefined}
 			data-drop-hint={(dropEnabled && !isOver) || undefined}
 			className="data-[drop-hint]:bg-primary-subtle data-[drop-active]:bg-primary-soft"
@@ -332,6 +383,7 @@ export const SideStack = memo(function SideStack({
 	renderToolBody: WorkbenchProps["renderToolBody"];
 	onCommit: WorkbenchProps["onCommit"];
 }) {
+	const t = useT();
 	const [sizeRef, size] = useElementSize();
 	const visible = useMemo(
 		() => visibleAuxiliaryGroups(shared.document, side),
@@ -360,7 +412,7 @@ export const SideStack = memo(function SideStack({
 	return (
 		<aside
 			ref={sizeRef}
-			aria-label={`${side} workbench`}
+			aria-label={t(WORKBENCH_LABELS[side])}
 			data-testid={side === "right" ? "right-stack" : "left-stack"}
 			className="relative h-full min-h-0 overflow-hidden"
 		>

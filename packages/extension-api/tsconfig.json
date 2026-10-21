@@ -3,7 +3,8 @@
 	"compilerOptions": {
 		"noEmit": true,
 		"lib": ["ES2023"],
-		"types": ["bun"]
+		"types": ["bun"],
+		"jsx": "react-jsx"
 	},
 	"include": ["src"]
 }

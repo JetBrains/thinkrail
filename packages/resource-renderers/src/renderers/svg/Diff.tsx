@@ -1,3 +1,4 @@
+import { type Translator, useT } from "@thinkrail/locales/react";
 import { useMemo } from "react";
 import type { ResourceContent, ResourceDiffProps } from "../../registry";
 import { diffContentStamp } from "../reviewComposerState";
@@ -25,14 +26,17 @@ function SvgContent({
 	tokens: SvgThemeTokens;
 	path: string;
 }) {
+	const t = useT();
 	const document = useMemo(() => buildSvgDocument(text, tokens), [text, tokens]);
-	return <SvgFrame title={`Vector diff of ${path}`} document={document} />;
+	return <SvgFrame title={t("viewer.svg.diffTitle", { path })} document={document} />;
 }
 
-function caption(label: string, text: string | null): string {
-	if (text === null) return `${label}: No image`;
+function caption(t: Translator, side: "old" | "new", text: string | null): string {
+	const key = side === "old" ? "viewer.side.oldCaption" : "viewer.side.newCaption";
+	if (text === null) return t(key, { detail: t("viewer.image.noImage") });
 	const size = svgIntrinsicSize(text);
-	return `${label}: ${size ? `${size.width} × ${size.height}` : "Flexible size"} · ${svgByteLength(text)} B`;
+	const dimensions = size ? `${size.width} × ${size.height}` : t("viewer.svg.flexibleSize");
+	return t(key, { detail: `${dimensions} · ${svgByteLength(text)} B` });
 }
 
 export default function SvgDiff({
@@ -45,6 +49,7 @@ export default function SvgDiff({
 	viewState,
 	onViewState,
 }: ResourceDiffProps) {
+	const t = useT();
 	const tokens = useSvgTheme(true);
 	const originalText = textOf(original);
 	const modifiedText = textOf(modified);
@@ -57,7 +62,7 @@ export default function SvgDiff({
 			originalText === null ? null : (
 				<SvgContent text={originalText} tokens={tokens} path={originalResource.path} />
 			),
-		caption: caption("Old", originalText),
+		caption: caption(t, "old", originalText),
 		intrinsicSize: originalSize,
 		review: review?.base,
 	};
@@ -67,7 +72,7 @@ export default function SvgDiff({
 			modifiedText === null ? null : (
 				<SvgContent text={modifiedText} tokens={tokens} path={resource.path} />
 			),
-		caption: caption("New", modifiedText),
+		caption: caption(t, "new", modifiedText),
 		intrinsicSize: modifiedSize,
 		review: review?.worktree,
 	};
@@ -75,7 +80,8 @@ export default function SvgDiff({
 		<VisualDiff
 			prefix="svg"
 			noun="vector"
-			regionLabel="image region"
+			selectionKey="image region"
+			commentLabel={t("viewer.region.commentOnImageRegion")}
 			original={originalSide}
 			modified={modifiedSide}
 			contentStamp={diffContentStamp(original, modified)}

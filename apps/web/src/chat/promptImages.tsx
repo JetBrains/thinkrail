@@ -1,5 +1,6 @@
 import { RiCloseLine as X } from "@remixicon/react";
 import { REQUEST_IMAGE_BASE64_BUDGET } from "@thinkrail/contracts";
+import { t as translate, useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type ClipboardEvent,
@@ -85,12 +86,12 @@ export function usePromptImages(): PromptImagesController {
 					const additions: PromptImage[] = [];
 					const nextErrors: PromptImageError[] = [];
 					settled.forEach((result, i) => {
-						const name = picked[i]?.name || "image";
+						const name = picked[i]?.name || translate("chat.promptImages.fallbackName");
 						if (result.status !== "fulfilled" || result.value === null) {
 							nextErrors.push({
 								id: crypto.randomUUID(),
 								name,
-								reason: "unsupported image format",
+								reason: translate("chat.promptImages.unsupported"),
 							});
 							return;
 						}
@@ -99,7 +100,7 @@ export function usePromptImages(): PromptImagesController {
 							nextErrors.push({
 								id: crypto.randomUUID(),
 								name,
-								reason: "message image limit reached",
+								reason: translate("chat.promptImages.limitReached"),
 							});
 							return;
 						}
@@ -166,6 +167,7 @@ export function PromptImageChips({
 	testId?: string;
 	className?: string;
 }) {
+	const t = useT();
 	const { images, pending, errors, removeImage, dismissError } = controller;
 	if (!leading && images.length === 0 && pending === 0 && errors.length === 0) return null;
 	return (
@@ -177,13 +179,13 @@ export function PromptImageChips({
 					data-testid="composer-image-error"
 					tone="error"
 					icon={false}
-					title={`Couldn't attach ${err.name} — ${err.reason}`}
-					label={`Couldn't attach ${err.name}`}
+					title={t("chat.promptImages.attachFailedDetail", { name: err.name, reason: err.reason })}
+					label={t("chat.promptImages.attachFailed", { name: err.name })}
 					meta={`— ${err.reason}`}
 					trailing={
 						<button
 							type="button"
-							aria-label="Dismiss"
+							aria-label={t("common.dismiss")}
 							onClick={() => dismissError(err.id)}
 							className="hover:opacity-80"
 						>
@@ -205,7 +207,7 @@ export function PromptImageChips({
 					trailing={
 						<button
 							type="button"
-							aria-label="Remove image"
+							aria-label={t("chat.promptImages.remove")}
 							onClick={() => removeImage(img.id)}
 							className="text-text-muted hover:text-text-default"
 						>
@@ -219,7 +221,7 @@ export function PromptImageChips({
 					data-testid="composer-image-pending"
 					label={
 						<span className="text-text-muted">
-							{pending === 1 ? "Attaching…" : `Attaching ${pending}…`}
+							{t("chat.promptImages.attaching", { count: pending })}
 						</span>
 					}
 				/>

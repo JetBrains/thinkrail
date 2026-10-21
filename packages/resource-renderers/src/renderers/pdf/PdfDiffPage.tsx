@@ -1,3 +1,4 @@
+import { useT } from "@thinkrail/locales/react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SurfaceReview } from "../../registry";
@@ -52,6 +53,7 @@ export function PdfDiffPage({
 	onRendered: (side: DiffSide, page: number, rendered: boolean) => void;
 	registerElement: (page: number, element: HTMLElement | null) => void;
 }) {
+	const t = useT();
 	const rootRef = useRef<HTMLElement | null>(null);
 	const [originalBitmap, setOriginalBitmap] = useState<Bitmap | null>(null);
 	const [modifiedBitmap, setModifiedBitmap] = useState<Bitmap | null>(null);
@@ -144,9 +146,11 @@ export function PdfDiffPage({
 	const originalSide: VisualDiffSide = {
 		present: originalPresent,
 		content: originalBitmap ? (
-			<BitmapImage bitmap={originalBitmap} title={`Original PDF page ${page}`} />
+			<BitmapImage bitmap={originalBitmap} title={t("viewer.pdf.originalPage", { page })} />
 		) : null,
-		caption: originalPresent ? `Old: page ${page}` : "Old: No page",
+		caption: t("viewer.side.oldCaption", {
+			detail: originalPresent ? t("viewer.pdf.pageNumber", { page }) : t("viewer.pdf.noPage"),
+		}),
 		intrinsicSize: originalBitmap?.size ?? null,
 		review: pageBaseReview,
 		draftForRegion: (region) => pdfRegionDraft(region, page),
@@ -154,9 +158,11 @@ export function PdfDiffPage({
 	const modifiedSide: VisualDiffSide = {
 		present: modifiedPresent,
 		content: modifiedBitmap ? (
-			<BitmapImage bitmap={modifiedBitmap} title={`Modified PDF page ${page}`} />
+			<BitmapImage bitmap={modifiedBitmap} title={t("viewer.pdf.modifiedPage", { page })} />
 		) : null,
-		caption: modifiedPresent ? `New: page ${page}` : "New: No page",
+		caption: t("viewer.side.newCaption", {
+			detail: modifiedPresent ? t("viewer.pdf.pageNumber", { page }) : t("viewer.pdf.noPage"),
+		}),
 		intrinsicSize: modifiedBitmap?.size ?? null,
 		review: pageWorktreeReview,
 		draftForRegion: (region) => pdfRegionDraft(region, page),
@@ -172,17 +178,18 @@ export function PdfDiffPage({
 			data-page={page}
 			className="flex min-h-[680px] flex-col gap-4"
 		>
-			<span className="tr-text-metadata text-text-muted">Page {page}</span>
+			<span className="tr-text-metadata text-text-muted">{t("viewer.pdf.page", { page })}</span>
 			{active ? (
 				<VisualDiff
 					prefix="image"
 					noun="page"
-					regionLabel={`page ${page} region`}
+					selectionKey={`page ${page} region`}
+					commentLabel={t("viewer.region.commentOnPageRegion", { page })}
 					original={originalSide}
 					modified={modifiedSide}
 					contentStamp={pdfPageContentStamp(stamp, page)}
 					initialMode="2-up"
-					emptyLabel="No page"
+					emptyLabel={t("viewer.pdf.noPage")}
 				/>
 			) : null}
 		</section>

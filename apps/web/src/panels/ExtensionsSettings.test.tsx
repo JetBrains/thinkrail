@@ -24,10 +24,15 @@ test("lists an extension with its title, description, tool chip and an enabled s
 	const markup = render([VISUALIZE]);
 	expect(markup).toContain('data-testid="extension-row-visualize"');
 	expect(markup).toContain("Visualize");
-	expect(markup).toContain("Lets the agent draw diagrams.");
+	expect(markup).toContain("Lets the agent draw Mermaid diagrams");
 	expect(markup).toContain('data-testid="extension-tool-visualize"');
 	expect(markup).toContain('data-testid="extension-toggle-visualize" data-active="true"');
 	expect(markup).toContain('aria-label="Enable Visualize"');
+});
+
+test("a bundled extension's description comes from the catalog; any other shows its own", () => {
+	const other = { ...VISUALIZE, name: "third-party", title: "Third party" };
+	expect(render([other])).toContain("Lets the agent draw diagrams.");
 });
 
 test("the switch follows the synced disabled list, not the catalog's snapshot", () => {

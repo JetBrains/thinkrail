@@ -22,6 +22,7 @@ import {
 	isBackgroundCommandCompletionMessage,
 	isTodoReviewFixMessage,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
+	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	MCP_TOOL_GRANTS_PROTOCOL_VERSION,
 	MODEL_PICKER_PROTOCOL_VERSION,
@@ -206,6 +207,14 @@ test("workspace read state is pinned to v86", () => {
 	expect(WS_METHODS.workspaceMarkRead).toBe("workspace.markRead");
 });
 
+test("local language files and the locale setting are pinned to v89", () => {
+	expect(PROTOCOL_VERSION).toBe(89);
+	expect(LOCALES_PROTOCOL_VERSION).toBe(89);
+	expect(WS_METHODS.localesList).toBe("locales.list");
+	expect(WS_METHODS.localesReveal).toBe("locales.reveal");
+	expect(WS_CHANNELS.localesChanged).toBe("locales.changed");
+});
+
 test("project rename is pinned to v85", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_RENAME_PROTOCOL_VERSION);
 	expect(PROJECT_RENAME_PROTOCOL_VERSION).toBe(85);
@@ -222,7 +231,7 @@ test("branch status, review-free push, and PR description sources are pinned to 
 });
 
 test("review details and the GitHub review actions are pinned to v88", () => {
-	expect(PROTOCOL_VERSION).toBe(88);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(REVIEW_ACTIONS_PROTOCOL_VERSION);
 	expect(REVIEW_ACTIONS_PROTOCOL_VERSION).toBe(88);
 	expect(WS_METHODS.prReady).toBe("pr.ready");
 	expect(WS_METHODS.prMerge).toBe("pr.merge");

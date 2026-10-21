@@ -101,7 +101,15 @@ macOS receives the conventional application, Edit, and Window role menus. Window
 Edit role menu. Linux skips registration because Electrobun 2.0.1 does not support application menus
 there; WebKitGTK keeps its renderer-native editing behavior. macOS Command-H, Option-Command-H, and Command-M carry explicit
 accelerators because role items get no default shortcut. Settings… (Command-comma, after About), Quit, and Close
-are custom-action items, not roles; see Confirmed quit and close. The policy is platform-pure and the packaged
+are custom-action items, not roles; see Confirmed quit and close. Their labels, plus the Edit and Window menu
+titles, are the `DESKTOP_MENU_KEYS` of [[module-locales]]; the native error dialogs (startup failed,
+restart-to-update failed) use its `DESKTOP_DIALOG_KEYS`. The web pushes the active language's labels for both
+through the preload's `__THINKRAIL_NATIVE_MENU__` bridge (`menuLabelsChanged`); the main process sanitizes
+each label (non-blank, ≤ 80 chars for menu items and ≤ 200 for dialog text, else English), reinstalls the
+menu, and — outside the neutral e2e host — saves them to `<userData>/native-labels.json`. The next start
+installs the menu with the saved labels and a startup failure, which can happen before the web loads,
+reads its dialog text from that file (English on first run or any read error); the desktop never resolves
+a language itself. Role items keep OS-provided labels. The policy is platform-pure and the packaged
 ready seam reports whether registration ran, so unit tests pin menu composition while expanded-app smoke
 pins production wiring.
 

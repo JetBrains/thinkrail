@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import {
+	DEFAULT_WORKSPACE_NAME,
 	type DiffStats,
 	type ExistingWorktreeCandidate,
 	isSubagentMaxConcurrent,
@@ -346,7 +347,7 @@ function ensureDefaultWorkspace(project: Project): Workspace {
 		id: randomUUID(),
 		projectId: project.id,
 		kind: "default",
-		name: "Default",
+		name: DEFAULT_WORKSPACE_NAME,
 		branch,
 		worktreePath: project.path,
 		baseBranch,

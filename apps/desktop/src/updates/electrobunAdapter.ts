@@ -1,4 +1,5 @@
 import { Updater, Utils } from "electrobun/main";
+import type { DesktopDialogLabels } from "../nativeLabels";
 import {
 	createNativeUpdateController,
 	type NativeUpdateController,
@@ -27,6 +28,7 @@ const electrobunUpdater: NativeUpdaterDependency = {
 
 export function createElectrobunQuitCoordinator(
 	shutdown: () => Promise<void>,
+	dialogLabels: () => DesktopDialogLabels,
 ): DesktopQuitCoordinator {
 	return createDesktopQuitCoordinator({
 		shutdown,
@@ -36,12 +38,13 @@ export function createElectrobunQuitCoordinator(
 		applyUpdate: () => Updater.applyUpdate(),
 		getUpdateError: () => Updater.updateInfo().error,
 		reportUpdateFailure: async (message) => {
+			const labels = dialogLabels();
 			await Utils.showMessageBox({
 				type: "error",
-				title: "ThinkRail could not restart",
-				message: "ThinkRail could not restart to install the update",
+				title: labels["desktop.dialog.updateRestartFailedTitle"],
+				message: labels["desktop.dialog.updateRestartFailed"],
 				detail: message,
-				buttons: ["Quit"],
+				buttons: [labels["desktop.dialog.quit"]],
 			});
 		},
 		reportLifecycleError: (error) => {

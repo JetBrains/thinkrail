@@ -864,3 +864,20 @@ test("the settle idle window defaults to 7 days, accepts null for never, and rej
 	resetConfigCache();
 	expect(getConfig().settleIdleDays).toBeNull();
 });
+
+test("locale defaults to system, keeps an unavailable tag, and rejects non-canonical values", () => {
+	expect(DEFAULT_CONFIG.locale).toBe("system");
+	writeFileSync(join(dataDir, "config.json"), JSON.stringify({ locale: 42 }));
+	resetConfigCache();
+	expect(getConfig().locale).toBe("system");
+
+	const before = getConfig();
+	expect(() => updateConfig({ locale: "pt-br" })).toThrow("locale must be");
+	expect(() => updateConfig({ locale: "not a tag" })).toThrow("locale must be");
+	expect(getConfig()).toEqual(before);
+
+	expect(updateConfig({ locale: "pt-BR" }).locale).toBe("pt-BR");
+	resetConfigCache();
+	expect(getConfig().locale).toBe("pt-BR");
+	expect(updateConfig({ locale: "system" }).locale).toBe("system");
+});

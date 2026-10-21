@@ -4,6 +4,7 @@ import {
 	RiTerminalBoxLine as Terminal,
 } from "@remixicon/react";
 import type { OpenBranchReview, OpenPrResult, PrBodySource, Workspace } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -81,15 +82,8 @@ export interface ShipRunner {
 	dialogs: ReactNode;
 }
 
-function mergedInto(base: string | null): string {
-	return base ? `Merged into ${base}` : "Merged";
-}
-
-function commits(count: number): string {
-	return `${count} commit${count === 1 ? "" : "s"}`;
-}
-
 export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
+	const t = useT();
 	const { workspace, sessionId, openReview, noteOpenReview, refresh } = options;
 	const workspaceId = workspace?.id ?? "";
 	const branch = workspace?.branch ?? "";
@@ -118,10 +112,14 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 				ok
 					? {
 							variant: "success",
-							title: "Command copied",
-							message: "Run it in a terminal to integrate the remote changes, then push.",
+							title: t("panels.ship.copied.title"),
+							message: t("panels.ship.copied.message"),
 						}
-					: { variant: "error", title: "Copy failed", message: "Couldn't write to the clipboard." },
+					: {
+							variant: "error",
+							title: t("panels.ship.copyFailed.title"),
+							message: t("panels.ship.copyFailed.message"),
+						},
 			),
 		);
 	};
@@ -141,7 +139,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 				(err) => {
 					pushToast({
 						variant: "error",
-						title: "Couldn't load that description",
+						title: t("panels.ship.sourceFailed"),
 						message: errorText(err),
 					});
 					return null;
@@ -159,8 +157,8 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 						if (body === null) {
 							pushToast({
 								variant: "info",
-								title: "No description drafted",
-								message: "No model answered — the description was left as it was.",
+								title: t("panels.ship.noDraft.title"),
+								message: t("panels.ship.noDraft.message"),
 							});
 						}
 						return body;
@@ -168,7 +166,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 					(err) => {
 						pushToast({
 							variant: "error",
-							title: "Couldn't draft a description",
+							title: t("panels.ship.draftFailed"),
 							message: errorText(err),
 						});
 						return null;
@@ -180,8 +178,8 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 		if (dirtyFiles === 0) return;
 		pushToast({
 			variant: "info",
-			title: "Uncommitted changes",
-			message: `${dirtyFiles} uncommitted ${dirtyFiles === 1 ? "file" : "files"} stayed local.`,
+			title: t("panels.ship.dirty.title"),
+			message: t("panels.ship.dirty.message", { count: dirtyFiles }),
 		});
 	};
 
@@ -204,23 +202,33 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 			window.open(result.compareUrl, "_blank", "noopener,noreferrer");
 		}
 		const label = result.review ? openReviewLabel(result.review) : null;
+		const refreshed = result.bodyRefreshed !== false;
 		const toastByAction = {
-			created: { title: "PR opened", message: `${label ?? "The PR"} is open.` },
+			created: {
+				title: t("panels.ship.pr.openedTitle"),
+				message: label
+					? t("panels.ship.pr.openedNamed", { review: label })
+					: t("panels.ship.pr.opened"),
+			},
 			updated: {
-				title: "PR updated",
-				message: `Pushed new commits to ${label ?? "the open PR"}${result.bodyRefreshed === false ? " — refreshing its description failed." : " and refreshed its description."}`,
+				title: t("panels.ship.pr.updatedTitle"),
+				message: label
+					? refreshed
+						? t("panels.ship.pr.updatedNamed", { review: label })
+						: t("panels.ship.pr.updatedNamedRefreshFailed", { review: label })
+					: refreshed
+						? t("panels.ship.pr.updated")
+						: t("panels.ship.pr.updatedRefreshFailed"),
 			},
 			pushed: {
-				title: "Branch pushed",
-				message:
-					"The branch is on origin. The remote isn't GitHub — open the review on your forge.",
+				title: t("panels.ship.pr.pushedTitle"),
+				message: t("panels.ship.pr.pushedMessage"),
 			},
 			compare: {
-				title: "Branch pushed",
-				message:
-					"The review page opened with the description prefilled — finish creating it there.",
+				title: t("panels.ship.pr.pushedTitle"),
+				message: t("panels.ship.pr.compareMessage"),
 			},
-		} as const;
+		};
 		pushToast({ variant: "success", ...toastByAction[result.action] });
 	};
 
@@ -255,7 +263,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 			)
 			.then(
 				(result) => onPrOpened(submit, result),
-				(err) => onPushFailed("Open PR failed", err, { kind: "pr", submit }),
+				(err) => onPushFailed(t("panels.ship.pr.openFailed"), err, { kind: "pr", submit }),
 			)
 			.finally(() => setSubmitting(false));
 	};
@@ -302,7 +310,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 				(err) => {
 					pushToast({
 						variant: "error",
-						title: "Couldn't prepare the PR",
+						title: t("panels.ship.pr.prepareFailed"),
 						message: errorText(err),
 					});
 				},
@@ -327,15 +335,16 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 					refresh();
 					pushToast({
 						variant: "success",
-						title: ahead > 0 ? "Pushed" : "Branch published",
+						title:
+							ahead > 0 ? t("panels.ship.push.pushedTitle") : t("panels.ship.push.publishedTitle"),
 						message:
 							ahead > 0
-								? `Pushed ${commits(ahead)} to origin/${target.branch}.`
-								: `${target.branch} is on origin.`,
+								? t("panels.ship.push.pushedMessage", { count: ahead, branch: target.branch })
+								: t("panels.ship.push.publishedMessage", { branch: target.branch }),
 					});
 					toastDirty(result.dirtyFiles);
 				},
-				(err) => onPushFailed("Push failed", err, { kind: "push", target }),
+				(err) => onPushFailed(t("panels.ship.push.failed"), err, { kind: "push", target }),
 			)
 			.finally(() => setPending(null));
 	};
@@ -403,28 +412,45 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 					if (!result.merged) {
 						pushToast({
 							variant: "info",
-							title: `Queued PR #${state.number}`,
-							message: `GitHub merges it${state.base ? ` into ${state.base}` : ""} once the queue's requirements pass; origin/${state.branch} stays until then.`,
+							title: t("panels.ship.merge.queuedTitle", { number: state.number }),
+							message: state.base
+								? t("panels.ship.merge.queuedInto", { base: state.base, branch: state.branch })
+								: t("panels.ship.merge.queued", { branch: state.branch }),
 						});
 						return;
 					}
 					if (submit.deleteBranch && !result.branchDeleted) {
 						pushToast({
 							variant: "info",
-							title: `Merged PR #${state.number}`,
-							message: `origin/${state.branch} is still there: ${result.deleteError ?? "deleting it failed."}`,
+							title: t("panels.ship.merge.mergedTitle", { number: state.number }),
+							message: t("panels.ship.merge.branchKept", {
+								branch: state.branch,
+								error: result.deleteError ?? t("panels.ship.merge.deleteFailed"),
+							}),
 						});
 						return;
 					}
 					pushToast({
 						variant: "success",
-						title: `Merged PR #${state.number}`,
-						message: result.branchDeleted
-							? `${mergedInto(state.base)} and deleted origin/${state.branch}.`
-							: `${mergedInto(state.base)}.`,
+						title: t("panels.ship.merge.mergedTitle", { number: state.number }),
+						message: state.base
+							? result.branchDeleted
+								? t("panels.ship.merge.mergedIntoDeleted", {
+										base: state.base,
+										branch: state.branch,
+									})
+								: t("panels.ship.merge.mergedInto", { base: state.base })
+							: result.branchDeleted
+								? t("panels.ship.merge.mergedDeleted", { branch: state.branch })
+								: t("panels.ship.merge.merged"),
 					});
 				},
-				(err) => pushToast({ variant: "error", title: "Merge failed", message: errorText(err) }),
+				(err) =>
+					pushToast({
+						variant: "error",
+						title: t("panels.ship.merge.failed"),
+						message: errorText(err),
+					}),
 			)
 			.finally(() => {
 				setPending(null);
@@ -444,12 +470,15 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 				() => {
 					pushToast({
 						variant: "success",
-						title: "Remote branch deleted",
-						message: `origin/${target} is gone; the local branch stays.`,
+						title: t("panels.ship.deleteRemote.doneTitle"),
+						message: t("panels.ship.deleteRemote.doneMessage", { branch: target }),
 					});
 				},
 				(err) =>
-					onPushFailed("Couldn't delete the branch", err, { kind: "deleteRemote", branch: target }),
+					onPushFailed(t("panels.ship.deleteRemote.failed"), err, {
+						kind: "deleteRemote",
+						branch: target,
+					}),
 			)
 			.finally(() => {
 				setPending(null);
@@ -459,7 +488,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 
 	const askAgent = (text: string): void => {
 		void promptWorkspaceChat(workspaceId, sessionId, text).catch((err) =>
-			pushToast({ variant: "error", title: "Couldn't ask the agent", message: errorText(err) }),
+			pushToast({ variant: "error", title: t("panels.ship.askFailed"), message: errorText(err) }),
 		);
 	};
 
@@ -494,15 +523,15 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 				if (review) askAgent(fixChecksPrompt(review, branch, review.details?.base ?? base));
 				return;
 			case "ready":
-				reviewAction("ready", "Couldn't mark it ready", (label) => ({
-					title: "Ready for review",
-					message: `${label} is no longer a draft.`,
+				reviewAction("ready", t("panels.ship.ready.failed"), (label) => ({
+					title: t("panels.ship.ready.doneTitle"),
+					message: t("panels.ship.ready.doneMessage", { review: label }),
 				}));
 				return;
 			case "reopen":
-				reviewAction("reopen", "Couldn't reopen it", (label) => ({
-					title: "Reopened",
-					message: `${label} is open again.`,
+				reviewAction("reopen", t("panels.ship.reopen.failed"), (label) => ({
+					title: t("panels.ship.reopen.doneTitle"),
+					message: t("panels.ship.reopen.doneMessage", { review: label }),
 				}));
 				return;
 			case "mergePr":
@@ -564,9 +593,16 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 				onOpenChange={(open) => {
 					if (!open) setConfirmPush(null);
 				}}
-				title={`Push to ${confirmPush}?`}
-				description={`This pushes ${ahead > 0 ? commits(ahead) : "the branch"} straight to origin/${confirmPush}, the shared branch — no pull request reviews them first.`}
-				confirmLabel={`Push to ${confirmPush}`}
+				title={t("panels.ship.confirmPush.title", { branch: confirmPush })}
+				description={
+					ahead > 0
+						? t("panels.ship.confirmPush.descriptionCommits", {
+								count: ahead,
+								branch: confirmPush,
+							})
+						: t("panels.ship.confirmPush.description", { branch: confirmPush })
+				}
+				confirmLabel={t("panels.ship.confirmPush.confirm", { branch: confirmPush })}
 				confirmTestId="ship-confirm-base-push"
 				onConfirm={() => {
 					if (confirmPush !== null) void push({ branch: confirmPush, confirmBase: true });
@@ -586,9 +622,11 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 				onOpenChange={(open) => {
 					if (!open) setConfirmDelete(null);
 				}}
-				title={`Delete origin/${confirmDelete ?? branch}?`}
-				description={`This deletes the branch on origin. The workspace keeps its local ${confirmDelete ?? branch} branch and every commit on it.`}
-				confirmLabel="Delete remote branch"
+				title={t("panels.ship.confirmDelete.title", { branch: confirmDelete ?? branch })}
+				description={t("panels.ship.confirmDelete.description", {
+					branch: confirmDelete ?? branch,
+				})}
+				confirmLabel={t("panels.ship.confirmDelete.confirm")}
 				destructive
 				confirmTestId="ship-confirm-delete-remote"
 				onConfirm={() => {
@@ -599,11 +637,8 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 			<Dialog open={syncOpen} onOpenChange={setSyncOpen}>
 				<DialogContent data-testid="ship-sync-dialog" className="max-w-[32rem]">
 					<DialogHeader>
-						<DialogTitle>Branch diverged from origin</DialogTitle>
-						<DialogDescription>
-							origin/{branch} has commits this checkout lacks, so a plain push can't land, and
-							force-pushing would drop them. Integrate the remote changes first, then push.
-						</DialogDescription>
+						<DialogTitle>{t("panels.ship.sync.title")}</DialogTitle>
+						<DialogDescription>{t("panels.ship.sync.description", { branch })}</DialogDescription>
 					</DialogHeader>
 					{integrateCommand ? (
 						<code className="rounded-sm border border-border-default bg-container-content-bg px-8 py-4 tr-code-text text-text-default">
@@ -612,8 +647,8 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 					) : (
 						<p className="m-0 tr-text-ui text-text-muted">
 							{options.status?.pushesElsewhere
-								? `Origin pushes to a different repository than it fetches from, so pulling from origin would integrate the wrong history — integrate the push repository's ${branch} in a terminal.`
-								: `Integrate origin/${branch} in a terminal — this branch name can't be quoted safely for every shell.`}
+								? t("panels.ship.sync.pushesElsewhere", { branch })
+								: t("panels.ship.sync.manual", { branch })}
 						</p>
 					)}
 					<DialogFooter>
@@ -621,7 +656,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 							<>
 								<Button variant="ghost" data-testid="ship-sync-copy" onClick={copyIntegrateCommand}>
 									<Copy className="size-14" />
-									Copy command
+									{t("panels.ship.sync.copy")}
 								</Button>
 								<Button
 									variant="outline"
@@ -629,12 +664,12 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 									onClick={() => runSetupCommand(integrateCommand)}
 								>
 									<Terminal className="size-14" />
-									Run in terminal
+									{t("panels.ship.sync.run")}
 								</Button>
 							</>
 						) : (
 							<Button variant="ghost" onClick={() => setSyncOpen(false)}>
-								Close
+								{t("common.close")}
 							</Button>
 						)}
 						<Button
@@ -645,7 +680,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 							}}
 						>
 							<Robot className="size-14" />
-							Ask agent to integrate
+							{t("panels.ship.sync.askAgent")}
 						</Button>
 					</DialogFooter>
 				</DialogContent>

@@ -1,4 +1,5 @@
 import type { FileNode } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { useMemo, useRef, useState } from "react";
 import { statusLetter } from "../chat/planView";
@@ -23,6 +24,7 @@ export function FileTree({
 	marks,
 	...focus
 }: TreeFocus & { workspaceId: string; marks: ChangeMarks }) {
+	const t = useT();
 	const [nodes, setNodes] = useState<FileNode[] | null>(null);
 	const expanded = useAppStore((s) => selectFilesTreeView(s, workspaceId).expanded);
 	const expandedPaths = useMemo(() => new Set(expanded), [expanded]);
@@ -42,7 +44,9 @@ export function FileTree({
 
 	if (nodes === null) return <LoadingRegion rows={8} className="px-4 py-4" />;
 	if (nodes.length === 0)
-		return <p className="px-4 py-4 tr-text-metadata text-text-muted">Empty</p>;
+		return (
+			<p className="px-4 py-4 tr-text-metadata text-text-muted">{t("panels.fileTree.empty")}</p>
+		);
 	return (
 		<ul className="flex flex-col motion-safe:animate-reveal">
 			{nodes.map((node) => (

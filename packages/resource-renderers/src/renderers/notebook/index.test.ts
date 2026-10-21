@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { HTML_PREVIEW_CSP } from "../html/htmlDocument";
@@ -11,9 +12,10 @@ import {
 } from "./outputDocument";
 
 test("notebook renderer registration declares cell anchors and copy support", () => {
+	expect(currentTranslator()(notebookRenderer.labelKey)).toBe("Notebook");
 	expect(notebookRenderer).toMatchObject({
 		id: "thinkrail/notebook",
-		label: "Notebook",
+		labelKey: "viewer.renderer.notebook",
 		match: { glob: ["*.ipynb"], text: true },
 		rank: 130,
 		capabilities: {

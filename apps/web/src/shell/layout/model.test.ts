@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { applyLocale, currentTranslator } from "@thinkrail/locales/react";
 import type { LayoutAttention } from "../../lib";
 import {
 	adoptToolSelections,
@@ -27,8 +28,8 @@ import {
 	resizeSideGroups,
 	resizeSideRegion,
 	revealTool,
-	SEPARATE_PANES_REASON,
 	selectTab,
+	separatePanesReason,
 	setAuxiliaryGroupFolded,
 	setBottomAlignment,
 	setSideGroupFolded,
@@ -116,10 +117,18 @@ describe("workspace layout model", () => {
 			tabKey: `t${n}`,
 			name: `Terminal ${n}`,
 		});
-		expect(describeLayoutGroup([])).toBe("(empty)");
-		expect(describeLayoutGroup([toolTab("plan"), toolTab("review")])).toBe("(TODO List, Review)");
+		expect(describeLayoutGroup(currentTranslator(), [])).toBe("(empty)");
+		expect(describeLayoutGroup(currentTranslator(), [toolTab("plan"), toolTab("review")])).toBe(
+			"(TODO List, Review)",
+		);
 		expect(
-			describeLayoutGroup([terminal(1), terminal(2), terminal(3), terminal(4), terminal(5)]),
+			describeLayoutGroup(currentTranslator(), [
+				terminal(1),
+				terminal(2),
+				terminal(3),
+				terminal(4),
+				terminal(5),
+			]),
 		).toBe("(Terminal 1, Terminal 2, Terminal 3, +2)");
 	});
 
@@ -145,8 +154,52 @@ describe("workspace layout model", () => {
 	test("canonical tool labels override stale persisted display copy", () => {
 		const legacyFiles = { ...toolTab("files"), name: "All files" };
 		expect(toolTab("files").name).toBe("Files");
-		expect(layoutTabName(legacyFiles)).toBe("Files");
-		expect(layoutTabName(file("one"))).toBe("one.ts");
+		expect(layoutTabName(currentTranslator(), legacyFiles)).toBe("Files");
+		expect(layoutTabName(currentTranslator(), file("one"))).toBe("one.ts");
+	});
+
+	test("default chat, terminal, Changes, diff and plan names follow the current language", () => {
+		applyLocale("de", {
+			de: {
+				"store.chatTab.defaultName": "Unterhaltung",
+				"store.terminal.defaultTitle": "Konsole {{index}}",
+				"changes.tab.name": "Änderungen",
+				"chat.todo.planDocName": "Plan: {{title}}",
+			},
+		});
+		try {
+			const t = currentTranslator();
+			const chat = (name: string) => ({ kind: "chat", id: "c", name, sessionId: "s" }) as const;
+			expect(layoutTabName(t, chat(""))).toBe("Unterhaltung");
+			expect(layoutTabName(t, chat("Fix login"))).toBe("Fix login");
+			expect(layoutTabName(t, { kind: "terminal", id: "t", name: "Terminal 2", tabKey: "k" })).toBe(
+				"Konsole 2",
+			);
+			expect(
+				layoutTabName(t, { kind: "changes", id: "x", name: "", scope: { kind: "branch" } }),
+			).toBe("Änderungen");
+			expect(
+				layoutTabName(t, {
+					kind: "diff",
+					id: "d",
+					name: "a.ts",
+					path: "src/a.ts",
+					scope: { kind: "branch" },
+				}),
+			).toBe("a.ts");
+			expect(
+				layoutTabName(t, {
+					kind: "document",
+					id: "p",
+					name: "",
+					documentKind: "todo-plan",
+					sourceId: "s",
+					docPath: "TODO.md",
+				}),
+			).toBe("Plan: Unterhaltung");
+		} finally {
+			applyLocale("en", {});
+		}
 	});
 
 	test("opens one canonical tab and keeps preview promotion one-way", () => {
@@ -236,7 +289,7 @@ describe("workspace layout model", () => {
 		for (const tab of [...source.tabs]) document = closeLayoutTab(document, tab.id).document;
 		expect(collectCenterGroups(document.center)).toHaveLength(4);
 		document = mutation(
-			removeLayoutGroup(document, { area: "center", groupId: source.id }),
+			removeLayoutGroup(currentTranslator(), document, { area: "center", groupId: source.id }),
 		).document;
 		expect(collectCenterGroups(document.center)).toHaveLength(3);
 
@@ -263,7 +316,7 @@ describe("workspace layout model", () => {
 		};
 		let document = baseDocument([file("one"), terminal]);
 		const intoToolPane = moveTabToGroup(document, terminal, { area: "right", groupId: "right-a" });
-		expect(intoToolPane).toEqual({ reason: SEPARATE_PANES_REASON });
+		expect(intoToolPane).toEqual({ reason: separatePanesReason(currentTranslator()) });
 		document = mutation(createAuxiliaryGroup(document, "right", terminal, 1, 6)).document;
 		const terminalPane = document.right.groups[1];
 		if (!terminalPane) throw new Error("Missing terminal pane fixture");
@@ -273,7 +326,7 @@ describe("workspace layout model", () => {
 		});
 		expect(
 			moveTabToGroup(document, toolTab("files"), { area: "right", groupId: terminalPane.id }),
-		).toEqual({ reason: SEPARATE_PANES_REASON });
+		).toEqual({ reason: separatePanesReason(currentTranslator()) });
 		const renamedTerminal = { ...terminal, name: "Build shell" };
 		document = mutation(openCenterTab(document, renamedTerminal, "center-a", "preview")).document;
 		expect(
@@ -566,11 +619,11 @@ describe("workspace layout model", () => {
 		const blocked = createSideGroup(document, "right", toolTab("plan"), 1, 1);
 		expect(isLayoutUnavailable(blocked)).toBe(true);
 		const retainedSource = createSideGroup(document, "right", toolTab("files"), 0, 1);
-		expect(retainedSource).toEqual({ reason: "This region is limited to 1 groups." });
+		expect(retainedSource).toEqual({ reason: "This region is limited to 1 group." });
 
 		let grown = mutation(createSideGroup(document, "right", toolTab("plan"), 1, 2)).document;
 		expect(createSideGroup(grown, "right", toolTab("files"), grown.right.groups.length, 1)).toEqual(
-			{ reason: "This region is limited to 1 groups." },
+			{ reason: "This region is limited to 1 group." },
 		);
 		expect(grown.right.groups).toHaveLength(2);
 		expect(grown.right.groups.map((group) => group.tabs[0]?.id)).toEqual([

@@ -1,4 +1,5 @@
 import type { GitStatus } from "@thinkrail/contracts";
+import { t } from "@thinkrail/locales/react";
 import { useRef, useState } from "react";
 import { selectDiffBaseRef, selectDiffScope, toast, useAppStore } from "../store";
 import { errorText, getTransport, wsErrorCode } from "../transport";
@@ -26,15 +27,13 @@ export function useGitStatus(workspaceId: string) {
 				if (wsErrorCode(failure) === "UNKNOWN_COMMIT") {
 					setDiffScope(workspaceId, { kind: "branch" });
 					toast.info(
-						scope.kind === "turn"
-							? "That agent turn's snapshot is no longer in this repository — showing all changes."
-							: "That commit is no longer in this branch — showing all changes.",
+						scope.kind === "turn" ? t("changes.panel.turnGone") : t("changes.panel.commitGone"),
 					);
 					return;
 				}
 				if (status && !warnedRef.current) {
 					warnedRef.current = true;
-					toast.error(`Could not refresh the changes: ${errorText(failure)}`);
+					toast.error(t("changes.refreshFailed", { error: errorText(failure) }));
 				}
 				setError(errorText(failure));
 			},

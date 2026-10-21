@@ -2,6 +2,7 @@ import {
 	RiArrowDownSLine as ChevronDown,
 	RiArrowRightSLine as ChevronRight,
 } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { type ReactNode, useEffect, useState } from "react";
 import type { ReviewThread } from "../../registry";
@@ -54,6 +55,7 @@ export function JsonTree({
 	renderValue?: ((node: JsonNode, mark: JsonDiffMark | undefined) => ReactNode) | undefined;
 	initiallyExpanded?: boolean | undefined;
 }) {
+	const t = useT();
 	const branch = node.type === "object" || node.type === "array";
 	const [expanded, setExpanded] = useState(initiallyExpanded);
 	const mark = markFor?.(node);
@@ -74,7 +76,7 @@ export function JsonTree({
 						variant="ghost"
 						size="icon"
 						className="size-24 shrink-0"
-						aria-label={expanded ? "Collapse JSON node" : "Expand JSON node"}
+						aria-label={expanded ? t("viewer.json.collapseNode") : t("viewer.json.expandNode")}
 						aria-expanded={expanded}
 						onClick={() => setExpanded((value) => !value)}
 					>
@@ -100,7 +102,7 @@ export function JsonTree({
 							<button
 								key={entry.thread.id}
 								type="button"
-								aria-label={`Show comment ${entry.number}`}
+								aria-label={t("viewer.region.showComment", { number: entry.number })}
 								className="flex size-20 items-center justify-center rounded-full bg-primary tr-text-metadata text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
 								onClick={() => onMarker(entry.thread.id)}
 							>

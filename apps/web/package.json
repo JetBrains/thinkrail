@@ -33,6 +33,7 @@
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/ext-visualize": "workspace:*",
 		"@thinkrail/extension-api": "workspace:*",
+		"@thinkrail/locales": "workspace:*",
 		"@thinkrail/resource-renderers": "workspace:*",
 		"@thinkrail/ui": "workspace:*",
 		"@xterm/addon-clipboard": "0.2.0",

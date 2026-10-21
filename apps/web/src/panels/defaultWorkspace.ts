@@ -1,9 +1,10 @@
 import type { Workspace } from "@thinkrail/contracts";
+import { t } from "@thinkrail/locales/react";
 import { isDefaultWorkspace, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 
 export async function enterDefaultWorkspace(projectId: string): Promise<Workspace | null> {
-	const title = "Couldn't open the project folder";
+	const title = t("panels.defaultWorkspace.openFailed");
 	let workspaces: Workspace[];
 	try {
 		workspaces = await getTransport().request("workspace.list", { projectId });
@@ -13,7 +14,7 @@ export async function enterDefaultWorkspace(projectId: string): Promise<Workspac
 	}
 	const def = workspaces.find(isDefaultWorkspace);
 	if (!def) {
-		toast.error("This host has no Default workspace for this project.", title);
+		toast.error(t("panels.defaultWorkspace.missing"), title);
 		return null;
 	}
 	const store = useAppStore.getState();

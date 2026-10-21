@@ -1,13 +1,14 @@
 import type { McpServerEntryInput, McpServerScope } from "@thinkrail/contracts";
+import type { MessageKey } from "@thinkrail/locales";
 
 export interface McpPreset {
 	id: string;
 	name: string;
-	title: string;
-	description: string;
+	title: MessageKey;
+	description: MessageKey;
 	entry: McpServerEntryInput;
 	scope: McpServerScope;
-	modifiesData?: string;
+	modifiesData?: MessageKey;
 	optInPerProject?: boolean;
 }
 
@@ -15,45 +16,44 @@ export const MCP_PRESETS: readonly McpPreset[] = [
 	{
 		id: "context7",
 		name: "context7",
-		title: "Context7",
-		description: "Current library and framework documentation. No sign-in.",
+		title: "mcp.preset.context7.title",
+		description: "mcp.preset.context7.description",
 		entry: { url: "https://mcp.context7.com/mcp", exposure: "direct" },
 		scope: "user",
 	},
 	{
 		id: "deepwiki",
 		name: "deepwiki",
-		title: "DeepWiki",
-		description: "Ask about any public GitHub repository. No sign-in.",
+		title: "mcp.preset.deepwiki.title",
+		description: "mcp.preset.deepwiki.description",
 		entry: { url: "https://mcp.deepwiki.com/mcp", exposure: "direct" },
 		scope: "user",
 	},
 	{
 		id: "linear",
 		name: "linear",
-		title: "Linear (read-only)",
-		description:
-			"Issues, projects and comments through Linear's read-only endpoint. Sign in after adding.",
+		title: "mcp.preset.linear.title",
+		description: "mcp.preset.linear.description",
 		entry: { url: "https://mcp.linear.app/mcp/readonly" },
 		scope: "user",
 	},
 	{
 		id: "sentry",
 		name: "sentry",
-		title: "Sentry",
-		description: "Issues, events and releases. Sign in after adding.",
+		title: "mcp.preset.sentry.title",
+		description: "mcp.preset.sentry.description",
 		entry: { url: "https://mcp.sentry.dev/mcp" },
 		scope: "user",
-		modifiesData: "Sentry",
+		modifiesData: "mcp.preset.sentry.modifiesData",
 	},
 	{
 		id: "playwright",
 		name: "playwright",
-		title: "Playwright",
-		description: "Drives a browser on this host. Enabled for this project only.",
+		title: "mcp.preset.playwright.title",
+		description: "mcp.preset.playwright.description",
 		entry: { command: "npx", args: ["-y", "@playwright/mcp@0.0.83"], enabled: false },
 		scope: "user",
-		modifiesData: "the websites its browser opens",
+		modifiesData: "mcp.preset.playwright.modifiesData",
 		optInPerProject: true,
 	},
 ];

@@ -1,4 +1,5 @@
 import { RiAlertLine as TriangleAlert } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -15,7 +16,7 @@ export function NoticeDialog({
 	onOpenChange,
 	title,
 	description,
-	dismissLabel = "OK",
+	dismissLabel,
 	tone = "error",
 	testId = "notice-dialog",
 }: {
@@ -27,6 +28,7 @@ export function NoticeDialog({
 	tone?: "error" | "info";
 	testId?: string;
 }) {
+	const t = useT();
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-w-[24rem]" hideClose data-testid={testId}>
@@ -41,7 +43,7 @@ export function NoticeDialog({
 				</DialogHeader>
 				<DialogFooter>
 					<Button data-testid="notice-dismiss" onClick={() => onOpenChange(false)}>
-						{dismissLabel}
+						{dismissLabel ?? t("panels.noticeDialog.ok")}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

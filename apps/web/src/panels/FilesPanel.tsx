@@ -1,4 +1,5 @@
 import { RiCollapseVerticalLine } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { selectActiveFilePath, selectFilesTreeView, useAppStore } from "../store";
@@ -15,6 +16,7 @@ import { RememberedScrollArea } from "./RememberedScrollArea";
 import { useGitStatus } from "./useGitStatus";
 
 export function FilesPanel({ workspaceId }: { workspaceId: string }) {
+	const t = useT();
 	const mode = useAppStore((s) => s.filesMode);
 	const setMode = useAppStore((s) => s.setFilesMode);
 	const changesView = useAppStore((s) => s.changesView);
@@ -39,18 +41,18 @@ export function FilesPanel({ workspaceId }: { workspaceId: string }) {
 			<div
 				data-testid="files-mode-toggle"
 				role="toolbar"
-				aria-label="Files view"
+				aria-label={t("panels.files.toolbar")}
 				className="flex h-panel-header-row shrink-0 items-center gap-4 overflow-clip border-border-default border-b px-12"
 			>
 				<ToggleSegment
 					testid="files-mode-all"
-					label="All"
+					label={t("panels.files.all")}
 					active={mode === "all"}
 					onClick={() => setMode("all")}
 				/>
 				<ToggleSegment
 					testid="files-mode-changed"
-					label={count > 0 ? `Changed ${count}` : "Changed"}
+					label={count > 0 ? t("panels.files.changedCount", { count }) : t("panels.files.changed")}
 					active={mode === "changed"}
 					onClick={() => setMode("changed")}
 				/>
@@ -58,7 +60,7 @@ export function FilesPanel({ workspaceId }: { workspaceId: string }) {
 					<div className="ml-auto flex shrink-0">
 						<HeaderIconButton
 							testid="files-collapse-all"
-							label="Collapse all folders"
+							label={t("panels.files.collapseAll")}
 							onClick={collapseAll}
 						>
 							<RiCollapseVerticalLine className="size-14" />

@@ -21,6 +21,7 @@ import {
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -78,6 +79,7 @@ function ArmButton({
 	disabled: boolean;
 	onRun: (id: ShipActionId) => void;
 }) {
+	const t = useT();
 	const { primary, secondary } = arm;
 	if (!primary && secondary.length === 0) return null;
 	const tone = splitTone(primary);
@@ -102,7 +104,7 @@ function ArmButton({
 				<DropdownMenu>
 					<DropdownMenuTrigger
 						data-testid={`${testid}-menu`}
-						aria-label="More actions"
+						aria-label={t("shell.location.ship.moreActions")}
 						disabled={disabled}
 						className={cn(
 							splitPartClass(tone),
@@ -150,20 +152,37 @@ function ArmButton({
 const valueText = "flex h-20 items-center gap-4 px-8 tr-text-ui";
 
 function RemoteValueView({ value }: { value: RemoteValue }) {
+	const t = useT();
 	switch (value.kind) {
 		case "noOrigin":
-			return <span className={cn(valueText, "text-text-subtle")}>No remote</span>;
+			return (
+				<span className={cn(valueText, "text-text-subtle")}>
+					{t("shell.location.remote.noRemote")}
+				</span>
+			);
 		case "unreachable":
-			return <span className={cn(valueText, "text-text-subtle")}>Unreachable</span>;
+			return (
+				<span className={cn(valueText, "text-text-subtle")}>
+					{t("shell.location.remote.unreachable")}
+				</span>
+			);
 		case "unpublished":
-			return <span className={cn(valueText, "text-text-muted")}>Not published</span>;
+			return (
+				<span className={cn(valueText, "text-text-muted")}>
+					{t("shell.location.remote.notPublished")}
+				</span>
+			);
 		case "published":
-			return <span className={cn(valueText, "text-text-muted")}>Published</span>;
+			return (
+				<span className={cn(valueText, "text-text-muted")}>
+					{t("shell.location.remote.published")}
+				</span>
+			);
 		case "inSync":
 			return (
 				<span className={cn(valueText, "text-text-muted")}>
 					<Check aria-hidden="true" className="size-14 text-feedback-success" />
-					In sync
+					{t("shell.location.remote.inSyncShort")}
 				</span>
 			);
 		case "counts":
@@ -199,8 +218,9 @@ function ShipSegments({
 	settled: boolean;
 	runner: ShipRunner;
 }) {
+	const t = useT();
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
-	const model = shipActions({
+	const model = shipActions(t, {
 		status,
 		review,
 		base: workspace.baseBranch.replace(/^origin\//, ""),
@@ -211,12 +231,15 @@ function ShipSegments({
 	});
 	const remoteAction = model.remote.primary;
 	const showRemoteValue = !remoteAction || remoteAction.id === "sync";
-	const caption = model.noun === "MR" ? "Merge request" : "Pull request";
+	const caption =
+		model.noun === "MR"
+			? t("shell.location.review.mergeRequest")
+			: t("shell.location.review.pullRequest");
 	return (
 		<>
 			<Segment
 				testid="scope-remote-segment"
-				caption="Remote"
+				caption={t("shell.location.remote.caption")}
 				className={cn("shrink-0", remoteAction ? "flex" : "hidden md:flex")}
 			>
 				{showRemoteValue ? (
@@ -249,7 +272,9 @@ function ShipSegments({
 						data-kind={model.review.value}
 						className={cn(valueText, "text-text-subtle")}
 					>
-						{model.review.value === "base" ? "—" : `No ${model.noun}`}
+						{model.review.value === "base"
+							? "—"
+							: t("shell.location.ship.noReview", { noun: model.noun })}
 					</span>
 				)}
 				<ArmButton

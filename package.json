@@ -82,6 +82,7 @@
 		"check:boundaries": "bun test scripts/checkModuleBoundaries.test.ts && bun scripts/check-module-boundaries.ts",
 		"check:seams": "bun scripts/check-binary-seams.ts",
 		"check:spec-surface": "bun scripts/check-spec-surface.ts",
+		"check:i18n": "bun test scripts/checkI18n.test.ts scripts/i18nRenderReach.test.ts && bun scripts/check-i18n.ts",
 		"check:compiler": "bun --filter @thinkrail/web compiler:census:check",
 		"check:pi-packages": "bun scripts/check-pi-packages.ts",
 		"changeset": "changeset",

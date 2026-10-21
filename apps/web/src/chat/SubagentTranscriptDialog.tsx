@@ -1,4 +1,5 @@
 import type { DelegationRunStatus, TranscriptMessage } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { useEffect, useMemo, useState } from "react";
 import { isConnectedGeneration, useAppStore } from "@/store";
@@ -83,6 +84,7 @@ function useSubagentTranscript({ workspaceId, parentSessionId, childSessionId }:
 }
 
 export function SubagentTranscriptPane(scope: TranscriptScope) {
+	const t = useT();
 	const { messages, live, error, rows, messageActions, askContext } = useSubagentTranscript(scope);
 	return (
 		<ChatActionsContext.Provider value={null}>
@@ -97,10 +99,10 @@ export function SubagentTranscriptPane(scope: TranscriptScope) {
 							{error}
 						</span>
 					) : messages === null ? (
-						<span className="text-text-muted tr-text-metadata">Loading…</span>
+						<span className="text-text-muted tr-text-metadata">{t("common.loading")}</span>
 					) : rows.length === 0 ? (
 						<span className="text-text-muted tr-text-metadata italic">
-							Nothing in the transcript yet.
+							{t("chat.subagentTranscript.empty")}
 						</span>
 					) : (
 						rows.map((row) => (
@@ -127,6 +129,7 @@ export function SubagentTranscriptDialog({
 	onOpenChange: (open: boolean) => void;
 	onCloseAutoFocus?: (event: Event) => void;
 }) {
+	const t = useT();
 	const status = useAppStore((state) => state.status);
 	return (
 		<Dialog open onOpenChange={onOpenChange}>
@@ -137,11 +140,11 @@ export function SubagentTranscriptDialog({
 			>
 				<div className="flex min-w-0 items-baseline gap-8 pr-8">
 					<DialogTitle className="shrink-0 tr-text-ui text-text-default">
-						Subagent transcript
+						{t("chat.subagentTranscript.title")}
 					</DialogTitle>
 					<span className="min-w-0 truncate text-text-muted tr-text-metadata">
 						{scope.childSessionId}
-						{status !== "connected" ? " · stale" : ""}
+						{status !== "connected" ? ` · ${t("chat.subagentTranscript.stale")}` : ""}
 					</span>
 				</div>
 				<SubagentTranscriptPane key={scope.childSessionId} {...scope} />

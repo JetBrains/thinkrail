@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { currentTranslator } from "@thinkrail/locales/react";
 import type { ResourceRenderer, ReviewThread } from "../../registry";
 import { registerResourceRenderer, resolveRenderers } from "../../registry";
 import { placedRegionThreadIds } from "../regionReview";
@@ -13,9 +14,10 @@ import {
 } from "./imageState";
 
 test("image renderer registration declares image matching and region anchors", () => {
+	expect(currentTranslator()(imageRenderer.labelKey)).toBe("Image");
 	expect(imageRenderer).toMatchObject({
 		id: "thinkrail/image",
-		label: "Image",
+		labelKey: "viewer.renderer.image",
 		match: { mime: ["image/*"], text: false },
 		rank: 120,
 		capabilities: {
@@ -31,7 +33,7 @@ test("image renderer registration declares image matching and region anchors", (
 test("image extensions match when MIME metadata is absent", () => {
 	const fallback: ResourceRenderer = {
 		id: "thinkrail/binary",
-		label: "File",
+		labelKey: "viewer.renderer.file",
 		match: { text: false },
 		rank: 0,
 		capabilities: {
@@ -93,5 +95,5 @@ test("image zoom state is bounded and defaults to 2-up diffs", () => {
 	expect(imageViewState({ mode: "zoom", zoom: 2 })).toEqual({ mode: "zoom", zoom: 2 });
 	expect(imageDiffViewState(undefined)).toBe("2-up");
 	expect(imageDiffViewState({ mode: "onion" })).toBe("onion");
-	expect(formatByteLength(1536)).toBe("1.5 KB");
+	expect(formatByteLength(currentTranslator(), 1536)).toBe("1.5 KB");
 });

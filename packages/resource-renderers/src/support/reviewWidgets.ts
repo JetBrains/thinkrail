@@ -66,10 +66,16 @@ interface ReviewZoneController {
 	isComposerOpen(): boolean;
 }
 
+export interface ReviewCommenting {
+	setLabel(label: string): void;
+	dispose(): void;
+}
+
 export function attachReviewCommenting(
 	codeEditor: monaco.editor.IStandaloneCodeEditor,
 	zones: ReviewZoneController,
-): () => void {
+	label: string,
+): ReviewCommenting {
 	let iconPosition: monaco.IPosition | null = null;
 	const iconNode = document.createElement("div");
 	iconNode.className = "review-add-icon-holder";
@@ -77,8 +83,6 @@ export function attachReviewCommenting(
 	const iconButton = document.createElement("button");
 	iconButton.type = "button";
 	iconButton.dataset.testid = "review-add-icon";
-	iconButton.title = "Comment on selection";
-	iconButton.ariaLabel = "Comment on selection";
 	iconButton.className = "review-add-icon";
 	iconButton.innerHTML = ICON_SVG;
 	iconNode.appendChild(iconButton);
@@ -120,15 +124,25 @@ export function attachReviewCommenting(
 	};
 	iconButton.addEventListener("click", commentOnSelection);
 
-	const menuAction = codeEditor.addAction({
-		id: `thinkrail.review.commentSelection.${codeEditor.getId()}`,
-		label: "Comment on selection",
-		precondition: "editorHasSelection",
-		contextMenuGroupId: "9_cutcopypaste",
-		contextMenuOrder: 2,
-		keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyM],
-		run: commentOnSelection,
-	});
+	let menuAction: monaco.IDisposable | null = null;
+	let currentLabel = "";
+	const setLabel = (next: string) => {
+		if (next === currentLabel) return;
+		currentLabel = next;
+		iconButton.title = next;
+		iconButton.ariaLabel = next;
+		menuAction?.dispose();
+		menuAction = codeEditor.addAction({
+			id: `thinkrail.review.commentSelection.${codeEditor.getId()}`,
+			label: next,
+			precondition: "editorHasSelection",
+			contextMenuGroupId: "9_cutcopypaste",
+			contextMenuOrder: 2,
+			keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyM],
+			run: commentOnSelection,
+		});
+	};
+	setLabel(label);
 	const selectionListener = codeEditor.onDidChangeCursorSelection((event) => {
 		if (zones.isComposerOpen()) return;
 		const selection = event.selection;
@@ -142,10 +156,13 @@ export function attachReviewCommenting(
 		});
 	});
 
-	return () => {
-		selectionListener.dispose();
-		menuAction.dispose();
-		codeEditor.removeContentWidget(iconWidget);
+	return {
+		setLabel,
+		dispose: () => {
+			selectionListener.dispose();
+			menuAction?.dispose();
+			codeEditor.removeContentWidget(iconWidget);
+		},
 	};
 }
 

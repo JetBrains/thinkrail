@@ -1,4 +1,5 @@
 import type { SlashCommandInfo, TemplateInfo } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useState } from "react";
 
@@ -148,6 +149,7 @@ export function TemplateSlotHint({
 	onNext: () => void;
 	className?: string;
 }) {
+	const t = useT();
 	return (
 		<button
 			type="button"
@@ -158,7 +160,7 @@ export function TemplateSlotHint({
 				className,
 			)}
 		>
-			slot {activeIndex + 1}/{count} · ⇥ next · esc done
+			{t("prompt.slotHint.label", { index: activeIndex + 1, count })}
 		</button>
 	);
 }
@@ -176,6 +178,7 @@ export function SlashCommandMenu<T extends SlashCommandItem>({
 	className?: string;
 	footer?: ReactNode;
 }) {
+	const t = useT();
 	return (
 		<div
 			data-testid="slash-menu"
@@ -202,7 +205,7 @@ export function SlashCommandMenu<T extends SlashCommandItem>({
 					) : null}
 					<span className="ml-auto shrink-0 text-text-muted tr-text-metadata">
 						{command.source === "builtin"
-							? "Pi/built-in"
+							? t("prompt.slashMenu.builtinSource")
 							: `${command.source}/${command.sourceInfo.scope}`}
 					</span>
 				</button>

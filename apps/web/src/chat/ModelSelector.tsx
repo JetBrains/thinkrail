@@ -8,6 +8,7 @@ import {
 	RiStarLine as StarLine,
 } from "@remixicon/react";
 import { sameModel, type WireModel } from "@thinkrail/contracts";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import {
 	Command,
 	CommandEmpty,
@@ -37,9 +38,9 @@ import {
 } from "./pickerGroups";
 import type { ModelPreferences } from "./useModelPreferences";
 
-function subLine(model: WireModel): string {
-	const parts = [`${formatContext(model.contextWindow)} context`];
-	if (model.reasoning) parts.push("reasoning");
+function subLine(t: Translator, model: WireModel): string {
+	const parts = [t("chat.modelPicker.context", { size: formatContext(model.contextWindow) })];
+	if (model.reasoning) parts.push(t("chat.modelPicker.reasoning"));
 	return parts.join(" · ");
 }
 
@@ -78,13 +79,14 @@ export function ModelSelector({
 	disabled?: boolean;
 	preferences?: ModelPreferences;
 }) {
+	const t = useT();
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState("");
 	const [expansion, setExpansion] = useState<GroupExpansion>(() => initialGroupExpansion(null, []));
 
 	const pinnedModels = preferences?.favorites ?? [];
 	const searching = query !== "";
-	const groups = pickerGroups(models, {
+	const groups = pickerGroups(t, models, {
 		pinned: pinnedModels,
 		query,
 		expansion,
@@ -122,7 +124,7 @@ export function ModelSelector({
 				)}
 				<span className="flex min-w-0 flex-1 flex-col">
 					<span className="truncate">{model.name}</span>
-					<span className="truncate text-text-muted tr-text-metadata">{subLine(model)}</span>
+					<span className="truncate text-text-muted tr-text-metadata">{subLine(t, model)}</span>
 				</span>
 				<span className="mt-2 shrink-0 text-text-subtle tr-text-metadata">{model.id}</span>
 				{isCurrent ? <Check className="mt-2 size-14 shrink-0 text-primary" /> : null}
@@ -131,7 +133,11 @@ export function ModelSelector({
 						type="button"
 						data-testid="model-favorite-toggle"
 						data-favorite={isPinned}
-						aria-label={isPinned ? `Unpin ${model.name}` : `Pin ${model.name}`}
+						aria-label={
+							isPinned
+								? t("chat.modelPicker.unpin", { model: model.name })
+								: t("chat.modelPicker.pin", { model: model.name })
+						}
 						aria-pressed={isPinned}
 						onClick={(event) => {
 							event.stopPropagation();
@@ -193,17 +199,25 @@ export function ModelSelector({
 				)}
 			>
 				<span className="truncate text-text-muted tr-text-metadata">
-					{current?.name ?? (placeholder || "Select model")}
+					{current?.name ?? (placeholder || t("chat.modelPicker.selectModel"))}
 				</span>
 				<ChevronDown className="size-16 shrink-0 text-text-muted" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-340 p-0">
 				<Command className="min-h-0 flex-1 bg-transparent" filter={pickerFilter(groups, groupRow)}>
-					<CommandInput placeholder="Search models…" value={query} onValueChange={setQuery} />
+					<CommandInput
+						placeholder={t("chat.modelPicker.search")}
+						value={query}
+						onValueChange={setQuery}
+					/>
 					<CommandList className="max-h-340 min-h-0 flex-1 pb-24">
-						{emptyState === "no-match" ? <CommandEmpty>No models found.</CommandEmpty> : null}
+						{emptyState === "no-match" ? (
+							<CommandEmpty>{t("chat.modelPicker.noMatch")}</CommandEmpty>
+						) : null}
 						{emptyState === "no-models" ? (
-							<p className="px-8 py-12 text-center text-text-muted tr-text-ui">{NO_MODELS_HINT}</p>
+							<p className="px-8 py-12 text-center text-text-muted tr-text-ui">
+								{t(NO_MODELS_HINT)}
+							</p>
 						) : null}
 						{defaultOption !== undefined && onSelectDefault !== undefined && (
 							<CommandGroup>
@@ -232,7 +246,7 @@ export function ModelSelector({
 							</CommandGroup>
 						)}
 						{pinnedModels.length > 0 && (
-							<CommandGroup heading="Pinned">
+							<CommandGroup heading={t("chat.modelPicker.pinned")}>
 								{pinnedModels.map((m) => renderModel(m, "pinned"))}
 							</CommandGroup>
 						)}
@@ -254,7 +268,7 @@ export function ModelSelector({
 						className="pointer-events-auto inline-flex items-center gap-4 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-metadata text-text-default shadow-sm outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 					>
 						<RefreshCw className={cn("size-12 shrink-0", refreshing && "animate-spin")} />
-						{refreshing ? "Updating…" : "Refresh"}
+						{refreshing ? t("chat.modelPicker.updating") : t("chat.modelPicker.refresh")}
 					</button>
 				</div>
 			</PopoverContent>

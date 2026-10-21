@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { BranchStatus, OpenBranchReview, ReviewDetails } from "@thinkrail/contracts";
+import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	fixChecksPrompt,
 	integratePrompt,
@@ -22,7 +23,7 @@ const published: BranchStatus = {
 
 function model(status: Partial<BranchStatus>, extra: Partial<ShipContext> = {}) {
 	const merged = { ...published, ...status };
-	return shipActions({
+	return shipActions(currentTranslator(), {
 		status: merged,
 		review: merged.review,
 		base: "main",
@@ -222,7 +223,7 @@ test("a host without review actions keeps the open PR's arm empty", () => {
 
 test("the resolved review wins over the status review and names the noun", () => {
 	const mr: OpenBranchReview = { kind: "merge-request", number: 4, state: "merged" };
-	const m = shipActions({
+	const m = shipActions(currentTranslator(), {
 		status: { ...published, review: null },
 		review: mr,
 		base: "main",

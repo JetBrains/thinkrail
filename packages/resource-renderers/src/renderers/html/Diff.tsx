@@ -1,3 +1,4 @@
+import { useT } from "@thinkrail/locales/react";
 import { useMemo } from "react";
 import type { ResourceContent, ResourceDiffProps } from "../../registry";
 import { diffContentStamp } from "../reviewComposerState";
@@ -33,6 +34,8 @@ export default function HtmlDiff({
 	viewState,
 	onViewState,
 }: ResourceDiffProps) {
+	const t = useT();
+	const noDocument = t("viewer.html.noDocument");
 	const [viewport, selectViewport] = useHtmlViewport(viewState, onViewState);
 	const originalText = textOf(original);
 	const modifiedText = textOf(modified);
@@ -42,11 +45,14 @@ export default function HtmlDiff({
 			originalText === null ? null : (
 				<HtmlSide
 					text={originalText}
-					title={`Original preview of ${originalResource.path}`}
+					title={t("viewer.html.originalPreview", { path: originalResource.path })}
 					viewport={viewport}
 				/>
 			),
-		caption: originalText === null ? "Old: No document" : "Old document",
+		caption:
+			originalText === null
+				? t("viewer.side.oldCaption", { detail: noDocument })
+				: t("viewer.html.oldDocument"),
 		intrinsicSize: null,
 	};
 	const modifiedSide: VisualDiffSide = {
@@ -55,11 +61,14 @@ export default function HtmlDiff({
 			modifiedText === null ? null : (
 				<HtmlSide
 					text={modifiedText}
-					title={`Modified preview of ${resource.path}`}
+					title={t("viewer.html.modifiedPreview", { path: resource.path })}
 					viewport={viewport}
 				/>
 			),
-		caption: modifiedText === null ? "New: No document" : "New document",
+		caption:
+			modifiedText === null
+				? t("viewer.side.newCaption", { detail: noDocument })
+				: t("viewer.html.newDocument"),
 		intrinsicSize: null,
 	};
 	return (
@@ -69,13 +78,14 @@ export default function HtmlDiff({
 				<VisualDiff
 					prefix="html"
 					noun="document"
-					regionLabel="document"
+					selectionKey="document"
+					commentLabel={t("viewer.region.commentOnDocument")}
 					original={originalSide}
 					modified={modifiedSide}
 					contentStamp={diffContentStamp(original, modified)}
 					initialMode="2-up"
 					modes={["2-up"]}
-					emptyLabel="No document"
+					emptyLabel={noDocument}
 				/>
 			</div>
 		</div>

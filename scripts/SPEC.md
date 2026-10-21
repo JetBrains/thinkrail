@@ -15,12 +15,12 @@ Repository-wide development orchestration and conformance gates that do not belo
 
 ## Boundary
 
-- **Owns:** the multi-process development launcher; exact-version/catalog validation; the PI binary-seam canary; module dependency/import boundary validation; declared-spec-surface to TypeScript-barrel conformance; and focused root contract tests that compose otherwise independent product implementations.
+- **Owns:** the multi-process development launcher; exact-version/catalog validation; the PI binary-seam canary; module dependency/import boundary validation; the UI-text gate (`check:i18n`); declared-spec-surface to TypeScript-barrel conformance; and focused root contract tests that compose otherwise independent product implementations.
 - **Public surface:** the root `package.json` commands consumed by developers, Husky, and CI.
 - **Allowed deps:** Bun/Node, the TypeScript compiler API, `pi-spec-graph/core` for the canonical spec/frontmatter model, and `mdast-util-from-markdown` for CommonMark block structure; read-only inspection of workspace manifests and source trees; the public package metadata and bundle outputs each check validates; and test-only imports of real product internals when a root harness must prove a cross-package contract without creating a product dependency.
 - **Forbidden:** product runtime logic, a second source of package or feature behavior, editing source as part of a check, or application-internal imports outside focused root contract tests. A root contract test may compose implementations but must not become the protocol source or a product dependency.
 
-`check:boundaries` runs the checker's focused tests before scanning the real workspace. It enforces both manifest edges and static source imports, including type-only, dynamic, re-export, CommonJS, import-type, package-subpath, and relative cross-module forms. Generated/build directories, including Hutch's projected `.hutch` SDK trees and transient `.cottontail-tmp` loaders, are excluded. The current product rings and launcher edges are exhaustive: contracts, `pi-delegation`, and `pi-background-commands` → none; `pi-subagents` and `pi-dag` → `pi-delegation`; shared → contracts; server → contracts/shared plus its existing bundled extension and delegation packages; web → contracts and the browser SDK/extension entries below; CLI → server/shared; desktop → server/shared/contracts; artifact-tests → CLI/server/shared. Product packages may not import artifact-tests. A future composition root must add an explicit rule rather than silently inheriting access to every workspace package.
+`check:boundaries` runs the checker's focused tests before scanning the real workspace. It enforces both manifest edges and static source imports, including type-only, dynamic, re-export, CommonJS, import-type, package-subpath, and relative cross-module forms. Generated/build directories, including Hutch's projected `.hutch` SDK trees and transient `.cottontail-tmp` loaders, are excluded. The current product rings and launcher edges are exhaustive: contracts, `pi-delegation`, and `pi-background-commands` → none; `pi-subagents` and `pi-dag` → `pi-delegation`; shared → contracts; server → contracts/shared plus its existing bundled extension and delegation packages; web → contracts, locales, and the browser SDK/extension entries below; CLI → server/shared; desktop → server/shared/contracts/locales; server, UI, and extension web halves may also use locales, which itself has no workspace edges; artifact-tests → CLI/server/shared. Product packages may not import artifact-tests. A future composition root must add an explicit rule rather than silently inheriting access to every workspace package.
 
 The extension boundary follows [[module-thinkrail-extensions]] and is registered from discovered manifests, not a fixed extension-name list:
 
@@ -35,3 +35,24 @@ These are static literal-import checks, not a runtime module resolver. Negative 
 `check:spec-surface` enrolls only valid specs tagged `public-surface-checked`. Enrollment is explicit so adding prose cannot silently turn enforcement off: an enrolled spec must retain a bare backticked identifier list and a discoverable TypeScript barrel, or the check fails. Unenrolled prose surfaces remain descriptive and are reported only by `--list-skipped`.
 
 The TypeScript compiler resolves the barrel's effective export names, including type-only and default exports and transitive re-exports; a CommonJS `export =` assignment is the module's singular `default` surface rather than the assigned value's synthetic members. An unresolved re-export is a violation rather than a silently incomplete surface. The declared and effective name sets must match in both directions. Filesystem-level tests exercise enrollment, resolution, and failure behavior through the same runner CI invokes.
+
+`check:i18n` enforces [[architecture]] Decision 23 over `apps/web/src`, `packages/ui`, and extension `web/`
+halves (tests and generated files excluded). With the TypeScript AST it rejects literal UI text in four
+shapes: JSX text; text-bearing JSX attributes (`aria-label`, `title`, `placeholder`, `alt`, `label`,
+`description`, `hint`, and `*Label`/`*Title`/`*Description`/… props), including literals reached through
+conditionals, `||`/`??`, `+`, and template parts; literal children inside `{…}`; prose in text-named object
+properties (`label`, `title`, `description`, `detail`, `hint`, `message`, `reason`, …); and literal
+`toast.*()` messages or `errorText()` fallbacks. "Text" means a run of two or more letters after trimming
+symbols, so `⌘K`, `·`, and counts pass; the bare brand `ThinkRail` is the one allowed word. It is a
+heuristic floor, not a proof: review still owns strings returned from plain functions. It also checks
+`packages/locales/en.json`: keys sorted, values non-empty, and every key (plural base for `_one`/`_other`)
+referenced as a string literal by some UI, desktop, or locales source, so removed UI leaves no orphaned
+translations. Finally it builds the web TypeScript program and fails on any **render-time read of the global
+translator** ([[module-locales]] § Render reads the translator as a value): a reference to `t`, `i18n`,
+`currentLocale` or `currentTranslator` from `@thinkrail/locales/react` evaluated in a render root — a
+component or hook body, a class `render()`, and what they run synchronously: `useMemo`/`useState`
+initializers, `useAppStore` selectors, `.map`-style callbacks, JSX function children and `render*` props;
+a call (direct, through a namespace import, or passed by reference to such a callback) of any function that
+reaches them synchronously, default parameters included, transitively; a module-load call; and any getter
+or registered tool `summary` that reads them. Event handlers (`on*` and other non-render props), effects and
+deferred callbacks are event-time and pass. Fixture tests pin each shape, both flagged and allowed. There is no suppression mechanism; a false positive is fixed in the checker with a test.

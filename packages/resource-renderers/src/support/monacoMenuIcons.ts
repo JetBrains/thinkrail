@@ -10,14 +10,16 @@ import {
 	RiChatNewLine as MessageSquarePlus,
 	RiScissorsLine as Scissors,
 } from "@remixicon/react";
+import { t } from "@thinkrail/locales/react";
 import type * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 const svg = (icon: LucideIcon) => renderToStaticMarkup(createElement(icon, { size: 14 }));
 
-const ICONS = new Map<string, string>([
-	["Comment on selection", svg(MessageSquarePlus)],
+const COMMENT_ICON = svg(MessageSquarePlus);
+
+const MONACO_ICONS = new Map<string, string>([
 	["Copy", svg(Copy)],
 	["Cut", svg(Scissors)],
 	["Paste", svg(ClipboardPaste)],
@@ -27,6 +29,10 @@ const ICONS = new Map<string, string>([
 	["Peek", svg(Eye)],
 	["Command Palette", svg(Command)],
 ]);
+
+function menuIcon(label: string): string | undefined {
+	return label === t("review.widget.commentOnSelection") ? COMMENT_ICON : MONACO_ICONS.get(label);
+}
 
 const MENU_CSS =
 	".editor-menu-icon{display:inline-flex;align-items:center;justify-content:center;width:14px;margin:0 var(--space-8) 0 var(--space-2);flex-shrink:0;color:inherit}";
@@ -62,7 +68,7 @@ function decorateOpenMenus(): void {
 			const holder = document.createElement("span");
 			holder.className = "editor-menu-icon";
 			holder.ariaHidden = "true";
-			const icon = ICONS.get(label.textContent.trim().replace(/[.…]+$/u, ""));
+			const icon = menuIcon(label.textContent.trim().replace(/[.…]+$/u, ""));
 			if (icon) holder.innerHTML = icon;
 			label.before(holder);
 		}

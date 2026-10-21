@@ -1,5 +1,6 @@
 import { RiShieldCheckLine as ShieldCheck, RiAlertLine as TriangleAlert } from "@remixicon/react";
 import type { Project } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { useState } from "react";
 import {
@@ -17,6 +18,7 @@ import { errorText, getTransport } from "@/transport";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 export function ProjectTrustNotice({ projectId }: { projectId: string }) {
+	const t = useT();
 	const project = useAppStore((s) => s.projects.find((p) => p.id === projectId));
 	const supportsProjectTrust = useAppStore(selectSupportsProjectTrust);
 	const summary = useProjectTrustSummary(projectId);
@@ -48,20 +50,20 @@ export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 				onClick={() => setConfirmingRevoke(true)}
 				className="shrink-0"
 			>
-				Stop trusting
+				{t("panels.projectTrust.stopTrusting")}
 			</Button>
 			<ConfirmDialog
 				open={confirmingRevoke}
 				onOpenChange={setConfirmingRevoke}
-				title="Stop trusting this project?"
-				description={stopTrustingText(project, supportsProjectTrust)}
-				confirmLabel="Stop trusting"
+				title={t("panels.projectTrust.stopTrustingTitle")}
+				description={stopTrustingText(t, project, supportsProjectTrust)}
+				confirmLabel={t("panels.projectTrust.stopTrusting")}
 				destructive
 				confirmTestId="project-untrust-confirm"
 				onConfirm={() =>
 					void run(
 						() => getTransport().request("project.setTrust", { id: projectId, trusted: false }),
-						"Couldn't stop trusting project",
+						t("panels.projectTrust.stopTrustingFailed"),
 					)
 				}
 			/>
@@ -77,7 +79,7 @@ export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 			>
 				<ShieldCheck className="-mt-2 size-14 shrink-0 text-feedback-success" aria-hidden />
 				<span className="min-w-0 flex-1 tr-text-ui text-text-default">
-					{trustedNoticeText(notice)}
+					{trustedNoticeText(t, notice)}
 				</span>
 				{stopTrusting}
 			</div>
@@ -85,7 +87,7 @@ export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 	}
 
 	const pending = notice.kind === "unacknowledged";
-	const enables = notice.kind === "untrusted" ? trustEnablesText(notice) : null;
+	const enables = notice.kind === "untrusted" ? trustEnablesText(t, notice) : null;
 	return (
 		<div
 			data-testid="project-trust-notice"
@@ -97,8 +99,8 @@ export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 				<span className="flex min-w-0 flex-1 flex-col gap-2">
 					<span className="tr-text-ui text-text-default">
 						{pending
-							? `${notice.names.length} new skill${notice.names.length === 1 ? "" : "s"} appeared since you trusted this project.`
-							: untrustedNoticeText(notice)}
+							? t("panels.projectTrust.newSkills", { count: notice.names.length })
+							: untrustedNoticeText(t, notice)}
 					</span>
 					{enables ? (
 						<span data-testid="project-trust-enables" className="text-text-muted tr-text-metadata">
@@ -124,11 +126,13 @@ export function ProjectTrustNotice({ projectId }: { projectId: string }) {
 										})
 								: () =>
 										getTransport().request("project.setTrust", trustGrantParams(projectId, notice)),
-							pending ? "Couldn't confirm skills" : "Couldn't trust project",
+							pending
+								? t("panels.projectTrust.acknowledgeFailed")
+								: t("panels.projectTrust.trustFailed"),
 						)
 					}
 				>
-					{pending ? "Review & enable" : "Trust project"}
+					{pending ? t("panels.projectTrust.reviewAndEnable") : t("panels.projectTrust.trust")}
 				</Button>
 			</div>
 		</div>
