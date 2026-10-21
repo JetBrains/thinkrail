@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
 import { useCallback } from "react";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
+import { chatName } from "@/lib";
 import { useSessionSwitcher } from "./useSessionSwitcher";
 
 export interface SessionSwitcherProps {
@@ -74,7 +75,9 @@ export function SessionSwitcher({ open, onOpenChange }: SessionSwitcherProps) {
 												)}
 												<span className="flex min-w-0 flex-1 flex-col">
 													<span className="truncate tr-text-ui text-text-default leading-tight group-data-[selected=true]:text-primary">
-														{session.chatTitle || t("shell.sessionSwitcher.untitled")}
+														{session.chatTitle === null
+															? t("shell.sessionSwitcher.untitled")
+															: chatName(t, session.chatTitle)}
 													</span>
 													{session.workspaceName ? (
 														<span className="truncate text-text-subtle tr-text-metadata leading-tight">

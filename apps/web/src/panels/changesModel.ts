@@ -5,9 +5,9 @@ import type {
 	GitFileStatus,
 	TurnChangeSet,
 } from "@thinkrail/contracts";
-import { currentTranslator, localeOf, type Translator, t } from "@thinkrail/locales/react";
+import type { Translator } from "@thinkrail/locales/react";
 import { VIRTUALIZED_DIFF_LINES } from "@thinkrail/resource-renderers";
-import { ancestorPaths, tupleKey } from "../lib";
+import { ancestorPaths, tupleKey, turnTimeLabel } from "../lib";
 import { extendFolderChain, startFolderChain } from "./folderChains";
 
 export function statusNameClass(status: GitFileStatus): string {
@@ -51,23 +51,6 @@ export function scopeKey(scope: GitDiffScope): string {
 	return scope.kind;
 }
 
-function scopeSuffix(scope: GitDiffScope): string {
-	switch (scope.kind) {
-		case "branch":
-			return "";
-		case "uncommitted":
-			return t("changes.scope.uncommittedSuffix");
-		case "pinned":
-			return scope.baseRef.slice(0, 7);
-		case "commit":
-			return scope.sha.slice(0, 7);
-		case "turn":
-			return t("changes.scope.turnSuffix", {
-				time: turnTimeLabel(currentTranslator(), scope.startedAt),
-			});
-	}
-}
-
 export function turnScope(turn: TurnChangeSet): Extract<GitDiffScope, { kind: "turn" }> {
 	return {
 		kind: "turn",
@@ -78,30 +61,12 @@ export function turnScope(turn: TurnChangeSet): Extract<GitDiffScope, { kind: "t
 	};
 }
 
-export function turnTimeLabel(t: Translator, startedAt: number): string {
-	return new Date(startedAt).toLocaleTimeString(localeOf(t), {
-		hour: "2-digit",
-		minute: "2-digit",
-	});
-}
-
 export function diffTabId(workspaceId: string, scope: GitDiffScope, path: string): string {
 	return tupleKey("diff", workspaceId, scopeKey(scope), path);
 }
 
-export function diffTabName(scope: GitDiffScope, path: string): string {
-	const { base } = splitPath(path);
-	const suffix = scopeSuffix(scope);
-	return suffix ? `${base} · ${suffix}` : base;
-}
-
 export function changesTabId(workspaceId: string, scope: GitDiffScope): string {
 	return tupleKey("changes", workspaceId, scopeKey(scope));
-}
-
-export function changesTabName(scope: GitDiffScope): string {
-	const suffix = scopeSuffix(scope);
-	return suffix ? t("changes.tab.nameScoped", { suffix }) : t("changes.tab.name");
 }
 
 const GENERATED_PATH =

@@ -571,7 +571,7 @@ export function useChatLocationReconciliation(
 				existing?.name ??
 				state.closedChatsByWorkspace[workspaceId]?.find((chat) => chat.sessionId === sessionId)
 					?.title ??
-				"Chat";
+				"";
 			state.openTab(
 				{
 					kind: "chat",

@@ -11,7 +11,7 @@ import { useCallback, useEffect, useInsertionEffect, useRef, useState } from "re
 import { tupleKey } from "../lib";
 import {
 	isConnectedGeneration,
-	selectChatTitle,
+	selectChatName,
 	selectHasNormalizedSessionState,
 	toast,
 	useAppStore,
@@ -277,7 +277,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 
 	const openPlan = () => {
 		const state = useAppStore.getState();
-		const title = selectChatTitle(currentTranslator(), state, workspaceId, sessionId);
+		const title = selectChatName(state, workspaceId, sessionId);
 		void getTransport()
 			.request("todo.list", { workspaceId, sessionId, opened: "page" })
 			.catch(() => {});
@@ -285,7 +285,7 @@ export function useChatTodos(workspaceId: string, sessionId: string): ChatTodos 
 			kind: "plan",
 			id: `${workspaceId}:plan:${sessionId}`,
 			workspaceId,
-			name: translate("chat.todo.planDocName", { title }),
+			name: title,
 			sessionId,
 		});
 	};

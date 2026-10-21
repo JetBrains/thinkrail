@@ -26,6 +26,7 @@ import {
 import type { Translator } from "@thinkrail/locales/react";
 import type { LoginState } from "../auth";
 import {
+	chatName,
 	compactAge,
 	isAbsolutePath,
 	isMcpActiveState,
@@ -898,15 +899,22 @@ export function specPathMatcher(nodes: SpecGraphNode[]): (path: string) => boole
 	return (reported) => paths.some((rel) => matchesWorktreePath(reported, rel));
 }
 
+export function selectChatName(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	workspaceId: string,
+	sessionId: string,
+): string {
+	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
+	return tabs.find((tab) => tab.kind === "chat" && tab.sessionId === sessionId)?.name ?? "";
+}
+
 export function selectChatTitle(
 	t: Translator,
 	state: { tabsByWorkspace: Record<string, EditorTab[]> },
 	workspaceId: string,
 	sessionId: string,
 ): string {
-	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
-	const chatTab = tabs.find((tab) => tab.kind === "chat" && tab.sessionId === sessionId);
-	return (chatTab?.name ?? t("store.chatTab.defaultName")).trim() || t("store.chatTab.defaultName");
+	return chatName(t, selectChatName(state, workspaceId, sessionId));
 }
 
 export function selectCompactionTurnIds(

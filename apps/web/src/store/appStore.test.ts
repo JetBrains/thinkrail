@@ -1294,7 +1294,7 @@ test("a durable session title event renames an open chat without moving attentio
 	expect(rt("named").eventRevision).toBe(1);
 });
 
-test("a durable session title event renames closed history and restores the Chat fallback", () => {
+test("a durable session title event renames closed history and clears it back to untitled", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "closed-title", null, "medium");
 	store.closeChatToHistory("closed-title", true, "ws1");
@@ -1302,7 +1302,7 @@ test("a durable session title event renames closed history and restores the Chat
 	store.handlePiEvent(sessionTitleChanged("Closed work"), "closed-title");
 	expect(useAppStore.getState().closedChatsByWorkspace.ws1?.[0]?.title).toBe("Closed work");
 	store.handlePiEvent(sessionTitleChanged(), "closed-title");
-	expect(useAppStore.getState().closedChatsByWorkspace.ws1?.[0]?.title).toBe("Chat");
+	expect(useAppStore.getState().closedChatsByWorkspace.ws1?.[0]?.title).toBe("");
 });
 
 test("a durable title updates a known tab without conjuring a runtime or title-event buffer", () => {

@@ -18,9 +18,9 @@ import {
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { useRef, useState } from "react";
 import { useNow } from "@/components/useNow";
-import { relativeTime } from "@/lib";
+import { relativeTime, turnTimeLabel } from "@/lib";
 import { getTransport } from "../transport";
-import { scopeLabel, scopeTitle, turnScope, turnTimeLabel } from "./changesModel";
+import { scopeLabel, scopeTitle, turnScope } from "./changesModel";
 import { useWorkspaceTurns } from "./useWorkspaceTurns";
 
 export function ChangesScopeMenu({

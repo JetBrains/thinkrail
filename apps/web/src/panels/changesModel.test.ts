@@ -7,10 +7,8 @@ import {
 	buildChangesTree,
 	type ChangeTreeDir,
 	changesTabId,
-	changesTabName,
 	changeTreeFolderPaths,
 	diffTabId,
-	diffTabName,
 	estimatedSectionHeight,
 	scopeKey,
 	scopeLabel,
@@ -81,22 +79,12 @@ test("scopeKey + diffTabId: the scope is part of a diff tab's identity", () => {
 	expect(commit).not.toBe(branch);
 });
 
-test("diffTabName tags every non-default scope so two tabs of one file are distinguishable", () => {
-	expect(diffTabName({ kind: "branch" }, "src/a.ts")).toBe("a.ts");
-	expect(diffTabName({ kind: "uncommitted" }, "src/a.ts")).toBe("a.ts · uncommitted");
-	expect(diffTabName({ kind: "commit", sha: "abc1234567" }, "src/a.ts")).toBe("a.ts · abc1234");
-	expect(diffTabName({ kind: "pinned", baseRef: "abc1234567" }, "src/a.ts")).toBe("a.ts · abc1234");
-});
-
 test("changesTabId: one review tab per (workspace, scope), disjoint from every diff tab id", () => {
 	const branch = changesTabId("ws1", { kind: "branch" });
 	expect(branch).toBe("changes:3:ws16:branch");
 	expect(changesTabId("ws1", { kind: "commit", sha: "abc123" })).not.toBe(branch);
 	expect(changesTabId("ws2", { kind: "branch" })).not.toBe(branch);
 	expect(branch.startsWith("diff:")).toBe(false);
-	expect(changesTabName({ kind: "branch" })).toBe("Changes");
-	expect(changesTabName({ kind: "uncommitted" })).toBe("Changes · uncommitted");
-	expect(changesTabName({ kind: "commit", sha: "abc1234567" })).toBe("Changes · abc1234");
 });
 
 test("sectionCollapsedByDefault folds large and generated files, never an ordinary source change", () => {
@@ -181,8 +169,6 @@ test("a turn scope is keyed by its id, labelled Last turn only while it is the n
 	expect(scopeTitle(currentTranslator(), scope, [], [older, newer])).toMatch(
 		/^Agent turn at .* · 1 file$/,
 	);
-	expect(changesTabName(scope)).toMatch(/^Changes · turn /);
-	expect(diffTabName(scope, "src/a.ts")).toMatch(/^a\.ts · turn /);
 });
 
 test("a loading section reserves a height in the order of its eventual diff", () => {

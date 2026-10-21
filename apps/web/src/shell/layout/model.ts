@@ -1,12 +1,17 @@
 import type { MessageKey } from "@thinkrail/locales";
 import { currentTranslator, type Translator, t } from "@thinkrail/locales/react";
 import {
+	changesTabName,
+	chatName,
+	diffTabName,
 	isPreviewCompatibleTabKind,
 	type LayoutAttention,
 	layoutResourceIdentity,
+	planDocumentName,
 	randomId,
 	readLayoutNavigationClock,
 	readLayoutSelection,
+	terminalName,
 } from "../../lib";
 import type {
 	LayoutAuxiliaryRegion,
@@ -102,7 +107,22 @@ const LAYOUT_TOOL_NAME_KEYS = {
 } as const satisfies Record<LayoutToolId, MessageKey>;
 
 export function layoutTabName(t: Translator, tab: LayoutTab): string {
-	return tab.kind === "tool" ? t(LAYOUT_TOOL_NAME_KEYS[tab.tool]) : tab.name;
+	switch (tab.kind) {
+		case "tool":
+			return t(LAYOUT_TOOL_NAME_KEYS[tab.tool]);
+		case "chat":
+			return chatName(t, tab.name);
+		case "terminal":
+			return terminalName(t, tab.name);
+		case "changes":
+			return changesTabName(t, tab.scope);
+		case "diff":
+			return tab.before === undefined ? diffTabName(t, tab.scope, tab.path) : tab.name;
+		case "document":
+			return planDocumentName(t, tab.name);
+		case "file":
+			return tab.name;
+	}
 }
 
 export function toolTab(tool: LayoutToolId): LayoutToolTab {

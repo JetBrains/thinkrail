@@ -72,6 +72,8 @@ import type {
 } from "../chat/types";
 import {
 	ancestorPaths,
+	defaultTerminalIndex,
+	defaultTerminalTitle,
 	isPreviewCompatibleTabKind,
 	type LayoutAttention,
 	layoutResourceIdentity,
@@ -2170,17 +2172,9 @@ function foldLoginFrame(state: LoginState, frame: LoginFrame): LoginState {
 	}
 }
 
-function terminalTitleIndex(title: string): number {
-	const index = Number.parseInt(/\d+/.exec(title)?.[0] ?? "", 10);
-	const isDefault =
-		title === t("store.terminal.defaultTitle", { index }) ||
-		title === t("store.terminal.defaultTitle", { index, lng: "en" });
-	return Number.isInteger(index) && isDefault ? index : Number.NaN;
-}
-
 function nextTerminalTitle(list: TerminalTab[]): string {
-	const used = list.map((tab) => terminalTitleIndex(tab.title)).filter((n) => Number.isInteger(n));
-	return t("store.terminal.defaultTitle", { index: Math.max(0, ...used) + 1 });
+	const used = list.flatMap((tab) => defaultTerminalIndex(tab.title) ?? []);
+	return defaultTerminalTitle(Math.max(0, ...used) + 1);
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -3483,7 +3477,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				kind: "chat",
 				id: chatTabId(workspaceId, sessionId),
 				workspaceId,
-				name: t("store.chatTab.defaultName"),
+				name: "",
 				sessionId,
 			};
 			const id = existing?.id ?? availableEditorTabId(tabs, preferred);
@@ -4103,7 +4097,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			let sessions = s.sessions;
 			for (const { event, sessionId } of payloads) {
 				if (event.type === "session_info_changed") {
-					const title = event.name?.trim() || t("store.chatTab.defaultName");
+					const title = event.name?.trim() ?? "";
 					const renamed = renameChat(state, sessionId, title);
 					if (renamed && Object.keys(renamed).length > 0) state = { ...state, ...renamed };
 				}
@@ -4312,7 +4306,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					kind: "chat",
 					id: target.tabId,
 					workspaceId: target.workspaceId,
-					name: t("store.chatTab.defaultName"),
+					name: "",
 					sessionId: target.sessionId,
 				} satisfies ChatTab);
 			const resourcePlacement = selectLayoutResourcePlacement(s, target.workspaceId, resource);

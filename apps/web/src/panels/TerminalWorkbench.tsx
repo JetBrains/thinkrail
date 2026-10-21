@@ -4,6 +4,7 @@ import { WS_CHANNELS } from "@thinkrail/contracts";
 import { i18n, useT } from "@thinkrail/locales/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { lazy, type ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { terminalName } from "../lib";
 import type { TerminalTab } from "../store";
 import { isConnectedGeneration, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
@@ -187,7 +188,9 @@ export function useTerminalClose(): {
 				title={t("panels.terminalWorkbench.busyTitle")}
 				description={
 					pending
-						? t("panels.terminalWorkbench.busyDescription", { title: pending.tab.title })
+						? t("panels.terminalWorkbench.busyDescription", {
+								title: terminalName(t, pending.tab.title),
+							})
 						: t("panels.terminalWorkbench.busyDescriptionUntitled")
 				}
 				confirmLabel={t("panels.terminalWorkbench.closeAnyway")}

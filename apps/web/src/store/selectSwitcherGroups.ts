@@ -14,7 +14,7 @@ export interface SwitcherSession {
 	workspaceId: string;
 	projectId: string;
 	workspaceName: string;
-	chatTitle: string;
+	chatTitle: string | null;
 	attention: SessionAttention;
 }
 
@@ -69,7 +69,7 @@ function resolveChatTitle(
 			return null;
 		};
 		const fromLayout = visit(document.center);
-		if (fromLayout) return fromLayout;
+		if (fromLayout !== null) return fromLayout;
 	}
 	const closed = state.closedChatsByWorkspace[workspaceId] ?? [];
 	return closed.find((chat) => chat.sessionId === sessionId)?.title ?? null;
@@ -97,7 +97,7 @@ export function selectSwitcherGroups(state: SwitcherGroupsState): SwitcherProjec
 				workspaceId: record.workspaceId,
 				projectId: record.projectId,
 				workspaceName: resolveWorkspaceName(state, record.projectId, record.workspaceId) ?? "",
-				chatTitle: resolveChatTitle(state, record.workspaceId, record.sessionId) ?? "",
+				chatTitle: resolveChatTitle(state, record.workspaceId, record.sessionId),
 				attention,
 			});
 			sessionsByProject.set(record.projectId, sessions);

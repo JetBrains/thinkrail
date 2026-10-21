@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { currentTranslator } from "@thinkrail/locales/react";
+import { applyLocale, currentTranslator } from "@thinkrail/locales/react";
 import type { LayoutAttention } from "../../lib";
 import {
 	adoptToolSelections,
@@ -156,6 +156,50 @@ describe("workspace layout model", () => {
 		expect(toolTab("files").name).toBe("Files");
 		expect(layoutTabName(currentTranslator(), legacyFiles)).toBe("Files");
 		expect(layoutTabName(currentTranslator(), file("one"))).toBe("one.ts");
+	});
+
+	test("default chat, terminal, Changes, diff and plan names follow the current language", () => {
+		applyLocale("de", {
+			de: {
+				"store.chatTab.defaultName": "Unterhaltung",
+				"store.terminal.defaultTitle": "Konsole {{index}}",
+				"changes.tab.name": "Änderungen",
+				"chat.todo.planDocName": "Plan: {{title}}",
+			},
+		});
+		try {
+			const t = currentTranslator();
+			const chat = (name: string) => ({ kind: "chat", id: "c", name, sessionId: "s" }) as const;
+			expect(layoutTabName(t, chat(""))).toBe("Unterhaltung");
+			expect(layoutTabName(t, chat("Fix login"))).toBe("Fix login");
+			expect(layoutTabName(t, { kind: "terminal", id: "t", name: "Terminal 2", tabKey: "k" })).toBe(
+				"Konsole 2",
+			);
+			expect(
+				layoutTabName(t, { kind: "changes", id: "x", name: "", scope: { kind: "branch" } }),
+			).toBe("Änderungen");
+			expect(
+				layoutTabName(t, {
+					kind: "diff",
+					id: "d",
+					name: "a.ts",
+					path: "src/a.ts",
+					scope: { kind: "branch" },
+				}),
+			).toBe("a.ts");
+			expect(
+				layoutTabName(t, {
+					kind: "document",
+					id: "p",
+					name: "",
+					documentKind: "todo-plan",
+					sourceId: "s",
+					docPath: "TODO.md",
+				}),
+			).toBe("Plan: Unterhaltung");
+		} finally {
+			applyLocale("en", {});
+		}
 	});
 
 	test("opens one canonical tab and keeps preview promotion one-way", () => {
