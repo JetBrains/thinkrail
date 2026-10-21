@@ -31,6 +31,7 @@ type ReviewRow = {
 	changedAt?: number;
 	createdAt?: number;
 	details?: ReviewDetails;
+	head?: string;
 };
 type RepoMergeSettings = Pick<ReviewDetails, "mergeMethods" | "deleteBranchOnMerge">;
 type ParsedReviewRows = { valid: true; rows: ReviewRow[] } | { valid: false };
@@ -190,7 +191,9 @@ function reviewListCommand(
 			"--state",
 			scope === "open" ? "open" : "all",
 			"--json",
-			scope === "open" ? `${GITHUB_ROW_FIELDS},${GITHUB_DETAIL_FIELDS}` : GITHUB_ROW_FIELDS,
+			scope === "open"
+				? `${GITHUB_ROW_FIELDS},${GITHUB_DETAIL_FIELDS}`
+				: `${GITHUB_ROW_FIELDS},headRepositoryOwner,headRepository`,
 			"--limit",
 			scope === "open" ? "1" : SETTLED_REVIEW_ROW_LIMIT,
 		];
@@ -246,7 +249,9 @@ async function lookupOpenBranchReview(
 		if (row === null) {
 			const settled = await listReviewRows(cwd, provider, branch, "settled", run);
 			if (settled === null) return { value: null, cacheable: false };
-			row = pickReviewRow(settled);
+			row = pickReviewRow(
+				ownSlug ? settled.filter((r) => !r.head || r.head === ownSlug.toLowerCase()) : settled,
+			);
 		}
 		const settings =
 			row?.details && detection.remoteUrl
@@ -498,7 +503,9 @@ function parseReviewRows(
 			}
 			const createdAt = reviewRowTime(row, ["createdAt", "created_at"]);
 			const details = state === "open" ? reviewRowDetails(row, ownSlug) : undefined;
+			const head = headRepositorySlug(row);
 			parsed.push({
+				...(head ? { head } : {}),
 				number: value,
 				...(url ? { url } : {}),
 				...(state ? { state } : {}),

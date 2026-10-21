@@ -245,3 +245,44 @@ describe("deleteRemoteBranch", () => {
 		);
 	});
 });
+
+function teammatePush(file: string): string {
+	const other = join(dataDir, `teammate-${file}`);
+	Bun.spawnSync(["git", "clone", "-q", "--branch", "feature", remote, other], { env: process.env });
+	sh(other, "config", "user.email", "t@thinkrail.test");
+	sh(other, "config", "user.name", "teammate");
+	writeFileSync(join(other, file), "teammate\n");
+	sh(other, "add", "-A");
+	sh(other, "commit", "-q", "-m", "teammate");
+	sh(other, "push", "-q", "origin", "feature");
+	return sh(other, "rev-parse", "HEAD");
+}
+
+describe("remote deletion is leased to the tip this checkout saw", () => {
+	test("a commit pushed after the merge keeps the branch and is reported", async () => {
+		const { run } = fakeGh({ headRefName: "feature", state: "OPEN" });
+		const pushed = { tip: "" };
+		const racing: PrCommandRunner = async (cwd, command, timeoutMs) => {
+			const result = await run(cwd, command, timeoutMs);
+			if (command[2] === "merge") pushed.tip = teammatePush("late.txt");
+			return result;
+		};
+		const result = await mergePr({ ...params, method: "squash", deleteBranch: true }, racing);
+		expect(result).toMatchObject({ merged: true, branchDeleted: false });
+		expect(result.deleteError).toMatch(/moved since this checkout last saw it/);
+		expect(sh(remote, "rev-parse", "refs/heads/feature")).toBe(pushed.tip);
+	});
+
+	test("a standalone deletion refuses a remote that moved or holds commits HEAD lacks", async () => {
+		const tip = teammatePush("unseen.txt");
+		await expect(deleteRemoteBranch({ workspaceId: "w1", branch: "feature" })).rejects.toThrow(
+			/moved since this checkout last saw it/,
+		);
+		expect(sh(remote, "rev-parse", "refs/heads/feature")).toBe(tip);
+		sh(repo, "fetch", "-q", "origin");
+		await expect(deleteRemoteBranch({ workspaceId: "w1", branch: "feature" })).rejects.toThrow(
+			/has commits this checkout doesn't/,
+		);
+		expect(sh(remote, "rev-parse", "refs/heads/feature")).toBe(tip);
+	});
+});

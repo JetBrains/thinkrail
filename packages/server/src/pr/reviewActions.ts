@@ -5,7 +5,7 @@ import {
 	githubSlug,
 	runProviderCommand,
 } from "../branch-review";
-import { git, originUrls } from "../git";
+import { git, gitAsync, originUrls, remoteRefOid } from "../git";
 import {
 	MUTATION_TIMEOUT_MS,
 	onBaseBranch,
@@ -162,12 +162,14 @@ export async function mergePr(
 	params: MergePrParams,
 	run: PrCommandRunner = runProviderCommand,
 ): Promise<MergePrResult> {
+	let mergedHead = "";
 	const cwd = await mutate(
 		params,
 		["OPEN"],
 		(worktree) => {
 			const head = git(worktree, ["rev-parse", "HEAD"]);
 			if (!head.ok) throw new Error(`Couldn't read HEAD: ${head.err || "git failed"}`);
+			mergedHead = head.out;
 			return [
 				"gh",
 				"pr",
@@ -184,7 +186,7 @@ export async function mergePr(
 	const merged = (await viewPr(cwd, params.number, run).catch(() => null))?.state === "MERGED";
 	if (!merged || !params.deleteBranch) return { merged, branchDeleted: false };
 	try {
-		const deleted = await deleteOrigin(cwd, params.branch);
+		const deleted = await deleteOrigin(cwd, params.branch, mergedHead);
 		return deleted === true
 			? { merged, branchDeleted: true }
 			: { merged, branchDeleted: false, deleteError: deleted };
@@ -197,11 +199,28 @@ export async function mergePr(
 	}
 }
 
-async function deleteOrigin(cwd: string, branch: string): Promise<true | string> {
-	const pushed = await pushOrigin(cwd, ["origin", "--delete", `refs/heads/${branch}`]);
+async function remoteHasRef(cwd: string, ref: string): Promise<boolean> {
+	const target = (await originUrls(cwd)).push ?? "origin";
+	const listed = await gitAsync(cwd, ["ls-remote", "--end-of-options", target, ref], {
+		network: true,
+	});
+	return !listed.ok || listed.out.trim() !== "";
+}
+
+async function deleteOrigin(cwd: string, branch: string, expected: string): Promise<true | string> {
+	const ref = `refs/heads/${branch}`;
+	const pushed = await pushOrigin(cwd, [
+		`--force-with-lease=${ref}:${expected}`,
+		"origin",
+		"--delete",
+		ref,
+	]);
 	forgetOpenBranchReview(cwd);
 	if (!("err" in pushed)) return true;
-	return /remote ref does not exist/i.test(pushed.err) ? true : pushed.err;
+	if (/remote ref does not exist/i.test(pushed.err)) return true;
+	if (!/stale info/i.test(pushed.err)) return pushed.err;
+	if (!(await remoteHasRef(cwd, ref))) return true;
+	return `origin/${branch} moved since this checkout last saw it — fetch and review it first. Nothing was deleted.`;
 }
 
 export async function deleteRemoteBranch(params: {
@@ -220,6 +239,17 @@ export async function deleteRemoteBranch(params: {
 			`"${ws.branch}" still has an open ${review.value.kind === "pull-request" ? "PR" : "MR"} — deleting the branch would close it. Nothing was deleted.`,
 		);
 	}
-	const deleted = await deleteOrigin(ws.worktreePath, ws.branch);
+	const tip = remoteRefOid(ws.worktreePath, `origin/${ws.branch}`);
+	if (!tip) {
+		throw new Error(
+			`Couldn't tell which commit origin/${ws.branch} points at — refresh and try again. Nothing was deleted.`,
+		);
+	}
+	if (!git(ws.worktreePath, ["merge-base", "--is-ancestor", tip, "HEAD"]).ok) {
+		throw new Error(
+			`origin/${ws.branch} has commits this checkout doesn't — integrate or review them first. Nothing was deleted.`,
+		);
+	}
+	const deleted = await deleteOrigin(ws.worktreePath, ws.branch, tip);
 	if (deleted !== true) throw new Error(deleted);
 }

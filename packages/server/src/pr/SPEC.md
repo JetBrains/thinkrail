@@ -163,10 +163,13 @@ branch is deleted only after a real merge — deleting a queued PR's head branch
 the injected runner, surface gh's stderr when refused, and drop the worktree's review cache whatever the
 outcome. **The remote branch is deleted with git, never `gh pr merge --delete-branch`**: gh would also
 delete the local branch and switch the checkout — fatal for a worktree and for the user's own checkout.
-Both paths run `git push origin --delete refs/heads/<branch>` (the full ref, so a same-named tag is never
-the one deleted) through `pushOrigin`, the one push helper (`pushGitEnv` + `PUSH_AUTH_FAILED`)
-`pushToOrigin` also uses; an already-missing remote branch counts as deleted (GitHub's own auto-delete may
-have won). After a successful merge a failed deletion is reported in `MergePrResult.deleteError`, not
+Both paths run `git push --force-with-lease=refs/heads/<branch>:<tip> origin --delete refs/heads/<branch>`
+(the full ref, so a same-named tag is never the one deleted) through `pushOrigin`, the one push helper
+(`pushGitEnv` + `PUSH_AUTH_FAILED`) `pushToOrigin` also uses. The lease names the tip the deletion was
+validated against — the merged HEAD after a merge, the remote-tracking `origin/<branch>` for a standalone
+deletion, which must also be contained in HEAD — so a commit someone pushed in between is never the
+remote's only copy to be deleted: the lease rejects and nothing is deleted. A rejected lease whose ref is
+already gone (`ls-remote` on the push URL) counts as deleted — GitHub's own auto-delete may have won. After a successful merge a failed deletion is reported in `MergePrResult.deleteError`, not
 thrown. The standalone deletion refuses the base branch, a branch whose review the fresh lookup reports
 open, and — when that lookup did not answer — any branch at all, since deleting a PR's head branch closes
 it and an unanswered lookup cannot rule that out.

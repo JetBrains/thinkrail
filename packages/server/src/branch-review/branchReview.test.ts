@@ -660,3 +660,35 @@ test("a same-named branch's PR from a fork carries no details, so nothing offers
 	expect(review?.details).toBeUndefined();
 	expect(commands.filter((args) => args[1] === "repo")).toHaveLength(0);
 });
+
+test("a fork's settled same-named PR is never this branch's review, so it cannot shelve or reopen it", async () => {
+	const cwd = repo("git@github.com:acme/settled-fork.git");
+	const commands: string[][] = [];
+	const review = await findOpenBranchReviewWithRunner(cwd, "feature", async (_cwd, args) => {
+		commands.push(args);
+		if (args.includes("open")) return { ok: true, out: "[]" };
+		return {
+			ok: true,
+			out: JSON.stringify([
+				{
+					number: 9,
+					state: "CLOSED",
+					closedAt: "2026-10-05T10:00:00Z",
+					headRepositoryOwner: { login: "contributor" },
+					headRepository: { name: "settled-fork" },
+				},
+				{
+					number: 7,
+					state: "MERGED",
+					mergedAt: "2026-10-01T10:00:00Z",
+					headRepositoryOwner: { login: "acme" },
+					headRepository: { name: "settled-fork" },
+				},
+			]),
+		};
+	});
+	expect(commands[1]?.[commands[1].indexOf("--json") + 1]).toContain(
+		"headRepositoryOwner,headRepository",
+	);
+	expect(review).toMatchObject({ number: 7, state: "merged" });
+});

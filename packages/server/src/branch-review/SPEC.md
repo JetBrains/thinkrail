@@ -45,6 +45,8 @@ contracts spec pins `state` to `WORKSPACE_SETTLE_PROTOCOL_VERSION` and the host 
   become `OpenBranchReview.details` — only when the PR's head repository (`headRepositoryOwner` /
   `headRepository`, also requested) is origin's own: `--head` matches by branch name alone, so a fork's PR
   from a same-named branch is found too, and it must never look like something this workspace can act on.
+  The settled page asks for the head repository too and drops a known foreign row before picking, so a
+  fork's merged or closed same-named PR never shelves this workspace or offers Reopen.
   Checks count each check once by its newest attempt (a re-run appears
   per attempt in the rollup): SUCCESS / NEUTRAL / SKIPPED pass; FAILURE / TIMED_OUT / CANCELLED /
   ACTION_REQUIRED / STARTUP_FAILURE fail; anything not completed (and PENDING / EXPECTED status contexts)
