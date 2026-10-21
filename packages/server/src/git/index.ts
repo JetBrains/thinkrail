@@ -7,7 +7,9 @@ export {
 } from "./diffScope";
 export {
 	canonicalPath,
+	commitsAheadOf,
 	countPushDivergence,
+	countPushTargetDivergence,
 	currentBranch,
 	gitCommitPaths,
 	gitDiffFile,
@@ -18,6 +20,8 @@ export {
 	listCommits,
 	listCommitsSince,
 	listRemotes,
+	originUrls,
+	type PushTargetStatus,
 	prefetchBranch,
 	readBlobAt,
 	readBlobBytesAt,
