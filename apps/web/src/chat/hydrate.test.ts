@@ -102,7 +102,11 @@ test("a failed round keeps its error before a later user-stopped result that wok
 			output: { text: "", truncated: false },
 		},
 	};
-	const hydrated = messagesToRuntime([user, failed, stopped] as unknown as Message[]);
+	const hydrated = messagesToRuntime(currentTranslator(), [
+		user,
+		failed,
+		stopped,
+	] as unknown as Message[]);
 	expect(hydrated.turns.map((t) => t.kind)).toEqual([
 		"user",
 		"assistant",
@@ -117,9 +121,9 @@ test("a failed round keeps its error before a later user-stopped result that wok
 	]);
 
 	const woke = { ...stopped, details: { ...stopped.details, status: "completed", exitCode: 0 } };
-	expect(messagesToRuntime([user, failed, woke] as unknown as Message[]).turns.at(-1)?.kind).toBe(
-		"error",
-	);
+	expect(
+		messagesToRuntime(t, [user, failed, woke] as unknown as Message[]).turns.at(-1)?.kind,
+	).toBe("error");
 });
 
 test("an assistant turn that ended at length hydrates a visible truncation failure", () => {

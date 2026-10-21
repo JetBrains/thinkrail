@@ -117,7 +117,10 @@ function moduleRules(packages: ReadonlyMap<string, string>): ModuleRule[] {
 		...roots.filter((root) => root === "packages/locales").map((root) => ({ root, allowed: [] })),
 		...roots
 			.filter((root) => root === "packages/resource-renderers")
-			.map((root) => ({ root, allowed: ["packages/contracts", "packages/locales", "packages/ui"] })),
+			.map((root) => ({
+				root,
+				allowed: ["packages/contracts", "packages/locales", "packages/ui"],
+			})),
 		...roots
 			.filter((root) => root.startsWith("pi-extensions/"))
 			.map((root) => ({ root, allowed: [] })),

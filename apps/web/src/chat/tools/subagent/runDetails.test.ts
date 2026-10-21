@@ -132,8 +132,9 @@ test("agentSummary is the live collapsed-header line, per status", () => {
 });
 
 test("usage counters leave run time to the caller; run counters append it", () => {
-	expect(usageCounters(details())).toEqual(["12 turns", "30k tok", "$0.040"]);
-	expect(runCounters(details())).toEqual([...usageCounters(details()), "45s"]);
+	const t = currentTranslator();
+	expect(usageCounters(t, details())).toEqual(["12 turns", "30k tok", "$0.040"]);
+	expect(runCounters(t, details())).toEqual([...usageCounters(t, details()), "45s"]);
 });
 
 test("the completion report drops pi-subagents' header and teases its first readable line", () => {
