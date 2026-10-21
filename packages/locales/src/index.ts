@@ -30,6 +30,8 @@ export const DESKTOP_DIALOG_KEYS = [
 	"desktop.dialog.startFailed",
 	"desktop.dialog.updateRestartFailed",
 	"desktop.dialog.updateRestartFailedTitle",
+	"desktop.splash.finishingUpdate",
+	"desktop.splash.starting",
 ] as const satisfies readonly (keyof EnglishCatalog)[];
 
 const BUNDLED: Readonly<Record<string, Catalog>> = { en: EN };
