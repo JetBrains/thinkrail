@@ -608,7 +608,8 @@ export default function ChatView({
 			.catch(() => {});
 	};
 
-	const onHistoryOpen = () => openOverlay(draft);
+	// The history button toggles the overlay: a second click closes it again.
+	const onHistoryOpen = () => (historyState.open ? closeHistory() : openOverlay(draft));
 
 	const onManageTemplates = () => useAppStore.getState().openSettings(SettingsSection.Templates);
 
