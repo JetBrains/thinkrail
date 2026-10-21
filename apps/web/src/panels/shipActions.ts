@@ -28,6 +28,7 @@ export interface ShipAction {
 
 export type RemoteValue =
 	| { kind: "noOrigin" }
+	| { kind: "unreachable" }
 	| { kind: "unpublished" }
 	| { kind: "published" }
 	| { kind: "inSync" }
@@ -61,6 +62,7 @@ function commits(count: number): string {
 
 function remoteValue(status: BranchFacts): RemoteValue {
 	if (!status.hasOrigin) return { kind: "noOrigin" };
+	if (status.published === null) return { kind: "unreachable" };
 	if (!status.published) return { kind: "unpublished" };
 	if (status.ahead === undefined || status.behind === undefined) return { kind: "published" };
 	if (status.ahead === 0 && status.behind === 0) return { kind: "inSync" };
@@ -68,7 +70,7 @@ function remoteValue(status: BranchFacts): RemoteValue {
 }
 
 function remotePrimary(status: BranchFacts): ShipAction | null {
-	if (!status.hasOrigin) return null;
+	if (!status.hasOrigin || status.published === null) return null;
 	if (!status.published) {
 		return status.aheadOfBase > 0
 			? { id: "publish", label: "Publish branch", short: "Publish", tone: "primary" }

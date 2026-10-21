@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
@@ -117,6 +117,46 @@ test("pushing the Default workspace's own base branch asks first", async ({ page
 			.poll(() => gitAs(bare, "rev-parse", "refs/heads/main"), { timeout: 10_000 })
 			.toBe(local);
 	} finally {
+		gitAs(E2E_FIXTURE_REPO, "reset", "-q", "--hard", startSha);
+	}
+});
+
+test("Try again after a failed base push never pushes a branch the user didn't confirm", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await enterDefaultWorkspace(page);
+	const bare = bareRemote();
+	const startSha = gitAs(E2E_FIXTURE_REPO, "rev-parse", "HEAD");
+	const hook = join(E2E_FIXTURE_REPO, ".git", "hooks", "pre-push");
+	try {
+		gitAs(E2E_FIXTURE_REPO, "remote", "add", "origin", bare);
+		gitAs(E2E_FIXTURE_REPO, "push", "-q", "--set-upstream", "origin", "main");
+		commitFile(E2E_FIXTURE_REPO, "notes.txt", "local-only\n", "chore: local note");
+		mkdirSync(join(E2E_FIXTURE_REPO, ".git", "hooks"), { recursive: true });
+		writeFileSync(
+			hook,
+			"#!/bin/sh\necho \"fatal: Authentication failed for 'origin'\" >&2\nexit 1\n",
+		);
+		chmodSync(hook, 0o755);
+		await revalidate(page);
+		await page.getByTestId("scope-ship-remote-primary").click();
+		await page.getByTestId("ship-confirm-base-push").click();
+		const setup = page.getByTestId("open-pr-setup-dialog");
+		await expect(setup).toBeVisible();
+
+		gitAs(E2E_FIXTURE_REPO, "switch", "-q", "-c", "release");
+		await revalidate(page);
+		await expect(page.getByTestId("scope-branch")).toHaveText("release");
+		rmSync(hook);
+		await page.getByTestId("open-pr-setup-retry").click();
+		await expect(page.getByText(/moved from "main" to "release"/).first()).toBeVisible();
+		expect(gitAs(bare, "for-each-ref", "--format=%(refname)", "refs/heads")).toBe(
+			"refs/heads/main",
+		);
+	} finally {
+		rmSync(hook, { force: true });
+		gitAs(E2E_FIXTURE_REPO, "switch", "-q", "main");
 		gitAs(E2E_FIXTURE_REPO, "reset", "-q", "--hard", startSha);
 	}
 });

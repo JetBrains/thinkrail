@@ -140,6 +140,8 @@ function RemoteValueView({ value }: { value: RemoteValue }) {
 	switch (value.kind) {
 		case "noOrigin":
 			return <span className={cn(valueText, "text-text-subtle")}>No remote</span>;
+		case "unreachable":
+			return <span className={cn(valueText, "text-text-subtle")}>Unreachable</span>;
 		case "unpublished":
 			return <span className={cn(valueText, "text-text-muted")}>Not published</span>;
 		case "published":

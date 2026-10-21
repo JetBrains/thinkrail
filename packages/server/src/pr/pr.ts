@@ -37,6 +37,7 @@ const MUTATION_TIMEOUT_MS = 60_000;
 export interface OpenPrParams {
 	workspaceId: string;
 	sessionId?: string;
+	branch?: string;
 	title?: string;
 	titleEdited?: boolean;
 	body?: string;
@@ -310,6 +311,8 @@ export async function ghPrFlow(
 			"gh",
 			"pr",
 			"list",
+			"--repo",
+			input.slug,
 			"--head",
 			branch,
 			"--base",
@@ -332,6 +335,8 @@ export async function ghPrFlow(
 				"pr",
 				"edit",
 				String(existing),
+				"--repo",
+				input.slug,
 				...(input.titleEdited ? ["--title", input.title] : []),
 				"--body",
 				input.body,
@@ -351,6 +356,8 @@ export async function ghPrFlow(
 			"gh",
 			"pr",
 			"create",
+			"--repo",
+			input.slug,
 			"--base",
 			input.base,
 			"--head",
@@ -403,20 +410,20 @@ async function pushToOrigin(cwd: string, branch: string): Promise<string> {
 	return origin;
 }
 
-function refreshedWorkspace(workspaceId: string) {
+function refreshedWorkspace(workspaceId: string, expectedBranch: string | undefined) {
 	refreshUserOwnedWorkspace(workspaceId);
 	const ws = getWorkspace(workspaceId);
 	assertSafeRef(ws.branch);
+	if (expectedBranch !== undefined && ws.branch !== expectedBranch) {
+		throw new Error(
+			`The checkout moved from "${expectedBranch}" to "${ws.branch}" — nothing was pushed. Review the branch and try again.`,
+		);
+	}
 	return ws;
 }
 
 function pushWorkspace(workspaceId: string, branch: string, confirmBase: boolean) {
-	const ws = refreshedWorkspace(workspaceId);
-	if (ws.branch !== branch) {
-		throw new Error(
-			`The checkout moved from "${branch}" to "${ws.branch}" — nothing was pushed. Review the branch and push again.`,
-		);
-	}
+	const ws = refreshedWorkspace(workspaceId, branch);
 	if (onBaseBranch(ws) && !confirmBase) {
 		throw new Error(
 			`"${ws.branch}" is this workspace's base branch — pushing it publishes the commits straight to the shared branch. Confirm the push first.`,
@@ -438,8 +445,8 @@ export async function pushBranch(params: {
 	return { dirtyFiles };
 }
 
-function prWorkspace(workspaceId: string) {
-	const ws = refreshedWorkspace(workspaceId);
+function prWorkspace(workspaceId: string, expectedBranch: string | undefined) {
+	const ws = refreshedWorkspace(workspaceId, expectedBranch);
 	const baseRemote = remoteNameOf(ws.baseBranch, listRemotes(ws.worktreePath));
 	const unconfiguredTrackingRef =
 		baseRemote === null &&
@@ -468,9 +475,9 @@ export async function openPr(
 	// resolve the live branch synchronously here so a switch made in a terminal just before Open PR
 	// can never push/open/compare against a stale one (see SPEC). A no-op for created workspaces,
 	// whose branch is ThinkRail-owned and never drifts externally.
-	prWorkspace(params.workspaceId);
+	prWorkspace(params.workspaceId, params.branch);
 	const dirtyFiles = (await gitStatus(params.workspaceId, { kind: "uncommitted" })).changes.length;
-	const ws = prWorkspace(params.workspaceId);
+	const ws = prWorkspace(params.workspaceId, params.branch);
 	const cwd = ws.worktreePath;
 	const origin = await pushToOrigin(cwd, ws.branch);
 

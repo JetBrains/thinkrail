@@ -250,7 +250,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   **`state`** — `"open" | "merged" | "closed"`, absent on a pre-v78 host and read as open — and
   **`changedAt`**, the ms time the provider merged or closed it; no actions),
   **`BranchStatus`** (`workspace.branchStatus`'s answer, v87 `BRANCH_STATUS_PROTOCOL_VERSION`: `hasOrigin`,
-  `provider` (`"github" | "gitlab" | null`), `published` (origin has the branch), `pushesElsewhere` (origin's
+  `provider` (`"github" | "gitlab" | null`), `published` (the push repository has the branch; `null` when a split origin's push repository
+  couldn't be read), `pushesElsewhere` (origin's
   push URL differs from its fetch URL, so `ahead` / `behind` describe the push repository), `ahead` / `behind` vs
   `origin/<branch>` when published, `aheadOfBase`, `onBase` (the branch is its own base —
   Default on the default branch) and `review: OpenBranchReview | null` — the facts the topbar's Remote and
@@ -602,7 +603,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   returns the discovered `templates` and `planAvailable`; an older client's `{ sessionId }` call keeps the
   plan body) / **`pr.generate`** (v87, `{ workspaceId, sessionId?, template? }` → `{ body: string | null }`,
   a best-effort one-shot draft; `null` when no model answered; `pr.open` v87 accepts no `sessionId` when
-  the caller supplies the `body`) /
+  the caller supplies the `body`, and an optional `branch` — the branch the draft was composed for — that
+  must still be the live branch, as for `workspace.push`) /
   **`project.setTrust`** (persist a project's trust grant → the updated `Project`; gates its committed
   cross-agent skill aliases; `resources: true` also grants pi-level resource trust, see Project trust) /
   **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved from

@@ -140,8 +140,8 @@ export interface BranchStatus {
 	hasOrigin: boolean;
 	/** The forge `origin` points at; `null` without an origin or for any other host. */
 	provider: ReviewProvider | null;
-	/** `origin/<branch>` exists. */
-	published: boolean;
+	/** The push repository has the branch; `null` when it couldn't be read (split origin, `ls-remote` failed). */
+	published: boolean | null;
 	/** Origin pushes to another URL than it fetches from: ahead/behind describe the push repository. */
 	pushesElsewhere: boolean;
 	/** Published only: local commits origin lacks. */

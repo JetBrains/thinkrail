@@ -30,6 +30,7 @@ import { settleWorkspace, unsettleWorkspace } from "./workspaceActions";
 const PR_OPEN_TIMEOUT_MS = 180_000;
 
 type PrSubmit = {
+	branch: string;
 	draft: boolean;
 	title?: string | undefined;
 	body?: string | undefined;
@@ -37,7 +38,9 @@ type PrSubmit = {
 	sourcing?: PrSourcing | undefined;
 };
 
-type Retry = { kind: "pr"; submit: PrSubmit } | { kind: "push"; confirmBase: boolean };
+type PushTarget = { branch: string; confirmBase: boolean };
+
+type Retry = { kind: "pr"; submit: PrSubmit } | { kind: "push"; target: PushTarget };
 
 export interface ShipRunnerOptions {
 	workspace: Workspace | null;
@@ -74,9 +77,9 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 	const hostPlatform = useAppStore((s) => s.hostPlatform);
 	const [pending, setPending] = useState<ShipActionId | null>(null);
 	const [submitting, setSubmitting] = useState(false);
-	const [compose, setCompose] = useState<PrComposeState | null>(null);
+	const [compose, setCompose] = useState<(PrComposeState & { branch: string }) | null>(null);
 	const [setup, setSetup] = useState<PrSetupState | null>(null);
-	const [confirmPush, setConfirmPush] = useState(false);
+	const [confirmPush, setConfirmPush] = useState<string | null>(null);
 	const [syncOpen, setSyncOpen] = useState(false);
 	const [removing, setRemoving] = useState<Workspace | null>(null);
 	const lastSubmit = useRef<PrSubmit | null>(null);
@@ -218,6 +221,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 				"pr.open",
 				{
 					workspaceId,
+					branch: submit.branch,
 					...(sessionId ? { sessionId } : {}),
 					...(title !== undefined ? { title } : {}),
 					...(titleEdited ? { titleEdited: true } : {}),
@@ -235,15 +239,17 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 	};
 
 	const openPr = (draft: boolean): Promise<void> => {
-		if (openReview) return submitPr({ draft: false, titleEdited: false });
+		if (openReview) return submitPr({ branch, draft: false, titleEdited: false });
 		const edited = lastSubmit.current;
 		if (
 			edited &&
+			edited.branch === branch &&
 			edited.title !== undefined &&
 			edited.body !== undefined &&
 			edited.draft === draft
 		) {
 			setCompose({
+				branch,
 				draft,
 				title: edited.title,
 				body: edited.body,
@@ -257,6 +263,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 			.then(
 				(draftPreview) =>
 					setCompose({
+						branch,
 						draft,
 						title: draftPreview.title,
 						body: draftPreview.body,
@@ -281,12 +288,16 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 			.finally(() => setPending(null));
 	};
 
-	const push = (confirmBase: boolean): Promise<void> => {
+	const push = (target: PushTarget): Promise<void> => {
 		setPending("push");
 		return getTransport()
 			.request(
 				"workspace.push",
-				{ workspaceId, branch, ...(confirmBase ? { confirmBase: true } : {}) },
+				{
+					workspaceId,
+					branch: target.branch,
+					...(target.confirmBase ? { confirmBase: true } : {}),
+				},
 				{ timeoutMs: PR_OPEN_TIMEOUT_MS },
 			)
 			.then(
@@ -297,12 +308,12 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 						title: ahead > 0 ? "Pushed" : "Branch published",
 						message:
 							ahead > 0
-								? `Pushed ${commits(ahead)} to origin/${branch}.`
-								: `${branch} is on origin.`,
+								? `Pushed ${commits(ahead)} to origin/${target.branch}.`
+								: `${target.branch} is on origin.`,
 					});
 					toastDirty(result.dirtyFiles);
 				},
-				(err) => onPushFailed("Push failed", err, { kind: "push", confirmBase }),
+				(err) => onPushFailed("Push failed", err, { kind: "push", target }),
 			)
 			.finally(() => setPending(null));
 	};
@@ -312,8 +323,8 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 		switch (id) {
 			case "publish":
 			case "push":
-				if (onBase) setConfirmPush(true);
-				else void push(false);
+				if (onBase) setConfirmPush(branch);
+				else void push({ branch, confirmBase: false });
 				return;
 			case "sync":
 				setSyncOpen(true);
@@ -344,7 +355,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 		const failed = retry.current;
 		retry.current = null;
 		if (failed?.kind === "pr") void submitPr(failed.submit);
-		else if (failed) void push(failed.confirmBase);
+		else if (failed) void push(failed.target);
 	};
 	const runSetupCommand = (command: string) => {
 		setSetup(null);
@@ -363,7 +374,7 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 					setCompose(null);
 				}}
 				onSubmit={(submit) => {
-					if (compose) void submitPr({ draft: compose.draft, ...submit });
+					if (compose) void submitPr({ branch: compose.branch, draft: compose.draft, ...submit });
 				}}
 			/>
 			<PrSetupDialog
@@ -382,15 +393,17 @@ export function useShipRunner(options: ShipRunnerOptions): ShipRunner {
 				}}
 			/>
 			<ConfirmDialog
-				open={confirmPush}
-				onOpenChange={setConfirmPush}
-				title={`Push to ${branch}?`}
-				description={`This pushes ${ahead > 0 ? commits(ahead) : "the branch"} straight to origin/${branch}, the shared branch — no pull request reviews them first.`}
-				confirmLabel={`Push to ${branch}`}
+				open={confirmPush !== null}
+				onOpenChange={(open) => {
+					if (!open) setConfirmPush(null);
+				}}
+				title={`Push to ${confirmPush}?`}
+				description={`This pushes ${ahead > 0 ? commits(ahead) : "the branch"} straight to origin/${confirmPush}, the shared branch — no pull request reviews them first.`}
+				confirmLabel={`Push to ${confirmPush}`}
 				confirmTestId="ship-confirm-base-push"
 				onConfirm={() => {
-					setConfirmPush(false);
-					void push(true);
+					if (confirmPush !== null) void push({ branch: confirmPush, confirmBase: true });
+					setConfirmPush(null);
 				}}
 			/>
 			<Dialog open={syncOpen} onOpenChange={setSyncOpen}>

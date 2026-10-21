@@ -111,7 +111,8 @@ actions through the panels-owned ship runner; it owns no host state.
   n commits behind origin`, "In sync with origin", "Not published", or "No origin remote" — on a pre-v87
   host only alongside a review), and — with a review — the PR/MR row with its link.
 - **Remote** (v87 `workspace.branchStatus`) renders for every workspace, including Default on its base.
-  Its value reads *No remote* (no `origin`), *Not published* (origin lacks the branch), *In sync*, or the
+  Its value reads *No remote* (no `origin`), *Unreachable* (a split origin's push repository couldn't be
+  read — no action offered), *Not published* (origin lacks the branch), *In sync*, or the
   ↑N warning / ↓N info chips. Its next action is the `shipActions` remote arm: **Publish** (unpublished
   with commits ahead of the base), **Push N** (ahead, not behind), or **Sync…** (behind: the diverged
   dialog with the Plan pane's shell-inert `git pull --rebase origin <branch>` rule, never a force command;

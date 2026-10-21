@@ -267,6 +267,25 @@ test("a split origin measures the branch against where it is pushed, not where i
 	).toMatchObject({ published: true, ahead: 0, behind: 1 });
 });
 
+test("a split origin whose push repository can't be read reports publication as unknown", async () => {
+	const workspace = (await handleRequest(
+		"workspace.create",
+		{ projectId: "p1", name: "Unreachable push" },
+		CTX,
+	)) as Workspace;
+	const fetchRepo = join(dataDir, "fetch-only.git");
+	mkdirSync(fetchRepo);
+	git(fetchRepo, "init", "--bare");
+	git(repo, "remote", "add", "origin", fetchRepo);
+	git(workspace.worktreePath, "push", fetchRepo, `HEAD:refs/heads/${workspace.branch}`);
+	git(workspace.worktreePath, "fetch", "origin");
+	git(repo, "remote", "set-url", "--push", "origin", join(dataDir, "missing.git"));
+
+	const status = await handleRequest("workspace.branchStatus", { workspaceId: workspace.id }, CTX);
+	expect(status).toMatchObject({ hasOrigin: true, pushesElsewhere: true, published: null });
+	expect(status).not.toHaveProperty("ahead");
+});
+
 test("request diagnostics expose only registered method names", async () => {
 	expect(requestMethodDiagnostic("workspace.list")).toBe("workspace.list");
 	expect(requestMethodDiagnostic("host.update")).toBe("host.update");

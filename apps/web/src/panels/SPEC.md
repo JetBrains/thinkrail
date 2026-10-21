@@ -1332,7 +1332,11 @@ own section. The kebab menu (`plan-menu`, a
   `lastSubmit` reuse, `PUSH_AUTH_FAILED`, `ghProblem`, and compare hand-off rules above have one home.
   **Try again** re-runs the mutation that actually failed — a PR submit or a push, recorded when it fails
   and dropped when the setup dialog closes — never whichever PR the user last composed; `lastSubmit`
-  only restores the compose dialog's edits, including its description sources.
+  only restores the compose dialog's edits, including its description sources, and only on the branch they
+  were composed for. Every mutation carries the branch it was made for — the compose dialog's branch at
+  preview time, the base-push confirmation's named branch, the failed attempt's branch on retry — and the
+  host refuses it once the checkout has moved, so neither a terminal switch nor a retry can push a branch
+  the user didn't see or confirm.
   The Plan pane alone asks for its plan body explicitly (`bodySource: "plan"`, so a plan of adopted commits
   only still opens on it) and keeps its plan-specific emphasis and its body-refreshing *Push updates*
   (`pr.open` without a body); the topbar's Push is `workspace.push` and never touches a PR description.

@@ -237,6 +237,19 @@ describe("prDraftInput", () => {
 	});
 });
 
+describe("openPr is bound to the branch the user saw", () => {
+	test("a checkout that moved to another branch since the draft pushes nothing", async () => {
+		sh(repo, "switch", "-q", "-c", "other");
+		seedWorkspaces([
+			{ id: "w2", kind: "external", name: "Ext", branch: "feature", baseBranch: "main" },
+		]);
+		await expect(
+			openPr({ workspaceId: "w2", branch: "feature", body: "Draft for feature" }),
+		).rejects.toThrow(/moved from "feature" to "other"/);
+		expect(sh(remote, "for-each-ref", "refs/heads")).toBe("");
+	});
+});
+
 describe("openPr refreshes a session's PR body from its plan", () => {
 	test("a push with no body renders the session plan, adopted commits included", async () => {
 		sh(repo, "remote", "set-url", "origin", "https://gitlab.com/acme/widgets.git");

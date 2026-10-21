@@ -157,3 +157,9 @@ test("Sync offers git pull only when origin pulls from where it pushes and the b
 	expect(syncCommand("feature/ship", { ...published, pushesElsewhere: true })).toBeNull();
 	expect(syncCommand("feature;rm -rf", published)).toBeNull();
 });
+
+test("a push repository that couldn't be read offers no remote action and claims no state", () => {
+	const m = model({ published: null, pushesElsewhere: true, ahead: undefined, behind: undefined });
+	expect(m.remote.value).toEqual({ kind: "unreachable" });
+	expect(ids(m.remote)).toEqual({ primary: null, secondary: [] });
+});

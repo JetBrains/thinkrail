@@ -635,6 +635,7 @@ export interface WsMethodMap {
 		params: {
 			workspaceId: string;
 			sessionId?: string;
+			branch?: string;
 			title?: string;
 			titleEdited?: boolean;
 			body?: string;

@@ -69,6 +69,8 @@ function countsSummary(ahead: number, behind: number): RemoteSummary {
 
 function statusSummary(status: BranchFacts): RemoteSummary | null {
 	if (!status.hasOrigin) return { text: "No origin remote", diverges: false };
+	if (status.published === null)
+		return { text: "Couldn't read the push repository", diverges: false };
 	if (!status.published) return { text: "Not published", diverges: false };
 	if (status.ahead === undefined || status.behind === undefined) return null;
 	return countsSummary(status.ahead, status.behind);

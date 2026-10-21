@@ -78,7 +78,9 @@ revalidates immediately after that await. Without both, a branch switched in a t
 read is in flight or moments before pressing Open PR would push/open/compare against the STALE persisted
 branch until the async watcher next catches up: the branch-sensitive `ws` is fresh, so the
 base guard, the push, the `gh` lookup/create, and the compare URL all derive from the one refreshed
-value. Then:
+value. When the request names a `branch` (the branch the client composed the draft for), both refreshes
+must still see it live, exactly like `pushBranch`: a checkout moved between composing and submitting
+pushes nothing rather than opening a PR for another branch with this one's title and body. Then:
 1. No `origin` remote → throws (the client toasts it). The forge (GitHub slug / GitLab project) is read from
    origin's **configured push URL** (`remote.origin.pushurl`, else `remote.origin.url`, via `git`'s
    `originUrls`), not the fetch URL, so a remote that pushes elsewhere than it fetches opens the review
@@ -105,7 +107,10 @@ value. Then:
 3. GitLab.com origin → `action: "compare"` with GitLab's prefilled new-MR page (`gitlabNewMrUrl`: source,
    target, title, description capped like the GitHub compare body) — no `glab` mutation this iteration. Any
    other origin (incl. local/bare test remotes) → `action: "pushed"` — the honest floor.
-4. GitHub origin: an existing open PR (`gh pr list --head <branch> --base <input.base>`, parsed by
+4. GitHub origin: every `gh` call carries `--repo <slug>`, the push URL's repository — gh would otherwise
+   resolve the repository from the remote's fetch URL, so a split origin would look up, edit, or create the
+   PR on the repository that never received the branch. An existing open PR (`gh pr list --head <branch>
+   --base <input.base>`, parsed by
    `branch-review`'s `reviewNumber`) → `gh pr edit <NUMBER> --title --body` refresh → `action: "updated"` +
    **`bodyRefreshed`** (an edit failure is reported, never claimed as success). The edit selector is
    the NUMBER the list step just returned, never the branch positional — gh resolves a numeric
