@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { normalizeEol } from "../../scripts/generatedFiles";
 import type { Style, StyleRef, Typography } from "../../scripts/typography";
 import {
@@ -20,7 +21,7 @@ import {
 } from "../../scripts/typography";
 
 const typography = loadTypography();
-const SRC = new URL("..", import.meta.url).pathname;
+const SRC = fileURLToPath(new URL("..", import.meta.url));
 const GENERATED = normalizeEol(readFileSync(GENERATED_PATH, "utf8"));
 
 const read = (p: string) => readFileSync(p, "utf8");

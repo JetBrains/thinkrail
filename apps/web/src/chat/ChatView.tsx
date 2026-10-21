@@ -43,6 +43,7 @@ import {
 	type MentionCandidate,
 	type SubmitBehavior,
 } from "./Composer";
+import { mentionLookup } from "./fileTargets";
 import { HistoryOverlay } from "./HistoryOverlay";
 import type { ModelSelection } from "./ModelEffortPicker";
 import {
@@ -371,9 +372,7 @@ export default function ChatView({
 			setMentionCandidates([]);
 			return;
 		}
-		const slash = mentionQuery.lastIndexOf("/");
-		const dir = slash >= 0 ? mentionQuery.slice(0, slash) : "";
-		const prefix = (slash >= 0 ? mentionQuery.slice(slash + 1) : mentionQuery).toLowerCase();
+		const { dir, prefix } = mentionLookup(mentionQuery);
 		let cancelled = false;
 		const timer = setTimeout(() => {
 			getTransport()

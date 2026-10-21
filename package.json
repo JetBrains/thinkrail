@@ -70,6 +70,7 @@
 		"e2e:binary": "bun --preload ./e2e/idleSleepPreload.ts e2e/run-binary.ts",
 		"e2e:desktop": "bun --preload ./e2e/idleSleepPreload.ts e2e/run-desktop.ts",
 		"test:workflows": "playwright test -c playwright.workflows.config.ts",
+		"test:windows-paths": "bun test packages/server/src/host/directorySpelling.test.ts packages/server/src/persistence/storedDirectories.test.ts packages/server/src/projects/projects.test.ts packages/server/src/workspaces/workspaces.test.ts packages/server/src/history/testFixtures.test.ts packages/server/src/host/historyScope.test.ts packages/server/src/fs/files.test.ts packages/server/src/reviews/reviews.test.ts packages/server/src/host/requestReview.test.ts packages/server/src/git/objectName.test.ts packages/server/src/dialog/dialog.test.ts && bun test packages/artifact-tests/src/installerScripts.test.ts -t install.ps1",
 		"e2e:full": "bun --preload ./e2e/idleSleepPreload.ts e2e/run-full.ts",
 		"e2e:full:headed": "bun --preload ./e2e/idleSleepPreload.ts e2e/run-full.ts --headed",
 		"e2e:agent": "bun --preload ./e2e/idleSleepPreload.ts e2e/run-agent.ts",

@@ -109,6 +109,12 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   separators and traversal cannot bypass containment. A narrow assistant-only URL transform preserves
   recognized Windows drive-letter anchor paths, including Markdown's percent-encoded backslash form, until
   validation; drive-rooted containment compares case-insensitively while preserving the linked path's casing.
+  Ahead of that transform, an assistant-only remark transformer (`remarkWrittenPathDestinations`) restores a
+  link or definition destination exactly as written when it contains a backslash and has no URL scheme.
+  CommonMark would otherwise read `\.` or `\_` as escapes and turn `C:\repo\.thinkrail\x.md` into a dead link;
+  in an agent-written path a backslash is a separator (architecture Decision 22). It reads the source from the
+  parse's own file, because `BlockMarkdown` parses each block separately and positions are block-local. Repo
+  Markdown in the file viewer keeps CommonMark semantics, matching GitHub's rendering.
   Every other value delegates to react-markdown's default sanitizer, and a rejected Windows path
   is re-sanitized before fallback anchor rendering. The generic `Markdown` primitive remains props-driven and
   receives this behavior only as an `a` component override at the assistant-turn integration edge;
@@ -715,7 +721,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   passive one lets Chromium apply the scroll before the wheel event reaches the hook, so the movement arrives
   without reader intent and neither detach nor exact-edge rearm fires. Scrolling stays responsive because a
   streaming delta re-renders only the rows whose content changed, keeping the main thread free.
-- **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
+- **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions (`mentionLookup` splits the typed
+  query into the folder `fs.readDir` lists and the name prefix, reading a typed `\` as a separator), `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in
   the browser and downscales anything over a **1568px long edge** (`fitWithin`; Claude's standard-tier
@@ -1002,7 +1009,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   (always next to its label) — since a keyboard-only user, `Shift+Enter`'s own audience, never triggers
   `:hover`. The save-as-template icon's own shortcut (`SAVE_SHORTCUT_LABEL`, `⌘S`/`Ctrl+S`) gets the
   identical selected-only glyph (`data-testid="history-save-shortcut"`) for the same reason, symmetric
-  with the jump icon.
+  with the jump icon. An untitled hit is labelled by its cwd's last segment through lib's `fileName`
+  (a header cwd is pi's native spelling, so `C:\Users\me\repo` reads as `repo`).
 - **Template slots** (the shared `prompt` module's parser/state machine + `Composer`'s geometry +
   `ChatView`'s catalog/template-read wiring — the composer's Tab-through placeholder flow, end to end).
   **Parsing** (`prompt`, pure): `parseTemplateSlots(body, argumentHint)` expands pi's own placeholder grammar (`$1..$n`,

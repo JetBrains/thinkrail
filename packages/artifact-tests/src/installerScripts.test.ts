@@ -285,6 +285,40 @@ describe("install.sh validation", () => {
 });
 
 describe.skipIf(process.platform !== "win32" || !powershell)("install.ps1 validation", () => {
+	test("recognizes its bin dir on PATH whichever separator an entry is spelled with", () => {
+		if (!powershell) throw new Error("PowerShell is unavailable");
+		const fixture = makeFixture();
+		const definition = /^function Test-ThinkRailOnPath \{[\s\S]*?^\}/m.exec(
+			readFileSync(powershellInstaller, "utf8"),
+		)?.[0];
+		if (!definition) throw new Error("install.ps1 defines no Test-ThinkRailOnPath");
+		const script = join(fixture.root, "on-path.ps1");
+		writeFileSync(
+			script,
+			[
+				definition,
+				"$dir = 'C:\\Users\\me\\.thinkrail\\bin'",
+				"Write-Output (Test-ThinkRailOnPath -Dir $dir -PathEntries @('C:/Users/me/.thinkrail/bin'))",
+				"Write-Output (Test-ThinkRailOnPath -Dir $dir -PathEntries @('c:/users/ME/.thinkrail/bin/'))",
+				"Write-Output (Test-ThinkRailOnPath -Dir $dir -PathEntries @('C:\\Users\\me\\.thinkrail\\bin\\'))",
+				"Write-Output (Test-ThinkRailOnPath -Dir 'C:/Users/me/.thinkrail/bin' -PathEntries @('C:\\Users\\me\\.thinkrail\\bin'))",
+				"Write-Output (Test-ThinkRailOnPath -Dir $dir -PathEntries @('C:/Other/bin'))",
+			].join("\n"),
+		);
+		const child = Bun.spawnSync(
+			[powershell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script],
+			{ stdout: "pipe", stderr: "pipe" },
+		);
+		expect(child.stderr.toString()).toBe("");
+		expect(child.stdout.toString().trim().split(/\r?\n/)).toEqual([
+			"True",
+			"True",
+			"True",
+			"True",
+			"False",
+		]);
+	});
+
 	test.each([
 		["stable", "v1.2.3", "Invalid version"],
 		["stable", "1.2.3-nightly.4", "does not belong to the stable channel"],

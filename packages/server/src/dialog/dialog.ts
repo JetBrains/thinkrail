@@ -1,4 +1,5 @@
 import { readFileSync, statSync } from "node:fs";
+import { posix, win32 } from "node:path";
 
 interface PickerExecution {
 	stdout: string;
@@ -23,7 +24,18 @@ interface SelectDirectoryOptions {
 type PickerOverride = { kind: "path"; path: string } | { kind: "error"; message: string };
 
 const PICKER_ERROR_DIRECTIVE = "error:";
-const toPath = (stdout: string): string | null => stdout.trim().replace(/[/\\]+$/, "") || null;
+function pickedPath(path: typeof posix, trailingSeparators: RegExp) {
+	return (stdout: string): string | null => {
+		const picked = stdout.trim();
+		if (!picked) return null;
+		const { root } = path.parse(picked);
+		const stripped = picked.replace(trailingSeparators, "");
+		return stripped.length < root.length ? root : stripped;
+	};
+}
+
+const toPosixPath = pickedPath(posix, /\/+$/);
+const toWindowsPath = pickedPath(win32, /[/\\]+$/);
 
 const appleScriptCancellation = ({ stderr }: PickerExecution): boolean => stderr.includes("(-128)");
 const linuxCancellation = ({ code, stderr }: PickerExecution): boolean =>
@@ -66,7 +78,7 @@ export function pickersFor(platform: NodeJS.Platform): Picker[] {
 			return [
 				{
 					cmd: ["osascript", "-e", 'POSIX path of (choose folder with prompt "Open project")'],
-					parse: toPath,
+					parse: toPosixPath,
 					isCancellation: appleScriptCancellation,
 				},
 			];
@@ -74,19 +86,19 @@ export function pickersFor(platform: NodeJS.Platform): Picker[] {
 			return [
 				{
 					cmd: ["zenity", "--file-selection", "--directory", "--title=Open project"],
-					parse: toPath,
+					parse: toPosixPath,
 					isCancellation: linuxCancellation,
 				},
 				{
 					cmd: ["kdialog", "--getexistingdirectory", ".", "--title", "Open project"],
-					parse: toPath,
+					parse: toPosixPath,
 					isCancellation: linuxCancellation,
 				},
 			];
 		case "win32":
 			return ["powershell.exe", "pwsh.exe"].map((shell) => ({
 				cmd: [shell, "-NoProfile", "-Sta", "-EncodedCommand", ENCODED_WINDOWS_PICKER],
-				parse: toPath,
+				parse: toWindowsPath,
 				isCancellation: noNonZeroCancellation,
 			}));
 		default:

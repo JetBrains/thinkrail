@@ -54,7 +54,15 @@ A platform's native behavior is proven only on that platform. Windows remains a 
 executable, environment, path, and trash behavior differs materially from POSIX hosts. Its subprocess
 unit gate also exercises native descendant-console behavior, which the Linux unit run cannot prove, and
 its desktop window-chrome unit gate binds the `user32.dll` frame symbols the frameless title bar relies on
-([[module-desktop]]); neither needs the Electrobun devkit. Native macOS and Linux ARM64 acceptance belongs
+([[module-desktop]]); neither needs the Electrobun devkit. Its path gate (`bun run test:windows-paths`) runs
+the suites that pin architecture Decision 22 on the one host where git prints `C:/…`, node prints `C:\…`,
+and `\` is not a file-name character: stored directories, chat lifecycle in Default and external
+workspaces, POSIX wire paths, git object names, picker roots, and `install.ps1`'s PATH check. A suite joins
+the gate only once it passes on Windows. A test whose premise NTFS cannot hold, such as a `:` in a ref name
+or an unprivileged symlink, is skipped there and stays covered on Linux. The runner's `TEMP` is an 8.3
+short name (`C:\Users\RUNNER~1\…`) while git reports the long one, so path fixtures are rooted at
+`realpathSync.native`, the spelling git and the OS agree on. The installer file contributes only its
+`install.ps1` suite, because its `install.sh` tests rightly reject the `~` such a prefix carries. Native macOS and Linux ARM64 acceptance belongs
 to the release matrix.
 
 ## Native build contract

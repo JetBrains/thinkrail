@@ -1,16 +1,17 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { readDir } from "./files";
+import { join, sep } from "node:path";
+import { readDir, workspaceRelativePath } from "./files";
 
 let dataDir: string;
+let root: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 
 beforeEach(() => {
 	dataDir = mkdtempSync(join(tmpdir(), "trpi-fs-test-"));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
-	const root = join(dataDir, "worktree");
+	root = join(dataDir, "worktree");
 	mkdirSync(join(root, "src", "auth"), { recursive: true });
 	writeFileSync(join(root, "src", "auth", "login.ts"), "export {};\n");
 	writeFileSync(
@@ -29,4 +30,20 @@ test("readDir reports worktree-relative paths with forward slashes on every plat
 	expect(readDir("w1", ".").map((node) => node.path)).toEqual(["src"]);
 	expect(readDir("w1", "src").map((node) => node.path)).toEqual(["src/auth"]);
 	expect(readDir("w1", "src/auth").map((node) => node.path)).toEqual(["src/auth/login.ts"]);
+});
+
+test("workspaceRelativePath names a contained path worktree-relative with / separators", () => {
+	expect(workspaceRelativePath(root, join(root, "src", "auth", "login.ts"))).toBe(
+		"src/auth/login.ts",
+	);
+	expect(workspaceRelativePath(root, join("src", "auth", "login.ts"))).toBe("src/auth/login.ts");
+	expect(workspaceRelativePath(root, "./src/../src/auth")).toBe("src/auth");
+	expect(workspaceRelativePath(`${root}${sep}.`, "src")).toBe("src");
+	expect(workspaceRelativePath(root, "..env")).toBe("..env");
+	expect(workspaceRelativePath(root, ".")).toBe("");
+});
+
+test("workspaceRelativePath rejects a path outside the worktree", () => {
+	expect(workspaceRelativePath(root, "../worktree-sibling/a.ts")).toBeNull();
+	expect(workspaceRelativePath(root, join(dataDir, "elsewhere"))).toBeNull();
 });
