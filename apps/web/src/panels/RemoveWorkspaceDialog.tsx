@@ -1,6 +1,6 @@
 import type { Workspace } from "@thinkrail/contracts";
 import { T, useT } from "@thinkrail/locales/react";
-import { isExternalWorkspace } from "../store";
+import { isExternalWorkspace, workspaceName } from "../store";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { removeWorkspace } from "./workspaceActions";
 
@@ -22,8 +22,8 @@ export function RemoveWorkspaceDialog({
 			onOpenChange={onOpenChange}
 			title={
 				isExternal
-					? t("panels.removeWorkspace.titleExternal", { name: workspace.name })
-					: t("panels.removeWorkspace.title", { name: workspace.name })
+					? t("panels.removeWorkspace.titleExternal", { name: workspaceName(t, workspace) })
+					: t("panels.removeWorkspace.title", { name: workspaceName(t, workspace) })
 			}
 			description={
 				<T

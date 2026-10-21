@@ -70,6 +70,8 @@ export type SubagentOverride = "on" | "off";
 /** `"settled"` = the user parked the workspace on the shelf; `"active"` = the user pinned it live. */
 export type SettledOverride = "settled" | "active";
 
+export const DEFAULT_WORKSPACE_NAME = "Default";
+
 export interface Workspace {
 	id: string;
 	projectId: string;

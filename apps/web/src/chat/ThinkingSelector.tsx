@@ -4,6 +4,7 @@ import { useT } from "@thinkrail/locales/react";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
+import { LEVEL_LABEL } from "./modelPicker";
 
 export function ThinkingSelector({
 	level,
@@ -34,7 +35,7 @@ export function ThinkingSelector({
 				)}
 			>
 				<span className="tr-text-eyebrow text-text-muted">{t("chat.modelPicker.effort")}</span>
-				<span className="capitalize">{level}</span>
+				<span className="capitalize">{t(LEVEL_LABEL[level])}</span>
 				<ChevronDown className="size-16 shrink-0 text-text-muted" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[160px] p-4">
@@ -54,7 +55,7 @@ export function ThinkingSelector({
 						<span className="flex w-14 shrink-0 justify-center">
 							{l === level ? <Check className="size-14 text-primary" /> : null}
 						</span>
-						{l}
+						{t(LEVEL_LABEL[l])}
 					</button>
 				))}
 			</PopoverContent>

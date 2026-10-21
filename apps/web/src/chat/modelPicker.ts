@@ -72,6 +72,16 @@ export const LEVEL_HINT = {
 	max: "chat.modelPicker.levelHint.max",
 } satisfies Record<ThinkingLevel, MessageKey>;
 
+export const LEVEL_LABEL = {
+	off: "chat.modelPicker.level.off",
+	minimal: "chat.modelPicker.level.minimal",
+	low: "chat.modelPicker.level.low",
+	medium: "chat.modelPicker.level.medium",
+	high: "chat.modelPicker.level.high",
+	xhigh: "chat.modelPicker.level.xhigh",
+	max: "chat.modelPicker.level.max",
+} satisfies Record<ThinkingLevel, MessageKey>;
+
 /** Levels whose cost deserves a warning beside the hint (what Codex and Claude.ai flag). */
 export const COSTLY_LEVELS: ReadonlySet<ThinkingLevel> = new Set<ThinkingLevel>(["xhigh", "max"]);
 

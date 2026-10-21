@@ -270,7 +270,7 @@ function MessageRow({
 						{hit.sessionTitle || fileName(hit.cwd) || t("chat.history.sessionFallback")}
 					</span>
 					<span>·</span>
-					<span>{hit.role}</span>
+					<span>{t(HISTORY_ROLE_LABEL[hit.role])}</span>
 					<span>·</span>
 					<span>{relativeTime(t, hit.timestamp, now)}</span>
 					{unmapped ? <span>{t("chat.history.unmapped")}</span> : null}
@@ -339,8 +339,13 @@ function HistoryPreview({
 	);
 }
 
+const HISTORY_ROLE_LABEL = {
+	user: "chat.history.role.user",
+	assistant: "chat.history.role.assistant",
+} as const satisfies Record<MessageHit["role"], MessageKey>;
+
 function messageCrumb(t: Translator, hit: MessageHit, now: number): string {
-	return `${hit.sessionTitle || fileName(hit.cwd) || t("chat.history.sessionFallback")} · ${hit.role} · ${relativeTime(t, hit.timestamp, now)}`;
+	return `${hit.sessionTitle || fileName(hit.cwd) || t("chat.history.sessionFallback")} · ${t(HISTORY_ROLE_LABEL[hit.role])} · ${relativeTime(t, hit.timestamp, now)}`;
 }
 
 export interface HistoryOverlayProps {

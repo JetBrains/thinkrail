@@ -229,7 +229,11 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		const handleExit = (ev: TerminalExitPush): void => {
 			if (ev.id !== serverIdRef.current) return;
 			serverIdRef.current = null;
-			term.write(`\r\n[process exited${ev.exitCode === 0 ? "" : ` with code ${ev.exitCode}`}]\r\n`);
+			const exitLine =
+				ev.exitCode === 0
+					? i18n.t("panels.terminalInstance.processExited")
+					: i18n.t("panels.terminalInstance.processExitedWithCode", { code: ev.exitCode });
+			term.write(`\r\n${exitLine}\r\n`);
 			setExited(true);
 		};
 		const unsubscribeExit = getTransport().subscribe(WS_CHANNELS.terminalExit, (payload) => {

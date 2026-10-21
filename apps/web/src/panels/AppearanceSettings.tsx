@@ -12,7 +12,8 @@ import {
 	THEME_SYSTEM_PROTOCOL_VERSION,
 	type ThemeId,
 } from "@thinkrail/contracts";
-import { useT } from "@thinkrail/locales/react";
+import type { MessageKey } from "@thinkrail/locales";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
@@ -44,6 +45,20 @@ import { SETTINGS_ROWS_CONTAINER, SettingsRow } from "./SettingsRow";
 type Appearance = ThemeDescriptor["appearance"];
 type Contrast = ThemeDescriptor["contrast"];
 type ThemeModeOption = "system" | Appearance;
+
+const BUNDLED_THEME_LABELS: Readonly<Record<string, MessageKey>> = {
+	dark: "settings.appearance.themeName.dark",
+	light: "settings.appearance.themeName.light",
+	"high-contrast-dark": "settings.appearance.themeName.highContrastDark",
+	"high-contrast-light": "settings.appearance.themeName.highContrastLight",
+	"minimal-dark": "settings.appearance.themeName.minimalDark",
+	"minimal-light": "settings.appearance.themeName.minimalLight",
+};
+
+function themeLabel(t: Translator, theme: Pick<ThemeDescriptor, "id" | "label">): string {
+	const key = BUNDLED_THEME_LABELS[theme.id];
+	return key ? t(key) : theme.label;
+}
 
 function familyKey(id: ThemeId): string {
 	return id.replace(/(^|-)(light|dark)$/, "").replace(/^high-contrast-?/, "");
@@ -96,8 +111,8 @@ function ThemeDropdown({
 	const t = useT();
 	const label =
 		appearance === "light"
-			? t("settings.appearance.lightThemeTrigger", { theme: resolution.theme.label })
-			: t("settings.appearance.darkThemeTrigger", { theme: resolution.theme.label });
+			? t("settings.appearance.lightThemeTrigger", { theme: themeLabel(t, resolution.theme) })
+			: t("settings.appearance.darkThemeTrigger", { theme: themeLabel(t, resolution.theme) });
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
@@ -108,7 +123,7 @@ function ThemeDropdown({
 					data-testid={`system-theme-${appearance}-trigger`}
 					className="h-32 justify-between"
 				>
-					<span className="truncate">{resolution.theme.label}</span>
+					<span className="truncate">{themeLabel(t, resolution.theme)}</span>
 					<ChevronDown className="size-16" />
 				</Button>
 			</DropdownMenuTrigger>
@@ -125,7 +140,7 @@ function ThemeDropdown({
 							) : (
 								<span className="size-14" />
 							)}
-							<span>{theme.label}</span>
+							<span>{themeLabel(t, theme)}</span>
 						</DropdownMenuRadioItem>
 					))}
 				</DropdownMenuRadioGroup>
@@ -145,6 +160,7 @@ function ThemeList({
 	disabled: boolean;
 	onSelect: (id: ThemeId) => void;
 }) {
+	const t = useT();
 	return (
 		<div className="flex flex-col gap-4">
 			{themes.map(({ id, label, appearance, contrast }) => {
@@ -169,7 +185,7 @@ function ThemeList({
 								: "border-border-default text-text-muted hover:bg-control-bg-hovered hover:text-text-default",
 						)}
 					>
-						<span className="flex-1">{label}</span>
+						<span className="flex-1">{themeLabel(t, { id, label })}</span>
 						{active ? <Check className="size-16 shrink-0 text-primary" /> : null}
 					</button>
 				);
@@ -369,10 +385,16 @@ export function AppearanceSettings() {
 								testId="theme-fallback-warning"
 							>
 								{appearance === "light"
-									? t("settings.appearance.fallback.light", { theme: resolution.theme.label })
+									? t("settings.appearance.fallback.light", {
+											theme: themeLabel(t, resolution.theme),
+										})
 									: appearance === "dark"
-										? t("settings.appearance.fallback.dark", { theme: resolution.theme.label })
-										: t("settings.appearance.fallback.fixed", { theme: resolution.theme.label })}
+										? t("settings.appearance.fallback.dark", {
+												theme: themeLabel(t, resolution.theme),
+											})
+										: t("settings.appearance.fallback.fixed", {
+												theme: themeLabel(t, resolution.theme),
+											})}
 							</SettingsNotice>
 						))}
 					</div>
@@ -389,7 +411,7 @@ export function AppearanceSettings() {
 									: t("settings.appearance.mode.dark")}
 								<ArrowRight className="size-14 shrink-0 text-text-muted" />
 								<Palette className="size-14 shrink-0 text-text-muted" />
-								{currentResolution.theme.label}
+								{themeLabel(t, currentResolution.theme)}
 							</span>
 						}
 					/>
@@ -397,7 +419,7 @@ export function AppearanceSettings() {
 				{systemMode ? (
 					<Disclosure
 						label={t("settings.appearance.themePair")}
-						summary={`${lightResolution.theme.label} / ${darkResolution.theme.label}`}
+						summary={`${themeLabel(t, lightResolution.theme)} / ${themeLabel(t, darkResolution.theme)}`}
 						expanded={expanded}
 						testId="theme-pair-toggle"
 						onToggle={() => setExpanded((value) => !value)}
@@ -432,7 +454,7 @@ export function AppearanceSettings() {
 				) : (
 					<Disclosure
 						label={t("settings.appearance.theme")}
-						summary={activeTheme.label}
+						summary={themeLabel(t, activeTheme)}
 						expanded={expanded}
 						testId="theme-toggle"
 						onToggle={() => setExpanded((value) => !value)}

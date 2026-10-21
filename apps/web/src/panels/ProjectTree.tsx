@@ -71,6 +71,7 @@ import {
 	toast,
 	useAppStore,
 	type WorkspaceReadAction,
+	workspaceName,
 } from "../store";
 import { errorText, getTransport } from "../transport";
 import { AddProjectMenu } from "./AddProjectMenu";
@@ -776,6 +777,7 @@ function WorkspaceRow({
 				? FolderOpen
 				: GitBranch;
 	const isTwoLine = !isSettled && workspace.branch !== workspace.name;
+	const displayName = workspaceName(t, workspace);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const openMenuFromContext = (event: MouseEvent) => {
 		event.preventDefault();
@@ -835,7 +837,7 @@ function WorkspaceRow({
 			<button
 				type="button"
 				data-testid="workspace-keep-active"
-				aria-label={t("panels.projectTree.keepActiveLabel", { name: workspace.name })}
+				aria-label={t("panels.projectTree.keepActiveLabel", { name: displayName })}
 				onClick={onKeepActive}
 				className={HOVER_CONTROL_CLASS}
 			>
@@ -849,7 +851,7 @@ function WorkspaceRow({
 			<button
 				type="button"
 				data-testid="workspace-settle"
-				aria-label={t("panels.projectTree.settleLabel", { name: workspace.name })}
+				aria-label={t("panels.projectTree.settleLabel", { name: displayName })}
 				disabled={settleBlocked}
 				onClick={onSettle}
 				className={HOVER_CONTROL_CLASS}
@@ -862,7 +864,7 @@ function WorkspaceRow({
 	return (
 		<li>
 			<fieldset
-				aria-label={workspace.name}
+				aria-label={displayName}
 				data-testid="workspace-item"
 				data-active={isActive}
 				data-kind={workspace.kind ?? "worktree"}
@@ -901,7 +903,7 @@ function WorkspaceRow({
 								data-testid="workspace-name"
 								className={`truncate tr-text-ui leading-tight ${isActive ? "text-primary" : "text-text-muted"}`}
 							>
-								{workspace.name}
+								{displayName}
 							</span>
 							{branchLabel}
 						</span>
@@ -924,7 +926,7 @@ function WorkspaceRow({
 					<DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
 						<DropdownMenuTrigger
 							data-testid="workspace-menu"
-							aria-label={t("panels.projectTree.workspaceActions", { name: workspace.name })}
+							aria-label={t("panels.projectTree.workspaceActions", { name: displayName })}
 							className={HOVER_CONTROL_CLASS}
 						>
 							<MoreVertical className="size-14" />

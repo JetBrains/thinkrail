@@ -4,6 +4,7 @@ export {
 	base64EncodedLength,
 	COMPOSER_GROWTH_LIMITS,
 	DEFAULT_CONFIG,
+	DEFAULT_WORKSPACE_NAME,
 	IMAGE_MAX_BASE64_BYTES,
 	isComposerGrowthLimit,
 	isControlMessage,

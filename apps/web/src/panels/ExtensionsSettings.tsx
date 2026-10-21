@@ -1,10 +1,20 @@
 import type { ExtensionCatalogEntry } from "@thinkrail/contracts";
-import { useT } from "@thinkrail/locales/react";
+import type { MessageKey } from "@thinkrail/locales";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { Switch } from "@thinkrail/ui/switch";
 import { useEffect, useState } from "react";
 import { toast, useAppStore } from "@/store";
 import { getTransport } from "@/transport";
+
+const BUNDLED_DESCRIPTIONS: Readonly<Record<string, MessageKey>> = {
+	visualize: "settings.extensions.visualize.description",
+};
+
+function bundledDescription(t: Translator, entry: ExtensionCatalogEntry): string {
+	const key = BUNDLED_DESCRIPTIONS[entry.name];
+	return key ? t(key) : (entry.description ?? "");
+}
 
 export function ExtensionsCatalog({
 	entries,
@@ -42,7 +52,9 @@ export function ExtensionsCatalog({
 						<div className="flex min-w-0 flex-col gap-4">
 							<span className="tr-title-compact text-text-default">{entry.title}</span>
 							{entry.description ? (
-								<span className="text-text-muted tr-text-metadata">{entry.description}</span>
+								<span className="text-text-muted tr-text-metadata">
+									{bundledDescription(t, entry)}
+								</span>
 							) : null}
 							{entry.tools.length > 0 ? (
 								<span className="flex flex-wrap gap-4">

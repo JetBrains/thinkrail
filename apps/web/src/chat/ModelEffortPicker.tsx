@@ -47,6 +47,7 @@ import {
 	groupByProvider,
 	kindLabel,
 	LEVEL_HINT,
+	LEVEL_LABEL,
 	type LevelTone,
 	levelPosition,
 	levelTone,
@@ -237,7 +238,7 @@ function EffortSlider({
 					step={1}
 					value={Math.max(0, index)}
 					aria-label={t("chat.modelPicker.effortFor", { model: model.name })}
-					aria-valuetext={level}
+					aria-valuetext={t(LEVEL_LABEL[level])}
 					data-testid="thinking-slider"
 					onChange={(event) => {
 						const next = levels[Number(event.target.value)];
@@ -250,7 +251,7 @@ function EffortSlider({
 					className="pointer-events-none absolute top-2 left-[clamp(32px,var(--effort),calc(100%-32px))] flex h-24 min-w-64 -translate-x-1/2 items-center justify-center gap-4 rounded-full border border-control-border-active bg-container-elevated-bg px-8 text-text-default tr-text-label-pill capitalize shadow-[var(--shadow-sm)] transition-[left] duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] peer-focus-visible:ring-2 peer-focus-visible:ring-primary motion-reduce:transition-none"
 				>
 					<Glyph className={cn("size-12 shrink-0", TONE_TEXT[levelTone(level)])} />
-					{level}
+					{t(LEVEL_LABEL[level])}
 				</div>
 			</div>
 			<div className="flex justify-between px-2">
@@ -279,7 +280,7 @@ function EffortSlider({
 									active ? "text-text-default" : "text-text-subtle hover:text-text-muted",
 								)}
 							>
-								{candidate}
+								{t(LEVEL_LABEL[candidate])}
 								{candidate === defaultLevel ? (
 									<span
 										aria-hidden
@@ -527,7 +528,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 									levels={pillModel.thinkingLevels}
 									className={TONE_TEXT[levelTone(pillLevel)]}
 								/>
-								{pillLevel}
+								{t(LEVEL_LABEL[pillLevel])}
 							</span>
 							{hasKindGlyph(pillModel) ? (
 								<IconTooltip label={describeAuth(t, pillModel)} wrapTrigger>

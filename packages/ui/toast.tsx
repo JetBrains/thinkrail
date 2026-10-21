@@ -9,10 +9,13 @@ const ToastProvider = ToastPrimitive.Provider;
 
 function ToastViewport({
 	className,
+	label,
 	...props
 }: React.ComponentProps<typeof ToastPrimitive.Viewport>) {
+	const t = useT();
 	return (
 		<ToastPrimitive.Viewport
+			label={label ?? t("common.notificationsRegion", { hotkey: "{hotkey}" })}
 			className={cn(
 				"fixed inset-x-0 bottom-0 z-[100] flex max-h-screen w-full flex-col gap-8 p-12 outline-none sm:inset-x-auto sm:right-0 sm:bottom-0 sm:w-[380px] sm:max-w-[100vw]",
 				className,

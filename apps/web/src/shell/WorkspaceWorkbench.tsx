@@ -55,6 +55,7 @@ import {
 	selectWorkspaceTick,
 	toast,
 	useAppStore,
+	workspaceName,
 } from "../store";
 import { errorText, getTransport } from "../transport";
 import {
@@ -710,7 +711,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				{workspace ? (
 					<>
 						<h2 className="max-w-full truncate tr-title-entity text-text-default">
-							{isDefault ? (contextProject?.name ?? workspace.name) : workspace.name}
+							{isDefault ? (contextProject?.name ?? workspaceName(t, workspace)) : workspace.name}
 						</h2>
 						<p className="flex max-w-full items-center gap-4 tr-text-metadata text-text-muted">
 							<GitBranch className="size-14 shrink-0" />

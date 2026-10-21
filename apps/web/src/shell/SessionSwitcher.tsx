@@ -6,6 +6,7 @@ import { useCallback } from "react";
 import { AttentionDot } from "@/components/AttentionDot";
 import { RunningIcon } from "@/components/RunningIcon";
 import { chatName } from "@/lib";
+import { workspaceName } from "@/store";
 import { useSessionSwitcher } from "./useSessionSwitcher";
 
 export interface SessionSwitcherProps {
@@ -81,7 +82,10 @@ export function SessionSwitcher({ open, onOpenChange }: SessionSwitcherProps) {
 													</span>
 													{session.workspaceName ? (
 														<span className="truncate text-text-subtle tr-text-metadata leading-tight">
-															{session.workspaceName}
+															{workspaceName(t, {
+																kind: session.workspaceKind,
+																name: session.workspaceName,
+															})}
 														</span>
 													) : null}
 												</span>

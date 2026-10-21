@@ -55,6 +55,7 @@ import {
 	settledReasonLabel,
 	supportsWorkspaceReadState,
 	useAppStore,
+	workspaceName,
 } from "../../store";
 import { PillChevron, pillClass, Segment } from "./Segment";
 
@@ -123,7 +124,7 @@ export function WorkspaceSegment({
 	const canRename = workspace !== null && canRenameWorkspace(protocolVersion, workspace);
 	const isDefault = workspace !== null && isDefaultWorkspace(workspace);
 	const isExternal = workspace !== null && isExternalWorkspace(workspace);
-	const name = workspace?.name ?? t("shell.location.project.home");
+	const name = workspace ? workspaceName(t, workspace) : t("shell.location.project.home");
 	const {
 		editing,
 		nameRef,
@@ -206,7 +207,9 @@ export function WorkspaceSegment({
 					>
 						{workspace ? (
 							<>
-								<DropdownMenuLabel className="truncate">{workspace.name}</DropdownMenuLabel>
+								<DropdownMenuLabel className="truncate">
+									{workspaceName(t, workspace)}
+								</DropdownMenuLabel>
 								{editors.length > 0 ? (
 									<DropdownMenuSub>
 										<DropdownMenuSubTrigger data-testid="scope-workspace-open-in">
@@ -320,7 +323,7 @@ export function WorkspaceSegment({
 										onSelect={() => useAppStore.getState().activateWorkspace(candidate)}
 									>
 										{running ? <RunningIcon className="size-14 text-primary" /> : <Icon />}
-										<span className="truncate">{candidate.name}</span>
+										<span className="truncate">{workspaceName(t, candidate)}</span>
 										{candidate.branch !== candidate.name ? (
 											<span className="ml-auto truncate pl-8 text-text-subtle tr-code-text-small">
 												{candidate.branch}
@@ -344,7 +347,7 @@ export function WorkspaceSegment({
 											onSelect={() => useAppStore.getState().activateWorkspace(candidate)}
 										>
 											{isExternalWorkspace(candidate) ? <FolderOpen /> : <GitBranch />}
-											<span className="truncate">{candidate.name}</span>
+											<span className="truncate">{workspaceName(t, candidate)}</span>
 											<span className="ml-auto shrink-0 pl-8 text-text-subtle tr-text-caption">
 												{settledReasonLabel(t, reason, partition.now)}
 											</span>

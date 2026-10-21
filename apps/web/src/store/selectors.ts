@@ -3,6 +3,7 @@ import {
 	type BackgroundCommandSummary,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	canMarkCompletionUnread,
+	DEFAULT_WORKSPACE_NAME,
 	type GitDiffScope,
 	isSessionWorking,
 	MCP_PROTOCOL_VERSION,
@@ -897,6 +898,15 @@ export function matchesWorktreePath(reported: string, rel: string): boolean {
 export function specPathMatcher(nodes: SpecGraphNode[]): (path: string) => boolean {
 	const paths = nodes.map((node) => node.path);
 	return (reported) => paths.some((rel) => matchesWorktreePath(reported, rel));
+}
+
+export function workspaceName(
+	t: Translator,
+	workspace: { kind?: Workspace["kind"] | undefined; name: string },
+): string {
+	return workspace.kind === "default" && workspace.name === DEFAULT_WORKSPACE_NAME
+		? t("store.workspace.defaultName")
+		: workspace.name;
 }
 
 export function selectChatName(
