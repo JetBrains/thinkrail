@@ -106,6 +106,16 @@ export function userText(content: UserMessage["content"]): string {
 		.join("");
 }
 
+export function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function ancestorPaths(path: string): string[] {
+	const segments = path.split("/");
+	segments.pop();
+	return segments.map((_, index) => segments.slice(0, index + 1).join("/"));
+}
+
 export function normalizePath(path: string): string {
 	return path.replaceAll("\\", "/").replace(/^\.\/+/, "");
 }

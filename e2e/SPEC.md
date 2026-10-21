@@ -300,7 +300,7 @@ pane order, boundary drops create panes while entry-half drops join one, a tool 
 terminal strip, the pane-header title drags its tool, an unplaced tool sits dimmed in a trailing cluster),
 a terminal pane's selected session surviving fold and reload, linked collapsed regions, keyboard focus without implicit activation, a browser
 history workspace switch during a singleton drag, and DOM continuity across shape changes: it stamps the
-center tabs, chat input, terminal, Projects tree, and Changes toolbar before each fold/hide/show and asserts
+center tabs, chat input, terminal, Projects tree, and Review panel before each fold/hide/show and asserts
 the same nodes survive, which fails if any panel group is remounted. The compressed-resize matrix uses independent cases
 with explicit compression assertions, avoiding accidental collapse caused by the rails' occupied width.
 `rail-layout-regressions.spec.ts` covers node replacement before bottom measurement, explicit drops into

@@ -495,7 +495,9 @@ const ChatTranscript = forwardRef<
 	);
 	const onReveal = useCallback(
 		(tool: "specs" | "changes") => {
-			useAppStore.getState().requestToolView(workspaceId, tool);
+			const store = useAppStore.getState();
+			if (tool === "changes") store.revealChanges(workspaceId);
+			else store.requestToolView(workspaceId, tool);
 		},
 		[workspaceId],
 	);

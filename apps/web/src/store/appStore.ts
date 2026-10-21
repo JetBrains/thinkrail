@@ -68,6 +68,7 @@ import type {
 	ToolResultState,
 } from "../chat/types";
 import {
+	ancestorPaths,
 	isPreviewCompatibleTabKind,
 	type LayoutAttention,
 	layoutResourceIdentity,
@@ -110,6 +111,7 @@ import {
 	SETTLED_SHELF_PAGE,
 	selectActiveWorkspaceProjectId,
 	selectChatAttended,
+	selectFilesTreeView,
 	selectLayoutResourcePlacement,
 	selectSupportsMcp,
 	selectWorkspaceById,
@@ -192,6 +194,14 @@ export function isFileComparison<T extends { kind: string; before?: string | und
 	return tab.kind === "diff" && tab.before !== undefined;
 }
 export type ChangesLayout = "stacked" | "single";
+type FilesMode = "all" | "changed";
+export type FilesScrollView = "all" | "changedList" | "changedTree";
+export interface FilesTreeView {
+	expanded: readonly string[];
+	changedCollapsed: readonly string[];
+	scroll: Partial<Record<FilesScrollView, { top: number; scope: string }>>;
+	seenActivePath: string | null;
+}
 const TURNS_PER_WORKSPACE = 30;
 export interface ChangesTabReveal {
 	path: string;
@@ -1154,6 +1164,24 @@ interface AppState {
 	) => void;
 	changesView: "list" | "tree";
 	setChangesView: (view: "list" | "tree") => void;
+	filesMode: FilesMode;
+	setFilesMode: (mode: FilesMode) => void;
+	filesTreeByWorkspace: Record<string, FilesTreeView>;
+	hydrateFilesTree: (views: Record<string, FilesTreeView>) => void;
+	setFilesTreeExpanded: (workspaceId: string, paths: readonly string[], expanded: boolean) => void;
+	collapseAllFiles: (workspaceId: string) => void;
+	revealInFiles: (workspaceId: string, path: string) => void;
+	setChangedTreeCollapsed: (
+		workspaceId: string,
+		paths: readonly string[],
+		collapsed: boolean,
+	) => void;
+	setFilesTreeScroll: (
+		workspaceId: string,
+		view: FilesScrollView,
+		top: number,
+		scope: string,
+	) => void;
 	changesLayout: ChangesLayout;
 	setChangesLayout: (layout: ChangesLayout) => void;
 	diffScopeByWorkspace: Record<string, GitDiffScope>;
@@ -1301,6 +1329,7 @@ interface AppState {
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
 	requestChangesView: (workspaceId: string, path: string | null, scope?: GitDiffScope) => void;
+	revealChanges: (workspaceId: string) => void;
 	clearChangesRequest: () => void;
 	requestChatLocation: (req: ChatLocationRequest) => void;
 	clearChatLocation: () => void;
@@ -1490,6 +1519,45 @@ function reconcileProjectNavigation(
 		selectedProjectId: projects[0]?.id ?? null,
 		activeWorkspaceId: null,
 	};
+}
+
+function withPathMembership(
+	list: readonly string[],
+	paths: readonly string[],
+	member: boolean,
+): readonly string[] {
+	const current = new Set(list);
+	const changed = paths.filter((path) => current.has(path) !== member);
+	if (changed.length === 0) return list;
+	if (member) return [...list, ...changed];
+	const removed = new Set(changed);
+	return list.filter((path) => !removed.has(path));
+}
+
+function revealChangedFilesPatch(
+	state: Pick<AppState, "layoutIntents">,
+	workspaceId: string,
+): Pick<AppState, "layoutIntents" | "filesMode"> {
+	return {
+		layoutIntents: appendLayoutIntent(state.layoutIntents, {
+			kind: "reveal-tool",
+			workspaceId,
+			tool: "files",
+		}),
+		filesMode: "changed",
+	};
+}
+
+function patchFilesTreeView(
+	state: Pick<AppState, "filesTreeByWorkspace" | "removedWorkspaceIds">,
+	workspaceId: string,
+	update: (view: FilesTreeView) => FilesTreeView,
+): Pick<AppState, "filesTreeByWorkspace"> | Record<string, never> {
+	if (state.removedWorkspaceIds[workspaceId]) return {};
+	const view = selectFilesTreeView(state, workspaceId);
+	const next = update(view);
+	if (next === view) return {};
+	return { filesTreeByWorkspace: { ...state.filesTreeByWorkspace, [workspaceId]: next } };
 }
 
 function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
@@ -2159,6 +2227,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	reviewsByWorkspace: {},
 	reviewFocusRequest: null,
 	changesView: "tree",
+	filesMode: "all",
+	filesTreeByWorkspace: {},
 	changesLayout: "stacked",
 	diffScopeByWorkspace: {},
 	chatLocationRequest: null,
@@ -2468,6 +2538,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
 				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
+				filesTreeByWorkspace: omitKey(state.filesTreeByWorkspace, workspaceId),
 				reviewsByWorkspace: omitKey(state.reviewsByWorkspace, workspaceId),
 				changesRequest:
 					state.changesRequest?.workspaceId === workspaceId ? null : state.changesRequest,
@@ -2990,6 +3061,45 @@ export const useAppStore = create<AppState>((set, get) => ({
 			}),
 		),
 	setChangesView: (view) => set({ changesView: view }),
+	setFilesMode: (filesMode) => set({ filesMode }),
+	hydrateFilesTree: (filesTreeByWorkspace) => set({ filesTreeByWorkspace }),
+	setFilesTreeExpanded: (workspaceId, paths, expanded) =>
+		set((s) =>
+			patchFilesTreeView(s, workspaceId, (view) => {
+				const next = withPathMembership(view.expanded, paths, expanded);
+				return next === view.expanded ? view : { ...view, expanded: next };
+			}),
+		),
+	revealInFiles: (workspaceId, path) =>
+		set((s) =>
+			patchFilesTreeView(s, workspaceId, (view) => {
+				const expanded = withPathMembership(view.expanded, ancestorPaths(path), true);
+				return expanded === view.expanded && view.seenActivePath === path
+					? view
+					: { ...view, expanded, seenActivePath: path };
+			}),
+		),
+	collapseAllFiles: (workspaceId) =>
+		set((s) =>
+			patchFilesTreeView(s, workspaceId, (view) =>
+				view.expanded.length === 0 ? view : { ...view, expanded: [] },
+			),
+		),
+	setChangedTreeCollapsed: (workspaceId, paths, collapsed) =>
+		set((s) =>
+			patchFilesTreeView(s, workspaceId, (view) => {
+				const next = withPathMembership(view.changedCollapsed, paths, collapsed);
+				return next === view.changedCollapsed ? view : { ...view, changedCollapsed: next };
+			}),
+		),
+	setFilesTreeScroll: (workspaceId, scrollView, top, scope) =>
+		set((s) =>
+			patchFilesTreeView(s, workspaceId, (view) => {
+				const current = view.scroll[scrollView];
+				if (current?.top === top && current.scope === scope) return view;
+				return { ...view, scroll: { ...view.scroll, [scrollView]: { top, scope } } };
+			}),
+		),
 	setChangesLayout: (changesLayout) => set({ changesLayout }),
 	setDiffScope: (workspaceId, scope) =>
 		set((s) =>
@@ -4126,11 +4236,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const advanced = advanceCenterNavigation(s, workspaceId);
 			return {
-				layoutIntents: appendLayoutIntent(s.layoutIntents, {
-					kind: "reveal-tool",
-					workspaceId,
-					tool: "changes",
-				}),
+				...revealChangedFilesPatch(s, workspaceId),
 				changesRequest: {
 					workspaceId,
 					path,
@@ -4143,6 +4249,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 				...advanced.patch,
 			};
 		}),
+	revealChanges: (workspaceId) =>
+		set((s) => (s.removedWorkspaceIds[workspaceId] ? {} : revealChangedFilesPatch(s, workspaceId))),
 	clearChangesRequest: () => set({ changesRequest: null }),
 	requestChatLocation: (req) =>
 		set((state) => {

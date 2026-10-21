@@ -19,6 +19,9 @@ not this module; the theme-aware highlighter remains app-local.
   none should re-state: **`normalizePath()`** / **`isAbsolutePath()`** (a path from a pi tool call or the
   host may use either separator and may be relative or absolute — every path predicate in the app starts
   from these, so `chat`'s display helpers and `store`'s worktree matcher share one definition;
+  **`ancestorPaths()`** (a `/` path's parent folders, outermost first — the Files tree's folder marks
+  and its auto-reveal expand the same set) and **`isRecord()`** (a non-array object check for untrusted
+  JSON);
   `@thinkrail/resource-renderers` keeps its own `canonicalWorkspacePath` for `describeResource` and
   `ResourcePreview` because a package cannot import the app's `lib`; `panels/pathIdentity.test.ts` pins it to
   `projectRelativePath` for workspace-relative paths),

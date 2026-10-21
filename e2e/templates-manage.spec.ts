@@ -219,12 +219,11 @@ test.describe("templates management", () => {
 			.locator('[data-testid="file-node"][data-kind="dir"]')
 			.filter({ hasText: /^\.pi\/prompts$/ });
 		await expect(promptsDir).toBeVisible();
-		await promptsDir.click();
-		await expect(
-			page
-				.locator('[data-testid="file-node"][data-kind="file"]')
-				.filter({ hasText: /^scoped-note\.md$/ }),
-		).toBeVisible();
+		const scopedNote = page
+			.locator('[data-testid="file-node"][data-kind="file"]')
+			.filter({ hasText: /^scoped-note\.md[MAUR]?$/ });
+		await expect(scopedNote).toBeVisible();
+		await expect(scopedNote).toHaveAttribute("data-active", "true");
 	});
 
 	test("history overlay: save-as-template opens the shared editor prefilled with the selected prompt", async ({

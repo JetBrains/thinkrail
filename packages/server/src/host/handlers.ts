@@ -95,6 +95,7 @@ import {
 	countPushDivergence,
 	gitDiffFile,
 	gitStatus,
+	ignoredPaths,
 	listBranches,
 	listCommits,
 	prefetchBranch,
@@ -591,9 +592,16 @@ const handlers: WsHandlers = {
 	},
 	"dialog.selectDirectory": () =>
 		observeSetupAction("directory_pick", selectDirectory, directoryPickOutcome),
-	"fs.readDir": (p) => {
+	"fs.readDir": async (p) => {
 		void ensureWatch(p.workspaceId);
-		return readDir(p.workspaceId, p.path);
+		const nodes = readDir(p.workspaceId, p.path);
+		const ignored = await ignoredPaths(
+			getWorkspace(p.workspaceId).worktreePath,
+			nodes.map((node) => node.path),
+		);
+		return ignored.size === 0
+			? nodes
+			: nodes.map((node) => (ignored.has(node.path) ? { ...node, gitignored: true } : node));
 	},
 	"fs.readFile": (p) => {
 		void ensureWatch(p.workspaceId);
