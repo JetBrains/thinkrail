@@ -1,12 +1,15 @@
 import {
 	RiArrowDownLine as ArrowDown,
 	RiArrowUpLine as ArrowUp,
+	RiCheckLine as Check,
+	RiCloseCircleFill as CloseCircle,
 	RiFileCopyLine as Copy,
 	RiExternalLinkLine as ExternalLink,
 	RiGitBranchLine as GitBranch,
+	RiLoader4Line as Loader,
 	RiGitPullRequestLine as PullRequest,
 } from "@remixicon/react";
-import type { OpenBranchReview, Workspace } from "@thinkrail/contracts";
+import type { OpenBranchReview, ReviewChecks, Workspace } from "@thinkrail/contracts";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
@@ -14,14 +17,18 @@ import { type ReactNode, useRef, useState } from "react";
 import { copyText } from "../../lib";
 import { BranchPicker } from "../../panels/BranchPicker";
 import { useBranchList } from "../../panels/branches";
-import { isOpenBranchReview, openReviewLabel } from "../../panels/useOpenBranchReview";
+import type { BranchFacts } from "../../panels/branchStatusState";
+import { isOpenBranchReview, openReviewLabel } from "../../panels/useBranchStatus";
 import { isUserOwnedWorkspace, selectDiffBaseRef, toast, useAppStore } from "../../store";
 import { errorText, getTransport } from "../../transport";
 import {
+	checksSummary,
+	checksVerdict,
 	pluralCommits,
 	remoteCounts,
 	reviewChipLabel,
 	reviewStateLabel,
+	reviewSummary,
 	reviewTone,
 } from "./locationModel";
 import { chipClass, PillChevron, pillClass, Segment } from "./Segment";
@@ -51,22 +58,55 @@ function Row({
 const rowActionClass =
 	"flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary";
 
+interface RemoteSummary {
+	text: string;
+	diverges: boolean;
+}
+
+function countsSummary(ahead: number, behind: number): RemoteSummary {
+	const parts = [
+		ahead > 0 ? `${pluralCommits(ahead)} to push` : null,
+		behind > 0 ? `${pluralCommits(behind)} behind origin` : null,
+	].filter(Boolean);
+	return parts.length > 0
+		? { text: parts.join(" · "), diverges: true }
+		: { text: "In sync with origin", diverges: false };
+}
+
+function statusSummary(status: BranchFacts): RemoteSummary | null {
+	if (!status.hasOrigin) return { text: "No origin remote", diverges: false };
+	if (status.published === null)
+		return { text: "Couldn't read the push repository", diverges: false };
+	if (!status.published) return { text: "Not published", diverges: false };
+	if (status.ahead === undefined || status.behind === undefined) return null;
+	return countsSummary(status.ahead, status.behind);
+}
+
 export function BranchSegment({
 	workspace,
 	review,
 	reviewDetailsKnown,
+	status,
 }: {
 	workspace: Workspace;
 	review: OpenBranchReview | null;
 	reviewDetailsKnown: boolean;
+	status: BranchFacts | null;
 }) {
 	const [open, setOpen] = useState(false);
 	const contentRef = useRef<HTMLDivElement>(null);
 	const diffBase = useAppStore((s) => selectDiffBaseRef(s, workspace.id));
 	const { branches, refreshing, refresh } = useBranchList(open ? workspace.projectId : null);
 	const userOwned = isUserOwnedWorkspace(workspace);
-	const remoteStatus = remoteCounts(review, reviewDetailsKnown);
+	const remoteStatus = status ? null : remoteCounts(review, reviewDetailsKnown);
 	const remote = remoteStatus === "unknown" ? null : remoteStatus;
+	const openDetails = review && isOpenBranchReview(review) ? review.details : undefined;
+	const decision = openDetails ? reviewSummary(openDetails) : null;
+	const summary = status
+		? statusSummary(status)
+		: review && isOpenBranchReview(review) && remoteStatus !== "unknown"
+			? countsSummary(remote?.unpushed ?? 0, remote?.behind ?? 0)
+			: null;
 
 	const copyBranch = () => {
 		void copyText(workspace.branch).then((ok) => {
@@ -181,108 +221,153 @@ export function BranchSegment({
 						onRefresh={refresh}
 					/>
 				</Row>
-				{review ? (
-					<>
-						{isOpenBranchReview(review) && remoteStatus !== "unknown" ? (
-							<Row label="Remote">
-								<span
-									data-testid="scope-remote-summary"
-									className={cn(
-										remote ? "text-text-default" : "text-text-muted",
-										"truncate tr-text-ui",
-									)}
-								>
-									{remote
-										? [
-												remote.unpushed > 0 ? `${pluralCommits(remote.unpushed)} to push` : null,
-												remote.behind > 0 ? `${pluralCommits(remote.behind)} behind origin` : null,
-											]
-												.filter(Boolean)
-												.join(" · ")
-										: "In sync with origin"}
-								</span>
-							</Row>
-						) : null}
-						<Row
-							label={review.kind === "pull-request" ? "Pull request" : "Merge request"}
-							action={
-								review.url ? (
-									<IconTooltip label={`Open ${openReviewLabel(review)}`}>
-										<a
-											data-testid="scope-review-open"
-											aria-label={`Open ${openReviewLabel(review)}`}
-											href={review.url}
-											target="_blank"
-											rel="noreferrer"
-											className={rowActionClass}
-										>
-											<ExternalLink className="size-14" />
-										</a>
-									</IconTooltip>
-								) : null
-							}
+				{summary ? (
+					<Row label="Remote">
+						<span
+							data-testid="scope-remote-summary"
+							className={cn(
+								summary.diverges ? "text-text-default" : "text-text-muted",
+								"truncate tr-text-ui",
+							)}
 						>
-							<PullRequest
-								aria-hidden="true"
-								className={cn(
-									"size-14 shrink-0",
-									reviewTone(review) === "success"
-										? "text-feedback-success"
-										: reviewTone(review) === "info"
-											? "text-feedback-info"
-											: "text-text-muted",
-								)}
-							/>
-							<span className="truncate" data-testid="scope-review-state">
-								{openReviewLabel(review)} · {reviewStateLabel(review)}
-							</span>
-						</Row>
-					</>
+							{summary.text}
+						</span>
+					</Row>
+				) : null}
+				{review ? (
+					<Row
+						label={review.kind === "pull-request" ? "Pull request" : "Merge request"}
+						action={
+							review.url ? (
+								<IconTooltip label={`Open ${openReviewLabel(review)}`}>
+									<a
+										data-testid="scope-review-open"
+										aria-label={`Open ${openReviewLabel(review)}`}
+										href={review.url}
+										target="_blank"
+										rel="noreferrer"
+										className={rowActionClass}
+									>
+										<ExternalLink className="size-14" />
+									</a>
+								</IconTooltip>
+							) : null
+						}
+					>
+						<PullRequest
+							aria-hidden="true"
+							className={cn(
+								"size-14 shrink-0",
+								reviewTone(review) === "success"
+									? "text-feedback-success"
+									: reviewTone(review) === "info"
+										? "text-feedback-info"
+										: "text-text-muted",
+							)}
+						/>
+						<span className="truncate" data-testid="scope-review-state">
+							{openReviewLabel(review)} · {reviewStateLabel(review)}
+						</span>
+					</Row>
+				) : null}
+				{openDetails?.checks ? (
+					<Row label="Checks">
+						<ChecksGlyph checks={openDetails.checks} />
+						<span data-testid="scope-review-checks" className="truncate">
+							{checksSummary(openDetails.checks)}
+						</span>
+					</Row>
+				) : null}
+				{decision ? (
+					<Row label="Review">
+						<span
+							data-testid="scope-review-decision"
+							data-tone={decision.tone}
+							className={cn(
+								"truncate",
+								decision.tone === "success"
+									? "text-feedback-success"
+									: decision.tone === "warning"
+										? "text-feedback-warning"
+										: "text-text-muted",
+							)}
+						>
+							{decision.text}
+						</span>
+					</Row>
 				) : null}
 			</PopoverContent>
 		</Popover>
 	);
 }
 
-export function ReviewSegment({ review }: { review: OpenBranchReview }) {
+function ChecksGlyph({ checks }: { checks: ReviewChecks }) {
+	switch (checksVerdict(checks)) {
+		case "failing":
+			return <CloseCircle aria-hidden="true" className="size-12 shrink-0 text-feedback-error" />;
+		case "pending":
+			return (
+				<Loader aria-hidden="true" className="size-12 shrink-0 animate-spin text-text-muted" />
+			);
+		case "passing":
+			return <Check aria-hidden="true" className="size-12 shrink-0 text-feedback-success" />;
+	}
+}
+
+export function ReviewChip({ review }: { review: OpenBranchReview }) {
 	const label = reviewChipLabel(review);
 	const tone = reviewTone(review);
+	const checks = isOpenBranchReview(review) ? review.details?.checks : undefined;
+	const checksText = checks ? checksSummary(checks) : null;
 	const chip = (
 		<>
 			<span aria-hidden="true" className="size-6 shrink-0 rounded-full bg-current" />
 			{label}
-			{review.url ? <ExternalLink aria-hidden="true" /> : null}
+			{checks ? (
+				<span data-testid="scope-review-checks-glyph" data-verdict={checksVerdict(checks)}>
+					<ChecksGlyph checks={checks} />
+				</span>
+			) : review.url ? (
+				<ExternalLink aria-hidden="true" />
+			) : null}
 		</>
 	);
+	const described = checksText ? `${label} · ${checksText}` : label;
+	const element = review.url ? (
+		<a
+			data-testid="scope-review"
+			data-kind={review.kind}
+			href={review.url}
+			target="_blank"
+			rel="noreferrer"
+			aria-label={`Open ${described}`}
+			data-state-tone={tone}
+			className={chipClass(tone, true)}
+		>
+			{chip}
+		</a>
+	) : (
+		<span
+			data-testid="scope-review"
+			data-kind={review.kind}
+			data-state-tone={tone}
+			className={chipClass(tone)}
+		>
+			{chip}
+			{checksText ? <span className="sr-only">{checksText}</span> : null}
+		</span>
+	);
+	return checksText ? <IconTooltip label={checksText}>{element}</IconTooltip> : element;
+}
+
+export function ReviewSegment({ review }: { review: OpenBranchReview }) {
 	return (
 		<Segment
 			testid="scope-review-segment"
 			caption={review.kind === "pull-request" ? "Pull request" : "Merge request"}
 			className="hidden shrink-0 sm:flex"
 		>
-			{review.url ? (
-				<a
-					data-testid="scope-review"
-					data-kind={review.kind}
-					href={review.url}
-					target="_blank"
-					rel="noreferrer"
-					aria-label={`Open ${label}`}
-					data-state-tone={tone}
-					className={chipClass(tone, true)}
-				>
-					{chip}
-				</a>
-			) : (
-				<span
-					data-testid="scope-review"
-					data-kind={review.kind}
-					data-state-tone={tone}
-					className={chipClass(tone)}
-				>
-					{chip}
-				</span>
-			)}
+			<ReviewChip review={review} />
 		</Segment>
 	);
 }

@@ -50,8 +50,8 @@ name only canonical steps, and a CSS `padding-left: max(…)` would need a gate 
 `select-none`; its whole trailing action cluster (`topbar-actions`) is `window-no-drag`, so any button
 placed inside it — the Update affordance, quota Retry, Settings — is excluded from dragging by
 construction; `Shell.tsx` itself places no other button in the header (`topbarChrome.test.ts` gates this).
-The location strip ([[submodule-web-shell-location-bar]]) is the one deliberate exception: its pills and
-chips each carry `window-no-drag` while their captions and hairlines stay draggable, so a user can still
+The location strip ([[submodule-web-shell-location-bar]]) is the one deliberate exception: its pills,
+chips, and Remote / Pull request split buttons each carry `window-no-drag` while their captions and hairlines stay draggable, so a user can still
 grab the strip between controls. Plain text such as the connection label stays draggable. The one other button group is
 `NativeWindowControls`: when the host installs the optional `NativeWindowControlsBridge`
 (`__THINKRAIL_NATIVE_WINDOW_CONTROLS__`, [[module-contracts]]) — today only the Windows desktop — Shell
@@ -73,9 +73,10 @@ vector served as `public/favicon.svg`, inlined at 32×32 and rendered
 through semantic `text-primary`—with no divider before location. With a context project the mark is followed
 by the `locationBar` strip: captioned segments **Project · Workspace · Branch · from base · Remote · Pull
 request** whose values are controls (project switcher, workspace actions + sibling switcher, branch card,
-remote/PR status chips), with the drop order and grammar owned by [[submodule-web-shell-location-bar]]. Shell
-passes it the context project, the active workspace (or `null` for Project Home), the open review from
-`useOpenBranchReview`, and the callback that opens the shell-owned New workspace dialog. No selected project
+Remote and Pull request segments with the branch's next action), with the drop order and grammar owned by
+[[submodule-web-shell-location-bar]]. Shell passes it the context project, the active workspace (or `null`
+for Project Home), the branch status from `useBranchStatus`, and the callback that opens the shell-owned
+New workspace dialog. No selected project
 leaves the logo alone.
 
 Immediately before host connection status, the topbar conditionally renders the **JetBrains recurring-quota

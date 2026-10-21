@@ -10,11 +10,20 @@ import {
 	createSessionWithSkillBaseline,
 	errorText,
 	getSessionMessagesWithSkillBaseline,
+	getTransport,
 } from "../transport";
+
+function sendPrompt(sessionId: string, text: string): void {
+	useAppStore.getState().appendUserMessage(sessionId, text);
+	void getTransport()
+		.request("session.prompt", { sessionId, text })
+		.catch((err) => useAppStore.getState().appendErrorTurn(sessionId, errorText(err)));
+}
 
 export async function startChatInTab(
 	workspaceId: string,
 	preferredGroupId?: string,
+	prompt?: string,
 ): Promise<void> {
 	const navigation = useAppStore.getState().beginCenterNavigation(workspaceId, preferredGroupId);
 	useAppStore.getState().beginChatStart(workspaceId);
@@ -32,6 +41,7 @@ export async function startChatInTab(
 			syncedTick,
 			layoutOpenOptionsForNavigation(store, workspaceId, navigation),
 		);
+		if (prompt) sendPrompt(sessionId, prompt);
 	} catch {
 		const state = useAppStore.getState();
 		if (
@@ -133,4 +143,20 @@ export async function openChatInTab(
 	} finally {
 		useAppStore.getState().endChatStart(workspaceId);
 	}
+}
+
+export async function promptWorkspaceChat(
+	workspaceId: string,
+	sessionId: string | null,
+	text: string,
+): Promise<void> {
+	if (!sessionId) return startChatInTab(workspaceId, undefined, text);
+	await openChatInTab(workspaceId, sessionId);
+	const runtime = useAppStore.getState().sessions[sessionId];
+	if (!runtime) return;
+	if (runtime.isStreaming) {
+		await getTransport().request("session.followUp", { sessionId, text });
+		return;
+	}
+	sendPrompt(sessionId, text);
 }

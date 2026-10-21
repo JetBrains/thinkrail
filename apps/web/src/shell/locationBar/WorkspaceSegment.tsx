@@ -27,7 +27,6 @@ import {
 } from "@thinkrail/ui/dropdown-menu";
 import { useEffect, useMemo, useState } from "react";
 import { RunningIcon } from "../../components/RunningIcon";
-import { useNow } from "../../components/useNow";
 import { copyText, platformShortcutLabel } from "../../lib";
 import { RemoveWorkspaceDialog } from "../../panels/RemoveWorkspaceDialog";
 import {
@@ -58,24 +57,8 @@ import {
 } from "../../store";
 import { PillChevron, pillClass, Segment } from "./Segment";
 
-export function WorkspaceSegment({
-	project,
-	workspace,
-	onNewWorkspace,
-}: {
-	project: Project;
-	workspace: Workspace | null;
-	onNewWorkspace: () => void;
-}) {
-	const [menuOpen, setMenuOpen] = useState(false);
-	const siblings = useAppStore((s) => s.workspaces[project.id]);
-	const sessionStateByWorkspace = useAppStore((s) => (menuOpen ? s.sessionStateByWorkspace : null));
-	const protocolVersion = useAppStore((s) => s.protocolVersion);
-	const workspaceSettlingSupported = useAppStore((s) => s.workspaceSettlingSupported);
-	const now = useNow();
-	const activeWorkspaceLiveLatch = useAppStore((s) => s.activeWorkspaceLiveLatch);
-	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
-	const activeSettled = useAppStore((s) =>
+export function useActiveWorkspaceSettled(workspace: Workspace | null, now: number): boolean {
+	return useAppStore((s) =>
 		workspace
 			? selectWorkspaceSettledReason(
 					{
@@ -90,6 +73,28 @@ export function WorkspaceSegment({
 				) !== null
 			: false,
 	);
+}
+
+export function WorkspaceSegment({
+	project,
+	workspace,
+	activeSettled,
+	now,
+	onNewWorkspace,
+}: {
+	project: Project;
+	workspace: Workspace | null;
+	activeSettled: boolean;
+	now: number;
+	onNewWorkspace: () => void;
+}) {
+	const [menuOpen, setMenuOpen] = useState(false);
+	const siblings = useAppStore((s) => s.workspaces[project.id]);
+	const sessionStateByWorkspace = useAppStore((s) => (menuOpen ? s.sessionStateByWorkspace : null));
+	const protocolVersion = useAppStore((s) => s.protocolVersion);
+	const workspaceSettlingSupported = useAppStore((s) => s.workspaceSettlingSupported);
+	const activeWorkspaceLiveLatch = useAppStore((s) => s.activeWorkspaceLiveLatch);
+	const settleIdleDays = useAppStore((s) => s.settleIdleDays);
 	const activeBlocked = useAppStore(
 		(s) =>
 			workspace !== null &&
@@ -166,7 +171,7 @@ export function WorkspaceSegment({
 				</>
 			}
 			testid="scope-workspace-segment"
-			className="max-w-[460px] pl-0 sm:pl-8"
+			className="min-w-64 max-w-[460px] pl-0 sm:pl-8"
 		>
 			{editing && workspace ? (
 				<input

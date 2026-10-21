@@ -15,7 +15,7 @@ task service." Each task owns its prompt, output parsing/guards, and graceful-de
 blocks or crashes its caller. The current task drafts a completed plan's summary when the agent wrote
 none. Naming chats and workspaces is **not** an assist task: the main agent names them through
 `set_title` (see [[submodule-server-agent]]), because every helper-model naming scheme produced names
-users wanted to fix. PR-draft (title/body) and similar tasks land here next. The tasks are a **library
+users wanted to fix. PR descriptions are the second task. The tasks are a **library
 surface** — no wire method; consumers are host-side flows.
 
 ## Boundary
@@ -33,8 +33,13 @@ surface** — no wire method; consumers are host-side flows.
     `## Testing` — a missing section gets a placeholder, and a missing Summary takes the text before the
     first heading; `null` when empty). The host persists the result
     only when non-null; it never overwrites an agent-authored `plan.summary`.
-- **Public surface (barrel):** `setOneShotRunner`, `suggestPlanSummary`, `toPlanSummary`, `OneShotRunner`,
-  `PlanSummaryStep`.
+  - `suggestPrDescription(input)` → a Markdown PR/MR description drafted from the caller-built input
+    (`{ branch, base, commits, diffStat, plan?, template? }`, already bounded by `pr`), or `null` on the same
+    best-effort terms. With a `template` the draft keeps the template's headings and checklist and fills
+    their bodies; `toPrDescription(raw)` is the output guard (strip a code fence, clamp length, `null` when
+    empty).
+- **Public surface (barrel):** `setOneShotRunner`, `suggestPlanSummary`, `toPlanSummary`,
+  `suggestPrDescription`, `toPrDescription`, `OneShotRunner`, `PlanSummaryStep`, `PrDescriptionInput`.
 - **Allowed deps:** `agent` (the `completeOnce`/`OneShotRequest`/`OneShotResult` primitive, via its
   barrel); Node.
 - **Forbidden:** `host`; **`@earendil-works/pi-ai` / `pi-coding-agent` directly** (model access + dispatch
