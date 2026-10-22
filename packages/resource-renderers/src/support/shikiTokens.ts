@@ -173,15 +173,26 @@ export function createShikiTokens({ languages: catalog, languageId, engine }: Sh
 		const referenced = referencedLanguages(source());
 		const seen = embedded.get(id) ?? new Set<string>();
 		embedded.set(id, seen);
-		const wanted = embeds.filter((embed) => referenced.has(embed) && !seen.has(embed));
-		const loaded = await Promise.all(
-			wanted.map(async (embed) => {
-				if ((await loadGrammar(embed)) === null) return false;
-				seen.add(embed);
-				return true;
-			}),
-		);
-		return loaded.includes(true);
+		const visited = new Set([id]);
+		let changed = false;
+		let frontier: readonly string[] = embeds;
+		while (frontier.length > 0) {
+			const wanted = frontier.filter((embed) => referenced.has(embed) && !visited.has(embed));
+			for (const embed of wanted) visited.add(embed);
+			const nested = await Promise.all(
+				wanted.map(async (embed) => {
+					const own = await loadGrammar(embed);
+					if (own === null) return [];
+					if (!seen.has(embed)) {
+						seen.add(embed);
+						changed = true;
+					}
+					return own;
+				}),
+			);
+			frontier = nested.flat();
+		}
+		return changed;
 	}
 
 	function scopeOf(metadata: number) {
