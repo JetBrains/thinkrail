@@ -56,13 +56,11 @@ const buttonVariants = cva(
 
 const ICON_SIZE: Record<ButtonSize, string> = { s: "size-14", m: "size-16", l: "size-20" };
 
+const SPIN = "animate-spin motion-reduce:animate-none";
+
 function Spinner({ size }: { size: ButtonSize }) {
 	return (
-		<RiLoader4Line
-			aria-hidden
-			data-slot="button-spinner"
-			className={cn(ICON_SIZE[size], "animate-spin motion-reduce:animate-none")}
-		/>
+		<RiLoader4Line aria-hidden data-slot="button-spinner" className={cn(ICON_SIZE[size], SPIN)} />
 	);
 }
 
@@ -73,6 +71,8 @@ interface SharedProps {
 	selected?: boolean;
 	/** Shows a spinner at icon size, keeps the geometry, and blocks re-activation. */
 	loading?: boolean;
+	/** With `loading`, rotate the button's own icon in place instead of swapping in the spinner (a refresh whose content stays valid). */
+	spinIcon?: boolean;
 	ref?: React.Ref<HTMLButtonElement>;
 }
 
@@ -104,6 +104,7 @@ export function Button({
 	iconRight: IconRight,
 	selected,
 	loading,
+	spinIcon,
 	type = "button",
 	children,
 	ref,
@@ -121,7 +122,17 @@ export function Button({
 			{...props}
 			{...stateProps(props, selected, loading)}
 		>
-			{IconLeft ? loading ? <Spinner size={size} /> : <IconLeft aria-hidden /> : null}
+			{IconLeft ? (
+				loading ? (
+					spinIcon ? (
+						<IconLeft aria-hidden className={SPIN} />
+					) : (
+						<Spinner size={size} />
+					)
+				) : (
+					<IconLeft aria-hidden />
+				)
+			) : null}
 			{loading && !spinnerReplacesIcon ? (
 				<>
 					<span className="contents text-transparent">{children}</span>
@@ -134,7 +145,11 @@ export function Button({
 			)}
 			{IconRight ? (
 				loading && !IconLeft ? (
-					<Spinner size={size} />
+					spinIcon ? (
+						<IconRight aria-hidden className={SPIN} />
+					) : (
+						<Spinner size={size} />
+					)
 				) : (
 					<IconRight aria-hidden />
 				)
@@ -168,6 +183,7 @@ export function IconButton({
 	wrapTrigger,
 	selected,
 	loading,
+	spinIcon,
 	type = "button",
 	ref,
 	...props
@@ -191,7 +207,15 @@ export function IconButton({
 				{...props}
 				{...stateProps(props, selected, loading)}
 			>
-				{loading ? <Spinner size={size} /> : <Icon aria-hidden />}
+				{loading ? (
+					spinIcon ? (
+						<Icon aria-hidden className={SPIN} />
+					) : (
+						<Spinner size={size} />
+					)
+				) : (
+					<Icon aria-hidden />
+				)}
 			</button>
 		</IconTooltip>
 	);

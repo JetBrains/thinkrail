@@ -38,6 +38,7 @@ export function GithubSettings() {
 			size="m"
 			iconLeft={RefreshCw}
 			loading={refreshing}
+			spinIcon
 			data-testid="settings-gh-refresh"
 			onClick={() => void refresh()}
 		>

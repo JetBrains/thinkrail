@@ -629,6 +629,7 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 							size="m"
 							iconLeft={RefreshCw}
 							loading={refreshing}
+							spinIcon
 							data-testid="model-refresh"
 							data-refreshing={refreshing}
 							disabled={refreshing}

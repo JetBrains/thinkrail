@@ -97,6 +97,7 @@ export function BranchPicker({
 						data-testid="branch-refresh"
 						wrapTrigger
 						loading={refreshing}
+						spinIcon
 						onClick={onRefresh}
 					/>
 				</div>

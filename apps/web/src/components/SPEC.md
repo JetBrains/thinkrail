@@ -118,8 +118,9 @@ third thing, never bare text, never nothing:
    to its control**: a single button, one menu item, one icon — never a whole region. Reference sites:
    the "New chat"/"Creating…" button states, `shell/WorkspaceChatHistory.tsx`'s history icon,
    `chat/ActivityGroup.tsx`/`chat/ToolCard.tsx` step icons, `panels/ProjectTree.tsx`'s "Creating worktree…"
-   pending row. A narrower named sub-idiom of this tier: **`RefreshCw` spinning in place** (icon unchanged,
-   just rotating) for a manual "Refresh" action on a control whose surrounding content stays visible and
+   pending row. On a shared button this tier is `loading` (icon-sized spinner in the icon's place). A
+   narrower named sub-idiom of this tier: **`RefreshCw` spinning in place** (icon unchanged, just rotating;
+   a shared button spells it `loading spinIcon`) for a manual "Refresh" action on a control whose surrounding content stays visible and
    valid while the refresh runs (`chat/ModelEffortPicker.tsx`, `chat/ModelSelector.tsx`, `panels/GithubSettings.tsx`,
    `panels/ProvidersSettings.tsx`, `panels/BranchPicker.tsx`) — swapping to a generic spinner there would
    discard the "this still works, just refreshing" signal the in-place spin gives for free.

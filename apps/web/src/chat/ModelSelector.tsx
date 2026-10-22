@@ -264,6 +264,7 @@ export function ModelSelector({
 						size="m"
 						iconLeft={RefreshCw}
 						loading={refreshing}
+						spinIcon
 						data-testid="model-refresh"
 						data-refreshing={refreshing}
 						disabled={refreshing}

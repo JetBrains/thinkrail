@@ -247,6 +247,7 @@ const STATES: {
 	{ id: "focus-visible", force: ["focus-visible"] },
 	{ id: "disabled", props: { disabled: true } },
 	{ id: "loading", props: { loading: true } },
+	{ id: "loading-spin", props: { loading: true, spinIcon: true } },
 	{ id: "selected", props: { selected: true }, only: ["outline", "ghost"] },
 ];
 
@@ -673,7 +674,7 @@ export function ButtonsCatalog({ forcedRules }: { forcedRules: number }) {
 <Button variant="primary" | "soft-primary" | "outline" | "ghost" | "destructive"   // default primary
         size="s" | "m" | "l"                                                      // default l
         iconLeft={RiAddLine} iconRight={RiArrowDownSLine}                         // components, sized by the button
-        loading selected disabled>
+        loading spinIcon selected disabled>   // spinIcon: loading rotates the own icon (refresh)
   Label
 </Button>
 

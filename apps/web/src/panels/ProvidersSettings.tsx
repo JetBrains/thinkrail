@@ -151,6 +151,7 @@ export function ProvidersSettings() {
 					size="m"
 					iconLeft={RefreshCw}
 					loading={refreshing}
+					spinIcon
 					data-testid="providers-refresh"
 					aria-label={t("settings.providers.refreshLabel")}
 					onClick={() => void load()}

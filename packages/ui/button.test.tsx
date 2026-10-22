@@ -145,3 +145,17 @@ test("there are exactly five variants and three sizes", () => {
 	expect(markup).toContain('data-variant="primary"');
 	expect(markup).toContain('data-size="l"');
 });
+
+test("spinIcon keeps the button's own icon and rotates it while loading", () => {
+	const text = render(
+		<Button loading spinIcon size="m" iconLeft={RiAddLine}>
+			Refresh
+		</Button>,
+	);
+	expect(text).not.toContain('data-slot="button-spinner"');
+	expect(text).toContain("animate-spin");
+	expect(text).toContain('aria-busy="true"');
+	const icon = render(<IconButton loading spinIcon icon={RiAddLine} label="Refresh" />);
+	expect(icon).not.toContain('data-slot="button-spinner"');
+	expect(icon).toContain("animate-spin");
+});
