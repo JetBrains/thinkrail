@@ -225,6 +225,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Install desktop runtime packages
         uses: ./.github/actions/desktop-apt
+        timeout-minutes: 10
       - name: Install Playwright Chromium
         run: .github/scripts/install-playwright.sh
       - name: Start virtual display
