@@ -3,6 +3,7 @@ import { useT } from "@thinkrail/locales/react";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { useMemo, useRef, useState } from "react";
 import { statusLetter } from "../chat/planView";
+import { firstClickOnly } from "../lib";
 import { selectFilesTreeView, type TabIntent, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
@@ -155,7 +156,7 @@ function FileNodeRow({
 						/>
 					) : undefined
 				}
-				onClick={isDir ? toggleDirectory : () => open("preview")}
+				onClick={isDir ? toggleDirectory : firstClickOnly(() => open("preview"))}
 				onDoubleClick={isDir ? undefined : () => open("keep")}
 			/>
 			{isDir && expanded && children && (

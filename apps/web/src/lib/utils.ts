@@ -3,6 +3,12 @@ import type { Translator } from "@thinkrail/locales/react";
 
 export const DOUBLE_CLICK_SETTLE_MS = 250;
 
+export function firstClickOnly(run: () => void): (event: { detail: number }) => void {
+	return (event) => {
+		if (event.detail <= 1) run();
+	};
+}
+
 export function tupleKey(namespace: string, ...parts: string[]): string {
 	return `${namespace}:${parts.map((part) => `${part.length}:${part}`).join("")}`;
 }

@@ -37,7 +37,7 @@ export function TreeRow({
 	labelClassName?: string;
 	trailing?: ReactNode;
 	highlight?: "self" | "wrapper";
-	onClick?: (() => void) | undefined;
+	onClick?: ((event: MouseEvent) => void) | undefined;
 	onDoubleClick?: (() => void) | undefined;
 	onContextMenu?: ((event: MouseEvent) => void) | undefined;
 }) {

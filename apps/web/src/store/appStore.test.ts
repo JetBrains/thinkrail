@@ -3030,7 +3030,11 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 			anchorText: "removed",
 		},
 		historyOpenRequest: { id: "history", sessionId: "removed-chat" },
-		reviewFocusRequest: { workspaceId: "w1", commentId: "comment" },
+		reviewFocusRequest: {
+			workspaceId: "w1",
+			commentId: "comment",
+			surface: { kind: "diff", scope: { kind: "branch" } },
+		},
 		closedChatsByWorkspace: {
 			w1: [{ sessionId: "removed-chat", title: "Removed", closedAt: 1 }],
 		},
@@ -3996,7 +4000,11 @@ test("consuming a changes-tab reveal lands active path, expansion and focus in o
 		collapsed: { "src/a.ts": false },
 		reveal: null,
 	});
-	expect(s().reviewFocusRequest).toEqual({ workspaceId: "ws1", commentId: "c1" });
+	expect(s().reviewFocusRequest).toEqual({
+		workspaceId: "ws1",
+		commentId: "c1",
+		surface: { kind: "diff", scope: { kind: "branch" } },
+	});
 
 	s().setChangesTabSectionViewState("ws1", tab.id, "src/a.ts", { scrollTop: 3 });
 	const saved = s().tabsByWorkspace;

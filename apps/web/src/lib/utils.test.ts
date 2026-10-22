@@ -5,6 +5,7 @@ import {
 	compactAge,
 	cssColorToHex,
 	fileName,
+	firstClickOnly,
 	firstNonBlankLine,
 	hasPlatformModifier,
 	isAbsolutePath,
@@ -249,4 +250,16 @@ test("firstNonBlankLine skips blank lines and trims", () => {
 	expect(firstNonBlankLine("\n  \n  hello  \nworld")).toBe("hello");
 	expect(firstNonBlankLine(" \n\t\n")).toBeUndefined();
 	expect(firstNonBlankLine("")).toBeUndefined();
+});
+
+test("firstClickOnly runs on a first click or keyboard activation, not a double click's second", () => {
+	let runs = 0;
+	const onClick = firstClickOnly(() => {
+		runs += 1;
+	});
+	onClick({ detail: 0 });
+	onClick({ detail: 1 });
+	onClick({ detail: 2 });
+	onClick({ detail: 3 });
+	expect(runs).toBe(2);
 });

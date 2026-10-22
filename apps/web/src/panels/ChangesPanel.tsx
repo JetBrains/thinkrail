@@ -3,6 +3,7 @@ import { useT } from "@thinkrail/locales/react";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { firstClickOnly } from "../lib";
 import {
 	type CenterNavigationStamp,
 	type ChangesTab,
@@ -250,7 +251,7 @@ export function ChangesPanel({
 												data-status={change.status}
 												data-active={isActive(change.path) ? true : undefined}
 												data-viewed={isViewed(change.path) ? true : undefined}
-												onClick={() => openDiff(change.path, "preview")}
+												onClick={firstClickOnly(() => openDiff(change.path, "preview"))}
 												onDoubleClick={() => openDiff(change.path, "keep", undefined, true)}
 												title={change.path}
 												className="flex h-panel-row min-w-0 flex-1 items-center gap-8 px-4 text-left tr-text-ui"

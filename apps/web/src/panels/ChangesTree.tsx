@@ -1,4 +1,5 @@
 import type { GitFileChange } from "@thinkrail/contracts";
+import { firstClickOnly } from "../lib";
 import type { TabIntent } from "../store";
 import { ChangeRowActions, ROW_MENU_SLOT } from "./ChangeRowActions";
 import { buildChangesTree, type ChangeTreeNode, statusNameClass } from "./changesModel";
@@ -50,7 +51,7 @@ function ChangeNodeRow({ node, ...rowProps }: ChangeRowProps & { node: ChangeTre
 							dataViewed={isViewed(node.path)}
 							label={node.name}
 							labelClassName={`${statusNameClass(node.status)} ${isViewed(node.path) ? "opacity-60" : ""}`}
-							onClick={() => onOpen(node.path, "preview")}
+							onClick={firstClickOnly(() => onOpen(node.path, "preview"))}
 							onDoubleClick={() => onOpen(node.path, "keep", true)}
 							trailing={
 								<>
