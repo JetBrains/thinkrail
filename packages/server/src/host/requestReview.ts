@@ -585,7 +585,7 @@ export async function maybeAutoReReview(
 			startPlanReview(workspaceId, sessionId, item.id, runSubagent);
 		}
 	} catch (err) {
-		console.warn(`auto re-review skipped (${workspaceId}/${sessionId}): ${err}`);
+		log.warn(`auto re-review skipped (${workspaceId}/${sessionId})`, err);
 	}
 }
 

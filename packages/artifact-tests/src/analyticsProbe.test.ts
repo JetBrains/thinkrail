@@ -108,6 +108,22 @@ test("desktop launch assertion pins first-install and restart personless provena
 			),
 		).toThrow();
 	}
+	const report: CollectedEvent = {
+		event: "$exception",
+		distinct_id: launch.distinct_id,
+		properties: { ...launch.properties, source: "host_logged", handled: true, scope: "agent" },
+	};
+	expect(assertDesktopLaunch([launch, report], expected, false)).toBe(launch.distinct_id);
+	expect(() =>
+		assertDesktopLaunch(
+			[launch, { ...report, properties: { ...report.properties, path: "/Users/x" } }],
+			expected,
+			false,
+		),
+	).toThrow("unexpected $exception properties: path");
+	expect(() =>
+		assertDesktopLaunch([launch, { ...report, distinct_id: "other" }], expected, false),
+	).toThrow("installation id");
 	expect(() => assertDesktopLaunch([], expected, false)).toThrow("app_started");
 	expect(() =>
 		assertDesktopLaunch([{ ...launch, distinct_id: "not-a-uuid" }], expected, false),

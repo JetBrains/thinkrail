@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { Updater, Utils } from "electrobun/main";
+import { desktopError } from "../errorReporting";
 import type { DesktopDialogLabels } from "../nativeLabels";
 import {
 	createNativeUpdateController,
@@ -22,7 +23,7 @@ export interface ElectrobunUpdateControllerOptions {
 
 function updateJournal(userData: string) {
 	return createUpdateJournalStore(join(userData, UPDATE_JOURNAL_FILE), (error) => {
-		console.error("[desktop] update journal failed", error);
+		desktopError("updates", "update journal failed", error);
 	});
 }
 
@@ -62,7 +63,7 @@ export function createElectrobunQuitCoordinator(
 			});
 		},
 		reportLifecycleError: (error) => {
-			console.error("[desktop] update lifecycle failed", error);
+			desktopError("updates", "update lifecycle failed", error);
 		},
 	});
 }

@@ -1,4 +1,5 @@
 import { dlopen, FFIType } from "bun:ffi";
+import { desktopError } from "./errorReporting";
 
 export interface KeyState {
 	keyDown: boolean;
@@ -75,7 +76,7 @@ export function createKeyStateReader(platform: NodeJS.Platform) {
 			});
 		} catch (error) {
 			unavailable = true;
-			console.error("[desktop] could not read keyboard state", error);
+			desktopError("keyboard", "could not read keyboard state", error);
 			return null;
 		}
 	};

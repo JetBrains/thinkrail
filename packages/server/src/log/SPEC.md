@@ -66,13 +66,20 @@ through a reviewed `logger(scope)` call with an intentionally bounded message.
   equivalent bounded metadata — never raw error text or request-derived paths. A callsite that explicitly
   approves a structured error gets only type/message/stack, never arbitrary enumerable fields.
 
+## Logged-error observer
+
+`observeLoggedErrors(observer | null)` is the single seam through which a `warn`/`error` call that carries
+an error object is also handed to one observer (scope + error), independent of the level threshold;
+observer failures are swallowed. The host wires it to analytics error reports at server start and clears
+it on stop, so `log` stays free of any analytics edge.
+
 ## Boundary
 
 - **Owns:** the process-level Pino adapter, level/env resolution, scoped façade, JSONL schema and privacy
   policy, pino-roll configuration and startup cleanup invocation, pretty stderr, and the shared
   `describeError` used by the independent crash report.
 - **Public surface (barrel):** `logger`, `Logger`, `LogLevel`, `initLogging`, `InitLoggingOptions`,
-  `setLogLevel`, `logsDir`, `describeError`.
+  `setLogLevel`, `logsDir`, `describeError`, `observeLoggedErrors`.
 - **Allowed deps:** `persistence` (`dataDir`); `pino`, `pino-pretty`, `pino-roll`; Node path/streams.
 - **Forbidden:** importing any other sibling module or `host`; being imported by `persistence` (the one
   module below it — a `persistence → log` edge would be a cycle).

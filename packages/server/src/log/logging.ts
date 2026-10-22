@@ -166,7 +166,25 @@ function writeWithPino(
 	else method({ err: serializeLogError(error) }, message);
 }
 
+export type LoggedErrorObserver = (scope: string, error: unknown) => void;
+
+let loggedErrorObserver: LoggedErrorObserver | null = null;
+
+export function observeLoggedErrors(observer: LoggedErrorObserver | null): void {
+	loggedErrorObserver = observer;
+}
+
+function notifyLoggedError(level: LogLevel, scope: string, error: unknown): void {
+	if (error === undefined || (level !== "warn" && level !== "error")) return;
+	const observer = loggedErrorObserver;
+	if (!observer) return;
+	try {
+		observer(scope, error);
+	} catch {}
+}
+
 function emit(level: LogLevel, scope: string, message: string, error?: unknown): void {
+	notifyLoggedError(level, scope, error);
 	if (!shouldLog(level, currentLevel)) return;
 	if (!applicationLogger) {
 		writeDirectStderr(fallbackLine(level, scope, message, error));

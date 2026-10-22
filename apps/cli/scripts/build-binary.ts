@@ -12,10 +12,14 @@ import {
 } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { resolveBuildRuntimeSources } from "@thinkrail/server/build-support";
+import { BINARY_SOURCE_MAP_BASE } from "../src/binarySourceMap";
 import { binaryArtifactName } from "./artifactName";
 
 const cliDir = resolve(import.meta.dir, "..");
 const repoRoot = resolve(cliDir, "..", "..");
+if (resolve(repoRoot, BINARY_SOURCE_MAP_BASE) !== cliDir) {
+	throw new Error(`the binary compiles from ${cliDir}, not ${BINARY_SOURCE_MAP_BASE}`);
+}
 const webDist = join(repoRoot, "apps", "web", "dist");
 const webGeneratedPath = join(cliDir, "src", "web-assets.generated.ts");
 const extGeneratedPath = join(cliDir, "src", "bundled-extensions.generated.ts");
@@ -57,9 +61,10 @@ function generateWebManifest(): void {
 	if (!existsSync(join(webDist, "index.html"))) {
 		throw new Error(`web build not found at ${webDist} — run \`bun run build:web\` first.`);
 	}
-	const files = listFiles(webDist)
-		.sort()
-		.map((file) => ({ root: webDist, file }));
+	const webFiles = listFiles(webDist).sort();
+	const maps = webFiles.filter((file) => file.endsWith(".map"));
+	if (maps.length) throw new Error(`refusing to embed web source maps: ${maps.join(", ")}`);
+	const files = webFiles.map((file) => ({ root: webDist, file }));
 	const { imports, entries, version } = embedFiles(files, "a");
 	writeFileSync(
 		webGeneratedPath,
@@ -110,6 +115,7 @@ try {
 			"--no-compile-autoload-bunfig",
 			"--bytecode",
 			"--format=esm",
+			"--sourcemap",
 			`--target=${target ?? "bun"}`,
 			entryPath,
 			"--outfile",
@@ -118,6 +124,7 @@ try {
 		{ stdout: "inherit", stderr: "inherit", cwd: cliDir },
 	);
 	if (!proc.success) process.exit(proc.exitCode ?? 1);
+	rmSync(`${outFile}.map`, { force: true });
 } finally {
 	rmSync(webGeneratedPath, { force: true });
 	rmSync(extGeneratedPath, { force: true });

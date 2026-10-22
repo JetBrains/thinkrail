@@ -53,6 +53,7 @@
 	"devDependencies": {
 		"@babel/core": "7.29.7",
 		"@lobehub/icons-static-svg": "1.95.1",
+		"@posthog/cli": "catalog:",
 		"@rolldown/plugin-babel": "0.2.4",
 		"@tailwindcss/vite": "catalog:",
 		"@types/babel__core": "7.20.5",
