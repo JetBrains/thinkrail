@@ -111,7 +111,8 @@ another.
 The runtime bundle is built with `--outdir` + `--entry-naming` (Bun refuses external maps with
 `--outfile`). Only in a credentialed release build (`THINKRAIL_SOURCEMAPS_RELEASE`, [[module-ci-release]])
 does `preBuild` emit an external map, inject the PostHog chunk id itself, upload a `.js` copy + map with
-`posthog-cli sourcemap upload`, and delete the map: posthog-cli's own `inject` skips `.ts` files and would
+`posthog-cli sourcemap upload` through the root `posthog-cli` script (the web package's checksum-verified
+runner), and delete the map: posthog-cli's own `inject` skips `.ts` files and would
 push Bun's `// @bun` pragma off line 1, so the registration statement becomes line 2 and the map shifts
 one line. The chunk id is a UUID hashed from the release, the code **and** its map: Bun emits
 byte-identical JS for a different checkout path (the generated entry's absolute imports live only in

@@ -86,7 +86,9 @@ return to stable.
 **Release source maps are build-only and never shipped.** With `THINKRAIL_SOURCEMAPS_RELEASE` set (a
 credentialed release build, [[module-ci-release]]), `vite.config.ts` emits hidden maps and the
 `sourceMapUpload.ts` plugin runs `posthog-cli sourcemap process --delete-after` on `dist`, failing if
-any `.map` remains; without it the build is unchanged. The injected chunk-id registry is what
+any `.map` remains; without it the build is unchanged. `posthogCli.ts` is the repo's only way to run
+posthog-cli (the root `posthog-cli` script exposes it to desktop's `preBuild`): it checks the binary against
+pinned SHA-256s before running it ([[module-ci-release]]). The injected chunk-id registry is what
 `transport` reads for UI error reports.
 
 **The React Compiler is on for every `apps/web` bundle** (`vite.config.ts`: `@rolldown/plugin-babel` running

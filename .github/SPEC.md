@@ -137,7 +137,12 @@ jobs otherwise perform service calls but do not build product source or assemble
 `THINKRAIL_SOURCEMAPS_RELEASE=<version>` and the CLI credentials (EU host). The web build emits hidden
 maps and runs `posthog-cli sourcemap process --release-mode symbol-set --delete-after` (release
 `thinkrail@<version>`); desktop's `preBuild` injects the runtime bundle's chunk id itself and uploads it
-([[module-desktop]]). `@posthog/cli` is pinned once in the root catalog. Builds fail rather than package any
+([[module-desktop]]). `@posthog/cli` is pinned once in the root catalog, and its npm wrapper downloads the
+native binary on first use without any integrity check, so every invocation goes through the root
+`posthog-cli` script (`apps/web/posthogCli.ts`): it refuses a wrapper version other than the pinned one and
+a binary whose SHA-256 is not one of the seven pinned per platform — taken from archives whose digests
+matched PostHog's GitHub release — before the binary sees the key or rewrites shipped JS. Bumping
+`@posthog/cli` means re-pinning. Builds fail rather than package any
 web `.map`, and turbo hashes the release variable so a cache hit restores the injected, map-free output.
 The CLI binary embeds its own map instead ([[module-cli]]).
 

@@ -1,8 +1,7 @@
-import { spawnSync } from "node:child_process";
 import { readdirSync, statSync } from "node:fs";
-import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 import type { Plugin } from "vite";
+import { runPosthogCli } from "./posthogCli";
 
 export const SOURCE_MAP_RELEASE_NAME = "thinkrail";
 
@@ -27,13 +26,6 @@ export function listSourceMaps(dir: string): string[] {
 	});
 }
 
-function runPosthogCli(args: string[]): void {
-	const cli = createRequire(import.meta.url).resolve("@posthog/cli/run-posthog-cli.js");
-	const result = spawnSync("bun", [cli, ...args], { stdio: "inherit" });
-	if (result.error) throw result.error;
-	if (result.status !== 0) throw new Error(`posthog-cli exited ${result.status ?? result.signal}`);
-}
-
 export function posthogSourceMapUpload(release: string): Plugin {
 	let outDir = "dist";
 	return {
@@ -42,8 +34,8 @@ export function posthogSourceMapUpload(release: string): Plugin {
 		configResolved(config) {
 			outDir = resolve(config.root, config.build.outDir);
 		},
-		closeBundle() {
-			runPosthogCli([
+		async closeBundle() {
+			await runPosthogCli([
 				"sourcemap",
 				"process",
 				"--directory",

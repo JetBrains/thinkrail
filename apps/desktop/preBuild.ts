@@ -9,7 +9,6 @@ import {
 	statSync,
 	writeFileSync,
 } from "node:fs";
-import { createRequire } from "node:module";
 import { basename, join, relative, resolve, sep } from "node:path";
 import type { BundledExtensions } from "@thinkrail/server";
 import type { BuildRuntimeSources } from "@thinkrail/server/build-support";
@@ -77,9 +76,9 @@ function uploadRuntimeSourceMap(runtimeFile: string, release: string): void {
 	writeFileSync(join(uploadDir, "server-runtime.js"), injected.code);
 	writeFileSync(join(uploadDir, "server-runtime.js.map"), JSON.stringify(injected.map));
 	try {
-		const cli = createRequire(import.meta.url).resolve("@posthog/cli/run-posthog-cli.js");
 		runBun([
-			cli,
+			"run",
+			"posthog-cli",
 			"sourcemap",
 			"upload",
 			"--directory",
