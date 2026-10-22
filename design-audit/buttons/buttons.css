@@ -1,0 +1,232 @@
+/* buttons.html chrome only: every selector is a `bk-*` class and never targets the specimen buttons. */
+.bk-app {
+	min-height: 100vh;
+	background: var(--container-content-bg);
+	color: var(--text-default);
+	font-family: var(--tr-font-family-interface);
+	font-size: 13px;
+	line-height: 1.45;
+	padding: 0 28px 64px;
+}
+.bk-top {
+	position: sticky;
+	top: 0;
+	z-index: 60;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 16px;
+	padding: 12px 0;
+	background: var(--container-content-bg);
+	border-bottom: 1px solid var(--border-default);
+}
+.bk-title {
+	font-size: 18px;
+	font-weight: 600;
+}
+.bk-sub {
+	font-size: 11px;
+	color: var(--text-muted);
+	max-width: 640px;
+}
+.bk-field {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	font-size: 11px;
+	color: var(--text-muted);
+}
+.bk-field select {
+	font: inherit;
+	font-size: 13px;
+	color: var(--text-default);
+	background: var(--container-workspace-bg);
+	border: 1px solid var(--border-default);
+	border-radius: 4px;
+	padding: 3px 6px;
+}
+.bk-nav {
+	display: flex;
+	gap: 12px;
+	margin-left: auto;
+}
+.bk-nav a {
+	color: var(--primary);
+	text-decoration: none;
+}
+.bk-section {
+	margin-top: 28px;
+}
+.bk-section h2 {
+	font-size: 17px;
+	font-weight: 600;
+	margin: 0 0 10px;
+}
+.bk-section h3 {
+	font-size: 13px;
+	font-weight: 600;
+	margin: 14px 0 6px;
+}
+.bk-note {
+	font-size: 11px;
+	color: var(--text-muted);
+	margin: 4px 0;
+}
+.bk-table {
+	border-collapse: collapse;
+	font-size: 12px;
+}
+.bk-table th,
+.bk-table td {
+	border: 1px solid var(--border-muted);
+	padding: 3px 8px;
+	text-align: left;
+}
+.bk-variant {
+	border: 1px solid var(--border-default);
+	border-radius: 8px;
+	padding: 6px 12px 10px;
+	margin-bottom: 12px;
+	background: var(--container-sidebar-bg);
+}
+.bk-row {
+	display: grid;
+	grid-template-columns: 170px 1fr;
+	gap: 8px;
+	align-items: start;
+	margin-top: 6px;
+}
+.bk-row-head {
+	font-size: 11px;
+	color: var(--text-muted);
+	padding-top: 10px;
+}
+.bk-cells {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.bk-spec {
+	margin: 0;
+	border: 1px solid var(--border-muted);
+	border-radius: 6px;
+	overflow: hidden;
+	min-width: 150px;
+	background: var(--container-content-bg);
+}
+.bk-stage {
+	padding: 12px 14px;
+	display: flex;
+	align-items: center;
+	min-height: 44px;
+	box-sizing: border-box;
+}
+.bk-cap {
+	padding: 3px 6px 4px;
+	border-top: 1px solid var(--border-muted);
+	font-size: 10px;
+}
+.bk-cap-label {
+	font-weight: 600;
+	font-size: 11px;
+}
+.bk-forced {
+	color: var(--feedback-warning);
+}
+.bk-measure {
+	font-family: var(--tr-font-family-code);
+	color: var(--text-muted);
+}
+.bk-bad {
+	color: var(--feedback-error);
+	font-weight: 600;
+}
+.bk-inline {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin: 6px 0;
+}
+.bk-inline-name {
+	width: 110px;
+	font-size: 12px;
+}
+.bk-inline-stage {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 10px;
+	border-radius: 6px;
+	border: 1px solid var(--border-muted);
+}
+.bk-exemplars {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.bk-exemplar {
+	border: 1px solid var(--border-default);
+	border-radius: 8px;
+	padding: 10px 12px;
+	background: var(--container-sidebar-bg);
+}
+.bk-exemplar-title {
+	font-weight: 600;
+}
+.bk-ba {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+	margin-top: 8px;
+}
+.bk-ba-label {
+	font-size: 11px;
+	color: var(--text-muted);
+	margin-bottom: 4px;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+.bk-before {
+	margin: 0 0 8px;
+}
+.bk-before img {
+	display: block;
+	max-width: 100%;
+	border: 1px solid var(--border-muted);
+	border-radius: 4px;
+}
+.bk-before figcaption {
+	font-size: 10px;
+	color: var(--text-muted);
+}
+.bk-after {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+	padding: 14px;
+	border-radius: 6px;
+	border: 1px solid var(--border-muted);
+}
+.bk-code {
+	font-family: var(--tr-font-family-code);
+	font-size: 12px;
+	background: var(--container-workspace-bg);
+	padding: 10px 12px;
+	border-radius: 6px;
+	overflow: auto;
+}
+.bk-toast-frame {
+	position: relative;
+	transform: translateZ(0);
+	width: 400px;
+	height: 150px;
+	border: 1px dashed var(--border-muted);
+	border-radius: 6px;
+}
+.bk-rail-stage {
+	height: 180px;
+	align-items: stretch;
+	padding: 0;
+}
