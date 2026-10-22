@@ -1,4 +1,6 @@
-import { realpathSync, rmSync } from "node:fs";
+import { realpathSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, type Page, test } from "@playwright/test";
 import type { AskUserQuestionArgs } from "@thinkrail/pi-ask-user-question/core";
 import {
@@ -7,10 +9,15 @@ import {
 	openFixtureProject,
 	pressPlatformShortcut,
 } from "./fixtures/app";
-import { E2E_FIXTURE_REPO } from "./fixtures/paths";
+import { resolveBunExecutable } from "./fixtures/executables";
+import { E2E_FIXTURE_REPO, E2E_PI_AGENT_DIR } from "./fixtures/paths";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const BASE_TS = 1_704_000_000_000;
+const STDIO_SERVER = fileURLToPath(
+	new URL("../packages/server/src/agent/mcp/fixtures/stdioServer.ts", import.meta.url),
+);
+const USER_MCP_CONFIG = join(E2E_PI_AGENT_DIR, "mcp.json");
 const askArgs: AskUserQuestionArgs = {
 	questions: [
 		{
@@ -232,6 +239,37 @@ test("the Extensions page flips a host-backed switch in place and the switch sur
 			await row.click();
 			await expect(row.getByTestId("search-toggle")).toHaveAttribute("data-on", "true");
 		}
+	}
+});
+
+test("the MCP page lists the workspace's servers with their state and switches one off in place", async ({
+	page,
+}) => {
+	rmSync(USER_MCP_CONFIG, { force: true });
+	writeFileSync(
+		USER_MCP_CONFIG,
+		JSON.stringify({
+			mcpServers: { fixture: { command: resolveBunExecutable(), args: [STDIO_SERVER] } },
+		}),
+	);
+	try {
+		await openFixtureProject(page);
+		await enterDefaultWorkspace(page);
+		await openPalette(page);
+		await page.getByTestId("search-input").fill(">mcp");
+		await page.locator('[data-testid="search-row"][data-item-id="command:settings.mcp"]').click();
+		await expect(page.getByTestId("search-crumb")).toContainText("MCP servers");
+		const row = page.locator('[data-testid="search-row"][data-item-id="mcp:user:fixture"]');
+		await expect(row).toContainText("Personal");
+		await expect(row.getByTestId("search-toggle")).toHaveAttribute("data-on", "true");
+		await row.click();
+		await expect(row.getByTestId("search-toggle")).toHaveAttribute("data-on", "false", {
+			timeout: 15_000,
+		});
+		await expect(palette(page)).toBeVisible();
+		await expect(row).toContainText("Disabled");
+	} finally {
+		rmSync(USER_MCP_CONFIG, { force: true });
 	}
 });
 
