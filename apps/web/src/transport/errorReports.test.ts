@@ -33,7 +33,7 @@ afterEach(() => {
 	useAppStore.setState({ protocolVersion: null });
 });
 
-test("reports are offered only to a host at or beyond the v86 capability", () => {
+test("reports are offered only to a host at or beyond the v90 capability", () => {
 	expect(supportsClientErrorReports(CLIENT_ERROR_REPORT_PROTOCOL_VERSION)).toBe(true);
 	expect(supportsClientErrorReports(CLIENT_ERROR_REPORT_PROTOCOL_VERSION - 1)).toBe(false);
 	expect(supportsClientErrorReports(null)).toBe(false);

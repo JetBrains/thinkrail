@@ -137,7 +137,7 @@ the existing reconnect-safe request transport; the host's bounded probe lifetime
 **Client error reports** (`errorReports.ts`): `installClientErrorReporting()` listens for window `error` /
 `unhandledrejection`, and `reportClientError(clientErrorReport(kind, error, boundary?))` forwards raw
 class/message/stack over fire-and-forget `client.reportError` — only to a host with
-`supportsClientErrorReports` (v86); reports raised before the welcome wait for it (≤ 10 queued), and a
+`supportsClientErrorReports` (v90); reports raised before the welcome wait for it (≤ 10 queued), and a
 page sends at most 50. Each report carries the PostHog chunk ids (≤ 20) that the release build's
 injected `_posthogChunkIds` registry assigns to URLs in its own stack, so uploaded maps resolve its frames.
 The browser never scrubs or holds a vendor client: the host is the only sanitizer.
