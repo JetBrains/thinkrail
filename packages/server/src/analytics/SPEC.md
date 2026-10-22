@@ -125,7 +125,7 @@ The privacy guarantee is an allow-list, not a deny-list. Capture uses posthog-no
 default ones read ±7 source lines per frame from disk, make paths relative to `cwd` (still
 `../../Users/<name>/…`) and derive module names. `@posthog/core`, pinned to posthog-node's own core, is
 imported only for that builder. The sink's typed (doc-less) `before_send` then **rebuilds** every
-`$exception` from scratch: ≤ 5 exceptions of identifier-only `type`, scrubbed `value`,
+`$exception` from scratch: ≤ 5 exceptions of identifier-only `type`, a classifier `value`,
 `mechanism.{handled,synthetic,type}` (the root's `handled` comes from the report, because the SDK's capture
 APIs take no hint and always default it to true; causes stay handled), and frames carrying only `platform`, identifier-only `function`,
 normalized `filename`, `lineno`, `colno`, `in_app` and a UUID-shaped `chunk_id`. Context lines, `vars`,
@@ -143,17 +143,24 @@ frames by `chunk_id` (or a public URL we do not have): the SDK's core builder co
 `_posthogChunkIds` registry an injected bundle writes (the desktop runtime), and UI reports carry their
 own `chunkIds` (URL → id) which the host passes as the internal `$thinkrail_chunk_ids` property the
 sanitizer consumes and never forwards. The CLI binary embeds its map, so its frames arrive already
-resolved. Messages keep the
-first line (≤ 300 chars) with home dir, username, hostname, URLs, emails, quoted text, any slash token,
-UUIDs, IPs, hex ≥ 7, long tokens, digit runs ≥ 4 and JSON tails replaced by `<…>` placeholders, which
-also groups dynamic messages into one issue. Known residual risk, accepted: a bare unquoted value inside
-one of our own interpolated messages (e.g. a branch name without `/`) survives; new code keeps personal
-values out of `message` (AGENTS.md). A wire-level test asserts on the SDK's actual request body, so an
-SDK upgrade that adds fields fails CI rather than leaking.
+resolved.
+
+**No message text is ever sent.** Error messages routinely carry third-party prose — git stderr (a
+pre-push hook's output reaches `pr.open`'s thrown message), DNS/TLS diagnostics with private hostnames,
+provider and extension errors — and no redaction makes arbitrary prose personal-data-free. The root
+exception's `value` is therefore a classifier built only from the validated allow-listed fields —
+`source`, then `request_method` or `scope`, then `code` (e.g. `request pr.open PUSH_AUTH_FAILED`,
+`ui render:chat`) — and causes carry an empty `value`; PostHog groups by type and resolved frames, so the
+classifier only names the issue. The UI report carries no message at all. A wire-level test pins the
+exact property-key set of the SDK's actual request body, including the `$lib`/`$lib_version`/
+`$is_server`/`$geoip_disable` the SDK adds after `before_send`, so an SDK upgrade that adds a field
+fails CI rather than leaking.
 
 `enableExceptionAutocapture` stays off: its own `uncaughtException` listener defers exit to ours, so its
 asynchronous capture would be lost. The SDK's rate limiter applies only to autocapture, so the service
-dedupes identical (source, scope, method, type, message) reports for 60 s and caps 100 per launch.
+dedupes reports with the same (source, scope, method, type, code, throw site — the stack's top frame)
+for 60 s and caps 100 per launch, at most 50 from any one source so a noisy source cannot starve the
+rest; the fatal crash report bypasses both.
 Browser stacks arrive raw and are rewritten from WebKit/Gecko `fn@url:line:col` into V8 lines the node
 parser reads; the browser never holds a vendor client. Errors before host analytics initializes
 (desktop/CLI pre-boot) are not reported; desktop main-process bundles carry no source maps.
@@ -206,7 +213,7 @@ Counts describe installations, not people. Every event carries `app_version`, `c
 plus its
 closed properties. Only built-in provider/model names pass raw; custom values become `custom`, preserving
 the existing explicit `jbcentral` login name. No chat/file contents, paths/names, resource IDs, credentials,
-unsanitized errors, token/cost counts or recordings are collected; error reports carry only the
+error messages, token/cost counts or recordings are collected; error reports carry only the
 allow-listed shape above.
 
 The sink uses the launcher-supplied public key, EU endpoint, disabled GeoIP enrichment and

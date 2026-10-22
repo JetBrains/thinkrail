@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
-import { homedir, tmpdir, userInfo } from "node:os";
+import { homedir, hostname, tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { EXTERNAL_FRAME } from "./errors";
 import {
@@ -69,7 +69,25 @@ function piiLadenError(): Error {
 	return error;
 }
 
-test("a reported error reaches PostHog with no personal data in the actual request", async () => {
+const WIRE_KEYS = [
+	"$exception_level",
+	"$exception_list",
+	"$geoip_disable",
+	"$is_server",
+	"$lib",
+	"$lib_version",
+	"$process_person_profile",
+	"app_version",
+	"arch",
+	"build",
+	"channel",
+	"handled",
+	"os",
+	"request_method",
+	"source",
+];
+
+test("a reported error reaches PostHog as a classifier with no personal data in the actual request", async () => {
 	const sent: BatchEntry[] = [];
 	boot(sent);
 	reportError(piiLadenError(), { source: "request", handled: true, requestMethod: "project.open" });
@@ -77,10 +95,12 @@ test("a reported error reaches PostHog with no personal data in the actual reque
 	const [entry, ...rest] = exceptions(sent);
 	expect(rest).toEqual([]);
 	if (!entry) throw new Error("no $exception was sent");
+	expect(Object.keys(entry.properties).sort()).toEqual(WIRE_KEYS);
 	const wire = JSON.stringify(entry);
 	for (const forbidden of [
 		homedir(),
 		userInfo().username,
+		hostname(),
 		"secret-plan",
 		"jane",
 		"payroll",
@@ -94,10 +114,7 @@ test("a reported error reaches PostHog with no personal data in the actual reque
 		expect(wire).not.toContain(forbidden);
 	}
 	const list = entry.properties.$exception_list as Array<Record<string, unknown>>;
-	expect(list.map((exception) => exception.value)).toEqual([
-		"open <str> failed for <email>",
-		"git: <path> rejected at <path>",
-	]);
+	expect(list.map((exception) => exception.value)).toEqual(["request project.open", ""]);
 	const frames = (list[0]?.stacktrace as { frames: Array<Record<string, unknown>> }).frames;
 	expect(
 		frames.some((frame) => frame.filename === "packages/server/src/analytics/errorReports.test.ts"),
@@ -114,6 +131,30 @@ test("a reported error reaches PostHog with no personal data in the actual reque
 		build: "binary",
 		$process_person_profile: false,
 	});
+});
+
+test("third-party diagnostics in a message never leave the host", async () => {
+	const sent: BatchEntry[] = [];
+	boot(sent);
+	const hook = Object.assign(new Error("Confidential client Jane Doe exceeded credit limit"), {
+		code: "PUSH_AUTH_FAILED",
+	});
+	reportError(hook, { source: "request", handled: true, requestMethod: "pr.open" });
+	reportError(new Error("getaddrinfo ENOTFOUND llm.acme-corp.internal"), {
+		source: "host_logged",
+		handled: true,
+		scope: "agent",
+	});
+	await shutdownAnalytics();
+	const wire = JSON.stringify(exceptions(sent));
+	for (const forbidden of ["Confidential", "Jane", "credit", "acme", "ENOTFOUND"]) {
+		expect(wire).not.toContain(forbidden);
+	}
+	expect(
+		exceptions(sent)
+			.map((entry) => (entry.properties.$exception_list as Array<{ value: string }>)[0]?.value)
+			.sort(),
+	).toEqual(["host_logged agent", "request pr.open PUSH_AUTH_FAILED"]);
 });
 
 test.each([
@@ -141,14 +182,48 @@ test.each([
 	expect(sent).toEqual([]);
 });
 
-test("identical reports are deduplicated and the per-launch volume is capped", async () => {
+function raise(message: string): Error {
+	return new Error(message);
+}
+
+test("reports from one throw site are deduplicated whatever their message", async () => {
 	const sent: BatchEntry[] = [];
 	boot(sent);
-	for (let i = 0; i < 3; i++) reportError(new Error("same"), { source: "ui", handled: false });
-	for (let i = 0; i < 150; i++)
-		reportError(new Error(`distinct ${i}`), { source: "ui", handled: false });
+	for (let i = 0; i < 5; i++) {
+		reportError(raise(`ENOENT: no such file, open '/Users/jane/p${i}/x'`), {
+			source: "request",
+			handled: true,
+			requestMethod: "fs.read",
+		});
+	}
+	reportError(raise("other"), { source: "request", handled: true, requestMethod: "fs.write" });
 	await shutdownAnalytics();
-	expect(exceptions(sent)).toHaveLength(100);
+	expect(exceptions(sent).map((entry) => entry.properties.request_method)).toEqual([
+		"fs.read",
+		"fs.write",
+	]);
+});
+
+test("each source has its own budget inside the per-launch cap", async () => {
+	const sent: BatchEntry[] = [];
+	boot(sent);
+	for (let i = 0; i < 80; i++)
+		reportError(raise("ui"), { source: "ui", handled: false, scope: `s${i}` });
+	reportError(raise("request"), {
+		source: "request",
+		handled: true,
+		requestMethod: "project.open",
+	});
+	for (let i = 0; i < 80; i++) {
+		reportError(raise("logged"), { source: "host_logged", handled: true, scope: `l${i}` });
+	}
+	reportError(raise("desktop"), { source: "desktop", handled: true, scope: "updates" });
+	await shutdownAnalytics();
+	const bySource = new Map<unknown, number>();
+	for (const entry of exceptions(sent)) {
+		bySource.set(entry.properties.source, (bySource.get(entry.properties.source) ?? 0) + 1);
+	}
+	expect(Object.fromEntries(bySource)).toEqual({ ui: 50, request: 1, host_logged: 49 });
 });
 
 test("a fatal report is sent immediately as level fatal with the CodedError-style code", async () => {
@@ -172,10 +247,9 @@ test("client errors keep WebKit stacks parseable and their frames web-relative",
 		kind: "render",
 		boundary: "plan rail",
 		type: "TypeError",
-		message: "undefined is not an object (evaluating 'jane.name')",
 		stack: "render@http://127.0.0.1:4317/assets/index-abc.js:10:5\nhttps://evil.example/x.js:1:1",
 	});
-	reportClientError({ kind: "bogus", type: 42, message: { jane: true } });
+	reportClientError({ kind: "bogus", type: 42, stack: { jane: true } });
 	await shutdownAnalytics();
 	expect(
 		exceptions(sent)
@@ -188,7 +262,7 @@ test("client errors keep WebKit stacks parseable and their frames web-relative",
 	const render = exceptions(sent).find((entry) => entry.properties.scope === "render:plan_rail");
 	const list = render?.properties.$exception_list as Array<Record<string, unknown>>;
 	expect(list[0]?.type).toBe("TypeError");
-	expect(list[0]?.value).toBe("undefined is not an object (evaluating <str>)");
+	expect(list[0]?.value).toBe("ui render:plan_rail");
 	const frames = (list[0]?.stacktrace as { frames: Array<Record<string, unknown>> }).frames;
 	expect(frames).toContainEqual({
 		platform: "web:javascript",
@@ -213,7 +287,6 @@ test("chunk ids reach PostHog: registered bundles via the SDK, browser chunks vi
 		reportClientError({
 			kind: "window",
 			type: "TypeError",
-			message: "x",
 			stack: "f@http://127.0.0.1:4317/assets/index-abc.js:10:5",
 			chunkIds: { "http://127.0.0.1:4317/assets/index-abc.js": webId },
 		});
@@ -242,7 +315,7 @@ test("the report's handled flag reaches the root exception mechanism; causes sta
 	const fatal = new Error("fatal");
 	fatal.cause = new Error("root cause");
 	await reportFatalError(fatal);
-	reportClientError({ kind: "window", type: "TypeError", message: "x", stack: "" });
+	reportClientError({ kind: "window", type: "TypeError", stack: "" });
 	reportError(new Error("request"), { source: "request", handled: true });
 	await shutdownAnalytics();
 	const mechanisms = Object.fromEntries(

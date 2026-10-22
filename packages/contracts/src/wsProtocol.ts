@@ -500,7 +500,6 @@ export type ClientErrorKind = "render" | "window" | "rejection";
 export interface ClientErrorReport {
 	kind: ClientErrorKind;
 	type: string;
-	message: string;
 	stack?: string;
 	boundary?: string;
 	chunkIds?: Record<string, string>;

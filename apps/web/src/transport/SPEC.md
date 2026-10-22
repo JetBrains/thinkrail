@@ -135,8 +135,8 @@ modal. Late login frames for tombstoned workspaces are cancelled instead of inst
 response path does the same if removal preceded its acknowledgement. Cancellation is best-effort over
 the existing reconnect-safe request transport; the host's bounded probe lifetime remains the final cleanup.
 **Client error reports** (`errorReports.ts`): `installClientErrorReporting()` listens for window `error` /
-`unhandledrejection`, and `reportClientError(clientErrorReport(kind, error, boundary?))` forwards raw
-class/message/stack over fire-and-forget `client.reportError` — only to a host with
+`unhandledrejection`, and `reportClientError(clientErrorReport(kind, error, boundary?))` forwards the raw
+class and stack — never the message — over fire-and-forget `client.reportError` — only to a host with
 `supportsClientErrorReports` (v90); reports raised before the welcome wait for it (≤ 10 queued), and a
 page sends at most 50. Each report carries the PostHog chunk ids (≤ 20) that the release build's
 injected `_posthogChunkIds` registry assigns to URLs in its own stack, so uploaded maps resolve its frames.

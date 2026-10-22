@@ -39,19 +39,21 @@ test("reports are offered only to a host at or beyond the v90 capability", () =>
 	expect(supportsClientErrorReports(null)).toBe(false);
 });
 
-test("a report carries the error's class, message, stack and boundary label", () => {
+test("a report carries the error's class, stack and boundary, never its message", () => {
 	const error = new TypeError("bad");
 	expect(clientErrorReport("render", error, "chat")).toEqual({
 		kind: "render",
 		type: "TypeError",
-		message: "bad",
 		stack: error.stack as string,
 		boundary: "chat",
 	});
 	expect(clientErrorReport("rejection", { secret: true })).toEqual({
 		kind: "rejection",
 		type: "UnhandledRejection",
-		message: "",
+	});
+	expect(clientErrorReport("rejection", "jane@example.com")).toEqual({
+		kind: "rejection",
+		type: "UnhandledRejection",
 	});
 });
 
@@ -87,8 +89,8 @@ test("window errors and unhandled rejections are forwarded until uninstalled", (
 	uninstall();
 	target.dispatchEvent(error);
 	expect(requests.map((request) => request.params)).toMatchObject([
-		{ kind: "window", type: "RangeError", message: "boom" },
-		{ kind: "rejection", type: "Error", message: "nope" },
+		{ kind: "window", type: "RangeError" },
+		{ kind: "rejection", type: "Error" },
 	]);
 });
 

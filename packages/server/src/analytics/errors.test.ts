@@ -4,57 +4,31 @@ import {
 	EXTERNAL_FRAME,
 	type FrameRoots,
 	normalizeFrameFilename,
-	type ScrubContext,
 	sanitizeExceptionProperties,
-	scrubMessage,
 	toV8Stack,
 } from "./errors";
 
-const SCRUB: ScrubContext = {
-	home: "/Users/jdoe",
-	username: "jdoe",
-	hostname: "Janes-MacBook-Pro",
-};
 const ROOTS: FrameRoots = { appRoot: "/opt/thinkrail", caseInsensitive: false };
+
+function rootValue(properties: Record<string, unknown>): unknown {
+	return sanitizeExceptionProperties(
+		{ ...properties, $exception_list: [{ type: "Error", value: "Confidential: jane@acme.com" }] },
+		ROOTS,
+	).$exception_list;
+}
 
 test.each([
 	[
-		"ENOENT: no such file or directory, open '/Users/jdoe/acme/secret-plan.md'",
-		"ENOENT: no such file or directory, open <str>",
+		{ source: "request", request_method: "pr.open", code: "PUSH_AUTH_FAILED" },
+		"request pr.open PUSH_AUTH_FAILED",
 	],
-	["Workspace not found: /Users/jdoe/acme", "Workspace not found: <path>"],
-	[
-		"Can't pin the base side of this diff: origin/feature-x names no commit.",
-		"Can't pin the base side of this diff: <path> names no commit.",
-	],
-	[
-		"The base (main) has no src/payroll.ts to comment on.",
-		"The base (main) has no <path> to comment on.",
-	],
-	["C:\\Users\\jdoe\\AppData\\Local\\x.json is locked", "<path> is locked"],
-	["fetch https://api.example.com/v1?key=sk-abc failed", "fetch <url> failed"],
-	["invite jane.doe@example.com rejected", "invite <email> rejected"],
-	['branch "jane/hotfix" already exists', "branch <str> already exists"],
-	["unknown comment 3f2a1b9c-1d2e-4f5a-9b8c-7d6e5f4a3b2c", "unknown comment <id>"],
-	["commit 9fceb02a1 is missing", "commit <hex> is missing"],
-	["connect ECONNREFUSED 10.0.0.12:8443", "connect ECONNREFUSED <ip>:<n>"],
-	['400 {"error":{"message":"prompt contained jane"}}', "400 <json>"],
-	["token ghp_abcdefghijklmnopqrstuvwxyz0123 expired", "token <token> expired"],
-	["jdoe cannot write on Janes-MacBook-Pro", "<user> cannot write on <host>"],
-	["first line\nsecond line with /Users/jdoe/secret", "first line"],
-	["ran `rm -rf build` for jdoe", "ran <str> for <user>"],
-	[
-		"Cannot read properties of undefined (reading 'title')",
-		"Cannot read properties of undefined (reading <str>)",
-	],
-])("scrubMessage(%j)", (input, expected) => {
-	expect(scrubMessage(input, SCRUB)).toBe(expected);
-});
-
-test("scrubMessage caps length and ignores non-strings", () => {
-	expect(scrubMessage("a ".repeat(400), SCRUB).length).toBeLessThanOrEqual(300);
-	expect(scrubMessage({ secret: "x" }, SCRUB)).toBe("");
-	expect(scrubMessage(undefined, SCRUB)).toBe("");
+	[{ source: "ui", scope: "render:chat" }, "ui render:chat"],
+	[{ source: "host_logged", scope: "agent" }, "host_logged agent"],
+	[{ source: "request", request_method: "project.open", scope: "ignored" }, "request project.open"],
+	[{ source: "request", scope: "has spaces /and/paths" }, "request"],
+	[{}, ""],
+])("the exception value is a classifier of %j, never the message", (properties, value) => {
+	expect(rootValue(properties)).toEqual([{ type: "Error", value }]);
 });
 
 test.each([
@@ -130,7 +104,6 @@ test("chunk ids pass only as UUIDs, from the SDK frame or the browser's url map"
 			$thinkrail_chunk_ids: { [url]: id },
 		},
 		ROOTS,
-		SCRUB,
 	);
 	const [list] = properties.$exception_list as Array<{ stacktrace: { frames: unknown[] } }>;
 	expect(list?.stacktrace.frames.map((f) => (f as { chunk_id?: string }).chunk_id)).toEqual([
@@ -218,13 +191,12 @@ test("sanitizeExceptionProperties rebuilds the event from an allow-list", () => 
 			workspace_path: "/Users/jdoe/acme",
 		},
 		ROOTS,
-		SCRUB,
 	);
 	expect(properties).toEqual({
 		$exception_list: [
 			{
 				type: "TypeError",
-				value: "bad <path>",
+				value: "request project.open ALREADY_OPEN",
 				mechanism: { handled: true, synthetic: false, type: "generic" },
 				stacktrace: {
 					type: "raw",

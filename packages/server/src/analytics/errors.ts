@@ -1,19 +1,11 @@
-import { homedir, hostname, userInfo } from "node:os";
 import { dirname, isAbsolute, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export type ErrorSource = "host_crash" | "host_logged" | "request" | "ui" | "desktop";
 
 export const EXTERNAL_FRAME = "<external>";
-const MAX_MESSAGE_LENGTH = 300;
 const MAX_EXCEPTIONS = 5;
 const MAX_FRAMES = 60;
-
-export interface ScrubContext {
-	home: string;
-	username: string;
-	hostname: string;
-}
 
 export interface FrameRoots {
 	appRoot: string;
@@ -32,14 +24,6 @@ function safely<T>(read: () => T, fallback: T): T {
 	} catch {
 		return fallback;
 	}
-}
-
-export function defaultScrubContext(): ScrubContext {
-	return {
-		home: safely(homedir, ""),
-		username: safely(() => userInfo().username, ""),
-		hostname: safely(hostname, ""),
-	};
 }
 
 function toSlashes(path: string): string {
@@ -64,51 +48,6 @@ export function frameRoots(options: FrameRootOptions = {}): FrameRoots {
 		...(options.remapBase ? { remapBase: options.remapBase } : {}),
 		caseInsensitive: process.platform === "win32",
 	};
-}
-
-function escapeRegExp(text: string): string {
-	return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function replaceLiteral(text: string, literal: string, placeholder: string): string {
-	if (literal.length < 3) return text;
-	return text.replace(
-		new RegExp(`(?<![A-Za-z0-9])${escapeRegExp(literal)}(?![A-Za-z0-9])`, "gi"),
-		placeholder,
-	);
-}
-
-export function scrubMessage(
-	input: unknown,
-	context: ScrubContext = defaultScrubContext(),
-): string {
-	let text = typeof input === "string" ? input : "";
-	text = (text.split(/\r?\n/, 1)[0] ?? "").trim();
-	const jsonStart = text.search(/\{|\[(?=\s*["{[])/);
-	if (jsonStart >= 0) text = `${text.slice(0, jsonStart)}<json>`;
-	for (const home of new Set([context.home, toSlashes(context.home)])) {
-		if (home.length >= 3) text = text.split(home).join("~");
-	}
-	text = replaceLiteral(text, context.username, "<user>");
-	text = replaceLiteral(text, context.hostname, "<host>");
-	text = text
-		.replace(/\b[a-z][a-z0-9+.-]*:\/\/\S+/gi, "<url>")
-		.replace(/[^\s@<>()'"`]+@[^\s@<>()'"`]+\.[a-z]{2,}/gi, "<email>")
-		.replace(/(^|[\s(:=,[])'[^'\n]*'(?=$|[\s).,:;!?\]])/g, "$1<str>")
-		.replace(/"[^"\n]*"/g, "<str>")
-		.replace(/`[^`\n]*`/g, "<str>")
-		.replace(/«[^»\n]*»/g, "<str>")
-		.replace(/\b[A-Za-z]:[\\/][^\s,;()]*/g, "<path>")
-		.replace(/[^\s,;()<>]*[/\\][^\s,;()<>]*/g, "<path>")
-		.replace(/~(?=$|[\s,;:.)])/g, "<path>")
-		.replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "<id>")
-		.replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, "<ip>")
-		.replace(/\b(?=[0-9a-f]*\d)[0-9a-f]{7,}\b/gi, "<hex>")
-		.replace(/[A-Za-z0-9_\-+=]{24,}/g, "<token>")
-		.replace(/\d{4,}/g, "<n>")
-		.replace(/\s+/g, " ")
-		.trim();
-	return text.length > MAX_MESSAGE_LENGTH ? `${text.slice(0, MAX_MESSAGE_LENGTH - 1)}…` : text;
 }
 
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
@@ -234,18 +173,17 @@ function sanitizeFrame(
 }
 
 function sanitizeException(
-	exception: unknown,
+	exception: Record<string, unknown>,
+	value: string,
 	roots: FrameRoots,
-	scrub: ScrubContext,
 	chunkIds: Record<string, unknown>,
-): Record<string, unknown> | null {
-	if (!isRecord(exception)) return null;
+): Record<string, unknown> {
 	const out: Record<string, unknown> = {
 		type:
 			typeof exception.type === "string" && SAFE_TYPE.test(exception.type)
 				? exception.type
 				: "Error",
-		value: scrubMessage(exception.value, scrub),
+		value,
 	};
 	const mechanism = exception.mechanism;
 	if (isRecord(mechanism)) {
@@ -269,19 +207,32 @@ function sanitizeException(
 	return out;
 }
 
+function classifier(passthrough: Record<string, unknown>): string {
+	return [passthrough.source, passthrough.request_method ?? passthrough.scope, passthrough.code]
+		.filter((part): part is string => typeof part === "string")
+		.join(" ");
+}
+
 export function sanitizeExceptionProperties(
 	properties: Record<string, unknown>,
 	roots: FrameRoots,
-	scrub: ScrubContext,
 ): Record<string, unknown> {
+	const passthrough: Record<string, unknown> = {};
+	for (const key of PASSTHROUGH_KEYS) {
+		const value = properties[key];
+		if (typeof value === "string" && SAFE_VALUE.test(value)) passthrough[key] = value;
+	}
 	const list = Array.isArray(properties.$exception_list) ? properties.$exception_list : [];
 	const chunkIdsValue = properties[CHUNK_IDS_PROPERTY];
 	const chunkIds = isRecord(chunkIdsValue) ? chunkIdsValue : {};
 	const handled = typeof properties.handled === "boolean" ? properties.handled : undefined;
+	const summary = classifier(passthrough);
 	const exceptions = list
+		.filter(isRecord)
 		.slice(0, MAX_EXCEPTIONS)
-		.map((exception) => sanitizeException(exception, roots, scrub, chunkIds))
-		.filter((exception) => exception !== null);
+		.map((exception, index) =>
+			sanitizeException(exception, index === 0 ? summary : "", roots, chunkIds),
+		);
 	const root = exceptions[0];
 	if (root && handled !== undefined) {
 		const mechanism = isRecord(root.mechanism)
@@ -296,19 +247,14 @@ export function sanitizeExceptionProperties(
 	const level = properties.$exception_level;
 	if (typeof level === "string" && LEVELS.has(level)) out.$exception_level = level;
 	if (handled !== undefined) out.handled = handled;
-	for (const key of PASSTHROUGH_KEYS) {
-		const value = properties[key];
-		if (typeof value === "string" && SAFE_VALUE.test(value)) out[key] = value;
-	}
-	return out;
+	return { ...out, ...passthrough };
 }
 
 export function createExceptionSanitizer(
 	options: FrameRootOptions = {},
 ): (properties: Record<string, unknown>) => Record<string, unknown> {
-	const scrub = defaultScrubContext();
 	const roots = frameRoots(options);
-	return (properties) => sanitizeExceptionProperties(properties, roots, scrub);
+	return (properties) => sanitizeExceptionProperties(properties, roots);
 }
 
 export function errorCode(error: unknown): string | undefined {

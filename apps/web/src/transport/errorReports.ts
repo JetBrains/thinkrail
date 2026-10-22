@@ -53,7 +53,6 @@ export function clientErrorReport(
 	return {
 		kind,
 		type: real?.name || (kind === "rejection" ? "UnhandledRejection" : "Error"),
-		message: real ? real.message : typeof error === "string" ? error : "",
 		...(real?.stack ? { stack: real.stack } : {}),
 		...(boundary ? { boundary } : {}),
 		...(chunkIds ? { chunkIds } : {}),

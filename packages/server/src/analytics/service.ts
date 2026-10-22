@@ -60,7 +60,11 @@ interface AnalyticsState {
 	acquisition: AcquisitionRecord | null;
 	attributionGeneration: number;
 	attributionAbort: AbortController;
-	errorReports: { count: number; recent: Map<string, number> };
+	errorReports: {
+		count: number;
+		bySource: Map<ErrorSource, number>;
+		recent: Map<string, number>;
+	};
 	attribution: Pick<
 		AnalyticsOptions,
 		| "openExternal"
@@ -121,7 +125,7 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 			acquisition: null,
 			attributionGeneration: 0,
 			attributionAbort: new AbortController(),
-			errorReports: { count: 0, recent: new Map() },
+			errorReports: { count: 0, bySource: new Map(), recent: new Map() },
 			attribution: {
 				...(options.openExternal ? { openExternal: options.openExternal } : {}),
 				...(options.attributionEndpoint
@@ -172,20 +176,36 @@ export interface ErrorReport {
 export interface ClientErrorInput {
 	kind?: unknown;
 	type?: unknown;
-	message?: unknown;
 	stack?: unknown;
 	boundary?: unknown;
 	chunkIds?: unknown;
 }
 
 const MAX_ERROR_REPORTS = 100;
+const MAX_ERROR_REPORTS_PER_SOURCE = 50;
 const ERROR_DEDUPE_MS = 60_000;
 const FATAL_FLUSH_TIMEOUT_MS = 2_000;
 
+function throwSite(error: unknown): string {
+	const stack = error instanceof Error && typeof error.stack === "string" ? error.stack : "";
+	return (
+		stack
+			.split("\n")
+			.find((line) => /^\s*at\s/.test(line))
+			?.trim() ?? ""
+	);
+}
+
 function errorKey(error: unknown, report: ErrorReport): string {
 	const name = error instanceof Error ? error.name : typeof error;
-	const message = error instanceof Error ? error.message : String(error);
-	return `${report.source}|${report.scope ?? ""}|${report.requestMethod ?? ""}|${name}|${message.slice(0, 200)}`;
+	return [
+		report.source,
+		report.scope ?? "",
+		report.requestMethod ?? "",
+		name,
+		errorCode(error) ?? "",
+		throwSite(error),
+	].join("|");
 }
 
 function admitErrorReport(s: AnalyticsState, error: unknown, report: ErrorReport): boolean {
@@ -193,8 +213,11 @@ function admitErrorReport(s: AnalyticsState, error: unknown, report: ErrorReport
 	const key = errorKey(error, report);
 	const last = s.errorReports.recent.get(key);
 	if (last !== undefined && now - last < ERROR_DEDUPE_MS) return false;
+	const fromSource = s.errorReports.bySource.get(report.source) ?? 0;
 	if (s.errorReports.count >= MAX_ERROR_REPORTS) return false;
+	if (fromSource >= MAX_ERROR_REPORTS_PER_SOURCE) return false;
 	s.errorReports.count++;
+	s.errorReports.bySource.set(report.source, fromSource + 1);
 	s.errorReports.recent.set(key, now);
 	return true;
 }
@@ -255,7 +278,7 @@ function boundedString(value: unknown, max: number): string {
 }
 
 function clientError(input: ClientErrorInput): Error {
-	const error = new Error(boundedString(input.message, 2_000));
+	const error = new Error();
 	error.name = boundedString(input.type, 128) || "Error";
 	error.stack = toV8Stack(boundedString(input.stack, 16_000));
 	return error;
