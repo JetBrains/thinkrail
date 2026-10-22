@@ -145,6 +145,7 @@ import {
 	setReviewFailedPublisher,
 } from "./requestReview";
 import { runObservation } from "./runAnalytics";
+import { hostSearch } from "./search";
 import {
 	REVIEW_REFRESH_INTERVAL_MS,
 	refreshOpenProjectReviews,
@@ -666,6 +667,8 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			JSON.stringify({ channel: WS_CHANNELS.workspaceFsChanged, data: payload }),
 		);
 		reanchorWorkspace(payload.workspaceId);
+		const changedRoot = loadWorkspaces().find((w) => w.id === payload.workspaceId)?.worktreePath;
+		if (changedRoot) hostSearch().invalidateRoot(changedRoot);
 		if (
 			payload.truncated ||
 			payload.paths.some((path) => path === ".pi" || path.startsWith(".pi/"))

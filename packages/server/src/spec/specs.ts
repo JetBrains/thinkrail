@@ -19,12 +19,56 @@ export function evictSpecIndex(workspaceId: string): void {
 
 const projectIndexes = new Map<string, SpecIndex>();
 
-export function projectHasSpecs(root: string): boolean {
+function rootIndexFor(root: string): SpecIndex {
 	let index = projectIndexes.get(root);
 	if (!index) {
 		index = new SpecIndex(root);
 		projectIndexes.set(root, index);
 	}
+	return index;
+}
+
+export interface SpecSnapshotEntry {
+	readonly path: string;
+	readonly id: string;
+	readonly title: string;
+	readonly type: string;
+	readonly content: string;
+}
+
+const SNAPSHOT_TTL_MS = 5_000;
+const snapshots = new Map<string, { at: number; entries: readonly SpecSnapshotEntry[] }>();
+
+export function specSnapshot(root: string, now = Date.now()): readonly SpecSnapshotEntry[] {
+	const cached = snapshots.get(root);
+	if (cached && now - cached.at < SNAPSHOT_TTL_MS) return cached.entries;
+	let entries: SpecSnapshotEntry[] = [];
+	try {
+		entries = rootIndexFor(root)
+			.contentEntries()
+			.map((entry) => {
+				const id = scalar(entry.frontmatter, FIELDS.id) ?? "";
+				return {
+					path: entry.path,
+					id,
+					title: scalar(entry.frontmatter, FIELDS.title) ?? id,
+					type: scalar(entry.frontmatter, FIELDS.type) ?? "",
+					content: entry.content,
+				};
+			});
+	} catch {
+		entries = [];
+	}
+	snapshots.set(root, { at: now, entries });
+	return entries;
+}
+
+export function invalidateSpecSnapshot(root: string): void {
+	snapshots.delete(root);
+}
+
+export function projectHasSpecs(root: string): boolean {
+	const index = rootIndexFor(root);
 	try {
 		for (const node of index.graph().nodes.values()) {
 			if (node.type !== "task-spec") return true;

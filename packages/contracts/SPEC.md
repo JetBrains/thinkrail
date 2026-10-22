@@ -51,11 +51,11 @@ both rings rank with. The one package
   `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`;
   **`matchFields`** + `parseMatchTerms` + `compareMatches` + `MATCH_TIER` and the `Match*` types from
   `match` (the one search matcher: fixed tiers exact > prefix > word start/camel hump/acronym > substring >
-  bounded subsequence of at least three characters, every term required, a quoted `MatchTerm` (`literal`)
-  matched contiguously only, case and Latin diacritics folded without moving offsets, a secondary field
-  never above substring, path fields matched on the basename first, field-keyed highlight ranges — the
-  browser's palette and the host's search providers rank with this one copy so their tiers cannot drift);
-  the value
+  bounded subsequence of at least three characters > `content` for a body match, every term required, a
+  quoted `MatchTerm` (`literal`) matched contiguously only, case and Latin diacritics folded without moving
+  offsets, a secondary field never above substring, path fields matched on the basename first, field-keyed
+  highlight ranges — the browser's palette and the host's search providers rank with this one copy so their
+  tiers cannot drift); the value
   re-exports
   `DEFAULT_CONFIG`, `DEFAULT_WORKSPACE_NAME` (the host's name for a project's default workspace; clients
   word it in their language until it is renamed), `SYSTEM_LOCALE_PREFERENCE` + **`isLocalePreference(value)`** (`"system"` or a canonical
@@ -516,6 +516,18 @@ both rings rank with. The one package
   so the jump affordance lives there instead; `messageIndex` anchors jump-to-message into
   `session.getMessages` order, `anchorText` makes the anchor drift-tolerant), and
   **`HistorySearchResult`** (the prompts + full-text messages sections, with totals and indexing status);
+  the **search palette DTOs** (`SEARCH_PROTOCOL_VERSION`, v99): **`SearchKind`** (`chat` / `transcript` /
+  `workspace` / `file` / `spec` / `plan`), **`SearchContext`** (the active workspace + context project the
+  host turns into roots), **`SearchHit`** (a stable `kind:id[:locator]` id, title / subtitle / `snippet`,
+  the shared matcher's `tier` + `score` and highlight `ranges` so the browser merges host hits with its
+  local ones by the same rule, and the navigation target — `projectId` / `workspaceId` / `sessionId` /
+  `messageIndex` + `anchorText` / root-relative `path` / `specId`), **`SearchGroup`** (one per kind:
+  capped `hits`, the true `total`, and a `state` of `ready` / `truncated` / `indexing` / `failed` — a
+  client re-asks only on `indexing`), **`SearchQueryResult`** (`seq` echoed; `superseded` when a newer
+  `seq` from the same client overtook it), **`SearchPreviewTarget`** / **`SearchPreviewResult`** (a
+  bounded transcript window, a text head, or `unavailable`), and the limits `MAX_SEARCH_QUERY_LENGTH`,
+  `MAX_SEARCH_GROUP_LIMIT`, `DEFAULT_SEARCH_GROUP_LIMIT`; the matcher gains the `content` tier for
+  body/transcript matches, always below every field tier;
   the **review DTOs** — **`Review`** (one open review per workspace; `baseSha` — the reviewed diff's
   ORIGINAL side (the branch range's fork point, what that diff actually displays — never the target's
   tip, which can carry upstream commits the review never showed) pinned to a **full commit oid at
@@ -765,7 +777,10 @@ both rings rank with. The one package
   **`client.reportError`** (`ClientErrorReport { kind: render | window | rejection, type, stack?,
   boundary?, chunkIds? }` → ack; `chunkIds` maps stack URLs to PostHog source-map chunk ids; a fire-and-forget UI error for host error tracking — the payload is raw and untrusted,
   the host is the only sanitizer; `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` pins its v90 introduction so a
-  newer client never sends it to an older host) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
+  newer client never sends it to an older host) / **`search.query`** + **`search.preview`** (the palette's host
+  providers from `SEARCH_PROTOCOL_VERSION`, v99: `{ seq, query, kinds?, context, limit? }` → per-kind
+  groups with the shared matcher's tiers, or `superseded` for an overtaken `seq`; a preview is a bounded
+  read that never attaches a session) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
   recency-ordered; the messages section is assistant-only — a user-role hit surfaces as a jumpable
   `PromptHit` instead, never a separate `MessageHit`) / the **`review.*` set** — **`get`** (the open
   review + comments, lazily created; re-anchored on read) / **`commentAdd`**/**`commentUpdate`**/

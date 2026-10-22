@@ -1,0 +1,325 @@
+import type { SearchGroup, SearchHit, Workspace } from "@thinkrail/contracts";
+import { MATCH_TIER, type MatchField, matchFields } from "@thinkrail/contracts";
+import type { HistorySession } from "../history";
+import { makeSnippet, matchesTerms } from "../history";
+import type { SpecSnapshotEntry } from "../spec";
+import type { StoredPlanFile } from "../todos";
+import type { FileListCache, IndexedFileList } from "./files";
+import {
+	buildGroup,
+	compactWhitespace,
+	type Deadline,
+	emptyGroup,
+	lineSnippet,
+	termRanges,
+} from "./hits";
+
+export interface SearchRoot {
+	readonly root: string;
+	readonly projectId: string;
+	readonly workspaceId?: string;
+	readonly current: boolean;
+}
+
+export interface ProviderInput {
+	readonly terms: readonly string[];
+	readonly limit: number;
+	readonly deadline: Deadline;
+}
+
+const SCAN_CHECK_EVERY = 1_000;
+const MIN_BODY_TERM_LENGTH = 3;
+const TRANSCRIPT_TEXT_PREVIEW = 160;
+
+function isSubsequence(text: string, term: string): boolean {
+	let at = 0;
+	for (const char of term) {
+		at = text.indexOf(char, at);
+		if (at === -1) return false;
+		at += 1;
+	}
+	return true;
+}
+
+function rangesOf(match: {
+	fields: readonly { key: string; ranges: readonly (readonly [number, number])[] }[];
+}) {
+	const ranges: Record<string, [number, number][]> = {};
+	for (const field of match.fields) ranges[field.key] = field.ranges.map(([a, b]) => [a, b]);
+	return ranges;
+}
+
+export function searchFiles(
+	roots: readonly SearchRoot[],
+	lists: FileListCache,
+	input: ProviderInput,
+): SearchGroup {
+	const hits: SearchHit[] = [];
+	const lowerTerms = input.terms.map((term) => term.toLowerCase());
+	const fuzzyTerms = lowerTerms.some((term) => term.length >= 3);
+	let indexing = false;
+	let truncated = false;
+	let scanned = 0;
+	const pushHit = (
+		root: SearchRoot,
+		path: string,
+		match: NonNullable<ReturnType<typeof matchFields>>,
+	) => {
+		const slash = path.lastIndexOf("/");
+		hits.push({
+			id: `file:${root.projectId}:${root.workspaceId ?? ""}:${path}`,
+			kind: "file",
+			title: slash === -1 ? path : path.slice(slash + 1),
+			...(slash === -1 ? {} : { subtitle: path.slice(0, slash) }),
+			tier: match.tier,
+			score: match.score + (root.current ? 0.05 : 0),
+			ranges: rangesOf(match),
+			projectId: root.projectId,
+			...(root.workspaceId ? { workspaceId: root.workspaceId } : {}),
+			path,
+		});
+	};
+	const expired = () => {
+		scanned += 1;
+		if (scanned % SCAN_CHECK_EVERY !== 0 || !input.deadline.expired()) return false;
+		truncated = true;
+		return true;
+	};
+	const ready: { root: SearchRoot; list: IndexedFileList }[] = [];
+	for (const root of roots) {
+		const list = lists.peek(root.root);
+		if (!list) {
+			void lists.load(root.root);
+			indexing = true;
+			continue;
+		}
+		if (list.truncated) truncated = true;
+		ready.push({ root, list });
+	}
+	const rest: { root: SearchRoot; index: number }[] = [];
+	for (const { root, list } of ready) {
+		for (let index = 0; index < list.paths.length && !truncated; index += 1) {
+			if (expired()) break;
+			const lower = list.lower[index] ?? "";
+			if (!lowerTerms.every((term) => lower.includes(term))) {
+				if (fuzzyTerms) rest.push({ root, index });
+				continue;
+			}
+			const path = list.paths[index] ?? "";
+			const match = matchFields(input.terms, [{ key: "path", text: path, path: true }]);
+			if (match) pushHit(root, path, match);
+		}
+	}
+	if (!truncated && hits.length < input.limit) {
+		for (const { root, index } of rest) {
+			if (expired()) break;
+			const list = lists.peek(root.root);
+			const lower = list?.lower[index] ?? "";
+			if (!lowerTerms.every((term) => isSubsequence(lower, term))) continue;
+			const path = list?.paths[index] ?? "";
+			const match = matchFields(input.terms, [{ key: "path", text: path, path: true }]);
+			if (match) pushHit(root, path, match);
+		}
+	}
+	const group = buildGroup("file", hits, input.limit, truncated ? "truncated" : "ready");
+	return indexing && hits.length === 0 ? { ...group, state: "indexing" } : group;
+}
+
+export function searchSpecs(
+	roots: readonly SearchRoot[],
+	snapshot: (root: string) => readonly SpecSnapshotEntry[],
+	input: ProviderInput,
+): SearchGroup {
+	const hits: SearchHit[] = [];
+	const bodyTerms = input.terms.some((term) => term.length >= MIN_BODY_TERM_LENGTH);
+	for (const root of roots) {
+		for (const entry of snapshot(root.root)) {
+			if (input.deadline.expired()) {
+				return buildGroup("spec", hits, input.limit, "truncated");
+			}
+			const fields: MatchField[] = [
+				{ key: "title", text: entry.title },
+				{ key: "id", text: entry.id, secondary: true },
+				{ key: "path", text: entry.path, path: true, secondary: true },
+			];
+			const match = matchFields(input.terms, fields);
+			const base = {
+				kind: "spec" as const,
+				projectId: root.projectId,
+				...(root.workspaceId ? { workspaceId: root.workspaceId } : {}),
+				path: entry.path,
+				specId: entry.id,
+			};
+			if (match) {
+				hits.push({
+					...base,
+					id: `spec:${root.projectId}:${root.workspaceId ?? ""}:${entry.path}`,
+					title: entry.title,
+					subtitle: entry.path,
+					tier: match.tier,
+					score: match.score,
+					ranges: rangesOf(match),
+				});
+				continue;
+			}
+			if (!bodyTerms || !matchesTerms(entry.content, [...input.terms])) continue;
+			const snippet = lineSnippet(entry.content, input.terms);
+			if (snippet === null) continue;
+			hits.push({
+				...base,
+				id: `spec:${root.projectId}:${root.workspaceId ?? ""}:${entry.path}`,
+				title: entry.title,
+				subtitle: entry.path,
+				snippet,
+				tier: MATCH_TIER.content,
+				score: 0,
+				ranges: { snippet: termRanges(snippet, input.terms) },
+			});
+		}
+	}
+	return buildGroup("spec", hits, input.limit);
+}
+
+export interface ChatLabel {
+	readonly projectId: string;
+	readonly workspaceId: string;
+}
+
+export function searchChats(
+	sessions: readonly HistorySession[],
+	indexing: boolean,
+	label: (cwd: string) => ChatLabel | null,
+	input: ProviderInput,
+): { chats: SearchGroup; transcripts: SearchGroup } {
+	const chats: SearchHit[] = [];
+	const transcripts: SearchHit[] = [];
+	const terms = [...input.terms];
+	const primary = terms[0] ?? "";
+	let truncated = false;
+	let scanned = 0;
+	for (const session of sessions) {
+		const where = label(session.cwd);
+		if (!where) continue;
+		const last = session.entries[session.entries.length - 1];
+		const timestamp = last?.timestamp ?? 0;
+		if (session.title) {
+			const match = matchFields(input.terms, [{ key: "title", text: session.title }]);
+			if (match) {
+				chats.push({
+					id: `chat:${session.sessionId}`,
+					kind: "chat",
+					title: session.title,
+					tier: match.tier,
+					score: match.score,
+					ranges: rangesOf(match),
+					projectId: where.projectId,
+					workspaceId: where.workspaceId,
+					sessionId: session.sessionId,
+					timestamp,
+				});
+			}
+		}
+		for (const entry of session.entries) {
+			scanned += 1;
+			if (scanned % SCAN_CHECK_EVERY === 0 && input.deadline.expired()) {
+				truncated = true;
+				break;
+			}
+			if (!matchesTerms(entry.text, terms)) continue;
+			const snippet = compactWhitespace(makeSnippet(entry.text, primary));
+			transcripts.push({
+				id: `transcript:${session.sessionId}:${entry.messageIndex}`,
+				kind: "transcript",
+				title: snippet.slice(0, TRANSCRIPT_TEXT_PREVIEW),
+				...(session.title ? { subtitle: session.title } : {}),
+				snippet,
+				tier: MATCH_TIER.content,
+				score: entry.role === "user" ? 0.1 : 0,
+				ranges: { title: termRanges(snippet.slice(0, TRANSCRIPT_TEXT_PREVIEW), terms) },
+				projectId: where.projectId,
+				workspaceId: where.workspaceId,
+				sessionId: session.sessionId,
+				messageIndex: entry.messageIndex,
+				anchorText: entry.text.slice(0, 120),
+				timestamp: entry.timestamp,
+			});
+		}
+		if (truncated) break;
+	}
+	const state = truncated ? "truncated" : indexing ? "indexing" : "ready";
+	return {
+		chats: buildGroup("chat", chats, input.limit, state),
+		transcripts: buildGroup("transcript", transcripts, input.limit, state),
+	};
+}
+
+export function searchPlans(
+	workspaces: readonly Pick<Workspace, "id" | "projectId" | "worktreePath">[],
+	plans: (root: string) => StoredPlanFile[],
+	knownSessions: ReadonlySet<string> | null,
+	input: ProviderInput,
+): SearchGroup {
+	const hits: SearchHit[] = [];
+	for (const workspace of workspaces) {
+		for (const file of plans(workspace.worktreePath)) {
+			if (input.deadline.expired()) return buildGroup("plan", hits, input.limit, "truncated");
+			if (knownSessions && !knownSessions.has(file.sessionId)) continue;
+			const plan = file.read();
+			const push = (itemId: string, title: string, subtitle: string | undefined) => {
+				const match = matchFields(input.terms, [{ key: "title", text: title }]);
+				if (!match) return;
+				hits.push({
+					id: `plan:${workspace.id}:${file.sessionId}:${itemId}`,
+					kind: "plan",
+					title,
+					...(subtitle ? { subtitle } : {}),
+					tier: match.tier,
+					score: match.score,
+					ranges: rangesOf(match),
+					projectId: workspace.projectId,
+					workspaceId: workspace.id,
+					sessionId: file.sessionId,
+				});
+			};
+			for (const todo of plan.todos) push(todo.id, todo.title, undefined);
+			for (const group of plan.groups) {
+				push(group.id, group.title, undefined);
+				for (const todo of group.todos) push(todo.id, todo.title, group.title);
+			}
+		}
+	}
+	return buildGroup("plan", hits, input.limit);
+}
+
+export function searchWorkspaces(
+	workspaces: readonly Workspace[],
+	input: ProviderInput,
+): SearchGroup {
+	const hits: SearchHit[] = [];
+	for (const workspace of workspaces) {
+		const fields: MatchField[] = [
+			{ key: "title", text: workspace.name },
+			{ key: "subtitle", text: workspace.branch, secondary: true },
+		];
+		if (workspace.review) {
+			fields.push({ key: "keywords", text: `#${workspace.review.number}`, secondary: true });
+		}
+		const match = matchFields(input.terms, fields);
+		if (!match) continue;
+		hits.push({
+			id: `workspace:${workspace.id}`,
+			kind: "workspace",
+			title: workspace.name,
+			subtitle: workspace.branch,
+			tier: match.tier,
+			score: match.score,
+			ranges: rangesOf(match),
+			projectId: workspace.projectId,
+			workspaceId: workspace.id,
+			...(workspace.lastActiveAt ? { timestamp: workspace.lastActiveAt } : {}),
+		});
+	}
+	return buildGroup("workspace", hits, input.limit);
+}
+
+export { emptyGroup };

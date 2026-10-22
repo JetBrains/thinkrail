@@ -4,6 +4,8 @@ export const MATCH_TIER = {
 	word: 2,
 	substring: 3,
 	fuzzy: 4,
+	/** A body/transcript match: never a field the row is titled by, so always below every field tier. */
+	content: 5,
 } as const;
 
 export type MatchTier = (typeof MATCH_TIER)[keyof typeof MATCH_TIER];
