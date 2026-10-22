@@ -52,8 +52,10 @@ project), **Recent** (by frecency), and **Actions**.
 ## Interaction
 
 DOM focus stays in the input (WAI-ARIA combobox + listbox with `aria-activedescendant` and a polite
-result count). ↑/↓ select, ↵ runs the row (a toggle flips in place and the palette stays open; a page
-row pushes its page), Tab/Shift+Tab and `Alt+1…n` change scope, `Mod+I` toggles the preview pane,
+result count; chips and footer buttons are not tabbable, and Tab is always consumed). ↑/↓ select, ↵
+runs the row (a toggle flips in place and the palette stays open; a page row pushes its page),
+Tab/Shift+Tab and `Alt+1…n` change scope at the root (a chip writes its prefix into the query, so the
+prefix is the one source of scope), `Mod+I` toggles the preview pane,
 `Mod+K` opens the selected row's searchable action panel, Backspace on an empty page query pops it.
 Escape closes the action panel, then pops a page, then clears, then closes; an untrusted (synthetic)
 Escape — the desktop close-item command — closes outright. `Ctrl+R` is swallowed while the palette is
