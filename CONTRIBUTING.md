@@ -18,7 +18,7 @@ bug reports, include:
 
 ## Development setup
 
-**Prerequisites:** [Bun](https://bun.sh) 1.4.3 (the repository's pinned package manager and runtime),
+**Prerequisites:** [Bun](https://bun.sh) 1.4.4 (the repository's pinned package manager and runtime),
 Node.js ≥ 22.19 (required by the in-process `pi` engine), and an authenticated `pi` provider for agent work.
 
 ```bash

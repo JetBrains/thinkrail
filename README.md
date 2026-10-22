@@ -205,7 +205,7 @@ module, and a change that moves a boundary, contract, or decision updates the sp
 
 ## Developing ThinkRail
 
-You need **Bun** 1.4.3 (the pinned package manager and runtime), **Node.js** ≥ 22.19 (required by the
+You need **Bun** 1.4.4 (the pinned package manager and runtime), **Node.js** ≥ 22.19 (required by the
 in-process `pi` engine), and an authenticated `pi` provider for agent work.
 
 ```bash
