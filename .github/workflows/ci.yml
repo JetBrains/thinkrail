@@ -278,26 +278,3 @@ jobs:
             .value.result == "success"
             or (.value.result == "skipped" and $app == "false" and (.key | IN("changes", "lint", "test") | not))
           )' <<< "$NEEDS"
-
-  # Legacy required-check names: mirror "CI passed" until the ruleset stops requiring them, then delete.
-  e2e:
-    name: E2E (no-agent)
-    needs: ci-passed
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
-    steps:
-      - run: test "${{ needs.ci-passed.result }}" = success
-  binary:
-    name: Binary smoke & e2e
-    needs: ci-passed
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
-    steps:
-      - run: test "${{ needs.ci-passed.result }}" = success
-  desktop:
-    name: Desktop smoke & e2e
-    needs: ci-passed
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
-    steps:
-      - run: test "${{ needs.ci-passed.result }}" = success
