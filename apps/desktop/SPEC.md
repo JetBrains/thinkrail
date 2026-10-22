@@ -113,7 +113,10 @@ The runtime bundle is built with `--outdir` + `--entry-naming` (Bun refuses exte
 does `preBuild` emit an external map, inject the PostHog chunk id itself, upload a `.js` copy + map with
 `posthog-cli sourcemap upload`, and delete the map: posthog-cli's own `inject` skips `.ts` files and would
 push Bun's `// @bun` pragma off line 1, so the registration statement becomes line 2 and the map shifts
-one line, with a deterministic content-hash UUID. `preBuild` also refuses to stage web `.map` files.
+one line. The chunk id is a UUID hashed from the release, the code **and** its map: Bun emits
+byte-identical JS for a different checkout path (the generated entry's absolute imports live only in
+`sourcesContent`) or a comment-only source change, and posthog-cli's symbol-set upload fails on an
+existing chunk id with different content. `preBuild` also refuses to stage web `.map` files.
 
 Handled native-shell failures (keyboard state, title-bar double-click, update listener/lifecycle,
 Windows frame restore, startup) go through `errorReporting.ts`'s `desktopError(scope, message, error)`:

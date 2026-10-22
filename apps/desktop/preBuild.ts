@@ -68,6 +68,7 @@ function uploadRuntimeSourceMap(runtimeFile: string, release: string): void {
 	const injected = injectChunkId(
 		readFileSync(runtimeFile, "utf8"),
 		JSON.parse(readFileSync(mapFile, "utf8")) as SourceMapJson,
+		release,
 	);
 	writeFileSync(runtimeFile, injected.code);
 	rmSync(mapFile);

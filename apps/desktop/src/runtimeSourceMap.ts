@@ -6,8 +6,14 @@ export interface SourceMapJson {
 	[key: string]: unknown;
 }
 
-export function chunkIdFor(code: string): string {
-	const hex = createHash("sha256").update(code).digest("hex");
+export function chunkIdFor(code: string, map: SourceMapJson, release: string): string {
+	const hex = createHash("sha256")
+		.update(release)
+		.update("\0")
+		.update(code)
+		.update("\0")
+		.update(JSON.stringify(map))
+		.digest("hex");
 	const variant = ((Number.parseInt(hex.slice(16, 17), 16) & 0x3) | 0x8).toString(16);
 	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
@@ -19,8 +25,9 @@ function registration(chunkId: string): string {
 export function injectChunkId(
 	code: string,
 	map: SourceMapJson,
+	release: string,
 ): { code: string; map: SourceMapJson; chunkId: string } {
-	const chunkId = chunkIdFor(code);
+	const chunkId = chunkIdFor(code, map, release);
 	const lines = code.split("\n");
 	const at = lines[0]?.startsWith("// @bun") ? 1 : 0;
 	lines.splice(at, 0, registration(chunkId));
