@@ -198,6 +198,20 @@ describe("createShikiTokens", () => {
 		expect(counts.get("shellscript")).toBeUndefined();
 	});
 
+	test("fences inside quotes and lists and spaced lang attributes count as references", async () => {
+		for (const text of [
+			["> ```ts", "> const x = 1", "> ```"],
+			["- ```ts", "  const x = 1", "  ```"],
+			["1. > ```ts", "   > const x = 1", "   > ```"],
+			['<script lang = "ts">', "const x = 1", "</script>"],
+		]) {
+			const counts = new Map<string, number>();
+			const tokens = await themedTokens(countingCatalog(counts));
+			expect(await tokens.loadEmbeds("markdown", () => text.join("\n"))).toBe(true);
+			expect(counts.get("typescript")).toBe(1);
+		}
+	});
+
 	test("front matter and inline HTML colour without a fence reference", async () => {
 		const counts = new Map<string, number>();
 		const tokens = await themedTokens(countingCatalog(counts));

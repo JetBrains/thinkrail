@@ -11,7 +11,8 @@ import { EncodedTokenMetadata, INITIAL, type StateStack } from "shiki/textmate";
 import type { ResourceCodeHost, ResourceCodeLanguage } from "../host";
 
 const MAX_LINE_LENGTH = 20_000;
-const EMBED_REFERENCE = /^[ \t]*(?:`{3,}|~{3,})[ \t]*\{?\.?([\w#+.-]+)|\blang=["']?([\w#+.-]+)/gm;
+const EMBED_REFERENCE =
+	/^[ \t]*(?:(?:>|[-*+][ \t]|\d{1,9}[.)][ \t])[ \t]*)*(?:`{3,}|~{3,})[ \t]*\{?\.?([\w#+.-]+)|\blang[ \t]*=[ \t]*["']?([\w#+.-]+)/gm;
 const TOKENIZE_TIME_LIMIT_MS = 500;
 const IMPLICIT_EMBEDS = [
 	[/^-{3,}/, "yaml"],
