@@ -133,6 +133,18 @@ describe("createShikiTokens", () => {
 		expect(await tokens.ready("typescript")).toBe(false);
 	});
 
+	test("an engine that fails once retries on the next request", async () => {
+		let attempts = 0;
+		const tokens = createShikiTokens({
+			languages: CATALOG,
+			languageId,
+			engine: () => (++attempts === 1 ? Promise.reject(new Error("no wasm")) : engine()),
+		});
+		expect(await tokens.ready("typescript")).toBe(false);
+		expect(await tokens.ready("typescript")).toBe(true);
+		expect(attempts).toBe(2);
+	});
+
 	test("every catalog id resolves its own grammar name", async () => {
 		const tokens = await themedTokens();
 		for (const { id } of CATALOG) expect(await tokens.ready(id), id).toBe(true);
@@ -217,11 +229,17 @@ describe("createShikiTokens", () => {
 	test("embeds load transitively through an embed that is itself referenced", async () => {
 		const counts = new Map<string, number>();
 		const tokens = await themedTokens(countingCatalog(counts));
-		const text = () =>
-			['<template lang="md">', "```ts", "const x = 1", "```", "</template>"].join("\n");
+		const lines = ['<template lang="md">', "```sh", "echo hi", "```", "</template>"];
+		const text = () => lines.join("\n");
+		await tokens.ready("vue");
+		expect(tokenize(tokens.provider("vue"), lines)[2]).toHaveLength(1);
+
 		expect(await tokens.loadEmbeds("vue", text)).toBe(true);
 		expect(counts.get("markdown")).toBe(1);
-		expect(counts.get("typescript")).toBe(1);
+		expect(counts.get("shellscript")).toBe(1);
+		const echo = scopeOf(tokenize(tokens.provider("shellscript"), ["echo hi"])[0], "echo");
+		expect(echo).toBeTruthy();
+		expect(scopeOf(tokenize(tokens.provider("vue"), lines)[2], "echo")).toBe(echo);
 		expect(await tokens.loadEmbeds("vue", text)).toBe(false);
 	});
 

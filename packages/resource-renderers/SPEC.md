@@ -584,13 +584,16 @@ content's own height.
   line, and the JS regex engine tokenized about 4.5x slower than Oniguruma (a 2,861-line TS file: about
   1,715 ms against 380 ms). The factory's `create()` loads the grammar when Monaco first meets a model of
   that language; the `languageForPath` probe model starts it before the editor mounts. Concurrent
-  requests share one load, and an unknown id stays plain. Monaco marks a factory resolved even when
-  `create()` answers `null`, so a failed load answers plain text and registers a fresh factory: the next
-  model of that language retries. `create()` never throws. Each provider binds the grammar object current
-  when it is made, because loading an embed rebuilds every grammar that lists it, and Monaco's saved line
-  states only fit the old one. Embeds load per model: a regex scan of fence info strings and `lang=`
-  attributes picks the in-catalog `embeddedLangsLazy` the text names (markdown 26, vue 8, svelte 2
-  otherwise), they load after the first colour, then the provider is re-registered so Monaco re-tokenizes.
+  requests share one load, and an unknown id stays plain. Monaco asks a language's factory for a provider
+  only once, so a failed load answers plain text and marks the language missing; a failed highlighter or
+  engine start is not cached, so a later request retries it. The next model of that language whose load
+  succeeds installs the provider directly with `setTokensProvider`. `create()` never throws. Each provider binds the grammar object current when it is made, because loading an embed
+  rebuilds every grammar that lists it, and Monaco's saved line states only fit the old one. Embeds load
+  per model: a regex scan of fence info strings (including fences inside blockquotes and list items) and
+  `lang=` attributes (spaces around `=` allowed) picks the in-catalog `embeddedLangsLazy` the text names
+  (markdown 26, vue 8, svelte 2 otherwise) and follows an embed's own lazy embeds transitively
+  (vue -> markdown -> shellscript); they load after the first colour, then the provider is re-registered
+  so Monaco re-tokenizes.
   A leading `---` adds `yaml` and an HTML tag adds `html` (front matter and inline HTML embed them with no
   fence). Fence names the markdown grammar embeds under another language (`jsx` and `es6` as
   `javascript`, `golang` as `go`, `h` as `c`) map through `FENCE_EMBEDS` before the host's `languageId`.
