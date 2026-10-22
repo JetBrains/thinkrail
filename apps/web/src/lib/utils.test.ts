@@ -4,6 +4,8 @@ import {
 	ancestorPaths,
 	compactAge,
 	cssColorToHex,
+	DOUBLE_CLICK_SETTLE_MS,
+	doubleClickPendingMs,
 	fileName,
 	firstClickOnly,
 	firstNonBlankLine,
@@ -262,4 +264,18 @@ test("firstClickOnly runs on a first click or keyboard activation, not a double 
 	onClick({ detail: 2 });
 	onClick({ detail: 3 });
 	expect(runs).toBe(2);
+});
+
+test("doubleClickPendingMs covers the double-click window after a first click", () => {
+	const onClick = firstClickOnly(() => {});
+	onClick({ detail: 1 });
+	const pending = doubleClickPendingMs();
+	expect(pending).toBeGreaterThan(DOUBLE_CLICK_SETTLE_MS - 50);
+	expect(pending).toBeLessThanOrEqual(DOUBLE_CLICK_SETTLE_MS);
+});
+
+test("doubleClickPendingMs stays at 0 after a keyboard activation", async () => {
+	await Bun.sleep(DOUBLE_CLICK_SETTLE_MS);
+	firstClickOnly(() => {})({ detail: 0 });
+	expect(doubleClickPendingMs()).toBe(0);
 });

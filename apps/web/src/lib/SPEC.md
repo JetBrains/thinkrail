@@ -52,7 +52,9 @@ not this module; the theme-aware highlighter remains app-local.
   commit something a double click contradicts: a single click (or keyboard activation) on the active
   preview tab, so a double click is not read as two keeps, and the Changes review-tab preview),
   **`firstClickOnly()`** (wraps a browse row's preview open so it runs on a first click or keyboard
-  activation, `detail <= 1`, and skips a double click's second click),
+  activation, `detail <= 1`, and skips a double click's second click) with **`doubleClickPendingMs()`**
+  (how long a double click on the last such row could still arrive; the Review reveal waits it out so it
+  does not unmount the row first),
   **`mcpState.ts`** (the MCP server-state vocabulary — `MCP_STATE_KEY` / `mcpStateLabel(t, state)`,
   `mcpStateTone` (a connected server reporting zero tools warns), `mcpStatusLabel` / `mcpToolCountLabel`
   (the text helpers here take the caller's translator first, so render output follows a language change),
@@ -102,7 +104,7 @@ not this module; the theme-aware highlighter remains app-local.
   caller's translator), `platformShortcutLabel`, `hasPlatformModifier`, `platformFamily`, `copyText`, `randomId`,
   `MCP_STATE_KEY`, `mcpStateLabel`, `mcpStateTone`, `mcpStatusLabel`, `mcpToolCountLabel`, `isMcpAttentionState`,
   `isMcpActiveState`, the `McpStateTone` type,
-  `DOUBLE_CLICK_SETTLE_MS`, `firstClickOnly`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
+  `DOUBLE_CLICK_SETTLE_MS`, `firstClickOnly`, `doubleClickPendingMs`, `tupleKey`, `parseTupleKey`, `layoutResourceIdentity`,
   `readLayoutSelection`, `readLayoutNavigationClock`, `sameLayoutAttention`, the `LayoutAttention`
   type, and the keyboard gate shared by the shell's chords and the panels' plain-letter review
   shortcuts: `MODAL_LAYER_SELECTOR` + `hasLayer` (an open modal/dialog/alertdialog owns the keyboard)
