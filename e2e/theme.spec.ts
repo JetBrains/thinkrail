@@ -223,6 +223,42 @@ test("Monaco keeps syntax colours across a light/dark swap", async ({ page }) =>
 	expect(await keywordToken(page)).toEqual(after);
 });
 
+test("an editor preloaded before a theme swap opens in the current theme", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	writeFileSync(join(workspace.worktreePath, "swap.ts"), "export const answer = 42;\n");
+	const options = await readThemeOptions(page);
+	const light = options.find(
+		(option) => option.appearance === "light" && option.contrast === "normal",
+	);
+	const dark = options.find(
+		(option) => option.appearance === "dark" && option.contrast === "normal",
+	);
+	expect(light && dark).toBeTruthy();
+	await pickTheme(page, dark?.id ?? "");
+	await expect
+		.poll(() =>
+			page.evaluate(
+				() =>
+					performance.getEntriesByType("resource").filter((entry) => entry.name.endsWith(".wasm"))
+						.length,
+			),
+		)
+		.toBeGreaterThan(0);
+	await pickTheme(page, light?.id ?? "");
+
+	await revealWorkbenchTool(page, "files");
+	await page.getByTestId("file-node").filter({ hasText: "swap.ts" }).dblclick();
+	await expect(page.getByTestId("editor-pane")).toContainText("answer");
+	await expectEditorMatchesTheme(page);
+	const first = await keywordToken(page);
+
+	await pickTheme(page, dark?.id ?? "");
+	await expect.poll(async () => (await keywordToken(page)).color).not.toBe(first.color);
+	await pickTheme(page, light?.id ?? "");
+	await expect.poll(async () => (await keywordToken(page)).color).toBe(first.color);
+});
+
 test("selected workspace tabs and rail entries keep their surface and edge marker under every manifest", async ({
 	page,
 }) => {

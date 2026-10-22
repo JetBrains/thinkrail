@@ -100,6 +100,29 @@ describe("createShikiTokens", () => {
 		expect(loads).toBe(1);
 	});
 
+	test("warm builds the engine once without a grammar and ready reuses it", async () => {
+		let engines = 0;
+		const counts = new Map<string, number>();
+		const tokens = createShikiTokens({
+			languages: countingCatalog(counts),
+			languageId,
+			engine: () => {
+				engines += 1;
+				return engine();
+			},
+		});
+		tokens.warm("plaintext");
+		tokens.warm("plaintext");
+		expect(engines).toBe(1);
+		expect(counts.size).toBe(0);
+		await applyTheme(tokens, await light);
+		expect(await tokens.ready("typescript")).toBe(true);
+		expect(engines).toBe(1);
+		expect(scopeOf(tokenize(tokens.provider("typescript"), ["const x = 1"])[0], "const")).not.toBe(
+			"",
+		);
+	});
+
 	test("an unknown language resolves false without loading anything", async () => {
 		const tokens = await themedTokens();
 		expect(await tokens.ready("klingon")).toBe(false);

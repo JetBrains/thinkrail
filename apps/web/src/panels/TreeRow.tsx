@@ -24,6 +24,7 @@ export function TreeRow({
 	onClick,
 	onDoubleClick,
 	onContextMenu,
+	onWarm,
 }: {
 	ref?: Ref<HTMLButtonElement> | undefined;
 	testid: string;
@@ -40,6 +41,7 @@ export function TreeRow({
 	onClick?: ((event: MouseEvent) => void) | undefined;
 	onDoubleClick?: (() => void) | undefined;
 	onContextMenu?: ((event: MouseEvent) => void) | undefined;
+	onWarm?: (() => void) | undefined;
 }) {
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 	const Folder = active ? RiFolderFill : RiFolderLine;
@@ -57,6 +59,8 @@ export function TreeRow({
 			onClick={onClick}
 			onDoubleClick={onDoubleClick}
 			onContextMenu={onContextMenu}
+			onPointerEnter={onWarm}
+			onFocus={onWarm}
 			className={`flex h-panel-row w-full min-w-0 items-center gap-4 rounded-sm px-4 text-left tr-text-ui ${tone} outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${
 				highlight === "self"
 					? `hover:bg-control-bg-hovered ${active ? "bg-control-bg-selected" : ""}`

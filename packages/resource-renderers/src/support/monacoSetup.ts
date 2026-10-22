@@ -232,17 +232,17 @@ export function ensureMonaco(code: ResourceCodeHost): void {
 	void tokens.applyTheme(theme.registration, theme.data.rules);
 	defineTheme(theme);
 	setup = { code, tokens };
-}
-
-async function refreshTheme(): Promise<void> {
-	if (!setup) return;
-	const theme = currentTheme(setup.code);
-	await setup.tokens.applyTheme(theme.registration, theme.data.rules);
-	defineTheme(theme);
-}
-
-export function watchThemeSwap(): () => void {
-	return onThemeSwap(() => {
-		void refreshTheme().catch(() => monaco.editor.setTheme(EDITOR_THEME));
+	onThemeSwap(() => {
+		void refreshTheme(code, tokens).catch(() => monaco.editor.setTheme(EDITOR_THEME));
 	});
+}
+
+export function warmLanguage(id: string): void {
+	setup?.tokens.warm(id);
+}
+
+async function refreshTheme(code: ResourceCodeHost, tokens: MonacoSetup["tokens"]): Promise<void> {
+	const theme = currentTheme(code);
+	await tokens.applyTheme(theme.registration, theme.data.rules);
+	defineTheme(theme);
 }

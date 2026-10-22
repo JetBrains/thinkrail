@@ -88,6 +88,7 @@ import {
 } from "./layoutState";
 import { syncLegacySelectionFromAttention, useLegacySelectionAdapter } from "./legacySelection";
 import { useTerminalPlacementReconciliation } from "./terminalReconciliation";
+import { useIdleEditorPreload } from "./useIdleEditorPreload";
 import { WorkspaceChatHistory } from "./WorkspaceChatHistory";
 
 function PlanSummaryAutoDraft({
@@ -337,6 +338,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const specs = useWorkspaceSpecs(workspaceId);
 	const review = useWorkspaceReview(workspaceId);
 	useLoadWorkspaceTurns(workspaceId);
+	useIdleEditorPreload(workspaceId);
 	const reviewComments = useAppStore((state) => state.reviewsByWorkspace[workspaceId]?.comments);
 	const railPlanSessionId = useAppStore((state) => selectRailPlanSessionId(state, workspaceId));
 	const reviewDraftCount = useAppStore((state) => selectReviewDraftCount(state, workspaceId));

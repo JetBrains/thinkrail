@@ -275,7 +275,6 @@ function ReviewedPreviewView(props: ResolvedProps & { file: ReadyFile; review: S
 			<RendererView
 				key={implementationKey}
 				renderer={renderer}
-				implementationKey={implementationKey}
 				mobile={mobile}
 				resource={resource}
 				content={file.content}

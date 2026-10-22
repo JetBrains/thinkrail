@@ -8,6 +8,7 @@ import type {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import type { ComponentType } from "react";
+import type { ResourceHost } from "../host";
 
 export interface ResourceDescriptor {
 	workspaceId: string;
@@ -122,10 +123,13 @@ export interface ResourceRenderer {
 		whitespace: boolean;
 		boundedDiff?: "always" | "large";
 	};
-	loadView?(
-		environment: ResourceEnvironment,
-	): Promise<{ default: ComponentType<ResourceViewProps> }>;
+	loadView?(environment: ResourceEnvironment): Promise<ResourceViewModule>;
 	loadDiff?(): Promise<{ default: ComponentType<ResourceDiffProps> }>;
+}
+
+export interface ResourceViewModule {
+	default: ComponentType<ResourceViewProps>;
+	warm?(host: ResourceHost, resource: ResourceDescriptor): void;
 }
 
 export type ResourceIntent = "view" | "diff";
