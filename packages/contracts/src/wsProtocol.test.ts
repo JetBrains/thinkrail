@@ -14,6 +14,7 @@ import {
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
+	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
@@ -208,11 +209,17 @@ test("workspace read state is pinned to v86", () => {
 });
 
 test("local language files and the locale setting are pinned to v89", () => {
-	expect(PROTOCOL_VERSION).toBe(89);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(LOCALES_PROTOCOL_VERSION);
 	expect(LOCALES_PROTOCOL_VERSION).toBe(89);
 	expect(WS_METHODS.localesList).toBe("locales.list");
 	expect(WS_METHODS.localesReveal).toBe("locales.reveal");
 	expect(WS_CHANNELS.localesChanged).toBe("locales.changed");
+});
+
+test("client error reports are pinned to v90", () => {
+	expect(PROTOCOL_VERSION).toBe(90);
+	expect(CLIENT_ERROR_REPORT_PROTOCOL_VERSION).toBe(90);
+	expect(WS_METHODS.clientReportError).toBe("client.reportError");
 });
 
 test("project rename is pinned to v85", () => {

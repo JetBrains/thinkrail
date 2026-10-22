@@ -11,6 +11,14 @@ import {
 } from "../persistence";
 import { runAttributionClaim } from "./attribution";
 import {
+	CHUNK_IDS_PROPERTY,
+	type ErrorSource,
+	errorCode,
+	type FatalErrorKind,
+	reportableError,
+	toV8Stack,
+} from "./errors";
+import {
 	type AdditionalAnalyticsCapture,
 	type AnalyticsEvent,
 	acquisitionCampaignProperties,
@@ -28,6 +36,8 @@ export interface AnalyticsOptions {
 	build?: BuildKind;
 	posthogApiKey?: string;
 	posthogHost?: string;
+	appRoot?: string;
+	remapBase?: string;
 	mute?: boolean;
 	additionalEnabled: boolean;
 	env?: AnalyticsEnv;
@@ -57,6 +67,11 @@ interface AnalyticsState {
 	acquisition: AcquisitionRecord | null;
 	attributionGeneration: number;
 	attributionAbort: AbortController;
+	errorReports: {
+		count: number;
+		bySource: Map<ErrorSource, number>;
+		recent: Map<string, number>;
+	};
 	attribution: Pick<
 		AnalyticsOptions,
 		| "openExternal"
@@ -98,6 +113,10 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 			sinkFactory({
 				apiKey,
 				...(host ? { host } : {}),
+				frames: {
+					...(options.appRoot ? { appRoot: options.appRoot } : {}),
+					...(options.remapBase ? { remapBase: options.remapBase } : {}),
+				},
 				...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
 			});
 		const basic = createSink();
@@ -113,6 +132,7 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 			acquisition: null,
 			attributionGeneration: 0,
 			attributionAbort: new AbortController(),
+			errorReports: { count: 0, bySource: new Map(), recent: new Map() },
 			attribution: {
 				...(options.openExternal ? { openExternal: options.openExternal } : {}),
 				...(options.attributionEndpoint
@@ -150,6 +170,162 @@ export function initializeAnalyticsWithSinkFactoryForTests(
 export function track(event: BasicAnalyticsEvent): void {
 	const s = state;
 	if (s && !s.shutdownPromise) send(s, s.basic, event);
+}
+
+export interface ErrorReport {
+	source: ErrorSource;
+	handled: boolean;
+	scope?: string;
+	requestMethod?: string;
+	chunkIds?: Record<string, string>;
+}
+
+export interface ClientErrorInput {
+	kind?: unknown;
+	type?: unknown;
+	stack?: unknown;
+	boundary?: unknown;
+	chunkIds?: unknown;
+}
+
+const MAX_ERROR_REPORTS = 100;
+const MAX_ERROR_REPORTS_PER_SOURCE = 50;
+const ERROR_DEDUPE_MS = 60_000;
+const FATAL_FLUSH_TIMEOUT_MS = 1_000;
+
+function throwSite(error: unknown): string {
+	const stack = error instanceof Error && typeof error.stack === "string" ? error.stack : "";
+	return (
+		stack
+			.split("\n")
+			.find((line) => /^\s*at\s/.test(line))
+			?.trim() ?? ""
+	);
+}
+
+function errorKey(error: unknown, reportable: Error, report: ErrorReport): string {
+	const name = error instanceof Error ? error.name : typeof error;
+	return [
+		report.source,
+		report.scope ?? "",
+		report.requestMethod ?? "",
+		name,
+		errorCode(error) ?? "",
+		throwSite(reportable),
+	].join("|");
+}
+
+function admitErrorReport(
+	s: AnalyticsState,
+	error: unknown,
+	reportable: Error,
+	report: ErrorReport,
+): boolean {
+	const now = Date.now();
+	const key = errorKey(error, reportable, report);
+	const last = s.errorReports.recent.get(key);
+	if (last !== undefined && now - last < ERROR_DEDUPE_MS) return false;
+	const fromSource = s.errorReports.bySource.get(report.source) ?? 0;
+	if (s.errorReports.count >= MAX_ERROR_REPORTS) return false;
+	if (fromSource >= MAX_ERROR_REPORTS_PER_SOURCE) return false;
+	s.errorReports.count++;
+	s.errorReports.bySource.set(report.source, fromSource + 1);
+	s.errorReports.recent.set(key, now);
+	return true;
+}
+
+function errorParams(
+	s: AnalyticsState,
+	error: unknown,
+	report: ErrorReport,
+	fatal: boolean,
+): Record<string, unknown> {
+	const code = errorCode(error);
+	return {
+		...s.env,
+		source: report.source,
+		handled: report.handled,
+		...(code ? { code } : {}),
+		...(report.scope ? { scope: report.scope } : {}),
+		...(report.requestMethod ? { request_method: report.requestMethod } : {}),
+		...(fatal ? { $exception_level: "fatal" } : {}),
+		...(report.chunkIds ? { [CHUNK_IDS_PROPERTY]: report.chunkIds } : {}),
+	};
+}
+
+export function reportError(error: unknown, report: ErrorReport): void {
+	const s = state;
+	if (!s || s.shutdownPromise) return;
+	try {
+		const reportable = reportableError(error);
+		if (!admitErrorReport(s, error, reportable, report)) return;
+		void s.basic.sendException(s.clientId, reportable, errorParams(s, error, report, false), false);
+	} catch {
+		log.debug("error report failed");
+	}
+}
+
+export async function reportFatalError(error: unknown, kind?: FatalErrorKind): Promise<void> {
+	const s = state;
+	if (!s) return;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		const report: ErrorReport = {
+			source: "host_crash",
+			handled: false,
+			...(kind ? { scope: kind } : {}),
+		};
+		const params = errorParams(s, error, report, true);
+		await Promise.race([
+			s.basic.sendException(s.clientId, reportableError(error), params, true),
+			new Promise<void>((resolve) => {
+				timer = setTimeout(resolve, FATAL_FLUSH_TIMEOUT_MS);
+			}),
+		]);
+	} catch {
+		log.debug("fatal error report failed");
+	} finally {
+		if (timer) clearTimeout(timer);
+	}
+}
+
+const CLIENT_ERROR_KINDS = new Set(["render", "window", "rejection"]);
+
+function boundedString(value: unknown, max: number): string {
+	return typeof value === "string" ? value.slice(0, max) : "";
+}
+
+function clientError(input: ClientErrorInput): Error {
+	const error = new Error();
+	error.name = boundedString(input.type, 128) || "Error";
+	error.stack = toV8Stack(boundedString(input.stack, 16_000));
+	return error;
+}
+
+const MAX_CLIENT_CHUNK_IDS = 20;
+
+function clientChunkIds(value: unknown): Record<string, string> | undefined {
+	if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+	const entries = Object.entries(value)
+		.filter(
+			(entry): entry is [string, string] =>
+				entry[0].length <= 2_048 && typeof entry[1] === "string" && entry[1].length <= 64,
+		)
+		.slice(0, MAX_CLIENT_CHUNK_IDS);
+	return entries.length ? Object.fromEntries(entries) : undefined;
+}
+
+export function reportClientError(input: ClientErrorInput): void {
+	const kind =
+		typeof input.kind === "string" && CLIENT_ERROR_KINDS.has(input.kind) ? input.kind : "window";
+	const boundary = boundedString(input.boundary, 64).trim().replace(/\s+/g, "_");
+	const chunkIds = clientChunkIds(input.chunkIds);
+	reportError(clientError(input), {
+		source: "ui",
+		handled: kind === "render",
+		scope: boundary ? `${kind}:${boundary}` : kind,
+		...(chunkIds ? { chunkIds } : {}),
+	});
 }
 
 export function getAdditionalAnalyticsCapture(): AdditionalAnalyticsCapture | null {
