@@ -16,6 +16,7 @@ export interface DesktopHost {
 	};
 	port: number;
 	requested: number;
+	reportError(error: unknown, scope: string): void;
 }
 
 export interface DesktopServerRuntime {

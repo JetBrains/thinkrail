@@ -68,7 +68,8 @@ to the release matrix.
 ## Native build contract
 
 The private native matrix checks out an explicit public source commit and invokes
-`.github/actions/build-binary`. The action accepts `version`, `channel`, and a host-matching `target`.
+`.github/actions/build-binary`. The action accepts `version`, `channel`, and a host-matching `target`,
+plus optional `posthog-cli-api-key` / `posthog-cli-project-id` for source-map upload (below).
 Its stable public outputs are:
 
 - `artifact-name` / `artifact-path` — native CLI;
@@ -125,8 +126,27 @@ workflow passes it from its secret store and the stamp step never echoes it. The
 is never product identity.
 
 Signing credentials and access to `codesign.labs.jb.gg` stay in the protected private pipeline. Hosted
-native jobs receive no service credentials; protected internal jobs perform service calls but do not
-build product source or assemble archives. CodeSign and checksum actions are private and versioned with
+native jobs receive no service credentials except one owner-approved exception: a PostHog personal API
+key (error-tracking write, organization read) for source-map upload. PostHog's `posthog-cli` must stamp
+chunk ids into the JS before packaging and needs that key to do so, and the maps must never ship, so the
+upload cannot move to a later protected job. The key reaches only the web build, `desktop:build` and desktop
+packaging steps (never smokes; the identity-stamping step sees only whether it is set) and is absent from PR CI, whose builds are unchanged. Protected internal
+jobs otherwise perform service calls but do not build product source or assemble archives.
+
+**Source maps.** When `posthog-cli-api-key` is set, those steps receive
+`THINKRAIL_SOURCEMAPS_RELEASE=<version>` and the CLI credentials (EU host). The web build emits hidden
+maps and runs `posthog-cli sourcemap process --release-mode symbol-set --delete-after` (release
+`thinkrail@<version>`); desktop's `preBuild` injects the runtime bundle's chunk id itself and uploads it
+([[module-desktop]]). `@posthog/cli` is pinned once in the root catalog, and its npm wrapper downloads the
+native binary on first use without any integrity check, so every invocation goes through the root
+`posthog-cli` script (`apps/web/posthogCli.ts`): it refuses a wrapper version other than the pinned one and
+a binary whose SHA-256 is not one of the seven pinned per platform — taken from archives whose digests
+matched PostHog's GitHub release — before the binary sees the key or rewrites shipped JS. Bumping
+`@posthog/cli` means re-pinning. Builds fail rather than package any
+web `.map`, and turbo hashes the release variable so a cache hit restores the injected, map-free output.
+The CLI binary embeds its own map instead ([[module-cli]]).
+
+CodeSign and checksum actions are private and versioned with
 the release workflow.
 
 The pipeline fails closed: it builds every target, signs and verifies the required artifacts, computes

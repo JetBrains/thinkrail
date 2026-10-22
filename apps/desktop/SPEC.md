@@ -99,12 +99,33 @@ another.
    `Utils.openExternal` callback used by the host's one-shot browser attribution claim. The callback passes through
    `DesktopHostOptions` and the generated runtime. The first native-window `dom-ready` explicitly calls the
    proxied `host.server.startAttributionClaim()` readiness method; host boot and elapsed time do not start a
-   saved-choice claim. No deep-link or RPC surface is added.
+   saved-choice claim. No deep-link or RPC surface is added. The runtime also passes `appRoot`
+   (`runtimeDir/..`, i.e. `Resources/app`) so error-report frames are rooted at the packaged app, and returns
+   `reportDesktopError` as `DesktopHost.reportError`.
 5. Restore the valid route fragment and bounded client-preference map for
    `{ backendProfileId: "local", windowId: "main" }`. The route is appended to the fresh origin; the
    preference map is serialized as data and prepended to the preload source so the web client can hydrate
    before React mounts despite the changing port. Open one normal native `BrowserWindow` with the system
    renderer.
+
+The runtime bundle is built with `--outdir` + `--entry-naming` (Bun refuses external maps with
+`--outfile`). Only in a credentialed release build (`THINKRAIL_SOURCEMAPS_RELEASE`, [[module-ci-release]])
+does `preBuild` emit an external map, inject the PostHog chunk id itself, upload a `.js` copy + map with
+`posthog-cli sourcemap upload` through the root `posthog-cli` script (the web package's checksum-verified
+runner), and delete the map: posthog-cli's own `inject` skips `.ts` files and would
+push Bun's `// @bun` pragma off line 1, so the registration statement becomes line 2 and the map shifts
+one line. The chunk id is a UUID hashed from the release, the code **and** its map: Bun emits
+byte-identical JS for a different checkout path (the generated entry's absolute imports live only in
+`sourcesContent`) or a comment-only source change, and posthog-cli's symbol-set upload fails on an
+existing chunk id with different content. `preBuild` also refuses to stage web `.map` files.
+
+Handled native-shell failures that carry an error (keyboard state, title-bar double-click, update
+listener/lifecycle/journal, native-label writes, leaving the bundle working directory, Windows frame restore,
+startup) go through `errorReporting.ts`'s `desktopError(scope, message, error)`:
+the `[desktop] …` console line stays, and once the host has booted the error is forwarded to
+`DesktopHost.reportError` as a sanitized `desktop` error report ([[submodule-server-analytics]]); before
+that it is console-only. Uncaught main-process faults need no seam — they share the host's process
+handlers. `updates` reaches this sibling helper directly.
 
 The Electrobun entry bundle contains native-shell code only. A static server import there is forbidden:
 it can load `bun-pty` before `BUN_PTY_LIB` and bypass the defined server-runtime build. Startup

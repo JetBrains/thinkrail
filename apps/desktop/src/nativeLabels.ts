@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { DESKTOP_DIALOG_KEYS, EN, type EnglishCatalog } from "@thinkrail/locales";
+import { desktopError } from "./errorReporting";
 
 const MAX_DIALOG_LABEL_LENGTH = 200;
 
@@ -44,6 +45,6 @@ export function writeNativeLabels(path: string, labels: Readonly<Record<string, 
 		mkdirSync(dirname(path), { recursive: true });
 		writeFileSync(path, JSON.stringify(labels));
 	} catch (error) {
-		console.warn("[desktop] could not save the native labels", error);
+		desktopError("labels", "could not save the native labels", error);
 	}
 }
