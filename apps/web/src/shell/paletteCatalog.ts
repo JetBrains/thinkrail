@@ -59,6 +59,7 @@ export interface PaletteCatalogDeps {
 	readonly canSettle: boolean;
 	readonly settled: boolean;
 	readonly settingsGroups: readonly SettingsNavGroup[];
+	readonly availableSections: ReadonlySet<SettingsSection>;
 	readonly themes: readonly ThemeDescriptor[];
 	readonly theme: ThemeId;
 	readonly extensions: readonly ExtensionCatalogEntry[] | null;
@@ -207,6 +208,7 @@ export function buildCommands(deps: PaletteCatalogDeps): Command[] {
 			group: "settings",
 			icon: RiPuzzle2Line,
 			keywords: ["extension", "enable", "disable", "tools"],
+			when: () => deps.availableSections.has("extensions"),
 			page: "extensions",
 		},
 		{
@@ -215,7 +217,7 @@ export function buildCommands(deps: PaletteCatalogDeps): Command[] {
 			group: "settings",
 			icon: RiPlugLine,
 			keywords: ["mcp", "server", "tools", "enable", "disable"],
-			when: hasWorkspace,
+			when: (context) => hasWorkspace(context) && deps.availableSections.has("mcp"),
 			page: "mcp",
 		},
 	];

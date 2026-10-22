@@ -296,6 +296,7 @@ function PaletteBody({
 					index: (panel.index + delta + panelActions.length) % Math.max(1, panelActions.length),
 				});
 			} else if (event.key === "Enter") {
+				if (event.nativeEvent.isComposing) return;
 				event.preventDefault();
 				runAction(panelActions[panel.index]);
 			}

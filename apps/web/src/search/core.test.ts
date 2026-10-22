@@ -47,6 +47,10 @@ describe("parseSearchQuery", () => {
 		});
 		expect(parseSearchQuery("#shell")).toMatchObject({ scope: "specs", text: "shell" });
 		expect(parseSearchQuery('"@team"')).toMatchObject({ scope: "all", terms: ["@team"] });
+		expect(parseSearchQuery('"Document is:running filter" is:unread')).toMatchObject({
+			terms: ["Document is:running filter"],
+			filters: ["is:unread"],
+		});
 	});
 
 	test("scope prefixes round-trip, so a chip can write its prefix back", () => {

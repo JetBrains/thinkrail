@@ -38,6 +38,7 @@ import {
 } from "../search";
 import {
 	deriveMcpServerRows,
+	SettingsSection,
 	selectActiveWorkspace,
 	selectContextProject,
 	selectHistoryTarget,
@@ -60,7 +61,11 @@ import {
 } from "./paletteCatalog";
 
 const SCOPES: readonly SearchScope[] = ["all", "work", "commands"];
-const TITLE_BACKFILL_WORKSPACES = 24;
+const TITLE_BACKFILL_CONCURRENCY = 4;
+const TITLE_BACKFILL_TTL_MS = 60_000;
+
+const backfilledTitles = new Map<string, string>();
+const backfilledWorkspacesAt = new Map<string, number>();
 
 function navigateToWorkspace(workspace: Pick<Workspace, "id" | "projectId">, sessionId?: string) {
 	useAppStore.getState().activateWorkspaceFromRoute(workspace, sessionId);
@@ -86,14 +91,22 @@ function backfillOrder(state: ReturnType<typeof useAppStore.getState>) {
 		untitled.push({ workspaceId, rank });
 	}
 	untitled.sort((a, b) => a.rank - b.rank);
+	const now = Date.now();
 	return {
 		missingProjects,
-		workspaceIds: untitled.slice(0, TITLE_BACKFILL_WORKSPACES).map((entry) => entry.workspaceId),
+		workspaceIds: untitled
+			.map((entry) => entry.workspaceId)
+			.filter(
+				(workspaceId) =>
+					now - (backfilledWorkspacesAt.get(workspaceId) ?? 0) > TITLE_BACKFILL_TTL_MS,
+			),
 	};
 }
 
 function useChatTitleBackfill(): Record<string, string> {
-	const [titles, setTitles] = useState<Record<string, string>>({});
+	const [titles, setTitles] = useState<Record<string, string>>(() =>
+		Object.fromEntries(backfilledTitles),
+	);
 	useEffect(() => {
 		let cancelled = false;
 		const { missingProjects, workspaceIds } = backfillOrder(useAppStore.getState());
@@ -103,20 +116,26 @@ function useChatTitleBackfill(): Record<string, string> {
 				.then((rows) => useAppStore.getState().setWorkspaces(projectId, rows))
 				.catch(() => {});
 		}
-		for (const workspaceId of workspaceIds) {
-			void getTransport()
-				.request("session.list", { workspaceId })
-				.then((summaries) => {
-					if (cancelled) return;
-					setTitles((previous) => {
-						const next = { ...previous };
-						for (const summary of summaries)
-							if (summary.title) next[summary.sessionId] = summary.title;
-						return next;
-					});
-				})
-				.catch(() => {});
-		}
+		const queue = [...workspaceIds];
+		const drain = async (): Promise<void> => {
+			for (
+				let workspaceId = queue.shift();
+				workspaceId !== undefined;
+				workspaceId = queue.shift()
+			) {
+				if (cancelled) return;
+				const summaries = await getTransport()
+					.request("session.list", { workspaceId })
+					.catch(() => null);
+				if (!summaries) continue;
+				backfilledWorkspacesAt.set(workspaceId, Date.now());
+				for (const summary of summaries) {
+					if (summary.title) backfilledTitles.set(summary.sessionId, summary.title);
+				}
+				if (!cancelled) setTitles(Object.fromEntries(backfilledTitles));
+			}
+		};
+		for (let lane = 0; lane < TITLE_BACKFILL_CONCURRENCY; lane += 1) void drain();
 		return () => {
 			cancelled = true;
 		};
@@ -124,9 +143,10 @@ function useChatTitleBackfill(): Record<string, string> {
 	return titles;
 }
 
-function useExtensionCatalog(): ExtensionCatalogEntry[] | null {
+function useExtensionCatalog(enabled: boolean): ExtensionCatalogEntry[] | null {
 	const [entries, setEntries] = useState<ExtensionCatalogEntry[] | null>(null);
 	useEffect(() => {
+		if (!enabled) return;
 		let current = true;
 		void getTransport()
 			.request("extension.list", {})
@@ -139,7 +159,7 @@ function useExtensionCatalog(): ExtensionCatalogEntry[] | null {
 		return () => {
 			current = false;
 		};
-	}, []);
+	}, [enabled]);
 	return entries;
 }
 
@@ -188,13 +208,22 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		return workspace ? selectWorkspaceSettledReason(s, workspace, Date.now()) !== null : false;
 	});
 	const chatTitles = useChatTitleBackfill();
-	const extensions = useExtensionCatalog();
+	const settingsGroups = useMemo(
+		() => settingsNavGroups(protocolVersion, options.hasUpdateSettings),
+		[protocolVersion, options.hasUpdateSettings],
+	);
+	const availableSections = useMemo(
+		() => new Set(settingsGroups.flatMap((group) => group.sections.map((section) => section.id))),
+		[settingsGroups],
+	);
+	const extensions = useExtensionCatalog(availableSections.has(SettingsSection.Extensions));
 	const editors = useEditors();
 	const [nowMs] = useState(Date.now);
+	const mcpAvailable = availableSections.has(SettingsSection.Mcp);
 	useEffect(() => {
-		if (!activeWorkspaceId) return;
+		if (!activeWorkspaceId || !mcpAvailable) return;
 		void requestMcpList("mcp.list", { workspaceId: activeWorkspaceId }).catch(() => {});
-	}, [activeWorkspaceId]);
+	}, [activeWorkspaceId, mcpAvailable]);
 
 	const online = status === "connected" && welcomeGeneration > 0 && protocolVersion !== null;
 	const context: CommandContext = useMemo(
@@ -217,7 +246,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 			readAction,
 			canSettle: activeWorkspace !== null && canSettleWorkspace(protocolVersion, activeWorkspace),
 			settled,
-			settingsGroups: settingsNavGroups(protocolVersion, options.hasUpdateSettings),
+			settingsGroups,
+			availableSections,
 			themes: getThemes(),
 			theme,
 			extensions,
@@ -301,6 +331,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 							group: "work" as const,
 							icon: RiTerminalBoxLine,
 							keywords: ["shell", "console"],
+							mutates: true,
 							run: () => store().addTerminal(activeWorkspace.id),
 						},
 						{
@@ -371,6 +402,8 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 	}, [
 		t,
 		context,
+		settingsGroups,
+		availableSections,
 		activeWorkspace,
 		historySessionId,
 		readAction,
