@@ -42,10 +42,12 @@ The three browser suites dominate wall time, so each runs as a matrix of Playwri
 runners ([[module-browser-e2e]] owns the slicing). Shard counts trade runner minutes for wall time and are
 tuned against observed per-job durations.
 
-**Required gate.** The ruleset requires one check, "CI passed": an aggregate job that succeeds only when
-the change classifier, conformance/lint/typecheck and unit tests succeeded and every other job either
-succeeded or was skipped by the classifier. CI can then add, rename or skip jobs without a ruleset edit;
-renaming "CI passed" itself blocks the merge queue.
+**Required gate.** The ruleset requires one check, "CI passed": an aggregate job that succeeds only when the
+change classifier, conformance/lint/typecheck and unit tests succeeded and every other job either succeeded
+or was skipped by the classifier. CI can then add, rename or skip jobs without a ruleset edit; renaming "CI
+passed" itself blocks the merge queue. Every job carries a timeout a few times its healthy duration, so a
+hung process fails its job, and with it "CI passed", within minutes instead of holding a runner for GitHub's
+six-hour default.
 
 **Change classifier.** A `changes` job diffs the PR or merge group against its base, counting a rename as
 both its old and new path. When every changed path lies outside the app — the website and its analytics
@@ -64,12 +66,14 @@ so main never lands an artifact they have not exercised. An artifact-only defect
 therefore surfaces at enqueue time instead of on the PR; it was 1 in 56 failed runs before the split. The
 Windows job stays on every app PR: it is mostly native unit gates, not an artifact replay.
 
-Browser jobs retry the Playwright browser download a bounded number of times, a network fault that
-otherwise ejects an entry from the merge queue; the tests themselves are never retried at job level. They
-install Chromium without `--with-deps`: the runner image already carries its shared libraries, and the extra
-apt packages (CJK/Thai/X fonts) feed no assertion while their Ubuntu-mirror download was the slowest step of
-the job, often for minutes. A missing library fails Chromium's launch loudly. The browsers themselves are not
-cached: the Playwright CDN download takes seconds, no slower than an Actions-cache restore of the same bytes.
+Browser jobs retry the Playwright browser download a bounded number of times, a network fault that otherwise
+ejects an entry from the merge queue; inside a job Playwright retries a failed test once on CI (source and
+artifact configs alike), a test that passes on that retry is reported flaky and does not fail the job, and
+no job is re-run automatically. They install Chromium without `--with-deps`: the runner image already
+carries its shared libraries, and the extra apt packages (CJK/Thai/X fonts) feed no assertion while their
+Ubuntu-mirror download was the slowest step of the job, often for minutes. A missing library fails
+Chromium's launch loudly. The browsers themselves are not cached: the Playwright CDN download takes seconds,
+no slower than an Actions-cache restore of the same bytes.
 
 Native artifact smokes run only in shard 1: repeating an identical probe per shard adds no coverage and
 multiplies exposure to runner-environment faults.
@@ -83,9 +87,9 @@ saved on a PR or merge-group ref is private to that ref, so the `CI cache` workf
 to main, the one scope every PR and merge group can restore. The install step is bounded at ten minutes: a
 mirror that trickles bytes never trips apt's own timeouts and would otherwise hold the job for hours. The
 jobs start Xvfb as their own step and proceed only once an X client connects to the exported `DISPLAY`; a
-server that never answers is restarted a bounded number of times, then fails the job. Only the virtual
-display is retried, never the smoke or the browser tests: once the display is proven, every application
-failure fails CI.
+server that never answers is restarted a bounded number of times, then fails the job. Beyond the suites'
+single Playwright retry, only the virtual display is retried: once it is proven, the smoke and browser tests
+get no further environment retries.
 
 A platform's native behavior is proven only on that platform. Windows remains a PR gate because its
 executable, environment, path, and trash behavior differs materially from POSIX hosts. Its subprocess unit

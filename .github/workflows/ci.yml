@@ -16,6 +16,7 @@ concurrency:
 jobs:
   changes:
     name: Classify changes
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     outputs:
       app: ${{ steps.classify.outputs.app }}
@@ -44,6 +45,7 @@ jobs:
 
   lint:
     name: Lint & Typecheck
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -70,6 +72,7 @@ jobs:
 
   test:
     name: Unit Tests
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -87,6 +90,7 @@ jobs:
 
   pi-packages:
     name: Pi package parity (vanilla pi under Node)
+    timeout-minutes: 10
     needs: changes
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
@@ -110,6 +114,7 @@ jobs:
 
   e2e-shard:
     name: E2E (no-agent) shard ${{ matrix.shard }}/2
+    timeout-minutes: 30
     needs: changes
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
@@ -146,6 +151,7 @@ jobs:
 
   binary-shard:
     name: Binary smoke & e2e shard ${{ matrix.shard }}/4
+    timeout-minutes: 30
     needs: changes
     if: needs.changes.outputs.artifacts == 'true'
     runs-on: ubuntu-latest
@@ -187,6 +193,7 @@ jobs:
 
   binary-windows:
     name: Binary smoke (windows)
+    timeout-minutes: 20
     needs: changes
     if: needs.changes.outputs.app == 'true'
     runs-on: windows-latest
@@ -207,6 +214,7 @@ jobs:
 
   desktop-shard:
     name: Desktop smoke & e2e shard ${{ matrix.shard }}/4
+    timeout-minutes: 30
     needs: changes
     if: needs.changes.outputs.artifacts == 'true'
     runs-on: ubuntu-24.04
@@ -267,6 +275,7 @@ jobs:
   # The one required check in the main ruleset.
   ci-passed:
     name: CI passed
+    timeout-minutes: 5
     needs: [changes, lint, test, pi-packages, e2e-shard, binary-shard, binary-windows, desktop-shard]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
