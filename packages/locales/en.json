@@ -778,7 +778,7 @@
 	"panels.addProject.openGitHub": "Open GitHub project",
 	"panels.addProject.recents": "Recents",
 	"panels.analytics.description": "Share anonymous product usage and how you found ThinkRail. We never collect prompts, code, files, credentials, or account identity.",
-	"panels.analytics.reportDetails": "Reports use a random installation ID, app type, version and channel, OS, and architecture. Custom providers and models are labeled “custom”. No prompts, code, transcripts, file paths, credentials, or recordings.",
+	"panels.analytics.reportDetails": "Reports use a random installation ID, app type, version and channel, OS, and architecture. Custom providers and models are labeled “custom”. No prompts, code, transcripts, file paths, credentials, or recordings. Error reports are always sent, whatever this setting: the error type and code and where in ThinkRail's own code it happened — never error messages or anything from your projects.",
 	"panels.analytics.shareDescription": "Setup, agent runs, task completions, reviews, and pull-request outcomes.",
 	"panels.analytics.shareLabel": "Share additional usage data",
 	"panels.analyticsConsent.saveFailed": "Couldn't save your choice. Please try again.",

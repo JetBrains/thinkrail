@@ -19,9 +19,18 @@ export function isChunkLoadError(error: unknown): boolean {
 	return CHUNK_ERROR_PATTERNS.some((pattern) => message.includes(pattern));
 }
 
+export type ErrorBoundaryReporter = (error: Error, reportId: string | undefined) => void;
+
+let reporter: ErrorBoundaryReporter | null = null;
+
+export function setErrorBoundaryReporter(next: ErrorBoundaryReporter | null): void {
+	reporter = next;
+}
+
 type Props = {
 	children: ReactNode;
 	label?: string;
+	reportId?: string;
 	resetKeys?: readonly unknown[];
 };
 
@@ -36,6 +45,9 @@ export class ErrorBoundary extends Component<Props, State> {
 
 	override componentDidCatch(error: Error, info: ErrorInfo): void {
 		console.error(`[ErrorBoundary${this.props.label ? `: ${this.props.label}` : ""}]`, error, info);
+		try {
+			reporter?.(error, this.props.reportId);
+		} catch {}
 	}
 
 	override componentDidUpdate(prev: Props): void {

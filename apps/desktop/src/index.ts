@@ -20,6 +20,7 @@ import {
 	readMenuLabels,
 } from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
+import { desktopError, setDesktopErrorReporter } from "./errorReporting";
 import { installExternalNavigation } from "./externalNavigation";
 import { preferNativeHostBridge, usesNativeHostBridge } from "./hostTransport";
 import { createKeyStateReader } from "./keyState";
@@ -190,7 +191,7 @@ async function start(): Promise<void> {
 	try {
 		process.chdir(homedir());
 	} catch (error) {
-		console.error("[desktop] could not leave the app bundle working directory", error);
+		desktopError("cwd", "could not leave the app bundle working directory", error);
 	}
 	// The probe spawns the login shell, so it starts only once cwd is outside the bundle.
 	const shellEnv = resolveShellEnv();
@@ -214,6 +215,7 @@ async function start(): Promise<void> {
 			? { openExternal: (url: string) => Utils.openExternal(url) }
 			: {}),
 	});
+	setDesktopErrorReporter(host.reportError);
 	const quitCoordinator = createElectrobunQuitCoordinator(
 		() => host.server.shutdown(),
 		() => dialogLabels,
@@ -399,7 +401,7 @@ async function start(): Promise<void> {
 				try {
 					restoreWindowsFrameControls(handle, loadWindowsFrameApi());
 				} catch (error) {
-					console.error("[desktop] could not restore the Windows frame controls", error);
+					desktopError("windows_frame", "could not restore the Windows frame controls", error);
 				}
 			}
 		}
@@ -514,7 +516,7 @@ try {
 	await start();
 } catch (error) {
 	const message = error instanceof Error ? error.message : String(error);
-	console.error(message);
+	desktopError("startup", message, error);
 	startupSplash?.hide();
 	try {
 		const labels = readDialogLabels(readNativeLabels(nativeLabelsPath()));

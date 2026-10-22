@@ -14,6 +14,7 @@ import {
 	resetAnalyticsForTests,
 } from "../analytics";
 import { resetJbcentralStateForTests } from "../auth";
+import { logger } from "../log";
 import { resetConfigCache, updateConfig } from "../settings";
 import { type BootedHost, bootHost } from "./boot";
 import { handleRequest } from "./handlers";
@@ -347,6 +348,47 @@ test("the host forwards successful login generation metadata into the basic even
 		expect(JSON.stringify(events)).not.toContain("private");
 	} finally {
 		login.mockRestore();
+	}
+});
+
+test("failed wire requests and logged host errors become sanitized exception reports", async () => {
+	const b = await boot({ port: 0, host: "127.0.0.1", portMode: "exact" });
+	const events: { event: string; properties: Record<string, unknown> }[] = [];
+	initializeAnalytics({
+		posthogApiKey: TEST_KEY,
+		additionalEnabled: false,
+		env: {},
+		fetchImpl: (async (_url: Parameters<typeof fetch>[0], init?: RequestInit) => {
+			events.push(...JSON.parse(String(init?.body)).batch);
+			return new Response("{}");
+		}) as typeof fetch,
+	});
+	const missing = join(process.env.THINKRAIL_DATA_DIR ?? tmpdir(), "private-client-project");
+	const collector = await collectSocket(b.port, "error-reports");
+	try {
+		collector.socket.send(
+			JSON.stringify({ id: "fail", method: "project.open", params: { path: missing } }),
+		);
+		const frame = await collector.waitForFrame((candidate) => candidate.id === "fail");
+		expect(frame.ok).toBe(false);
+		logger("probe").warn("probe failed", new Error(`could not read ${missing}`));
+		const exceptions = () => events.filter((event) => event.event === "$exception");
+		const deadline = Date.now() + 2_000;
+		while (exceptions().length < 2 && Date.now() < deadline) await Bun.sleep(5);
+		expect(
+			exceptions()
+				.map((event) => event.properties.source)
+				.sort(),
+		).toEqual(["host_logged", "request"]);
+		expect(
+			exceptions().find((event) => event.properties.source === "request")?.properties,
+		).toMatchObject({ handled: true, request_method: "project.open" });
+		expect(
+			exceptions().find((event) => event.properties.source === "host_logged")?.properties.scope,
+		).toBe("probe");
+		expect(JSON.stringify(exceptions())).not.toContain("private-client-project");
+	} finally {
+		collector.socket.close();
 	}
 });
 

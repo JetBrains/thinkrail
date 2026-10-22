@@ -177,7 +177,10 @@ and locally built packages may still be unsigned and blocked by Gatekeeper. Linu
 
 ThinkRail collects basic usage events — launches, chat creation, message sends, provider connections — tied to
 a random installation ID. Usage analytics never include prompts, code, files, credentials, or account
-identity. Additional product usage and how you found ThinkRail are shared only while **Share additional usage
+identity. Error reports are also always sent, tied to the same installation ID, so we can fix crashes: the
+error type and code and where in ThinkRail's own code it happened. They never include error messages, file
+paths, names, URLs, or anything from your projects or extensions. Additional product
+usage and how you found ThinkRail are shared only while **Share additional usage
 data** is on; the switch is offered at first launch and lives in **Settings → Privacy**. When launching from
 the command line, `thinkrail --no-analytics` (or `THINKRAIL_NO_ANALYTICS=1`) turns additional sharing off for
 that run. With additional sharing on, a packaged build may open the ThinkRail blog in your browser once to

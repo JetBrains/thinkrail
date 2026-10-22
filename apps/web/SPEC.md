@@ -66,7 +66,8 @@ marks into `chat/generated/`).
 ThinkRail artwork as the shell logo (compact enough for browser-tab sizes and light/dark browser chrome).
 `main.tsx` is the entry/composition root — it synchronously builds the bundled theme catalog, resolves and
 applies the versioned first-paint theme-preference hint (including the current system color scheme) pre-React,
-initializes transport, the client-local preference seams (chat presentation, hidden models, project
+initializes transport and its client error reporting (window listeners + the error-boundary reporter
+seam), the client-local preference seams (chat presentation, hidden models, project
 expansion) and navigation, then wraps `<Shell />` in
 `components/ErrorBoundary` as the last-resort boundary (a crash escaping every region shows a reload
 screen, not a blank root) plus the app's single `TooltipProvider`.
@@ -81,6 +82,14 @@ the root package-manager overrides resolve both runtime packages through their c
 reads `bun.lock` and rejects any second `react` or `react-dom` version. Every React move upgrades both
 packages together and repeats the mounted-chat memory stress probe before this temporary canary pin can
 return to stable.
+
+**Release source maps are build-only and never shipped.** With `THINKRAIL_SOURCEMAPS_RELEASE` set (a
+credentialed release build, [[module-ci-release]]), `vite.config.ts` emits hidden maps and the
+`sourceMapUpload.ts` plugin runs `posthog-cli sourcemap process --delete-after` on `dist`, failing if
+any `.map` remains; without it the build is unchanged. `posthogCli.ts` is the repo's only way to run
+posthog-cli (the root `posthog-cli` script exposes it to desktop's `preBuild`): it checks the binary against
+pinned SHA-256s before running it ([[module-ci-release]]). The injected chunk-id registry is what
+`transport` reads for UI error reports.
 
 **The React Compiler is on for every `apps/web` bundle** (`vite.config.ts`: `@rolldown/plugin-babel` running
 `@vitejs/plugin-react`'s `reactCompilerPreset()` over dev and build). Three devDependencies live in this

@@ -16,6 +16,14 @@ inputs:
   posthog-project-key:
     description: "Public PostHog project key baked into release analytics; never committed"
     required: true
+  posthog-cli-api-key:
+    description: "Optional PostHog personal API key (error tracking write) that uploads web and desktop-runtime source maps"
+    required: false
+    default: ""
+  posthog-cli-project-id:
+    description: "PostHog project id receiving the source maps; required with posthog-cli-api-key"
+    required: false
+    default: ""
 outputs:
   artifact-name:
     description: "CLI artifact filename"
@@ -48,8 +56,13 @@ runs:
         VERSION: ${{ inputs.version }}
         CHANNEL: ${{ inputs.channel }}
         POSTHOG_PROJECT_KEY: ${{ inputs.posthog-project-key }}
+        POSTHOG_CLI_API_KEY_SET: ${{ inputs.posthog-cli-api-key != '' }}
+        POSTHOG_CLI_PROJECT_ID: ${{ inputs.posthog-cli-project-id }}
       run: |
         set -eu
+        if [ "${POSTHOG_CLI_API_KEY_SET:-false}" = true ] && [ -z "${POSTHOG_CLI_PROJECT_ID:-}" ]; then
+          echo "::error::posthog-cli-api-key needs posthog-cli-project-id"; exit 1
+        fi
         case "$CHANNEL" in
           nightly|stable) ;;
           *) echo "::error::unsupported release channel $CHANNEL"; exit 1 ;;
@@ -69,6 +82,11 @@ runs:
 
     - name: Build web UI
       shell: bash
+      env:
+        THINKRAIL_SOURCEMAPS_RELEASE: ${{ inputs.posthog-cli-api-key != '' && inputs.version || '' }}
+        POSTHOG_CLI_API_KEY: ${{ inputs.posthog-cli-api-key }}
+        POSTHOG_CLI_PROJECT_ID: ${{ inputs.posthog-cli-project-id }}
+        POSTHOG_CLI_HOST: https://eu.posthog.com
       run: bun run build:web
 
     - name: Compile single-file CLI binary
@@ -101,9 +119,14 @@ runs:
       shell: bash
       env:
         TARGET: ${{ inputs.target }}
+        THINKRAIL_SOURCEMAPS_RELEASE: ${{ inputs.posthog-cli-api-key != '' && inputs.version || '' }}
+        POSTHOG_CLI_API_KEY: ${{ inputs.posthog-cli-api-key }}
+        POSTHOG_CLI_PROJECT_ID: ${{ inputs.posthog-cli-project-id }}
+        POSTHOG_CLI_HOST: https://eu.posthog.com
       run: |
         set -eu
         bun run desktop:build
+        unset THINKRAIL_SOURCEMAPS_RELEASE POSTHOG_CLI_API_KEY POSTHOG_CLI_PROJECT_ID POSTHOG_CLI_HOST
         launcher=$(bun -e 'import { locateDesktopLauncher } from "@thinkrail/artifact-tests"; console.log(locateDesktopLauncher("apps/desktop"));')
         case "$TARGET" in
           bun-linux-*)
@@ -118,6 +141,10 @@ runs:
       env:
         TARGET: ${{ inputs.target }}
         CHANNEL: ${{ inputs.channel }}
+        THINKRAIL_SOURCEMAPS_RELEASE: ${{ inputs.posthog-cli-api-key != '' && inputs.version || '' }}
+        POSTHOG_CLI_API_KEY: ${{ inputs.posthog-cli-api-key }}
+        POSTHOG_CLI_PROJECT_ID: ${{ inputs.posthog-cli-project-id }}
+        POSTHOG_CLI_HOST: https://eu.posthog.com
       run: |
         set -eu
         if [ "$TARGET" = bun-windows-x64 ]; then
