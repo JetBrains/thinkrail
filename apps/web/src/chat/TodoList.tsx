@@ -17,7 +17,7 @@ import {
 import type { TodoGroupItem, TodoItem, TodoPlan, TodoStatus } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { useState } from "react";
 import { PlanStatusIcon, SectionLabel } from "./planKit";
@@ -131,17 +131,14 @@ export function TodoAddRow({
 				className="min-w-0 flex-1 bg-transparent tr-text-ui text-text-default outline-none placeholder:text-text-muted"
 			/>
 			{onOpenPlan ? (
-				<IconTooltip label={t("chat.todo.openPlanTooltip")}>
-					<button
-						type="button"
-						data-testid="todo-open-plan"
-						onClick={onOpenPlan}
-						aria-label={t("chat.todo.openPlan")}
-						className="flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted hover:bg-control-bg-hovered hover:text-text-default focus-visible:opacity-100"
-					>
-						<FileText className="size-14" />
-					</button>
-				</IconTooltip>
+				<IconButton
+					icon={FileText}
+					data-testid="todo-open-plan"
+					onClick={onOpenPlan}
+					label={t("chat.todo.openPlan")}
+					tooltip={t("chat.todo.openPlanTooltip")}
+					className="shrink-0"
+				/>
 			) : null}
 		</div>
 	);
@@ -438,19 +435,16 @@ function TodoRow({
 				</span>
 			) : null}
 			{onRemove && todo.status !== "done" && !reviewing ? (
-				<IconTooltip label={t("chat.todo.remove")}>
-					<button
-						type="button"
-						data-testid="todo-remove"
-						aria-label={t("chat.todo.remove")}
-						onClick={() => {
-							void onRemove(todo.id);
-						}}
-						className="shrink-0 rounded-sm p-2 text-text-muted opacity-0 group-hover:opacity-100 hover:bg-control-bg-selected hover:text-text-default focus:opacity-100"
-					>
-						<Close className="size-14" />
-					</button>
-				</IconTooltip>
+				<IconButton
+					icon={Close}
+					size="s"
+					data-testid="todo-remove"
+					label={t("chat.todo.remove")}
+					onClick={() => {
+						void onRemove(todo.id);
+					}}
+					className="shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+				/>
 			) : null}
 		</li>
 	);

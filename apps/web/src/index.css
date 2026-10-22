@@ -291,26 +291,6 @@
 	position: relative;
 	z-index: 60;
 }
-.review-add-icon {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	/* Never part of the text selection it floats over — a selectable node here lets a drag extend into
-	   the button and repaint the document tail as selected. */
-	user-select: none;
-	width: 22px;
-	height: 22px;
-	border-radius: var(--radius-sm);
-	border: 1px solid var(--border-default);
-	background: var(--container-elevated-bg);
-	color: var(--primary);
-	cursor: pointer;
-	/* Elevation: it floats OVER text, so it must read as a button above the page, not a hole in it. */
-	box-shadow: 0 2px 8px color-mix(in srgb, var(--container-header-bg) 70%, transparent);
-}
-.review-add-icon:hover {
-	background: var(--control-bg-hovered);
-}
 /* The rendered preview's ::selection: translucent (the muted alpha step of the theme's selection),
    because Chrome paints a multi-block selection wall-to-wall — with the theme's OPAQUE selection over
    the near-black canvas, the unselected remainder of the focus line read as a black hole punched in
@@ -405,32 +385,6 @@
 	display: flex;
 	gap: var(--space-8);
 }
-/* Typography comes from the generated `tr-text-action` class on the node. */
-.review-composer-btn {
-	padding: var(--space-2) var(--space-8);
-	border-radius: var(--radius-sm);
-	border: 1px solid var(--border-default);
-	background: var(--container-elevated-bg);
-	color: var(--text);
-	cursor: pointer;
-}
-.review-composer-btn:hover {
-	background: var(--control-bg-hovered);
-}
-.review-composer-btn:disabled {
-	opacity: 0.5;
-	pointer-events: none;
-}
-.review-composer-btn-primary {
-	border-color: var(--primary);
-	background: var(--primary);
-	color: var(--text-on-primary);
-}
-.review-composer-btn-quiet {
-	border-color: transparent;
-	background: transparent;
-	color: var(--text-subtle);
-}
 
 /* In-flow review thread cards (ReviewThreadCard + reviewWidgets.attachReviewThreads): the comment
    sits IN the document flow directly below its anchor — spliced between markdown segments in the
@@ -513,28 +467,6 @@
 	outline: none;
 	border-color: var(--control-border-active);
 }
-.review-thread-action {
-	display: flex;
-	flex-shrink: 0;
-	align-items: center;
-	justify-content: center;
-	width: 20px;
-	height: 20px;
-	border: 0;
-	border-radius: var(--radius-sm);
-	background: transparent;
-	color: var(--text-subtle);
-	cursor: pointer;
-}
-.review-thread-action:hover {
-	background: var(--control-bg-hovered);
-	color: var(--text);
-}
-.review-thread-action:disabled {
-	opacity: 0.5;
-	pointer-events: none;
-}
-
 /* The preview's in-flow composer + the commented-region mark (parity with Monaco's decorations). */
 .review-composer-flow {
 	margin: var(--space-8) 0 var(--space-8) var(--space-12);

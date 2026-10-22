@@ -88,7 +88,8 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
   `@/components/preloadedLazy`; `useNow()` via `@/components/useNow` (the
   wall clock as a `useSyncExternalStore` value on a shared 30 s ticker, so a render never calls `Date.now`
   itself).
-- **Allowed deps:** React, `@remixicon/react`, `@thinkrail/ui/utils` (`cn`), `@thinkrail/locales` (UI strings), `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
+- **Allowed deps:** React, `@remixicon/react`, `@thinkrail/ui/utils` (`cn`), `@thinkrail/ui/button` (the
+  error fallback's Reload / Try again are shared buttons), `@thinkrail/locales` (UI strings), `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
   rather than re-stated), `constants` (`BRAND_MARK_SEGMENTS` — the monogram regions `RunningIcon` clips to,
   shared with the shell logo rather than copied). Kept dependency-light on purpose, and both are leaves, so *any* region
   (shell, panels, `main.tsx`) can still wrap in it without creating a cycle.

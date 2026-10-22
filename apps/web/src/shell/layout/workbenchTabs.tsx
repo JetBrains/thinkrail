@@ -2,6 +2,7 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { RiSearchLine as Search, RiCloseLine as X } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 import {
 	Command,
 	CommandEmpty,
@@ -23,8 +24,9 @@ import { Fragment, memo, type ReactNode, useEffect, useRef, useState } from "rea
 import { chatLabel, DOUBLE_CLICK_SETTLE_MS, type LayoutAttention, tupleKey } from "../../lib";
 import {
 	type AuxiliaryRailControlProps,
-	AuxiliaryRailIndicator,
-	RAIL_ENTRY_BUTTON_CLASS,
+	RAIL_ICON,
+	railEntryButtonClass,
+	railEntryButtonProps,
 	railEntryFrameClass,
 	railTooltipSide,
 } from "./AuxiliaryRail";
@@ -316,14 +318,16 @@ export const TabStrip = memo(function TabStrip({
 			{trailing}
 			{overflowing ? (
 				<Popover open={overflowOpen} onOpenChange={setOverflowOpen}>
-					<IconTooltip label={t("workbench.tabs.search")} wrapTrigger>
-						<PopoverTrigger
-							aria-label={t("workbench.tabs.search")}
-							className="flex w-panel-header-row shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-						>
-							<Search className="size-14" />
-						</PopoverTrigger>
-					</IconTooltip>
+					<PopoverTrigger asChild>
+						<IconButton
+							variant="ghost"
+							size="m"
+							icon={Search}
+							label={t("workbench.tabs.search")}
+							wrapTrigger
+							className="shrink-0 self-center"
+						/>
+					</PopoverTrigger>
 					<PopoverContent
 						align="end"
 						className="w-288 p-0"
@@ -595,7 +599,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 			type="button"
 			id={tabDomId(location, tab.id)}
 			{...(rail
-				? { "aria-label": name, "aria-pressed": active }
+				? { "aria-label": name, "aria-pressed": active, ...railEntryButtonProps(active) }
 				: { role: "tab", "aria-selected": active })}
 			aria-keyshortcuts={
 				rail
@@ -619,14 +623,14 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 			onKeyDown={onKeyDown}
 			className={
 				rail
-					? RAIL_ENTRY_BUTTON_CLASS
+					? railEntryButtonClass(location.area)
 					: cn(
 							"relative flex min-w-0 flex-1 items-center gap-4 self-stretch pl-8 text-left outline-none",
 							tab.kind === "tool" && "pr-8",
 						)
 			}
 		>
-			{tabIcon(tab, active)}
+			{rail ? tabIcon(tab, active, RAIL_ICON) : tabIcon(tab, active)}
 			{rail ? null : <span className={`truncate ${preview ? "italic" : ""}`}>{name}</span>}
 			{rail ? (
 				<span className="pointer-events-none absolute top-0 right-0 flex">
@@ -687,9 +691,6 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 								: "inset-y-0 right-0 w-1/2 data-[drop-active]:border-r-2",
 						)}
 					/>
-					{rail && active && location.area !== "center" ? (
-						<AuxiliaryRailIndicator region={location.area} />
-					) : null}
 					{editingName && tab.kind === "chat" ? (
 						<div ref={register} className="flex min-w-0 flex-1 items-center gap-4 py-4 pl-8">
 							{tabIcon(tab, active)}
@@ -713,16 +714,16 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 						tabButton
 					)}
 					{tab.kind !== "tool" ? (
-						<button
-							type="button"
+						<IconButton
+							variant="ghost"
+							size="s"
+							icon={X}
+							label={t("workbench.tab.closeNamed", { name })}
 							tabIndex={-1}
 							data-testid={tab.kind === "terminal" ? "terminal-tab-close" : "editor-tab-close"}
-							aria-label={t("workbench.tab.closeNamed", { name })}
 							onClick={onClose}
-							className="mr-4 rounded-sm p-2 opacity-0 hover:bg-control-bg-hovered group-hover:opacity-100 focus:opacity-100"
-						>
-							<X className="size-14" />
-						</button>
+							className="mr-4 shrink-0 opacity-0 group-hover:opacity-100 focus:opacity-100"
+						/>
 					) : null}
 				</div>
 			</ContextMenuTrigger>

@@ -2,7 +2,6 @@ import { RiCheckLine as Check, RiRefreshLine as RefreshCw } from "@remixicon/rea
 import type { GithubAuthStatus } from "@thinkrail/contracts";
 import { T, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
-import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useState } from "react";
 import { getTransport } from "@/transport";
 import { SettingsGroup } from "./SettingsGroup";
@@ -36,12 +35,12 @@ export function GithubSettings() {
 	const refreshButton = (
 		<Button
 			variant="outline"
-			size="sm"
+			size="m"
+			iconLeft={RefreshCw}
+			loading={refreshing}
 			data-testid="settings-gh-refresh"
-			disabled={refreshing}
 			onClick={() => void refresh()}
 		>
-			<RefreshCw className={cn("size-14", refreshing && "animate-spin")} />
 			{t("settings.github.refresh")}
 		</Button>
 	);

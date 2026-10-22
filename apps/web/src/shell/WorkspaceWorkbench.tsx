@@ -1,13 +1,12 @@
 import {
 	RiGitBranchLine as GitBranch,
-	RiLoader4Line as Loader2,
 	RiChatNewLine as MessageSquarePlus,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { t, useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
 import {
 	Fragment,
 	lazy,
@@ -248,13 +247,9 @@ function ChatResourceBody({
 	return (
 		<div className="flex h-full flex-col items-center justify-center gap-8 text-text-muted">
 			<span className="tr-text-ui">{t("shell.workbench.chatRestoreSlow")}</span>
-			<button
-				type="button"
-				onClick={retry}
-				className="rounded-sm border border-border-default px-8 py-4 tr-text-ui hover:bg-control-bg-hovered"
-			>
+			<Button variant="outline" size="m" onClick={retry}>
 				{t("common.retry")}
-			</button>
+			</Button>
 		</div>
 	);
 }
@@ -774,25 +769,21 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 						? t("shell.workbench.ready.defaultDescription")
 						: t("shell.workbench.ready.worktreeDescription")}
 				</p>
-				<button
-					type="button"
+				<Button
+					variant="outline"
+					size="m"
+					iconLeft={MessageSquarePlus}
+					loading={chatStarting}
 					data-testid="start-chat"
 					data-starting={chatStarting || undefined}
 					disabled={chatStarting}
 					onClick={() => startChat(groupId)}
-					className="mt-4 flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered disabled:text-text-muted disabled:hover:bg-container-elevated-bg"
+					className="mt-4"
 				>
-					{chatStarting ? (
-						<>
-							<Loader2 className="size-14 animate-spin motion-reduce:animate-none" />{" "}
-							{t("shell.workbench.ready.startingChat")}
-						</>
-					) : (
-						<>
-							<MessageSquarePlus className="size-14" /> {t("shell.workbench.ready.newChat")}
-						</>
-					)}
-				</button>
+					{chatStarting
+						? t("shell.workbench.ready.startingChat")
+						: t("shell.workbench.ready.newChat")}
+				</Button>
 			</div>
 		),
 		[chatStarting, contextProject, isDefault, isExternal, startChat, t, workspace],
@@ -807,17 +798,15 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 					targetGroupId={groupId}
 					{...(canRenameChat ? { onRenameChat: requestRenameChat } : {})}
 				/>
-				<IconTooltip label={t("shell.workbench.newTerminal")}>
-					<button
-						type="button"
-						data-testid="new-terminal"
-						aria-label={t("shell.workbench.newTerminal")}
-						onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
-						className="flex w-panel-header-row shrink-0 items-center justify-center border-border-default border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-					>
-						<SquareTerminal className="size-14" />
-					</button>
-				</IconTooltip>
+				<IconButton
+					variant="ghost"
+					size="m"
+					icon={SquareTerminal}
+					label={t("shell.workbench.newTerminal")}
+					data-testid="new-terminal"
+					onClick={() => useAppStore.getState().addTerminal(workspaceId, undefined, groupId)}
+					className="shrink-0 self-center"
+				/>
 			</>
 		),
 		[canRenameChat, requestRenameChat, t, workspaceId],

@@ -6,6 +6,7 @@ import {
 } from "@remixicon/react";
 import type { BranchList } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 import {
 	Command,
 	CommandEmpty,
@@ -88,16 +89,16 @@ export function BranchPicker({
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[320px] p-0">
 				<div className="flex items-center justify-end border-border-muted border-b px-8 py-4">
-					<button
-						type="button"
+					<IconButton
+						icon={RefreshCw}
+						label={t("panels.branchPicker.refresh")}
+						variant="ghost"
+						size="m"
 						data-testid="branch-refresh"
-						aria-label={t("panels.branchPicker.refresh")}
-						title={t("panels.branchPicker.refresh")}
+						wrapTrigger
+						loading={refreshing}
 						onClick={onRefresh}
-						className="flex size-24 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-					>
-						<RefreshCw className={`size-14 ${refreshing ? "animate-spin" : ""}`} />
-					</button>
+					/>
 				</div>
 				<Command>
 					<CommandInput placeholder={t("panels.branchPicker.search")} />

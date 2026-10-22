@@ -36,7 +36,7 @@ export function ProviderWarningBanner() {
 			</span>
 			<Button
 				variant="outline"
-				size="sm"
+				size="m"
 				data-testid="welcome-connect-provider"
 				onClick={() => useAppStore.getState().openSettings("providers")}
 				className="shrink-0"

@@ -13,8 +13,9 @@ import { type LayoutAttention, tupleKey } from "../../lib";
 import {
 	AuxiliaryRail,
 	type AuxiliaryRailControlProps,
-	AuxiliaryRailIndicator,
-	RAIL_ENTRY_BUTTON_CLASS,
+	RAIL_ICON,
+	railEntryButtonClass,
+	railEntryButtonProps,
 	railEntryFrameClass,
 	railTooltipSide,
 } from "./AuxiliaryRail";
@@ -109,7 +110,6 @@ export function AuxiliaryRailButton({
 					: t(EMPTY_GROUP_LABELS[entry.region], { position: ordinal });
 	return (
 		<div data-active={active} className={railEntryFrameClass(entry.region)}>
-			{active ? <AuxiliaryRailIndicator region={entry.region} /> : null}
 			<IconTooltip
 				label={
 					entry.kind === "terminals" ? (
@@ -142,6 +142,7 @@ export function AuxiliaryRailButton({
 					aria-controls={
 						group ? groupPanelId({ area: entry.region, groupId: group.id }) : undefined
 					}
+					{...railEntryButtonProps(active)}
 					{...control}
 					onClick={onActivate}
 					data-drop-label={
@@ -150,21 +151,21 @@ export function AuxiliaryRailButton({
 					data-drop-active={isOver || undefined}
 					data-drop-hint={(dropEnabled && !isOver) || undefined}
 					className={cn(
-						RAIL_ENTRY_BUTTON_CLASS,
+						railEntryButtonClass(entry.region),
 						"data-[drop-hint]:bg-primary-subtle data-[drop-active]:ring-2 data-[drop-active]:ring-inset data-[drop-active]:ring-primary",
 						unplaced && "text-text-subtle",
 					)}
 				>
 					{entry.kind === "tool" ? (
-						tabIcon(toolTab(entry.tool), active)
+						tabIcon(toolTab(entry.tool), active, RAIL_ICON)
 					) : entry.kind === "terminals" || entry.region === "bottom" ? (
 						active ? (
-							<RiTerminalBoxFill className="size-14 shrink-0" />
+							<RiTerminalBoxFill className={RAIL_ICON} />
 						) : (
-							<SquareTerminal className="size-14 shrink-0" />
+							<SquareTerminal className={RAIL_ICON} />
 						)
 					) : (
-						<PanelsTopLeft className="size-14 shrink-0" />
+						<PanelsTopLeft className={RAIL_ICON} />
 					)}
 					{entry.kind === "terminals" && ordinal > 1 ? (
 						<span

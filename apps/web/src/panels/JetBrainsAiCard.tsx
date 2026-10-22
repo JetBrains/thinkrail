@@ -20,7 +20,8 @@ import {
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
+import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { copyText } from "@/lib";
 import { getTransport } from "@/transport";
@@ -239,8 +240,13 @@ export function JetBrainsAiCard({
 				<h3 className="tr-text-label-pill text-text-subtle">{t("settings.jbcentral.title")}</h3>
 				<div className="flex shrink-0 items-center gap-4">
 					{busyAction ? (
-						<Button size="sm" disabled data-testid="jetbrains-configuring">
-							<Loader2 className="size-14 animate-spin" />
+						<Button
+							variant="primary"
+							size="m"
+							iconLeft={Loader2}
+							loading
+							data-testid="jetbrains-configuring"
+						>
 							{t(ACTION_BUSY_LABEL[busyAction])}
 						</Button>
 					) : signedOut ? (
@@ -252,11 +258,12 @@ export function JetBrainsAiCard({
 					) : status.state === "load-failed" && retryAction ? (
 						<>
 							<Button
-								size="sm"
+								variant="primary"
+								size="m"
+								iconLeft={RefreshCw}
 								data-testid="jetbrains-retry"
 								onClick={() => void runAction(retryAction)}
 							>
-								<RefreshCw className="size-14" />
 								{t("common.retry")}
 							</Button>
 							{status.configured ? (
@@ -268,11 +275,11 @@ export function JetBrainsAiCard({
 					) : needsRecheck(status) ? (
 						<Button
 							variant="ghost"
-							size="sm"
+							size="m"
+							iconLeft={RefreshCw}
 							data-testid="jetbrains-recheck"
 							onClick={() => void onChanged()}
 						>
-							<RefreshCw className="size-14" />
 							{t("settings.jbcentral.recheck")}
 						</Button>
 					) : null}
@@ -317,20 +324,21 @@ export function JetBrainsAiCard({
 function ActionButton({ action, onAction }: { action: JbcentralAction; onAction: () => void }) {
 	const t = useT();
 	const disconnect = action === "disconnect";
+	const icon = disconnect
+		? LogOut
+		: action === "update"
+			? Wrench
+			: action === "start-proxy"
+				? Play
+				: null;
 	return (
 		<Button
-			variant={disconnect ? "outline" : "default"}
-			size="sm"
+			variant={disconnect ? "outline" : "primary"}
+			size="m"
+			{...(icon ? { iconLeft: icon } : {})}
 			data-testid={`jetbrains-${action}`}
 			onClick={onAction}
 		>
-			{disconnect ? (
-				<LogOut className="size-14" />
-			) : action === "update" ? (
-				<Wrench className="size-14" />
-			) : action === "start-proxy" ? (
-				<Play className="size-14" />
-			) : null}
 			{t(ACTION_LABEL[action])}
 		</Button>
 	);
@@ -356,12 +364,12 @@ function StatusBody({
 					<CopyableCommand command={install.command} />
 					<Button
 						variant="ghost"
-						size="sm"
+						size="m"
+						iconLeft={RefreshCw}
 						data-testid="jetbrains-recheck"
 						onClick={() => void onChanged()}
 						className="self-start"
 					>
-						<RefreshCw className="size-14" />
 						{t("settings.jbcentral.recheck")}
 					</Button>
 				</div>
@@ -439,18 +447,14 @@ function SignInButton({
 }) {
 	return (
 		<Button
-			variant="soft"
-			size="sm"
+			variant="soft-primary"
+			size="m"
+			iconLeft={ExternalLink}
+			loading={signingIn}
 			data-testid="jetbrains-signin"
-			disabled={signingIn}
 			onClick={onSignIn}
 			className="self-start"
 		>
-			{signingIn ? (
-				<Loader2 className="size-14 animate-spin" />
-			) : (
-				<ExternalLink className="size-14" />
-			)}
 			{label}
 		</Button>
 	);
@@ -556,6 +560,10 @@ function failureText(action: JbcentralAction, reason: JbcentralActionFailureReas
 	}
 }
 
+function CopiedCheck({ className }: { className?: string | undefined }) {
+	return <Check aria-hidden className={cn(className, "text-feedback-success")} />;
+}
+
 function CopyableCommand({ command }: { command: string }) {
 	const t = useT();
 	const [copied, setCopied] = useState(false);
@@ -569,20 +577,14 @@ function CopyableCommand({ command }: { command: string }) {
 			<code className="min-w-0 flex-1 select-all break-all tr-code-text text-text-default">
 				{command}
 			</code>
-			<button
-				type="button"
+			<IconButton
+				icon={copied ? CopiedCheck : Copy}
+				label={t("settings.jbcentral.copyCommand", { command })}
+				tooltip={t("common.copy")}
 				data-testid="jetbrains-copy-cmd"
-				aria-label={t("settings.jbcentral.copyCommand", { command })}
-				title={t("common.copy")}
 				onClick={() => void copy()}
-				className="flex size-24 shrink-0 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-			>
-				{copied ? (
-					<Check className="size-14 text-feedback-success" />
-				) : (
-					<Copy className="size-14" />
-				)}
-			</button>
+				className="shrink-0"
+			/>
 		</div>
 	);
 }

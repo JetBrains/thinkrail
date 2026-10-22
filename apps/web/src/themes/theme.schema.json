@@ -83,6 +83,8 @@
 				"info",
 				"success",
 				"danger",
+				"dangerHover",
+				"onDanger",
 				"warning"
 			],
 			"properties": {
@@ -114,6 +116,8 @@
 				"info": { "$ref": "#/$defs/hexColor" },
 				"success": { "$ref": "#/$defs/hexColor" },
 				"danger": { "$ref": "#/$defs/hexColor" },
+				"dangerHover": { "$ref": "#/$defs/hexColor" },
+				"onDanger": { "$ref": "#/$defs/hexColor" },
 				"warning": { "$ref": "#/$defs/hexColor" }
 			}
 		},

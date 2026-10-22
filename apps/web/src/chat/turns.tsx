@@ -24,6 +24,7 @@ import { Button } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
 import {
+	type ComponentProps,
 	memo,
 	type MouseEvent as ReactMouseEvent,
 	type ReactNode,
@@ -618,8 +619,13 @@ function ErrorTurn({
 			</div>
 			{onTryAgain ? (
 				<div className="flex justify-end">
-					<Button variant="outline" size="sm" data-testid="agent-try-again" onClick={onTryAgain}>
-						<RotateCw className="size-12" />
+					<Button
+						variant="outline"
+						size="m"
+						iconLeft={RotateCw}
+						data-testid="agent-try-again"
+						onClick={onTryAgain}
+					>
 						{t("chat.turn.tryAgain")}
 					</Button>
 				</div>
@@ -722,19 +728,23 @@ function RetryIndicator({
 	);
 }
 
-function FileDiffGlyph({ className }: { className?: string }) {
-	return <CustomIcon name="file-diff-line" className={className} />;
+function FileDiffGlyph({ className }: { className?: string | undefined }) {
+	return <CustomIcon name="file-diff-line" className={cn("size-14 shrink-0", className)} />;
 }
 
 interface ArtifactGroup {
 	id: "specs" | "files";
-	icon: typeof FileText | ((props: { className?: string }) => ReactNode);
+	icon: typeof FileText | ((props: { className?: string | undefined }) => ReactNode);
 	paths: string[];
 	label: (count: number) => string;
 	expanded: boolean;
 	onOpen: (path: string) => void;
 	reveal: () => void;
 	stats?: ReadonlyMap<string, { added: number; removed: number }>;
+}
+
+function WorkingStack({ className, ...props }: ComponentProps<typeof Stack>) {
+	return <Stack {...props} className={cn(className, "motion-safe:animate-working")} />;
 }
 
 function ArtifactChip({
@@ -750,8 +760,11 @@ function ArtifactChip({
 	const many = paths.length > 1;
 	const first = paths[0];
 	return (
-		<button
-			type="button"
+		<Button
+			variant="soft-primary"
+			size="s"
+			iconLeft={Icon}
+			{...(many ? { iconRight: expanded ? ChevronDown : ChevronRight } : {})}
 			data-testid={`turn-divider-${id}`}
 			data-expanded={many && expanded ? true : undefined}
 			aria-expanded={many ? expanded : undefined}
@@ -764,21 +777,9 @@ function ArtifactChip({
 				if (!expanded) reveal();
 				onSelect(event);
 			}}
-			className={cn(
-				"flex items-center gap-4 rounded-sm px-4 text-primary hover:bg-control-bg-hovered",
-				many && expanded && "bg-control-bg-selected",
-			)}
 		>
-			<Icon className="size-12 shrink-0" />
 			{label(paths.length)}
-			{many ? (
-				expanded ? (
-					<ChevronDown className="size-16 shrink-0" />
-				) : (
-					<ChevronRight className="size-16 shrink-0" />
-				)
-			) : null}
-		</button>
+		</Button>
 	);
 }
 
@@ -933,15 +934,15 @@ export function TurnDivider({
 					/>
 				))}
 				{receipt && onReviewTurn ? (
-					<button
-						type="button"
+					<Button
+						variant="soft-primary"
+						size="s"
+						iconLeft={Eye}
 						data-testid="turn-divider-review"
 						onClick={() => onReviewTurn(receipt.scope)}
-						className="flex items-center gap-4 rounded-sm px-4 text-primary hover:bg-control-bg-hovered"
 					>
-						<Eye className="size-12 shrink-0" />
 						{t("chat.divider.reviewTurn")}
-					</button>
+					</Button>
 				) : null}
 				{elapsedMs != null && elapsedMs >= 1000 ? (
 					<span className="flex items-center gap-4">
@@ -950,15 +951,15 @@ export function TurnDivider({
 					</span>
 				) : null}
 				{running ? (
-					<button
-						type="button"
+					<Button
+						variant="soft-primary"
+						size="s"
+						iconLeft={WorkingStack}
 						data-testid="turn-divider-running"
 						onClick={running.onOpen}
-						className="flex items-center gap-4 rounded-full border border-primary-muted bg-primary-subtle px-8 text-primary hover:bg-primary-soft"
 					>
-						<Stack className="size-12 shrink-0 motion-safe:animate-working" />
 						{t("chat.divider.stillRunning", { count: running.count })}
-					</button>
+					</Button>
 				) : null}
 				<span className="h-px flex-1 bg-border-muted" />
 			</div>

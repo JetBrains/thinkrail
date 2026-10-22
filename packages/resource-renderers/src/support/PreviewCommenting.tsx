@@ -1,5 +1,6 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ReviewThread, SurfaceReview } from "../registry";
@@ -115,7 +116,7 @@ export function PreviewCommenting({
 			node.setAttribute("data-visible", "true");
 		};
 		const onPointerDown = (e: PointerEvent) => {
-			if (e.button === 0 && !(e.target as Element | null)?.closest?.(".review-add-icon")) {
+			if (e.button === 0 && !iconRef.current?.contains(e.target as Node | null)) {
 				draggingRef.current = true;
 				iconRef.current?.setAttribute("data-dragging", "true");
 			}
@@ -195,18 +196,17 @@ export function PreviewCommenting({
 		<div ref={attachScroller} data-testid={testid} className={surfaceClassName}>
 			{children(composerInsert)}
 			{createPortal(
-				<button
+				<IconButton
 					ref={iconRef}
-					type="button"
+					icon={MessageSquarePlus}
+					label={t("panels.previewCommenting.commentOnSelection")}
+					variant="outline"
+					size="s"
 					data-testid="review-add-icon"
-					title={t("panels.previewCommenting.commentOnSelection")}
-					aria-label={t("panels.previewCommenting.commentOnSelection")}
 					onMouseDown={(e) => e.preventDefault()}
 					onClick={openComposer}
-					className="review-add-icon review-add-icon-float"
-				>
-					<MessageSquarePlus className="size-14" />
-				</button>,
+					className="review-add-icon-float"
+				/>,
 				document.body,
 			)}
 		</div>

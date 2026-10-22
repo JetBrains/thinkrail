@@ -1,5 +1,6 @@
 import type { GitStatus } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { ToggleSegment } from "@thinkrail/ui/toggle-segment";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -205,14 +206,9 @@ export function ChangesPanel({
 						<p className="tr-text-metadata text-feedback-error">
 							{t("changes.readFailed", { error })}
 						</p>
-						<button
-							type="button"
-							data-testid="changes-retry"
-							onClick={reload}
-							className="rounded-sm px-4 py-2 tr-text-metadata text-text-muted transition-colors hover:bg-control-bg-hovered hover:text-text-default"
-						>
+						<Button variant="ghost" size="s" data-testid="changes-retry" onClick={reload}>
 							{t("common.retry")}
-						</button>
+						</Button>
 					</div>
 				) : status === null ? (
 					<LoadingRegion rows={5} className="px-8 py-4" />

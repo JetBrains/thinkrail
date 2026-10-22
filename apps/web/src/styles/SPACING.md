@@ -25,15 +25,16 @@ styles/spacingUsage.test.ts    the adoption guard
 
 ## The scale
 
-`spacing.json` declares the steps **`0 · 2 · 4 · 8 · 12 · 16 · 24 · 32 · 40 · 64`**. The **step name IS
+`spacing.json` declares the steps **`0 · 2 · 4 · 6 · 8 · 12 · 16 · 24 · 32 · 40 · 64`**. The **step name IS
 its pixel value** — `"8": "8px"` — so an instruction that names a number maps to exactly one token and
 one family of utilities. `0` is the identity step (no spacing).
 
 The scale is an **intentionally defined primitive set, not an inventory of current usage**: a step may
 exist ahead of any consumer. `32`/`40`/`64` are reserved primitives with no rhythm call sites — they are
-canonical, not orphans, and are not removed for lack of use. Conversely, adding a step (a `6`, say) is a
-deliberate design decision, not a mechanical one — the audit found 6px used four ways, each resolved
-into an existing role rather than minting a new step.
+canonical, not orphans, and are not removed for lack of use. Conversely, adding a step is a deliberate design decision, not a mechanical one. `6` was added for
+one decided consumer — the icon↔text gap of the L button (`packages/ui` Button system: S 4 · M 4 · L 6,
+below the button's side padding except at S, where it equals it). The earlier audit's four unrelated 6px uses stay resolved into
+existing roles; a new 6px rhythm needs its own decision, not this step's existence.
 
 `spacing.json` is the authored source; no other authored source restates a canonical rhythm length. The
 generated output necessarily materializes those values as `--space-<n>` custom properties. They are read

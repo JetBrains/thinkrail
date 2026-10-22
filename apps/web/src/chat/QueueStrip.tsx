@@ -1,6 +1,7 @@
 import { RiPencilLine as Pencil, RiCloseLine as X } from "@remixicon/react";
 import type { QueueLane, SessionQueueState } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 
 export function QueueStrip({
 	queue,
@@ -46,24 +47,22 @@ export function QueueStrip({
 					<span className="min-w-0 flex-1 truncate">
 						<span className="text-text-default">{item.label}:</span> {item.text}
 					</span>
-					<button
-						type="button"
+					<IconButton
+						icon={Pencil}
+						size="s"
 						data-testid="queue-item-edit"
-						aria-label={t("chat.queue.edit", { text: item.text })}
+						label={t("chat.queue.edit", { text: item.text })}
 						onClick={() => onEdit(item.kind, item.index)}
-						className="flex size-20 shrink-0 items-center justify-center rounded-xs hover:bg-control-bg-hovered hover:text-text-default"
-					>
-						<Pencil className="size-12" />
-					</button>
-					<button
-						type="button"
+						className="shrink-0"
+					/>
+					<IconButton
+						icon={X}
+						size="s"
 						data-testid="queue-item-remove"
-						aria-label={t("chat.queue.remove", { text: item.text })}
+						label={t("chat.queue.remove", { text: item.text })}
 						onClick={() => onRemove(item.kind, item.index)}
-						className="flex size-20 shrink-0 items-center justify-center rounded-xs hover:bg-control-bg-hovered hover:text-text-default"
-					>
-						<X className="size-12" />
-					</button>
+						className="shrink-0"
+					/>
 				</div>
 			))}
 		</div>

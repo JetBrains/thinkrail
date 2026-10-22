@@ -1,6 +1,6 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { IconButton } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type CSSProperties,
@@ -218,18 +218,15 @@ export function RegionReviewSurface({
 								style={regionStyle(composer.selection, primaryBounds)}
 							>
 								{!drag && !composer.composing ? (
-									<IconTooltip label={commentText}>
-										<button
-											type="button"
-											data-testid="review-add-icon"
-											aria-label={commentText}
-											className="pointer-events-auto absolute -right-12 -bottom-12 flex size-24 items-center justify-center rounded-sm bg-primary text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
-											onPointerDown={(event) => event.stopPropagation()}
-											onClick={composer.open}
-										>
-											<MessageSquarePlus className="size-14" />
-										</button>
-									</IconTooltip>
+									<IconButton
+										icon={MessageSquarePlus}
+										label={commentText}
+										variant="primary"
+										data-testid="review-add-icon"
+										className="pointer-events-auto absolute -right-12 -bottom-12"
+										onPointerDown={(event) => event.stopPropagation()}
+										onClick={composer.open}
+									/>
 								) : null}
 							</div>
 						) : null}

@@ -1,4 +1,5 @@
 import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { useEffect, useMemo, useRef } from "react";
 import {
 	anchorLabel,
@@ -90,14 +91,15 @@ export function UnplacedReviewStrip({
 						</span>
 						<ReviewThreadCard thread={thread} actions={review.actions} />
 						{target ? (
-							<button
-								type="button"
+							<Button
+								variant="soft-primary"
+								size="m"
 								data-testid="review-show-in-renderer"
-								className="ml-12 rounded-sm px-8 py-4 tr-text-action text-primary hover:bg-control-bg-hovered"
+								className="ml-12"
 								onClick={() => onSelectRenderer(target.id)}
 							>
 								{t("panels.unplacedReview.showIn", { renderer: t(target.labelKey) })}
-							</button>
+							</Button>
 						) : null}
 					</div>
 				);

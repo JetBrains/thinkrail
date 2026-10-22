@@ -14,7 +14,7 @@ export function ExpensiveDiffNotice({
 		<div data-testid="diff-too-large" className="flex flex-col items-start gap-8 px-12 py-8">
 			<p className="tr-text-ui text-text-muted">{t("panels.diffSurface.tooExpensive")}</p>
 			<div className="flex gap-8">
-				<Button size="sm" variant="outline" data-testid="diff-show-anyway" onClick={onShowAnyway}>
+				<Button size="m" variant="outline" data-testid="diff-show-anyway" onClick={onShowAnyway}>
 					{t("panels.diffSurface.showAnyway")}
 				</Button>
 				{actions}

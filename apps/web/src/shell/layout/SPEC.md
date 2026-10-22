@@ -106,17 +106,20 @@ the plain pane header, and its Hide control are the one owner of edge-chrome sty
 `AuxiliaryGroupHeader` reuses the header component, and the shell's Project Home branch
 ([[submodule-web-shell]]) composes the exported `AuxiliaryRail` / `AuxiliaryRailToolButton` /
 `AuxiliaryPaneHeader` around its own geometry so a tool looks identical with or without a frame. Every
-rail entry is a `data-active` frame around the control, so the selected fill (`control-bg-selected`, the
-same role every tab strip uses) and the accent indicator sit on the frame while hover, focus, and drop
-cues sit on the control. Tab
+rail entry is a `data-active` 32px frame (24px in the bottom rail) around a control that wears the shared
+`ghost` M icon-button skin (`buttonVariants`, [[module-ui]] "Button system": 24px square, 16px icon,
+shared hover — pressed looks the same — and the offset focus outline, offset 0 in the bottom rail whose
+2px margin would clip it). The control keeps its own element for the roving toolbar, drag and drop and
+adornments; the open entry sets `data-selected` (the shared `control-bg-selected` fill), while drop cues sit on the
+control. Tab
 and tool icons resolve in one place (`tabIcon`), Line at rest and Fill when active; rail tooltips open away
 from their edge. Rail geometry is excluded from available pane space, but
 saved dimensions remain workbench-wide ratios; viewport projection never rewrites them. Measurement
 observers follow the actual DOM node through ref attachment/cleanup, including keyed panel-group
 replacement; a mounted workbench does not imply its measured descendants survived. Rail selection is
-the tab strip's grammar turned sideways: the selected fill, a Fill icon, and a short accent edge (the
-rail's analogue of a resource tab's underline), identical in every theme — a palette decides how loud
-each reads, never a per-theme selector in the component.
+the selected fill plus a Fill icon (and `aria-pressed`) — no accent edge: the rail is a column of icon
+buttons, not a tab strip, so it carries no underline analogue. It is identical in every theme — a palette
+decides how loud it reads, never a per-theme selector in the component.
 
 ## Layout grammar
 
@@ -208,7 +211,8 @@ Pointer is never the sole arrangement path. Keyboard controls and shadcn menus c
 Center resource strips and auxiliary terminal-session strips have bounded readable tab widths and no fixed previous/next controls: wheel, trackpad, touch,
 roving-keyboard navigation, active reveal, and the searchable keyboard overflow list scroll the same list.
 Native scrollbars stay hidden; pointer-transparent edge fades appear only where clipped and update without
-changing the fixed 28 px strip. Full-height strip actions share that width. A control renders only when it can
+changing the fixed 28 px strip. Strip actions are shared `IconButton ghost m` controls (24 px squares,
+vertically centred in the strip) rather than full-height cells. A control renders only when it can
 act: overflow search only while clipped; every expanded auxiliary pane has a Hide action because its rail
 remains available for restoration. Singleton tool icons have no inline close glyph; explicit Remove tool
 from group stays in their menu and on Delete, separate from pane visibility. Terminals and center

@@ -127,6 +127,51 @@ test("the primary control's label stays legible on both its resting and hover fi
 	}
 });
 
+test("the destructive control's label stays legible on both its resting and hover fill", () => {
+	for (const theme of bundledThemes()) {
+		for (const fill of ["danger", "dangerHover"] as const) {
+			expect(
+				contrast(theme.colors.onDanger, theme.colors[fill]),
+				`${theme.id}: onDanger on ${fill}`,
+			).toBeGreaterThanOrEqual(4.5);
+		}
+		expect(
+			contrast(theme.colors.dangerHover, theme.colors.danger),
+			`${theme.id}: dangerHover vs danger`,
+		).toBeGreaterThanOrEqual(1.15);
+	}
+});
+
+const ACTION_SURFACES = RESTING.filter((surface) => surface !== "content");
+
+function tint(hex: string, over: string, percent: number): string {
+	const channel = (value: string, start: number) =>
+		Number.parseInt(value.slice(start, start + 2), 16);
+	const mixed = [1, 3, 5].map((start) =>
+		Math.round((channel(hex, start) * percent + channel(over, start) * (100 - percent)) / 100),
+	);
+	return `#${mixed.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+}
+
+test("the soft-primary label stays legible on its resting and hover tint over every resting surface", () => {
+	const scale = (
+		JSON.parse(readFileSync(join(import.meta.dir, "../styles/colors.json"), "utf8")) as {
+			scale: Record<string, number>;
+		}
+	).scale;
+	for (const theme of bundledThemes()) {
+		for (const surface of ACTION_SURFACES) {
+			for (const step of ["subtle", "wash"]) {
+				const fill = tint(theme.colors.accent, theme.colors[surface], scale[step] ?? 0);
+				expect(
+					contrast(theme.colors.accent, fill),
+					`${theme.id}: accent on accent@${step} over ${surface}`,
+				).toBeGreaterThanOrEqual(4.5);
+			}
+		}
+	}
+});
+
 const HOVER_DISTINCTION_FLOOR = 1.15;
 
 test("the hover/selected fill stays distinguishable from every resting surface", () => {

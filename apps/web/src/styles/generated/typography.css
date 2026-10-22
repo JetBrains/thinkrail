@@ -28,6 +28,7 @@
 	--tr-font-weight-medium: 500;
 	--tr-font-weight-semibold: 600;
 	--tr-font-weight-brand: 400;
+	--tr-font-weight-button: 470;
 
 	/* Font sizes (px) */
 	--tr-font-size-s10: 10px;
@@ -216,6 +217,15 @@
 	font-size: var(--tr-font-size-s12);
 	font-weight: var(--tr-font-weight-medium);
 	line-height: var(--tr-line-height-default);
+	letter-spacing: var(--tr-letter-spacing-normal);
+	text-transform: none;
+	font-style: normal;
+}
+.tr-text-button {
+	font-family: var(--tr-font-family-interface);
+	font-size: var(--tr-font-size-s14);
+	font-weight: var(--tr-font-weight-button);
+	line-height: var(--tr-line-height-ui);
 	letter-spacing: var(--tr-letter-spacing-normal);
 	text-transform: none;
 	font-style: normal;

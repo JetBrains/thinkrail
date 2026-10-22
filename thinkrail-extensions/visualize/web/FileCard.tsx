@@ -7,9 +7,9 @@ import {
 	useOptionalResourceHost,
 	useResourceScope,
 } from "@thinkrail/resource-renderers";
+import { type ButtonIcon, IconButton } from "@thinkrail/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@thinkrail/ui/dialog";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 
 function FileLink({
 	path,
@@ -34,27 +34,15 @@ function FileLink({
 function CardAction({
 	testid,
 	label,
+	icon,
 	onClick,
-	children,
 }: {
 	testid: string;
 	label: string;
+	icon: ButtonIcon;
 	onClick: () => void;
-	children: ReactNode;
 }) {
-	return (
-		<IconTooltip label={label}>
-			<button
-				type="button"
-				data-testid={testid}
-				aria-label={label}
-				onClick={onClick}
-				className="flex size-24 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-			>
-				{children}
-			</button>
-		</IconTooltip>
-	);
+	return <IconButton icon={icon} label={label} data-testid={testid} onClick={onClick} />;
 }
 
 function FilePreview({ path, before }: { path: string; before: string | undefined }) {
@@ -74,10 +62,9 @@ function FilePreview({ path, before }: { path: string; before: string | undefine
 		<CardAction
 			testid="tool-visualize-open-tab"
 			label={t(before === undefined ? "visualize.file.openInTab" : "visualize.file.openDiffInTab")}
+			icon={OpenTab}
 			onClick={openTab}
-		>
-			<OpenTab className="size-14" />
-		</CardAction>
+		/>
 	);
 	const shared = {
 		path,
@@ -98,10 +85,9 @@ function FilePreview({ path, before }: { path: string; before: string | undefine
 						<CardAction
 							testid="tool-visualize-fullscreen"
 							label={t("visualize.file.fullScreen")}
+							icon={Fullscreen}
 							onClick={() => setFullscreen(true)}
-						>
-							<Fullscreen className="size-14" />
-						</CardAction>
+						/>
 					</>
 				}
 			/>

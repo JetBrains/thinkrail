@@ -2,6 +2,7 @@ import { useDroppable } from "@dnd-kit/core";
 import { RiAddLine as Plus, RiCloseLine as X } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -10,7 +11,6 @@ import {
 	DropdownMenuTrigger,
 } from "@thinkrail/ui/dropdown-menu";
 import { type ImperativePanelGroupHandle, ResizablePanelGroup } from "@thinkrail/ui/resizable";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { memo, type ReactNode, useMemo, useRef } from "react";
 import { type LayoutAttention, readLayoutSelection, tupleKey } from "../../lib";
 import { AuxiliaryPaneHeader, AuxiliaryPaneHideButton } from "./AuxiliaryPaneHeader";
@@ -217,15 +217,17 @@ export function SideGroupMenu({
 			: t("workbench.group.newTerminalPaneBelow");
 	return (
 		<DropdownMenu>
-			<IconTooltip label={t("workbench.group.addTo")} wrapTrigger>
-				<DropdownMenuTrigger
+			<DropdownMenuTrigger asChild>
+				<IconButton
+					variant="ghost"
+					size="m"
+					icon={Plus}
+					label={t("workbench.group.addTo")}
+					wrapTrigger
 					data-testid="side-group-menu"
-					aria-label={t("workbench.group.addTo")}
-					className="flex w-panel-header-row shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-				>
-					<Plus className="size-16" />
-				</DropdownMenuTrigger>
-			</IconTooltip>
+					className="shrink-0 self-center"
+				/>
+			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
 				<DropdownMenuItem
 					data-testid="side-new-terminal"
@@ -297,22 +299,19 @@ export function AuxiliaryGroupHeader({
 			/>
 			{trailing}
 			{group.tabs.length === 0 ? (
-				<IconTooltip
-					label={isLayoutUnavailable(removal) ? removal.reason : t("workbench.group.remove")}
-				>
-					<button
-						type="button"
-						data-testid="remove-layout-group"
-						aria-label={t("workbench.group.remove")}
-						disabled={isLayoutUnavailable(removal)}
-						onClick={() => {
-							if (!isLayoutUnavailable(removal)) shared.onApply(removal);
-						}}
-						className="flex w-panel-header-row shrink-0 items-center justify-center text-text-muted hover:bg-control-bg-hovered hover:text-text-default disabled:text-control-disabled-text"
-					>
-						<X className="size-14" />
-					</button>
-				</IconTooltip>
+				<IconButton
+					variant="ghost"
+					size="m"
+					icon={X}
+					label={t("workbench.group.remove")}
+					tooltip={isLayoutUnavailable(removal) ? removal.reason : t("workbench.group.remove")}
+					data-testid="remove-layout-group"
+					disabled={isLayoutUnavailable(removal)}
+					onClick={() => {
+						if (!isLayoutUnavailable(removal)) shared.onApply(removal);
+					}}
+					className="shrink-0 self-center"
+				/>
 			) : null}
 			<AuxiliaryPaneHideButton
 				testId={region === "bottom" ? "bottom-group-fold" : "side-group-fold"}

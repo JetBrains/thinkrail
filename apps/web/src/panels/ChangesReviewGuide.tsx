@@ -5,6 +5,7 @@ import {
 } from "@remixicon/react";
 import type { GitFileChange, ReviewComment, ReviewGuide } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import type { ChangesTab } from "../store";
 import { splitPath } from "./changesModel";
@@ -242,15 +243,15 @@ export function ChangesReviewGuide({
 											) : null}
 										</button>
 										{step.comment.status === "draft" ? (
-											<button
-												type="button"
+											<Button
+												size="s"
 												data-testid="changes-review-guide-fix"
 												disabled={sending}
 												onClick={() => send(() => sendReviewComment(workspaceId, step.comment.id))}
-												className="mt-8 rounded-sm bg-primary px-8 py-2 tr-text-metadata text-text-on-primary hover:bg-control-primary-bg-hovered"
+												className="mt-8"
 											>
 												{t("changes.guide.fixOne")}
-											</button>
+											</Button>
 										) : null}
 									</div>
 								</li>
@@ -260,22 +261,21 @@ export function ChangesReviewGuide({
 				)}
 			</div>
 			<div className="flex shrink-0 items-center gap-4 border-border-default border-t px-8 py-4">
-				<button
-					type="button"
+				<IconButton
+					variant="outline"
+					icon={ChevronLeft}
+					label={t("changes.guide.previous", { key: PREVIOUS_KEY.toUpperCase() })}
 					data-testid="changes-review-guide-prev"
-					aria-label={t("changes.guide.previous", { key: PREVIOUS_KEY.toUpperCase() })}
 					disabled={steps.length === 0}
 					onClick={previous}
-					className="flex size-24 items-center justify-center rounded-sm border border-control-border-default text-text-muted hover:bg-control-bg-hovered disabled:text-control-disabled-text"
-				>
-					<ChevronLeft className="size-14" />
-				</button>
-				<button
-					type="button"
+				/>
+				<Button
+					size="m"
+					iconRight={ChevronRight}
 					data-testid="changes-review-guide-next"
 					disabled={steps.length === 0}
 					onClick={next}
-					className="flex h-24 flex-1 items-center justify-center gap-4 whitespace-nowrap rounded-sm bg-primary px-8 tr-text-metadata text-text-on-primary hover:bg-control-primary-bg-hovered disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+					className="flex-1"
 				>
 					{cursor < 0
 						? t("changes.guide.start")
@@ -288,19 +288,18 @@ export function ChangesReviewGuide({
 					<kbd className="rounded-xs border border-current px-4 tr-code-text">
 						{NEXT_KEY.toUpperCase()}
 					</kbd>
-					<ChevronRight className="size-14" />
-				</button>
-				<button
-					type="button"
+				</Button>
+				<Button
+					variant="outline"
+					size="m"
+					iconLeft={Robot}
 					data-testid="changes-review-guide-apply"
 					disabled={sending || openFindingIds.length === 0}
 					onClick={() => send(() => sendReviewBatch(workspaceId, openFindingIds))}
 					title={t("changes.guide.applyTitle")}
-					className="flex h-24 items-center gap-4 rounded-sm border border-control-border-default px-8 tr-text-metadata text-text-muted hover:bg-control-bg-hovered disabled:text-control-disabled-text"
 				>
-					<Robot className="size-14" />
 					{t("changes.guide.apply")}
-				</button>
+				</Button>
 			</div>
 		</aside>
 	);

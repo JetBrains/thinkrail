@@ -413,17 +413,17 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 					<p className="tr-text-metadata text-text-muted">
 						{t("panels.terminalInstance.detached")}
 					</p>
-					<button
-						type="button"
+					<Button
+						variant="outline"
+						size="m"
 						data-testid="terminal-take-back"
 						aria-disabled={retrying}
 						onClick={retrying ? undefined : retry}
-						className="rounded-sm bg-control-bg px-8 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
 						{retrying
 							? t("panels.terminalInstance.takingBack")
 							: t("panels.terminalInstance.takeBack")}
-					</button>
+					</Button>
 				</div>
 			) : null}
 			{failureMessage !== null && !detached ? (
@@ -441,7 +441,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 						<div className="flex items-center gap-8">
 							<Button
 								variant="outline"
-								size="sm"
+								size="m"
 								data-testid="terminal-open-settings"
 								disabled={retrying}
 								onClick={openTerminalSettings}
@@ -449,7 +449,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 								{t("panels.terminalInstance.settings")}
 							</Button>
 							<Button
-								size="sm"
+								size="m"
 								data-testid="terminal-start-retry"
 								aria-disabled={retrying}
 								onClick={retrying ? undefined : retry}

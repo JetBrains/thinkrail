@@ -305,7 +305,7 @@ export function DiffSurfaceBody({
 						noticeActions={
 							surface.modified.kind === "text" && reviewable ? (
 								<Button
-									size="sm"
+									size="m"
 									variant="ghost"
 									data-testid="diff-open-file"
 									onClick={() => void openFileInTab(workspaceId, path, "keep")}
