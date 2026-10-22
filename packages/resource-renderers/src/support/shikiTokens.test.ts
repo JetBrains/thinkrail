@@ -11,6 +11,7 @@ const CATALOG = [
 	{ id: "javascript", load: () => import("shiki/langs/javascript.mjs") },
 	{ id: "yaml", load: () => import("shiki/langs/yaml.mjs") },
 	{ id: "html", load: () => import("shiki/langs/html-derivative.mjs") },
+	{ id: "vue", load: () => import("shiki/langs/vue.mjs") },
 ];
 const ALIASES = new Map([
 	["ts", "typescript"],
@@ -24,6 +25,7 @@ const ALIASES = new Map([
 	["javascript", "javascript"],
 	["yaml", "yaml"],
 	["html", "html"],
+	["vue", "vue"],
 ]);
 const FENCE = ["# hi", "```ts", "const x = 1", "```"];
 
@@ -210,6 +212,17 @@ describe("createShikiTokens", () => {
 			expect(await tokens.loadEmbeds("markdown", () => text.join("\n"))).toBe(true);
 			expect(counts.get("typescript")).toBe(1);
 		}
+	});
+
+	test("embeds load transitively through an embed that is itself referenced", async () => {
+		const counts = new Map<string, number>();
+		const tokens = await themedTokens(countingCatalog(counts));
+		const text = () =>
+			['<template lang="md">', "```ts", "const x = 1", "```", "</template>"].join("\n");
+		expect(await tokens.loadEmbeds("vue", text)).toBe(true);
+		expect(counts.get("markdown")).toBe(1);
+		expect(counts.get("typescript")).toBe(1);
+		expect(await tokens.loadEmbeds("vue", text)).toBe(false);
 	});
 
 	test("front matter and inline HTML colour without a fence reference", async () => {
