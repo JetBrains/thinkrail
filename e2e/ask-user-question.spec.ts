@@ -219,6 +219,58 @@ test("a persisted tall questionnaire reveals page changes and a restored page wi
 	}
 });
 
+test("a key pressed before a reopened questionnaire's first frame does not cancel its focus claim", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const session = seedQuestionnaire("early input questionnaire", "ask-early-input", {
+		questions: [
+			{
+				question: "Which early rollout should we use?",
+				header: "Early",
+				options: [
+					{ label: "Early alpha", description: "Use the first fixture choice." },
+					{ label: "Early beta", description: "Use the second fixture choice." },
+				],
+			},
+		],
+	});
+	type HeldFrames = Window & { releaseHeldFrames?: () => void };
+
+	try {
+		await enterDefaultWorkspace(page);
+		await hideAuxiliaryWorkbench(page);
+		await openPersistedChat(page, "early input questionnaire");
+		const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
+		await expect(card.getByTestId("ask-option").first()).toBeFocused();
+
+		const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+		await chatTabs.first().getByTestId("editor-tab-close").click();
+		await expect(chatTabs).toHaveCount(0);
+		await page.getByTestId("chat-history").first().click();
+		await page.evaluate(() => {
+			const held: FrameRequestCallback[] = [];
+			const request = window.requestAnimationFrame.bind(window);
+			window.requestAnimationFrame = (callback) => held.push(callback);
+			(window as HeldFrames).releaseHeldFrames = () => {
+				window.requestAnimationFrame = request;
+				for (const callback of held.splice(0)) request(callback);
+			};
+		});
+		await page
+			.getByTestId("closed-chat-item")
+			.filter({ hasText: "early input questionnaire" })
+			.click();
+		await expect(card).toBeVisible();
+		await page.keyboard.press("Shift");
+		await page.evaluate(() => (window as HeldFrames).releaseHeldFrames?.());
+		await expect(card.getByTestId("ask-option").first()).toBeFocused();
+	} finally {
+		await page.evaluate(() => (window as HeldFrames).releaseHeldFrames?.()).catch(() => undefined);
+		rmSync(session.path, { force: true });
+	}
+});
+
 test("a questionnaire with more than four questions exposes every page and the full review", async ({
 	page,
 }) => {
