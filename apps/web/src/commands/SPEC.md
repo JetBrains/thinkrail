@@ -54,12 +54,12 @@ does not reproduce yet.
 | `view.theme` Change theme… | page → `settings.update { theme }` | online | PR1 |
 | `settings.open` and every Settings section | `store.openSettings(section)` | protocol-gated sections only | PR1 |
 | Open search with double Shift | `store.setDoubleShiftSearch` (client-local) | — | PR1 (inline toggle) |
-| `settings.extensions` Extensions… | page → `settings.update { disabledExtensions }` | online | PR1 (inline toggles) |
-| `settings.mcp` MCP servers… | page → `panels/McpSettings.setMcpServerEnabled`; locked rows open Settings | active workspace, online | PR1 (inline toggles) |
+| `settings.extensions` Extensions… | page → `settings.update { disabledExtensions }` | the Extensions section available (protocol), online | PR1 (inline toggles) |
+| `settings.mcp` MCP servers… | page → `panels/McpSettings.setMcpServerEnabled`; locked rows open Settings | active workspace, the MCP section available (protocol), online | PR1 (inline toggles) |
 | `workspace.markRead` / `markUnread` | `panels/workspaceActions` | `supportsWorkspaceReadState` + `selectWorkspaceReadAction` | PR1 |
 | `workspace.settle` / `unsettle` | `panels/workspaceActions` | `canSettleWorkspace` | PR1 |
 | `workspace.reveal`, `workspace.copyPath`, `workspace.openIn.<editor>` | `panels/workspaceActions`, `lib.copyText` | active workspace | PR1 |
-| `terminal.new` New terminal | `store.addTerminal` | active workspace | PR1 |
+| `terminal.new` New terminal | `store.addTerminal` | active workspace, online (placement reserves on the host) | PR1 |
 | Start work from typed text (`⌘↵`, targets) | shared `startWork` | context project | PR3 |
 | Chat without a project | `chat.create` | — | PR4 |
 | Continue in workspace | `chat.continue` | a projectless chat | PR5 |

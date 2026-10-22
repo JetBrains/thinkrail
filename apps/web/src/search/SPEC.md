@@ -35,7 +35,8 @@ A leading prefix selects a scope and its chip, and a chip writes the prefix back
 workspaces, chats), `>` commands and settings; `/` files and `#` specs join with host search. `#<digits>`
 is a pull-request lookup, never the specs scope. `is:waiting|error|unread|running|settled` and `has:pr`
 filter work items anywhere in the query (`is:settled` is the workspace shelf rule, `has:pr` an open
-review); a bare `is:` lists the filters. Quoted text is one contiguous literal term and escapes a prefix.
+review); a bare `is:` lists the filters. Quoted text is one contiguous literal term, escapes a prefix, and is
+never read as a filter (`"is:running"` searches for that text).
 Terms AND-combine through the shared matcher in [[module-contracts]].
 
 ## Ranking

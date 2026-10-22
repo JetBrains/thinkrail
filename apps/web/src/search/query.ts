@@ -49,9 +49,12 @@ export function parseSearchQuery(raw: string): ParsedQuery {
 	const filters: StateFilter[] = [];
 	let partialFilter: string | null = null;
 	const textTokens: string[] = [];
-	for (const token of body.split(/\s+/).filter(Boolean)) {
+	for (const match of body.matchAll(/"[^"]*"?|\S+/g)) {
+		const token = match[0];
 		const lower = token.toLowerCase();
-		if (isStateFilter(lower)) {
+		if (token.startsWith('"')) {
+			textTokens.push(token);
+		} else if (isStateFilter(lower)) {
 			if (!filters.includes(lower)) filters.push(lower);
 		} else if (/^(is|has):\w*$/.test(lower)) {
 			partialFilter = lower;
