@@ -31,11 +31,12 @@ pipeline.
 Workflow Bun setup reads the root `package.json` `packageManager` pin through `bun-version-file`.
 Desktop's packaged runtime remains Electrobun-owned (see [[module-desktop]]).
 
-PR and merge-queue gates cover dependency/boundary/seam/spec-surface conformance, lint/typecheck, unit
-and no-agent browser tests. Linux and Windows run native CLI artifact smoke; Linux also runs browser tests
-against the compiled binary. Desktop PR coverage builds the Linux target, runs native-window and shared
+PR and merge-queue gates cover dependency/boundary/seam/spec-surface conformance, lint/typecheck, unit and
+no-agent browser tests. Linux and Windows run native CLI artifact smoke; Linux also runs browser tests
+against the compiled binary. Desktop coverage builds the Linux target, runs native-window and shared
 artifact probes under Xvfb with test-only software-rendering flags, and runs desktop-backed browser tests.
-Real-provider tests remain explicitly authorized and separate.
+The Linux binary and desktop suites run on every merge group but on a PR only when its change can affect
+artifacts (change classifier below). Real-provider tests remain explicitly authorized and separate.
 
 The three browser suites dominate wall time, so each runs as a matrix of Playwright shards on separate
 runners ([[module-browser-e2e]] owns the slicing). Shard counts trade runner minutes for wall time and are
@@ -54,7 +55,14 @@ allow-list, never a file-type rule: Markdown is product input here (skills ship 
 conformance gates). In the merge queue it diffs against the target branch, not the event's `base_sha`: that
 is the previous entry's group head, and with HEADGREEN grouping a green head merges every entry ahead, so a
 site PR queued behind an app PR must still run the full set. Conformance, lint/typecheck and unit tests
-always run; they are cheap and cover the website too.
+always run; they are cheap and cover the website too. A second output, `artifacts`, gates the Linux binary
+and desktop suites, which replay the no-agent browser suite against built artifacts and cost over half of
+CI's runner time: on a PR they run only when a path feeds building or packaging — the CLI and desktop apps,
+artifact tests, the server's build support and bundled-runtime registration, the artifact Playwright
+runners, CI definitions, patches and the root manifests and lockfile — and in a merge group they always run,
+so main never lands an artifact they have not exercised. An artifact-only defect in an unrelated change
+therefore surfaces at enqueue time instead of on the PR; it was 1 in 56 failed runs before the split. The
+Windows job stays on every app PR: it is mostly native unit gates, not an artifact replay.
 
 Browser jobs retry the Playwright browser download a bounded number of times, a network fault that
 otherwise ejects an entry from the merge queue; the tests themselves are never retried at job level. They
