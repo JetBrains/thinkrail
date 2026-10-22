@@ -1,0 +1,24 @@
+name: CI cache
+
+# Seeds main-scoped caches for CI: a cache saved on a PR or merge-group ref is visible only to that ref,
+# while every PR and merge group can restore one saved on main. See .github/SPEC.md → CI.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-cache
+  cancel-in-progress: true
+
+jobs:
+  desktop-apt:
+    name: Desktop apt packages
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/desktop-apt
+        timeout-minutes: 10
