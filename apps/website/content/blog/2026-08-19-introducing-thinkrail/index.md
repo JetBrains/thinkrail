@@ -72,7 +72,7 @@ ThinkRail is in the early stages of development, and we are eager to hear your q
 1. **Try ThinkRail**: Launch it locally and try it out!
 2. [**Visit our webpage**](https://jb.gg/osk2n7): The ThinkRail landing page serves a dual purpose: it both describes and demonstrates the product. There you can learn more about each feature and the team behind ThinkRail.
 3. [**Browse our GitHub repository**](https://github.com/JetBrains/thinkrail)
-4. Find us on social media platforms: [**X/Twitter**](https://x.com/ThinkRailAI), [**YouTube**](https://www.youtube.com/@ThinkRailAI), and [**TikTok**](https://www.tiktok.com/@thinkrail). 
+4. Find us on social media platforms: [**X/Twitter**](https://x.com/ThinkRailAI), [**YouTube**](https://www.youtube.com/@ThinkRailAI), and [**TikTok**](https://www.tiktok.com/@thinkrail).
 5. [**Join Our Discord server**](https://discord.gg/Wybu9ceWkY): Say "hi" and let us know what you think about ThinkRail.
 6. [**Take Our Survey**](https://forms.gle/es1ksqAax6hnDWCP8): Share how you use Pi, what frustrates you, and what features you would like to see in ThinkRail. Your input will directly influence our roadmap.
 
