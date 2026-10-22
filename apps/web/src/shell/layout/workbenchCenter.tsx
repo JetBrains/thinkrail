@@ -110,6 +110,7 @@ export const CenterGroupView = memo(function CenterGroupView({
 										: t("workbench.group.remove")
 								}
 								data-testid="remove-layout-group"
+								wrapTrigger
 								disabled={isLayoutUnavailable(groupRemoval)}
 								onClick={() => {
 									if (!isLayoutUnavailable(groupRemoval)) shared.onApply(groupRemoval);

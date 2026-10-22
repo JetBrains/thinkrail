@@ -306,6 +306,7 @@ export function AuxiliaryGroupHeader({
 					label={t("workbench.group.remove")}
 					tooltip={isLayoutUnavailable(removal) ? removal.reason : t("workbench.group.remove")}
 					data-testid="remove-layout-group"
+					wrapTrigger
 					disabled={isLayoutUnavailable(removal)}
 					onClick={() => {
 						if (!isLayoutUnavailable(removal)) shared.onApply(removal);
