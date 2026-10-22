@@ -181,24 +181,32 @@ interface MonacoSetup {
 }
 
 let setup: MonacoSetup | null = null;
+// Monaco asks a language's factory for a provider only once, so a grammar whose first load failed
+// gets its provider installed by the next model that loads it successfully.
+const missingProviders = new Set<string>();
 
 function registerTokenProvider(id: string, tokens: MonacoSetup["tokens"]): void {
 	monaco.languages.registerTokensProviderFactory(id, {
 		create: async () => {
 			if (await tokens.ready(id)) return tokens.provider(id);
-			registerTokenProvider(id, tokens);
+			missingProviders.add(id);
 			return null;
 		},
 	});
 }
 
+async function recoverProvider(id: string, tokens: MonacoSetup["tokens"]) {
+	return missingProviders.has(id) && (await tokens.ready(id)) && missingProviders.delete(id);
+}
+
 function loadModelEmbeds(model: editor.ITextModel, tokens: MonacoSetup["tokens"]): void {
 	const id = model.getLanguageId();
-	void tokens
-		.loadEmbeds(id, () => (model.isDisposed() ? "" : model.getValue()))
-		.then((loaded) => {
-			if (loaded) monaco.languages.setTokensProvider(id, tokens.provider(id));
-		});
+	void Promise.all([
+		recoverProvider(id, tokens),
+		tokens.loadEmbeds(id, () => (model.isDisposed() ? "" : model.getValue())),
+	]).then(([recovered, loaded]) => {
+		if (recovered || loaded) monaco.languages.setTokensProvider(id, tokens.provider(id));
+	});
 }
 
 function watchModelEmbeds(tokens: MonacoSetup["tokens"]): void {
