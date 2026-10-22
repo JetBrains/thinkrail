@@ -47,8 +47,8 @@ succeeded or was skipped by the classifier. CI can then add, rename or skip jobs
 renaming "CI passed" itself blocks the merge queue. The legacy gates "E2E (no-agent)", "Binary smoke &
 e2e" and "Desktop smoke & e2e" mirror "CI passed" only until the ruleset stops requiring them, then go.
 
-**Change classifier.** A `changes` job diffs the PR or merge group against its base. When every changed
-path lies outside the app — the website and its analytics package, the website workflows, README
+**Change classifier.** A `changes` job diffs the PR or merge group against its base, counting a rename as
+both its old and new path. When every changed path lies outside the app — the website and its analytics package, the website workflows, README
 screenshots — the classifier skips the pi-package, browser, binary, Windows and desktop jobs; any other
 path, or a failed diff, runs them all. The exclusion list is a path allow-list, never a file-type rule:
 Markdown is product input here (skills ship in the artifacts, specs feed conformance gates). In the merge

@@ -26,7 +26,7 @@ jobs:
           BASE: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
           OUTSIDE_APP: ^(apps/website/|packages/website-analytics/|\.github/workflows/site(-preview|-preview-cleanup)?\.yml$|\.github/readme-assets/)
         run: |
-          if git fetch --no-tags --depth=1 origin "$BASE" && files=$(git diff --name-only "$BASE" HEAD); then
+          if git fetch --no-tags --depth=1 origin "$BASE" && files=$(git diff --name-only --no-renames "$BASE" HEAD); then
             if grep -qvE "$OUTSIDE_APP" <<< "$files"; then app=true; else app=false; fi
           else
             echo "::warning::Could not diff against $BASE; running every job"
