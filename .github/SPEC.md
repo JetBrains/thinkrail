@@ -75,15 +75,17 @@ Native artifact smokes run only in shard 1: repeating an identical probe per sha
 multiplies exposure to runner-environment faults.
 
 Linux desktop jobs install their GTK/WebKitGTK runtime through `.github/actions/desktop-apt`, from `.deb`
-files cached per package list and runner image version; a run on a newer image restores the previous image's
-files and downloads only what changed, and `apt-get autoclean` drops versions the image no longer offers, so
-a slow Ubuntu mirror costs little even while an image rolls out. A cache saved on a PR or merge-group ref is
-private to that ref, so the `CI cache` workflow seeds it on every push to main, the one scope every PR and
-merge group can restore. The install step is bounded at ten minutes: a mirror that trickles bytes never
-trips apt's own timeouts and would otherwise hold the job for hours. The jobs start Xvfb as their own step
-and proceed only once an X client connects to the exported `DISPLAY`; a server that never answers is
-restarted a bounded number of times, then fails the job. Only the virtual display is retried, never the
-smoke or the browser tests: once the display is proven, every application failure fails CI.
+files cached under a hash of the exact package versions apt plans to install after `apt-get update`. A
+mirror update or a different runner image changes that plan and so the key: the previous cache is restored
+by prefix, only the changed packages download, and `apt-get autoclean` drops versions the archive no longer
+offers, so a slow Ubuntu mirror costs little between image releases and while an image rolls out. A cache
+saved on a PR or merge-group ref is private to that ref, so the `CI cache` workflow seeds it on every push
+to main, the one scope every PR and merge group can restore. The install step is bounded at ten minutes: a
+mirror that trickles bytes never trips apt's own timeouts and would otherwise hold the job for hours. The
+jobs start Xvfb as their own step and proceed only once an X client connects to the exported `DISPLAY`; a
+server that never answers is restarted a bounded number of times, then fails the job. Only the virtual
+display is retried, never the smoke or the browser tests: once the display is proven, every application
+failure fails CI.
 
 A platform's native behavior is proven only on that platform. Windows remains a PR gate because its
 executable, environment, path, and trash behavior differs materially from POSIX hosts. Its subprocess unit
