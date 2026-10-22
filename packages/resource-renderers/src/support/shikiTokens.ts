@@ -245,5 +245,10 @@ export function createShikiTokens({ languages: catalog, languageId, engine }: Sh
 		if (highlighter) await selectTheme(highlighter, registration);
 	}
 
-	return { ready, loadEmbeds, provider, applyTheme };
+	function warm(id: string) {
+		void highlighterReady();
+		void loadGrammar(id);
+	}
+
+	return { ready, warm, loadEmbeds, provider, applyTheme };
 }

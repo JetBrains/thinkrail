@@ -1,18 +1,21 @@
 import type { FileNode } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { describeResource, PENDING_TEXT_META } from "@thinkrail/resource-renderers";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { statusLetter } from "../chat/planView";
 import { firstClickOnly } from "../lib";
 import { selectFilesTreeView, type TabIntent, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
+import { holdEditorWarm, useEditorWarm } from "./editorWarm";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
 import { useWorkspaceRead } from "./useWorkspaceRead";
 
 type SetPathsExpanded = (paths: readonly string[], expanded: boolean) => void;
+type WarmFile = ((path: string) => void) | undefined;
 
 interface TreeFocus {
 	activePath: string | null;
@@ -29,6 +32,10 @@ export function FileTree({
 	const [nodes, setNodes] = useState<FileNode[] | null>(null);
 	const expanded = useAppStore((s) => selectFilesTreeView(s, workspaceId).expanded);
 	const expandedPaths = useMemo(() => new Set(expanded), [expanded]);
+	const warm = useEditorWarm();
+	const warmFile: WarmFile = warm
+		? (path) => warm(describeResource(workspaceId, path, PENDING_TEXT_META))
+		: undefined;
 
 	const setPathsExpanded: SetPathsExpanded = (paths, next) =>
 		useAppStore.getState().setFilesTreeExpanded(workspaceId, paths, next);
@@ -42,6 +49,9 @@ export function FileTree({
 			onSwitch: () => setNodes(null),
 		},
 	);
+
+	const loading = nodes === null;
+	useEffect(() => (loading ? holdEditorWarm() : undefined), [loading]);
 
 	if (nodes === null) return <LoadingRegion rows={8} className="px-4 py-4" />;
 	if (nodes.length === 0)
@@ -59,6 +69,7 @@ export function FileTree({
 					focus={focus}
 					expandedPaths={expandedPaths}
 					setPathsExpanded={setPathsExpanded}
+					warmFile={warmFile}
 				/>
 			))}
 		</ul>
@@ -72,6 +83,7 @@ function FileNodeRow({
 	focus,
 	expandedPaths,
 	setPathsExpanded,
+	warmFile,
 }: {
 	node: FileNode;
 	workspaceId: string;
@@ -79,6 +91,7 @@ function FileNodeRow({
 	focus: TreeFocus;
 	expandedPaths: ReadonlySet<string>;
 	setPathsExpanded: SetPathsExpanded;
+	warmFile: WarmFile;
 }) {
 	const isDir = node.kind === "dir";
 	const [directory, setDirectory] = useState<ResolvedFolderChain<FileNode> | null>(null);
@@ -158,6 +171,7 @@ function FileNodeRow({
 				}
 				onClick={isDir ? toggleDirectory : firstClickOnly(() => open("preview"))}
 				onDoubleClick={isDir ? undefined : () => open("keep")}
+				onWarm={isDir || !warmFile ? undefined : () => warmFile(node.path)}
 			/>
 			{isDir && expanded && children && (
 				<ul className="flex flex-col pl-tree-indent">
@@ -170,6 +184,7 @@ function FileNodeRow({
 							focus={focus}
 							expandedPaths={expandedPaths}
 							setPathsExpanded={setPathsExpanded}
+							warmFile={warmFile}
 						/>
 					))}
 				</ul>

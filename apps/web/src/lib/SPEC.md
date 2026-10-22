@@ -52,6 +52,8 @@ not this module; the theme-aware highlighter remains app-local.
   commit something a double click contradicts: a single click (or keyboard activation) on the active
   preview tab, so a double click is not read as two keeps, the Changes review-tab preview, and the Review
   reveal through `doubleClickPendingMs()`),
+  **`whenIdle(task, { timeout, fallbackDelay })`** (runs a task on `requestIdleCallback` with a timeout, or
+  after `fallbackDelay` where the API is missing — Safari and the macOS WKWebView — and returns a cancel),
   **`firstClickOnly()`** (wraps a browse row's preview open so it runs on a first click or keyboard
   activation, `detail <= 1`, and skips a double click's second click) with **`doubleClickPendingMs()`**
   (how long a double click on the last such row could still arrive; the Review reveal waits it out so it

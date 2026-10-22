@@ -49,6 +49,9 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   `ResourcePreview` run one sequence:
   - `useRendererSelection(resource, intent, rendererId)` — candidates for the environment's phone class, the
     selected renderer, its implementation key (renderer id + phone class) and the placed-thread state;
+  - **`usePreloadResourceView()`** — a stable `(resource) => void` that resolves the view renderer for the
+    environment's phone class, loads its implementation and runs the module's optional `warm`; it needs both
+    providers;
   - the lazy `RendererView` mount and **`GuardedRendererDiff`**, the one diff mount: the expensive-diff notice
     (`diff-too-large` / **Show diff anyway**, per mount, with a caller action slot) until opted in, then the
     lazy diff renderer, virtualized above `VIRTUALIZED_DIFF_LINES` of the caller's `lineCount`
@@ -76,9 +79,11 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
 - `markdown` — the component that renders markdown (`ResourceMarkdownProps`); the document preview, rendered
   diff and notebook cells pass their plugins and components through it.
 - `code` — the code-highlighting host (`languages` with grammar loaders, `languageId` canonicalization, and
-  the code `theme` resolved from CSS variables). Monaco is page-global: the first `MonacoEditor` initializes it
-  from its host's `code` once (`ensureMonaco`, synchronous after the Monaco chunk loads), and every later editor
-  reuses that setup; it re-themes on every completed theme swap. A grammar loads on its language's first model.
+  the code `theme` resolved from CSS variables). Monaco is page-global: the first preload `warm` or
+  `MonacoEditor` initializes it from its host's `code` once (`ensureMonaco`, synchronous after the Monaco
+  chunk loads), and every later editor reuses that setup. `ensureMonaco` owns the one page-lifetime theme
+  watch, so a swap between a preload and the first editor still re-themes, and N open editors cost one
+  refresh per swap. A grammar loads on its language's first model or on a warm for its path.
 - `bytesUrl(workspaceId, path, oid?)` — the host byte route for images, PDFs and relative markdown assets.
 - `openFile(workspaceId, path, { keep? })` and `openComparison(workspaceId, before, path)` — navigation for
   relative document links (preview) and explicit Open-in-tab actions (keep).
@@ -116,7 +121,24 @@ own render and passes them to `MarkdownDocument` explicitly — a context read i
 
 `ResourceRenderer.loadView(environment)` receives the same `ResourceEnvironment` (`{ mobile }`) used for
 resolution, so the code renderer picks Pierre `File` on phone-class viewports and Monaco otherwise without
-reading a viewport global.
+reading a viewport global. The loaded module (`ResourceViewModule`, exported from the root) may export
+`warm(host, resource)`; a preload calls it after every request, one task after the module resolves, so
+the chunk's evaluation and the warm are separate long tasks. It must be cheap and idempotent. Monaco's
+`warm` runs `ensureMonaco`, starts the regex engine, and one task later loads the grammar for the
+resource's path (an empty path warms no grammar).
+
+**One loaded implementation per key, chosen once.** `rendererMount` keeps one component map and the
+in-flight load per implementation key (renderer id + phone class), shared by preloads and mounts.
+`RendererView` derives that key itself from its `renderer` and `mobile` props, so a mount and a preload
+cannot disagree on it. React
+`lazy` suspends on its first render even when its promise already resolved, and a shown fallback holds for
+at least 300 ms. So a finished load stores the module's component under its key, unless a mount already
+stored a `lazy` there, and the first `RendererView` without a stored component stores a `lazy` that reuses
+the in-flight load. That choice is stored once and never switched: a lazy and a direct component are
+different types, and swapping them would remount a live editor. A lazy made while a load was in flight is
+resolved for every later mount, so it does not suspend again. A failed preload, in the load or in `warm`,
+logs a warning instead of rejecting; a failed load is forgotten, so the next mount retries and a real
+failure reaches the pane's error boundary.
 
 **Review-draft scratch is read per slot.** A pane that keeps transient authoring across remounts provides
 `ReviewDraftContext` with a `ReviewDraftPersistence` (`rendererId`, `read(key)`, `subscribe`, `update(key,
@@ -614,3 +636,15 @@ content's own height.
   `application/wasm`: Vite in dev, `Bun.file` in `serveStatic` for the desktop app and the staged CLI binary.
   Cost: the first open of a new language waits for its grammar chunk (about one frame at 1x CPU), and the
   engine fetches a 466 kB `.wasm` asset; Pierre's newer Shiki ships its own copy.
+- **The code view preloads before the first open.** Loading the Monaco chunk, initializing Monaco and
+  building the engine only after the tab mounted, behind a fallback held for at least 300 ms, made the
+  first open about 420 ms at 1x CPU (840 ms at 4x) against 65 ms for a warm one. With the app's idle
+  preload and row-hover warm (`usePreloadResourceView`), the first open is about 120 ms at 1x (430 ms at
+  4x, where the rest is Oniguruma compiling the grammar's scanners on the first tokenize). The package
+  only offers the mechanism; the host decides when to call it. Cost: every desktop session loads the
+  Monaco chunk and the engine (about 3.9 MB decoded, about 7 MB more heap) and a 70 ms evaluation task at
+  4x CPU after boot. A click while the preload is still loading suspends as before. A preload that fails
+  while the network is down costs the rest of the session: Chromium caches the failed module fetch, so
+  every later import of that chunk rejects without a request, and a statically split chunk has no URL to
+  cache-bust. The first open then shows the error boundary's **Reload page**, which recovers; on main the
+  same outage fails only if it lasts until the first open.
