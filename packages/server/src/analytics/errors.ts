@@ -2,6 +2,7 @@ import { dirname, isAbsolute, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export type ErrorSource = "host_crash" | "host_logged" | "request" | "ui" | "desktop";
+export type FatalErrorKind = "uncaughtException" | "unhandledRejection";
 
 export const EXTERNAL_FRAME = "<external>";
 const MAX_EXCEPTIONS = 5;
@@ -114,6 +115,10 @@ const MECHANISM_TYPES = new Set([
 	"onuncaughtexception",
 	"onconsole",
 	"middleware",
+]);
+const CRASH_MECHANISMS = new Map<unknown, string>([
+	["uncaughtException", "onuncaughtexception"],
+	["unhandledRejection", "onunhandledrejection"],
 ]);
 const LEVELS = new Set(["fatal", "error", "warning", "log", "info", "debug"]);
 const PASSTHROUGH_KEYS = [
@@ -234,11 +239,17 @@ export function sanitizeExceptionProperties(
 			sanitizeException(exception, index === 0 ? summary : "", roots, chunkIds),
 		);
 	const root = exceptions[0];
-	if (root && handled !== undefined) {
+	const crashType =
+		passthrough.source === "host_crash" ? CRASH_MECHANISMS.get(passthrough.scope) : undefined;
+	if (root && (handled !== undefined || crashType)) {
 		const mechanism = isRecord(root.mechanism)
 			? root.mechanism
 			: { synthetic: false, type: "generic" };
-		root.mechanism = { ...mechanism, handled };
+		root.mechanism = {
+			...mechanism,
+			...(handled !== undefined ? { handled } : {}),
+			...(crashType ? { type: crashType } : {}),
+		};
 	}
 	const out: Record<string, unknown> = {
 		$exception_list: exceptions,

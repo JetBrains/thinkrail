@@ -10,7 +10,13 @@ import {
 	saveAcquisition,
 } from "../persistence";
 import { runAttributionClaim } from "./attribution";
-import { CHUNK_IDS_PROPERTY, type ErrorSource, errorCode, toV8Stack } from "./errors";
+import {
+	CHUNK_IDS_PROPERTY,
+	type ErrorSource,
+	errorCode,
+	type FatalErrorKind,
+	toV8Stack,
+} from "./errors";
 import {
 	type AdditionalAnalyticsCapture,
 	type AnalyticsEvent,
@@ -184,7 +190,7 @@ export interface ClientErrorInput {
 const MAX_ERROR_REPORTS = 100;
 const MAX_ERROR_REPORTS_PER_SOURCE = 50;
 const ERROR_DEDUPE_MS = 60_000;
-const FATAL_FLUSH_TIMEOUT_MS = 2_000;
+const FATAL_FLUSH_TIMEOUT_MS = 1_000;
 
 function throwSite(error: unknown): string {
 	const stack = error instanceof Error && typeof error.stack === "string" ? error.stack : "";
@@ -252,12 +258,17 @@ export function reportError(error: unknown, report: ErrorReport): void {
 	}
 }
 
-export async function reportFatalError(error: unknown): Promise<void> {
+export async function reportFatalError(error: unknown, kind?: FatalErrorKind): Promise<void> {
 	const s = state;
 	if (!s) return;
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	try {
-		const params = errorParams(s, error, { source: "host_crash", handled: false }, true);
+		const report: ErrorReport = {
+			source: "host_crash",
+			handled: false,
+			...(kind ? { scope: kind } : {}),
+		};
+		const params = errorParams(s, error, report, true);
 		await Promise.race([
 			s.basic.sendException(s.clientId, error, params, true),
 			new Promise<void>((resolve) => {

@@ -40,7 +40,7 @@ export function installCrashLog(appVersion?: string): void {
 		}
 		if (crashing) return;
 		crashing = true;
-		void reportFatalError(error).finally(() => process.exit(1));
+		void reportFatalError(error, kind).finally(() => process.exit(1));
 	};
 	process.on("uncaughtException", (error) => report("uncaughtException", error));
 	process.on("unhandledRejection", (reason) => report("unhandledRejection", reason));

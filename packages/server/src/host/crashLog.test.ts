@@ -146,6 +146,7 @@ test("a crash is reported to PostHog as a fatal exception before the process exi
 		const crash = batches.find((entry) => entry.event === "$exception");
 		expect(crash?.properties).toMatchObject({
 			source: "host_crash",
+			scope: "uncaughtException",
 			handled: false,
 			$exception_level: "fatal",
 		});

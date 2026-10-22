@@ -113,7 +113,9 @@ status is not proof of value, correctness or a passed test. Arrival order is not
 PostHog Error Tracking `$exception` events are basic-tier: always on under the same gate as basic events
 (keyed build, not CI/test), unaffected by `analyticsEnabled`, `--no-analytics` or `THINKRAIL_NO_ANALYTICS`,
 and never campaign-enriched. Closed `source`: `host_crash` (crashLog's uncaught/unhandled, level `fatal`,
-sent with `captureExceptionImmediate` and awaited at most 2 s before exit), `host_logged` (a host
+`scope` = the crash kind and root mechanism `onuncaughtexception`/`onunhandledrejection`, sent with
+`captureExceptionImmediate` and awaited at most 1 s before exit — a reachable PostHog answers in a fraction
+of that, and every extra second keeps a faulted host running), `host_logged` (a host
 `log.warn/error` carrying an error, with its `scope`), `request` (every failed WS request, CodedErrors
 included — revisitable; PostHog itself excludes expected 4xx outcomes — with `request_method` only for a
 registered method), `ui` (`client.reportError`; `scope` = kind[:boundary], render = handled) and `desktop`

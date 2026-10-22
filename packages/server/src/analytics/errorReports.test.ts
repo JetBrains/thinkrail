@@ -226,18 +226,34 @@ test("each source has its own budget inside the per-launch cap", async () => {
 	expect(Object.fromEntries(bySource)).toEqual({ ui: 50, request: 1, host_logged: 49 });
 });
 
-test("a fatal report is sent immediately as level fatal with the CodedError-style code", async () => {
+test("a fatal report is sent immediately as level fatal, tagged with its crash kind and code", async () => {
 	const sent: BatchEntry[] = [];
 	boot(sent);
 	const error = Object.assign(new Error("exploded"), { code: "ENOENT" });
-	await reportFatalError(error);
+	await reportFatalError(error, "unhandledRejection");
 	const [entry] = exceptions(sent);
 	expect(entry?.properties).toMatchObject({
 		source: "host_crash",
+		scope: "unhandledRejection",
 		handled: false,
 		code: "ENOENT",
 		$exception_level: "fatal",
 	});
+	const [root] = entry?.properties.$exception_list as Array<Record<string, unknown>>;
+	expect(root?.value).toBe("host_crash unhandledRejection ENOENT");
+	expect(root?.mechanism).toMatchObject({ handled: false, type: "onunhandledrejection" });
+});
+
+test("an unreachable collector delays a fatal report's exit by at most one second", async () => {
+	const sent: BatchEntry[] = [];
+	boot(sent, {
+		fetchImpl: (() => new Promise<Response>(() => {})) as unknown as typeof fetch,
+	});
+	const started = performance.now();
+	await reportFatalError(new Error("stuck"), "uncaughtException");
+	const waited = performance.now() - started;
+	expect(waited).toBeGreaterThanOrEqual(900);
+	expect(waited).toBeLessThan(1_500);
 });
 
 test("client errors keep WebKit stacks parseable and their frames web-relative", async () => {
