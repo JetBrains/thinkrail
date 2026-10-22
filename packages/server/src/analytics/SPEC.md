@@ -153,7 +153,12 @@ provider and extension errors — and no redaction makes arbitrary prose persona
 exception's `value` is therefore a classifier built only from the validated allow-listed fields —
 `source`, then `request_method` or `scope`, then `code` (e.g. `request pr.open PUSH_AUTH_FAILED`,
 `ui render:chat`) — and causes carry an empty `value`; PostHog groups by type and resolved frames, so the
-classifier only names the issue. The UI report carries no message at all. A wire-level test pins the
+classifier only names the issue. A message also hides in every V8/Bun stack header, and a multi-line one
+(git stderr, a test runner's traceback) can contain lines shaped like frames that the SDK's parser would
+turn into "in-app" frames; so the SDK only ever sees `reportableError(error)` — the class plus each
+exception's and cause's stack with its message cut out (a stack whose message cannot be located is
+dropped, and non-`Error` values carry no stack) — and the browser cuts its message out of its own stack
+before `client.reportError`, which carries no message field at all. A wire-level test pins the
 exact property-key set of the SDK's actual request body, including the `$lib`/`$lib_version`/
 `$is_server`/`$geoip_disable` the SDK adds after `before_send`, so an SDK upgrade that adds a field
 fails CI rather than leaking.

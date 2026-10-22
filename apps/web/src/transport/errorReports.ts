@@ -43,17 +43,24 @@ export function chunkIdsForStack(
 	return count ? out : undefined;
 }
 
+function messageFreeStack(error: Error): string {
+	const stack = typeof error.stack === "string" ? error.stack : "";
+	const at = error.message ? stack.indexOf(error.message) : -1;
+	return at < 0 ? stack : `${stack.slice(0, at)}${stack.slice(at + error.message.length)}`;
+}
+
 export function clientErrorReport(
 	kind: ClientErrorKind,
 	error: unknown,
 	boundary?: string,
 ): ClientErrorReport {
 	const real = error instanceof Error ? error : null;
-	const chunkIds = real?.stack ? chunkIdsForStack(real.stack) : undefined;
+	const stack = real ? messageFreeStack(real) : "";
+	const chunkIds = stack ? chunkIdsForStack(stack) : undefined;
 	return {
 		kind,
 		type: real?.name || (kind === "rejection" ? "UnhandledRejection" : "Error"),
-		...(real?.stack ? { stack: real.stack } : {}),
+		...(stack ? { stack } : {}),
 		...(boundary ? { boundary } : {}),
 		...(chunkIds ? { chunkIds } : {}),
 	};

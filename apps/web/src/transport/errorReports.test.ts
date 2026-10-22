@@ -44,7 +44,7 @@ test("a report carries the error's class, stack and boundary, never its message"
 	expect(clientErrorReport("render", error, "chat")).toEqual({
 		kind: "render",
 		type: "TypeError",
-		stack: error.stack as string,
+		stack: (error.stack as string).replace("bad", ""),
 		boundary: "chat",
 	});
 	expect(clientErrorReport("rejection", { secret: true })).toEqual({
@@ -55,6 +55,22 @@ test("a report carries the error's class, stack and boundary, never its message"
 		kind: "rejection",
 		type: "UnhandledRejection",
 	});
+});
+
+test("the message is cut out of the stack, even when its lines look like frames", () => {
+	const hook = new Error(
+		"push rejected\n    at calculateCustomerSalary (http://127.0.0.1:4317/src/customer-payroll.js:7:2)",
+	);
+	const stack = clientErrorReport("rejection", hook).stack ?? "";
+	expect(stack).not.toContain("calculateCustomerSalary");
+	expect(stack).not.toContain("push rejected");
+	expect(stack).toContain("errorReports.test.ts");
+	const webkit = Object.assign(new Error("not in a WebKit stack"), {
+		stack: "render@http://127.0.0.1:4317/assets/index-abc.js:10:5",
+	});
+	expect(clientErrorReport("window", webkit).stack).toBe(
+		"render@http://127.0.0.1:4317/assets/index-abc.js:10:5",
+	);
 });
 
 test("reports before the welcome wait for the protocol and are dropped by older hosts", () => {

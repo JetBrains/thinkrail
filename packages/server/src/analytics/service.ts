@@ -15,6 +15,7 @@ import {
 	type ErrorSource,
 	errorCode,
 	type FatalErrorKind,
+	reportableError,
 	toV8Stack,
 } from "./errors";
 import {
@@ -202,7 +203,7 @@ function throwSite(error: unknown): string {
 	);
 }
 
-function errorKey(error: unknown, report: ErrorReport): string {
+function errorKey(error: unknown, reportable: Error, report: ErrorReport): string {
 	const name = error instanceof Error ? error.name : typeof error;
 	return [
 		report.source,
@@ -210,13 +211,18 @@ function errorKey(error: unknown, report: ErrorReport): string {
 		report.requestMethod ?? "",
 		name,
 		errorCode(error) ?? "",
-		throwSite(error),
+		throwSite(reportable),
 	].join("|");
 }
 
-function admitErrorReport(s: AnalyticsState, error: unknown, report: ErrorReport): boolean {
+function admitErrorReport(
+	s: AnalyticsState,
+	error: unknown,
+	reportable: Error,
+	report: ErrorReport,
+): boolean {
 	const now = Date.now();
-	const key = errorKey(error, report);
+	const key = errorKey(error, reportable, report);
 	const last = s.errorReports.recent.get(key);
 	if (last !== undefined && now - last < ERROR_DEDUPE_MS) return false;
 	const fromSource = s.errorReports.bySource.get(report.source) ?? 0;
@@ -251,8 +257,9 @@ export function reportError(error: unknown, report: ErrorReport): void {
 	const s = state;
 	if (!s || s.shutdownPromise) return;
 	try {
-		if (!admitErrorReport(s, error, report)) return;
-		void s.basic.sendException(s.clientId, error, errorParams(s, error, report, false), false);
+		const reportable = reportableError(error);
+		if (!admitErrorReport(s, error, reportable, report)) return;
+		void s.basic.sendException(s.clientId, reportable, errorParams(s, error, report, false), false);
 	} catch {
 		log.debug("error report failed");
 	}
@@ -270,7 +277,7 @@ export async function reportFatalError(error: unknown, kind?: FatalErrorKind): P
 		};
 		const params = errorParams(s, error, report, true);
 		await Promise.race([
-			s.basic.sendException(s.clientId, error, params, true),
+			s.basic.sendException(s.clientId, reportableError(error), params, true),
 			new Promise<void>((resolve) => {
 				timer = setTimeout(resolve, FATAL_FLUSH_TIMEOUT_MS);
 			}),

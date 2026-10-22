@@ -3,7 +3,9 @@ import {
 	detectAppRoot,
 	EXTERNAL_FRAME,
 	type FrameRoots,
+	messageFreeStack,
 	normalizeFrameFilename,
+	reportableError,
 	sanitizeExceptionProperties,
 	toV8Stack,
 } from "./errors";
@@ -232,4 +234,33 @@ test("toV8Stack rewrites WebKit/Gecko frames so the node parser reads them", () 
 		"    at render (http://127.0.0.1:1/assets/a.js:10:5)\n    at ? (http://127.0.0.1:1/assets/b.js:1:2)",
 	);
 	expect(toV8Stack("    at f (x.js:1:1)")).toBe("    at f (x.js:1:1)");
+});
+
+test("messageFreeStack cuts the message out of the stack and drops a stack it cannot separate", () => {
+	const message = "push rejected\n    at payroll (src/payroll.ts:1:1)";
+	expect(messageFreeStack(`Error: ${message}\n    at real (x.ts:2:3)`, message)).toBe(
+		"Error: \n    at real (x.ts:2:3)",
+	);
+	expect(messageFreeStack("    at real (x.ts:2:3)", "")).toBe("    at real (x.ts:2:3)");
+	expect(messageFreeStack("    at real (x.ts:2:3)", "rewritten message")).toBeUndefined();
+	expect(messageFreeStack(undefined, "x")).toBeUndefined();
+});
+
+test("reportableError keeps the class and the message-free stacks of the cause chain, nothing else", () => {
+	const message =
+		"Confidential client Jane Doe\n    at salary (http://127.0.0.1:1/src/payroll.js:7:2)";
+	const error = Object.assign(new TypeError(message, { cause: new Error(message) }), {
+		code: "EACCES",
+		path: "/Users/jane/acme",
+	});
+	const reportable = reportableError(error);
+	expect(reportable.name).toBe("TypeError");
+	expect(reportable.message).toBe("");
+	expect(Object.keys(reportable).sort()).toEqual(["cause", "name"]);
+	const stacks = `${reportable.stack}\n${(reportable.cause as Error).stack}`;
+	expect(stacks).not.toContain("Jane");
+	expect(stacks).not.toContain("payroll");
+	expect(stacks).toContain("errors.test.ts");
+	expect(reportableError("a string reason").stack).toBe("");
+	expect(reportableError({ error: error }).stack).toBe("");
 });

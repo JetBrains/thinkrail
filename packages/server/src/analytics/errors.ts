@@ -268,6 +268,27 @@ export function createExceptionSanitizer(
 	return (properties) => sanitizeExceptionProperties(properties, roots);
 }
 
+const MAX_CAUSE_DEPTH = 4;
+
+export function messageFreeStack(stack: unknown, message: unknown): string | undefined {
+	if (typeof stack !== "string" || !stack) return undefined;
+	if (typeof message !== "string" || !message) return stack;
+	const at = stack.indexOf(message);
+	return at < 0 ? undefined : `${stack.slice(0, at)}${stack.slice(at + message.length)}`;
+}
+
+export function reportableError(error: unknown, depth = 0): Error {
+	const out = new Error();
+	out.stack = "";
+	if (!(error instanceof Error)) return out;
+	out.name = error.name;
+	out.stack = messageFreeStack(error.stack, error.message) ?? "";
+	if (error.cause !== undefined && depth < MAX_CAUSE_DEPTH) {
+		out.cause = reportableError(error.cause, depth + 1);
+	}
+	return out;
+}
+
 export function errorCode(error: unknown): string | undefined {
 	if (!isRecord(error) && !(error instanceof Error)) return undefined;
 	const code = (error as { code?: unknown }).code;

@@ -157,6 +157,27 @@ test("third-party diagnostics in a message never leave the host", async () => {
 	).toEqual(["host_logged agent", "request pr.open PUSH_AUTH_FAILED"]);
 });
 
+test("message lines shaped like stack frames never become frames, causes and binary remaps included", async () => {
+	const sent: BatchEntry[] = [];
+	boot(sent, { remapBase: "apps/cli" });
+	const hook = [
+		"pre-push hook failed",
+		"    at calculateCustomerSalary (http://localhost:5173/src/customer-payroll.js:7:2)",
+		"    at payrollRun (src/payroll-secret.ts:3:1)",
+	].join("\n");
+	reportError(new Error(hook, { cause: new Error(hook) }), {
+		source: "request",
+		handled: true,
+		requestMethod: "pr.open",
+	});
+	await shutdownAnalytics();
+	const wire = JSON.stringify(exceptions(sent));
+	for (const forbidden of ["calculateCustomerSalary", "customer-payroll", "payroll", "pre-push"]) {
+		expect(wire).not.toContain(forbidden);
+	}
+	expect(wire).toContain("packages/server/src/analytics/errorReports.test.ts");
+});
+
 test.each([
 	{ additionalEnabled: false },
 	{ mute: true },
