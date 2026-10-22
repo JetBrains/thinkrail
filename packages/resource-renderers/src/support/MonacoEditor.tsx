@@ -1,18 +1,18 @@
-import MonacoReact, { type OnMount } from "@monaco-editor/react";
 import { useT } from "@thinkrail/locales/react";
-import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import type { editor } from "monaco-editor/esm/vs/editor/editor.api.js";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useId, useLayoutEffect, useRef, useState } from "react";
 import { type ResourceHost, useResourceHost, useResourcePreferences } from "../host";
 import type { ResourceDescriptor, ResourceViewProps, SurfaceReview } from "../registry";
 import { MonacoReviewZones } from "./MonacoReviewZones";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
 import {
-	EDITOR_THEME,
+	createFileEditor,
+	disposeFileEditor,
 	ensureMonaco,
 	fileEditorOptions,
 	languageForPath,
 	revealLineNow,
+	syncFileModel,
 	warmLanguage,
 } from "./monacoSetup";
 import {
@@ -48,98 +48,115 @@ export default function MonacoEditor({
 	const t = useT();
 	const { fileLineWidth, fileLineWidthBounded } = useResourcePreferences();
 	ensureMonaco(useResourceHost().code);
-	const modelScope = useId().replace(/[^\w-]/g, "");
-	const options = useMemo(
-		() => fileEditorOptions(t, fileLineWidth, fileLineWidthBounded, resource.path),
-		[t, fileLineWidth, fileLineWidthBounded, resource.path],
-	);
-	const menuIconsRef = useRef<{ dispose(): void } | null>(null);
+	const scope = useId().replace(/[^\w-]/g, "");
+	const path = resource.path;
+	const text = content.kind === "text" ? content.text : "";
+	const commentLabel = t("review.widget.commentOnSelection");
+	const options = fileEditorOptions(t, fileLineWidth, fileLineWidthBounded, resource.path);
+	const containerRef = useRef<HTMLDivElement | null>(null);
 	const commentingRef = useRef<ReviewCommenting | null>(null);
-	const threadsRef = useRef<ReturnType<typeof attachReviewThreads> | null>(null);
 	const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+	const threadsRef = useRef<ReturnType<typeof attachReviewThreads> | null>(null);
 	const decorationsRef = useRef<string[]>([]);
+	const freshMountRef = useRef(false);
+	const appliedTextRef = useRef(text);
+	const latestRef = useRef({
+		scope,
+		path,
+		text,
+		options,
+		commentLabel,
+		viewState,
+		review,
+		onViewState,
+	});
 	const [reviewZones, setReviewZones] = useState<MonacoReviewZoneState>({
 		threads: [],
 		composer: null,
 	});
-	const onViewStateRef = useRef(onViewState);
-	onViewStateRef.current = onViewState;
 
-	const closeComposer = useCallback(() => threadsRef.current?.closeComposer(), []);
-	const layoutReviewZones = useCallback(() => threadsRef.current?.layout(), []);
-	const syncThreads = useCallback((target: SurfaceReview) => {
-		if (!editorRef.current) return;
-		threadsRef.current?.setThreads(target.threads);
-		decorationsRef.current = applyReviewDecorations(
-			editorRef.current,
-			decorationsRef.current,
-			target.threads,
-		);
+	useLayoutEffect(() => {
+		latestRef.current = {
+			scope,
+			path,
+			text,
+			options,
+			commentLabel,
+			viewState,
+			review,
+			onViewState,
+		};
+	});
+
+	useLayoutEffect(() => {
+		const container = containerRef.current;
+		if (!container) return;
+		const mount = latestRef.current;
+		const codeEditor = createFileEditor(container, mount);
+		editorRef.current = codeEditor;
+		freshMountRef.current = true;
+		appliedTextRef.current = mount.text;
+		const menuIcons = decorateEditorContextMenus(codeEditor);
+		if (isEditorViewState(mount.viewState)) codeEditor.restoreViewState(mount.viewState);
+		const threads = mount.review ? attachReviewThreads(codeEditor, setReviewZones) : null;
+		const commenting = threads
+			? attachReviewCommenting(codeEditor, threads, mount.commentLabel)
+			: null;
+		threadsRef.current = threads;
+		commentingRef.current = commenting;
+		return () => {
+			const saved = codeEditor.saveViewState();
+			if (saved) latestRef.current.onViewState?.(saved);
+			menuIcons.dispose();
+			commenting?.dispose();
+			threads?.dispose();
+			threadsRef.current = null;
+			commentingRef.current = null;
+			editorRef.current = null;
+			decorationsRef.current = [];
+			disposeFileEditor(codeEditor);
+		};
 	}, []);
 
-	const commentLabel = t("review.widget.commentOnSelection");
-	const commentLabelRef = useRef(commentLabel);
-	commentLabelRef.current = commentLabel;
-	useEffect(() => {
+	useLayoutEffect(() => {
+		const codeEditor = editorRef.current;
+		if (!codeEditor) return;
+		syncFileModel(codeEditor, { scope, path, text }, appliedTextRef.current);
+		appliedTextRef.current = text;
+	}, [scope, path, text]);
+
+	useLayoutEffect(() => {
 		commentingRef.current?.setLabel(commentLabel);
 	}, [commentLabel]);
 
-	const onMount: OnMount = (codeEditor) => {
-		editorRef.current = codeEditor;
-		menuIconsRef.current = decorateEditorContextMenus(codeEditor);
-		if (isEditorViewState(viewState)) codeEditor.restoreViewState(viewState);
-		if (review) {
-			threadsRef.current = attachReviewThreads(codeEditor, setReviewZones);
-			commentingRef.current = attachReviewCommenting(
-				codeEditor,
-				threadsRef.current,
-				commentLabelRef.current,
-			);
-			syncThreads(review);
-			const line = focusLine(review);
-			if (line !== null) {
-				revealLineNow(codeEditor, line);
-				review.onFocusHandled();
-			}
-		}
-	};
+	useLayoutEffect(() => {
+		editorRef.current?.updateOptions(options);
+	}, [options]);
 
-	useEffect(() => {
-		if (review) syncThreads(review);
-	}, [review, syncThreads]);
+	const closeComposer = () => threadsRef.current?.closeComposer();
+	const layoutReviewZones = () => threadsRef.current?.layout();
 
-	useEffect(() => {
-		if (!review || !editorRef.current) return;
+	useLayoutEffect(() => {
+		const codeEditor = editorRef.current;
+		const freshMount = freshMountRef.current;
+		freshMountRef.current = false;
+		if (!review || !codeEditor) return;
+		threadsRef.current?.setThreads(review.threads);
+		decorationsRef.current = applyReviewDecorations(
+			codeEditor,
+			decorationsRef.current,
+			review.threads,
+		);
 		const line = focusLine(review);
 		if (line === null) return;
-		editorRef.current.revealLineInCenter(line);
+		if (freshMount) revealLineNow(codeEditor, line);
+		else codeEditor.revealLineInCenter(line);
 		review.onFocusHandled();
 	}, [review]);
 
-	useEffect(
-		() => () => {
-			const saved = editorRef.current?.saveViewState();
-			if (saved) onViewStateRef.current?.(saved);
-			menuIconsRef.current?.dispose();
-			commentingRef.current?.dispose();
-			threadsRef.current?.dispose();
-		},
-		[],
-	);
-
-	const text = content.kind === "text" ? content.text : "";
 	return (
 		<>
-			<MonacoReact
-				height="100%"
-				path={`${modelScope}/${resource.path}`}
-				value={text}
-				language={languageForPath(resource.path)}
-				theme={EDITOR_THEME}
-				onMount={onMount}
-				loading={<LoadingRegion rows={12} className="h-full w-full p-12" />}
-				options={options}
-			/>
+			<div ref={containerRef} className="h-full w-full text-left" />
 			<MonacoReviewZones
 				zones={reviewZones}
 				review={review}

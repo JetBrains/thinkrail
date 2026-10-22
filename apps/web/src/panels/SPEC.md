@@ -1451,11 +1451,11 @@ own section. The kebab menu (`plan-menu`, a
   (`comment.sessionId`) opens **the discussion** (its chat tab); one without — every draft, since a
   draft is never sent — opens the file **focused on the comment**. The file stays one hover-action
   away (the `FileText` glyph runs the file+focus navigation; the chat glyph is gone from open rows).
-  The file focus works through (the store's `reviewFocusRequest`, which names the surface the row opens
-  (`inline` file, or `diff` with its scope) so an already-mounted pane of the other kind or another
-  base cannot consume it, consumed
-  exactly once by the pane: Monaco reveals the anchor line — including on a fresh mount, via `onMount` —
-  the preview scrolls the in-flow card into view). **No editing here** — the in-file card is the editor;
+  The file focus works through the store's `reviewFocusRequest`, which names the surface the row opens
+  (`inline` file, or `diff` with its scope) so an already-mounted pane of the other kind or another base
+  cannot consume it. The pane consumes it exactly once: Monaco reveals the anchor line, including on a
+  fresh mount (immediate scroll from the mount's layout effect; see the resource-renderers SPEC mount
+  rule), and the preview scrolls the in-flow card into view. **No editing here** — the in-file card is the editor;
   the row's action icons (their own layer, never triggering navigation) are per-row **Send** (→
   `review.sendComment`, opens the created chat tab via the same
   `openChatSession` tail as New Workspace), **Delete for DRAFT rows** (ConfirmPopover →

@@ -10,7 +10,6 @@
 ../../packages/resource-renderers/src/renderers/pdf/Diff.tsx PdfDiff
 ../../packages/resource-renderers/src/renderers/pdf/View.tsx PdfView
 ../../packages/resource-renderers/src/renderers/pdf/usePdfDocument.ts usePdfDocument
-../../packages/resource-renderers/src/support/MonacoEditor.tsx MonacoEditor
 ../../packages/resource-renderers/src/support/useScrollViewState.ts useScrollViewState
 src/chat/ChatTranscript.tsx useVirtualRows
 src/chat/HistoryOverlay.tsx Highlight

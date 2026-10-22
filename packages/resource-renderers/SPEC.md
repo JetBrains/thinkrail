@@ -128,6 +128,8 @@ the chunk's evaluation and the warm are separate long tasks. It must be cheap an
 for the resource's path (an empty path loads no grammar). `usePreloadResourceView` preloads only a
 renderer whose `capabilities.preload` is set, which only the code view sets: a host warming every row it
 hovers would otherwise load the PDF, notebook or CSV chunk of the row's top candidate.
+Once the chunk has loaded, a Monaco mount is
+synchronous: no library loader or boot promise stands between the view's commit and the editor.
 
 **One loaded implementation per key, chosen once.** `rendererMount` keeps one component map and the
 in-flight load per implementation key (renderer id + phone class), shared by preloads and mounts.
@@ -177,7 +179,7 @@ keeps it.
 
 - **Allowed deps:** `@thinkrail/contracts` (types), `@thinkrail/locales` (the `MessageKey` type and
   `./react` for its UI strings — `useT`, `<T>`, `localeOf`), `@thinkrail/ui` primitives, React, and the renderer
-  engines (`@monaco-editor/react`, `monaco-editor`, `@shikijs/monaco`, `shiki`, `@pierre/diffs`, `pdfjs-dist`,
+  engines (`monaco-editor`, `@shikijs/monaco`, `shiki`, `@pierre/diffs`, `pdfjs-dist`,
   `react-markdown`, `rehype-raw`, `rehype-sanitize`, `diff`, `jsondiffpatch`, `react-virtuoso`,
   `node-htmldiff`).
 - **Forbidden:** the web app (store, transport, panels, chat, shell, lib, themes), extensions, the server, and
@@ -568,9 +570,9 @@ content's own height.
   the selected column with horizontal scrolling in a narrower pane. Broadcast changes update a mounted
   desktop file editor. Pierre diffs and phone files own horizontal overflow and do not consume this Monaco
   preference. Rendered Markdown and rendered Markdown diffs retain their separate ~78ch reading measure.
-  `MonacoEditor` is a React Compiler bail-out, so it memoizes its options by hand on width, bounded and path;
-  the typography and spacing tokens the options read are static generated CSS (themes set only colours), and
-  a fresh options object would make `@monaco-editor/react` call `updateOptions` on every render.
+  The React Compiler memoizes `MonacoEditor`'s options on width, bounded and path, and the editor calls
+  `updateOptions` only when that object changes; the typography and spacing tokens the options read are
+  static generated CSS (themes set only colours).
 - **The desktop Monaco surface is a reader, not a language workstation.** Its file-only options keep the
   configured wrapping, generated code typography, minimap/overview-ruler removal and 6px shadowless scrollbar,
   and add read-only messaging, the path as its accessible label, an 8px top inset, three-character line-number
@@ -585,10 +587,19 @@ content's own height.
   messaging and Unicode highlighting); keeping word highlighting preserves F7. The TS/JS/JSON/CSS/HTML
   language-service contributions and their workers are absent, so this viewer emits no language-service
   diagnostics by construction. Each editor mount owns its model: the model id is a per-mount `useId` scope
-  ahead of the path, because `@monaco-editor/react` shares one model per `path` and disposes it with
-  whichever editor unmounts first, which blanked the surviving view once the same file could be on screen
-  twice (a chat card and its full screen, a card and the file's tab).
-- **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` has the sole `EDITOR_THEME`.
+  ahead of the path, so the same file on screen twice (a chat card and its full screen, a card and the
+  file's tab) never shares a model that one unmount disposes under the other.
+- **`MonacoEditor` mounts Monaco itself.** A layout effect creates the editor and its model in the commit
+  that mounts the view, with no loading state, then restores the view state and attaches review commenting
+  (review attaches only at mount). Its layout cleanup saves the view state before it disposes the editor
+  and the model, in that order. A path change on a live editor swaps the model in place, and the language
+  follows the path, because `RendererView` is keyed by implementation, not path. New text calls `setValue`
+  only when it differs from the text last applied, compared as strings, never through `getValue()`.
+  A review focus in the mount commit reveals its line with `ScrollType.Immediate`: a smooth reveal issued
+  before the editor's first frame never lands (found by the far-off worktree comment e2e). A later focus on
+  a live editor scrolls smoothly.
+- **Code surfaces re-theme from generic tokens, resiliently.** `monacoSetup` owns the sole `EDITOR_THEME`:
+  `createFileEditor` applies it and the theme refresh defines it.
   Themes own one TextMate scope definition: chat uses its live CSS-variable form, while Monaco resolves that
   same definition plus its complete editor/widget/menu/input colour map to hex and defines the Monaco theme from
   it directly. Token colours come from `shikiTokens.ts`, a Monaco-free owner of one Shiki highlighter, its
@@ -654,3 +665,10 @@ content's own height.
   same outage fails only if it lasts until the first open. The host therefore holds the preload until the
   page is online. `e2e/error-boundary.spec.ts` pins the Chromium behaviour: if a browser update re-fetches a
   failed module, that test turns red and this cost is gone.
+- **Monaco mounts without `@monaco-editor/react`.** The wrapper awaited `loader.init()` (a promise even
+  with a bundled Monaco) and took two more React commits before `editor.create`. The owned mount creates
+  the editor in the view's own commit. Click to text, median of 7 at 1x CPU: warm open 69 to 33 ms, tab
+  switch 50 to 30 ms, first open 87 to 68 ms, a 22.9k-line file 133 to 88 ms; at 4x CPU first open 285
+  to 221 ms. Click to highlighted is no later. Cost: create and first render now run in one task, so the
+  longest task grows at 4x CPU (first open 119 to 143 ms, the 22.9k-line file 97 to 153 ms). The Monaco
+  chunk shrinks by 12 kB.

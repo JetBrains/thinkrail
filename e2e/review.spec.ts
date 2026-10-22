@@ -964,6 +964,14 @@ test("opening a far-off worktree comment scrolls its card into view in the file 
 	const fileCard = page.getByRole("tabpanel").getByTestId("review-thread-card");
 	await expect(fileCard).toBeInViewport();
 	await expect(fileCard).toContainText("Far-off remark.");
+
+	await expect(async () => {
+		await page.getByRole("tabpanel").locator(".margin").first().hover();
+		await page.mouse.wheel(0, -20_000);
+		await expect(fileCard).not.toBeInViewport({ timeout: 500 });
+	}).toPass();
+	await reviewSection.getByTestId("review-comment-open").first().click();
+	await expect(fileCard).toBeInViewport();
 });
 
 test("opening a far-off base-side comment scrolls its card into view in the virtualized diff", async ({

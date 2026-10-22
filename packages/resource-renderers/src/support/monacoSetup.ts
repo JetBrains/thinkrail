@@ -1,5 +1,4 @@
 /// <reference path="../bundler.d.ts" />
-import { loader } from "@monaco-editor/react";
 import type { Translator } from "@thinkrail/locales/react";
 import type { ThemeRegistration } from "shiki/core";
 import { createOnigurumaEngine } from "shiki/engine/oniguruma";
@@ -40,9 +39,7 @@ window.MonacoEnvironment = {
 	},
 };
 
-loader.config({ monaco });
-
-export const EDITOR_THEME = "thinkrail-editor";
+const EDITOR_THEME = "thinkrail-editor";
 
 const BRACKETS: [string, string][] = [
 	["(", ")"],
@@ -128,6 +125,55 @@ export function fileEditorOptions(
 	return options;
 }
 
+interface FileModelInput {
+	scope: string;
+	path: string;
+	text: string;
+}
+
+function fileModelUri({ scope, path }: FileModelInput) {
+	return monaco.Uri.parse(`${scope}/${path}`);
+}
+
+function createFileModel(input: FileModelInput) {
+	return monaco.editor.createModel(input.text, languageForPath(input.path), fileModelUri(input));
+}
+
+export function createFileEditor(
+	container: HTMLElement,
+	{ options, ...model }: FileModelInput & { options: editor.IStandaloneEditorConstructionOptions },
+) {
+	return monaco.editor.create(container, {
+		...options,
+		model: createFileModel(model),
+		theme: EDITOR_THEME,
+	});
+}
+
+export function syncFileModel(
+	codeEditor: editor.IStandaloneCodeEditor,
+	input: FileModelInput,
+	appliedText: string,
+): void {
+	const current = codeEditor.getModel();
+	if (!current || current.uri.toString() !== fileModelUri(input).toString()) {
+		codeEditor.setModel(createFileModel(input));
+		current?.dispose();
+		return;
+	}
+	if (input.text !== appliedText) current.setValue(input.text);
+}
+
+export function revealLineNow(codeEditor: editor.IStandaloneCodeEditor, line: number): void {
+	codeEditor.revealLineInCenter(line, monaco.editor.ScrollType.Immediate);
+}
+
+export function disposeFileEditor(codeEditor: editor.IStandaloneCodeEditor): void {
+	const model = codeEditor.getModel();
+	codeEditor.dispose();
+	model?.dispose();
+}
+
 function themeData(registration: ThemeRegistration) {
 	try {
 		const { rules, colors } = monacoThemeData(registration);
@@ -160,10 +206,6 @@ function currentTheme(code: ResourceCodeHost) {
 function defineTheme({ base, data }: ReturnType<typeof currentTheme>): void {
 	monaco.editor.defineTheme(EDITOR_THEME, { base, inherit: true, ...data });
 	monaco.editor.setTheme(EDITOR_THEME);
-}
-
-export function revealLineNow(codeEditor: editor.IStandaloneCodeEditor, line: number): void {
-	codeEditor.revealLineInCenter(line, monaco.editor.ScrollType.Immediate);
 }
 
 async function createEngine() {
