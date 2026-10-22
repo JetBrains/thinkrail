@@ -44,8 +44,7 @@ tuned against observed per-job durations.
 **Required gate.** The ruleset requires one check, "CI passed": an aggregate job that succeeds only when
 the change classifier, conformance/lint/typecheck and unit tests succeeded and every other job either
 succeeded or was skipped by the classifier. CI can then add, rename or skip jobs without a ruleset edit;
-renaming "CI passed" itself blocks the merge queue. The legacy gates "E2E (no-agent)", "Binary smoke &
-e2e" and "Desktop smoke & e2e" mirror "CI passed" only until the ruleset stops requiring them, then go.
+renaming "CI passed" itself blocks the merge queue.
 
 **Change classifier.** A `changes` job diffs the PR or merge group against its base, counting a rename as
 both its old and new path. When every changed path lies outside the app — the website and its analytics package, the website workflows, README
