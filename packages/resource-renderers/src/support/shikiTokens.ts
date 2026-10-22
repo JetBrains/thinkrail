@@ -127,7 +127,10 @@ export function createShikiTokens({ languages: catalog, languageId, engine }: Sh
 				if (theme) await selectTheme(hl, theme);
 				return hl;
 			})
-			.catch(() => null);
+			.catch(() => {
+				creating = null;
+				return null;
+			});
 		return creating;
 	}
 
@@ -138,7 +141,7 @@ export function createShikiTokens({ languages: catalog, languageId, engine }: Sh
 		if (!language) return Promise.resolve(null);
 		load = Promise.all([highlighterReady(), language.load()])
 			.then(async ([hl, module]) => {
-				if (!hl) return null;
+				if (!hl) throw new Error("highlighter unavailable");
 				await hl.loadLanguage(module.default);
 				const own = module.default.find((registration) => registration.name === id);
 				return own?.embeddedLangsLazy?.filter((embed) => byId.has(embed)) ?? [];
