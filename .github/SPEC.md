@@ -38,10 +38,25 @@ artifact probes under Xvfb with test-only software-rendering flags, and runs des
 Real-provider tests remain explicitly authorized and separate.
 
 The three browser suites dominate wall time, so each runs as a matrix of Playwright shards on separate
-runners ([[module-browser-e2e]] owns the slicing). The ruleset's required check names "E2E (no-agent)",
-"Binary smoke & e2e" and "Desktop smoke & e2e" belong to aggregate gate jobs that succeed only when every
-shard of their matrix succeeded; renaming a gate without updating the ruleset blocks the merge queue.
-Shard counts trade runner minutes for wall time and are tuned against observed per-job durations.
+runners ([[module-browser-e2e]] owns the slicing). Shard counts trade runner minutes for wall time and are
+tuned against observed per-job durations.
+
+**Required gate.** The ruleset requires one check, "CI passed": an aggregate job that succeeds only when
+the change classifier, conformance/lint/typecheck and unit tests succeeded and every other job either
+succeeded or was skipped by the classifier. CI can then add, rename or skip jobs without a ruleset edit;
+renaming "CI passed" itself blocks the merge queue. The legacy gates "E2E (no-agent)", "Binary smoke &
+e2e" and "Desktop smoke & e2e" mirror "CI passed" only until the ruleset stops requiring them, then go.
+
+**Change classifier.** A `changes` job diffs the PR or merge group against its base. When every changed
+path lies outside the app — the website and its analytics package, the website workflows, README
+screenshots — the classifier skips the pi-package, browser, binary, Windows and desktop jobs; any other
+path, or a failed diff, runs them all. The exclusion list is a path allow-list, never a file-type rule:
+Markdown is product input here (skills ship in the artifacts, specs feed conformance gates). In the merge
+queue the diff spans every group entry ahead, so a site PR queued behind an app PR still runs the full set.
+Conformance, lint/typecheck and unit tests always run; they are cheap and cover the website too.
+
+Browser jobs retry the Playwright browser download a bounded number of times, a network fault that
+otherwise ejects an entry from the merge queue; the tests themselves are never retried at job level.
 Native artifact smokes run only in shard 1: repeating an identical probe per shard adds no coverage and
 multiplies exposure to runner-environment faults.
 
