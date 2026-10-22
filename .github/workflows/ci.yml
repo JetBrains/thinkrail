@@ -223,12 +223,11 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
-      - name: Install desktop and browser runtimes
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            dbus-x11 x11-utils xvfb libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2
-          .github/scripts/install-playwright.sh
+      - name: Install desktop runtime packages
+        uses: ./.github/actions/desktop-apt
+        timeout-minutes: 10
+      - name: Install Playwright Chromium
+        run: .github/scripts/install-playwright.sh
       - name: Start virtual display
         run: |
           for attempt in 1 2 3; do
