@@ -24,8 +24,8 @@ initializeBundledThemes();
 applyThemePreference(readThemeHint());
 initTransport();
 installClientErrorReporting();
-setErrorBoundaryReporter((error, label) =>
-	reportClientError(clientErrorReport("render", error, label)),
+setErrorBoundaryReporter((error, reportId) =>
+	reportClientError(clientErrorReport("render", error, reportId)),
 );
 initChatPreferencesPersistence();
 initModelVisibilityPersistence();
@@ -37,7 +37,7 @@ function App() {
 	useLocaleSync();
 	const t = useT();
 	return (
-		<ErrorBoundary label={t("app.errorBoundary.label")}>
+		<ErrorBoundary label={t("app.errorBoundary.label")} reportId="app">
 			<TooltipProvider delayDuration={250} skipDelayDuration={400}>
 				<AppResourceHost>
 					<Shell />

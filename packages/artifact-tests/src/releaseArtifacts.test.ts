@@ -199,15 +199,17 @@ test.each([
 });
 
 test("a source-map upload key without its project id fails closed before stamping", () => {
-	const missing = stampIdentity("stable", "phc_release", { POSTHOG_CLI_API_KEY: "phx_secret" });
+	const missing = stampIdentity("stable", "phc_release", { POSTHOG_CLI_API_KEY_SET: "true" });
 	expect(missing.result.exitCode).not.toBe(0);
 	expect(missing.stamped).toBeUndefined();
-	expect(`${missing.result.stdout}${missing.result.stderr}`).not.toContain("phx_secret");
 	const paired = stampIdentity("stable", "phc_release", {
-		POSTHOG_CLI_API_KEY: "phx_secret",
+		POSTHOG_CLI_API_KEY_SET: "true",
 		POSTHOG_CLI_PROJECT_ID: "1",
 	});
 	expect(paired.result.exitCode).toBe(0);
+	expect(
+		stampIdentity("stable", "phc_release", { POSTHOG_CLI_API_KEY_SET: "false" }).result.exitCode,
+	).toBe(0);
 });
 
 test("source-map credentials reach only the web and desktop build steps", () => {
@@ -215,7 +217,6 @@ test("source-map credentials reach only the web and desktop build steps", () => 
 		.filter((step) => step.env && "POSTHOG_CLI_API_KEY" in step.env)
 		.map((step) => step.name);
 	expect(credentialed).toEqual([
-		"Stamp shared release identity",
 		"Build web UI",
 		"Build and smoke desktop app",
 		"Package desktop installer",

@@ -33,16 +33,16 @@ test("resetKeys recovery: equal keys keep the error, a changed key clears it", (
 	expect(shallowEqualArrays(undefined, undefined)).toBe(true);
 });
 
-test("a caught render error reaches the installed reporter with its boundary label", () => {
+test("a caught render error reaches the installed reporter with its untranslated report id", () => {
 	const seen: Array<[Error, string | undefined]> = [];
 	const consoleError = spyOn(console, "error").mockImplementation(() => {});
 	try {
-		setErrorBoundaryReporter((error, label) => {
-			seen.push([error, label]);
+		setErrorBoundaryReporter((error, reportId) => {
+			seen.push([error, reportId]);
 			throw new Error("reporter failure must not escape");
 		});
 		const boom = new Error("boom");
-		new ErrorBoundary({ label: "chat", children: null }).componentDidCatch(boom, {
+		new ErrorBoundary({ label: "Чат", reportId: "chat", children: null }).componentDidCatch(boom, {
 			componentStack: "",
 		});
 		setErrorBoundaryReporter(null);

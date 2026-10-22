@@ -24,9 +24,10 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
     chunk / 504 / Safari "module script failed") and steers those to a page **reload** (re-fetches the
     chunk) rather than an in-place retry;
   - logs the crash to the console (`componentDidCatch`) — the UI already degrades gracefully — and hands
-    it with the boundary `label` to the one reporter installed via `setErrorBoundaryReporter` (wired by
+    it with the boundary's untranslated `reportId` (never the displayed, translated `label`) to the one
+    reporter installed via `setErrorBoundaryReporter` (wired by
     `main.tsx` to the transport's error reports; reporter failures are swallowed). The seam keeps this
-    module store/transport-free and leaves every call site unchanged.
+    module store/transport-free.
 - **`CustomIcon.tsx`** — renders an SVG from `public/custom-icons/` as a themeable `currentColor` glyph
   via a CSS `mask-image` span (`.custom-icon*` classes in `index.css`), so a custom glyph sizes with
   `size-*` and colours with `text-*` exactly like a Remix icon. Names are a typed union

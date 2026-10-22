@@ -190,7 +190,7 @@ async function start(): Promise<void> {
 	try {
 		process.chdir(homedir());
 	} catch (error) {
-		console.error("[desktop] could not leave the app bundle working directory", error);
+		desktopError("cwd", "could not leave the app bundle working directory", error);
 	}
 	if (!neutral && process.env.THINKRAIL_DESKTOP_HIDDEN !== "1") {
 		startupSplash = await openStartupSplash(

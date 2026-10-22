@@ -119,8 +119,9 @@ byte-identical JS for a different checkout path (the generated entry's absolute 
 `sourcesContent`) or a comment-only source change, and posthog-cli's symbol-set upload fails on an
 existing chunk id with different content. `preBuild` also refuses to stage web `.map` files.
 
-Handled native-shell failures (keyboard state, title-bar double-click, update listener/lifecycle,
-Windows frame restore, startup) go through `errorReporting.ts`'s `desktopError(scope, message, error)`:
+Handled native-shell failures that carry an error (keyboard state, title-bar double-click, update
+listener/lifecycle/journal, native-label writes, leaving the bundle working directory, Windows frame restore,
+startup) go through `errorReporting.ts`'s `desktopError(scope, message, error)`:
 the `[desktop] …` console line stays, and once the host has booted the error is forwarded to
 `DesktopHost.reportError` as a sanitized `desktop` error report ([[submodule-server-analytics]]); before
 that it is console-only. Uncaught main-process faults need no seam — they share the host's process

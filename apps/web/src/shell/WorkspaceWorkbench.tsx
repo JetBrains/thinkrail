@@ -160,7 +160,11 @@ function EditorResourceBody({ workspaceId, tab }: { workspaceId: string; tab: Ed
 		return <MissingResource kind={tab.kind} />;
 	}
 	return (
-		<ErrorBoundary label={t("shell.workbench.panel.editor")} resetKeys={[workspaceId, tab.id]}>
+		<ErrorBoundary
+			label={t("shell.workbench.panel.editor")}
+			reportId="editor"
+			resetKeys={[workspaceId, tab.id]}
+		>
 			<Suspense fallback={<MissingResource kind="editor" />}>
 				{editor.kind === "file" ? (
 					<FilePane tab={editor} />
@@ -196,7 +200,11 @@ function ChatResourceBody({
 	}, [available, tab.sessionId]);
 	if (available) {
 		return (
-			<ErrorBoundary label={t("shell.workbench.panel.chat")} resetKeys={[workspaceId, tab.id]}>
+			<ErrorBoundary
+				label={t("shell.workbench.panel.chat")}
+				reportId="chat"
+				resetKeys={[workspaceId, tab.id]}
+			>
 				<Suspense fallback={<MissingResource kind="chat" />}>
 					<ChatView sessionId={tab.sessionId} workspaceId={workspaceId} onOpenFile={onOpenFile} />
 				</Suspense>
@@ -560,7 +568,11 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			if (tab.kind === "document") {
 				if (deletedSessions?.[tab.sourceId]) return <MissingResource kind="plan" />;
 				return (
-					<ErrorBoundary label={t("shell.workbench.panel.plan")} resetKeys={[workspaceId, tab.id]}>
+					<ErrorBoundary
+						label={t("shell.workbench.panel.plan")}
+						reportId="plan"
+						resetKeys={[workspaceId, tab.id]}
+					>
 						<Suspense fallback={<MissingResource kind="plan" />}>
 							<PlanPane workspaceId={workspaceId} sessionId={tab.sourceId} />
 						</Suspense>
@@ -573,6 +585,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 				return (
 					<ErrorBoundary
 						label={t("shell.workbench.panel.terminal")}
+						reportId="terminal"
 						resetKeys={[workspaceId, tab.id]}
 					>
 						{terminal ? (
@@ -622,6 +635,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			plan: railPlanSessionId ? (
 				<ErrorBoundary
 					label={t("shell.workbench.panel.planRail")}
+					reportId="plan_rail"
 					resetKeys={[workspaceId, railPlanSessionId]}
 				>
 					<Suspense fallback={<MissingResource kind="plan" />}>
@@ -641,6 +655,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 			bodies[tool] = (
 				<ErrorBoundary
 					label={t("shell.workbench.panel.tool", { tool })}
+					reportId={`${tool}_tool`}
 					resetKeys={[workspaceId, tool]}
 				>
 					{bodies[tool]}

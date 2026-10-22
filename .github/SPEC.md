@@ -130,7 +130,7 @@ native jobs receive no service credentials except one owner-approved exception: 
 key (error-tracking write, organization read) for source-map upload. PostHog's `posthog-cli` must stamp
 chunk ids into the JS before packaging and needs that key to do so, and the maps must never ship, so the
 upload cannot move to a later protected job. The key reaches only the web build, `desktop:build` and desktop
-packaging steps (never smokes) and is absent from PR CI, whose builds are unchanged. Protected internal
+packaging steps (never smokes; the identity-stamping step sees only whether it is set) and is absent from PR CI, whose builds are unchanged. Protected internal
 jobs otherwise perform service calls but do not build product source or assemble archives.
 
 **Source maps.** When `posthog-cli-api-key` is set, those steps receive

@@ -56,11 +56,11 @@ runs:
         VERSION: ${{ inputs.version }}
         CHANNEL: ${{ inputs.channel }}
         POSTHOG_PROJECT_KEY: ${{ inputs.posthog-project-key }}
-        POSTHOG_CLI_API_KEY: ${{ inputs.posthog-cli-api-key }}
+        POSTHOG_CLI_API_KEY_SET: ${{ inputs.posthog-cli-api-key != '' }}
         POSTHOG_CLI_PROJECT_ID: ${{ inputs.posthog-cli-project-id }}
       run: |
         set -eu
-        if [ -n "${POSTHOG_CLI_API_KEY:-}" ] && [ -z "${POSTHOG_CLI_PROJECT_ID:-}" ]; then
+        if [ "${POSTHOG_CLI_API_KEY_SET:-false}" = true ] && [ -z "${POSTHOG_CLI_PROJECT_ID:-}" ]; then
           echo "::error::posthog-cli-api-key needs posthog-cli-project-id"; exit 1
         fi
         case "$CHANNEL" in

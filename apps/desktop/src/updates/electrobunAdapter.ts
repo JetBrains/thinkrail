@@ -23,7 +23,7 @@ export interface ElectrobunUpdateControllerOptions {
 
 function updateJournal(userData: string) {
 	return createUpdateJournalStore(join(userData, UPDATE_JOURNAL_FILE), (error) => {
-		console.error("[desktop] update journal failed", error);
+		desktopError("updates", "update journal failed", error);
 	});
 }
 
