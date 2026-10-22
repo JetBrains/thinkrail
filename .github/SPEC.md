@@ -51,9 +51,10 @@ both its old and new path. When every changed path lies outside the app — the 
 package, the website workflows, README screenshots — the classifier skips the pi-package, browser, binary,
 Windows and desktop jobs; any other path, or a failed diff, runs them all. The exclusion list is a path
 allow-list, never a file-type rule: Markdown is product input here (skills ship in the artifacts, specs feed
-conformance gates). In the merge queue the diff spans every group entry ahead, so a site PR queued behind an
-app PR still runs the full set. Conformance, lint/typecheck and unit tests always run; they are cheap and
-cover the website too.
+conformance gates). In the merge queue it diffs against the target branch, not the event's `base_sha`: that
+is the previous entry's group head, and with HEADGREEN grouping a green head merges every entry ahead, so a
+site PR queued behind an app PR must still run the full set. Conformance, lint/typecheck and unit tests
+always run; they are cheap and cover the website too.
 
 Browser jobs retry the Playwright browser download a bounded number of times, a network fault that
 otherwise ejects an entry from the merge queue; the tests themselves are never retried at job level. They
