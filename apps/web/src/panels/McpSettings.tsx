@@ -211,13 +211,21 @@ function writeSetting(
 	});
 }
 
+export function setMcpServerEnabled(
+	workspaceId: string,
+	row: McpServerRow,
+	enabled: boolean,
+): Promise<McpListResult> {
+	return writeSetting(workspaceId, row, { enabled });
+}
+
 type McpRowCommand =
 	| { kind: "toggle"; enabled: boolean }
 	| { kind: "exposure"; exposure: McpEditableExposure }
 	| { kind: "revoke-tool"; tool: string }
 	| { kind: McpRowAction | "sign-out" | "remove" | "share" | "details" };
 
-function lockedSettings(row: McpServerRow): boolean {
+export function lockedSettings(row: McpServerRow): boolean {
 	return (
 		row.state === "pending-approval" ||
 		row.state === "invalid-config" ||

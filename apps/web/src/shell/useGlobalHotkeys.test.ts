@@ -23,7 +23,7 @@ const all = {
 	workspace: true,
 	bottom: true,
 	newWorkspace: true,
-	sessionSwitcher: true,
+	search: true,
 } as const;
 
 describe("global hotkey routing", () => {
@@ -45,15 +45,13 @@ describe("global hotkey routing", () => {
 		expect(globalHotkeyCommand(key("KeyB", { altKey: true }), all, false, "Linux")).toBeNull();
 	});
 
-	test("routes Mod+K to session-switcher when available, suppressed behind modal", () => {
-		expect(globalHotkeyCommand(key("KeyK"), all, false, "Linux")).toBe("session-switcher");
+	test("routes Mod+K to search when available, suppressed behind modal", () => {
+		expect(globalHotkeyCommand(key("KeyK"), all, false, "Linux")).toBe("search");
 		expect(
 			globalHotkeyCommand(key("KeyK", { ctrlKey: false, metaKey: true }), all, false, "MacIntel"),
-		).toBe("session-switcher");
+		).toBe("search");
 		expect(globalHotkeyCommand(key("KeyK"), all, true, "Linux")).toBeNull();
-		expect(
-			globalHotkeyCommand(key("KeyK"), { ...all, sessionSwitcher: false }, false, "Linux"),
-		).toBeNull();
+		expect(globalHotkeyCommand(key("KeyK"), { ...all, search: false }, false, "Linux")).toBeNull();
 		expect(globalHotkeyCommand(key("KeyK", { shiftKey: true }), all, false, "Linux")).toBeNull();
 		expect(globalHotkeyCommand(key("KeyK", { altKey: true }), all, false, "Linux")).toBeNull();
 	});
