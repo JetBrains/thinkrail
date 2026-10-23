@@ -428,7 +428,9 @@ the renderer's plain-source fallback, not the tool-error branch. File previews w
 fixture repository (removed in `finally`) and pin the HTML renderer in the card, the before/after 2-up diff,
 a region comment's Send carrying the card's chat `sessionId` over the wire, HTML design-width scaling and the
 width switch, full screen, Open in tab, and a before/after opened as a comparison diff tab that survives a
-reload. These regressions need no provider,
+reload. A huge comparison opts in through Show diff anyway while an unrelated file changes every 400 ms (each
+write its own watcher frame, past the 300 ms quiet flush), so updates keep landing inside the expensive first
+mount. These regressions need no provider,
 prompt submission, route mock, or screenshot. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
 real Settings → Extensions switch through `settings.update`, proves it survives a reload, and seeds a
 historical `visualize` call that must still render its diagram while the extension is off; each test restores

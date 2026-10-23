@@ -219,6 +219,19 @@ never guarded: it costs no diffing. The bounded check closes the multiset estima
 lines. The notice says "This diff is too expensive to show automatically" without a line count; the guard
 answers only whether automatic rendering should wait. Every diff surface mounts through it, so the app's diff
 tabs and Changes sections, comparison tabs and chat cards cannot disagree.
+The first diff of a page mounts through a Suspense retry (the lazy renderer), which React renders
+interruptibly and never expires: any unrelated update during it (a watcher nudge, a file re-read) discards the
+unfinished mount with its `useMemo` results, and recomputing per restart kept a Show-anyway diff on a skeleton
+for as long as the workspace kept changing. `PierreDiff` therefore takes its parse and change blocks from a
+content-keyed module cache (`diffCache`) that a restarted render reuses, and computes change blocks only for a
+surface with hunk actions, so a read-only preview diffs once. Each of its two tables (parses, change blocks;
+they hold the same texts) is bounded by the text its entries retain — 4 Mi characters across both sides,
+about twenty full rewrites at the notice threshold (2000 changed lines of ~100 characters) — and by 64
+entries, more than one render of a Changes viewport mounts, so releasing every section at once cannot cycle
+it; the newest entry always stays however large, so an opted-in giant diff survives its own restarts. The
+trade-off: being module-level, it keeps up to that text (or the one larger newest diff) plus Pierre's parse
+of it alive after its surfaces unmount, and surfaces that together exceed the budget within one render
+recompute on every restart.
 
 
 ## Bundled renderers
