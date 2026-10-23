@@ -188,6 +188,8 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   idempotency (incl. concurrent), takeover, displaced-client rejection, tab-list broadcast, close/busy,
   revive. Replay-persistence and natural-exit cases use bounded publisher-observed data/exit conditions as
   readiness edges, never elapsed time; their expected output marker never appears contiguously in the command
-  input, so terminal echo cannot impersonate command execution.
+  input, so terminal echo cannot impersonate command execution. "Any output" is not a replay readiness edge:
+  a shell's first frame may be mode-only (bash's `ESC[?2004h`), which the recorder never stores, so a revive
+  test persists only after its printed marker arrives and asserts the replay contains it.
 - `e2e/terminals.spec.ts` — the rapid re-entry regression, reload survival, second-client takeover,
   cross-client tab convergence.

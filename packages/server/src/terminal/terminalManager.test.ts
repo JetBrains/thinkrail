@@ -105,7 +105,7 @@ function waitForTerminalExit(id: string): Promise<void> {
 	);
 }
 
-async function exitTerminalWithMarker(
+async function printTerminalMarker(
 	id: string,
 	markerSuffix: string,
 	clientKey: string,
@@ -114,6 +114,15 @@ async function exitTerminalWithMarker(
 	const marker = `TR_${markerSuffix}`;
 	writeTerminal(id, `printf 'TR_%s\\n' '${markerSuffix}'\r`, clientKey);
 	await waitForTerminalOutput(id, marker);
+	return marker;
+}
+
+async function exitTerminalWithMarker(
+	id: string,
+	markerSuffix: string,
+	clientKey: string,
+): Promise<string> {
+	const marker = await printTerminalMarker(id, markerSuffix, clientKey);
 	writeTerminal(id, "exit\r", clientKey);
 	await waitForTerminalExit(id);
 	return marker;
@@ -371,7 +380,7 @@ test(
 	"a host restart gives the tabs back with fresh shells showing the old output",
 	async () => {
 		const first = attachTerminal(WS, "tab-a", "client-1", { title: "Kept" });
-		await waitForTerminalOutput(first.id);
+		const marker = await printTerminalMarker(first.id, "KEPT", "client-1");
 		persistTerminalSessions();
 		resetTerminalState();
 
@@ -382,7 +391,7 @@ test(
 		const revived = attachTerminal(WS, "tab-a", "client-1");
 		expect(revived.created).toBe(true);
 		expect(revived.id).not.toBe(first.id);
-		expect(revived.replay ?? "").not.toBe("");
+		expect(revived.replay ?? "").toContain(marker);
 	},
 	TERMINAL_TEST_TIMEOUT_MS,
 );
@@ -391,7 +400,7 @@ test(
 	"a revived recording is served once, not to every later attach",
 	async () => {
 		const first = attachTerminal(WS, "tab-a", "client-1");
-		await waitForTerminalOutput(first.id);
+		const marker = await printTerminalMarker(first.id, "SERVED_ONCE", "client-1");
 		persistTerminalSessions();
 		resetTerminalState();
 		reviveTerminalSessions();
@@ -400,7 +409,7 @@ test(
 		closeTerminalTab(WS, "tab-a", true);
 		const fresh = attachTerminal(WS, "tab-a", "client-1");
 
-		expect(revived.replay ?? "").not.toBe("");
+		expect(revived.replay ?? "").toContain(marker);
 		expect(fresh.replay ?? "").toBe("");
 	},
 	TERMINAL_TEST_TIMEOUT_MS,
