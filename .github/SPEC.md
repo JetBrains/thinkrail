@@ -63,8 +63,11 @@ CI's runner time: on a PR they run only when a path feeds building or packaging 
 artifact tests, the server's build support and bundled-runtime registration, the artifact Playwright
 runners, CI definitions, patches and the root manifests and lockfile — and in a merge group they always run,
 so main never lands an artifact they have not exercised. An artifact-only defect in an unrelated change
-therefore surfaces at enqueue time instead of on the PR; it was 1 in 56 failed runs before the split. The
-Windows job stays on every app PR: it is mostly native unit gates, not an artifact replay.
+therefore surfaces at enqueue time instead of on the PR; it was 1 in 56 failed runs before the split. That
+includes the shared no-agent specs and fixtures the artifact suites replay: only the artifact runners and
+configs are classifier paths, so a harness change that breaks only the binary or desktop replay is also
+caught at enqueue. The Windows job stays on every app PR: it is mostly native unit gates, not an artifact
+replay.
 
 Browser jobs retry the Playwright browser download a bounded number of times, a network fault that otherwise
 ejects an entry from the merge queue; inside a job Playwright retries a failed test once on CI (source and
