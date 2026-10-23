@@ -20,29 +20,45 @@ const HEADING_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
 const BOOLEAN_ATTRIBUTES = new Set(["open", "checked", "disabled"]);
 const HTML_INTEGER = /^[\t\n\f\r ]*([+-]?\d+)/;
 
-type MergeState =
-	| { state: "pending" }
-	| { state: "failed" }
-	| { state: "done"; html: string; before: string };
+type DoneMerge = { state: "done"; html: string; before: string };
+type MergeState = { state: "pending" } | { state: "failed" } | DoneMerge;
 const PENDING: MergeState = { state: "pending" };
 const FAILED: MergeState = { state: "failed" };
+const MERGE_CACHE_SIZE = 16;
+const merges = new Map<string, DoneMerge>();
 
-function useHtmldiffMerge(before: string, after: string): MergeState {
-	const [merge, setMerge] = useState<MergeState>(PENDING);
+function rememberMerge(key: string, merge: DoneMerge): void {
+	merges.set(key, merge);
+	const oldest = merges.keys().next().value;
+	if (merges.size > MERGE_CACHE_SIZE && oldest !== undefined) merges.delete(oldest);
+}
+
+function useHtmldiffMerge(before: string, after: string): { merge: MergeState; cached: boolean } {
+	const key = `${before}\u0000${after}`;
+	const [merge, setMerge] = useState<MergeState>(() => merges.get(key) ?? PENDING);
+	const [cachedAtMount] = useState(() => merges.has(key));
 
 	useEffect(() => {
+		const cached = merges.get(key);
+		if (cached) {
+			setMerge(cached);
+			return;
+		}
 		const worker = new Worker(new URL("./htmldiff.worker.ts", import.meta.url), {
 			type: "module",
 		});
-		worker.onmessage = (event: MessageEvent<string>) =>
-			setMerge({ state: "done", html: event.data, before });
+		worker.onmessage = (event: MessageEvent<string>) => {
+			const done: DoneMerge = { state: "done", html: event.data, before };
+			rememberMerge(key, done);
+			setMerge(done);
+		};
 		worker.onerror = () => setMerge(FAILED);
 		worker.onmessageerror = () => setMerge(FAILED);
 		worker.postMessage({ before, after });
 		return () => worker.terminate();
-	}, [before, after]);
+	}, [key, before, after]);
 
-	return merge;
+	return { merge: merges.get(key) ?? merge, cached: cachedAtMount };
 }
 
 type Changed = (element: Element) => boolean;
@@ -294,7 +310,7 @@ export default function RenderedDiff({
 			openFile,
 		],
 	);
-	const merge = useHtmldiffMerge(before, after);
+	const { merge, cached } = useHtmldiffMerge(before, after);
 	const view = useMemo(() => {
 		if (merge.state !== "done") return null;
 		const root = parseRoot(merge.html);
@@ -319,7 +335,7 @@ export default function RenderedDiff({
 		<div
 			ref={attachScroller}
 			data-testid="rendered-diff"
-			className="h-full overflow-auto bg-container-content-bg motion-safe:animate-reveal"
+			className={`h-full overflow-auto bg-container-content-bg ${cached ? "" : "motion-safe:animate-reveal"}`}
 		>
 			{view.empty ? (
 				<p data-testid="rendered-diff-empty" className="px-12 py-8 tr-text-ui text-text-muted">
