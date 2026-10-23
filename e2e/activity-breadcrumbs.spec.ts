@@ -585,6 +585,7 @@ test("sticky activity breadcrumbs expose the off-screen Activity â†’ Thinking â†
 		await expect
 			.poll(async () => (await readChatScrollGeometry(chatScroll)).distanceFromEnd)
 			.toBeLessThanOrEqual(1);
+		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 	};
 	await assertFollowingLatest();
 

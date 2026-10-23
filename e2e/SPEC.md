@@ -126,6 +126,9 @@ fixed-position behavior. Intersection with the scroller alone does not prove tha
 Pierre surfaces paint plain text first and replace their rows when the worker's highlight lands, which
 is late on slower hosts such as the compiled-binary and packaged-desktop artifacts; pointer probes wait
 for highlighted tokens (`pierreHighlightedTokens`) before measuring or dragging rows.
+A following probe that lets actionability scroll an off-screen transcript control into view first
+waits for `data-scroll-moving="false"`: that scroll is not reader input, so an active placement motion
+restores the latest edge, which on slow runners lands between mousedown and mouseup and drops the click.
 
 ## Render profiling harness
 
