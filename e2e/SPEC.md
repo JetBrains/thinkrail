@@ -315,8 +315,10 @@ focus endpoints, and rail/header geometry that matches the workbench across a wo
 
 The no-agent setup seeds a test-owned empty `models.json` and never reads or copies developer
 `auth.json` or `models.json`; provider scenarios use synthetic fixtures, and the separately authorized
-real-Central mode keeps its opaque-artifact-only credential contract above. Model-context coverage
-exercises the Default / 1M / Custom selector through the real host: shared and per-provider saves,
+real-Central mode keeps its opaque-artifact-only credential contract above. Ambient credential environment
+variables still reach the no-agent host, so a check that depends on whether any provider is connected reads
+the host's `provider.status` over the wire first, never a one-shot snapshot of UI still loading it. Model-context
+coverage exercises the Default / 1M / Custom selector through the real host: shared and per-provider saves,
 retained live-chat limits versus new-chat metadata, Custom validation and Apply focus, cross-client
 convergence with draft invalidation, sanitized read/write failures with Retry, mobile keyboard use,
 and pre-v76 hiding.
