@@ -152,6 +152,11 @@ is a public ingestion key, not a service credential, so hosted native jobs may r
 workflow passes it from its secret store and the stamp step never echoes it. The private workflow's own commit
 is never product identity.
 
+The version itself comes from `.github/scripts/next-version.sh`, the one public version policy. It reads
+`git tag -l` unless `--tags` supplies the list. The release controller passes the git tags plus the
+versions its update feed still advertises, so deleting a release and its tag never frees that number.
+`--tags` is therefore a consumed interface, not a test-only hook.
+
 Signing credentials and access to `codesign.labs.jb.gg` stay in the protected private pipeline. Hosted
 native jobs receive no service credentials except one owner-approved exception: a PostHog personal API
 key (error-tracking write, organization read) for source-map upload. PostHog's `posthog-cli` must stamp
