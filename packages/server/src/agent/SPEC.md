@@ -888,6 +888,21 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   worktree `cwd` remains an input, never a workspace-registry lookup); Central process/filesystem knowledge—the
   caller supplies only the desired opaque extension paths for a candidate.
 
+## Tool output and context recovery
+
+Portable tools own bounded model-facing output ([[submodule-spec-graph-tools]],
+[[submodule-pi-todos-tools]]); the host does not wrap every tool or rewrite user input. Pi's native
+read/bash/MCP limits remain authoritative. Structured result details are presentation metadata;
+measure model-facing content, not the serialized transcript or SDK context object.
+
+`piContextOverflow.test.ts` exercises real in-process sessions with synthetic providers and a stub
+compactor: tool-result sizes at dispatch, one overflow retry, and final settlement. Its pure parity
+probes also expose two engine limitations observed in Pi 1.2 and 1.4: retained tool pairs can exceed
+`keepRecentTokens`, and summary-output limits do not bound aggregate summary input. These are upgrade
+review signals, not guarantees of safe whole-request admission or a claim about a historical incident.
+Budgeting, compaction and retry corrections belong upstream; neither earlier-compaction overrides nor
+host retries compensate for them here. Re-evaluate the parity expectations when Pi changes those paths.
+
 ## Session titles
 
 `agentSessionManager` is the only durable chat-title writer. Its `renameSession(sessionId,
