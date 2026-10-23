@@ -306,6 +306,14 @@ defaults *and* over a virtualization remount. `FoldGeometryProvider` is the tran
 change seam: every fold header registers a stable row-derived id through `useFold`, including `Collapsible`
 and fallback-driven auto expansion/collapse. It routes detached anchor stabilization through
 `ReadingBandController`'s single motion channel and refreshes from the changing row's measured geometry.
+The correction lands in the change's first frame (the motion's frame, the row's resize observation as
+backstop), never in the React commit: a commit-time `scrollTop` write reaches Virtuoso's synchronous scroll
+handler before its ResizeObserver measures the changed row, so it windowed stale sizes — an above-viewport
+expansion emptied the list and remounted every row, including the reader's anchor, within one frame. The
+correction is still pending only until that first frame or backstop write: native input or a newer fold change
+arriving before it applies it exactly once (a newer change thereby accepts a synchronous, pre-measurement write
+for the overlap). Afterwards nothing is pending, so a resumed stabilization interrupted again never re-applies
+it over reader movement whose scroll event is not yet handled.
 A wholly offscreen disclosure preserves the visible transcript by its own row-height delta. If a sticky
 breadcrumb collapses the disclosure body that contains the reader's viewport, that content no longer has a
 surviving anchor, so the collapsed original header takes its place at the viewport boundary. Reader input or

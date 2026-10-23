@@ -486,7 +486,6 @@ export function useChatScroll(
 			const complete = () => {
 				afterChange = true;
 				if (provenance === "user") controller.rebaseFollowCap();
-				controller.refreshAnchor();
 				rebaseGuard();
 			};
 			const scroller = scrollerRef.current;
