@@ -143,6 +143,7 @@ for (const [reasoning, effort] of [
 			effort,
 			faux.streamSimple,
 		);
+		expect(requests).toHaveLength(1);
 		expect(requests[0]?.options?.reasoning).toBeUndefined();
 		expect(requests[0]?.options?.maxTokens).toBeUndefined();
 	});
