@@ -465,7 +465,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   push's `target`, which is how Providers and MCP settings each open only their own logins,
   **`clearLoginInput()`** drops the live input the instant a reply is sent (no double-submit),
   and **`clearLogin()`** dismisses it. The **settings surface** state — **`settingsOpen`** +
-  **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Mcp`/`Github`/`Appearance`/`Chat`/`Layout`/`Updates`/`Terminal`/`Workspaces`/`Templates`/`Notifications`/`Privacy`/`Feedback`/`Extensions`;
+  **`settingsSection`** (a const-object enum: `Providers`/`Models`/`Mcp`/`Github`/`Appearance`/`Chat`/`Layout`/`Keyboard`/`Updates`/`Terminal`/`Workspaces`/`Templates`/`Notifications`/`Privacy`/`Feedback`/`Extensions`;
   the `LineWidth` and `Review` keys are retained so old deep links still type-check but are not navigation
   sections — `panels/settingsNav` resolves them to an available section, and their controls now live in
   Chat/Appearance and Models) with **`openSettings(section?)`** (deep-links to a section, defaults to Providers) /
@@ -474,7 +474,13 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   updater snapshots/actions remain in `updates`' shell-local hook state; the optional **`hostUpdate`** lifecycle
   snapshot is host domain state, installed atomically from `server.welcome` or replaced by the one
   `host.updateAvailable` push. It remains visible through a temporary disconnect; a later welcome replaces or
-  clears it. The
+  clears it. The ephemeral **`searchOpen`** plus **`openSearch()`** / **`closeSearch()`** is the render
+  flag for the search palette ([[submodule-web-search]]), kept here so the global chord, the topbar button
+  and an aggregate attention notification ([[submodule-web-notifications]]) open the same instance; the
+  palette's query, scope, pages and selection are its own component state, never store state. The
+  client-local **`doubleShiftSearch`** + **`setDoubleShiftSearch()`** mirror the double-Shift preference
+  `search` persists through the stable preference adapter (not host config: Sticky Keys and single-Shift
+  IME conflicts are per machine). The
   ephemeral **`notificationPromptOpen`** plus **`openNotificationPrompt()`** / **`closeNotificationPrompt()`**
   is the client-local render flag for the attention-notification permission preface (cadence/snooze and the
   trigger live in [[submodule-web-notifications]], never the store). The

@@ -10,6 +10,7 @@ import { useLocaleSync } from "./i18n";
 import { initNavigation } from "./navigation";
 import { initFilesTreePersistence } from "./panels/filesTreeState";
 import { initProjectExpansionPersistence } from "./panels/projectExpansion";
+import { initSearchPreferences } from "./search";
 import { AppResourceHost } from "./shell/AppResourceHost";
 import { Shell } from "./shell/Shell";
 import { applyThemePreference, initializeBundledThemes, readThemeHint } from "./themes";
@@ -31,6 +32,7 @@ initChatPreferencesPersistence();
 initModelVisibilityPersistence();
 initProjectExpansionPersistence();
 initFilesTreePersistence();
+initSearchPreferences();
 initNavigation();
 
 function App() {

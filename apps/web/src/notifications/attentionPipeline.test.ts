@@ -119,7 +119,7 @@ describe("observer + engine pipeline", () => {
 		clock.run();
 		expect(emitted).toHaveLength(1);
 		expect(emitted[0]?.body).toBe("2 worktrees need your attention");
-		expect(emitted[0]?.target).toEqual({ kind: "switcher" });
+		expect(emitted[0]?.target).toEqual({ kind: "search" });
 	});
 
 	test("a session answered before the window flush is dropped", () => {

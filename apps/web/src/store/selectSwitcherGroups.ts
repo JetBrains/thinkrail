@@ -34,7 +34,7 @@ interface SwitcherGroupsState {
 	closedChatsByWorkspace: Record<string, ClosedChat[]>;
 }
 
-function getSessionAttention(state: SessionStateRecord["state"]): SessionAttention | null {
+export function getSessionAttention(state: SessionStateRecord["state"]): SessionAttention | null {
 	if (state.needsInput !== null) return "needs-input";
 	if (state.completionUnread && state.completion?.outcome === "failed") return "error";
 	if (state.completionUnread) return "unread";
@@ -53,8 +53,8 @@ function compareSessionsByAttention(a: SwitcherSession, b: SwitcherSession): num
 	return ATTENTION_PRIORITY[a.attention] - ATTENTION_PRIORITY[b.attention];
 }
 
-function resolveChatTitle(
-	state: SwitcherGroupsState,
+export function selectKnownChatTitle(
+	state: Pick<SwitcherGroupsState, "layoutDocumentsByWorkspace" | "closedChatsByWorkspace">,
 	workspaceId: string,
 	sessionId: string,
 ): string | null {
@@ -98,7 +98,7 @@ export function selectSwitcherGroups(state: SwitcherGroupsState): SwitcherProjec
 				projectId: record.projectId,
 				workspaceName: workspace?.name ?? "",
 				workspaceKind: workspace?.kind,
-				chatTitle: resolveChatTitle(state, record.workspaceId, record.sessionId),
+				chatTitle: selectKnownChatTitle(state, record.workspaceId, record.sessionId),
 				attention,
 			});
 			sessionsByProject.set(record.projectId, sessions);

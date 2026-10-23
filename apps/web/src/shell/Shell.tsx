@@ -1,12 +1,14 @@
 import {
 	RiCircleLine as Circle,
 	RiCircleFill,
+	RiSearchLine,
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useState } from "react";
+import { shortcutLabel } from "../commands";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
 import { AnalyticsConsentDialog } from "../panels/AnalyticsConsentDialog";
 import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
@@ -14,6 +16,7 @@ import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
 import { useBranchStatus } from "../panels/useBranchStatus";
+import { SearchSettings } from "../search";
 import {
 	SettingsSection,
 	selectActiveWorkspace,
@@ -37,7 +40,7 @@ import { useLocalLayoutState } from "./layoutState";
 import { LocationBar } from "./locationBar";
 import { NativeWindowControls } from "./NativeWindowControls";
 import { PROJECT_HOME_PROJECTS_REGION_ID, ProjectHome } from "./ProjectHome";
-import { SessionSwitcher } from "./SessionSwitcher";
+import { SearchPaletteHost } from "./SearchPaletteHost";
 import { readSettingsShortcutLabel } from "./useAppShortcuts";
 import { useCollapsibleRegion } from "./useCollapsibleRegion";
 import { useGlobalHotkeys } from "./useGlobalHotkeys";
@@ -80,9 +83,9 @@ export function Shell() {
 	const updates = useUpdates(supportsHostUpdateRun(protocolVersion) ? runHostUpdate : null);
 	const windowControls = useNativeWindowControls();
 	const [newWorkspaceProjectId, setNewWorkspaceProjectId] = useState<string | null>(null);
-	const sessionSwitcherOpen = useAppStore((s) => s.sessionSwitcherOpen);
 
 	const homeProjects = useCollapsibleRegion<HTMLDivElement>(PROJECT_HOME_PROJECTS_REGION_ID);
+	const [searchShortcut] = useState(() => shortcutLabel({ key: "K", mod: true }));
 
 	const [themeHint] = useState(readThemeHint);
 	const [settingsShortcut] = useState(readSettingsShortcutLabel);
@@ -133,7 +136,7 @@ export function Shell() {
 		...(contextProject
 			? { onNewWorkspace: () => setNewWorkspaceProjectId(contextProject.id) }
 			: {}),
-		onSessionSwitcher: () => useAppStore.getState().toggleSessionSwitcher(),
+		onSearch: () => useAppStore.getState().openSearch(),
 	});
 	return (
 		<div data-testid="shell" className="grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr]">
@@ -170,6 +173,17 @@ export function Shell() {
 							onOpen={() => useAppStore.getState().openSettings(SettingsSection.Updates)}
 						/>
 					) : null}
+					<IconTooltip label={t("shell.search.openWithShortcut", { shortcut: searchShortcut })}>
+						<button
+							type="button"
+							data-testid="open-search"
+							aria-label={t("shell.search.open")}
+							onClick={() => useAppStore.getState().openSearch()}
+							className="flex size-28 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
+						>
+							<RiSearchLine className="size-16" />
+						</button>
+					</IconTooltip>
 					<JbcentralQuotaTopbar />
 					<span
 						data-testid="connection-status"
@@ -219,6 +233,7 @@ export function Shell() {
 				) : null}
 				<SettingsDialog
 					layoutSettings={<LayoutSettings />}
+					keyboardSettings={<SearchSettings />}
 					updateSettings={updates ? <UpdateSettings updates={updates} /> : undefined}
 				/>
 				{newWorkspaceProjectId !== null ? (
@@ -239,13 +254,10 @@ export function Shell() {
 				<ProjectHome projects={homeProjects} />
 			)}
 			{analyticsConsentOpen ? <AnalyticsConsentDialog /> : <InterviewPromptDialog />}
-			<SessionSwitcher
-				open={sessionSwitcherOpen}
-				onOpenChange={(open) => {
-					const store = useAppStore.getState();
-					if (open) store.openSessionSwitcher();
-					else store.closeSessionSwitcher();
-				}}
+			<SearchPaletteHost
+				onNewWorkspace={setNewWorkspaceProjectId}
+				onToggleProjectsHome={homeProjects.toggle}
+				hasUpdateSettings={updates !== null}
 			/>
 			<NotificationPermissionPrompt />
 			<Toaster />

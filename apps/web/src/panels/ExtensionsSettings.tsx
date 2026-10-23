@@ -83,6 +83,14 @@ export function ExtensionsCatalog({
 	);
 }
 
+export function setExtensionEnabled(name: string, enabled: boolean): Promise<unknown> {
+	const disabled = useAppStore.getState().disabledExtensions;
+	const next = enabled
+		? disabled.filter((candidate) => candidate !== name)
+		: [...disabled.filter((candidate) => candidate !== name), name];
+	return getTransport().request("settings.update", { config: { disabledExtensions: next } });
+}
+
 export function ExtensionsSettings() {
 	const t = useT();
 	const disabled = useAppStore((state) => state.disabledExtensions);
@@ -104,12 +112,9 @@ export function ExtensionsSettings() {
 	}, []);
 
 	const toggle = (name: string, enabled: boolean) => {
-		const next = enabled
-			? disabled.filter((candidate) => candidate !== name)
-			: [...disabled.filter((candidate) => candidate !== name), name];
-		getTransport()
-			.request("settings.update", { config: { disabledExtensions: next } })
-			.catch(() => toast.error(t("settings.extensions.changeFailed")));
+		setExtensionEnabled(name, enabled).catch(() =>
+			toast.error(t("settings.extensions.changeFailed")),
+		);
 	};
 
 	return (
