@@ -133,6 +133,8 @@ test("a shell start failure explains recovery and retries the same tab", async (
 	const takeBack = terminal.getByTestId("terminal-take-back");
 	await expect(takeBack).toHaveAttribute("aria-disabled", "false");
 	releaseSuccess?.();
+	const cdp = await page.context().newCDPSession(page);
+	await cdp.send("Emulation.setCPUThrottlingRate", { rate: 10 });
 	await takeBack.click();
 	await waitTerminalReady(page);
 	await expect(terminal).toHaveAttribute("data-failed", "false");
@@ -142,6 +144,7 @@ test("a shell start failure explains recovery and retries the same tab", async (
 		"",
 	);
 	await expect(terminal.locator(".xterm-helper-textarea")).toBeFocused();
+	await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
 	await page.getByTestId("terminal-tab-close").click();
 	await expect(page.getByTestId("terminal-tab")).toHaveCount(0);
 });
