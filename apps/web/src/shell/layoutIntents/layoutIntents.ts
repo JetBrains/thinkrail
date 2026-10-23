@@ -246,7 +246,12 @@ export function useLayoutIntentProcessing(
 				)
 			: null;
 		let result:
-			| { document: WorkspaceLayoutDocument; focusGroupId?: string; focusTabId?: string }
+			| {
+					document: WorkspaceLayoutDocument;
+					focusGroupId?: string;
+					focusTabId?: string;
+					focusOnlyIfLost?: true;
+			  }
 			| undefined;
 		switch (layoutIntent.kind) {
 			case "open": {
@@ -510,6 +515,7 @@ export function useLayoutIntentProcessing(
 					key: layoutIntent.id,
 					location,
 					...(result.focusTabId ? { tabId: result.focusTabId } : {}),
+					...(result.focusOnlyIfLost ? { onlyIfFocusLost: true } : {}),
 				});
 			}
 		}

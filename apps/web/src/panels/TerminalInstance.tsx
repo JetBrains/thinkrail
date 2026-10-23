@@ -10,6 +10,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebFontsAddon } from "@xterm/addon-web-fonts";
 import { type ITheme, Terminal as XTerm } from "@xterm/xterm";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import "@xterm/xterm/css/xterm.css";
 import { i18n, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
@@ -287,28 +288,19 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 						const restoreTerminalFocus = restoreFocus
 							? focusIsInTerminal()
 							: initialFocusRequestsTerminal && document.activeElement === initialFocusTarget;
-						setExited(false);
-						setReady(true);
 						if (restoreTerminalFocus) {
-							requestAnimationFrame(() => {
-								if (disposed || attachGeneration !== startedAt || prebind !== attemptPrebind) {
-									return;
-								}
-								if (
-									(restoreFocus && focusIsInTerminal()) ||
-									(!restoreFocus && document.activeElement === initialFocusTarget)
-								) {
-									term.focus();
-								}
-								setDetached(false);
-								setFailureMessage(null);
-								setRetrying(false);
+							flushSync(() => {
+								setExited(false);
+								setReady(true);
 							});
+							term.focus();
 						} else {
-							setDetached(false);
-							setFailureMessage(null);
-							setRetrying(false);
+							setExited(false);
+							setReady(true);
 						}
+						setDetached(false);
+						setFailureMessage(null);
+						setRetrying(false);
 						if (buffered.exit) handleExit(buffered.exit);
 						applyFit();
 						if (created && serverIdRef.current === id && initialCommandRef.current) {

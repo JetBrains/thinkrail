@@ -2053,8 +2053,10 @@ own section. The kebab menu (`plan-menu`, a
   preserving focus without stealing unrelated workbench focus. Initial xterm focus is deferred until a
   successful attach and applies only while the terminal tab that requested it still owns focus; Retry keeps
   its overlay mounted through the successful handoff and restores xterm focus only while focus remains in that
-  terminal region. A competing detach invalidates that handoff and clears its retry state before exposing Take
-  Back again.
+  terminal region. A focusing handoff commits the attached state synchronously before `focus()`: the failed
+  frame stays inert until that commit and an inert subtree silently refuses focus, so frame timing (a next
+  animation frame can precede React's commit on a loaded machine) must never be what lifts it. A competing
+  detach invalidates that handoff and clears its retry state before exposing Take Back again.
   **Historical replay is input-inert:** the PTY id
   remains unadopted until xterm's replay callback, which rechecks attach freshness before binding and draining
   genuinely live frames; replies xterm synthesizes for recorded terminal queries can therefore never enter the

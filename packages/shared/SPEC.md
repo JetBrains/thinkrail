@@ -172,8 +172,11 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   postconditions map to a closed adapter outcome. `watchJbcentralArtifact(onChange)` observes only that
   reviewed location and reports invalidation events for add, remove, and replacement; it handles a not-yet-
   existing extension directory by re-arming from the nearest existing parent, and an existence-only poll
-  repairs dropped add/remove filesystem events. It never opens or fingerprints the generated file. The caller
-  debounces events and rechecks existence through the ordinary inspection API.
+  repairs dropped add/remove filesystem events. Each newly installed watch re-checks once: an artifact that
+  appeared, or a deeper directory that now exists, while the watch was being moved emits no event for it, so
+  the watcher invalidates or re-arms deeper right away instead of leaving it to the poll (a late poll hit
+  re-ran the runtime rebuild after a first Connect had already settled). It never opens or fingerprints the
+  generated file. The caller debounces events and rechecks existence through the ordinary inspection API.
 
   **A directory event is not an artifact event.** `fs.watch` is per-directory, and the re-arm above means the
   watched directory is routinely an *ancestor* — when the artifact directory has not been created, the

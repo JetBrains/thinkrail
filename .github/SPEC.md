@@ -101,10 +101,13 @@ desktop window-chrome unit gate binds the `user32.dll` frame symbols the framele
 ([[module-desktop]]); neither needs the Electrobun devkit. Its path gate (`bun run test:windows-paths`) runs
 the suites that pin architecture Decision 22 on the one host where git prints `C:/…`, node prints `C:\…`,
 and `\` is not a file-name character: stored directories, chat lifecycle in Default and external workspaces,
-POSIX wire paths, git object names, picker roots, and `install.ps1`'s PATH check. A suite joins the gate
-only once it passes on Windows. A test whose premise NTFS cannot hold, such as a `:` in a ref name or an
-unprivileged symlink, is skipped there and stays covered on Linux. The runner's `TEMP` is an 8.3 short name
-(`C:\Users\RUNNER~1\…`) while git reports the long one, so path fixtures are rooted at
+POSIX wire paths, git object names, picker roots, and `install.ps1`'s PATH check. A suite joins the gate only
+once it passes on Windows. A test whose premise NTFS cannot hold, such as a `:` in a ref name or an
+unprivileged symlink, is skipped there and stays covered on Linux. The gate runs with a 30 s per-test budget
+instead of Bun's 5 s default: each git spawn costs ~40 ms there (the workspace suite runs about 14× slower
+than on Linux, one passing test reached 4.2 s), and a runner stall such as on-access scanning of a fresh
+install turns that into timeouts. Tests with an explicit timeout keep it. The runner's `TEMP` is an 8.3 short
+name (`C:\Users\RUNNER~1\…`) while git reports the long one, so path fixtures are rooted at
 `realpathSync.native`, the spelling git and the OS agree on. The installer file contributes only its
 `install.ps1` suite, because its `install.sh` tests rightly reject the `~` such a prefix carries. Native
 macOS and Linux ARM64 acceptance belongs to the release matrix. The Windows job installs Bun and its
