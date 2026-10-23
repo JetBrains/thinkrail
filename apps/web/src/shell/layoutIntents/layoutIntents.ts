@@ -248,6 +248,7 @@ export function useLayoutIntentProcessing(
 		let result:
 			| { document: WorkspaceLayoutDocument; focusGroupId?: string; focusTabId?: string }
 			| undefined;
+		let focusOnlyIfLost = false;
 		switch (layoutIntent.kind) {
 			case "open": {
 				const cacheTab = toLayoutTab(layoutIntent.tab);
@@ -458,6 +459,7 @@ export function useLayoutIntentProcessing(
 					document[layoutIntent.side].groups.some((group) => !group.folded)
 				) {
 					result = hideSide(document, layoutIntent.side, attention);
+					focusOnlyIfLost = true;
 				} else {
 					const shown = showSide(document, layoutIntent.side, maxSideGroups, attention);
 					if (!isLayoutUnavailable(shown)) result = shown;
@@ -466,6 +468,7 @@ export function useLayoutIntentProcessing(
 			case "toggle-bottom":
 				if (document.bottom.visible && document.bottom.groups.some((group) => !group.folded)) {
 					result = hideBottom(document, attention);
+					focusOnlyIfLost = true;
 				} else {
 					const shown = showBottom(document, maxSideGroups, maxBottomGroups, attention);
 					if (!isLayoutUnavailable(shown)) result = shown;
@@ -510,6 +513,7 @@ export function useLayoutIntentProcessing(
 					key: layoutIntent.id,
 					location,
 					...(result.focusTabId ? { tabId: result.focusTabId } : {}),
+					...(focusOnlyIfLost ? { onlyIfFocusLost: true } : {}),
 				});
 			}
 		}
