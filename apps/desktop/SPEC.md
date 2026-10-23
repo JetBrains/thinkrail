@@ -457,8 +457,10 @@ updating is integrated below; feed publication remains release-owned and gated b
 ### Signing
 
 Signing and notarization use JetBrains-provided services through the private release coordinator;
-public builds contain neither service credentials nor a new Apple-login/keychain flow. Current Windows
-coverage signs the setup stub without rewriting its hash-keyed adjacent payload.
+public builds contain neither service credentials nor a new Apple-login/keychain flow. Windows coverage
+signs the setup stub and every PE file in its adjacent payload, so the launcher, `bun.exe`, the framework
+DLLs and the bundled `uninstall` helper that installs and applies updates all carry a JetBrains signature.
+The private pipeline repacks the payload around the signed bytes ([[module-ci-release]]).
 
 The native macOS build also exposes Electrobun's standard expanded `.app.tar.zst` as a private signing
 input. The approved JetBrains SRE flow signs the expanded app and finalizes a conventional DMG around it,
