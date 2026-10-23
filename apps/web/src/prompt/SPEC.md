@@ -39,3 +39,6 @@ controls stay disabled while it resolves; the draft remains editable, and an edi
 the delayed application. A selected template replaces the complete draft. Tab and Shift+Tab cycle placeholders, Escape ends the
 slot session, edited repeated groups mirror when leaving a slot, and submission removes untouched markers.
 Presentation helpers expose the same hint and highlight states while leaving each input's layout to its owner.
+`usePendingSelection` applies a requested caret/selection in a layout effect, in the same commit as the value
+change and never a deferred frame: a frame landing between a follow-up select-all and its insert (a paste,
+Playwright's `fill`) would collapse the selection, so the insert appends and doubles the draft.
