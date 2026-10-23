@@ -4,6 +4,7 @@ export interface CiRun {
 	id: number;
 	event: string;
 	branch: string;
+	pr: number | null;
 	sha: string;
 	attempt: number;
 	conclusion: string | null;
@@ -35,8 +36,9 @@ export interface TestStats {
 	title: string;
 	failed: number;
 	flaky: number;
-	branches: Set<string>;
+	changes: Set<string>;
 	mergeQueue: number;
+	mergeQueueChanges: Set<string>;
 	rerunConfirmed: number;
 	lastSeen: string;
 	jobs: Set<string>;
@@ -46,7 +48,7 @@ export interface StepStats {
 	job: string;
 	step: string;
 	count: number;
-	branches: Set<string>;
+	changes: Set<string>;
 	lastSeen: string;
 }
 
@@ -66,6 +68,8 @@ const TEST_STEP = /\btest\b|e2e|smoke|check:pi-packages/i;
 const TIMESTAMP = /^\d{4}-\d\d-\d\dT[\d:.]+Z ?/;
 const BUN_FILE = /^(?:##\[group\])?((?:[\w@.-]+[\\/])*[\w.-]+\.test\.tsx?):$/;
 const BUN_FAIL = /^\s*\(fail\) (.+?)(?: \[[\d.]+m?s\])?$/;
+const BUN_SUMMARY = /^\d+ tests? failed:$/;
+const MERGE_QUEUE_PR = /^gh-readonly-queue\/[^/]+\/pr-(\d+)-/;
 const PLAYWRIGHT_SECTION = /^\s+\d+ (failed|flaky)$/;
 const PLAYWRIGHT_TEST = /^\s+\[[\w-]+\] › (\S+?):\d+:\d+ › (.+?)[\s─]*$/;
 
@@ -76,15 +80,29 @@ export function logLines(text: string): string[] {
 export function parseTestFailures(text: string): TestFailure[] {
 	const found = new Map<string, TestFailure>();
 	let file: string | null = null;
+	let bunSummary = false;
 	let section: TestFailure["kind"] | null = null;
 	for (const line of logLines(text)) {
 		const fileMatch = BUN_FILE.exec(line.trim());
-		if (fileMatch) file = fileMatch[1]?.replaceAll("\\", "/") ?? null;
+		if (fileMatch) {
+			file = fileMatch[1]?.replaceAll("\\", "/") ?? null;
+			bunSummary = false;
+		}
+		if (BUN_SUMMARY.test(line.trim())) {
+			bunSummary = true;
+			continue;
+		}
 		const bunFail = BUN_FAIL.exec(line);
 		if (bunFail?.[1]) {
 			const title = bunFail[1];
-			if (!found.has(`failed:${title}`))
-				found.set(`failed:${title}`, { file, title, kind: "failed" });
+			const known = [...found.values()].some(
+				(test) => test.kind === "failed" && test.title === title,
+			);
+			if (bunSummary && !known)
+				found.set(`failed::${title}`, { file: null, title, kind: "failed" });
+			if (!bunSummary && !found.has(`failed:${file ?? ""}:${title}`)) {
+				found.set(`failed:${file ?? ""}:${title}`, { file, title, kind: "failed" });
+			}
 			continue;
 		}
 		const sectionMatch = PLAYWRIGHT_SECTION.exec(line);
@@ -114,6 +132,12 @@ export function baseJobName(name: string): string {
 	return name.replace(/ shard \d+\/\d+$/, "");
 }
 
+export function changeOf(run: CiRun): string {
+	if (run.pr !== null) return `#${run.pr}`;
+	const queued = MERGE_QUEUE_PR.exec(run.branch)?.[1];
+	return queued ? `#${queued}` : run.branch;
+}
+
 function passedOnSameSha(job: CiJob, runs: Map<number, CiRun>, jobs: CiJob[]): boolean {
 	const sha = runs.get(job.runId)?.sha;
 	if (!sha) return false;
@@ -130,13 +154,13 @@ export function isFlake(stats: TestStats): boolean {
 	return (
 		stats.rerunConfirmed > 0 ||
 		stats.flaky > 0 ||
-		stats.branches.size >= 3 ||
-		(stats.mergeQueue > 0 && stats.branches.size >= 2)
+		stats.changes.size >= 3 ||
+		stats.mergeQueueChanges.size >= 2
 	);
 }
 
 function flakeScore(stats: TestStats): number {
-	return stats.rerunConfirmed * 3 + stats.mergeQueue * 2 + stats.branches.size * 2 + stats.flaky;
+	return stats.rerunConfirmed * 3 + stats.mergeQueue * 2 + stats.changes.size * 2 + stats.flaky;
 }
 
 export function buildReport(
@@ -158,8 +182,9 @@ export function buildReport(
 				title: failure.title,
 				failed: 0,
 				flaky: 0,
-				branches: new Set<string>(),
+				changes: new Set<string>(),
 				mergeQueue: 0,
+				mergeQueueChanges: new Set<string>(),
 				rerunConfirmed: 0,
 				lastSeen: run.createdAt,
 				jobs: new Set<string>(),
@@ -172,8 +197,11 @@ export function buildReport(
 				continue;
 			}
 			stats.failed += 1;
-			stats.branches.add(run.branch);
-			if (run.event === "merge_group") stats.mergeQueue += 1;
+			stats.changes.add(changeOf(run));
+			if (run.event === "merge_group") {
+				stats.mergeQueue += 1;
+				stats.mergeQueueChanges.add(changeOf(run));
+			}
 			if (confirmed) stats.rerunConfirmed += 1;
 		}
 	}
@@ -189,23 +217,24 @@ export function buildReport(
 		const attempt = attempts.get(attemptKey) ?? { flakeOnly: true };
 		attempts.set(attemptKey, attempt);
 		const failing = (reportByJob.get(job.id)?.tests ?? []).filter((test) => test.kind === "failed");
-		if (!isTestJob(job) || failing.length === 0) {
-			attempt.flakeOnly = false;
-			for (const step of job.failedSteps) {
-				const key = `${baseJobName(job.name)} › ${step}`;
-				const stats = steps.get(key) ?? {
-					job: baseJobName(job.name),
-					step,
-					count: 0,
-					branches: new Set<string>(),
-					lastSeen: run.createdAt,
-				};
-				steps.set(key, stats);
-				stats.count += 1;
-				stats.branches.add(run.branch);
-				if (run.createdAt > stats.lastSeen) stats.lastSeen = run.createdAt;
-			}
-			continue;
+		const unexplained =
+			isTestJob(job) && failing.length > 0
+				? job.failedSteps.filter((step) => !TEST_STEP.test(step))
+				: job.failedSteps;
+		if (unexplained.length > 0 || failing.length === 0) attempt.flakeOnly = false;
+		for (const step of unexplained) {
+			const key = `${baseJobName(job.name)} › ${step}`;
+			const stats = steps.get(key) ?? {
+				job: baseJobName(job.name),
+				step,
+				count: 0,
+				changes: new Set<string>(),
+				lastSeen: run.createdAt,
+			};
+			steps.set(key, stats);
+			stats.count += 1;
+			stats.changes.add(changeOf(run));
+			if (run.createdAt > stats.lastSeen) stats.lastSeen = run.createdAt;
 		}
 		for (const failure of failing) {
 			const stats = tests.get(`${failure.file ?? ""} › ${failure.title}`);
@@ -230,7 +259,7 @@ const day = (iso: string) => iso.slice(0, 10);
 
 function testRow(stats: TestStats): string {
 	const name = stats.file ? `\`${stats.file}\` › ${stats.title}` : stats.title;
-	return `| ${cell(name)} | ${stats.failed} | ${stats.flaky} | ${stats.branches.size} | ${stats.mergeQueue} | ${stats.rerunConfirmed} | ${day(stats.lastSeen)} | ${cell([...stats.jobs].sort().join(", "))} |`;
+	return `| ${cell(name)} | ${stats.failed} | ${stats.flaky} | ${stats.changes.size} | ${stats.mergeQueue} | ${stats.rerunConfirmed} | ${day(stats.lastSeen)} | ${cell([...stats.jobs].sort().join(", "))} |`;
 }
 
 export function renderReport(report: FlakeReport): string {
@@ -239,19 +268,19 @@ export function renderReport(report: FlakeReport): string {
 			? 0
 			: Math.round((100 * report.flakeOnlyAttempts) / report.failedAttempts);
 	const header =
-		"| Test | Failed | Flaky | Branches | Merge queue | Rerun passed | Last seen | Jobs |\n|---|---:|---:|---:|---:|---:|---|---|";
+		"| Test | Failed | Flaky | Changes | Merge queue | Rerun passed | Last seen | Jobs |\n|---|---:|---:|---:|---:|---:|---|---|";
 	const lines = [
 		`# CI flakes since ${report.since}`,
 		"",
 		`${report.runs} runs; ${report.failedAttempts} failed attempts, ${report.flakeOnlyAttempts} (${share}%) failed only on flake-classified tests.`,
 		"",
-		"A test is flake-classified when a later run of the same SHA passed its job, Playwright marked it flaky (failed, then passed on retry), it failed on 3+ branches, or it failed in the merge queue on 2+ branches. Flaky counts come from failed jobs' logs only; a flaky test in an otherwise green job is not seen.",
+		"A change is a PR (its PR runs and merge-queue entries count once) or, without a PR, a branch. A test is flake-classified when a later run of the same SHA passed its job, Playwright marked it flaky (failed, then passed on retry), it failed for 3+ changes, or it failed in the merge queue for 2+ changes. Flaky counts come from failed jobs' logs only; a flaky test in an otherwise green job is not seen.",
 		"",
 		"## Flaky tests",
 		"",
 		...(report.flakes.length ? [header, ...report.flakes.map(testRow)] : ["None."]),
 		"",
-		"## Other test failures (single branch, no passing rerun: probably genuine)",
+		"## Other test failures (no flake evidence: probably genuine)",
 		"",
 		...(report.likelyGenuine.length ? [header, ...report.likelyGenuine.map(testRow)] : ["None."]),
 		"",
@@ -259,10 +288,10 @@ export function renderReport(report: FlakeReport): string {
 		"",
 		...(report.steps.length
 			? [
-					"| Job | Step | Failures | Branches | Last seen |\n|---|---|---:|---:|---|",
+					"| Job | Step | Failures | Changes | Last seen |\n|---|---|---:|---:|---|",
 					...report.steps.map(
 						(step) =>
-							`| ${cell(step.job)} | ${cell(step.step)} | ${step.count} | ${step.branches.size} | ${day(step.lastSeen)} |`,
+							`| ${cell(step.job)} | ${cell(step.step)} | ${step.count} | ${step.changes.size} | ${day(step.lastSeen)} |`,
 					),
 				]
 			: ["None."]),

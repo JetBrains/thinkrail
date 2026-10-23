@@ -34,14 +34,16 @@ These are static literal-import checks, not a runtime module resolver. Negative 
 
 `ci:flakes` (`bun run ci:flakes [--days 14] [--repo …] [--workflow ci.yml]`) prints a Markdown report of the
 CI workflow's test failures over a window, read through `gh api`: runs, per-attempt jobs, and the logs of failed
-test jobs only. Pure parsers read bun `(fail)` lines under their `##[group]<file>:` context and Playwright
-`failed`/`flaky` summary blocks. Per test it counts failures, Playwright flaky passes, distinct branches,
-merge-queue failures, and failures whose SHA later passed the same job or a whole run. A test is
-flake-classified on a passing rerun, a flaky mark, 3+ branches, or merge-queue failures on 2+ branches; single-
-branch failures with no passing rerun are listed apart as probably genuine, and failed steps that yielded no
-parsed test (build, install, download) are listed by step. It automates the hand analysis behind the
-2026-10 CI-flake series; it is a diagnostic, never a gate, and has no scheduled run. Flaky passes in otherwise
-green jobs are not seen, because only failed jobs' logs are read.
+test jobs only. Pure parsers read bun `(fail)` lines keyed by their `##[group]<file>:` context (the closing
+`N tests failed:` summary only repeats them) and Playwright `failed`/`flaky` summary blocks. A change is a PR —
+its PR runs and merge-queue entries count once — or, without a PR, a branch. Per test it counts failures,
+Playwright flaky passes, distinct changes, merge-queue failures, and failures whose SHA later passed the same
+job or a whole run. A test is flake-classified on a passing rerun, a flaky mark, failures for 3+ changes, or
+merge-queue failures for 2+ changes; the rest are listed apart as probably genuine. Failed steps no parsed test
+explains (build, install, download, or a step failing beside a test failure) are listed by step, and an
+attempt counts as flake-only only when every failure in it is a flake-classified test. It automates the hand
+analysis behind the 2026-10 CI-flake series; it is a diagnostic, never a gate, and has no scheduled run. Flaky
+passes in otherwise green jobs are not seen, because only failed jobs' logs are read.
 
 `check:spec-surface` enrolls only valid specs tagged `public-surface-checked`. Enrollment is explicit so adding prose cannot silently turn enforcement off: an enrolled spec must retain a bare backticked identifier list and a discoverable TypeScript barrel, or the check fails. Unenrolled prose surfaces remain descriptive and are reported only by `--list-skipped`.
 

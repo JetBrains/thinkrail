@@ -70,7 +70,7 @@ const runs = jsonLines<CiRun>(
 		`created=>=${since}`,
 		"--paginate",
 		"--jq",
-		".workflow_runs[] | {id, event, branch: .head_branch, sha: .head_sha, attempt: .run_attempt, conclusion, createdAt: .created_at}",
+		".workflow_runs[] | {id, event, branch: .head_branch, pr: (.pull_requests[0].number // null), sha: .head_sha, attempt: .run_attempt, conclusion, createdAt: .created_at}",
 	]),
 );
 

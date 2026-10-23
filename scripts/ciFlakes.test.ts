@@ -38,6 +38,23 @@ describe("parseTestFailures", () => {
 		]);
 	});
 
+	test("keeps same-named tests of different files apart and ignores the closing summary", () => {
+		const log = [
+			"##[group]src/a/prefs.test.ts:",
+			"(fail) idempotent writes preserve the stored document [1.00ms]",
+			"##[group]src/b/routes.test.ts:",
+			"(fail) idempotent writes preserve the stored document [2.00ms]",
+			"##[endgroup]",
+			"2 tests failed:",
+			"(fail) idempotent writes preserve the stored document [1.00ms]",
+			"(fail) idempotent writes preserve the stored document [2.00ms]",
+		].join("\n");
+		expect(parseTestFailures(log).map((test) => test.file)).toEqual([
+			"src/a/prefs.test.ts",
+			"src/b/routes.test.ts",
+		]);
+	});
+
 	test("normalizes a Windows test file path", () => {
 		const windowsLog = [
 			"2026-10-23T16:26:00.0000000Z ##[group]packages\\artifact-tests\\src\\installerScripts.test.ts:",
@@ -74,11 +91,13 @@ function run(
 	sha: string,
 	conclusion: string,
 	event = "pull_request",
+	pr: number | null = null,
 ): CiRun {
 	return {
 		id,
 		event,
 		branch,
+		pr,
 		sha,
 		attempt: 1,
 		conclusion,
@@ -102,16 +121,19 @@ const genuine = { file: "src/x.test.ts", title: "a new feature works", kind: "fa
 
 describe("buildReport", () => {
 	const runs = [
-		run(1, "feature-a", "sha-a", "failure"),
-		run(2, "feature-a", "sha-a", "success"),
-		run(3, "feature-b", "sha-b", "failure"),
-		run(4, "feature-c", "sha-c", "failure", "merge_group"),
-		run(5, "feature-d", "sha-d", "failure"),
+		run(1, "feature-a", "sha-a", "failure", "pull_request", 101),
+		run(2, "feature-a", "sha-a", "success", "pull_request", 101),
+		run(3, "feature-b", "sha-b", "failure", "pull_request", 102),
+		run(4, "gh-readonly-queue/main/pr-103-sha", "sha-c", "failure", "merge_group"),
+		run(5, "feature-d", "sha-d", "failure", "pull_request", 104),
 	];
 	const jobs = [
 		job(11, 1, "E2E (no-agent) shard 1/2", "failure", ["Run bun run e2e"]),
 		job(12, 1, "CI passed", "failure", ["Run test"]),
-		job(31, 3, "E2E (no-agent) shard 2/2", "failure", ["Run bun run e2e"]),
+		job(31, 3, "E2E (no-agent) shard 2/2", "failure", [
+			"Run bun run e2e",
+			"Upload Playwright report",
+		]),
 		job(41, 4, "Binary smoke & e2e shard 1/4", "failure", ["Run bun run e2e:binary --shard=1/4"]),
 		job(51, 5, "Unit Tests", "failure", ["Run bun run test"]),
 		job(52, 5, "Desktop smoke & e2e shard 2/4", "failure", ["Run bun run desktop:build"]),
@@ -123,35 +145,56 @@ describe("buildReport", () => {
 		{ job: jobs[4] as CiJob, tests: [genuine] },
 	]);
 
-	test("ranks a cross-branch, merge-queue, rerun-confirmed failure as a flake", () => {
+	test("ranks a cross-change, merge-queue, rerun-confirmed failure as a flake", () => {
 		const [ask] = report.flakes;
 		expect(ask?.title).toBe(askFailure.title);
 		expect(ask?.failed).toBe(3);
-		expect(ask?.branches.size).toBe(3);
+		expect([...(ask?.changes ?? [])].sort()).toEqual(["#101", "#102", "#103"]);
 		expect(ask?.mergeQueue).toBe(1);
 		expect(ask?.rerunConfirmed).toBe(1);
 		expect([...(ask?.jobs ?? [])].sort()).toEqual(["Binary smoke & e2e", "E2E (no-agent)"]);
 	});
 
-	test("keeps a single-branch failure with no passing rerun out of the flakes", () => {
+	test("keeps a single-change failure with no passing rerun out of the flakes", () => {
 		expect(report.likelyGenuine.map((stats) => stats.title)).toEqual([genuine.title]);
 	});
 
-	test("counts attempts and those that failed only on flakes, ignoring the aggregate gate", () => {
+	test("counts attempts that failed only on flakes, excluding unexplained steps and the aggregate gate", () => {
 		expect(report.failedAttempts).toBe(4);
-		expect(report.flakeOnlyAttempts).toBe(3);
+		expect(report.flakeOnlyAttempts).toBe(2);
 	});
 
-	test("lists failed steps that carried no parsed test failure", () => {
+	test("lists failed steps no parsed test explains, including ones beside a test failure", () => {
 		expect(report.steps.map((step) => [step.job, step.step, step.count])).toEqual([
+			["E2E (no-agent)", "Upload Playwright report", 1],
 			["Desktop smoke & e2e", "Run bun run desktop:build", 1],
 		]);
+	});
+
+	test("counts a PR and its merge-queue entries as one change", () => {
+		const queued = buildReport(
+			"2026-10-01",
+			[
+				run(1, "feature-a", "sha-a", "failure", "pull_request", 101),
+				run(2, "gh-readonly-queue/main/pr-101-sha", "sha-q", "failure", "merge_group"),
+			],
+			[
+				job(11, 1, "Unit Tests", "failure", ["Run bun run test"]),
+				job(21, 2, "Unit Tests", "failure", ["Run bun run test"]),
+			],
+			[
+				{ job: job(11, 1, "Unit Tests", "failure", ["Run bun run test"]), tests: [genuine] },
+				{ job: job(21, 2, "Unit Tests", "failure", ["Run bun run test"]), tests: [genuine] },
+			],
+		);
+		expect(queued.flakes).toEqual([]);
+		expect([...(queued.likelyGenuine[0]?.changes ?? [])]).toEqual(["#101"]);
 	});
 
 	test("renders both test tables and the step table", () => {
 		const markdown = renderReport(report);
 		expect(markdown).toContain("# CI flakes since 2026-10-01");
-		expect(markdown).toContain("4 failed attempts, 3 (75%) failed only on flake-classified tests.");
+		expect(markdown).toContain("4 failed attempts, 2 (50%) failed only on flake-classified tests.");
 		expect(markdown).toContain(
 			"| `e2e/ask-user-question.spec.ts` › a persisted tall questionnaire reveals page changes | 3 | 0 | 3 | 1 | 1 |",
 		);
@@ -166,19 +209,34 @@ describe("isFlake", () => {
 		title: "t",
 		failed: 1,
 		flaky: 0,
-		branches: new Set(["a"]),
+		changes: new Set(["#1"]),
 		mergeQueue: 0,
+		mergeQueueChanges: new Set<string>(),
 		rerunConfirmed: 0,
 		lastSeen: "2026-10-01",
 		jobs: new Set<string>(),
 	};
 
-	test("needs evidence beyond one failure on one branch", () => {
+	test("needs evidence beyond failures of one or two changes", () => {
 		expect(isFlake(base)).toBe(false);
 		expect(isFlake({ ...base, flaky: 1 })).toBe(true);
 		expect(isFlake({ ...base, rerunConfirmed: 1 })).toBe(true);
-		expect(isFlake({ ...base, branches: new Set(["a", "b", "c"]) })).toBe(true);
-		expect(isFlake({ ...base, mergeQueue: 1 })).toBe(false);
-		expect(isFlake({ ...base, mergeQueue: 1, branches: new Set(["a", "b"]) })).toBe(true);
+		expect(isFlake({ ...base, changes: new Set(["#1", "#2", "#3"]) })).toBe(true);
+		expect(
+			isFlake({
+				...base,
+				changes: new Set(["#1", "#2"]),
+				mergeQueue: 1,
+				mergeQueueChanges: new Set(["#2"]),
+			}),
+		).toBe(false);
+		expect(
+			isFlake({
+				...base,
+				changes: new Set(["#1", "#2"]),
+				mergeQueue: 2,
+				mergeQueueChanges: new Set(["#1", "#2"]),
+			}),
+		).toBe(true);
 	});
 });
