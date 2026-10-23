@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import {
 	existsSync,
 	mkdirSync,
@@ -9,6 +9,7 @@ import {
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
+import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
@@ -71,6 +72,38 @@ test("an oversized spec match is preserved privately without changing its source
 	});
 });
 
+test("errors keep their model-facing failure status when the message is oversized", async () => {
+	await withRoot(async (root) => {
+		for (const size of [7, 60000]) {
+			const result = await run("spec_get", { id: "x".repeat(size) }, root);
+			const path = (result.details as { output?: { fullOutputPath?: string } }).output
+				?.fullOutputPath;
+			try {
+				expect(result.isError).toBe(true);
+				expect(text(result)).toStartWith("Error:");
+				expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
+			} finally {
+				if (path) rmSync(path, { force: true });
+			}
+		}
+	});
+});
+
+test("an oversized error remains a failure when output capture is unavailable", async () => {
+	await withRoot(async (root) => {
+		const open = spyOn(fs, "open").mockRejectedValue(new Error("Synthetic capture failure"));
+		try {
+			const result = await run("spec_get", { id: "x".repeat(60000) }, root);
+			expect(result.isError).toBe(true);
+			expect(text(result)).toStartWith("Error:");
+			expect(text(result)).toContain("Full output unavailable");
+			expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
+		} finally {
+			open.mockRestore();
+		}
+	});
+});
+
 test("grep count limits are clamped and continuation keeps filters", async () => {
 	await withRoot(async (root) => {
 		writeFileSync(
@@ -114,6 +147,57 @@ test("large graph, node and validation text also remains bounded and file-backed
 			} finally {
 				if (path) rmSync(path, { force: true });
 			}
+		}
+	});
+});
+
+test.each([
+	"partial write",
+	"collision",
+	"cleanup failure",
+] as const)("capture failure after %s preserves the mutation and cleans up only its own file", async (failure) => {
+	await withRoot(async (root) => {
+		const realOpen = fs.open;
+		const realUnlink = fs.unlink;
+		let path: string | undefined;
+		let file: fs.FileHandle | undefined;
+		const unlink = spyOn(fs, "unlink").mockImplementation(async (name) => {
+			if (failure === "cleanup failure" && String(name) === path)
+				throw new Error("Synthetic cleanup failure");
+			return realUnlink(name);
+		});
+		const open = spyOn(fs, "open").mockImplementation(async (name, flags, mode) => {
+			if (!String(name).includes("pi-spec-output-")) return realOpen(name, flags, mode);
+			path = String(name);
+			if (failure === "collision") writeFileSync(path, "existing output", { flag: "wx" });
+			file = await realOpen(name, flags, mode);
+			const write = file.writeFile.bind(file);
+			file.writeFile = async () => {
+				await write("PARTIAL");
+				throw Object.assign(new Error("Synthetic disk-full failure"), { code: "ENOSPC" });
+			};
+			return file;
+		});
+		try {
+			const result = await run(
+				"spec_create",
+				{ path: "SPEC.md", id: "x".repeat(60000), type: "module-design", title: "Fixture" },
+				root,
+			);
+			expect(result.isError).not.toBe(true);
+			expect((result.details as { output: { captureFailed: boolean } }).output.captureFailed).toBe(
+				true,
+			);
+			expect(readFileSync(join(root, "SPEC.md"), "utf8")).toContain(`id: ${"x".repeat(60000)}`);
+			if (!path) throw new Error("missing capture attempt");
+			expect(existsSync(path)).toBe(failure !== "partial write");
+			if (failure === "collision") expect(readFileSync(path, "utf8")).toBe("existing output");
+			if (file) await expect(file.stat()).rejects.toThrow();
+		} finally {
+			open.mockRestore();
+			unlink.mockRestore();
+			await file?.close().catch(() => {});
+			if (path) rmSync(path, { force: true });
 		}
 	});
 });

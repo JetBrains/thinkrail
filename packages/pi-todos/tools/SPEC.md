@@ -95,6 +95,9 @@ an edit. Full structured details remain available to presentation without enteri
 Oversized text (including a single enormous title or a prior completion summary) is preserved exactly
 in an exclusive owner-only temporary file. Retrieval uses bounded `read` ranges or shell byte ranges
 for a single huge line; files may expire. Capture failure is explicit, with no false claim of saved
-output and no instruction to repeat a mutation. No input truncation, durable output store, global
-wrapper or compaction policy lives here. The thin Pi/filesystem adapter stays local so this package
-remains independent of other portable extensions.
+output and no instruction to repeat a mutation. Failed captures close their handle and attempt to
+remove only a file whose exclusive creation succeeded; a collision is never ours to delete. Cleanup
+failure cannot change the mutation's outcome. Actual tool errors retain Pi's `isError` flag and a short
+model-facing error marker even when their payload is oversized or capture fails.
+No input truncation, durable output store, global wrapper or compaction policy lives here. The thin
+Pi/filesystem adapter stays local so this package remains independent of other portable extensions.

@@ -43,6 +43,7 @@ async function scenario(responses: FauxResponseStep[], overflow = false) {
 		api: "context-probe",
 		models: [model],
 		tokensPerSecond: 100_000,
+		tokenSize: { min: 1024, max: 1024 },
 	});
 	const runtime = await ModelRuntime.create({
 		credentials: new InMemoryCredentialStore(),
@@ -131,6 +132,11 @@ async function scenario(responses: FauxResponseStep[], overflow = false) {
 	} finally {
 		unsubscribe();
 		session.dispose();
+		for (const event of events) {
+			if (event.type !== "tool_execution_end") continue;
+			const details = event.result.details as { output?: { fullOutputPath?: string } } | undefined;
+			if (details?.output?.fullOutputPath) rmSync(details.output.fullOutputPath, { force: true });
+		}
 		rmSync(cwd, { recursive: true, force: true });
 	}
 }
@@ -154,6 +160,18 @@ test("Pi receives bounded native and spec-search results, but does not bound arb
 		expect(request?.content).not.toContain("PRESENTATION_ONLY");
 		expect(result.events.at(-1)?.type).toBe("agent_settled");
 	}
+});
+
+test("Pi dispatches an oversized tool error with its failure flag and bounded error text", async () => {
+	const result = await scenario([
+		fauxAssistantMessage(fauxToolCall("spec_get", { id: "x".repeat(60000) })),
+		fauxAssistantMessage("The lookup failed"),
+	]);
+	expect(result.callCount).toBe(2);
+	expect(result.requests[1]?.toolErrors).toEqual([true]);
+	expect(result.requests[1]?.content).toContain("Error:");
+	expect(result.requests[1]?.toolTextBytes[0]).toBeLessThanOrEqual(DEFAULT_MAX_BYTES);
+	expect(result.events.at(-1)?.type).toBe("agent_settled");
 });
 
 test("Pi parity: a retained tool pair can exceed the recent-token target", () => {

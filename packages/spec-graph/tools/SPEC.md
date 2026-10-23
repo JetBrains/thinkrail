@@ -41,7 +41,10 @@ file; the other four are read-only.
   explicit and never changes a successful mutation into a retry instruction. Files may expire; use
   bounded `read` ranges (or shell byte ranges for a single huge line), not a full replay. Structured
   `details` stay presentation data, not model context. This is tool-owned output formatting, not a
-  global wrapper or context manager.
+  global wrapper or context manager. Failed captures close their handle and attempt to remove only
+  their exclusively created file, never an existing collision; cleanup failure cannot change a
+  mutation's outcome. Actual errors retain Pi's `isError` flag and a short model-facing error marker
+  even when their payload is oversized or capture fails.
 - `spec_grep` pages by zero-based match offset with both a count and formatted-byte ceiling. Follow
   `nextOffset` with the same filters; offset reads the current sorted sources, not a snapshot, so
   restart when files change. One oversized match is file-backed rather than skipped or split.

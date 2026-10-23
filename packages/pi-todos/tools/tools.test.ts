@@ -1,5 +1,6 @@
-import { expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { expect, spyOn, test } from "bun:test";
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
@@ -112,6 +113,26 @@ test("a completion preserves oversized summary output without repeating the muta
 	}
 });
 
+test("errors keep their model-facing failure status when the message is oversized", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-errors-"));
+	try {
+		for (const size of [7, 60000]) {
+			const result = await run("todo_update", { id: "x".repeat(size) }, cwd);
+			const path = (result.details as { output?: { fullOutputPath?: string } }).output
+				?.fullOutputPath;
+			try {
+				expect(result.isError).toBe(true);
+				expect(text(result)).toStartWith("Error:");
+				expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
+			} finally {
+				if (path) rmSync(path, { force: true });
+			}
+		}
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
 test("todo pagination keeps filters, clamps limits and handles empty or invalid ranges", async () => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-ranges-"));
 	try {
@@ -186,12 +207,64 @@ test("failed output capture reports unavailable without retrying a successful mu
 			).output,
 		).toEqual({ truncated: true, captureFailed: true });
 		expect(new TodoStore(cwd, "sess-test").read().todos).toHaveLength(1);
+		const failed = await run("todo_update", { id: "x".repeat(60000) }, cwd);
+		expect(failed.isError).toBe(true);
+		expect(text(failed)).toStartWith("Error:");
+		expect(text(failed)).toContain("Full output unavailable");
+		expect(Buffer.byteLength(text(failed))).toBeLessThanOrEqual(50 * 1024);
 	} finally {
 		for (const [index, key] of keys.entries()) {
 			const value = original[index];
 			if (value === undefined) delete process.env[key];
 			else process.env[key] = value;
 		}
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test.each([
+	"partial write",
+	"collision",
+	"cleanup failure",
+] as const)("capture failure after %s preserves the mutation and cleans up only its own file", async (failure) => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-capture-ownership-"));
+	const realOpen = fs.open;
+	const realUnlink = fs.unlink;
+	let path: string | undefined;
+	let file: fs.FileHandle | undefined;
+	const unlink = spyOn(fs, "unlink").mockImplementation(async (name) => {
+		if (failure === "cleanup failure" && String(name) === path)
+			throw new Error("Synthetic cleanup failure");
+		return realUnlink(name);
+	});
+	const open = spyOn(fs, "open").mockImplementation(async (name, flags, mode) => {
+		if (!String(name).includes("pi-todo-output-")) return realOpen(name, flags, mode);
+		path = String(name);
+		if (failure === "collision") writeFileSync(path, "existing output", { flag: "wx" });
+		file = await realOpen(name, flags, mode);
+		const write = file.writeFile.bind(file);
+		file.writeFile = async () => {
+			await write("PARTIAL");
+			throw Object.assign(new Error("Synthetic disk-full failure"), { code: "ENOSPC" });
+		};
+		return file;
+	});
+	try {
+		const result = await run("todo_add", { title: "x".repeat(60000) }, cwd);
+		expect(result.isError).not.toBe(true);
+		expect((result.details as { output: { captureFailed: boolean } }).output.captureFailed).toBe(
+			true,
+		);
+		expect(new TodoStore(cwd, "sess-test").read().todos).toHaveLength(1);
+		if (!path) throw new Error("missing capture attempt");
+		expect(existsSync(path)).toBe(failure !== "partial write");
+		if (failure === "collision") expect(readFileSync(path, "utf8")).toBe("existing output");
+		if (file) await expect(file.stat()).rejects.toThrow();
+	} finally {
+		open.mockRestore();
+		unlink.mockRestore();
+		await file?.close().catch(() => {});
+		if (path) rmSync(path, { force: true });
 		rmSync(cwd, { recursive: true, force: true });
 	}
 });
@@ -415,13 +488,6 @@ test("todo_add with after inserts mid-group (after wins over group)", async () =
 	}
 });
 
-function resultText(result: AgentToolResult<unknown>): string {
-	return result.content
-		.map((c) => (c.type === "text" ? c.text : ""))
-		.filter(Boolean)
-		.join("\n");
-}
-
 test("todo_update reports paused items and suggests the next step after done", async () => {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-tools-"));
 	try {
@@ -439,10 +505,10 @@ test("todo_update reports paused items and suggests the next step after done", a
 			cwd,
 		)) as AgentToolResult<{ paused: { id: string }[] }>;
 		expect(flipped.details.paused.map((t) => t.id)).toEqual([a.details.todo.id]);
-		expect(resultText(flipped)).toContain("paused:");
+		expect(text(flipped)).toContain("paused:");
 
 		const done = await run("todo_update", { id: b.details.todo.id, status: "done" }, cwd);
-		expect(resultText(done)).toContain(`next: ${a.details.todo.id}`);
+		expect(text(done)).toContain(`next: ${a.details.todo.id}`);
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
@@ -454,10 +520,10 @@ test("todo_list renders groups first, then the loose queue last (a mid-task add 
 		await run("todo_add", { title: "agent step", group: "Refactor" }, cwd);
 		new TodoStore(cwd, "sess-test").add({ title: "user ask", origin: "user" });
 
-		const text = resultText(await run("todo_list", {}, cwd));
-		const groupAt = text.indexOf("▸ Refactor");
-		const headerAt = text.indexOf("Loose queue:");
-		const looseAt = text.indexOf("user ask");
+		const output = text(await run("todo_list", {}, cwd));
+		const groupAt = output.indexOf("▸ Refactor");
+		const headerAt = output.indexOf("Loose queue:");
+		const looseAt = output.indexOf("user ask");
 		expect(groupAt).toBeGreaterThanOrEqual(0);
 		expect(headerAt).toBeGreaterThan(groupAt);
 		expect(looseAt).toBeGreaterThan(headerAt);
@@ -479,17 +545,17 @@ test("todo_list renders group-first with derived status + progress, and nudges w
 		await run("todo_add", { title: "step b", group: "Fix login" }, cwd);
 
 		const idle = await run("todo_list", {}, cwd);
-		expect(resultText(idle)).toContain("▸ Fix login [pending 0/2]");
-		expect(resultText(idle)).toContain("nothing is in_progress");
+		expect(text(idle)).toContain("▸ Fix login [pending 0/2]");
+		expect(text(idle)).toContain("nothing is in_progress");
 
 		await run("todo_update", { id: a.details.todo.id, status: "in_progress" }, cwd);
 		const active = await run("todo_list", {}, cwd);
-		expect(resultText(active)).toContain("▸ Fix login [active 0/2]");
-		expect(resultText(active)).not.toContain("nothing is in_progress");
+		expect(text(active)).toContain("▸ Fix login [active 0/2]");
+		expect(text(active)).not.toContain("nothing is in_progress");
 
 		await run("todo_update", { id: a.details.todo.id, status: "done" }, cwd);
 		const half = await run("todo_list", {}, cwd);
-		expect(resultText(half)).toContain("▸ Fix login [pending 1/2]");
+		expect(text(half)).toContain("▸ Fix login [pending 1/2]");
 	} finally {
 		rmSync(cwd, { recursive: true, force: true });
 	}
@@ -501,7 +567,7 @@ test("todo_add refuses an `after` anchor pointing at a loose item (promote, don�
 		const mine = new TodoStore(cwd, "sess-test").add({ title: "user ask", origin: "user" });
 		const rejected = await run("todo_add", { title: "related step", after: mine.id }, cwd);
 		expect(isError(rejected)).toBe(true);
-		expect(resultText(rejected)).toContain("promoted");
+		expect(text(rejected)).toContain("promoted");
 
 		const plan = new TodoStore(cwd, "sess-test").read();
 		expect(plan.todos.map((t) => t.title)).toEqual(["user ask"]);

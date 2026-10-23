@@ -5,7 +5,7 @@ import {
 	truncateHead,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { countItems, TODO_STATUSES, type TodoPlan } from "../core/index.ts";
+import { countItems, flatItems, TODO_STATUSES, type TodoPlan } from "../core/index.ts";
 import {
 	consistencyNudge,
 	errorResult,
@@ -70,7 +70,7 @@ export function registerTodoList(pi: ExtensionAPI): void {
 							.filter((group) => group.todos.length > 0),
 					}
 				: plan;
-			const items = [...filtered.groups.flatMap((group) => group.todos), ...filtered.todos];
+			const items = flatItems(filtered);
 			const rendered = params.status
 				? items.length
 					? items.map(formatTodo).join("\n")

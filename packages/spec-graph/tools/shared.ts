@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { writeFile } from "node:fs/promises";
+import { open, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -30,13 +30,21 @@ export async function textResult<T>(
 	const preview = truncateHead(text);
 	if (!preview.truncated) return { content: [{ type: "text", text }], details };
 	let fullOutputPath: string | undefined;
+	let ownedPath: string | undefined;
 	let notice: string;
 	try {
 		const path = join(tmpdir(), `pi-spec-output-${randomUUID()}.txt`);
-		await writeFile(path, text, { flag: "wx", mode: 0o600 });
+		const file = await open(path, "wx", 0o600);
+		ownedPath = path;
+		try {
+			await file.writeFile(text);
+		} finally {
+			await file.close();
+		}
 		fullOutputPath = path;
 		notice = `Full output saved to: ${path}\nTemporary file; may expire. Read only relevant offset/limit ranges; use shell byte ranges for oversized single lines.`;
 	} catch {
+		if (ownedPath) await unlink(ownedPath).catch(() => {});
 		notice =
 			"Full output unavailable: temporary-file capture failed. Narrow a read query; do not repeat a mutation to retrieve its output.";
 	}
@@ -57,8 +65,8 @@ export async function textResult<T>(
 	};
 }
 
-export function errorResult(message: string): Promise<AgentToolResult<{ error: string }>> {
-	return textResult(`Error: ${message}`, { error: message });
+export async function errorResult(message: string): Promise<AgentToolResult<{ error: string }>> {
+	return { ...(await textResult(`Error:\n${message}`, { error: message })), isError: true };
 }
 
 const SCAFFOLD_HEADINGS: Record<SpecType, string[]> = {
