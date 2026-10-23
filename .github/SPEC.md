@@ -246,6 +246,9 @@ metadata or startup-shell syntax. Git Bash writes native-readable Windows metada
 are preserved rather than rewritten. CLI self-update binds metadata to the running executable and invokes these
 installers rather than duplicating download/checksum logic. Controlled script tests own these
 regressions; finalized Windows PowerShell/Git-Bash and custom-volume behavior remains release qualification.
+The `install.ps1` suite starts PowerShell once in a warm-up hook with its own budget before its timed tests:
+the first `powershell.exe` launch on a fresh hosted runner has taken up to 31 s (2–14 s in passing runs),
+a one-time environment cost that no single test's budget should absorb.
 
 Website deployment contains no signing credentials. CODEOWNERS and the main-branch rules protect the
 public recipes; local builds and public PR jobs never publish user-facing release artifacts.

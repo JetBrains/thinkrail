@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
 	chmodSync,
@@ -21,6 +21,7 @@ const binaryBody = "controlled thinkrail artifact\n";
 const binaryHash = createHash("sha256").update(binaryBody).digest("hex");
 const powershell = Bun.which("powershell.exe") ?? Bun.which("pwsh");
 const POWERSHELL_TEST_TIMEOUT_MS = 30_000;
+const POWERSHELL_WARM_UP_TIMEOUT_MS = 120_000;
 
 interface Fixture {
 	root: string;
@@ -286,6 +287,15 @@ describe("install.sh validation", () => {
 });
 
 describe.skipIf(process.platform !== "win32" || !powershell)("install.ps1 validation", () => {
+	beforeAll(() => {
+		if (!powershell) throw new Error("PowerShell is unavailable");
+		const warmUp = Bun.spawnSync(
+			[powershell, "-NoProfile", "-NonInteractive", "-Command", "exit 0"],
+			{ stdout: "pipe", stderr: "pipe" },
+		);
+		expect(warmUp.exitCode).toBe(0);
+	}, POWERSHELL_WARM_UP_TIMEOUT_MS);
+
 	test(
 		"recognizes its bin dir on PATH whichever separator an entry is spelled with",
 		() => {
