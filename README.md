@@ -65,7 +65,8 @@ create the tools it needs based on how you actually work.
 - **Agent tools beyond the shell.** Web research, and inline diagrams, option comparisons and file previews
   rendered right in the chat — when the agent proposes a UI change it shows a before/after mockup you can
   comment on like a diff. Settings → Extensions lists the ThinkRail extensions the agent gets and lets you switch
-  each one off.
+  each one off. Large spec searches and TODO-plan reads are paginated; oversized spec/TODO tool text
+  stays out of the prompt behind a bounded excerpt and a private temporary file, which may expire.
 - **MCP servers.** Connect the MCP servers in your `pi` `mcp.json` (or add them, and a few presets, from
   Settings): ThinkRail asks in the chat before calls the server does not mark read-only (or always allows
   the tools you trust in a project), keeps servers a repository

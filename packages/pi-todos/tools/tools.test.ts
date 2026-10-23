@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
@@ -8,6 +8,7 @@ import type {
 	ExtensionToolContext,
 	ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import { createReadTool } from "@earendil-works/pi-coding-agent";
 import { TODO_STATUSES, TodoStore } from "../core/index.ts";
 import { registerTodoTools } from "./index.ts";
 
@@ -41,6 +42,159 @@ function paramEnum(toolName: string, prop: string): readonly string[] {
 	};
 	return schema.properties?.[prop]?.enum ?? [];
 }
+
+function text(result: AgentToolResult<unknown>): string {
+	return result.content
+		.filter((block) => block.type === "text")
+		.map((block) => block.text)
+		.join("\n");
+}
+
+test("todo_list pages a large plan without losing, repeating or changing items", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-pages-"));
+	try {
+		const store = new TodoStore(cwd, "sess-test");
+		const plan = store.replaceAll({
+			groups: [
+				{
+					title: "Large task",
+					todos: Array.from({ length: 240 }, (_, i) => ({
+						title: `Step ${i} ${"x".repeat(1000)}`,
+					})),
+				},
+			],
+		});
+		const found: string[] = [];
+		let offset = 0;
+		for (let page = 0; page < 20; page++) {
+			const result = await run("todo_list", { offset }, cwd);
+			expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
+			found.push(...[...text(result).matchAll(/— (t_[a-f0-9]+)/g)].map((match) => match[1] ?? ""));
+			const nextOffset = (result.details as { nextOffset?: number }).nextOffset;
+			if (nextOffset === undefined) break;
+			expect(nextOffset).toBeGreaterThan(offset);
+			expect(text(result)).toContain(`offset: ${nextOffset}`);
+			offset = nextOffset;
+		}
+		expect(found).toEqual(plan.groups.flatMap((group) => group.todos.map((todo) => todo.id)));
+		expect(store.read()).toEqual(plan);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("a completion preserves oversized summary output without repeating the mutation", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-output-"));
+	let path: string | undefined;
+	try {
+		const store = new TodoStore(cwd, "sess-test");
+		const todo = store.add({ title: "Finish" });
+		const summary = "Previous work 🧪\n".repeat(4000).trim();
+		store.setSummary(summary);
+		const result = await run("todo_update", { id: todo.id, status: "done" }, cwd);
+		expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
+		expect(text(result).split("\n").length).toBeLessThanOrEqual(2000);
+		path = (result.details as { output?: { fullOutputPath?: string } }).output?.fullOutputPath;
+		expect(path).toBeDefined();
+		if (!path) throw new Error("missing full output");
+		const afterMutation = store.read();
+		expect(readFileSync(path, "utf8")).toContain(summary.trim());
+		const range = await createReadTool(cwd).execute("range", { path, offset: 3000, limit: 2 });
+		expect(text(range)).toContain("Previous work 🧪");
+		expect(Buffer.byteLength(text(range))).toBeLessThanOrEqual(50 * 1024);
+		expect(store.read()).toEqual(afterMutation);
+		expect(afterMutation.summary).toBe(summary);
+		expect(afterMutation.todos[0]?.status).toBe("done");
+		if (process.platform !== "win32") expect(statSync(path).mode & 0o777).toBe(0o600);
+	} finally {
+		if (path) rmSync(path, { force: true });
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("todo pagination keeps filters, clamps limits and handles empty or invalid ranges", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-ranges-"));
+	try {
+		const store = new TodoStore(cwd, "sess-test");
+		store.replaceAll({
+			groups: [
+				{
+					title: "Task",
+					todos: Array.from({ length: 250 }, (_, i) => ({ title: `Step ${i}`, status: "done" })),
+				},
+			],
+		});
+		store.add({ title: "Not done" });
+		const first = await run("todo_list", { status: "done", limit: 100000 }, cwd);
+		expect((first.details as { nextOffset?: number }).nextOffset).toBe(200);
+		expect(text(first)).toContain("status: done");
+		const last = await run("todo_list", { status: "done", offset: 200 }, cwd);
+		expect((last.details as { nextOffset?: number }).nextOffset).toBeUndefined();
+		expect(text(last).split("\n")).toHaveLength(50);
+		expect(text(last)).not.toContain("Not done");
+		expect(text(await run("todo_list", { offset: 9999 }, cwd))).toContain("No more plan lines");
+		expect(isError(await run("todo_list", { offset: -1 }, cwd))).toBe(true);
+		expect(isError(await run("todo_list", { limit: 0 }, cwd))).toBe(true);
+	} finally {
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("a single enormous plan line still exposes continuation and its file can expire", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-long-line-"));
+	let path: string | undefined;
+	try {
+		const store = new TodoStore(cwd, "sess-test");
+		const title = "🧪".repeat(20000);
+		store.add({ title });
+		store.add({ title: "Next item" });
+		const result = await run("todo_list", {}, cwd);
+		path = (result.details as { output?: { fullOutputPath?: string } }).output?.fullOutputPath;
+		expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
+		expect((result.details as { nextOffset?: number }).nextOffset).toBe(1);
+		expect(text(result)).toContain("offset: 1");
+		if (!path) throw new Error("missing full output");
+		expect(readFileSync(path, "utf8")).toContain(title);
+		expect(text(await run("todo_list", { offset: 1 }, cwd))).toContain("Next item");
+		rmSync(path);
+		await expect(createReadTool(cwd).execute("missing", { path })).rejects.toThrow();
+		expect(store.read().todos).toHaveLength(2);
+	} finally {
+		if (path) rmSync(path, { force: true });
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
+
+test("failed output capture reports unavailable without retrying a successful mutation", async () => {
+	const cwd = mkdtempSync(join(tmpdir(), "pi-todos-capture-failure-"));
+	const keys = ["TMPDIR", "TMP", "TEMP"] as const;
+	const original = keys.map((key) => process.env[key]);
+	try {
+		const notDirectory = join(cwd, "not-a-directory");
+		writeFileSync(notDirectory, "fixture");
+		for (const key of keys) process.env[key] = notDirectory;
+		const result = await run("todo_add", { title: "x".repeat(60000) }, cwd);
+		expect(isError(result)).toBe(false);
+		expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
+		expect(text(result)).toContain("Full output unavailable");
+		expect(text(result)).toContain("do not repeat a mutation");
+		expect(
+			(
+				result.details as {
+					output?: { truncated: boolean; captureFailed?: boolean; fullOutputPath?: string };
+				}
+			).output,
+		).toEqual({ truncated: true, captureFailed: true });
+		expect(new TodoStore(cwd, "sess-test").read().todos).toHaveLength(1);
+	} finally {
+		for (const [index, key] of keys.entries()) {
+			const value = original[index];
+			if (value === undefined) delete process.env[key];
+			else process.env[key] = value;
+		}
+		rmSync(cwd, { recursive: true, force: true });
+	}
+});
 
 test("registers the seven todo tools", () => {
 	expect([...tools.keys()].sort()).toEqual([

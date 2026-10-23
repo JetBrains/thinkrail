@@ -5,6 +5,7 @@ import {
 	mkdtempSync,
 	readFileSync,
 	rmSync,
+	statSync,
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
@@ -24,6 +25,98 @@ import {
 	SPEC_TYPES,
 } from "../core/index.ts";
 import { registerSpecTools } from "./index.ts";
+
+test("spec_grep pages by bytes without losing or repeating matches", async () => {
+	await withRoot(async (root) => {
+		const lines = Array.from({ length: 240 }, (_, i) => `needle ${i} ${"x".repeat(1000)}`);
+		writeFileSync(
+			join(root, "SPEC.md"),
+			`---\nid: large\ntype: module-design\n---\n${lines.join("\n")}`,
+		);
+		const found: string[] = [];
+		let offset = 0;
+		for (let page = 0; page < 20; page++) {
+			const result = await run("spec_grep", { pattern: "needle", offset }, root);
+			expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
+			const details = result.details as { matches: { snippet: string }[]; nextOffset?: number };
+			found.push(...details.matches.map((match) => match.snippet));
+			if (details.nextOffset === undefined) break;
+			expect(details.nextOffset).toBeGreaterThan(offset);
+			expect(text(result)).toContain(`offset: ${details.nextOffset}`);
+			offset = details.nextOffset;
+		}
+		expect(found).toEqual(lines);
+	});
+});
+
+test("an oversized spec match is preserved privately without changing its source", async () => {
+	await withRoot(async (root) => {
+		const line = `needle ${"🧪".repeat(20000)} END`;
+		const source = `---\nid: large\ntype: module-design\n---\n${line}`;
+		writeFileSync(join(root, "SPEC.md"), source);
+		const result = await run("spec_grep", { pattern: "needle" }, root);
+		expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
+		const details = result.details as { output?: { fullOutputPath?: string } };
+		const path = details.output?.fullOutputPath;
+		expect(path).toBeDefined();
+		if (!path) throw new Error("missing full output");
+		try {
+			expect(readFileSync(path, "utf8")).toContain(line);
+			expect(readFileSync(join(root, "SPEC.md"), "utf8")).toBe(source);
+			if (process.platform !== "win32") expect(statSync(path).mode & 0o777).toBe(0o600);
+			expect(text(result)).toContain("byte ranges");
+		} finally {
+			rmSync(path, { force: true });
+		}
+	});
+});
+
+test("grep count limits are clamped and continuation keeps filters", async () => {
+	await withRoot(async (root) => {
+		writeFileSync(
+			join(root, "SPEC.md"),
+			`---\nid: many\ntype: module-design\ntags: [target]\n---\n${"needle\n".repeat(250)}`,
+		);
+		writeFileSync(
+			join(root, "other.md"),
+			"---\nid: other\ntype: module-design\n---\nneedle excluded",
+		);
+		const first = await run("spec_grep", { pattern: "needle", tag: "target", limit: 100000 }, root);
+		expect((first.details as { matches: unknown[] }).matches).toHaveLength(200);
+		expect((first.details as { nextOffset?: number }).nextOffset).toBe(200);
+		const last = await run("spec_grep", { pattern: "needle", tag: "target", offset: 200 }, root);
+		expect((last.details as { matches: unknown[] }).matches).toHaveLength(50);
+		expect((last.details as { nextOffset?: number }).nextOffset).toBeUndefined();
+		expect(isError(await run("spec_grep", { pattern: "needle", offset: -1 }, root))).toBe(true);
+	});
+});
+
+test("large graph, node and validation text also remains bounded and file-backed", async () => {
+	await withRoot(async (root) => {
+		writeFileSync(
+			join(root, "SPEC.md"),
+			`---\nid: root\ntype: module-design\ntitle: ${"x".repeat(60000)}\nreferences: [${Array.from({ length: 2200 }, (_, i) => `missing-${i}`).join(", ")}]\n---\n`,
+		);
+		for (const [name, params] of [
+			["spec_get", { id: "root" }],
+			["spec_graph", { root: "root", direction: "subtree" }],
+			["spec_validate", {}],
+		] as const) {
+			const result = await run(name, params, root);
+			const path = (result.details as { output?: { fullOutputPath?: string } }).output
+				?.fullOutputPath;
+			try {
+				expect(Buffer.byteLength(text(result))).toBeLessThanOrEqual(50 * 1024);
+				expect(text(result).split("\n").length).toBeLessThanOrEqual(2000);
+				expect(path).toBeDefined();
+				if (!path) throw new Error("missing full output");
+				expect(readFileSync(path, "utf8").length).toBeGreaterThan(50000);
+			} finally {
+				if (path) rmSync(path, { force: true });
+			}
+		}
+	});
+});
 
 function foldsCase(): boolean {
 	const probe = mkdtempSync(join(tmpdir(), "spec-probe-"));
