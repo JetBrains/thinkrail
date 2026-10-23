@@ -70,6 +70,7 @@ import {
 	collectAllGroups,
 	findPlacedResource,
 	findTabLocation,
+	isToolShowing,
 	type LayoutCenterTab,
 	type LayoutTab,
 	type LayoutTabFocusRequest,
@@ -356,6 +357,12 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		() => selectActiveReviewedPath(useAppStore.getState(), workspaceId),
 		[workspaceId],
 	);
+	const readReviewShowing = useCallback(() => {
+		const state = useAppStore.getState();
+		const layout = state.layoutDocumentsByWorkspace[workspaceId];
+		const layoutAttention = state.layoutAttentionByWorkspace[workspaceId];
+		return layout && layoutAttention ? isToolShowing(layout, layoutAttention, "review") : false;
+	}, [workspaceId]);
 	const openToolFile = useCallback(
 		(path: string) => {
 			void openFileInTab(workspaceId, path, "preview");
@@ -427,7 +434,12 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[document, workspaceId],
 	);
 
-	useLegacySelectionAdapter(workspaceId, activeReviewedPath, readActiveReviewedPath);
+	useLegacySelectionAdapter(
+		workspaceId,
+		activeReviewedPath,
+		readActiveReviewedPath,
+		readReviewShowing,
+	);
 	useDeletedChatPlacementReconciliation(workspaceId);
 	useTerminalReservation(workspaceId);
 	useLayoutIntentProcessing(workspaceId, commit, changeAttention, setFocusRequest);

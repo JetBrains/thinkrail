@@ -39,8 +39,11 @@ export function syncLegacySelectionFromAttention(workspaceId: string): void {
 	);
 }
 
-export function scheduleReviewReveal(reveal: () => void): (() => void) | undefined {
-	const wait = doubleClickPendingMs();
+export function scheduleReviewReveal(
+	reveal: () => void,
+	reviewShowing: boolean,
+): (() => void) | undefined {
+	const wait = reviewShowing ? 0 : doubleClickPendingMs();
 	if (wait === 0) {
 		reveal();
 		return;
@@ -53,6 +56,7 @@ export function useLegacySelectionAdapter(
 	workspaceId: string,
 	activeReviewedPath: string | null,
 	readActiveReviewedPath: () => string | null,
+	readReviewShowing: () => boolean,
 ): void {
 	const selectedCenterTab = useAppStore((state) => selectAttentionCenterTab(state, workspaceId));
 	const selectedCenterResourceCacheKey = useAppStore((state) =>
@@ -90,14 +94,20 @@ export function useLegacySelectionAdapter(
 		const cancel = scheduleReviewReveal(() => {
 			revealed = true;
 			revealReview();
-		});
+		}, readReviewShowing());
 		return () => {
 			cancel?.();
 			if (!revealed && previousReviewedSelection.current?.selection === reviewedSelection) {
 				previousReviewedSelection.current = null;
 			}
 		};
-	}, [activeLegacyTabId, activeReviewedPath, readActiveReviewedPath, workspaceId]);
+	}, [
+		activeLegacyTabId,
+		activeReviewedPath,
+		readActiveReviewedPath,
+		readReviewShowing,
+		workspaceId,
+	]);
 
 	useEffect(() => {
 		syncLegacySelectedResource(workspaceId, selectedCenterTab, selectedCenterResourceCacheKey);

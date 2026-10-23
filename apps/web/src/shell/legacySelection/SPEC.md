@@ -18,8 +18,9 @@ terminal mirrors used by feature render caches.
   atomically clearing the incompatible legacy mirror; rerunning when a cache identity is repaired beneath a
   stable placement; and revealing the Review tool when the active tab becomes a reviewed file, deferred while
   `doubleClickPendingMs()` says a browse row's double-click could still arrive, so the row can keep its preview
-  before Review replaces it. A deferred reveal cancelled before it fires is forgotten, so a rerun with the same
-  selection schedules it again.
+  before Review replaces it. When Review already shows (the workbench-supplied reader), nothing can replace the
+  row, so the reveal runs at once: a late reveal's focus request would close whatever the user opened meanwhile.
+  A deferred reveal cancelled before it fires is forgotten, so a rerun with the same selection schedules it again.
 - **Public surface (`index.ts`):** the mounted compatibility hook and the imperative attention-change adapter
   used by the workbench callback.
 - **External deps:** web-local center-resource types; store selectors, the single legacy mirror action, and the
