@@ -137,6 +137,10 @@ test("a persisted tall questionnaire reveals page changes and a restored page wi
 	try {
 		await selectOldestFirst(page);
 		await enterDefaultWorkspace(page);
+		await openPersistedChat(page, "tall persisted questionnaire");
+		const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
+		await chatTabs.first().getByTestId("editor-tab-close").click();
+		await expect(chatTabs).toHaveCount(0);
 		await hideAuxiliaryWorkbench(page);
 		await openPersistedChat(page, "tall persisted questionnaire");
 
@@ -170,7 +174,6 @@ test("a persisted tall questionnaire reveals page changes and a restored page wi
 			}))
 			.toEqual({ heading: true, firstOption: true });
 
-		const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 		await chatTabs.first().getByTestId("editor-tab-close").click();
 		await expect(chatTabs).toHaveCount(0);
 		await page.getByTestId("chat-history").first().click();
@@ -239,7 +242,6 @@ test("a key pressed before a reopened questionnaire's first frame does not cance
 
 	try {
 		await enterDefaultWorkspace(page);
-		await hideAuxiliaryWorkbench(page);
 		await openPersistedChat(page, "early input questionnaire");
 		const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
 		await expect(card.getByTestId("ask-option").first()).toBeFocused();
@@ -247,6 +249,7 @@ test("a key pressed before a reopened questionnaire's first frame does not cance
 		const chatTabs = page.locator('[data-testid="editor-tab"][data-kind="chat"]');
 		await chatTabs.first().getByTestId("editor-tab-close").click();
 		await expect(chatTabs).toHaveCount(0);
+		await hideAuxiliaryWorkbench(page);
 		await page.getByTestId("chat-history").first().click();
 		await page.evaluate(() => {
 			const held: FrameRequestCallback[] = [];

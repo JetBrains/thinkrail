@@ -155,6 +155,11 @@ const PARITY_CASES: { name: string; global: unknown; project?: unknown }[] = [
 		global: { mcpServers: { bad: null, list: [1], text: "x" } },
 		project: { mcpServers: { odd: 5, none: null } },
 	},
+	{
+		name: "BOM-prefixed global definitions and project overrides",
+		global: '\uFEFF{"mcpServers":{"docs":{"url":"https://docs.example/mcp"}}}',
+		project: '\uFEFF{"mcpServers":{"docs":{"enabled":false}}}',
+	},
 	{ name: "malformed global file", global: "{ not json" },
 	{ name: "mcpServers that is not an object", global: { mcpServers: [] }, project: "[]" },
 	{ name: "non-object top level", global: "[1,2]" },
@@ -350,6 +355,32 @@ test("writers keep unknown keys and indentation, drop global defaults, and repla
 	});
 	expect(removeMcpServerConfig(path, "__proto__")).toBe(true);
 	expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({ extra: true, mcpServers: {} });
+});
+
+test("BOM-prefixed files load and edit without losing permissions, indentation or unrelated keys", () => {
+	const original =
+		'\uFEFF{\n\t"extra": true,\n\t"mcpServers": {"docs": {"url": "https://docs.example/mcp"}}\n}\n';
+	const { agentDir, cwd } = fixture(original);
+	const path = join(agentDir, "mcp.json");
+	chmodSync(path, 0o600);
+	const loaded = loadMcpConfigFiles({ agentDir, cwd, projectTrusted: true });
+	expect(loaded.errors).toEqual([]);
+	expect(loaded.servers.map((server) => server.name)).toEqual(["docs"]);
+	expect(removeMcpServerConfig(path, "missing")).toBe(false);
+	expect(readFileSync(path, "utf8")).toBe(original);
+	updateMcpServerConfig(path, "docs", { enabled: false });
+	const text = readFileSync(path, "utf8");
+	expect(text.startsWith('{\n\t"extra": true,')).toBe(true);
+	expect(JSON.parse(text).mcpServers.docs.enabled).toBe(false);
+	expect(statSync(path).mode & 0o777).toBe(0o600);
+	writeFileSync(path, `\uFEFF${text}`);
+	expect(addMcpServerConfig(path, "new", { command: "unused" })).toBe(false);
+	writeFileSync(path, `\uFEFF${readFileSync(path, "utf8")}`);
+	expect(removeMcpServerConfig(path, "docs")).toBe(true);
+	expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
+		extra: true,
+		mcpServers: { new: { command: "unused" } },
+	});
 });
 
 test("an override entry keeps explicit values instead of dropping defaults", () => {

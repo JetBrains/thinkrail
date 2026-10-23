@@ -17,12 +17,29 @@ The installed version comes only from the root dependency catalog, not a second 
 
 ## Last re-check
 
-Every MCP entry below was re-checked against the installed catalog version and retained: the public
-exports, the builtin MCP configuration/writer code, `openUrl`, the shutdown ordering and startup
-dispatch, and the ephemeral `structuredContent` had not changed. That upgrade widened
-`structuredContent` to any JSON value, stopped enumerating resources on connect (status wording
-`connected · N tools · resources`), cancels requests abandoned during an OAuth refresh, and added
-`reachesTools`; the status parser and result summary tests cover the two visible changes.
+The compaction output-cap upgrade ([upstream #11036](https://github.com/earendil-works/pi/pull/11036))
+was checked against the installed catalog version. **No removal gate is satisfied.**
+
+- MCP loader/writers remain private; management/status still use commands, notifications and logs.
+  `openUrl` remains the public sign-in URL seam. The one parity change is single-leading-BOM acceptance,
+  now shared by the host loader, writers and raw-entry occupancy/fingerprint reads. Config and host
+  tests cover both scopes, approved overrides, malformed occupied names and refused-write preservation.
+- `AgentSession.dispose()` still does not emit extension shutdown; reload dispatch is sequential,
+  and MCP clears its server list before awaiting closure. Keep ordered cleanup and late-start admission.
+  Codemode still needs a worker/WASM artifact surface we do not package. Raw `structuredContent` is
+  still ephemeral, not a bounded durable transcript presentation.
+- Delivered queue removal and `clearQueue()` remain text-only. SDK creation still does not initialize
+  a headless terminal theme. Extension loading still needs Jiti/virtual-module adaptation in artifacts,
+  static OAuth/Bedrock registration and the image-resize override. Artifact probes also exercise a
+  value import from `pi-ai/models` through the external extension loader.
+- Public trust detection does not replace resource-kind discovery/exclusion reloads; session discovery
+  and prompt-template APIs still do not cover the host's read/edit surfaces. Keep their parity tests.
+- Pi now sizes history, turn-prefix and branch summaries without reserve-derived output caps. Reasoning
+  inheritance and rejection of incomplete `length` summaries remain. Direct faux-provider tests exercise
+  the real summary calls, not replacement summaries; lifecycle tests cover cancellation and failure.
+  Restored truncated-call recovery now omits the paired tool result too, but does not replace
+  `sessionRepair`'s host-restart and questionnaire repair. No host summarizer, effort-default change,
+  reserve tuning, wire migration or session migration is introduced.
 
 ## Upgrade contract
 

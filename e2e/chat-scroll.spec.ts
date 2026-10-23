@@ -632,12 +632,17 @@ for (const testCase of orderCases) {
 				scroller.dispatchEvent(new Event("scroll"));
 			}, testCase.order);
 			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
-			await chatScroll.dispatchEvent("pointercancel", {
-				pointerId: 73,
-				pointerType: "touch",
-				isPrimary: true,
-			});
 			await chatScroll.evaluate((root, order) => {
+				root.dispatchEvent(
+					new PointerEvent("pointercancel", {
+						bubbles: true,
+						cancelable: true,
+						composed: true,
+						pointerId: 73,
+						pointerType: "touch",
+						isPrimary: true,
+					}),
+				);
 				const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
 				if (!scroller) throw new Error("missing Virtuoso scroller");
 				scroller.scrollTop =

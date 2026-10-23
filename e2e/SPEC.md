@@ -66,6 +66,11 @@ chords read the page's browser-reported platform through one fixture helper and 
 Control elsewhere; hard-coding the runner host's modifier would exercise the wrong product branch under
 browser/platform emulation.
 
+Questionnaire attention probes perform workbench layout shortcuts only while their chat is closed.
+Those shortcuts are user input and deliberately end the card's bounded focus/reveal claim; resizing an
+active card during that claim also races its initial viewport geometry. Reopen after layout setup so
+focus and tall-card assertions measure questionnaire behavior rather than unrelated layout navigation.
+
 Provider-backed browser tests (`e2e:agent`) use a dedicated serial real-Central mode; the separate
 headless workflow suite keeps its local PI-auth mode. Concurrent provider turns would alter rate limits,
 cost, and determinism, so neither is sharded. The agent runner builds the web artifact under the caller's
@@ -84,6 +89,12 @@ configs distribute individual tests, so a passed-through Playwright `--shard=k/N
 across CI machines, each booting its own artifact host. A future launcher or
 deployment adds another host adapter for this same suite, never copied feature specs; shared behavior is
 therefore proven through every composition root.
+
+The focused `compaction.live` probe exercises manual compaction, continuation and restored context
+through a real provider. It lowers only the disposable lane's `keepRecentTokens` and disables automatic
+compaction to keep the request small and deterministic, restoring the settings bytes in `finally`.
+It neither changes the provider/effort selection nor proves removal of a fixed output cap; direct SDK
+summary-request unit tests own that assertion.
 
 ## Chat resource controls
 
@@ -121,6 +132,10 @@ starts servers.
 
 Native wheel probes target the actual transcript viewport again after clicking a floating Latest
 button; a pointer left at a removed overlay is not evidence of a gesture delivered to the scroller.
+The canceled-pointer momentum probe delivers synthetic cancellation and its continuing scroll in one
+browser task. Separate commands let native completion events from earlier programmatic position writes
+end the simulated gesture before its tail arrives. This pins post-cancellation intent and exact-edge
+rearm in both orders, not extended native touch physics; native completion and expiry remain enabled.
 Disclosure-anchor probes place the complete header below the real sticky breadcrumb before asserting
 fixed-position behavior. Intersection with the scroller alone does not prove that a header is unobscured.
 Pierre surfaces paint plain text first and replace their rows when the worker's highlight lands, which

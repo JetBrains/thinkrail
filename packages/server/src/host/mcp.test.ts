@@ -203,14 +203,61 @@ test("a user entry is rewritten or removed only as rendered: a stale or missing 
 });
 
 for (const scope of ["user", "project"] as const) {
+	test(`BOM-prefixed ${scope} entries retain occupancy, fingerprints and approvals through edits`, async () => {
+		mkdirSync(join(repo, ".pi"));
+		const file = join(scope === "user" ? agentDir : join(repo, ".pi"), "mcp.json");
+		const original =
+			'\uFEFF{"extra":true,"mcpServers":{"docs":{"url":"https://docs.example/mcp"}}}';
+		writeFileSync(file, original);
+		const current = find(await request("mcp.list", { workspaceId: "w1" }), scope, "docs");
+		expect(current?.fingerprint).toBeString();
+		if (scope === "project") {
+			await request("mcp.approve", {
+				workspaceId: "w1",
+				name: "docs",
+				fingerprint: current?.fingerprint,
+			});
+		}
+		const target = { workspaceId: "w1", scope, name: "docs" };
+		const entry = { url: "https://docs.example/v2" };
+		expect(await codeOf(request("mcp.add", { ...target, entry }))).toBe("MCP_CONFIG_INVALID");
+		expect(
+			await codeOf(request("mcp.update", { ...target, entry, expectedFingerprint: "stale" })),
+		).toBe("MCP_CONFIG_INVALID");
+		expect(readFileSync(file, "utf8")).toBe(original);
+		const updated = find(
+			await request("mcp.update", {
+				...target,
+				entry,
+				expectedFingerprint: current?.fingerprint,
+			}),
+			scope,
+			"docs",
+		);
+		expect(updated?.endpoint).toBe(entry.url);
+		if (scope === "project") expect(updated?.approval?.state).toBe("approved");
+		writeFileSync(file, `\uFEFF${readFileSync(file, "utf8")}`);
+		await request("mcp.remove", { ...target, expectedFingerprint: updated?.fingerprint });
+		expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ extra: true, mcpServers: {} });
+	});
+
 	test.each(
-		malformedEntries.map((entry) => [entry] as const),
-	)(`add refuses a ${scope} name occupied by %j after the client listed it as absent`, async (entry) => {
+		malformedEntries.flatMap(
+			(entry) =>
+				[
+					["", entry],
+					["\uFEFF", entry],
+				] as const,
+		),
+	)(`add refuses a ${scope} file with prefix %j occupied by %j after the client listed it as absent`, async (prefix, entry) => {
 		approveProjectMcpServer("p1", "other", "other-fingerprint");
 		expect(find(await request("mcp.list", { workspaceId: "w1" }), scope, "docs")).toBeUndefined();
 		mkdirSync(join(repo, ".pi"));
 		const file = join(scope === "user" ? agentDir : join(repo, ".pi"), "mcp.json");
-		writeFileSync(file, `${JSON.stringify({ mcpServers: { docs: entry } }, null, "\t")}\n`);
+		writeFileSync(
+			file,
+			`${prefix}${JSON.stringify({ mcpServers: { docs: entry } }, null, "\t")}\n`,
+		);
 		const before = readFileSync(file, "utf8");
 		const projectsFile = join(root, "data", "projects.json");
 		const projectsBefore = readFileSync(projectsFile, "utf8");
@@ -427,17 +474,20 @@ test("always-allowed tools are listed on their server row and revoked one by one
 	).toBe("MCP_CONFIG_INVALID");
 });
 
-test("share refuses a repository entry of that name that is a full definition or an unapproved override", async () => {
+test.each([
+	"",
+	"\uFEFF",
+])("share with prefix %j refuses full definitions and unapproved overrides", async (prefix) => {
 	writeFileSync(
 		join(agentDir, "mcp.json"),
-		JSON.stringify({ mcpServers: { linear: { url: "https://linear.example/mcp" } } }),
+		`${prefix}${JSON.stringify({ mcpServers: { linear: { url: "https://linear.example/mcp" } } })}`,
 	);
 	await request("mcp.setProjectOverride", { workspaceId: "w1", name: "linear", enabled: false });
 	mkdirSync(join(repo, ".pi"));
 	const file = join(repo, ".pi", "mcp.json");
 	const share = () => request("mcp.shareWithRepo", { workspaceId: "w1", name: "linear" });
 	const refusedLeavesFile = async (entry: object) => {
-		writeFileSync(file, JSON.stringify({ mcpServers: { linear: entry } }));
+		writeFileSync(file, `${prefix}${JSON.stringify({ mcpServers: { linear: entry } })}`);
 		const before = readFileSync(file, "utf8");
 		expect(await codeOf(share())).toBe("MCP_CONFIG_INVALID");
 		expect(readFileSync(file, "utf8")).toBe(before);
@@ -465,8 +515,14 @@ test("share refuses a repository entry of that name that is a full definition or
 });
 
 test.each(
-	malformedEntries.map((entry) => [entry] as const),
-)("share refuses a repository name occupied by %j regardless of approval", async (entry) => {
+	malformedEntries.flatMap(
+		(entry) =>
+			[
+				["", entry],
+				["\uFEFF", entry],
+			] as const,
+	),
+)("share with prefix %j refuses a repository name occupied by %j regardless of approval", async (prefix, entry) => {
 	writeFileSync(
 		join(agentDir, "mcp.json"),
 		JSON.stringify({ mcpServers: { linear: { url: "https://linear.example/mcp" } } }),
@@ -474,7 +530,10 @@ test.each(
 	await request("mcp.setProjectOverride", { workspaceId: "w1", name: "linear", enabled: false });
 	mkdirSync(join(repo, ".pi"));
 	const file = join(repo, ".pi", "mcp.json");
-	writeFileSync(file, `${JSON.stringify({ mcpServers: { linear: entry } }, null, "\t")}\n`);
+	writeFileSync(
+		file,
+		`${prefix}${JSON.stringify({ mcpServers: { linear: entry } }, null, "\t")}\n`,
+	);
 	const before = readFileSync(file, "utf8");
 	const projectsFile = join(root, "data", "projects.json");
 	for (const approved of [false, true]) {
