@@ -87,6 +87,7 @@
 		"check:i18n": "bun test scripts/checkI18n.test.ts scripts/i18nRenderReach.test.ts && bun scripts/check-i18n.ts",
 		"check:compiler": "bun --filter @thinkrail/web compiler:census:check",
 		"check:pi-packages": "bun scripts/check-pi-packages.ts",
+		"ci:flakes": "bun scripts/ci-flakes.ts",
 		"changeset": "changeset",
 		"release:version": "changeset version && bun install --no-frozen-lockfile",
 		"release:pack": "bun scripts/pack-pi-package.ts",
