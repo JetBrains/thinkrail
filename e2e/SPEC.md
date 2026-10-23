@@ -121,6 +121,9 @@ starts servers.
 
 Native wheel probes target the actual transcript viewport again after clicking a floating Latest
 button; a pointer left at a removed overlay is not evidence of a gesture delivered to the scroller.
+A probe that interrupts a Latest return clicks and interrupts in one task, moving from the current
+position: resetting `scrollTop` without a scroll event can make the hook's observed delta zero when the
+return's first frame happened to cover exactly the probe's step, so no detach is seen.
 Disclosure-anchor probes place the complete header below the real sticky breadcrumb before asserting
 fixed-position behavior. Intersection with the scroller alone does not prove that a header is unobscured.
 Pierre surfaces paint plain text first and replace their rows when the worker's highlight lands, which

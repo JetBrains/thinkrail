@@ -401,25 +401,21 @@ for (const testCase of orderCases) {
 	}) => {
 		const { session, chatScroll } = await openTallChat(page, testCase.order);
 		try {
-			const interruptionStart = await moveIntoStableHistory(
-				page,
-				chatScroll,
-				testCase.order,
-				testCase.historyWheel,
-			);
+			await moveIntoStableHistory(page, chatScroll, testCase.order, testCase.historyWheel);
 			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
-			await page.getByTestId(testCase.buttonTestId).evaluate((button) => button.click());
 			await chatScroll.evaluate(
-				(root, { scrollTop, deltaY }) => {
+				(root, { buttonTestId, deltaY }) => {
 					const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
-					if (!scroller) throw new Error("missing Virtuoso scroller");
-					scroller.scrollTop = scrollTop;
+					const latest = root.querySelector<HTMLButtonElement>(`[data-testid="${buttonTestId}"]`);
+					if (!scroller || !latest) throw new Error("missing chat scroll controls");
+					latest.click();
+					const scrollTop = scroller.scrollTop;
 					scroller.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY }));
 					scroller.scrollTop = scrollTop + deltaY;
 					scroller.dispatchEvent(new Event("scroll"));
 				},
 				{
-					scrollTop: interruptionStart.scrollTop,
+					buttonTestId: testCase.buttonTestId,
 					deltaY: testCase.latestWheel > 0 ? 20 : -20,
 				},
 			);
