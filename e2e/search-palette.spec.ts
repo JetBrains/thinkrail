@@ -12,6 +12,7 @@ import {
 	enterDefaultWorkspace,
 	openFixtureProject,
 	pressPlatformShortcut,
+	worktreeRows,
 } from "./fixtures/app";
 import { resolveBunExecutable } from "./fixtures/executables";
 import { E2E_FIXTURE_REPO, E2E_PI_AGENT_DIR } from "./fixtures/paths";
@@ -415,6 +416,65 @@ test("an older host gets the local scopes only, with a notice, and never a searc
 	await expect(page.locator('[data-testid="search-row"][data-kind="file"]')).toHaveCount(0);
 	await page.waitForTimeout(500);
 	expect(hostRequests).toEqual([]);
+});
+
+test("start from the typed text: Mod+Enter creates a workspace and sends the first prompt; Tab retargets to the project folder; Shift+Mod+Enter opens the dialog prefilled", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await expect(worktreeRows(page)).toHaveCount(0);
+
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("Refactor the auth module");
+	const startRow = page.locator('[data-testid="search-row"][data-item-id="start"]');
+	await expect(startRow).toContainText("Refactor the auth module");
+	await expect(startRow).toContainText("New workspace");
+	await pressPlatformShortcut(page, "Enter");
+	await expect(palette(page)).toBeHidden();
+	await expect(worktreeRows(page)).toHaveCount(1);
+	await expect(worktreeRows(page).first()).toHaveAttribute("data-active", "true");
+	const userMessage = page.locator('[data-testid="chat-message"][data-role="user"]').first();
+	await expect(userMessage).toContainText("Refactor the auth module");
+
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("Explain the sample notebook");
+	await page.keyboard.press("ArrowUp");
+	await expect(startRow).toHaveAttribute("aria-selected", "true");
+	await page.keyboard.press("Tab");
+	await expect(startRow).toContainText("Project folder");
+	await page.keyboard.press("Enter");
+	await expect(palette(page)).toBeHidden();
+	await expect(defaultWorkspaceRow(page)).toHaveAttribute("data-active", "true");
+	await expect(
+		page.locator('[data-testid="chat-message"][data-role="user"]', {
+			hasText: "Explain the sample notebook",
+		}),
+	).toBeVisible();
+
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("Also check the tests");
+	await page.keyboard.press("ArrowUp");
+	await page.keyboard.press("Tab");
+	await page.keyboard.press("Tab");
+	await expect(startRow).toContainText("This chat");
+	await page.keyboard.press("Enter");
+	await expect(palette(page)).toBeHidden();
+	await expect(
+		page.locator('[data-testid="chat-message"][data-role="user"]', {
+			hasText: "Also check the tests",
+		}),
+	).toBeVisible();
+	await expect(worktreeRows(page)).toHaveCount(1);
+
+	await openPalette(page);
+	await page.getByTestId("search-input").fill("Write release notes");
+	await pressPlatformShortcut(page, "Shift+Enter");
+	await expect(palette(page)).toBeHidden();
+	const dialog = page.getByTestId("new-workspace-dialog");
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByTestId("ws-prompt")).toHaveValue("Write release notes");
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
 });
 
 test("inline toggles keep the palette open and Ctrl+R stays inert under it", async ({ page }) => {

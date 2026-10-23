@@ -60,7 +60,7 @@ does not reproduce yet.
 | `workspace.settle` / `unsettle` | `panels/workspaceActions` | `canSettleWorkspace` | PR1 |
 | `workspace.reveal`, `workspace.copyPath`, `workspace.openIn.<editor>` | `panels/workspaceActions`, `lib.copyText` | active workspace | PR1 |
 | `terminal.new` New terminal | `store.addTerminal` | active workspace, online (placement reserves on the host) | PR1 |
-| Start work from typed text (`⌘↵`, targets) | shared `startWork` | context project | PR3 |
+| Start work from typed text (`⌘↵`, Tab cycles new workspace → project folder → current chat; `⇧⌘↵` opens the dialog prefilled) | `panels/startWork` via the palette's `PaletteStart` | context project, online | PR3 |
 | Chat without a project | `chat.create` | — | PR4 |
 | Continue in workspace | `chat.continue` | a projectless chat | PR5 |
 | Remove workspace, close project, stop trusting, layout apply/reset, clear review, MCP approve/remove, stop all subagents, delete template | their confirm dialogs | confirmation | Row UI |

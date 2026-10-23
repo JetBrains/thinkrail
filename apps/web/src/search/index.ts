@@ -5,7 +5,9 @@ export type {
 	PaletteItem,
 	PaletteItemKind,
 	PalettePreview,
+	PaletteStart,
 	PaletteToggle,
+	StartTargetOption,
 } from "./model";
 export { initSearchPreferences } from "./preferences";
 export type { SearchScope } from "./query";

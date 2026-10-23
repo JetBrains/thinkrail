@@ -139,6 +139,28 @@ describe("buildSections", () => {
 		expect(expanded.find((section) => section.id === "chats")?.items).toHaveLength(35);
 	});
 
+	test("the start row closes a typed root query in All and Work, never on a page, a filter or another scope", () => {
+		const start = {
+			targets: [{ kind: "workspace" as const, label: "New workspace", detail: "Start in One" }],
+			run: () => {},
+			openDialog: () => {},
+		};
+		const target = start.targets[0] as (typeof start.targets)[number];
+		const withStart = (raw: string) =>
+			sections(raw, { start: { start, target, text: raw.replace(/^[@>]/, "").trim() } });
+		const last = (raw: string) => withStart(raw).at(-1);
+		expect(last("ship the thing")).toMatchObject({ id: "start" });
+		expect(last("ship the thing")?.items[0]?.item).toMatchObject({
+			kind: "start",
+			title: "ship the thing",
+			badge: "New workspace",
+		});
+		expect(last("@ship")?.id).toBe("start");
+		expect(last(">ship")?.id).not.toBe("start");
+		expect(last("is:unread ship")?.id).not.toBe("start");
+		expect(flattenRows(withStart("zzz-no-match"))).toHaveLength(1);
+	});
+
 	test("pages rank within their own sections", () => {
 		const page: PalettePage = {
 			id: "theme",

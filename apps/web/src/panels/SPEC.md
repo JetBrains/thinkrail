@@ -463,8 +463,14 @@ a project picker, the prompt hero, and the reused
   so `resources: true` travels only when the notice named pi-level resources; it folds the updated project
   back into the store and re-previews); personal + bundled skills show regardless. When the menu is closed, **Enter submits** (matching the submit button's
   `↵` affordance) and
-  **Shift+Enter** inserts a newline. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active,
-  and the dialog itself expands the project and refreshes its authoritative `workspace.list` (fire-and-forget;
+  **Shift+Enter** inserts a newline. The create-and-kick-off tail lives in **`startWork.ts`** so the dialog and
+  the search palette's start row share one implementation: `prepareStartWorkspace(target)` (a new
+  worktree, or the project folder through `enterDefaultWorkspace`) and `startChatIn(workspace, prompt)`;
+  `startWork(target, prompt)` composes both for a one-shot start and routes the `current-chat` target through
+  `promptWorkspaceChat` (`session.followUp` while the chat streams, a plain prompt when idle — never a steer).
+  A start without an explicit `baseRef` resolves the project's default branch through `git.listBranches`
+  first — omitting `baseRef` would branch from whatever HEAD is. Worktree-mode submit = `workspace.create({ projectId, baseRef })` → set active,
+  and the helper expands the project and refreshes its authoritative `workspace.list` (fire-and-forget;
   the `workspace.created` push is not relied on because an unloaded project list drops it) — there is no
   `onCreated` callback, so every mount site (`ProjectTree`, `WelcomePanel`, the shell's keyboard-opened
   instance) gets the same post-create fold → **always open a

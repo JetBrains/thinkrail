@@ -20,10 +20,11 @@ by `shell`.
 
 ## Boundary
 
-- **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `SearchSettings`,
-  `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`, `waitingItems`,
-  `WorkItemsState`, `commandItems`, `SearchScope`, `PalettePage`, `PalettePageSection`, `PaletteItem`,
-  `PaletteItemKind`, `PaletteAction`, `PalettePreview`, `PaletteToggle`.
+- **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `PaletteStart`,
+  `StartTargetOption`, `SearchSettings`, `initSearchPreferences`, `createDoubleShiftDetector`,
+  `buildWorkItems`, `waitingItems`, `WorkItemsState`, `commandItems`, `SearchScope`, `PalettePage`,
+  `PalettePageSection`, `PaletteItem`, `PaletteItemKind`, `PaletteAction`, `PalettePreview`,
+  `PaletteToggle`.
 - **Allowed deps:** `contracts` (the shared matcher and domain types), `commands`, `store`, `transport`
   (the backend endpoint for browser preference keys), `clientPreferences`, `constants`, `components`,
   `lib`, `@thinkrail/ui/*`, `@remixicon/react`.
@@ -52,6 +53,18 @@ is prefix-or-better and clearly ahead, or the typed query has latched to it. Gro
 best row and capped at four in All (thirty in a scope) with an "N more" row that switches the scope.
 The empty query lists **Waiting for you** (the former session switcher's attention set, every open
 project), **Recent** (by frecency), and **Actions**.
+
+## Start from the typed text
+
+Whenever the root query has text (All or Work scope, no state filter), the last section is **Start
+work**: one row titled with the text as typed, badged with the current target. `↵` on it, or `Mod+↵`
+from any row, hands the raw text to the injected `PaletteStart.run(text, target)`; `Shift+Mod+↵` calls
+`openDialog` instead (shell opens the Create-workspace dialog prefilled). `Tab` on the start row cycles
+the target (new workspace → project folder → the current chat, when there is one) instead of the scope.
+The row carries the offline reason like every host mutation, is never remembered by the learning store,
+and shell resolves a target into `panels/startWork`'s request — a new workspace from the project's
+default branch with the host default model, the project folder through `enterDefaultWorkspace`, or the
+current chat through `followUp` semantics.
 
 ## Host search
 

@@ -1,8 +1,15 @@
-import { RiFilter3Line, RiMoreLine } from "@remixicon/react";
+import { RiFilter3Line, RiMoreLine, RiSparkling2Line } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import type { Translator } from "@thinkrail/locales/react";
+import { shortcutLabel } from "../commands";
 import { frecencyScore, type LearningSnapshot } from "./learning";
-import type { PaletteItem, PaletteRow, PaletteSection } from "./model";
+import type {
+	PaletteItem,
+	PaletteRow,
+	PaletteSection,
+	PaletteStart,
+	StartTargetOption,
+} from "./model";
 import { type ParsedQuery, type SearchScope, STATE_FILTERS, type StateFilter } from "./query";
 import { compareRanked, pickTopHit, plainRow, type RankedItem, rankItems, toRow } from "./rank";
 
@@ -18,10 +25,17 @@ export interface PalettePage {
 	readonly sections: () => readonly PalettePageSection[];
 }
 
+export interface StartInput {
+	readonly start: PaletteStart;
+	readonly target: StartTargetOption;
+	readonly text: string;
+}
+
 export interface SectionsInput {
 	readonly t: Translator;
 	readonly parsed: ParsedQuery;
 	readonly page: PalettePage | null;
+	readonly start?: StartInput;
 	readonly rootItems: readonly PaletteItem[];
 	readonly waiting: readonly PaletteItem[];
 	readonly actions: readonly PaletteItem[];
@@ -43,6 +57,7 @@ const GROUP_LABELS: Readonly<Record<string, MessageKey>> = {
 	mcp: "search.group.mcp",
 	extensions: "search.group.extensions",
 	themes: "search.group.themes",
+	start: "search.group.start",
 	files: "search.group.files",
 	specs: "search.group.specs",
 	plans: "search.group.plans",
@@ -226,7 +241,49 @@ function emptyRootSections(input: SectionsInput): PaletteSection[] {
 	);
 }
 
+export const START_ROW_ID = "start";
+
+export function startRow(t: Translator, input: StartInput): PaletteItem {
+	const { start, target, text } = input;
+	return {
+		id: START_ROW_ID,
+		kind: "start",
+		title: text,
+		subtitle: t("search.start.subtitle", {
+			target: target.detail,
+			full: shortcutLabel({ key: "↵", mod: true, shift: true }),
+		}),
+		group: "start",
+		scope: "all",
+		icon: RiSparkling2Line,
+		badge: target.label,
+		shortcut: { key: "↵", mod: true },
+		...(start.disabledReason ? { disabledReason: start.disabledReason } : {}),
+		run: () => start.run(text, target),
+	};
+}
+
+function withStart(sections: PaletteSection[], input: SectionsInput): PaletteSection[] {
+	const { start, parsed, t } = input;
+	if (
+		!start ||
+		input.page ||
+		parsed.filters.length > 0 ||
+		(parsed.scope !== "all" && parsed.scope !== "work")
+	) {
+		return sections;
+	}
+	return [
+		...sections,
+		{ id: "start", title: groupLabel(t, "start"), items: [plainRow(startRow(t, start))] },
+	];
+}
+
 export function buildSections(input: SectionsInput): PaletteSection[] {
+	return withStart(rootSections(input), input);
+}
+
+function rootSections(input: SectionsInput): PaletteSection[] {
 	const { t, parsed } = input;
 	if (input.page) return pageSections(input.page, input);
 	if (parsed.partialFilter !== null && parsed.filters.length === 0 && parsed.terms.length === 0) {

@@ -16,7 +16,6 @@ import {
 	type TemplateReadLocation,
 	type ThinkingLevel,
 	type WireModel,
-	type Workspace,
 } from "@thinkrail/contracts";
 import { i18n, T, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
@@ -77,10 +76,10 @@ import {
 	useTemplateCommandPicker,
 } from "@/prompt";
 import { selectCatalogModel, selectPickerModels, toast, useAppStore } from "@/store";
-import { createSessionWithSkillBaseline, errorText, getTransport } from "@/transport";
+import { errorText, getTransport } from "@/transport";
 import { BranchPicker } from "./BranchPicker";
 import { useBranchList } from "./branches";
-import { enterDefaultWorkspace } from "./defaultWorkspace";
+import { prepareStartWorkspace, startChatIn } from "./startWork";
 
 type WorkspaceTarget = "worktree" | "default";
 
@@ -96,12 +95,6 @@ export function reconcileModel(
 
 const PILL =
 	"flex h-32 min-w-0 items-center gap-8 rounded-sm border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
-
-async function refreshProjectWorkspaces(projectId: string): Promise<void> {
-	useAppStore.getState().expandProject(projectId);
-	const rows = await getTransport().request("workspace.list", { projectId });
-	useAppStore.getState().setWorkspaces(projectId, rows);
-}
 
 export function NewWorkspaceDialog({
 	open,
@@ -366,68 +359,21 @@ export function NewWorkspaceDialog({
 		setCreating(true);
 		const text = finalizeTemplateSlotSession(prompt, slotSession).trim();
 		const attachments = attachedImages.images.map(({ name, content }) => ({ name, content }));
-		let workspace: Workspace;
-		if (target === "default") {
-			const def = await enterDefaultWorkspace(selectedProjectId);
-			if (!def) {
-				setCreating(false);
-				return;
-			}
-			workspace = def;
-		} else {
-			useAppStore.getState().beginWorktreeCreation(selectedProjectId);
-			try {
-				workspace = await getTransport().request("workspace.create", {
-					projectId: selectedProjectId,
-					...(baseRef ? { baseRef } : {}),
-				});
-			} catch (err) {
-				toast.error(errorText(err), t("panels.newWorkspace.createFailed"));
-				setCreating(false);
-				return;
-			} finally {
-				useAppStore.getState().endWorktreeCreation(selectedProjectId);
-			}
-		}
-
-		const store = useAppStore.getState();
-		if (target === "worktree") {
-			void refreshProjectWorkspaces(workspace.projectId).catch(() => {});
-			store.activateWorkspace(workspace);
+		const workspace = await prepareStartWorkspace(
+			target === "default"
+				? { kind: "project-folder", projectId: selectedProjectId }
+				: { kind: "workspace", projectId: selectedProjectId, baseRef },
+		);
+		if (!workspace) {
+			setCreating(false);
+			return;
 		}
 		onOpenChange(false);
-
-		store.beginChatStart(workspace.id);
-		try {
-			const { result: session, syncedTick } = await createSessionWithSkillBaseline({
-				workspaceId: workspace.id,
-				...(model && explicitPair ? { model, thinkingLevel } : {}),
-			});
-			store.openChatSession(
-				workspace.id,
-				session.sessionId,
-				session.model,
-				session.thinkingLevel,
-				syncedTick,
-			);
-			if (!text && attachments.length === 0) return;
-			store.appendUserMessage(
-				session.sessionId,
-				text,
-				attachments.length > 0 ? attachments : undefined,
-			);
-			getTransport()
-				.request("session.prompt", {
-					sessionId: session.sessionId,
-					text,
-					...(attachments.length > 0 ? { images: attachments.map((a) => a.content) } : {}),
-				})
-				.catch((err) => store.appendErrorTurn(session.sessionId, errorText(err)));
-		} catch (err) {
-			toast.error(errorText(err), t("panels.newWorkspace.chatStartFailed"));
-		} finally {
-			useAppStore.getState().endChatStart(workspace.id);
-		}
+		await startChatIn(workspace, {
+			text,
+			images: attachments,
+			...(model && explicitPair ? { model: { model, thinkingLevel } } : {}),
+		});
 	};
 
 	const trustProject = async (notice: Extract<ProjectTrustNotice, { kind: "untrusted" }>) => {

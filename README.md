@@ -45,8 +45,9 @@ create the tools it needs based on how you actually work.
 - **One search box for everything.** `⌘K` (or a double tap of Shift) opens a palette that finds chats and
   the messages inside them, workspaces and projects, files by name, specs and plans across every open
   project — with a preview pane on `⌘I` — runs any command with its shortcut shown, jumps to a Settings
-  section, and switches MCP servers and extensions on or off in place. With nothing typed it lists the
-  chats waiting for you.
+  section, and switches MCP servers and extensions on or off in place. Whatever you typed can also become
+  work: `⌘↵` starts it in a new workspace, the project folder or the current chat. With nothing typed it
+  lists the chats waiting for you.
 - **Specs as ground truth.** A connected graph of `SPEC.md` files lives beside the code; the agent reads,
   searches, and maintains it through dedicated `spec_*` tools, so intent survives the session. The
   read-only Specs tool renders the graph as a tree in the workbench.

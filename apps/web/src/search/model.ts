@@ -18,6 +18,7 @@ export type PaletteItemKind =
 	| "spec"
 	| "plan"
 	| "transcript"
+	| "start"
 	| "filter"
 	| "more";
 
@@ -88,6 +89,22 @@ export interface PaletteItem {
 	readonly run?: () => void;
 	readonly actions?: () => readonly PaletteAction[];
 	readonly preview?: () => PalettePreview | null;
+}
+
+export type StartTargetKind = "workspace" | "project-folder" | "current-chat";
+
+export interface StartTargetOption {
+	readonly kind: StartTargetKind;
+	readonly label: string;
+	readonly detail: string;
+}
+
+/** Start work from the typed text: the ordered targets (the first is the default) and the two ways to go. */
+export interface PaletteStart {
+	readonly targets: readonly StartTargetOption[];
+	readonly run: (text: string, target: StartTargetOption) => void;
+	readonly openDialog: (text: string, target: StartTargetOption) => void;
+	readonly disabledReason?: string;
 }
 
 export interface PaletteSection {

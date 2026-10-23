@@ -10,13 +10,14 @@ import type { ExtensionCatalogEntry, SearchHit, Workspace } from "@thinkrail/con
 import { t as globalT, type Translator, useT } from "@thinkrail/locales/react";
 import { useEffect, useMemo, useState } from "react";
 import type { Command, CommandContext } from "../commands";
-import { copyText } from "../lib";
+import { chatName, copyText } from "../lib";
 import { enterDefaultWorkspace } from "../panels/defaultWorkspace";
 import { setExtensionEnabled } from "../panels/ExtensionsSettings";
 import { setMcpServerEnabled } from "../panels/McpSettings";
 import { startChatInTab } from "../panels/openChat";
 import { openFileInTab } from "../panels/openTabs";
 import { settingsNavGroups } from "../panels/settingsNav";
+import { startWork } from "../panels/startWork";
 import {
 	canSettleWorkspace,
 	goToProjectHome,
@@ -34,8 +35,10 @@ import {
 	type PaletteAction,
 	type PaletteHost,
 	type PaletteItem,
+	type PaletteStart,
 	type SearchPaletteProps,
 	type SearchScope,
+	type StartTargetOption,
 	waitingItems,
 } from "../search";
 import {
@@ -221,7 +224,7 @@ function useExtensionCatalog(enabled: boolean): ExtensionCatalogEntry[] | null {
 }
 
 export interface SearchPaletteOptions {
-	readonly openNewWorkspace: (projectId: string) => void;
+	readonly openNewWorkspace: (projectId: string, initialPrompt?: string) => void;
 	readonly toggleProjectsHome: () => void;
 	readonly pickAndOpenProject: () => Promise<void>;
 	readonly hasUpdateSettings: boolean;
@@ -314,6 +317,55 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		}),
 		[online, contextProject, activeWorkspaceId, protocolVersion],
 	);
+	const currentChatTitle = useAppStore((s) => {
+		const target = selectHistoryTarget(s);
+		return target
+			? chatName(t, selectKnownChatTitle(s, target.workspaceId, target.sessionId))
+			: null;
+	});
+	const start = useMemo<PaletteStart | undefined>(() => {
+		if (!contextProject) return undefined;
+		const targets: StartTargetOption[] = [
+			{
+				kind: "workspace",
+				label: t("search.start.newWorkspace"),
+				detail: t("search.start.newWorkspaceDetailDefaultBase", { project: contextProject.name }),
+			},
+			{
+				kind: "project-folder",
+				label: t("search.start.projectFolder"),
+				detail: t("search.start.projectFolderDetail", { project: contextProject.name }),
+			},
+			...(historySessionId && currentChatTitle !== null && activeWorkspaceId
+				? [
+						{
+							kind: "current-chat" as const,
+							label: t("search.start.currentChat"),
+							detail: t("search.start.currentChatDetail", { title: currentChatTitle }),
+						},
+					]
+				: []),
+		];
+		const resolve = (target: StartTargetOption) => {
+			if (target.kind === "current-chat" && activeWorkspaceId && historySessionId) {
+				return {
+					kind: "current-chat" as const,
+					workspaceId: activeWorkspaceId,
+					sessionId: historySessionId,
+				};
+			}
+			if (target.kind === "project-folder") {
+				return { kind: "project-folder" as const, projectId: contextProject.id };
+			}
+			return { kind: "workspace" as const, projectId: contextProject.id };
+		};
+		return {
+			targets,
+			run: (text, target) => void startWork(resolve(target), { text }),
+			openDialog: (text) => options.openNewWorkspace(contextProject.id, text),
+			...(online ? {} : { disabledReason: t("search.palette.offlineReason") }),
+		};
+	}, [contextProject, historySessionId, currentChatTitle, activeWorkspaceId, online, options, t]);
 
 	const binding = useMemo(() => {
 		const store = () => useAppStore.getState();
@@ -514,6 +566,7 @@ export function useSearchPalette(options: SearchPaletteOptions): SearchPalettePr
 		onClose: () => useAppStore.getState().closeSearch(),
 		scopes: hostSearch ? HOST_SCOPES : LOCAL_SCOPES,
 		...(host ? { host } : {}),
+		...(start ? { start } : {}),
 		...(online
 			? hostSearch
 				? {}

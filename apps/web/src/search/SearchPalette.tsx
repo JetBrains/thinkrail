@@ -34,7 +34,7 @@ import { hasPlatformModifier } from "../lib";
 import { hostItems } from "./hostItems";
 import { createHostPreviewLoader, type HostPreviewLoader, useHostSearch } from "./hostSearch";
 import { recordPick } from "./learning";
-import type { PaletteAction, PaletteItem, PaletteRow, PaletteSection } from "./model";
+import type { PaletteAction, PaletteItem, PaletteRow, PaletteSection, PaletteStart } from "./model";
 import { readLearning, readPreviewOpen, writeLearning, writePreviewOpen } from "./preferences";
 import {
 	parseSearchQuery,
@@ -45,7 +45,7 @@ import {
 	stripScopePrefix,
 	withScopePrefix,
 } from "./query";
-import { buildSections, flattenRows, type PalettePage } from "./sections";
+import { buildSections, flattenRows, type PalettePage, START_ROW_ID } from "./sections";
 
 const SCOPE_LABELS: Record<SearchScope, MessageKey> = {
 	all: "search.scope.all",
@@ -71,6 +71,7 @@ export interface SearchPaletteProps {
 	readonly pages: Readonly<Record<string, PalettePage>>;
 	readonly scopes: readonly SearchScope[];
 	readonly host?: PaletteHost;
+	readonly start?: PaletteStart;
 	readonly notice?: string;
 }
 
@@ -117,10 +118,12 @@ function PaletteBody({
 	pages,
 	scopes,
 	host,
+	start,
 	notice,
 }: SearchPaletteProps) {
 	const t = useT();
 	const [query, setQuery] = useState("");
+	const [startTargetIndex, setStartTargetIndex] = useState(0);
 	const [stack, setStack] = useState<readonly string[]>([]);
 	const [lateIds, setLateIds] = useState<ReadonlySet<string>>(NO_GROUPS);
 	const seenHostIds = useRef<Set<string>>(new Set());
@@ -183,12 +186,17 @@ function PaletteBody({
 		};
 		return [...rootItems, ...hostItems(context, hostState.groups)];
 	}, [host, hostState.groups, rootItems, t, lateIds]);
+	const startText = parsed.text.trim();
+	const startTarget = start?.targets[startTargetIndex % Math.max(1, start.targets.length)];
+	const startInput =
+		start && startTarget && startText ? { start, target: startTarget, text: startText } : undefined;
 	const sections = useMemo(
 		() =>
 			buildSections({
 				t,
 				parsed: page ? parseSearchQuery(query) : parsed,
 				page,
+				...(startInput ? { start: startInput } : {}),
 				rootItems: allItems,
 				waiting,
 				actions: emptyActions,
@@ -196,7 +204,19 @@ function PaletteBody({
 				learning,
 				nowMs,
 			}),
-		[t, page, parsed, query, allItems, waiting, emptyActions, expanded, learning, nowMs],
+		[
+			t,
+			page,
+			parsed,
+			query,
+			startInput,
+			allItems,
+			waiting,
+			emptyActions,
+			expanded,
+			learning,
+			nowMs,
+		],
 	);
 	const rows = useMemo(() => flattenRows(sections), [sections]);
 	const selectedIndex = Math.max(
@@ -278,7 +298,7 @@ function PaletteBody({
 			return;
 		}
 		if (item.run) {
-			remember(item);
+			if (item.kind !== "start") remember(item);
 			onClose();
 			item.run();
 		}
@@ -313,6 +333,19 @@ function PaletteBody({
 	const cycleScope = (delta: number) => {
 		const index = scopes.indexOf(parsed.scope);
 		changeScope(scopes[(index + delta + scopes.length) % scopes.length] ?? "all");
+	};
+
+	const cycleStartTarget = (delta: number) => {
+		const count = start?.targets.length ?? 0;
+		if (count === 0) return;
+		setStartTargetIndex((index) => (index + delta + count) % count);
+	};
+
+	const startFromText = (full: boolean) => {
+		if (!startInput || startInput.start.disabledReason) return;
+		onClose();
+		if (full) startInput.start.openDialog(startInput.text, startInput.target);
+		else startInput.start.run(startInput.text, startInput.target);
 	};
 
 	const togglePreview = () => {
@@ -352,7 +385,15 @@ function PaletteBody({
 		}
 		if (event.key === "Tab") {
 			event.preventDefault();
-			if (!panel && stack.length === 0) cycleScope(event.shiftKey ? -1 : 1);
+			if (panel || stack.length > 0) return;
+			if (selected?.item.id === START_ROW_ID) cycleStartTarget(event.shiftKey ? -1 : 1);
+			else cycleScope(event.shiftKey ? -1 : 1);
+			return;
+		}
+		if (mod && event.key === "Enter" && !event.altKey) {
+			if (event.nativeEvent.isComposing) return;
+			event.preventDefault();
+			startFromText(event.shiftKey);
 			return;
 		}
 		if (panel) {
@@ -504,7 +545,17 @@ function PaletteBody({
 			<footer className="flex h-32 shrink-0 items-center gap-12 overflow-hidden border-border-muted border-t px-12 tr-text-metadata text-text-subtle">
 				<Hint keys={["↑", "↓"]} label={t("search.hint.select")} />
 				<Hint keys={["↵"]} label={t(enterLabel(selected?.item))} />
-				{stack.length === 0 ? <Hint keys={["Tab"]} label={t("search.hint.scope")} /> : null}
+				{stack.length === 0 ? (
+					<Hint
+						keys={["Tab"]}
+						label={t(
+							selected?.item.id === START_ROW_ID ? "search.hint.target" : "search.hint.scope",
+						)}
+					/>
+				) : null}
+				{startInput && !startInput.start.disabledReason ? (
+					<Hint keys={shortcutKeys({ key: "↵", mod: true })} label={t("search.hint.start")} />
+				) : null}
 				{hostState.pending ? (
 					<span
 						data-testid="search-host-pending"
@@ -580,6 +631,7 @@ function enterLabel(item: PaletteItem | undefined): MessageKey {
 	if (item.toggle) return "search.hint.toggle";
 	if (item.page) return "search.hint.enter";
 	if (item.kind === "command") return "search.hint.run";
+	if (item.kind === "start") return "search.hint.start";
 	return "search.hint.open";
 }
 
