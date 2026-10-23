@@ -349,12 +349,17 @@ test("the tab list is the host's, in creation order", () => {
 	]);
 });
 
-test("closing a tab removes it and reports closed", () => {
-	attachTerminal(WS, "tab-a", "client-1");
+test(
+	"closing a tab removes it and reports closed",
+	async () => {
+		const attached = attachTerminal(WS, "tab-a", "client-1");
+		await printTerminalMarker(attached.id, "IDLE", "client-1");
 
-	expect(closeTerminalTab(WS, "tab-a")).toEqual({ closed: true, busy: false });
-	expect(listTerminals(WS)).toHaveLength(0);
-});
+		expect(closeTerminalTab(WS, "tab-a")).toEqual({ closed: true, busy: false });
+		expect(listTerminals(WS)).toHaveLength(0);
+	},
+	TERMINAL_TEST_TIMEOUT_MS,
+);
 
 test("closing an unknown tab is not an error and not busy", () => {
 	expect(closeTerminalTab(WS, "never-existed")).toEqual({ closed: false, busy: false });
