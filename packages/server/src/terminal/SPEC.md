@@ -190,4 +190,5 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   readiness edges, never elapsed time; their expected output marker never appears contiguously in the command
   input, so terminal echo cannot impersonate command execution.
 - `e2e/terminals.spec.ts` — the rapid re-entry regression, reload survival, second-client takeover,
-  cross-client tab convergence.
+  cross-client tab convergence, addressed-output isolation. Its output markers likewise never appear
+  contiguously in the typed command: keystroke echo reaches the screen first, split across output batches.

@@ -462,12 +462,12 @@ test("a terminal's output never reaches another client", async ({ page, context 
 	await worktreeRow(page2, "workspace-2").click();
 	await waitTerminalReady(page2);
 
-	await runInTerminal(page, "echo TR_SECRET_FROM_A");
-	await expect(visibleTerminalScreen(page)).toContainText("TR_SECRET_FROM_A");
-	await runInTerminal(page2, "echo TR_SECRET_FROM_B");
-	await expect(visibleTerminalScreen(page2)).toContainText("TR_SECRET_FROM_B");
+	await runInTerminal(page, "echo TR_SECRET_FROM_A_$((20 + 22))");
+	await expect(visibleTerminalScreen(page)).toContainText("TR_SECRET_FROM_A_42");
+	await runInTerminal(page2, "echo TR_SECRET_FROM_B_$((20 + 22))");
+	await expect(visibleTerminalScreen(page2)).toContainText("TR_SECRET_FROM_B_42");
 
-	expect(framesToB.some((frame) => frame.includes("TR_SECRET_FROM_B"))).toBe(true);
+	expect(framesToB.some((frame) => frame.includes("TR_SECRET_FROM_B_42"))).toBe(true);
 
 	expect(framesToB.some((frame) => frame.includes("TR_SECRET_FROM_A"))).toBe(false);
 
