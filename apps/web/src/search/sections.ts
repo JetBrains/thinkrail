@@ -43,6 +43,10 @@ const GROUP_LABELS: Readonly<Record<string, MessageKey>> = {
 	mcp: "search.group.mcp",
 	extensions: "search.group.extensions",
 	themes: "search.group.themes",
+	files: "search.group.files",
+	specs: "search.group.specs",
+	plans: "search.group.plans",
+	transcripts: "search.group.transcripts",
 	filters: "search.group.filters",
 };
 

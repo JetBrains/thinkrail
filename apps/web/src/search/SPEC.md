@@ -11,17 +11,19 @@ tags: [ui, search, public-surface-checked]
 
 ## Responsibility
 
-The universal entry point: one palette that finds chats, workspaces and projects, runs commands, and
-manages settings, opened with `Mod+K`, double Shift, or the topbar search button. It owns the
-presentation, the query grammar, ranking and learning, and the store-derived work items; the command
-catalog, settings pages and their handlers are composed and injected by `shell`.
+The universal entry point: one palette that finds chats, workspaces and projects, files, specs, plans
+and chat transcripts, runs commands, and manages settings, opened with `Mod+K`, double Shift, or the
+topbar search button. It owns the presentation, the query grammar, ranking and learning, the
+store-derived work items, and the host-search controller (`search.query` / `search.preview`); the
+command catalog, settings pages, their handlers and the way a host hit opens are composed and injected
+by `shell`.
 
 ## Boundary
 
-- **Public surface:** `SearchPalette`, `SearchPaletteProps`, `SearchSettings`, `initSearchPreferences`,
-  `createDoubleShiftDetector`, `buildWorkItems`, `waitingItems`, `WorkItemsState`, `commandItems`,
-  `SearchScope`, `PalettePage`, `PalettePageSection`, `PaletteItem`, `PaletteItemKind`, `PaletteAction`,
-  `PalettePreview`, `PaletteToggle`.
+- **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `SearchSettings`,
+  `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`, `waitingItems`,
+  `WorkItemsState`, `commandItems`, `SearchScope`, `PalettePage`, `PalettePageSection`, `PaletteItem`,
+  `PaletteItemKind`, `PaletteAction`, `PalettePreview`, `PaletteToggle`.
 - **Allowed deps:** `contracts` (the shared matcher and domain types), `commands`, `store`, `transport`
   (the backend endpoint for browser preference keys), `clientPreferences`, `constants`, `components`,
   `lib`, `@thinkrail/ui/*`, `@remixicon/react`.
@@ -32,8 +34,9 @@ catalog, settings pages and their handlers are composed and injected by `shell`.
 ## Query grammar
 
 A leading prefix selects a scope and its chip, and a chip writes the prefix back: `@` work (projects,
-workspaces, chats), `>` commands and settings; `/` files and `#` specs join with host search. `#<digits>`
-is a pull-request lookup, never the specs scope. `is:waiting|error|unread|running|settled` and `has:pr`
+workspaces, chats, transcripts, plans), `>` commands and settings, `/` files, `#` specs — the last two
+exist only when the host serves `search.query` (`supportsHostSearch`; an older host keeps the local
+scopes and shows a notice). `#<digits>` is a pull-request lookup, never the specs scope. `is:waiting|error|unread|running|settled` and `has:pr`
 filter work items anywhere in the query (`is:settled` is the workspace shelf rule, `has:pr` an open
 review); a bare `is:` lists the filters. Quoted text is one contiguous literal term, escapes a prefix, and is
 never read as a filter (`"is:running"` searches for that text).
@@ -49,6 +52,22 @@ is prefix-or-better and clearly ahead, or the typed query has latched to it. Gro
 best row and capped at four in All (thirty in a scope) with an "N more" row that switches the scope.
 The empty query lists **Waiting for you** (the former session switcher's attention set, every open
 project), **Recent** (by frecency), and **Actions**.
+
+## Host search
+
+`useHostSearch` wraps the pure `createHostSearchController`: a 100 ms debounce, at most one request in
+flight plus the latest queued input, a monotonic `seq` for the host's per-client superseding, and
+fencing — a reply paints only when it answers the current input, its `seq` is the latest issued, the
+welcome generation is unchanged and the host did not mark it `superseded`; a failed request paints
+nothing and never retries; an `indexing` group polls every 300 ms up to twenty times, `truncated` and
+`failed` never poll. The host is asked only for the scope's kinds (`scopeKinds`) and never on a page or
+for an empty query. `hostItems` turns the host's groups into rows — files, specs, plans, transcripts, plus
+chats and workspaces the client does not already list — carrying the host's matcher result as
+`PaletteItem.match`, so `rankItems` ranks them with the local rows by the same tiers instead of
+re-matching the title. Host hits that arrive after the user moved the selection are flagged `late` and
+sort after their group's earlier rows, so the rows above the selection never reorder. A host row's
+preview is loaded through `search.preview` (memoized per target) and renders a transcript window, a text
+head, or the unavailable notice; a host row opens through the injected `PaletteHost.openHit`.
 
 ## Interaction
 

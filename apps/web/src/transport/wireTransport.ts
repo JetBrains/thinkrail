@@ -24,6 +24,7 @@ import {
 	PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION,
 	PLAN_SUMMARY_GENERATION_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
+	SEARCH_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	TURN_CHANGES_PROTOCOL_VERSION,
 	WS_CHANNELS,
@@ -48,6 +49,10 @@ export function supportsRichAnchors(protocolVersion: number | null): boolean {
 
 export function supportsTurnChanges(protocolVersion: number | null): boolean {
 	return protocolVersion !== null && protocolVersion >= TURN_CHANGES_PROTOCOL_VERSION;
+}
+
+export function supportsHostSearch(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= SEARCH_PROTOCOL_VERSION;
 }
 
 export function runHostUpdate(): Promise<Ack> {

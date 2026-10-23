@@ -552,6 +552,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
   writes converge every client through the existing `pi.event`/`session_info_changed` channel and
   `session.list` repair; no new push channel exists.
 
+- **Search composition (`search.ts`):** `search.query` / `search.preview` go to one lazily created
+  `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the
+  history index's `sessions()`, `specSnapshot` and `listStoredPlans`; the handler passes the socket's
+  `clientKey` so the service can supersede an older `seq` per client. The `workspace.fsChanged`
+  publisher also calls `invalidateRoot(worktreePath)` so a watched workspace's file list and spec
+  snapshot refresh on the next keystroke; unwatched roots fall back to the module's TTLs.
+
 `RunningServer.startAttributionClaim()` is the explicit launcher-readiness signal and rechecks the saved
 enabled/confirmed choice before entering analytics attribution.
 

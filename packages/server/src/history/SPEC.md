@@ -113,7 +113,11 @@ Verified against the installed `dist/core/session-manager.{js,d.ts}`. Re-verify 
   discovery call changes the root used by pi.
 
 ## Boundary
-- **Public surface (`index.ts`):** `HistoryIndex`, `getHistoryIndex()`, `matchesTerms`, `makeSnippet`,
+- **Narrow read for the search palette:** `HistoryIndex.sessions()` answers every indexed session's
+  identity, `title` and entries (read-only) with the same freshness, cold-build budget and `indexing`
+  flag as `search()`; the `search` module ranks titles with the shared matcher and scans entries with
+  `matchesTerms`, so no second parse of the corpus exists.
+- **Public surface (`index.ts`):** `HistoryIndex` (+ `HistorySession`), `getHistoryIndex()`, `matchesTerms`, `makeSnippet`,
   `clampLimit`, `extractSession`, types. **No test helpers** — `writeFixtureSession`/`defaultSessionDirFor`
   are disk-writing test-only builders and must not enter the runtime module graph; they're reachable only
   through the server package's dedicated **`@thinkrail/server/history-test-fixtures`** subpath export

@@ -38,7 +38,11 @@ export function itemBoost(
 }
 
 export function compareRanked(a: RankedItem, b: RankedItem): number {
-	return a.match.tier - b.match.tier || b.total - a.total;
+	return (
+		a.match.tier - b.match.tier ||
+		Number(a.item.late === true) - Number(b.item.late === true) ||
+		b.total - a.total
+	);
 }
 
 export function rankItems(
@@ -50,7 +54,13 @@ export function rankItems(
 ): RankedItem[] {
 	const ranked: RankedItem[] = [];
 	for (const item of items) {
-		const match = matchFields(terms, itemFields(item));
+		const match = item.match
+			? {
+					tier: item.match.tier as MatchResult["tier"],
+					score: item.match.score,
+					fields: Object.entries(item.match.ranges).map(([key, ranges]) => ({ key, ranges })),
+				}
+			: matchFields(terms, itemFields(item));
 		if (!match) continue;
 		const { boost, latched } = itemBoost(item, learning, query, nowMs);
 		ranked.push({ item, match, total: match.score * 100 + boost, latched });

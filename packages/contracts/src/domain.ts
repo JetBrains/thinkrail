@@ -1158,6 +1158,78 @@ export interface HistorySearchResult {
 	indexing: boolean;
 }
 
+export const SEARCH_KINDS = ["chat", "transcript", "workspace", "file", "spec", "plan"] as const;
+
+export type SearchKind = (typeof SEARCH_KINDS)[number];
+
+export const MAX_SEARCH_QUERY_LENGTH = 200;
+
+export const MAX_SEARCH_GROUP_LIMIT = 50;
+
+export const DEFAULT_SEARCH_GROUP_LIMIT = 20;
+
+/** Where the palette is: the active workspace and the context project rank first and define the roots. */
+export interface SearchContext {
+	projectId?: string;
+	workspaceId?: string;
+}
+
+export interface SearchHit {
+	/** `kind:id[:locator]` — stable across replies so the client can keep a selection. */
+	id: string;
+	kind: SearchKind;
+	title: string;
+	subtitle?: string;
+	snippet?: string;
+	/** The shared matcher's tier and score; the client merges host hits with its own by these. */
+	tier: number;
+	score: number;
+	ranges?: Record<string, [number, number][]>;
+	projectId: string;
+	workspaceId?: string;
+	sessionId?: string;
+	messageIndex?: number;
+	anchorText?: string;
+	/** Root-relative POSIX path of a file or spec hit. */
+	path?: string;
+	specId?: string;
+	timestamp?: number;
+}
+
+export type SearchGroupState = "ready" | "truncated" | "indexing" | "failed";
+
+export interface SearchGroup {
+	kind: SearchKind;
+	hits: SearchHit[];
+	total: number;
+	state: SearchGroupState;
+}
+
+export interface SearchQueryResult {
+	seq: number;
+	groups: SearchGroup[];
+	/** A newer `seq` from the same client arrived while this one ran; `groups` is empty. */
+	superseded?: true;
+}
+
+export type SearchPreviewTarget =
+	| { kind: "chat"; sessionId: string; messageIndex?: number }
+	| { kind: "file"; projectId: string; workspaceId?: string; path: string }
+	| { kind: "spec"; projectId: string; workspaceId?: string; path: string }
+	| { kind: "plan"; workspaceId: string; sessionId: string };
+
+export interface SearchPreviewMessage {
+	role: "user" | "assistant";
+	messageIndex: number;
+	text: string;
+	focus: boolean;
+}
+
+export type SearchPreviewResult =
+	| { kind: "text"; title: string; body: string; truncated: boolean }
+	| { kind: "transcript"; title: string; messages: SearchPreviewMessage[]; truncated: boolean }
+	| { kind: "unavailable"; reason: "missing" | "binary" | "unsupported" };
+
 export type TemplateScope = "global" | "project";
 
 export interface TemplateInfo {

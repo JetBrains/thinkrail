@@ -18,6 +18,7 @@ export {
 	initTransport,
 	runHostUpdate,
 	supportsChangeMutations,
+	supportsHostSearch,
 	supportsHostUpdateRun,
 	supportsPlanReview,
 	supportsPlanSummaryGeneration,

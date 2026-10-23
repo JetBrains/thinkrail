@@ -1,7 +1,19 @@
-import { parseMatchTerms } from "@thinkrail/contracts";
+import { parseMatchTerms, SEARCH_KINDS, type SearchKind } from "@thinkrail/contracts";
 
 export const SEARCH_SCOPES = ["all", "work", "files", "specs", "commands"] as const;
 export type SearchScope = (typeof SEARCH_SCOPES)[number];
+
+const SCOPE_KINDS: Record<SearchScope, readonly SearchKind[]> = {
+	all: SEARCH_KINDS,
+	work: ["chat", "transcript", "workspace", "plan"],
+	files: ["file"],
+	specs: ["spec"],
+	commands: [],
+};
+
+export function scopeKinds(scope: SearchScope): readonly SearchKind[] {
+	return SCOPE_KINDS[scope];
+}
 
 export const SCOPE_PREFIX: Record<Exclude<SearchScope, "all">, string> = {
 	work: "@",

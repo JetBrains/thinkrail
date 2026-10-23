@@ -1,4 +1,5 @@
 import type { RemixiconComponentType } from "@remixicon/react";
+import type { MatchRange, SearchPreviewTarget } from "@thinkrail/contracts";
 import type { CommandShortcut } from "../commands";
 import type { SessionAttention } from "../store";
 import type { SearchScope } from "./query";
@@ -13,6 +14,10 @@ export type PaletteItemKind =
 	| "extension"
 	| "model"
 	| "theme"
+	| "file"
+	| "spec"
+	| "plan"
+	| "transcript"
 	| "filter"
 	| "more";
 
@@ -44,6 +49,13 @@ export interface PalettePreview {
 	readonly body?: string;
 }
 
+/** A match the host already scored with the shared matcher; the client ranks it as-is. */
+export interface PaletteMatch {
+	readonly tier: number;
+	readonly score: number;
+	readonly ranges: Readonly<Record<string, readonly MatchRange[]>>;
+}
+
 export interface PaletteItem {
 	readonly id: string;
 	readonly kind: PaletteItemKind;
@@ -65,6 +77,9 @@ export interface PaletteItem {
 	readonly settled?: boolean;
 	readonly hasPr?: boolean;
 	readonly contextBoost?: number;
+	readonly match?: PaletteMatch;
+	readonly late?: boolean;
+	readonly previewTarget?: SearchPreviewTarget;
 	readonly disabledReason?: string;
 	readonly toggle?: PaletteToggle;
 	readonly page?: string;

@@ -6,6 +6,12 @@ import {
 	RiSideBarLine,
 	RiWifiOffLine,
 } from "@remixicon/react";
+import type {
+	SearchContext,
+	SearchHit,
+	SearchPreviewResult,
+	SearchPreviewTarget,
+} from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
 import { Dialog, DialogContent, DialogTitle } from "@thinkrail/ui/dialog";
@@ -16,6 +22,7 @@ import {
 	type ReactNode,
 	useEffect,
 	useInsertionEffect,
+	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -24,6 +31,8 @@ import { shortcutKeys } from "../commands";
 import { AttentionDot } from "../components/AttentionDot";
 import { RunningIcon } from "../components/RunningIcon";
 import { hasPlatformModifier } from "../lib";
+import { hostItems } from "./hostItems";
+import { createHostPreviewLoader, type HostPreviewLoader, useHostSearch } from "./hostSearch";
 import { recordPick } from "./learning";
 import type { PaletteAction, PaletteItem, PaletteRow, PaletteSection } from "./model";
 import { readLearning, readPreviewOpen, writeLearning, writePreviewOpen } from "./preferences";
@@ -32,6 +41,7 @@ import {
 	SCOPE_PREFIX,
 	type SearchScope,
 	type StateFilter,
+	scopeKinds,
 	stripScopePrefix,
 	withScopePrefix,
 } from "./query";
@@ -45,6 +55,14 @@ const SCOPE_LABELS: Record<SearchScope, MessageKey> = {
 	commands: "search.scope.commands",
 };
 
+/** What the host adds to the palette: its search providers and how a host hit opens. */
+export interface PaletteHost {
+	readonly context: SearchContext;
+	readonly openHit: (hit: SearchHit) => void;
+	readonly projectName: (projectId: string) => string | undefined;
+	readonly workspaceName: (workspaceId: string) => string | undefined;
+}
+
 export interface SearchPaletteProps {
 	readonly onClose: () => void;
 	readonly rootItems: readonly PaletteItem[];
@@ -52,6 +70,7 @@ export interface SearchPaletteProps {
 	readonly actions: readonly PaletteItem[];
 	readonly pages: Readonly<Record<string, PalettePage>>;
 	readonly scopes: readonly SearchScope[];
+	readonly host?: PaletteHost;
 	readonly notice?: string;
 }
 
@@ -97,13 +116,15 @@ function PaletteBody({
 	actions: emptyActions,
 	pages,
 	scopes,
+	host,
 	notice,
 }: SearchPaletteProps) {
 	const t = useT();
 	const [query, setQuery] = useState("");
 	const [stack, setStack] = useState<readonly string[]>([]);
+	const [lateIds, setLateIds] = useState<ReadonlySet<string>>(NO_GROUPS);
+	const seenHostIds = useRef<Set<string>>(new Set());
 	const [expanded, setExpanded] = useState<ReadonlySet<string>>(NO_GROUPS);
-	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [panel, setPanel] = useState<ActionPanelState | null>(null);
 	const [previewOpen, setPreviewOpen] = useState(readPreviewOpen);
 	const [learning, setLearning] = useState(readLearning);
@@ -117,20 +138,65 @@ function PaletteBody({
 		const result = parseSearchQuery(query);
 		return scopes.includes(result.scope) ? result : parseSearchQuery(stripScopePrefix(query));
 	}, [query, scopes]);
+	const hostEnabled = host !== undefined && page === null;
+	const hostProjectId = host?.context.projectId;
+	const hostWorkspaceId = host?.context.workspaceId;
+	const hostInput = useMemo(
+		() => ({
+			enabled: hostEnabled,
+			text: parsed.text,
+			kinds: scopeKinds(parsed.scope),
+			context: {
+				...(hostProjectId ? { projectId: hostProjectId } : {}),
+				...(hostWorkspaceId ? { workspaceId: hostWorkspaceId } : {}),
+			},
+		}),
+		[hostEnabled, hostProjectId, hostWorkspaceId, parsed.text, parsed.scope],
+	);
+	const hostState = useHostSearch(hostInput);
+	const [previews] = useState(createHostPreviewLoader);
+	const [selectedId, setSelectedId] = useState<string | null>(null);
+	useLayoutEffect(() => {
+		const seen = seenHostIds.current;
+		if (!hostState.groups) {
+			seen.clear();
+			setLateIds(NO_GROUPS);
+			return;
+		}
+		const fresh = hostState.groups.flatMap((group) =>
+			group.hits.filter((hit) => !seen.has(hit.id)).map((hit) => hit.id),
+		);
+		for (const id of fresh) seen.add(id);
+		if (fresh.length > 0 && selectedId !== null) {
+			setLateIds((current) => new Set([...current, ...fresh]));
+		}
+	}, [hostState.groups, selectedId]);
+	const allItems = useMemo(() => {
+		if (!host || !hostState.groups || hostState.groups.length === 0) return rootItems;
+		const context = {
+			t,
+			openHit: host.openHit,
+			projectName: host.projectName,
+			workspaceName: host.workspaceName,
+			localIds: new Set(rootItems.map((item) => item.id)),
+			lateIds,
+		};
+		return [...rootItems, ...hostItems(context, hostState.groups)];
+	}, [host, hostState.groups, rootItems, t, lateIds]);
 	const sections = useMemo(
 		() =>
 			buildSections({
 				t,
 				parsed: page ? parseSearchQuery(query) : parsed,
 				page,
-				rootItems,
+				rootItems: allItems,
 				waiting,
 				actions: emptyActions,
 				expanded,
 				learning,
 				nowMs,
 			}),
-		[t, page, parsed, query, rootItems, waiting, emptyActions, expanded, learning, nowMs],
+		[t, page, parsed, query, allItems, waiting, emptyActions, expanded, learning, nowMs],
 	);
 	const rows = useMemo(() => flattenRows(sections), [sections]);
 	const selectedIndex = Math.max(
@@ -157,6 +223,8 @@ function PaletteBody({
 	const resetQuery = (next: string) => {
 		setQuery(next);
 		setSelectedId(null);
+		seenHostIds.current.clear();
+		setLateIds(NO_GROUPS);
 	};
 
 	const changeScope = (scope: SearchScope) => {
@@ -431,12 +499,21 @@ function PaletteBody({
 						/>
 					)}
 				</div>
-				{previewItem ? <Preview t={t} item={previewItem} /> : null}
+				{previewItem ? <Preview t={t} item={previewItem} previews={previews} /> : null}
 			</div>
 			<footer className="flex h-32 shrink-0 items-center gap-12 overflow-hidden border-border-muted border-t px-12 tr-text-metadata text-text-subtle">
 				<Hint keys={["↑", "↓"]} label={t("search.hint.select")} />
 				<Hint keys={["↵"]} label={t(enterLabel(selected?.item))} />
 				{stack.length === 0 ? <Hint keys={["Tab"]} label={t("search.hint.scope")} /> : null}
+				{hostState.pending ? (
+					<span
+						data-testid="search-host-pending"
+						className="flex shrink-0 items-center gap-4 text-text-muted"
+					>
+						<RunningIcon className="size-12" />
+						{t("search.palette.searching")}
+					</span>
+				) : null}
 				<Hint
 					keys={["esc"]}
 					label={t(
@@ -760,7 +837,15 @@ function Row({
 	);
 }
 
-function Preview({ t, item }: { t: Translator; item: PaletteItem }) {
+function Preview({
+	t,
+	item,
+	previews,
+}: {
+	t: Translator;
+	item: PaletteItem;
+	previews: HostPreviewLoader;
+}) {
 	const preview = item.preview?.() ?? null;
 	const Icon = item.icon;
 	return (
@@ -768,7 +853,9 @@ function Preview({ t, item }: { t: Translator; item: PaletteItem }) {
 			data-testid="search-preview"
 			className="hidden w-[40%] shrink-0 overflow-y-auto border-border-muted border-l px-16 py-16 md:block"
 		>
-			{preview ? (
+			{item.previewTarget ? (
+				<HostPreview t={t} item={item} target={item.previewTarget} previews={previews} />
+			) : preview ? (
 				<>
 					<div className="flex items-center gap-8 tr-title-card text-text-default">
 						<Icon aria-hidden className="size-16 shrink-0 text-primary" />
@@ -795,6 +882,83 @@ function Preview({ t, item }: { t: Translator; item: PaletteItem }) {
 				<p className="tr-text-ui text-text-subtle">{t("search.palette.noPreview")}</p>
 			)}
 		</aside>
+	);
+}
+
+function HostPreview({
+	t,
+	item,
+	target,
+	previews,
+}: {
+	t: Translator;
+	item: PaletteItem;
+	target: SearchPreviewTarget;
+	previews: HostPreviewLoader;
+}) {
+	const [result, setResult] = useState<SearchPreviewResult | null>(null);
+	const key = JSON.stringify(target);
+	useEffect(() => {
+		let current = true;
+		setResult(null);
+		void previews.load(JSON.parse(key) as SearchPreviewTarget).then((loaded) => {
+			if (current) setResult(loaded);
+		});
+		return () => {
+			current = false;
+		};
+	}, [key, previews]);
+	const Icon = item.icon;
+	return (
+		<div data-testid="search-host-preview" data-state={result?.kind ?? "loading"}>
+			<div className="flex items-center gap-8 tr-title-card text-text-default">
+				<Icon aria-hidden className="size-16 shrink-0 text-primary" />
+				<span className="min-w-0 truncate">
+					{result && "title" in result && result.title ? result.title : item.title}
+				</span>
+			</div>
+			{item.subtitle ? (
+				<p className="mt-4 truncate tr-text-metadata text-text-subtle">{item.subtitle}</p>
+			) : null}
+			{result === null ? (
+				<p className="mt-12 tr-text-ui text-text-subtle">{t("search.palette.previewLoading")}</p>
+			) : result.kind === "unavailable" ? (
+				<p className="mt-12 tr-text-ui text-text-subtle">{t("search.palette.noPreview")}</p>
+			) : result.kind === "text" ? (
+				<>
+					<pre className="mt-12 max-h-[60vh] overflow-hidden whitespace-pre-wrap break-words tr-code-text-small text-text-muted">
+						{result.body}
+					</pre>
+					{result.truncated ? (
+						<p className="mt-8 tr-text-metadata text-text-subtle">
+							{t("search.palette.previewTruncated")}
+						</p>
+					) : null}
+				</>
+			) : (
+				<ol className="mt-12 flex flex-col gap-8">
+					{result.messages.map((message) => (
+						<li
+							key={message.messageIndex}
+							data-focus={message.focus}
+							className={cn(
+								"rounded-sm px-8 py-4 tr-text-ui",
+								message.focus ? "bg-control-bg-selected text-text-default" : "text-text-muted",
+							)}
+						>
+							<span className="block tr-text-eyebrow text-text-subtle">
+								{t(
+									message.role === "user"
+										? "search.preview.roleUser"
+										: "search.preview.roleAssistant",
+								)}
+							</span>
+							<span className="whitespace-pre-wrap break-words">{message.text}</span>
+						</li>
+					))}
+				</ol>
+			)}
+		</div>
 	);
 }
 
