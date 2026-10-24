@@ -24,9 +24,10 @@ bootstrap it into one so it can be opened.
   with the named `NOT_GIT` code), dedupes by root,
   and assigns a stable unique readable `slug`; `getProjects` returns all known records with slug backfill,
   `listProjects` returns open records by `lastOpened`, and `listRecentProjects` returns open + closed records
-  by `lastOpened`, dropping only records whose folder is definitively gone (missing, or no
-  longer a directory; other filesystem errors do not prove deletion, so those records stay
-  listed). A persisted
+  by `lastOpened`, dropping only *closed* records whose folder is definitively gone (missing, or no
+  longer a directory, checked asynchronously off the connect hot path; open records always stay so a
+  temporarily unmounted drive loses nothing, and other filesystem errors do not prove deletion, so
+  those records stay listed). A persisted
   optional **`Project.closed: true`** is the entire membership state: absence means open, so existing
   records migrate as open. **`openProject`** finds a known root even when closed, clears `closed`, bumps
   `lastOpened`, preserves its id, persists, and publishes the full snapshot; **`closeProject`** marks that
