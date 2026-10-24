@@ -28,13 +28,7 @@ import {
 	CommandItem,
 	CommandList,
 } from "@thinkrail/ui/command";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle,
-} from "@thinkrail/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@thinkrail/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { Textarea } from "@thinkrail/ui/textarea";
 import { cn } from "@thinkrail/ui/utils";
@@ -94,8 +88,10 @@ export function reconcileModel(
 	return catalogFresh && models.length > 0 ? "unavailable" : null;
 }
 
-const PILL =
-	"flex h-32 min-w-0 items-center gap-8 rounded-sm border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected";
+const PILL_SHAPE =
+	"flex h-32 min-w-0 items-center gap-8 rounded-sm border border-control-border-default bg-clip-padding bg-control-bg px-8 tr-text-ui text-text-default outline-none transition-colors";
+
+const PILL = `${PILL_SHAPE} hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary data-[open=true]:border-control-border-active data-[open=true]:bg-control-bg-selected`;
 
 async function refreshProjectWorkspaces(projectId: string): Promise<void> {
 	useAppStore.getState().expandProject(projectId);
@@ -124,6 +120,8 @@ export function NewWorkspaceDialog({
 	const [target, setTarget] = useState<WorkspaceTarget>("worktree");
 	const [baseRef, setBaseRef] = useState<string>("");
 	const [prompt, setPrompt] = useState("");
+	const [name, setName] = useState("");
+	const [suggestedName, setSuggestedName] = useState("");
 	const [skillCommands, setSkillCommands] = useState<SlashCommandInfo[]>([]);
 	const [templates, setTemplates] = useState<TemplateInfo[]>([]);
 	const [slotSession, setSlotSession] = useState<TemplateSlotSessionState | null>(null);
@@ -206,6 +204,7 @@ export function NewWorkspaceDialog({
 		if (!open) return;
 		setSelectedProjectId(projectId);
 		updatePromptDraft(initialPrompt ?? "", null);
+		setName("");
 		setTarget("worktree");
 		setCreating(false);
 		attachedImages.reset();
@@ -255,6 +254,21 @@ export function NewWorkspaceDialog({
 	}, [open, selectedProjectId, slashActive, supportsProjectTemplatePreview]);
 
 	const trustSummary = useProjectTrustSummary(selectedProjectId, open);
+
+	useEffect(() => {
+		if (!open) return;
+		let cancelled = false;
+		setSuggestedName("");
+		getTransport()
+			.request("workspace.suggestName", { projectId: selectedProjectId })
+			.then((suggested) => {
+				if (!cancelled) setSuggestedName(suggested.name);
+			})
+			.catch(() => {});
+		return () => {
+			cancelled = true;
+		};
+	}, [open, selectedProjectId]);
 
 	const {
 		models: allModels,
@@ -377,8 +391,10 @@ export function NewWorkspaceDialog({
 		} else {
 			useAppStore.getState().beginWorktreeCreation(selectedProjectId);
 			try {
+				const chosenName = name.trim();
 				workspace = await getTransport().request("workspace.create", {
 					projectId: selectedProjectId,
+					...(chosenName ? { name: chosenName } : {}),
 					...(baseRef ? { baseRef } : {}),
 				});
 			} catch (err) {
@@ -477,41 +493,37 @@ export function NewWorkspaceDialog({
 					promptRef.current?.focus();
 				}}
 			>
-				<DialogHeader>
-					<DialogTitle>
-						{isolated
-							? t("panels.newWorkspace.titleIsolated")
-							: t("panels.newWorkspace.titleDefault")}
-					</DialogTitle>
+				<DialogTitle>{t("panels.newWorkspace.title")}</DialogTitle>
+
+				<div className="flex flex-col gap-8">
+					<fieldset
+						data-testid="ws-target"
+						className="flex w-fit items-center gap-2 rounded-md border border-control-border-default bg-control-bg p-2"
+					>
+						<legend className="sr-only">{t("panels.newWorkspace.targetLegend")}</legend>
+						<TargetOption
+							icon={GitBranch}
+							label={t("panels.newWorkspace.targetIsolated")}
+							name={targetGroupName}
+							active={isolated}
+							testid="ws-target-worktree"
+							onSelect={() => setTarget("worktree")}
+						/>
+						<TargetOption
+							icon={House}
+							label={t("panels.newWorkspace.targetDefault")}
+							name={targetGroupName}
+							active={!isolated}
+							testid="ws-target-default"
+							onSelect={() => setTarget("default")}
+						/>
+					</fieldset>
 					<DialogDescription>
 						{isolated
 							? t("panels.newWorkspace.descriptionIsolated")
 							: t("panels.newWorkspace.descriptionDefault")}
 					</DialogDescription>
-				</DialogHeader>
-
-				<fieldset
-					data-testid="ws-target"
-					className="flex w-fit items-center gap-2 rounded-md border border-control-border-default bg-control-bg p-2"
-				>
-					<legend className="sr-only">{t("panels.newWorkspace.targetLegend")}</legend>
-					<TargetOption
-						icon={GitBranch}
-						label={t("panels.newWorkspace.targetIsolated")}
-						name={targetGroupName}
-						active={isolated}
-						testid="ws-target-worktree"
-						onSelect={() => setTarget("worktree")}
-					/>
-					<TargetOption
-						icon={House}
-						label={t("panels.newWorkspace.targetDefault")}
-						name={targetGroupName}
-						active={!isolated}
-						testid="ws-target-default"
-						onSelect={() => setTarget("default")}
-					/>
-				</fieldset>
+				</div>
 
 				<div className="flex flex-wrap items-center gap-8">
 					<ProjectPicker
@@ -532,6 +544,34 @@ export function NewWorkspaceDialog({
 							onSelect={selectBaseRef}
 							onRefresh={refreshBranches}
 						/>
+					) : (
+						<span
+							data-testid="ws-current-branch"
+							className="flex h-32 min-w-0 max-w-224 items-center gap-8 text-text-muted tr-text-metadata"
+						>
+							<GitBranch className="size-14 shrink-0" />
+							<span className="truncate">
+								{branches?.current
+									? t("panels.newWorkspace.currentBranch", { branch: branches.current })
+									: t("panels.newWorkspace.detachedHead")}
+							</span>
+						</span>
+					)}
+					{isolated ? (
+						<label className={`${PILL_SHAPE} max-w-160 focus-within:border-control-border-active`}>
+							<span className="shrink-0 tr-text-eyebrow text-text-muted">
+								{t("panels.newWorkspace.nameLabel")}
+							</span>
+							<input
+								type="text"
+								data-testid="ws-name"
+								value={name}
+								placeholder={suggestedName}
+								spellCheck={false}
+								onChange={(e) => setName(e.target.value)}
+								className="min-w-0 flex-1 bg-transparent text-text-muted tr-text-metadata outline-none"
+							/>
+						</label>
 					) : null}
 					<SkillsButton
 						onOpen={() => setManageSkills(true)}
@@ -639,7 +679,7 @@ export function NewWorkspaceDialog({
 							onNext={() => stepPromptSlot(1)}
 							className="absolute top-full left-8 z-50 mt-4"
 						/>
-					) : prompt.trim() && isolated ? (
+					) : prompt.trim() && isolated && !name.trim() ? (
 						<p
 							data-testid="workspace-naming-hint"
 							className="px-4 text-text-muted tr-text-metadata"

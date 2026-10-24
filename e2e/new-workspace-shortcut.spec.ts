@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject } from "./fixtures/app";
 
 test.describe("new workspace keyboard shortcut", () => {
-	test("Mod+N opens the Create workspace dialog for the selected project from the Welcome screen, and Escape closes it", async ({
+	test("Mod+N opens the Start work dialog for the selected project from the Welcome screen, and Escape closes it", async ({
 		page,
 	}) => {
 		await openFixtureProject(page);
@@ -10,13 +10,13 @@ test.describe("new workspace keyboard shortcut", () => {
 		const dialog = page.getByTestId("new-workspace-dialog");
 		await expect(page.getByTestId("add-workspace").first()).toHaveAttribute(
 			"aria-label",
-			/^Create workspace \(.*N.*\)$/,
+			/^Start work \(.*N.*\)$/,
 		);
 
 		await page.getByTestId("welcome-title").click();
 		await page.keyboard.press("ControlOrMeta+n");
 		await expect(dialog).toBeVisible();
-		await expect(dialog.getByRole("heading", { name: "Create workspace" })).toBeVisible();
+		await expect(dialog.getByRole("heading", { name: "Start work" })).toBeVisible();
 
 		await page.keyboard.press("ControlOrMeta+n");
 		await expect(dialog).toHaveCount(1);
@@ -37,7 +37,7 @@ test.describe("new workspace keyboard shortcut", () => {
 
 		await page.keyboard.press("ControlOrMeta+Alt+n");
 		await expect(dialog).toBeVisible();
-		await expect(dialog.getByRole("heading", { name: "Create workspace" })).toBeVisible();
+		await expect(dialog.getByRole("heading", { name: "Start work" })).toBeVisible();
 
 		await page.keyboard.press("Escape");
 		await expect(dialog).toBeHidden();
@@ -51,7 +51,7 @@ test.describe("new workspace keyboard shortcut", () => {
 		await page.keyboard.press("Escape");
 		await page.keyboard.press("ControlOrMeta+n");
 		await expect(dialog).toBeVisible();
-		await expect(dialog.getByRole("heading", { name: "Create workspace" })).toBeVisible();
+		await expect(dialog.getByRole("heading", { name: "Start work" })).toBeVisible();
 
 		await page.keyboard.press("Escape");
 		await expect(dialog).toBeHidden();
