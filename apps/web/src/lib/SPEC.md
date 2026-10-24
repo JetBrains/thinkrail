@@ -54,8 +54,9 @@ not this module; the theme-aware highlighter remains app-local.
   reveal through `doubleClickPendingMs()`),
   **`whenIdle(task, { timeout, fallbackDelay })`** (runs a task on `requestIdleCallback` with a timeout, or
   after `fallbackDelay` where the API is missing — Safari and the macOS WKWebView — and returns a cancel),
-  **`whenPageActive(start)`** (starts a cancellable task once the page is visible and online, waiting for
-  `visibilitychange`/`online` otherwise; the page reader is injectable for tests),
+  **`whenPageActive(schedule, task)`** (schedules `task` through `schedule` once the page is visible and
+  online, and checks again when the scheduled run fires: a page that went hidden or offline meanwhile waits
+  for `visibilitychange`/`online` and schedules anew; the page reader is injectable for tests),
   **`firstClickOnly()`** (wraps a browse row's preview open so it runs on a first click or keyboard
   activation, `detail <= 1`, and skips a double click's second click) with **`doubleClickPendingMs()`**
   (how long a double click on the last such row could still arrive; the Review reveal waits it out so it

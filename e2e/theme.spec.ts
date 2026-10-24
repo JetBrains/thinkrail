@@ -230,6 +230,7 @@ test("an editor preloaded before a theme swap opens in the current theme", async
 	const workspace = await createWorkspaceViaDialog(page);
 	writeFileSync(join(workspace.worktreePath, "swap.ts"), "export const answer = 42;\n");
 	const options = await readThemeOptions(page);
+	const defaultTheme = options.find((option) => option.active)?.id;
 	const light = options.find(
 		(option) => option.appearance === "light" && option.contrast === "normal",
 	);
@@ -259,6 +260,7 @@ test("an editor preloaded before a theme swap opens in the current theme", async
 	await expect.poll(async () => (await keywordToken(page)).color).not.toBe(first.color);
 	await pickTheme(page, light?.id ?? "");
 	await expect.poll(async () => (await keywordToken(page)).color).toBe(first.color);
+	await pickTheme(page, defaultTheme ?? "");
 });
 
 test("selected workspace tabs and rail entries keep their surface and edge marker under every manifest", async ({

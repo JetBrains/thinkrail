@@ -28,20 +28,35 @@ const browserPageActivity: PageActivity = {
 };
 
 export function whenPageActive(
-	start: () => () => void,
+	schedule: (run: () => void) => () => void,
+	task: () => void,
 	activity: PageActivity = browserPageActivity,
 ): () => void {
-	let stop: (() => void) | null = null;
+	let finished = false;
+	let cancelScheduled: (() => void) | null = null;
 	let unsubscribe = () => {};
 	const attempt = () => {
-		if (stop || !activity.active()) return;
+		if (finished || cancelScheduled || !activity.active()) return;
 		unsubscribe();
-		stop = start();
+		cancelScheduled = schedule(run);
 	};
-	unsubscribe = activity.subscribe(attempt);
-	attempt();
+	const wait = () => {
+		unsubscribe = activity.subscribe(attempt);
+		attempt();
+	};
+	function run() {
+		cancelScheduled = null;
+		if (!activity.active()) {
+			wait();
+			return;
+		}
+		finished = true;
+		task();
+	}
+	wait();
 	return () => {
+		finished = true;
 		unsubscribe();
-		stop?.();
+		cancelScheduled?.();
 	};
 }

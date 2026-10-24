@@ -12,14 +12,13 @@ export function useIdleEditorPreload(workspaceId: string): void {
 	const warm = useEditorWarm();
 	useEffect(() => {
 		if (!warm || preloaded) return;
-		return whenPageActive(() =>
-			whenFilesTreeIdle(
-				() => {
-					preloaded = true;
-					warm(describeResource(workspaceId, "", PENDING_TEXT_META));
-				},
-				{ timeout: IDLE_TIMEOUT_MS, fallbackDelay: FALLBACK_DELAY_MS },
-			),
+		return whenPageActive(
+			(run) =>
+				whenFilesTreeIdle(run, { timeout: IDLE_TIMEOUT_MS, fallbackDelay: FALLBACK_DELAY_MS }),
+			() => {
+				preloaded = true;
+				warm(describeResource(workspaceId, "", PENDING_TEXT_META));
+			},
 		);
 	}, [warm, workspaceId]);
 }

@@ -103,7 +103,7 @@ After `main.tsx`'s synchronous first-paint apply, Shell is the sole mounted them
 `useEditorWarm` allows it (not phone-class, not `saveData`), it schedules one `whenFilesTreeIdle` preload of the
 code view (2 s idle timeout, 1.5 s fallback delay), which also waits for a loading Files tree to paint. The
 preload runs once per page, not per workspace switch, and `lib`'s `whenPageActive` holds it until the page
-is visible and online: a hidden tab would pay about 3.9 MB and a 50–70 ms task for nothing, and a preload
+is visible and online, checking again right before it runs: a hidden tab would pay about 3.9 MB and a 50–70 ms task for nothing, and a preload
 that fails offline makes Chromium cache the failed chunk for the session. Once the preload has finished,
 the first desktop code-view open from any surface — Files, quick open, chat links, review — renders
 without a loading fallback; other renderers still load on their first mount.

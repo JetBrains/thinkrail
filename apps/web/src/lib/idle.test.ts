@@ -74,44 +74,83 @@ function fakeActivity(active: boolean) {
 	};
 }
 
-test("whenPageActive starts at once on an active page and stops through its cancel", () => {
+function fakeSchedule() {
+	const pending: (() => void)[] = [];
+	let cancelled = 0;
+	return {
+		schedule(run: () => void) {
+			pending.push(run);
+			return () => {
+				cancelled += 1;
+			};
+		},
+		flush() {
+			for (const run of pending.splice(0)) run();
+		},
+		get scheduled() {
+			return pending.length;
+		},
+		get cancelled() {
+			return cancelled;
+		},
+	};
+}
+
+test("whenPageActive schedules at once on an active page and runs the task", () => {
 	const page = fakeActivity(true);
-	const events: string[] = [];
-	const cancel = whenPageActive(() => {
-		events.push("start");
-		return () => events.push("stop");
-	}, page.activity);
-	expect(events).toEqual(["start"]);
+	const idle = fakeSchedule();
+	let runs = 0;
+	whenPageActive(idle.schedule, () => runs++, page.activity);
+	expect(idle.scheduled).toBe(1);
 	expect(page.listeners.size).toBe(0);
-	cancel();
-	expect(events).toEqual(["start", "stop"]);
+	idle.flush();
+	expect(runs).toBe(1);
 });
 
-test("whenPageActive waits for a hidden or offline page to become active, then starts once", () => {
+test("whenPageActive waits for a hidden or offline page to become active, then schedules once", () => {
 	const page = fakeActivity(false);
-	let starts = 0;
-	whenPageActive(() => {
-		starts += 1;
-		return () => {};
-	}, page.activity);
-	expect(starts).toBe(0);
+	const idle = fakeSchedule();
+	let runs = 0;
+	whenPageActive(idle.schedule, () => runs++, page.activity);
+	expect(idle.scheduled).toBe(0);
 	page.become(false);
-	expect(starts).toBe(0);
+	expect(idle.scheduled).toBe(0);
 	page.become(true);
 	page.become(true);
-	expect(starts).toBe(1);
+	expect(idle.scheduled).toBe(1);
+	idle.flush();
+	expect(runs).toBe(1);
 	expect(page.listeners.size).toBe(0);
 });
 
-test("whenPageActive cancelled while waiting never starts", () => {
-	const page = fakeActivity(false);
-	let starts = 0;
-	const cancel = whenPageActive(() => {
-		starts += 1;
-		return () => {};
-	}, page.activity);
-	cancel();
+test("whenPageActive rechecks when the scheduled run fires and waits again if the page went inactive", () => {
+	const page = fakeActivity(true);
+	const idle = fakeSchedule();
+	let runs = 0;
+	whenPageActive(idle.schedule, () => runs++, page.activity);
+	page.become(false);
+	idle.flush();
+	expect(runs).toBe(0);
+	expect(idle.scheduled).toBe(0);
 	page.become(true);
-	expect(starts).toBe(0);
+	expect(idle.scheduled).toBe(1);
+	idle.flush();
+	expect(runs).toBe(1);
 	expect(page.listeners.size).toBe(0);
+});
+
+test("whenPageActive cancel stops a wait and a scheduled run", () => {
+	const waiting = fakeActivity(false);
+	const idle = fakeSchedule();
+	let runs = 0;
+	whenPageActive(idle.schedule, () => runs++, waiting.activity)();
+	waiting.become(true);
+	expect(idle.scheduled).toBe(0);
+	expect(waiting.listeners.size).toBe(0);
+
+	const active = fakeActivity(true);
+	const cancel = whenPageActive(idle.schedule, () => runs++, active.activity);
+	cancel();
+	expect(idle.cancelled).toBe(1);
+	expect(runs).toBe(0);
 });
