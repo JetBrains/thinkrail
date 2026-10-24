@@ -492,7 +492,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   authoritative open/reopen/close snapshot to **`project.updated`**. The WS `open` handler subscribes to
   that channel and hydrates two views in `server.welcome`: `projects` (open records only) and
   `recentProjects` (all known records, with closed records whose folder is definitively
-  gone omitted; the existence checks run asynchronously so a stale mount can't stall the connect). The
+  gone omitted; the existence checks run asynchronously so a stale mount does not block the event loop,
+  but the welcome still waits for them and an unresponsive mount may delay the connection). The
   checks finish before both views are read and sent, so a `project.updated` processed while checks are
   pending is reflected in the snapshot rather than overwritten by it. The one full-snapshot channel is
   idempotent and avoids separate
