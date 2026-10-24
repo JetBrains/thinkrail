@@ -79,6 +79,10 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
   the code `theme` resolved from CSS variables). Monaco is page-global: the first `MonacoEditor` initializes it
   from its host's `code` once (`ensureMonaco`), and every later editor reuses that setup; it re-themes on every
   completed theme swap.
+- Monaco colour decorators are off in `fileEditorOptions`. The default `*` colour provider reads issue
+  references such as `#130` as hex colours in any language (Java comments included), and CSS-family
+  providers do the same, so code buffers keep them as plain text; colour presentation is left to rendered
+  previews.
 - `bytesUrl(workspaceId, path, oid?)` — the host byte route for images, PDFs and relative markdown assets.
 - `openFile(workspaceId, path, { keep? })` and `openComparison(workspaceId, before, path)` — navigation for
   relative document links (preview) and explicit Open-in-tab actions (keep).

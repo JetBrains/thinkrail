@@ -100,6 +100,7 @@ export function fileEditorOptions(
 		readOnlyMessage: { value: t("panels.monacoSetup.readOnly") },
 		ariaLabel: path,
 		unicodeHighlight: { ambiguousCharacters: false },
+		colorDecorators: false,
 		lineNumbersMinChars: 3,
 		renderLineHighlight: "all",
 		smoothScrolling: true,
