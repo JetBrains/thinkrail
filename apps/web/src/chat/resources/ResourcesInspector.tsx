@@ -58,7 +58,6 @@ export interface ResourcesInspectorProps {
 	onStopAll: () => void;
 	/** The selected row's body: bounded command output or the read-only subagent transcript. */
 	detail: ReactNode;
-	/** The selected subagent's model label (catalog name, effort); falls back to the raw `provider/id`. */
 	renderSubagentModel?: (summary: SubagentResourceSummary) => ReactNode;
 	mcpServers?: McpServerResourceSummary[] | null;
 	onMcpSetEnabled?: (name: string, enabled: boolean) => void;
@@ -104,7 +103,7 @@ function DetailHeader({
 		resource.kind === "command" ? resource.summary.errorMessage : resource.summary.abortReason;
 	const model =
 		resource.kind === "subagent" && resource.summary.model
-			? (renderSubagentModel?.(resource.summary) ?? resource.summary.model)
+			? renderSubagentModel?.(resource.summary)
 			: null;
 	return (
 		<div className="flex shrink-0 flex-col gap-8 border-border-muted border-b p-12">

@@ -1,6 +1,7 @@
-import type { ThinkingLevel, WireModel } from "@thinkrail/contracts";
+import type { ThinkingLevel } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
+import type { ReactNode } from "react";
 import { useChatActions } from "./ChatActions";
 import { EFFORT_BAR_HEIGHTS, LEVEL_LABEL, type LevelTone, levelTone, litBars } from "./modelPicker";
 import { ProviderGlyph } from "./ProviderGlyph";
@@ -13,7 +14,7 @@ export const TONE_TEXT: Record<LevelTone, string> = {
 	hot: "text-feedback-warning",
 };
 
-export function EffortBars({
+function EffortBars({
 	level,
 	levels,
 	className,
@@ -35,57 +36,47 @@ export function EffortBars({
 	);
 }
 
-/** Split a run's `provider/id` reference; model ids may themselves contain `/`. */
 export function parseModelRef(ref: string): { provider: string; id: string } | null {
 	const slash = ref.indexOf("/");
 	if (slash <= 0 || slash === ref.length - 1) return null;
 	return { provider: ref.slice(0, slash), id: ref.slice(slash + 1) };
 }
 
-export function ModelEffortLabel({
-	model,
-	thinkingLevel,
-	catalogModel,
-	className,
+export function ModelEffortPill({
+	icon,
+	name,
+	detail,
+	level,
+	levels,
+	levelTestId,
 }: {
-	model: string;
-	thinkingLevel?: ThinkingLevel | undefined;
-	catalogModel?: WireModel | null | undefined;
-	className?: string;
+	icon: ReactNode;
+	name: ReactNode;
+	detail?: ReactNode;
+	level: ThinkingLevel | undefined;
+	levels: readonly ThinkingLevel[];
+	levelTestId?: string;
 }) {
 	const t = useT();
-	const provider = parseModelRef(model)?.provider;
-	const levelText = thinkingLevel ? t(LEVEL_LABEL[thinkingLevel]) : undefined;
 	return (
-		<span
-			data-testid="model-effort-label"
-			title={levelText ? t("chat.modelEffortLabel.title", { model, level: levelText }) : model}
-			className={cn("inline-flex min-w-0 items-center gap-4", className)}
-		>
-			{provider ? <ProviderGlyph provider={provider} className="size-12" /> : null}
-			<span className={cn("min-w-0 truncate", !catalogModel && "tr-code-text-small")}>
-				{catalogModel?.name ?? model}
-			</span>
-			{thinkingLevel ? (
-				<>
-					<span aria-hidden>·</span>
-					<span
-						data-testid="model-effort-level"
-						className={cn(
-							"inline-flex shrink-0 items-center gap-4",
-							TONE_TEXT[levelTone(thinkingLevel)],
-						)}
-					>
-						<EffortBars level={thinkingLevel} levels={catalogModel?.thinkingLevels ?? ALL_LEVELS} />
-						{levelText}
-					</span>
-				</>
+		<>
+			{icon}
+			<span className="truncate">{name}</span>
+			{detail ? <span className="truncate text-text-muted tr-text-metadata">{detail}</span> : null}
+			{level ? (
+				<span
+					data-testid={levelTestId}
+					data-level={level}
+					className="flex shrink-0 items-center gap-4 text-text-muted tr-text-metadata capitalize"
+				>
+					<EffortBars level={level} levels={levels} className={TONE_TEXT[levelTone(level)]} />
+					{t(LEVEL_LABEL[level])}
+				</span>
 			) : null}
-		</span>
+		</>
 	);
 }
 
-/** A delegation run's label, resolved against the chat's model catalog through `ChatActions`. */
 export function RunModelLabel({
 	model,
 	thinkingLevel,
@@ -95,11 +86,24 @@ export function RunModelLabel({
 }) {
 	const actions = useChatActions();
 	if (!model) return null;
+	const catalogModel = actions?.findModel?.(model);
+	const provider = parseModelRef(model)?.provider;
 	return (
-		<ModelEffortLabel
-			model={model}
-			thinkingLevel={thinkingLevel}
-			catalogModel={actions?.findModel?.(model)}
-		/>
+		<span
+			data-testid="model-effort-label"
+			title={model}
+			className="flex min-w-0 items-center gap-8 tr-text-ui text-text-default"
+		>
+			<ModelEffortPill
+				icon={
+					provider ? (
+						<ProviderGlyph provider={provider} className="size-14 text-text-muted" />
+					) : null
+				}
+				name={catalogModel?.name ?? model}
+				level={thinkingLevel}
+				levels={catalogModel?.thinkingLevels ?? ALL_LEVELS}
+			/>
+		</span>
 	);
 }

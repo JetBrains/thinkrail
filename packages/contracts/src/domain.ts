@@ -447,9 +447,7 @@ export interface SubagentResourceSummary {
 	task: string;
 	status: DelegationRunStatus;
 	createdAt: string;
-	/** `provider/id` the child session runs on; absent from an older host. */
 	model?: string;
-	/** The child's effective (model-clamped) effort; absent from an older host or run. */
 	thinkingLevel?: ThinkingLevel;
 	abortReason?: string;
 	durationMs?: number;

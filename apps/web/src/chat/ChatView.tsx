@@ -48,7 +48,7 @@ import {
 } from "./Composer";
 import { mentionLookup } from "./fileTargets";
 import { HistoryOverlay } from "./HistoryOverlay";
-import { ModelEffortLabel, parseModelRef } from "./ModelEffortLabel";
+import { parseModelRef, RunModelLabel } from "./ModelEffortLabel";
 import type { ModelSelection } from "./ModelEffortPicker";
 import {
 	compactSubmissionError,
@@ -79,6 +79,10 @@ import { useHistorySearch } from "./useHistorySearch";
 registerWebExtensions();
 
 const TRY_AGAIN_PROMPT = "Try again.";
+
+function renderSubagentModel({ model, thinkingLevel }: SubagentResourceSummary) {
+	return <RunModelLabel model={model} thinkingLevel={thinkingLevel} />;
+}
 
 export default function ChatView({
 	sessionId,
@@ -278,17 +282,6 @@ export default function ChatView({
 	const findModel = useCallback(
 		(ref: string) => selectCatalogModel(allModels, parseModelRef(ref)),
 		[allModels],
-	);
-	const renderSubagentModel = useCallback(
-		({ model, thinkingLevel }: SubagentResourceSummary) =>
-			model ? (
-				<ModelEffortLabel
-					model={model}
-					thinkingLevel={thinkingLevel}
-					catalogModel={findModel(model)}
-				/>
-			) : null,
-		[findModel],
 	);
 	const readMcpOutput = useCallback(
 		(toolCallId: string) =>

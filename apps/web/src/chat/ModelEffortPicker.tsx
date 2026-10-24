@@ -37,7 +37,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { type CSSProperties, forwardRef, useImperativeHandle, useMemo, useState } from "react";
-import { EffortBars, TONE_TEXT } from "./ModelEffortLabel";
+import { ModelEffortPill, TONE_TEXT } from "./ModelEffortLabel";
 import {
 	CENTRAL_KIND_TAG,
 	COSTLY_LEVELS,
@@ -474,39 +474,28 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 						className,
 					)}
 				>
-					{defaultOption?.active ? (
-						<Sparkles className="size-14 shrink-0 text-text-muted" />
-					) : pillModel ? (
-						<ProviderGlyph provider={pillModel.provider} className="size-14 text-text-muted" />
-					) : null}
-					<span className="truncate">
-						{defaultOption?.active
-							? t("common.default")
-							: (pillModel?.name ?? t("chat.modelPicker.selectModel"))}
-					</span>
-					{pillModel ? (
-						<>
-							{defaultOption?.active ? (
-								<span className="truncate text-text-muted tr-text-metadata">{pillModel.name}</span>
-							) : null}
-							<span
-								data-testid="thinking-selector"
-								data-level={pillLevel}
-								className="flex shrink-0 items-center gap-4 text-text-muted tr-text-metadata capitalize"
-							>
-								<EffortBars
-									level={pillLevel}
-									levels={pillModel.thinkingLevels}
-									className={TONE_TEXT[levelTone(pillLevel)]}
-								/>
-								{t(LEVEL_LABEL[pillLevel])}
-							</span>
-							{hasKindGlyph(pillModel) ? (
-								<IconTooltip label={describeAuth(t, pillModel)} wrapTrigger>
-									<KindGlyph model={pillModel} className="text-text-muted" />
-								</IconTooltip>
-							) : null}
-						</>
+					<ModelEffortPill
+						icon={
+							defaultOption?.active ? (
+								<Sparkles className="size-14 shrink-0 text-text-muted" />
+							) : pillModel ? (
+								<ProviderGlyph provider={pillModel.provider} className="size-14 text-text-muted" />
+							) : null
+						}
+						name={
+							defaultOption?.active
+								? t("common.default")
+								: (pillModel?.name ?? t("chat.modelPicker.selectModel"))
+						}
+						detail={defaultOption?.active ? pillModel?.name : undefined}
+						level={pillModel ? pillLevel : undefined}
+						levels={pillModel?.thinkingLevels ?? []}
+						levelTestId="thinking-selector"
+					/>
+					{pillModel && hasKindGlyph(pillModel) ? (
+						<IconTooltip label={describeAuth(t, pillModel)} wrapTrigger>
+							<KindGlyph model={pillModel} className="text-text-muted" />
+						</IconTooltip>
 					) : null}
 					<ChevronDown className="size-14 shrink-0 text-text-muted" />
 				</PopoverTrigger>

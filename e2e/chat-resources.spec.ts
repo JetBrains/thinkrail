@@ -52,6 +52,8 @@ async function observeResourceWire(
 								task: "Focus fixture",
 								status: "completed",
 								createdAt: "2026-01-01T00:00:00.000Z",
+								model: "acme/reviewer-1",
+								thinkingLevel: "high",
 								durationMs: 7 * 60_000,
 							},
 						],
@@ -203,6 +205,8 @@ test("an older welcome retires the inspector with its transcript and returns foc
 	await expect(row.getByRole("option")).toHaveAccessibleName(/Focus fixture, Done/);
 	await expect(row.getByRole("option")).toContainText("7 min");
 	await expect(inspector.getByTestId("resources-inspector-detail")).toContainText("Duration7 min");
+	await expect(inspector.getByTestId("resource-detail-model")).toContainText("acme/reviewer-1");
+	await expect(inspector.getByTestId("resource-detail-model")).toContainText("high");
 	await expect(inspector.getByTestId("subagent-transcript")).toContainText("FOCUS_CHILD");
 	expect(wire.transcriptRequests).toEqual([
 		{

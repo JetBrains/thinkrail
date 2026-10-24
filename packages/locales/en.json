@@ -208,7 +208,6 @@
 	"chat.history.sessionFallback": "session",
 	"chat.history.unmapped": "· not a ThinkRail workspace",
 	"chat.history.workspaceFallback": "workspace",
-	"chat.modelEffortLabel.title": "{{model}} · effort: {{level}}",
 	"chat.modelPicker.allModels": "All models",
 	"chat.modelPicker.authKind.apiKey": "API key",
 	"chat.modelPicker.authKind.central": "JetBrains AI",

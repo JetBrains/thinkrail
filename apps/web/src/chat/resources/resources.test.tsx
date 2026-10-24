@@ -280,7 +280,7 @@ test("the inspector keeps the selected finished row, disables controls when stal
 	expect(html).toContain("Done");
 });
 
-test("the detail header shows a subagent's model through the parent's label, falling back to the raw id, and omits it when the host sent none", () => {
+test("the detail header shows a subagent's model through the parent's label and omits it when the host sent none", () => {
 	const withModel = { ...child, model: "openai/gpt-6", thinkingLevel: "max" as const };
 	const labelled = renderToStaticMarkup(
 		<resources.ResourcesInspector
@@ -294,11 +294,6 @@ test("the detail header shows a subagent's model through the parent's label, fal
 	expect(labelled).toContain('data-testid="resource-detail-model"');
 	expect(labelled).toContain(">Model<");
 	expect(labelled).toContain("openai/gpt-6 @ max");
-
-	const raw = renderToStaticMarkup(
-		<resources.ResourcesInspector {...inspectorProps} subagents={[withModel]} />,
-	);
-	expect(raw).toMatch(/data-testid="resource-detail-model"[\s\S]*openai\/gpt-6/);
 
 	const older = renderToStaticMarkup(
 		<resources.ResourcesInspector
