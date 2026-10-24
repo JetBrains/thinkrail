@@ -340,7 +340,7 @@
 	"chat.templateEditor.description": "Description",
 	"chat.templateEditor.descriptionPlaceholder": "What this template is for",
 	"chat.templateEditor.editTitle": "Edit {{name}}",
-	"chat.templateEditor.invalidName": "Name can't be empty, start with \".\", or contain \"/\", \"\\\", or a null byte.",
+	"chat.templateEditor.invalidName": "Name can't be empty, start with \".\", or contain \"/\", \"\\\", \":\", or a null byte.",
 	"chat.templateEditor.name": "Name",
 	"chat.templateEditor.namePlaceholder": "standup",
 	"chat.templateEditor.newTitle": "New template",
