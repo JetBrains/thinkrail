@@ -57,6 +57,23 @@ async function pickTheme(page: Page, theme: string): Promise<void> {
 	await expect(dialog).toBeHidden();
 }
 
+async function restoreSystemPairLight(
+	page: Page,
+	light: string,
+	fixedAppearance: ThemeOption["appearance"],
+): Promise<void> {
+	const dialog = page.getByTestId("settings-dialog");
+	if (!(await dialog.isVisible())) await openAppearance(page);
+	await dialog.getByTestId("theme-mode-system").click();
+	const trigger = dialog.getByTestId("system-theme-light-trigger");
+	if (!(await trigger.isVisible())) await expandDisclosure(dialog.getByTestId("theme-pair-toggle"));
+	await trigger.click();
+	await page.getByTestId(`system-theme-light-option-${light}`).click();
+	await dialog.getByTestId(`theme-mode-${fixedAppearance}`).click();
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeHidden();
+}
+
 async function expectEditorMatchesTheme(page: Page): Promise<void> {
 	const colors = await page
 		.locator(".monaco-editor")
@@ -115,35 +132,38 @@ test("system mode follows each client and retains its explicit pair", async ({ p
 
 	const dialog = await openAppearance(page);
 	await dialog.getByTestId("theme-mode-system").click();
-	await expect(page.locator("html")).toHaveAttribute("data-theme", initialLight?.id ?? "");
-	await expect(dialog.getByTestId("system-theme-current")).toContainText("Light");
-	await expandDisclosure(dialog.getByTestId("theme-pair-toggle"));
-	await expect(dialog.getByTestId("system-theme-light-trigger")).toHaveAccessibleName(
-		`Light theme: ${initialLight?.label}`,
-	);
-	await dialog.getByTestId("system-theme-light-trigger").click();
-	await page.getByTestId(`system-theme-light-option-${alternateLight?.id}`).click();
-	await expect(page.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");
-
-	await page.emulateMedia({ colorScheme: "dark" });
-	await expect(page.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
-	await expect(dialog.getByTestId("system-theme-current")).toContainText("Dark");
-
 	const peer = await page.context().newPage();
-	await peer.emulateMedia({ colorScheme: "light" });
-	await peer.goto("/");
-	await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
-	await expect(peer.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");
+	try {
+		await expect(page.locator("html")).toHaveAttribute("data-theme", initialLight?.id ?? "");
+		await expect(dialog.getByTestId("system-theme-current")).toContainText("Light");
+		await expandDisclosure(dialog.getByTestId("theme-pair-toggle"));
+		await expect(dialog.getByTestId("system-theme-light-trigger")).toHaveAccessibleName(
+			`Light theme: ${initialLight?.label}`,
+		);
+		await dialog.getByTestId("system-theme-light-trigger").click();
+		await page.getByTestId(`system-theme-light-option-${alternateLight?.id}`).click();
+		await expect(page.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");
 
-	await dialog.getByTestId(`theme-mode-${fixed?.appearance}`).click();
-	await expect(page.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
-	await expect(peer.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
+		await page.emulateMedia({ colorScheme: "dark" });
+		await expect(page.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
+		await expect(dialog.getByTestId("system-theme-current")).toContainText("Dark");
 
-	await dialog.getByTestId("theme-mode-system").click();
-	await expect(page.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
-	await expect(peer.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");
-	await dialog.getByTestId(`theme-mode-${fixed?.appearance}`).click();
-	await peer.close();
+		await peer.emulateMedia({ colorScheme: "light" });
+		await peer.goto("/");
+		await expect(peer.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
+		await expect(peer.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");
+
+		await dialog.getByTestId(`theme-mode-${fixed?.appearance}`).click();
+		await expect(page.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
+		await expect(peer.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
+
+		await dialog.getByTestId("theme-mode-system").click();
+		await expect(page.locator("html")).toHaveAttribute("data-theme", fixed?.id ?? "");
+		await expect(peer.locator("html")).toHaveAttribute("data-theme", alternateLight?.id ?? "");
+	} finally {
+		await peer.close();
+		await restoreSystemPairLight(page, initialLight?.id ?? "", fixed?.appearance ?? "dark");
+	}
 });
 
 test("Monaco opens files and re-themes under every discovered manifest", async ({ page }) => {
@@ -271,6 +291,7 @@ test("selected workspace tabs and rail entries keep their surface and edge marke
 
 	const options = await readThemeOptions(page);
 	expect(options.length).toBeGreaterThanOrEqual(2);
+	const defaultTheme = options.find((option) => option.active)?.id;
 
 	await revealWorkbenchTool(page, "files");
 	const files = page.getByTestId("file-node");
@@ -330,4 +351,5 @@ test("selected workspace tabs and rail entries keep their surface and edge marke
 		await expect(marker).toHaveCSS("width", "2px");
 		await expect(marker).toHaveCSS("height", "16px");
 	}
+	await pickTheme(page, defaultTheme ?? "");
 });
