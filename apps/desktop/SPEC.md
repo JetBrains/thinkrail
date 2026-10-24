@@ -438,8 +438,10 @@ by editor tooling; no handwritten API declarations or shadow typecheck config ex
 approved, desktop alone sets `exactOptionalPropertyTypes: false` to match Electrobun's source contract,
 while retaining `strict: true` and `noUncheckedIndexedAccess: true`. Desktop also sets
 `noImplicitReturns: false` because Electrobun's browser and native SDK sources fail it; the other base
-lint-style flags stay on. These settings apply to the desktop compilation, including imported workspace
-source; every other package retains its separate unchanged strict check. The optional-property
+lint-style flags stay on. Desktop's own source passes the flag, so the override is dropped once an
+Electrobun release ships [blackboardsh/electrobun#590](https://github.com/blackboardsh/electrobun/pull/590).
+These settings apply to the desktop compilation, including imported workspace source; every other package
+retains its separate unchanged strict check. The optional-property
 incompatibility is tracked in Electrobun issue #516; `skipLibCheck` cannot exclude imported implementation
 `.ts`. The direct-source approach follows the v2 migration guide and avoids a second declaration-generation
 pipeline. Canonical main imports use `electrobun/main`; the preload retains `electrobun/view`, and the RPC
