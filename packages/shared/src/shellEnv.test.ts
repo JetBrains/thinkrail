@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	LOGIN_ENV_END,
 	LOGIN_ENV_MARKER,
 	localeRepair,
 	loginShellImports,
+	loginShellProbe,
 	mergePath,
 	parseLoginShellEnv,
 	repairShellEnv,
@@ -37,7 +39,7 @@ beforeEach(() => {
 	originalTerm = process.env.TERM;
 	originalLocale = Object.fromEntries(LOCALE_VARS.map((key) => [key, process.env[key]]));
 	shellDir = mkdtempSync(join(tmpdir(), "shellenv-"));
-	fakeShell(`printf '${LOGIN_ENV_MARKER}HOME=/Users/x\\0PATH=${LOGIN_PATH}\\0'`);
+	fakeShell(`printf '${LOGIN_ENV_MARKER}HOME=/Users/x\\0PATH=${LOGIN_PATH}\\0${LOGIN_ENV_END}'`);
 	process.env.PATH = LAUNCHD_DEFAULT_PATH;
 });
 afterEach(() => {
@@ -74,7 +76,7 @@ test("repairShellEnv adopts the login shell PATH from the launchd default", asyn
 });
 
 test("repairShellEnv probes from a base PATH and keeps a terminal's extras in front", async () => {
-	fakeShell(`printf '${LOGIN_ENV_MARKER}PATH=/Users/x/.local/bin:%s\\0' "$PATH"`);
+	fakeShell(`printf '${LOGIN_ENV_MARKER}PATH=/Users/x/.local/bin:%s\\0${LOGIN_ENV_END}' "$PATH"`);
 	process.env.PATH = `/work/.venv/bin:${LOGIN_PATH}`;
 
 	await repairShellEnv();
@@ -85,7 +87,9 @@ test("repairShellEnv probes from a base PATH and keeps a terminal's extras in fr
 });
 
 test("repairShellEnv falls back to a non-interactive login shell", async () => {
-	fakeShell(`case "$*" in *-i*) exit 1;; esac\nprintf '${LOGIN_ENV_MARKER}PATH=${LOGIN_PATH}\\0'`);
+	fakeShell(
+		`case "$*" in *-i*) exit 1;; esac\nprintf '${LOGIN_ENV_MARKER}PATH=${LOGIN_PATH}\\0${LOGIN_ENV_END}'`,
+	);
 
 	await repairShellEnv();
 
@@ -128,14 +132,20 @@ test("repairShellEnv leaves an existing locale untouched", async () => {
 	expect(process.env.LANG).toBe("ru_RU.UTF-8");
 });
 
-test("parseLoginShellEnv ignores rc-file chatter before the marker and malformed entries", () => {
-	const stdout = `Welcome back!\nfoo=bar\n__THINKRAIL_LOGIN_ENV__HOME=/Users/x\0PATH=/a:/b\0=bad\0noequals\0GITHUB_TOKEN=ghp_x\0`;
+test("parseLoginShellEnv reads only the entries between its markers", () => {
+	const stdout = `Welcome back!\nfoo=bar\n${LOGIN_ENV_MARKER}HOME=/Users/x\0PATH=/a:/b\0=bad\0noequals\0GITHUB_TOKEN=ghp_x\0${LOGIN_ENV_END}logout chatter=1\0`;
 	const env = parseLoginShellEnv(stdout);
 	expect(env).not.toBeNull();
 	expect(env?.get("HOME")).toBe("/Users/x");
 	expect(env?.get("GITHUB_TOKEN")).toBe("ghp_x");
 	expect(env?.has("foo")).toBe(false);
+	expect(env?.has("logout chatter")).toBe(false);
 	expect(parseLoginShellEnv("no marker here")).toBeNull();
+});
+
+test("parseLoginShellEnv rejects output that stops before its end marker", () => {
+	expect(parseLoginShellEnv(`${LOGIN_ENV_MARKER}HOME=/Users/x\0PATH=/opt/home`)).toBeNull();
+	expect(parseLoginShellEnv(`${LOGIN_ENV_MARKER}HOME=/Users/x\0PATH=/a:/b\0`)).toBeNull();
 });
 
 test("loginShellImports adds only what the process lacks and never host-reserved or bookkeeping variables", () => {
@@ -193,22 +203,71 @@ test("the PATH repair and the import share one login-shell probe", async () => {
 });
 
 test("the login shell probe does not block the event loop", async () => {
-	fakeShell(`sleep 0.3; printf '${LOGIN_ENV_MARKER}PATH=${LOGIN_PATH}\\0'`);
+	const gate = join(shellDir, "gate");
+	fakeShell(
+		`while [ ! -e '${gate}' ]; do sleep 0.01; done\nprintf '${LOGIN_ENV_MARKER}PATH=${LOGIN_PATH}\\0${LOGIN_ENV_END}'`,
+	);
 	const order: string[] = [];
 	const repair = repairShellEnv().then(() => order.push("repaired"));
-	await Bun.sleep(20);
+	await new Promise((resolve) => setTimeout(resolve, 0));
 	order.push("timer");
+	writeFileSync(gate, "");
 	await repair;
 	expect(order).toEqual(["timer", "repaired"]);
 	expect(process.env.PATH).toBe(`/Users/x/.pi/agent/bin:${LOGIN_PATH}`);
 });
 
-test("a background job holding stdout neither delays nor drops the login PATH", async () => {
-	fakeShell(`sleep 3 &\nprintf '${LOGIN_ENV_MARKER}PATH=${LOGIN_PATH}\\0'`);
-	const started = performance.now();
+test("a login shell that stops before the end marker repairs nothing", async () => {
+	fakeShell(`printf '${LOGIN_ENV_MARKER}HOME=/Users/x\\0PATH=/opt/home'`);
+
 	await repairShellEnv();
-	expect(process.env.PATH).toBe(`/Users/x/.pi/agent/bin:${LOGIN_PATH}`);
-	expect(performance.now() - started).toBeLessThan(1500);
+
+	expect(process.env.PATH).toBe(LAUNCHD_DEFAULT_PATH);
+});
+
+function jobPids(file: string): number[] {
+	if (!existsSync(file)) return [];
+	return readFileSync(file, "utf8").split(/\s+/).filter(Boolean).map(Number);
+}
+
+function running(pid: number): boolean {
+	const state = Bun.spawnSync(["ps", "-o", "stat=", "-p", String(pid)])
+		.stdout.toString()
+		.trim();
+	return state !== "" && !state.startsWith("Z");
+}
+
+async function settledPids(pids: number[]): Promise<number[]> {
+	for (let attempt = 0; attempt < 100 && pids.some(running); attempt += 1) await Bun.sleep(20);
+	return pids.filter(running);
+}
+
+test("a background job holding stdout neither holds the probe open nor drops the login PATH", async () => {
+	const jobs = join(shellDir, "jobs");
+	fakeShell(
+		`sleep 30 &\necho $! >> '${jobs}'\nprintf '${LOGIN_ENV_MARKER}PATH=${LOGIN_PATH}\\0${LOGIN_ENV_END}'`,
+	);
+	try {
+		await repairShellEnv();
+		expect(process.env.PATH).toBe(`/Users/x/.pi/agent/bin:${LOGIN_PATH}`);
+	} finally {
+		for (const pid of jobPids(jobs).filter(running)) process.kill(pid, "SIGKILL");
+	}
+});
+
+test("a hung interactive login shell that ignores SIGTERM is killed with its children", async () => {
+	const jobs = join(shellDir, "jobs");
+	fakeShell(
+		`case "$*" in *-i*) trap '' TERM; sleep 30 & echo $! >> '${jobs}'; wait;; esac\nexit 1`,
+	);
+	try {
+		await repairShellEnv({ probe: loginShellProbe(1000) });
+		expect(process.env.PATH).toBe(LAUNCHD_DEFAULT_PATH);
+		expect(jobPids(jobs)).toHaveLength(1);
+		expect(await settledPids(jobPids(jobs))).toEqual([]);
+	} finally {
+		for (const pid of jobPids(jobs).filter(running)) process.kill(pid, "SIGKILL");
+	}
 });
 
 test("every resolveShellEnv caller awaits the same run, across bundled copies", async () => {

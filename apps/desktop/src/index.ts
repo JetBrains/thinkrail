@@ -193,7 +193,6 @@ async function start(): Promise<void> {
 	} catch (error) {
 		desktopError("cwd", "could not leave the app bundle working directory", error);
 	}
-	// The probe spawns the login shell, so it starts only once cwd is outside the bundle.
 	const shellEnv = resolveShellEnv();
 	if (!neutral && process.env.THINKRAIL_DESKTOP_HIDDEN !== "1") {
 		startupSplash = await openStartupSplash(

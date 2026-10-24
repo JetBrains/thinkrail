@@ -13,13 +13,16 @@ export function mergePath(current: string, login: string): string {
 }
 
 export const LOGIN_ENV_MARKER = "__THINKRAIL_LOGIN_ENV__";
+export const LOGIN_ENV_END = "__THINKRAIL_LOGIN_ENV_END__";
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 export function parseLoginShellEnv(stdout: string): Map<string, string> | null {
-	const marker = stdout.lastIndexOf(LOGIN_ENV_MARKER);
-	if (marker === -1) return null;
+	const start = stdout.lastIndexOf(LOGIN_ENV_MARKER);
+	if (start === -1) return null;
+	const end = stdout.indexOf(LOGIN_ENV_END, start);
+	if (end === -1) return null;
 	const env = new Map<string, string>();
-	for (const entry of stdout.slice(marker + LOGIN_ENV_MARKER.length).split("\0")) {
+	for (const entry of stdout.slice(start + LOGIN_ENV_MARKER.length, end).split("\0")) {
 		const eq = entry.indexOf("=");
 		if (eq <= 0) continue;
 		const name = entry.slice(0, eq);
@@ -28,28 +31,39 @@ export function parseLoginShellEnv(stdout: string): Map<string, string> | null {
 	return env.size > 0 ? env : null;
 }
 
+function killGroup(child: Bun.Subprocess): void {
+	try {
+		process.kill(-child.pid, "SIGKILL");
+	} catch {
+		child.kill("SIGKILL");
+	}
+}
+
 async function readStdout(
 	argv: string[],
-	options: { timeout: number; env?: Record<string, string | undefined> },
+	options: { timeout: number; env?: Record<string, string | undefined>; until?: string },
 ): Promise<string | null> {
 	try {
 		const child = Bun.spawn(argv, {
-			...options,
-			killSignal: "SIGKILL",
+			...(options.env ? { env: options.env } : {}),
+			detached: true,
 			stdin: "ignore",
 			stdout: "pipe",
 			stderr: "ignore",
 		});
+		const deadline = setTimeout(() => killGroup(child), options.timeout);
 		const reader = child.stdout.getReader();
 		const decoder = new TextDecoder();
 		let text = "";
 		const drained = (async () => {
 			for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
 				text += decoder.decode(chunk.value, { stream: true });
+				if (options.until !== undefined && text.includes(options.until)) return;
 			}
 		})().catch(() => {});
 		const code = await child.exited;
-		await Promise.race([drained, Bun.sleep(ORPHAN_PIPE_GRACE_MS)]);
+		clearTimeout(deadline);
+		if (code === 0) await Promise.race([drained, Bun.sleep(ORPHAN_PIPE_GRACE_MS)]);
 		void reader.cancel().catch(() => {});
 		return code === 0 ? text + decoder.decode() : null;
 	} catch {
@@ -60,21 +74,28 @@ async function readStdout(
 async function probeLoginShellEnv(
 	shell: string,
 	interactive: boolean,
+	timeout: number,
 ): Promise<Map<string, string> | null> {
-	const script = `printf '%s' '${LOGIN_ENV_MARKER}'; env -0`;
+	const script = `printf '%s' '${LOGIN_ENV_MARKER}'; env -0 && printf '%s' '${LOGIN_ENV_END}'`;
 	const args = interactive ? ["-l", "-i", "-c", script] : ["-l", "-c", script];
 	const stdout = await readStdout([shell, ...args], {
-		timeout: PROBE_TIMEOUT_MS,
+		timeout,
 		env: { ...process.env, PATH: PROBE_BASE_PATH, HISTFILE: "/dev/null", HISTSIZE: "0" },
+		until: LOGIN_ENV_END,
 	});
 	return stdout === null ? null : parseLoginShellEnv(stdout);
 }
 
 export type LoginShellEnvProbe = () => Promise<Map<string, string> | null>;
 
-async function defaultLoginShellProbe(): Promise<Map<string, string> | null> {
-	const shell = process.env.SHELL ?? "/bin/zsh";
-	return (await probeLoginShellEnv(shell, true)) ?? (await probeLoginShellEnv(shell, false));
+export function loginShellProbe(timeout = PROBE_TIMEOUT_MS): LoginShellEnvProbe {
+	return async () => {
+		const shell = process.env.SHELL ?? "/bin/zsh";
+		return (
+			(await probeLoginShellEnv(shell, true, timeout)) ??
+			(await probeLoginShellEnv(shell, false, timeout))
+		);
+	};
 }
 
 const NEVER_IMPORTED_PREFIXES = ["PI_", "THINKRAIL_"];
@@ -128,7 +149,7 @@ async function launchdSshAgentSock(): Promise<string | undefined> {
 export async function repairShellEnv(options: { probe?: LoginShellEnvProbe } = {}): Promise<void> {
 	if (process.platform === "win32") return;
 	const [loginEnv, sshAgentSock] = await Promise.all([
-		(options.probe ?? defaultLoginShellProbe)(),
+		(options.probe ?? loginShellProbe())(),
 		launchdSshAgentSock(),
 	]);
 	resolveLoginShellImports(loginEnv);
