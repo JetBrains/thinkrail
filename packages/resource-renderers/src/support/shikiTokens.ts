@@ -14,9 +14,14 @@ const MAX_LINE_LENGTH = 20_000;
 const EMBED_REFERENCE =
 	/^[ \t]*(?:(?:>|[-*+][ \t]|\d{1,9}[.)][ \t])[ \t]*)*(?:`{3,}|~{3,})[ \t]*\{?\.?([\w#+.-]+)|\blang[ \t]*=[ \t]*["']?([\w#+.-]+)/gm;
 const TOKENIZE_TIME_LIMIT_MS = 500;
+const INLINE_HTML_ELEMENTS =
+	"a|abbr|b|bdi|bdo|br|cite|code|del|details|dfn|div|em|font|h[1-6]|hr|i|img|ins|kbd|mark|p|picture|pre|q|s|samp|small|source|span|strong|sub|summary|sup|table|time|u|var|video|wbr";
 const IMPLICIT_EMBEDS = [
 	[/^-{3,}/, "yaml"],
-	[/^[ \t]*<[A-Za-z!]|<\/[A-Za-z]/m, "html"],
+	[
+		new RegExp(`^[ \\t]*<[A-Za-z!]|<\\/[A-Za-z]|<!--|<(?:${INLINE_HTML_ELEMENTS})(?=[\\s/>])`, "m"),
+		"html",
+	],
 ] as const;
 const FENCE_EMBEDS = new Map([
 	["h", "c"],

@@ -595,8 +595,9 @@ content's own height.
   (vue -> markdown -> shellscript); they load after the first colour, then the provider is re-registered
   so Monaco re-tokenizes. Each scan reports the embeds it loaded that the installed provider lacks, so two
   models scanning at once each re-register for what they finished, not only the first.
-  A leading `---` adds `yaml`, and a tag at a line start or any closing tag adds `html` (front matter and
-  inline HTML embed them with no fence; a generic such as `Array<T>` inside a fence does not count). Fence names the markdown grammar embeds under another language (`jsx` and `es6` as
+  A leading `---` adds `yaml`. A tag at a line start, a closing tag, a comment, or a common inline element
+  such as `<img …>`, `<br>` or `<kbd>` adds `html` (front matter and inline HTML embed them with no fence).
+  A generic such as `Array<T>` or `Map<K, V>` inside a fence does not count. Fence names the markdown grammar embeds under another language (`jsx` and `es6` as
   `javascript`, `golang` as `go`, `h` as `c`) map through `FENCE_EMBEDS` before the host's `languageId`.
   The `html` catalog entry loads `html-derivative`, the grammar markdown includes for inline HTML.
   The scan reruns on content and language changes. Nothing suspends on the engine or a grammar: a Suspense

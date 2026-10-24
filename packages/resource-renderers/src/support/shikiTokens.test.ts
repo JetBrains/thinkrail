@@ -325,10 +325,24 @@ describe("createShikiTokens", () => {
 	test("a generic inside a fence does not pull in html", async () => {
 		const counts = new Map<string, number>();
 		const tokens = await themedTokens(countingCatalog(counts));
-		const text = ["```ts", "const xs: Array<string> = [];", "```"];
+		const text = ["```ts", "const xs: Array<string> = new Map<K, V>() as Box<T>;", "```"];
 		expect(await tokens.loadEmbeds("markdown", () => text.join("\n"))).toBe(true);
 		expect(counts.get("typescript")).toBe(1);
 		expect(counts.get("html")).toBeUndefined();
+	});
+
+	test("an inline void or self-closing tag mid-line pulls in html", async () => {
+		for (const line of [
+			'Logo: <img src="logo.png">',
+			"first<br>second",
+			"a<br/>b",
+			"x <!-- note -->",
+		]) {
+			const counts = new Map<string, number>();
+			const tokens = await themedTokens(countingCatalog(counts));
+			expect(await tokens.loadEmbeds("markdown", () => line)).toBe(true);
+			expect(counts.get("html")).toBe(1);
+		}
 	});
 
 	test("a provider keeps the grammar its line states came from after embeds rebuild it", async () => {
