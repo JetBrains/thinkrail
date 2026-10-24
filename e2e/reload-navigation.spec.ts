@@ -365,10 +365,20 @@ test("a restored chat reveals as soon as its transcript arrives, with no Suspens
 		server.onMessage((message) => ws.send(message));
 	});
 
+	let chatChunkUrl: string | undefined;
+	page.on("response", (response) => {
+		if (/\/assets\/ChatView-[^/]+\.js$/.test(new URL(response.url()).pathname)) {
+			chatChunkUrl = response.url();
+		}
+	});
+
 	await page.reload();
 	await expect.poll(() => release !== null).toBe(true);
 	await expect(page.getByLabel("Restoring chat")).toBeVisible();
-	await page.waitForTimeout(1000);
+	await expect
+		.poll(() => chatChunkUrl, { message: "the ChatView chunk loads while the transcript is held" })
+		.toBeDefined();
+	await page.evaluate((url) => import(url).then(() => undefined), chatChunkUrl ?? "");
 	await expect(page.getByTestId("chat-input")).toHaveCount(0);
 	const seen = await page.evaluateHandle(() => {
 		const counter = { skeletons: 0 };
