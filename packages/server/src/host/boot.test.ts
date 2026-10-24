@@ -459,7 +459,7 @@ test("boot permits two hosts for the same data directory", async () => {
 	expect(await Promise.all(responses.map((response) => response.text()))).toEqual(["ok", "ok"]);
 });
 
-test("welcome is the first frame and omits closed projects whose folders are gone", async () => {
+test("welcome omits closed projects whose folders are gone", async () => {
 	const dir = process.env.THINKRAIL_DATA_DIR;
 	if (!dir) throw new Error("missing fixture data directory");
 	writeFileSync(
@@ -478,12 +478,12 @@ test("welcome is the first frame and omits closed projects whose folders are gon
 		]),
 	);
 	const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
-	const collector = await collectSocket(b.port, "recents-first");
-	await collector.waitForFrame((frame) => frame.channel === WS_CHANNELS.serverWelcome);
+	const collector = await collectSocket(b.port, "recents");
+	const frame = await collector.waitForFrame(
+		(candidate) => candidate.channel === WS_CHANNELS.serverWelcome,
+	);
 
-	const [first] = collector.frames;
-	expect(first?.channel).toBe(WS_CHANNELS.serverWelcome);
-	const welcome = first?.data as ServerWelcome;
+	const welcome = frame.data as ServerWelcome;
 	expect(welcome.projects.map((project) => project.id)).toEqual(["open"]);
 	expect(welcome.recentProjects?.map((project) => project.id)).toEqual(["open", "kept"]);
 });

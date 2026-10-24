@@ -505,7 +505,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `recentProjects` (all known records, with closed records whose folder is definitively
   gone omitted). The `/ws` upgrade first awaits `refreshRecentProjectFolders` for at most
   250 ms, so an unresponsive mount delays a connect by that budget at most and an unfinished check leaves
-  its record listed; `open` itself never yields, so `server.welcome` stays the socket's first frame and
+  its record at its last completed result; `open` itself never yields, so `server.welcome` stays the socket's first frame and
   both views are read from the current registry in the same tick they are sent. The one full-snapshot
   channel is idempotent and avoids separate opened/closed streams replaying out of order. Every client
   converges its rail + Recents from it; only
