@@ -13,6 +13,11 @@ export type LoadedFile =
 
 export type ReadyFile = Extract<LoadedFile, { status: "ready" }>;
 
+export interface FileState {
+	file: string;
+	loaded: LoadedFile;
+}
+
 export interface WorkspaceFileReads {
 	read: () => Promise<{ content: string; meta?: ResourceMeta | undefined }>;
 	subscribe: (onChange: () => void) => () => void;
@@ -26,6 +31,16 @@ function errorMessage(error: unknown): string {
 
 function ready(current: LoadedFile | null): ReadyFile | null {
 	return current?.status === "ready" ? current : null;
+}
+
+export function updateFileState(
+	current: FileState | null,
+	file: string,
+	next: (current: LoadedFile | null) => LoadedFile,
+): FileState {
+	const previous = current?.file === file ? current.loaded : null;
+	const loaded = next(previous);
+	return current && loaded === previous ? current : { file, loaded };
 }
 
 export function startWorkspaceFileReads({
@@ -64,7 +79,11 @@ export function startWorkspaceFileReads({
 				settle(ticket, (current) => {
 					const previous = ready(current);
 					const message = errorMessage(error);
-					return previous ? { ...previous, stale: message } : { status: "error", message };
+					if (previous)
+						return previous.stale === message ? previous : { ...previous, stale: message };
+					return current?.status === "error" && current.message === message
+						? current
+						: { status: "error", message };
 				}),
 		);
 	};

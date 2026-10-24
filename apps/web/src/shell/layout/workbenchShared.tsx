@@ -44,6 +44,7 @@ export interface LayoutTabFocusRequest {
 	key: string;
 	location: LayoutGroupLocation;
 	tabId?: string;
+	onlyIfFocusLost?: true;
 }
 
 export interface PreparedLayoutClose {
@@ -395,7 +396,17 @@ export function railControlId(entry: AuxiliaryRailEntry): string {
 		: encodedElementId("layout-rail-control", entry.key);
 }
 
+function isFocusLost(active: Element | null): boolean {
+	return (
+		!active ||
+		active === active.ownerDocument.body ||
+		!active.isConnected ||
+		active.getClientRects().length === 0
+	);
+}
+
 export function focusLayoutRequest(request: LayoutTabFocusRequest): void {
+	if (request.onlyIfFocusLost && !isFocusLost(globalThis.document.activeElement)) return;
 	const tab = request.tabId
 		? globalThis.document.getElementById(tabDomId(request.location, request.tabId))
 		: null;

@@ -60,7 +60,7 @@ choice was settled: the decision log below.
 
 | Tool | Behavior |
 | --- | --- |
-| `Agent({ subagent_type, task, model?, run_in_background? })` | Snapshots definitions before each parent model turn (editable mid-session), then maps the named one plus the optional invocation model to `SessionOptions` and spawns via `createChild` + `runQueued`; the description and execution closure use that same snapshot, so a mid-session edit cannot make advertised model policy disagree with execution. Model precedence is definition pin → invocation model → live parent; a definition pin silently wins over a supplied invocation value, and the available-agent description advertises each definition's pin or call/parent selection before use. The description also states that subagents cannot call MCP tools — children never load an MCP engine (the curated child set has none, in pi and in ThinkRail), so the parent calls them itself and passes results in the task. Foreground: awaits the outcome and rides the tool signal; `error` outcomes throw (tool error, reason-first) — and the error tool result **still carries the run's final `details`**: pi replaces a thrown tool error's result with `{content, details: {}}`, so the extension stashes the outcome details by `toolCallId` before throwing and re-injects them via a `tool_result` hook override (the stash is swept on `turn_end` — after finalization — and on `session_shutdown`, so a turn aborted before tool finalization cannot strand entries); a failed run's card keeps its child session id and the transcript stays openable (PR #304 review finding). Background: **never rides the parent turn's abort signal** (a detached run survives a parent abort — core-spec semantics, test-pinned); returns `{childSessionId}` text immediately; the terminal outcome injects a `subagent-completion` custom message (`deliverAs: "followUp"`; turn triggering follows the User stop policy below). Live `onUpdate` details flow to `partialResult` (REPLACE). Results bounded to 50k chars — the full text stays in the child transcript. |
+| `Agent({ subagent_type, task, model?, run_in_background? })` | Snapshots definitions before each parent model turn (editable mid-session), then maps the named one plus the optional invocation model to `SessionOptions` and spawns via `createChild` + `runQueued`; the description and execution closure use that same snapshot, so a mid-session edit cannot make advertised model policy disagree with execution. Model precedence is definition pin → invocation model → live parent; a definition pin silently wins over a supplied invocation value, and the available-agent description advertises each definition's model pin or call/parent selection and any explicit thinking policy before use. The description also states that subagents cannot call MCP tools — children never load an MCP engine (the curated child set has none, in pi and in ThinkRail), so the parent calls them itself and passes results in the task. Foreground: awaits the outcome and rides the tool signal; `error` outcomes throw (tool error, reason-first) — and the error tool result **still carries the run's final `details`**: pi replaces a thrown tool error's result with `{content, details: {}}`, so the extension stashes the outcome details by `toolCallId` before throwing and re-injects them via a `tool_result` hook override (the stash is swept on `turn_end` — after finalization — and on `session_shutdown`, so a turn aborted before tool finalization cannot strand entries); a failed run's card keeps its child session id and the transcript stays openable (PR #304 review finding). Background: **never rides the parent turn's abort signal** (a detached run survives a parent abort — core-spec semantics, test-pinned); returns `{childSessionId}` text immediately; the terminal outcome injects a `subagent-completion` custom message (`deliverAs: "followUp"`; turn triggering follows the User stop policy below). Live `onUpdate` details flow to `partialResult` (REPLACE). Results bounded to 50k chars — the full text stays in the child transcript. |
 | `get_subagent_result({ session_id })` | **Lineage-checked**: a child whose `record.parentSessionId` is not the calling session takes the unknown-id error path — with a shared (workspace-scoped) service, one tab must not read or mark-collected another parent's child (PR #302 review finding). Reads the core registry via `findChild` + `collectResult`: terminal → final text + details through the **same reason-first, 50k-bounded shaping** as a foreground result (marks collected; an errored run reports its `errorMessage` first — core decision #24); running → status snapshot; unknown id → error naming the restart-loss case + the derived transcript path. |
 
 Both tools register inside `session_start` (emitted by `bindExtensions`). `Agent` additionally
@@ -103,9 +103,26 @@ review and thread semantics stay outside this portable role.
 ## The mapping (policy, not mechanism)
 
 `toSpawnMapping`: definition + optional invocation model → `SessionOptions` + `RunOptions.maxTurns`.
-The effective reference follows definition pin → invocation model → parent inheritance, so only an
-unpinned definition can use a per-call model. Model refs fuzzy-resolve against the session's available
-models (`provider/id` → exact id → unique prefix; ambiguous or unknown effective refs throw loud).
+The effective reference follows definition pin → invocation model → parent inheritance. A pin discards
+the invocation reference, including its thinking suffix, without resolving it. References resolve
+against the session's available models (`provider/id` → exact id → unique prefix); no provider
+substitution, custom model synthesis or parent fallback is permitted for an unresolved selection.
+
+Both definition and invocation model references accept one final `:<thinking>` suffix: `off`,
+`minimal`, `low`, `medium`, `high`, `xhigh` or `max`. Whole-reference resolution always comes first:
+existing literal colon IDs and unique prefixes keep their meaning, and ambiguity fails without trying
+a stripped reference. Only a missing whole reference permits suffix parsing; its nonempty base must
+resolve under the same rules, with no recursive stripping. Unknown suffixes remain literal unresolved
+references, with a syntax hint rather than silent default thinking. Missing and ambiguous selections
+have distinct diagnostics; provider qualification is suggested only for ambiguity. The exported
+`resolveModelRef` remains identity-only and does not interpret suffixes.
+
+Thinking precedence is explicit definition `thinking` → suffix on the winning reference → live parent.
+Pi clamps the requested level to the selected model's capabilities; the extension neither duplicates
+that policy nor changes parent state. This is syntax compatibility, not adoption of Pi's CLI resolver:
+its fuzzy tie-breaking and custom-ID fallback would violate this package's ambiguity/availability
+contract. A separate per-call thinking argument is not part of this surface.
+
 Child system prompt = definition body → subagent bridge → env block (cwd, git branch, platform) —
 **stable material first** for KV-cache prefix reuse. The
 recursion guard (`excludeTools: ["Agent", "get_subagent_result"]`) is unconditional.
@@ -132,7 +149,8 @@ Pi behavior is unchanged unless its caller explicitly supplies the user reason.
 
 ## Verification
 
-Unit suites in-package (`bun test`), including a two-extension regression where one extension
+Unit suites in-package (`bun test`) pin literal-ID/suffix precedence, ambiguity, definition thinking,
+Pi-clamped child thinking, parent isolation and failures before child creation, including a two-extension regression where one extension
 registers a synthetic provider and the zero-config subagents extension delegates through it. Public Pi
 session tests pin gated replay, real reload gaps, permanent closure, synchronous send failures,
 reentrant flushing and default/legacy runner isolation. End to end: `e2e/subagents.live.spec.ts` (`@agent` — the real host driving real children: foreground

@@ -120,13 +120,181 @@ test("a per-call model selects the model for an unpinned definition", () => {
 	expect(mapping.session.model).toEqual({ provider: "openai", id: "gpt-5" });
 });
 
-test("a definition pin wins without resolving a supplied per-call model", () => {
-	const mapping = toSpawnMapping(definition({ model: "claude-haiku-4-5" }), {
+test("a model thinking suffix maps the available base and requested effort separately", () => {
+	const availableModels = [{ provider: "openai", id: "gpt-5.6-sol" }];
+	const mapping = toSpawnMapping(definition({ name: "reviewer" }), {
+		cwd: "/tmp/x",
+		availableModels,
+		model: "openai/gpt-5.6-sol:xhigh",
+	});
+	expect(mapping.session.model).toEqual(availableModels[0]);
+	expect(mapping.session.thinkingLevel).toBe("xhigh");
+	expect(resolveModelRef("openai/gpt-5.6-sol:xhigh", availableModels)).toBeUndefined();
+});
+
+test("whole-reference ambiguity cannot be bypassed by resolving a suffix base", () => {
+	const base = { provider: "openai", id: "gpt-5" };
+	const catalogs = [
+		[base, { provider: "openai", id: "gpt-5:xhigh" }, { provider: "proxy", id: "gpt-5:xhigh" }],
+		[
+			base,
+			{ provider: "openai", id: "gpt-5:xhigh-preview" },
+			{ provider: "openai", id: "gpt-5:xhigh-next" },
+		],
+	];
+	for (const catalog of catalogs) {
+		for (const availableModels of [catalog, [...catalog].reverse()]) {
+			expect(() =>
+				toSpawnMapping(definition(), {
+					cwd: "/tmp/x",
+					availableModels,
+					model: "gpt-5:xhigh",
+				}),
+			).toThrow("ambiguous");
+		}
+	}
+});
+
+test("missing bases and unknown suffixes receive actionable diagnostics, not qualification hints", () => {
+	const options = { cwd: "/tmp/x", availableModels: AVAILABLE };
+	expect(() => toSpawnMapping(definition(), { ...options, model: "openai/missing:xhigh" })).toThrow(
+		'Agent "scout" requests model "openai/missing:xhigh" (base "openai/missing"), which is not available in this session',
+	);
+	for (const suffix of ["turbo", "", "XHIGH"]) {
+		expect(() =>
+			toSpawnMapping(definition(), { ...options, model: `openai/gpt-5:${suffix}` }),
+		).toThrow("thinking suffixes: off, minimal, low, medium, high, xhigh, max");
+	}
+	expect(() => toSpawnMapping(definition(), { ...options, model: "openai/missing" })).toThrow(
+		'Agent "scout" requests model "openai/missing", which is not available in this session',
+	);
+});
+
+test.each([
+	"off",
+	"minimal",
+	"low",
+	"medium",
+	"high",
+	"xhigh",
+	"max",
+] as const)("%s is supported on qualified, exact and unique-prefix model references from either source", (thinking) => {
+	for (const ref of ["openai/gpt-5", "gpt-5", "gpt"]) {
+		for (const source of ["definition", "invocation"]) {
+			const model = `${ref}:${thinking}`;
+			const mapping = toSpawnMapping(definition(source === "definition" ? { model } : {}), {
+				cwd: "/tmp/x",
+				availableModels: AVAILABLE,
+				model,
+			});
+			expect(mapping.session.model).toEqual({ provider: "openai", id: "gpt-5" });
+			expect(mapping.session.thinkingLevel).toBe(thinking);
+		}
+	}
+});
+
+test("literal colon IDs and whole-reference prefixes keep their existing meaning", () => {
+	for (const literal of [
+		{ provider: "openai", id: "gpt-5:xhigh" },
+		{ provider: "openai", id: "gpt-5:free" },
+		{ provider: "openrouter", id: "vendor/model:free" },
+	]) {
+		const mapping = toSpawnMapping(definition(), {
+			cwd: "/tmp/x",
+			availableModels: [...AVAILABLE, literal],
+			model: `${literal.provider}/${literal.id}`,
+		});
+		expect(mapping.session.model).toEqual(literal);
+		expect(mapping.session.thinkingLevel).toBeUndefined();
+	}
+	for (const id of ["gpt-5:xhigh", "gpt-5:xhigh-preview"]) {
+		const literal = { provider: "openai", id };
+		const mapping = toSpawnMapping(definition(), {
+			cwd: "/tmp/x",
+			availableModels: [...AVAILABLE, literal],
+			model: "gpt-5:xhigh",
+		});
+		expect(mapping.session.model).toEqual(literal);
+		expect(mapping.session.thinkingLevel).toBeUndefined();
+	}
+});
+
+test("a suffix may follow a literal colon/slash ID, but is never recursively stripped", () => {
+	const literal = { provider: "openrouter", id: "vendor/model:low" };
+	const options = { cwd: "/tmp/x", availableModels: [...AVAILABLE, literal] };
+	const mapping = toSpawnMapping(definition(), {
+		...options,
+		model: "openrouter/vendor/model:low:xhigh",
+	});
+	expect(mapping.session.model).toEqual(literal);
+	expect(mapping.session.thinkingLevel).toBe("xhigh");
+	for (const model of ["openai/gpt-5:low:xhigh", ":xhigh"]) {
+		expect(() =>
+			toSpawnMapping(definition(), {
+				cwd: "/tmp/x",
+				availableModels: [{ provider: "openai", id: "gpt-5" }],
+				model,
+			}),
+		).toThrow("not available");
+	}
+});
+
+test("suffix bases retain exact matching, qualification and ambiguity safety", () => {
+	const mirrored = [...AVAILABLE, { provider: "proxy", id: "gpt-5" }];
+	for (const availableModels of [mirrored, [...mirrored].reverse()]) {
+		for (const model of ["gpt-5:xhigh", "gpt:xhigh", "claude-:low"]) {
+			expect(() => toSpawnMapping(definition(), { cwd: "/tmp/x", availableModels, model })).toThrow(
+				'ambiguous — qualify it as "provider/id"',
+			);
+		}
+		const mapping = toSpawnMapping(definition(), {
+			cwd: "/tmp/x",
+			availableModels,
+			model: "proxy/gpt-5:xhigh",
+		});
+		expect(mapping.session.model).toEqual({ provider: "proxy", id: "gpt-5" });
+	}
+	for (const model of ["openai/gpt:xhigh", "OPENAI/gpt-5:xhigh", " openai/gpt-5:xhigh"]) {
+		expect(() =>
+			toSpawnMapping(definition(), { cwd: "/tmp/x", availableModels: AVAILABLE, model }),
+		).toThrow("not available");
+	}
+});
+
+test("a definition pin wins without resolving the invocation model or its thinking suffix", () => {
+	for (const model of ["unobtanium", "openai/gpt-5:xhigh", "unobtanium:turbo"]) {
+		const mapping = toSpawnMapping(definition({ model: "claude-haiku-4-5" }), {
+			cwd: "/tmp/x",
+			availableModels: AVAILABLE,
+			model,
+		});
+		expect(mapping.session.model).toEqual({ provider: "anthropic", id: "claude-haiku-4-5" });
+		expect(mapping.session.thinkingLevel).toBeUndefined();
+	}
+	const mapping = toSpawnMapping(definition({ model: "claude-haiku-4-5:low" }), {
 		cwd: "/tmp/x",
 		availableModels: AVAILABLE,
-		model: "unobtanium",
+		model: "openai/gpt-5:xhigh",
 	});
-	expect(mapping.session.model).toEqual({ provider: "anthropic", id: "claude-haiku-4-5" });
+	expect(mapping.session.thinkingLevel).toBe("low");
+});
+
+test("explicit definition thinking overrides either source's suffix, including off", () => {
+	for (const thinking of ["off", "low"] as const) {
+		for (const pinned of [true, false]) {
+			const mapping = toSpawnMapping(
+				definition({ thinking, ...(pinned ? { model: "openai/gpt-5:xhigh" } : {}) }),
+				{ cwd: "/tmp/x", availableModels: AVAILABLE, model: "openai/gpt-5:xhigh" },
+			);
+			expect(mapping.session.thinkingLevel).toBe(thinking);
+		}
+		const inherited = toSpawnMapping(definition({ thinking }), {
+			cwd: "/tmp/x",
+			availableModels: AVAILABLE,
+		});
+		expect(inherited.session.model).toBeUndefined();
+		expect(inherited.session.thinkingLevel).toBe(thinking);
+	}
 });
 
 test("an unpinned definition inherits the parent: no model/thinking/tools in the options", () => {
@@ -151,6 +319,16 @@ test("an unavailable or ambiguous per-call model throws loud", () => {
 			}),
 		).toThrow(`requests model "${model}"`);
 	}
+});
+
+test("an unavailable pin cannot fall back to a valid invocation model", () => {
+	expect(() =>
+		toSpawnMapping(definition({ model: "openai/missing:xhigh" }), {
+			cwd: "/tmp/x",
+			availableModels: AVAILABLE,
+			model: "openai/gpt-5:low",
+		}),
+	).toThrow('pins model "openai/missing:xhigh" (base "openai/missing"), which is not available');
 });
 
 test("a pinned model that matches nothing throws loud", () => {

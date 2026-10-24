@@ -17,6 +17,7 @@ import {
 import { Type } from "typebox";
 import { type AgentDefinition, discoverAgentDefinitions } from "./definitions";
 import { RECURSION_GUARD_TOOLS, toSpawnMapping } from "./mapping";
+import { THINKING_LEVELS } from "./thinking";
 
 export const SUBAGENT_COMPLETION_MESSAGE = "subagent-completion";
 
@@ -48,8 +49,10 @@ function agentListLines(definitions: AgentDefinition[]): string {
 	return definitions
 		.map((d) => {
 			const model = d.model === undefined ? "call or parent" : `pinned ${d.model}`;
+			const thinking =
+				d.thinking === undefined ? "" : `; thinking: ${d.thinking} (overrides suffix)`;
 			const tools = d.tools?.join(", ") ?? "pi defaults: read, bash, edit, write";
-			return `- "${d.name}" (${d.source}): ${d.description} [model: ${model}; tools: ${tools}]`;
+			return `- "${d.name}" (${d.source}): ${d.description} [model: ${model}${thinking}; tools: ${tools}]`;
 		})
 		.join("\n");
 }
@@ -176,8 +179,12 @@ The subagent works autonomously and non-interactively: give it one complete, sel
 calls in ONE message to run subagents in parallel; sequence dependent steps yourself across turns.
 Set run_in_background for long tasks — you get the session id immediately, a completion message
 arrives when it finishes, and get_subagent_result fetches the result on demand. Set model to choose
-an available model for an unpinned agent; a definition's pinned model always wins. Subagents cannot
-call MCP tools (mcp__*, tool_search, the MCP resource tools): call those yourself and put what the
+an available model for an unpinned agent; a definition's pinned model always wins, ignoring the
+invocation model and its suffix. A model reference with no whole-reference match may end in
+:<thinking> (${THINKING_LEVELS.join(", ")}). Whole-reference matches keep their meaning;
+ambiguous references fail rather than being reinterpreted. Explicit definition thinking overrides
+a suffix; without either, thinking inherits the parent. Pi clamps thinking to model capabilities.
+Subagents cannot call MCP tools (mcp__*, tool_search, the MCP resource tools): call those yourself and put what the
 subagent needs in the task.
 
 Available subagent types:
@@ -192,7 +199,7 @@ ${known}`,
 					model: Type.Optional(
 						Type.String({
 							description:
-								'Available model for an unpinned agent, preferably "provider/id"; a definition pin wins',
+								'Available model for an unpinned agent: "provider/id" or "provider/id:thinking". Whole-reference matches win; a definition pin ignores this value, and definition thinking overrides a suffix.',
 						}),
 					),
 					run_in_background: Type.Optional(

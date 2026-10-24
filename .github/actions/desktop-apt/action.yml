@@ -1,25 +1,35 @@
 name: Install Linux desktop runtime packages
 description: >-
-  Installs the GTK/WebKitGTK packages the Linux desktop build and smoke need, through a .deb cache keyed by
-  this file and the runner image version.
+  Installs the GTK/WebKitGTK packages the Linux desktop build and smoke need, through a .deb cache keyed by the
+  exact package versions apt plans to install.
 
 runs:
   using: composite
   steps:
-    - id: image
+    - id: plan
       shell: bash
-      run: echo "version=$ImageOS-$ImageVersion" >> "$GITHUB_OUTPUT"
+      env:
+        PACKAGES: dbus-x11 x11-utils xvfb libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2
+      run: |
+        read -ra packages <<< "$PACKAGES"
+        sudo apt-get update
+        plan=$(apt-get -s install --no-install-recommends "${packages[@]}" | { grep '^Inst ' || true; } | sort)
+        {
+          echo "packages=$PACKAGES"
+          echo "key=desktop-apt-$(sha256sum <<< "$plan" | cut -c1-16)"
+        } >> "$GITHUB_OUTPUT"
     - uses: actions/cache@v5
       with:
         path: ~/.cache/desktop-apt
-        key: desktop-apt-${{ hashFiles('.github/actions/desktop-apt/action.yml') }}-${{ steps.image.outputs.version }}
-        restore-keys: desktop-apt-${{ hashFiles('.github/actions/desktop-apt/action.yml') }}-
+        key: ${{ steps.plan.outputs.key }}
+        restore-keys: desktop-apt-
     - shell: bash
+      env:
+        PACKAGES: ${{ steps.plan.outputs.packages }}
       run: |
+        read -ra packages <<< "$PACKAGES"
         cache=~/.cache/desktop-apt
         mkdir -p "$cache/partial"
-        sudo apt-get update
-        sudo apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$cache" \
-          dbus-x11 x11-utils xvfb libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2
+        sudo apt-get install -y --no-install-recommends -o Dir::Cache::Archives="$cache" "${packages[@]}"
         sudo apt-get autoclean -o Dir::Cache::Archives="$cache"
         sudo chown -R "$(id -u):$(id -g)" "$cache"

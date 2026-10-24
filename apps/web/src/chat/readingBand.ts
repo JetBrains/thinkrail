@@ -177,6 +177,7 @@ export function createReadingBandController(
 	let nativeInputPending = false;
 	let settlementAfterInput = false;
 	let nativeInputToken = 0;
+	let anchorCorrectionDeferred = false;
 
 	const publish = (patch: Partial<ReadingBandState>) => {
 		const next = { ...state, ...patch };
@@ -271,6 +272,7 @@ export function createReadingBandController(
 		frame = null;
 		const active = motion;
 		if (!active) return;
+		anchorCorrectionDeferred = false;
 		if (
 			(active.requireFollowing && !state.following) ||
 			(active.requireStreaming && !state.streaming)
@@ -579,8 +581,20 @@ export function createReadingBandController(
 
 	const refreshAnchor = () => {
 		if (motion?.kind !== "anchor") return;
+		anchorCorrectionDeferred = false;
 		const target = boundedScrollTarget(motion.scrollTarget);
 		if (target !== null) environment.writeScrollTop(target);
+	};
+
+	const applyDeferredAnchor = () => {
+		if (!anchorCorrectionDeferred) return;
+		anchorCorrectionDeferred = false;
+		if (motion?.kind !== "anchor") return;
+		const target = boundedScrollTarget(motion.scrollTarget);
+		const bounds = environment.readScrollBounds();
+		if (target !== null && bounds && Math.abs(target - bounds.scrollTop) > GEOMETRY_EPSILON) {
+			environment.writeScrollTop(target);
+		}
 	};
 
 	const startSettlementReturn = () =>
@@ -732,6 +746,7 @@ export function createReadingBandController(
 	};
 
 	const interruptForNativeInput = (pauseState: "stationary" | "pending" = "stationary") => {
+		applyDeferredAnchor();
 		nativeInputToken += 1;
 		const token = nativeInputToken;
 		nativeInputPending = true;
@@ -873,6 +888,7 @@ export function createReadingBandController(
 		interruptForNativeInput,
 		cancelReveal: () => {
 			if (motion?.kind !== "anchor" && motion?.kind !== "reveal") return;
+			applyDeferredAnchor();
 			cancelMotion();
 			reconcileReaderRoom();
 		},
@@ -898,6 +914,7 @@ export function createReadingBandController(
 				stabilityFrames: EDGE_STABILITY_FRAMES,
 				instantScroll: true,
 			});
+			anchorCorrectionDeferred = true;
 		},
 		refreshAnchor,
 		readerLeft: () => {

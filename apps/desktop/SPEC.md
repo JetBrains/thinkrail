@@ -389,7 +389,7 @@ drivers and assertions live in the test package, which product code never import
 The package pins the Electrobun `2.0.1` npm bootstrap as a build-only dependency. That exact pin selects
 its paired Hutch toolchain and SDK; direct global Hutch invocation and floating version overrides are not
 part of the build path. The application explicitly selects the real Bun main process, not the default
-Cottontail runtime. The packaged Bun is `1.4.3`, selected by `build.bun.version` rather than
+Cottontail runtime. The packaged Bun is `1.4.4`, selected by `build.bun.version` rather than
 Electrobun's default `1.4.0`. Hutch resolves that field like the other toolchain versions
 (`configuredToolchainVersion`), but `ElectrobunConfig` does not type it, so the config passes the Bun
 block as a named value. `buildConfig.test.ts` asserts that it equals the root `packageManager` pin, which
@@ -462,8 +462,10 @@ updating is integrated below; feed publication remains release-owned and gated b
 ### Signing
 
 Signing and notarization use JetBrains-provided services through the private release coordinator;
-public builds contain neither service credentials nor a new Apple-login/keychain flow. Current Windows
-coverage signs the setup stub without rewriting its hash-keyed adjacent payload.
+public builds contain neither service credentials nor a new Apple-login/keychain flow. Windows coverage
+signs the setup stub and every PE file in its adjacent payload, so the launcher, `bun.exe`, the framework
+DLLs and the bundled `uninstall` helper that installs and applies updates all carry a JetBrains signature.
+The private pipeline repacks the payload around the signed bytes ([[module-ci-release]]).
 
 The native macOS build also exposes Electrobun's standard expanded `.app.tar.zst` as a private signing
 input. The approved JetBrains SRE flow signs the expanded app and finalizes a conventional DMG around it,

@@ -1,5 +1,6 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import type { ReviewAnchor } from "@thinkrail/contracts";
+import * as diff from "diff";
 import { anchorLabel } from "../../registry";
 import {
 	alignNotebookCells,
@@ -257,9 +258,12 @@ test("200 disjoint notebook cells align within the bounded similarity budget", (
 		}));
 	const original = parsedCells(cells("original"), 4);
 	const modified = parsedCells(cells("modified"), 4);
-	const started = performance.now();
-	const aligned = alignNotebookCells(original, modified);
-	const elapsed = performance.now() - started;
-	expect(aligned).toHaveLength(400);
-	expect(elapsed).toBeLessThan(200);
+	const lineDiffs = spyOn(diff, "diffArrays");
+	try {
+		const aligned = alignNotebookCells(original, modified);
+		expect(aligned).toHaveLength(400);
+		expect(lineDiffs.mock.calls.length).toBeLessThan(original.length);
+	} finally {
+		lineDiffs.mockRestore();
+	}
 });
