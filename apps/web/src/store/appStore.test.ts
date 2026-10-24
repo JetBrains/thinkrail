@@ -377,6 +377,10 @@ test("stats refresh ticks survive batching at finalized Pi state boundaries", ()
 	expect(rt("a").statsRefreshTick).toBe(3);
 	store.handlePiEvent(toolEnd("t1", {}), "a");
 	expect(rt("a").statsRefreshTick).toBe(3);
+	store.handlePiEvent({ type: "entry_appended", entryType: "custom" }, "a");
+	expect(rt("a").statsRefreshTick).toBe(3);
+	store.handlePiEvent({ type: "entry_appended", entryType: "usage" }, "a");
+	expect(rt("a").statsRefreshTick).toBe(4);
 });
 
 test("a host-fired USER message folds into the transcript; the composer's optimistic twin doesn't duplicate", () => {

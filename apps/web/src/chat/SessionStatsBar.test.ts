@@ -32,6 +32,12 @@ describe("SessionStatsBar pi-style formatting", () => {
 		]);
 	});
 
+	it("switches units by the rounded value so no label reads 10.0k or 1000k", () => {
+		expect(
+			[9_949, 9_950, 9_999, 999_499, 999_500, 999_999, 9_949_999, 9_950_000].map(formatTokens),
+		).toEqual(["9.9k", "10k", "10k", "999k", "1.0M", "1.0M", "9.9M", "10M"]);
+	});
+
 	it("orders the available pi fields and omits zero values", () => {
 		expect(
 			usageParts(

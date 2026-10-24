@@ -114,7 +114,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   - the local render union **`PiEvent`** — the real superset `AgentSessionEvent` lives in the Node-only
     `pi-coding-agent`, so it's **mirrored** here (the `agent_end.willRetry` + `agent_settled` /
     `queue_update` / `compaction_*` / `auto_retry_*` / `summarization_retry_*` /
-    `session_info_changed` / `thinking_level_changed` members, plus `bash_execution_update` — mirrored
+    `session_info_changed` / `thinking_level_changed` / host-projected `entry_appended { entryType }`
+    members, plus `bash_execution_update` — mirrored
     for union fidelity only; the host never calls `executeBash`, so the UI never receives it).
     Every message an event carries (`message_*`, `turn_end`, `agent_end.messages`) is typed as
     **`WireAgentMessage`** — `TranscriptMessage` plus the `WireBranchSummary` / `WireBashExecution`

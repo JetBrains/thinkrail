@@ -14,12 +14,13 @@ import {
 	type DelegationRunDetails as WireRunDetails,
 } from "@thinkrail/contracts";
 import { errorCodeOf } from "@thinkrail/shared/codedError";
-import type { DelegationRunDetails as CoreRunDetails } from "pi-delegation";
+import { type DelegationRunDetails as CoreRunDetails, delegationSessionDir } from "pi-delegation";
 import { SUBAGENT_COMPLETION_MESSAGE } from "pi-subagents";
 import {
 	createSession,
 	deleteSession,
 	disposeAllSessions,
+	getSessionStats,
 	liveParentContext,
 	removeSession,
 	removeWorkspaceSessions,
@@ -31,6 +32,7 @@ import {
 	delegationRootDir,
 	delegationServiceFor,
 	readChildTranscript,
+	reconcileSessionSubagentUsage,
 	refreshSubagentConcurrency,
 	setSubagentConcurrencyResolver,
 } from "./delegation";
@@ -192,6 +194,139 @@ function gatedChildResponse(): { release: () => void } {
 	]);
 	return { release };
 }
+
+test("a child run's usage delta lands in the parent's pi totals and invalidates its stats", async () => {
+	const cwd = tmpDir("trdel-usage-");
+	let parentManager: SessionManager | undefined;
+	setSessionManagerFactory((dir) => {
+		parentManager = SessionManager.inMemory(dir);
+		return parentManager;
+	});
+	const { sessionId } = await createSession({ cwd, workspaceId: "ws-usage" });
+	setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+	const published: unknown[] = [];
+	setSessionPublisher((payload) => {
+		if (payload.sessionId === sessionId) published.push(payload.event);
+	});
+	try {
+		expect(getSessionStats(sessionId).tokens.total).toBe(0);
+		faux.setResponses([fauxAssistantMessage("CHILD_DONE")]);
+		const child = await delegationServiceFor("ws-usage").createChild({
+			parent: sessionId,
+			visibility: "hidden",
+			info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
+			session: { systemPrompt: "You are a test scout." },
+		});
+		const { usage } = (await child.runQueued("Report.")).details;
+		expect(usage.input + usage.output).toBeGreaterThan(0);
+
+		const { tokens } = getSessionStats(sessionId);
+		expect(tokens).toMatchObject({
+			input: usage.input,
+			output: usage.output,
+			cacheRead: usage.cacheRead,
+			cacheWrite: usage.cacheWrite,
+		});
+		const recorded = parentManager?.getEntries().filter((entry) => entry.type === "usage");
+		expect(recorded).toMatchObject([
+			{ kind: "subagent", provider: "faux", model: "faux", note: child.sessionId },
+		]);
+		expect(published).toContainEqual({ type: "entry_appended", entryType: "usage" });
+
+		await reconcileSessionSubagentUsage("ws-usage", sessionId, () => parentManager?.getEntries());
+		expect(parentManager?.getEntries().filter((entry) => entry.type === "usage")).toHaveLength(1);
+	} finally {
+		setSessionPublisher(() => {});
+		await removeSession(sessionId);
+	}
+});
+
+async function parentWithGatedChild(workspaceId: string) {
+	let parentManager: SessionManager | undefined;
+	setSessionManagerFactory((dir) => {
+		parentManager = SessionManager.inMemory(dir);
+		return parentManager;
+	});
+	const cwd = tmpDir(`trdel-${workspaceId}-`);
+	const { sessionId } = await createSession({ cwd, workspaceId });
+	setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+	const { release } = gatedChildResponse();
+	const child = await delegationServiceFor(workspaceId).createChild({
+		parent: sessionId,
+		visibility: "hidden",
+		info: { createdBy: "tool:Agent", roleName: "scout", roleSource: "builtin" },
+		session: { systemPrompt: "You are a test scout." },
+	});
+	const run = child.runQueued("Long background job.");
+	await waitFor(() => child.snapshot?.status === "running");
+	const usageEntries = () =>
+		parentManager?.getEntries().filter((entry) => entry.type === "usage") ?? [];
+	return { cwd, sessionId, child, run, release, usageEntries };
+}
+
+test("attaching a chat recovers the spend of children a crashed host never recorded", async () => {
+	const cwd = tmpDir("trdel-crash-");
+	let parentManager: SessionManager | undefined;
+	let orphanId = "";
+	setSessionManagerFactory((dir) => {
+		parentManager = SessionManager.inMemory(dir);
+		const orphan = SessionManager.create(
+			cwd,
+			delegationSessionDir(delegationRootDir(), "ws-crash", parentManager.getSessionId()),
+		);
+		orphan.appendMessage({ role: "user", content: "Long job.", timestamp: Date.now() });
+		orphan.appendMessage({
+			...fauxAssistantMessage("partial"),
+			provider: "faux",
+			model: "faux",
+			usage: {
+				input: 120,
+				output: 30,
+				cacheRead: 4_000,
+				cacheWrite: 500,
+				totalTokens: 4_650,
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.25 },
+			},
+		});
+		orphanId = orphan.getSessionId();
+		return parentManager;
+	});
+	const { sessionId } = await createSession({ cwd, workspaceId: "ws-crash" });
+	setSessionManagerFactory((dir) => SessionManager.inMemory(dir));
+	try {
+		await waitFor(() => getSessionStats(sessionId).tokens.total > 0);
+		expect(getSessionStats(sessionId)).toMatchObject({
+			tokens: { input: 120, output: 30, cacheRead: 4_000, cacheWrite: 500 },
+			cost: 0.25,
+		});
+		const usageEntries = () => parentManager?.getEntries().filter((e) => e.type === "usage");
+		expect(usageEntries()).toMatchObject([
+			{ kind: "subagent", provider: "faux", model: "faux", note: orphanId },
+		]);
+		await reconcileSessionSubagentUsage("ws-crash", sessionId, () => parentManager?.getEntries());
+		expect(usageEntries()).toHaveLength(1);
+	} finally {
+		await removeSession(sessionId);
+	}
+});
+
+test("closing a chat still records the usage of a child its cascade stops", async () => {
+	const { sessionId, child, run, release, usageEntries } = await parentWithGatedChild("ws-close");
+	const closed = removeSession(sessionId);
+	await waitFor(() => liveParentContext(sessionId) === undefined);
+	release();
+	await Promise.all([closed, run]);
+	expect(usageEntries()).toMatchObject([{ kind: "subagent", note: child.sessionId }]);
+});
+
+test("deleting a chat never appends usage to its trashed transcript", async () => {
+	const { cwd, sessionId, run, release, usageEntries } = await parentWithGatedChild("ws-delusage");
+	const deleted = deleteSession(sessionId, "ws-delusage", cwd);
+	await waitFor(() => liveParentContext(sessionId) === undefined);
+	release();
+	await Promise.all([deleted, run]);
+	expect(usageEntries()).toEqual([]);
+});
 
 test("owned children remain inspectable before and during their first provider response", async () => {
 	const cwd = tmpDir("trdel-prefile-");

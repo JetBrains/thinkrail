@@ -633,7 +633,8 @@ function invalidatesSessionStats(event: PiEvent): boolean {
 	return (
 		event.type === "message_end" ||
 		event.type === "compaction_end" ||
-		event.type === "agent_settled"
+		event.type === "agent_settled" ||
+		(event.type === "entry_appended" && event.entryType === "usage")
 	);
 }
 

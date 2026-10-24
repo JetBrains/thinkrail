@@ -120,6 +120,11 @@ full-output paths; run `mcp/results.test.ts`, `mcpEngine.test.ts`, web MCP card 
   discovery and prompt-template/frontmatter rules where public APIs cannot serve its read/edit UI.
   Prefer public discovery/parsing APIs when they meet those needs; retain parity coverage in history,
   template and composer tests until then.
+- **Subagent usage totals from child transcripts** — [[submodule-server-agent]], `subagentUsage.ts`.
+  Pi's session-total loop (`AgentSession.getSessionStats`) is not exported for a bare session file, so
+  the host mirrors which entries carry spend (`usage`, compaction/branch-summary `usage`, assistant and
+  tool-result message usage) to reconcile crashed child runs. Remove the mirror when pi exports a totals
+  helper over entries or a file; `delegation.test.ts` pins parity with pi's own run delta.
 
 ## Not temporary SDK workarounds
 

@@ -80,3 +80,21 @@ test("tool results without structuredContent pass through by identity", () => {
 	);
 	expect(projected.type === "tool_execution_end" && projected.result).toBe(result);
 });
+
+test("entry_appended carries only the appended entry's type", () => {
+	const projected = projectSessionEvent(
+		{
+			type: "entry_appended",
+			entry: {
+				type: "custom",
+				id: "entry-1",
+				parentId: null,
+				timestamp: "2026-10-24T00:00:00.000Z",
+				customType: "extension-state",
+				data: { secret: "not-for-the-wire" },
+			},
+		},
+		null,
+	);
+	expect(projected).toEqual({ type: "entry_appended", entryType: "custom" });
+});

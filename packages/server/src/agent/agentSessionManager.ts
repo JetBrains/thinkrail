@@ -2,7 +2,7 @@ import { createReadStream, existsSync, rmSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
-import { clampThinkingLevel, getSupportedThinkingLevels } from "@earendil-works/pi-ai";
+import { clampThinkingLevel, getSupportedThinkingLevels, type Usage } from "@earendil-works/pi-ai";
 import {
 	type AgentSession,
 	type CreateAgentSessionOptions,
@@ -89,6 +89,7 @@ import { publishSessionResourcesChanged } from "./chatResources";
 import {
 	disposeSessionChildren,
 	hasLiveSessionChildren,
+	reconcileSessionSubagentUsage,
 	removeWorkspaceDelegation,
 	stopSessionChildren,
 	subagentsFor,
@@ -180,6 +181,7 @@ const workspaceLifecycleGenerations = new Map<string, number>();
 const closingWorkspaces = new Map<string, number>();
 const pendingSessionPreparations = new Map<string, Set<Promise<unknown>>>();
 const sessionTeardowns = new Map<string, Promise<void>>();
+const tearingDownEntries = new Map<string, Entry>();
 
 interface WorkspaceLifecycleToken {
 	global: number;
@@ -1236,6 +1238,11 @@ async function registerSession(
 	restartMcpStatus(session.sessionId);
 	commands.flushCompletions();
 	subagents.flushCompletions();
+	void reconcileSessionSubagentUsage(workspaceId, session.sessionId, () =>
+		usageWritableEntry(session.sessionId)?.session.sessionManager.getEntries(),
+	).catch((error: unknown) =>
+		log.warn(`subagent usage was not reconciled for ${session.sessionId}`, error as Error),
+	);
 	log.debug(`session ${session.sessionId} attached (workspace ${workspaceId})`);
 	if (announceCreation) {
 		publishCreated(summaryOf(session.sessionId, prepared.entry));
@@ -2376,7 +2383,7 @@ export function setSessionThinkingLevel(sessionId: string, level: ThinkingLevel)
 export function getSessionStats(sessionId: string): SessionStats {
 	const session = mustGet(sessionId);
 	const stats = session.getSessionStats();
-	const contextUsage = stats.contextUsage ?? session.getContextUsage();
+	const { contextUsage } = stats;
 	return {
 		sessionId: stats.sessionId,
 		totalMessages: stats.totalMessages,
@@ -2390,6 +2397,22 @@ export function getSessionStats(sessionId: string): SessionStats {
 		cost: stats.cost,
 		...(contextUsage ? { contextUsage } : {}),
 	};
+}
+
+function usageWritableEntry(sessionId: string): Entry | undefined {
+	if (hasDeletionTombstone(sessionId)) return undefined;
+	return sessions.get(sessionId) ?? tearingDownEntries.get(sessionId);
+}
+
+export function recordSessionUsage(
+	sessionId: string,
+	record: { kind: string; provider: string; model: string; usage: Usage; note?: string },
+): void {
+	const entry = usageWritableEntry(sessionId);
+	if (!entry) return;
+	const { kind, provider, model, usage, note } = record;
+	entry.session.sessionManager.appendUsage(kind, provider, model, usage, note);
+	publish({ sessionId, event: { type: "entry_appended", entryType: "usage" } });
 }
 
 export interface McpSessionView {
@@ -2649,6 +2672,10 @@ function disposeSession(sessionId: string): Promise<void> {
 	if (!entry) return Promise.resolve();
 	entry.disposed = true;
 	const cascade = trackSessionTeardown(sessionId, closeSessionResources(entry));
+	tearingDownEntries.set(sessionId, entry);
+	void cascade.finally(() => {
+		if (tearingDownEntries.get(sessionId) === entry) tearingDownEntries.delete(sessionId);
+	});
 	cancelExtUiForSession(sessionId);
 	forgetMcpStatus(sessionId);
 	entry.askUserQuestionWaiters.abandon();
