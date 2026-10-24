@@ -3,6 +3,8 @@ import {
 	RiCircleFill,
 	RiSettings3Line as Settings,
 } from "@remixicon/react";
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useState } from "react";
 import { NotificationPermissionPrompt, useAttentionNotifications } from "../notifications";
@@ -11,7 +13,7 @@ import { InterviewPromptDialog } from "../panels/InterviewPromptDialog";
 import { NewWorkspaceDialog } from "../panels/NewWorkspaceDialog";
 import { SettingsDialog } from "../panels/SettingsDialog";
 import { Toaster } from "../panels/Toaster";
-import { useOpenBranchReview } from "../panels/useOpenBranchReview";
+import { useBranchStatus } from "../panels/useBranchStatus";
 import {
 	SettingsSection,
 	selectActiveWorkspace,
@@ -26,7 +28,7 @@ import {
 	writeThemeHint,
 } from "../themes";
 import { type ConnectionStatus, runHostUpdate, supportsHostUpdateRun } from "../transport";
-import { UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
+import { UpdateInstallSurfaces, UpdateReadyButton, UpdateSettings, useUpdates } from "../updates";
 import { AppShortcuts } from "./AppShortcuts";
 import { BrandLogo } from "./BrandLogo";
 import { JbcentralQuotaTopbar } from "./JbcentralQuotaTopbar";
@@ -42,11 +44,11 @@ import { useGlobalHotkeys } from "./useGlobalHotkeys";
 import { useNativeWindowControls } from "./useNativeWindowControls";
 import { WorkspaceWorkbench } from "./WorkspaceWorkbench";
 
-const STATUS_LABEL: Record<ConnectionStatus, string> = {
-	connected: "Connected",
-	connecting: "Connecting…",
-	disconnected: "Disconnected",
-};
+const STATUS_LABEL = {
+	connected: "shell.connection.connected",
+	connecting: "shell.connection.connecting",
+	disconnected: "shell.connection.disconnected",
+} satisfies Record<ConnectionStatus, MessageKey>;
 
 const STATUS_DOT: Record<ConnectionStatus, string> = {
 	connected: "text-feedback-success",
@@ -55,6 +57,7 @@ const STATUS_DOT: Record<ConnectionStatus, string> = {
 };
 
 export function Shell() {
+	const t = useT();
 	useLocalLayoutState();
 	useAttentionNotifications();
 	const status = useAppStore((s) => s.status);
@@ -63,7 +66,13 @@ export function Shell() {
 	const activeWorkspaceId = useAppStore((s) => s.activeWorkspaceId);
 	const activeWorkspace = useAppStore(selectActiveWorkspace);
 	const contextProject = useAppStore(selectContextProject);
-	const { review: openReview, url: openReviewUrl } = useOpenBranchReview(activeWorkspace, status);
+	const {
+		review: openReview,
+		url: openReviewUrl,
+		status: branchStatus,
+		noteOpenReview,
+		refreshBranchStatus,
+	} = useBranchStatus(activeWorkspace, status, { pollChecks: true });
 	const locationReview =
 		openReview && openReviewUrl ? { ...openReview, url: openReviewUrl } : openReview;
 	const hasActiveWorkspace = activeWorkspaceId != null;
@@ -144,6 +153,9 @@ export function Shell() {
 							project={contextProject}
 							workspace={activeWorkspace}
 							review={activeWorkspace ? locationReview : null}
+							branchStatus={branchStatus}
+							noteOpenReview={noteOpenReview}
+							refreshBranchStatus={refreshBranchStatus}
 							onNewWorkspace={() => setNewWorkspaceProjectId(contextProject.id)}
 						/>
 					) : null}
@@ -163,7 +175,7 @@ export function Shell() {
 						data-testid="connection-status"
 						data-status={status}
 						role="status"
-						aria-label={STATUS_LABEL[status]}
+						aria-label={t(STATUS_LABEL[status])}
 						className="inline-flex items-center gap-8 tr-text-ui text-text-muted"
 					>
 						<StatusDot
@@ -171,14 +183,20 @@ export function Shell() {
 							className={`size-8 shrink-0 fill-current ${STATUS_DOT[status]}`}
 						/>
 						<span aria-hidden="true" className="hidden sm:inline">
-							{STATUS_LABEL[status]}
+							{t(STATUS_LABEL[status])}
 						</span>
 					</span>
-					<IconTooltip label={settingsShortcut ? `Settings (${settingsShortcut})` : "Settings"}>
+					<IconTooltip
+						label={
+							settingsShortcut
+								? t("shell.topbar.settingsWithShortcut", { shortcut: settingsShortcut })
+								: t("shell.topbar.settings")
+						}
+					>
 						<button
 							type="button"
 							data-testid="open-settings"
-							aria-label="Settings"
+							aria-label={t("shell.topbar.settings")}
 							onClick={() => useAppStore.getState().openSettings()}
 							className="flex size-28 items-center justify-center rounded-sm text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 						>
@@ -231,6 +249,7 @@ export function Shell() {
 			/>
 			<NotificationPermissionPrompt />
 			<Toaster />
+			<UpdateInstallSurfaces updates={updates} />
 			<AppShortcuts />
 		</div>
 	);

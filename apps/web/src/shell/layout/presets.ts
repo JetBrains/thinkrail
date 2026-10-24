@@ -5,6 +5,8 @@ import type {
 	LayoutPresetSideRegion,
 	LayoutToolId,
 } from "@thinkrail/contracts";
+import type { MessageKey } from "@thinkrail/locales";
+import type { Translator } from "@thinkrail/locales/react";
 import { isPreviewCompatibleTabKind } from "../../lib";
 import {
 	collectAllGroups,
@@ -78,7 +80,7 @@ export const BUILTIN_LAYOUT_PRESETS: readonly LayoutPreset[] = [
 		left: side(true, 0.18, [{ id: "balanced-left", tools: ["projects"] }]),
 		right: side(true, 0.28, [
 			{ id: "balanced-right-top", tools: ["specs", "files"], weight: 1.25 },
-			{ id: "balanced-right-bottom", tools: ["changes", "review"] },
+			{ id: "balanced-right-bottom", tools: ["review"] },
 		]),
 		bottom: bottom(true, [{ id: "balanced-bottom", tools: [] }]),
 	},
@@ -87,9 +89,7 @@ export const BUILTIN_LAYOUT_PRESETS: readonly LayoutPreset[] = [
 		name: "Focus",
 		center: group("focus-primary"),
 		left: side(false, 0.18, [{ id: "focus-left", tools: ["projects"] }]),
-		right: side(false, 0.26, [
-			{ id: "focus-right", tools: ["specs", "files", "changes", "review"] },
-		]),
+		right: side(false, 0.26, [{ id: "focus-right", tools: ["specs", "files", "review"] }]),
 		bottom: bottom(false, [{ id: "focus-bottom", tools: [] }]),
 	},
 	{
@@ -98,12 +98,25 @@ export const BUILTIN_LAYOUT_PRESETS: readonly LayoutPreset[] = [
 		center: split("review-center", "vertical", group("review-primary"), group("review-secondary")),
 		left: side(true, 0.16, [{ id: "review-left", tools: ["projects"] }]),
 		right: side(true, 0.32, [
-			{ id: "review-right-main", tools: ["changes", "review"], weight: 1.4 },
+			{ id: "review-right-main", tools: ["review"], weight: 1.4 },
 			{ id: "review-right-reference", tools: ["specs", "files"] },
 		]),
 		bottom: bottom(true, [{ id: "review-bottom", tools: [] }]),
 	},
 ] as const;
+
+const BUILTIN_PRESET_NAME_KEYS: Readonly<Record<string, MessageKey>> = {
+	balanced: "workbench.preset.balanced",
+	focus: "workbench.preset.focus",
+	review: "workbench.preset.review",
+};
+
+export function layoutPresetName(t: Translator, preset: LayoutPreset): string {
+	const key = BUILTIN_LAYOUT_PRESETS.some((builtin) => builtin.id === preset.id)
+		? BUILTIN_PRESET_NAME_KEYS[preset.id]
+		: undefined;
+	return key ? t(key) : preset.name;
+}
 
 export function minimumSideGroupLimit(preset: LayoutPreset): number {
 	return Math.max(1, preset.left.groups.length, preset.right.groups.length);

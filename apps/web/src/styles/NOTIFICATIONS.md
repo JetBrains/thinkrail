@@ -73,5 +73,5 @@ goes in a `mt-12` footer.
 
 A few older error surfaces still use the tinted style, for example `ExistingWorktreeDialog` and the
 `SpecsPanel` load error. Migrate them when you next touch them, and do not copy their style into new
-notices. Markdown alert callouts (`panels/markdownAlerts`) are not notices: they deliberately mirror
+notices. Markdown alert callouts (`resource-renderers/support/markdownAlerts`) are not notices: they deliberately mirror
 GitHub's alert styling.

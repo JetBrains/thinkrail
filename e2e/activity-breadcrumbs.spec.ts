@@ -350,15 +350,23 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 			}
 			throw new Error("fold toggle did not enter the chat viewport");
 		};
-		const maximumAnchorDeviation = (toggle: Locator, top: number) =>
-			toggle.evaluate(async (element, expectedTop) => {
-				let maximum = 0;
-				for (let frame = 0; frame < 48; frame += 1) {
-					await new Promise(requestAnimationFrame);
-					maximum = Math.max(maximum, Math.abs(element.getBoundingClientRect().top - expectedTop));
-				}
-				return maximum;
-			}, top);
+		const maximumAnchorDeviation = async (anchor: Locator, top: number, activate?: Locator) =>
+			anchor.evaluate(
+				async (element, { expectedTop, toggle }) => {
+					if (toggle instanceof HTMLElement) toggle.click();
+					let maximum = 0;
+					for (let frame = 0; frame < 48; frame += 1) {
+						await new Promise(requestAnimationFrame);
+						if (!element.isConnected) throw new Error("the reading anchor was remounted");
+						maximum = Math.max(
+							maximum,
+							Math.abs(element.getBoundingClientRect().top - expectedTop),
+						);
+					}
+					return maximum;
+				},
+				{ expectedTop: top, toggle: activate ? await activate.elementHandle() : null },
+			);
 		const expectDetachedToggleAnchor = async (
 			toggle: Locator,
 			activation: "keyboard" | "pointer" = "pointer",
@@ -401,17 +409,23 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 		expect((await readChatViewportIntersection(longOutputToggle)).intersects).toBe(false);
 		const retainedPreviewTop = (await retainedPreviewAnchor.boundingBox())?.y;
 		expect(retainedPreviewTop).toBeDefined();
-		await longOutputToggle.evaluate((element) => element.click());
+		expect(
+			await maximumAnchorDeviation(
+				retainedPreviewAnchor,
+				retainedPreviewTop ?? 0,
+				longOutputToggle,
+			),
+		).toBeLessThanOrEqual(2);
 		await expect(longOutputToggle).toHaveAttribute("aria-expanded", "false");
-		expect(
-			await maximumAnchorDeviation(retainedPreviewAnchor, retainedPreviewTop ?? 0),
-		).toBeLessThanOrEqual(2);
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
-		await longOutputToggle.evaluate((element) => element.click());
-		await expect(longOutputToggle).toHaveAttribute("aria-expanded", "true");
 		expect(
-			await maximumAnchorDeviation(retainedPreviewAnchor, retainedPreviewTop ?? 0),
+			await maximumAnchorDeviation(
+				retainedPreviewAnchor,
+				retainedPreviewTop ?? 0,
+				longOutputToggle,
+			),
 		).toBeLessThanOrEqual(2);
+		await expect(longOutputToggle).toHaveAttribute("aria-expanded", "true");
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 
 		const clippedPreviewAnchor = page.getByText("coalescer regression line 30", { exact: true });
@@ -461,14 +475,16 @@ for (const order of ["oldest-first", "newest-first"] as const) {
 		expect((await readChatViewportIntersection(activityToggle)).intersects).toBe(false);
 		const anchorTop = (await offscreenAnchor.boundingBox())?.y;
 		expect(anchorTop).toBeDefined();
-		await activityToggle.evaluate((element) => element.click());
+		expect(
+			await maximumAnchorDeviation(offscreenAnchor, anchorTop ?? 0, activityToggle),
+		).toBeLessThanOrEqual(2);
 		await expect(activityToggle).toHaveAttribute("aria-expanded", "false");
-		expect(await maximumAnchorDeviation(offscreenAnchor, anchorTop ?? 0)).toBeLessThanOrEqual(2);
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 		expect((await readChatViewportIntersection(activityToggle)).intersects).toBe(false);
-		await activityToggle.evaluate((element) => element.click());
+		expect(
+			await maximumAnchorDeviation(offscreenAnchor, anchorTop ?? 0, activityToggle),
+		).toBeLessThanOrEqual(2);
 		await expect(activityToggle).toHaveAttribute("aria-expanded", "true");
-		expect(await maximumAnchorDeviation(offscreenAnchor, anchorTop ?? 0)).toBeLessThanOrEqual(2);
 		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 		await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
 
@@ -585,6 +601,7 @@ test("sticky activity breadcrumbs expose the off-screen Activity â†’ Thinking â†
 		await expect
 			.poll(async () => (await readChatScrollGeometry(chatScroll)).distanceFromEnd)
 			.toBeLessThanOrEqual(1);
+		await expect(chatScroll).toHaveAttribute("data-scroll-moving", "false");
 	};
 	await assertFollowingLatest();
 
@@ -607,9 +624,9 @@ test("sticky activity breadcrumbs expose the off-screen Activity â†’ Thinking â†
 				scroller.scrollTop +=
 					element.getBoundingClientRect().top - scroller.getBoundingClientRect().top + 80;
 			});
-			return trail.count();
+			return trail.isVisible();
 		})
-		.toBe(1);
+		.toBe(true);
 	await expect(trail).toBeVisible();
 	await expect(trail.getByTestId("activity-breadcrumb-segment")).toHaveCount(3);
 	await expect(trail.locator('[data-kind="activity"]')).toBeVisible();

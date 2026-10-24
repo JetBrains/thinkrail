@@ -1,4 +1,5 @@
 import { type CollisionDetection, pointerWithin, useDroppable } from "@dnd-kit/core";
+import type { Translator } from "@thinkrail/locales/react";
 import {
 	type ImperativePanelGroupHandle,
 	ResizableHandle,
@@ -43,6 +44,7 @@ export interface LayoutTabFocusRequest {
 	key: string;
 	location: LayoutGroupLocation;
 	tabId?: string;
+	onlyIfFocusLost?: true;
 }
 
 export interface PreparedLayoutClose {
@@ -143,6 +145,19 @@ export function isResizeArrowKey(key: string): boolean {
 	return ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(key);
 }
 
+function setLayoutFlagged(
+	group: ImperativePanelGroupHandle,
+	sizes: number[],
+	flag: { current: boolean },
+) {
+	flag.current = true;
+	try {
+		group.setLayout(sizes);
+	} finally {
+		flag.current = false;
+	}
+}
+
 export function useCommittedSizes(
 	current: readonly number[],
 	projectionEpoch: string,
@@ -172,12 +187,7 @@ export function useCommittedSizes(
 	const restore = useCallback(() => {
 		const group = groupRef.current;
 		if (!group || group.getLayout().length !== currentRef.current.length) return;
-		restoring.current = true;
-		try {
-			group.setLayout([...currentRef.current]);
-		} finally {
-			restoring.current = false;
-		}
+		setLayoutFlagged(group, [...currentRef.current], restoring);
 	}, [groupRef]);
 	const cancelStaleGesture = useCallback(() => {
 		const active = dragging.current || keyboard.current;
@@ -349,8 +359,8 @@ export function useHorizontalOverflow(
 	return overflow;
 }
 
-export function tabSearchKeywords(tab: LayoutTab): string[] {
-	const name = layoutTabName(tab);
+export function tabSearchKeywords(t: Translator, tab: LayoutTab): string[] {
+	const name = layoutTabName(t, tab);
 	switch (tab.kind) {
 		case "file":
 		case "diff":
@@ -394,7 +404,17 @@ export function railControlId(entry: AuxiliaryRailEntry): string {
 		: encodedElementId("layout-rail-control", entry.key);
 }
 
+function isFocusLost(active: Element | null): boolean {
+	return (
+		!active ||
+		active === active.ownerDocument.body ||
+		!active.isConnected ||
+		active.getClientRects().length === 0
+	);
+}
+
 export function focusLayoutRequest(request: LayoutTabFocusRequest): void {
+	if (request.onlyIfFocusLost && !isFocusLost(globalThis.document.activeElement)) return;
 	const tab = request.tabId
 		? globalThis.document.getElementById(tabDomId(request.location, request.tabId))
 		: null;

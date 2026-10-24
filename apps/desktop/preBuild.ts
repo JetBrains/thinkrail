@@ -4,6 +4,7 @@ import {
 	copyFileSync,
 	mkdirSync,
 	readdirSync,
+	readFileSync,
 	rmSync,
 	statSync,
 	writeFileSync,
@@ -11,6 +12,7 @@ import {
 import { basename, join, relative, resolve, sep } from "node:path";
 import type { BundledExtensions } from "@thinkrail/server";
 import type { BuildRuntimeSources } from "@thinkrail/server/build-support";
+import { injectChunkId, type SourceMapJson } from "./src/runtimeSourceMap";
 import { ptyLibraryName, runtimeTarget } from "./src/runtimeTarget";
 
 const desktopDir = import.meta.dir;
@@ -49,6 +51,50 @@ function resolveRuntimeSources(): BuildRuntimeSources {
 	return JSON.parse(result.stdout) as BuildRuntimeSources;
 }
 
+function sourceMapRelease(): string | null {
+	const release = process.env.THINKRAIL_SOURCEMAPS_RELEASE?.trim();
+	if (!release) return null;
+	if (!process.env.POSTHOG_CLI_API_KEY || !process.env.POSTHOG_CLI_PROJECT_ID) {
+		throw new Error(
+			"THINKRAIL_SOURCEMAPS_RELEASE needs POSTHOG_CLI_API_KEY and POSTHOG_CLI_PROJECT_ID",
+		);
+	}
+	return release;
+}
+
+function uploadRuntimeSourceMap(runtimeFile: string, release: string): void {
+	const mapFile = `${runtimeFile}.map`;
+	const injected = injectChunkId(
+		readFileSync(runtimeFile, "utf8"),
+		JSON.parse(readFileSync(mapFile, "utf8")) as SourceMapJson,
+		release,
+	);
+	writeFileSync(runtimeFile, injected.code);
+	rmSync(mapFile);
+	const uploadDir = join(stageDir, "sourcemaps");
+	mkdirSync(uploadDir, { recursive: true });
+	writeFileSync(join(uploadDir, "server-runtime.js"), injected.code);
+	writeFileSync(join(uploadDir, "server-runtime.js.map"), JSON.stringify(injected.map));
+	try {
+		runBun([
+			"run",
+			"posthog-cli",
+			"sourcemap",
+			"upload",
+			"--directory",
+			uploadDir,
+			"--release-name",
+			"thinkrail",
+			"--release-version",
+			release,
+			"--release-mode",
+			"symbol-set",
+		]);
+	} finally {
+		rmSync(uploadDir, { recursive: true, force: true });
+	}
+}
+
 function listFiles(root: string): string[] {
 	const files: string[] = [];
 	for (const name of readdirSync(root)) {
@@ -59,7 +105,12 @@ function listFiles(root: string): string[] {
 	return files;
 }
 
+const release = sourceMapRelease();
 runBun(["run", "build:web"]);
+const webMaps = listFiles(join(repoRoot, "apps", "web", "dist")).filter((file) =>
+	file.endsWith(".map"),
+);
+if (webMaps.length) throw new Error(`refusing to package web source maps: ${webMaps.join(", ")}`);
 rmSync(stageDir, { recursive: true, force: true });
 mkdirSync(runtimeDir, { recursive: true });
 const sources = resolveRuntimeSources();
@@ -85,7 +136,7 @@ try {
 	writeFileSync(
 		generatedEntry,
 		`${sources.extensions.map((extension, index) => `import factory${index} from ${JSON.stringify(extension.entry)};`).join("\n")}
-import { bootHost, registerBundledRuntime } from "@thinkrail/server";
+import { bootHost, registerBundledRuntime, reportDesktopError } from "@thinkrail/server";
 
 export async function startDesktopHost(options) {
   await registerBundledRuntime({
@@ -97,7 +148,7 @@ export async function startDesktopHost(options) {
     },
     ${bundledRuntimeKeys.webAccessFactory}: factory${sources.webAccessIndex},
   });
-  return bootHost({
+  const host = await bootHost({
     port: 0,
     host: "127.0.0.1",
     portMode: "exact",
@@ -108,20 +159,26 @@ export async function startDesktopHost(options) {
       posthogApiKey: options.posthogProjectKey,
       channel: options.channel,
       build: "desktop",
+      appRoot: options.runtimeDir + "/..",
       ...(options.openExternal ? { openExternal: options.openExternal } : {}),
     },
   });
+  return { ...host, reportError: reportDesktopError };
 }
 `,
 	);
+	const runtimeFile = join(runtimeDir, "server-runtime.ts");
 	runBun([
 		"build",
 		generatedEntry,
 		"--target=bun",
 		"--define",
 		"PI_BUNDLED_NODE=true",
-		`--outfile=${join(runtimeDir, "server-runtime.ts")}`,
+		...(release ? ["--sourcemap=external"] : []),
+		`--outdir=${runtimeDir}`,
+		`--entry-naming=${basename(runtimeFile)}`,
 	]);
+	if (release) uploadRuntimeSourceMap(runtimeFile, release);
 } finally {
 	rmSync(generatedEntry, { force: true });
 }

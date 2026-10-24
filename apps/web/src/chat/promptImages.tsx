@@ -1,5 +1,6 @@
 import { RiCloseLine as X } from "@remixicon/react";
 import { REQUEST_IMAGE_BASE64_BUDGET } from "@thinkrail/contracts";
+import { t as translate, useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	type ClipboardEvent,
@@ -77,41 +78,38 @@ export function usePromptImages(): PromptImagesController {
 			if (picked.length === 0) return;
 			const startedGeneration = generation.current;
 			setPending((n) => n + picked.length);
-			void (async () => {
-				try {
-					const settled = await Promise.allSettled(picked.map(fileToAttachedImage));
-					if (startedGeneration !== generation.current) return;
-					let used = imagesRef.current.reduce((sum, p) => sum + p.content.data.length, 0);
-					const additions: PromptImage[] = [];
-					const nextErrors: PromptImageError[] = [];
-					settled.forEach((result, i) => {
-						const name = picked[i]?.name || "image";
-						if (result.status !== "fulfilled" || result.value === null) {
-							nextErrors.push({
-								id: crypto.randomUUID(),
-								name,
-								reason: "unsupported image format",
-							});
-							return;
-						}
-						const size = result.value.content.data.length;
-						if (used + size > REQUEST_IMAGE_BASE64_BUDGET) {
-							nextErrors.push({
-								id: crypto.randomUUID(),
-								name,
-								reason: "message image limit reached",
-							});
-							return;
-						}
-						used += size;
-						additions.push({ id: crypto.randomUUID(), name, ...result.value });
-					});
-					if (additions.length > 0) commit([...imagesRef.current, ...additions]);
-					if (nextErrors.length > 0) setErrors((prev) => [...prev, ...nextErrors]);
-				} finally {
-					setPending((n) => n - picked.length);
-				}
-			})();
+			const decode = async () => {
+				const settled = await Promise.allSettled(picked.map(fileToAttachedImage));
+				if (startedGeneration !== generation.current) return;
+				let used = imagesRef.current.reduce((sum, p) => sum + p.content.data.length, 0);
+				const additions: PromptImage[] = [];
+				const nextErrors: PromptImageError[] = [];
+				settled.forEach((result, i) => {
+					const name = picked[i]?.name || translate("chat.promptImages.fallbackName");
+					if (result.status !== "fulfilled" || result.value === null) {
+						nextErrors.push({
+							id: crypto.randomUUID(),
+							name,
+							reason: translate("chat.promptImages.unsupported"),
+						});
+						return;
+					}
+					const size = result.value.content.data.length;
+					if (used + size > REQUEST_IMAGE_BASE64_BUDGET) {
+						nextErrors.push({
+							id: crypto.randomUUID(),
+							name,
+							reason: translate("chat.promptImages.limitReached"),
+						});
+						return;
+					}
+					used += size;
+					additions.push({ id: crypto.randomUUID(), name, ...result.value });
+				});
+				if (additions.length > 0) commit([...imagesRef.current, ...additions]);
+				if (nextErrors.length > 0) setErrors((prev) => [...prev, ...nextErrors]);
+			};
+			void decode().finally(() => setPending((n) => n - picked.length));
 		},
 		[commit],
 	);
@@ -166,6 +164,7 @@ export function PromptImageChips({
 	testId?: string;
 	className?: string;
 }) {
+	const t = useT();
 	const { images, pending, errors, removeImage, dismissError } = controller;
 	if (!leading && images.length === 0 && pending === 0 && errors.length === 0) return null;
 	return (
@@ -177,13 +176,13 @@ export function PromptImageChips({
 					data-testid="composer-image-error"
 					tone="error"
 					icon={false}
-					title={`Couldn't attach ${err.name} — ${err.reason}`}
-					label={`Couldn't attach ${err.name}`}
+					title={t("chat.promptImages.attachFailedDetail", { name: err.name, reason: err.reason })}
+					label={t("chat.promptImages.attachFailed", { name: err.name })}
 					meta={`— ${err.reason}`}
 					trailing={
 						<button
 							type="button"
-							aria-label="Dismiss"
+							aria-label={t("common.dismiss")}
 							onClick={() => dismissError(err.id)}
 							className="hover:opacity-80"
 						>
@@ -205,7 +204,7 @@ export function PromptImageChips({
 					trailing={
 						<button
 							type="button"
-							aria-label="Remove image"
+							aria-label={t("chat.promptImages.remove")}
 							onClick={() => removeImage(img.id)}
 							className="text-text-muted hover:text-text-default"
 						>
@@ -219,7 +218,7 @@ export function PromptImageChips({
 					data-testid="composer-image-pending"
 					label={
 						<span className="text-text-muted">
-							{pending === 1 ? "Attaching…" : `Attaching ${pending}…`}
+							{t("chat.promptImages.attaching", { count: pending })}
 						</span>
 					}
 				/>

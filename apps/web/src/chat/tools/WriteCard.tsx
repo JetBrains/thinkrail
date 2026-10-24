@@ -5,6 +5,7 @@ import {
 	strArg,
 	type ToolRenderProps,
 } from "@thinkrail/extension-api/web";
+import { useT } from "@thinkrail/locales/react";
 import { CodeBlock } from "./CodeBlock";
 import { Collapsible, countLines } from "./Collapsible";
 import { ToolFileLink } from "./ToolFileLink";
@@ -17,6 +18,7 @@ export function WriteCard({
 	workspaceRoot,
 	onOpenFile,
 }: ToolRenderProps) {
+	const t = useT();
 	const path = strArg(args, "path");
 	const content = strArg(args, "content");
 	const lang = languageFromPath(path);
@@ -33,7 +35,7 @@ export function WriteCard({
 					disabled={status !== "done"}
 					className="text-text-default"
 				/>
-				<span className="shrink-0 text-text-muted">written</span>
+				<span className="shrink-0 text-text-muted">{t("tools.write.written")}</span>
 			</div>
 			{status === "error" ? (
 				<pre className="overflow-auto px-8 py-4 text-feedback-error tr-code-text">{message}</pre>
@@ -42,7 +44,9 @@ export function WriteCard({
 					<CodeBlock code={content} lang={lang} />
 				</Collapsible>
 			) : (
-				<span className="text-text-muted tr-text-metadata italic">(empty file)</span>
+				<span className="text-text-muted tr-text-metadata italic">
+					{t("tools.write.emptyFile")}
+				</span>
 			)}
 		</div>
 	);

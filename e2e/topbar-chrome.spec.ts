@@ -207,6 +207,9 @@ test("native updates progress from explicit download through install and restart
 			progress: null,
 			error: null,
 			failedPhase: null,
+			installStep: null,
+			log: [],
+			lastInstall: null,
 		};
 		const listeners = new Set<(next: NativeUpdateState) => void>();
 		const publish = (next: Partial<NativeUpdateState>) => {
@@ -217,7 +220,9 @@ test("native updates progress from explicit download through install and restart
 			getState: async () => state,
 			checkForUpdates: async () => {},
 			downloadUpdate: async () => publish({ status: "downloading", progress: 37 }),
-			restartToUpdate: async () => publish({ status: "installing", progress: 100 }),
+			restartToUpdate: async () =>
+				publish({ status: "installing", progress: null, installStep: "stopping" }),
+			dismissInstallResult: async () => {},
 			subscribe: (listener) => {
 				listeners.add(listener);
 				return () => listeners.delete(listener);
@@ -255,6 +260,7 @@ test("native updates progress from explicit download through install and restart
 	await page.getByTestId("update-ready").click();
 	await page.getByTestId("update-restart").click();
 	await expect(page.getByTestId("update-status")).toContainText("Installing update");
+	await expect(page.getByTestId("update-install-dialog")).toBeVisible();
 });
 
 test("the action cluster keeps Update, quota Retry and Settings out of the drag region", async ({
@@ -270,12 +276,16 @@ test("the action cluster keeps Update, quota Retry and Settings out of the drag 
 			progress: null,
 			error: null,
 			failedPhase: null,
+			installStep: null,
+			log: [],
+			lastInstall: null,
 		};
 		const bridge: NativeUpdateBridge = {
 			getState: async () => state,
 			checkForUpdates: async () => {},
 			downloadUpdate: async () => {},
 			restartToUpdate: async () => {},
+			dismissInstallResult: async () => {},
 			subscribe: () => () => {},
 		};
 		Object.defineProperty(globalThis, "__THINKRAIL_NATIVE_UPDATES__", { value: bridge });

@@ -142,7 +142,7 @@ export function estimateChatRowHeight(row: ChatRow): number {
 			return clampHeight(24 + wrappedLines(text, 62) * PROSE_LINE_HEIGHT + attachments);
 		}
 		case "system":
-			return clampHeight(20 + wrappedLines(row.text) * PROSE_LINE_HEIGHT);
+			return clampHeight(20 + wrappedLines(row.text ?? "") * PROSE_LINE_HEIGHT);
 		case "error":
 			return clampHeight(28 + wrappedLines(row.text) * PROSE_LINE_HEIGHT);
 		case "backgroundCommandCompletion":

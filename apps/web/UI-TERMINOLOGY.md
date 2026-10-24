@@ -176,11 +176,11 @@ Tab-body components:
 | Canonical name | Implementation | Tab kind | Responsibility |
 |---|---|---|---|
 | File Pane | `panels/FilePane.tsx` → `FilePane` | `FileTab` | Registry-dispatched file viewer; richer formats get renderer toggles |
-| — Code File | `panels/MonacoEditor.tsx` / `panels/resources/code/PierreFile.tsx` (lazy) | — | Read-only Monaco source on desktop, Pierre source on phones |
-| — Markdown Preview | `panels/MarkdownPreview.tsx` → `MarkdownPreview` (lazy) | — | Rendered markdown (document skin) |
+| — Code File | `resource-renderers/support/MonacoEditor.tsx` / `resource-renderers/renderers/code/PierreFile.tsx` (lazy) | — | Read-only Monaco source on desktop, Pierre source on phones |
+| — Markdown Preview | `resource-renderers/support/MarkdownPreview.tsx` → `MarkdownPreview` (lazy) | — | Rendered markdown (document skin) |
 | Diff Pane | `panels/DiffPane.tsx` → `DiffPane` | `DiffTab` | File diff; Split\|Inline or Source\|Rendered toggle |
-| — Source Diff | `panels/resources/code/PierreDiff.tsx` (lazy) | — | Read-only Pierre split/unified source diff with review and hunk actions |
-| — Rendered Diff | `panels/RenderedDiff.tsx` → `RenderedDiff` (lazy) | — | Rich markdown diff (`<ins>`/`<del>`) |
+| — Source Diff | `resource-renderers/renderers/code/PierreDiff.tsx` (lazy) | — | Read-only Pierre split/unified source diff with review and hunk actions |
+| — Rendered Diff | `resource-renderers/support/RenderedDiff.tsx` → `RenderedDiff` (lazy) | — | Rich markdown diff (`<ins>`/`<del>`) |
 | Changes Review Pane | `panels/ChangesReviewPane.tsx` → `ChangesReviewPane` | `ChangesTab` | Every changed file of one scope as sections; **Stacked** \| **One file** modes (its own section below) |
 | Chat View | `chat/ChatView.tsx` → `ChatView` (lazy) | `chat` | The agent conversation (its own section below) |
 | Document Pane | `WorkspaceWorkbench` reference renderer | `document` | Rehydratable virtual documents such as TODO plans |
@@ -337,15 +337,15 @@ Children / associated surfaces:
 - **Parent:** Right side-rail tool (`plan`) for the compact TODO list; center editor tab for the
   document-scale Plan page.
 - **Responsibility:** surface the chat's `pi-todos` plan (group-first, status-ordered). The TODO list
-  is a side-rail tool next to Files / Specs / Changes / Review.
+  is a side-rail tool next to Files / Specs / Review.
 
 ---
 
 # Changes Review Tab
 
 The continuous review surface for one diff scope: every changed file of the scope as a **File Section** in a
-center tab. A single click on a Changes row, or the chat's **Review-Turn Chip**, opens it; the Changes Tool is
-its navigator.
+center tab. A single click on a Changes row, or the chat's **Review-Turn Chip**, opens it; the Changed mode of the
+Files tool is its navigator.
 
 - **Canonical name:** Changes Review Tab; its body is the **Changes Review Pane**.
 - **Implementation:** `panels/ChangesReviewPane.tsx` → `ChangesReviewPane`, rendering
@@ -374,7 +374,7 @@ its navigator.
 | — Viewed | inline toggle button | `changes-section-viewed` (`aria-pressed`) | Marks the file viewed in this tab |
 | — Collapsed Notice | inline | `changes-section-collapsed` / `changes-section-expand` | Large or generated file collapsed by default: Expand / Open as tab |
 | — Section states | inline | `changes-section-loading` / `changes-section-error` / `changes-section-retry` | Height-reserving placeholder; failed read + Retry |
-| Hunk Toolbar | `HunkToolbar` in `panels/resources/code/PierreDiff.tsx` | `hunk-toolbar` (`data-kept`) | Per-hunk Source Diff actions: Revert (`hunk-revert`), Ask agent (`hunk-ask-agent`) |
+| Hunk Toolbar | `HunkToolbar` in `resource-renderers/renderers/code/PierreDiff.tsx` | `hunk-toolbar` (`data-kept`) | Per-hunk Source Diff actions: Revert (`hunk-revert`), Ask agent (`hunk-ask-agent`) |
 | — Keep | inline toggle button | `hunk-keep` (`aria-pressed`) | "Keep" / "Kept" hunk triage; review tab in a mutable scope only |
 | Triage Bar | inline in `ChangesReviewPane` (Stacked) | `changes-review-triage` | Bottom bar: `n of N reviewed` |
 | — Progress Bar | inline | `changes-review-progress` | Viewed fraction |
@@ -408,7 +408,7 @@ leaves a compact restore rail. Side arrangement is workspace-shared; selection a
 
 Every Side Group has a **Group Header**; folding retains that header as a 27px row while its linked
 body stays native-hidden and unmounted. Initial Balanced placement puts Projects on the left, Specs and
-Files in the first right group, then Changes and Review in the second; the default terminal catalog
+Files in the first right group, then Review in the second; the default terminal catalog
 joins that last group. This is startup behavior, not a fixed hierarchy.
 
 ## Side Tools
@@ -417,20 +417,19 @@ joins that last group. This is startup behavior, not a fixed hierarchy.
 |---|---|---|
 | Projects | `tab-projects`, body `left-nav` | `panels/ProjectTree.tsx`; projects and workspaces |
 | Specs | `tab-specs` | `panels/SpecsPanel.tsx`; automatically refreshed read-only spec graph, with error-only `specs-retry` |
-| Files | `tab-files` | `panels/FileTree.tsx`; worktree file tree |
-| Changes | `tab-changes` | `panels/ChangesPanel.tsx`; scoped git changes, Changes Review Tab navigator, diff opens |
+| Files | `tab-files` | `panels/FilesPanel.tsx`; **All | Changed** switch (`files-mode-all` / `files-mode-changed`, app-wide `store.filesMode`, default All) over `panels/FileTree.tsx` (worktree tree; changed files carry a status-coloured name + letter `file-status`, folders containing changes an amber name + dot `file-folder-dot`; git-ignored rows `data-status="ignored"` in the subtle colour; the active file/diff tab's row selected and auto-revealed) plus the **Collapse All Button** `files-collapse-all` or `panels/ChangesPanel.tsx` (below) |
 | Review | `tab-review` | `panels/ReviewPanel.tsx`; review accordion and send actions |
 
 `WorkspaceWorkbench` owns the long-lived Specs and Review reads so badges, review flags, and artifact
 classification remain current even while those tool bodies are not selected.
 
-## Changes Tool
+## Changes mode (Files tool)
 
-The Changes body keeps its own feature toolbar: scope menu, target-branch picker, and List\|Tree toggle
+The Changed mode of the Files tool keeps its own feature toolbar, under the All | Changed switch row: scope menu, target-branch picker, and List\|Tree toggle
 (Tree by default). A single click on a row opens the scope's **Changes review tab** — every changed file as
 a stacked section, or one at a time in its **One file** mode — and the sidebar is that tab's navigator
 (the row of the section in view is active, viewed files carry a mark); double-click or *Open as tab* opens
-the per-file diff tab. `ChangesPanel` remains arrangement-agnostic; only its side placement changed.
+the per-file diff tab. `ChangesPanel` remains arrangement-agnostic and is fed its git status by `FilesPanel`.
 
 | Canonical name | Implementation | `data-testid` | Responsibility |
 |---|---|---|---|
@@ -439,7 +438,7 @@ the per-file diff tab. `ChangesPanel` remains arrangement-agnostic; only its sid
 | — Last Turn | menu item | `changes-scope-last-turn` | "Last turn · N files": the newest agent run; disabled until a run changed files |
 | — Agent Turns | menu items under "Agent turns" | `changes-scope-turn` (`data-turn`) | Recent agent runs, newest first (only when there is more than one) |
 | Branch Picker | `panels/BranchPicker.tsx` → `BranchPicker` | `changes-target-picker` | Target branch (`vs <base>`) |
-| Changes View Toggle | `panels/ToggleSegment.tsx` | `changes-toggle-list` / `changes-toggle-tree` | List \| Tree |
+| Changes View Toggle | `ui/toggle-segment.tsx` | `changes-toggle-list` / `changes-toggle-tree` | List \| Tree |
 | Changes List Row | inline in `ChangesPanel` | `change-item` (`data-active`, `data-viewed`) | Flat changed-file row |
 | Changes Tree | `panels/ChangesTree.tsx` | file rows `change-item`, folders `change-tree-folder` | Folder tree of changed files |
 | Viewed Mark | `panels/ViewedMark.tsx` → `ViewedMark` | `change-viewed` | Check glyph on a row the review tab marked viewed |
@@ -618,8 +617,8 @@ its alternatives in parentheses.
 **Sides**
 
 - **Left Side**, **Right Side**, **Side Group**, **Hidden-Side Rail**.
-- Singleton tools: **Projects**, **Specs**, **Files**, **Changes**, **Review**.
-- **Specs Panel**, **Files Panel** (alt: File Tree), **Changes Panel**, **Review Panel**.
+- Singleton tools: **Projects**, **Specs**, **Files**, **Review**.
+- **Specs Panel**, **Files Panel** (alt: File Tree; its **Changed** mode renders the **Changes Panel**), **Review Panel**.
 - **Changes Header** (no component): **Changes Scope Menu** (with **Last Turn** / **Agent Turns**),
   **Branch Picker**, **Changes View Toggle**.
 - **Changes List** / **Changes Tree**, **Change-Row Actions**, **Tree Row**, **Viewed Mark**,

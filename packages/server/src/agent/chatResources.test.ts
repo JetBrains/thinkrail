@@ -204,6 +204,11 @@ test("foreign parent/workspace controls are indistinguishable from missing comma
 		}),
 	).rejects.toMatchObject({ code: "unknown-parent" });
 	await stopBackgroundCommand(p.workspaceId, p.sessionId, id, p.cwd);
+	await waitFor(
+		async () =>
+			(await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).commands[0]?.status ===
+			"stopped",
+	);
 });
 
 test("scoped catalog notifications expose stopping before settlement, never output bytes", async () => {
@@ -211,8 +216,11 @@ test("scoped catalog notifications expose stopping before settlement, never outp
 	const changes: { workspaceId: string; sessionId: string }[] = [];
 	const snapshots: Promise<SessionResources>[] = [];
 	setSessionResourcesPublisher((payload) => {
+		if (payload.workspaceId !== p.workspaceId && payload.sessionId !== p.sessionId) return;
 		changes.push(payload);
-		snapshots.push(getSessionResources(payload.workspaceId, payload.sessionId, p.cwd));
+		const snapshot = getSessionResources(payload.workspaceId, payload.sessionId, p.cwd);
+		snapshot.catch(() => {});
+		snapshots.push(snapshot);
 	});
 	try {
 		const id = await launch(p, "printf first; sleep 0.2; printf second; sleep 30");
@@ -510,7 +518,10 @@ test("direct child projection keeps every active and latest twenty terminal reco
 	const service = delegationServiceFor(p.workspaceId);
 	const children: ChildHandle[] = [];
 	const changes: { workspaceId: string; sessionId: string }[] = [];
-	setSessionResourcesPublisher((payload) => changes.push(payload));
+	setSessionResourcesPublisher((payload) => {
+		if (payload.workspaceId === p.workspaceId || payload.sessionId === p.sessionId)
+			changes.push(payload);
+	});
 	try {
 		for (let i = 0; i < 23; i++) {
 			const child = await service.createChild({

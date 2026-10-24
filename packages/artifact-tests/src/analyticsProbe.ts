@@ -101,11 +101,26 @@ export function analyticsProbeEnvironment(
 	);
 }
 
+const EXCEPTION_KEYS = new Set([
+	"app_version",
+	"arch",
+	"build",
+	"channel",
+	"os",
+	"source",
+	"handled",
+	"code",
+	"scope",
+	"request_method",
+]);
+
 export function assertDesktopLaunch(
-	events: CollectedEvent[],
+	collected: CollectedEvent[],
 	expected: { app_version: string; channel: string; os: string; arch: string },
 	expectAppInstalled: boolean,
 ): string {
+	const events = collected.filter((event) => event.event !== "$exception");
+	const exceptions = collected.filter((event) => event.event === "$exception");
 	const expectedNames = expectAppInstalled ? ["app_installed", "app_started"] : ["app_started"];
 	assert(
 		events.map((event) => event.event).join(",") === expectedNames.join(","),
@@ -134,6 +149,20 @@ export function assertDesktopLaunch(
 			"person profile processing must be off",
 		);
 		assert(event.properties.$geoip_disable === true, "GeoIP enrichment must be off");
+	}
+	for (const exception of exceptions) {
+		assert(
+			exception.distinct_id === first.distinct_id,
+			"error report used another installation id",
+		);
+		assert(
+			exception.properties.$process_person_profile === false,
+			"error report person profile processing must be off",
+		);
+		const extra = Object.keys(exception.properties).filter(
+			(key) => !key.startsWith("$") && !EXCEPTION_KEYS.has(key),
+		);
+		assert(extra.length === 0, `unexpected $exception properties: ${extra.join(",")}`);
 	}
 	return first.distinct_id;
 }

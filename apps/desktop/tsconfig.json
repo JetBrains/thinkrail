@@ -3,6 +3,7 @@
 	"compilerOptions": {
 		"noEmit": true,
 		"exactOptionalPropertyTypes": false,
+		"noImplicitReturns": false,
 		"allowImportingTsExtensions": true,
 		"types": ["bun"],
 		"paths": {

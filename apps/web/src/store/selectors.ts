@@ -3,6 +3,7 @@ import {
 	type BackgroundCommandSummary,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
 	canMarkCompletionUnread,
+	DEFAULT_WORKSPACE_NAME,
 	type GitDiffScope,
 	isSessionWorking,
 	MCP_PROTOCOL_VERSION,
@@ -23,8 +24,10 @@ import {
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 	type Workspace,
 } from "@thinkrail/contracts";
+import type { Translator } from "@thinkrail/locales/react";
 import type { LoginState } from "../auth";
 import {
+	chatName,
 	compactAge,
 	isAbsolutePath,
 	isMcpActiveState,
@@ -42,8 +45,10 @@ import type {
 	WorkspaceLayoutDocument,
 } from "../shell/layout";
 import type {
+	ChangesTabSection,
 	ClosedChat,
 	EditorTab,
+	FilesTreeView,
 	MarkedUnread,
 	PendingMarkUnread,
 	RouteChatTarget,
@@ -287,27 +292,29 @@ export type SettledReason =
 	| { kind: "idle"; since: number };
 
 /** Chip text; `settledReasonTitle` is the long form. */
-export function settledReasonLabel(reason: SettledReason, now: number): string {
+export function settledReasonLabel(t: Translator, reason: SettledReason, now: number): string {
 	switch (reason.kind) {
 		case "override":
-			return "by you";
+			return t("store.settled.byYou");
 		case "review":
-			return reason.state;
+			return reason.state === "merged" ? t("store.settled.merged") : t("store.settled.closed");
 		case "idle":
-			return `idle ${compactAge(reason.since, now)}`;
+			return t("store.settled.idle", { age: compactAge(t, reason.since, now) });
 	}
 }
 
-export function settledReasonTitle(reason: SettledReason, now: number): string {
+export function settledReasonTitle(t: Translator, reason: SettledReason, now: number): string {
 	switch (reason.kind) {
 		case "override":
 			return reason.since === undefined
-				? "Settled by you"
-				: `Settled by you ${relativeTime(reason.since, now)}`;
+				? t("store.settled.byYouTitle")
+				: t("store.settled.byYouTitleAt", { time: relativeTime(t, reason.since, now) });
 		case "review":
-			return reason.state === "merged" ? "Pull request merged" : "Pull request closed";
+			return reason.state === "merged"
+				? t("store.settled.prMergedTitle")
+				: t("store.settled.prClosedTitle");
 		case "idle":
-			return `Idle for ${compactAge(reason.since, now)}`;
+			return t("store.settled.idleTitle", { age: compactAge(t, reason.since, now) });
 	}
 }
 
@@ -835,6 +842,31 @@ export function selectDiffScope(
 	return state.diffScopeByWorkspace[workspaceId] ?? BRANCH_SCOPE;
 }
 
+const EMPTY_FILES_TREE_VIEW: FilesTreeView = {
+	expanded: [],
+	changedCollapsed: [],
+	scroll: {},
+	seenActivePath: null,
+};
+
+export function selectFilesTreeView(
+	state: { filesTreeByWorkspace: Record<string, FilesTreeView> },
+	workspaceId: string,
+): FilesTreeView {
+	return state.filesTreeByWorkspace[workspaceId] ?? EMPTY_FILES_TREE_VIEW;
+}
+
+export function selectActiveFilePath(
+	state: {
+		tabsByWorkspace: Record<string, EditorTab[]>;
+		activeTabByWorkspace: Record<string, string | null>;
+	},
+	workspaceId: string,
+): string | null {
+	const tab = selectActiveEditorTab(state, workspaceId);
+	return tab?.kind === "file" || tab?.kind === "diff" ? normalizePath(tab.path) : null;
+}
+
 export function selectDiffBaseRef(state: ActiveWorkspaceState, workspaceId: string): string {
 	const workspace = selectWorkspaceById(state, workspaceId);
 	return workspace ? (workspace.diffBase ?? workspace.baseBranch) : "";
@@ -845,6 +877,16 @@ export function selectDiffTabTargetRef(
 	tab: { workspaceId: string; scope: GitDiffScope },
 ): string {
 	return tab.scope.kind === "branch" ? selectDiffBaseRef(state, tab.workspaceId) : "";
+}
+
+export function selectChangesTabSection(
+	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	workspaceId: string,
+	tabId: string,
+	path: string,
+): ChangesTabSection | undefined {
+	const tab = state.tabsByWorkspace[workspaceId]?.find((candidate) => candidate.id === tabId);
+	return tab?.kind === "changes" ? tab.sections[path] : undefined;
 }
 
 export function matchesWorktreePath(reported: string, rel: string): boolean {
@@ -858,14 +900,31 @@ export function specPathMatcher(nodes: SpecGraphNode[]): (path: string) => boole
 	return (reported) => paths.some((rel) => matchesWorktreePath(reported, rel));
 }
 
-export function selectChatTitle(
+export function workspaceName(
+	t: Translator,
+	workspace: { kind?: Workspace["kind"] | undefined; name: string },
+): string {
+	return workspace.kind === "default" && workspace.name === DEFAULT_WORKSPACE_NAME
+		? t("store.workspace.defaultName")
+		: workspace.name;
+}
+
+export function selectChatName(
 	state: { tabsByWorkspace: Record<string, EditorTab[]> },
 	workspaceId: string,
 	sessionId: string,
 ): string {
 	const tabs = state.tabsByWorkspace[workspaceId] ?? [];
-	const chatTab = tabs.find((t) => t.kind === "chat" && t.sessionId === sessionId);
-	return (chatTab?.name ?? "Chat").trim() || "Chat";
+	return tabs.find((tab) => tab.kind === "chat" && tab.sessionId === sessionId)?.name ?? "";
+}
+
+export function selectChatTitle(
+	t: Translator,
+	state: { tabsByWorkspace: Record<string, EditorTab[]> },
+	workspaceId: string,
+	sessionId: string,
+): string {
+	return chatName(t, selectChatName(state, workspaceId, sessionId));
 }
 
 export function selectCompactionTurnIds(
@@ -884,6 +943,29 @@ export function selectWorkspaceTick(
 	workspaceId: string,
 ): number {
 	return state.fsChangesByWorkspace[workspaceId]?.tick ?? 0;
+}
+
+export function fsChangedPaths(change: {
+	paths: readonly string[];
+	truncated: boolean;
+}): readonly string[] | null {
+	return change.truncated || change.paths.length === 0 ? null : change.paths;
+}
+
+interface FileChangeState {
+	connectionGeneration: number;
+	fsChangesByWorkspace: Record<string, { paths: readonly string[]; truncated: boolean }>;
+}
+
+export function selectFileChangeSince(
+	state: FileChangeState,
+	previous: FileChangeState,
+	workspaceId: string,
+): readonly string[] | null | undefined {
+	if (state.connectionGeneration !== previous.connectionGeneration) return null;
+	const change = state.fsChangesByWorkspace[workspaceId];
+	if (!change || change === previous.fsChangesByWorkspace[workspaceId]) return undefined;
+	return fsChangedPaths(change);
 }
 
 export function selectCurrentRouteChatTarget(state: {

@@ -1,3 +1,4 @@
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -12,10 +13,8 @@ import { toast, useAppStore } from "@/store";
 import { selectNotificationChannel } from "./channel";
 import { snoozePrompt } from "./notificationPrompt";
 
-const DENIED_HINT =
-	"Notifications are blocked for this site. Re-enable them in your browser's site settings, then turn notifications on again.";
-
 export function NotificationPermissionPrompt() {
+	const t = useT();
 	const open = useAppStore((state) => state.notificationPromptOpen);
 	const pendingRef = useRef(false);
 
@@ -30,7 +29,11 @@ export function NotificationPermissionPrompt() {
 		void selectNotificationChannel()
 			.requestPermission()
 			.then((result) => {
-				if (result === "denied") toast.error(DENIED_HINT, "Notifications blocked");
+				if (result === "denied")
+					toast.error(
+						t("notifications.permission.deniedHint"),
+						t("notifications.permission.deniedTitle"),
+					);
 			})
 			.finally(() => {
 				pendingRef.current = false;
@@ -47,19 +50,15 @@ export function NotificationPermissionPrompt() {
 		>
 			<DialogContent data-testid="notification-permission-prompt">
 				<DialogHeader>
-					<DialogTitle>Get notified when a worktree needs you</DialogTitle>
-					<DialogDescription>
-						ThinkRail can notify you when an agent asks a question, finishes, or fails — even when
-						the app is in a background tab. Notifications only appear while this window isn't
-						focused.
-					</DialogDescription>
+					<DialogTitle>{t("notifications.permission.title")}</DialogTitle>
+					<DialogDescription>{t("notifications.permission.description")}</DialogDescription>
 				</DialogHeader>
 				<DialogFooter>
 					<Button variant="outline" data-testid="notification-not-now" onClick={dismiss}>
-						Not now
+						{t("notifications.permission.notNow")}
 					</Button>
 					<Button data-testid="notification-enable" onClick={enable}>
-						Enable
+						{t("notifications.permission.enable")}
 					</Button>
 				</DialogFooter>
 			</DialogContent>

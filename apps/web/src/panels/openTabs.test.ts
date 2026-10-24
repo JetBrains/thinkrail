@@ -360,7 +360,7 @@ test("a review tab opens without a host read and carries the clicked file as a o
 	const tab = openedChangesTab();
 	expect(tab).toMatchObject({
 		id: changesTabId("w1", { kind: "branch" }),
-		name: "Changes",
+		name: "",
 		scope: { kind: "branch" },
 		reveal: { path: "src/a.ts", tick: 1 },
 		viewed: [],
@@ -440,7 +440,7 @@ test("an explicit Open as tab retains the existing preview", async () => {
 test("a lone review-tab preview lands after the settle window and claims the preview slot", async () => {
 	await openChangesTab("w1", { kind: "uncommitted" }, { revealPath: "README.md" }, "preview");
 	const tab = openedChangesTab();
-	expect(tab.name).toBe("Changes · uncommitted");
+	expect(tab.scope).toEqual({ kind: "uncommitted" });
 	expect(useAppStore.getState().previewTabByWorkspace.w1).toBe(tab.id);
 });
 

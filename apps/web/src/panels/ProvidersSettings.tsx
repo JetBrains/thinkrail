@@ -11,12 +11,13 @@ import {
 	type ProviderStatus,
 	type ProviderStatusReport,
 } from "@thinkrail/contracts";
+import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LoginDialog } from "@/auth";
 import { AUTH_KIND_LABEL } from "@/chat/modelPicker";
-import { SkeletonRows } from "@/components/Skeleton";
 import { selectLoginBusy, toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { JetBrainsAiCard } from "./JetBrainsAiCard";
@@ -26,6 +27,7 @@ const API_KEY_VISIBLE = 8;
 const MAX_REST_NAMES = 5;
 
 export function ProvidersSettings() {
+	const t = useT();
 	const [report, setReport] = useState<ProviderStatusReport | null>(null);
 	const [failed, setFailed] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
@@ -46,17 +48,19 @@ export function ProvidersSettings() {
 			sequence === loadSequence.current &&
 			providerVersion === useAppStore.getState().providerVersion;
 		setRefreshing(true);
-		try {
+		const read = async () => {
 			const next = await getTransport().request("provider.status", {});
 			if (!isCurrent()) return;
 			setReport(next);
 			setFailed(false);
-		} catch {
-			if (!isCurrent()) return;
-			setFailed(true);
-		} finally {
-			if (sequence === loadSequence.current) setRefreshing(false);
-		}
+		};
+		await read()
+			.catch(() => {
+				if (isCurrent()) setFailed(true);
+			})
+			.finally(() => {
+				if (sequence === loadSequence.current) setRefreshing(false);
+			});
 	}, []);
 
 	useEffect(() => {
@@ -74,28 +78,34 @@ export function ProvidersSettings() {
 	const startLogin = useCallback(async (providerId: string, type: "oauth" | "api_key") => {
 		if (!useAppStore.getState().reserveLogin()) return;
 		setBusyProvider(providerId);
-		try {
+		const start = async () => {
 			const { loginId } = await getTransport().request("provider.loginStart", { providerId, type });
 			useAppStore.getState().beginLogin(loginId, providerId);
-		} catch (err) {
-			toast.error(errorText(err), "Couldn't start the connection");
-		} finally {
-			useAppStore.getState().finishLoginStart();
-			setBusyProvider(null);
-		}
+		};
+		await start()
+			.catch((err: unknown) =>
+				toast.error(errorText(err), translate("settings.providers.startFailed")),
+			)
+			.finally(() => {
+				useAppStore.getState().finishLoginStart();
+				setBusyProvider(null);
+			});
 	}, []);
 
 	const logout = useCallback(
 		async (providerId: string) => {
 			setBusyProvider(providerId);
-			try {
+			const signOut = async () => {
 				await getTransport().request("provider.logout", { providerId });
-			} catch (err) {
-				toast.error(errorText(err), "Couldn't sign out");
-				return;
-			} finally {
-				setBusyProvider(null);
-			}
+				return true;
+			};
+			const signedOut = await signOut()
+				.catch((err: unknown) => {
+					toast.error(errorText(err), translate("settings.providers.signOutFailed"));
+					return false;
+				})
+				.finally(() => setBusyProvider(null));
+			if (!signedOut) return;
 			await load();
 		},
 		[load],
@@ -105,7 +115,7 @@ export function ProvidersSettings() {
 		try {
 			await getTransport().request("settings.update", { config });
 		} catch (error) {
-			toast.error(errorText(error), "Couldn't save JetBrains quota settings");
+			toast.error(errorText(error), translate("settings.providers.quotaSaveFailed"));
 			throw error;
 		}
 	}, []);
@@ -136,19 +146,17 @@ export function ProvidersSettings() {
 	return (
 		<div data-testid="settings-providers" className="flex flex-col gap-24">
 			<div className="flex items-center justify-between gap-12">
-				<p className="tr-text-metadata text-text-muted">
-					Connect at least one provider so the agent can run — a subscription or an API key.
-				</p>
+				<p className="tr-text-metadata text-text-muted">{t("settings.providers.intro")}</p>
 				<Button
 					variant="ghost"
 					size="sm"
 					data-testid="providers-refresh"
-					aria-label="Refresh provider status"
+					aria-label={t("settings.providers.refreshLabel")}
 					disabled={refreshing}
 					onClick={() => void load()}
 				>
 					<RefreshCw className={cn("size-14", refreshing && "animate-spin")} />
-					Refresh
+					{t("settings.providers.refresh")}
 				</Button>
 			</div>
 
@@ -156,12 +164,12 @@ export function ProvidersSettings() {
 				<SkeletonRows rows={3} />
 			) : failed ? (
 				<p data-testid="providers-error" className="text-text-muted tr-text-ui">
-					Couldn't read the provider status from the host — try Refresh.
+					{t("settings.providers.loadFailed")}
 				</p>
 			) : (
 				<SettingsPageContainer>
 					{configured.length > 0 ? (
-						<SettingsGroup title="Connected">
+						<SettingsGroup title={t("settings.providers.connectedGroup")}>
 							{configured.map((p) => (
 								<ConnectedRow
 									key={p.id}
@@ -184,8 +192,8 @@ export function ProvidersSettings() {
 
 					{subscriptionRows.length > 0 ? (
 						<SettingsGroup
-							title="Subscriptions"
-							description="Use your existing Claude, ChatGPT, or Copilot plan — no API key needed."
+							title={t("settings.providers.subscriptionsGroup")}
+							description={t("settings.providers.subscriptionsDescription")}
 						>
 							{subscriptionRows.map((p) => (
 								<ProviderRow
@@ -200,7 +208,9 @@ export function ProvidersSettings() {
 					) : null}
 
 					{apiKeyRows.length > 0 ? (
-						<SettingsGroup title={`Available (${apiKeyRows.length})`}>
+						<SettingsGroup
+							title={t("settings.providers.availableGroup", { count: apiKeyRows.length })}
+						>
 							{shownKeys.map((p) => (
 								<ProviderRow
 									key={p.id}
@@ -218,7 +228,7 @@ export function ProvidersSettings() {
 										data-testid="providers-show-more"
 										onClick={() => setShowAllKeys(true)}
 									>
-										Show {hiddenKeyCount} more
+										{t("settings.providers.showMore", { count: hiddenKeyCount })}
 									</Button>
 								</div>
 							) : null}
@@ -227,13 +237,18 @@ export function ProvidersSettings() {
 
 					{noInApp.length > 0 ? (
 						<p data-testid="providers-more" className="text-text-muted tr-text-metadata">
-							{noInApp.length} more configured outside the app (environment variables or
-							models.json):{" "}
-							{noInApp
-								.slice(0, MAX_REST_NAMES)
-								.map((p) => p.name)
-								.join(", ")}
-							{noInApp.length > MAX_REST_NAMES ? ", …" : ""}
+							{noInApp.length > MAX_REST_NAMES
+								? t("settings.providers.outsideAppTruncated", {
+										count: noInApp.length,
+										names: noInApp
+											.slice(0, MAX_REST_NAMES)
+											.map((p) => p.name)
+											.join(", "),
+									})
+								: t("settings.providers.outsideApp", {
+										count: noInApp.length,
+										names: noInApp.map((p) => p.name).join(", "),
+									})}
 						</p>
 					) : null}
 				</SettingsPageContainer>
@@ -247,7 +262,7 @@ export function ProvidersSettings() {
 					onReply={(value) => {
 						getTransport()
 							.request("provider.loginReply", { loginId: activeLogin.loginId, value })
-							.catch((err) => toast.error(errorText(err), "Couldn't submit"));
+							.catch((err) => toast.error(errorText(err), t("settings.providers.submitFailed")));
 						useAppStore.getState().clearLoginInput();
 					}}
 					onCancel={() => {
@@ -275,11 +290,12 @@ function ConnectedRow({
 	busy: boolean;
 	onSignOut: () => void;
 }) {
-	const label = provider.kind ? AUTH_KIND_LABEL[provider.kind] : "configured";
+	const t = useT();
+	const label = t(AUTH_KIND_LABEL[provider.kind ?? "other"]);
 	const managedTitle =
 		provider.kind === "central"
-			? "Connected through JetBrains AI"
-			: "Configured outside the app (environment / models.json)";
+			? t("settings.providers.managedCentral")
+			: t("settings.providers.managedOutside");
 
 	return (
 		<div
@@ -291,8 +307,9 @@ function ConnectedRow({
 		>
 			<span className="min-w-0 flex-1 truncate tr-text-ui text-text-default">{provider.name}</span>
 			<span className="truncate text-text-muted tr-text-metadata">
-				{label}
-				{provider.detail ? ` · ${provider.detail}` : ""}
+				{provider.detail
+					? t("settings.providers.kindDetail", { kind: label, detail: provider.detail })
+					: label}
 			</span>
 			{provider.canLogout ? (
 				<Button
@@ -304,7 +321,7 @@ function ConnectedRow({
 					onClick={onSignOut}
 				>
 					<LogOut className="size-14" />
-					Sign out
+					{t("settings.providers.signOut")}
 				</Button>
 			) : (
 				<span
@@ -312,7 +329,7 @@ function ConnectedRow({
 					title={managedTitle}
 				>
 					<Lock className="size-12" />
-					Managed
+					{t("settings.providers.managed")}
 				</span>
 			)}
 		</div>
@@ -330,6 +347,7 @@ function ProviderRow({
 	onSignIn: () => void;
 	onApiKey: () => void;
 }) {
+	const t = useT();
 	return (
 		<div
 			data-testid="provider-signin-row"
@@ -349,7 +367,7 @@ function ProviderRow({
 						onClick={onSignIn}
 					>
 						<LogIn className="size-14" />
-						Sign in
+						{t("settings.providers.signIn")}
 					</Button>
 				)}
 				{provider.canApiKey && (
@@ -362,7 +380,7 @@ function ProviderRow({
 						onClick={onApiKey}
 					>
 						<KeyRound className="size-14" />
-						API key
+						{t("settings.providers.apiKey")}
 					</Button>
 				)}
 			</div>

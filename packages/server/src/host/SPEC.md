@@ -159,7 +159,9 @@ channel fan-out, and the process-boot wrapper both launchers share.
   bounded settle includes hidden delegation children even when their parent is
   idle, plus child cascades already started by a concurrent removal, so graceful quit does not let a
   background child lose its terminal abort/tool result; `crashLog.ts` (`installCrashLog` — the `uncaughtException`/`unhandledRejection` report
-  appended to `<dataDir>/logs/crash.log` and echoed to stderr, then `exit(1)`: in-process pi means such a
+  appended to `<dataDir>/logs/crash.log` and echoed to stderr, then — for the first fault only — an awaited,
+  ≤ 1 s analytics `reportFatalError` (tagged with the crash kind) before `exit(1)`; later faults in that window are still appended but
+  neither re-report nor re-exit: in-process pi means such a
   fault is the whole host's, and a launcher started without a terminal otherwise loses its only trace.
   Never a recovery, and never installed under `NODE_ENV=test` — a unit-test process reports its own
   faults. It renders the throw via the `log` module's `describeError`, so crash reports and log lines
@@ -169,7 +171,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   `resolveShellEnv: true`, pre-warm the same Central watcher/runtime
   initialization before choosing the serving port, await `createServer` (which idempotently enforces
   runtime bootstrap for low-level embedders), and write the `listening on` info line (see
-  `submodule-server-log`). Its
+  `submodule-server-log`); `reportDesktopError(error, scope)` is the desktop launcher's handled-error door
+  into analytics (source `desktop`). Its
   SIGINT/SIGTERM handlers await that same shutdown before process exit. Settling aborts streaming sessions
   and waits bounded so pi persists their "Operation aborted" tool results and transcripts land paired,
   except a session blocked on `ask_user_question`: shutdown deliberately leaves that call dangling and the
@@ -179,7 +182,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   params are not shape-validated at runtime. The registry includes `workspace.rename` as the direct manual door into
   `renameWorkspace(id, name)` (no `branch` option) — the workspaces module changes only the
   display label, persists, and publishes it, so the handler never mutates Git, emits, or patches a client
-  separately; `project.rename` likewise delegates to the projects module's `renameProject`, which owns validation and the push. The host's `resolveNewChatModel` composes AppConfig settings with the agent's settled available
+  separately; `project.rename` likewise delegates to the projects module's `renameProject`, which owns validation and the push. `client.reportError` hands the untrusted browser report to analytics' `reportClientError` (the
+  only sanitizer) and always acks. Error tracking also rides two `server.ts` seams: every failed WS request
+  is reported with its registered method (CodedErrors included), and `observeLoggedErrors` routes host
+  `log.warn/error(msg, err)` calls as `host_logged` — so host diagnostics that carry an error go through
+  the logger, never `console.*`. The host's `resolveNewChatModel` composes AppConfig settings with the agent's settled available
   model list and Pi thinking clamp; `model.default`, `session.create`, and newly-created review chats share
   that resolver, and creation passes its model and effort explicitly. A `session.create` that **named** a
   model and every `session.setModel` also record the resolved model as recent through `settings`'
@@ -473,7 +480,11 @@ channel fan-out, and the process-boot wrapper both launchers share.
   client's **last open chat** (the optional `sessionId` the send carries — the conversation the user
   is already in), else the key's pinned chat (`reviews.fileReviewSession`), else a NEW chat; whatever
   received the package becomes the key's pin (`markCommentsSent`), so the sidebar's "open the
-  discussion" always follows the comments. **`review.sendBatch` answers with every session it touched**, in group
+  discussion" always follows the comments. **A send that names its chat is one package**: when the client
+  passes `sessionId` (a chat card's own chat, or the last open chat) every comment goes into that chat in one
+  structured message, because grouping exists to route each key to its own chat, and per-key packages into
+  the same chat made the agent take one review — a before/after mockup's two files — in separate turns.
+  **`review.sendBatch` answers with every session it touched**, in group
   order: a batch spanning two files starts two chats, and naming only the first left the other one
   running unseen while its comments already read as sent (the client opens them all, focusing the
   first). A linked chat that is merely **detached** is
@@ -545,7 +556,7 @@ channel fan-out, and the process-boot wrapper both launchers share.
 enabled/confirmed choice before entering analytics attribution.
 
 - **Public surface (barrel):** `createServer`, `CreateServerOptions`, `RunningServer`, `bootHost`,
-  `BootHostOptions`, `BootedHost`, `BuildKind`.
+  `BootHostOptions`, `BootedHost`, `BuildKind`, `reportDesktopError`.
 - **Allowed deps:** `contracts` (`PROTOCOL_VERSION`, feature-introduction versions, `WS_CHANNELS`); `shared` (`freePort`, `shellEnv` — for
   `boot.ts`; `codedError`); `persistence` (`dataDir` — where `crashLog.ts` writes); `pi-todos/core` (reduced synchronous
   task snapshots, with group status still core-owned); the feature modules it composes (per the parent dependency graph, incl. `fs`'s
@@ -575,13 +586,25 @@ enabled/confirmed choice before entering analytics attribution.
   answer remains live and refreshable; a reopened complete review is caught on activation) — bounded to a
   few concurrent provider calls and riding the module's 60 s cache. Idle refresh pacing is branch-aware,
   so switching branches never inherits the old branch's 30-minute delay; a fresh
-  `workspace.openReview` for the active workspace also writes the snapshot, so the active row is always
-  current. Both writers pass the branch the lookup was made for, and `workspaces` drops an answer whose
+  `workspace.openReview` or `workspace.branchStatus` for the active workspace also writes the snapshot, so the
+  active row is always current. Both writers pass the branch the lookup was made for, and `workspaces` drops an answer whose
   branch has moved underneath it. **Protocol skew:** `RequestContext.protocolVersion` is the socket's
   advertised protocol (absent for in-process callers, who speak the current one); `workspace.openReview`
-  answers a client older than `WORKSPACE_SETTLE_PROTOCOL_VERSION` with `null` for a merged or closed
+  (and `workspace.branchStatus`, whose callers are always newer) answers a client older than `WORKSPACE_SETTLE_PROTOCOL_VERSION` with `null` for a merged or closed
   review, because such a client reads any review as an open PR and its plan pane would offer *Push
-  updates* that creates a new PR — the host snapshot itself still records the true state. **Backfill:**
+  updates* that creates a new PR — the host snapshot itself still records the true state. **Branch status / push / generate (v87):**
+  `workspace.branchStatus` composes the same review lookup + divergence as `openReview` with `git`'s
+  `commitsAheadOf` (ahead of the base), `pr`'s `onBaseBranch`, and the provider of origin's push URL (`originUrls`, as `pr.open` reads it); for an
+  origin whose push URL differs from its fetch URL the divergence is `countPushTargetDivergence` against the
+  push repository, so the counts describe the repository the Push action delivers to — `published` is the divergence answer itself (its remote ref exists), so the two never disagree; when
+  the measurement fails it falls back to the tracking ref only for a single-URL origin, and a split origin
+  reports `published: null` (unknown) rather than the fetch repository's answer; `workspace.push` stamps activity
+  like `pr.open` and drops the worktree's review cache through `pr`; `pr.generate` is composed here —
+  `pr` gathers the bounded input (`prDraftInput`), `assist` drafts — so `pr` gains no `assist` edge. **Review
+  actions (v88):** `pr.ready` / `pr.merge` / `pr.reopen` / `workspace.deleteRemoteBranch` delegate to `pr` and
+  stamp activity like a push; the snapshot follows on the client's next fresh `workspace.branchStatus`
+  (a merged review needs the provider's merge time, which only the lookup has). `skipFetch` on
+  `workspace.branchStatus` skips only the origin fetch, never the review lookup. **Backfill:**
   the same post-list pass gives records without `lastActiveAt` their
   stamp from the newest chat's `updatedAt` (`listSessions`), else the worktree's `.git` gitfile mtime
   (managed and external worktrees alike — only the Default row, whose `.git` is the repository itself,

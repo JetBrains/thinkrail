@@ -128,6 +128,7 @@ export function installDagAdapter(
 			"error" in details
 		)
 			return { isError: true };
+		return undefined;
 	});
 
 	async function invoke(

@@ -35,7 +35,7 @@ function document(): WorkspaceLayoutDocument {
 					id: "tools",
 					weight: 0.3,
 					folded: false,
-					tabs: [{ ...toolTab("files"), id: "custom-files" }, toolTab("changes")],
+					tabs: [{ ...toolTab("files"), id: "custom-files" }, toolTab("review")],
 				},
 				{ id: "shells", weight: 0.4, folded: false, tabs: [terminal("build"), terminal("tests")] },
 				{ id: "other", weight: 0.3, folded: false, tabs: [terminal("server")] },
@@ -107,10 +107,10 @@ test("rail clusters mirror the panes in order and park unplaced tools in a trail
 			cluster.entries.map((entry) => (entry.kind === "tool" ? entry.tool : entry.kind)),
 		]),
 	).toEqual([
-		["tools", ["files", "changes"]],
+		["tools", ["files", "review"]],
 		["shells", ["terminals"]],
 		["other", ["terminals"]],
-		[null, ["specs", "review", "plan"]],
+		[null, ["specs", "plan"]],
 	]);
 	const closed = closeLayoutTab(doc, "custom-files").document;
 	closed.toolRestoreTargets.files = { region: "right", index: 0 };
@@ -118,7 +118,7 @@ test("rail clusters mirror the panes in order and park unplaced tools in a trail
 	expect(clusters.map((cluster) => cluster.groupId)).toEqual(["tools", "shells", "other", null]);
 	const unplaced = clusters.at(-1)?.entries ?? [];
 	expect(unplaced.map((entry) => (entry.kind === "tool" ? entry.tool : entry.kind)).sort()).toEqual(
-		["files", "plan", "review", "specs"],
+		["files", "plan", "specs"],
 	);
 	expect(unplaced.every(isUnplacedRailEntry)).toBe(true);
 	expect(

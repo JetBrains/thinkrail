@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { relative, resolve, sep } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import * as root from "@thinkrail/extension-api";
 import * as web from "@thinkrail/extension-api/web";
 
@@ -62,6 +62,7 @@ describe("browser-safe public surface", () => {
 					name: "enforce-browser-runtime-boundary",
 					setup(builder) {
 						builder.onResolve({ filter: /^[^./]/ }, ({ path }) => {
+							if (isAbsolute(path)) return undefined;
 							imports.push(path);
 							if (path !== "@thinkrail/contracts") {
 								throw new Error(`Unexpected runtime dependency: ${path}`);

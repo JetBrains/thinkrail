@@ -125,7 +125,7 @@ test("queries an open GitHub PR for the explicit branch, and only that when one 
 			"--state",
 			"open",
 			"--json",
-			"number,url,state,mergedAt,closedAt,createdAt",
+			"number,url,state,mergedAt,closedAt,createdAt,isDraft,baseRefName,reviewDecision,mergeStateStatus,statusCheckRollup,latestReviews,headRepositoryOwner,headRepository",
 			"--limit",
 			"1",
 		],
@@ -530,4 +530,167 @@ test("the outcome form tells a provider's 'no review' apart from a failed lookup
 	expect(calls).toBe(2);
 	await findBranchReviewOutcomeWithRunner(cwd, "third", settledPageDown);
 	expect(calls).toBe(4);
+});
+
+function openPrRow(repository: string, over: Record<string, unknown> = {}) {
+	const [owner, name] = repository.split("/");
+	return {
+		number: 128,
+		headRepositoryOwner: { login: owner },
+		headRepository: { name },
+		state: "OPEN",
+		url: "https://github.com/acme/app/pull/128",
+		isDraft: false,
+		reviewDecision: "",
+		mergeStateStatus: "CLEAN",
+		statusCheckRollup: [],
+		latestReviews: [],
+		...over,
+	};
+}
+
+function githubRunner(row: Record<string, unknown>, repoView: string | null) {
+	const commands: string[][] = [];
+	const run = async (_cwd: string, args: string[]) => {
+		commands.push(args);
+		if (args[1] === "repo")
+			return repoView === null ? { ok: false, out: "" } : { ok: true, out: repoView };
+		return { ok: true, out: JSON.stringify([row]) };
+	};
+	return { run, commands };
+}
+
+test("an open GitHub PR carries draft, checks, review decision, merge state and merge methods", async () => {
+	const cwd = repo("git@github.com:acme/details.git");
+	const { run, commands } = githubRunner(
+		openPrRow("acme/details", {
+			isDraft: true,
+			baseRefName: "release/2",
+			reviewDecision: "CHANGES_REQUESTED",
+			mergeStateStatus: "BLOCKED",
+			statusCheckRollup: [
+				{
+					__typename: "CheckRun",
+					name: "lint",
+					status: "COMPLETED",
+					conclusion: "FAILURE",
+					startedAt: "2026-01-01T00:00:00Z",
+				},
+				{
+					__typename: "CheckRun",
+					name: "lint",
+					status: "COMPLETED",
+					conclusion: "SUCCESS",
+					startedAt: "2025-12-31T00:00:00Z",
+				},
+				{ __typename: "CheckRun", name: "e2e", status: "IN_PROGRESS", conclusion: "" },
+				{ __typename: "CheckRun", name: "docs", status: "COMPLETED", conclusion: "SKIPPED" },
+				{ __typename: "CheckRun", name: "old", status: "COMPLETED", conclusion: "STALE" },
+				{ __typename: "StatusContext", context: "ci/legacy", state: "ERROR" },
+				{ __typename: "StatusContext", context: "deploy", state: "PENDING" },
+			],
+			latestReviews: [
+				{ author: { login: "anna" }, state: "CHANGES_REQUESTED" },
+				{ author: { login: "bob" }, state: "COMMENTED" },
+				{ author: { login: "cy" }, state: "APPROVED" },
+			],
+		}),
+		JSON.stringify({
+			mergeCommitAllowed: true,
+			squashMergeAllowed: true,
+			rebaseMergeAllowed: false,
+			deleteBranchOnMerge: true,
+		}),
+	);
+	const review = await findOpenBranchReviewWithRunner(cwd, "feature", run);
+	expect(review?.details).toEqual({
+		draft: true,
+		base: "release/2",
+		checks: { passing: 1, pending: 2, failing: 2, failingNames: ["lint", "ci/legacy"] },
+		reviewDecision: "changes_requested",
+		reviewers: [
+			{ login: "anna", state: "changes_requested" },
+			{ login: "cy", state: "approved" },
+		],
+		mergeState: "blocked",
+		mergeMethods: ["squash", "merge"],
+		deleteBranchOnMerge: true,
+	});
+	expect(commands[1]).toEqual([
+		"gh",
+		"repo",
+		"view",
+		"--json",
+		"mergeCommitAllowed,squashMergeAllowed,rebaseMergeAllowed,deleteBranchOnMerge",
+	]);
+});
+
+test("a PR without checks or a decision omits them, and repository settings are read once per repo", async () => {
+	const cwd = repo("git@github.com:acme/settings-cache.git");
+	const { run, commands } = githubRunner(
+		openPrRow("ACME/Settings-Cache", { mergeStateStatus: "SOMETHING_NEW" }),
+		JSON.stringify({
+			mergeCommitAllowed: false,
+			squashMergeAllowed: true,
+			rebaseMergeAllowed: true,
+		}),
+	);
+	const first = await findOpenBranchReviewWithRunner(cwd, "feature", run, { fresh: true });
+	expect(first?.details).toEqual({
+		draft: false,
+		reviewers: [],
+		mergeState: "unknown",
+		mergeMethods: ["squash", "rebase"],
+	});
+	await findOpenBranchReviewWithRunner(cwd, "feature", run, { fresh: true });
+	expect(commands.filter((args) => args[1] === "repo")).toHaveLength(1);
+});
+
+test("a failed repository read leaves merge methods out without failing the lookup", async () => {
+	const cwd = repo("git@github.com:acme/settings-down.git");
+	const { run } = githubRunner(openPrRow("acme/settings-down"), null);
+	const outcome = await findBranchReviewOutcomeWithRunner(cwd, "feature", run);
+	expect(outcome.reliable).toBe(true);
+	expect(outcome.value?.details).toEqual({ draft: false, reviewers: [], mergeState: "clean" });
+});
+
+test("a same-named branch's PR from a fork carries no details, so nothing offers to act on it", async () => {
+	const cwd = repo("git@github.com:acme/forked.git");
+	const { run, commands } = githubRunner(openPrRow("contributor/forked", { isDraft: true }), "{}");
+	const review = await findOpenBranchReviewWithRunner(cwd, "feature", run);
+	expect(review).toMatchObject({ kind: "pull-request", number: 128, state: "open" });
+	expect(review?.details).toBeUndefined();
+	expect(commands.filter((args) => args[1] === "repo")).toHaveLength(0);
+});
+
+test("a fork's settled same-named PR is never this branch's review, so it cannot shelve or reopen it", async () => {
+	const cwd = repo("git@github.com:acme/settled-fork.git");
+	const commands: string[][] = [];
+	const review = await findOpenBranchReviewWithRunner(cwd, "feature", async (_cwd, args) => {
+		commands.push(args);
+		if (args.includes("open")) return { ok: true, out: "[]" };
+		return {
+			ok: true,
+			out: JSON.stringify([
+				{
+					number: 9,
+					state: "CLOSED",
+					closedAt: "2026-10-05T10:00:00Z",
+					headRepositoryOwner: { login: "contributor" },
+					headRepository: { name: "settled-fork" },
+				},
+				{
+					number: 7,
+					state: "MERGED",
+					mergedAt: "2026-10-01T10:00:00Z",
+					headRepositoryOwner: { login: "acme" },
+					headRepository: { name: "settled-fork" },
+				},
+			]),
+		};
+	});
+	expect(commands[1]?.[commands[1].indexOf("--json") + 1]).toContain(
+		"headRepositoryOwner,headRepository",
+	);
+	expect(review).toMatchObject({ number: 7, state: "merged" });
 });

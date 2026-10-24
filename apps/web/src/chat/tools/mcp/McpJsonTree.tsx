@@ -1,5 +1,6 @@
 import { RiArrowRightSLine as ChevronRight } from "@remixicon/react";
 import type { McpResultSummary } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import { useFold } from "../../foldState";
 import { isRecord } from "./mcpResult";
@@ -82,6 +83,7 @@ function JsonEntries({
 	value: JsonContainer;
 	expandAll: boolean;
 }) {
+	const t = useT();
 	const [all, toggleAll, toggleAllRef] = useFold(`${id}:all`);
 	const entries = entriesOf(value);
 	const shown = all ? entries : entries.slice(0, CHILD_LIMIT);
@@ -105,7 +107,7 @@ function JsonEntries({
 					className={cn(toggleClass, "self-start text-primary hover:underline")}
 				>
 					<Indent />
-					{all ? "Show fewer" : `Show all ${entries.length}`}
+					{all ? t("mcp.card.showFewer") : t("mcp.jsonTree.showAll", { count: entries.length })}
 				</button>
 			) : null}
 		</div>
@@ -171,6 +173,7 @@ export function McpStructuredContent({
 	id: string;
 	summary: McpResultSummary | null;
 }) {
+	const t = useT();
 	const [open, toggle, toggleRef] = useFold(id);
 	if (summary?.structuredContentTruncated) {
 		return (
@@ -178,7 +181,7 @@ export function McpStructuredContent({
 				data-testid="mcp-structured-truncated"
 				className="text-text-muted tr-text-metadata italic"
 			>
-				Structured content too large to keep.
+				{t("mcp.structured.truncated")}
 			</span>
 		);
 	}
@@ -201,7 +204,7 @@ export function McpStructuredContent({
 				<ChevronRight
 					className={cn("size-16 shrink-0 transition-transform", open && "rotate-90")}
 				/>
-				Structured content
+				{t("mcp.structured.title")}
 			</button>
 			{open ? <McpJsonTree id={`${id}:tree`} value={summary.structuredContent} /> : null}
 		</div>

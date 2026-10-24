@@ -131,13 +131,27 @@ test("picker exhaustion throws a diagnostic instead of cancellation", async () =
 	).rejects.toThrow("Failed to open display");
 });
 
-test("picker output is trimmed, trailing separators dropped, empty → null", () => {
-	const parse = pickersFor("darwin")[0]?.parse;
-	if (!parse) throw new Error("expected a darwin picker");
-	expect(parse("/Users/me/project/\n")).toBe("/Users/me/project");
-	expect(parse("C:\\Users\\me\\project\\")).toBe("C:\\Users\\me\\project");
-	expect(parse("   ")).toBeNull();
-	expect(parse("")).toBeNull();
+test("picker output is trimmed, the platform's trailing separators dropped, empty → null", () => {
+	const posix = pickersFor("darwin")[0]?.parse;
+	const windows = pickersFor("win32")[0]?.parse;
+	if (!posix || !windows) throw new Error("expected darwin and win32 pickers");
+	expect(posix("/Users/me/project/\n")).toBe("/Users/me/project");
+	expect(posix("/Users/me/odd\\")).toBe("/Users/me/odd\\");
+	expect(windows("C:\\Users\\me\\project\\\r\n")).toBe("C:\\Users\\me\\project");
+	for (const parse of [posix, windows]) {
+		expect(parse("   ")).toBeNull();
+		expect(parse("")).toBeNull();
+	}
+});
+
+test("a picked filesystem root stays a root", () => {
+	const posix = pickersFor("linux")[0]?.parse;
+	const windows = pickersFor("win32")[0]?.parse;
+	if (!posix || !windows) throw new Error("expected linux and win32 pickers");
+	expect(posix("/\n")).toBe("/");
+	expect(windows("C:\\")).toBe("C:\\");
+	expect(windows("D:/")).toBe("D:/");
+	expect(windows("\\\\server\\share\\")).toBe("\\\\server\\share\\");
 });
 
 test("THINKRAIL_PICK_DIR overrides the native picker", async () => {

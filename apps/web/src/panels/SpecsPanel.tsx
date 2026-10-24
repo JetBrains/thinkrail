@@ -14,10 +14,11 @@ import {
 	RiNetworkFill,
 	RiStackFill,
 } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useMemo, useState } from "react";
-import { LoadingRegion } from "../components/Skeleton";
 import { selectActiveEditorTab, useAppStore } from "../store";
 import { openFileInTab } from "./openTabs";
 import {
@@ -37,6 +38,7 @@ export function SpecsPanel({
 	failed?: boolean;
 	onRetry: () => void;
 }) {
+	const t = useT();
 	const nodes = useAppStore((s) => s.specsByWorkspace[workspaceId]) ?? null;
 	const activeFilePath = useAppStore((state) => {
 		const tab = selectActiveEditorTab(state, workspaceId);
@@ -60,7 +62,7 @@ export function SpecsPanel({
 			)
 		) : nodes.length === 0 ? (
 			failed ? null : (
-				<p className="px-4 py-4 tr-text-metadata text-text-muted">No specs</p>
+				<p className="px-4 py-4 tr-text-metadata text-text-muted">{t("panels.specs.empty")}</p>
 			)
 		) : (
 			<ul className="flex flex-col motion-safe:animate-reveal">
@@ -84,11 +86,11 @@ export function SpecsPanel({
 					className="flex items-center gap-8 rounded-sm border border-feedback-error-muted bg-feedback-error-subtle px-8 py-4 tr-text-metadata text-text-default"
 				>
 					<span className="min-w-0 flex-1">
-						{nodes === null ? "Couldn't load specs." : "Couldn't update specs."}
+						{nodes === null ? t("panels.specs.loadFailed") : t("panels.specs.updateFailed")}
 					</span>
 					<Button variant="ghost" size="sm" data-testid="specs-retry" onClick={onRetry}>
 						<RefreshCw className="size-14" />
-						Retry
+						{t("common.retry")}
 					</Button>
 				</div>
 			) : null}
@@ -125,12 +127,13 @@ function SpecNodeRow({
 	activeFilePath: string | null;
 	depth: number;
 }) {
+	const t = useT();
 	const { node, children } = tree;
 	const [expanded, setExpanded] = useState(true);
 	const isActive = activeFilePath === node.path;
 	const isMainSpec = depth === 0 && node.type === "goal-and-requirements";
-	const role = specRoleLabel(node.type);
-	const trailingRole = isMainSpec ? "Main spec" : specRoleTag(node.type);
+	const role = specRoleLabel(t, node.type);
+	const trailingRole = isMainSpec ? t("panels.specs.mainSpec") : specRoleTag(t, node.type);
 	const DocumentIcon = specRoleIcon(node.type, isActive || isMainSpec);
 	const Chevron = expanded ? ChevronDown : ChevronRight;
 
@@ -148,7 +151,11 @@ function SpecNodeRow({
 					<button
 						type="button"
 						data-testid="spec-toggle"
-						aria-label={expanded ? `Collapse ${node.title}` : `Expand ${node.title}`}
+						aria-label={
+							expanded
+								? t("panels.specs.collapse", { title: node.title })
+								: t("panels.specs.expand", { title: node.title })
+						}
 						aria-expanded={expanded}
 						onClick={() => setExpanded((value) => !value)}
 						className="flex w-20 shrink-0 items-center justify-center self-stretch rounded-sm text-text-muted outline-none transition-colors hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
@@ -168,7 +175,10 @@ function SpecNodeRow({
 					data-active={isActive}
 					data-depth={depth}
 					aria-current={isActive ? "page" : undefined}
-					aria-label={`Open ${node.title}. ${isMainSpec ? "Main spec" : role}`}
+					aria-label={t("panels.specs.open", {
+						title: node.title,
+						role: isMainSpec ? t("panels.specs.mainSpec") : role,
+					})}
 					title={`${node.title}\n${node.id} · ${node.type}`}
 					onClick={() => void openFileInTab(workspaceId, node.path, "preview")}
 					onDoubleClick={() => void openFileInTab(workspaceId, node.path, "keep")}

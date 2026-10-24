@@ -7,6 +7,7 @@ import type {
 	HostPlatform,
 	HostUpdateNotice,
 	LayoutPreset,
+	LocalLocalesSnapshot,
 	LoginFrame,
 	LoginPush,
 	McpListResult,
@@ -46,6 +47,7 @@ import {
 	isBackgroundCommandCompletionMessage,
 	isControlMessage,
 	isLineWidth,
+	isLocalePreference,
 	isSettleIdleDays,
 	isSubagentCompletionMessage,
 	isSubagentMaxConcurrent,
@@ -54,9 +56,10 @@ import {
 	normalizeThemePreference,
 	sameModel,
 } from "@thinkrail/contracts";
+import { t } from "@thinkrail/locales/react";
 import { create } from "zustand";
 import type { LoginState } from "../auth";
-import { assistantFailureText } from "../chat/assistantFailure";
+import { assistantFailure } from "../chat/assistantFailure";
 import type { ChatMessageOrder } from "../chat/chatPreferences";
 import type { HydratedRuntime } from "../chat/hydrate";
 import { insertRoundCloser } from "../chat/roundCloser";
@@ -68,6 +71,9 @@ import type {
 	ToolResultState,
 } from "../chat/types";
 import {
+	ancestorPaths,
+	defaultTerminalIndex,
+	defaultTerminalTitle,
 	isPreviewCompatibleTabKind,
 	type LayoutAttention,
 	layoutResourceIdentity,
@@ -110,6 +116,7 @@ import {
 	SETTLED_SHELF_PAGE,
 	selectActiveWorkspaceProjectId,
 	selectChatAttended,
+	selectFilesTreeView,
 	selectLayoutResourcePlacement,
 	selectSupportsMcp,
 	selectWorkspaceById,
@@ -160,25 +167,46 @@ export interface DocTab {
 	sourceId: string;
 }
 export type DiffTabView = "split" | "inline";
-export interface DiffTab {
+interface DiffTabBase {
 	kind: "diff";
 	id: string;
 	workspaceId: string;
 	name: string;
 	path: string;
+	rendererId?: string;
+	viewState?: unknown;
+	view?: DiffTabView;
+	loadedTick?: number;
+}
+export interface GitDiffTab extends DiffTabBase {
+	before?: undefined;
 	scope: GitDiffScope;
 	loadedTarget: string;
 	original: string;
 	modified: string;
 	meta?: { original: ResourceMeta; modified: ResourceMeta };
 	originalOid?: string | null;
-	rendererId?: string;
-	viewState?: unknown;
-	view?: DiffTabView;
 	ignoreWhitespace?: boolean;
-	loadedTick?: number;
+}
+export interface FileComparisonTab extends DiffTabBase {
+	before: string;
+}
+export type DiffTab = GitDiffTab | FileComparisonTab;
+
+export function isFileComparison<T extends { kind: string; before?: string | undefined }>(
+	tab: T,
+): tab is T & { kind: "diff"; before: string } {
+	return tab.kind === "diff" && tab.before !== undefined;
 }
 export type ChangesLayout = "stacked" | "single";
+type FilesMode = "all" | "changed";
+export type FilesScrollView = "all" | "changedList" | "changedTree";
+export interface FilesTreeView {
+	expanded: readonly string[];
+	changedCollapsed: readonly string[];
+	scroll: Partial<Record<FilesScrollView, { top: number; scope: string }>>;
+	seenActivePath: string | null;
+}
 const TURNS_PER_WORKSPACE = 30;
 export interface ChangesTabReveal {
 	path: string;
@@ -364,6 +392,7 @@ export const SettingsSection = {
 	Mcp: "mcp",
 	Github: "github",
 	Appearance: "appearance",
+	Language: "language",
 	LineWidth: "line-width",
 	Chat: "chat",
 	Layout: "layout",
@@ -506,7 +535,7 @@ function removeSupersededAssistant(
 		(turn) =>
 			turn.id === attemptAssistantId &&
 			turn.kind === "assistant" &&
-			assistantFailureText(turn.message) !== null,
+			assistantFailure(turn.message) !== null,
 	);
 	return index < 0 ? turns : [...turns.slice(0, index), ...turns.slice(index + 1)];
 }
@@ -770,15 +799,16 @@ export function reduceSessionEvent(rt: SessionRuntime, event: PiEvent): SessionR
 		case "agent_end":
 			return rt;
 		case "agent_settled": {
-			const failure = assistantFailureText(event.terminal);
+			const failure = assistantFailure(event.terminal);
 			const closer: ChatTurn = failure
 				? {
 						kind: "error",
 						id: crypto.randomUUID(),
-						text: failure,
+						text: failure.message,
+						failure: failure.failure,
 						recovery: "try-again",
 					}
-				: { kind: "system", id: crypto.randomUUID(), text: "✓ Done", endedAt: Date.now() };
+				: { kind: "system", id: crypto.randomUUID(), endedAt: Date.now() };
 			return {
 				...rt,
 				turns: insertRoundCloser(
@@ -913,6 +943,7 @@ interface AppState {
 	welcomeGeneration: number;
 	protocolVersion: number | null;
 	hostPlatform: HostPlatform | null;
+	hostAppVersion: string | null;
 	hostUpdate: HostUpdateNotice | null;
 	projects: Project[];
 	recentProjects: Project[];
@@ -1017,6 +1048,9 @@ interface AppState {
 	reviewAutoFix: boolean;
 	agentReviewEnabled: boolean;
 	disabledExtensions: string[];
+	locale: string;
+	localLocales: LocalLocalesSnapshot | null;
+	installLocalLocales: (snapshot: LocalLocalesSnapshot | null) => void;
 	customLayoutPresets: LayoutPreset[];
 	toasts: Toast[];
 	setStatus: (status: ConnectionStatus) => void;
@@ -1027,6 +1061,7 @@ interface AppState {
 		config?: AppConfig,
 		hostPlatform?: HostPlatform,
 		hostUpdate?: HostUpdateNotice,
+		hostAppVersion?: string,
 	) => void;
 	applyHostUpdate: (hostUpdate: HostUpdateNotice) => void;
 	installProjectSnapshot: (projects: Project[], recentProjects: Project[]) => void;
@@ -1141,6 +1176,24 @@ interface AppState {
 	) => void;
 	changesView: "list" | "tree";
 	setChangesView: (view: "list" | "tree") => void;
+	filesMode: FilesMode;
+	setFilesMode: (mode: FilesMode) => void;
+	filesTreeByWorkspace: Record<string, FilesTreeView>;
+	hydrateFilesTree: (views: Record<string, FilesTreeView>) => void;
+	setFilesTreeExpanded: (workspaceId: string, paths: readonly string[], expanded: boolean) => void;
+	collapseAllFiles: (workspaceId: string) => void;
+	revealInFiles: (workspaceId: string, path: string) => void;
+	setChangedTreeCollapsed: (
+		workspaceId: string,
+		paths: readonly string[],
+		collapsed: boolean,
+	) => void;
+	setFilesTreeScroll: (
+		workspaceId: string,
+		view: FilesScrollView,
+		top: number,
+		scope: string,
+	) => void;
 	changesLayout: ChangesLayout;
 	setChangesLayout: (layout: ChangesLayout) => void;
 	diffScopeByWorkspace: Record<string, GitDiffScope>;
@@ -1288,6 +1341,7 @@ interface AppState {
 	applyConfig: (config: AppConfig) => void;
 	requestToolView: (workspaceId: string, tool: LayoutToolId) => void;
 	requestChangesView: (workspaceId: string, path: string | null, scope?: GitDiffScope) => void;
+	revealChanges: (workspaceId: string) => void;
 	clearChangesRequest: () => void;
 	requestChatLocation: (req: ChatLocationRequest) => void;
 	clearChatLocation: () => void;
@@ -1372,6 +1426,7 @@ function configPatch(config: AppConfig) {
 		disabledExtensions: Array.isArray(config.disabledExtensions)
 			? config.disabledExtensions
 			: DEFAULT_CONFIG.disabledExtensions,
+		locale: isLocalePreference(config.locale) ? config.locale : DEFAULT_CONFIG.locale,
 	};
 }
 
@@ -1479,6 +1534,45 @@ function reconcileProjectNavigation(
 	};
 }
 
+function withPathMembership(
+	list: readonly string[],
+	paths: readonly string[],
+	member: boolean,
+): readonly string[] {
+	const current = new Set(list);
+	const changed = paths.filter((path) => current.has(path) !== member);
+	if (changed.length === 0) return list;
+	if (member) return [...list, ...changed];
+	const removed = new Set(changed);
+	return list.filter((path) => !removed.has(path));
+}
+
+function revealChangedFilesPatch(
+	state: Pick<AppState, "layoutIntents">,
+	workspaceId: string,
+): Pick<AppState, "layoutIntents" | "filesMode"> {
+	return {
+		layoutIntents: appendLayoutIntent(state.layoutIntents, {
+			kind: "reveal-tool",
+			workspaceId,
+			tool: "files",
+		}),
+		filesMode: "changed",
+	};
+}
+
+function patchFilesTreeView(
+	state: Pick<AppState, "filesTreeByWorkspace" | "removedWorkspaceIds">,
+	workspaceId: string,
+	update: (view: FilesTreeView) => FilesTreeView,
+): Pick<AppState, "filesTreeByWorkspace"> | Record<string, never> {
+	if (state.removedWorkspaceIds[workspaceId]) return {};
+	const view = selectFilesTreeView(state, workspaceId);
+	const next = update(view);
+	if (next === view) return {};
+	return { filesTreeByWorkspace: { ...state.filesTreeByWorkspace, [workspaceId]: next } };
+}
+
 function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
 	const { [key]: _dropped, ...rest } = record;
 	return rest;
@@ -1533,7 +1627,7 @@ function patchResourceTab(
 function patchDiffTab(
 	state: Pick<AppState, "activeWorkspaceId" | "tabsByWorkspace">,
 	id: string,
-	patch: Partial<Omit<DiffTab, "kind" | "id">>,
+	patch: (tab: DiffTab) => DiffTab,
 ): Partial<AppState> {
 	const wsId = state.activeWorkspaceId;
 	if (!wsId) return {};
@@ -1542,7 +1636,7 @@ function patchDiffTab(
 	return {
 		tabsByWorkspace: {
 			...state.tabsByWorkspace,
-			[wsId]: tabs.map((t) => (t.id === id && t.kind === "diff" ? { ...t, ...patch } : t)),
+			[wsId]: tabs.map((t) => (t.id === id && t.kind === "diff" ? patch(t) : t)),
 		},
 	};
 }
@@ -2080,10 +2174,8 @@ function foldLoginFrame(state: LoginState, frame: LoginFrame): LoginState {
 }
 
 function nextTerminalTitle(list: TerminalTab[]): string {
-	const used = list
-		.map((tab) => Number.parseInt(/^Terminal (\d+)$/.exec(tab.title)?.[1] ?? "", 10))
-		.filter((n) => Number.isInteger(n));
-	return `Terminal ${Math.max(0, ...used) + 1}`;
+	const used = list.flatMap((tab) => defaultTerminalIndex(tab.title) ?? []);
+	return defaultTerminalTitle(Math.max(0, ...used) + 1);
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -2092,6 +2184,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 	welcomeGeneration: 0,
 	protocolVersion: null,
 	hostPlatform: null,
+	hostAppVersion: null,
 	hostUpdate: null,
 	projects: [],
 	recentProjects: [],
@@ -2146,6 +2239,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 	reviewsByWorkspace: {},
 	reviewFocusRequest: null,
 	changesView: "tree",
+	filesMode: "all",
+	filesTreeByWorkspace: {},
 	changesLayout: "stacked",
 	diffScopeByWorkspace: {},
 	chatLocationRequest: null,
@@ -2191,6 +2286,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 	reviewAutoFix: DEFAULT_CONFIG.reviewAutoFix,
 	agentReviewEnabled: DEFAULT_CONFIG.agentReviewEnabled,
 	disabledExtensions: DEFAULT_CONFIG.disabledExtensions,
+	locale: DEFAULT_CONFIG.locale,
+	localLocales: null,
+	installLocalLocales: (snapshot) => set({ localLocales: snapshot }),
 	toasts: [],
 	resourceSnapshots: {},
 	resourceRevision: 0,
@@ -2338,6 +2436,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		config,
 		hostPlatform,
 		hostUpdate,
+		hostAppVersion,
 	) =>
 		set((state) => {
 			const openProjects = sortProjects(projects.filter((project) => project.closed !== true));
@@ -2352,6 +2451,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				recentProjects: sortProjects(recentProjects),
 				hostPlatform: hostPlatform ?? null,
 				hostUpdate: hostUpdate ?? null,
+				hostAppVersion: hostAppVersion ?? null,
 				...(config ? configPatch(config) : {}),
 				...reconcileProjectNavigation(state, openProjects),
 				...pruneExpandedProjects(state, openProjects),
@@ -2455,6 +2555,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				skillChangeTickByWorkspace: omitKey(state.skillChangeTickByWorkspace, workspaceId),
 				specsByWorkspace: omitKey(state.specsByWorkspace, workspaceId),
 				diffScopeByWorkspace: omitKey(state.diffScopeByWorkspace, workspaceId),
+				filesTreeByWorkspace: omitKey(state.filesTreeByWorkspace, workspaceId),
 				reviewsByWorkspace: omitKey(state.reviewsByWorkspace, workspaceId),
 				changesRequest:
 					state.changesRequest?.workspaceId === workspaceId ? null : state.changesRequest,
@@ -2476,7 +2577,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 		if (wasActive) {
 			if (fallbackWorkspace) set((state) => workspaceActivationPatch(state, fallbackWorkspace));
 			else s.selectProject(projectId);
-			toast.info(`Workspace "${name ?? "?"}" was removed`);
+			toast.info(t("store.workspace.removed", { name: name ?? "?" }));
 		}
 	},
 	selectProject: (selectedProjectId, opts) =>
@@ -2853,9 +2954,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 				return next;
 			}),
 		),
-	setDiffTabView: (id, view) => set((s) => patchDiffTab(s, id, { view })),
+	setDiffTabView: (id, view) => set((s) => patchDiffTab(s, id, (tab) => ({ ...tab, view }))),
 	setDiffTabIgnoreWhitespace: (id, ignoreWhitespace) =>
-		set((s) => patchDiffTab(s, id, { ignoreWhitespace })),
+		set((s) =>
+			patchDiffTab(s, id, (tab) => (isFileComparison(tab) ? tab : { ...tab, ignoreWhitespace })),
+		),
 	setChangesTabView: (workspaceId, id, view) =>
 		set((s) => patchChangesTab(s, workspaceId, id, (tab) => ({ ...tab, view }))),
 	setChangesTabIgnoreWhitespace: (workspaceId, id, ignoreWhitespace) =>
@@ -2975,6 +3078,45 @@ export const useAppStore = create<AppState>((set, get) => ({
 			}),
 		),
 	setChangesView: (view) => set({ changesView: view }),
+	setFilesMode: (filesMode) => set({ filesMode }),
+	hydrateFilesTree: (filesTreeByWorkspace) => set({ filesTreeByWorkspace }),
+	setFilesTreeExpanded: (workspaceId, paths, expanded) =>
+		set((s) =>
+			patchFilesTreeView(s, workspaceId, (view) => {
+				const next = withPathMembership(view.expanded, paths, expanded);
+				return next === view.expanded ? view : { ...view, expanded: next };
+			}),
+		),
+	revealInFiles: (workspaceId, path) =>
+		set((s) =>
+			patchFilesTreeView(s, workspaceId, (view) => {
+				const expanded = withPathMembership(view.expanded, ancestorPaths(path), true);
+				return expanded === view.expanded && view.seenActivePath === path
+					? view
+					: { ...view, expanded, seenActivePath: path };
+			}),
+		),
+	collapseAllFiles: (workspaceId) =>
+		set((s) =>
+			patchFilesTreeView(s, workspaceId, (view) =>
+				view.expanded.length === 0 ? view : { ...view, expanded: [] },
+			),
+		),
+	setChangedTreeCollapsed: (workspaceId, paths, collapsed) =>
+		set((s) =>
+			patchFilesTreeView(s, workspaceId, (view) => {
+				const next = withPathMembership(view.changedCollapsed, paths, collapsed);
+				return next === view.changedCollapsed ? view : { ...view, changedCollapsed: next };
+			}),
+		),
+	setFilesTreeScroll: (workspaceId, scrollView, top, scope) =>
+		set((s) =>
+			patchFilesTreeView(s, workspaceId, (view) => {
+				const current = view.scroll[scrollView];
+				if (current?.top === top && current.scope === scope) return view;
+				return { ...view, scroll: { ...view.scroll, [scrollView]: { top, scope } } };
+			}),
+		),
 	setChangesLayout: (changesLayout) => set({ changesLayout }),
 	setDiffScope: (workspaceId, scope) =>
 		set((s) =>
@@ -3336,7 +3478,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 				kind: "chat",
 				id: chatTabId(workspaceId, sessionId),
 				workspaceId,
-				name: "Chat",
+				name: "",
 				sessionId,
 			};
 			const id = existing?.id ?? availableEditorTabId(tabs, preferred);
@@ -3956,7 +4098,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			let sessions = s.sessions;
 			for (const { event, sessionId } of payloads) {
 				if (event.type === "session_info_changed") {
-					const title = event.name?.trim() || "Chat";
+					const title = event.name?.trim() ?? "";
 					const renamed = renameChat(state, sessionId, title);
 					if (renamed && Object.keys(renamed).length > 0) state = { ...state, ...renamed };
 				}
@@ -4111,11 +4253,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 			if (s.removedWorkspaceIds[workspaceId]) return {};
 			const advanced = advanceCenterNavigation(s, workspaceId);
 			return {
-				layoutIntents: appendLayoutIntent(s.layoutIntents, {
-					kind: "reveal-tool",
-					workspaceId,
-					tool: "changes",
-				}),
+				...revealChangedFilesPatch(s, workspaceId),
 				changesRequest: {
 					workspaceId,
 					path,
@@ -4128,6 +4266,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 				...advanced.patch,
 			};
 		}),
+	revealChanges: (workspaceId) =>
+		set((s) => (s.removedWorkspaceIds[workspaceId] ? {} : revealChangedFilesPatch(s, workspaceId))),
 	clearChangesRequest: () => set({ changesRequest: null }),
 	requestChatLocation: (req) =>
 		set((state) => {
@@ -4167,7 +4307,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 					kind: "chat",
 					id: target.tabId,
 					workspaceId: target.workspaceId,
-					name: "Chat",
+					name: "",
 					sessionId: target.sessionId,
 				} satisfies ChatTab);
 			const resourcePlacement = selectLayoutResourcePlacement(s, target.workspaceId, resource);

@@ -11,8 +11,10 @@ import {
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	BRANCH_STATUS_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
+	CLIENT_ERROR_REPORT_PROTOCOL_VERSION,
 	CONTEXT_WINDOW_SETTINGS_PROTOCOL_VERSION,
 	customMessageText,
 	DEFAULT_MODEL_PROTOCOL_VERSION,
@@ -21,6 +23,7 @@ import {
 	isBackgroundCommandCompletionMessage,
 	isTodoReviewFixMessage,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
+	LOCALES_PROTOCOL_VERSION,
 	MCP_PROTOCOL_VERSION,
 	MCP_TOOL_GRANTS_PROTOCOL_VERSION,
 	MODEL_PICKER_PROTOCOL_VERSION,
@@ -32,6 +35,7 @@ import {
 	PROJECT_TRUST_PROTOCOL_VERSION,
 	PROTOCOL_VERSION,
 	RESOURCE_META_PROTOCOL_VERSION,
+	REVIEW_ACTIONS_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
@@ -198,16 +202,48 @@ test("the project trust summary and pi-level resource consent are pinned to v81"
 });
 
 test("workspace read state is pinned to v86", () => {
-	expect(PROTOCOL_VERSION).toBe(86);
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(WORKSPACE_READ_STATE_PROTOCOL_VERSION);
 	expect(WORKSPACE_READ_STATE_PROTOCOL_VERSION).toBe(86);
 	expect(WS_METHODS.workspaceMarkUnread).toBe("workspace.markUnread");
 	expect(WS_METHODS.workspaceMarkRead).toBe("workspace.markRead");
+});
+
+test("local language files and the locale setting are pinned to v89", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(LOCALES_PROTOCOL_VERSION);
+	expect(LOCALES_PROTOCOL_VERSION).toBe(89);
+	expect(WS_METHODS.localesList).toBe("locales.list");
+	expect(WS_METHODS.localesReveal).toBe("locales.reveal");
+	expect(WS_CHANNELS.localesChanged).toBe("locales.changed");
+});
+
+test("client error reports are pinned to v90", () => {
+	expect(PROTOCOL_VERSION).toBe(90);
+	expect(CLIENT_ERROR_REPORT_PROTOCOL_VERSION).toBe(90);
+	expect(WS_METHODS.clientReportError).toBe("client.reportError");
 });
 
 test("project rename is pinned to v85", () => {
 	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(PROJECT_RENAME_PROTOCOL_VERSION);
 	expect(PROJECT_RENAME_PROTOCOL_VERSION).toBe(85);
 	expect(WS_METHODS.projectRename).toBe("project.rename");
+});
+
+test("branch status, review-free push, and PR description sources are pinned to v87", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(BRANCH_STATUS_PROTOCOL_VERSION);
+	expect(BRANCH_STATUS_PROTOCOL_VERSION).toBe(87);
+	expect(WS_METHODS.workspaceBranchStatus).toBe("workspace.branchStatus");
+	expect(WS_METHODS.workspacePush).toBe("workspace.push");
+	expect(WS_METHODS.prGenerate).toBe("pr.generate");
+	expect(WS_METHODS.workspaceOpenReview).toBe("workspace.openReview");
+});
+
+test("review details and the GitHub review actions are pinned to v88", () => {
+	expect(PROTOCOL_VERSION).toBeGreaterThanOrEqual(REVIEW_ACTIONS_PROTOCOL_VERSION);
+	expect(REVIEW_ACTIONS_PROTOCOL_VERSION).toBe(88);
+	expect(WS_METHODS.prReady).toBe("pr.ready");
+	expect(WS_METHODS.prMerge).toBe("pr.merge");
+	expect(WS_METHODS.prReopen).toBe("pr.reopen");
+	expect(WS_METHODS.workspaceDeleteRemoteBranch).toBe("workspace.deleteRemoteBranch");
 });
 
 test("MCP server management, status and chat resources are pinned to v83", () => {

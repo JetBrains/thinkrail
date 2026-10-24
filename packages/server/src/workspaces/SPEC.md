@@ -26,8 +26,10 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
 - **Owns:** `listExistingWorktrees(projectId)` (**async** — parses `git worktree list --porcelain -z` read
   through `gitAsync`, the same request-path-read rule `git/SPEC.md` states for `gitStatus`/`listCommits`:
   this is the Existing-Worktree dialog's populate call, so a slow/large registry must not freeze the host's
-  event loop; drop the project folder, prunable registrations, and every path already represented in
-  ThinkRail; branch-backed rows are `available`, detached-HEAD ones `detached`), `openExistingWorktree(projectId, path)`
+  event loop; each listed path is resolved, since git prints `C:/…` on Windows and the row's path becomes the
+  stored `worktreePath` (architecture Decision 22); drop the project folder, prunable registrations, and every
+  path already represented in ThinkRail; branch-backed rows are `available`, detached-HEAD ones `detached`),
+  `openExistingWorktree(projectId, path)`
   (**async** for the same worktree-list read; revalidate against
   the Git registry at the mutation door, comparing canonicalized paths; same-project retries are
   idempotent, cross-project cwd reuse is rejected; persist + emit `created` with `kind: "external"`, a
@@ -231,8 +233,11 @@ place as `kind: "external"` — outside the data dir, never created or mutated h
   **refuses symlinked path components** (`lstat`, never followed — a malicious checkout can't redirect
   the seed outside the workspace); and the `.gitignore` write is **exclusive-create (`wx`) — only when
   the file is absent**: in the Default workspace that path is inside the user's own repo, where an
-  existing (possibly tracked, possibly customized) file is theirs to keep, and `O_EXCL` never follows
-  a (possibly dangling) symlink; seeding fills the gap, never overwrites (pinned by regression tests).
+  existing (possibly tracked, possibly customized) file is theirs to keep. The leaf is `lstat`-checked
+  first, so any entry already there, a (possibly dangling) symlink included, counts as present: POSIX
+  `O_EXCL` refuses to follow a symlink, but Windows' exclusive create (`CREATE_NEW`) follows the reparse
+  point and would write outside the checkout. Seeding fills the gap, never overwrites (pinned by
+  regression tests, the symlink one wherever the host may create symlinks).
 - **Lifecycle events:** every membership mutation — `createWorkspace` (`created`), `renameWorkspace`
   (`updated`, the agent's `set_title` included since it goes through it), `forgetWorkspace`
   (`removed`) — emits a `WorkspaceLifecycleEvent` through an **injected publisher** (`setWorkspacePublisher`,

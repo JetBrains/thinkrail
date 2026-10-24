@@ -4,6 +4,7 @@ import type {
 	BackgroundCommandCompletionDetails,
 	BackgroundCommandOutputResult,
 	BranchList,
+	BranchStatus,
 	ChangeReceipt,
 	DelegationRunDetails,
 	DelegationRunStatus,
@@ -23,6 +24,7 @@ import type {
 	JbcentralConnectResult,
 	JbcentralLoginResult,
 	JbcentralQuotaSnapshot,
+	LocalLocalesSnapshot,
 	LoginReply,
 	McpExposure,
 	McpListResult,
@@ -31,13 +33,16 @@ import type {
 	McpServerLog,
 	McpServerScope,
 	McpStatusSnapshot,
+	MergeMethod,
+	MergePrResult,
 	OpenBranchReview,
 	OpenPrResult,
-	PrDraft,
+	PrBodySource,
 	Project,
 	ProjectPathStatus,
 	ProjectTrustSummary,
 	ProviderStatusReport,
+	PrPreview,
 	ResourceMeta,
 	RevertTarget,
 	ReviewAnchor,
@@ -112,7 +117,11 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 86;
+export const PROTOCOL_VERSION = 90;
+export const CLIENT_ERROR_REPORT_PROTOCOL_VERSION = 90;
+export const LOCALES_PROTOCOL_VERSION = 89;
+export const REVIEW_ACTIONS_PROTOCOL_VERSION = 88;
+export const BRANCH_STATUS_PROTOCOL_VERSION = 87;
 export const WORKSPACE_READ_STATE_PROTOCOL_VERSION = 86;
 export const PROJECT_RENAME_PROTOCOL_VERSION = 85;
 export const MCP_TOOL_GRANTS_PROTOCOL_VERSION = 84;
@@ -206,6 +215,9 @@ export const WS_METHODS = {
 	workspaceOpenExisting: "workspace.openExisting",
 	workspaceList: "workspace.list",
 	workspaceOpenReview: "workspace.openReview",
+	workspaceBranchStatus: "workspace.branchStatus",
+	workspacePush: "workspace.push",
+	workspaceDeleteRemoteBranch: "workspace.deleteRemoteBranch",
 	workspaceRemove: "workspace.remove",
 	workspaceDiffStats: "workspace.diffStats",
 	workspaceSetSkillOverride: "workspace.setSkillOverride",
@@ -226,6 +238,10 @@ export const WS_METHODS = {
 	githubRefresh: "github.refresh",
 	prPreview: "pr.preview",
 	prOpen: "pr.open",
+	prGenerate: "pr.generate",
+	prReady: "pr.ready",
+	prMerge: "pr.merge",
+	prReopen: "pr.reopen",
 	fsReadDir: "fs.readDir",
 	fsReadFile: "fs.readFile",
 	specGraph: "spec.graph",
@@ -254,6 +270,8 @@ export const WS_METHODS = {
 	skillList: "skill.list",
 	skillsState: "skills.state",
 	extensionList: "extension.list",
+	localesList: "locales.list",
+	localesReveal: "locales.reveal",
 	sessionCreate: "session.create",
 	sessionPrompt: "session.prompt",
 	sessionSteer: "session.steer",
@@ -304,6 +322,7 @@ export const WS_METHODS = {
 	hostUpdate: "host.update",
 	settingsUpdate: "settings.update",
 	feedbackRespond: "feedback.respond",
+	clientReportError: "client.reportError",
 	historySearch: "history.search",
 	reviewGet: "review.get",
 	reviewCommentAdd: "review.commentAdd",
@@ -360,10 +379,10 @@ export const WS_CHANNELS = {
 	reviewFailed: "review.failed",
 	turnChanged: "turn.changed",
 	mcpStatus: "mcp.status",
+	localesChanged: "locales.changed",
 } as const;
 
 type SameUnion<A extends B, B extends C, C = A> = A;
-type _MethodsMatchMap = SameUnion<(typeof WS_METHODS)[keyof typeof WS_METHODS], WsMethodName>;
 export type WsChannel = (typeof WS_CHANNELS)[keyof typeof WS_CHANNELS];
 
 export const ASK_USER_ANSWERS_CUSTOM_TYPE = "ask-user-answers";
@@ -475,6 +494,16 @@ export function customMessageText(content: WireCustomMessage["content"]): string
 		.join("");
 }
 
+export type ClientErrorKind = "render" | "window" | "rejection";
+
+export interface ClientErrorReport {
+	kind: ClientErrorKind;
+	type: string;
+	stack?: string;
+	boundary?: string;
+	chunkIds?: Record<string, string>;
+}
+
 export interface Ack {
 	ok: true;
 }
@@ -573,6 +602,18 @@ export interface WsMethodMap {
 		params: { workspaceId: string; allowCached?: boolean };
 		result: OpenBranchReview | null;
 	};
+	"workspace.branchStatus": {
+		params: { workspaceId: string; allowCached?: boolean; skipFetch?: boolean };
+		result: BranchStatus;
+	};
+	"workspace.push": {
+		params: { workspaceId: string; branch: string; confirmBase?: boolean };
+		result: { dirtyFiles: number };
+	};
+	"workspace.deleteRemoteBranch": {
+		params: { workspaceId: string; branch: string };
+		result: Ack;
+	};
 	"workspace.remove": { params: { id: string }; result: Ack };
 	"workspace.diffStats": { params: { id: string }; result: DiffStats };
 	"workspace.setSkillOverride": {
@@ -604,13 +645,42 @@ export interface WsMethodMap {
 	"github.authStatus": { params: Record<string, never>; result: GithubAuthStatus };
 	"github.refresh": { params: Record<string, never>; result: GithubAuthStatus };
 	"pr.preview": {
-		params: { workspaceId: string; sessionId: string; title?: string };
-		result: PrDraft;
+		params: {
+			workspaceId: string;
+			sessionId?: string;
+			title?: string;
+			source?: PrBodySource;
+			template?: string;
+		};
+		result: PrPreview;
+	};
+	"pr.generate": {
+		params: { workspaceId: string; sessionId?: string; template?: string };
+		result: { body: string | null };
+	};
+	"pr.ready": {
+		params: { workspaceId: string; branch: string; number: number };
+		result: Ack;
+	};
+	"pr.merge": {
+		params: {
+			workspaceId: string;
+			branch: string;
+			number: number;
+			method: MergeMethod;
+			deleteBranch: boolean;
+		};
+		result: MergePrResult;
+	};
+	"pr.reopen": {
+		params: { workspaceId: string; branch: string; number: number };
+		result: Ack;
 	};
 	"pr.open": {
 		params: {
 			workspaceId: string;
-			sessionId: string;
+			sessionId?: string;
+			branch?: string;
 			title?: string;
 			titleEdited?: boolean;
 			body?: string;
@@ -716,6 +786,8 @@ export interface WsMethodMap {
 	"skill.list": { params: { projectId: string }; result: SlashCommandInfo[] };
 	"skills.state": { params: { workspaceId: string }; result: SkillCatalogEntry[] };
 	"extension.list": { params: Record<string, never>; result: ExtensionCatalogEntry[] };
+	"locales.list": { params: Record<string, never>; result: LocalLocalesSnapshot };
+	"locales.reveal": { params: Record<string, never>; result: Ack };
 	"session.create": {
 		params: { workspaceId: string; model?: WireModel; thinkingLevel?: ThinkingLevel };
 		result: { sessionId: string; model: WireModel | null; thinkingLevel: ThinkingLevel };
@@ -829,6 +901,7 @@ export interface WsMethodMap {
 	"host.update": { params: Record<string, never>; result: Ack };
 	"settings.update": { params: { config: AppConfigUpdate }; result: AppConfig };
 	"feedback.respond": { params: { action: InterviewResponse }; result: Ack };
+	"client.reportError": { params: ClientErrorReport; result: Ack };
 	"history.search": {
 		params: { query: string; scope: HistoryScope; limit?: number };
 		result: HistorySearchResult;
@@ -952,7 +1025,10 @@ export interface WsMethodMap {
 /** Payload of the `mcp.status` channel: one per-session snapshot per publish. */
 export type McpStatusPayload = McpStatusSnapshot;
 
-export type WsMethodName = keyof WsMethodMap;
+export type WsMethodName = SameUnion<
+	keyof WsMethodMap,
+	(typeof WS_METHODS)[keyof typeof WS_METHODS]
+>;
 export type WsParams<M extends WsMethodName> = WsMethodMap[M]["params"];
 export type WsResult<M extends WsMethodName> = WsMethodMap[M]["result"];
 

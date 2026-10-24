@@ -9,6 +9,16 @@ function isContained(root: string, candidate: string): boolean {
 	return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
 }
 
+function posixRelative(root: string, abs: string): string {
+	return relative(root, abs).split(sep).join("/");
+}
+
+export function workspaceRelativePath(root: string, path: string): string | null {
+	const base = resolve(root);
+	const abs = resolve(base, path);
+	return isContained(base, abs) ? posixRelative(base, abs) : null;
+}
+
 function isGitMetadataPath(root: string, candidate: string): boolean {
 	return relative(root, candidate).split(sep).includes(".git");
 }
@@ -58,7 +68,7 @@ export function readDir(workspaceId: string, path: string): FileNode[] {
 		.filter((entry) => entry.name !== ".git")
 		.map(
 			(entry): FileNode => ({
-				path: relative(root, join(abs, entry.name)),
+				path: posixRelative(root, join(abs, entry.name)),
 				name: entry.name,
 				kind: entry.isDirectory() ? "dir" : "file",
 			}),

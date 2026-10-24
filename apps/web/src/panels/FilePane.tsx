@@ -1,80 +1,30 @@
-import {
-	type ComponentType,
-	type LazyExoticComponent,
-	lazy,
-	Suspense,
-	useCallback,
-	useMemo,
-	useState,
-} from "react";
-import { LoadingRegion } from "../components/Skeleton";
-import { isPhoneViewport, usePhoneViewport } from "../lib";
+import { useT } from "@thinkrail/locales/react";
 import {
 	describeResource,
-	type ResourceContent,
-	type ResourceRenderer,
-	type ResourceViewProps,
-	resolveRenderers,
-} from "../resources";
+	PENDING_TEXT_META,
+	RendererToggles,
+	RendererView,
+	rendererImplementationKey,
+	resourceContent,
+	UnplacedReviewStrip,
+	useRendererSelection,
+} from "@thinkrail/resource-renderers";
+import { LoadingRegion } from "@thinkrail/ui/skeleton";
+import { Suspense, useMemo } from "react";
+import { isPhoneViewport } from "../lib";
 import type { FileTab } from "../store";
 import { useAppStore } from "../store";
 import { getTransport } from "../transport";
-import {
-	PENDING_TEXT_META,
-	rendererImplementationKey,
-	rendererTestId,
-	resourceBytesUrl,
-	selectResourceRenderer,
-	useResetViewStateOnImplementationChange,
-} from "./resourcePane";
+import { resourceBytesUrl, useResetViewStateOnImplementationChange } from "./resourcePane";
 import { reviewFlagFor } from "./reviewModel";
 import { SendReviewButton } from "./SendReviewButton";
-import { ToggleSegment } from "./ToggleSegment";
-import { UnplacedReviewStrip } from "./UnplacedReviewStrip";
 import { useLiveTabContent } from "./useLiveTabContent";
 import { useFileReview } from "./useReviewCommenting";
 
 const loading = <LoadingRegion rows={12} className="h-full p-12" />;
 
-function contentFor(tab: FileTab): ResourceContent {
-	const meta = tab.meta;
-	if (!meta) return { kind: "text", text: tab.content, hash: "" };
-	if (meta.hash === null || meta.byteLength === null) return { kind: "absent" };
-	if (meta.text) return { kind: "text", text: tab.content, hash: meta.hash };
-	return {
-		kind: "bytes",
-		url: resourceBytesUrl(tab.workspaceId, tab.path),
-		hash: meta.hash,
-		byteLength: meta.byteLength,
-	};
-}
-
-const viewComponents = new Map<string, LazyExoticComponent<ComponentType<ResourceViewProps>>>();
-
-function RendererView({
-	renderer,
-	implementationKey,
-	...props
-}: ResourceViewProps & { renderer: ResourceRenderer; implementationKey: string }) {
-	let Component = viewComponents.get(implementationKey);
-	if (!Component) {
-		if (!renderer.loadView) {
-			throw new Error(`Resource renderer has no view loader: ${renderer.id}`);
-		}
-		Component = lazy(renderer.loadView);
-		viewComponents.set(implementationKey, Component);
-	}
-	return <Component {...props} />;
-}
-
-function sameIds(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
-	if (left.size !== right.size) return false;
-	for (const id of left) if (!right.has(id)) return false;
-	return true;
-}
-
 export function FilePane({ tab }: { tab: FileTab }) {
-	const mobile = usePhoneViewport();
+	const t = useT();
 	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
 	const review = useFileReview(tab.workspaceId, tab.path, "inline");
 	const reviewComments = useAppStore(
@@ -100,31 +50,12 @@ export function FilePane({ tab }: { tab: FileTab }) {
 		() => describeResource(tab.workspaceId, tab.path, tab.meta ?? PENDING_TEXT_META),
 		[tab.workspaceId, tab.path, tab.meta],
 	);
-	const candidates = useMemo(
-		() => resolveRenderers(resource, "view", { mobile }),
-		[resource, mobile],
-	);
-	const renderer = selectResourceRenderer(candidates, tab.rendererId, tab.path);
-	const implementationKey = rendererImplementationKey(renderer.id, mobile);
-	const [placement, setPlacement] = useState<{
-		implementationKey: string;
-		ids: ReadonlySet<string>;
-	} | null>(null);
-	const onPlacedThreadIds = useCallback(
-		(ids: ReadonlySet<string>) => {
-			setPlacement((current) => {
-				if (current?.implementationKey === implementationKey && sameIds(current.ids, ids)) {
-					return current;
-				}
-				return { implementationKey, ids: new Set(ids) };
-			});
-		},
-		[implementationKey],
-	);
-	const placedThreadIds =
-		placement?.implementationKey === implementationKey ? placement.ids : undefined;
+	const { mobile, candidates, renderer, implementationKey, placedThreadIds, onPlacedThreadIds } =
+		useRendererSelection(resource, "view", tab.rendererId);
 	useResetViewStateOnImplementationChange(tab.workspaceId, tab.id, implementationKey);
-	const content = contentFor(tab);
+	const content = resourceContent(tab.content, tab.meta, () =>
+		resourceBytesUrl(tab.workspaceId, tab.path),
+	);
 	const reviews = [review.worktree];
 	const showToolbar = candidates.length >= 2 || fileHasDraft;
 	const saveViewState = (state: unknown) => {
@@ -146,21 +77,15 @@ export function FilePane({ tab }: { tab: FileTab }) {
 				<div
 					data-testid="resource-view-toggle"
 					role="toolbar"
-					aria-label="Resource view"
+					aria-label={t("panels.filePane.resourceView")}
 					className="flex h-32 shrink-0 items-center justify-end gap-4 border-border-default border-b bg-container-header-bg px-12"
 				>
 					<SendReviewButton workspaceId={tab.workspaceId} path={tab.path} />
-					{candidates.length >= 2
-						? candidates.map((candidate) => (
-								<ToggleSegment
-									key={candidate.id}
-									testid={rendererTestId(candidate.id)}
-									label={candidate.label}
-									active={candidate.id === renderer.id}
-									onClick={() => setTabRenderer(tab.workspaceId, tab.id, candidate.id)}
-								/>
-							))
-						: null}
+					<RendererToggles
+						candidates={candidates}
+						renderer={renderer}
+						onRendererId={(rendererId) => setTabRenderer(tab.workspaceId, tab.id, rendererId)}
+					/>
 				</div>
 			) : null}
 			<UnplacedReviewStrip
@@ -177,6 +102,7 @@ export function FilePane({ tab }: { tab: FileTab }) {
 						key={implementationKey}
 						renderer={renderer}
 						implementationKey={implementationKey}
+						mobile={mobile}
 						resource={resource}
 						content={content}
 						review={review.worktree}

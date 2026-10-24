@@ -4,7 +4,7 @@ type: module-design
 status: active
 title: Visualize extension
 parent: module-thinkrail-extensions
-depends-on: [module-ui, module-extension-api, module-pi-visualize]
+depends-on: [module-ui, module-extension-api, module-pi-visualize, module-locales]
 references: [submodule-web-chat, submodule-server-extensions]
 ---
 
@@ -17,11 +17,13 @@ is the props-driven presentation. The tool name joins the two without a wire cha
 ## Boundary
 
 Two entrypoints and no root barrel. `@thinkrail/ext-visualize/server` default-exports
-`defineServerExtension({ name: "visualize", title, description, extensions: [createVisualizeExtension({ validateMermaid })] })`
+`defineServerExtension({ name: "visualize", title, description, extensions: [createVisualizeExtension({ validateMermaid, checkFile, scratchDir })] })`
 — no children, no skill packages — and may import `extension-api/server`, `@thinkrail/pi-visualize`,
-`mermaid`, `linkedom`. `@thinkrail/ext-visualize/web` default-exports a `defineWebExtension` descriptor plus
+`mermaid`, `linkedom`, and `node:fs`/`node:path`. `@thinkrail/ext-visualize/web` default-exports a `defineWebExtension` descriptor plus
 named `MermaidView` for fenced mermaid in chat markdown, and consumes `extension-api/web`, per-file UI
-primitives, contracts, React and Remix Icon. Neither half imports the other, app/host internals, or (web)
+primitives, `@thinkrail/resource-renderers` (`ResourcePreview` and the host seam), contracts,
+`@thinkrail/locales/react` for its strings (`visualize.*` keys), React and
+Remix Icon. Neither half imports the other, app/host internals, or (web)
 any pi package; the browser loads `mermaid` lazily inside the renderer, never in the eager entry chunk.
 
 ## Strict validation (server)
@@ -41,14 +43,35 @@ its defensive fallback.
 - Invalid syntax surfaces as the package's `isError` tool result asking the model to correct and retry;
   the extension injects no prompt and forces no retry.
 
+File previews get `workspaceFileChecker`: a path must be relative, stay inside the session cwd (lexically
+and after resolving links, with the host read guard's containment rule, so `..draft.html` is a name and not
+a parent), name a regular file and stay out of `.git`, else the tool result asks the model to write it first
+— the same paths the host's `fs.readFile` then serves, so the card never reports what the tool accepted as
+unreadable. `scratchDir` is
+`.thinkrail/context/mockups/`, inside the host's gitignored scratch dir, so mockups never become
+project changes.
+
 The host composes this descriptor from the server registry ([[submodule-server-extensions]]); a strict
 validation call through that composition is pinned in `packages/server` (dev) and in the artifact probes
 (CLI binary and desktop), so the vanilla probe can never be what runs in ThinkRail.
 
 ## Rendering contract (web)
 
-Diagrams, comparison options and recommended choices preserve the existing chat presentation. The
-registration is primary and expanded by default; its title or diagram/comparison summary is available
+Diagrams, comparison options and recommended choices preserve the existing chat presentation. A
+completed `type: "file"` call renders `FileCard`: the title, the `before → path` links (through
+`onOpenFile`), and [[module-resource-renderers]]' `ResourcePreview` for the path and `before` — the same
+renderers, diff and review comments as diff review. The card frame is a fixed 480px box (Monaco and bounded
+diffs need a height) whose toolbar adds **Open in tab** (`host.openFile` keep, or `host.openComparison` for a
+before/after) and **Full screen** (a dialog rendering the same preview with Split/Inline; renderer choice and
+view state, such as the HTML preview width, are shared with the card). A card always shows the file's
+**current** content, never a snapshot from the tool call: editing a mockup updates every card that shows it
+(review comments follow the file). A mockup deleted under a mounted card leaves it on its last loaded version
+under a "Couldn't refresh" notice; a card mounted afterwards shows the load error. That is the price
+of anchoring review to real files; the tool guideline asks the agent to keep an earlier proposal as a copy
+passed as `before` when it should stay visible. The workspace and chat come from `useResourceScope`, which the chat transcript provides to
+its rows, so review sends land in the chat that shows the card; with no host or scope (a subagent transcript)
+the card shows only the links. The
+registration is primary and expanded by default; its title or diagram/comparison/file summary is available
 without rendering. Invalid or streaming arguments remain defensive and tool errors preserve readable
 result text.
 
