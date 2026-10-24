@@ -578,6 +578,19 @@ test("cards drawn in the preview reserve their height in the source view — and
 	await expect.poll(() => zonesReserveCards(page), { timeout: 5000 }).toBe(true);
 });
 
+function viewportRatio(target: Locator): Promise<number> {
+	return target.evaluate(
+		(node) =>
+			new Promise<number>((resolve) => {
+				const observer = new IntersectionObserver(([entry]) => {
+					observer.disconnect();
+					resolve(entry?.intersectionRatio ?? 0);
+				});
+				observer.observe(node);
+			}),
+	);
+}
+
 async function scrollCardsIntoView(page: Page): Promise<void> {
 	await page.locator(".monaco-editor").first().hover();
 	for (let i = 0; i < 30; i++) {
@@ -965,11 +978,11 @@ test("opening a far-off worktree comment scrolls its card into view in the file 
 	await expect(fileCard).toBeInViewport();
 	await expect(fileCard).toContainText("Far-off remark.");
 
-	await expect(async () => {
-		await page.getByRole("tabpanel").locator(".margin").first().hover();
-		await page.mouse.wheel(0, -20_000);
-		await expect(fileCard).not.toBeInViewport({ timeout: 500 });
-	}).toPass();
+	await page.getByRole("tabpanel").locator(".margin").first().hover();
+	for (let tick = 0; tick < 200 && (await viewportRatio(fileCard)) > 0; tick += 1) {
+		await page.mouse.wheel(0, -500);
+	}
+	await expect(fileCard).not.toBeInViewport();
 	await reviewSection.getByTestId("review-comment-open").first().click();
 	await expect(fileCard).toBeInViewport();
 });

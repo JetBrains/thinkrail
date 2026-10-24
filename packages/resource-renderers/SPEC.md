@@ -594,7 +594,12 @@ content's own height.
   (review attaches only at mount). Its layout cleanup saves the view state before it disposes the editor
   and the model, in that order. A path change on a live editor swaps the model in place, and the language
   follows the path, because `RendererView` is keyed by implementation, not path. New text calls `setValue`
-  only when it differs from the text last applied, compared as strings, never through `getValue()`.
+  only when it differs from the text last applied: the editor is read-only, so the last applied text is
+  the model's text and reading it back (`getValue()`) would only cost a full copy. The model and options
+  effects skip their first run, because the mount just created the editor with exactly those inputs. The
+  editor lives in a layout effect, so a re-suspend inside the view's Suspense boundary disposes it (and any
+  open review composer); nothing re-suspends there today, because each `RendererView` has its own boundary
+  and its loaded component is cached.
   A review focus in the mount commit reveals its line with `ScrollType.Immediate`: a smooth reveal issued
   before the editor's first frame never lands (found by the far-off worktree comment e2e). A later focus on
   a live editor scrolls smoothly.
@@ -667,8 +672,8 @@ content's own height.
   failed module, that test turns red and this cost is gone.
 - **Monaco mounts without `@monaco-editor/react`.** The wrapper awaited `loader.init()` (a promise even
   with a bundled Monaco) and took two more React commits before `editor.create`. The owned mount creates
-  the editor in the view's own commit. Click to text, median of 7 at 1x CPU: warm open 69 to 33 ms, tab
-  switch 50 to 30 ms, first open 87 to 68 ms, a 22.9k-line file 133 to 88 ms; at 4x CPU first open 285
-  to 221 ms. Click to highlighted is no later. Cost: create and first render now run in one task, so the
-  longest task grows at 4x CPU (first open 119 to 143 ms, the 22.9k-line file 97 to 153 ms). The Monaco
-  chunk shrinks by 12 kB.
+  the editor in the view's own commit. Click to visible text, median of 5 interleaved rounds (Chromium,
+  Mac Studio): a file open 65 to 34 ms and a tab switch 49 to 30 ms at 1x CPU, 145 to 77 ms and 88 to
+  70 ms at 4x. Click to highlighted is no later. Cost: create and first render now run in one task, so the
+  longest task after the click grows at 4x CPU (cold open 120 to 145 ms, warm large open 0 to 55 ms). The
+  `MonacoEditor` chunk shrinks by 12.1 kB (3.10 MB to 3.09 MB; 3.5 kB gzip).

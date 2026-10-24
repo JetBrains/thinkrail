@@ -260,7 +260,9 @@ test("Monaco restores scroll across a tab switch", async ({ page }) => {
 	expect(await firstVisibleLine(page)).toBe(scrolledTo);
 });
 
-test("closing a file tab leaves no Monaco editor behind", async ({ page }) => {
+test("closing and reopening a file tab mounts exactly one Monaco editor without page errors", async ({
+	page,
+}) => {
 	const pageErrors: string[] = [];
 	page.on("pageerror", (error) => pageErrors.push(error.message));
 	await openFixtureProject(page);

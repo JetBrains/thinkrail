@@ -136,9 +136,10 @@ A following probe that lets actionability scroll an off-screen transcript contro
 waits for `data-scroll-moving="false"`: that scroll is not reader input, so an active placement motion
 restores the latest edge, which on slow runners lands between mousedown and mouseup and drops the click.
 Monaco wheel probes reach the editor through an actionability-checked `hover()`, never a measured box:
-`@monaco-editor/react` creates the editor in a hidden container, so it is visible at 5×5 px until its
-ResizeObserver lays it out, and the centre of that box lies under the left panel's resize separator.
-Each CDP wheel event scrolls Monaco 50 px whatever its delta (one synthetic tick).
+a box read before the editor's layout settles can be a stale one whose centre lies under the left panel's
+resize separator. Each CDP wheel event scrolls Monaco 50 px whatever its delta (one synthetic tick), so a
+probe that must scroll an element out wheels until it observes the element gone rather than sending one
+large delta.
 
 ## Render profiling harness
 
