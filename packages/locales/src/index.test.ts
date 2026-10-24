@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
+	BUNDLED_LOCALES,
+	bundledCatalog,
 	completePlurals,
 	EN,
 	fallbackChain,
@@ -72,6 +74,7 @@ test("fallbackChain dedupes tag, base, English", () => {
 test("languageName uses the language's own name", () => {
 	expect(languageName("de")).toBe("Deutsch");
 	expect(languageName("en")).toBe("English");
+	expect(languageName("zh-Hans")).toBe("简体中文");
 });
 
 describe("validateCatalog hardening", () => {
@@ -134,9 +137,17 @@ describe("validateCatalog hardening", () => {
 	});
 });
 
-test("the bundled English catalog passes its own validation", () => {
-	const result = validateCatalog(EN);
-	expect(result.ok && Object.keys(result.strings).length).toBe(Object.keys(EN).length);
+test("every bundled catalog covers all English keys in sorted order and passes validation", () => {
+	expect(BUNDLED_LOCALES).toEqual(["en", "zh-Hans"]);
+	const enKeys = Object.keys(EN);
+	for (const locale of BUNDLED_LOCALES) {
+		const catalog = bundledCatalog(locale);
+		expect(catalog).toBeDefined();
+		if (!catalog) continue;
+		expect(Object.keys(catalog)).toEqual(enKeys);
+		const result = validateCatalog(catalog);
+		expect(result.ok && Object.keys(result.strings).length).toBe(enKeys.length);
+	}
 });
 
 describe("plural forms", () => {

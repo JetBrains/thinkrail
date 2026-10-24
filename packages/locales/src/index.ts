@@ -1,4 +1,5 @@
 import en from "../en.json";
+import zhHans from "../zh-Hans.json";
 
 export type Catalog = Readonly<Record<string, string>>;
 export type EnglishCatalog = typeof en;
@@ -34,7 +35,7 @@ export const DESKTOP_DIALOG_KEYS = [
 	"desktop.splash.starting",
 ] as const satisfies readonly (keyof EnglishCatalog)[];
 
-const BUNDLED: Readonly<Record<string, Catalog>> = { en: EN };
+const BUNDLED: Readonly<Record<string, Catalog>> = { en: EN, "zh-Hans": zhHans };
 
 export const BUNDLED_LOCALES: readonly string[] = Object.keys(BUNDLED);
 
