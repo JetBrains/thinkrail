@@ -1439,7 +1439,7 @@ function summaryOf(sessionId: string, entry: Entry): SessionSummary {
 	return {
 		sessionId,
 		workspaceId: entry.workspaceId,
-		title: session.sessionName ?? "Chat",
+		title: session.sessionName ?? "",
 		model: session.model
 			? sessionWireModel(session.model as unknown as Model<string>, entry.generation)
 			: null,
@@ -1572,7 +1572,7 @@ async function listSessionsInternal(workspaceId: string, cwd: string): Promise<S
 		.map((info) => ({
 			sessionId: info.id,
 			workspaceId,
-			title: info.name ?? "Chat",
+			title: info.name ?? "",
 			model: null,
 			thinkingLevel: "medium" as ThinkingLevel,
 			isStreaming: false,

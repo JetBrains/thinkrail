@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { closeLayoutTab, removeLayoutGroup, toolTab } from "./model";
 import {
 	applyProjectedLayoutDocument,
@@ -139,7 +140,10 @@ describe("normalized workbench layout", () => {
 			previewTabId: "hidden",
 		};
 		const secondView = workspaceViewFromDocument(second);
-		const removed = removeLayoutGroup(first, { area: "center", groupId: "center-b" });
+		const removed = removeLayoutGroup(currentTranslator(), first, {
+			area: "center",
+			groupId: "center-b",
+		});
 		if ("reason" in removed) throw new Error(removed.reason);
 		const next = applyProjectedLayoutDocument(
 			{ frame, viewsByWorkspace: { a: firstView, b: secondView } },
@@ -230,7 +234,7 @@ describe("normalized workbench layout", () => {
 			bottom: {
 				...preset.bottom,
 				groups: [
-					{ id: "changes-slot", weight: 0.5, folded: false, tools: ["changes" as const] },
+					{ id: "changes-slot", weight: 0.5, folded: false, tools: ["plan" as const] },
 					{ id: "shells", weight: 0.5, folded: false, tools: [] },
 				],
 			},
@@ -246,7 +250,7 @@ describe("normalized workbench layout", () => {
 			toolSlotDocument.bottom.groups.map((group) =>
 				group.tabs.map((tab) => (tab.kind === "tool" ? tab.tool : tab.id)),
 			),
-		).toEqual([["changes"], ["first-shell", "second-shell", "third"]]);
+		).toEqual([["plan"], ["first-shell", "second-shell", "third"]]);
 	});
 
 	test("a slotless preset keeps its frame slotless and reflows terminals into center", () => {
@@ -279,7 +283,10 @@ describe("normalized workbench layout", () => {
 		const previous = document();
 		const previousFrame = workbenchFrameFromDocument(previous);
 		const view = workspaceViewFromDocument(previous);
-		const next = removeLayoutGroup(previous, { area: "left", groupId: "left-terminals" });
+		const next = removeLayoutGroup(currentTranslator(), previous, {
+			area: "left",
+			groupId: "left-terminals",
+		});
 		expect(next).toEqual({ reason: "Move or hide this group's tabs before removing it." });
 
 		const withoutLeft = {

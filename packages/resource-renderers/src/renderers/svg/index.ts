@@ -2,7 +2,7 @@ import type { ResourceRenderer } from "../../registry";
 
 export const svgRenderer: ResourceRenderer = {
 	id: "thinkrail/svg",
-	label: "Vector",
+	labelKey: "viewer.renderer.vector",
 	match: { mime: ["image/svg+xml"], text: true },
 	rank: 130,
 	capabilities: {

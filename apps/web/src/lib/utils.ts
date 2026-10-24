@@ -1,4 +1,5 @@
 import type { UserMessage } from "@thinkrail/contracts";
+import type { Translator } from "@thinkrail/locales/react";
 
 export const DOUBLE_CLICK_SETTLE_MS = 250;
 
@@ -106,6 +107,28 @@ export function userText(content: UserMessage["content"]): string {
 		.join("");
 }
 
+export function firstNonBlankLine(text: string): string | undefined {
+	let start = 0;
+	while (start < text.length) {
+		const newline = text.indexOf("\n", start);
+		const end = newline === -1 ? text.length : newline;
+		const line = text.slice(start, end).trim();
+		if (line) return line;
+		start = end + 1;
+	}
+	return undefined;
+}
+
+export function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function ancestorPaths(path: string): string[] {
+	const segments = path.split("/");
+	segments.pop();
+	return segments.map((_, index) => segments.slice(0, index + 1).join("/"));
+}
+
 export function normalizePath(path: string): string {
 	return path.replaceAll("\\", "/").replace(/^\.\/+/, "");
 }
@@ -128,7 +151,7 @@ export function shallowEqualArrays(
 	return a.every((value, i) => Object.is(value, b[i]));
 }
 
-function fileName(path: string): string {
+export function fileName(path: string): string {
 	const parts = normalizePath(path).split("/").filter(Boolean);
 	return parts.at(-1) ?? path;
 }
@@ -264,26 +287,26 @@ export function platformShortcutLabel(
 	return alt ? `Ctrl+Alt+${key}` : `Ctrl+${key}`;
 }
 
-export function relativeTime(ms: number, now: number): string {
+export function relativeTime(t: Translator, ms: number, now: number): string {
 	const s = Math.floor((now - ms) / 1000);
-	if (s < 60) return "just now";
+	if (s < 60) return t("lib.relativeTime.justNow");
 	const m = Math.floor(s / 60);
-	if (m < 60) return `${m}m ago`;
+	if (m < 60) return t("lib.relativeTime.minutes", { count: m });
 	const h = Math.floor(m / 60);
-	if (h < 24) return `${h}h ago`;
-	return `${Math.floor(h / 24)}d ago`;
+	if (h < 24) return t("lib.relativeTime.hours", { count: h });
+	return t("lib.relativeTime.days", { count: Math.floor(h / 24) });
 }
 
 /** Compact elapsed label for dense rows: `3h`, `12d`, `3w`, `4mo`. */
-export function compactAge(ms: number, now: number): string {
+export function compactAge(t: Translator, ms: number, now: number): string {
 	const hours = Math.max(0, Math.floor((now - ms) / 3_600_000));
-	if (hours < 1) return "<1h";
-	if (hours < 24) return `${hours}h`;
+	if (hours < 1) return t("lib.compactAge.underHour");
+	if (hours < 24) return t("lib.compactAge.hours", { count: hours });
 	const days = Math.floor(hours / 24);
-	if (days < 14) return `${days}d`;
+	if (days < 14) return t("lib.compactAge.days", { count: days });
 	const weeks = Math.floor(days / 7);
-	if (weeks < 10) return `${weeks}w`;
-	return `${Math.floor(days / 30)}mo`;
+	if (weeks < 10) return t("lib.compactAge.weeks", { count: weeks });
+	return t("lib.compactAge.months", { count: Math.floor(days / 30) });
 }
 
 export function isShellInert(value: string): boolean {

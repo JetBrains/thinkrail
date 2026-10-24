@@ -217,7 +217,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   repair cache/history labels or a still-queued open, but cannot recreate a locally closed placement or steal
   focus. **The durable-title fold** routes
   `session_info_changed` through the same one-home chat-label mutation already used by extension-UI
-  `setTitle`: normalize an absent name to the `Chat` fallback; update the cached `ChatTab`, its existing local
+  `setTitle`: normalize an absent name to the empty untitled name (worded at render by `lib`'s `chatName`, as
+  `selectChatTitle` does; `selectChatName` returns the stored name, and `workspaceName(t, ws)` words the
+  host-named default workspace); update the cached `ChatTab`, its existing local
   placement, any queued open, or its `closedChatsByWorkspace` row; and change no recency, runtime, placement,
   navigation clock, or attention. The durable Pi event may supersede an extension's presentation-only title.
   An event for a session this surface has never listed remains a no-op—`session.list`/`session.getMessages`
@@ -677,7 +679,17 @@ so a run that settled while the socket was down still arrives); every other cons
 `useWorkspaceTurns`.
 **`requestChangesView(workspaceId, path | null, scope?)`** gained two optional dimensions for the chat's
 *Review turn* action: a `scope` lands on `diffScopeByWorkspace` atomically with the reveal intent, and a
-`null` path means "open the review tab for that scope" rather than "reveal this file".
+`null` path means "open the review tab for that scope" rather than "reveal this file". It reveals the
+**Files** tool and sets **`filesMode: "changed"`** in the same write, as does **`revealChanges(workspaceId)`**
+(the chat's commit receipt); `filesMode` (`"all"` default) is app-wide and session-only like `changesView`.
+**`filesTreeByWorkspace`** (read through **`selectFilesTreeView`**, a stable empty view when absent) is the
+Files tree's remembered look per workspace: All-mode `expanded` folders, Changed-tree `changedCollapsed`
+folders (one set for every scope), `scroll` per view (`all` / `changedList` / `changedTree`, each tagged with
+the scope and compare target it belongs to, so another scope or target branch starts at the top), and `seenActivePath`. **`revealInFiles`** expands
+every ancestor of a path and records it as seen in one write, so the auto-reveal can tell on return whether
+the active file changed meanwhile; every write is idempotent (an unchanged view keeps its identity) and a
+removed workspace's view is dropped in `applyWorkspaceRemoved`. Persistence lives outside the store, in
+`panels/filesTreeState`. **`selectActiveFilePath`** is the path of the active file or diff tab, else `null`.
 **`diffScopeByWorkspace`** + **`setDiffScope(workspaceId, scope)`** hold *what* each workspace's Changes
 panel is diffing (read through **`selectDiffScope`**, which defaults to the shared, referentially stable
 `BRANCH_SCOPE`); keyed **per workspace**, not app-wide like `changesView`, because a scope belongs to that
@@ -753,5 +765,6 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   invocation parser/matcher for user-message echo reconciliation, the MCP attention/active predicates; a
   leaf, so the edge adds no cycle); `chat`
   (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
-  (`ConnectionStatus`, **type-only**); `zustand`.
+  (`ConnectionStatus`, **type-only**); `@thinkrail/locales` (default chat/terminal names, settled-reason
+  copy and toasts, resolved when created); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`, shell runtime (the web-local layout state edge is type-only), or transport runtime.

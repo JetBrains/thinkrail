@@ -1,0 +1,86 @@
+import {
+	RiArrowDownSLine as ChevronDown,
+	RiArrowRightSLine as ChevronRight,
+	RiFileCopyLine as Copy,
+} from "@remixicon/react";
+import type { NativeUpdateLogEntry } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
+import { cn } from "@thinkrail/ui/utils";
+import { formatInstallLog, installLogSource, installLogText, logTime } from "./installCopy";
+
+export function InstallLogToggle({
+	open,
+	onOpenChange,
+}: {
+	open: boolean;
+	onOpenChange(open: boolean): void;
+}) {
+	const t = useT();
+	const Icon = open ? ChevronDown : ChevronRight;
+	return (
+		<Button
+			variant="ghost"
+			size="sm"
+			data-testid="update-log-toggle"
+			aria-expanded={open}
+			onClick={() => onOpenChange(!open)}
+		>
+			<Icon className="size-14" />
+			{open ? t("updates.log.hide") : t("updates.log.show")}
+		</Button>
+	);
+}
+
+export function InstallLog({
+	entries,
+	note,
+}: {
+	entries: readonly NativeUpdateLogEntry[];
+	note?: string | undefined;
+}) {
+	const t = useT();
+	return (
+		<div className="flex flex-col gap-4">
+			<div
+				role="log"
+				aria-label={t("updates.log.label")}
+				data-testid="update-log"
+				className="max-h-[12rem] overflow-auto rounded-sm border border-border-default bg-container-terminal-bg p-8 tr-code-text-small"
+			>
+				{entries.length === 0 ? (
+					<p className="text-text-muted">{t("updates.log.empty")}</p>
+				) : (
+					entries.map((entry, index) => (
+						<p
+							key={`${entry.at}-${index}`}
+							className={cn(
+								"whitespace-pre-wrap break-words",
+								entry.level === "error" ? "text-feedback-error" : "text-text-default",
+							)}
+						>
+							<span className="text-text-subtle">{logTime(entry.at)}</span>{" "}
+							<span className="text-feedback-info">{installLogSource(t, entry.source)}</span>{" "}
+							{installLogText(t, entry.event)}
+						</p>
+					))
+				)}
+			</div>
+			<div className="flex items-center justify-between gap-8">
+				<span className="text-text-muted tr-text-metadata">{note}</span>
+				<Button
+					variant="ghost"
+					size="sm"
+					data-testid="update-log-copy"
+					disabled={entries.length === 0}
+					onClick={() => {
+						void navigator.clipboard?.writeText(formatInstallLog(t, entries)).catch(() => {});
+					}}
+				>
+					<Copy className="size-14" />
+					{t("updates.log.copy")}
+				</Button>
+			</div>
+		</div>
+	);
+}

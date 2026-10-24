@@ -1,3 +1,4 @@
+import { mkdirSync } from "node:fs";
 import type {
 	OpenBranchReview,
 	ReviewComment,
@@ -11,7 +12,11 @@ import type {
 	WsParams,
 	WsResult,
 } from "@thinkrail/contracts";
-import { isControlMessage, WORKSPACE_SETTLE_PROTOCOL_VERSION } from "@thinkrail/contracts";
+import {
+	BRANCH_STATUS_PROTOCOL_VERSION,
+	isControlMessage,
+	WORKSPACE_SETTLE_PROTOCOL_VERSION,
+} from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	abortSession,
@@ -70,7 +75,13 @@ import {
 	stopBackgroundCommand,
 	stopSubagent,
 } from "../agent";
-import { type AdditionalAnalyticsCapture, type SendMode, track } from "../analytics";
+import {
+	type AdditionalAnalyticsCapture,
+	reportClientError,
+	type SendMode,
+	track,
+} from "../analytics";
+import { suggestPrDescription } from "../assist";
 import {
 	cancelLogin,
 	connectJbcentral,
@@ -84,7 +95,7 @@ import {
 	startProxyJbcentral,
 	updateJbcentral,
 } from "../auth";
-import { findBranchReviewOutcome } from "../branch-review";
+import { findBranchReviewOutcome, providerFromRemoteUrl } from "../branch-review";
 import { forgetWorkspaceChanges, revertChange, undoChange } from "../changes";
 import { selectDirectory } from "../dialog";
 import { listAvailableEditors, openEditor, revealInFileManager } from "../editors";
@@ -92,17 +103,34 @@ import { listExtensionCatalog } from "../extensions";
 import { recordAcceptedMessage, respondToInterview } from "../feedback";
 import { readDir, readFile } from "../fs";
 import {
+	commitsAheadOf,
 	countPushDivergence,
+	countPushTargetDivergence,
 	gitDiffFile,
 	gitStatus,
+	ignoredPaths,
 	listBranches,
 	listCommits,
+	originUrls,
+	type PushTargetStatus,
 	prefetchBranch,
+	remoteRefOid,
 } from "../git";
 import { githubAuthStatus, githubRefresh } from "../github";
 import { clampLimit, getHistoryIndex } from "../history";
+import { localesDir, readLocalLocales } from "../locales";
 import { logger } from "../log";
-import { openPr, previewPr } from "../pr";
+import {
+	deleteRemoteBranch,
+	mergePr,
+	onBaseBranch,
+	openPr,
+	prDraftInput,
+	previewPr,
+	pushBranch,
+	readyPr,
+	reopenPr,
+} from "../pr";
 import {
 	acknowledgeProjectSkills,
 	closeProject,
@@ -359,7 +387,7 @@ function fireTodoFixPrompt(
 			},
 		)
 		.catch((err) => {
-			console.warn(`todo fix rollback failed: ${err instanceof Error ? err.message : err}`);
+			log.warn("todo fix rollback failed", err);
 		})
 		.finally(() => releaseItemFix(p.sessionId, p.id));
 }
@@ -525,11 +553,55 @@ const handlers: WsHandlers = {
 		if (outcome.reliable) setWorkspaceReview(ws.id, outcome.value, ws.branch);
 		const review = openReviewForClient(outcome.value, ctx.protocolVersion);
 		if (!review) return review;
+		const { details: _details, ...reference } = review;
 		return {
-			...review,
+			...reference,
 			...(divergence && divergence.ahead > 0 ? { unpushedCommits: divergence.ahead } : {}),
 			...(divergence && divergence.behind > 0 ? { behindCommits: divergence.behind } : {}),
 		};
+	},
+	"workspace.branchStatus": async (p, ctx) => {
+		const ws = getWorkspace(p.workspaceId);
+		const fresh = shouldRefreshOpenReview(p.allowCached);
+		const origin = await originUrls(ws.worktreePath);
+		const splitPushUrl = origin.push !== origin.fetch ? origin.push : null;
+		const [outcome, measured, aheadOfBase] = await Promise.all([
+			findBranchReviewOutcome(ws.worktreePath, ws.branch, { fresh }),
+			(splitPushUrl
+				? countPushTargetDivergence(ws.worktreePath, ws.branch, splitPushUrl)
+				: countPushDivergence(ws.worktreePath, ws.branch, {
+						fetch: fresh && p.skipFetch !== true,
+					}).then(
+						(divergence): PushTargetStatus =>
+							divergence ? { published: true, ...divergence } : { published: false },
+					)
+			).catch(() => undefined),
+			commitsAheadOf(ws.worktreePath, ws.baseBranch),
+		]);
+		if (outcome.reliable) setWorkspaceReview(ws.id, outcome.value, ws.branch);
+		return {
+			hasOrigin: origin.push !== null,
+			provider: origin.push ? providerFromRemoteUrl(origin.push) : null,
+			pushesElsewhere: splitPushUrl !== null,
+			published:
+				measured?.published ??
+				(splitPushUrl ? null : remoteRefOid(ws.worktreePath, `origin/${ws.branch}`) !== null),
+			...(measured?.published && measured.ahead !== undefined && measured.behind !== undefined
+				? { ahead: measured.ahead, behind: measured.behind }
+				: {}),
+			aheadOfBase,
+			onBase: onBaseBranch(ws),
+			review: openReviewForClient(outcome.value, ctx.protocolVersion),
+		};
+	},
+	"workspace.push": async (p) => {
+		recordWorkspaceActivity(p.workspaceId);
+		return pushBranch(p);
+	},
+	"workspace.deleteRemoteBranch": async (p) => {
+		recordWorkspaceActivity(p.workspaceId);
+		await deleteRemoteBranch(p);
+		return { ok: true } as const;
 	},
 	"workspace.settle": (params) => settleWorkspace(params.id),
 	"workspace.unsettle": (params) => unsettleWorkspace(params.id),
@@ -571,7 +643,29 @@ const handlers: WsHandlers = {
 	},
 	"github.authStatus": () => githubAuthStatus(),
 	"github.refresh": () => githubRefresh(),
-	"pr.preview": (params) => previewPr(params),
+	"pr.preview": (params, ctx) =>
+		previewPr(
+			params.sessionId && !params.source && !supportsBranchStatus(ctx.protocolVersion)
+				? { ...params, source: "plan" }
+				: params,
+		),
+	"pr.generate": async (params) => ({
+		body: await suggestPrDescription(await prDraftInput(params)),
+	}),
+	"pr.ready": async (p) => {
+		recordWorkspaceActivity(p.workspaceId);
+		await readyPr(p);
+		return { ok: true } as const;
+	},
+	"pr.merge": (p) => {
+		recordWorkspaceActivity(p.workspaceId);
+		return mergePr(p);
+	},
+	"pr.reopen": async (p) => {
+		recordWorkspaceActivity(p.workspaceId);
+		await reopenPr(p);
+		return { ok: true } as const;
+	},
 	"pr.open": async (p) => {
 		refreshUserOwnedWorkspace(p.workspaceId);
 		recordWorkspaceActivity(p.workspaceId);
@@ -591,9 +685,16 @@ const handlers: WsHandlers = {
 	},
 	"dialog.selectDirectory": () =>
 		observeSetupAction("directory_pick", selectDirectory, directoryPickOutcome),
-	"fs.readDir": (p) => {
+	"fs.readDir": async (p) => {
 		void ensureWatch(p.workspaceId);
-		return readDir(p.workspaceId, p.path);
+		const nodes = readDir(p.workspaceId, p.path);
+		const ignored = await ignoredPaths(
+			getWorkspace(p.workspaceId).worktreePath,
+			nodes.map((node) => node.path),
+		);
+		return ignored.size === 0
+			? nodes
+			: nodes.map((node) => (ignored.has(node.path) ? { ...node, gitignored: true } : node));
 	},
 	"fs.readFile": (p) => {
 		void ensureWatch(p.workspaceId);
@@ -785,6 +886,13 @@ const handlers: WsHandlers = {
 		return listSkillCatalog(ws.worktreePath, admissionContextFor(project, ws.skillOverrides ?? {}));
 	},
 	"extension.list": () => listExtensionCatalog(new Set(getConfig().disabledExtensions)),
+	"locales.list": () => readLocalLocales(),
+	"locales.reveal": () => {
+		const dir = localesDir();
+		mkdirSync(dir, { recursive: true });
+		revealInFileManager(dir);
+		return { ok: true } as const;
+	},
 	"project.acknowledgeSkills": (p) => {
 		return acknowledgeProjectSkills(p.id, p.names);
 	},
@@ -1116,6 +1224,10 @@ const handlers: WsHandlers = {
 		respondToInterview(params.action);
 		return { ok: true } as const;
 	},
+	"client.reportError": (params) => {
+		reportClientError(typeof params === "object" && params !== null ? params : {});
+		return { ok: true } as const;
+	},
 	"history.search": (p) => {
 		const { filter, labels } = buildHistoryScope(p.scope, listProjects(), (projectId) =>
 			listWorkspaceRecords(projectId),
@@ -1235,6 +1347,10 @@ function dispatch<M extends WsMethodName>(method: M, params: WsParams<M>, ctx: R
 
 export function requestMethodDiagnostic(method: string): string {
 	return isWsMethod(method) ? method : "unknown method";
+}
+
+function supportsBranchStatus(protocolVersion: number | undefined): boolean {
+	return protocolVersion === undefined || protocolVersion >= BRANCH_STATUS_PROTOCOL_VERSION;
 }
 
 export function shouldRefreshOpenReview(allowCached: boolean | undefined): boolean {

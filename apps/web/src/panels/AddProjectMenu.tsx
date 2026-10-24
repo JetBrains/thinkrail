@@ -4,6 +4,7 @@ import {
 	RiGlobalLine as Globe,
 } from "@remixicon/react";
 import type { Project } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -30,26 +31,27 @@ export function AddProjectMenu({
 	align?: "start" | "center" | "end";
 	children: ReactNode;
 }) {
+	const t = useT();
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
 			<DropdownMenuContent align={align}>
 				<DropdownMenuItem data-testid="menu-open-project" onSelect={() => onOpen()}>
 					<Folder />
-					<span>Open project</span>
+					<span>{t("panels.addProject.open")}</span>
 				</DropdownMenuItem>
 				<DropdownMenuItem data-testid="menu-enter-host-path" onSelect={() => onEnterHostPath()}>
 					<Edit />
-					<span>Enter host path…</span>
+					<span>{t("panels.addProject.enterHostPath")}</span>
 				</DropdownMenuItem>
 				<DropdownMenuItem disabled>
 					<Globe />
-					<span>Open GitHub project</span>
+					<span>{t("panels.addProject.openGitHub")}</span>
 				</DropdownMenuItem>
 				{recentProjects.length > 0 && (
 					<>
 						<DropdownMenuSeparator />
-						<DropdownMenuLabel>Recents</DropdownMenuLabel>
+						<DropdownMenuLabel>{t("panels.addProject.recents")}</DropdownMenuLabel>
 						<DropdownMenuGroup>
 							{recentProjects.map((project) => (
 								<DropdownMenuItem

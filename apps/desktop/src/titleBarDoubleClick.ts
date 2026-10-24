@@ -1,3 +1,4 @@
+import { desktopError } from "./errorReporting";
 export const ELECTROBUN_APP_REGION_PROPERTY = "--electrobun-app-region";
 
 export type TitleBarDoubleClickAction = "zoom" | "minimize" | "none";
@@ -133,7 +134,7 @@ export function createTitleBarDoubleClickHandler(options: {
 			const after = snapshotWindow(options.window);
 			options.onHandled?.({ preference, action, before, after });
 		} catch (error) {
-			console.error("[desktop] title-bar double-click failed", error);
+			desktopError("title_bar", "title-bar double-click failed", error);
 		} finally {
 			pending = false;
 		}

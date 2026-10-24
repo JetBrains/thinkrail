@@ -337,15 +337,15 @@ Children / associated surfaces:
 - **Parent:** Right side-rail tool (`plan`) for the compact TODO list; center editor tab for the
   document-scale Plan page.
 - **Responsibility:** surface the chat's `pi-todos` plan (group-first, status-ordered). The TODO list
-  is a side-rail tool next to Files / Specs / Changes / Review.
+  is a side-rail tool next to Files / Specs / Review.
 
 ---
 
 # Changes Review Tab
 
 The continuous review surface for one diff scope: every changed file of the scope as a **File Section** in a
-center tab. A single click on a Changes row, or the chat's **Review-Turn Chip**, opens it; the Changes Tool is
-its navigator.
+center tab. A single click on a Changes row, or the chat's **Review-Turn Chip**, opens it; the Changed mode of the
+Files tool is its navigator.
 
 - **Canonical name:** Changes Review Tab; its body is the **Changes Review Pane**.
 - **Implementation:** `panels/ChangesReviewPane.tsx` → `ChangesReviewPane`, rendering
@@ -408,7 +408,7 @@ leaves a compact restore rail. Side arrangement is workspace-shared; selection a
 
 Every Side Group has a **Group Header**; folding retains that header as a 27px row while its linked
 body stays native-hidden and unmounted. Initial Balanced placement puts Projects on the left, Specs and
-Files in the first right group, then Changes and Review in the second; the default terminal catalog
+Files in the first right group, then Review in the second; the default terminal catalog
 joins that last group. This is startup behavior, not a fixed hierarchy.
 
 ## Side Tools
@@ -417,20 +417,19 @@ joins that last group. This is startup behavior, not a fixed hierarchy.
 |---|---|---|
 | Projects | `tab-projects`, body `left-nav` | `panels/ProjectTree.tsx`; projects and workspaces |
 | Specs | `tab-specs` | `panels/SpecsPanel.tsx`; automatically refreshed read-only spec graph, with error-only `specs-retry` |
-| Files | `tab-files` | `panels/FileTree.tsx`; worktree file tree |
-| Changes | `tab-changes` | `panels/ChangesPanel.tsx`; scoped git changes, Changes Review Tab navigator, diff opens |
+| Files | `tab-files` | `panels/FilesPanel.tsx`; **All | Changed** switch (`files-mode-all` / `files-mode-changed`, app-wide `store.filesMode`, default All) over `panels/FileTree.tsx` (worktree tree; changed files carry a status-coloured name + letter `file-status`, folders containing changes an amber name + dot `file-folder-dot`; git-ignored rows `data-status="ignored"` in the subtle colour; the active file/diff tab's row selected and auto-revealed) plus the **Collapse All Button** `files-collapse-all` or `panels/ChangesPanel.tsx` (below) |
 | Review | `tab-review` | `panels/ReviewPanel.tsx`; review accordion and send actions |
 
 `WorkspaceWorkbench` owns the long-lived Specs and Review reads so badges, review flags, and artifact
 classification remain current even while those tool bodies are not selected.
 
-## Changes Tool
+## Changes mode (Files tool)
 
-The Changes body keeps its own feature toolbar: scope menu, target-branch picker, and List\|Tree toggle
+The Changed mode of the Files tool keeps its own feature toolbar, under the All | Changed switch row: scope menu, target-branch picker, and List\|Tree toggle
 (Tree by default). A single click on a row opens the scope's **Changes review tab** — every changed file as
 a stacked section, or one at a time in its **One file** mode — and the sidebar is that tab's navigator
 (the row of the section in view is active, viewed files carry a mark); double-click or *Open as tab* opens
-the per-file diff tab. `ChangesPanel` remains arrangement-agnostic; only its side placement changed.
+the per-file diff tab. `ChangesPanel` remains arrangement-agnostic and is fed its git status by `FilesPanel`.
 
 | Canonical name | Implementation | `data-testid` | Responsibility |
 |---|---|---|---|
@@ -618,8 +617,8 @@ its alternatives in parentheses.
 **Sides**
 
 - **Left Side**, **Right Side**, **Side Group**, **Hidden-Side Rail**.
-- Singleton tools: **Projects**, **Specs**, **Files**, **Changes**, **Review**.
-- **Specs Panel**, **Files Panel** (alt: File Tree), **Changes Panel**, **Review Panel**.
+- Singleton tools: **Projects**, **Specs**, **Files**, **Review**.
+- **Specs Panel**, **Files Panel** (alt: File Tree; its **Changed** mode renders the **Changes Panel**), **Review Panel**.
 - **Changes Header** (no component): **Changes Scope Menu** (with **Last Turn** / **Agent Turns**),
   **Branch Picker**, **Changes View Toggle**.
 - **Changes List** / **Changes Tree**, **Change-Row Actions**, **Tree Row**, **Viewed Mark**,

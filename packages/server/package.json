@@ -17,10 +17,12 @@
 	"dependencies": {
 		"@earendil-works/pi-ai": "catalog:",
 		"@earendil-works/pi-coding-agent": "catalog:",
+		"@posthog/core": "1.45.1",
 		"@stroncium/procfs": "1.2.1",
 		"@thinkrail/contracts": "workspace:*",
 		"@thinkrail/ext-visualize": "workspace:*",
 		"@thinkrail/extension-api": "workspace:*",
+		"@thinkrail/locales": "workspace:*",
 		"@thinkrail/shared": "workspace:*",
 		"bun-pty": "0.4.10",
 		"jiti": "2.7.0",

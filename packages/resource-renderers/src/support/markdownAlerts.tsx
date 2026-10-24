@@ -6,6 +6,8 @@ import {
 	type RemixiconComponentType,
 	RiAlertLine as TriangleAlert,
 } from "@remixicon/react";
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
 import type { ReactNode } from "react";
 import type { Components } from "react-markdown";
 
@@ -60,7 +62,7 @@ function transformBlockquote(bq: MdNode): void {
 const ALERTS: Record<
 	AlertVariant,
 	{
-		label: string;
+		label: MessageKey;
 		icon: RemixiconComponentType;
 		border: string;
 		bg: string;
@@ -68,35 +70,35 @@ const ALERTS: Record<
 	}
 > = {
 	note: {
-		label: "Note",
+		label: "panels.markdownAlerts.note",
 		icon: Info,
 		border: "border-feedback-info",
 		bg: "bg-feedback-info-subtle",
 		text: "text-feedback-info",
 	},
 	tip: {
-		label: "Tip",
+		label: "panels.markdownAlerts.tip",
 		icon: Lightbulb,
 		border: "border-feedback-success",
 		bg: "bg-feedback-success-subtle",
 		text: "text-feedback-success",
 	},
 	important: {
-		label: "Important",
+		label: "panels.markdownAlerts.important",
 		icon: CircleAlert,
 		border: "border-primary",
 		bg: "bg-primary-subtle",
 		text: "text-primary",
 	},
 	warning: {
-		label: "Warning",
+		label: "panels.markdownAlerts.warning",
 		icon: TriangleAlert,
 		border: "border-feedback-warning",
 		bg: "bg-feedback-warning-subtle",
 		text: "text-feedback-warning",
 	},
 	caution: {
-		label: "Caution",
+		label: "panels.markdownAlerts.caution",
 		icon: OctagonAlert,
 		border: "border-feedback-error",
 		bg: "bg-feedback-error-subtle",
@@ -115,6 +117,7 @@ function AlertCallout({
 	node?: { properties?: Record<string, unknown> };
 	children?: ReactNode;
 }) {
+	const t = useT();
 	const raw = node?.properties?.variant;
 	const cfg = ALERTS[isVariant(raw) ? raw : "note"];
 	const Icon = cfg.icon;
@@ -126,7 +129,7 @@ function AlertCallout({
 		>
 			<p className={`tr-title-card mb-4 flex items-center gap-4 ${cfg.text}`}>
 				<Icon className="size-16 shrink-0" />
-				{cfg.label}
+				{t(cfg.label)}
 			</p>
 			{children}
 		</div>

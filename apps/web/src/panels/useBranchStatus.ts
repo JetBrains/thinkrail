@@ -1,65 +1,86 @@
-import type { OpenBranchReview, Workspace } from "@thinkrail/contracts";
+import {
+	BRANCH_STATUS_PROTOCOL_VERSION,
+	type BranchStatus,
+	type OpenBranchReview,
+	type Workspace,
+} from "@thinkrail/contracts";
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import { useAppStore } from "../store";
 import { type ConnectionStatus, getTransport } from "../transport";
-import { type OpenBranchReviewStateStore, openBranchReviewState } from "./openBranchReviewState";
+import {
+	type BranchAnswer,
+	type BranchFacts,
+	type BranchStatusSnapshot,
+	type BranchStatusStateStore,
+	branchStatusState,
+} from "./branchStatusState";
 
-type OpenReviewRequestParams = { workspaceId: string; allowCached?: true };
-type OpenReviewRequest = (params: OpenReviewRequestParams) => Promise<OpenBranchReview | null>;
+type BranchStatusRequestParams = { workspaceId: string; allowCached?: true; skipFetch?: true };
 
-export interface OpenBranchReviewState {
+export const CI_POLL_INTERVAL_MS = 20_000;
+type BranchStatusRequest = (params: BranchStatusRequestParams) => Promise<BranchAnswer>;
+
+export interface BranchStatusHookState {
 	review: OpenBranchReview | null;
 	url?: string;
+	status: BranchFacts | null;
 	noteOpenReview: (review: OpenBranchReview, url?: string) => void;
-	refreshOpenReview: () => void;
+	refreshBranchStatus: () => void;
 }
 
-function requestOpenBranchReview(options: {
+function requestBranchStatus(options: {
 	workspaceId: string;
 	key: string;
 	allowCached: boolean;
-	request: OpenReviewRequest;
-	state: OpenBranchReviewStateStore;
+	skipFetch?: boolean;
+	request: BranchStatusRequest;
+	state: BranchStatusStateStore;
 }): void {
 	const generation = options.state.beginRequest(options.key);
 	void options
 		.request({
 			workspaceId: options.workspaceId,
 			...(options.allowCached ? { allowCached: true as const } : {}),
+			...(options.skipFetch ? { skipFetch: true as const } : {}),
 		})
 		.then(
-			(review) => {
-				options.state.resolveRequest(options.key, generation, review);
+			(answer) => {
+				options.state.resolveRequest(options.key, generation, answer);
 			},
 			() => {
-				options.state.resolveRequest(options.key, generation, null);
+				options.state.resolveRequest(options.key, generation, { review: null, status: null });
 			},
 		);
 }
 
-export function startOpenBranchReviewSync(options: {
+export function startBranchStatusSync(options: {
 	workspaceId: string;
 	key: string;
-	request: OpenReviewRequest;
-	state: OpenBranchReviewStateStore;
+	request: BranchStatusRequest;
+	state: BranchStatusStateStore;
 	focusTarget: EventTarget;
 	connected: boolean;
 }): {
 	setConnected: (connected: boolean) => void;
 	refresh: () => void;
 	reload: () => void;
+	poll: () => void;
 	stop: () => void;
 } {
 	let connected = options.connected;
 	let freshOnReconnect = false;
-	const load = (allowCached: boolean) =>
-		requestOpenBranchReview({
+	const load = (allowCached: boolean, skipFetch = false) =>
+		requestBranchStatus({
 			workspaceId: options.workspaceId,
 			key: options.key,
 			allowCached,
+			skipFetch,
 			request: options.request,
 			state: options.state,
 		});
+	const poll = () => {
+		if (connected) load(false, true);
+	};
 	const refresh = () => {
 		if (connected) load(false);
 		else freshOnReconnect = true;
@@ -78,34 +99,78 @@ export function startOpenBranchReviewSync(options: {
 
 	if (connected) load(true);
 	options.focusTarget.addEventListener("focus", refresh);
-	return { setConnected, refresh, reload, stop };
+	return { setConnected, refresh, reload, poll, stop };
 }
 
-const transportRequest: OpenReviewRequest = (params) =>
-	getTransport().request("workspace.openReview", params);
+export function startCiPoll(options: {
+	poll: () => void;
+	visible: () => boolean;
+	intervalMs?: number;
+	setInterval?: (run: () => void, ms: number) => unknown;
+	clearInterval?: (handle: unknown) => void;
+}): () => void {
+	const every = options.setInterval ?? ((run, ms) => globalThis.setInterval(run, ms));
+	const clear =
+		options.clearInterval ??
+		((handle) => globalThis.clearInterval(handle as ReturnType<typeof setInterval>));
+	const handle = every(() => {
+		if (options.visible()) options.poll();
+	}, options.intervalMs ?? CI_POLL_INTERVAL_MS);
+	return () => clear(handle);
+}
 
-type OpenBranchReviewSync = ReturnType<typeof startOpenBranchReviewSync>;
+export function ciPollWanted(snapshot: BranchStatusSnapshot | null): boolean {
+	const review = snapshot?.review;
+	if (!review || !isOpenBranchReview(review) || !review.details) return false;
+	return (review.details.checks?.pending ?? 0) > 0 || (snapshot.discovery ?? 0) > 0;
+}
 
-export function useOpenBranchReview(
+export function supportsBranchStatus(protocolVersion: number | null): boolean {
+	return protocolVersion !== null && protocolVersion >= BRANCH_STATUS_PROTOCOL_VERSION;
+}
+
+export function branchAnswer({ review, ...facts }: BranchStatus): BranchAnswer {
+	const ahead = facts.ahead ?? 0;
+	const behind = facts.behind ?? 0;
+	return {
+		review: review
+			? {
+					...review,
+					...(ahead > 0 ? { unpushedCommits: ahead } : {}),
+					...(behind > 0 ? { behindCommits: behind } : {}),
+				}
+			: null,
+		status: facts,
+	};
+}
+
+const transportRequest: BranchStatusRequest = async (params) => {
+	if (supportsBranchStatus(useAppStore.getState().protocolVersion)) {
+		return branchAnswer(await getTransport().request("workspace.branchStatus", params));
+	}
+	return { review: await getTransport().request("workspace.openReview", params), status: null };
+};
+
+type BranchStatusSync = ReturnType<typeof startBranchStatusSync>;
+
+export function useBranchStatus(
 	workspace: Workspace | null,
 	status: ConnectionStatus,
-): OpenBranchReviewState {
+	options: { pollChecks?: boolean } = {},
+): BranchStatusHookState {
 	const workspaceId = workspace?.id ?? null;
 	const key = workspace ? `${workspace.id}\0${workspace.branch}` : null;
 	const currentKey = useRef(key);
-	const connected = status === "connected";
+	const connected = useAppStore((s) => status === "connected" && s.protocolVersion !== null);
 	const connectedRef = useRef(connected);
-	const sync = useRef<OpenBranchReviewSync | null>(null);
+	const sync = useRef<BranchStatusSync | null>(null);
 	currentKey.current = key;
 	connectedRef.current = connected;
 	const subscribe = useCallback(
-		(listener: () => void) => (key ? openBranchReviewState.subscribe(key, listener) : () => {}),
+		(listener: () => void) => (key ? branchStatusState.subscribe(key, listener) : () => {}),
 		[key],
 	);
-	const getSnapshot = useCallback(
-		() => (key ? openBranchReviewState.getSnapshot(key) : null),
-		[key],
-	);
+	const getSnapshot = useCallback(() => (key ? branchStatusState.getSnapshot(key) : null), [key]);
 	const loaded = useSyncExternalStore(subscribe, getSnapshot, () => null);
 
 	useEffect(() => {
@@ -113,11 +178,11 @@ export function useOpenBranchReview(
 			sync.current = null;
 			return;
 		}
-		const controller = startOpenBranchReviewSync({
+		const controller = startBranchStatusSync({
 			workspaceId,
 			key,
 			request: transportRequest,
-			state: openBranchReviewState,
+			state: branchStatusState,
 			focusTarget: window,
 			connected: connectedRef.current,
 		});
@@ -147,22 +212,37 @@ export function useOpenBranchReview(
 		sync.current?.reload();
 	}, [fsTick, key, workspaceId]);
 
+	const pollChecks = options.pollChecks === true && connected && ciPollWanted(loaded);
+	useEffect(() => {
+		if (!pollChecks || !key) return;
+		return startCiPoll({
+			poll: () => {
+				branchStatusState.spendDiscovery(key);
+				sync.current?.poll();
+			},
+			visible: () => document.visibilityState === "visible",
+		});
+	}, [pollChecks, key]);
+
 	const noteOpenReview = useCallback(
 		(review: OpenBranchReview, url?: string) => {
-			if (key && currentKey.current === key) openBranchReviewState.noteOpenReview(key, review, url);
+			if (key && currentKey.current === key) branchStatusState.noteOpenReview(key, review, url);
 		},
 		[key],
 	);
-	const refreshOpenReview = useCallback(() => {
-		if (key && currentKey.current === key) sync.current?.refresh();
+	const refreshBranchStatus = useCallback(() => {
+		if (!key || currentKey.current !== key) return;
+		branchStatusState.startDiscovery(key);
+		sync.current?.refresh();
 	}, [key]);
 
 	const current = connected ? loaded : null;
 	return {
 		review: current?.review ?? null,
 		...(current?.url ? { url: current.url } : {}),
+		status: current?.status ?? null,
 		noteOpenReview,
-		refreshOpenReview,
+		refreshBranchStatus,
 	};
 }
 
@@ -187,6 +267,7 @@ export function resolveBranchReview(
 			...(lookup.url ? { url: lookup.url } : {}),
 			...(lookup.unpushedCommits !== undefined ? { unpushedCommits: lookup.unpushedCommits } : {}),
 			...(lookup.behindCommits !== undefined ? { behindCommits: lookup.behindCommits } : {}),
+			...(lookup.details ? { details: lookup.details } : {}),
 		},
 		detailsKnown: true,
 	};

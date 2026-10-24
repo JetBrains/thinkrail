@@ -21,7 +21,10 @@ The host's native directory picker, so the browser "Open project" gets a real OS
   PowerShell non-zero exit are failures. Linux with neither `DISPLAY` nor `WAYLAND_DISPLAY` fails before
   spawn with an actionable no-graphical-session reason. A missing or failed candidate falls through to the
   next candidate; cancellation stops. If all candidates are missing or fail, the method throws the most
-  useful observed reason, because a silent `null` is a dead button.
+  useful observed reason, because a silent `null` is a dead button. A picked path is read with the host
+  platform's path rules: trailing separators are dropped (both `/` and `\` on Windows, only `/` elsewhere),
+  but a filesystem root (`/`, `C:\`, `\\server\share\`) stays a root, since `C:` alone would be a
+  drive-relative path and an emptied `/` would read as a cancel.
   **File-indirection:** when `THINKRAIL_PICK_DIR` names an existing *file*, its trimmed contents are
   **re-read per call**. Plain content is the returned path; `error:<message>` throws that deterministic
   failure before native availability checks. One shared source, binary, or desktop e2e host can therefore

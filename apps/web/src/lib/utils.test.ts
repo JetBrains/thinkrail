@@ -1,9 +1,14 @@
 import { expect, test } from "bun:test";
+import { currentTranslator } from "@thinkrail/locales/react";
 import {
+	ancestorPaths,
 	compactAge,
 	cssColorToHex,
+	fileName,
+	firstNonBlankLine,
 	hasPlatformModifier,
 	isAbsolutePath,
+	isRecord,
 	isShellInert,
 	layoutResourceIdentity,
 	normalizePath,
@@ -154,6 +159,14 @@ test("a changes review tab is identified by its scope alone, apart from any file
 	);
 });
 
+test("fileName is a path's last segment whichever separator wrote it", () => {
+	expect(fileName("C:\\Users\\me\\repo")).toBe("repo");
+	expect(fileName("/home/me/repo/")).toBe("repo");
+	expect(fileName("src/foo.ts")).toBe("foo.ts");
+	expect(fileName("C:\\")).toBe("C:");
+	expect(fileName("")).toBe("");
+});
+
 test("normalizePath brings both separator styles to one form and drops a leading ./", () => {
 	expect(normalizePath("src/foo.ts")).toBe("src/foo.ts");
 	expect(normalizePath("C:\\wt\\src\\foo.ts")).toBe("C:/wt/src/foo.ts");
@@ -207,13 +220,33 @@ test("shallowEqualArrays compares element-wise and treats absent as unequal", ()
 
 test("relativeTime measures against the given now, not the clock", () => {
 	const now = 1_000_000_000_000;
-	expect(relativeTime(now - 59_000, now)).toBe("just now");
-	expect(relativeTime(now - 5 * 60_000, now)).toBe("5m ago");
-	expect(relativeTime(now - 3 * 3_600_000, now)).toBe("3h ago");
-	expect(relativeTime(now - 2 * 86_400_000, now)).toBe("2d ago");
-	expect(compactAge(now - 20 * 60_000, now)).toBe("<1h");
-	expect(compactAge(now - 5 * 3_600_000, now)).toBe("5h");
-	expect(compactAge(now - 13 * 86_400_000, now)).toBe("13d");
-	expect(compactAge(now - 20 * 86_400_000, now)).toBe("2w");
-	expect(compactAge(now - 100 * 86_400_000, now)).toBe("3mo");
+	const t = currentTranslator();
+	expect(relativeTime(t, now - 59_000, now)).toBe("just now");
+	expect(relativeTime(t, now - 5 * 60_000, now)).toBe("5m ago");
+	expect(relativeTime(t, now - 3 * 3_600_000, now)).toBe("3h ago");
+	expect(relativeTime(t, now - 2 * 86_400_000, now)).toBe("2d ago");
+	expect(compactAge(t, now - 20 * 60_000, now)).toBe("<1h");
+	expect(compactAge(t, now - 5 * 3_600_000, now)).toBe("5h");
+	expect(compactAge(t, now - 13 * 86_400_000, now)).toBe("13d");
+	expect(compactAge(t, now - 20 * 86_400_000, now)).toBe("2w");
+	expect(compactAge(t, now - 100 * 86_400_000, now)).toBe("3mo");
+});
+
+test("ancestorPaths lists a path's parent folders outermost first", () => {
+	expect(ancestorPaths("src/auth/login.ts")).toEqual(["src", "src/auth"]);
+	expect(ancestorPaths("README.md")).toEqual([]);
+});
+
+test("isRecord accepts plain objects only", () => {
+	expect(isRecord({ a: 1 })).toBe(true);
+	expect(isRecord([])).toBe(false);
+	expect(isRecord(null)).toBe(false);
+	expect(isRecord("x")).toBe(false);
+});
+
+test("firstNonBlankLine skips blank lines and trims", () => {
+	expect(firstNonBlankLine("first\nsecond")).toBe("first");
+	expect(firstNonBlankLine("\n  \n  hello  \nworld")).toBe("hello");
+	expect(firstNonBlankLine(" \n\t\n")).toBeUndefined();
+	expect(firstNonBlankLine("")).toBeUndefined();
 });

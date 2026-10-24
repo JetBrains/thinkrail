@@ -1,3 +1,4 @@
+import { useT } from "@thinkrail/locales/react";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { SurfaceReview } from "../../registry";
@@ -30,6 +31,7 @@ export function PdfPageCanvas({
 	onRendered: (page: number, size: Size | null) => void;
 	registerElement: (page: number, element: HTMLElement | null) => void;
 }) {
+	const t = useT();
 	const rootRef = useRef<HTMLElement | null>(null);
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 	const [size, setSize] = useState<Size | null>(null);
@@ -107,17 +109,21 @@ export function PdfPageCanvas({
 			data-page={page}
 			className="flex flex-col gap-4"
 		>
-			<span className="tr-text-metadata text-text-muted">Page {page}</span>
+			<span className="tr-text-metadata text-text-muted">{t("viewer.pdf.page", { page })}</span>
 			<RegionReviewSurface
 				review={pageReview}
 				intrinsicSize={size}
 				contentStamp={pdfPageContentStamp(stamp, page)}
 				className={`${size ? "mx-auto w-full" : "h-[640px] w-full"} max-w-full border border-border-muted bg-container-workspace-bg`}
 				{...(geometry ? { style: geometry } : {})}
-				label={`page ${page} region`}
+				commentLabel={t("viewer.region.commentOnPageRegion", { page })}
 				draftForRegion={(region) => pdfRegionDraft(region, page)}
 			>
-				<canvas ref={canvasRef} className="block h-full w-full" aria-label={`PDF page ${page}`} />
+				<canvas
+					ref={canvasRef}
+					className="block h-full w-full"
+					aria-label={t("viewer.pdf.pageCanvas", { page })}
+				/>
 			</RegionReviewSurface>
 		</section>
 	);

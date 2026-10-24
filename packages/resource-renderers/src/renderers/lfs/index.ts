@@ -2,7 +2,7 @@ import type { ResourceRenderer } from "../../registry";
 
 export const lfsRenderer: ResourceRenderer = {
 	id: "thinkrail/lfs",
-	label: "LFS",
+	labelKey: "viewer.renderer.lfs",
 	match: { mime: ["application/vnd.git-lfs"], text: true },
 	rank: 130,
 	capabilities: {

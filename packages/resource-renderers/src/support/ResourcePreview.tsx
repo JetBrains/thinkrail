@@ -1,3 +1,4 @@
+import { useT } from "@thinkrail/locales/react";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
@@ -14,12 +15,13 @@ import { surfaceLineCount } from "./largeDiff";
 import { type RendererLayout, RendererToggles } from "./RendererToggles";
 import { RendererView, useRendererSelection } from "./rendererMount";
 import { UnplacedReviewStrip } from "./UnplacedReviewStrip";
-import { type LoadedFile, type ReadyFile, startWorkspaceFileReads } from "./workspaceFileReads";
-
-interface FileState {
-	file: string;
-	loaded: LoadedFile;
-}
+import {
+	type FileState,
+	type LoadedFile,
+	type ReadyFile,
+	startWorkspaceFileReads,
+	updateFileState,
+} from "./workspaceFileReads";
 
 export type ResourcePreviewLayout = "split" | "unified";
 
@@ -80,11 +82,7 @@ function useWorkspaceFile(workspaceId: string, path: string | undefined): Loaded
 					if (paths === null || paths.includes(path)) onChange();
 				}),
 			bytesUrl: () => bytesUrl(workspaceId, path),
-			update: (next) =>
-				setState((current) => ({
-					file: fileKey,
-					loaded: next(current?.file === fileKey ? current.loaded : null),
-				})),
+			update: (next) => setState((current) => updateFileState(current, fileKey, next)),
 		});
 	}, [readFile, subscribeFileChanges, bytesUrl, workspaceId, path, fileKey]);
 
@@ -103,6 +101,7 @@ export function ResourcePreview(props: ResourcePreviewProps) {
 function ScopedResourcePreview(
 	props: ResourcePreviewProps & { workspaceId: string; sessionId: string | undefined },
 ) {
+	const t = useT();
 	const [localRenderer, setLocalRenderer] = useState<string | undefined>(undefined);
 	const path = canonicalWorkspacePath(props.path);
 	const requested = props.before === undefined ? undefined : canonicalWorkspacePath(props.before);
@@ -130,7 +129,7 @@ function ScopedResourcePreview(
 				data-testid="resource-preview-error"
 				className="rounded-sm border border-border-default px-8 py-4 text-feedback-error tr-text-metadata"
 			>
-				Couldn't load {failure.path}: {failure.message}
+				{t("viewer.preview.loadFailed", { path: failure.path, message: failure.message })}
 			</div>
 		);
 	}
@@ -145,6 +144,7 @@ function ScopedResourcePreview(
 }
 
 function StaleNotice({ files }: { files: readonly { path: string; file: ReadyFile }[] }) {
+	const t = useT();
 	const stale = files.filter(({ file }) => file.stale !== undefined);
 	if (stale.length === 0) return null;
 	return (
@@ -154,9 +154,7 @@ function StaleNotice({ files }: { files: readonly { path: string; file: ReadyFil
 			className="shrink-0 border-border-default border-b bg-feedback-warning-subtle px-12 py-4 tr-text-metadata text-feedback-warning"
 		>
 			{stale.map(({ path, file }) => (
-				<p key={path}>
-					Couldn't refresh {path}: {file.stale}. Showing the last loaded version.
-				</p>
+				<p key={path}>{t("viewer.preview.refreshFailed", { path, message: file.stale })}</p>
 			))}
 		</div>
 	);
@@ -205,12 +203,13 @@ function PreviewToolbar({
 	renderer: ResourceRenderer;
 	layout?: { value: RendererLayout; onChange: (layout: RendererLayout) => void } | undefined;
 }) {
+	const t = useT();
 	const { ReviewSend } = useResourceHost();
 	return (
 		<div
 			data-testid="resource-view-toggle"
 			role="toolbar"
-			aria-label="Resource view"
+			aria-label={t("panels.filePane.resourceView")}
 			className="flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-12"
 		>
 			<div className="mr-auto flex min-w-0 items-center">{props.leading}</div>

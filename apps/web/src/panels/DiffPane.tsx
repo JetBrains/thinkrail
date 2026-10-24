@@ -4,6 +4,7 @@ import {
 	RiParagraph as Pilcrow,
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import {
 	RendererToggles,
 	ResourcePreview,
@@ -58,6 +59,7 @@ function FileComparisonPane({ tab }: { tab: FileComparisonTab }) {
 }
 
 function GitDiffPane({ tab }: { tab: GitDiffTab }) {
+	const t = useT();
 	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
 	const setDiffTabView = useAppStore((state) => state.setDiffTabView);
 	const setDiffTabIgnoreWhitespace = useAppStore((state) => state.setDiffTabIgnoreWhitespace);
@@ -150,7 +152,7 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 			<div
 				data-testid="diff-view-toggle"
 				role="toolbar"
-				aria-label="Diff view mode"
+				aria-label={t("panels.diffPane.viewMode")}
 				className="flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-12"
 			>
 				<span
@@ -174,7 +176,7 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 				{hunkActions ? (
 					<HeaderIconButton
 						testid="diff-revert-file"
-						label="Revert file"
+						label={t("panels.diffPane.revertFile")}
 						onClick={() => void hunkActions.revertFile()}
 					>
 						<Revert className="size-14" />
@@ -183,7 +185,7 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 				{renderer.capabilities.whitespace ? (
 					<HeaderIconButton
 						testid="diff-toggle-whitespace"
-						label="Hide whitespace changes"
+						label={t("panels.diffPane.hideWhitespace")}
 						active={ignoreWhitespace}
 						onClick={() => setDiffTabIgnoreWhitespace(tab.id, !ignoreWhitespace)}
 					>
@@ -193,7 +195,7 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 				{renderer.capabilities.copy ? (
 					<HeaderIconButton
 						testid="diff-copy"
-						label="Copy file contents"
+						label={t("panels.diffPane.copyContents")}
 						onClick={() => void copy()}
 					>
 						{copied ? (

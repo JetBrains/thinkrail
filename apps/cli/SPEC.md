@@ -133,7 +133,10 @@ worktrees and any uncommitted work in them. pi's own state (`~/.pi`) is never to
   against**. Being installed is not the same as having added the entry: `-NoModifyPath`, an entry that was
   already present, a failed registry write and a Git-Bash `install.sh` install all record an install
   without touching the Windows PATH, and legacy metadata predates the flag — all of those are *not ours*,
-  so the PATH is left alone and the user is told which dir to check. The edit itself runs as an embedded PowerShell script —
+  so the PATH is left alone and the user is told which dir to check. Both sides read `/` and `\` in an entry as the same separator, so a
+  user's own `C:/…/bin` entry counts as already present: install never appends a duplicate it would then
+  record as its own, which the uninstaller would remove together with the user's entry. The edit itself runs
+  as an embedded PowerShell script —
   the exact inverse of install.ps1's `Add-ThinkRailToUserPath` (same `HKCU\Environment` handling,
   preserving the value's `REG_EXPAND_SZ` kind, comparing entries raw *and* `%VAR%`-expanded, then
   broadcasting `WM_SETTINGCHANGE`) — because round-tripping a raw PATH value through a pipe would risk
@@ -176,6 +179,12 @@ zero analytics traffic. CI/test suppression remains host-owned and covers both t
 
 ## Single-file binary (`build:binary`)
 
+The binary embeds its source map (`--sourcemap`, ~+17 MB on top of the bytecode build; Bun's `--compile`
+embeds a map whenever it emits one, so no upload path avoids the size) so Bun resolves error stacks
+on-device, bytecode included; the build deletes the external `.map` it also writes, refuses to embed web
+`.map` files, and compiles from `BINARY_SOURCE_MAP_BASE` (`apps/cli`), which the launcher passes as
+analytics `remapBase` for binary builds because remapped frames are relative to that directory.
+
 `bun run build:binary` produces a **standalone `thinkrail` executable** — one self-contained file per
 platform — via `bun build --compile`. Bun bundles the host *and* transparently embeds the `bun-pty` native
 lib; the extra steps are the **web UI** (a directory the host normally serves), the **bundled pi
@@ -183,7 +192,7 @@ extensions** (which the server path-loads out of `node_modules` in dev — impos
 and `trash`'s **native helper sidecars** (which macOS/Windows must execute from real filesystem paths):
 
 - `scripts/build-binary.ts` consumes `@thinkrail/server/build-support`, writes three **transient** generated modules, runs
-  `bun build --compile --no-compile-autoload-bunfig --bytecode --format=esm --target=<host|--target>` on
+  `bun build --compile --no-compile-autoload-bunfig --bytecode --format=esm --sourcemap --target=<host|--target>` on
   `src/compiled-entry.ts`, then deletes them (so the artifact cannot execute a project-local
   `bunfig.toml` preload before ThinkRail boots, and the working tree + `tsc` stay clean); each generated
   module has a committed `.d.ts` type contract `tsc` resolves against
@@ -250,16 +259,19 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   require; the fixture is seeded at the **host-reported `worktreePath`**, never the smoke's own temp path,
   because the host stores git's symlink-resolved root — macOS `/var` → `/private/var`, Windows' 8.3 `TEMP`
   — so a fixture written at an unresolved path lands in an encoded session dir the host never scans, and
-  the delete then truthfully no-ops while the file stays put), creates an offline session so every bundled
+  the delete then truthfully no-ops while the file stays put; its header cwd is `resolve(worktreePath)`, as
+  pi writes one, so a stored directory spelled unlike pi's header, #766, fails the probe instead of matching
+  itself), creates an offline session so every bundled
   factory is evaluated, verifies both macOS/Windows helpers were staged from the artifact, and SIGTERM
-  exits 0. CI builds + smokes the binary on every PR on **ubuntu and windows** (each its host target), with
-  `e2e:binary` on ubuntu; macOS binary coverage stays release-matrix-only. The Windows leg is not optional
+  exits 0. CI builds + smokes the binary on **ubuntu and windows** (each its host target): windows on every PR that
+  touches the app, ubuntu with `e2e:binary` on every merge group and on PRs whose change can affect artifacts (see
+  `module-ci-release`); macOS binary coverage stays release-matrix-only. The Windows leg is not optional
   polish: the host reaches that extension only when its Central inspection says *installed and supported*,
   so the whole assertion is Windows-executable-shaped, and an ubuntu-only smoke let #255 ship a release
   matrix that failed for two days while publishing nothing (see `module-ci-release`). It does not prompt a
   provider; real turn behavior stays in `e2e:agent`. The smoke's **broad-net sibling** is `bun run e2e:binary` (root
-  `playwright.binary.config.ts`): the whole no-agent e2e suite executed against this binary — also in CI
-  on every PR. And `bun run check:seams` (root `scripts/check-binary-seams.ts`) is the build-time canary
+  `playwright.binary.config.ts`): the whole no-agent e2e suite executed against this binary — in CI on
+  those same runs. And `bun run check:seams` (root `scripts/check-binary-seams.ts`) is the build-time canary
   for the seam class: it fails when a pi bump introduces a new bundler-opaque dynamic import the server's
   `registerBundledRuntime` doesn't statically register. The scan **excludes `pi-coding-agent/dist/bundle/`**
   (recorded as a skipped dir in the script, stale-checked like the allowlist): pi ≥ 0.84.3 ships a bundled

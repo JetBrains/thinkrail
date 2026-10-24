@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, lstatSync, mkdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import {
+	DEFAULT_WORKSPACE_NAME,
 	type DiffStats,
 	type ExistingWorktreeCandidate,
 	isSubagentMaxConcurrent,
@@ -123,7 +124,7 @@ async function gitWorktreeEntries(repoPath: string): Promise<GitWorktreeEntry[]>
 				branch = field.slice("branch refs/heads/".length);
 			} else if (field === "prunable" || field.startsWith("prunable ")) prunable = true;
 		}
-		if (path) entries.push({ path, prunable, ...(branch ? { branch } : {}) });
+		if (path) entries.push({ path: resolve(path), prunable, ...(branch ? { branch } : {}) });
 	}
 	return entries;
 }
@@ -312,8 +313,10 @@ export function ensureWorkspaceScratchDir(ws: Workspace): void {
 		else if (!entry.isDirectory())
 			throw new Error(`Refusing to seed the scratch dir: not a real directory: ${dir}`);
 	}
+	const gitignore = join(dir, ".gitignore");
+	if (lstatSync(gitignore, { throwIfNoEntry: false })) return;
 	try {
-		writeFileSync(join(dir, ".gitignore"), "*\n", { flag: "wx" });
+		writeFileSync(gitignore, "*\n", { flag: "wx" });
 	} catch (err) {
 		if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
 	}
@@ -344,7 +347,7 @@ function ensureDefaultWorkspace(project: Project): Workspace {
 		id: randomUUID(),
 		projectId: project.id,
 		kind: "default",
-		name: "Default",
+		name: DEFAULT_WORKSPACE_NAME,
 		branch,
 		worktreePath: project.path,
 		baseBranch,

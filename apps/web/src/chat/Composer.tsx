@@ -9,6 +9,8 @@ import {
 	RiStopFill as StopFill,
 } from "@remixicon/react";
 import type { ComposerGrowthLimit, ThinkingLevel, WireModel } from "@thinkrail/contracts";
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
@@ -88,26 +90,32 @@ const KEYCAP = "flex h-16 min-w-16 items-center justify-center rounded-xs bg-on-
 const STREAMING_SEND_MODES = [
 	{
 		behavior: "steer" as const,
-		name: "Steer",
-		meaning: "delivers at the agent's next step",
+		name: "chat.composer.mode.steer",
+		meaning: "chat.composer.mode.steerMeaning",
 		keys: "Enter",
 		testid: "send-mode-steer",
 	},
 	{
 		behavior: "followUp" as const,
-		name: "Queue",
-		meaning: "runs after the agent finishes",
+		name: "chat.composer.mode.queue",
+		meaning: "chat.composer.mode.queueMeaning",
 		keys: "Cmd/Ctrl+Enter",
 		testid: "send-mode-queue",
 	},
 	{
 		behavior: "interrupt" as const,
-		name: "Interrupt",
-		meaning: "stops the current response and sends now",
+		name: "chat.composer.mode.interrupt",
+		meaning: "chat.composer.mode.interruptMeaning",
 		keys: "Cmd/Ctrl+Shift+Enter",
 		testid: "send-mode-interrupt",
 	},
-];
+] satisfies {
+	behavior: SubmitBehavior;
+	name: MessageKey;
+	meaning: MessageKey;
+	keys: string;
+	testid: string;
+}[];
 
 export interface MentionCandidate {
 	path: string;
@@ -212,6 +220,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 	},
 	handleRef,
 ) {
+	const t = useT();
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const pickerRef = useRef<ModelEffortPickerHandle>(null);
 	const [caret, setCaret] = useState(0);
@@ -528,9 +537,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								className="flex w-full items-center gap-8 rounded-sm border-border-default border-t px-8 py-4 text-left text-text-muted tr-text-metadata hover:bg-control-bg-hovered hover:text-text-default"
 							>
 								<Sparkles className="size-12 shrink-0" />
-								<span className="truncate">
-									No prompt templates yet — add starters in Settings → Templates
-								</span>
+								<span className="truncate">{t("chat.composer.noTemplates")}</span>
 							</button>
 						) : null
 					}
@@ -645,10 +652,10 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							rows={1}
 							placeholder={
 								isStreaming
-									? "Steer the agent at its next step…"
+									? t("chat.composer.placeholderStreaming")
 									: expanded
-										? "Message the agent…  (@ files · / commands)"
-										: "Message…"
+										? t("chat.composer.placeholderExpanded")
+										: t("chat.composer.placeholder")
 							}
 							className={cn(
 								"absolute inset-0 size-full resize-none overflow-x-hidden overflow-y-auto rounded-sm bg-transparent px-12 py-8 tr-text-ui text-text-default outline-none placeholder:text-text-muted",
@@ -657,12 +664,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						/>
 					</div>
 					<div className="col-start-3 row-start-2 flex shrink-0 items-center gap-4 self-end">
-						<IconTooltip label="Search history">
+						<IconTooltip label={t("chat.composer.searchHistory")}>
 							<Button
 								variant="ghost"
 								size="icon"
 								data-testid="history-open"
-								aria-label="Search history"
+								aria-label={t("chat.composer.searchHistory")}
 								onClick={openHistory}
 								className="rounded-full"
 							>
@@ -673,12 +680,12 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							<button
 								type="button"
 								data-testid="chat-abort"
-								aria-label="Stop"
+								aria-label={t("chat.composer.stop")}
 								onClick={onAbort}
 								className={STOP_PILL}
 							>
 								<StopFill className="size-12" />
-								<span className={WIDE_ONLY}>Stop</span>
+								<span className={WIDE_ONLY}>{t("chat.composer.stop")}</span>
 							</button>
 						) : null}
 						<div
@@ -689,7 +696,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 							<button
 								type="button"
 								data-testid="chat-send"
-								aria-label={isStreaming ? "Steer" : "Send"}
+								aria-label={isStreaming ? t("chat.composer.steer") : t("chat.composer.send")}
 								onClick={() => submit(isStreaming ? "steer" : "send")}
 								disabled={!canSend}
 								className={cn(
@@ -699,19 +706,21 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								)}
 							>
 								<ArrowUp className={cn("size-16", COMPACT_ONLY)} />
-								<span className={WIDE_ONLY}>{isStreaming ? "Steer" : "Send"}</span>
+								<span className={WIDE_ONLY}>
+									{isStreaming ? t("chat.composer.steer") : t("chat.composer.send")}
+								</span>
 								<kbd aria-hidden className={cn(KEYCAP, WIDE_ONLY)}>
 									<EnterKey className="size-12" />
 								</kbd>
 							</button>
 							{isStreaming ? (
 								<Popover open={sendMenuOpen} onOpenChange={setSendMenuOpen}>
-									<IconTooltip label="Send options" wrapTrigger>
+									<IconTooltip label={t("chat.composer.sendOptions")} wrapTrigger>
 										<PopoverTrigger asChild>
 											<button
 												type="button"
 												data-testid="send-menu"
-												aria-label="Send options"
+												aria-label={t("chat.composer.sendOptions")}
 												className={cn(
 													SEND_MORE,
 													canSend
@@ -739,14 +748,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 												>
 													<span className="flex w-full items-baseline justify-between gap-8">
 														<span className="text-text-default tr-text-ui group-disabled:text-control-disabled-text">
-															{mode.name}
+															{t(mode.name)}
 														</span>
 														<span className="shrink-0 text-text-muted tr-text-metadata group-disabled:text-control-disabled-text">
 															{mode.keys}
 														</span>
 													</span>
 													<span className="text-text-muted tr-text-metadata group-disabled:text-control-disabled-text">
-														{mode.meaning}
+														{t(mode.meaning)}
 													</span>
 												</button>
 											))}

@@ -29,12 +29,14 @@ dials it over the network; a phone reaches the selected host over Tailscale.
 
 ```
 apps/cli        browser host launcher: boot server + open browser ── depends on ─▶ packages/server
-apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/contracts, packages/ui, packages/extension-api/web, packages/resource-renderers, thinkrail-extensions/*/web
-apps/desktop    Electrobun local-host launcher                     ── depends on ─▶ packages/server, packages/contracts, packages/shared
+apps/web        UI client (mobile-first)                           ── depends on ─▶ packages/contracts, packages/locales, packages/ui, packages/extension-api/web, packages/resource-renderers, thinkrail-extensions/*/web
+apps/desktop    Electrobun local-host launcher                     ── depends on ─▶ packages/server, packages/contracts, packages/shared, packages/locales
 apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── depends on ─▶ packages/website-analytics
 packages/website-analytics  dependency-free browser analytics policy for the public website
-packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/shared, packages/pi-background-commands, packages/pi-delegation, packages/pi-subagents, packages/extension-api/server, thinkrail-extensions/*/server
+packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/locales, packages/shared, packages/pi-background-commands, packages/pi-delegation, packages/pi-subagents, packages/extension-api/server, thinkrail-extensions/*/server
 packages/contracts  the wire (types plus tiny pure runtime)
+packages/locales    UI string catalogs (bundled en.json) + pure catalog rules; ./react holds the one i18next
+                    instance ── depends on ─▶ nothing in the workspace (i18next, react-i18next)
 packages/shared     shellEnv (server-side only)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
                     its pi-free core/ read model also backs the host's spec.graph read method)
@@ -52,11 +54,11 @@ pi-extensions/*     portable pi packages published to npm as @thinkrail/pi-<name
                     (decided, Decision 20; the pi-* packages above move here per publish wave)
 thinkrail-extensions/*  ThinkRail extensions: a pi capability + ./server and ./web halves, composed by one
                     registry file per side (Decision 21; visualize shipped) ── depends on ─▶ pi-extensions/*,
-                    packages/extension-api, packages/ui
-packages/extension-api  types + define* helpers for extension halves ── depends on ─▶ packages/contracts
-packages/ui         owned shadcn/Radix primitives + cn + onThemeSwap ── may depend on ─▶ packages/contracts
+                    packages/extension-api, packages/ui, packages/locales (web half)
+packages/extension-api  types + define* helpers for extension halves ── depends on ─▶ packages/contracts, packages/locales (types)
+packages/ui         owned shadcn/Radix primitives + cn + onThemeSwap ── may depend on ─▶ packages/contracts, packages/locales
 packages/resource-renderers  file/diff renderers, registry + review surfaces behind a host seam ── may depend on ─▶
-                    packages/contracts, packages/ui
+                    packages/contracts, packages/locales, packages/ui
 ```
 
 Artifact verification is a separate source-only workspace, [[module-artifact-tests]]. It depends on
@@ -67,7 +69,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
 ## Decisions
 
 1. **Client/host split.** Engine host owns `pi` and state; the UI is a portable client; the wire is the
-   only coupling. **Rule: `apps/web` depends on `contracts`, `ui`, `extension-api/web`,
+   only coupling. **Rule: `apps/web` depends on `contracts`, `locales`, `ui`, `extension-api/web`,
    `resource-renderers`, and `thinkrail-extensions/*/web` only** — never on `server` or `shared`. All added edges are browser-safe
    presentation packages; the UI remains shippable without the host.
 2. **Launchers are thin; the host is a library.** `apps/cli` and `apps/desktop` both embed the shared
@@ -209,7 +211,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     hyphens, without admitting a range.
 
     The root `packageManager` field also pins Bun for development, CI, and CLI compilation; Bun types
-    live in the catalog. Bun `1.4.3` aligns these paths with the desktop runtime, which the desktop
+    live in the catalog. Bun `1.4.4` aligns these paths with the desktop runtime, which the desktop
     config selects through Electrobun's `build.bun.version` (see [[module-desktop]]); a desktop test keeps
     the two pins equal. CI reads the root pin rather than maintaining a second version in workflow YAML.
 
@@ -258,7 +260,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     proxy to a second site.
 
 15. **Desktop packaging preserves the host/runtime boundary.** Electrobun `2.0.1` explicitly selects
-    the pinned Bun `1.4.3` runtime and embeds the host in that process, not the default Cottontail
+    the pinned Bun `1.4.4` runtime and embeds the host in that process, not the default Cottontail
     runtime; it never wraps or spawns the CLI. Its exact npm bootstrap pin selects the Hutch build
     toolchain and generated SDK; Bun remains the workspace package manager. The native window loads the
     packaged web build from the host's actual loopback port so UI, wire, files, and SPA fallback keep one
@@ -373,6 +375,48 @@ dependency. This keeps test process drivers outside both launchers and the serve
     best-effort validation in the portable package, strict `mermaid`+`linkedom` validation injected by
     the ThinkRail server half through `createVisualizeExtension({ validateMermaid })`; the old
     `packages/pi-visualize` is deleted. Detail: [[module-thinkrail-extensions]].
+
+22. **A path's spelling follows its kind.** A directory identity (`Project.path`,
+    `Workspace.worktreePath`) is the host's **resolved** spelling (`path.resolve`), exactly what pi records as a
+    transcript's cwd (pi resolves the cwd it is handed), so comparing it with a pi-reported cwd is a plain
+    `===`. Paths that enter in another spelling are resolved where they enter: git prints `C:/…` on Windows,
+    `THINKRAIL_DATA_DIR` may be relative, and records written before this rule are healed on load
+    ([[submodule-server-persistence]]). A **workspace-relative** path on the wire or in a store (file tree,
+    changes, review anchors and reading order, fs events) is POSIX `/` and contained in the worktree; the
+    server converts native `path.relative` output and model-written paths where they enter, and git object
+    names (`<ref>:<path>`) use `/`. Absolute paths pi reports (tool arguments, transcript cwd) stay pi's and
+    may use either separator; the browser reads them through `projectRelativePath` ([[submodule-web-lib]]),
+    and in agent-written prose or paths a backslash is a separator, never a Markdown escape. Why: two
+    spellings of one Windows directory broke every raw comparison (#766), so chats in Default and external
+    workspaces could not be listed, reopened, renamed, deleted, or scoped in history. Rejected: normalizing at
+    each comparison (every future comparison must remember; the first patch missed nine of twelve sites);
+    `realpath` as the canonical form (diverges from headers already on disk wherever a stored path crosses a
+    symlink or 8.3 name); folding case (pi's own cwd identity is case-sensitive, and git and `resolve` both
+    keep on-disk case). Accepted cost: an older ThinkRail sharing `~/.thinkrail` fails reopen-from-Recent
+    (`ALREADY_OPEN`) for a healed project until it updates.
+
+23. **UI strings are keyed catalogs; local language files are runtime data, not code.** Every
+    user-facing string in `apps/web`, `packages/ui`, and extension web halves is a named flat key
+    (`settings.language.title`) in [[module-locales]]'s `en.json`, the single English source of truth,
+    rendered through one shared i18next instance (`@thinkrail/locales/react`). **A lint gate fails on
+    hardcoded user-facing text** (JSX text and text-bearing attributes such as `aria-label`, `title`,
+    `placeholder`, `alt`, `label`) in those trees, so a new string cannot ship without a key. ThinkRail
+    ships bundled catalogs (English only today); a user adds or overrides a language by dropping a flat
+    i18next-JSON file into the **global** data dir (`~/.thinkrail/locales/<tag>.json`) — never a
+    workspace, so a cloned repo cannot rewrite the UI. The host validates and watches those files
+    ([[submodule-server-locales]]) and serves them over the wire; the web merges them over the bundled
+    catalogs ([[submodule-web-i18n]]) with per-string fallback *local exact → bundled exact → bundled
+    base → English*. The choice (`AppConfig.locale`, default `"system"`) follows the user like the
+    theme. Agent, tool, skill, prompt output and server error text are never translated. Stored and wire
+    data never carry translated text: defaults ThinkRail writes (untitled chats, default terminals, the
+    host-named default workspace, chat round notices) are worded at render, so a switch re-words all of
+    them, while names set by the user or the agent show verbatim. This is the
+    one runtime-loaded user resource; code extensions and themes stay compiled in (Decision 21 and the
+    themes non-goal) because a string map renders as escaped text and carries no executable surface.
+    Rejected: English-text keys (a wording fix orphans every translation); a host-served bundled catalog
+    (bundled strings belong to the web build that renders them); an in-house runtime (i18next chosen for
+    its standard format and tooling); catalogs in `contracts` (data and translation logic are not wire
+    types). Deferred: bundled non-English languages, RTL layout, an agent translation skill.
 
 ## Invariants
 

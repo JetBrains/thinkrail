@@ -1,5 +1,6 @@
 import { RiArrowDownSLine, RiArrowRightSLine, RiSearchLine } from "@remixicon/react";
 import { sameModel, type WireModel } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import { useId, useMemo, useState } from "react";
 import { formatContext } from "@/chat/modelPicker";
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function VisibleModelsSettings({ models }: Props) {
+	const t = useT();
 	const [expanded, setExpanded] = useState(false);
 	const [search, setSearch] = useState("");
 	const listId = useId();
@@ -43,11 +45,11 @@ export function VisibleModelsSettings({ models }: Props) {
 				className="flex w-full items-start gap-8 py-12 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary"
 			>
 				<span className="flex flex-1 flex-col gap-2">
-					<span className="tr-text-ui text-text-default">Visible models</span>
+					<span className="tr-text-ui text-text-default">{t("settings.visibleModels.title")}</span>
 					<span className="tr-text-metadata text-text-muted">
 						{hiddenCount === 0
-							? "New models are shown automatically."
-							: `${hiddenCount} model${hiddenCount === 1 ? "" : "s"} hidden. New models are shown automatically.`}
+							? t("settings.visibleModels.allShown")
+							: t("settings.visibleModels.hidden", { count: hiddenCount })}
 					</span>
 				</span>
 				<span className="mt-2 shrink-0">
@@ -67,8 +69,8 @@ export function VisibleModelsSettings({ models }: Props) {
 							type="text"
 							value={search}
 							onChange={(e) => setSearch(e.target.value)}
-							placeholder="Search models…"
-							aria-label="Search models to show"
+							placeholder={t("settings.visibleModels.searchPlaceholder")}
+							aria-label={t("settings.visibleModels.searchLabel")}
 							className="h-32 w-full rounded-sm border border-control-border-default bg-control-bg pl-24 pr-8 tr-text-ui text-text-default placeholder:text-text-muted outline-none transition-colors focus:border-control-border-active"
 						/>
 					</div>
@@ -76,7 +78,9 @@ export function VisibleModelsSettings({ models }: Props) {
 					<div className="max-h-320 overflow-y-auto">
 						{filteredModels.length === 0 ? (
 							<div className="px-12 py-16 text-center text-text-muted tr-text-metadata">
-								{search.trim() ? "No models match your search." : "No models available."}
+								{search.trim()
+									? t("settings.visibleModels.noMatch")
+									: t("settings.visibleModels.noModels")}
 							</div>
 						) : (
 							filteredModels.map((model, index) => {
@@ -103,13 +107,20 @@ export function VisibleModelsSettings({ models }: Props) {
 												{model.name}
 											</span>
 											<span className="truncate tr-text-metadata text-text-muted">
-												{model.provider} · {formatContext(model.contextWindow)}
-												{model.reasoning ? " · reasoning" : ""}
+												{model.reasoning
+													? t("settings.visibleModels.metaReasoning", {
+															provider: model.provider,
+															window: formatContext(model.contextWindow),
+														})
+													: t("settings.visibleModels.meta", {
+															provider: model.provider,
+															window: formatContext(model.contextWindow),
+														})}
 											</span>
 										</span>
 										<SettingsSwitch
 											checked={isVisible}
-											label={`Show ${model.name}`}
+											label={t("settings.visibleModels.show", { name: model.name })}
 											testId={`model-visibility-${model.provider}-${model.id}`}
 											onChange={() => toggleModelVisibility(model)}
 										/>

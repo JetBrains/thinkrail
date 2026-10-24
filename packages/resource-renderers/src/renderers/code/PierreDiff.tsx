@@ -1,6 +1,7 @@
 import {
 	type AnnotationSide,
 	type DiffLineAnnotation,
+	type FileDiffMetadata,
 	parseDiffFromFile,
 	type SelectedLineRange,
 } from "@pierre/diffs";
@@ -11,6 +12,7 @@ import {
 	RiChatNewLine as MessageSquarePlus,
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -32,6 +34,7 @@ import {
 	changeBlockId,
 	computeActionBlocks,
 } from "./changeBlocks";
+import { createDiffCache } from "./diffCache";
 import PierreProvider from "./PierreProvider";
 import { PierreScroller } from "./PierreScroller";
 import {
@@ -52,6 +55,9 @@ type DiffAnnotationMetadata =
 	| { kind: "hunk"; id: string };
 
 const NO_PLACED_THREADS: ReadonlySet<string> = new Set();
+const NO_BLOCKS: ChangeBlock[] = [];
+const parsedDiffs = createDiffCache<FileDiffMetadata>();
+const actionBlocks = createDiffCache<ChangeBlock[]>();
 
 function textSide(content: ResourceContent): string | null {
 	return content.kind === "text" ? content.text : null;
@@ -131,6 +137,7 @@ function HunkToolbar({
 	actions: NonNullable<ResourceDiffProps["hunkActions"]>;
 	onAskAgent: (block: ChangeBlock) => void;
 }) {
+	const t = useT();
 	const [reverting, setReverting] = useState(false);
 	const revert = () => {
 		setReverting(true);
@@ -151,11 +158,11 @@ function HunkToolbar({
 			onPointerDown={(event) => event.stopPropagation()}
 		>
 			{triage ? (
-				<IconTooltip label={kept ? "Kept — click to undo" : "Keep this hunk"}>
+				<IconTooltip label={kept ? t("viewer.hunk.keptTooltip") : t("viewer.hunk.keepTooltip")}>
 					<button
 						type="button"
 						data-testid="hunk-keep"
-						aria-label={kept ? "Undo keep" : "Keep hunk"}
+						aria-label={kept ? t("viewer.hunk.undoKeep") : t("viewer.hunk.keepLabel")}
 						aria-pressed={kept}
 						onClick={() => triage.setKept(contentKey, !kept)}
 						className={`flex h-24 items-center gap-4 rounded-sm px-8 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary ${
@@ -163,15 +170,15 @@ function HunkToolbar({
 						}`}
 					>
 						<Check className="size-14" />
-						{kept ? "Kept" : "Keep"}
+						{kept ? t("viewer.hunk.kept") : t("viewer.hunk.keep")}
 					</button>
 				</IconTooltip>
 			) : null}
-			<IconTooltip label="Revert hunk">
+			<IconTooltip label={t("viewer.hunk.revert")}>
 				<button
 					type="button"
 					data-testid="hunk-revert"
-					aria-label="Revert hunk"
+					aria-label={t("viewer.hunk.revert")}
 					disabled={reverting}
 					onClick={revert}
 					className="flex size-24 items-center justify-center rounded-sm outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text"
@@ -179,11 +186,11 @@ function HunkToolbar({
 					<Revert className="size-14" />
 				</button>
 			</IconTooltip>
-			<IconTooltip label="Ask agent about this hunk">
+			<IconTooltip label={t("viewer.hunk.askAgent")}>
 				<button
 					type="button"
 					data-testid="hunk-ask-agent"
-					aria-label="Ask agent about this hunk"
+					aria-label={t("viewer.hunk.askAgent")}
 					onClick={() => onAskAgent(block)}
 					className="flex size-24 items-center justify-center rounded-sm outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 				>
@@ -191,9 +198,7 @@ function HunkToolbar({
 				</button>
 			</IconTooltip>
 			{actions.agentWorking ? (
-				<span className="tr-text-metadata text-text-subtle">
-					the agent is working in this workspace
-				</span>
+				<span className="tr-text-metadata text-text-subtle">{t("viewer.hunk.agentWorking")}</span>
 			) : null}
 		</div>
 	);
@@ -212,34 +217,47 @@ function PierreDiffSurface({
 	onViewState,
 	virtualize = false,
 }: ResourceDiffProps) {
+	const t = useT();
 	const originalText = textSide(original);
 	const modifiedText = textSide(modified);
 	const originalHash = contentHash(original);
 	const modifiedHash = contentHash(modified);
 	const fileDiff = useMemo(
 		() =>
-			parseDiffFromFile(
-				originalText === null
-					? null
-					: {
-							name: resource.path,
-							contents: originalText,
-							...(resource.language ? { lang: resource.language } : {}),
-							...(originalHash
-								? { cacheKey: `${resource.language ?? resource.path}:${originalHash}` }
-								: {}),
-						},
-				modifiedText === null
-					? null
-					: {
-							name: resource.path,
-							contents: modifiedText,
-							...(resource.language ? { lang: resource.language } : {}),
-							...(modifiedHash
-								? { cacheKey: `${resource.language ?? resource.path}:${modifiedHash}` }
-								: {}),
-						},
-				{ ignoreWhitespace },
+			parsedDiffs(
+				[
+					originalText,
+					modifiedText,
+					resource.path,
+					resource.language,
+					originalHash,
+					modifiedHash,
+					ignoreWhitespace,
+				],
+				() =>
+					parseDiffFromFile(
+						originalText === null
+							? null
+							: {
+									name: resource.path,
+									contents: originalText,
+									...(resource.language ? { lang: resource.language } : {}),
+									...(originalHash
+										? { cacheKey: `${resource.language ?? resource.path}:${originalHash}` }
+										: {}),
+								},
+						modifiedText === null
+							? null
+							: {
+									name: resource.path,
+									contents: modifiedText,
+									...(resource.language ? { lang: resource.language } : {}),
+									...(modifiedHash
+										? { cacheKey: `${resource.language ?? resource.path}:${modifiedHash}` }
+										: {}),
+								},
+						{ ignoreWhitespace },
+					),
 			),
 		[
 			ignoreWhitespace,
@@ -251,9 +269,15 @@ function PierreDiffSurface({
 			resource.path,
 		],
 	);
+	const hasHunkActions = hunkActions !== undefined;
 	const blocks = useMemo(
-		() => computeActionBlocks(originalText, modifiedText, ignoreWhitespace),
-		[ignoreWhitespace, modifiedText, originalText],
+		() =>
+			hasHunkActions
+				? actionBlocks([originalText, modifiedText, ignoreWhitespace], () =>
+						computeActionBlocks(originalText, modifiedText, ignoreWhitespace),
+					)
+				: NO_BLOCKS,
+		[hasHunkActions, ignoreWhitespace, modifiedText, originalText],
 	);
 	const blockById = useMemo(
 		() => new Map(blocks.map((block) => [changeBlockId(block), block])),
@@ -344,7 +368,7 @@ function PierreDiffSurface({
 					label:
 						range?.kind === "lineRange"
 							? composerLineLabel(range.startLine, range.endLine)
-							: "Changed hunk",
+							: t("viewer.hunk.changed"),
 					initialText: request.initialText,
 					...(request.notice ? { notice: request.notice } : {}),
 				},
@@ -424,7 +448,7 @@ function PierreDiffSurface({
 			<VirtualizerContext.Provider value={virtualize ? virtualizer : undefined}>
 				{fileDiff.hunks.length === 0 ? (
 					<p data-testid="diff-empty" className="px-12 py-8 tr-text-ui text-text-muted">
-						No differences between the two sides.
+						{t("viewer.code.noDifferences")}
 					</p>
 				) : null}
 				<FileDiff<DiffAnnotationMetadata>
@@ -435,11 +459,11 @@ function PierreDiffSurface({
 					selectedLines={selectedLines}
 					className="flex-1"
 					renderGutterUtility={(getHoveredLine) => (
-						<IconTooltip label="Comment on this line">
+						<IconTooltip label={t("viewer.code.commentOnLine")}>
 							<button
 								type="button"
 								data-testid="review-add-icon"
-								aria-label="Comment on this line"
+								aria-label={t("viewer.code.commentOnLine")}
 								onPointerDown={(event) => {
 									event.preventDefault();
 									event.stopPropagation();
@@ -483,14 +507,14 @@ function PierreDiffSurface({
 									data-testid="review-selection-blocked"
 									className="review-composer review-composer-flow flex items-center gap-8"
 								>
-									<span className="tr-text-metadata text-text-muted">{composer.message}</span>
+									<span className="tr-text-metadata text-text-muted">{t(composer.message)}</span>
 									<button
 										type="button"
 										data-testid="review-selection-blocked-close"
 										className="tr-text-metadata text-text-default underline-offset-2 hover:underline"
 										onClick={closeComposer}
 									>
-										Dismiss
+										{t("common.dismiss")}
 									</button>
 								</div>
 							);

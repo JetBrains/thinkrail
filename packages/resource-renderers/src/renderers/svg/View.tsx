@@ -1,3 +1,4 @@
+import { useT } from "@thinkrail/locales/react";
 import { type CSSProperties, useEffect, useMemo } from "react";
 import type { ResourceViewProps } from "../../registry";
 import { useElementSize } from "../../support/useElementSize";
@@ -17,6 +18,7 @@ export default function SvgView({
 	review,
 	onPlacedThreadIds,
 }: ResourceViewProps) {
+	const t = useT();
 	const text = content.kind === "text" ? content.text : null;
 	const tokens = useSvgTheme(false);
 	const document = useMemo(
@@ -64,11 +66,15 @@ export default function SvgView({
 							}
 						: {})}
 				>
-					<SvgFrame title={`Vector preview of ${resource.path}`} document={document} />
+					<SvgFrame
+						title={t("viewer.svg.previewTitle", { path: resource.path })}
+						document={document}
+					/>
 				</RegionReviewSurface>
 			</div>
 			<div className="shrink-0 border-border-default border-t bg-container-header-bg px-12 py-4 tr-text-metadata text-text-muted">
-				{size ? `${size.width} × ${size.height}` : "Flexible size"} · {svgByteLength(text)} B
+				{size ? `${size.width} × ${size.height}` : t("viewer.svg.flexibleSize")} ·{" "}
+				{svgByteLength(text)} B
 			</div>
 		</div>
 	);

@@ -22,7 +22,7 @@ geometry, and submit actions; this module makes those inputs behave the same onc
   the template-pick controller that refuses to overwrite a draft changed after selection.
 - **Public surface:** `index.ts` is the only import path and re-exports the command-completion, template-text,
   template-pick, template-slot, and caret/selection-restoration (`usePendingSelection`) APIs.
-- **Allowed deps:** `contracts` types, React, and `@thinkrail/ui/utils` (`cn`).
+- **Allowed deps:** `contracts` types, React, `@thinkrail/locales` (UI strings), and `@thinkrail/ui/utils` (`cn`).
 - **Forbidden:** store or transport access; workspace/session/project lookup; deciding which commands exist in a
   lifecycle; sending a prompt; importing `chat` or `panels`.
 
@@ -39,3 +39,6 @@ controls stay disabled while it resolves; the draft remains editable, and an edi
 the delayed application. A selected template replaces the complete draft. Tab and Shift+Tab cycle placeholders, Escape ends the
 slot session, edited repeated groups mirror when leaving a slot, and submission removes untouched markers.
 Presentation helpers expose the same hint and highlight states while leaving each input's layout to its owner.
+`usePendingSelection` applies a requested caret/selection in a layout effect, in the same commit as the value
+change and never a deferred frame: a frame landing between a follow-up select-all and its insert (a paste,
+Playwright's `fill`) would collapse the selection, so the insert appends and doubles the draft.

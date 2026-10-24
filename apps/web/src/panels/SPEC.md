@@ -14,8 +14,9 @@ tags: [ui]
 The layout-agnostic, store-driven feature views. A panel fills its container and never knows its
 arrangement (so the mobile shell is an additive layer, not a rewrite).
 
-Changes and Review keep their fixed toolbars outside a panel-owned `components/QuietScrollArea`; Projects,
-Files, and Specs expose content for the shell-owned scroll wrapper described in `shell/SPEC.md`.
+Files (both modes) and Review keep their fixed toolbars outside a panel-owned `components/QuietScrollArea`
+(Files through `RememberedScrollArea`); Projects and Specs expose content for the shell-owned scroll wrapper
+described in `shell/SPEC.md`.
 `TerminalInstance` wraps xterm with `QuietScrollFrame`, which skins xterm's descendant custom scroll control
 without shrinking its hit target; top/bottom state comes from xterm's public `buffer.active.viewportY/baseY`
 and `onScroll`/`onWriteParsed` API rather than pretending its non-native viewport has DOM scroll metrics.
@@ -219,7 +220,34 @@ treatment.
   cached push is correctly treated as the read baseline. Only explicit `terminal.close` kills a PTY, with the existing busy-shell confirmation; confirming a force-close retains
   the active request until it settles (the dialog may close, but a second request cannot orphan it), failures
   surface to the user, and an authoritative catalog removal dismisses a now-stale confirmation instead of
-  leaving a modal for a terminal another client already closed. Also `FileTree`, `SpecsPanel`, `ReviewPanel`,
+  leaving a modal for a terminal another client already closed. Also `FilesPanel` (the **Files** tool: a
+  fixed panel-header row with an **All | Changed** `ToggleSegment` pair — `Changed` carries the changed-file
+  count when non-zero — over `FileTree` or `ChangesPanel`; the mode is app-wide, session-only,
+  `store.filesMode`, default All, and `requestChangesView` / `revealChanges` reveal Files and select Changed
+  in one store write. `FilesPanel` owns the single `git.status` read (`useGitStatus`, scope-keyed, including
+  the unknown-commit scope fallback) and feeds `ChangesPanel` and the **All** marks from it, so count, marks
+  and the Changed list cannot disagree. **All** follows VS Code's Explorer: the plain tree plus marks derived
+  once by the pure `changesModel.buildChangeMarks` — a changed file shows its name and a trailing
+  `M`/`A`/`U`/`R` letter in the status colour (modified amber, added/untracked green, renamed blue; the one
+  `chat/planView.statusLetter`, shared with the Changes review tab and plan rows, so untracked reads `U`
+  and added `A` everywhere); every
+  ancestor folder, expanded or collapsed, shows its name and a dot in one amber "contains changes" colour
+  (a compact row as a whole); deleted files are neither shown nor mark folders, as in VS Code. Git-ignored
+  entries (the host's `FileNode.gitignored` — for a compact row, that of the deepest directory it
+  represents — and everything inside them) render in `text-subtle`. The
+  active file or diff tab (`selectActiveFilePath`) gets the selected row look, and when it changes while All
+  is showing its folders expand (and stay expanded) and it scrolls `nearest` into view; on return All
+  reveals only if the active file differs from the persisted `seenActivePath`, and then skips the scroll
+  restore so the two cannot fight. Auto-reveal never switches the side tab or the mode. Clicks still open
+  the editor. A failed first status read shows no marks; a failed refresh keeps the last ones, like the
+  Changed list. The tree's look is remembered per workspace across reloads (`store.filesTreeByWorkspace`:
+  All expanded folders, Changed-tree collapsed folders shared by every scope, scroll per view through
+  `RememberedScrollArea` — a Changed view's scroll belongs to its scope and compare target, so changing
+  either starts at the top), persisted by the `filesTreeState` module (native stable preferences, else
+  localStorage under a host-qualified key; hydrated from `main.tsx`, debounced writes plus a `pagehide`
+  flush; windows share it, last write wins, no live sync). A **Collapse all folders** `HeaderIconButton` at the
+  right of the switch row collapses All, or — only in Changed's Tree view with at least one change —
+  every changed-tree folder (`changeTreeFolderPaths`)), `FileTree`, `SpecsPanel`, `ReviewPanel`,
   `ChangesPanel` (the changed files under a fixed **panel-header row** — `h-panel-header-row`
   (`--panel-header-row-height`, currently 28px), shared structural geometry with workbench Group Headers
   and the chat header, not a value pinned here — that says **what** is being diffed via the
@@ -327,8 +355,9 @@ Above the cards, `WelcomePanel` composes **`ProviderWarningBanner`** — a slim 
 no provider is connected** ("No model provider connected — the agent can't run") with a **Connect a provider**
 CTA that opens Settings → Providers (`store.openSettings("providers")`). It reads `provider.status` (a
 provider is "connected" iff any `configured`) on mount and re-checks whenever the settings dialog toggles, so
-it disappears the moment the user connects one; a transport error degrades to *not* nagging (offline ≠ "no
-provider"). All provider **management** lives in Settings, not here (the always-on strip is gone).
+it disappears the moment the user connects one; it stays hidden until the first answer lands, and a transport
+error degrades to *not* nagging (unknown or offline ≠ "no provider"). All provider **management** lives in
+Settings, not here (the always-on strip is gone).
 
 Beneath it, **`ProjectTrustNotice`** is the pre-workspace trust surface (so trust is reachable with no
 workspace yet): **presence-gated** — renders nothing unless the selected project ships something a trust
@@ -459,7 +488,7 @@ a project picker, the prompt hero, and the reused
   create dialog.) **`SettingsDialog`** is the app-settings surface the shell's topbar gear opens — a
   **store-driven two-pane shell**: one nav list, rendered once, beside a scrollable content pane. At `md`+
   the list is a rail grouped **Agent** (Models, Providers, MCP servers, Prompt templates) ·
-  **Interface** (Chat, Appearance, Layout, Terminal) · **System** (Workspaces, Integrations, Extensions,
+  **Interface** (Chat, Appearance, Language, Layout, Terminal) · **System** (Workspaces, Integrations, Extensions,
   Notifications, Privacy, Updates). Integrations keeps section id `github`: today it is the GitHub CLI page
   and it is the home for further integrations. Below `md` the same list is a horizontal scrolling strip without group labels. The
   Feedback card (`settings-nav-feedback`, “Get 100 credits for a user interview”) belongs to that list at
@@ -656,6 +685,16 @@ a project picker, the prompt hero, and the reused
   neither control. **`GithubSettings`** (the Integrations section's "Local GitHub" group —
   `github.authStatus()` shown as `settings-gh-status[data-connected]`: Connected + login, or a Not connected
   notice naming `gh auth login`; Refresh (`github.refresh`) is offered in both states);
+  **`LanguageSettings`** (gated by `LOCALES_PROTOCOL_VERSION`; a store-integrating container over the
+  props-driven `LanguagePage`, whose derivations come from [[submodule-web-i18n]]): one radio list — **System**
+  (default; names the language System resolves to) then every available language by its own-language name
+  with a source badge (*Built-in*, *Local file*, *Built-in, customized by local file*), then unselectable rows
+  for a selected-but-missing file (*File not found*; English renders, the choice is kept) and for each broken
+  file (its translated error code plus the untranslated parser detail). Selecting writes `settings.update
+  { locale }` and converges on the broadcast. *Add a language* gives the steps with a link to
+  `packages/locales/en.json` at `v<appVersion>` (released versions; `main` otherwise), the host's folder path
+  with **Copy path** and **Open folder** (`locales.reveal`, offered in every client like workspace reveal —
+  a remote browser uses the path), and a **How to contribute** link to CONTRIBUTING's Translations section);
   **`AppearanceSettings`** (the catalog-driven theme settings: a **Theme mode** segmented control,
   **System / Light / Dark** with System offered only from `THEME_SYSTEM_PROTOCOL_VERSION` (older hosts keep
   fixed-only behavior), and a **Contrast level** control, **Default / High**. Light/Dark write a fixed
@@ -896,7 +935,7 @@ a project picker, the prompt hero, and the reused
   (`auth` module).
 
   Panels compose their own sub-panels
-  (e.g. side tools → `FileTree`/`ChangesPanel`, resource panes → registered bundled renderers) — an internal hierarchy.
+  (e.g. side tools → `FilesPanel` → `FileTree`/`ChangesPanel`, resource panes → registered bundled renderers) — an internal hierarchy.
   When a center group has no resource tab, the workbench asks panels for the empty surface as a persistent
   creation/orientation receipt rather than a generic placeholder: **“Workspace ready”**, the display name,
   `branch · from baseBranch`, and **“Files, chats, changes, and terminals are scoped to this workspace,”**
@@ -1079,7 +1118,7 @@ a project picker, the prompt hero, and the reused
   renders the plan's shipping funnel — **Build (`d/t done`) → Review (`r/k reviewed`,
   `plan-review-progress`, only when the plan has reviewable items) → PR (`plan-pr-stage`,
   `data-state`)** — each stage wearing a glyph for its state: done (check), active (the stage the
-  plan is currently at), pending (muted). The PR stage reads the same `useOpenBranchReview` lookup
+  plan is currently at), pending (muted). The PR stage reads the same `useBranchStatus` lookup
   as the button and shows `PR #N` once one is open; "merged" is unknowable (the lookup only
   sees OPEN reviews), so the funnel honestly ends at PR-open. Under the stepper sits the **work
   CONTEXT line** (`plan-context`): `baseBranch ← branch · N commits · +A −R` — the arrow points at the
@@ -1203,7 +1242,7 @@ own section. The kebab menu (`plan-menu`, a
   unauthenticated GitHub CLI with install/sign-in commands and offers the compare page as an
   in-dialog link (`pr-setup-compare` — a real anchor, so no popup-blocker risk) instead of the
   blind `window.open`. Both variants keep a **Try again** (`pr-setup-retry`) that re-runs the same
-  flow — always with the LAST edited title/body (the `lastPrSubmit` ref, set on every submit,
+  flow — always with the LAST edited title/body (the runner's `lastSubmit` ref, set on every submit,
   cleared only when the flow fully succeeded, when the user explicitly cancels the compose dialog,
   or when they take the compare-page hand-off (external completion the client can't observe) — a
   `ghProblem` outcome otherwise keeps it, so the gh dialog's Try again actually re-submits;
@@ -1280,13 +1319,57 @@ own section. The kebab menu (`plan-menu`, a
   state renders content-shaped skeleton rows, never a bare "Loading…" line), `@thinkrail/ui/*` (incl. `popover`/`command`/`textarea` for the
   dialog), `chat` (`ModelEffortPicker` + the `useModelCatalog`/`useModelPreferences` hooks that feed it,
   reused by `NewWorkspaceDialog`; `ModelSelector`/`ThinkingSelector`, still mounted by
-  `ModelsSettings`; `modelPicker`'s `AUTH_KIND_LABEL`, the one connection-kind vocabulary
+  `ModelsSettings`; `modelPicker`'s `AUTH_KIND_LABEL`, the one connection-kind vocabulary (catalog keys)
   `ProvidersSettings` shares with the picker, and its `formatContext` plus `ProviderGlyph`, reused by
   `VisibleModelsSettings`' rows; `TemplateEditorDialog`, reused by `TemplatesSettings`), `auth` (`LoginDialog`, mounted by
   `ProvidersSettings` and `McpSettings`), `@thinkrail/resource-renderers`, `lib`, `themes` (catalog + generic application contract),
   `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`shiki`,
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.
+
+- **Ship — the branch's delivery state and actions, one implementation for topbar and Plan pane.**
+  `useBranchStatus(workspace, status)` (the keyed `branchStatusState`, request
+  generation, `noteOpenReview`, focus/fs/reconnect freshness rules above carry over unchanged) reads
+  `workspace.branchStatus` on a v87 host and falls back to `workspace.openReview` below it. It counts as
+  connected only once the welcome has named the protocol, so a reconnect never asks the old method of a
+  new host. It exposes the lookup's review — callers resolve it against the snapshot with
+  `resolveBranchReview` — with v87's ahead/behind folded onto it, plus the review-free `BranchFacts`.
+  `shipActions(t, context)` is the pure derivation of each segment's `{ primary, secondary }` (labels
+  rendered with the caller's `useT()` translator) —
+  remote arm (Publish / Push N / Sync…) and review arm (Open PR / Create MR / Open draft PR / the
+  disabled Merge-locally stub / Settle; on a v88 host Fix with agent / Ready / Merge PR for an open GitHub
+  PR and Reopen / Delete remote branch after it) — unit-tested over the full scenario table, as are the
+  agent prompt texts it builds (`fixChecksPrompt`, `integratePrompt`). `useShipRunner`
+  executes them and owns their dialogs: the shared `PrComposeDialog` (now also used for first-time
+  creation from the topbar), `PrSetupDialog`, the diverged Sync dialog, the base-push confirmation,
+  `MergePrDialog`, and the remote-branch deletion confirmation. The merge dialog and its toasts name the
+  PR's current base from `details.base`, never the workspace's base (a PR can be retargeted on GitHub),
+  and make no target claim when it is unknown. Review actions act on the `review` the
+  caller shows (its number) and the branch the runner is bound to. **Merge PR** offers only the methods
+  the repository allows (every method when the host could not tell) and defaults to the last method used
+  for the project — `mergePrefs`, client-side per host + project (a project is one repository), falling back
+  to squash → merge → rebase; *delete the branch on GitHub* is remembered with it and starts on, and hides
+  when GitHub deletes merged branches itself. **Fix with agent** and the Sync dialog's **Ask agent to
+  integrate** hand a prompt to the runner's chat through `openChat`'s `promptWorkspaceChat` — a follow-up
+  while that chat streams, otherwise a prompt; with no chat, a new one starts with it — and show the chat.
+  Integration may rebase or merge but never force-push or drop commits, and leaves the push to the user.
+  The Plan pane's Open PR / *Push updates* / diverged handling runs through the same runner, so the
+  `lastSubmit` reuse, `PUSH_AUTH_FAILED`, `ghProblem`, and compare hand-off rules above have one home.
+  **Try again** re-runs the mutation that actually failed — a PR submit or a push, recorded when it fails
+  and dropped when the setup dialog closes — never whichever PR the user last composed; `lastSubmit`
+  only restores the compose dialog's edits, including its description sources, and only on the branch they
+  were composed for. Every mutation carries the branch it was made for — the compose dialog's branch at
+  preview time, the base-push confirmation's named branch, the failed attempt's branch on retry — and the
+  host refuses it once the checkout has moved, so neither a terminal switch nor a retry can push a branch
+  the user didn't see or confirm.
+  The Plan pane alone asks for its plan body explicitly (`bodySource: "plan"`, so a plan of adopted commits
+  only still opens on it) and keeps its plan-specific emphasis and its body-refreshing *Push updates*
+  (`pr.open` without a body); the topbar's Push is `workspace.push` and never touches a PR description.
+  **Compose sources:** the dialog's *Description from* switch re-fetches `pr.preview` with `source` —
+  *Chat plan* (default when the session has a plan; the active chat's session from the topbar), *Commits*,
+  *Template* (the host's discovered PR/MR templates, one picker), *Empty* — and **Generate with agent** /
+  **Fill template with agent** (`pr.generate`) replaces the field's text with the host's one-shot draft;
+  nothing is pushed until submit, and a `null` draft toasts instead of clearing the field.
 
 ## Get right
 
@@ -1317,7 +1400,8 @@ own section. The kebab menu (`plan-menu`, a
   strip; its action switches to the first candidate that advertises matching anchor geometry for that intent.
   Bundled registration happens once in the shell's `AppResourceHost`, while renderer implementation imports
   stay lazy.
-- The singleton side-tool renderers are **Projects | Specs | Files | Changes | Review**. Their current
+- The singleton side-tool renderers are **Projects | Specs | Files | Review** (the changed-files list is
+  Files' **Changed** mode, not a tool of its own). Their current
   location and local selection are supplied by the shell; Review exposes its store-derived pending-draft
   count as tab metadata. A renderer remains the same when its singleton moves to the opposite side.
 - **`ReviewPanel`** is the review sidebar (see [[submodule-server-reviews]] for the model) — **ONE screen, a per-file ACCORDION**: each row a path +
@@ -1542,7 +1626,8 @@ own section. The kebab menu (`plan-menu`, a
   *paused* read. A visible `FileTree` directory probes while collapsed only as far as needed to identify
   its compact single-directory run; descendants below the run's deepest directory mount and read only
   when that compact row is expanded. No tick has to be threaded down as a prop.
-  Its users — `FileTree` (root + each visible directory chain), `ChangesPanel` (`git.status`),
+  Its users — `FileTree` (root + each visible directory chain), `FilesPanel` (`git.status`, via
+  `useGitStatus`, feeding both modes),
   `useWorkspaceSpecs` (`spec.graph`) — plus `FilePane`/`DiffPane`, which follow the same tick contract per
   open tab. Agent edits,
   terminal commands, and Finder changes all land without a manual step.
@@ -1569,9 +1654,10 @@ own section. The kebab menu (`plan-menu`, a
   would rather branch on it than close over the parameter; ignoring it — as `ChangesPanel` does, its `scope`
   being an object the key merely names — is expected. Refetches **preserve view state**: `FileTree` re-reads
   the root + the directory probes backing each visible compact row and expanded branch. Expansion lives
-  above individual rows and is keyed by every directory path a compact row represents, so shortening or
+  above individual rows (in the store, so it also survives remounts and reloads) and is keyed by every
+  directory path a compact row represents, so shortening or
   lengthening a chain cannot hide descendants that were visible before the refetch; vanished dirs drop out
-  via their parent. `ChangesPanel` re-reads
+  via their parent. `FilesPanel` re-reads
   `git.status` (list-only — the diff renders as a center resource, not under the list), `SpecsPanel`
   refetches without remounting (expansion survives), and `FilePane`/`DiffPane` re-read an
   open resource's content when the workspace ticked past its loaded tick (live while visible;
@@ -1854,7 +1940,8 @@ own section. The kebab menu (`plan-menu`, a
 - **Changes: List | Tree.** A header toggle (`store.changesView`, app-wide — persisted in the store, not
   per workspace, so it survives workspace switches) switches the flat **List** and a folder **Tree**
   (`ChangesTree`), both built from the same `git.status` list. The Tree is styled exactly like the
-  Files tree (shared `TreeRow`); folders **default expanded** (change sets are small), and a
+  Files tree (shared `TreeRow`); folders **default expanded** (change sets are small) and the ones you
+  collapse are remembered per workspace for every scope (`filesTreeByWorkspace.changedCollapsed`), and a
   single-directory run is one slash-joined compact row (based on the changed-file tree, regardless of
   unchanged siblings on disk), matching `FileTree`. **Status is shown on the file name, not a letter glyph**
   (the git-decoration convention — `changesModel.statusNameClass`, shared by both views):
@@ -1967,8 +2054,10 @@ own section. The kebab menu (`plan-menu`, a
   preserving focus without stealing unrelated workbench focus. Initial xterm focus is deferred until a
   successful attach and applies only while the terminal tab that requested it still owns focus; Retry keeps
   its overlay mounted through the successful handoff and restores xterm focus only while focus remains in that
-  terminal region. A competing detach invalidates that handoff and clears its retry state before exposing Take
-  Back again.
+  terminal region. A focusing handoff commits the attached state synchronously before `focus()`: the failed
+  frame stays inert until that commit and an inert subtree silently refuses focus, so frame timing (a next
+  animation frame can precede React's commit on a loaded machine) must never be what lifts it. A competing
+  detach invalidates that handoff and clears its retry state before exposing Take Back again.
   **Historical replay is input-inert:** the PTY id
   remains unadopted until xterm's replay callback, which rechecks attach freshness before binding and draining
   genuinely live frames; replies xterm synthesizes for recorded terminal queries can therefore never enter the

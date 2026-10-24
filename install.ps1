@@ -85,14 +85,14 @@ function Get-ThinkRailPersistentPath {
 }
 
 function Test-ThinkRailOnPath {
-    # Is $Dir among these PATH entries (compared unexpanded and %VAR%-expanded, case-insensitively)?
+    # Is $Dir among these PATH entries (compared unexpanded and %VAR%-expanded, separator- and case-insensitively)?
     param([string]$Dir, [string[]]$PathEntries)
-    $norm = $Dir.TrimEnd('\')
+    $norm = $Dir.Replace('/', '\').TrimEnd('\')
     foreach ($entry in $PathEntries) {
         if (-not $entry) { continue }
-        $e = $entry.Trim().TrimEnd('\')
+        $e = $entry.Trim().Replace('/', '\').TrimEnd('\')
         if (-not $e) { continue }
-        $expanded = [System.Environment]::ExpandEnvironmentVariables($e).TrimEnd('\')
+        $expanded = [System.Environment]::ExpandEnvironmentVariables($e).Replace('/', '\').TrimEnd('\')
         if (($e -ieq $norm) -or ($expanded -ieq $norm)) { return $true }
     }
     return $false

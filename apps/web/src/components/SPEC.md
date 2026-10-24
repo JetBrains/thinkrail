@@ -23,13 +23,18 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
   - classifies failed dynamic `import()`s via the pure, unit-tested **`isChunkLoadError`** (stale Vite
     chunk / 504 / Safari "module script failed") and steers those to a page **reload** (re-fetches the
     chunk) rather than an in-place retry;
-  - logs the crash to the console (`componentDidCatch`) — the UI already degrades gracefully.
+  - logs the crash to the console (`componentDidCatch`) — the UI already degrades gracefully — and hands
+    it with the boundary's untranslated `reportId` (never the displayed, translated `label`) to the one
+    reporter installed via `setErrorBoundaryReporter` (wired by
+    `main.tsx` to the transport's error reports; reporter failures are swallowed). The seam keeps this
+    module store/transport-free.
 - **`CustomIcon.tsx`** — renders an SVG from `public/custom-icons/` as a themeable `currentColor` glyph
   via a CSS `mask-image` span (`.custom-icon*` classes in `index.css`), so a custom glyph sizes with
   `size-*` and colours with `text-*` exactly like a Remix icon. Names are a typed union
-  (`CustomIconName`); today: `file-diff-line`/`file-diff-fill` (the Changes tool glyph).
+  (`CustomIconName`); today: `file-diff-line`/`file-diff-fill` (the Changes review tab glyph).
 - **`QuietScrollArea.tsx`** — the store-free overflow observer and two presentation surfaces:
-  `QuietScrollArea` owns an ordinary native scroll viewport, while `QuietScrollFrame` observes a
+  `QuietScrollArea` owns an ordinary native scroll viewport (an optional `viewportRef` callback hands that
+  element to a caller that saves/restores its scroll, e.g. `panels/RememberedScrollArea`), while `QuietScrollFrame` observes a
   third-party descendant scroll control without taking over its content or input and can receive the
   library's authoritative edge state. `styles/global.css` owns the single scrollbar definition for every
   native scroll container: a 6px gutter, transparent track, transparent resting thumb, `--border-default`
@@ -68,14 +73,22 @@ primitive. The shared shadcn primitives live in [[module-ui]] (`@thinkrail/ui/*`
   `className` for the region's own padding/sizing, an optional `label` threaded to `SkeletonRows`'
   `role="status"` region rather than opening a second one, and an optional `testId`). The full loading
   vocabulary and its rules are below.
+- **Also owns:** `preloadedLazy.tsx` — a split-chunk component plus `preload()`. Plain `lazy` suspends on
+  its first render even when the chunk is cached; under a sync store update React then holds the
+  fallback ~300ms. A mount that finds the chunk loaded renders it directly; a mount never swaps component
+  type. Call `preload()` when the owning screen mounts, not at boot, so other screens never fetch the
+  chunk. A failed load reaches the `ErrorBoundary` as with plain `lazy`; renders never retry it, only the
+  next `preload()` does. Known limit: on a slow link, or when the revealing data is already in the store
+  at mount, the first mount still takes the `lazy` path.
 - **Public surface:** `ErrorBoundary`, `isChunkLoadError` — imported directly via
   `@/components/ErrorBoundary` (no barrel; the placeholders come from `@thinkrail/ui/skeleton`); `AttentionDot` via
   `@/components/AttentionDot`; `RunningIcon` via `@/components/RunningIcon`; `CustomIcon`,
   `CustomIconName` via `@/components/CustomIcon`; `QuietScrollArea`, `QuietScrollFrame`, and the
-  `QuietScrollEdges` type via `@/components/QuietScrollArea`; `useNow()` via `@/components/useNow` (the
+  `QuietScrollEdges` type via `@/components/QuietScrollArea`; `preloadedLazy` via
+  `@/components/preloadedLazy`; `useNow()` via `@/components/useNow` (the
   wall clock as a `useSyncExternalStore` value on a shared 30 s ticker, so a render never calls `Date.now`
   itself).
-- **Allowed deps:** React, `@remixicon/react`, `@thinkrail/ui/utils` (`cn`), `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
+- **Allowed deps:** React, `@remixicon/react`, `@thinkrail/ui/utils` (`cn`), `@thinkrail/locales` (UI strings), `lib` (`shallowEqualArrays` — the reset-keys comparison, shared
   rather than re-stated), `constants` (`BRAND_MARK_SEGMENTS` — the monogram regions `RunningIcon` clips to,
   shared with the shell logo rather than copied). Kept dependency-light on purpose, and both are leaves, so *any* region
   (shell, panels, `main.tsx`) can still wrap in it without creating a cycle.

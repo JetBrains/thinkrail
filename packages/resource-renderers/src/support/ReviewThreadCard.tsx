@@ -1,4 +1,5 @@
 import { RiSendPlaneLine as Send, RiDeleteBin6Line as Trash2 } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useEffect, useRef, useState } from "react";
 import type { ReviewThread, ReviewThreadActions } from "../registry";
@@ -24,6 +25,7 @@ export function ReviewThreadCard({
 	actions: ReviewThreadActions;
 	onActivate?: (() => void) | undefined;
 }) {
+	const t = useT();
 	const [edit, changeEdit] = useReviewDraftState<ReviewTextState | undefined>(
 		`thread:${thread.id}`,
 		undefined,
@@ -85,25 +87,29 @@ export function ReviewThreadCard({
 						data-testid="review-thread-anchor"
 						className={`review-thread-label rounded-sm tr-text-eyebrow outline-none focus-visible:ring-2 focus-visible:ring-primary${thread.stale ? " text-feedback-warning" : ""}`}
 						onClick={onActivate}
-						{...(thread.anchorState === "outdated" ? { title: outdatedReason(thread.anchor) } : {})}
+						{...(thread.anchorState === "outdated"
+							? { title: outdatedReason(t, thread.anchor) }
+							: {})}
 					>
-						{threadLabel(thread)}
+						{threadLabel(t, thread)}
 					</button>
 				) : (
 					<span
 						className={`review-thread-label tr-text-eyebrow${thread.stale ? " text-feedback-warning" : ""}`}
-						{...(thread.anchorState === "outdated" ? { title: outdatedReason(thread.anchor) } : {})}
+						{...(thread.anchorState === "outdated"
+							? { title: outdatedReason(t, thread.anchor) }
+							: {})}
 					>
-						{threadLabel(thread)}
+						{threadLabel(t, thread)}
 					</span>
 				)}
 				{thread.status === "draft" && (
 					<span className="review-thread-actions">
-						<IconTooltip label="Send this comment to the file's review chat" wrapTrigger>
+						<IconTooltip label={t("review.comment.send")} wrapTrigger>
 							<button
 								type="button"
 								data-testid="review-thread-send"
-								aria-label="Send this comment to the file's review chat"
+								aria-label={t("review.comment.send")}
 								className="review-thread-action disabled:pointer-events-none"
 								disabled={busy || !draftText.trim()}
 								onClick={() =>
@@ -118,11 +124,11 @@ export function ReviewThreadCard({
 								<Send className="size-12" />
 							</button>
 						</IconTooltip>
-						<IconTooltip label="Delete draft" wrapTrigger>
+						<IconTooltip label={t("review.comment.deleteDraft")} wrapTrigger>
 							<button
 								type="button"
 								data-testid="review-thread-delete"
-								aria-label="Delete draft"
+								aria-label={t("review.comment.deleteDraft")}
 								className="review-thread-action disabled:pointer-events-none"
 								disabled={busy}
 								onClick={() => run(() => actions.onDeleteComment(thread.id))}

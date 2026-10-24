@@ -39,8 +39,10 @@ Clear, fractal module boundaries are a top-priority requirement:
 
 ## Repo-wide invariants
 
-- `apps/web` depends on `contracts`, `ui`, `extension-api/web`, `resource-renderers`, and
+- `apps/web` depends on `contracts`, `locales`, `ui`, `extension-api/web`, `resource-renderers`, and
   `thinkrail-extensions/*/web` only, never `server` or `shared`.
+- User-facing UI text is a key in `packages/locales/en.json` rendered through `@thinkrail/locales/react`;
+  the lint gate rejects hardcoded JSX text and text attributes.
 - Never value-import `pi` into browser-bundled code. Import types only from the `pi-ai` /
   `pi-agent-core` package roots; `@earendil-works/pi-coding-agent` is server-only.
 - One id model: UI tab id versus `session.sessionId`; there is no separate pi UUID.
@@ -52,6 +54,11 @@ Clear, fractal module boundaries are a top-priority requirement:
 - Automatic work ends at `agent_settled`, never `agent_end`; retries, compaction, recovery, or queued
   continuations may follow an attempt-level `agent_end`.
 - UI panels are layout-agnostic; the shell arranges them.
+- Errors are reported to PostHog Error Tracking unconditionally, but only as a classifier — type, `code`,
+  source/scope/request method and ThinkRail-only stack frames — never `message` text. Give a failure worth
+  telling apart a `CodedError` code rather than relying on its message. Host diagnostics that carry an
+  error go through `logger(scope)`, not `console.*`. The allow-list lives in
+  `packages/server/src/analytics/SPEC.md`.
 - The transport host endpoint is a parameter, defaulting to same-origin; `server.welcome` carries the
   protocol version.
 

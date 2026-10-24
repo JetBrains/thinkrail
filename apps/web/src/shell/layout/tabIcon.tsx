@@ -50,8 +50,6 @@ export function tabIcon(tab: LayoutTab, active = false): ReactNode {
 					return active ? <RiBookOpenFill className={cls} /> : <RiBookOpenLine className={cls} />;
 				case "files":
 					return active ? <RiFileFill className={cls} /> : <RiFileLine className={cls} />;
-				case "changes":
-					return <CustomIcon name={active ? "file-diff-fill" : "file-diff-line"} className={cls} />;
 				case "review":
 					return active ? <RiDiscussFill className={cls} /> : <RiDiscussLine className={cls} />;
 				case "plan":

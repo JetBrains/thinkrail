@@ -6,6 +6,7 @@ import {
 	MCP_PROTOCOL_VERSION,
 	WORKSPACE_SETTLE_PROTOCOL_VERSION,
 } from "@thinkrail/contracts";
+import { t } from "@thinkrail/locales/react";
 import { SettingsSection } from "@/store";
 import { filterSettingsNavGroups, resolveSettingsSection, settingsNavGroups } from "./settingsNav";
 
@@ -28,7 +29,7 @@ const ids = (protocolVersion: number | null, hasUpdates: boolean) =>
 describe("settingsNavGroups", () => {
 	test("current hosts with injected updates list every section in its group", () => {
 		expect(
-			settingsNavGroups(LATEST, true).map((g) => [g.label, g.sections.map((s) => s.id)]),
+			settingsNavGroups(LATEST, true).map((g) => [t(g.label), g.sections.map((s) => s.id)]),
 		).toEqual([
 			[
 				"Agent",

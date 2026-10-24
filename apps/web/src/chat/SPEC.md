@@ -109,6 +109,12 @@ blocks in order into rows; `ChatTurnView` dispatches on row kind:
   separators and traversal cannot bypass containment. A narrow assistant-only URL transform preserves
   recognized Windows drive-letter anchor paths, including Markdown's percent-encoded backslash form, until
   validation; drive-rooted containment compares case-insensitively while preserving the linked path's casing.
+  Ahead of that transform, an assistant-only remark transformer (`remarkWrittenPathDestinations`) restores a
+  link or definition destination exactly as written when it contains a backslash and has no URL scheme.
+  CommonMark would otherwise read `\.` or `\_` as escapes and turn `C:\repo\.thinkrail\x.md` into a dead link;
+  in an agent-written path a backslash is a separator (architecture Decision 22). It reads the source from the
+  parse's own file, because `BlockMarkdown` parses each block separately and positions are block-local. Repo
+  Markdown in the file viewer keeps CommonMark semantics, matching GitHub's rendering.
   Every other value delegates to react-markdown's default sanitizer, and a rejected Windows path
   is re-sanitized before fallback anchor rendering. The generic `Markdown` primitive remains props-driven and
   receives this behavior only as an `a` component override at the assistant-turn integration edge;
@@ -300,6 +306,14 @@ defaults *and* over a virtualization remount. `FoldGeometryProvider` is the tran
 change seam: every fold header registers a stable row-derived id through `useFold`, including `Collapsible`
 and fallback-driven auto expansion/collapse. It routes detached anchor stabilization through
 `ReadingBandController`'s single motion channel and refreshes from the changing row's measured geometry.
+The correction lands in the change's first frame (the motion's frame, the row's resize observation as
+backstop), never in the React commit: a commit-time `scrollTop` write reaches Virtuoso's synchronous scroll
+handler before its ResizeObserver measures the changed row, so it windowed stale sizes — an above-viewport
+expansion emptied the list and remounted every row, including the reader's anchor, within one frame. The
+correction is still pending only until that first frame or backstop write: native input or a newer fold change
+arriving before it applies it exactly once (a newer change thereby accepts a synchronous, pre-measurement write
+for the overlap). Afterwards nothing is pending, so a resumed stabilization interrupted again never re-applies
+it over reader movement whose scroll event is not yet handled.
 A wholly offscreen disclosure preserves the visible transcript by its own row-height delta. If a sticky
 breadcrumb collapses the disclosure body that contains the reader's viewport, that content no longer has a
 surviving anchor, so the collapsed original header takes its place at the viewport boundary. Reader input or
@@ -491,7 +505,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   transport state.
 - **Hydration** (`hydrate.ts`) — the pure
   `messagesToRuntime(TranscriptMessage[], lastSettlement?, { idScope? })` converter (read-side counterpart
-  of the event reducer): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }` (a
+  of the event reducer; a synthesized failure turn carries its `failure` kind and the provider message, worded at render by `errorTurnText`): rebuilds `{ turns, toolResults, askAnswers, turnIdByMessageIndex }` (a
   `HydratedRuntime`) from a persisted transcript so a reconnecting/second client renders identically to
   the live path (same `raw` result shape). One-shot consumers keep freshly minted ids; a repeated-snapshot
   consumer supplies its session scope to derive stable role/timestamp/index ids for persisted turns. When supplied, the live summary's `lastSettlement` is authoritative; otherwise only the
@@ -587,16 +601,23 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   native movement that interrupts an active alignment also detaches even when directed toward latest, unless
   that movement itself reaches the exact edge.
   Explicit text selection and user-invoked message/history, breadcrumb, or tool-page navigation also detach.
-  Pointer provenance survives release long enough for native scrollbar-track animation, keyboard
-  provenance covers focus-induced scrolling from interactive transcript controls, and both expire on
-  scroll-end or a bounded timeout so later geometry cannot inherit them. A return gesture rearms once only
-  when it reaches the physical latest edge within the shared 1px geometry tolerance; directions invert with
-  order, and touch/trackpad intent survives through momentum. No 50px near-edge threshold and no geometry
-  change alone may rearm. Expanding or collapsing an Activity, Thinking, tool, or message disclosure is a
-  geometry change rather than navigation: it preserves alignment, retargets the current latest/response
-  destination while following, and leaves a detached reader's visible anchor fixed. An own Send deliberately
-  reattaches and places its user row at 10% of transcript height clamped to 48–80px; a queued/background
-  continuation preserves a detached reader when it starts.
+  Pointer provenance survives release long enough for native scrollbar-track animation, keyboard provenance
+  covers focus-induced scrolling from interactive transcript controls, and both expire on scroll-end or a
+  bounded timeout so later geometry cannot inherit them. Movement that script makes through the scroller's
+  `scrollBy`/`scrollTo` (Virtuoso's estimate-to-measurement corrections, `scrollToIndex`) is subtracted from
+  observed movement and never carries reader direction, and a scroll-end that closes only such movement ends
+  no intent: a 1px correction for rows mounting above an oldest-first reader once read as touch momentum
+  toward latest, and its scroll-end ended the momentum before it reached the edge. The hook shadows the
+  scroller's own `scrollBy`/`scrollTo` for its lifetime and restores them on cleanup; this relies on
+  Virtuoso moving its scroller only through those two methods (verified for react-virtuoso 4.18.7, re-verify
+  on upgrade), and only displacement those calls apply synchronously is attributed. A return gesture rearms
+  once only when it reaches the physical latest edge within the shared 1px geometry tolerance; directions
+  invert with order, and touch/trackpad intent survives through momentum. No 50px near-edge threshold and no
+  geometry change alone may rearm. Expanding or collapsing an Activity, Thinking, tool, or message
+  disclosure is a geometry change rather than navigation: it preserves alignment, retargets the current
+  latest/response destination while following, and leaves a detached reader's visible anchor fixed. An own
+  Send deliberately reattaches and places its user row at 10% of transcript height clamped to 48–80px; a
+  queued/background continuation preserves a detached reader when it starts.
 - **Streaming response movement exists only during work, and it moves in window steps** — while following, the
   view stands still while the active response fills the window below its prompt. Each time the response edge
   passes Trigger (default 100%), the sole motion owner makes one eased ~220 ms step that places the edge at
@@ -715,7 +736,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   passive one lets Chromium apply the scroll before the wheel event reaches the hook, so the movement arrives
   without reader intent and neither detach nor exact-edge rearm fires. Scrolling stays responsive because a
   streaming delta re-renders only the rows whose content changed, keeping the main thread free.
-- **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions, `/`
+- **Composer & chrome** — `Composer` (prompt field + send/steer/followUp/abort, `@`-mentions (`mentionLookup` splits the typed
+  query into the folder `fs.readDir` lists and the name prefix, reading a typed `\` as a separator), `/`
   commands + template **slot sessions** (Tab-through placeholders — see the Template slots bullet
   below), image paste/drop — routed through **`imageAttachment.ts`**: `fileToAttachedImage` decodes in
   the browser and downscales anything over a **1568px long edge** (`fitWithin`; Claude's standard-tier
@@ -1002,7 +1024,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   (always next to its label) — since a keyboard-only user, `Shift+Enter`'s own audience, never triggers
   `:hover`. The save-as-template icon's own shortcut (`SAVE_SHORTCUT_LABEL`, `⌘S`/`Ctrl+S`) gets the
   identical selected-only glyph (`data-testid="history-save-shortcut"`) for the same reason, symmetric
-  with the jump icon.
+  with the jump icon. An untitled hit is labelled by its cwd's last segment through lib's `fileName`
+  (a header cwd is pi's native spelling, so `C:\Users\me\repo` reads as `repo`).
 - **Template slots** (the shared `prompt` module's parser/state machine + `Composer`'s geometry +
   `ChatView`'s catalog/template-read wiring — the composer's Tab-through placeholder flow, end to end).
   **Parsing** (`prompt`, pure): `parseTemplateSlots(body, argumentHint)` expands pi's own placeholder grammar (`$1..$n`,
@@ -1452,8 +1475,8 @@ Unknown custom messages retain their existing behavior.
   also **extend** the render with an optional `urlTransform`, extra `remarkPlugins`, and `components`, e.g.
   the file view's GitHub alert callouts), the view types
   (`types.ts`,
-  incl. `ToolResultState` + `ExtUiDialogRequest`), and `ChatView` (lazy-mounted by the shell workbench
-  resource renderer;
+  incl. `ToolResultState` + `ExtUiDialogRequest`), and `ChatView` (a split chunk the shell workbench
+  preloads on mount through `components/preloadedLazy` and mounts as the chat resource body;
   it wires `SkillsDialog` + the header Skills trigger, resolving the owning `projectId` from the store and
   reading the reload badge from the store selector `selectSkillsStale(state, workspaceId, sessionId)` —
   per-session and store-derived, so it survives the tab-switch remount; a successful reload calls

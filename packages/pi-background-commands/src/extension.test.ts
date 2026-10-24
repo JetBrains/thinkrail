@@ -449,12 +449,13 @@ test("standalone shutdown kills owned process trees silently", async () => {
 	const session = await makeSession();
 	const escaped = join(cwd, "must-not-finish");
 	const ready = join(cwd, "process-ready");
+	const leakAfterMs = 3000;
 	try {
 		faux.setResponses([
 			fauxAssistantMessage(
 				fauxToolCall("background_command", {
 					action: "start",
-					command: `sh -c 'printf ready > "${ready}"; sleep 0.4; printf leaked > "${escaped}"'`,
+					command: `sh -c 'printf ready > "${ready}"; sleep ${leakAfterMs / 1000}; printf leaked > "${escaped}"'`,
 				}),
 			),
 			fauxAssistantMessage("ACK"),
@@ -462,9 +463,10 @@ test("standalone shutdown kills owned process trees silently", async () => {
 		]);
 		await session.prompt("Start until shutdown.");
 		await waitFor(() => existsSync(ready));
+		const readyAt = Date.now();
 		const calls = faux.state.callCount;
 		await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
-		await Bun.sleep(500);
+		await Bun.sleep(Math.max(500, readyAt + leakAfterMs + 500 - Date.now()));
 		expect(faux.state.callCount).toBe(calls);
 		expect(existsSync(escaped)).toBe(false);
 		expect(JSON.stringify(session.messages)).not.toContain(BACKGROUND_COMMAND_COMPLETION_MESSAGE);
@@ -472,7 +474,7 @@ test("standalone shutdown kills owned process trees silently", async () => {
 		await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
 		session.dispose();
 	}
-});
+}, 15_000);
 
 test("deletion tombstones defer bounded completion messages until rollback, without a resource reload", async () => {
 	const executor = controlledOperations();

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { WireModel } from "@thinkrail/contracts";
+import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	type GroupExpansion,
 	groupRowValue,
@@ -36,7 +37,7 @@ const row = (m: WireModel): SearchRow => ({
 const collapsed: GroupExpansion = initialGroupExpansion(null, []);
 
 function groups(query: string, expansion = collapsed, pinned: WireModel[] = []) {
-	return pickerGroups(catalog, { pinned, query, expansion, row }).map((g) => ({
+	return pickerGroups(currentTranslator(), catalog, { pinned, query, expansion, row }).map((g) => ({
 		provider: g.provider,
 		count: g.count,
 		expanded: g.expanded,
@@ -114,7 +115,12 @@ describe("pickerGroups", () => {
 });
 
 describe("pickerFilter", () => {
-	const visible = pickerGroups(catalog, { pinned: [], query: "", expansion: collapsed, row });
+	const visible = pickerGroups(currentTranslator(), catalog, {
+		pinned: [],
+		query: "",
+		expansion: collapsed,
+		row,
+	});
 	const filter = pickerFilter(visible, row);
 
 	test("scores model rows like the default scorer", () => {

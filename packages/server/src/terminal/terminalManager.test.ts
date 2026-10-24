@@ -105,7 +105,7 @@ function waitForTerminalExit(id: string): Promise<void> {
 	);
 }
 
-async function exitTerminalWithMarker(
+async function printTerminalMarker(
 	id: string,
 	markerSuffix: string,
 	clientKey: string,
@@ -114,6 +114,15 @@ async function exitTerminalWithMarker(
 	const marker = `TR_${markerSuffix}`;
 	writeTerminal(id, `printf 'TR_%s\\n' '${markerSuffix}'\r`, clientKey);
 	await waitForTerminalOutput(id, marker);
+	return marker;
+}
+
+async function exitTerminalWithMarker(
+	id: string,
+	markerSuffix: string,
+	clientKey: string,
+): Promise<string> {
+	const marker = await printTerminalMarker(id, markerSuffix, clientKey);
 	writeTerminal(id, "exit\r", clientKey);
 	await waitForTerminalExit(id);
 	return marker;
@@ -340,12 +349,17 @@ test("the tab list is the host's, in creation order", () => {
 	]);
 });
 
-test("closing a tab removes it and reports closed", () => {
-	attachTerminal(WS, "tab-a", "client-1");
+test(
+	"closing a tab removes it and reports closed",
+	async () => {
+		const attached = attachTerminal(WS, "tab-a", "client-1");
+		await printTerminalMarker(attached.id, "IDLE", "client-1");
 
-	expect(closeTerminalTab(WS, "tab-a")).toEqual({ closed: true, busy: false });
-	expect(listTerminals(WS)).toHaveLength(0);
-});
+		expect(closeTerminalTab(WS, "tab-a")).toEqual({ closed: true, busy: false });
+		expect(listTerminals(WS)).toHaveLength(0);
+	},
+	TERMINAL_TEST_TIMEOUT_MS,
+);
 
 test("closing an unknown tab is not an error and not busy", () => {
 	expect(closeTerminalTab(WS, "never-existed")).toEqual({ closed: false, busy: false });
@@ -371,7 +385,7 @@ test(
 	"a host restart gives the tabs back with fresh shells showing the old output",
 	async () => {
 		const first = attachTerminal(WS, "tab-a", "client-1", { title: "Kept" });
-		await waitForTerminalOutput(first.id);
+		const marker = await printTerminalMarker(first.id, "KEPT", "client-1");
 		persistTerminalSessions();
 		resetTerminalState();
 
@@ -382,7 +396,7 @@ test(
 		const revived = attachTerminal(WS, "tab-a", "client-1");
 		expect(revived.created).toBe(true);
 		expect(revived.id).not.toBe(first.id);
-		expect(revived.replay ?? "").not.toBe("");
+		expect(revived.replay ?? "").toContain(marker);
 	},
 	TERMINAL_TEST_TIMEOUT_MS,
 );
@@ -391,7 +405,7 @@ test(
 	"a revived recording is served once, not to every later attach",
 	async () => {
 		const first = attachTerminal(WS, "tab-a", "client-1");
-		await waitForTerminalOutput(first.id);
+		const marker = await printTerminalMarker(first.id, "SERVED_ONCE", "client-1");
 		persistTerminalSessions();
 		resetTerminalState();
 		reviveTerminalSessions();
@@ -400,7 +414,7 @@ test(
 		closeTerminalTab(WS, "tab-a", true);
 		const fresh = attachTerminal(WS, "tab-a", "client-1");
 
-		expect(revived.replay ?? "").not.toBe("");
+		expect(revived.replay ?? "").toContain(marker);
 		expect(fresh.replay ?? "").toBe("");
 	},
 	TERMINAL_TEST_TIMEOUT_MS,

@@ -91,7 +91,12 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   structured context to chats that can resolve them; local review, not a forge integration
   ([[submodule-server-reviews]]).
 - **Open PR** — push the workspace branch and open or update its GitHub PR through the user's `gh`,
-  falling back to a prefilled compare URL ([[submodule-server-pr]]).
+  falling back to a prefilled compare URL (GitLab: the prefilled new-MR page), from the plan or straight
+  from the topbar, whose Remote and Pull request segments always show the branch's next step — publish,
+  push, sync, open a PR described from the plan, commits, a template, or an agent draft — and, for an open
+  GitHub PR, its checks and review decision with mark ready, merge, fix failing checks or integrate a
+  diverged branch with the agent, reopen, and delete the remote branch
+  ([[submodule-server-pr]], [[submodule-web-shell-location-bar]]).
 - **Specs** — the agent searches, navigates, and maintains the spec graph through `spec_*` tools; the
   read-only Specs tool renders it as a tree ([[module-spec-graph]], [[submodule-server-spec]]).
 - **Workflows** — bundled workflow skills for project setup, design brainstorming, and shipping a PR
@@ -107,6 +112,9 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   ([[submodule-server-agent]], [[submodule-web-panels]]).
 - **Around the workspace** — open a worktree in an installed editor or IDE, and keep the app itself up
   to date ([[submodule-server-editors]], [[submodule-web-updates]]).
+- **Interface language** — the UI follows the system language or the user's choice; English ships
+  built-in, and a user adds or overrides a language with a flat JSON file in `~/.thinkrail/locales`, live
+  on save. Agent and tool output is never translated ([[module-locales]], [[submodule-web-i18n]]).
 - **Brand** — ThinkRail green accent (bright on dark themes, deepened on light ones so it clears AA on
   both), a Darcula-family dark background, Orbitron for the brand display role, Geist and JetBrains Mono
   for UI and code ([[submodule-web-themes]], [[web-typography]]).
