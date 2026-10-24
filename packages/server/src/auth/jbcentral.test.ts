@@ -9,7 +9,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import { JBCENTRAL_STATUS_TTL_MS } from "@thinkrail/shared/jbcentral";
@@ -214,6 +214,7 @@ beforeEach(async () => {
 	const binDir = join(root, "bin");
 	mkdirSync(binDir, { recursive: true });
 	mkdirSync(home, { recursive: true });
+	mkdirSync(dirname(artifactPath), { recursive: true });
 	mkdirSync(agentDir, { recursive: true });
 	mkdirSync(controlDir, { recursive: true });
 	writeFileSync(extensionSource, syntheticExtension("central-model"));

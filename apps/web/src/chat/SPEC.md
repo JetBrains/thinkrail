@@ -306,6 +306,14 @@ defaults *and* over a virtualization remount. `FoldGeometryProvider` is the tran
 change seam: every fold header registers a stable row-derived id through `useFold`, including `Collapsible`
 and fallback-driven auto expansion/collapse. It routes detached anchor stabilization through
 `ReadingBandController`'s single motion channel and refreshes from the changing row's measured geometry.
+The correction lands in the change's first frame (the motion's frame, the row's resize observation as
+backstop), never in the React commit: a commit-time `scrollTop` write reaches Virtuoso's synchronous scroll
+handler before its ResizeObserver measures the changed row, so it windowed stale sizes — an above-viewport
+expansion emptied the list and remounted every row, including the reader's anchor, within one frame. The
+correction is still pending only until that first frame or backstop write: native input or a newer fold change
+arriving before it applies it exactly once (a newer change thereby accepts a synchronous, pre-measurement write
+for the overlap). Afterwards nothing is pending, so a resumed stabilization interrupted again never re-applies
+it over reader movement whose scroll event is not yet handled.
 A wholly offscreen disclosure preserves the visible transcript by its own row-height delta. If a sticky
 breadcrumb collapses the disclosure body that contains the reader's viewport, that content no longer has a
 surviving anchor, so the collapsed original header takes its place at the viewport boundary. Reader input or
@@ -593,16 +601,23 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   native movement that interrupts an active alignment also detaches even when directed toward latest, unless
   that movement itself reaches the exact edge.
   Explicit text selection and user-invoked message/history, breadcrumb, or tool-page navigation also detach.
-  Pointer provenance survives release long enough for native scrollbar-track animation, keyboard
-  provenance covers focus-induced scrolling from interactive transcript controls, and both expire on
-  scroll-end or a bounded timeout so later geometry cannot inherit them. A return gesture rearms once only
-  when it reaches the physical latest edge within the shared 1px geometry tolerance; directions invert with
-  order, and touch/trackpad intent survives through momentum. No 50px near-edge threshold and no geometry
-  change alone may rearm. Expanding or collapsing an Activity, Thinking, tool, or message disclosure is a
-  geometry change rather than navigation: it preserves alignment, retargets the current latest/response
-  destination while following, and leaves a detached reader's visible anchor fixed. An own Send deliberately
-  reattaches and places its user row at 10% of transcript height clamped to 48–80px; a queued/background
-  continuation preserves a detached reader when it starts.
+  Pointer provenance survives release long enough for native scrollbar-track animation, keyboard provenance
+  covers focus-induced scrolling from interactive transcript controls, and both expire on scroll-end or a
+  bounded timeout so later geometry cannot inherit them. Movement that script makes through the scroller's
+  `scrollBy`/`scrollTo` (Virtuoso's estimate-to-measurement corrections, `scrollToIndex`) is subtracted from
+  observed movement and never carries reader direction, and a scroll-end that closes only such movement ends
+  no intent: a 1px correction for rows mounting above an oldest-first reader once read as touch momentum
+  toward latest, and its scroll-end ended the momentum before it reached the edge. The hook shadows the
+  scroller's own `scrollBy`/`scrollTo` for its lifetime and restores them on cleanup; this relies on
+  Virtuoso moving its scroller only through those two methods (verified for react-virtuoso 4.18.7, re-verify
+  on upgrade), and only displacement those calls apply synchronously is attributed. A return gesture rearms
+  once only when it reaches the physical latest edge within the shared 1px geometry tolerance; directions
+  invert with order, and touch/trackpad intent survives through momentum. No 50px near-edge threshold and no
+  geometry change alone may rearm. Expanding or collapsing an Activity, Thinking, tool, or message
+  disclosure is a geometry change rather than navigation: it preserves alignment, retargets the current
+  latest/response destination while following, and leaves a detached reader's visible anchor fixed. An own
+  Send deliberately reattaches and places its user row at 10% of transcript height clamped to 48–80px; a
+  queued/background continuation preserves a detached reader when it starts.
 - **Streaming response movement exists only during work, and it moves in window steps** — while following, the
   view stands still while the active response fills the window below its prompt. Each time the response edge
   passes Trigger (default 100%), the sole motion owner makes one eased ~220 ms step that places the edge at

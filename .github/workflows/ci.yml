@@ -16,26 +16,36 @@ concurrency:
 jobs:
   changes:
     name: Classify changes
+    timeout-minutes: 5
     runs-on: ubuntu-latest
     outputs:
       app: ${{ steps.classify.outputs.app }}
+      artifacts: ${{ steps.classify.outputs.artifacts }}
     steps:
       - uses: actions/checkout@v5
       - id: classify
         env:
-          BASE: ${{ github.event.merge_group.base_sha || github.event.pull_request.base.sha }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_ref }}
           OUTSIDE_APP: ^(apps/website/|packages/website-analytics/|\.github/workflows/site(-preview|-preview-cleanup)?\.yml$|\.github/readme-assets/)
+          ARTIFACT_PATHS: ^(apps/cli/|apps/desktop/|packages/artifact-tests/|packages/server/src/(buildSupport|agent/extensions)\.ts$|e2e/(run-binary|run-desktop|artifactPlaywright)\.ts$|playwright\.(binary|desktop)\.config\.ts$|\.github/|patches/|(package\.json|bun\.lock|turbo\.json)$)
         run: |
-          if git fetch --no-tags --depth=1 origin "$BASE" && files=$(git diff --name-only --no-renames "$BASE" HEAD); then
+          if git fetch --no-tags --depth=1 origin "$BASE" && files=$(git diff --name-only --no-renames FETCH_HEAD HEAD); then
             if grep -qvE "$OUTSIDE_APP" <<< "$files"; then app=true; else app=false; fi
+            if [ "$app" = true ] && { [ "$GITHUB_EVENT_NAME" = merge_group ] || grep -qE "$ARTIFACT_PATHS" <<< "$files"; }; then
+              artifacts=true
+            else
+              artifacts=false
+            fi
           else
             echo "::warning::Could not diff against $BASE; running every job"
             app=true
+            artifacts=true
           fi
-          echo "app=$app" | tee -a "$GITHUB_OUTPUT"
+          { echo "app=$app"; echo "artifacts=$artifacts"; } | tee -a "$GITHUB_OUTPUT"
 
   lint:
     name: Lint & Typecheck
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -62,6 +72,7 @@ jobs:
 
   test:
     name: Unit Tests
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -79,6 +90,7 @@ jobs:
 
   pi-packages:
     name: Pi package parity (vanilla pi under Node)
+    timeout-minutes: 10
     needs: changes
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
@@ -102,6 +114,7 @@ jobs:
 
   e2e-shard:
     name: E2E (no-agent) shard ${{ matrix.shard }}/2
+    timeout-minutes: 30
     needs: changes
     if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
@@ -138,8 +151,9 @@ jobs:
 
   binary-shard:
     name: Binary smoke & e2e shard ${{ matrix.shard }}/4
+    timeout-minutes: 30
     needs: changes
-    if: needs.changes.outputs.app == 'true'
+    if: needs.changes.outputs.artifacts == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -179,6 +193,7 @@ jobs:
 
   binary-windows:
     name: Binary smoke (windows)
+    timeout-minutes: 20
     needs: changes
     if: needs.changes.outputs.app == 'true'
     runs-on: windows-latest
@@ -187,12 +202,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
-      - name: Cache bun install
-        uses: actions/cache@v5
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
+          no-cache: true
       - run: bun install --frozen-lockfile
       - run: bun test packages/spec-graph
       - run: bun test packages/pi-background-commands
@@ -204,8 +214,9 @@ jobs:
 
   desktop-shard:
     name: Desktop smoke & e2e shard ${{ matrix.shard }}/4
+    timeout-minutes: 30
     needs: changes
-    if: needs.changes.outputs.app == 'true'
+    if: needs.changes.outputs.artifacts == 'true'
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -264,6 +275,7 @@ jobs:
   # The one required check in the main ruleset.
   ci-passed:
     name: CI passed
+    timeout-minutes: 5
     needs: [changes, lint, test, pi-packages, e2e-shard, binary-shard, binary-windows, desktop-shard]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
@@ -271,9 +283,12 @@ jobs:
       - env:
           NEEDS: ${{ toJSON(needs) }}
           APP: ${{ needs.changes.outputs.app }}
+          ARTIFACTS: ${{ needs.changes.outputs.artifacts }}
         run: |
           jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
-          jq -e --arg app "$APP" 'to_entries | all(
-            .value.result == "success"
-            or (.value.result == "skipped" and $app == "false" and (.key | IN("changes", "lint", "test") | not))
-          )' <<< "$NEEDS"
+          jq -e --arg app "$APP" --arg artifacts "$ARTIFACTS" '
+            {"pi-packages": $app, "e2e-shard": $app, "binary-windows": $app,
+             "binary-shard": $artifacts, "desktop-shard": $artifacts} as $runs
+            | to_entries | all(
+                .value.result == "success"
+                or (.value.result == "skipped" and ($runs[.key] // "true") == "false"))' <<< "$NEEDS"

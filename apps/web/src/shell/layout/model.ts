@@ -58,6 +58,7 @@ export interface LayoutMutationResult {
 	document: WorkspaceLayoutDocument;
 	focusGroupId?: string;
 	focusTabId?: string;
+	focusOnlyIfLost?: true;
 }
 
 export interface LayoutUnavailable {
@@ -899,7 +900,7 @@ export function hideSide(
 		center?.tabs[0];
 	return {
 		document: setSideVisibility(document, side, false),
-		...(center ? { focusGroupId: center.id } : {}),
+		...(center ? { focusGroupId: center.id, focusOnlyIfLost: true } : {}),
 		...(selected ? { focusTabId: selected.id } : {}),
 	};
 }
@@ -916,7 +917,7 @@ export function hideBottom(
 		center?.tabs[0];
 	return {
 		document: setBottomVisibility(document, false),
-		...(center ? { focusGroupId: center.id } : {}),
+		...(center ? { focusGroupId: center.id, focusOnlyIfLost: true } : {}),
 		...(selected ? { focusTabId: selected.id } : {}),
 	};
 }
