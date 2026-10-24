@@ -21,7 +21,7 @@ import {
 	templateDirs,
 } from "./templates";
 
-const INVALID_NAMES = ["../x", "a/b", "a\\b", ".hidden", ""];
+const INVALID_NAMES = ["../x", "a/b", "a\\b", ".hidden", "", "a:b", ":b", "a:"];
 
 let root: string;
 let globalDir: string;
