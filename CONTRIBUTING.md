@@ -109,6 +109,10 @@ repo alongside the code — top-level specs at the root
 decision updates the relevant `SPEC.md` first, then the code and the tests that pin
 it. See [`AGENTS.md`](AGENTS.md) for the spec workflow.
 
+For team review, the [project-native spec-driven development proposal](docs/proposals/spec-driven-development.md)
+explores adapting ThinkRail to existing spec practices and frameworks. It is a draft, not implemented
+behavior, and does not replace the current workflow above.
+
 ## Translations
 
 ThinkRail's interface strings live in one file,
