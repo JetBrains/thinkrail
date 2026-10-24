@@ -22,8 +22,6 @@ const INPUT_CLASS =
 function isValidTemplateName(name: string): boolean {
 	if (name.length === 0) return false;
 	if (name.startsWith(".")) return false;
-	// Keep in sync with the server: ":" is rejected on every OS so saved
-	// templates stay portable (NTFS reads "a:b.md" as an alternate data stream).
 	return (
 		!name.includes("/") &&
 		!name.includes("\\") &&
