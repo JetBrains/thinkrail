@@ -17,7 +17,7 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 ## Boundary
 
 - **Owns:** host-side runtime helpers that are neither engine- nor transport-specific.
-- **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `mergePath()`,
+- **Public surface:** `@thinkrail/shared/shellEnv` → `resolveShellEnv()`, `repairShellEnv()`, `mergePath()`,
   `loginShellImports()`, `parseLoginShellEnv()`, `LOGIN_ENV_MARKER`, `localeRepair()`;
   `@thinkrail/shared/freePort` → `findFreePort()`, `isPortFree()`;
   `@thinkrail/shared/startupMark` → the static recursive wordmark plus the pure responsive/ANSI renderer
@@ -50,9 +50,11 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 
 ## Contents
 
-- **/shellEnv** — `resolveShellEnv()`: make the host's environment safe for the shells it spawns, because a
-  GUI-launched host (Finder/Dock, launchd, a systemd unit, a container) inherits a stripped-down one. Four
-  independent repairs:
+- **/shellEnv** — `resolveShellEnv()` (one cached async run per process; `repairShellEnv()` is the
+  uncached worker that tests drive with an injected probe, and `loginShellProbe(timeout)` builds the
+  default probe with a test-sized deadline): make the host's environment safe for the shells it spawns,
+  because a GUI-launched host (Finder/Dock, launchd, a systemd unit, a container) inherits a
+  stripped-down one. Four independent repairs:
   - **`PATH`** — always adopt the user's login PATH so the in-process agent's bash/tools and the git hooks
     they trigger find `git`/`node`/`bun`/etc., keeping whatever the launching terminal had added on top.
   - **login-shell environment** — import the rest of the user's login-shell environment once at startup,
@@ -216,17 +218,36 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
 ## Get right (shellEnv)
 
 - Runs **once at startup, before creating any `AgentSession`**.
+- **Async, one run per process, awaited before the first spawn.** `resolveShellEnv()` returns one
+  promise cached on a `Symbol.for` global key, so every caller awaits that same run, even from a second
+  bundled copy of the module (the desktop shell and its server bundle). A GUI launch pays for the login
+  shell (~100 ms typical, seconds with nvm/conda), and a sync probe stalls the whole boot for it. The
+  async probe lets a launcher overlap it with work that spawns nothing (bundle import, logging init) and
+  await it before the first spawn.
+  Gating each spawn site instead was rejected: the sites are many (git, PTY, editors, Central, pi tools,
+  extensions), and a missed one silently gets the stripped PATH. The login-shell and `launchctl` probes
+  run in parallel; the `launchctl` `SSH_AUTH_SOCK` applies only when the login-env import did not set it.
+- **Output counts only up to its end marker.** The probe prints `LOGIN_ENV_END` after `env -0`, and output
+  without it is a failed probe, so a cut-off read never applies a truncated `PATH` or silently drops
+  variables. Bytes after the marker are drained and discarded until the shell exits, because an EXIT trap
+  or logout file that writes more than the pipe buffer would otherwise block the shell until the deadline.
+  Once the shell has exited with the marker read, the read is cancelled, so a background job that an rc
+  file leaves holding the pipe cannot hold the run open. A 100ms bound after the exit only covers a shell
+  that exits without the marker while such a job keeps the pipe open.
+- **The deadline kills the whole probe.** The shell starts in its own process group, and at 5s the group
+  gets SIGKILL: interactive zsh and bash ignore the default SIGTERM, and a hung rc command would outlive
+  its shell.
 - No-op on win32 (GUI processes already inherit the registry PATH). Elsewhere it **always** probes: spawn
-  a login shell `[$SHELL||/bin/zsh, -l, -i, -c, <print LOGIN_ENV_MARKER>; env -0]` (retry without `-i` on
-  non-zero exit) with PATH reset to the OS base dirs (so rc files compute their canonical PATH instead of
-  layering onto whatever the launcher passed), 5s timeout, parse the `\0`-separated entries after the
-  marker, then `mergePath(current, login)` — the login PATH, preceded by the current entries it lacks (an
-  activated venv, `nix develop`, direnv) so a terminal launch keeps its explicit additions ahead. Never
-  throws — on any failure it leaves PATH untouched.
+  a login shell `[$SHELL||/bin/zsh, -l, -i, -c, <print LOGIN_ENV_MARKER>; env -0 && <print
+  LOGIN_ENV_END>]` (retry without `-i` on non-zero exit) with PATH reset to the OS base dirs (so rc files
+  compute their canonical PATH instead of layering onto whatever the launcher passed), 5s deadline, parse
+  the `\0`-separated entries between the markers, then `mergePath(current, login)` — the login PATH,
+  preceded by the current entries it lacks (an activated venv, `nix develop`, direnv) so a terminal
+  launch keeps its explicit additions ahead. Never throws — on any failure it leaves PATH untouched.
 - There is no "PATH already looks complete" short-circuit. One existed, keyed on user-dir markers, and
   `/usr/local/bin` was among them; it heads macOS `/etc/paths` and every Linux default PATH, so the probe
   never ran for Dock-launched hosts and every session lost Homebrew/bun (`command not found`, failing git
-  hooks, stuck subagents). The one-time ~100–300 ms probe per app start is cheaper than guessing.
+  hooks, stuck subagents). The one-time login-shell probe per app start is cheaper than guessing.
 
 ## Get right (jbcentral)
 
