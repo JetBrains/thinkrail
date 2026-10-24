@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { rmSync, statSync } from "node:fs";
+import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import type {
@@ -127,22 +128,24 @@ export function listProjects(): Project[] {
 	return newestFirst(getProjects().filter((project) => project.closed !== true));
 }
 
-/**
- * Whether the project's folder is definitively gone: missing, or no longer a
- * directory. Other filesystem errors (e.g. permission failures) do not prove
- * deletion, so the entry is kept rather than dropped from Recent Projects.
- */
-function projectFolderGone(path: string): boolean {
-	try {
-		return !statSync(path).isDirectory();
-	} catch (error) {
-		const code = (error as { code?: string }).code;
-		return code === "ENOENT" || code === "ENOTDIR";
-	}
+function projectFolderGone(path: string): Promise<boolean> {
+	return stat(path).then(
+		(stats) => !stats.isDirectory(),
+		(error) => {
+			const code = (error as { code?: string }).code;
+			return code === "ENOENT" || code === "ENOTDIR";
+		},
+	);
 }
 
-export function listRecentProjects(): Project[] {
-	return newestFirst(getProjects()).filter((project) => !projectFolderGone(project.path));
+export async function listRecentProjects(): Promise<Project[]> {
+	const projects = newestFirst(getProjects());
+	const keep = await Promise.all(
+		projects.map((project) =>
+			project.closed === true ? projectFolderGone(project.path).then((gone) => !gone) : true,
+		),
+	);
+	return projects.filter((_, index) => keep[index]);
 }
 
 export function closeProject(id: string): Project {
