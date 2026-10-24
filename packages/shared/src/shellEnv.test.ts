@@ -255,6 +255,16 @@ test("a background job holding stdout neither holds the probe open nor drops the
 	}
 });
 
+test("output after the end marker is drained so a chatty logout hook cannot stall the shell", async () => {
+	fakeShell(
+		`printf '${LOGIN_ENV_MARKER}PATH=${LOGIN_PATH}\\0${LOGIN_ENV_END}'\nhead -c 16777216 /dev/zero`,
+	);
+
+	await repairShellEnv();
+
+	expect(process.env.PATH).toBe(`/Users/x/.pi/agent/bin:${LOGIN_PATH}`);
+});
+
 test("a hung interactive login shell that ignores SIGTERM is killed with its children", async () => {
 	const jobs = join(shellDir, "jobs");
 	fakeShell(

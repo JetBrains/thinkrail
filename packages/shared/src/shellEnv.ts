@@ -55,15 +55,17 @@ async function readStdout(
 		const reader = child.stdout.getReader();
 		const decoder = new TextDecoder();
 		let text = "";
+		let complete = false;
 		const drained = (async () => {
 			for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+				if (complete) continue;
 				text += decoder.decode(chunk.value, { stream: true });
-				if (options.until !== undefined && text.includes(options.until)) return;
+				complete = options.until !== undefined && text.includes(options.until);
 			}
 		})().catch(() => {});
 		const code = await child.exited;
 		clearTimeout(deadline);
-		if (code === 0) await Promise.race([drained, Bun.sleep(ORPHAN_PIPE_GRACE_MS)]);
+		if (code === 0 && !complete) await Promise.race([drained, Bun.sleep(ORPHAN_PIPE_GRACE_MS)]);
 		void reader.cancel().catch(() => {});
 		return code === 0 ? text + decoder.decode() : null;
 	} catch {

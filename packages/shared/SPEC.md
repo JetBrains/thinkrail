@@ -227,11 +227,13 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   Gating each spawn site instead was rejected: the sites are many (git, PTY, editors, Central, pi tools,
   extensions), and a missed one silently gets the stripped PATH. The login-shell and `launchctl` probes
   run in parallel; the `launchctl` `SSH_AUTH_SOCK` applies only when the login-env import did not set it.
-- **Output counts only up to its end marker.** The probe prints `LOGIN_ENV_END` after `env -0`, the read
-  stops there, and output without it is a failed probe. A cut-off read therefore never applies a truncated
-  `PATH` or silently drops variables, and a background job that an rc file leaves holding the pipe cannot
-  hold the run open. A 100ms bound after the shell exits only covers a shell that exits without the marker
-  while such a job keeps the pipe open.
+- **Output counts only up to its end marker.** The probe prints `LOGIN_ENV_END` after `env -0`, and output
+  without it is a failed probe, so a cut-off read never applies a truncated `PATH` or silently drops
+  variables. Bytes after the marker are drained and discarded until the shell exits, because an EXIT trap
+  or logout file that writes more than the pipe buffer would otherwise block the shell until the deadline.
+  Once the shell has exited with the marker read, the read is cancelled, so a background job that an rc
+  file leaves holding the pipe cannot hold the run open. A 100ms bound after the exit only covers a shell
+  that exits without the marker while such a job keeps the pipe open.
 - **The deadline kills the whole probe.** The shell starts in its own process group, and at 5s the group
   gets SIGKILL: interactive zsh and bash ignore the default SIGTERM, and a hung rc command would outlive
   its shell.
