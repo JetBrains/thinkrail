@@ -581,7 +581,7 @@ test("Ctrl+R and Escape are owned app-wide: both work with focus outside the com
 
 	await page.keyboard.press("Control+r");
 	await expect(overlay).toBeVisible();
-	await clickOutside();
+	await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
 	await page.keyboard.press("Escape");
 	await expect(overlay).toBeHidden();
 	await expect(input).toBeFocused();
@@ -714,10 +714,18 @@ test("the history button toggles the overlay, outside clicks dismiss it, and pic
 
 	await input.click();
 	await expect(overlay).toBeHidden();
+	await expect(input).toBeFocused();
+	await page.keyboard.type("draft");
+	await expect(input).toHaveValue("draft");
+	await input.fill("");
 
 	await historyButton.click();
 	await expect(overlay).toBeVisible();
 	await page.getByTestId("history-scope").click();
 	await page.getByTestId("history-scope-option").first().click();
 	await expect(overlay).toBeVisible();
+
+	await page.getByTestId("open-settings").click();
+	await expect(overlay).toBeHidden();
+	await expect(page.getByTestId("settings-dialog")).toBeVisible();
 });
