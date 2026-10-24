@@ -93,7 +93,7 @@ export const SHIKI_FILE_LANGUAGES: readonly ShikiFileLanguage[] = [
 		extensions: [".html", ".htm", ".xhtml", ".shtml"],
 		aliases: ["HTML", "htm", "xhtml"],
 		chat: true,
-		load: () => import("@shikijs/langs/html"),
+		load: () => import("@shikijs/langs/html-derivative"),
 	},
 	{
 		id: "markdown",

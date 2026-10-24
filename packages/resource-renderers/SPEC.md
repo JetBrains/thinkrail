@@ -77,8 +77,8 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
   diff and notebook cells pass their plugins and components through it.
 - `code` — the code-highlighting host (`languages` with grammar loaders, `languageId` canonicalization, and
   the code `theme` resolved from CSS variables). Monaco is page-global: the first `MonacoEditor` initializes it
-  from its host's `code` once (`ensureMonaco`), and every later editor reuses that setup; it re-themes on every
-  completed theme swap.
+  from its host's `code` once (`ensureMonaco`, synchronous after the Monaco chunk loads), and every later editor
+  reuses that setup; it re-themes on every completed theme swap. A grammar loads on its language's first model.
 - `bytesUrl(workspaceId, path, oid?)` — the host byte route for images, PDFs and relative markdown assets.
 - `openFile(workspaceId, path, { keep? })` and `openComparison(workspaceId, before, path)` — navigation for
   relative document links (preview) and explicit Open-in-tab actions (keep).
@@ -551,6 +551,9 @@ content's own height.
   gutter, full active-line paint, smooth scrolling, active bracket-pair + indentation guides, single-file
   occurrence highlighting, and ambiguous-Unicode suppression. Opaque `viewState` is restored only after its
   editor-state shape is validated and is saved on unmount, so tab switches round-trip scroll and folding.
+  A review focus that arrives with the mount jumps to its line (`revealLineNow`, an immediate scroll): a
+  smooth scroll started before the editor's first layout can stop short, and the handled focus is not
+  retried, so the card stayed off screen. A focus on a mounted editor still scrolls smoothly.
   Monaco is imported from `editor.api` with only the reading contributions (find, folding, bracket matching,
   context menu/copy, links, hover, word highlighting, sticky scroll, go-to-line/command palette, read-only
   messaging and Unicode highlighting); keeping word highlighting preserves F7. The TS/JS/JSON/CSS/HTML
@@ -561,16 +564,53 @@ content's own height.
   twice (a chat card and its full screen, a card and the file's tab).
 - **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` has the sole `EDITOR_THEME`.
   Themes own one TextMate scope definition: chat uses its live CSS-variable form, while Monaco resolves that
-  same definition plus its complete editor/widget/menu/input colour map to hex, loads it into a dedicated
-  JS-regex Shiki highlighter, and installs `@shikijs/monaco` once per page. Its curated language catalog is
-  shared with the chat highlighter and extended for the desktop file formats; missing Monaco language ids are
-  registered with their file associations before Shiki installs providers. A theme swap replaces the
-  highlighter theme under the same name, redefines Monaco, and selects `EDITOR_THEME`. The normal/high-contrast
-  base comes from manifest appearance/contrast metadata—never a known id—and remains inherited for specialist
-  colours outside the explicit map. Reads pass through `lib.cssColorToHex`; an absent or unparseable token is
+  same definition plus its complete editor/widget/menu/input colour map to hex and defines the Monaco theme from
+  it directly. Token colours come from `shikiTokens.ts`, a Monaco-free owner of one Shiki highlighter, its
+  per-language grammar loads and the colour→scope map. Its curated language catalog is shared with the chat
+  highlighter and extended for the desktop file formats; missing Monaco language ids are registered with their
+  file associations, then each catalog id gets a `registerTokensProviderFactory` entry. A swap loads the
+  highlighter theme under the other of two names and rebuilds the scope map from the same converted Monaco rules it
+  defines, redefines Monaco, and selects `EDITOR_THEME`. The normal/high-contrast base comes from manifest
+  appearance/contrast metadata—never a known id—and remains inherited for specialist colours outside the
+  explicit map. Reads pass through `lib.cssColorToHex`; an absent or unparseable token is
   omitted so the selected base palette wins rather than crashing the panel. Pierre's one registered
   `thinkrail` CSS-variable Shiki theme emits variable references instead of catalog colours; inherited
   `--diffs-*` properties map foreground/syntax to `--code-*`, canvases to the workspace/content roles, and
   addition/deletion paint to feedback roles, so a theme swap needs no re-highlight. `TerminalInstance`
   similarly rebuilds from the complete 16-slot ANSI variable set. Monaco and xterm consume the nullable
   editor selection-foreground override when provided.
+- **Monaco loads one grammar per language and tokenizes on Oniguruma WASM.** Compiling all 35 catalog
+  grammars up front was a 210-250 ms main-thread task (about 870 ms at 4x CPU) before the first coloured
+  line, and the JS regex engine tokenized about 4.5x slower than Oniguruma (a 2,861-line TS file: about
+  1,715 ms against 380 ms). The factory's `create()` loads the grammar when Monaco first meets a model of
+  that language; the `languageForPath` probe model starts it before the editor mounts. Concurrent
+  requests share one load, and an unknown id stays plain. Monaco asks a language's factory for a provider
+  only once, so a failed load answers plain text and marks the language missing; a failed highlighter or
+  engine start is not cached, so a later request retries it. The next model of that language whose load
+  succeeds installs the provider directly with `setTokensProvider`. `create()` never throws. Each provider binds the grammar object current when it is made, because loading an embed
+  rebuilds every grammar that lists it, and Monaco's saved line states only fit the old one. Embeds load
+  per model: a regex scan of fence info strings (including fences inside blockquotes and list items) and
+  `lang=` attributes (spaces around `=` allowed) picks the in-catalog `embeddedLangsLazy` the text names
+  (markdown 26, vue 8, svelte 2 otherwise) and follows an embed's own lazy embeds transitively
+  (vue -> markdown -> shellscript); they load after the first colour, then the provider is re-registered
+  so Monaco re-tokenizes. Each scan reports the embeds it loaded that the installed provider lacks, so two
+  models scanning at once each re-register for what they finished, not only the first.
+  A leading `---` adds `yaml`. A tag at a line start, a closing tag, a comment, or a common inline element
+  such as `<img …>`, `<br>` or `<kbd>` adds `html` (front matter and inline HTML embed them with no fence).
+  A generic such as `Array<T>` or `Map<K, V>` inside a fence does not count. Fence names the markdown grammar embeds under another language (`jsx` and `es6` as
+  `javascript`, `golang` as `go`, `h` as `c`) map through `FENCE_EMBEDS` before the host's `languageId`.
+  The `html` catalog entry loads `html-derivative`, the grammar markdown includes for inline HTML.
+  The scan reruns on content and language changes. Nothing suspends on the engine or a grammar: a Suspense
+  fallback is held for at least 300 ms. The JS regex engine runs only where `WebAssembly` does not exist
+  (WebKit Lockdown Mode). A failed `.wasm` fetch or compile fails that highlighter start instead: files stay
+  plain and the next file retries, so one transient failure (a dev-server restart, an SPA fallback serving
+  HTML) neither pins the 4.5x slower engine for the page nor hides a broken asset behind it. The asset is
+  fetched and compiled here and Shiki only instantiates the compiled module, because Shiki's `loadWasm`
+  keeps a rejected start for the whole page. A theme that fails to load costs only the colours: the
+  highlighter is kept and the next theme swap retries. Shiki's `setTheme` is a no-op for the name it last
+  selected, so each swap loads the theme under the other of two names to get the new colour map. The raw
+  `shiki/onig.wasm` asset is used because `shiki/wasm` inlines it as base64 and decodes it byte by byte on
+  the main thread (about 22 ms at 1x CPU) before the first coloured line. Every shipped host serves `.wasm` as
+  `application/wasm`: Vite in dev, `Bun.file` in `serveStatic` for the desktop app and the staged CLI binary.
+  Cost: the first open of a new language waits for its grammar chunk (about one frame at 1x CPU), and the
+  engine fetches a 466 kB `.wasm` asset; Pierre's newer Shiki ships its own copy.

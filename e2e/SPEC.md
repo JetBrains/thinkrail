@@ -423,7 +423,10 @@ During iteration, run the affected specs and use Playwright's last-failed mode. 
 irrelevant expensive setup with equivalent fixture state and wait for observable readiness; blanket retries,
 arbitrary sleeps, and assertion weakening are not synchronization policy. A race guard forces the hazardous
 interleaving (held animation frames, a held reply) rather than sampling it in a CPU-throttled loop, whose cost
-scales with runner speed and outgrows the test budget on CI. Live-provider completion waits on
+scales with runner speed and outgrows the test budget on CI. An assertion that something happens without a
+settle wait freezes the page clock (`page.clock.pauseAt`) before the gesture, so a regressed timer can never
+fire, instead of racing a wall-clock `timeout`; `page.clock.runFor` then plays a settle window out
+deterministically. Live-provider completion waits on
 the session's streaming state after response evidence appears; the optional rendered `Done` row is not a
 terminal-state contract. Scenarios whose subject is a client-side send transformation assert the exact
 outgoing `session.prompt` frame rather than treating a

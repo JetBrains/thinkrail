@@ -2,7 +2,7 @@ import MonacoReact, { type OnMount } from "@monaco-editor/react";
 import { useT } from "@thinkrail/locales/react";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import type { editor } from "monaco-editor/esm/vs/editor/editor.api.js";
-import { use, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useResourceHost, useResourcePreferences } from "../host";
 import type { ResourceViewProps, SurfaceReview } from "../registry";
 import { MonacoReviewZones } from "./MonacoReviewZones";
@@ -12,6 +12,7 @@ import {
 	ensureMonaco,
 	fileEditorOptions,
 	languageForPath,
+	revealLineNow,
 	watchThemeSwap,
 } from "./monacoSetup";
 import {
@@ -41,7 +42,7 @@ export default function MonacoEditor({
 }: ResourceViewProps) {
 	const t = useT();
 	const { fileLineWidth, fileLineWidthBounded } = useResourcePreferences();
-	use(ensureMonaco(useResourceHost().code));
+	ensureMonaco(useResourceHost().code);
 	const modelScope = useId().replace(/[^\w-]/g, "");
 	const options = useMemo(
 		() => fileEditorOptions(t, fileLineWidth, fileLineWidthBounded, resource.path),
@@ -94,7 +95,7 @@ export default function MonacoEditor({
 			syncThreads(review);
 			const line = focusLine(review);
 			if (line !== null) {
-				codeEditor.revealLineInCenter(line);
+				revealLineNow(codeEditor, line);
 				review.onFocusHandled();
 			}
 		}
