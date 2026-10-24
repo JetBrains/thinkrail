@@ -186,8 +186,10 @@ surface acquires Pierre's module-singleton worker pool; an ordinary workspace th
 nor initializes its pool. Renderer metadata and loaders are the only eager edge. A production build must
 retain distinct Pierre diff, Pierre file, worker-pool, and Monaco chunks, with none of their implementation
 code in the entry chunk. Monaco stays out of the entry graph but is not loaded only on demand: on desktop,
-`shell` preloads the code view at idle after the workbench mounts, and Files rows warm it on hover and
-focus. Phone-class viewports and `saveData` connections never preload.
+`shell` preloads the code view once per page at idle after the workbench mounts, once the page is visible
+and online, and Files rows warm it on focus and after a 150 ms hover. Only renderers that opt in with
+`capabilities.preload` (the code view) load early, so hovering a PDF or notebook row loads nothing.
+Phone-class viewports and `saveData` connections never preload.
 Vite emits every worker as an ES module (`worker.format: "es"`), so worker `import()` calls split into
 on-demand chunks instead of inlining; every target webview (Chromium, WebKit/Safari 17+, WebView2) runs
 module workers. Safari/WebKit 17 is the browser floor: the shipped webviews (macOS 12+ system WebKit,

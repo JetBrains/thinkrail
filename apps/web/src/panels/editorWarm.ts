@@ -1,7 +1,10 @@
 import { type ResourceDescriptor, usePreloadResourceView } from "@thinkrail/resource-renderers";
 import { isRecord, usePhoneViewport, whenIdle } from "../lib";
 
+const HOVER_WARM_DELAY_MS = 150;
+
 let loadingTrees = 0;
+let hoverWarm: ReturnType<typeof setTimeout> | undefined;
 const parked = new Set<() => void>();
 
 function savesData(): boolean {
@@ -51,4 +54,9 @@ export function whenFilesTreeIdle(
 		cancelled = true;
 		cancel();
 	};
+}
+
+export function warmOnHover(run: () => void, delay = HOVER_WARM_DELAY_MS): void {
+	clearTimeout(hoverWarm);
+	hoverWarm = setTimeout(run, delay);
 }

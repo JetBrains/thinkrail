@@ -122,6 +122,7 @@ export interface ResourceRenderer {
 		layout: boolean;
 		whitespace: boolean;
 		boundedDiff?: "always" | "large";
+		preload?: boolean;
 	};
 	loadView?(environment: ResourceEnvironment): Promise<ResourceViewModule>;
 	loadDiff?(): Promise<{ default: ComponentType<ResourceDiffProps> }>;

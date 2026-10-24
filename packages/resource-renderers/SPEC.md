@@ -124,8 +124,10 @@ resolution, so the code renderer picks Pierre `File` on phone-class viewports an
 reading a viewport global. The loaded module (`ResourceViewModule`, exported from the root) may export
 `warm(host, resource)`; a preload calls it after every request, one task after the module resolves, so
 the chunk's evaluation and the warm are separate long tasks. It must be cheap and idempotent. Monaco's
-`warm` runs `ensureMonaco`, starts the regex engine, and one task later loads the grammar for the
-resource's path (an empty path warms no grammar).
+`warm` runs `ensureMonaco` and, one task later, starts the highlighter (engine and theme) and the grammar
+for the resource's path (an empty path loads no grammar). `usePreloadResourceView` preloads only a
+renderer whose `capabilities.preload` is set, which only the code view sets: a host warming every row it
+hovers would otherwise load the PDF, notebook or CSV chunk of the row's top candidate.
 
 **One loaded implementation per key, chosen once.** `rendererMount` keeps one component map and the
 in-flight load per implementation key (renderer id + phone class), shared by preloads and mounts.
@@ -137,8 +139,9 @@ stored a `lazy` there, and the first `RendererView` without a stored component s
 the in-flight load. That choice is stored once and never switched: a lazy and a direct component are
 different types, and swapping them would remount a live editor. A lazy made while a load was in flight is
 resolved for every later mount, so it does not suspend again. A failed preload, in the load or in `warm`,
-logs a warning instead of rejecting; a failed load is forgotten, so the next mount retries and a real
-failure reaches the pane's error boundary.
+logs a warning instead of rejecting. A failed load is forgotten, together with a `lazy` a mount stored for
+it while it was in flight, so the next mount retries and a real failure reaches the pane's error
+boundary.
 
 **Review-draft scratch is read per slot.** A pane that keeps transient authoring across remounts provides
 `ReviewDraftContext` with a `ReviewDraftPersistence` (`rendererId`, `read(key)`, `subscribe`, `update(key,
@@ -194,7 +197,8 @@ ranked, and followed by the required text or byte fallback. MIME matching uses t
 fallback as resource description when host MIME metadata is absent. The resulting ordered list is both
 dispatch policy and the pane's view-toggle grammar. Renderer capabilities also state whether the selected
 surface supports copying its modified source, split/unified layout, and ignore-whitespace recomputation; the
-pane exposes only those applicable controls. `boundedDiff: "always"` marks a diff renderer that manages its
+pane exposes only those applicable controls. `preload` marks a view worth loading before its first mount
+(only the code view sets it). `boundedDiff: "always"` marks a diff renderer that manages its
 own viewport (virtualized table, paged PDF, sandboxed HTML frame) and therefore needs a bounded height;
 `"large"` marks one that lays out naturally but virtualizes once bounded, so a host bounds it when the diff
 is large; a host passes `virtualize` only for a diff large enough to need it. Every other diff lays out at its natural height, which is what lets the continuous Changes review stack sections
@@ -647,4 +651,6 @@ content's own height.
   while the network is down costs the rest of the session: Chromium caches the failed module fetch, so
   every later import of that chunk rejects without a request, and a statically split chunk has no URL to
   cache-bust. The first open then shows the error boundary's **Reload page**, which recovers; on main the
-  same outage fails only if it lasts until the first open.
+  same outage fails only if it lasts until the first open. The host therefore holds the preload until the
+  page is online. `e2e/error-boundary.spec.ts` pins the Chromium behaviour: if a browser update re-fetches a
+  failed module, that test turns red and this cost is gone.

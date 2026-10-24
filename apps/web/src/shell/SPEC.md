@@ -101,8 +101,12 @@ After `main.tsx`'s synchronous first-paint apply, Shell is the sole mounted them
 
 `WorkspaceWorkbench` owns the idle editor preload (`useIdleEditorPreload`): when `panels/editorWarm`'s
 `useEditorWarm` allows it (not phone-class, not `saveData`), it schedules one `whenFilesTreeIdle` preload of the
-code view (2 s idle timeout, 1.5 s fallback delay), which also waits for a loading Files tree to paint. Once the preload has finished, the first file open from
-any surface — Files, quick open, chat links, review — renders without a loading fallback.
+code view (2 s idle timeout, 1.5 s fallback delay), which also waits for a loading Files tree to paint. The
+preload runs once per page, not per workspace switch, and `lib`'s `whenPageActive` holds it until the page
+is visible and online: a hidden tab would pay about 3.9 MB and a 50–70 ms task for nothing, and a preload
+that fails offline makes Chromium cache the failed chunk for the session. Once the preload has finished,
+the first desktop code-view open from any surface — Files, quick open, chat links, review — renders
+without a loading fallback; other renderers still load on their first mount.
 
 The durable frame grammar and pure operations belong to [[submodule-web-shell-layout]]. Zustand carries one `WorkbenchFrame`, local layout preferences, and keyed `WorkspaceViewState` values; the mounted document is derived and never persisted as a second authority. Frame-plus-view transitions commit atomically through `layoutState`.
 

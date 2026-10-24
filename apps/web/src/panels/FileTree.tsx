@@ -8,7 +8,7 @@ import { firstClickOnly } from "../lib";
 import { selectFilesTreeView, type TabIntent, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { type ChangeMarks, statusMarkClass } from "./changesModel";
-import { holdEditorWarm, useEditorWarm } from "./editorWarm";
+import { holdEditorWarm, useEditorWarm, warmOnHover } from "./editorWarm";
 import { type ResolvedFolderChain, resolveFolderChain } from "./folderChains";
 import { openFileInTab } from "./openTabs";
 import { TreeRow } from "./TreeRow";
@@ -171,7 +171,12 @@ function FileNodeRow({
 				}
 				onClick={isDir ? toggleDirectory : firstClickOnly(() => open("preview"))}
 				onDoubleClick={isDir ? undefined : () => open("keep")}
-				onWarm={isDir || !warmFile ? undefined : () => warmFile(node.path)}
+				onWarm={
+					isDir || !warmFile
+						? undefined
+						: (trigger) =>
+								trigger === "focus" ? warmFile(node.path) : warmOnHover(() => warmFile(node.path))
+				}
 			/>
 			{isDir && expanded && children && (
 				<ul className="flex flex-col pl-tree-indent">

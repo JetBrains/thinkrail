@@ -269,8 +269,10 @@ treatment.
   it shows the panel's `container-sidebar-bg`, so the two chrome rows read as one continuous surface. The **file-style tree row** (chevron/spacer
   lead, folder/file icon, truncated label, trailing slot; `min-w-0` so a row can shrink when it shares a
   flex line with a trailing control) is the shared **`TreeRow`**, used by both
-  `FileTree` and `ChangesTree` so the two trees stay identical. `TreeRow`'s optional `onWarm` fires on
-  pointer enter and focus; `FileTree` file rows use it to preload the code view and the row's grammar
+  `FileTree` and `ChangesTree` so the two trees stay identical. `TreeRow`'s optional `onWarm` reports
+  `hover` (pointer enter) or `focus`. `FileTree` file rows warm at once on focus and through
+  `warmOnHover` on hover, which keeps one pending row and fires after the pointer rests 150 ms, so a
+  sweep across the tree loads nothing. A warm preloads the code view and the row's grammar
   through **`useEditorWarm`** (`editorWarm.ts`, also used by the shell's idle preload): it returns
   `usePreloadResourceView`'s callback, or `undefined` on phone-class viewports and `saveData` connections.
   `editorWarm` also owns the boot gate: a `FileTree` holds `holdEditorWarm()` until its first listing

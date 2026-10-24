@@ -5,7 +5,7 @@ import {
 	ResourceHostProvider,
 } from "@thinkrail/resource-renderers";
 import { renderToStaticMarkup } from "react-dom/server";
-import { holdEditorWarm, useEditorWarm, whenFilesTreeIdle } from "./editorWarm";
+import { holdEditorWarm, useEditorWarm, warmOnHover, whenFilesTreeIdle } from "./editorWarm";
 
 const host: ResourceHost = {
 	markdown: () => null,
@@ -100,4 +100,12 @@ test("whenFilesTreeIdle cancelled while parked never runs", () => {
 	release();
 	flushIdle();
 	expect(runs).toBe(0);
+});
+
+test("warmOnHover warms only the row the pointer rests on", async () => {
+	const warmed: string[] = [];
+	warmOnHover(() => warmed.push("first"), 10);
+	warmOnHover(() => warmed.push("second"), 10);
+	await new Promise((resolve) => setTimeout(resolve, 11));
+	expect(warmed).toEqual(["second"]);
 });

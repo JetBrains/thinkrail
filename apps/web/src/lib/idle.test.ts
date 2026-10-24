@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { whenIdle } from "./idle";
+import { type PageActivity, whenIdle, whenPageActive } from "./idle";
 
 const original = {
 	request: globalThis.requestIdleCallback,
@@ -52,4 +52,66 @@ test("whenIdle cancel stops the fallback timer", async () => {
 	cancel();
 	await Bun.sleep(10);
 	expect(runs).toBe(0);
+});
+
+function fakeActivity(active: boolean) {
+	let isActive = active;
+	const listeners = new Set<() => void>();
+	const activity: PageActivity = {
+		active: () => isActive,
+		subscribe(onChange) {
+			listeners.add(onChange);
+			return () => listeners.delete(onChange);
+		},
+	};
+	return {
+		activity,
+		listeners,
+		become(next: boolean) {
+			isActive = next;
+			for (const listener of [...listeners]) listener();
+		},
+	};
+}
+
+test("whenPageActive starts at once on an active page and stops through its cancel", () => {
+	const page = fakeActivity(true);
+	const events: string[] = [];
+	const cancel = whenPageActive(() => {
+		events.push("start");
+		return () => events.push("stop");
+	}, page.activity);
+	expect(events).toEqual(["start"]);
+	expect(page.listeners.size).toBe(0);
+	cancel();
+	expect(events).toEqual(["start", "stop"]);
+});
+
+test("whenPageActive waits for a hidden or offline page to become active, then starts once", () => {
+	const page = fakeActivity(false);
+	let starts = 0;
+	whenPageActive(() => {
+		starts += 1;
+		return () => {};
+	}, page.activity);
+	expect(starts).toBe(0);
+	page.become(false);
+	expect(starts).toBe(0);
+	page.become(true);
+	page.become(true);
+	expect(starts).toBe(1);
+	expect(page.listeners.size).toBe(0);
+});
+
+test("whenPageActive cancelled while waiting never starts", () => {
+	const page = fakeActivity(false);
+	let starts = 0;
+	const cancel = whenPageActive(() => {
+		starts += 1;
+		return () => {};
+	}, page.activity);
+	cancel();
+	page.become(true);
+	expect(starts).toBe(0);
+	expect(page.listeners.size).toBe(0);
 });

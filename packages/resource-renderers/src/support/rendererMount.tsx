@@ -20,6 +20,7 @@ import {
 } from "../registry";
 
 const viewComponents = new Map<string, ComponentType<ResourceViewProps>>();
+const lazyViews = new Map<string, ComponentType<ResourceViewProps>>();
 const pendingViews = new Map<string, Promise<ResourceViewModule>>();
 const diffComponents = new Map<string, LazyExoticComponent<ComponentType<ResourceDiffProps>>>();
 
@@ -36,6 +37,10 @@ function loadView(renderer: ResourceRenderer, mobile: boolean): Promise<Resource
 		},
 		(error: unknown) => {
 			pendingViews.delete(key);
+			if (viewComponents.get(key) === lazyViews.get(key)) {
+				viewComponents.delete(key);
+				lazyViews.delete(key);
+			}
 			throw error;
 		},
 	);
@@ -71,7 +76,7 @@ export function usePreloadResourceView(): (resource: ResourceDescriptor) => void
 		(resource: ResourceDescriptor) => {
 			const candidates = resolveRenderers(resource, "view", { mobile });
 			const renderer = selectResourceRenderer(candidates, undefined, resource.path);
-			void preloadRendererView(renderer, mobile, host, resource);
+			if (renderer.capabilities.preload) void preloadRendererView(renderer, mobile, host, resource);
 		},
 		[host, mobile],
 	);
@@ -87,6 +92,7 @@ export function RendererView({
 	if (!Component) {
 		Component = lazy(() => loadView(renderer, mobile));
 		viewComponents.set(key, Component);
+		lazyViews.set(key, Component);
 	}
 	return <Component {...props} />;
 }

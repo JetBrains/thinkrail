@@ -53,10 +53,25 @@ test("an idle-preloaded editor opens the first clicked file without a loading fa
 	expect(pageErrors).toEqual([]);
 });
 
-test("a phone viewport never preloads the Monaco editor", async ({ page }) => {
+const PAST_IDLE_PRELOAD_MS = 5_000;
+
+test("a phone viewport never preloads the Monaco editor, a desktop one does", async ({ page }) => {
+	const editorChunk = /MonacoEditor[^/]*\.js(\?|$)/;
+	const editorRequests: string[] = [];
+	page.on("request", (request) => {
+		if (editorChunk.test(request.url())) editorRequests.push(request.url());
+	});
+	await page.clock.install();
 	await page.setViewportSize({ width: 390, height: 844 });
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
-	await page.waitForTimeout(2500);
-	expect(await loadedResources(page, /MonacoEditor[^/]*\.js/)).toBe(0);
+
+	await page.clock.runFor(PAST_IDLE_PRELOAD_MS);
+	await page.evaluate(() => fetch("/health").then(() => undefined));
+	expect(editorRequests).toEqual([]);
+
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await expect(page.getByTestId("center-tabs")).toBeVisible();
+	await page.clock.runFor(PAST_IDLE_PRELOAD_MS);
+	await expect.poll(() => editorRequests.length).toBeGreaterThan(0);
 });

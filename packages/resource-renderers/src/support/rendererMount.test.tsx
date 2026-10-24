@@ -32,7 +32,10 @@ afterEach(() => {
 	for (const cleanup of cleanups.splice(0)) cleanup();
 });
 
-function testRenderer(load: (mobile: boolean) => Promise<ResourceViewModule>) {
+function testRenderer(
+	load: (mobile: boolean) => Promise<ResourceViewModule>,
+	{ preload = true }: { preload?: boolean } = {},
+) {
 	sequence += 1;
 	const extension = `preload${sequence}`;
 	const calls: boolean[] = [];
@@ -49,6 +52,7 @@ function testRenderer(load: (mobile: boolean) => Promise<ResourceViewModule>) {
 			copy: false,
 			layout: false,
 			whitespace: false,
+			preload,
 		},
 		loadView: ({ mobile }) => {
 			calls.push(mobile);
@@ -64,15 +68,12 @@ function viewModule(label: string, warm?: ResourceViewModule["warm"]): ResourceV
 	return { default: () => <span>{label}</span>, ...(warm ? { warm } : {}) };
 }
 
+const TEXT = { kind: "text", text: "", hash: "h" } as const;
+
 function render(renderer: ResourceRenderer, resource: ResourceDescriptor, mobile = false) {
 	return renderToStaticMarkup(
 		<Suspense fallback={<i>loading</i>}>
-			<RendererView
-				renderer={renderer}
-				mobile={mobile}
-				resource={resource}
-				content={{ kind: "text", text: "", hash: "h" }}
-			/>
+			<RendererView renderer={renderer} mobile={mobile} resource={resource} content={TEXT} />
 		</Suspense>,
 	);
 }
@@ -99,6 +100,37 @@ test("a failed preload does not reject and a later mount retries the loader", as
 	expect(calls).toEqual([false]);
 	expect(render(renderer, resource)).toContain("loading");
 	expect(calls).toEqual([false, false]);
+});
+
+test("a lazy stored while the load is in flight keeps serving once the load resolves", async () => {
+	let finish: (module: ResourceViewModule) => void = () => {};
+	const { renderer, resource } = testRenderer(
+		() =>
+			new Promise((resolve) => {
+				finish = resolve;
+			}),
+	);
+	const props = { renderer, mobile: false, resource, content: TEXT } as const;
+	const inFlight = RendererView(props);
+	expect(render(renderer, resource)).toContain("loading");
+	finish(viewModule("late"));
+	await preloadRendererView(renderer, false, host, resource);
+	expect(RendererView(props).type).toBe(inFlight.type);
+	expect(render(renderer, resource)).toBe("<span>late</span>");
+});
+
+test("a load that fails after a mount stored its lazy is retried by the next mount", async () => {
+	let attempt = 0;
+	const { renderer, calls, resource } = testRenderer(async () => {
+		attempt += 1;
+		if (attempt === 1) throw new Error("chunk failed");
+		return viewModule("recovered");
+	});
+	expect(render(renderer, resource)).toContain("loading");
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	await preloadRendererView(renderer, false, host, resource);
+	expect(calls).toEqual([false, false]);
+	expect(render(renderer, resource)).toBe("<span>recovered</span>");
 });
 
 test("a warm that throws does not reject and the view still renders", async () => {
@@ -170,4 +202,16 @@ test("usePreloadResourceView resolves the renderer for the environment", () => {
 	));
 	preload(resource);
 	expect(calls).toEqual([true]);
+});
+
+test("usePreloadResourceView leaves a renderer that does not opt into preloading alone", () => {
+	cleanups.push(registerResourceRenderer(codeRenderer));
+	const { calls, resource } = testRenderer(async () => viewModule("skipped"), { preload: false });
+	const preload = capturePreload((probe) => (
+		<ResourceHostProvider value={host}>
+			<ResourceEnvironmentProvider value={{ mobile: false }}>{probe}</ResourceEnvironmentProvider>
+		</ResourceHostProvider>
+	));
+	preload(resource);
+	expect(calls).toEqual([]);
 });
