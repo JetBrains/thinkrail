@@ -6,6 +6,7 @@ import { useT } from "@thinkrail/locales/react";
 import { useChatActions } from "./ChatActions";
 import { useFold } from "./foldState";
 import { Markdown } from "./Markdown";
+import { RunModelLabel } from "./ModelEffortLabel";
 import { ResultRow } from "./resources";
 import { completionReport, reportTeaser, usageCounters } from "./tools/subagent/runDetails";
 
@@ -88,6 +89,7 @@ export function SubagentResult({
 				expanded={expanded}
 				onToggle={report ? toggle : undefined}
 				toggleRef={toggleRef}
+				metaLead={<RunModelLabel model={details.model} thinkingLevel={details.thinkingLevel} />}
 				meta={usageCounters(t, details).join(" · ")}
 				teaser={reportTeaser(report)}
 				onOpen={actions?.resultOpener({ kind: "subagent", childSessionId: details.childSessionId })}

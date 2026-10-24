@@ -191,6 +191,33 @@ export function projectAuxiliaryRail(
 	return entries;
 }
 
+function showingAuxiliaryEntries(document: WorkspaceLayoutDocument, attention: LayoutAttention) {
+	return (["left", "right", "bottom"] as const).flatMap((region) =>
+		projectAuxiliaryRail(document, attention, region).filter(
+			(entry) => entry.selected && entry.expanded,
+		),
+	);
+}
+
+export function isToolShowing(
+	document: WorkspaceLayoutDocument,
+	attention: LayoutAttention,
+	tool: LayoutToolId,
+): boolean {
+	return showingAuxiliaryEntries(document, attention).some(
+		(entry) => entry.kind === "tool" && entry.tool === tool,
+	);
+}
+
+export function showingAuxiliaryKey(
+	document: WorkspaceLayoutDocument,
+	attention: LayoutAttention,
+): string {
+	return showingAuxiliaryEntries(document, attention)
+		.map((entry) => entry.key)
+		.join("\n");
+}
+
 function activateGroup(
 	document: WorkspaceLayoutDocument,
 	region: LayoutAuxiliaryRegion,

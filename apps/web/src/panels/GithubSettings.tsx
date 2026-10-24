@@ -26,13 +26,10 @@ export function GithubSettings() {
 
 	const refresh = async () => {
 		setRefreshing(true);
-		try {
-			setGh(await getTransport().request("github.refresh", {}));
-		} catch {
-			setGh({ connected: false });
-		} finally {
-			setRefreshing(false);
-		}
+		const load = async () => setGh(await getTransport().request("github.refresh", {}));
+		await load()
+			.catch(() => setGh({ connected: false }))
+			.finally(() => setRefreshing(false));
 	};
 
 	const connected = gh?.connected ?? false;

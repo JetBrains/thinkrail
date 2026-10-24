@@ -45,10 +45,15 @@ translator as their first argument, so a language change recomputes them. `layou
 default name at render from the tab's kind (tool, untitled chat, default terminal, Changes / diff scope,
 plan document) through `lib`'s default-name helpers, and shows a name set by the user or agent verbatim.
 
-A click that may become a browser `dblclick` waits the shared 250 ms settle window. The upgraded gesture emits
-only its final keep while retaining the leading preview-slot claim, whether content was cached or required a
-host read. It never persists an intermediate preview. Pointer/resize drafts and viewport compression remain
-runtime-only.
+A file, spec, or diff browse click opens its preview at once, with no settle wait. A double click then
+promotes that same placement in place. A keep that arrives while the read is still in flight coalesces
+into one final keep that carries the leading preview-slot claim. Only two open paths wait the shared
+250 ms settle window: a single click (or keyboard activation) on the active preview tab, so a double click
+is not read as two keeps, and the Changes review-tab preview, which waits even when code rather than a
+click opens it. Outside the open paths, the legacy-selection Review reveal waits out what is left of a
+browse row's window. `isToolShowing` and `showingAuxiliaryKey` read which auxiliary tools are selected in
+an expanded pane, so the shell can tell whether Review shows and whether the user changed tools since.
+Pointer/resize drafts and viewport compression remain runtime-only.
 
 Frame groups may remain empty in any workspace. Closing a final resource therefore leaves topology untouched. Explicit remove/merge is the only way to delete a group, and its result rehomes every resource that references it across all locally retained workspace views. At least one center leaf always remains.
 

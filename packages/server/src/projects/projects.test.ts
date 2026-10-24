@@ -1,5 +1,6 @@
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { afterEach, beforeEach, expect, mock, test } from "bun:test";
 import {
+	chmodSync,
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
@@ -8,6 +9,7 @@ import {
 	rmSync,
 	writeFileSync,
 } from "node:fs";
+import * as fsPromises from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Project } from "@thinkrail/contracts";
@@ -22,6 +24,7 @@ import {
 	listProjects,
 	listRecentProjects,
 	openProject,
+	refreshRecentProjectFolders,
 	renameProject,
 	revokeProjectMcpTool,
 	setPiTrustSeed,
@@ -29,6 +32,18 @@ import {
 	setProjectPublisher,
 	setProjectTrust,
 } from "./projects";
+
+const realStat = fsPromises.stat;
+const hungStatPaths = new Set<string>();
+let hungStatCalls = 0;
+mock.module("node:fs/promises", () => ({
+	...fsPromises,
+	stat: (path: string, ...rest: []) => {
+		if (!hungStatPaths.has(path)) return realStat(path, ...rest);
+		hungStatCalls += 1;
+		return new Promise(() => {});
+	},
+}));
 
 function gitOut(cwd: string, ...args: string[]): string {
 	const r = Bun.spawnSync(["git", "-C", cwd, ...args], { stdout: "pipe", stderr: "ignore" });
@@ -481,3 +496,92 @@ test("MCP tool grants: deduplicated per server, reset by a new target, removed w
 	expect(cleared.mcpToolGrants).toBeUndefined();
 	expect(storedProjects()[0]).not.toHaveProperty("mcpToolGrants");
 });
+
+test("recent projects omit closed records whose folders are definitively gone", async () => {
+	const repo = join(dataDir, "repo");
+	makeRepo(repo);
+	const blocker = join(dataDir, "blocker");
+	writeFileSync(blocker, "not a folder");
+	const closed = (id: string, path: string, lastOpened: number) => ({
+		id,
+		name: id,
+		path,
+		slug: id,
+		lastOpened,
+		closed: true,
+	});
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			closed("missing", join(dataDir, "missing"), 5),
+			closed("file", blocker, 4),
+			closed("nested", join(blocker, "child"), 3),
+			closed("kept", repo, 2),
+			{ id: "open-gone", name: "o", path: join(dataDir, "unplugged"), slug: "o", lastOpened: 1 },
+		]),
+	);
+
+	await refreshRecentProjectFolders(1_000);
+
+	expect(listRecentProjects().map((project) => project.id)).toEqual(["kept", "open-gone"]);
+	expect(getProjects()).toHaveLength(5);
+});
+
+test("recent projects follow the last completed folder check of a closed record", async () => {
+	const folder = join(dataDir, "moved");
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{ id: "moved", name: "moved", path: folder, slug: "moved", lastOpened: 1, closed: true },
+		]),
+	);
+	expect(listRecentProjects().map((project) => project.id)).toEqual(["moved"]);
+
+	await refreshRecentProjectFolders(1_000);
+	expect(listRecentProjects()).toEqual([]);
+
+	mkdirSync(folder);
+	await refreshRecentProjectFolders(1_000);
+	expect(listRecentProjects().map((project) => project.id)).toEqual(["moved"]);
+});
+
+test("a folder check that outlasts the budget neither blocks the refresh nor repeats", async () => {
+	const hung = join(dataDir, "hung");
+	hungStatPaths.add(hung);
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{ id: "hung", name: "hung", path: hung, slug: "hung", lastOpened: 1, closed: true },
+		]),
+	);
+	const calls = hungStatCalls;
+
+	await refreshRecentProjectFolders(10);
+	await refreshRecentProjectFolders(10);
+
+	expect(hungStatCalls - calls).toBe(1);
+	expect(listRecentProjects().map((project) => project.id)).toEqual(["hung"]);
+});
+
+test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
+	"recent projects keep a closed record whose folder cannot be inspected",
+	async () => {
+		const locked = join(dataDir, "locked");
+		const folder = join(locked, "repo");
+		mkdirSync(folder, { recursive: true });
+		writeFileSync(
+			join(dataDir, "projects.json"),
+			JSON.stringify([
+				{ id: "locked", name: "locked", path: folder, slug: "locked", lastOpened: 1, closed: true },
+			]),
+		);
+		chmodSync(locked, 0o000);
+		try {
+			await refreshRecentProjectFolders(1_000);
+		} finally {
+			chmodSync(locked, 0o755);
+		}
+
+		expect(listRecentProjects().map((project) => project.id)).toEqual(["locked"]);
+	},
+);

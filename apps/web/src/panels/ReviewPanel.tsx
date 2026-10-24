@@ -20,7 +20,7 @@ import { QuietScrollArea } from "@/components/QuietScrollArea";
 import { PlanStatusIcon, SectionLabel } from "../chat/planKit";
 import { sessionGlance } from "../chat/planView";
 import { glanceIcon } from "../chat/TodoList";
-import { selectDiffScope, toast, useAppStore } from "../store";
+import { type ReviewFocusSurface, selectDiffScope, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 import { ConfirmPopover } from "./ConfirmPopover";
 import { openChatInTab } from "./openChat";
@@ -58,30 +58,32 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 
 	const openChat = (sessionId: string) => openChatInTab(workspaceId, sessionId);
 
-	const openSurface = (path: string, surface: ReviewSurface) => {
-		if (surface.kind === "file") {
-			void openFileInTab(workspaceId, path, "preview");
-			return;
-		}
-		const scope = surface.scope ?? selectDiffScope(useAppStore.getState(), workspaceId);
-		void openDiffInTab(workspaceId, scope, path, "preview");
+	const focusSurface = (surface: ReviewSurface): ReviewFocusSurface =>
+		surface.kind === "file"
+			? { kind: "inline" }
+			: {
+					kind: "diff",
+					scope: surface.scope ?? selectDiffScope(useAppStore.getState(), workspaceId),
+				};
+
+	const openSurface = (path: string, target: ReviewFocusSurface) => {
+		if (target.kind === "inline") void openFileInTab(workspaceId, path, "preview");
+		else void openDiffInTab(workspaceId, target.scope, path, "preview");
 	};
 
 	const navigateTo = (comment: ReviewComment) => {
 		const path = comment.anchor?.path;
 		if (!path) return;
-		useAppStore.getState().requestReviewFocus(workspaceId, comment.id);
-		openSurface(path, commentSurface(comment));
+		const target = focusSurface(commentSurface(comment));
+		useAppStore.getState().requestReviewFocus(workspaceId, comment.id, target);
+		openSurface(path, target);
 	};
 
 	const sendOne = async (comment: ReviewComment) => {
 		setSending(true);
-		try {
-			await sendReviewComment(workspaceId, comment.id);
-		} catch {
-		} finally {
-			setSending(false);
-		}
+		await sendReviewComment(workspaceId, comment.id)
+			.catch(() => {})
+			.finally(() => setSending(false));
 	};
 
 	if (failed && !snapshot) {
@@ -97,8 +99,9 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 
 	const files = fileSummaries(snapshot.comments, snapshot.review.doneFiles);
 	const finishFile = async (path: string | null) => {
+		const params = { workspaceId, path: path ?? "" };
 		try {
-			await getTransport().request("review.fileDone", { workspaceId, path: path ?? "" });
+			await getTransport().request("review.fileDone", params);
 		} catch (err) {
 			toast.error(errorText(err), t("review.panel.finishFailed"));
 		}
@@ -119,7 +122,7 @@ export function ReviewPanel({ workspaceId, failed }: { workspaceId: string; fail
 		else next.add(file.path);
 		setExpanded(next);
 		if (!isOpen && file.path)
-			openSurface(file.path, reviewFileSurface(snapshot.comments, file.path));
+			openSurface(file.path, focusSurface(reviewFileSurface(snapshot.comments, file.path)));
 	};
 
 	return (

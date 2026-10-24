@@ -597,13 +597,15 @@ function PlanComposer({
 		const text = draft.trim();
 		if (!text || submitting.current) return;
 		submitting.current = true;
-		try {
+		const send = async () => {
 			await onSubmit(text);
 			setDraft("");
-		} catch {
-		} finally {
-			submitting.current = false;
-		}
+		};
+		await send()
+			.catch(() => {})
+			.finally(() => {
+				submitting.current = false;
+			});
 	};
 	return (
 		<div className="mt-8 flex items-start gap-8 rounded-sm border border-control-border-default bg-control-bg px-12 py-8 transition-colors focus-within:border-control-border-active">
@@ -1343,7 +1345,7 @@ export default function PlanPane({
 						void openChatInTab(workspaceId, sessionId);
 					}}
 					onSend={async (text) => {
-						try {
+						const send = async () => {
 							await hydrateSessionRuntime(workspaceId, sessionId);
 							const store = useAppStore.getState();
 							const runtime = store.sessions[sessionId];
@@ -1358,14 +1360,15 @@ export default function PlanPane({
 										useAppStore.getState().appendErrorTurn(sessionId, errorText(err)),
 									);
 							}
-						} catch (err) {
+						};
+						await send().catch((err: unknown) => {
 							pushToast({
 								variant: "error",
 								title: t("plan.session.sendFailed"),
 								message: errorText(err),
 							});
 							throw err;
-						}
+						});
 					}}
 					renderGroup={renderGroup}
 					renderItem={renderItem}

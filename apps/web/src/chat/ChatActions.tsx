@@ -1,4 +1,4 @@
-import type { AskUserQuestionResult, McpReadOutputResult } from "@thinkrail/contracts";
+import type { AskUserQuestionResult, McpReadOutputResult, WireModel } from "@thinkrail/contracts";
 import { createContext, useContext } from "react";
 import type { RevealBlock } from "./scrollGeometry";
 
@@ -24,6 +24,7 @@ export interface ChatActions {
 	readMcpOutput?: ((toolCallId: string) => Promise<McpReadOutputResult>) | undefined;
 	openMcpSettings?: (() => void) | undefined;
 	openProviderSettings?: (() => void) | undefined;
+	findModel?: ((ref: string) => WireModel | null) | undefined;
 }
 
 export const ChatActionsContext = createContext<ChatActions | null>(null);

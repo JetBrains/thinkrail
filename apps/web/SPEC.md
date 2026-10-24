@@ -113,10 +113,14 @@ these conventions:
   as a ref read.
 - A ref that travels as a prop is named `*Ref` (`selectionEpochRef`) so handlers may mutate it.
 - A closure that reads refs reaches a `useState` initialiser only through a hook
-  (`useReadingBandController`), and a ref is never handed to a plain helper; the helper becomes a hook that
-  owns it (`useSideResizeBinder`).
+  (`useReadingBandController`), and render never hands a ref to a plain helper; the helper becomes a hook
+  that owns it (`useSideResizeBinder`).
 - A default parameter never reads a member expression (`caret = text.length`); resolve it in the body.
 - A closure never applies `++`/`--` to a variable it captures; write `attempts += 1`.
+- A component or hook never uses `try/finally` or `throw` inside `try`. Move the body into a local async
+  closure chained as `run().catch(onError).finally(cleanup)`; a synchronous guard moves to a module-level
+  helper (`setLayoutFlagged`). A conditional, logical or optional-chaining value (`a ? b : c`, `a ?? b`,
+  `a?.b`) inside `try/catch` moves above the `try`, or into the closure when its branches await.
 - A `useMemo`/`useCallback` lists every dependency it reads, or the compiler cannot preserve it.
 - A `useMemo` dependency the callback does not read is dropped, so a memo cannot reset on a key it ignores
   (`useMemo(() => new Map(), [key])` builds one map per mount). Reset through state keyed on the value instead
@@ -125,22 +129,18 @@ these conventions:
   singleton. It arrives through `useSyncExternalStore` or state: `AppearanceSettings` subscribes with
   `onSystemAppearanceChange`, and relative-time labels take `now` from `components/useNow`.
 
-Known bailouts include two hot paths: `useVirtualRows` runs on every `ChatView` render (each streamed delta)
-and `PlanComposer` on every plan-pane keystroke. Shared hooks and resource surfaces also have bailouts;
-compilation of the chat/shell hot paths does not imply coverage of every file/diff renderer.
+Known bailouts include one hot path: `useVirtualRows` runs on every `ChatView` render (each streamed delta).
+Shared hooks and resource surfaces also have bailouts; compilation of the chat/shell hot paths does not imply
+coverage of every file/diff renderer.
 
 - Ref access in render: `useVirtualRows` (reads the visible-anchor ref while adjusting state during render;
   state would cost a render per scroll), `useWorkspaceRead`, `useBranchStatus`,
   `useBranchList`, `useTemplateCommandPicker`, `usePendingSelection`, `MonacoEditor`, `AskUserQuestionCard`,
   `useScrollViewState`, Pierre diff/file's `useThreadAnnotations`, `PierreDiffSurface`, `PierreFileSurface`,
   image diff's `ImageContent`, `ImageView`, `PdfView`, `usePdfDocument`.
-- try/finally: `PlanPane` (also a throw inside try), `PlanComposer`, `ReviewPanel`, `SendButtonBase`,
-  `NewWorkspaceDialog`, `SkillsDialog`, `TemplateEditorDialog`, `JetBrainsAiCard`, `ProvidersSettings`,
-  `ModelsSettings`, `GithubSettings`, `ProjectTrustNotice`.
-- try without catch: `usePromptImages`.
 - Manual memo dependencies cannot be preserved: `CsvDiff`, `JsonDiff`, `NotebookDiffSurface`, `PdfDiff`.
-- Other: `useLiveTabContent` (`??=`), `useAnalyticsConsent` (a callback that calls itself), `TemplateRow`
-  (a conditional inside try/catch), `HistoryOverlay`'s `Highlight` (mutates a closure counter).
+- Other: `useLiveTabContent` (`??=`), `useAnalyticsConsent` (a callback that calls itself),
+  `HistoryOverlay`'s `Highlight` (mutates a closure counter).
 
 A new bailout is a regression unless it joins this list.
 
@@ -185,7 +185,11 @@ resource-loader dynamic imports. Only lazy Pierre renderer modules mount the pro
 surface acquires Pierre's module-singleton worker pool; an ordinary workspace therefore neither loads Pierre
 nor initializes its pool. Renderer metadata and loaders are the only eager edge. A production build must
 retain distinct Pierre diff, Pierre file, worker-pool, and Monaco chunks, with none of their implementation
-code in the entry chunk.
+code in the entry chunk. Monaco stays out of the entry graph but is not loaded only on demand: on desktop,
+`shell` preloads the code view once per page at idle after the workbench mounts, once the page is visible
+and online, and Files rows warm it on focus and after a 150 ms hover. Only renderers that opt in with
+`capabilities.preload` (the code view) load early, so hovering a PDF or notebook row loads nothing.
+Phone-class viewports and `saveData` connections never preload.
 Vite emits every worker as an ES module (`worker.format: "es"`), so worker `import()` calls split into
 on-demand chunks instead of inlining; every target webview (Chromium, WebKit/Safari 17+, WebView2) runs
 module workers. Safari/WebKit 17 is the browser floor: the shipped webviews (macOS 12+ system WebKit,

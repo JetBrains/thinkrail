@@ -1277,6 +1277,7 @@
 	"resources.detail.duration": "Duration",
 	"resources.detail.elapsed": "Elapsed",
 	"resources.detail.exit": "Exit",
+	"resources.detail.model": "Model",
 	"resources.detail.reason": "Reason",
 	"resources.detail.started": "Started",
 	"resources.detail.task": "Task",

@@ -691,6 +691,7 @@ test("user stop of a detached Agent child does not wake its idle parent", async 
 		const child = (await getSessionResources(p.workspaceId, p.sessionId, p.cwd)).subagents[0];
 		if (!child) throw new Error("missing child");
 		expect(child).not.toHaveProperty("durationMs");
+		expect(child).toMatchObject({ model: "resources/resources", thinkingLevel: "off" });
 		const stopping = stopSubagent(p.workspaceId, p.sessionId, child.childSessionId, p.cwd);
 		let acknowledged = false;
 		void stopping.then(() => {
