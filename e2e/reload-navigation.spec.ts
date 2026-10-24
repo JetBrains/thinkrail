@@ -338,3 +338,66 @@ test("workspace rows still list after a reload restore (the light list is comple
 	await expect(page.locator('[data-testid="workspace-item"][data-kind="default"]')).toBeVisible();
 	await expect(worktreeRows(page)).toHaveCount(1);
 });
+
+test("a restored chat reveals as soon as its transcript arrives, with no Suspense skeleton", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await expect(chatTabs(page)).toHaveCount(1);
+	const sessionId = chatIdFromHash(await currentHash(page));
+
+	let release: (() => void) | null = null;
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			const raw = typeof message === "string" ? message : message.toString();
+			if (
+				release === null &&
+				raw.includes('"method":"session.getMessages"') &&
+				raw.includes(sessionId)
+			) {
+				release = () => server.send(raw);
+				return;
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => ws.send(message));
+	});
+
+	let chatChunkUrl: string | undefined;
+	page.on("response", (response) => {
+		if (/\/assets\/ChatView-[^/]+\.js$/.test(new URL(response.url()).pathname)) {
+			chatChunkUrl = response.url();
+		}
+	});
+
+	await page.reload();
+	await expect.poll(() => release !== null).toBe(true);
+	await expect(page.getByLabel("Restoring chat")).toBeVisible();
+	await expect
+		.poll(() => chatChunkUrl, { message: "the ChatView chunk loads while the transcript is held" })
+		.toBeDefined();
+	await page.evaluate((url) => import(url).then(() => undefined), chatChunkUrl ?? "");
+	await expect(page.getByTestId("chat-input")).toHaveCount(0);
+	const seen = await page.evaluateHandle(() => {
+		const counter = { skeletons: 0 };
+		new MutationObserver((records) => {
+			for (const record of records) {
+				for (const node of record.addedNodes) {
+					if (
+						node instanceof Element &&
+						(node.matches('[aria-label="Restoring chat"]') ||
+							node.querySelector('[aria-label="Restoring chat"]'))
+					) {
+						counter.skeletons += 1;
+					}
+				}
+			}
+		}).observe(document.body, { childList: true, subtree: true });
+		return counter;
+	});
+	release?.();
+	await expect(page.getByTestId("chat-input")).toBeVisible();
+	expect(await seen.evaluate((counter) => counter.skeletons)).toBe(0);
+});

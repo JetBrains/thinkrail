@@ -48,6 +48,7 @@ function fauxCore(provider: string) {
 
 const fauxA = fauxCore("fauxa");
 const fauxB = fauxCore("fauxb");
+const fauxReasoner = fauxCore("fauxreasoner");
 
 const tmpDirs: string[] = [];
 function tmpDir(prefix: string): string {
@@ -68,7 +69,7 @@ const liveParents = new Map<string, AgentSession>();
 const BG_RUNNER_DEFINITION =
 	"---\nname: bg-runner\ndescription: Background test runner\nmodel: fauxb\n---\n\nRun the delegated task.\n";
 
-function fauxConfig(core: typeof fauxA, id: string): ProviderConfig {
+function fauxConfig(core: typeof fauxA, id: string, reasoning = false): ProviderConfig {
 	return {
 		api: core.api,
 		baseUrl: "http://faux.local",
@@ -79,7 +80,8 @@ function fauxConfig(core: typeof fauxA, id: string): ProviderConfig {
 				id,
 				name: id,
 				api: core.api,
-				reasoning: false,
+				reasoning,
+				...(reasoning ? { thinkingLevelMap: { xhigh: "xhigh", max: "max" } } : {}),
 				input: ["text"],
 				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 				contextWindow: 100_000,
@@ -119,6 +121,7 @@ beforeAll(async () => {
 	});
 	registerFaux(fauxA, "fauxa");
 	registerFaux(fauxB, "fauxb");
+	runtime.registerProvider("fauxreasoner", fauxConfig(fauxReasoner, "fauxreasoner", true));
 
 	parentCwd = tmpDir("pi-subagents-parent-");
 	const model = runtime.getModel("fauxa", "fauxa") as Model<string> | undefined;
@@ -173,6 +176,12 @@ afterAll(() => {
 	else process.env.PI_OFFLINE = priorOffline;
 	for (const dir of tmpDirs) rmSync(dir, { recursive: true, force: true });
 });
+
+function storedChildContext(session: AgentSession = parent) {
+	const child = service.childrenOf(session.sessionId)[0];
+	if (!child) throw new Error("Expected a delegated child");
+	return SessionManager.open(child.record.sessionFile).buildSessionContext();
+}
 
 function transcript(): string {
 	return JSON.stringify(parent.messages);
@@ -353,6 +362,14 @@ test("foreground: one Agent call runs a builtin scout and returns its report to 
 	await service.disposeChildrenOf(parent.sessionId);
 });
 
+test("Agent advertises thinking suffix syntax without adding a separate thinking argument", () => {
+	const tool = parent.getToolDefinition("Agent");
+	expect(tool?.description).toContain(":<thinking>");
+	expect(tool?.description).toContain("definition thinking overrides");
+	expect(JSON.stringify(tool?.parameters)).toContain("provider/id:thinking");
+	expect(tool?.parameters).not.toHaveProperty("properties.thinking");
+});
+
 test("a per-call model runs an unpinned agent on a different model than the parent", async () => {
 	fauxA.setResponses([
 		fauxAssistantMessage(
@@ -375,13 +392,106 @@ test("a per-call model runs an unpinned agent on a different model than the pare
 	await service.disposeChildrenOf(parent.sessionId);
 });
 
+test.each([
+	["fauxreasoner", "xhigh", false],
+	["fauxreasoner", "xhigh", true],
+	["fauxb", "off", false],
+	["fauxb", "off", true],
+] as const)("suffix thinking on %s becomes %s in the child, not the parent (background %s)", async (provider, expectedThinking, background) => {
+	const originalModel = parent.model;
+	const originalThinking = parent.thinkingLevel;
+	const marker = `THINKING_${provider}_${background}`;
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("Agent", {
+				subagent_type: "reviewer",
+				task: "Report your findings.",
+				model: `${provider}/${provider}:xhigh`,
+				run_in_background: background,
+			}),
+		),
+		fauxAssistantMessage(background ? `STARTED_${marker}` : `DONE_${marker}`),
+		...(background ? [fauxAssistantMessage(`DONE_${marker}`)] : []),
+	]);
+	const core = provider === "fauxb" ? fauxB : fauxReasoner;
+	core.setResponses([fauxAssistantMessage(`CHILD_${marker}`)]);
+
+	await parent.prompt("Delegate with a thinking suffix.");
+	await waitFor(() => transcript().includes(`DONE_${marker}`));
+	await parent.waitForIdle();
+
+	const context = storedChildContext();
+	expect(context.model).toEqual({ provider, modelId: provider });
+	expect(context.thinkingLevel).toBe(expectedThinking);
+	expect(transcript()).toContain(`CHILD_${marker}`);
+	expect(parent.model).toEqual(originalModel);
+	expect(parent.thinkingLevel).toBe(originalThinking);
+});
+
+test.each([
+	false,
+	true,
+])("an unsuffixed child inherits live parent thinking (model selected %s)", async (selectModel) => {
+	const session = await makeSession();
+	try {
+		const model = runtime.getModel("fauxreasoner", "fauxreasoner");
+		if (!model) throw new Error("Reasoning model not registered");
+		await session.setModel(model);
+		session.setThinkingLevel("high");
+		fauxReasoner.setResponses([
+			fauxAssistantMessage(
+				fauxToolCall("Agent", {
+					subagent_type: "reviewer",
+					task: "Inherit thinking.",
+					...(selectModel ? { model: "fauxreasoner/fauxreasoner" } : {}),
+				}),
+			),
+			fauxAssistantMessage("INHERITED_THINKING"),
+			fauxAssistantMessage("PARENT_DONE"),
+		]);
+		await session.prompt("Delegate without a suffix.");
+		expect(storedChildContext(session).thinkingLevel).toBe("high");
+		expect(session.thinkingLevel).toBe("high");
+	} finally {
+		await service.disposeChildrenOf(session.sessionId);
+		liveParents.delete(session.sessionId);
+		session.dispose();
+	}
+});
+
+test.each([
+	false,
+	true,
+])("invalid suffix selection is a tool error before child creation (background %s)", async (background) => {
+	const callsBefore = fauxReasoner.state.callCount;
+	fauxA.setResponses([
+		fauxAssistantMessage(
+			fauxToolCall("Agent", {
+				subagent_type: "reviewer",
+				task: "Never start.",
+				model: "fauxreasoner/missing:xhigh",
+				run_in_background: background,
+			}),
+		),
+		fauxAssistantMessage("PARENT_RECOVERED_SELECTION"),
+	]);
+	await parent.prompt("Try an unavailable model with a suffix.");
+	const result = parent.messages.filter((message) => message.role === "toolResult").at(-1);
+	expect(result?.isError).toBe(true);
+	expect(lastToolResultText()).toContain('base "fauxreasoner/missing"');
+	expect(lastToolResultText()).toContain("not available in this session");
+	expect(lastToolResultText()).not.toContain("qualify");
+	expect(service.childrenOf(parent.sessionId)).toEqual([]);
+	expect(fauxReasoner.state.callCount).toBe(callsBefore);
+});
+
 test("a definition-pinned model silently wins over the per-call model", async () => {
 	fauxA.setResponses([
 		fauxAssistantMessage(
 			fauxToolCall("Agent", {
 				subagent_type: "bg-runner",
 				task: "Keep the definition pin.",
-				model: "unobtanium",
+				model: "unobtanium:turbo",
 			}),
 		),
 		fauxAssistantMessage("PARENT_USED_PINNED_MODEL"),
@@ -392,14 +502,18 @@ test("a definition-pinned model silently wins over the per-call model", async ()
 
 	expect(transcript()).toContain("PINNED_MODEL_CHILD_OK");
 	expect(transcript()).toContain("PARENT_USED_PINNED_MODEL");
+	expect(storedChildContext().thinkingLevel).toBe("off");
 	const child = service.childrenOf(parent.sessionId)[0];
 	expect(child?.snapshot?.details.model).toBe("fauxb/fauxb");
 	await service.disposeChildrenOf(parent.sessionId);
 });
 
-test("a live definition edit refreshes advertised and effective model policy together", async () => {
+test("a live definition edit refreshes advertised and effective model/thinking policy together", async () => {
 	try {
-		writeFileSync(bgRunnerPath, BG_RUNNER_DEFINITION.replace("model: fauxb", "model: fauxa"));
+		writeFileSync(
+			bgRunnerPath,
+			BG_RUNNER_DEFINITION.replace("model: fauxb", "model: fauxreasoner:xhigh\nthinking: low"),
+		);
 		fauxA.setResponses([
 			fauxAssistantMessage(
 				fauxToolCall("Agent", {
@@ -408,17 +522,59 @@ test("a live definition edit refreshes advertised and effective model policy tog
 					model: "unobtanium",
 				}),
 			),
-			fauxAssistantMessage("REFRESHED_PIN_CHILD_OK"),
 			fauxAssistantMessage("PARENT_USED_REFRESHED_PIN"),
 		]);
+		fauxReasoner.setResponses([fauxAssistantMessage("REFRESHED_PIN_CHILD_OK")]);
 
 		await parent.prompt("Delegate after the definition changes.");
 
 		expect(transcript()).toContain("REFRESHED_PIN_CHILD_OK");
 		expect(transcript()).toContain("PARENT_USED_REFRESHED_PIN");
-		expect(parent.getToolDefinition("Agent")?.description).toContain("model: pinned fauxa");
+		expect(parent.getToolDefinition("Agent")?.description).toContain(
+			"model: pinned fauxreasoner:xhigh; thinking: low (overrides suffix)",
+		);
 		const child = service.childrenOf(parent.sessionId)[0];
-		expect(child?.snapshot?.details.model).toBe("fauxa/fauxa");
+		expect(child?.snapshot?.details.model).toBe("fauxreasoner/fauxreasoner");
+		expect(storedChildContext().thinkingLevel).toBe("low");
+	} finally {
+		writeFileSync(bgRunnerPath, BG_RUNNER_DEFINITION);
+		await service.disposeChildrenOf(parent.sessionId);
+	}
+});
+
+test("a definition edit during a model turn cannot split advertised and executed thinking policy", async () => {
+	try {
+		writeFileSync(
+			bgRunnerPath,
+			BG_RUNNER_DEFINITION.replace("model: fauxb", "model: fauxreasoner:xhigh\nthinking: low"),
+		);
+		fauxA.setResponses([
+			() => {
+				expect(parent.getToolDefinition("Agent")?.description).toContain(
+					"model: pinned fauxreasoner:xhigh; thinking: low (overrides suffix)",
+				);
+				writeFileSync(
+					bgRunnerPath,
+					BG_RUNNER_DEFINITION.replace("model: fauxb", "model: fauxb\nthinking: off"),
+				);
+				return fauxAssistantMessage(
+					fauxToolCall("Agent", {
+						subagent_type: "bg-runner",
+						task: "Keep the advertised policy.",
+						model: "missing:turbo",
+					}),
+				);
+			},
+			fauxAssistantMessage("SNAPSHOT_PRESERVED"),
+		]);
+		fauxReasoner.setResponses([fauxAssistantMessage("SNAPSHOT_CHILD")]);
+		await parent.prompt("Delegate while the definition changes.");
+		const context = storedChildContext();
+		expect(context.model).toEqual({ provider: "fauxreasoner", modelId: "fauxreasoner" });
+		expect(context.thinkingLevel).toBe("low");
+		expect(parent.getToolDefinition("Agent")?.description).toContain(
+			"model: pinned fauxb; thinking: off (overrides suffix)",
+		);
 	} finally {
 		writeFileSync(bgRunnerPath, BG_RUNNER_DEFINITION);
 		await service.disposeChildrenOf(parent.sessionId);

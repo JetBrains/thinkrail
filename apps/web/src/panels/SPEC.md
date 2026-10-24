@@ -355,8 +355,9 @@ Above the cards, `WelcomePanel` composes **`ProviderWarningBanner`** — a slim 
 no provider is connected** ("No model provider connected — the agent can't run") with a **Connect a provider**
 CTA that opens Settings → Providers (`store.openSettings("providers")`). It reads `provider.status` (a
 provider is "connected" iff any `configured`) on mount and re-checks whenever the settings dialog toggles, so
-it disappears the moment the user connects one; a transport error degrades to *not* nagging (offline ≠ "no
-provider"). All provider **management** lives in Settings, not here (the always-on strip is gone).
+it disappears the moment the user connects one; it stays hidden until the first answer lands, and a transport
+error degrades to *not* nagging (unknown or offline ≠ "no provider"). All provider **management** lives in
+Settings, not here (the always-on strip is gone).
 
 Beneath it, **`ProjectTrustNotice`** is the pre-workspace trust surface (so trust is reachable with no
 workspace yet): **presence-gated** — renders nothing unless the selected project ships something a trust
@@ -2061,8 +2062,10 @@ own section. The kebab menu (`plan-menu`, a
   preserving focus without stealing unrelated workbench focus. Initial xterm focus is deferred until a
   successful attach and applies only while the terminal tab that requested it still owns focus; Retry keeps
   its overlay mounted through the successful handoff and restores xterm focus only while focus remains in that
-  terminal region. A competing detach invalidates that handoff and clears its retry state before exposing Take
-  Back again.
+  terminal region. A focusing handoff commits the attached state synchronously before `focus()`: the failed
+  frame stays inert until that commit and an inert subtree silently refuses focus, so frame timing (a next
+  animation frame can precede React's commit on a loaded machine) must never be what lifts it. A competing
+  detach invalidates that handoff and clears its retry state before exposing Take Back again.
   **Historical replay is input-inert:** the PTY id
   remains unadopted until xterm's replay callback, which rechecks attach freshness before binding and draining
   genuinely live frames; replies xterm synthesizes for recorded terminal queries can therefore never enter the

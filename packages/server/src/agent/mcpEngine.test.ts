@@ -245,7 +245,7 @@ test("deleting a chat terminates its stdio server, even one that ignores EOF and
 	expect(alive(pid as number)).toBe(true);
 	await removeSession(p.sessionId);
 	await waitFor(() => !alive(pid as number), 6000);
-});
+}, 15_000);
 
 test("quitting terminates the servers of every live chat", async () => {
 	await chat();

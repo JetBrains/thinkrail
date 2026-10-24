@@ -401,25 +401,21 @@ for (const testCase of orderCases) {
 	}) => {
 		const { session, chatScroll } = await openTallChat(page, testCase.order);
 		try {
-			const interruptionStart = await moveIntoStableHistory(
-				page,
-				chatScroll,
-				testCase.order,
-				testCase.historyWheel,
-			);
+			await moveIntoStableHistory(page, chatScroll, testCase.order, testCase.historyWheel);
 			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
-			await page.getByTestId(testCase.buttonTestId).evaluate((button) => button.click());
 			await chatScroll.evaluate(
-				(root, { scrollTop, deltaY }) => {
+				(root, { buttonTestId, deltaY }) => {
 					const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
-					if (!scroller) throw new Error("missing Virtuoso scroller");
-					scroller.scrollTop = scrollTop;
+					const latest = root.querySelector<HTMLButtonElement>(`[data-testid="${buttonTestId}"]`);
+					if (!scroller || !latest) throw new Error("missing chat scroll controls");
+					latest.click();
+					const scrollTop = scroller.scrollTop;
 					scroller.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY }));
 					scroller.scrollTop = scrollTop + deltaY;
 					scroller.dispatchEvent(new Event("scroll"));
 				},
 				{
-					scrollTop: interruptionStart.scrollTop,
+					buttonTestId: testCase.buttonTestId,
 					deltaY: testCase.latestWheel > 0 ? 20 : -20,
 				},
 			);
@@ -623,20 +619,24 @@ for (const testCase of orderCases) {
 				pointerType: "touch",
 				isPrimary: true,
 			});
-			await chatScroll.evaluate((root, order) => {
+			await chatScroll.evaluate(async (root, order) => {
 				const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
 				if (!scroller) throw new Error("missing Virtuoso scroller");
 				const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
 				scroller.scrollTop =
 					order === "newest-first" ? Math.min(300, maxScrollTop) : Math.max(0, maxScrollTop - 300);
 				scroller.dispatchEvent(new Event("scroll"));
+				root.dispatchEvent(
+					new PointerEvent("pointercancel", {
+						bubbles: true,
+						isPrimary: true,
+						pointerId: 73,
+						pointerType: "touch",
+					}),
+				);
+				for (let frame = 0; frame < 4; frame += 1) await new Promise(requestAnimationFrame);
 			}, testCase.order);
 			await expect(chatScroll).toHaveAttribute("data-follow-state", "detached");
-			await chatScroll.dispatchEvent("pointercancel", {
-				pointerId: 73,
-				pointerType: "touch",
-				isPrimary: true,
-			});
 			await chatScroll.evaluate((root, order) => {
 				const scroller = root.querySelector<HTMLElement>("[data-virtuoso-scroller]");
 				if (!scroller) throw new Error("missing Virtuoso scroller");

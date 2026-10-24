@@ -383,7 +383,6 @@ export const WS_CHANNELS = {
 } as const;
 
 type SameUnion<A extends B, B extends C, C = A> = A;
-type _MethodsMatchMap = SameUnion<(typeof WS_METHODS)[keyof typeof WS_METHODS], WsMethodName>;
 export type WsChannel = (typeof WS_CHANNELS)[keyof typeof WS_CHANNELS];
 
 export const ASK_USER_ANSWERS_CUSTOM_TYPE = "ask-user-answers";
@@ -1026,7 +1025,10 @@ export interface WsMethodMap {
 /** Payload of the `mcp.status` channel: one per-session snapshot per publish. */
 export type McpStatusPayload = McpStatusSnapshot;
 
-export type WsMethodName = keyof WsMethodMap;
+export type WsMethodName = SameUnion<
+	keyof WsMethodMap,
+	(typeof WS_METHODS)[keyof typeof WS_METHODS]
+>;
 export type WsParams<M extends WsMethodName> = WsMethodMap[M]["params"];
 export type WsResult<M extends WsMethodName> = WsMethodMap[M]["result"];
 

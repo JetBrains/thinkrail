@@ -166,10 +166,11 @@ manually or reinstalled with the script.
 | --- | --- | --- |
 | macOS Apple Silicon | DMG | signed binary |
 | macOS Intel | no Electrobun build | not prebuilt — [build from source](#developing-thinkrail) |
-| Windows x64 | signed setup executable | signed `.exe` |
+| Windows x64 | signed setup executable and app binaries | signed `.exe` |
 | Linux x64 / ARM64 | setup tarball, unsigned | unsigned |
 
-JetBrains signs the Windows CLI and desktop setup executable. The macOS CLI is signed but not yet notarized.
+JetBrains signs the Windows CLI, the desktop setup executable, and every executable and DLL the desktop app
+installs. The macOS CLI is signed but not yet notarized.
 Signed and notarized desktop DMGs require the coordinated JetBrains service pipeline; older published DMGs
 and locally built packages may still be unsigned and blocked by Gatekeeper. Linux artifacts are unsigned.
 
@@ -205,7 +206,7 @@ module, and a change that moves a boundary, contract, or decision updates the sp
 
 ## Developing ThinkRail
 
-You need **Bun** 1.4.3 (the pinned package manager and runtime), **Node.js** ≥ 22.19 (required by the
+You need **Bun** 1.4.4 (the pinned package manager and runtime), **Node.js** ≥ 22.19 (required by the
 in-process `pi` engine), and an authenticated `pi` provider for agent work.
 
 ```bash

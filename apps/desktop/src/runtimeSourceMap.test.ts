@@ -81,7 +81,7 @@ test("injection keeps the @bun pragma first, registers the chunk, and keeps the 
 		const path = join(dir, "out", name);
 		writeFileSync(path, `${source}//# sourceMappingURL=${name}.map\n`);
 		writeFileSync(`${path}.map`, JSON.stringify(sourceMap));
-		const loaded = (await import(pathToFileURL(path).href)) as { explode(): never };
+		const loaded: { explode(): never } = await import(pathToFileURL(path).href);
 		try {
 			loaded.explode();
 		} catch (error) {

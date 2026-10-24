@@ -121,11 +121,24 @@ starts servers.
 
 Native wheel probes target the actual transcript viewport again after clicking a floating Latest
 button; a pointer left at a removed overlay is not evidence of a gesture delivered to the scroller.
+A probe that interrupts a Latest return clicks and interrupts in one task, moving from the current
+position: resetting `scrollTop` without a scroll event can make the hook's observed delta zero when the
+return's first frame happened to cover exactly the probe's step, so no detach is seen.
 Disclosure-anchor probes place the complete header below the real sticky breadcrumb before asserting
 fixed-position behavior. Intersection with the scroller alone does not prove that a header is unobscured.
+Programmatic disclosure-anchor probes activate inside the sampling evaluate, so the first post-change frame
+is always measured, and a disconnected anchor fails as a remount instead of reporting a detached node's zero
+rect.
 Pierre surfaces paint plain text first and replace their rows when the worker's highlight lands, which
 is late on slower hosts such as the compiled-binary and packaged-desktop artifacts; pointer probes wait
 for highlighted tokens (`pierreHighlightedTokens`) before measuring or dragging rows.
+A following probe that lets actionability scroll an off-screen transcript control into view first
+waits for `data-scroll-moving="false"`: that scroll is not reader input, so an active placement motion
+restores the latest edge, which on slow runners lands between mousedown and mouseup and drops the click.
+Monaco wheel probes reach the editor through an actionability-checked `hover()`, never a measured box:
+`@monaco-editor/react` creates the editor in a hidden container, so it is visible at 5×5 px until its
+ResizeObserver lays it out, and the centre of that box lies under the left panel's resize separator.
+Each CDP wheel event scrolls Monaco 50 px whatever its delta (one synthetic tick).
 
 ## Render profiling harness
 
@@ -315,8 +328,10 @@ focus endpoints, and rail/header geometry that matches the workbench across a wo
 
 The no-agent setup seeds a test-owned empty `models.json` and never reads or copies developer
 `auth.json` or `models.json`; provider scenarios use synthetic fixtures, and the separately authorized
-real-Central mode keeps its opaque-artifact-only credential contract above. Model-context coverage
-exercises the Default / 1M / Custom selector through the real host: shared and per-provider saves,
+real-Central mode keeps its opaque-artifact-only credential contract above. Ambient credential environment
+variables still reach the no-agent host, so a check that depends on whether any provider is connected reads
+the host's `provider.status` over the wire first, never a one-shot snapshot of UI still loading it. Model-context
+coverage exercises the Default / 1M / Custom selector through the real host: shared and per-provider saves,
 retained live-chat limits versus new-chat metadata, Custom validation and Apply focus, cross-client
 convergence with draft invalidation, sanitized read/write failures with Retry, mobile keyboard use,
 and pre-v76 hiding.
@@ -406,7 +421,9 @@ Windows lane into the real profile (see `module-shared`).
 
 During iteration, run the affected specs and use Playwright's last-failed mode. Flake repairs replace
 irrelevant expensive setup with equivalent fixture state and wait for observable readiness; blanket retries,
-arbitrary sleeps, and assertion weakening are not synchronization policy. Live-provider completion waits on
+arbitrary sleeps, and assertion weakening are not synchronization policy. A race guard forces the hazardous
+interleaving (held animation frames, a held reply) rather than sampling it in a CPU-throttled loop, whose cost
+scales with runner speed and outgrows the test budget on CI. Live-provider completion waits on
 the session's streaming state after response evidence appears; the optional rendered `Done` row is not a
 terminal-state contract. Scenarios whose subject is a client-side send transformation assert the exact
 outgoing `session.prompt` frame rather than treating a
@@ -428,7 +445,9 @@ the renderer's plain-source fallback, not the tool-error branch. File previews w
 fixture repository (removed in `finally`) and pin the HTML renderer in the card, the before/after 2-up diff,
 a region comment's Send carrying the card's chat `sessionId` over the wire, HTML design-width scaling and the
 width switch, full screen, Open in tab, and a before/after opened as a comparison diff tab that survives a
-reload. These regressions need no provider,
+reload. A huge comparison opts in through Show diff anyway while an unrelated file changes every 400 ms (each
+write its own watcher frame, past the 300 ms quiet flush), so updates keep landing inside the expensive first
+mount. These regressions need no provider,
 prompt submission, route mock, or screenshot. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
 real Settings → Extensions switch through `settings.update`, proves it survives a reload, and seeds a
 historical `visualize` call that must still render its diagram while the extension is off; each test restores

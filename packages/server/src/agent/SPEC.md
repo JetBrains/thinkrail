@@ -954,6 +954,10 @@ A restarted host has no control handles or retained command output to reconstruc
 
 `getSessionResources`, `readBackgroundCommandOutput`, `stopBackgroundCommand`, `stopSubagent`,
 `stopAllSubagents` and `setSessionResourcesPublisher` are public only through this module's barrel.
+`stopBackgroundCommand` acknowledges before settlement, so a test that stops a command waits for `stopped`
+before it ends, and a test publisher (process-global) ignores other chats' notices and keeps any read it
+starts handled: a late `stopped` notice once reached the next test's publisher, whose rejected read became
+an unhandled rejection that bun charged to every following test while that publisher stayed installed.
 Its only new external dependency is `pi-background-commands`; there is no `agent` → `terminal`, `subprocess`,
 settings or workspaces edge. The owning parent graph records this package dependency.
 

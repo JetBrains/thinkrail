@@ -608,7 +608,10 @@ export function watchJbcentralArtifact(
 			watchedDirectory = directory;
 		} catch {
 			scheduleRearm(WATCH_RETRY_MS);
+			return;
 		}
+		if (syncExistence()) invalidate();
+		else if (nearestExistingDirectory(extensionPath, deps) !== directory) scheduleRearm();
 	};
 
 	const pollExistence = (): void => {
