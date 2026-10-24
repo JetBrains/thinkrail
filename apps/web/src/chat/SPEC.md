@@ -467,7 +467,14 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   provider-backed authentication) — are supplied by `ChatView` (through `ChatTranscript`'s provider)
   only on an MCP-capable host;
   without them (older host, the plan page's provider, or `null`) the MCP cards hide Full output and Sign in
-  ([tools/mcp/SPEC.md](tools/mcp/SPEC.md)).
+  ([tools/mcp/SPEC.md](tools/mcp/SPEC.md)). Optional `findModel(ref)` resolves a run's `provider/id`
+  against the full model catalog (`ChatView` over `useModelCatalog`, hidden models included — a run may use
+  one); without it a run label shows the raw reference.
+- **Run model label** (`ModelEffortLabel.tsx`): `ModelEffortPill` is the model picker trigger's content
+  (glyph · name · effort bars and level word), extracted so `RunModelLabel` renders a delegation run's
+  model exactly like the composer pill: catalog name via `ChatActions.findModel`, else the raw
+  `provider/id`, which is also its tooltip. The picker's `thinking-selector` test id stays its own. A run
+  without `thinkingLevel` shows the model alone; one without `model`, nothing.
 - **Subagent transcript view** (`SubagentTranscriptDialog.tsx` — an integration file, like
   `SkillsDialog`): `SubagentTranscriptPane` renders a hidden child's **read-only** transcript with the
   same primitives (`messagesToRuntime` → `deriveRows` → `ChatTurnView`), fetched via
@@ -1419,8 +1426,8 @@ the `useChatResources` integration hook: it mounts the trigger in the header, th
 strip and the composer (only while the inspector is closed), and the inspector inside the transcript
 region so the header and composer stay usable; it owns the open/selected state and fills the inspector's
 detail slot — `CommandLogView` fed by `useCommandLog` for a command, `SubagentTranscriptPane` for a
-subagent. No new shell pane, workbench resource kind or terminal attachment is involved. Tool/command
-completion rendering remains in the conversation primitives, joined through tool/custom-message
+subagent — and the subagent detail header's `renderSubagentModel` with `RunModelLabel`. No new shell pane, workbench resource
+kind or terminal attachment is involved. Tool/command completion rendering remains in the conversation primitives, joined through tool/custom-message
 names rather than imports of the capability packages; the latest turn divider carries the "still
 running" chip as a parent-supplied deep link into the inspector. The resources view has a third list,
 the session's MCP servers (`SessionResources.mcpServers`): `useChatResources` passes it only on an
@@ -1437,9 +1444,9 @@ The divider's "still running" chip and the dock keep counting work only. No PID 
 none — and there is no immediate per-server stop.
 
 The dependency edges are `ChatView`/`useChatResources` → `resources`, `store`, `transport`,
-`BackgroundResult` → `resources` (`ResultRow`) and `tools/subagent` (`runDetails` helpers), and
-`ChatView` → the transcript pane. The `resources` child stays props-only and imports no sibling tool
-implementation; it receives the shared 30 s clock as a `now` prop. Command logs are fetched by the
+`BackgroundResult` → `resources` (`ResultRow`, the run label as its `metaLead`), `tools/subagent`
+(`runDetails` helpers) and `ModelEffortLabel`, and `ChatView` → the transcript pane. The `resources`
+child stays props-only and imports no sibling tool implementation; it receives the shared 30 s clock as a `now` prop. Command logs are fetched by the
 integration hook and passed into its read-only view; the module never loads xterm.
 
 The hook hydrates on mount/current welcome, subscribes to `session.resourcesChanged`, and coalesces
