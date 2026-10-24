@@ -613,8 +613,6 @@ export default function ChatView({
 		composerRef.current?.refocus();
 	};
 
-	// The history button toggles the overlay: a second click closes it again through
-	// the same dismiss path, returning focus to the composer.
 	const onHistoryOpen = () => (historyState.open ? onDismissHistory() : openOverlay(draft));
 
 	const onManageTemplates = () => useAppStore.getState().openSettings(SettingsSection.Templates);
