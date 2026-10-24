@@ -551,6 +551,9 @@ content's own height.
   gutter, full active-line paint, smooth scrolling, active bracket-pair + indentation guides, single-file
   occurrence highlighting, and ambiguous-Unicode suppression. Opaque `viewState` is restored only after its
   editor-state shape is validated and is saved on unmount, so tab switches round-trip scroll and folding.
+  A review focus that arrives with the mount jumps to its line (`revealLineNow`, an immediate scroll): a
+  smooth scroll started before the editor's first layout can stop short, and the handled focus is not
+  retried, so the card stayed off screen. A focus on a mounted editor still scrolls smoothly.
   Monaco is imported from `editor.api` with only the reading contributions (find, folding, bracket matching,
   context menu/copy, links, hover, word highlighting, sticky scroll, go-to-line/command palette, read-only
   messaging and Unicode highlighting); keeping word highlighting preserves F7. The TS/JS/JSON/CSS/HTML

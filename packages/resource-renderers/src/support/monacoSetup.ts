@@ -188,6 +188,10 @@ async function initializeMonaco(code: ResourceCodeHost): Promise<void> {
 	monaco.editor.setTheme(EDITOR_THEME);
 }
 
+export function revealLineNow(codeEditor: editor.IStandaloneCodeEditor, line: number): void {
+	codeEditor.revealLineInCenter(line, monaco.editor.ScrollType.Immediate);
+}
+
 export function ensureMonaco(code: ResourceCodeHost): Promise<void> {
 	if (!setup) setup = { code, ready: initializeMonaco(code) };
 	return setup.ready;

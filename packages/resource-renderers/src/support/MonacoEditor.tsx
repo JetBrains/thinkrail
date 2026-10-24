@@ -12,6 +12,7 @@ import {
 	ensureMonaco,
 	fileEditorOptions,
 	languageForPath,
+	revealLineNow,
 	watchThemeSwap,
 } from "./monacoSetup";
 import {
@@ -94,7 +95,7 @@ export default function MonacoEditor({
 			syncThreads(review);
 			const line = focusLine(review);
 			if (line !== null) {
-				codeEditor.revealLineInCenter(line);
+				revealLineNow(codeEditor, line);
 				review.onFocusHandled();
 			}
 		}
