@@ -982,8 +982,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   state. Radix's default on close is to return focus to the trigger; `onCloseAutoFocus` is overridden
   (`preventDefault` + focus the query input) so a mouse pick hands focus back to the query input
   instead — typing resumes immediately, no extra click needed. The menu is a **controlled** Radix menu
-  (`scopeMenuOpen`) for one reason: the overlay's window-level `Escape` stands down while it is open, so
-  Escape dismisses the innermost layer. The menu never
+  (`scopeMenuOpen`) for one reason: the overlay's window-level `Escape` and outside-press listeners stand
+  down while it is open, so Escape or a press dismisses the innermost layer. The menu never
   fights the overlay's own `ArrowUp`/`ArrowDown`/`Enter` handling: that handler is bound to the query
   `<input>` element itself, and Radix's portaled dropdown content is a **sibling** subtree — never a
   descendant of the input — so a keydown while the menu holds focus cannot reach the input's handler by
@@ -1005,19 +1005,28 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
     it is open. Capture + `stopPropagation` encodes "the topmost floating panel closes first" (a composer
     slot session survives the dismissal rather than being cleared by the same keystroke). It stands down
     while the scope picker is open — see the controlled `scopeMenuOpen` note above — so Radix's own
-    Escape closes just that menu. A window capture-phase `pointerdown` listener,
-    registered only while the overlay is open, closes it on outside presses, with two exclusions by
-    construction: presses on the history button, marked with a dedicated `data-history-trigger`
-    attribute rather than its test id (the button toggles the overlay itself, so counting them as
-    outside would fight the toggle) and presses inside the scope picker's portaled content, exempted
-    via a ref on its `DropdownMenuContent` rather than a global menu selector so unrelated menus do
-    not escape dismissal (picking a scope must not dismiss the overlay).
+    Escape closes just that menu.
+  - **The overlay is an fzf-style modal picker** (the shell's `Ctrl+R` / fzf history widget): while open
+    it owns input, and it is left only by *accepting* (insert, insert-and-send, jump, save as template)
+    or *aborting* (Escape, the history button, a press outside), which leaves the draft as it was. A
+    press into the composer aborts too — the picker and the prompt are never edited at once. Every open
+    is a fresh picker: `HistoryOverlay` mounts its `HistoryPicker` only while open, so local state such
+    as `scopeMenuOpen` cannot carry into the next open. Outside presses are a window capture-phase
+    `pointerdown` listener that, like Escape, stands down while the scope picker is open, so the first
+    press closes just that menu (Radix's modal menu retargets every press outside it — the overlay's own
+    query included — to `<html>`). Presses on the history button, marked with a dedicated
+    `data-history-trigger` attribute rather than its test id, are not outside: the button toggles the
+    overlay itself.
   - **Dismissal returns focus to the prompt field** (`ChatView.onDismissHistory` → the composer's
     `refocus` handle): opening moved focus into the overlay's query input, and closing unmounts it, so
     without this every post-Escape keystroke would land on `<body>` and be lost. The caret goes back where
     it was (`Composer` tracks it on click/keyup/change), or onto the current slot's marker when a slot
-    session is live. Dismissal is the *only* close that routes through `onClose` — insert, jump, and
-    save-as-template each own where focus goes next (the composer, another chat, a dialog).
+    session is live. An outside press (`onOutsidePress` → `ChatView.onHistoryOutsidePress`) closes at
+    once but restores focus only after the browser's own pointer focus handling (a zero-delay timeout),
+    and only when focus landed on `<body>`: a press on empty space hands the caret back to the prompt,
+    while a press on a control that takes focus (a button, a field, the terminal) keeps it. Aborts are
+    the *only* closes that restore focus — insert, jump, and save-as-template each own where focus goes
+    next (the composer, another chat, a dialog).
 - **History overlay: assistant-only messages + jumpable prompts** (`HistoryOverlay.tsx`,
   `useHistorySearch.ts` — R3) — `MESSAGES` now only ever contains assistant-role hits (the server
   filters; see `packages/server/src/history/SPEC.md`): a user-role hit is always a textual duplicate of

@@ -355,6 +355,7 @@ export interface HistoryOverlayProps {
 	onToggleStage: () => void;
 	onMoveSelection: (delta: number) => void;
 	onClose: () => void;
+	onOutsidePress: () => void;
 	onInsert: (hit: PromptHit) => void;
 	onInsertAndSend: (hit: PromptHit) => void;
 	onOpenMessage: (target: ChatLocationRequest) => void;
@@ -363,13 +364,18 @@ export interface HistoryOverlayProps {
 	onSetScope: (kind: HistoryScope["kind"]) => void;
 }
 
-export function HistoryOverlay({
+export function HistoryOverlay(props: HistoryOverlayProps) {
+	return props.state.open ? <HistoryPicker {...props} /> : null;
+}
+
+function HistoryPicker({
 	state,
 	workspaceNames,
 	onQueryChange,
 	onToggleStage,
 	onMoveSelection,
 	onClose,
+	onOutsidePress,
 	onInsert,
 	onInsertAndSend,
 	onOpenMessage,
@@ -378,24 +384,22 @@ export function HistoryOverlay({
 	onSetScope,
 }: HistoryOverlayProps) {
 	const t = useT();
-	const { open, stage, query, scope, result, selected, error } = state;
+	const { stage, query, scope, result, selected, error } = state;
 	const inputRef = useRef<HTMLInputElement>(null);
 	const resultsRef = useRef<HTMLDivElement>(null);
 	const rootRef = useRef<HTMLDivElement>(null);
-	const scopeMenuContentRef = useRef<HTMLDivElement>(null);
 	const [scopeMenuOpen, setScopeMenuOpen] = useState(false);
 	const highlight = useMemo(() => highlightTerms(query), [query]);
 
 	useEffect(() => {
-		if (!open) return;
 		const el = inputRef.current;
 		if (!el) return;
 		el.focus();
 		el.select();
-	}, [open]);
+	}, []);
 
 	useEffect(() => {
-		if (!open || scopeMenuOpen) return;
+		if (scopeMenuOpen) return;
 		const onWindowKeyDown = (e: globalThis.KeyboardEvent) => {
 			if (e.key !== "Escape") return;
 			e.preventDefault();
@@ -404,21 +408,20 @@ export function HistoryOverlay({
 		};
 		window.addEventListener("keydown", onWindowKeyDown, true);
 		return () => window.removeEventListener("keydown", onWindowKeyDown, true);
-	}, [open, scopeMenuOpen, onClose]);
+	}, [scopeMenuOpen, onClose]);
 
 	useEffect(() => {
-		if (!open) return;
+		if (scopeMenuOpen) return;
 		const onWindowPointerDown = (e: PointerEvent) => {
 			const target = e.target as Element | null;
 			if (!target) return;
 			if (rootRef.current?.contains(target)) return;
 			if (target.closest("[data-history-trigger]")) return;
-			if (scopeMenuContentRef.current?.contains(target)) return;
-			onClose();
+			onOutsidePress();
 		};
 		window.addEventListener("pointerdown", onWindowPointerDown, true);
 		return () => window.removeEventListener("pointerdown", onWindowPointerDown, true);
-	}, [open, onClose]);
+	}, [scopeMenuOpen, onOutsidePress]);
 
 	const selectedKey = useMemo(() => {
 		const sel = resolveHistorySelection(stage, result, selected);
@@ -434,8 +437,6 @@ export function HistoryOverlay({
 			?.querySelector('[data-selected="true"]')
 			?.scrollIntoView({ block: "nearest" });
 	}, [selectedKey]);
-
-	if (!open) return null;
 
 	const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
 		if ((e.metaKey || e.ctrlKey) && e.code === "KeyS") {
@@ -583,7 +584,6 @@ export function HistoryOverlay({
 						<span className="text-text-muted">⌃R</span>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
-						ref={scopeMenuContentRef}
 						align="end"
 						onCloseAutoFocus={(e) => {
 							e.preventDefault();

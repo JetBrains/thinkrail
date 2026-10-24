@@ -734,3 +734,48 @@ test("the history button toggles the overlay, outside clicks dismiss it, and pic
 	await expect(overlay).toBeHidden();
 	await expect(page.getByTestId("settings-dialog")).toBeVisible();
 });
+
+test("with the scope picker open a press closes only the picker, and a press on empty space hands the caret back to the prompt", async ({
+	page,
+}) => {
+	await openWorkspaceChat(page);
+	seedExternalCwdSessions();
+
+	const historyButton = page.getByTestId("history-open");
+	const overlay = page.getByTestId("history-overlay");
+	const query = page.getByTestId("history-query");
+	const scopeBadge = page.getByTestId("history-scope");
+	const options = page.getByTestId("history-scope-option");
+	const input = page.getByTestId("chat-input");
+	const emptyTopbar = () =>
+		page.getByTestId("topbar").click({ position: { x: 4, y: 20 }, force: true });
+
+	await input.fill("draft");
+	await historyButton.click();
+	await expect(overlay).toBeVisible();
+
+	await scopeBadge.click();
+	await expect(options).toHaveCount(4);
+	await query.click({ force: true });
+	await expect(options).toHaveCount(0);
+	await expect(overlay).toBeVisible();
+	await expect(query).toBeFocused();
+
+	await scopeBadge.click();
+	await expect(options).toHaveCount(4);
+	await emptyTopbar();
+	await expect(options).toHaveCount(0);
+	await expect(overlay).toBeVisible();
+
+	await emptyTopbar();
+	await expect(overlay).toBeHidden();
+	await expect(input).toBeFocused();
+	await page.keyboard.type("!");
+	await expect(input).toHaveValue("draft!");
+
+	await historyButton.click();
+	await expect(overlay).toBeVisible();
+	await expect(options).toHaveCount(0);
+	await page.keyboard.press("Escape");
+	await expect(overlay).toBeHidden();
+});
