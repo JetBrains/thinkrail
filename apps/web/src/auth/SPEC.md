@@ -30,18 +30,26 @@ not here — `auth` stays presentational + types, so nothing here imports `store
     never the raw URL text, which can run to hundreds of scope params — a failed clipboard write reveals a
     one-line, selected read-only field instead;
     a device code with a **clickable verification link** that also
-    **auto-opens** in a new tab best-effort on arrival; a `select`/`prompt` input — a `secret`-flagged
+    **auto-opens** in a new tab best-effort on arrival; a `select`/`prompt` input — a `select` renders as the
+    app's choice cards, its pi terminal phrasing tidied by `loginOptions` (the message loses its trailing
+    colon; an option label's trailing `(…)` becomes the card's muted detail line — `(default)` reads
+    "Recommended", and pi's terminal jargon `(headless)` is explained in plain words; a prompt's terminal hints become dialog copy — a trailing `(blank for X)` becomes a
+    plain "Leave empty for X." sentence (GitHub Copilot's Enterprise-domain step) and "press Enter" reads "choose
+    Continue" (Bedrock's credential-chain step)); a `secret`-flagged
     prompt renders **masked** (API keys, issue #97); progress/working spinner — while a sign-in URL is
     live and no required prompt is pending, the spinner reads host copy ("Waiting for you to finish
     signing in…") instead of pi's terminal-oriented progress (loopback ports, callback URLs);
     terminal success/error) and calls back `onReply(value)` / `onCancel()` / `onClose()`. Copy says
     **"Connect"**, not "Sign in" — one dialog serves OAuth and API-key entry alike. Themed with token
     utilities only; `@remixicon/react` icons; shadcn `Dialog`/`Button`.
+  - `loginOptions` — `loginSelectMessage` / `loginOptionParts` / `loginPromptMessage`: the pure presentation split above;
+    `loginOptionParts` takes the caller's translator for the notes it rewrites, while pi's own labels and messages pass
+    through in pi's language.
   - `uiOrigin` — `isLoopbackHost` / `uiServedFromLoopback`: whether the UI was opened via a loopback host,
     the dialog's proxy for "the browser runs on the ThinkRail host machine"; `redirectsToLoopback`:
     whether an authorize URL's `redirect_uri` / `callback_url` is an `http:` loopback address.
 - **Public surface (barrel `index.ts`):** `LoginDialog`; `LoginState`/`LoginInput*` (types).
-- **Allowed deps:** `@thinkrail/ui/dialog` and `@thinkrail/ui/button`; `lib` (`copyText`);
+- **Allowed deps:** `@thinkrail/ui/dialog`, `@thinkrail/ui/button` and `@thinkrail/ui/utils` (`cn`); `lib` (`copyText`);
   `@thinkrail/locales/react` (`useT`/`<T>` for the dialog's own copy). (The state types need no imports.)
 - **Forbidden:** importing `store`/`transport` (the dialog stays presentational — the **panel** is the
   integration piece, exactly as `chat/ChatView` is for the chat renderers); any `pi`/`server` import.
@@ -58,8 +66,9 @@ not here — `auth` stays presentational + types, so nothing here imports `store
   starts a login (`provider.loginStart` with `type` `"oauth"` or `"api_key"` — both auth routes ride the
   same channel, issue #97 — → `store.beginLogin`), mounts `LoginDialog` from `store.activeLogin`,
   wires `onReply`/`onCancel` to `provider.loginReply`/`loginCancel`, and re-fetches `provider.status` when a
-  login (or logout) settles; it ignores a login that carries a `target`. (The Welcome screen only carries
-  `panels/ProviderWarningBanner`, which opens Settings → Providers when no provider is connected.)
+  login (or logout) settles; it ignores a login that carries a `target`. That wiring lives once in
+  `panels/useProviderAuth`, shared with the onboarding connect surfaces (`ConnectProviderDialog`, the
+  wizard's Connect step); exactly one of them mounts the dialog at a time — Settings while it is open.
 - `panels/McpSettings` is the second integration piece: `mcp.login` / `mcp.testConnection` return a login id
   whose `provider.login` frames reach only the starting connection; it begins the login with the server as
   `target`, mounts the same `LoginDialog` only for a targeted login, and answers through the same

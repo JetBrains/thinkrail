@@ -33,14 +33,15 @@ test("opens a clean ThinkRail with no projects imported", async ({ page }) => {
 	await expect(page.getByTestId("terminal-panel")).toHaveCount(0);
 
 	await expect(page.getByTestId("welcome-title")).toHaveText("ThinkRail");
-	await expect(page.getByTestId("welcome-cta")).toContainText("Open project");
-	await expect(page.getByTestId("welcome-action")).toHaveCount(0);
+	await expect(page.getByTestId("onboarding-wizard")).toHaveCount(0);
+	await expect(page.getByTestId("welcome-cta")).toContainText("Start a new project");
+	await expect(page.getByTestId("welcome-action")).toHaveCount(1);
 
-	await page.getByTestId("welcome-cta").click();
+	await page.getByTestId("welcome-action").filter({ hasText: "Open project" }).click();
 	await expect(page.getByTestId("menu-open-project")).toBeVisible();
 });
 
-test("the Welcome provider warning only shows when no provider is connected, and opens Settings", async ({
+test("the Welcome provider warning only shows when no provider is connected, and opens the focused connect dialog", async ({
 	page,
 }) => {
 	await openAppFresh(page);
@@ -51,6 +52,20 @@ test("the Welcome provider warning only shows when no provider is connected, and
 	} else {
 		await expect(banner).toContainText("No model provider connected");
 		await page.getByTestId("welcome-connect-provider").click();
+		const dialog = page.getByTestId("connect-provider-dialog");
+		await expect(dialog).toBeVisible();
+		await expect(dialog.getByTestId("connect-provider-list")).toBeVisible();
+		await expect(dialog.getByTestId("connect-option-recommended")).toHaveCount(0);
+		await expect(
+			dialog.locator('[data-testid="provider-signin-row"][data-provider="anthropic"]'),
+		).toHaveCount(1);
+		await expect(
+			dialog.getByTestId("connect-provider-list").getByTestId("jetbrains-ai-card"),
+		).toBeVisible();
+		await expect(dialog.getByTestId("jbcentral-quota-settings")).toHaveCount(0);
+
+		await dialog.getByTestId("connect-show-all").click();
+		await expect(dialog).toHaveCount(0);
 		await expect(page.getByTestId("settings-dialog")).toBeVisible();
 		await expect(page.getByTestId("settings-providers")).toBeVisible();
 	}
@@ -250,7 +265,7 @@ test("opening a non-git folder from the Welcome screen offers to initialise a re
 	await expect(page.getByTestId("connection-status")).toHaveAttribute("data-status", "connected");
 	await expect(page.getByTestId("welcome")).toBeVisible();
 
-	await page.getByTestId("welcome-cta").click();
+	await page.getByTestId("welcome-action").filter({ hasText: "Open project" }).click();
 	await page.getByTestId("menu-open-project").click();
 
 	const confirmInit = page.getByTestId("confirm-init-repo");

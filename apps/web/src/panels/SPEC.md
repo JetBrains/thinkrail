@@ -283,7 +283,9 @@ treatment.
   `scopeKey` / `diffTabId(workspaceId, scope, path)` / `diffTabName` / `scopeLabel` and the `splitPath`
   used by both the flat list's path rows and the diff header's path chip. The **branch combobox** is the
   shared **`BranchPicker`** (searchable, grouped Remote/Local, current pick check-marked, refreshed on every
-  open with an explicit Refresh control as well) — one component for the New-Workspace dialog's *base* branch
+  open with an explicit Refresh control as well; a repo with no remote branches — a fresh **Start a new project**
+  repo — marks the trigger "· local" and says in the header that its branches live only on this computer, so a
+  bare `main` is not mistaken for a GitHub branch) — one component for the New-Workspace dialog's *base* branch
   and the Changes header's *target* branch. **Remote is two layers**: one `Remote` parent over a subgroup per
   host-identified remote (`origin`, `upstream`), whose rows show branch names without repeating the remote.
   The full ref remains every row's selection identity, search value, and `data-branch`; the browser never
@@ -309,18 +311,23 @@ treatment.
 workspace is active. **One hero heading** (`welcome-title`, the topbar's brand styling — accent font,
 `text-primary` — enlarged): the **shown project's name**, or `PRODUCT_NAME` when no project is shown —
 the wordmark is the empty-state identity, a project's own name is the identity once one is open (so no
-separate project eyebrow). **No pitch prose in any state** — the marketing paragraph was removed as
-unread; the screen is heading → banners → **one-to-three cards** (icon top-left,
+separate project eyebrow). The one exception is the post-connect handoff: after a provider connects from
+the Welcome banner while no project is shown, the hero reads **"You're set"** over a one-line "pick a path"
+subhead, so the screen visibly changes instead of returning the user to the same wall. **No pitch prose
+otherwise** — the marketing paragraph was removed as unread; the screen is heading → banners →
+**one-to-three cards** (icon top-left,
 label + explainer bottom-left; the primary is a filled-primary card carrying the stable `welcome-cta`
 hook, others quiet `welcome-action`s). Welcome is **the mode fork**: with a project shown it always pairs
 **"Start building"** (isolated worktree) with **"Work in project folder"** (the Default workspace) so the
 two working modes are a visible choice, not a hidden default. The cards by state: **no projects** →
-**"Open project"** (one card); **project + `hasSpecs`** → **"Start building"** (primary) + "Work in
+**"Start a new project"** (primary, `welcome-cta`) + **"Open project"** — or "Open project" alone as the
+primary against a host below `ONBOARDING_PROTOCOL_VERSION`; **project + `hasSpecs`** → **"Start building"** (primary) + "Work in
 project folder"; **project + no specs** → a spec-first **"Set up project"** (primary) + "Start building"
-+ "Work in project folder". **"Open project" appears only in the no-projects state** — where it's the
-only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
++ "Work in project folder". **"Open project" appears only in the no-projects state** — where, with
+"Start a new project", it's the only possible action; once a project is shown, opening another is the projects-rail **"+"** (the same
 dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
-**`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Enter host
+**`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Start a new project… (when the
+caller passes `onStartNew`, i.e. the host supports `project.create`) / Open project / Enter host
 path… / Open GitHub (soon) / Recents). Recents is the store's `recentProjects`: one last-opened path list
 containing open + closed records with no status badge; selecting either runs the shared open flow and lands at Project Home, with a
 closed record retaining its id and workspace state. `Card` is a `forwardRef` usable as a Radix `asChild`
@@ -353,11 +360,66 @@ on it. The open-project orchestration lives in the shared **`useOpenProject`** h
 (above), so the Welcome "Open project" card gets the same non-git init/notice handling as the rail.
 Above the cards, `WelcomePanel` composes **`ProviderWarningBanner`** — a slim gold banner shown **only when
 no provider is connected** ("No model provider connected — the agent can't run") with a **Connect a provider**
-CTA that opens Settings → Providers (`store.openSettings("providers")`). It reads `provider.status` (a
-provider is "connected" iff any `configured`) on mount and re-checks whenever the settings dialog toggles, so
-it disappears the moment the user connects one; it stays hidden until the first answer lands, and a transport
-error degrades to *not* nagging (unknown or offline ≠ "no provider"). All provider **management** lives in
+CTA that opens the focused **`ConnectProviderDialog`** (below), not the full Settings takeover. "Connected"
+comes from the shared **`useHasProvider`** hook: `provider.status` (connected iff any `configured`) read on
+mount, on every `providerVersion` bump (the host's `providerChanged` push), and whenever the settings
+dialog closes — so the banner disappears the moment a provider lands, wherever it was connected; it stays
+hidden until the first answer lands, and a transport error degrades to *not* nagging (unknown or offline ≠
+"no provider"). All provider **management** lives in
 Settings, not here (the always-on strip is gone).
+
+**First connection.** `ConnectProviderDialog` is an onboarding overlay over `ConnectProviderOptions` — the
+same body the onboarding wizard embeds: a **Recommended** block only when account detection found something
+(below), then **one
+searchable list** of every other unconfigured provider in a fixed-height scroll area (~40 providers never grow
+the overlay, and filtering never resizes it): the real `JetBrainsAiCard` pinned first (so its Central state machine is never duplicated),
+then OAuth-capable providers, then key-only ones, each row the Settings `ProviderRow` with whichever of
+Sign in / API key it supports. The unfiltered list skips recommended providers; a search covers every provider,
+them included. One list rather than separate subscription / API-key buckets, because users look for a provider
+by name, not by auth method. **Recommended is earned, never hardcoded.** The surface first asks the host `provider.detect`
+(`detectAccounts`; an older host or a failure counts as nothing found) — the wizard on **Get started**, the
+overlay on open — and keeps its skeleton until it answers, so nothing jumps. Every detected account whose pi
+provider is unconfigured and OAuth-capable becomes a Recommended sign-in (e.g. "Sign in with Claude" when
+Claude Code is signed in, with the tool's plan as a badge) that starts that provider's ordinary OAuth flow,
+and those providers leave the list. When nothing usable is found there is no Recommended block at all —
+naming a provider we know nothing about would be a guess dressed as advice. It is a suggestion, never a
+silent sign-in: the host reports which tools are signed in, and the user still authorises ThinkRail through
+pi's own flow. A **See all providers & advanced settings** link closes the overlay and opens Settings → Providers. No quota or other global
+settings appear here; the full `ProvidersSettings` stays the power-user surface. Data and login wiring are
+the shared **`useProviderAuth`** hook, which `ProvidersSettings` uses too: one `provider.status` loader
+(re-read on `providerVersion` and on a successful login), `startLogin` / `logout`, and the store-driven
+`LoginDialog` node. Exactly one surface mounts that node: Settings while it is open, otherwise the
+connect surface (`ownsLoginDialog`), so a login never renders two stacked dialogs. **Post-connect handoff:**
+when a provider that was not configured when the surface opened becomes configured — an OAuth / API-key
+login or a Central connect alike — the surface clears the finished login, closes itself, and raises one
+success toast naming the provider and the `model.list` count ("JetBrains AI connected — 23 models
+available"); `onConnected` lets Welcome switch its hero. Settings keeps its own behavior (no auto-close),
+because a power user there may be adding a second provider.
+
+**Starting from nothing.** "Start a new project" opens **`CreateProjectDialog`** (driven by `useOpenProject`'s
+`startNewProject`, so the rail "+" and Welcome share it): a project name, its derived folder name, and a
+**Location** — the parent folder, default `~/thinkrail`, editable as a host path or picked with the native
+directory picker — previewed as the final path, then `project.create` (folder + `git init` + initial commit
++ open; there is no "skip git" choice because a non-repo cannot be a project). When offered, a **Draft the
+specs with the agent** switch (default **on**) makes the caller open `NewWorkspaceDialog` seeded with
+`/skill:setting-up-a-project` exactly like the "Set up project" card. A failure stays inline in the dialog.
+
+**Cold-start onboarding wizard.** `OnboardingWizard` replaces the Welcome cards only on a true cold start:
+the host supports `ONBOARDING_PROTOCOL_VERSION`, `AppConfig.onboardingDismissed` is false, there are no
+open or recent projects, and `useHasProvider` reports none. The decision is **latched once** per mount so
+connecting a provider or opening a project mid-wizard does not tear it down. It opens on an **intro**
+(the brand title, the landing page's tagline and its three "why" beats — worktrees, specs, pi as the
+engine — as small cards, and **Get started**; the copy follows thinkrail.ai so first run and landing say the same thing) — a first-time user meets the
+product before a wall of providers. Then **at most three steps**, shown as a progress strip under each
+step's title (the intro is not a step; a longer strip read as a chore before the product does anything):
+**Connect** (`ConnectProviderOptions`; when a provider becomes configured the same step turns into its
+confirmation — no tokens spent: the connected provider, its `model.list` count and the `model.default`
+model new chats start with; zero models warns and offers Back to the choices) → **Project** (Start a new project / Open a
+project through `useOpenProject`) → **Build** (the opened project with "Set up project" and "Start
+building", each handing the `NewWorkspaceDialog` request back to Welcome). **Skip setup** is on every step.
+The gate lives in the store (`onboardingWizard`: pending → shown | hidden) so shell can hold first-run
+prompts while it is undecided. Finishing or skipping writes `onboardingDismissed: true`, so a returning user — even one who later removes
+every project and provider — gets the regular Welcome; a failed write still closes the wizard locally.
 
 Beneath it, **`ProjectTrustNotice`** is the pre-workspace trust surface (so trust is reachable with no
 workspace yet): **presence-gated** — renders nothing unless the selected project ships something a trust
@@ -835,7 +897,11 @@ a project picker, the prompt hero, and the reused
   [[submodule-web-notifications]].
   **`PrivacySettings`** manages the additional-data preference and
   confirmation together; the event contract belongs to [[submodule-server-analytics]].
-  **`AnalyticsConsentDialog`** mounts once through shell after a capable host's unconfirmed config hydrates.
+  **`AnalyticsConsentDialog`** mounts once through shell after a capable host's unconfirmed config hydrates,
+  held back (with the interview invitation) while the cold-start onboarding wizard may still show or is
+  showing (`selectOnboardingActive`): a new user meets the product before a privacy question, and sharing
+  stays off until the dialog mounts, so holding it never collects without asking — the cost is that the
+  wizard's own steps carry only basic events.
   It initializes the draft switch on and immediately persists `{ analyticsEnabled: true }`; persistence and
   broadcast activate the host gate while the dialog stays open. **Done**, Close, Escape, and backdrop persist
   the current draft with `analyticsConsentConfirmed: true`, so the ordinary result is on. Switching off
@@ -925,7 +991,8 @@ a project picker, the prompt hero, and the reused
   renders `extensions-failed`. Disabling never unregisters a tool renderer
   ([[submodule-web-extensions]]), so past transcripts still render.
   `ProvidersSettings`/`McpSettings`/`AppearanceSettings`/`LineWidthControl`/`ChatSettings`/`TemplatesSettings`/
-  `WorkspacesSettings`/`PrivacySettings`/`ModelsSettings`/`FeedbackSettings`/`ExtensionsSettings` and the app-wide **`InterviewPromptDialog`** are the
+  `WorkspacesSettings`/`PrivacySettings`/`ModelsSettings`/`FeedbackSettings`/`ExtensionsSettings`, the onboarding
+  `ConnectProviderDialog`/`CreateProjectDialog`/`OnboardingWizard`, and the app-wide **`InterviewPromptDialog`** are the
   panels-owned **integration pieces** (store + transport). The prompt renders the shared incentive copy and
   fixed Calendar anchor with `Schedule an interview`, `Not now`, and `Never show again` actions. Primary and
   middle-button booking activation open Calendar immediately and record `book`; close, Escape, and backdrop record `postpone`; permanent
@@ -1321,8 +1388,8 @@ own section. The kebab menu (`plan-menu`, a
   reused by `NewWorkspaceDialog`; `ModelSelector`/`ThinkingSelector`, still mounted by
   `ModelsSettings`; `modelPicker`'s `AUTH_KIND_LABEL`, the one connection-kind vocabulary (catalog keys)
   `ProvidersSettings` shares with the picker, and its `formatContext` plus `ProviderGlyph`, reused by
-  `VisibleModelsSettings`' rows; `TemplateEditorDialog`, reused by `TemplatesSettings`), `auth` (`LoginDialog`, mounted by
-  `ProvidersSettings` and `McpSettings`), `@thinkrail/resource-renderers`, `lib`, `themes` (catalog + generic application contract),
+  `VisibleModelsSettings`' rows; `TemplateEditorDialog`, reused by `TemplatesSettings`), `auth` (`LoginDialog`, mounted through
+  `useProviderAuth` and by `McpSettings`), `@thinkrail/resource-renderers`, `lib`, `themes` (catalog + generic application contract),
   `contracts`; `@remixicon/react`; and the heavy libs each lazy panel owns (`shiki`,
   `@xterm/*`) loaded via `import()`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `shell`; reaching across unrelated panels.

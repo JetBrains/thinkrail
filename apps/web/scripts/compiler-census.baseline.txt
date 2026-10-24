@@ -26,7 +26,6 @@ src/panels/NewWorkspaceDialog.tsx NewWorkspaceDialog
 src/panels/PlanPane.tsx PlanComposer
 src/panels/PlanPane.tsx PlanPane
 src/panels/ProjectTrustNotice.tsx ProjectTrustNotice
-src/panels/ProvidersSettings.tsx ProvidersSettings
 src/panels/ReviewPanel.tsx ReviewPanel
 src/panels/SendReviewButton.tsx SendButtonBase
 src/panels/TemplatesSettings.tsx TemplateRow
@@ -34,6 +33,7 @@ src/panels/branches.ts useBranchList
 src/panels/useAnalyticsConsent.ts useAnalyticsConsent
 src/panels/useBranchStatus.ts useBranchStatus
 src/panels/useLiveTabContent.ts useLiveTabContent
+src/panels/useProviderAuth.tsx useProviderAuth
 src/panels/useWorkspaceRead.ts useWorkspaceRead
 src/prompt/pendingSelection.ts usePendingSelection
 src/prompt/templatePick.ts useTemplateCommandPicker

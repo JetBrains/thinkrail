@@ -407,6 +407,7 @@ export function loadConfig(): AppConfig {
 			: DEFAULT_CONFIG.settleIdleDays,
 		disabledExtensions: storedExtensionNames(value.disabledExtensions),
 		locale: isLocalePreference(value.locale) ? value.locale : DEFAULT_CONFIG.locale,
+		onboardingDismissed: value.onboardingDismissed === true,
 	};
 }
 

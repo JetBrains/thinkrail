@@ -15,10 +15,18 @@ Repository-wide development orchestration and conformance gates that do not belo
 
 ## Boundary
 
-- **Owns:** the multi-process development launcher; exact-version/catalog validation; the PI binary-seam canary; module dependency/import boundary validation; the UI-text gate (`check:i18n`); declared-spec-surface to TypeScript-barrel conformance; the on-demand CI flake report (`ci:flakes`); and focused root contract tests that compose otherwise independent product implementations.
+- **Owns:** the multi-process development launcher; the on-demand provider sign-in smoke (`smoke:logins`); exact-version/catalog validation; the PI binary-seam canary; module dependency/import boundary validation; the UI-text gate (`check:i18n`); declared-spec-surface to TypeScript-barrel conformance; the on-demand CI flake report (`ci:flakes`); and focused root contract tests that compose otherwise independent product implementations.
 - **Public surface:** the root `package.json` commands consumed by developers, Husky, and CI.
 - **Allowed deps:** Bun/Node, the developer's authenticated `gh` CLI (read-only, `ci:flakes` only), the TypeScript compiler API, `pi-spec-graph/core` for the canonical spec/frontmatter model, and `mdast-util-from-markdown` for CommonMark block structure; read-only inspection of workspace manifests and source trees; the public package metadata and bundle outputs each check validates; and test-only imports of real product internals when a root harness must prove a cross-package contract without creating a product dependency.
 - **Forbidden:** product runtime logic, a second source of package or feature behavior, editing source as part of a check, or application-internal imports outside focused root contract tests. A root contract test may compose implementations but must not become the protocol source or a product dependency.
+
+`smoke:logins` boots a throwaway host in a temp HOME/data/pi-agent sandbox (no ambient credentials, real
+network) and, for every provider `provider.status` lists, starts each offered sign-in method over the wire,
+walks every branch of pi's select prompts, and passes when each flow reaches its first user step (a sign-in
+page, a device code, or a prompt); an error frame or a 15 s stall fails it. It cancels every flow, so nothing
+is ever stored, and needs no accounts — it catches a pi upgrade or registry change that breaks how a sign-in
+starts, not whether a real credential is accepted. It is on demand, never a commit or CI gate, because it
+depends on providers' live endpoints.
 
 `check:boundaries` runs the checker's focused tests before scanning the real workspace. It enforces both manifest edges and static source imports, including type-only, dynamic, re-export, CommonJS, import-type, package-subpath, and relative cross-module forms. Generated/build directories, including Hutch's projected `.hutch` SDK trees and transient `.cottontail-tmp` loaders, are excluded. The current product rings and launcher edges are exhaustive: contracts, `pi-delegation`, and `pi-background-commands` → none; `pi-subagents` and `pi-dag` → `pi-delegation`; shared → contracts; server → contracts/shared plus its existing bundled extension and delegation packages; web → contracts, locales, and the browser SDK/extension entries below; CLI → server/shared; desktop → server/shared/contracts/locales; server, UI, and extension web halves may also use locales, which itself has no workspace edges; artifact-tests → CLI/server/shared. Product packages may not import artifact-tests. A future composition root must add an explicit rule rather than silently inheriting access to every workspace package.
 

@@ -2,6 +2,7 @@ import {
 	RiEditLine as Edit,
 	RiFolderLine as Folder,
 	RiGlobalLine as Globe,
+	RiSparkling2Line as Sparkles,
 } from "@remixicon/react";
 import type { Project } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
@@ -21,10 +22,12 @@ export function AddProjectMenu({
 	onOpen,
 	onEnterHostPath,
 	onOpenRecent,
+	onStartNew,
 	align = "end",
 	children,
 }: {
 	recentProjects: Project[];
+	onStartNew?: () => void;
 	onOpen: () => void;
 	onEnterHostPath: () => void;
 	onOpenRecent: (path: string) => void;
@@ -36,6 +39,15 @@ export function AddProjectMenu({
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
 			<DropdownMenuContent align={align}>
+				{onStartNew ? (
+					<>
+						<DropdownMenuItem data-testid="menu-start-new-project" onSelect={() => onStartNew()}>
+							<Sparkles />
+							<span>{t("panels.addProject.startNew")}</span>
+						</DropdownMenuItem>
+						<DropdownMenuSeparator />
+					</>
+				) : null}
 				<DropdownMenuItem data-testid="menu-open-project" onSelect={() => onOpen()}>
 					<Folder />
 					<span>{t("panels.addProject.open")}</span>

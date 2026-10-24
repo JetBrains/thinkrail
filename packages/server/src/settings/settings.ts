@@ -55,6 +55,7 @@ const ACCEPTED_UPDATE_KEYS = {
 	settleIdleDays: true,
 	disabledExtensions: true,
 	locale: true,
+	onboardingDismissed: true,
 	chatMessageOrder: true,
 	layout: true,
 	recentModels: true,
@@ -140,6 +141,7 @@ export function updateConfig(partial: AppConfigUpdate): AppConfig {
 		["notificationsEnabled", runtimeUpdate.notificationsEnabled],
 		["reviewAutoFix", runtimeUpdate.reviewAutoFix],
 		["agentReviewEnabled", runtimeUpdate.agentReviewEnabled],
+		["onboardingDismissed", runtimeUpdate.onboardingDismissed],
 	] as const) {
 		if (value !== undefined && typeof value !== "boolean") {
 			throw new Error(`${name} must be a boolean`);

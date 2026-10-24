@@ -1,3 +1,4 @@
+export { detectModels } from "./detectModels";
 export {
 	connectJbcentral,
 	disconnectJbcentral,

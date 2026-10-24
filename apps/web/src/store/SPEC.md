@@ -502,14 +502,18 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   **`notificationsEnabled: boolean`** (the attention-notification master toggle),
   **`subagentsEnabled: boolean`**, **`subagentMaxConcurrent: number`**, **`disabledExtensions: string[]`**
   (defaulting to `[]` so a pre-v82 host reads as "all on"), **`jbcentralQuotaEnabled: boolean`**,
-  and **`jbcentralQuotaRefreshSeconds: number`** ride the same `applyConfig` fold (host-owned, fieldwise
+  **`jbcentralQuotaRefreshSeconds: number`**, and **`onboardingDismissed: boolean`** (absent ⇒ `false`) ride the same `applyConfig` fold (host-owned, fieldwise
   defaulted/validated from the contracts helpers so an older or malformed host snapshot cannot poison
   the store). `terminalWindowsShell` narrows through `isTerminalWindowsShell` and otherwise uses
   `DEFAULT_CONFIG.terminalWindowsShell`; `TerminalSettings` consumes both terminal fields, while terminal
   spawning remains server-owned — the Terminal, Line width, Chat, shared Layout catalog, Privacy, provider
   controls, and shell quota read sides. Analytics preference and confirmation default independently to false;
   the store never upgrades a preference to confirmation. A selector combines host capability, hydrated
-  configuration, and absent confirmation to drive the one first-launch prompt. Persisted preference priming
+  configuration, and absent confirmation to drive the one first-launch prompt; `selectOnboardingActive`
+holds it (and the interview invitation) while the client-local **`onboardingWizard`** gate
+(`pending | shown | hidden`, set by Welcome through `setOnboardingWizard`) is shown, or still pending on a
+cold-start-shaped store (capable host, not dismissed, no open or recent projects). Project Home reads the same
+selector to hide its Projects rail and pane, so onboarding has the whole window. Persisted preference priming
   and final choice updates converge through `applyConfig`; the dialog's visual draft remains component-local.
   **`chatMessageOrder: ChatMessageOrder`** and **`streamingResponseMovement:
   StreamingResponseMovement`** are instead client-local presentation preferences, hydrated together by

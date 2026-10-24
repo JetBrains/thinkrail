@@ -1,7 +1,5 @@
 import {
-	RiKeyLine as KeyRound,
 	RiLockLine as Lock,
-	RiLoginBoxLine as LogIn,
 	RiLogoutBoxLine as LogOut,
 	RiRefreshLine as RefreshCw,
 } from "@remixicon/react";
@@ -9,99 +7,40 @@ import {
 	type AppConfigUpdate,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
 	type ProviderStatus,
-	type ProviderStatusReport,
 } from "@thinkrail/contracts";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { LoginDialog } from "@/auth";
+import { useCallback, useState } from "react";
 import { AUTH_KIND_LABEL } from "@/chat/modelPicker";
-import { selectLoginBusy, toast, useAppStore } from "@/store";
+import { toast, useAppStore } from "@/store";
 import { errorText, getTransport } from "@/transport";
 import { JetBrainsAiCard } from "./JetBrainsAiCard";
+import { ProviderRow } from "./ProviderRow";
 import { SettingsGroup, SettingsPageContainer } from "./SettingsGroup";
+import { useProviderAuth } from "./useProviderAuth";
 
 const API_KEY_VISIBLE = 8;
 const MAX_REST_NAMES = 5;
 
 export function ProvidersSettings() {
 	const t = useT();
-	const [report, setReport] = useState<ProviderStatusReport | null>(null);
-	const [failed, setFailed] = useState(false);
-	const [refreshing, setRefreshing] = useState(false);
-	const [busyProvider, setBusyProvider] = useState<string | null>(null);
 	const [showAllKeys, setShowAllKeys] = useState(false);
-	const activeLogin = useAppStore((s) => (s.activeLogin?.target ? null : s.activeLogin));
-	const loginBusy = useAppStore(selectLoginBusy);
-	const providerVersion = useAppStore((s) => s.providerVersion);
+	const {
+		report,
+		failed,
+		refreshing,
+		load,
+		startLogin,
+		logout,
+		busyProvider,
+		rowBusy,
+		loginDialog,
+	} = useProviderAuth({ ownsLoginDialog: true });
 	const protocolVersion = useAppStore((s) => s.protocolVersion);
 	const quotaEnabled = useAppStore((s) => s.jbcentralQuotaEnabled);
 	const quotaRefreshSeconds = useAppStore((s) => s.jbcentralQuotaRefreshSeconds);
-	const loadSequence = useRef(0);
-
-	const load = useCallback(async () => {
-		const sequence = ++loadSequence.current;
-		const providerVersion = useAppStore.getState().providerVersion;
-		const isCurrent = () =>
-			sequence === loadSequence.current &&
-			providerVersion === useAppStore.getState().providerVersion;
-		setRefreshing(true);
-		try {
-			const next = await getTransport().request("provider.status", {});
-			if (!isCurrent()) return;
-			setReport(next);
-			setFailed(false);
-		} catch {
-			if (!isCurrent()) return;
-			setFailed(true);
-		} finally {
-			if (sequence === loadSequence.current) setRefreshing(false);
-		}
-	}, []);
-
-	useEffect(() => {
-		void load();
-	}, [load]);
-
-	useEffect(() => {
-		if (providerVersion > 0) void load();
-	}, [providerVersion, load]);
-
-	useEffect(() => {
-		if (activeLogin?.status === "success") void load();
-	}, [activeLogin?.status, load]);
-
-	const startLogin = useCallback(async (providerId: string, type: "oauth" | "api_key") => {
-		if (!useAppStore.getState().reserveLogin()) return;
-		setBusyProvider(providerId);
-		try {
-			const { loginId } = await getTransport().request("provider.loginStart", { providerId, type });
-			useAppStore.getState().beginLogin(loginId, providerId);
-		} catch (err) {
-			toast.error(errorText(err), translate("settings.providers.startFailed"));
-		} finally {
-			useAppStore.getState().finishLoginStart();
-			setBusyProvider(null);
-		}
-	}, []);
-
-	const logout = useCallback(
-		async (providerId: string) => {
-			setBusyProvider(providerId);
-			try {
-				await getTransport().request("provider.logout", { providerId });
-			} catch (err) {
-				toast.error(errorText(err), translate("settings.providers.signOutFailed"));
-				return;
-			} finally {
-				setBusyProvider(null);
-			}
-			await load();
-		},
-		[load],
-	);
 
 	const saveQuotaSetting = useCallback(async (config: AppConfigUpdate) => {
 		try {
@@ -131,9 +70,6 @@ export function ProvidersSettings() {
 	const shownKeys = showAllKeys ? apiKeyRows : apiKeyRows.slice(0, API_KEY_VISIBLE);
 	const hiddenKeyCount = apiKeyRows.length - shownKeys.length;
 	const noInApp = unconfigured.filter((p) => !p.canOAuth && !p.canApiKey);
-	const loginProviderName =
-		providers.find((p) => p.id === activeLogin?.providerId)?.name ?? activeLogin?.providerId ?? "";
-	const rowBusy = (id: string) => busyProvider === id || loginBusy;
 
 	return (
 		<div data-testid="settings-providers" className="flex flex-col gap-24">
@@ -246,29 +182,7 @@ export function ProvidersSettings() {
 				</SettingsPageContainer>
 			)}
 
-			{activeLogin ? (
-				<LoginDialog
-					key={activeLogin.loginId}
-					state={activeLogin}
-					providerName={loginProviderName}
-					onReply={(value) => {
-						getTransport()
-							.request("provider.loginReply", { loginId: activeLogin.loginId, value })
-							.catch((err) => toast.error(errorText(err), t("settings.providers.submitFailed")));
-						useAppStore.getState().clearLoginInput();
-					}}
-					onCancel={() => {
-						getTransport()
-							.request("provider.loginCancel", { loginId: activeLogin.loginId })
-							.catch(() => {});
-						useAppStore.getState().clearLogin();
-					}}
-					onClose={() => {
-						useAppStore.getState().clearLogin();
-						void load();
-					}}
-				/>
-			) : null}
+			{loginDialog}
 		</div>
 	);
 }
@@ -324,58 +238,6 @@ function ConnectedRow({
 					{t("settings.providers.managed")}
 				</span>
 			)}
-		</div>
-	);
-}
-
-function ProviderRow({
-	provider,
-	busy,
-	onSignIn,
-	onApiKey,
-}: {
-	provider: ProviderStatus;
-	busy: boolean;
-	onSignIn: () => void;
-	onApiKey: () => void;
-}) {
-	const t = useT();
-	return (
-		<div
-			data-testid="provider-signin-row"
-			data-provider={provider.id}
-			data-configured="false"
-			className="flex items-center gap-8 border-border-muted border-b py-12"
-		>
-			<span className="min-w-0 flex-1 truncate tr-text-ui text-text-default">{provider.name}</span>
-			<div className="flex shrink-0 items-center gap-4">
-				{provider.canOAuth && (
-					<Button
-						variant="soft"
-						size="sm"
-						data-testid="provider-signin"
-						data-provider={provider.id}
-						disabled={busy}
-						onClick={onSignIn}
-					>
-						<LogIn className="size-14" />
-						{t("settings.providers.signIn")}
-					</Button>
-				)}
-				{provider.canApiKey && (
-					<Button
-						variant="outline"
-						size="sm"
-						data-testid="provider-apikey"
-						data-provider={provider.id}
-						disabled={busy}
-						onClick={onApiKey}
-					>
-						<KeyRound className="size-14" />
-						{t("settings.providers.apiKey")}
-					</Button>
-				)}
-			</div>
 		</div>
 	);
 }

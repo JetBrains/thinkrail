@@ -8,6 +8,7 @@ import type {
 	ChangeReceipt,
 	DelegationRunDetails,
 	DelegationRunStatus,
+	DetectedAccount,
 	DiffStats,
 	EditorInfo,
 	ExistingWorktreeCandidate,
@@ -117,12 +118,13 @@ export type TemplateReadLocation =
 	| { projectId: string; workspaceId?: never }
 	| { workspaceId?: never; projectId?: never };
 
-export const PROTOCOL_VERSION = 90;
+export const PROTOCOL_VERSION = 91;
 export const CLIENT_ERROR_REPORT_PROTOCOL_VERSION = 90;
 export const LOCALES_PROTOCOL_VERSION = 89;
 export const REVIEW_ACTIONS_PROTOCOL_VERSION = 88;
 export const BRANCH_STATUS_PROTOCOL_VERSION = 87;
 export const WORKSPACE_READ_STATE_PROTOCOL_VERSION = 86;
+export const ONBOARDING_PROTOCOL_VERSION = 91;
 export const PROJECT_RENAME_PROTOCOL_VERSION = 85;
 export const MCP_TOOL_GRANTS_PROTOCOL_VERSION = 84;
 export const MCP_PROTOCOL_VERSION = 83;
@@ -201,6 +203,7 @@ export const WS_METHODS = {
 	projectRename: "project.rename",
 	projectInspect: "project.inspect",
 	projectInit: "project.init",
+	projectCreate: "project.create",
 	projectHasSpecs: "project.hasSpecs",
 	projectSetTrust: "project.setTrust",
 	projectAcknowledgeSkills: "project.acknowledgeSkills",
@@ -309,6 +312,7 @@ export const WS_METHODS = {
 	modelSetContextWindow: "model.setContextWindow",
 	modelClampThinking: "model.clampThinking",
 	providerStatus: "provider.status",
+	providerDetect: "provider.detect",
 	providerLoginStart: "provider.loginStart",
 	providerLoginReply: "provider.loginReply",
 	providerLoginCancel: "provider.loginCancel",
@@ -565,6 +569,7 @@ export interface WsMethodMap {
 	"project.rename": { params: { id: string; name: string }; result: Project };
 	"project.inspect": { params: { path: string }; result: ProjectPathStatus };
 	"project.init": { params: { path: string }; result: Project };
+	"project.create": { params: { parentPath: string; name: string }; result: Project };
 	"project.hasSpecs": { params: { projectId: string }; result: { hasSpecs: boolean } };
 	"project.setTrust": {
 		params: { id: string; trusted: boolean; resources?: boolean };
@@ -886,6 +891,7 @@ export interface WsMethodMap {
 		result: ModelContextSetting[];
 	};
 	"provider.status": { params: Record<string, never>; result: ProviderStatusReport };
+	"provider.detect": { params: Record<string, never>; result: { accounts: DetectedAccount[] } };
 	"provider.loginStart": {
 		params: { providerId: string; type?: "oauth" | "api_key" };
 		result: { loginId: string };

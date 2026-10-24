@@ -15,8 +15,10 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@thinkrail/ui/dialog";
+import { cn } from "@thinkrail/ui/utils";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { copyText } from "@/lib";
+import { loginOptionParts, loginPromptMessage, loginSelectMessage } from "./loginOptions";
 import type { LoginState } from "./loginState";
 import { redirectsToLoopback, uiServedFromLoopback } from "./uiOrigin";
 
@@ -85,6 +87,7 @@ export function LoginDialog({
 		state.input?.kind === "prompt" && state.url !== undefined && redirectsToLoopback(state.url);
 	const waitingForBrowser =
 		state.url !== undefined && (state.input?.kind !== "prompt" || pasteFallback);
+	const promptOpen = state.input?.kind === "prompt" && (!pasteFallback || pasteOpen);
 	const progress = waitingForBrowser ? t("auth.login.waitingForBrowser") : state.progress;
 
 	const submitPrompt = () => {
@@ -201,22 +204,39 @@ export function LoginDialog({
 						) : null}
 
 						{state.input?.kind === "select" ? (
-							<div className="flex flex-col gap-4">
+							<div className="flex flex-col gap-8">
 								{state.input.message ? (
-									<p className="text-text-muted tr-text-ui">{state.input.message}</p>
+									<p className="text-text-muted tr-text-ui">
+										{loginSelectMessage(state.input.message)}
+									</p>
 								) : null}
-								{state.input.options.map((option) => (
-									<button
-										key={option.id}
-										type="button"
-										data-testid="login-option"
-										data-option={option.id}
-										onClick={() => onReply(option.id)}
-										className="rounded-sm border border-control-border-default bg-control-bg px-12 py-8 text-left tr-text-ui text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
-									>
-										{option.label}
-									</button>
-								))}
+								<div className="grid gap-8 sm:grid-cols-2">
+									{state.input.options.map((option) => {
+										const { title, detail, recommended } = loginOptionParts(option.label, t);
+										return (
+											<button
+												key={option.id}
+												type="button"
+												data-testid="login-option"
+												data-option={option.id}
+												onClick={() => onReply(option.id)}
+												className={cn(
+													"flex w-full items-start rounded-sm border bg-clip-padding bg-container-workspace-bg p-12 text-left outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary",
+													recommended ? "border-primary-muted" : "border-border-default",
+												)}
+											>
+												<span className="min-w-0 flex-1">
+													<span className="block tr-title-card text-text-default">{title}</span>
+													{detail ? (
+														<span className="mt-2 block text-text-muted tr-text-metadata">
+															{detail}
+														</span>
+													) : null}
+												</span>
+											</button>
+										);
+									})}
+								</div>
 							</div>
 						) : null}
 
@@ -238,27 +258,24 @@ export function LoginDialog({
 										{t("auth.login.pasteHint")}
 									</p>
 								) : state.input.message ? (
-									<p className="text-text-muted tr-text-ui">{state.input.message}</p>
+									<p className="text-text-muted tr-text-ui">
+										{loginPromptMessage(state.input.message)}
+									</p>
 								) : null}
-								<div className="flex gap-8">
-									<input
-										ref={promptRef}
-										data-testid="login-input"
-										autoFocus
-										type={state.input.secret ? "password" : "text"}
-										placeholder={state.input.placeholder ?? ""}
-										onKeyDown={(e) => {
-											if (e.key === "Enter") {
-												e.preventDefault();
-												submitPrompt();
-											}
-										}}
-										className="min-w-0 flex-1 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active"
-									/>
-									<Button data-testid="login-submit" onClick={submitPrompt}>
-										{t("auth.login.submit")}
-									</Button>
-								</div>
+								<input
+									ref={promptRef}
+									data-testid="login-input"
+									autoFocus
+									type={state.input.secret ? "password" : "text"}
+									placeholder={state.input.placeholder ?? ""}
+									onKeyDown={(e) => {
+										if (e.key === "Enter") {
+											e.preventDefault();
+											submitPrompt();
+										}
+									}}
+									className="min-w-0 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-ui text-text-default outline-none placeholder:text-text-muted focus-visible:border-control-border-active"
+								/>
 							</div>
 						) : null}
 
@@ -290,9 +307,16 @@ export function LoginDialog({
 							{t("common.done")}
 						</Button>
 					) : (
-						<Button variant="outline" data-testid="login-cancel" onClick={onCancel}>
-							{t("common.cancel")}
-						</Button>
+						<>
+							<Button variant="outline" data-testid="login-cancel" onClick={onCancel}>
+								{t("common.cancel")}
+							</Button>
+							{promptOpen ? (
+								<Button data-testid="login-submit" onClick={submitPrompt}>
+									{t("auth.login.continue")}
+								</Button>
+							) : null}
+						</>
 					)}
 				</DialogFooter>
 			</DialogContent>

@@ -16,7 +16,7 @@ import {
 } from "@thinkrail/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { type ReactNode, useState } from "react";
-import { remoteBranchPresentation } from "./branchGroups";
+import { hasRemoteBranches, remoteBranchPresentation } from "./branchGroups";
 
 export function BranchPicker({
 	branches,
@@ -44,6 +44,7 @@ export function BranchPicker({
 	const remote = remoteBranchPresentation(branches);
 	const local = branches?.local ?? [];
 	const defaultBranch = branches?.defaultBranch;
+	const localOnly = branches !== null && !hasRemoteBranches(remote);
 
 	const renderItem = (ref: string, label = ref) => (
 		<CommandItem
@@ -84,10 +85,21 @@ export function BranchPicker({
 				<span className="truncate text-text-muted tr-text-metadata">
 					{selected || t("panels.branchPicker.placeholder")}
 				</span>
+				{localOnly ? (
+					<span
+						data-testid="branch-local-only"
+						className="shrink-0 text-text-muted tr-text-metadata"
+					>
+						{t("panels.branchPicker.localOnly")}
+					</span>
+				) : null}
 				<ChevronDown className="size-16 shrink-0 text-text-muted" />
 			</PopoverTrigger>
 			<PopoverContent align="start" container={container} className="w-[320px] p-0">
-				<div className="flex items-center justify-end border-border-muted border-b px-8 py-4">
+				<div className="flex items-center gap-8 border-border-muted border-b py-4 pr-8 pl-12">
+					<span className="min-w-0 flex-1 text-text-muted tr-text-metadata">
+						{localOnly ? t("panels.branchPicker.noRemote") : null}
+					</span>
 					<button
 						type="button"
 						data-testid="branch-refresh"
