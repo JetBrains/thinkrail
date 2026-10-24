@@ -68,7 +68,9 @@ alone suppresses only additional events. `bun run smoke:desktop --analytics [lau
 controlled hidden-host probe against a loopback PostHog collector, never the vendor endpoint. It removes
 inherited CI/test/optional mutes and proxies for human-mode launches, checks first packaged initialization
 emits `app_installed` before `app_started`, checks restart emits only `app_started`, and pins standard
-desktop/release/platform provenance plus one UUID across both (including additional opt-out). It then proves
+desktop/release/platform provenance plus one UUID across both (including additional opt-out). Any
+`$exception` error report a launch happens to emit stays outside that launch sequence but must share the
+UUID, stay personless, and carry only allow-listed plain properties. It then proves
 CI and test mutes independently. No UI action or confirmation is simulated; delivery is checked after normal
 host shutdown. The expected release identity is the shared identity used to build the artifact, so the
 probe needs a release-stamped (keyed) artifact; an unstamped build correctly emits nothing.

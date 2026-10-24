@@ -4,7 +4,7 @@ type: module-design
 status: draft
 title: Shared host UI primitives
 parent: architecture
-depends-on: [module-contracts]
+depends-on: [module-contracts, module-locales]
 references: [web-color, web-spacing, web-typography]
 ---
 
@@ -20,7 +20,8 @@ lazy chunks independent and preserves the shadcn convention. `./utils` exposes `
 only `onThemeSwap`, a DOM MutationObserver subscription to the completed `data-theme` signal, with
 explicit cleanup. It knows nothing about the theme catalog or preferences.
 
-Workspace imports may reach `contracts` only. External dependencies are React, Radix, cmdk,
+Workspace imports may reach `contracts` and `@thinkrail/locales/react` (the shared i18next instance, for
+primitive-owned strings such as the dialog's screen-reader Close and the toast's Dismiss label) only. External dependencies are React, Radix, cmdk,
 react-resizable-panels, Remix Icon, class-variance-authority, clsx and tailwind-merge. Host internals,
 pi, app stores, transport and theme runtime are forbidden. Tokens remain global CSS variables generated
 under `apps/web/src/styles`; utilities follow [[web-color]], [[web-spacing]] and [[web-typography]].
@@ -29,8 +30,12 @@ The app's Tailwind sources and adoption guards include this package and extensio
 ## Primitive invariants
 
 The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-menu`, `menu-styles`,
-`popover`, `command` (cmdk combobox body), `textarea`, `tooltip`, `resizable`, and `toast`, alongside
-`utils` and `theme`. `menu-styles` is shared by the menu primitives and custom app menu rows.
+`popover`, `command` (cmdk combobox body), `textarea`, `tooltip`, `resizable`, `toast`, `toggle-segment`
+(the slim header toggle: active segment on `control-bg-selected` + `text-default`, `data-active` /
+`aria-pressed`), and `skeleton` (`SkeletonRows` / `LoadingRegion`, the one loading placeholder; its usage rules
+live in the web components spec), alongside `utils` and `theme`. `menu-styles` is shared by the menu
+primitives and custom app menu rows. `toggle-segment` and `skeleton` moved here from the app when the
+resource renderers became a package, because both the app and [[module-resource-renderers]] use them.
 
 - Button variants are `default`/`destructive`/`outline`/`ghost`/`soft`; destructive confirms irreversible
   actions, and `soft` (primary-tinted surface + primary text) marks a prominent secondary action such as

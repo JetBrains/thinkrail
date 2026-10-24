@@ -1,6 +1,6 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
 	openAppFresh,
@@ -10,8 +10,19 @@ import {
 } from "./fixtures/app";
 import { git } from "./fixtures/git";
 import { E2E_FIXTURE_REPO, E2E_PLAIN_DIR } from "./fixtures/paths";
+import { E2eWire } from "./fixtures/wire";
 
 const FIXTURE_SPECS = ["SPEC.md", join("module-a", "SPEC.md")];
+
+async function hostReportsConnectedProvider(page: Page): Promise<boolean> {
+	const wire = await E2eWire.connect(Number(new URL(page.url()).port));
+	try {
+		const report = await wire.request("provider.status", {});
+		return report.providers.some((provider) => provider.configured);
+	} finally {
+		wire.close();
+	}
+}
 
 test("opens a clean ThinkRail with no projects imported", async ({ page }) => {
 	await openAppFresh(page);
@@ -35,13 +46,13 @@ test("the Welcome provider warning only shows when no provider is connected, and
 	await openAppFresh(page);
 
 	const banner = page.getByTestId("welcome-provider-warning");
-	if (await banner.isVisible()) {
+	if (await hostReportsConnectedProvider(page)) {
+		await expect(banner).toHaveCount(0);
+	} else {
 		await expect(banner).toContainText("No model provider connected");
 		await page.getByTestId("welcome-connect-provider").click();
 		await expect(page.getByTestId("settings-dialog")).toBeVisible();
 		await expect(page.getByTestId("settings-providers")).toBeVisible();
-	} else {
-		await expect(banner).toHaveCount(0);
 	}
 });
 

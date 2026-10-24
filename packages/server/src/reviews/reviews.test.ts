@@ -33,6 +33,7 @@ import {
 	reviewSessionKey,
 	rollbackSend,
 	sendableComments,
+	setReviewGuide,
 	setReviewPublisher,
 	updateComment,
 } from "./reviews";
@@ -725,4 +726,49 @@ test("markFileDone: only a fully-resolved file; a new comment re-opens it", asyn
 	expect((await getReviewSnapshot(WS_ID)).review.doneFiles).toEqual(["a.ts"]);
 	await addInline("more to say");
 	expect((await getReviewSnapshot(WS_ID)).review.doneFiles).toEqual([]);
+});
+
+test("an anchor naming a file by absolute or non-POSIX spelling is stored worktree-relative", async () => {
+	mkdirSync(join(worktree, "src"));
+	writeFileSync(join(worktree, "src", "b.ts"), "const b = 1;\n");
+	writeFileSync(join(worktree, "..env"), "KEY=1\n");
+	const finding = (path: string) =>
+		addComment({
+			workspaceId: WS_ID,
+			kind: "inline",
+			author: "agent",
+			anchor: {
+				path,
+				side: "worktree",
+				selectors: [{ kind: "lineRange", startLine: 1, endLine: 1 }],
+			},
+			body: "finding",
+		});
+
+	for (const path of [join(worktree, "src", "b.ts"), join("src", "b.ts"), "./src/../src/b.ts"]) {
+		expect((await finding(path)).anchor?.path).toBe("src/b.ts");
+	}
+	expect(anchorProblem(WS_ID, "..env", 1)).toBeNull();
+	expect((await finding("..env")).anchor?.path).toBe("..env");
+	await expect(finding(join(worktree, "..", "outside.ts"))).rejects.toThrow(
+		"Path escapes the worktree",
+	);
+});
+
+test("a reading order cites files worktree-relative and keeps an outside path as written", async () => {
+	await setReviewGuide(WS_ID, {
+		summary: "",
+		readingOrder: [
+			{ path: join(worktree, "a.ts"), why: "start here" },
+			{ path: "../elsewhere.ts", why: "not ours" },
+		],
+		verdict: "approve",
+		todoId: "t",
+		sessionId: "s",
+		reviewedSha: "0",
+		at: 1,
+	});
+	expect(
+		(await getReviewSnapshot(WS_ID)).review.guide?.readingOrder.map((step) => step.path),
+	).toEqual(["a.ts", "../elsewhere.ts"]);
 });

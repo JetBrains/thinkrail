@@ -8,10 +8,12 @@ import {
 	fileThreads,
 	groupComments,
 	lineRef,
-	outdatedReason,
 	reviewFileSurface,
+	reviewFlagForPaths,
 	reviewFlags,
+	sameThreads,
 	statusLabel,
+	tabReviewPaths,
 } from "./reviewModel";
 
 function comment(over: Partial<ReviewComment>): ReviewComment {
@@ -208,30 +210,34 @@ test("fileSummaries: a fully-resolved file stays listed until marked done; a new
 	expect(fileSummaries([overall])).toEqual([{ path: null, total: 0, drafts: 0, resolved: 1 }]);
 });
 
-test("an outdated anchor explains itself by what it could have re-found", () => {
-	const anchor = (
-		selectors: ReviewComment["anchor"] extends infer A
-			? A extends { selectors: infer S }
-				? S
-				: never
-			: never,
-	) => ({
-		path: "a.png",
-		side: "modified" as const,
-		contentHash: "h",
-		selectors,
+test("a file comparison is reviewed on both files, and its flag is the strongest of them", () => {
+	expect(tabReviewPaths({ path: "a.html" })).toEqual(["a.html"]);
+	expect(tabReviewPaths({ path: "a.html", before: "b.html" })).toEqual(["a.html", "b.html"]);
+	expect(tabReviewPaths({ path: "a.html", before: "a.html" })).toEqual(["a.html"]);
+	const flags = new Map([
+		["a.html", "sent" as const],
+		["b.html", "draft" as const],
+	]);
+	expect(reviewFlagForPaths(flags, ["a.html", "b.html"])).toBe("draft");
+	expect(reviewFlagForPaths(flags, ["a.html"])).toBe("sent");
+	expect(reviewFlagForPaths(flags, ["c.html"])).toBeNull();
+});
+
+test("threads are the same when every thread matches, so an unrelated comment keeps a file's array", () => {
+	const thread = (id: string, body = "note") => ({
+		id,
+		anchor: {
+			path: "a.ts",
+			side: "worktree" as const,
+			contentHash: "h",
+			selectors: [{ kind: "lineRange" as const, startLine: 1, endLine: 1 }],
+		},
+		body,
+		status: "draft" as const,
+		anchorState: "anchored" as const,
 	});
-	expect(
-		outdatedReason(
-			anchor([
-				{ kind: "textQuote", exact: "x" },
-				{ kind: "lineRange", startLine: 1, endLine: 1 },
-			]),
-		),
-	).toMatch(/changed or is gone.*text was not found again/);
-	expect(outdatedReason(anchor([{ kind: "region", x: 0, y: 0, width: 1, height: 1 }]))).toMatch(
-		/bytes changed or it is gone.*cannot be re-verified/,
-	);
-	expect(outdatedReason(anchor([]))).toMatch(/is gone/);
-	expect(outdatedReason(null)).toMatch(/is gone/);
+	expect(sameThreads([], [])).toBe(true);
+	expect(sameThreads([thread("1")], [thread("1")])).toBe(true);
+	expect(sameThreads([thread("1")], [thread("1", "edited")])).toBe(false);
+	expect(sameThreads([thread("1")], [thread("1"), thread("2")])).toBe(false);
 });

@@ -1,5 +1,18 @@
 import type { NativeCommand } from "@thinkrail/contracts";
+import { DESKTOP_MENU_KEYS } from "@thinkrail/locales";
 import type { ApplicationMenuItemConfig } from "electrobun/main";
+import { readLabels } from "./nativeLabels";
+
+const MENU_LABEL_KEYS = DESKTOP_MENU_KEYS;
+const MAX_MENU_LABEL_LENGTH = 80;
+
+export type DesktopMenuLabels = Readonly<Record<(typeof MENU_LABEL_KEYS)[number], string>>;
+
+export function readMenuLabels(raw: unknown): DesktopMenuLabels {
+	return readLabels(MENU_LABEL_KEYS, MAX_MENU_LABEL_LENGTH, raw);
+}
+
+export const DEFAULT_MENU_LABELS: DesktopMenuLabels = readMenuLabels({});
 
 export const QUIT_SHORTCUT_ACTION = "quit-shortcut";
 const CLOSE_ITEM_COMMAND: NativeCommand = "close-item";
@@ -13,9 +26,9 @@ type ApplicationMenuApi = {
 	setApplicationMenu(menu: ApplicationMenuItemConfig[]): void;
 };
 
-function editMenu(): ApplicationMenuItemConfig {
+function editMenu(labels: DesktopMenuLabels): ApplicationMenuItemConfig {
 	return {
-		label: "Edit",
+		label: labels["desktop.menu.edit"],
 		submenu: [
 			{ role: "undo" },
 			{ role: "redo" },
@@ -32,34 +45,43 @@ function editMenu(): ApplicationMenuItemConfig {
 
 export function desktopApplicationMenu(
 	platform: NodeJS.Platform,
+	labels: DesktopMenuLabels = DEFAULT_MENU_LABELS,
 ): ApplicationMenuItemConfig[] | null {
-	if (platform === "win32") return [editMenu()];
+	if (platform === "win32") return [editMenu(labels)];
 	if (platform !== "darwin") return null;
 	return [
 		{
 			submenu: [
 				{ role: "about" },
 				{ type: "separator" },
-				{ label: "Settings…", action: OPEN_SETTINGS_COMMAND, accelerator: "CommandOrControl+," },
+				{
+					label: labels["desktop.menu.settings"],
+					action: OPEN_SETTINGS_COMMAND,
+					accelerator: "CommandOrControl+,",
+				},
 				{ type: "separator" },
 				{ role: "hide", accelerator: "CommandOrControl+H" },
 				{ role: "hideOthers", accelerator: "CommandOrControl+Alt+H" },
 				{ role: "showAll" },
 				{ type: "separator" },
 				{
-					label: "Quit ThinkRail",
+					label: labels["desktop.menu.quit"],
 					action: QUIT_SHORTCUT_ACTION,
 					accelerator: "CommandOrControl+Q",
 				},
 			],
 		},
-		editMenu(),
+		editMenu(labels),
 		{
-			label: "Window",
+			label: labels["desktop.menu.window"],
 			submenu: [
 				{ role: "minimize", accelerator: "CommandOrControl+M" },
 				{ role: "zoom" },
-				{ label: "Close", action: CLOSE_ITEM_COMMAND, accelerator: "CommandOrControl+W" },
+				{
+					label: labels["desktop.menu.close"],
+					action: CLOSE_ITEM_COMMAND,
+					accelerator: "CommandOrControl+W",
+				},
 				{ type: "separator" },
 				{ role: "bringAllToFront" },
 			],
@@ -70,8 +92,9 @@ export function desktopApplicationMenu(
 export function installDesktopApplicationMenu(
 	applicationMenu: ApplicationMenuApi,
 	platform: NodeJS.Platform,
+	labels: DesktopMenuLabels = DEFAULT_MENU_LABELS,
 ): boolean {
-	const menu = desktopApplicationMenu(platform);
+	const menu = desktopApplicationMenu(platform, labels);
 	if (!menu) return false;
 	applicationMenu.setApplicationMenu(menu);
 	return true;

@@ -1,5 +1,8 @@
 import { RiArrowDownLine as ArrowDown, RiArrowUpLine as ArrowUp } from "@remixicon/react";
 import type { AskUserQuestionResult, GitDiffScope, TurnChangeSet } from "@thinkrail/contracts";
+import type { MessageKey } from "@thinkrail/locales";
+import { t as translate, useT } from "@thinkrail/locales/react";
+import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
 import { useModalLayerOpen } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
 import {
@@ -148,6 +151,11 @@ export type ChatTranscriptHandle = {
 	cancelImmediateTurn: (streaming: boolean) => void;
 };
 
+const SCROLL_BUTTON_LABELS = {
+	"Follow response": "chat.transcript.followResponse",
+	Latest: "chat.transcript.latest",
+} as const satisfies Record<"Follow response" | "Latest", MessageKey>;
+
 /**
  * The churn-isolated transcript child: owns the per-delta transcript rendering (the Virtuoso list, scroll
  * control, completion-ack, location reveal, flash, ask-focus scope) and the streaming-runtime subscription.
@@ -192,6 +200,7 @@ const ChatTranscript = forwardRef<
 	},
 	ref,
 ) {
+	const t = useT();
 	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
 	// Subscribe only to the runtime fields the transcript renders from, so composer keystrokes
 	// (`draft`), stats/model/extUi churn, etc. no longer re-render the transcript subtree.
@@ -434,7 +443,7 @@ const ChatTranscript = forwardRef<
 				: currentTurns.findLast((t) => turnAnchorText(t).includes(prefix));
 		const index = target ? rowIndexForTurn(currentRows, target.id) : -1;
 		if (index === -1) {
-			toast.error("couldn't locate the message — the session may have changed");
+			toast.error(translate("chat.transcript.locateFailed"));
 			useAppStore.getState().clearChatLocation();
 			return;
 		}
@@ -455,8 +464,7 @@ const ChatTranscript = forwardRef<
 				activeChatLocationReveal.current = null;
 				if (useAppStore.getState().chatLocationRequest !== chatLocationRequest) return;
 				if (result === "found") setFlashRowId(rowId);
-				else if (result === "missing")
-					toast.error("couldn't locate the message — the session may have changed");
+				else if (result === "missing") toast.error(translate("chat.transcript.locateFailed"));
 				useAppStore.getState().clearChatLocation();
 			},
 		);
@@ -494,7 +502,9 @@ const ChatTranscript = forwardRef<
 	);
 	const onReveal = useCallback(
 		(tool: "specs" | "changes") => {
-			useAppStore.getState().requestToolView(workspaceId, tool);
+			const store = useAppStore.getState();
+			if (tool === "changes") store.revealChanges(workspaceId);
+			else store.requestToolView(workspaceId, tool);
 		},
 		[workspaceId],
 	);
@@ -539,7 +549,7 @@ const ChatTranscript = forwardRef<
 	}, [pendingExtUiId]);
 	const extUiAnnouncement =
 		pendingExtUiRequest && announcedExtUiId === pendingExtUiRequest.id
-			? `Your input is needed: ${pendingExtUiRequest.title.split("\n")[0]}`
+			? t("chat.transcript.inputNeeded", { title: pendingExtUiRequest.title.split("\n")[0] })
 			: "";
 	const anchorToolCallId = pendingExtUiRequest?.toolCallId;
 	const promptOnToolCard =
@@ -581,6 +591,7 @@ const ChatTranscript = forwardRef<
 			sessionId,
 		],
 	);
+	const resourceScope = useMemo(() => ({ workspaceId, sessionId }), [workspaceId, sessionId]);
 
 	return (
 		<ChatActionsContext.Provider value={chatActions}>
@@ -604,76 +615,80 @@ const ChatTranscript = forwardRef<
 						>
 							{/* One provider above the list: its value is the single transcript-wide callback, so a
 						    per-row provider would only re-commit that identical value for every visible row. */}
-							<FoldGeometryProvider onBeforeChange={prepareFoldChange}>
-								<Virtuoso<ChatRow, ChatListContext>
-									key={chatMessageOrder}
-									ref={virtuosoRef}
-									data={rows}
-									heightEstimates={rowHeightEstimates}
-									firstItemIndex={firstItemIndex}
-									increaseViewportBy={CHAT_VIEWPORT_INCREASE}
-									minOverscanItemCount={CHAT_MIN_OVERSCAN_ITEMS}
-									skipAnimationFrameInResizeObserver
-									scrollerRef={handleScrollerRef}
-									context={listContext}
-									components={CHAT_LIST_COMPONENTS}
-									className={cn(
-										"h-full min-h-0 overflow-x-hidden [overflow-anchor:none]",
-										chatLineWidthBounded
-											? "w-full"
-											: "w-[var(--chat-transcript-width)] min-w-full max-w-none",
-									)}
-									followOutput={followOutput}
-									rangeChanged={({ startIndex }) => {
-										const localIndex = startIndex - firstItemIndex;
-										visibleAnchorRowId.current = rows[localIndex]?.id ?? null;
-									}}
-									totalListHeightChanged={handleContentHeight}
-									computeItemKey={(_, row) => row.id}
-									itemContent={(index, row) => (
-										<div
-											ref={
-												row.id === completionAnchorRowId && completionId
-													? (element) => {
-															if (element && !historyOpen) {
-																useAppStore
-																	.getState()
-																	.noteRenderedCompletion(sessionId, completionId);
+							<ResourceScopeProvider value={resourceScope}>
+								<FoldGeometryProvider onBeforeChange={prepareFoldChange}>
+									<Virtuoso<ChatRow, ChatListContext>
+										key={chatMessageOrder}
+										ref={virtuosoRef}
+										data={rows}
+										heightEstimates={rowHeightEstimates}
+										firstItemIndex={firstItemIndex}
+										increaseViewportBy={CHAT_VIEWPORT_INCREASE}
+										minOverscanItemCount={CHAT_MIN_OVERSCAN_ITEMS}
+										skipAnimationFrameInResizeObserver
+										scrollerRef={handleScrollerRef}
+										context={listContext}
+										components={CHAT_LIST_COMPONENTS}
+										className={cn(
+											"h-full min-h-0 overflow-x-hidden [overflow-anchor:none]",
+											chatLineWidthBounded
+												? "w-full"
+												: "w-[var(--chat-transcript-width)] min-w-full max-w-none",
+										)}
+										followOutput={followOutput}
+										rangeChanged={({ startIndex }) => {
+											const localIndex = startIndex - firstItemIndex;
+											visibleAnchorRowId.current = rows[localIndex]?.id ?? null;
+										}}
+										totalListHeightChanged={handleContentHeight}
+										computeItemKey={(_, row) => row.id}
+										itemContent={(index, row) => (
+											<div
+												ref={
+													row.id === completionAnchorRowId && completionId
+														? (element) => {
+																if (element && !historyOpen) {
+																	useAppStore
+																		.getState()
+																		.noteRenderedCompletion(sessionId, completionId);
+																}
 															}
-														}
-													: undefined
-											}
-											data-testid="chat-row"
-											data-chat-row-id={row.id}
-											data-chat-row-index={index - firstItemIndex}
-											data-flash={row.id === flashRowId || undefined}
-											className={cn(
-												measureClassName,
-												"rounded-sm px-chat-gutter py-4 transition-colors data-[flash]:bg-primary-subtle",
-											)}
-										>
-											<ChatTurnView
-												row={row}
-												workspaceRoot={workspaceRoot}
-												onOpenFile={onOpenFile}
-												agentResponded={messageActions.agentRespondedByUserId.get(row.id) ?? false}
-												isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
-												onOpenSpec={onOpenSpec}
-												onOpenChange={onOpenChange}
-												onReveal={onReveal}
-												onReviewTurn={onReviewTurn}
-												onTryAgain={onTryAgain}
-												stillRunning={row.id === latestDividerRowId ? stillRunning : undefined}
-											/>
-											{chatMessageOrder === "newest-first" &&
-											runwayActive &&
-											index === firstItemIndex ? (
-												<div ref={streamEdgeRef} data-testid="chat-stream-edge" className="h-0" />
-											) : null}
-										</div>
-									)}
-								/>
-							</FoldGeometryProvider>
+														: undefined
+												}
+												data-testid="chat-row"
+												data-chat-row-id={row.id}
+												data-chat-row-index={index - firstItemIndex}
+												data-flash={row.id === flashRowId || undefined}
+												className={cn(
+													measureClassName,
+													"rounded-sm px-chat-gutter py-4 transition-colors data-[flash]:bg-primary-subtle",
+												)}
+											>
+												<ChatTurnView
+													row={row}
+													workspaceRoot={workspaceRoot}
+													onOpenFile={onOpenFile}
+													agentResponded={
+														messageActions.agentRespondedByUserId.get(row.id) ?? false
+													}
+													isFinalAnswer={messageActions.finalAnswerRowIds.has(row.id)}
+													onOpenSpec={onOpenSpec}
+													onOpenChange={onOpenChange}
+													onReveal={onReveal}
+													onReviewTurn={onReviewTurn}
+													onTryAgain={onTryAgain}
+													stillRunning={row.id === latestDividerRowId ? stillRunning : undefined}
+												/>
+												{chatMessageOrder === "newest-first" &&
+												runwayActive &&
+												index === firstItemIndex ? (
+													<div ref={streamEdgeRef} data-testid="chat-stream-edge" className="h-0" />
+												) : null}
+											</div>
+										)}
+									/>
+								</FoldGeometryProvider>
+							</ResourceScopeProvider>
 							<ActivityBreadcrumbTrail
 								scroller={scrollerElement}
 								measureClassName={measureClassName}
@@ -702,7 +717,7 @@ const ChatTranscript = forwardRef<
 								) : (
 									<ArrowDown className="size-12" />
 								)}
-								{scrollButtonLabel}
+								{scrollButtonLabel ? t(SCROLL_BUTTON_LABELS[scrollButtonLabel]) : null}
 							</button>
 						) : null}
 						<span

@@ -299,27 +299,32 @@ test("plain ArrowUp/ArrowDown recall steps through this chat's own prior prompts
 	await expect(page.getByTestId("history-overlay")).toBeVisible();
 });
 
-test("a recall step immediately followed by a full-value replace never doubles the value, even under CPU contention", async ({
+test("a recall step immediately followed by a full-value replace never doubles the value, even when the step's next frame lands mid-replace", async ({
 	page,
 }) => {
-	test.setTimeout(60_000);
+	type HeldFrames = Window & { releaseHeldFrames?: () => Promise<void> };
 	const input = await openSeededClosedChat(page, [
 		{ role: "user", text: "write a test for the jitter", timestamp: 1_700_500_000_000 },
 		{ role: "assistant", text: "Added a test.", timestamp: 1_700_500_001_000 },
 	]);
 	await expect(input).toHaveValue("");
 
-	const client = await page.context().newCDPSession(page);
-	await client.send("Emulation.setCPUThrottlingRate", { rate: 4 });
-
-	for (let i = 0; i < 200; i++) {
-		await input.press("ArrowUp");
-		await expect(input).toHaveValue("write a test for the jitter");
-		const replacement = `edit ${i}`;
-		await input.fill(replacement);
-		expect(await input.inputValue()).toBe(replacement);
-		await input.fill("");
-	}
+	await page.evaluate(() => {
+		const held: FrameRequestCallback[] = [];
+		const request = window.requestAnimationFrame.bind(window);
+		window.requestAnimationFrame = (callback) => held.push(callback);
+		(window as HeldFrames).releaseHeldFrames = () => {
+			window.requestAnimationFrame = request;
+			for (const callback of held.splice(0)) request(callback);
+			return new Promise((resolve) => request(() => resolve()));
+		};
+	});
+	await input.press("ArrowUp");
+	await expect(input).toHaveValue("write a test for the jitter");
+	await input.selectText();
+	await page.evaluate(() => (window as HeldFrames).releaseHeldFrames?.());
+	await page.keyboard.insertText("edit");
+	expect(await input.inputValue()).toBe("edit");
 });
 
 test("a prompt repeated earlier in the chat recalls at its most recent position, deduped to one entry", async ({

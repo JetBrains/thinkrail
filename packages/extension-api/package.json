@@ -13,7 +13,8 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@thinkrail/contracts": "workspace:*"
+		"@thinkrail/contracts": "workspace:*",
+		"@thinkrail/locales": "workspace:*"
 	},
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": "catalog:",

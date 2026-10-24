@@ -70,7 +70,7 @@ let dataDir: string;
 const savedDataDir = process.env.THINKRAIL_DATA_DIR;
 
 beforeEach(() => {
-	dataDir = mkdtempSync(join(tmpdir(), "trpi-proj-test-"));
+	dataDir = realpathSync.native(mkdtempSync(join(tmpdir(), "trpi-proj-test-")));
 	process.env.THINKRAIL_DATA_DIR = dataDir;
 });
 
@@ -179,6 +179,27 @@ test("host-home paths resolve consistently across inspect, open, and init", () =
 		else process.env.USERPROFILE = savedUserProfile;
 	}
 });
+
+test.skipIf(process.platform !== "win32")(
+	"on Windows a home path may use the native separator",
+	() => {
+		const home = join(dataDir, "host-home");
+		const repo = join(home, "repo");
+		makeRepo(repo);
+		const savedUserProfile = process.env.USERPROFILE;
+		process.env.USERPROFILE = home;
+		try {
+			expect(inspectProjectPath("~\\repo")).toEqual({ kind: "repo" });
+			expect(openProject("~\\repo").path).toBe(realpathSync(repo));
+			expect(() => openProject("relative\\project")).toThrow(
+				"must be absolute or start with ~/ or ~\\",
+			);
+		} finally {
+			if (savedUserProfile === undefined) delete process.env.USERPROFILE;
+			else process.env.USERPROFILE = savedUserProfile;
+		}
+	},
+);
 
 test("relative project paths are rejected instead of using the host process cwd", () => {
 	for (const operation of [openProject, inspectProjectPath, initProject]) {

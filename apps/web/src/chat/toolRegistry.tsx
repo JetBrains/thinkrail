@@ -7,6 +7,7 @@ import {
 	type ToolRenderProps,
 	toolValueText,
 } from "@thinkrail/extension-api/web";
+import type { Translator } from "@thinkrail/locales/react";
 import type { ReactNode } from "react";
 
 interface ToolRegistration extends ToolRegistrationOptions {
@@ -50,8 +51,8 @@ export function getToolRenderer(toolName: string): ToolRenderer {
 	return resolveRegistration(toolName)?.renderer ?? DefaultToolRenderer;
 }
 
-export function getToolSummary(toolName: string, props: ToolRenderProps): string {
-	return resolveRegistration(toolName)?.summary?.(props) ?? "";
+export function getToolSummary(t: Translator, toolName: string, props: ToolRenderProps): string {
+	return resolveRegistration(toolName)?.summary?.(props, t) ?? "";
 }
 
 export function getToolChrome(toolName: string): ToolChrome {

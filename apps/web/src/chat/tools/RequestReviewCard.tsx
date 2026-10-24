@@ -4,6 +4,7 @@ import {
 } from "@remixicon/react";
 import { isPlanReviewResult, type PlanReviewResult } from "@thinkrail/contracts";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
+import { type Translator, useT } from "@thinkrail/locales/react";
 import type { ReactNode } from "react";
 import { ReviewPackageComments } from "../ReviewPackageComments";
 import { reviewFixCommentsToItems } from "../reviewPackage";
@@ -19,25 +20,30 @@ export function readPlanReview(raw: unknown): PlanReviewResult | null {
 	return isPlanReviewResult(raw) ? raw : null;
 }
 
-export function requestReviewSummary({ result }: ToolRenderProps): string {
+export function requestReviewSummary({ result }: ToolRenderProps, t: Translator): string {
 	const review = readPlanReview(result);
 	if (!review) return "";
 	if (review.verdict === "approve") {
 		const open = review.blockedByOpenFindings ?? 0;
 		return open > 0
-			? `Approved “${review.itemTitle}” · ${open} still open`
-			: `Approved “${review.itemTitle}”`;
+			? t("tools.requestReview.summaryApprovedOpen", { title: review.itemTitle, open })
+			: t("tools.requestReview.summaryApproved", { title: review.itemTitle });
 	}
-	const n = review.findings.length;
-	return `Changes requested on “${review.itemTitle}” · ${n} ${n === 1 ? "finding" : "findings"}`;
+	return t("tools.requestReview.summaryChanges", {
+		title: review.itemTitle,
+		count: review.findings.length,
+	});
 }
 
 export function RequestReviewCard({ toolCallId, result, status }: ToolRenderProps): ReactNode {
+	const t = useT();
 	const review = readPlanReview(result);
 	if (!review) {
 		return (
 			<span className="tr-text-ui text-text-muted">
-				{status === "running" ? "Reviewing the change set…" : "No review verdict."}
+				{status === "running"
+					? t("tools.requestReview.running")
+					: t("tools.requestReview.noVerdict")}
 			</span>
 		);
 	}
@@ -54,12 +60,16 @@ export function RequestReviewCard({ toolCallId, result, status }: ToolRenderProp
 				)}
 				<div className="min-w-0 flex-1">
 					<span data-testid="request-review-verdict" className="block text-text-default">
-						{review.verdict === "approve" ? "Approved" : "Changes requested"}
-						<span className="text-text-muted"> — “{review.itemTitle}”</span>
+						{review.verdict === "approve"
+							? t("tools.requestReview.approved")
+							: t("tools.requestReview.changesRequested")}
+						<span className="text-text-muted">
+							{t("tools.requestReview.itemTitle", { title: review.itemTitle })}
+						</span>
 						{blocked > 0 ? (
 							<span data-testid="request-review-blocked" className="text-feedback-warning">
 								{" "}
-								· not settled, {blocked} finding{blocked === 1 ? "" : "s"} still open
+								{t("tools.requestReview.blocked", { count: blocked })}
 							</span>
 						) : null}
 					</span>

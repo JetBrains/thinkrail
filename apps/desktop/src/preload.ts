@@ -1,4 +1,5 @@
 import type {
+	NativeMenuBridge,
 	NativeNotificationBridge,
 	NativeNotificationInput,
 	NativeUpdateBridge,
@@ -81,6 +82,7 @@ const updateBridge: NativeUpdateBridge = Object.freeze({
 	checkForUpdates: () => rpc.request.checkForUpdates(),
 	downloadUpdate: () => rpc.request.downloadUpdate(),
 	restartToUpdate: () => rpc.request.restartToUpdate(),
+	dismissInstallResult: () => rpc.request.dismissInstallResult(),
 	subscribe: (listener: (state: NativeUpdateState) => void) => {
 		updateListeners.add(listener);
 		return () => updateListeners.delete(listener);
@@ -128,6 +130,17 @@ if (readWindowChromeFlag(initialWindowChrome, "windowControls") === true) {
 		enumerable: false,
 	});
 }
+const menuBridge: NativeMenuBridge = Object.freeze({
+	setLabels: (labels: Readonly<Record<string, string>>) => {
+		electroview.rpc?.send.menuLabelsChanged({ labels: { ...labels } });
+	},
+});
+Object.defineProperty(globals, "__THINKRAIL_NATIVE_MENU__", {
+	value: menuBridge,
+	writable: false,
+	configurable: false,
+	enumerable: false,
+});
 const injectedPreferences = takePreloadGlobal(INITIAL_DESKTOP_PREFERENCES_GLOBAL);
 const preferences = new Map<string, string>();
 if (typeof injectedPreferences === "object" && injectedPreferences !== null) {

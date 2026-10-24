@@ -14,7 +14,7 @@ export interface DesktopQuitCoordinatorDependencies {
 export interface DesktopQuitCoordinator {
 	quit(): Promise<void>;
 	handleBeforeQuit(event: DesktopBeforeQuitEvent): void;
-	restartToUpdate(): Promise<void>;
+	restartToUpdate(): Promise<boolean>;
 }
 
 export function createDesktopQuitCoordinator(
@@ -86,25 +86,29 @@ export function createDesktopQuitCoordinator(
 		},
 		restartToUpdate: async () => {
 			completionIntent = "update";
-			if (initialApply) return initialApply;
-			const operation = Promise.resolve().then(dependencies.applyUpdate);
-			initialApply = operation;
-			void operation.then(
-				() => {
-					if (!shutdownPromise && initialApply === operation) {
-						initialApply = undefined;
-						completionIntent = "quit";
-					}
-				},
-				(error) => {
-					dependencies.reportLifecycleError(error);
-					if (!shutdownPromise && initialApply === operation) {
-						initialApply = undefined;
-						completionIntent = "quit";
-					}
-				},
-			);
-			return operation;
+			let operation = initialApply;
+			if (!operation) {
+				const started = Promise.resolve().then(dependencies.applyUpdate);
+				operation = started;
+				initialApply = started;
+				void started.then(
+					() => {
+						if (!shutdownPromise && initialApply === started) {
+							initialApply = undefined;
+							completionIntent = "quit";
+						}
+					},
+					(error) => {
+						dependencies.reportLifecycleError(error);
+						if (!shutdownPromise && initialApply === started) {
+							initialApply = undefined;
+							completionIntent = "quit";
+						}
+					},
+				);
+			}
+			await operation;
+			return shutdownPromise !== undefined;
 		},
 	};
 }

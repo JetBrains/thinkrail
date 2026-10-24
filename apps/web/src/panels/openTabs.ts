@@ -1,6 +1,7 @@
 import type { GitDiffScope } from "@thinkrail/contracts";
 import {
 	DOUBLE_CLICK_SETTLE_MS,
+	fileName,
 	layoutResourceIdentity,
 	projectRelativePath,
 	tupleKey,
@@ -10,6 +11,7 @@ import {
 	type ChangesTab,
 	createChangesTab,
 	type EditorTab,
+	type FileComparisonTab,
 	isCenterNavigationCurrent,
 	layoutOpenOptionsForNavigation,
 	selectDiffTabTargetRef,
@@ -20,7 +22,7 @@ import {
 	useAppStore,
 } from "../store";
 import { getTransport } from "../transport";
-import { changesTabId, changesTabName, diffTabId, diffTabName } from "./changesModel";
+import { changesTabId, diffTabId } from "./changesModel";
 
 function baseName(path: string): string {
 	return path.split("/").pop() || path;
@@ -197,7 +199,7 @@ export function openDiffInTab(
 		layoutResourceIdentity({
 			kind: "diff",
 			id,
-			name: diffTabName(scope, canonicalPath),
+			name: fileName(canonicalPath),
 			path: canonicalPath,
 			scope,
 		}),
@@ -209,7 +211,7 @@ export function openDiffInTab(
 			workspaceId,
 			path: canonicalPath,
 			scope,
-			name: diffTabName(scope, canonicalPath),
+			name: fileName(canonicalPath),
 			original,
 			modified,
 			meta,
@@ -219,6 +221,43 @@ export function openDiffInTab(
 		}),
 		requestedNavigation,
 		options.claimPreview,
+	);
+}
+
+export function fileComparisonTab(
+	workspaceId: string,
+	before: string,
+	path: string,
+): FileComparisonTab {
+	return {
+		kind: "diff",
+		id: tupleKey("compare", workspaceId, before, path),
+		workspaceId,
+		name: `${baseName(before)} → ${baseName(path)}`,
+		path,
+		before,
+	};
+}
+
+export function openFileComparisonInTab(
+	workspaceId: string,
+	before: string,
+	path: string,
+	intent: TabIntent,
+): Promise<void> {
+	const worktree = selectWorkspaceById(useAppStore.getState(), workspaceId)?.worktreePath;
+	const tab = fileComparisonTab(
+		workspaceId,
+		projectRelativePath(before, worktree),
+		projectRelativePath(path, worktree),
+	);
+	return openReadTab(
+		workspaceId,
+		tab.id,
+		layoutResourceIdentity(tab),
+		intent,
+		() => Promise.resolve(null),
+		(_payload, loadedTick) => ({ ...tab, loadedTick }),
 	);
 }
 
@@ -250,7 +289,7 @@ export async function openChangesTab(
 	const existing = (state.tabsByWorkspace[workspaceId] ?? []).find(
 		(tab): tab is ChangesTab => tab.id === id && tab.kind === "changes",
 	);
-	const base = existing ?? createChangesTab(workspaceId, id, changesTabName(scope), scope);
+	const base = existing ?? createChangesTab(workspaceId, id, "", scope);
 	const tab: ChangesTab = revealPath
 		? { ...base, reveal: { path: revealPath, tick: (base.reveal?.tick ?? 0) + 1 } }
 		: base;

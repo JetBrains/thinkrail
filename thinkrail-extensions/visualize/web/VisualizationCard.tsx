@@ -1,15 +1,18 @@
 import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
+import { useT } from "@thinkrail/locales/react";
 import { ComparisonCard } from "./ComparisonCard";
 import { DiagramCard } from "./DiagramCard";
+import { FileCard } from "./FileCard";
 
 export function VisualizationCard(props: ToolRenderProps) {
+	const t = useT();
 	const { args, result, status } = props;
 
 	if (status === "error") {
 		return (
 			<div data-testid="tool-visualize" data-status="error" className="flex flex-col gap-4">
 				<pre className="overflow-auto px-8 py-4 text-feedback-error tr-code-text">
-					{resultText(result) || "Visualization failed."}
+					{resultText(result) || t("visualize.card.failed")}
 				</pre>
 			</div>
 		);
@@ -18,7 +21,13 @@ export function VisualizationCard(props: ToolRenderProps) {
 	const type = strArg(args, "type");
 	return (
 		<div data-testid="tool-visualize" data-status={status}>
-			{type === "comparison" ? <ComparisonCard {...props} /> : <DiagramCard {...props} />}
+			{type === "comparison" ? (
+				<ComparisonCard {...props} />
+			) : type === "file" ? (
+				<FileCard {...props} />
+			) : (
+				<DiagramCard {...props} />
+			)}
 		</div>
 	);
 }

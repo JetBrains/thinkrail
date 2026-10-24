@@ -1,4 +1,5 @@
 import type { McpListResult, WsParams } from "@thinkrail/contracts";
+import { t } from "@thinkrail/locales/react";
 import { selectMcpRead, selectMcpWorkspaceStarting, useAppStore } from "../store";
 import { getTransport } from "./wireTransport";
 
@@ -25,8 +26,7 @@ export function requestMcpList<M extends McpListMethod>(
 ): Promise<McpListResult> {
 	const { workspaceId } = params;
 	const scope = selectMcpRead(useAppStore.getState(), workspaceId);
-	if (!scope)
-		return Promise.reject(new Error("MCP servers are unavailable until the host reconnects."));
+	if (!scope) return Promise.reject(new Error(t("app.transport.mcpUnavailable")));
 	const { connectionGeneration } = scope;
 	const tail = listTails.get(workspaceId);
 	const pending = tail?.connectionGeneration === connectionGeneration ? tail : undefined;
@@ -34,7 +34,7 @@ export function requestMcpList<M extends McpListMethod>(
 	const dispatch = async (): Promise<McpListResult> => {
 		const read = selectMcpRead(useAppStore.getState(), workspaceId);
 		if (!read || read.connectionGeneration !== connectionGeneration)
-			throw new Error("MCP servers are unavailable until the host reconnects.");
+			throw new Error(t("app.transport.mcpUnavailable"));
 		const result = await getTransport().request(method, params);
 		useAppStore.getState().installMcpList(read, result);
 		return result;

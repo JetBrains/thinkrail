@@ -134,12 +134,22 @@ Workspace removal cancels its active MCP login through `provider.loginCancel` af
 modal. Late login frames for tombstoned workspaces are cancelled instead of installed; the MCP start
 response path does the same if removal preceded its acknowledgement. Cancellation is best-effort over
 the existing reconnect-safe request transport; the host's bounded probe lifetime remains the final cleanup.
+**Client error reports** (`errorReports.ts`): `installClientErrorReporting()` listens for window `error` /
+`unhandledrejection`, and `reportClientError(clientErrorReport(kind, error, boundary?))` forwards the raw
+class and the stack with the message cut out of it (a V8 stack header repeats the message, and its lines
+can look like frames) over fire-and-forget `client.reportError` — only to a host with
+`CLIENT_ERROR_REPORT_PROTOCOL_VERSION` (v90); reports raised before the welcome wait for it (≤ 10 queued), and a
+page sends at most 50. Each report carries the PostHog chunk ids (≤ 20) that the release build's
+injected `_posthogChunkIds` registry assigns to URLs in its own stack, so uploaded maps resolve its frames.
+The browser never scrubs or holds a vendor client: the host is the only sanitizer.
+`main.tsx` installs the listeners and injects the forwarder into `components`' error-boundary seam.
 
 - **Public surface (barrel):** `initTransport`, `getTransport`, `prewarmWorkspaceSkillLoad`, the three
   skill-load-safe session request wrappers, `errorText`, `RequestError`, `wsErrorCode`, `requestMcpList`,
   `watchMcpWorkspace`, `ConnectionStatus`,
   `TransportOptions`, `runHostUpdate`, `supportsHostUpdateRun`, `supportsPlanReview`,
-  `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`. `runHostUpdate` is the typed empty host action
+  `supportsPlanSummaryGeneration`, `supportsChangeMutations`, `supportsRichAnchors`, `supportsTurnChanges`,
+  `installClientErrorReporting`, `reportClientError`, `clientErrorReport`. `runHostUpdate` is the typed empty host action
   and `supportsHostUpdateRun` lets `Shell` inject it only for protocol v70+; `supportsPlanReview` is exported
   because a sibling panel (`PlanPane`) gates the plan-review UI on it — an older host serves no
   `todo.startReview`/`reviewAll`, so the client must not offer them; `supportsPlanSummaryGeneration` (v69) is
@@ -164,13 +174,14 @@ the existing reconnect-safe request transport; the host's bounded probe lifetime
   `HOST_UPDATE_RUN_PROTOCOL_VERSION` + `Ack` + the typed `host.update` method for the CLI-host update action,
   `PLAN_REVIEW_SUBAGENT_PROTOCOL_VERSION` for the `supportsPlanReview` gate,
   `CHANGE_MUTATIONS_PROTOCOL_VERSION` for the diff-mutation gate, `REVIEW_RICH_ANCHORS_PROTOCOL_VERSION`
-  for the rich-anchor authoring gate, `provider.changed`, the empty
+  for the rich-anchor authoring gate, `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` + `ClientErrorReport` for
+  `client.reportError`, `provider.changed`, the empty
   addressed `feedback.interview` invitation, `HostUpdateNotice` for `server.welcome` +
   `host.updateAvailable`,
   `WorkspaceFsChangedPayload` for `workspace.fsChanged`, and `AppConfig` for `server.welcome`'s config +
   `settings.changed`); `store`
   (welcome + event routing — a runtime edge owned by the parent graph); `lib` (plain-HTTP-safe random page
-  identity); the browser `WebSocket`.
+  identity); `@thinkrail/locales` (user-visible request-failure messages); the browser `WebSocket`.
 - **Forbidden:** `server`/`shared`/any `pi` package; importing `panels`/`shell`; or requesting, subscribing to, or folding current-layout state. Browser layout persistence uses only `httpBase()` as part of its frontend-local storage identity; native stable persistence has no transport edge.
 
 ## Get right

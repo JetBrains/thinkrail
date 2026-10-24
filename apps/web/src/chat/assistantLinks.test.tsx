@@ -67,6 +67,53 @@ test("assistant Markdown distinguishes workspace files from ordinary anchors", (
 	expect(html).toContain('href="../report.md"');
 });
 
+test("assistant Markdown keeps a written path's backslashes in every block and link form", () => {
+	const html = renderToStaticMarkup(
+		<AssistantMarkdown
+			text={[
+				"Done, see below.",
+				"[task](C:\\repo\\.thinkrail\\context\\TASK.md)",
+				"[relative](src\\_private\\a.ts) and [spaced](<C:\\repo\\my docs\\-notes.md>)",
+			].join("\n\n")}
+			workspaceRoot="C:\\repo"
+			onOpenFile={() => {}}
+		/>,
+	);
+	for (const path of [".thinkrail/context/TASK.md", "src/_private/a.ts", "my docs/-notes.md"]) {
+		expect(html).toContain(`data-path="${path}"`);
+	}
+});
+
+test("a reference definition keeps its written path too", () => {
+	const html = renderToStaticMarkup(
+		<AssistantMarkdown
+			text={["See [the spec][s].", "[s]: C:\\repo\\.pi\\SPEC.md"].join("\n\n")}
+			workspaceRoot="C:\\repo"
+			onOpenFile={() => {}}
+		/>,
+	);
+	expect(html).toContain('data-path=".pi/SPEC.md"');
+});
+
+test("restoring written destinations never revives a URL escape, an unsafe scheme, or an outside path", () => {
+	const html = renderToStaticMarkup(
+		<AssistantMarkdown
+			text={[
+				"first",
+				"[site](https://example.com/a\\_b)",
+				"[unsafe](javascript:alert\\(1\\))",
+				"[outside](C:\\elsewhere\\.secret\\x.md)",
+			].join("\n\n")}
+			workspaceRoot="C:\\repo"
+			onOpenFile={() => {}}
+		/>,
+	);
+	expect(html).toContain('href="https://example.com/a_b"');
+	expect(html).not.toContain('data-testid="chat-file-link"');
+	expect(html).not.toContain("javascript:");
+	expect(html).not.toContain("elsewhere");
+});
+
 test("assistant Markdown opens contained Windows paths without exposing unsafe URLs", () => {
 	const html = renderToStaticMarkup(
 		<AssistantMarkdown

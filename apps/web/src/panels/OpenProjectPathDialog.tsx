@@ -1,4 +1,5 @@
 import { RiAlertLine as Alert } from "@remixicon/react";
+import { T, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -21,6 +22,7 @@ export function OpenProjectPathDialog({
 	onOpenChange: (open: boolean) => void;
 	onSubmit: (path: string) => void;
 }) {
+	const t = useT();
 	const [path, setPath] = useState("");
 	const finalPath = path.trim();
 
@@ -33,10 +35,12 @@ export function OpenProjectPathDialog({
 		<Dialog open={open} onOpenChange={setOpen}>
 			<DialogContent data-testid="open-project-path-dialog" className="max-w-[30rem] gap-12">
 				<DialogHeader>
-					<DialogTitle>Open project from host path</DialogTitle>
+					<DialogTitle>{t("panels.openProjectPath.title")}</DialogTitle>
 					<DialogDescription>
-						Enter a folder path on the computer running ThinkRail. Use{" "}
-						<code className="tr-code-text">~/</code> for the host account&apos;s home folder.
+						<T
+							i18nKey="panels.openProjectPath.description"
+							components={[<code key="home" className="tr-code-text" />]}
+						/>
 					</DialogDescription>
 				</DialogHeader>
 
@@ -60,7 +64,9 @@ export function OpenProjectPathDialog({
 					}}
 				>
 					<label htmlFor="open-project-host-path" className="flex flex-col gap-4">
-						<span className="tr-title-compact text-text-default">Folder path</span>
+						<span className="tr-title-compact text-text-default">
+							{t("panels.openProjectPath.folderPath")}
+						</span>
 						<input
 							id="open-project-host-path"
 							data-testid="open-project-path-input"
@@ -69,16 +75,16 @@ export function OpenProjectPathDialog({
 							spellCheck={false}
 							value={path}
 							onChange={(event) => setPath(event.target.value)}
-							placeholder="~/projects/example"
+							placeholder={t("panels.openProjectPath.placeholder")}
 							className="w-full rounded-sm border border-control-border-default bg-control-bg px-12 py-8 tr-text-ui text-text-default outline-none transition-colors placeholder:text-text-muted focus-visible:border-control-border-active"
 						/>
 					</label>
 					<DialogFooter>
 						<Button variant="outline" onClick={() => setOpen(false)}>
-							Cancel
+							{t("common.cancel")}
 						</Button>
 						<Button type="submit" data-testid="open-project-path-submit" disabled={!finalPath}>
-							Open project
+							{t("panels.openProjectPath.submit")}
 						</Button>
 					</DialogFooter>
 				</form>

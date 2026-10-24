@@ -12,7 +12,7 @@ tags: [review]
 
 The review layer: GitHub-style **draft comments** anchored to a workspace's files and diffs, collected
 without starting the agent, then sent — grouped **per file**, each file's comments into that file's one
-review chat — as a **structured context package**. Owns the per-workspace review store, anchor
+review chat, or all of them into the one chat a send names — as a **structured context package**. Owns the per-workspace review store, anchor
 re-anchoring, and package rendering.
 
 ## Model (mirrors the wire DTOs in `contracts`)
@@ -62,6 +62,11 @@ re-anchoring, and package rendering.
   can move. It degrades to the raw ref when that wouldn't resolve, so the review surface
   survives an unreadable base instead of vanishing with
   it. `reviewBaseRef` is how `host` reads it.
+- **Paths are worktree-relative POSIX** (architecture Decision 22). `addComment` stores `anchor.path`
+  through fs's `workspaceRelativePath`, so a finding citing an absolute or native path lands on the same
+  key as the file's diff and `doneFiles` entry; outside the worktree is refused. `setReviewGuide` does the
+  same for reading-order steps and keeps an outside path as written (the guide shows it disabled). File
+  reads share that containment, so a name like `..env` is a file, not an escape.
 - **`ReviewComment`**: `kind` inline/diff/file/review; `status` draft → sent → resolved (or
   dismissed); **`author`** — the human (default, absent) or `"agent"`: the plan's reviewer agent files
   findings through the same `addComment` (worktree-side anchors), badged in the panel and picked up by

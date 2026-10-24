@@ -70,6 +70,8 @@ export type SubagentOverride = "on" | "off";
 /** `"settled"` = the user parked the workspace on the shelf; `"active"` = the user pinned it live. */
 export type SettledOverride = "settled" | "active";
 
+export const DEFAULT_WORKSPACE_NAME = "Default";
+
 export interface Workspace {
 	id: string;
 	projectId: string;
@@ -113,6 +115,57 @@ export interface OpenBranchReview {
 	 * this does not imply the checkout rewrote history or that a force-push is appropriate.
 	 */
 	behindCommits?: number;
+	/** v88 `workspace.branchStatus` only: an open GitHub PR's live review facts. Never in the host snapshot. */
+	details?: ReviewDetails;
+}
+
+export type ReviewDecision = "approved" | "changes_requested" | "review_required";
+
+/** GitHub's `mergeStateStatus`, lower-cased. */
+export type ReviewMergeState =
+	| "clean"
+	| "unstable"
+	| "has_hooks"
+	| "blocked"
+	| "behind"
+	| "dirty"
+	| "draft"
+	| "unknown";
+
+export type MergeMethod = "squash" | "merge" | "rebase";
+
+export interface ReviewChecks {
+	passing: number;
+	pending: number;
+	failing: number;
+	/** Bounded, in the provider's order. */
+	failingNames: string[];
+}
+
+export interface ReviewDetails {
+	draft: boolean;
+	/** The branch the PR merges into now — it may have been retargeted since the workspace was made. */
+	base?: string;
+	/** Absent when the PR has no checks. */
+	checks?: ReviewChecks;
+	/** Absent when the repository requires no review and nobody decided. */
+	reviewDecision?: ReviewDecision;
+	/** Latest approving / change-requesting reviewers, bounded. */
+	reviewers: { login: string; state: "approved" | "changes_requested" }[];
+	mergeState: ReviewMergeState;
+	/** What the repository allows; absent when `gh repo view` did not answer. */
+	mergeMethods?: MergeMethod[];
+	/** The repository deletes head branches on merge itself. */
+	deleteBranchOnMerge?: boolean;
+}
+
+export interface MergePrResult {
+	/** `false` when GitHub queued the PR (merge queue / auto-merge) instead of merging it now. */
+	merged: boolean;
+	/** `deleteBranch` only: whether `origin/<branch>` is gone — never deleted for a queued PR. */
+	branchDeleted: boolean;
+	/** Why the deletion after a successful merge failed. */
+	deleteError?: string;
 }
 
 export type GhSetupProblem = "missing" | "unauthenticated";
@@ -120,6 +173,39 @@ export type GhSetupProblem = "missing" | "unauthenticated";
 export interface PrDraft {
 	title: string;
 	body: string;
+}
+
+export type PrBodySource = "plan" | "commits" | "template" | "empty";
+
+export interface PrPreview extends PrDraft {
+	/** v87: worktree-relative PR/MR templates the host found, in discovery order. */
+	templates?: string[];
+	/** v87: whether the session (when one was given) has a plan body to render. */
+	planAvailable?: boolean;
+	/** v87: the source the body was rendered from. */
+	source?: PrBodySource;
+}
+
+export type ReviewProvider = "github" | "gitlab";
+
+/** `workspace.branchStatus`: where the branch stands against origin and its base, review or not. */
+export interface BranchStatus {
+	hasOrigin: boolean;
+	/** The forge `origin` points at; `null` without an origin or for any other host. */
+	provider: ReviewProvider | null;
+	/** The push repository has the branch; `null` when it couldn't be read (split origin, `ls-remote` failed). */
+	published: boolean | null;
+	/** Origin pushes to another URL than it fetches from: ahead/behind describe the push repository. */
+	pushesElsewhere: boolean;
+	/** Published only: local commits origin lacks. */
+	ahead?: number;
+	/** Published only: last-known origin commits HEAD lacks (the branch diverged). */
+	behind?: number;
+	/** Commits on HEAD that the workspace's base lacks. */
+	aheadOfBase: number;
+	/** The branch is its own base (Default on the default branch): no PR can be opened from it. */
+	onBase: boolean;
+	review: OpenBranchReview | null;
 }
 
 export interface OpenPrResult {
@@ -732,7 +818,7 @@ export function isSystemThemePair(value: unknown): value is SystemThemePair {
 	);
 }
 
-export type LayoutToolId = "projects" | "specs" | "files" | "changes" | "review" | "plan";
+export type LayoutToolId = "projects" | "specs" | "files" | "review" | "plan";
 
 export type LayoutBottomAlignment = "center" | "center-left" | "center-right" | "full";
 
@@ -840,6 +926,8 @@ export interface AppConfig extends ThemePreference {
 	/** Idle days after which a quiet workspace settles onto its project's shelf; `null` = never. */
 	settleIdleDays: number | null;
 	disabledExtensions: string[];
+	/** UI language: `"system"` (follow the browser) or a BCP-47 tag; an unavailable tag renders English. */
+	locale: string;
 }
 
 export interface ExtensionCatalogEntry {
@@ -890,6 +978,51 @@ export function isSettleIdleDays(value: unknown): value is number | null {
 	);
 }
 
+export const SYSTEM_LOCALE_PREFERENCE = "system";
+
+export function isLocalePreference(value: unknown): value is string {
+	if (value === SYSTEM_LOCALE_PREFERENCE) return true;
+	if (typeof value !== "string" || value.length === 0 || value.length > 35) return false;
+	try {
+		return Intl.getCanonicalLocales(value)[0] === value;
+	} catch {
+		return false;
+	}
+}
+
+export interface LocalLocaleFileOk {
+	fileName: string;
+	tag: string;
+	ok: true;
+	strings: Record<string, string>;
+}
+
+export type LocalLocaleFileErrorCode =
+	| "invalid-name"
+	| "duplicate"
+	| "too-large"
+	| "too-many"
+	| "unreadable"
+	| "invalid-json"
+	| "not-object";
+
+export interface LocalLocaleFileError {
+	fileName: string;
+	tag: string | null;
+	ok: false;
+	error: LocalLocaleFileErrorCode;
+	/** Parser or OS detail for `invalid-json` / `unreadable`, untranslated. */
+	detail?: string;
+}
+
+export type LocalLocaleFile = LocalLocaleFileOk | LocalLocaleFileError;
+
+/** The host's local language files (`<dataDir>/locales/`), as `locales.list` reports them. */
+export interface LocalLocalesSnapshot {
+	dir: string;
+	files: LocalLocaleFile[];
+}
+
 export const SUBAGENT_MAX_CONCURRENT = { min: 1, max: 16, default: 4 } as const;
 
 export function isSubagentMaxConcurrent(value: unknown): value is number {
@@ -936,6 +1069,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 	jbcentralQuotaRefreshSeconds: JBCENTRAL_QUOTA_REFRESH_SECONDS.default,
 	settleIdleDays: SETTLE_IDLE_DAYS.default,
 	disabledExtensions: [],
+	locale: SYSTEM_LOCALE_PREFERENCE,
 };
 
 export function normalizeThemePreference(value: unknown): ThemePreference {

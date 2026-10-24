@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
+import { applyLocale, currentTranslator } from "@thinkrail/locales/react";
 import {
 	DefaultToolRenderer,
 	getToolChrome,
@@ -22,18 +23,22 @@ const props = (args: Record<string, unknown>): ToolRenderProps => ({
 describe("toolRegistry summaries", () => {
 	it("returns '' for a tool registered without a summary (collapsed header is just the name)", () => {
 		registerToolRenderer("no-summary-tool", () => null);
-		expect(getToolSummary("no-summary-tool", props({ command: "ls" }))).toBe("");
+		expect(getToolSummary(currentTranslator(), "no-summary-tool", props({ command: "ls" }))).toBe(
+			"",
+		);
 	});
 
 	it("returns '' for an unregistered tool", () => {
-		expect(getToolSummary("never-registered", props({}))).toBe("");
+		expect(getToolSummary(currentTranslator(), "never-registered", props({}))).toBe("");
 	});
 
 	it("invokes the registered summary with the render props", () => {
 		registerToolRenderer("summary-tool", () => null, {
 			summary: ({ args }) => `ran ${String(args.command)}`,
 		});
-		expect(getToolSummary("summary-tool", props({ command: "echo hi" }))).toBe("ran echo hi");
+		expect(getToolSummary(currentTranslator(), "summary-tool", props({ command: "echo hi" }))).toBe(
+			"ran echo hi",
+		);
 	});
 
 	it("still resolves the renderer (falls back to the default for unknown tools)", () => {
@@ -109,7 +114,7 @@ describe("prefix registrations (one resolver for every registry read)", () => {
 
 	it("resolves renderer, summary, chrome and prominence for a prefixed name", () => {
 		expect(getToolRenderer("pfx__server__tool")).toBe(prefixRenderer);
-		expect(getToolSummary("pfx__server__tool", props({}))).toBe("from prefix");
+		expect(getToolSummary(currentTranslator(), "pfx__server__tool", props({}))).toBe("from prefix");
 		expect(getToolChrome("pfx__server__tool")).toBe("bare");
 		expect(resolveProminence("pfx__server__tool")).toEqual({
 			prominence: "primary",
@@ -119,20 +124,20 @@ describe("prefix registrations (one resolver for every registry read)", () => {
 
 	it("lets an exact registration beat a matching prefix", () => {
 		expect(getToolRenderer("pfx__exact")).toBe(exactRenderer);
-		expect(getToolSummary("pfx__exact", props({}))).toBe("from exact");
+		expect(getToolSummary(currentTranslator(), "pfx__exact", props({}))).toBe("from exact");
 		expect(getToolChrome("pfx__exact")).toBe("card");
 		expect(resolveProminence("pfx__exact").prominence).toBe("routine");
 	});
 
 	it("prefers the longest matching prefix", () => {
 		expect(getToolRenderer("pfx__long__tool")).toBe(longerRenderer);
-		expect(getToolSummary("pfx__long__tool", props({}))).toBe("from longer");
+		expect(getToolSummary(currentTranslator(), "pfx__long__tool", props({}))).toBe("from longer");
 	});
 
 	it("leaves names the prefix does not start with on the default renderer", () => {
 		for (const name of ["pfx_", "x_pfx__tool", "PFX__tool"]) {
 			expect(getToolRenderer(name)).toBe(DefaultToolRenderer);
-			expect(getToolSummary(name, props({}))).toBe("");
+			expect(getToolSummary(currentTranslator(), name, props({}))).toBe("");
 			expect(resolveProminence(name)).toEqual({ prominence: "routine", defaultExpanded: false });
 		}
 	});
@@ -140,5 +145,19 @@ describe("prefix registrations (one resolver for every registry read)", () => {
 	it("never lets an empty prefix capture every tool", () => {
 		registerToolRendererPrefix("", () => null);
 		expect(getToolRenderer("some-unregistered-tool")).toBe(DefaultToolRenderer);
+	});
+});
+
+describe("summaries translate through the render translator", () => {
+	it("the summary receives the translator the caller renders with", () => {
+		registerToolRenderer("translated-summary-tool", () => null, {
+			summary: (_props, translate) => translate("desktop.menu.edit"),
+		});
+		applyLocale("de", { de: { "desktop.menu.edit": "Bearbeiten" } });
+		expect(getToolSummary(currentTranslator(), "translated-summary-tool", props({}))).toBe(
+			"Bearbeiten",
+		);
+		applyLocale("en", {});
+		expect(getToolSummary(currentTranslator(), "translated-summary-tool", props({}))).toBe("Edit");
 	});
 });

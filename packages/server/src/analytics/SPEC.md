@@ -10,15 +10,16 @@ tags: [analytics, privacy]
 
 ## Responsibility and boundary
 
-Host-only product analytics shared by CLI/source/desktop, delivered personless to PostHog EU.
-The module owns the closed event vocabulary, catalog bucketing, installation identity usage, delivery,
-consent gates and bounded shutdown. Host alone observes feature outcomes and captures events; feature
+Host-only product analytics and error reports shared by CLI/source/desktop, delivered personless to
+PostHog EU. The module owns the closed event vocabulary, catalog bucketing, installation identity usage,
+exception sanitization, delivery, consent gates and bounded shutdown. Host alone observes feature outcomes and captures events; feature
 modules remain analytics-free. Sibling dependency edges belong to [[module-server]].
 
 - **Public surface:** initialization, basic capture, consent-scoped additional capture, additional-data
-  enablement, shutdown/test reset, event types, bucket helpers and `BuildKind`.
+  enablement, error reports (`reportError`, `reportFatalError`, `reportClientError`, `ErrorReport`, `ErrorSource`),
+  shutdown/test reset, event types, bucket helpers and `BuildKind`.
 - **Allowed deps:** persistence, log, contracts types, pi-ai's built-in catalog, Node, and `posthog-node`
-  inside the sink only.
+  inside the sink only (`errors.ts` is SDK-free; the sink adapts it into `before_send`).
 - **Forbidden:** importing host/feature siblings; being imported outside host; exposing the installation
   UUID on the wire; copying rich feature payloads into telemetry; browser autocapture or a native-only sink.
 
@@ -107,6 +108,70 @@ after re-enabling.
 Internal/unknown work never inflates user activation. A normal stop or agent-declared task/verification
 status is not proof of value, correctness or a passed test. Arrival order is not execution order.
 
+## Error reports
+
+PostHog Error Tracking `$exception` events are basic-tier: always on under the same gate as basic events
+(keyed build, not CI/test), unaffected by `analyticsEnabled`, `--no-analytics` or `THINKRAIL_NO_ANALYTICS`,
+and never campaign-enriched. Closed `source`: `host_crash` (crashLog's uncaught/unhandled, level `fatal`,
+`scope` = the crash kind and root mechanism `onuncaughtexception`/`onunhandledrejection`, sent with
+`captureExceptionImmediate` and awaited at most 1 s before exit — a reachable PostHog answers in a fraction
+of that, and every extra second keeps a faulted host running), `host_logged` (a host
+`log.warn/error` carrying an error, with its `scope`), `request` (every failed WS request, CodedErrors
+included — revisitable; PostHog itself excludes expected 4xx outcomes — with `request_method` only for a
+registered method), `ui` (`client.reportError`; `scope` = kind[:boundary], render = handled) and `desktop`
+(handled desktop main-process errors, with their scope). An error `code` passes only as `^[A-Z][A-Z0-9_]+$`.
+
+The privacy guarantee is an allow-list, not a deny-list. Capture uses posthog-node 5.46.1's
+`captureException` through a `PostHog` subclass whose overridden (protected)
+`createErrorPropertiesBuilder` keeps the SDK's coercers and node parser but **no frame modifiers**: the
+default ones read ±7 source lines per frame from disk, make paths relative to `cwd` (still
+`../../Users/<name>/…`) and derive module names. `@posthog/core`, pinned to posthog-node's own core, is
+imported only for that builder. The sink's typed (doc-less) `before_send` then **rebuilds** every
+`$exception` from scratch: ≤ 5 exceptions of identifier-only `type`, a classifier `value`,
+`mechanism.{handled,synthetic,type}` (the root's `handled` comes from the report, because the SDK's capture
+APIs take no hint and always default it to true; causes stay handled), and frames carrying only `platform`, identifier-only `function`,
+normalized `filename`, `lineno`, `colno`, `in_app` and a UUID-shaped `chunk_id`. Context lines, `vars`,
+`abs_path`, `module` or any field a later SDK adds can never pass. Absolute filenames inside the app
+root (repo root from source, the bundle dir when packaged, `Resources/app` for desktop via `appRoot`)
+become root-relative; loopback/`views:` web URLs become `web/…`/`views/…`; `node:` and `native` stay
+as-is; everything else becomes `<external>` with function `?` — user extensions and project files leave
+no name. A relative filename can only come from the CLI binary's embedded source map (Bun remaps frames
+relative to its compile directory) and resolves solely through the launcher's `remapBase` to a
+repo-relative JS/TS path, never through `cwd`.
+
+Source maps make reported frames readable without shipping more than the CLI's own map
+([[module-ci-release]] owns the upload). PostHog resolves Node frames only by `chunk_id` and browser
+frames by `chunk_id` (or a public URL we do not have): the SDK's core builder copies chunk ids from the
+`_posthogChunkIds` registry an injected bundle writes (the desktop runtime), and UI reports carry their
+own `chunkIds` (URL → id) which the host passes as the internal `$thinkrail_chunk_ids` property the
+sanitizer consumes and never forwards. The CLI binary embeds its map, so its frames arrive already
+resolved.
+
+**No message text is ever sent.** Error messages routinely carry third-party prose — git stderr (a
+pre-push hook's output reaches `pr.open`'s thrown message), DNS/TLS diagnostics with private hostnames,
+provider and extension errors — and no redaction makes arbitrary prose personal-data-free. The root
+exception's `value` is therefore a classifier built only from the validated allow-listed fields —
+`source`, then `request_method` or `scope`, then `code` (e.g. `request pr.open PUSH_AUTH_FAILED`,
+`ui render:chat`) — and causes carry an empty `value`; PostHog groups by type and resolved frames, so the
+classifier only names the issue. A message also hides in every V8/Bun stack header, and a multi-line one
+(git stderr, a test runner's traceback) can contain lines shaped like frames that the SDK's parser would
+turn into "in-app" frames; so the SDK only ever sees `reportableError(error)` — the class plus each
+exception's and cause's stack with its message cut out (a stack whose message cannot be located is
+dropped, and non-`Error` values carry no stack) — and the browser cuts its message out of its own stack
+before `client.reportError`, which carries no message field at all. A wire-level test pins the
+exact property-key set of the SDK's actual request body, including the `$lib`/`$lib_version`/
+`$is_server`/`$geoip_disable` the SDK adds after `before_send`, so an SDK upgrade that adds a field
+fails CI rather than leaking.
+
+`enableExceptionAutocapture` stays off: its own `uncaughtException` listener defers exit to ours, so its
+asynchronous capture would be lost. The SDK's rate limiter applies only to autocapture, so the service
+dedupes reports with the same (source, scope, method, type, code, throw site — the stack's top frame)
+for 60 s and caps 100 per launch, at most 50 from any one source so a noisy source cannot starve the
+rest; the fatal crash report bypasses both.
+Browser stacks arrive raw and are rewritten from WebKit/Gecko `fn@url:line:col` into V8 lines the node
+parser reads; the browser never holds a vendor client. Errors before host analytics initializes
+(desktop/CLI pre-boot) are not reported; desktop main-process bundles carry no source maps.
+
 ## Preference and delivery
 
 `analyticsEnabled` is the additional-data preference and host delivery gate; `analyticsConsentConfirmed` records
@@ -155,7 +220,8 @@ Counts describe installations, not people. Every event carries `app_version`, `c
 plus its
 closed properties. Only built-in provider/model names pass raw; custom values become `custom`, preserving
 the existing explicit `jbcentral` login name. No chat/file contents, paths/names, resource IDs, credentials,
-arbitrary errors, token/cost counts or recordings are collected.
+error messages, token/cost counts or recordings are collected; error reports carry only the
+allow-listed shape above.
 
 The sink uses the launcher-supplied public key, EU endpoint, disabled GeoIP enrichment and
 `$process_person_profile: false`; key/endpoint/fetch injection supports tests and self-hosting. The

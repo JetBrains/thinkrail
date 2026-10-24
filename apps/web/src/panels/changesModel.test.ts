@@ -1,12 +1,14 @@
 import { expect, test } from "bun:test";
 import type { GitFileChange } from "@thinkrail/contracts";
+import { currentTranslator } from "@thinkrail/locales/react";
+import { VIRTUALIZED_DIFF_LINES } from "@thinkrail/resource-renderers";
 import {
+	buildChangeMarks,
 	buildChangesTree,
 	type ChangeTreeDir,
 	changesTabId,
-	changesTabName,
+	changeTreeFolderPaths,
 	diffTabId,
-	diffTabName,
 	estimatedSectionHeight,
 	scopeKey,
 	scopeLabel,
@@ -16,7 +18,6 @@ import {
 	stackedDiffBounded,
 	turnScope,
 } from "./changesModel";
-import { VIRTUALIZED_DIFF_LINES } from "./largeDiff";
 
 function change(path: string, over: Partial<GitFileChange> = {}): GitFileChange {
 	return { path, status: "modified", added: 1, removed: 0, ...over };
@@ -78,22 +79,12 @@ test("scopeKey + diffTabId: the scope is part of a diff tab's identity", () => {
 	expect(commit).not.toBe(branch);
 });
 
-test("diffTabName tags every non-default scope so two tabs of one file are distinguishable", () => {
-	expect(diffTabName({ kind: "branch" }, "src/a.ts")).toBe("a.ts");
-	expect(diffTabName({ kind: "uncommitted" }, "src/a.ts")).toBe("a.ts · uncommitted");
-	expect(diffTabName({ kind: "commit", sha: "abc1234567" }, "src/a.ts")).toBe("a.ts · abc1234");
-	expect(diffTabName({ kind: "pinned", baseRef: "abc1234567" }, "src/a.ts")).toBe("a.ts · abc1234");
-});
-
 test("changesTabId: one review tab per (workspace, scope), disjoint from every diff tab id", () => {
 	const branch = changesTabId("ws1", { kind: "branch" });
 	expect(branch).toBe("changes:3:ws16:branch");
 	expect(changesTabId("ws1", { kind: "commit", sha: "abc123" })).not.toBe(branch);
 	expect(changesTabId("ws2", { kind: "branch" })).not.toBe(branch);
 	expect(branch.startsWith("diff:")).toBe(false);
-	expect(changesTabName({ kind: "branch" })).toBe("Changes");
-	expect(changesTabName({ kind: "uncommitted" })).toBe("Changes · uncommitted");
-	expect(changesTabName({ kind: "commit", sha: "abc1234567" })).toBe("Changes · abc1234");
 });
 
 test("sectionCollapsedByDefault folds large and generated files, never an ordinary source change", () => {
@@ -119,17 +110,23 @@ test("scopeLabel keeps a commit scope short (sha), with the subject in the toolt
 			committedAt: "",
 		},
 	];
-	expect(scopeLabel({ kind: "branch" })).toBe("All changes");
-	expect(scopeLabel({ kind: "uncommitted" })).toBe("Uncommitted");
-	expect(scopeLabel({ kind: "commit", sha: "abc1234567" }, commits)).toBe("abc1234");
-	expect(scopeLabel({ kind: "commit", sha: "abc1234567" })).toBe("abc1234");
-	expect(scopeTitle({ kind: "commit", sha: "abc1234567" }, commits)).toBe(
+	expect(scopeLabel(currentTranslator(), { kind: "branch" })).toBe("All changes");
+	expect(scopeLabel(currentTranslator(), { kind: "uncommitted" })).toBe("Uncommitted");
+	expect(scopeLabel(currentTranslator(), { kind: "commit", sha: "abc1234567" }, commits)).toBe(
+		"abc1234",
+	);
+	expect(scopeLabel(currentTranslator(), { kind: "commit", sha: "abc1234567" })).toBe("abc1234");
+	expect(scopeTitle(currentTranslator(), { kind: "commit", sha: "abc1234567" }, commits)).toBe(
 		"abc1234 · Fix the thing",
 	);
-	expect(scopeTitle({ kind: "commit", sha: "abc1234567" })).toBe("abc1234");
-	expect(scopeTitle({ kind: "uncommitted" })).toBe("Diff scope: Uncommitted");
-	expect(scopeLabel({ kind: "pinned", baseRef: "abc1234567" })).toBe("abc1234");
-	expect(scopeTitle({ kind: "pinned", baseRef: "abc1234567" })).toBe("Diff scope: abc1234");
+	expect(scopeTitle(currentTranslator(), { kind: "commit", sha: "abc1234567" })).toBe("abc1234");
+	expect(scopeTitle(currentTranslator(), { kind: "uncommitted" })).toBe("Diff scope: Uncommitted");
+	expect(scopeLabel(currentTranslator(), { kind: "pinned", baseRef: "abc1234567" })).toBe(
+		"abc1234",
+	);
+	expect(scopeTitle(currentTranslator(), { kind: "pinned", baseRef: "abc1234567" })).toBe(
+		"Diff scope: abc1234",
+	);
 });
 
 test("splitPath separates the muted directory prefix from the bright basename", () => {
@@ -167,11 +164,11 @@ test("a turn scope is keyed by its id, labelled Last turn only while it is the n
 	expect(diffTabId("ws1", scope, "src/a.ts")).not.toBe(
 		diffTabId("ws1", turnScope(newer), "src/a.ts"),
 	);
-	expect(scopeLabel(turnScope(newer), [], [older, newer])).toBe("Last turn");
-	expect(scopeLabel(scope, [], [older, newer])).toMatch(/^Turn /);
-	expect(scopeTitle(scope, [], [older, newer])).toMatch(/^Agent turn at .* · 1 file$/);
-	expect(changesTabName(scope)).toMatch(/^Changes · turn /);
-	expect(diffTabName(scope, "src/a.ts")).toMatch(/^a\.ts · turn /);
+	expect(scopeLabel(currentTranslator(), turnScope(newer), [], [older, newer])).toBe("Last turn");
+	expect(scopeLabel(currentTranslator(), scope, [], [older, newer])).toMatch(/^Turn /);
+	expect(scopeTitle(currentTranslator(), scope, [], [older, newer])).toMatch(
+		/^Agent turn at .* · 1 file$/,
+	);
 });
 
 test("a loading section reserves a height in the order of its eventual diff", () => {
@@ -202,4 +199,28 @@ test("a stacked section bounds its diff only when the renderer needs a viewport"
 	expect(stackedDiffBounded("large", VIRTUALIZED_DIFF_LINES)).toBe(false);
 	expect(stackedDiffBounded("large", VIRTUALIZED_DIFF_LINES + 1)).toBe(true);
 	expect(stackedDiffBounded(undefined, 1_000_000)).toBe(false);
+});
+
+test("buildChangeMarks marks changed files and every ancestor folder, skipping deletions", () => {
+	const marks = buildChangeMarks([
+		change("src/auth/login.ts"),
+		change("tests/new.test.ts", { status: "untracked" }),
+		change("legacy/old.ts", { status: "deleted" }),
+		change("README.md", { status: "renamed" }),
+	]);
+	expect([...marks.files]).toEqual([
+		["src/auth/login.ts", "modified"],
+		["tests/new.test.ts", "untracked"],
+		["README.md", "renamed"],
+	]);
+	expect([...marks.dirs].sort()).toEqual(["src", "src/auth", "tests"]);
+});
+
+test("changeTreeFolderPaths lists every folder row of the changed tree, compact rows once", () => {
+	const tree = buildChangesTree([
+		change("apps/web/src/a.ts"),
+		change("apps/web/src/b/c.ts"),
+		change("README.md"),
+	]);
+	expect(changeTreeFolderPaths(tree)).toEqual(["apps/web/src", "apps/web/src/b"]);
 });

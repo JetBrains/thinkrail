@@ -3,7 +3,7 @@ import type { ElectrobunConfig } from "electrobun";
 
 // Hutch reads `build.bun.version` like the other toolchain versions, but ElectrobunConfig does not type
 // it, so the literal is kept out of the excess-property check. It must match the root packageManager pin.
-const bun = { entrypoint: "src/index.ts", version: "1.4.3" };
+const bun = { entrypoint: "src/index.ts", version: "1.4.4" };
 
 export default {
 	app: {

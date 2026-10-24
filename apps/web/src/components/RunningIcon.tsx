@@ -1,3 +1,4 @@
+import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import { useId } from "react";
 import { BRAND_MARK_SEGMENTS } from "../constants/branding";
@@ -59,6 +60,7 @@ const STROKES: ReadonlyArray<{
 ];
 
 export function RunningIcon({ className }: { className?: string | undefined }) {
+	const t = useT();
 	const id = useId();
 	const clipId = (name: string) => `${id}-${name}`;
 
@@ -67,7 +69,7 @@ export function RunningIcon({ className }: { className?: string | undefined }) {
 			data-testid="running-icon"
 			data-running="true"
 			role="img"
-			aria-label="Agent working"
+			aria-label={t("components.runningIcon.label")}
 			className={cn("inline-flex shrink-0 items-center justify-center", className)}
 		>
 			<svg aria-hidden="true" viewBox="0 0 760 760" className="size-full">

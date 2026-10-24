@@ -38,7 +38,12 @@ command patches the active workspace view. A frame command returns the frame plu
 retained-workspace remap; the store installs that result atomically through
 [[submodule-web-shell-layout-state]]. Components never splice groups or tabs. Stable ids are placement keys;
 a tab's `name` remains non-identity metadata. Singleton tool names resolve from the current web-owned catalog
-at presentation time, so copy updates never rewrite local layout state.
+at presentation time, so copy updates never rewrite local layout state. Unavailable reasons are localized copy
+resolved when the operation runs, never persisted. Helpers evaluated during render (`layoutTabName`,
+`describeLayoutGroup`, `removeLayoutGroup`, `separatePanesReason`, `layoutPresetName`) take the caller's
+translator as their first argument, so a language change recomputes them. `layoutTabName` words every
+default name at render from the tab's kind (tool, untitled chat, default terminal, Changes / diff scope,
+plan document) through `lib`'s default-name helpers, and shows a name set by the user or agent verbatim.
 
 A click that may become a browser `dblclick` waits the shared 250 ms settle window. The upgraded gesture emits
 only its final keep while retaining the leading preview-slot claim, whether content was cached or required a
@@ -104,7 +109,7 @@ each reads, never a per-theme selector in the component.
 ## Layout grammar
 
 - **Center:** a recursive horizontal/vertical binary tree, maximum four leaves. A split replaces one leaf with equal halves. User creation/resize requires each child to remain at least 320 px wide and 180 px high. Empty leaves are valid frame slots and render the shell-provided empty surface. Remove/Merge promotes a sibling and rehomes every affected workspace's tabs deterministically.
-- **Auxiliary eligibility:** Projects, Specs, Files, Changes, and Review are singleton auxiliary-only tools owned by the frame; terminals are workspace resources and may occupy center or any auxiliary region. Hiding a singleton preserves its restore target. View/deep-link reveal restores or unfolds it in frame-local position and focuses the requested item in current workspace attention.
+- **Auxiliary eligibility:** Projects, Specs, Files, and Review are singleton auxiliary-only tools owned by the frame; terminals are workspace resources and may occupy center or any auxiliary region. Hiding a singleton preserves its restore target. View/deep-link reveal restores or unfolds it in frame-local position and focuses the requested item in current workspace attention.
 - **Left/right:** ordered vertical frame stacks beside persistent full-height tool rails. Dragging an outer separator through its minimum hides that side and retains the last expanded width. Broad upper/lower body targets create adjacent groups; the rail's cluster-boundary zones offer the same commands for folded or hidden panes. Expanded bodies have a 120 px normal minimum; folded groups occupy no interior body space and retain their expanded weights, with restoration on the edge rail. An empty frame group remains available across workspaces until explicit removal and renders a named
   Add/Reveal surface rather than disappearing; a region with groups may stay hidden.
 - **Bottom:** ordered left-to-right frame groups resize on vertical separators. Folded groups retain only
@@ -181,7 +186,7 @@ directional edge hints at drag start and fill the true resulting half on hover. 
 clears on pointer leave; all hints clear on drop or cancel; decorative layers never alter hit-testing or the
 committed result.
 
-Creating or deleting a group is visibly a frame command and therefore affects every workspace in this window. Moving a resource among existing groups affects only its workspace view. Moving a singleton tool changes frame placement globally within this window. Uncommitted drag/resize drafts stay runtime-local and commit once on drop/pointer-up; no host revision can cancel them. A local projection epoch and required workspace identity fence gestures and delayed focus/preview-settle work without remounting the workbench. A workspace switch cancels an active gesture even when a singleton placement or deterministic terminal id also exists in the new view; stale focus requests are not replayed on return. Tab removal also cancels its drag. Invalidating a resize restores the live panel group's committed
+Creating or deleting a group is visibly a frame command and therefore affects every workspace in this window. Moving a resource among existing groups affects only its workspace view. Moving a singleton tool changes frame placement globally within this window. Uncommitted drag/resize drafts stay runtime-local and commit once on drop/pointer-up; no host revision can cancel them. A local projection epoch and required workspace identity fence gestures and delayed focus/preview-settle work without remounting the workbench. A workspace switch cancels an active gesture even when a singleton placement or deterministic terminal id also exists in the new view; stale focus requests are not replayed on return. A focus request marked `onlyIfFocusLost` runs only when DOM focus is absent, on `body`, disconnected, or no longer rendered; the check happens when the request executes, after the arrangement commits. `hideSide`/`hideBottom` mark their center focus target `focusOnlyIfLost`, and every path that applies them honors it: the global chords, header and menu hide, and collapsing a region by dragging its separator to zero. Tab removal also cancels its drag. Invalidating a resize restores the live panel group's committed
 projection before paint and rejects the remainder of that gesture until release, not merely its pending
 persistence. The same recovery applies to outer/aligned sides, bottom height, auxiliary stacks, and
 recursive center splits without keying the workbench by workspace. The canceled-drag announcement is reserved for a pointer/keyboard gesture in progress when its base or workspace is replaced, or a tab drag whose tab left the document: `@thinkrail/ui/resizable` reports layout on every group mount and ordinary resize, so a group that merely lived through earlier local transitions announces nothing.
@@ -217,7 +222,9 @@ Balanced and Review show it; Focus hides it. Balanced and Focus start with one c
 its deliberate vertical pair. Custom presets use the same grammar and capture geometry,
 topology, tools, folds, and empty structural slots, never workspace resources or terminal count. Preset node
 ids are template-local labels: instantiation mints frontend-local frame ids and returns the old→new group map
-used to rehome every workspace view. Only custom definitions cross the wire through settings.
+used to rehome every workspace view. Only custom definitions cross the wire through settings. Built-in preset
+names are display copy: `layoutPresetName` renders them through the locale catalog by preset id while the
+definition keeps its stable `name`; custom preset names are user data and render verbatim.
 
 Applying a preset creates one replacement frame, raises this surface's local side/bottom limits if required, and remaps all retained workspace views atomically. Center resources preserve visual order and distribute across destination leaves; terminals map into compatible slots; singleton tool placement ids survive where possible. Omitted tools receive deterministic restore targets, so a sparse preset cannot strand Projects or another tool. The local default preset is the target of the explicit Reset frame command; ordinary workspace switches retain the current frame. Default selection and limits persist locally, not in host settings.
 

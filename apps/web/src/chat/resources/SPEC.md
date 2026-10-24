@@ -29,8 +29,8 @@ subagent reads the same in the chat as in Finished.
   *header*; the detail *body* is a slot the parent fills, and so is the result row's expanded body.
 - **Public surface:** `ResourcesButton`, `ResourcesAttention`, `ResourcesDock`, `ResourcesInspector`,
   `CommandLogView`, `ResultRow`, `ResultSource`.
-- **Allowed external deps:** contracts, React, Remix icons, shared UI primitives and theme utilities, and
-  `lib` (the shared MCP state vocabulary). Time arrives as a `now` prop so formatting stays pure.
+- **Allowed external deps:** contracts, React, Remix icons, shared UI primitives and theme utilities,
+  `@thinkrail/locales` (UI strings), and `lib` (the shared MCP state vocabulary). Time arrives as a `now` prop so formatting stays pure.
 - **Forbidden:** store/transport, server/portable extension packages, Pi value imports, process
   execution, log persistence, subagent transcript fetching, and workbench placement. Parent-chat
   integration (what fills the detail slot, where the surfaces mount) and sibling dependency edges

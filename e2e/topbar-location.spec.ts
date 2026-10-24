@@ -12,7 +12,8 @@ import {
 // The topbar location strip is a row of captioned segments (Project · Workspace · Branch · from base ·
 // Remote · Pull request). Every value is a control: the project pill switches projects, the workspace pill
 // carries the workspace actions plus a sibling switcher, the branch pill opens the git card. Review/remote
-// facts need a forge, so those chips are pinned by unit tests; this journey covers the rest end to end.
+// facts need a forge, so those chips are pinned by unit tests; the review-free Remote / Pull request
+// actions are covered by topbar-ship.spec.ts; this journey covers the rest end to end.
 
 test("the location segments name the active workspace and switch through their menus", async ({
 	page,
@@ -26,8 +27,8 @@ test("the location segments name the active workspace and switch through their m
 	await expect(page.getByTestId("scope-name")).toHaveText("workspace-1");
 	await expect(page.getByTestId("scope-branch")).toHaveText("workspace-1");
 	await expect(page.getByTestId("scope-base")).toHaveText("main");
-	await expect(page.getByTestId("scope-remote-segment")).toHaveCount(0);
-	await expect(page.getByTestId("scope-review-segment")).toHaveCount(0);
+	await expect(page.getByTestId("scope-remote-segment")).toHaveCount(1);
+	await expect(page.getByTestId("scope-review-value")).toHaveText("No PR");
 	for (const id of ["scope-project", "scope-workspace", "scope-branch-trigger"]) {
 		await expect(page.getByTestId(id)).toHaveCSS("-webkit-app-region", "no-drag");
 	}

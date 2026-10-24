@@ -64,7 +64,7 @@ class FakeUpdater implements NativeUpdaterDependency {
 	}
 }
 
-function scheduledController(updater: FakeUpdater, restartToUpdate = async () => {}) {
+function scheduledController(updater: FakeUpdater, restartToUpdate = async () => true) {
 	const scheduled: Array<{ delay: number; callback: () => void; cancelled: boolean }> = [];
 	const controller = createNativeUpdateController({
 		enabled: true,
@@ -263,6 +263,7 @@ test("install clicked from updateReady waits for the coalesced download acknowle
 	let restartCalls = 0;
 	const { controller } = scheduledController(updater, async () => {
 		restartCalls += 1;
+		return true;
 	});
 	await findAvailable(controller);
 	await controller.downloadUpdate();
@@ -324,7 +325,7 @@ test("check and download failures retain their retry phase", async () => {
 
 test("a prepared package survives an unrelated failed check and installs without a feed recheck", async () => {
 	const updater = new FakeUpdater();
-	const restart = deferred<void>();
+	const restart = deferred<boolean>();
 	let restartCalls = 0;
 	const { controller } = scheduledController(updater, () => {
 		restartCalls += 1;
@@ -354,7 +355,7 @@ test("a prepared package survives an unrelated failed check and installs without
 	expect(updater.checkCalls).toBe(checkCallsAfterPreparation + 1);
 	expect(restartCalls).toBe(1);
 	expect((await controller.getState()).status).toBe("installing");
-	restart.resolve(undefined);
+	restart.resolve(true);
 	await settle();
 });
 
@@ -364,6 +365,7 @@ test("a failed installation retains the local package and retry dispatches insta
 	const { controller } = scheduledController(updater, async () => {
 		restartCalls += 1;
 		if (restartCalls === 1) throw new Error("restart was refused");
+		return true;
 	});
 	await prepareUpdate(controller, updater);
 	const checked = updater.checkCalls;

@@ -60,6 +60,14 @@ What a `./web` half may import:
   (`@thinkrail/ui/dialog`) are retained for code-splitting. Design tokens stay in `apps/web/src/styles`;
   the SDK and extension web halves use token utility classes only, and the app's CSS `@source` and
   color/spacing/typography checks cover `packages/ui` and `thinkrail-extensions/*/web`.
+- `@thinkrail/resource-renderers` ([[module-resource-renderers]]) — the host's file and diff renderers:
+  `ResourcePreview` shows a workspace file (or a before/after of two) with the same renderers and review
+  comments as diff review; `useResourceScope` gives the chat's workspace and session, and
+  `useOptionalResourceHost` the host's tab actions. The
+  extension never loads files or saves comments itself; the host supplies both through the provider.
+- `@thinkrail/locales/react` ([[module-locales]]) — `useT` / `<T>` / `t` over the one shared i18next
+  instance; an extension's UI text is keys in `packages/locales/en.json` under its own prefix
+  (`visualize.*`), held by `check:i18n` like the app.
 - **Not in the SDK (yet):** the highlighted `CodeBlock` and the shiki highlighter — not dependency-closed
   (highlighter → theme barrel). They move together with the generic CSS-variable shiki map when a second
   extension needs highlighting.
@@ -89,8 +97,10 @@ What a `./web` half may import:
   by relative path.
 - **Public subpaths:** `apps/web` may import only `@thinkrail/ext-*/web`; `packages/server` only
   `@thinkrail/ext-*/server`.
-- Edges: `extension-api → contracts`; `ui → contracts`; `ext-*/web → ui, extension-api, contracts`;
-  `ext-*/server → extension-api, its pi package`; `apps/web → contracts, ui, extension-api, ext-*/web`;
+- Edges: `extension-api → contracts`; `ui → contracts`; `resource-renderers → contracts, ui`;
+  `ext-*/web → ui, extension-api, resource-renderers, contracts`;
+  `ext-*/server → extension-api, its pi package`;
+  `apps/web → contracts, ui, extension-api, resource-renderers, ext-*/web`;
   `packages/server → extension-api, ext-*/server` (and no longer directly on pi packages an extension owns).
 
 ## Delivery template (every extension, every PR user-invisible)

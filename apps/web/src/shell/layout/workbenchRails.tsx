@@ -4,6 +4,8 @@ import {
 	RiTerminalBoxFill,
 	RiTerminalBoxLine as SquareTerminal,
 } from "@remixicon/react";
+import type { MessageKey } from "@thinkrail/locales";
+import { useT } from "@thinkrail/locales/react";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import type { ReactNode } from "react";
@@ -39,6 +41,29 @@ import type { DropTarget, SharedGroupProps } from "./workbenchShared";
 import { DropZone, groupPanelId, railControlId, railGroupDomId } from "./workbenchShared";
 import { WorkbenchTab } from "./workbenchTabs";
 
+const EMPTY_GROUP_LABELS = {
+	left: "workbench.rail.emptyLeftGroup",
+	right: "workbench.rail.emptyRightGroup",
+} as const satisfies Record<"left" | "right", MessageKey>;
+
+const JOIN_GROUP_LABELS = {
+	left: "workbench.rail.joinLeftGroup",
+	right: "workbench.rail.joinRightGroup",
+	bottom: "workbench.rail.joinBottomGroup",
+} as const satisfies Record<LayoutAuxiliaryRegion, MessageKey>;
+
+const NEW_PANE_HERE_LABELS = {
+	left: "workbench.rail.newLeftPaneHere",
+	right: "workbench.rail.newRightPaneHere",
+	bottom: "workbench.rail.newBottomPaneHere",
+} as const satisfies Record<LayoutAuxiliaryRegion, MessageKey>;
+
+const HIDDEN_SIDE_GROUP_LABELS = {
+	left: "workbench.rail.createLeftGroupHidden",
+	right: "workbench.rail.createRightGroupHidden",
+	bottom: "workbench.rail.createBottomGroupHidden",
+} as const satisfies Record<LayoutAuxiliaryRegion, MessageKey>;
+
 export function AuxiliaryRailButton({
 	entry,
 	control,
@@ -52,6 +77,7 @@ export function AuxiliaryRailButton({
 	shared: SharedGroupProps;
 	onActivate: () => void;
 }) {
+	const t = useT();
 	const unplaced = isUnplacedRailEntry(entry);
 	const group =
 		entry.groupId && !unplaced
@@ -75,12 +101,12 @@ export function AuxiliaryRailButton({
 	const active = entry.selected && entry.expanded;
 	const name =
 		entry.kind === "tool"
-			? layoutTabName(toolTab(entry.tool))
+			? layoutTabName(t, toolTab(entry.tool))
 			: entry.kind === "terminals"
-				? `Terminal group ${ordinal}, ${entry.tabs.length} ${entry.tabs.length === 1 ? "session" : "sessions"}`
+				? t("workbench.rail.terminalGroup", { position: ordinal, count: entry.tabs.length })
 				: entry.region === "bottom"
-					? "Terminal"
-					: `Empty ${entry.region} group ${ordinal}`;
+					? t("workbench.rail.terminal")
+					: t(EMPTY_GROUP_LABELS[entry.region], { position: ordinal });
 	return (
 		<div data-active={active} className={railEntryFrameClass(entry.region)}>
 			{active ? <AuxiliaryRailIndicator region={entry.region} /> : null}
@@ -90,7 +116,7 @@ export function AuxiliaryRailButton({
 						<span>
 							{name}
 							<br />
-							{entry.tabs.map((tab) => layoutTabName(tab)).join(", ")}
+							{entry.tabs.map((tab) => layoutTabName(t, tab)).join(", ")}
 						</span>
 					) : (
 						name
@@ -118,7 +144,9 @@ export function AuxiliaryRailButton({
 					}
 					{...control}
 					onClick={onActivate}
-					data-drop-label={dropEnabled ? `Join ${entry.region} group ${ordinal}` : undefined}
+					data-drop-label={
+						dropEnabled ? t(JOIN_GROUP_LABELS[entry.region], { position: ordinal }) : undefined
+					}
 					data-drop-active={isOver || undefined}
 					data-drop-hint={(dropEnabled && !isOver) || undefined}
 					className={cn(
@@ -163,6 +191,7 @@ export function AuxiliaryRegionRail({
 	attention: LayoutAttention;
 	trailing?: ReactNode;
 }) {
+	const t = useT();
 	const entries = projectAuxiliaryRail(shared.document, attention, region);
 	const groups = shared.document[region].groups;
 	const draggedAuxiliary =
@@ -210,7 +239,7 @@ export function AuxiliaryRegionRail({
 			<DropZone
 				id={tupleKey("dnd-rail-boundary", region, String(paneIndex))}
 				target={{ kind: "auxiliary-edge", region, index: paneIndex }}
-				label={`New ${region} pane here`}
+				label={t(NEW_PANE_HERE_LABELS[region])}
 				className={cn(
 					"absolute",
 					region === "bottom"
@@ -231,7 +260,7 @@ export function AuxiliaryRegionRail({
 						<DropZone
 							id={tupleKey("dnd-hidden-side-edge", region)}
 							target={{ kind: "auxiliary-edge", region, index: groups.length }}
-							label={`Create ${region} group in hidden side`}
+							label={t(HIDDEN_SIDE_GROUP_LABELS[region])}
 							className="relative min-h-32 w-32 flex-1"
 						/>
 					) : (

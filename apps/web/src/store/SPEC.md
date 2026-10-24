@@ -217,7 +217,9 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   repair cache/history labels or a still-queued open, but cannot recreate a locally closed placement or steal
   focus. **The durable-title fold** routes
   `session_info_changed` through the same one-home chat-label mutation already used by extension-UI
-  `setTitle`: normalize an absent name to the `Chat` fallback; update the cached `ChatTab`, its existing local
+  `setTitle`: normalize an absent name to the empty untitled name (worded at render by `lib`'s `chatName`, as
+  `selectChatTitle` does; `selectChatName` returns the stored name, and `workspaceName(t, ws)` words the
+  host-named default workspace); update the cached `ChatTab`, its existing local
   placement, any queued open, or its `closedChatsByWorkspace` row; and change no recency, runtime, placement,
   navigation clock, or attention. The durable Pi event may supersede an extension's presentation-only title.
   An event for a session this surface has never listed remains a no-op—`session.list`/`session.getMessages`
@@ -549,7 +551,11 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   **`noteFsChanged(payload)`** (folds a `workspace.fsChanged` push: `tick` increments per frame;
   `paths`/`truncated` are the last batch) — panels select their workspace's entry and refetch on `tick`
   change (the store holds only the signal, never fetches; `applyWorkspaceRemoved` drops a removed
-  workspace's entry). The **review slice** — **`reviewsByWorkspace: Record<workspaceId,
+  workspace's entry). **`fsChangedPaths(batch)`** reads a batch as its paths, or `null` when it is truncated
+  or pathless (anything may have changed) — one rule for `useLiveTabContent` and the resource host.
+  **`selectFileChangeSince(state, previous, workspaceId)`** answers a store transition the same way and
+  also answers `null` for a new connection, because pushes lost while disconnected are never replayed; the
+  resource host's `subscribeFileChanges` uses it, so a mounted `ResourcePreview` re-reads after a reconnect. The **review slice** — **`reviewsByWorkspace: Record<workspaceId,
 ReviewSnapshot>`** with **`setWorkspaceReview`** (a `review.get` read landing) and
 **`applyReviewChanged`** (folds a `review.changed` push — full snapshot, idempotent; every client,
 including a mutation's initiator, converges here — no optimism); `applyWorkspaceRemoved` drops the
@@ -610,7 +616,9 @@ components. The **Skills-reload badge** rides the same tick without a separate s
   plan live, so the page has no snapshot to go stale. **`DiffTab`** is one renderer-dispatched changed file over **one diff scope** (id `${workspaceId}:diff:${scopeKey}:${path}` — one tab per *(file,
 scope)*: **the scope is part of a tab's identity**, because a tab's content must never change meaning
 because the Changes tool's scope flipped underneath it; the tab carries its own `scope`, which is also what
-`DiffPane` re-reads with, never the panel's current one).
+`DiffPane` re-reads with, never the panel's current one). That is the `GitDiffTab` half of the `DiffTab` union;
+the other half, `FileComparisonTab`, compares two workspace files (`before` + `path`, no scope or loaded sides
+— see `panels/SPEC.md`), and `isFileComparison(tab)` tells them apart.
 **What a tab's identity fixes is *which scope* it shows — the kind, plus the sha for a commit scope.** A
 branch-scope tab means "this file vs the workspace's **current** review target", and that target moving —
 because commits landed on the branch, or because the user re-pointed it — is the same live-refresh contract
@@ -671,7 +679,17 @@ so a run that settled while the socket was down still arrives); every other cons
 `useWorkspaceTurns`.
 **`requestChangesView(workspaceId, path | null, scope?)`** gained two optional dimensions for the chat's
 *Review turn* action: a `scope` lands on `diffScopeByWorkspace` atomically with the reveal intent, and a
-`null` path means "open the review tab for that scope" rather than "reveal this file".
+`null` path means "open the review tab for that scope" rather than "reveal this file". It reveals the
+**Files** tool and sets **`filesMode: "changed"`** in the same write, as does **`revealChanges(workspaceId)`**
+(the chat's commit receipt); `filesMode` (`"all"` default) is app-wide and session-only like `changesView`.
+**`filesTreeByWorkspace`** (read through **`selectFilesTreeView`**, a stable empty view when absent) is the
+Files tree's remembered look per workspace: All-mode `expanded` folders, Changed-tree `changedCollapsed`
+folders (one set for every scope), `scroll` per view (`all` / `changedList` / `changedTree`, each tagged with
+the scope and compare target it belongs to, so another scope or target branch starts at the top), and `seenActivePath`. **`revealInFiles`** expands
+every ancestor of a path and records it as seen in one write, so the auto-reveal can tell on return whether
+the active file changed meanwhile; every write is idempotent (an unchanged view keeps its identity) and a
+removed workspace's view is dropped in `applyWorkspaceRemoved`. Persistence lives outside the store, in
+`panels/filesTreeState`. **`selectActiveFilePath`** is the path of the active file or diff tab, else `null`.
 **`diffScopeByWorkspace`** + **`setDiffScope(workspaceId, scope)`** hold *what* each workspace's Changes
 panel is diffing (read through **`selectDiffScope`**, which defaults to the shared, referentially stable
 `BRANCH_SCOPE`); keyed **per workspace**, not app-wide like `changesView`, because a scope belongs to that
@@ -717,6 +735,8 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   it is measured against — the client-side mirror of the host's one resolution), **`selectDiffTabTargetRef`**
   (that ref *as an open diff tab's live dimension*: the target for a branch-scope tab, `""` for a
   commit/uncommitted one whose sides can't move — derived here, never re-assembled in a panel),
+  `selectChangesTabSection` (one Changes tab section by workspace, tab and path — the review-draft
+  persistence reads its scratch slots through it),
   `selectWorkspaceTick` (the sync-baseline snapshot), `selectWorkspaceSessionIds` (deduplicated local chat
   placement + history membership used as a reconnect-reconciliation baseline), normalized session-state
   selectors/actions (exact session + workspace/project needs-input/working/unread-finished rollups, direct
@@ -745,5 +765,6 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   invocation parser/matcher for user-message echo reconciliation, the MCP attention/active predicates; a
   leaf, so the edge adds no cycle); `chat`
   (`ChatTurn`/`ToolResultState`, **type-only**); `auth` (`LoginState`, **type-only**); `transport`
-  (`ConnectionStatus`, **type-only**); `zustand`.
+  (`ConnectionStatus`, **type-only**); `@thinkrail/locales` (default chat/terminal names, settled-reason
+  copy and toasts, resolved when created); `zustand`.
 - **Forbidden:** `server`/`shared`/`pi`; importing `panels`, shell runtime (the web-local layout state edge is type-only), or transport runtime.

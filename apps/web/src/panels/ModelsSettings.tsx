@@ -4,6 +4,7 @@ import {
 	type ThinkingLevel,
 	type WireModel,
 } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ModelSelector } from "@/chat/ModelSelector";
@@ -19,6 +20,7 @@ import { SettingsSwitch } from "./SettingsSwitch";
 import { VisibleModelsSettings } from "./VisibleModelsSettings";
 
 export function ModelsSettings() {
+	const t = useT();
 	const defaultModel = useAppStore((s) => s.defaultModel);
 	const defaultEffort = useAppStore((s) => s.defaultEffort);
 	const reviewModel = useAppStore((s) => s.reviewModel);
@@ -84,8 +86,8 @@ export function ModelsSettings() {
 	const reviewerEffortLevel =
 		reviewEffort ?? (reviewModel ? "medium" : (resolvedDefault?.thinkingLevel ?? "medium"));
 	const reviewerPlaceholder = resolvedDefault?.model
-		? `${resolvedDefault.model.name} (Default)`
-		: "Default model";
+		? t("settings.models.reviewerDefault", { name: resolvedDefault.model.name })
+		: t("settings.models.defaultModelPlaceholder");
 
 	const updateReviewer = (config: {
 		reviewModel?: WireModel | null;
@@ -93,29 +95,29 @@ export function ModelsSettings() {
 	}) => {
 		getTransport()
 			.request("settings.update", { config })
-			.catch(() => toast.error("Couldn't change the review model"));
+			.catch(() => toast.error(t("settings.models.reviewModelFailed")));
 	};
 
 	const setAutoFix = (reviewAutoFix: boolean) => {
 		getTransport()
 			.request("settings.update", { config: { reviewAutoFix } })
-			.catch(() => toast.error("Couldn't change the auto-fix setting"));
+			.catch(() => toast.error(t("settings.models.autoFixFailed")));
 	};
 
 	const setAgentReviewEnabled = (value: boolean) => {
 		getTransport()
 			.request("settings.update", { config: { agentReviewEnabled: value } })
-			.catch(() => toast.error("Couldn't change the agent-review setting"));
+			.catch(() => toast.error(t("settings.models.agentReviewFailed")));
 	};
 
 	return (
 		<SettingsPageContainer testId="settings-models">
-			<SettingsGroup title="Default model">
+			<SettingsGroup title={t("settings.models.defaultGroup")}>
 				{loadFailed ? (
 					<div className="flex items-center gap-8 border-border-muted border-b py-12">
-						<p className="text-text-muted tr-text-ui">Couldn't load your default model.</p>
+						<p className="text-text-muted tr-text-ui">{t("settings.models.loadFailed")}</p>
 						<Button variant="ghost" size="sm" onClick={() => void readDefault()}>
-							Retry
+							{t("common.retry")}
 						</Button>
 					</div>
 				) : resolvedDefault || !reading ? (
@@ -123,7 +125,7 @@ export function ModelsSettings() {
 						data-testid="default-model-row"
 						className="flex flex-wrap items-center justify-between gap-12 border-border-muted border-b py-12"
 					>
-						<span className="tr-text-ui text-text-default">Chat model</span>
+						<span className="tr-text-ui text-text-default">{t("settings.models.chatModel")}</span>
 						<div className="flex flex-wrap items-center gap-8">
 							<ModelSelector
 								models={chatPickerModels}
@@ -131,9 +133,9 @@ export function ModelsSettings() {
 								refreshing={refreshing}
 								onRefresh={refresh}
 								onSelect={(selected) =>
-									void saveConfig({ defaultModel: selected }, "Couldn't save the default model")
+									void saveConfig({ defaultModel: selected }, t("settings.models.saveModelFailed"))
 								}
-								placeholder="First available"
+								placeholder={t("settings.models.firstAvailable")}
 								disabled={saving || reading}
 								preferences={preferences}
 							/>
@@ -141,7 +143,7 @@ export function ModelsSettings() {
 								level={level}
 								levels={model?.thinkingLevels ?? []}
 								onSelect={(defaultEffort) =>
-									void saveConfig({ defaultEffort }, "Couldn't save the default effort")
+									void saveConfig({ defaultEffort }, t("settings.models.saveEffortFailed"))
 								}
 								disabled={saving || reading}
 							/>
@@ -151,12 +153,12 @@ export function ModelsSettings() {
 				<VisibleModelsSettings models={allModels} />
 			</SettingsGroup>
 
-			<SettingsGroup title="Review" testId="models-review-group">
+			<SettingsGroup title={t("settings.models.reviewGroup")} testId="models-review-group">
 				<div
 					data-testid="review-model-row"
 					className="flex flex-wrap items-center justify-between gap-12 border-border-muted border-b py-12"
 				>
-					<span className="tr-text-ui text-text-default">Review model</span>
+					<span className="tr-text-ui text-text-default">{t("settings.models.reviewModel")}</span>
 					<div className="flex flex-wrap items-center gap-8">
 						<ModelSelector
 							models={reviewPickerModels}
@@ -179,12 +181,12 @@ export function ModelsSettings() {
 				{protocolVersion !== null && protocolVersion >= AGENT_REVIEW_SETTING_PROTOCOL_VERSION && (
 					<SettingsRow
 						testId="agent-review-row"
-						label="Agent-triggered review"
-						description="Allow the agent to review completed work."
+						label={t("settings.models.agentReview")}
+						description={t("settings.models.agentReviewDescription")}
 						control={
 							<SettingsSwitch
 								checked={agentReviewEnabled}
-								label="Agent-triggered review"
+								label={t("settings.models.agentReview")}
 								testId="agent-review-toggle"
 								onChange={setAgentReviewEnabled}
 							/>
@@ -193,12 +195,12 @@ export function ModelsSettings() {
 				)}
 				<SettingsRow
 					testId="review-autofix-row"
-					label="Automatic fix cycle"
-					description="Send requested changes back to the agent once."
+					label={t("settings.models.autoFix")}
+					description={t("settings.models.autoFixDescription")}
 					control={
 						<SettingsSwitch
 							checked={autoFix}
-							label="Automatic fix cycle"
+							label={t("settings.models.autoFix")}
 							testId="review-autofix-toggle"
 							onChange={setAutoFix}
 						/>

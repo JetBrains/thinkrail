@@ -32,7 +32,9 @@ const message: TranscriptMessage = {
 
 test("live and hydrated command completion messages produce the same historical row and never resource authority", () => {
 	const live = reduceSessionEvent(EMPTY_RUNTIME, { type: "message_end", message });
-	const hydrated = messagesToRuntime([message], undefined, { idScope: "chat" });
+	const hydrated = messagesToRuntime([message], undefined, {
+		idScope: "chat",
+	});
 	for (const runtime of [live, hydrated]) {
 		expect(runtime.turns).toHaveLength(1);
 		expect(runtime.turns[0]).toMatchObject({ kind: "backgroundCommandCompletion", details });

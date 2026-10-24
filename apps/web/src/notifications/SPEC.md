@@ -117,7 +117,8 @@ toggle is host-synced app config and defaults on (notifications still require th
   `selectNotificationChannel`, `NotificationChannel`, `NotificationPermissionState`, `ATTENTION_WINDOW_MS`.
 - **Allowed deps:** [[submodule-web-store]] (session-state reads, prompt state, `activateWorkspaceFromRoute`
   and `openSessionSwitcher` actions), `ui` (the preface dialog), [[module-contracts]] (`SessionState` /
-  `SessionCompletion` / `NativeNotificationBridge` types), React, Remix Icon.
+  `SessionCompletion` / `NativeNotificationBridge` types), `@thinkrail/locales` (notification and preface
+  strings, resolved when each notification is built), React, Remix Icon.
 - **Forbidden:** a second source of truth for attention; raw agent-event listening; any host/`pi` import;
   branching on `desktop` (channel choice is capability detection of the native bridge).
 

@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { McpListResult, McpServerSummary } from "@thinkrail/contracts";
+import { currentTranslator } from "@thinkrail/locales/react";
 import type { McpServerRow } from "@/store";
 import {
 	formatStartingElapsed,
@@ -46,17 +47,18 @@ function row(overrides: Partial<McpServerRow> = {}, summaryOverrides = {}): McpS
 }
 
 test("connected rows carry tool counts, partial chat coverage, and warn at zero tools", () => {
-	expect(mcpRowView(row({ toolCount: 2 }), NOW)).toEqual({
+	expect(mcpRowView(currentTranslator(), row({ toolCount: 2 }), NOW)).toEqual({
 		label: "Connected · 2 tools",
 		tone: "success",
 	});
 	expect(
 		mcpRowView(
+			currentTranslator(),
 			row({ toolCount: 2, sessions: { total: 3, reporting: ["s1", "s2"], connected: 2 } }),
 			NOW,
 		).label,
 	).toBe("Connected in 2 of 3 chats · 2 tools");
-	expect(mcpRowView(row({ toolCount: 0 }), NOW)).toEqual({
+	expect(mcpRowView(currentTranslator(), row({ toolCount: 0 }), NOW)).toEqual({
 		label: "Connected · 0 tools",
 		tone: "warning",
 		reason: "The server reports no tools.",
@@ -65,7 +67,7 @@ test("connected rows carry tool counts, partial chat coverage, and warn at zero 
 
 test("each non-green state has one reason line, at most one action and one secondary action", () => {
 	const view = (overrides: Partial<McpServerRow>, summaryOverrides = {}) =>
-		mcpRowView(row(overrides, summaryOverrides), NOW);
+		mcpRowView(currentTranslator(), row(overrides, summaryOverrides), NOW);
 	expect(view({ state: "starting", startingSince: NOW - 90_000 })).toMatchObject({
 		label: "Starting · 1 min",
 		tone: "working",
@@ -137,21 +139,24 @@ test("each non-green state has one reason line, at most one action and one secon
 test("name-only primary and secondary probes require effective row authority", () => {
 	const http = { transport: "http", oauth: true };
 	for (const effective of [false, true]) {
-		expect(mcpRowView(row({ state: "needs-sign-in", effective }, http), NOW).action).toBe(
-			effective ? "sign-in" : undefined,
-		);
-		expect(mcpRowView(row({ state: "not-running", effective }, http), NOW).secondary).toBe(
-			effective ? "test-connection" : undefined,
-		);
+		expect(
+			mcpRowView(currentTranslator(), row({ state: "needs-sign-in", effective }, http), NOW).action,
+		).toBe(effective ? "sign-in" : undefined);
+		expect(
+			mcpRowView(currentTranslator(), row({ state: "not-running", effective }, http), NOW)
+				.secondary,
+		).toBe(effective ? "test-connection" : undefined);
 	}
 	expect(
 		mcpRowView(
+			currentTranslator(),
 			row({ state: "pending-approval", effective: false }, { ...http, scope: "project" }),
 			NOW,
 		).action,
 	).toBe("review");
 	expect(
 		mcpRowView(
+			currentTranslator(),
 			row({ state: "invalid-config", effective: false }, { ...http, scope: "project" }),
 			NOW,
 		).action,
@@ -161,6 +166,7 @@ test("name-only primary and secondary probes require effective row authority", (
 test("a pending repository override turns any live row into a review", () => {
 	expect(
 		mcpRowView(
+			currentTranslator(),
 			row(
 				{ toolCount: 1, approvalPending: true },
 				{ approval: { state: "pending", fingerprint: "o" } },
@@ -262,10 +268,12 @@ test("save feedback never claims open chats already applied a change they are st
 });
 
 test("the handled-elsewhere notice names the owning extension, or the pi setting to remove", () => {
-	expect(mcpHandledElsewhereText("/home/me/.pi/agent/extensions/my-mcp.ts")).toBe(
+	expect(
+		mcpHandledElsewhereText(currentTranslator(), "/home/me/.pi/agent/extensions/my-mcp.ts"),
+	).toBe(
 		"MCP is handled by /home/me/.pi/agent/extensions/my-mcp.ts in this workspace; ThinkRail's MCP management is read-only.",
 	);
-	expect(mcpHandledElsewhereText("pi settings (-builtin:mcp)")).toBe(
+	expect(mcpHandledElsewhereText(currentTranslator(), "pi settings (-builtin:mcp)")).toBe(
 		"MCP is turned off in pi settings (-builtin:mcp); remove that entry to manage servers here.",
 	);
 });
@@ -292,9 +300,11 @@ test("a per-chat action reports its one chat's error as is, and names the chat w
 });
 
 test("configured codemode is labelled as treated like deferred", () => {
-	expect(mcpConfiguredExposureText(summary({ exposure: "codemode" }))).toBe(
+	expect(mcpConfiguredExposureText(currentTranslator(), summary({ exposure: "codemode" }))).toBe(
 		"codemode — treated as deferred (codemode not available yet)",
 	);
-	expect(mcpConfiguredExposureText(summary({ exposure: "direct" }))).toBe("direct");
-	expect(formatStartingElapsed(20_000)).toBe("<1 min");
+	expect(mcpConfiguredExposureText(currentTranslator(), summary({ exposure: "direct" }))).toBe(
+		"direct",
+	);
+	expect(formatStartingElapsed(currentTranslator(), 20_000)).toBe("<1 min");
 });
