@@ -14,12 +14,22 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { packPiPackage, publishablePiPackages, repoRoot } from "./pi-packages.ts";
 
+interface ScriptedUi {
+	mode: "tui" | "rpc";
+	/** Answers to `select` (a number picks that choice) and `input`, in order; `null` dismisses. */
+	replies?: (string | number | null)[];
+	/** Raw terminal input fed to the component a `ui.custom` factory returns. */
+	keys?: string[];
+}
+
 interface ParityCase {
 	tool: string;
 	name: string;
 	args: Record<string, unknown>;
+	ui?: ScriptedUi;
 	expectError?: string;
 	expectText?: string[];
+	expectTerminate?: boolean;
 	expectRender?: { width?: number; contains?: string[] };
 }
 
@@ -35,6 +45,25 @@ const rootManifest = JSON.parse(readFileSync(join(repoRoot, "package.json"), "ut
 const piVersion = rootManifest.workspaces.catalog["@earendil-works/pi-coding-agent"];
 if (!piVersion) throw new Error("check-pi-packages: pi version missing from the root catalog");
 
+const ASK_LIBRARY = {
+	question: "Which library?",
+	header: "Lib",
+	options: [
+		{ label: "date-fns", description: "small" },
+		{ label: "luxon", description: "rich" },
+	],
+};
+const ASK_TARGETS = {
+	question: "Which targets?",
+	header: "Targets",
+	multiSelect: true,
+	options: [
+		{ label: "web", description: "browser" },
+		{ label: "cli", description: "terminal" },
+	],
+};
+const KEY = { up: "\x1b[A", down: "\x1b[B", enter: "\r", escape: "\x1b", space: " " };
+
 const EXPECTATIONS: Record<string, Expectation> = {
 	"@thinkrail/pi-ask-user-question": {
 		tools: ["ask_user_question"],
@@ -43,19 +72,79 @@ const EXPECTATIONS: Record<string, Expectation> = {
 			{
 				tool: "ask_user_question",
 				name: "no-ui-reports-unavailable",
-				args: {
-					questions: [
-						{
-							question: "Which library?",
-							header: "Lib",
-							options: [
-								{ label: "date-fns", description: "small" },
-								{ label: "luxon", description: "rich" },
-							],
-						},
-					],
-				},
+				args: { questions: [ASK_LIBRARY] },
 				expectText: ["UI not available"],
+			},
+			{
+				tool: "ask_user_question",
+				name: "invalid-questionnaire-rejected",
+				args: { questions: [] },
+				ui: { mode: "rpc" },
+				expectText: ["At least one question is required"],
+			},
+			{
+				tool: "ask_user_question",
+				name: "terminal-answer",
+				args: { questions: [ASK_LIBRARY] },
+				ui: { mode: "tui", keys: [KEY.down, KEY.enter] },
+				expectText: ['"Which library?"="luxon"'],
+				expectRender: { width: 80, contains: ["✓ Lib: luxon"] },
+			},
+			{
+				tool: "ask_user_question",
+				name: "terminal-multi-with-own-answer",
+				args: { questions: [ASK_TARGETS] },
+				ui: {
+					mode: "tui",
+					keys: [KEY.space, KEY.down, KEY.down, "t", "r", "a", "y", KEY.enter],
+				},
+				expectText: ['"Which targets?"="web"', 'user\'s own answer: "tray"'],
+				expectRender: { width: 80, contains: ["✓ Targets: web, “tray”"] },
+			},
+			{
+				tool: "ask_user_question",
+				name: "terminal-skip",
+				args: { questions: [ASK_LIBRARY] },
+				ui: { mode: "tui", keys: [KEY.escape] },
+				expectText: ["User declined to answer questions"],
+				expectRender: { width: 80, contains: ["Skipped"] },
+			},
+			{
+				tool: "ask_user_question",
+				name: "terminal-chat-ends-the-turn",
+				args: { questions: [ASK_LIBRARY, ASK_TARGETS] },
+				ui: { mode: "tui", keys: [KEY.up, KEY.enter] },
+				expectText: ["discuss these questions in chat"],
+				expectTerminate: true,
+				expectRender: { width: 80, contains: ["Continuing in chat"] },
+			},
+			{
+				tool: "ask_user_question",
+				name: "dialog-answer",
+				args: { questions: [ASK_LIBRARY] },
+				ui: { mode: "rpc", replies: [1] },
+				expectText: ['"Which library?"="luxon"'],
+			},
+			{
+				tool: "ask_user_question",
+				name: "dialog-own-answer",
+				args: { questions: [ASK_LIBRARY] },
+				ui: { mode: "rpc", replies: [2, "dayjs"] },
+				expectText: ['"Which library?"="dayjs"'],
+			},
+			{
+				tool: "ask_user_question",
+				name: "dialog-multi-numbers",
+				args: { questions: [ASK_TARGETS] },
+				ui: { mode: "rpc", replies: ["1,2"] },
+				expectText: ['"Which targets?"="web, cli"'],
+			},
+			{
+				tool: "ask_user_question",
+				name: "dialog-dismiss-declines",
+				args: { questions: [ASK_LIBRARY] },
+				ui: { mode: "rpc", replies: [null] },
+				expectText: ["User declined to answer questions"],
 			},
 		],
 	},

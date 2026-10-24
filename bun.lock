@@ -433,6 +433,7 @@
       "name": "@thinkrail/pi-ask-user-question",
       "version": "0.0.0",
       "devDependencies": {
+        "@earendil-works/pi-ai": "catalog:",
         "@earendil-works/pi-coding-agent": "catalog:",
         "@earendil-works/pi-tui": "catalog:",
         "@types/bun": "catalog:",
