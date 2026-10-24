@@ -340,11 +340,12 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 						? process.platform
 						: "linux";
 				const setupCapture = additionalCapture();
+				const recentProjects = await listRecentProjects();
 				const welcome: ServerWelcome = {
 					protocolVersion: PROTOCOL_VERSION,
 					hostPlatform,
 					projects: listProjects(),
-					recentProjects: await listRecentProjects(),
+					recentProjects,
 					config: getConfig(),
 					...(appVersion ? { appVersion } : {}),
 					...(hostUpdateNotice ? { hostUpdate: hostUpdateNotice } : {}),
