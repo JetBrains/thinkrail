@@ -26,6 +26,7 @@ export interface ResultRowProps {
 	onToggle?: ((event: MouseEvent<HTMLButtonElement>) => void) | undefined;
 	toggleRef?: ((element: HTMLElement | null) => void) | undefined;
 	onOpen?: (() => void) | undefined;
+	metaLead?: ReactNode;
 	meta?: string | undefined;
 	teaser?: string | undefined;
 	children?: ReactNode;
@@ -90,6 +91,7 @@ export function ResultRow({
 	onToggle,
 	toggleRef,
 	onOpen,
+	metaLead,
 	meta,
 	teaser,
 	children,
@@ -121,6 +123,7 @@ export function ResultRow({
 				<span className="shrink-0 tabular-nums">{formatElapsed(t, durationMs)}</span>
 			) : null}
 			{exitCode !== undefined && exitCode !== null ? <ExitBadge exitCode={exitCode} /> : null}
+			{metaLead ? <span className="flex min-w-0 shrink">{metaLead}</span> : null}
 			{meta ? (
 				<span className="min-w-0 shrink truncate" title={meta}>
 					{meta}

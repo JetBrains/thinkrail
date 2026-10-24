@@ -2,6 +2,7 @@ import {
 	type PromptHit,
 	type QueueLane,
 	type SessionQueueContent,
+	type SubagentResourceSummary,
 	sameModel,
 	type TemplateInfo,
 	type ThinkingLevel,
@@ -47,6 +48,7 @@ import {
 } from "./Composer";
 import { mentionLookup } from "./fileTargets";
 import { HistoryOverlay } from "./HistoryOverlay";
+import { ModelEffortLabel, parseModelRef } from "./ModelEffortLabel";
 import type { ModelSelection } from "./ModelEffortPicker";
 import {
 	compactSubmissionError,
@@ -272,6 +274,21 @@ export default function ChatView({
 	const openProviderSettings = useCallback(
 		() => useAppStore.getState().openSettings(SettingsSection.Providers),
 		[],
+	);
+	const findModel = useCallback(
+		(ref: string) => selectCatalogModel(allModels, parseModelRef(ref)),
+		[allModels],
+	);
+	const renderSubagentModel = useCallback(
+		({ model, thinkingLevel }: SubagentResourceSummary) =>
+			model ? (
+				<ModelEffortLabel
+					model={model}
+					thinkingLevel={thinkingLevel}
+					catalogModel={findModel(model)}
+				/>
+			) : null,
+		[findModel],
 	);
 	const readMcpOutput = useCallback(
 		(toolCallId: string) =>
@@ -741,6 +758,7 @@ export default function ChatView({
 				readMcpOutput={supportsMcp ? readMcpOutput : undefined}
 				openMcpSettings={supportsMcp ? openMcpSettings : undefined}
 				openProviderSettings={supportsMcp ? openProviderSettings : undefined}
+				findModel={findModel}
 				resourcesOverlay={
 					resources.visible ? (
 						<ResourcesInspector
@@ -763,6 +781,7 @@ export default function ChatView({
 							onMcpSetEnabled={resources.setMcpEnabled}
 							onMcpReconnect={resources.reconnectMcp}
 							onOpenMcpSettings={openMcpSettings}
+							renderSubagentModel={renderSubagentModel}
 							detail={
 								selectedCommandId ? (
 									<CommandLogView {...commandLog} onRetry={commandLog.retry} />

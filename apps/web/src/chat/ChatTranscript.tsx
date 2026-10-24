@@ -178,6 +178,7 @@ const ChatTranscript = forwardRef<
 		readMcpOutput?: ChatActions["readMcpOutput"];
 		openMcpSettings?: ChatActions["openMcpSettings"];
 		openProviderSettings?: ChatActions["openProviderSettings"];
+		findModel?: ChatActions["findModel"];
 		resourcesOverlay?: ReactNode;
 	}
 >(function ChatTranscript(
@@ -196,6 +197,7 @@ const ChatTranscript = forwardRef<
 		readMcpOutput,
 		openMcpSettings,
 		openProviderSettings,
+		findModel,
 		resourcesOverlay,
 	},
 	ref,
@@ -578,9 +580,11 @@ const ChatTranscript = forwardRef<
 			readMcpOutput,
 			openMcpSettings,
 			openProviderSettings,
+			findModel,
 		}),
 		[
 			cancelAutomaticReveal,
+			findModel,
 			focusComposer,
 			openMcpSettings,
 			openProviderSettings,

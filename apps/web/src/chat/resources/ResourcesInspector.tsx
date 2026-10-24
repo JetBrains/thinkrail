@@ -58,6 +58,8 @@ export interface ResourcesInspectorProps {
 	onStopAll: () => void;
 	/** The selected row's body: bounded command output or the read-only subagent transcript. */
 	detail: ReactNode;
+	/** The selected subagent's model label (catalog name, effort); falls back to the raw `provider/id`. */
+	renderSubagentModel?: (summary: SubagentResourceSummary) => ReactNode;
 	mcpServers?: McpServerResourceSummary[] | null;
 	onMcpSetEnabled?: (name: string, enabled: boolean) => void;
 	onMcpReconnect?: (name: string) => void;
@@ -79,12 +81,14 @@ function DetailHeader({
 	authoritative,
 	actions,
 	onStop,
+	renderSubagentModel,
 }: {
 	resource: Resource;
 	now: number;
 	authoritative: boolean;
 	actions: ResourceActions;
 	onStop: () => void;
+	renderSubagentModel: ResourcesInspectorProps["renderSubagentModel"];
 }) {
 	const t = useT();
 	const state = resourceState(resource);
@@ -98,6 +102,10 @@ function DetailHeader({
 	const exitCode = resource.kind === "command" ? resource.summary.exitCode : undefined;
 	const reason =
 		resource.kind === "command" ? resource.summary.errorMessage : resource.summary.abortReason;
+	const model =
+		resource.kind === "subagent" && resource.summary.model
+			? (renderSubagentModel?.(resource.summary) ?? resource.summary.model)
+			: null;
 	return (
 		<div className="flex shrink-0 flex-col gap-8 border-border-muted border-b p-12">
 			<div className="flex min-w-0 items-center gap-8">
@@ -151,6 +159,12 @@ function DetailHeader({
 						<dd>
 							<ExitBadge exitCode={exitCode} />
 						</dd>
+					</div>
+				) : null}
+				{model ? (
+					<div data-testid="resource-detail-model" className="flex min-w-0 items-center gap-4">
+						<dt className="shrink-0 text-text-default">{t("resources.detail.model")}</dt>
+						<dd className="flex min-w-0">{model}</dd>
 					</div>
 				) : null}
 				<div className="flex min-w-0 basis-full gap-4">
@@ -402,6 +416,7 @@ export function ResourcesInspector(props: ResourcesInspectorProps) {
 								authoritative={props.authoritative}
 								actions={props.actions}
 								onStop={() => stopFor(selected)}
+								renderSubagentModel={props.renderSubagentModel}
 							/>
 							<div className="flex min-h-0 flex-1 flex-col gap-8 p-12">{props.detail}</div>
 						</>
