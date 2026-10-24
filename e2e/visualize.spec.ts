@@ -578,7 +578,9 @@ test("an HTML preview width is shared by the card and its full screen and surviv
 	}
 });
 
-test("a huge before/after comparison waits behind the expensive-diff notice", async ({ page }) => {
+test("a huge before/after comparison waits behind the expensive-diff notice and lands while the workspace keeps changing", async ({
+	page,
+}) => {
 	const lines = (mark: string) =>
 		`${Array.from({ length: 3_000 }, (_, index) => `${mark} line ${index + 1}`).join("\n")}\n`;
 	const cleanup = writeMockups({
@@ -593,8 +595,17 @@ test("a huge before/after comparison waits behind the expensive-diff notice", as
 		});
 		const diff = card.getByTestId("resource-preview-diff");
 		await expect(diff.getByTestId("diff-too-large")).toBeVisible();
-		await diff.getByTestId("diff-show-anyway").click();
-		await expect(diff.getByTestId("diff-too-large")).toHaveCount(0);
+		const unrelated = join(E2E_FIXTURE_REPO, "unrelated.txt");
+		const editUnrelated = () => writeFileSync(unrelated, String(Date.now()));
+		editUnrelated();
+		const unrelatedEdits = setInterval(editUnrelated, 400);
+		try {
+			await diff.getByTestId("diff-show-anyway").click();
+			await expect(diff.getByTestId("diff-too-large")).toHaveCount(0);
+		} finally {
+			clearInterval(unrelatedEdits);
+			rmSync(unrelated, { force: true });
+		}
 		const diffView = diff.getByTestId("diff-view");
 		await expect(pierreLines(diffView, "before line 1").first()).toBeVisible({ timeout: 20_000 });
 		expect(await pierreLines(diffView).count()).toBeLessThan(1_000);

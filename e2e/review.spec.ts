@@ -579,11 +579,7 @@ test("cards drawn in the preview reserve their height in the source view — and
 });
 
 async function scrollCardsIntoView(page: Page): Promise<void> {
-	const editor = page.locator(".monaco-editor").first();
-	await expect(editor).toBeVisible();
-	const box = await editor.boundingBox();
-	if (!box) throw new Error("Monaco editor has no bounding box");
-	await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+	await page.locator(".monaco-editor").first().hover();
 	for (let i = 0; i < 30; i++) {
 		await page.mouse.wheel(0, 800);
 		await page.waitForTimeout(50);

@@ -21,6 +21,7 @@ import {
 import { prepareChatTitle } from "../chat/chatTitle";
 import { useAutoPlanSummary } from "../chat/useChatTodos";
 import { ErrorBoundary } from "../components/ErrorBoundary";
+import { preloadedLazy } from "../components/preloadedLazy";
 import { QuietScrollArea } from "../components/QuietScrollArea";
 import { type LayoutAttention, layoutResourceIdentity } from "../lib";
 import { DiffPane } from "../panels/DiffPane";
@@ -100,7 +101,7 @@ function PlanSummaryAutoDraft({
 	return null;
 }
 
-const ChatView = lazy(() => import("../chat/ChatView"));
+const ChatView = preloadedLazy(() => import("../chat/ChatView"));
 const PlanPane = lazy(() => import("../panels/PlanPane"));
 const ChangesReviewPane = lazy(() =>
 	import("../panels/ChangesReviewPane").then((module) => ({ default: module.ChangesReviewPane })),
@@ -340,6 +341,9 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 	const railPlanSessionId = useAppStore((state) => selectRailPlanSessionId(state, workspaceId));
 	const reviewDraftCount = useAppStore((state) => selectReviewDraftCount(state, workspaceId));
 	const reviewFlagByPath = useMemo(() => reviewFlags(reviewComments), [reviewComments]);
+	useEffect(() => {
+		void ChatView.preload();
+	}, []);
 	const [focusRequest, setFocusRequest] = useState<LayoutTabFocusRequest | null>(null);
 	const requestRenameChat = useCallback(
 		(sessionId: string, titleInput: string, currentTitle: string) => {

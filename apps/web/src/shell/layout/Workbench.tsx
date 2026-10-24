@@ -178,6 +178,7 @@ export function Workbench({
 						key: createLayoutId("focus"),
 						location,
 						...(result.focusTabId ? { tabId: result.focusTabId } : {}),
+						...(result.focusOnlyIfLost ? { onlyIfFocusLost: true } : {}),
 					});
 				}
 			}

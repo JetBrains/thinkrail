@@ -1,3 +1,4 @@
+import { realpathSync, rmSync } from "node:fs";
 import { expect, type Locator, type Page, test, type WebSocketRoute } from "@playwright/test";
 import {
 	createWorkspaceViaDialog,
@@ -5,12 +6,15 @@ import {
 	enterDefaultWorkspace,
 	expandDisclosure,
 	openFixtureProject,
+	openPersistedChat,
 	pressPlatformShortcut,
 	pseudoBackgroundColor,
 	revealFirstProjectWorkspaces,
 	revealWorkbenchTool,
 	waitTerminalReady,
 } from "./fixtures/app";
+import { E2E_FIXTURE_REPO } from "./fixtures/paths";
+import { seedWorkspaceSession } from "./fixtures/sessions";
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
@@ -662,6 +666,51 @@ test("Mod+B and Mod+J hide and restore local sides without affecting bottom", as
 	await expect(page.getByTestId("left-nav")).toBeVisible();
 	await expect(page.getByTestId("right-stack")).toBeVisible();
 	await waitTerminalReady(page);
+});
+
+test("hiding a side or the bottom keeps focus outside it and recovers focus from inside it", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	const session = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name: "focus keeper",
+		messages: [{ role: "user", text: "Keep my draft focused.", timestamp: 1_700_900_000_000 }],
+	});
+	try {
+		await enterDefaultWorkspace(page);
+		await waitTerminalReady(page);
+		await openPersistedChat(page, "focus keeper");
+		const composer = page.getByTestId("chat-input");
+		await composer.click();
+		await composer.fill("draft in progress");
+
+		for (const [shortcut, region] of [
+			["b", "left-nav"],
+			["j", "right-stack"],
+			["Shift+j", "bottom-panel"],
+		] as const) {
+			await pressPlatformShortcut(page, shortcut);
+			await expect(page.getByTestId(region)).toHaveCount(0);
+			await expect(composer).toBeFocused();
+		}
+		await expect(composer).toHaveValue("draft in progress");
+
+		await pressPlatformShortcut(page, "b");
+		await expect(page.getByTestId("left-nav")).toBeVisible();
+		const insideLeft = page.getByTestId("left-nav").getByTestId("project-expand").first();
+		await insideLeft.focus();
+		await expect(insideLeft).toBeFocused();
+		await pressPlatformShortcut(page, "b");
+		await expect(page.getByTestId("left-nav")).toHaveCount(0);
+		await expect(
+			page
+				.locator('[data-testid="editor-tab"][data-kind="chat"]')
+				.filter({ hasText: "focus keeper" })
+				.getByRole("tab"),
+		).toBeFocused();
+	} finally {
+		rmSync(session.path, { force: true });
+	}
 });
 
 test("keyboard and menu commands reorder, search, recursively split, and explicitly remove empty groups", async ({
