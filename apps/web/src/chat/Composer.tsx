@@ -662,6 +662,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 								variant="ghost"
 								size="icon"
 								data-testid="history-open"
+								data-history-trigger
 								aria-label="Search history"
 								onClick={openHistory}
 								className="rounded-full"
