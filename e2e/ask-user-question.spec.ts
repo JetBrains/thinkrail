@@ -43,6 +43,17 @@ function optionsFor(pageName: string): AskUserQuestionOption[] {
 	];
 }
 
+async function openPersistedChatAfterInput(page: Page, title: string): Promise<void> {
+	await openPersistedChat(page, title);
+	const chatTab = page
+		.locator('[data-testid="editor-tab"][data-kind="chat"]')
+		.filter({ hasText: title });
+	await chatTab.hover();
+	await chatTab.getByTestId("editor-tab-close").click();
+	await expect(chatTab).toHaveCount(0);
+	await openPersistedChat(page, title);
+}
+
 async function selectOldestFirst(page: Page): Promise<void> {
 	await page.getByTestId("open-settings").click();
 	await page.getByTestId("settings-nav-chat").click();
@@ -138,7 +149,7 @@ test("a persisted tall questionnaire reveals page changes and a restored page wi
 		await selectOldestFirst(page);
 		await enterDefaultWorkspace(page);
 		await hideAuxiliaryWorkbench(page);
-		await openPersistedChat(page, "tall persisted questionnaire");
+		await openPersistedChatAfterInput(page, "tall persisted questionnaire");
 
 		const chatScroll = page.getByTestId("chat-scroll");
 		const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
@@ -240,7 +251,7 @@ test("a key pressed before a reopened questionnaire's first frame does not cance
 	try {
 		await enterDefaultWorkspace(page);
 		await hideAuxiliaryWorkbench(page);
-		await openPersistedChat(page, "early input questionnaire");
+		await openPersistedChatAfterInput(page, "early input questionnaire");
 		const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
 		await expect(card.getByTestId("ask-option").first()).toBeFocused();
 
@@ -289,7 +300,7 @@ test("a questionnaire with more than four questions exposes every page and the f
 	try {
 		await enterDefaultWorkspace(page);
 		await hideAuxiliaryWorkbench(page);
-		await openPersistedChat(page, "six-question round");
+		await openPersistedChatAfterInput(page, "six-question round");
 
 		const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
 		await expect(card).toBeVisible();
@@ -323,7 +334,7 @@ test("a coarse pointer reveals a returning page's text target without focusing i
 	try {
 		await enterDefaultWorkspace(page);
 		await hideAuxiliaryWorkbench(page);
-		await openPersistedChat(page, "touch questionnaire");
+		await openPersistedChatAfterInput(page, "touch questionnaire");
 
 		const chatScroll = page.getByTestId("chat-scroll");
 		const card = page.locator('[data-testid="ask-user-question"][data-tone="active"]');
