@@ -135,6 +135,9 @@ for highlighted tokens (`pierreHighlightedTokens`) before measuring or dragging 
 A following probe that lets actionability scroll an off-screen transcript control into view first
 waits for `data-scroll-moving="false"`: that scroll is not reader input, so an active placement motion
 restores the latest edge, which on slow runners lands between mousedown and mouseup and drops the click.
+Entering a workspace auto-opens its latest chat, and a pending questionnaire there claims focus and reveal
+at once. Workbench shortcuts pressed afterwards are user input, and the card yields to them. Questionnaire
+attention coverage therefore closes and reopens the chat after arranging the workbench.
 Monaco wheel probes reach the editor through an actionability-checked `hover()`, never a measured box:
 a box read before the editor's layout settles can be a stale one whose centre lies under the left panel's
 resize separator. Each CDP wheel event scrolls Monaco 50 px whatever its delta (one synthetic tick), so a
@@ -350,6 +353,10 @@ cross-client convergence, prompt priority, and pre-v65 fallback.
 Each scenario's app reset also removes the lane fixture repository's `origin` remote: the topbar's Remote /
 Pull request segments read the shared repo config, so an origin a push scenario added must never reshape a
 later scenario's topbar.
+
+The app reset leaves host settings alone (theme, system theme pair, message order, extension switches), and
+the lane shares one host. A test that changes one restores it before it ends; otherwise later scenarios, or
+the same test under `--repeat-each`, inherit it.
 
 **GitHub review states** (`topbar-review.spec.ts`) need a real-looking PR without a network. Origin is
 `git@github.com:<repo>.git` — what both the host's configured-URL read and `git remote get-url` see — with
