@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { tmpdir, userInfo } from "node:os";
 import { join } from "node:path";
 import { type Workspace, WS_CHANNELS } from "@thinkrail/contracts";
 import { removeTree } from "@thinkrail/shared/removeTree";
@@ -482,6 +482,31 @@ test("the attached client is not told it is displaced", async () => {
 
 	expect(pushed.filter((frame) => frame.channel === "terminal.detached")).toHaveLength(0);
 });
+
+test.skipIf(process.platform === "win32")(
+	"a shell runs as the real user, without the launching terminal's identity",
+	async () => {
+		const leaked = { LOGNAME: "root", TERM_PROGRAM: "Apple_Terminal", FORCE_COLOR: "0" };
+		const saved = Object.fromEntries(Object.keys(leaked).map((name) => [name, process.env[name]]));
+		Object.assign(process.env, leaked);
+		try {
+			const attached = attachTerminal(WS, "tab-a", "client-1");
+			await waitForTerminalOutput(attached.id);
+			writeTerminal(
+				attached.id,
+				`printf 'TR_%s=%s|%s|%s\\n' ENV "$LOGNAME" "$TERM_PROGRAM" "\${FORCE_COLOR-unset}"\r`,
+				"client-1",
+			);
+			await waitForTerminalOutput(attached.id, `TR_ENV=${userInfo().username}|ThinkRail|unset`);
+		} finally {
+			for (const [name, value] of Object.entries(saved)) {
+				if (value === undefined) delete process.env[name];
+				else process.env[name] = value;
+			}
+		}
+	},
+	TERMINAL_TEST_TIMEOUT_MS,
+);
 
 test(
 	"a tab keeps its last screen when its shell exits on its own",

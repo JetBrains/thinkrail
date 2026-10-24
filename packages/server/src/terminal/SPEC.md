@@ -28,7 +28,7 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   caller returns `null`), so the host counts only input that actually reached a PTY as workspace activity;
   the `TerminalDeliveryResult` type shared with the host publisher adapter.
 - **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`, `TerminalWindowsShell`), `bun-pty`,
-  `Bun.which`, `process.env`.
+  `Bun.which`, `process.env`, `node:os` (`userInfo`).
 - **Forbidden:** `host`; sibling features. No WebSocket type crosses this boundary — clients are opaque keys.
 
 ## Decisions
@@ -78,6 +78,18 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
 - **macOS PTYs start the user's shell in login mode (`-l`)** to match Terminal.app and the platform's
   terminal convention; other platforms keep a plain interactive shell. The PTY itself supplies
   interactivity, so no explicit `-i` is needed.
+- **The PTY environment is the user's, not the launcher's** (`ptyEnv.ts`). The host inherits whatever
+  started it — a terminal emulator, an IDE, `turbo`, Claude Code — and a verbatim copy handed every shell
+  that context: `TERM_PROGRAM`/`TERMINAL_EMULATOR`/`ITERM_*`/`VSCODE_*`/`TMUX`/`CLAUDECODE` made tools adapt
+  to a terminal that isn't there, and runner-set `FORCE_COLOR`/`CLICOLOR_FORCE`/`DEBUG_COLORS` could
+  override a tool's own colour detection. Those, the host's own variables (`THINKRAIL_*`, `PI_*`,
+  `ELECTROBUN_*`, `JITI_*`, `BUN_PTY_LIB`) and per-shell bookkeeping (`PWD`, `OLDPWD`, `SHLVL`, `_`) are
+  dropped; the terminal identifies itself as `TERM=xterm-256color`, `COLORTERM=truecolor`,
+  `TERM_PROGRAM=ThinkRail`. `NO_COLOR` is kept: it is the user's standing preference, not a runner's
+  override. Dropping is safe on Unix because the shell re-sources the user's own startup files. On Unix,
+  `USER` and `LOGNAME` are stamped from `userInfo()` (uid-derived): the PTY registers no utmpx session, so a
+  shell without them asks `getlogin()`, which reads a reused pty device's stale record and can report
+  another user (#427).
 - **A shell is keyed by `(workspaceId, tabKey)`**, never by a socket, a client, or a component. `tabKey` is
   durable and client-supplied; PTY ids are per-run and **never persisted** (attaching to an id that outlived
   its process is Theia's `Couldn't attach - can't find terminal with id`).
@@ -183,10 +195,13 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
 - `shellArgs.test.ts` — shell executable precedence across Unix and Windows plus platform-specific
   arguments; `auto`'s pwsh-then-powershell resolution via an injected `WhichFn`; every explicit preference
   is a literal pin regardless of what `which` reports; `ComSpec`/`COMSPEC` no longer influence the result.
+- `ptyEnv.test.ts` — launcher identity, colour forcing and host-internal variables are dropped while the
+  user's own variables (incl. `NO_COLOR`) survive; `USER`/`LOGNAME` come from the account on Unix only.
 - `terminalManager.test.ts` — transactional durable reservation without spawn, catalog bounds, rejection
   of malformed write data and out-of-range or non-integer grid sizes on resize and attach, attach
   idempotency (incl. concurrent), takeover, displaced-client rejection, tab-list broadcast, close/busy,
-  revive. Replay-persistence and natural-exit cases use bounded publisher-observed data/exit conditions as
+  revive, and a real shell reporting the account's `LOGNAME` with a leaked `LOGNAME=root` in the host.
+  Replay-persistence and natural-exit cases use bounded publisher-observed data/exit conditions as
   readiness edges, never elapsed time; their expected output marker never appears contiguously in the command
   input, so terminal echo cannot impersonate command execution. "Any output" is not a replay readiness edge:
   a shell's first frame may be mode-only (bash's `ESC[?2004h`), which the recorder never stores, so a revive
