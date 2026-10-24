@@ -23,8 +23,6 @@ export interface TemplateDirs {
 export function isValidTemplateName(name: string): boolean {
 	if (name.length === 0) return false;
 	if (name.startsWith(".")) return false;
-	// ":" is rejected on every OS so saved templates stay portable: on Windows,
-	// NTFS reads "a:b.md" as an alternate data stream of a file named "a".
 	return (
 		!name.includes("/") &&
 		!name.includes("\\") &&
