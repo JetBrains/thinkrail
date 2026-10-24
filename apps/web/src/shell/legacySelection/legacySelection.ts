@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { doubleClickPendingMs } from "../../lib";
 import {
 	selectAttentionCenterResourceCacheKey,
 	selectAttentionCenterTab,
@@ -38,10 +39,24 @@ export function syncLegacySelectionFromAttention(workspaceId: string): void {
 	);
 }
 
+export function scheduleReviewReveal(
+	reveal: () => void,
+	reviewShowing: boolean,
+): (() => void) | undefined {
+	const wait = reviewShowing ? 0 : doubleClickPendingMs();
+	if (wait === 0) {
+		reveal();
+		return;
+	}
+	const timer = setTimeout(reveal, wait);
+	return () => clearTimeout(timer);
+}
+
 export function useLegacySelectionAdapter(
 	workspaceId: string,
 	activeReviewedPath: string | null,
 	readActiveReviewedPath: () => string | null,
+	readReviewShowing: () => boolean,
 ): void {
 	const selectedCenterTab = useAppStore((state) => selectAttentionCenterTab(state, workspaceId));
 	const selectedCenterResourceCacheKey = useAppStore((state) =>
@@ -64,16 +79,35 @@ export function useLegacySelectionAdapter(
 				: null;
 		previousReviewedSelection.current = { workspaceId, selection: reviewedSelection };
 		if (!reviewedSelection || reviewedSelection === previous) return;
-		const state = useAppStore.getState();
-		const currentActiveTabId = state.activeTabByWorkspace[workspaceId];
-		const currentReviewedPath = readActiveReviewedPath();
-		const currentReviewedSelection =
-			currentActiveTabId && currentReviewedPath
-				? JSON.stringify([currentActiveTabId, currentReviewedPath])
-				: null;
-		if (currentReviewedSelection !== reviewedSelection) return;
-		state.enqueueLayoutIntent({ kind: "reveal-tool", workspaceId, tool: "review" });
-	}, [activeLegacyTabId, activeReviewedPath, readActiveReviewedPath, workspaceId]);
+		const revealReview = () => {
+			const state = useAppStore.getState();
+			const currentActiveTabId = state.activeTabByWorkspace[workspaceId];
+			const currentReviewedPath = readActiveReviewedPath();
+			const currentReviewedSelection =
+				currentActiveTabId && currentReviewedPath
+					? JSON.stringify([currentActiveTabId, currentReviewedPath])
+					: null;
+			if (currentReviewedSelection !== reviewedSelection) return;
+			state.enqueueLayoutIntent({ kind: "reveal-tool", workspaceId, tool: "review" });
+		};
+		let revealed = false;
+		const cancel = scheduleReviewReveal(() => {
+			revealed = true;
+			revealReview();
+		}, readReviewShowing());
+		return () => {
+			cancel?.();
+			if (!revealed && previousReviewedSelection.current?.selection === reviewedSelection) {
+				previousReviewedSelection.current = null;
+			}
+		};
+	}, [
+		activeLegacyTabId,
+		activeReviewedPath,
+		readActiveReviewedPath,
+		readReviewShowing,
+		workspaceId,
+	]);
 
 	useEffect(() => {
 		syncLegacySelectedResource(workspaceId, selectedCenterTab, selectedCenterResourceCacheKey);

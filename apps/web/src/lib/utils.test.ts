@@ -4,7 +4,10 @@ import {
 	ancestorPaths,
 	compactAge,
 	cssColorToHex,
+	DOUBLE_CLICK_SETTLE_MS,
+	doubleClickPendingMs,
 	fileName,
+	firstClickOnly,
 	firstNonBlankLine,
 	hasPlatformModifier,
 	isAbsolutePath,
@@ -249,4 +252,30 @@ test("firstNonBlankLine skips blank lines and trims", () => {
 	expect(firstNonBlankLine("\n  \n  hello  \nworld")).toBe("hello");
 	expect(firstNonBlankLine(" \n\t\n")).toBeUndefined();
 	expect(firstNonBlankLine("")).toBeUndefined();
+});
+
+test("firstClickOnly runs on a first click or keyboard activation, not a double click's second", () => {
+	let runs = 0;
+	const onClick = firstClickOnly(() => {
+		runs += 1;
+	});
+	onClick({ detail: 0 });
+	onClick({ detail: 1 });
+	onClick({ detail: 2 });
+	onClick({ detail: 3 });
+	expect(runs).toBe(2);
+});
+
+test("doubleClickPendingMs covers the double-click window after a first click", () => {
+	const onClick = firstClickOnly(() => {});
+	onClick({ detail: 1 });
+	const pending = doubleClickPendingMs();
+	expect(pending).toBeGreaterThan(DOUBLE_CLICK_SETTLE_MS - 50);
+	expect(pending).toBeLessThanOrEqual(DOUBLE_CLICK_SETTLE_MS);
+});
+
+test("doubleClickPendingMs stays at 0 after a keyboard activation", async () => {
+	await Bun.sleep(DOUBLE_CLICK_SETTLE_MS);
+	firstClickOnly(() => {})({ detail: 0 });
+	expect(doubleClickPendingMs()).toBe(0);
 });

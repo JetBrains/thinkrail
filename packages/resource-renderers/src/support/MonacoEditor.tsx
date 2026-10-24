@@ -2,9 +2,9 @@ import MonacoReact, { type OnMount } from "@monaco-editor/react";
 import { useT } from "@thinkrail/locales/react";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import type { editor } from "monaco-editor/esm/vs/editor/editor.api.js";
-import { use, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { useResourceHost, useResourcePreferences } from "../host";
-import type { ResourceViewProps, SurfaceReview } from "../registry";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type ResourceHost, useResourceHost, useResourcePreferences } from "../host";
+import type { ResourceDescriptor, ResourceViewProps, SurfaceReview } from "../registry";
 import { MonacoReviewZones } from "./MonacoReviewZones";
 import { decorateEditorContextMenus } from "./monacoMenuIcons";
 import {
@@ -12,7 +12,7 @@ import {
 	ensureMonaco,
 	fileEditorOptions,
 	languageForPath,
-	watchThemeSwap,
+	warmLanguage,
 } from "./monacoSetup";
 import {
 	applyReviewDecorations,
@@ -32,6 +32,11 @@ function isEditorViewState(value: unknown): value is editor.ICodeEditorViewState
 	return Array.isArray(Reflect.get(value, "cursorState")) && Reflect.has(value, "viewState");
 }
 
+export function warm(host: ResourceHost, resource: ResourceDescriptor): void {
+	ensureMonaco(host.code);
+	setTimeout(() => warmLanguage(languageForPath(resource.path)), 0);
+}
+
 export default function MonacoEditor({
 	resource,
 	content,
@@ -41,13 +46,12 @@ export default function MonacoEditor({
 }: ResourceViewProps) {
 	const t = useT();
 	const { fileLineWidth, fileLineWidthBounded } = useResourcePreferences();
-	use(ensureMonaco(useResourceHost().code));
+	ensureMonaco(useResourceHost().code);
 	const modelScope = useId().replace(/[^\w-]/g, "");
 	const options = useMemo(
 		() => fileEditorOptions(t, fileLineWidth, fileLineWidthBounded, resource.path),
 		[t, fileLineWidth, fileLineWidthBounded, resource.path],
 	);
-	const stopThemeWatchRef = useRef<(() => void) | null>(null);
 	const menuIconsRef = useRef<{ dispose(): void } | null>(null);
 	const commentingRef = useRef<ReviewCommenting | null>(null);
 	const threadsRef = useRef<ReturnType<typeof attachReviewThreads> | null>(null);
@@ -80,7 +84,6 @@ export default function MonacoEditor({
 	}, [commentLabel]);
 
 	const onMount: OnMount = (codeEditor) => {
-		stopThemeWatchRef.current = watchThemeSwap();
 		editorRef.current = codeEditor;
 		menuIconsRef.current = decorateEditorContextMenus(codeEditor);
 		if (isEditorViewState(viewState)) codeEditor.restoreViewState(viewState);
@@ -116,7 +119,6 @@ export default function MonacoEditor({
 		() => () => {
 			const saved = editorRef.current?.saveViewState();
 			if (saved) onViewStateRef.current?.(saved);
-			stopThemeWatchRef.current?.();
 			menuIconsRef.current?.dispose();
 			commentingRef.current?.dispose();
 			threadsRef.current?.dispose();

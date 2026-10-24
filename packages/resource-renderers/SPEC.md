@@ -49,6 +49,9 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   `ResourcePreview` run one sequence:
   - `useRendererSelection(resource, intent, rendererId)` — candidates for the environment's phone class, the
     selected renderer, its implementation key (renderer id + phone class) and the placed-thread state;
+  - **`usePreloadResourceView()`** — a stable `(resource) => void` that resolves the view renderer for the
+    environment's phone class, loads its implementation and runs the module's optional `warm`; it needs both
+    providers;
   - the lazy `RendererView` mount and **`GuardedRendererDiff`**, the one diff mount: the expensive-diff notice
     (`diff-too-large` / **Show diff anyway**, per mount, with a caller action slot) until opted in, then the
     lazy diff renderer, virtualized above `VIRTUALIZED_DIFF_LINES` of the caller's `lineCount`
@@ -76,9 +79,11 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
 - `markdown` — the component that renders markdown (`ResourceMarkdownProps`); the document preview, rendered
   diff and notebook cells pass their plugins and components through it.
 - `code` — the code-highlighting host (`languages` with grammar loaders, `languageId` canonicalization, and
-  the code `theme` resolved from CSS variables). Monaco is page-global: the first `MonacoEditor` initializes it
-  from its host's `code` once (`ensureMonaco`), and every later editor reuses that setup; it re-themes on every
-  completed theme swap.
+  the code `theme` resolved from CSS variables). Monaco is page-global: the first preload `warm` or
+  `MonacoEditor` initializes it from its host's `code` once (`ensureMonaco`, synchronous after the Monaco
+  chunk loads), and every later editor reuses that setup. `ensureMonaco` owns the one page-lifetime theme
+  watch, so a swap between a preload and the first editor still re-themes, and N open editors cost one
+  refresh per swap. A grammar loads on its language's first model or on a warm for its path.
 - `bytesUrl(workspaceId, path, oid?)` — the host byte route for images, PDFs and relative markdown assets.
 - `openFile(workspaceId, path, { keep? })` and `openComparison(workspaceId, before, path)` — navigation for
   relative document links (preview) and explicit Open-in-tab actions (keep).
@@ -116,7 +121,24 @@ own render and passes them to `MarkdownDocument` explicitly — a context read i
 
 `ResourceRenderer.loadView(environment)` receives the same `ResourceEnvironment` (`{ mobile }`) used for
 resolution, so the code renderer picks Pierre `File` on phone-class viewports and Monaco otherwise without
-reading a viewport global.
+reading a viewport global. The loaded module (`ResourceViewModule`, exported from the root) may export
+`warm(host, resource)`; a preload calls it after every request, one task after the module resolves, so
+the chunk's evaluation and the warm are separate long tasks. It must be cheap and idempotent. Monaco's
+`warm` runs `ensureMonaco`, starts the regex engine, and one task later loads the grammar for the
+resource's path (an empty path warms no grammar).
+
+**One loaded implementation per key, chosen once.** `rendererMount` keeps one component map and the
+in-flight load per implementation key (renderer id + phone class), shared by preloads and mounts.
+`RendererView` derives that key itself from its `renderer` and `mobile` props, so a mount and a preload
+cannot disagree on it. React
+`lazy` suspends on its first render even when its promise already resolved, and a shown fallback holds for
+at least 300 ms. So a finished load stores the module's component under its key, unless a mount already
+stored a `lazy` there, and the first `RendererView` without a stored component stores a `lazy` that reuses
+the in-flight load. That choice is stored once and never switched: a lazy and a direct component are
+different types, and swapping them would remount a live editor. A lazy made while a load was in flight is
+resolved for every later mount, so it does not suspend again. A failed preload, in the load or in `warm`,
+logs a warning instead of rejecting; a failed load is forgotten, so the next mount retries and a real
+failure reaches the pane's error boundary.
 
 **Review-draft scratch is read per slot.** A pane that keeps transient authoring across remounts provides
 `ReviewDraftContext` with a `ReviewDraftPersistence` (`rendererId`, `read(key)`, `subscribe`, `update(key,
@@ -561,16 +583,59 @@ content's own height.
   twice (a chat card and its full screen, a card and the file's tab).
 - **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` has the sole `EDITOR_THEME`.
   Themes own one TextMate scope definition: chat uses its live CSS-variable form, while Monaco resolves that
-  same definition plus its complete editor/widget/menu/input colour map to hex, loads it into a dedicated
-  JS-regex Shiki highlighter, and installs `@shikijs/monaco` once per page. Its curated language catalog is
-  shared with the chat highlighter and extended for the desktop file formats; missing Monaco language ids are
-  registered with their file associations before Shiki installs providers. A theme swap replaces the
-  highlighter theme under the same name, redefines Monaco, and selects `EDITOR_THEME`. The normal/high-contrast
-  base comes from manifest appearance/contrast metadata—never a known id—and remains inherited for specialist
-  colours outside the explicit map. Reads pass through `lib.cssColorToHex`; an absent or unparseable token is
+  same definition plus its complete editor/widget/menu/input colour map to hex and defines the Monaco theme from
+  it directly. Token colours come from `shikiTokens.ts`, a Monaco-free owner of one Shiki highlighter, its
+  per-language grammar loads and the colour→scope map. Its curated language catalog is shared with the chat
+  highlighter and extended for the desktop file formats; missing Monaco language ids are registered with their
+  file associations, then each catalog id gets a `registerTokensProviderFactory` entry. A swap loads the
+  highlighter theme under the other of two names and rebuilds the scope map from the same converted Monaco rules it
+  defines, redefines Monaco, and selects `EDITOR_THEME`. The normal/high-contrast base comes from manifest
+  appearance/contrast metadata—never a known id—and remains inherited for specialist colours outside the
+  explicit map. Reads pass through `lib.cssColorToHex`; an absent or unparseable token is
   omitted so the selected base palette wins rather than crashing the panel. Pierre's one registered
   `thinkrail` CSS-variable Shiki theme emits variable references instead of catalog colours; inherited
   `--diffs-*` properties map foreground/syntax to `--code-*`, canvases to the workspace/content roles, and
   addition/deletion paint to feedback roles, so a theme swap needs no re-highlight. `TerminalInstance`
   similarly rebuilds from the complete 16-slot ANSI variable set. Monaco and xterm consume the nullable
   editor selection-foreground override when provided.
+- **Monaco loads one grammar per language and tokenizes on Oniguruma WASM.** Compiling all 35 catalog
+  grammars up front was a 210-250 ms main-thread task (about 870 ms at 4x CPU) before the first coloured
+  line, and the JS regex engine tokenized about 4.5x slower than Oniguruma (a 2,861-line TS file: about
+  1,715 ms against 380 ms). The factory's `create()` loads the grammar when Monaco first meets a model of
+  that language; the `languageForPath` probe model starts it before the editor mounts. Concurrent
+  requests share one load, and an unknown id stays plain. Monaco asks a language's factory for a provider
+  only once, so a failed load answers plain text and marks the language missing; a failed highlighter or
+  engine start is not cached, so a later request retries it. The next model of that language whose load
+  succeeds installs the provider directly with `setTokensProvider`. `create()` never throws. Each provider binds the grammar object current when it is made, because loading an embed
+  rebuilds every grammar that lists it, and Monaco's saved line states only fit the old one. Embeds load
+  per model: a regex scan of fence info strings (including fences inside blockquotes and list items) and
+  `lang=` attributes (spaces around `=` allowed) picks the in-catalog `embeddedLangsLazy` the text names
+  (markdown 26, vue 8, svelte 2 otherwise) and follows an embed's own lazy embeds transitively
+  (vue -> markdown -> shellscript); they load after the first colour, then the provider is re-registered
+  so Monaco re-tokenizes.
+  A leading `---` adds `yaml` and an HTML tag adds `html` (front matter and inline HTML embed them with no
+  fence). Fence names the markdown grammar embeds under another language (`jsx` and `es6` as
+  `javascript`, `golang` as `go`, `h` as `c`) map through `FENCE_EMBEDS` before the host's `languageId`.
+  The `html` catalog entry loads `html-derivative`, the grammar markdown includes for inline HTML.
+  The scan reruns on content and language changes. Nothing suspends on the engine or a grammar: a Suspense
+  fallback is held for at least 300 ms. The engine falls back to the JS regex engine when WASM cannot load
+  (WebKit Lockdown Mode), and to plain text when neither engine builds. Shiki's `setTheme` is a no-op for
+  the name it last selected, so each swap loads the theme under the other of two names to get the new
+  colour map. The engine fetches the raw `shiki/onig.wasm` asset and compiles it with
+  `instantiateStreaming`; `shiki/wasm` inlines it as base64 and decodes it byte by byte on the main thread
+  (about 22 ms at 1x CPU) before the first coloured line. Every shipped host serves `.wasm` as
+  `application/wasm`: Vite in dev, `Bun.file` in `serveStatic` for the desktop app and the staged CLI binary.
+  Cost: the first open of a new language waits for its grammar chunk (about one frame at 1x CPU), and the
+  engine fetches a 466 kB `.wasm` asset; Pierre's newer Shiki ships its own copy.
+- **The code view preloads before the first open.** Loading the Monaco chunk, initializing Monaco and
+  building the engine only after the tab mounted, behind a fallback held for at least 300 ms, made the
+  first open about 420 ms at 1x CPU (840 ms at 4x) against 65 ms for a warm one. With the app's idle
+  preload and row-hover warm (`usePreloadResourceView`), the first open is about 120 ms at 1x (430 ms at
+  4x, where the rest is Oniguruma compiling the grammar's scanners on the first tokenize). The package
+  only offers the mechanism; the host decides when to call it. Cost: every desktop session loads the
+  Monaco chunk and the engine (about 3.9 MB decoded, about 7 MB more heap) and a 70 ms evaluation task at
+  4x CPU after boot. A click while the preload is still loading suspends as before. A preload that fails
+  while the network is down costs the rest of the session: Chromium caches the failed module fetch, so
+  every later import of that chunk rejects without a request, and a statically split chunk has no URL to
+  cache-bust. The first open then shows the error boundary's **Reload page**, which recovers; on main the
+  same outage fails only if it lasts until the first open.
