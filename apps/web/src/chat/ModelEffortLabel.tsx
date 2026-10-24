@@ -6,8 +6,6 @@ import { useChatActions } from "./ChatActions";
 import { EFFORT_BAR_HEIGHTS, LEVEL_LABEL, type LevelTone, levelTone, litBars } from "./modelPicker";
 import { ProviderGlyph } from "./ProviderGlyph";
 
-const ALL_LEVELS = Object.keys(LEVEL_LABEL) as ThinkingLevel[];
-
 export const TONE_TEXT: Record<LevelTone, string> = {
 	cool: "text-feedback-info",
 	accent: "text-primary",
@@ -54,7 +52,7 @@ export function ModelEffortPill({
 	name: ReactNode;
 	detail?: ReactNode;
 	level: ThinkingLevel | undefined;
-	levels: readonly ThinkingLevel[];
+	levels: readonly ThinkingLevel[] | undefined;
 	levelTestId?: string;
 }) {
 	const t = useT();
@@ -69,7 +67,9 @@ export function ModelEffortPill({
 					data-level={level}
 					className="flex shrink-0 items-center gap-4 text-text-muted tr-text-metadata capitalize"
 				>
-					<EffortBars level={level} levels={levels} className={TONE_TEXT[levelTone(level)]} />
+					{levels ? (
+						<EffortBars level={level} levels={levels} className={TONE_TEXT[levelTone(level)]} />
+					) : null}
 					{t(LEVEL_LABEL[level])}
 				</span>
 			) : null}
@@ -102,7 +102,7 @@ export function RunModelLabel({
 				}
 				name={catalogModel?.name ?? model}
 				level={thinkingLevel}
-				levels={catalogModel?.thinkingLevels ?? ALL_LEVELS}
+				levels={catalogModel?.thinkingLevels}
 			/>
 		</span>
 	);

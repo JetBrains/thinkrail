@@ -39,12 +39,14 @@ test("a run label shows the catalog name and effort, keeping the raw reference i
 	expect(html).toContain('data-level="high"');
 	expect(html).toContain(">high<");
 	expect(html).not.toContain("thinking-selector");
+	expect(html).toContain("rounded-xs bg-current");
 });
 
 test("an uncatalogued run reads as its raw reference, without a level when none was reported, and nothing without a model", () => {
 	const raw = renderToStaticMarkup(<RunModelLabel model="acme/custom-7b" thinkingLevel="off" />);
 	expect(raw).toContain(">acme/custom-7b<");
 	expect(raw).toContain(">off<");
+	expect(raw).not.toContain("rounded-xs bg-current");
 	expect(
 		renderToStaticMarkup(<RunModelLabel model="acme/custom-7b" thinkingLevel={undefined} />),
 	).not.toContain("data-level");

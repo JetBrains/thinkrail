@@ -473,7 +473,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
 - **Run model label** (`ModelEffortLabel.tsx`): `ModelEffortPill` is the model picker trigger's content
   (glyph · name · effort bars and level word), extracted so `RunModelLabel` renders a delegation run's
   model exactly like the composer pill: catalog name via `ChatActions.findModel`, else the raw
-  `provider/id`, which is also its tooltip. The picker's `thinking-selector` test id stays its own. A run
+  `provider/id` with the level word but no bars (there is no model scale to place it on); the raw
+  reference is also its tooltip. The picker's `thinking-selector` test id stays its own. A run
   without `thinkingLevel` shows the model alone; one without `model`, nothing.
 - **Subagent transcript view** (`SubagentTranscriptDialog.tsx` — an integration file, like
   `SkillsDialog`): `SubagentTranscriptPane` renders a hidden child's **read-only** transcript with the
