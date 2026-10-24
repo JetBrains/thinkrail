@@ -721,7 +721,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   global; **`template.save`**, **`template.delete`**) — all
   read/write pi's prompt dirs (global + project), so templates stay CLI-portable,
   `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside **`projects`**
-  (open records) and **`recentProjects`** (all known records, open + closed, with closed records whose project folder is definitively gone omitted), plus optional
+  (open records) and **`recentProjects`** (all known records, open + closed, minus closed records whose
+  folder is definitively gone), plus optional
   **`hostUpdate: HostUpdateNotice`** and **`hostPlatform`**
   (`darwin | linux | win32`, optional for older hosts) — the OS the *host* runs on, so a client that
   offers host-executed commands (the PR setup dialog) picks the right ones instead of guessing from

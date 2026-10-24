@@ -459,6 +459,35 @@ test("boot permits two hosts for the same data directory", async () => {
 	expect(await Promise.all(responses.map((response) => response.text()))).toEqual(["ok", "ok"]);
 });
 
+test("welcome is the first frame and omits closed projects whose folders are gone", async () => {
+	const dir = process.env.THINKRAIL_DATA_DIR;
+	if (!dir) throw new Error("missing fixture data directory");
+	writeFileSync(
+		join(dir, "projects.json"),
+		JSON.stringify([
+			{ id: "open", name: "open", path: join(dir, "unplugged"), slug: "open", lastOpened: 3 },
+			{
+				id: "gone",
+				name: "gone",
+				path: join(dir, "gone"),
+				slug: "gone",
+				lastOpened: 2,
+				closed: true,
+			},
+			{ id: "kept", name: "kept", path: dir, slug: "kept", lastOpened: 1, closed: true },
+		]),
+	);
+	const b = await boot({ port: grabFreePort(), host: "localhost", portMode: "exact" });
+	const collector = await collectSocket(b.port, "recents-first");
+	await collector.waitForFrame((frame) => frame.channel === WS_CHANNELS.serverWelcome);
+
+	const [first] = collector.frames;
+	expect(first?.channel).toBe(WS_CHANNELS.serverWelcome);
+	const welcome = first?.data as ServerWelcome;
+	expect(welcome.projects.map((project) => project.id)).toEqual(["open"]);
+	expect(welcome.recentProjects?.map((project) => project.id)).toEqual(["open", "kept"]);
+});
+
 test("shutdown is idempotent and releases the port", async () => {
 	const options = { port: grabFreePort(), host: "localhost", portMode: "exact" as const };
 	const first = await boot(options);

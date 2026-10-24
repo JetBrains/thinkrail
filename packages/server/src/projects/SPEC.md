@@ -25,10 +25,13 @@ bootstrap it into one so it can be opened.
   Windows; architecture Decision 22), dedupes by root,
   and assigns a stable unique readable `slug`; `getProjects` returns all known records with slug backfill,
   `listProjects` returns open records by `lastOpened`, and `listRecentProjects` returns open + closed records
-  by `lastOpened`, dropping only *closed* records whose folder is definitively gone (missing, or no
-  longer a directory, checked asynchronously off the connect hot path; open records always stay so a
-  temporarily unmounted drive loses nothing, and other filesystem errors do not prove deletion, so
-  those records stay listed). A persisted
+  by `lastOpened`, synchronously dropping only *closed* records whose folder the last completed check
+  found definitively gone (missing, or no longer a directory). Open records are never checked, so a
+  temporarily unmounted drive loses nothing; other filesystem errors do not prove deletion, and a record
+  not yet checked stays listed. **`refreshRecentProjectFolders(budgetMs)`** re-stats closed records'
+  folders asynchronously and resolves once they finish or the budget elapses; a still-pending check
+  keeps running, and later refreshes join it instead of piling a second stat onto a hung mount. The
+  filter is display-only: stored records are untouched. A persisted
   optional **`Project.closed: true`** is the entire membership state: absence means open, so existing
   records migrate as open. **`openProject`** finds a known root even when closed, clears `closed`, bumps
   `lastOpened`, preserves its id, persists, and publishes the full snapshot; **`closeProject`** marks that
@@ -79,7 +82,8 @@ bootstrap it into one so it can be opened.
   leaving it untouched otherwise; `trusted: false` revokes both. A trust change persists and publishes the
   record, so every client shows the persisted trust even when the host request that made it then fails
   (an open chat could not reload).
-- **Public surface (barrel):** `openProject`, `listProjects`, `listRecentProjects`, `closeProject`, `renameProject`,
+- **Public surface (barrel):** `openProject`, `listProjects`, `listRecentProjects`,
+  `refreshRecentProjectFolders`, `closeProject`, `renameProject`,
   `getProjects`, `setProjectPublisher`, `inspectProjectPath`, `initProject`, `setProjectTrust`,
   `setProjectSkillEnabled`, `setProjectGroupEnabled`, `acknowledgeProjectSkills`,
   `approveProjectMcpServer`, `setProjectMcpOverride`, `grantProjectMcpTool`, `revokeProjectMcpTool`,

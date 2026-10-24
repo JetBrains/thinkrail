@@ -22,6 +22,7 @@ import {
 	listProjects,
 	listRecentProjects,
 	openProject,
+	refreshRecentProjectFolders,
 	renameProject,
 	revokeProjectMcpTool,
 	setPiTrustSeed,
@@ -254,7 +255,7 @@ test("initProject: an existing repo is opened, not re-initialised (dedupe, histo
 	expect(gitOut(repo, "rev-parse", "HEAD")).toBe(originalHead);
 });
 
-test("legacy project records default to open in both projections", async () => {
+test("legacy project records default to open in both projections", () => {
 	const repo = join(dataDir, "repo");
 	makeRepo(repo);
 	writeFileSync(
@@ -263,7 +264,7 @@ test("legacy project records default to open in both projections", async () => {
 	);
 
 	expect(listProjects().map((project) => project.id)).toEqual(["legacy"]);
-	expect((await listRecentProjects()).map((project) => project.id)).toEqual(["legacy"]);
+	expect(listRecentProjects().map((project) => project.id)).toEqual(["legacy"]);
 });
 
 test("close/reopen preserves the stable project identity and workspace associations", async () => {
@@ -279,7 +280,7 @@ test("close/reopen preserves the stable project identity and workspace associati
 
 	expect(closed.closed).toBe(true);
 	expect(listProjects()).toEqual([]);
-	expect((await listRecentProjects()).map(({ id, closed: state }) => ({ id, closed: state }))).toEqual([
+	expect(listRecentProjects().map(({ id, closed: state }) => ({ id, closed: state }))).toEqual([
 		{ id: project.id, closed: true },
 	]);
 	expect(JSON.parse(readFileSync(join(dataDir, "workspaces.json"), "utf8"))).toEqual([
@@ -293,7 +294,7 @@ test("close/reopen preserves the stable project identity and workspace associati
 	expect(reopened.closed).toBeUndefined();
 	expect(reopened.lastOpened).toBeGreaterThan(closed.lastOpened);
 	expect(listProjects().map((candidate) => candidate.id)).toEqual([project.id]);
-	expect((await listRecentProjects()).map((candidate) => candidate.id)).toEqual([project.id]);
+	expect(listRecentProjects().map((candidate) => candidate.id)).toEqual([project.id]);
 	expect(published).toEqual([
 		expect.objectContaining({ id: project.id, closed: true }),
 		expect.not.objectContaining({ closed: true }),
@@ -482,74 +483,50 @@ test("MCP tool grants: deduplicated per server, reset by a new target, removed w
 	expect(storedProjects()[0]).not.toHaveProperty("mcpToolGrants");
 });
 
-test("recent projects omit closed records whose folders no longer exist", async () => {
+test("recent projects omit closed records whose folders are definitively gone", async () => {
 	const repo = join(dataDir, "repo");
 	makeRepo(repo);
-	writeFileSync(
-		join(dataDir, "projects.json"),
-		JSON.stringify([
-			{
-				id: "gone",
-				name: "gone",
-				path: join(dataDir, "gone"),
-				slug: "gone",
-				lastOpened: 2,
-				closed: true,
-			},
-			{ id: "kept", name: "repo", path: repo, slug: "repo", lastOpened: 1 },
-		]),
-	);
-
-	expect((await listRecentProjects()).map((project) => project.id)).toEqual(["kept"]);
-});
-
-test("recent projects reflect records that close while folder checks are pending", async () => {
-	const repo = join(dataDir, "repo");
-	makeRepo(repo);
-	const heldDir = join(dataDir, "held");
-	mkdirSync(heldDir, { recursive: true });
-	const record = (closed?: true) => [
-		{ id: "held", name: "held", path: heldDir, slug: "held", lastOpened: 2, closed: true },
-		{ id: "racing", name: "repo", path: repo, slug: "repo", lastOpened: 1, ...(closed ? { closed } : {}) },
-	];
-	writeFileSync(join(dataDir, "projects.json"), JSON.stringify(record()));
-
-	const pending = listRecentProjects();
-	writeFileSync(join(dataDir, "projects.json"), JSON.stringify(record(true)));
-	const result = await pending;
-
-	expect(result.map((project) => project.id).sort()).toEqual(["held", "racing"]);
-	expect(result.find((project) => project.id === "racing")?.closed).toBe(true);
-});
-
-test("recent projects keep open records whose folders are gone", async () => {
-	writeFileSync(
-		join(dataDir, "projects.json"),
-		JSON.stringify([
-			{ id: "gone", name: "gone", path: join(dataDir, "gone"), slug: "gone", lastOpened: 2 },
-		]),
-	);
-
-	expect((await listRecentProjects()).map((project) => project.id)).toEqual(["gone"]);
-});
-
-test("recent projects omit closed records whose path is not a directory", async () => {
 	const blocker = join(dataDir, "blocker");
 	writeFileSync(blocker, "not a folder");
+	const closed = (id: string, path: string, lastOpened: number) => ({
+		id,
+		name: id,
+		path,
+		slug: id,
+		lastOpened,
+		closed: true,
+	});
 	writeFileSync(
 		join(dataDir, "projects.json"),
 		JSON.stringify([
-			{ id: "file", name: "file", path: blocker, slug: "file", lastOpened: 1, closed: true },
-			{
-				id: "nested",
-				name: "nested",
-				path: join(blocker, "child"),
-				slug: "nested",
-				lastOpened: 2,
-				closed: true,
-			},
+			closed("missing", join(dataDir, "missing"), 5),
+			closed("file", blocker, 4),
+			closed("nested", join(blocker, "child"), 3),
+			closed("kept", repo, 2),
+			{ id: "open-gone", name: "o", path: join(dataDir, "unplugged"), slug: "o", lastOpened: 1 },
 		]),
 	);
 
-	expect(await listRecentProjects()).toEqual([]);
+	await refreshRecentProjectFolders(1_000);
+
+	expect(listRecentProjects().map((project) => project.id)).toEqual(["kept", "open-gone"]);
+	expect(getProjects()).toHaveLength(5);
+});
+
+test("recent projects follow the last completed folder check of a closed record", async () => {
+	const folder = join(dataDir, "moved");
+	writeFileSync(
+		join(dataDir, "projects.json"),
+		JSON.stringify([
+			{ id: "moved", name: "moved", path: folder, slug: "moved", lastOpened: 1, closed: true },
+		]),
+	);
+	expect(listRecentProjects().map((project) => project.id)).toEqual(["moved"]);
+
+	await refreshRecentProjectFolders(1_000);
+	expect(listRecentProjects()).toEqual([]);
+
+	mkdirSync(folder);
+	await refreshRecentProjectFolders(1_000);
+	expect(listRecentProjects().map((project) => project.id)).toEqual(["moved"]);
 });

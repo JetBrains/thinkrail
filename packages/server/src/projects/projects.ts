@@ -131,28 +131,44 @@ export function listProjects(): Project[] {
 	return newestFirst(getProjects().filter((project) => project.closed !== true));
 }
 
-function projectFolderGone(path: string): Promise<boolean> {
-	return stat(path).then(
-		(stats) => !stats.isDirectory(),
-		(error) => {
-			const code = (error as { code?: string }).code;
-			return code === "ENOENT" || code === "ENOTDIR";
-		},
-	);
+const goneFolders = new Set<string>();
+const folderChecks = new Map<string, Promise<void>>();
+
+function checkFolder(path: string): Promise<void> {
+	const pending = folderChecks.get(path);
+	if (pending) return pending;
+	const check = stat(path)
+		.then(
+			(stats) => !stats.isDirectory(),
+			(error) => {
+				const code = (error as { code?: string }).code;
+				return code === "ENOENT" || code === "ENOTDIR";
+			},
+		)
+		.then((gone) => {
+			if (gone) goneFolders.add(path);
+			else goneFolders.delete(path);
+			folderChecks.delete(path);
+		});
+	folderChecks.set(path, check);
+	return check;
 }
 
-export async function listRecentProjects(): Promise<Project[]> {
-	const candidates = newestFirst(getProjects());
-	const goneByPath = new Map<string, boolean>();
-	await Promise.all(
-		candidates.map((project) =>
-			project.closed === true
-				? projectFolderGone(project.path).then((gone) => void goneByPath.set(project.path, gone))
-				: undefined,
-		),
-	);
-	return newestFirst(getProjects()).filter((project) =>
-		project.closed === true ? goneByPath.get(project.path) !== true : true,
+export async function refreshRecentProjectFolders(budgetMs: number): Promise<void> {
+	const checks = getProjects()
+		.filter((project) => project.closed === true)
+		.map((project) => checkFolder(project.path));
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const budget = new Promise<void>((resolve) => {
+		timer = setTimeout(resolve, budgetMs);
+	});
+	await Promise.race([Promise.all(checks), budget]);
+	clearTimeout(timer);
+}
+
+export function listRecentProjects(): Project[] {
+	return newestFirst(
+		getProjects().filter((project) => project.closed !== true || !goneFolders.has(project.path)),
 	);
 }
 
