@@ -13,6 +13,7 @@ import {
 } from "./core.ts";
 import { askWithDialogs } from "./dialogs.ts";
 import { AskUserQuestionSchema } from "./schema.ts";
+import { askInTerminal, renderAskCall, renderAskResult } from "./tui.ts";
 
 export interface AskUserQuestionGuidance {
 	description?: string;
@@ -45,7 +46,8 @@ export const DEFAULT_PROMPT_GUIDELINES: readonly string[] = [
 	"Call ask_user_question as the only tool in the assistant response; continue with other tools after the answer.",
 ];
 
-const askWithBuiltInUi: AskUserQuestionAsker = (request) => askWithDialogs(request);
+const askWithBuiltInUi: AskUserQuestionAsker = (request) =>
+	request.ctx.mode === "tui" ? askInTerminal(request) : askWithDialogs(request);
 
 export function createAskUserQuestionExtension(
 	options: AskUserQuestionExtensionOptions = {},
@@ -75,6 +77,8 @@ export function createAskUserQuestionExtension(
 				const outcome = await ask({ toolCallId, args, signal, ctx });
 				return outcomeResult(outcome, args);
 			},
+			renderCall: renderAskCall,
+			renderResult: renderAskResult,
 		});
 	};
 }
