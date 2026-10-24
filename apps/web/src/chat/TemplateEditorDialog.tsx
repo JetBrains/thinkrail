@@ -91,6 +91,7 @@ export function TemplateEditorDialog({
 		setArgumentHint("");
 		setBody(initialBody);
 		setLoading(false);
+		return undefined;
 	}, [open, template, initialScope, initialBody, workspaceId]);
 
 	const save = async () => {

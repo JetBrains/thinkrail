@@ -469,6 +469,7 @@ describe("workspace layout model", () => {
 		const hidden = hideBottom(shown.document, attention);
 		expect(hidden.document.bottom.visible).toBe(false);
 		expect(hidden.focusGroupId).toBe("center-a");
+		expect(hidden.focusOnlyIfLost).toBe(true);
 
 		const restorable = baseDocument();
 		restorable.toolRestoreTargets.plan = { region: "bottom", index: 0 };
@@ -569,6 +570,7 @@ describe("workspace layout model", () => {
 		const hidden = hideSide(revealed.document, "right", attention);
 		expect(hidden.document.right.visible).toBe(false);
 		expect(hidden.focusGroupId).toBe("center-a");
+		expect(hidden.focusOnlyIfLost).toBe(true);
 		expect(hidden.focusTabId).toBeUndefined();
 
 		let atLimit = baseDocument();
