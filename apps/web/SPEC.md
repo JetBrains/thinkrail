@@ -119,8 +119,8 @@ these conventions:
 - A closure never applies `++`/`--` to a variable it captures; write `attempts += 1`.
 - A component or hook never uses `try/finally` or `throw` inside `try`. Move the body into a local async
   closure chained as `run().catch(onError).finally(cleanup)`; a synchronous guard moves to a module-level
-  helper (`setLayoutFlagged`). A conditional value inside `try/catch` moves above the `try`, or into the
-  closure when its branches await.
+  helper (`setLayoutFlagged`). A conditional, logical or optional-chaining value (`a ? b : c`, `a ?? b`,
+  `a?.b`) inside `try/catch` moves above the `try`, or into the closure when its branches await.
 - A `useMemo`/`useCallback` lists every dependency it reads, or the compiler cannot preserve it.
 - A `useMemo` dependency the callback does not read is dropped, so a memo cannot reset on a key it ignores
   (`useMemo(() => new Map(), [key])` builds one map per mount). Reset through state keyed on the value instead
