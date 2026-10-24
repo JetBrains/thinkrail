@@ -16,7 +16,7 @@ const EMBED_REFERENCE =
 const TOKENIZE_TIME_LIMIT_MS = 500;
 const IMPLICIT_EMBEDS = [
 	[/^-{3,}/, "yaml"],
-	[/<[A-Za-z!/]/, "html"],
+	[/^[ \t]*<[A-Za-z!]|<\/[A-Za-z]/m, "html"],
 ] as const;
 const FENCE_EMBEDS = new Map([
 	["h", "c"],
@@ -123,8 +123,8 @@ export function createShikiTokens({ languages: catalog, languageId, engine }: Sh
 		creating ??= engine()
 			.then((regexEngine) => createHighlighterCore({ themes: [], langs: [], engine: regexEngine }))
 			.then(async (hl) => {
+				if (theme) await selectTheme(hl, theme).catch(() => {});
 				highlighter = hl;
-				if (theme) await selectTheme(hl, theme);
 				return hl;
 			})
 			.catch(() => {
@@ -174,10 +174,8 @@ export function createShikiTokens({ languages: catalog, languageId, engine }: Sh
 		const embeds = await loadGrammar(id);
 		if (!embeds?.length) return false;
 		const referenced = referencedLanguages(source());
-		const seen = embedded.get(id) ?? new Set<string>();
-		embedded.set(id, seen);
 		const visited = new Set([id]);
-		let changed = false;
+		const loaded: string[] = [];
 		let frontier: readonly string[] = embeds;
 		while (frontier.length > 0) {
 			const wanted = frontier.filter((embed) => referenced.has(embed) && !visited.has(embed));
@@ -186,16 +184,17 @@ export function createShikiTokens({ languages: catalog, languageId, engine }: Sh
 				wanted.map(async (embed) => {
 					const own = await loadGrammar(embed);
 					if (own === null) return [];
-					if (!seen.has(embed)) {
-						seen.add(embed);
-						changed = true;
-					}
+					loaded.push(embed);
 					return own;
 				}),
 			);
 			frontier = nested.flat();
 		}
-		return changed;
+		const installed = embedded.get(id) ?? new Set<string>();
+		embedded.set(id, installed);
+		const fresh = loaded.filter((embed) => !installed.has(embed));
+		for (const embed of fresh) installed.add(embed);
+		return fresh.length > 0;
 	}
 
 	function scopeOf(metadata: number) {

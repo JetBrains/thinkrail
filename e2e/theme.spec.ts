@@ -206,6 +206,7 @@ test("Monaco keeps syntax colours across a light/dark swap", async ({ page }) =>
 	const dark = options.find(
 		(option) => option.appearance === "dark" && option.contrast === "normal",
 	);
+	const defaultTheme = options.find((option) => option.active)?.id;
 	expect(light && dark).toBeTruthy();
 	await pickTheme(page, light?.id ?? "");
 
@@ -221,6 +222,7 @@ test("Monaco keeps syntax colours across a light/dark swap", async ({ page }) =>
 	await page.getByTestId("file-node").filter({ hasText: "later.ts" }).dblclick();
 	await expect(page.locator('[data-testid="editor-pane"]:visible')).toContainText("later");
 	expect(await keywordToken(page)).toEqual(after);
+	await pickTheme(page, defaultTheme ?? "");
 });
 
 test("selected workspace tabs and rail entries keep their surface and edge marker under every manifest", async ({

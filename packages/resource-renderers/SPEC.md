@@ -593,18 +593,23 @@ content's own height.
   `lang=` attributes (spaces around `=` allowed) picks the in-catalog `embeddedLangsLazy` the text names
   (markdown 26, vue 8, svelte 2 otherwise) and follows an embed's own lazy embeds transitively
   (vue -> markdown -> shellscript); they load after the first colour, then the provider is re-registered
-  so Monaco re-tokenizes.
-  A leading `---` adds `yaml` and an HTML tag adds `html` (front matter and inline HTML embed them with no
-  fence). Fence names the markdown grammar embeds under another language (`jsx` and `es6` as
+  so Monaco re-tokenizes. Each scan reports the embeds it loaded that the installed provider lacks, so two
+  models scanning at once each re-register for what they finished, not only the first.
+  A leading `---` adds `yaml`, and a tag at a line start or any closing tag adds `html` (front matter and
+  inline HTML embed them with no fence; a generic such as `Array<T>` inside a fence does not count). Fence names the markdown grammar embeds under another language (`jsx` and `es6` as
   `javascript`, `golang` as `go`, `h` as `c`) map through `FENCE_EMBEDS` before the host's `languageId`.
   The `html` catalog entry loads `html-derivative`, the grammar markdown includes for inline HTML.
   The scan reruns on content and language changes. Nothing suspends on the engine or a grammar: a Suspense
-  fallback is held for at least 300 ms. The engine falls back to the JS regex engine when WASM cannot load
-  (WebKit Lockdown Mode), and to plain text when neither engine builds. Shiki's `setTheme` is a no-op for
-  the name it last selected, so each swap loads the theme under the other of two names to get the new
-  colour map. The engine fetches the raw `shiki/onig.wasm` asset and compiles it with
-  `instantiateStreaming`; `shiki/wasm` inlines it as base64 and decodes it byte by byte on the main thread
-  (about 22 ms at 1x CPU) before the first coloured line. Every shipped host serves `.wasm` as
+  fallback is held for at least 300 ms. The JS regex engine runs only where `WebAssembly` does not exist
+  (WebKit Lockdown Mode). A failed `.wasm` fetch or compile fails that highlighter start instead: files stay
+  plain and the next file retries, so one transient failure (a dev-server restart, an SPA fallback serving
+  HTML) neither pins the 4.5x slower engine for the page nor hides a broken asset behind it. The asset is
+  fetched and compiled here and Shiki only instantiates the compiled module, because Shiki's `loadWasm`
+  keeps a rejected start for the whole page. A theme that fails to load costs only the colours: the
+  highlighter is kept and the next theme swap retries. Shiki's `setTheme` is a no-op for the name it last
+  selected, so each swap loads the theme under the other of two names to get the new colour map. The raw
+  `shiki/onig.wasm` asset is used because `shiki/wasm` inlines it as base64 and decodes it byte by byte on
+  the main thread (about 22 ms at 1x CPU) before the first coloured line. Every shipped host serves `.wasm` as
   `application/wasm`: Vite in dev, `Bun.file` in `serveStatic` for the desktop app and the staged CLI binary.
   Cost: the first open of a new language waits for its grammar chunk (about one frame at 1x CPU), and the
   engine fetches a 466 kB `.wasm` asset; Pierre's newer Shiki ships its own copy.

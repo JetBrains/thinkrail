@@ -167,12 +167,14 @@ export function revealLineNow(codeEditor: editor.IStandaloneCodeEditor, line: nu
 }
 
 async function createEngine() {
-	try {
-		return await createOnigurumaEngine(fetch(onigWasmUrl));
-	} catch {
+	if (typeof WebAssembly !== "object") {
 		const { createJavaScriptRegexEngine } = await import("shiki/engine/javascript");
 		return createJavaScriptRegexEngine();
 	}
+	const response = await fetch(onigWasmUrl);
+	if (!response.ok) throw new Error(`onig.wasm: HTTP ${response.status}`);
+	const onig = await WebAssembly.compile(await response.arrayBuffer());
+	return createOnigurumaEngine((imports) => WebAssembly.instantiate(onig, imports));
 }
 
 interface MonacoSetup {
@@ -181,8 +183,6 @@ interface MonacoSetup {
 }
 
 let setup: MonacoSetup | null = null;
-// Monaco asks a language's factory for a provider only once, so a grammar whose first load failed
-// gets its provider installed by the next model that loads it successfully.
 const missingProviders = new Set<string>();
 
 function registerTokenProvider(id: string, tokens: MonacoSetup["tokens"]): void {

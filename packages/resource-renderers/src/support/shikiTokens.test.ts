@@ -273,6 +273,64 @@ describe("createShikiTokens", () => {
 		expect(counts.get("javascript")).toBe(1);
 	});
 
+	test("a theme that fails to load costs only the colours", async () => {
+		let engines = 0;
+		const tokens = createShikiTokens({
+			languages: CATALOG,
+			languageId,
+			engine: () => {
+				engines += 1;
+				return engine();
+			},
+		});
+		const broken = Object.defineProperty({ ...(await dark), name: "broken" }, "settings", {
+			enumerable: true,
+			get() {
+				throw new Error("theme failed to load");
+			},
+		});
+		await tokens.applyTheme(broken, []);
+		expect(await tokens.ready("typescript")).toBe(true);
+		expect(await tokens.ready("markdown")).toBe(true);
+		expect(engines).toBe(1);
+
+		await applyTheme(tokens, await light);
+		expect(
+			scopeOf(tokenize(tokens.provider("typescript"), ["const x = 1"])[0], "const"),
+		).toBeTruthy();
+	});
+
+	test("concurrent embed loads each report the embeds they finished", async () => {
+		let releaseShell = () => {};
+		const shellGate = new Promise<void>((resolve) => {
+			releaseShell = resolve;
+		});
+		const tokens = await themedTokens(
+			CATALOG.map((language) =>
+				language.id === "shellscript"
+					? { ...language, load: () => shellGate.then(language.load) }
+					: language,
+			),
+		);
+		await tokens.ready("markdown");
+		const slow = tokens.loadEmbeds("markdown", () =>
+			[...FENCE, "```sh", "echo hi", "```"].join("\n"),
+		);
+		expect(await tokens.loadEmbeds("markdown", () => FENCE.join("\n"))).toBe(true);
+		releaseShell();
+		expect(await slow).toBe(true);
+		expect(await tokens.loadEmbeds("markdown", () => FENCE.join("\n"))).toBe(false);
+	});
+
+	test("a generic inside a fence does not pull in html", async () => {
+		const counts = new Map<string, number>();
+		const tokens = await themedTokens(countingCatalog(counts));
+		const text = ["```ts", "const xs: Array<string> = [];", "```"];
+		expect(await tokens.loadEmbeds("markdown", () => text.join("\n"))).toBe(true);
+		expect(counts.get("typescript")).toBe(1);
+		expect(counts.get("html")).toBeUndefined();
+	});
+
 	test("a provider keeps the grammar its line states came from after embeds rebuild it", async () => {
 		const tokens = await themedTokens();
 		await tokens.ready("markdown");
