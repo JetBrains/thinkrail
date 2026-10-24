@@ -36,6 +36,29 @@ const piVersion = rootManifest.workspaces.catalog["@earendil-works/pi-coding-age
 if (!piVersion) throw new Error("check-pi-packages: pi version missing from the root catalog");
 
 const EXPECTATIONS: Record<string, Expectation> = {
+	"@thinkrail/pi-ask-user-question": {
+		tools: ["ask_user_question"],
+		skills: [],
+		cases: [
+			{
+				tool: "ask_user_question",
+				name: "no-ui-reports-unavailable",
+				args: {
+					questions: [
+						{
+							question: "Which library?",
+							header: "Lib",
+							options: [
+								{ label: "date-fns", description: "small" },
+								{ label: "luxon", description: "rich" },
+							],
+						},
+					],
+				},
+				expectText: ["UI not available"],
+			},
+		],
+	},
 	"@thinkrail/pi-visualize": {
 		tools: ["visualize"],
 		skills: [],

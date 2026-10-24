@@ -429,6 +429,22 @@
         "typescript": "catalog:",
       },
     },
+    "pi-extensions/ask-user-question": {
+      "name": "@thinkrail/pi-ask-user-question",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@earendil-works/pi-coding-agent": "catalog:",
+        "@earendil-works/pi-tui": "catalog:",
+        "@types/bun": "catalog:",
+        "typebox": "catalog:",
+        "typescript": "catalog:",
+      },
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*",
+        "@earendil-works/pi-tui": "*",
+        "typebox": "*",
+      },
+    },
     "pi-extensions/visualize": {
       "name": "@thinkrail/pi-visualize",
       "version": "0.1.0",
@@ -1210,6 +1226,8 @@
     "@thinkrail/extension-api": ["@thinkrail/extension-api@workspace:packages/extension-api"],
 
     "@thinkrail/locales": ["@thinkrail/locales@workspace:packages/locales"],
+
+    "@thinkrail/pi-ask-user-question": ["@thinkrail/pi-ask-user-question@workspace:pi-extensions/ask-user-question"],
 
     "@thinkrail/pi-visualize": ["@thinkrail/pi-visualize@workspace:pi-extensions/visualize"],
 
