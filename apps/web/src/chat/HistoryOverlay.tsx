@@ -359,6 +359,7 @@ export function HistoryOverlay({
 	const inputRef = useRef<HTMLInputElement>(null);
 	const resultsRef = useRef<HTMLDivElement>(null);
 	const rootRef = useRef<HTMLDivElement>(null);
+	const scopeMenuContentRef = useRef<HTMLDivElement>(null);
 	const [scopeMenuOpen, setScopeMenuOpen] = useState(false);
 
 	useEffect(() => {
@@ -387,11 +388,8 @@ export function HistoryOverlay({
 			const target = e.target as Element | null;
 			if (!target) return;
 			if (rootRef.current?.contains(target)) return;
-			// The history button toggles the overlay on click; closing here too
-			// would fight that toggle. The scope menu renders in a portal outside
-			// the overlay root, so its clicks must not count as "outside" either.
-			if (target.closest('[data-testid="history-open"]')) return;
-			if (target.closest('[role="menu"], [data-radix-popper-content-wrapper]')) return;
+			if (target.closest("[data-history-trigger]")) return;
+			if (scopeMenuContentRef.current?.contains(target)) return;
 			onClose();
 		};
 		window.addEventListener("pointerdown", onWindowPointerDown, true);
@@ -559,6 +557,7 @@ export function HistoryOverlay({
 						<span className="text-text-muted">⌃R</span>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
+						ref={scopeMenuContentRef}
 						align="end"
 						onCloseAutoFocus={(e) => {
 							e.preventDefault();
