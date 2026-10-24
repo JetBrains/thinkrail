@@ -20,7 +20,9 @@ terminal mirrors used by feature render caches.
   `doubleClickPendingMs()` says a browse row's double-click could still arrive, so the row can keep its preview
   before Review replaces it. When Review already shows (the workbench-supplied reader), nothing can replace the
   row, so the reveal runs at once: a late reveal's focus request would close whatever the user opened meanwhile.
-  A deferred reveal cancelled before it fires is forgotten, so a rerun with the same selection schedules it again.
+  For the same reason a deferred reveal yields when the showing auxiliary tools (the reader's `showingKey`)
+  changed since it was scheduled: a tool the user picked inside the window, such as Specs, stays. A deferred
+  reveal cancelled before it fires is forgotten, so a rerun with the same selection schedules it again.
 - **Public surface (`index.ts`):** the mounted compatibility hook and the imperative attention-change adapter
   used by the workbench callback.
 - **External deps:** web-local center-resource types; store selectors, the single legacy mirror action, and the

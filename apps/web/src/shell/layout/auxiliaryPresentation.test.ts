@@ -8,6 +8,7 @@ import {
 	projectWorkbenchRatio,
 	resizeVisibleAuxiliaryGroups,
 	restoreWorkbenchRatio,
+	showingAuxiliaryKey,
 	visibleAuxiliaryGroups,
 } from "./auxiliaryPresentation";
 import { closeLayoutTab, reconcileAttention, selectTab, toolTab } from "./model";
@@ -212,4 +213,25 @@ test("a tool shows only as the selected tab of an expanded pane", () => {
 	);
 	expect(isToolShowing(folded, reviewSelected, "review")).toBe(false);
 	expect(isToolShowing(doc, reviewSelected, "plan")).toBe(false);
+});
+
+test("the showing auxiliary key changes with the selected tool, not with the center", () => {
+	const doc = document();
+	const location = { area: "right", groupId: "tools" } as const;
+	const filesSelected = reconcileAttention(
+		doc,
+		selectTab(reconcileAttention(doc), location, "custom-files"),
+	);
+	const reviewSelected = reconcileAttention(
+		doc,
+		selectTab(filesSelected, location, toolTab("review").id),
+	);
+	const centerReselected = reconcileAttention(
+		doc,
+		selectTab(filesSelected, { area: "center", groupId: "center" }, "center-terminal"),
+	);
+	expect(showingAuxiliaryKey(doc, reviewSelected)).not.toBe(
+		showingAuxiliaryKey(doc, filesSelected),
+	);
+	expect(showingAuxiliaryKey(doc, centerReselected)).toBe(showingAuxiliaryKey(doc, filesSelected));
 });

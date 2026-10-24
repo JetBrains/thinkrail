@@ -254,11 +254,16 @@ test("firstNonBlankLine skips blank lines and trims", () => {
 	expect(firstNonBlankLine("")).toBeUndefined();
 });
 
+const LONG_AGO = -1_000_000;
+
 test("firstClickOnly runs on a first click or keyboard activation, not a double click's second", () => {
 	let runs = 0;
-	const onClick = firstClickOnly(() => {
-		runs += 1;
-	});
+	const onClick = firstClickOnly(
+		() => {
+			runs += 1;
+		},
+		() => LONG_AGO,
+	);
 	onClick({ detail: 0 });
 	onClick({ detail: 1 });
 	onClick({ detail: 2 });
@@ -266,16 +271,25 @@ test("firstClickOnly runs on a first click or keyboard activation, not a double 
 	expect(runs).toBe(2);
 });
 
-test("doubleClickPendingMs covers the double-click window after a first click", () => {
-	const onClick = firstClickOnly(() => {});
-	onClick({ detail: 1 });
-	const pending = doubleClickPendingMs();
-	expect(pending).toBeGreaterThan(DOUBLE_CLICK_SETTLE_MS - 50);
-	expect(pending).toBeLessThanOrEqual(DOUBLE_CLICK_SETTLE_MS);
+test("doubleClickPendingMs counts down the double-click window from a first click", () => {
+	firstClickOnly(
+		() => {},
+		() => LONG_AGO,
+	)({ detail: 1 });
+	expect(doubleClickPendingMs(LONG_AGO)).toBe(DOUBLE_CLICK_SETTLE_MS);
+	expect(doubleClickPendingMs(LONG_AGO + 100)).toBe(DOUBLE_CLICK_SETTLE_MS - 100);
+	expect(doubleClickPendingMs(LONG_AGO + DOUBLE_CLICK_SETTLE_MS)).toBe(0);
+	expect(doubleClickPendingMs()).toBe(0);
 });
 
-test("doubleClickPendingMs stays at 0 after a keyboard activation", async () => {
-	await Bun.sleep(DOUBLE_CLICK_SETTLE_MS);
-	firstClickOnly(() => {})({ detail: 0 });
-	expect(doubleClickPendingMs()).toBe(0);
+test("doubleClickPendingMs ignores a keyboard activation", () => {
+	firstClickOnly(
+		() => {},
+		() => LONG_AGO,
+	)({ detail: 1 });
+	firstClickOnly(
+		() => {},
+		() => LONG_AGO + 1_000,
+	)({ detail: 0 });
+	expect(doubleClickPendingMs(LONG_AGO + 1_000)).toBe(0);
 });

@@ -50,11 +50,13 @@ not this module; the theme-aware highlighter remains app-local.
   `getRandomValues`, which remains available to a plain-HTTP remote client),
   **`DOUBLE_CLICK_SETTLE_MS`** (the click→double-click window, used only where a single click would
   commit something a double click contradicts: a single click (or keyboard activation) on the active
-  preview tab, so a double click is not read as two keeps, and the Changes review-tab preview),
+  preview tab, so a double click is not read as two keeps, the Changes review-tab preview, and the Review
+  reveal through `doubleClickPendingMs()`),
   **`firstClickOnly()`** (wraps a browse row's preview open so it runs on a first click or keyboard
   activation, `detail <= 1`, and skips a double click's second click) with **`doubleClickPendingMs()`**
   (how long a double click on the last such row could still arrive; the Review reveal waits it out so it
-  does not unmount the row first),
+  does not unmount the row first). Both take an optional clock (`performance.now()` by default), so tests
+  pin the window without sleeping or inheriting another test's click,
   **`mcpState.ts`** (the MCP server-state vocabulary — `MCP_STATE_KEY` / `mcpStateLabel(t, state)`,
   `mcpStateTone` (a connected server reporting zero tools warns), `mcpStatusLabel` / `mcpToolCountLabel`
   (the text helpers here take the caller's translator first, so render output follows a language change),

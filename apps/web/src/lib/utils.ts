@@ -5,16 +5,19 @@ export const DOUBLE_CLICK_SETTLE_MS = 250;
 
 let lastFirstClickAt = Number.NEGATIVE_INFINITY;
 
-export function firstClickOnly(run: () => void): (event: { detail: number }) => void {
+export function firstClickOnly(
+	run: () => void,
+	now: () => number = () => performance.now(),
+): (event: { detail: number }) => void {
 	return (event) => {
 		if (event.detail > 1) return;
-		if (event.detail === 1) lastFirstClickAt = performance.now();
+		if (event.detail === 1) lastFirstClickAt = now();
 		run();
 	};
 }
 
-export function doubleClickPendingMs(): number {
-	return Math.max(0, DOUBLE_CLICK_SETTLE_MS - (performance.now() - lastFirstClickAt));
+export function doubleClickPendingMs(now = performance.now()): number {
+	return Math.max(0, DOUBLE_CLICK_SETTLE_MS - (now - lastFirstClickAt));
 }
 
 export function tupleKey(namespace: string, ...parts: string[]): string {

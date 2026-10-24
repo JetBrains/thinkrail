@@ -39,16 +39,24 @@ export function syncLegacySelectionFromAttention(workspaceId: string): void {
 	);
 }
 
+export interface AuxiliaryView {
+	reviewShowing: boolean;
+	showingKey: string;
+}
+
 export function scheduleReviewReveal(
 	reveal: () => void,
-	reviewShowing: boolean,
+	readAuxiliary: () => AuxiliaryView,
+	pending = doubleClickPendingMs(),
 ): (() => void) | undefined {
-	const wait = reviewShowing ? 0 : doubleClickPendingMs();
-	if (wait === 0) {
+	const scheduled = readAuxiliary();
+	if (scheduled.reviewShowing || pending === 0) {
 		reveal();
 		return;
 	}
-	const timer = setTimeout(reveal, wait);
+	const timer = setTimeout(() => {
+		if (readAuxiliary().showingKey === scheduled.showingKey) reveal();
+	}, pending);
 	return () => clearTimeout(timer);
 }
 
@@ -56,7 +64,7 @@ export function useLegacySelectionAdapter(
 	workspaceId: string,
 	activeReviewedPath: string | null,
 	readActiveReviewedPath: () => string | null,
-	readReviewShowing: () => boolean,
+	readAuxiliary: () => AuxiliaryView,
 ): void {
 	const selectedCenterTab = useAppStore((state) => selectAttentionCenterTab(state, workspaceId));
 	const selectedCenterResourceCacheKey = useAppStore((state) =>
@@ -94,20 +102,14 @@ export function useLegacySelectionAdapter(
 		const cancel = scheduleReviewReveal(() => {
 			revealed = true;
 			revealReview();
-		}, readReviewShowing());
+		}, readAuxiliary);
 		return () => {
 			cancel?.();
 			if (!revealed && previousReviewedSelection.current?.selection === reviewedSelection) {
 				previousReviewedSelection.current = null;
 			}
 		};
-	}, [
-		activeLegacyTabId,
-		activeReviewedPath,
-		readActiveReviewedPath,
-		readReviewShowing,
-		workspaceId,
-	]);
+	}, [activeLegacyTabId, activeReviewedPath, readActiveReviewedPath, readAuxiliary, workspaceId]);
 
 	useEffect(() => {
 		syncLegacySelectedResource(workspaceId, selectedCenterTab, selectedCenterResourceCacheKey);

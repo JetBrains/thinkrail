@@ -76,6 +76,7 @@ import {
 	type LayoutTab,
 	type LayoutTabFocusRequest,
 	type LayoutToolId,
+	showingAuxiliaryKey,
 	Workbench,
 	type WorkspaceLayoutDocument,
 } from "./layout";
@@ -361,11 +362,16 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		() => selectActiveReviewedPath(useAppStore.getState(), workspaceId),
 		[workspaceId],
 	);
-	const readReviewShowing = useCallback(() => {
+	const readAuxiliary = useCallback(() => {
 		const state = useAppStore.getState();
 		const layout = state.layoutDocumentsByWorkspace[workspaceId];
 		const layoutAttention = state.layoutAttentionByWorkspace[workspaceId];
-		return layout && layoutAttention ? isToolShowing(layout, layoutAttention, "review") : false;
+		return layout && layoutAttention
+			? {
+					reviewShowing: isToolShowing(layout, layoutAttention, "review"),
+					showingKey: showingAuxiliaryKey(layout, layoutAttention),
+				}
+			: { reviewShowing: false, showingKey: "" };
 	}, [workspaceId]);
 	const openToolFile = useCallback(
 		(path: string) => {
@@ -438,12 +444,7 @@ export function WorkspaceWorkbench({ workspaceId }: { workspaceId: string }) {
 		[document, workspaceId],
 	);
 
-	useLegacySelectionAdapter(
-		workspaceId,
-		activeReviewedPath,
-		readActiveReviewedPath,
-		readReviewShowing,
-	);
+	useLegacySelectionAdapter(workspaceId, activeReviewedPath, readActiveReviewedPath, readAuxiliary);
 	useDeletedChatPlacementReconciliation(workspaceId);
 	useTerminalReservation(workspaceId);
 	useLayoutIntentProcessing(workspaceId, commit, changeAttention, setFocusRequest);
