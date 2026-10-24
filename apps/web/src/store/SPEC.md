@@ -211,11 +211,12 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   so acceptance does not count twice. A slow completion is discarded when newer navigation overtakes it.
   Preview identity is workspace-local per center group: `preview` replaces that group's slot and `keep`
   promotes one-way. A coalesced preview→keep gesture carries `claimPreview` on its single final intent, so no
-  intermediate state persists. Arrangement-agnostic opens enter the store, but only shell layout integration
-  resolves them against that workspace's last focus and commits local placement. Reopening an existing
-  canonical resource changes attention only unless non-identity metadata changed. A late chat-title event may
-  repair cache/history labels or a still-queued open, but cannot recreate a locally closed placement or steal
-  focus. **The durable-title fold** routes
+  intermediate state persists; a keep after a landed preview promotes that existing placement in place.
+  Arrangement-agnostic opens enter the store, but only shell layout integration resolves them against that
+  workspace's last focus and commits local placement. Reopening an existing canonical resource changes
+  attention only unless non-identity metadata changed. A late chat-title event may repair cache/history
+  labels or a still-queued open, but cannot recreate a locally closed placement or steal focus.
+  **The durable-title fold** routes
   `session_info_changed` through the same one-home chat-label mutation already used by extension-UI
   `setTitle`: normalize an absent name to the empty untitled name (worded at render by `lib`'s `chatName`, as
   `selectChatTitle` does; `selectChatName` returns the stored name, and `workspaceName(t, ws)` words the
@@ -647,7 +648,7 @@ tab without a request. What the tab *does* own is review progress: `viewed` path
 at the top of the viewport, or the file shown in One-file mode; `ChangesPanel` highlights from it), per-path
 collapse overrides over the scale defaults, a one-shot `reveal` (`{ path, tick, commentId? }`, written by
 `openChangesTab` and consumed by the pane in one `consumeChangesTabReveal` write that also lands
-`activePath`, the section's expansion and a finding's `reviewFocusRequest`), `view` split|inline +
+`activePath`, the section's expansion and a finding's `reviewFocusRequest` aimed at the tab's scope), `view` split|inline +
 `ignoreWhitespace` for all sections, and per-path `rendererId` / opaque `viewState` written through the
 workspace-explicit `setChangesTabSection*` actions (an identical view state is not a write). Each section also holds opaque `reviewDrafts`, updated by a workspace/tab/path/key-explicit
 functional action. They survive renderer/view-state changes but not tab close or reload; writes cannot

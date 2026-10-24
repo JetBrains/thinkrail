@@ -491,11 +491,12 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 		}
 	};
 	const selectFromClick = () => {
-		if (!preview) {
+		if (pendingPreviewKeep.current) clearTimeout(pendingPreviewKeep.current);
+		pendingPreviewKeep.current = null;
+		if (!preview || !active) {
 			onSelect(tab.id);
 			return;
 		}
-		if (pendingPreviewKeep.current) clearTimeout(pendingPreviewKeep.current);
 		const gestureEpoch = ++selectionEpochRef.current;
 		const navigationClocks = navigationClockSnapshot(readAttention());
 		pendingPreviewKeep.current = setTimeout(() => {
@@ -506,7 +507,7 @@ export const WorkbenchTab = memo(function WorkbenchTab({
 			) {
 				return;
 			}
-			onSelect(tab.id, active);
+			onSelect(tab.id, true);
 		}, DOUBLE_CLICK_SETTLE_MS);
 	};
 	const selectFromDoubleClick = () => {

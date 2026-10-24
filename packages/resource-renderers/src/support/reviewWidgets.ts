@@ -3,6 +3,7 @@ import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReviewThread } from "../registry";
+import { emitChangedZones } from "./reviewZoneEmit";
 
 const ICON_WIDGET_ID = "thinkrail.review.addIcon";
 const CARD_MAX_WIDTH = 832;
@@ -192,9 +193,10 @@ export function attachReviewThreads(
 	let composer: InternalComposerZone | null = null;
 	let layoutFrame: number | null = null;
 	let disposed = false;
+	const emitZones = emitChangedZones(onZones);
 
 	const emit = () => {
-		onZones({
+		emitZones({
 			threads: threads.map(({ commentId, node }) => ({ commentId, node })),
 			composer: composer ? { node: composer.node, selection: composer.selection } : null,
 		});

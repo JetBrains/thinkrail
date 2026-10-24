@@ -932,7 +932,7 @@ test("Done is undone by a fresh remark: the file re-lists the moment a new comme
 	await expect(page.getByTestId("review-file-row")).toContainText("1 draft");
 });
 
-test("opening a comment far outside the virtualized window scrolls its card into view", async ({
+test("opening a far-off worktree comment scrolls its card into view in the file pane", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -961,6 +961,60 @@ test("opening a comment far outside the virtualized window scrolls its card into
 		await reviewSection.getByTestId("review-file-row").click();
 	}
 	await reviewSection.getByTestId("review-comment-open").first().click();
+	const fileCard = page.getByRole("tabpanel").getByTestId("review-thread-card");
+	await expect(fileCard).toBeInViewport();
+	await expect(fileCard).toContainText("Far-off remark.");
+
+	await expect(async () => {
+		await page.getByRole("tabpanel").locator(".margin").first().hover();
+		await page.mouse.wheel(0, -20_000);
+		await expect(fileCard).not.toBeInViewport({ timeout: 500 });
+	}).toPass();
+	await reviewSection.getByTestId("review-comment-open").first().click();
+	await expect(fileCard).toBeInViewport();
+});
+
+test("opening a far-off base-side comment scrolls its card into view in the virtualized diff", async ({
+	page,
+}) => {
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	const lines = Array.from({ length: 1_990 }, (_, index) => `far line ${index + 1}`);
+	writeFileSync(join(worktree(), "FAR.txt"), `${lines.join("\n")}\n`);
+	execSync(`git -C "${worktree()}" add FAR.txt && git -C "${worktree()}" commit -m "add far"`, {
+		stdio: "ignore",
+	});
+	await overWire(page, [{ method: "workspace.setDiffBase", params: { ref: "HEAD" } }]);
+	writeFileSync(join(worktree(), "FAR.txt"), `${lines.slice(0, 5).join("\n")}\n`);
+	await revealWorkbenchTool(page, "changes");
+	await page.getByTestId("change-item").filter({ hasText: "FAR.txt" }).dblclick();
+	const diff = page.getByTestId("diff-view");
+	const deletions = pierreDeletionsSide(diff);
+	await expect(deletions.getByText("far line 6", { exact: false }).first()).toBeVisible();
+
+	await diff.evaluate((node) => node.scrollTo({ top: node.scrollHeight }));
+	await expect(deletions.getByText("far line 1980", { exact: false }).first()).toBeVisible();
+	await selectPierreLine(deletions, "far line 1980", "first");
+	await page.getByTestId("review-composer-input").fill("Far-off base remark.");
+	await page.getByTestId("review-composer-save").click();
+	const card = diff.locator('[slot^="annotation-deletions-"]').getByTestId("review-thread-card");
+	await expect(card).toBeVisible();
+	const [comment] = await persistedComments(page);
+	expect(comment?.anchor?.side).toBe("base");
+
+	await diff.evaluate((node) => node.scrollTo({ top: 0 }));
+	await expect(card).not.toBeInViewport();
+	await revealWorkbenchTool(page, "review");
+	const reviewSection = page
+		.getByTestId("review-file-section")
+		.filter({ has: page.getByTestId("review-file-row").filter({ hasText: "FAR.txt" }) });
+	if ((await reviewSection.getAttribute("data-expanded")) !== "true") {
+		await reviewSection.getByTestId("review-file-row").click();
+	}
+	await reviewSection.getByTestId("review-comment-open").first().click();
+	await expect(
+		page.locator('[data-testid="editor-tab"][data-active="true"][data-kind="diff"]'),
+	).toContainText("FAR.txt");
 	await expect(card).toBeInViewport();
-	await expect(card).toContainText("Far-off remark.");
+	await expect(card).toContainText("Far-off base remark.");
 });

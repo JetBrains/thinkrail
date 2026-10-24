@@ -35,7 +35,6 @@ const inFlight = new Map<
 		claimPreview: boolean;
 		navigation: CenterNavigationStamp | null;
 		requestedAt: number;
-		startedAt: number;
 	}
 >();
 
@@ -68,58 +67,30 @@ async function openReadTab<T>(
 		pending.requestedAt = navTick(workspaceId);
 		return;
 	}
-	const flight = {
-		intent,
-		claimPreview: intent === "preview" || claimPreview,
-		navigation,
-		requestedAt: navTick(workspaceId),
-		startedAt: Date.now(),
-	};
-	inFlight.set(id, flight);
 	const cached = (store.tabsByWorkspace[workspaceId] ?? []).find(
 		(tab) =>
 			(tab.kind === "file" || tab.kind === "diff") &&
 			layoutResourceIdentity(tab) === resourceIdentity,
 	);
 	if (cached) {
-		try {
-			if (flight.intent === "preview") {
-				await new Promise((resolve) => setTimeout(resolve, DOUBLE_CLICK_SETTLE_MS));
-			}
-			const currentState = useAppStore.getState();
-			const latestCached = (currentState.tabsByWorkspace[workspaceId] ?? []).find(
-				(tab) =>
-					(tab.kind === "file" || tab.kind === "diff") &&
-					layoutResourceIdentity(tab) === resourceIdentity,
-			);
-			if (!latestCached) return;
-			const overtaken = flight.navigation
-				? !isCenterNavigationCurrent(currentState, workspaceId, flight.navigation)
-				: navTick(workspaceId) !== flight.requestedAt;
-			if (flight.intent === "preview" && overtaken) return;
-			const options = layoutOpenOptionsForNavigation(currentState, workspaceId, flight.navigation);
-			useAppStore
-				.getState()
-				.openTab(
-					latestCached,
-					flight.intent,
-					true,
-					flight.intent === "keep" && flight.claimPreview && !overtaken
-						? { ...options, claimPreview: true }
-						: options,
-				);
-		} finally {
-			inFlight.delete(id);
-		}
+		const claim =
+			intent === "keep" &&
+			claimPreview &&
+			(!navigation || isCenterNavigationCurrent(store, workspaceId, navigation));
+		const options = layoutOpenOptionsForNavigation(store, workspaceId, navigation);
+		store.openTab(cached, intent, true, claim ? { ...options, claimPreview: true } : options);
 		return;
 	}
+	const flight = {
+		intent,
+		claimPreview: intent === "preview" || claimPreview,
+		navigation,
+		requestedAt: navTick(workspaceId),
+	};
+	inFlight.set(id, flight);
 	const loadedTick = selectWorkspaceTick(useAppStore.getState(), workspaceId);
 	try {
 		const payload = await read();
-		if (flight.intent === "preview") {
-			const remaining = DOUBLE_CLICK_SETTLE_MS - (Date.now() - flight.startedAt);
-			if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
-		}
 		const currentState = useAppStore.getState();
 		const overtaken = flight.navigation
 			? !isCenterNavigationCurrent(currentState, workspaceId, flight.navigation)

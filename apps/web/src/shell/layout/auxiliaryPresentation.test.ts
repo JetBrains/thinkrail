@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
 	activateAuxiliaryRailEntry,
 	clusterAuxiliaryRail,
+	isToolShowing,
 	isUnplacedRailEntry,
 	projectAuxiliaryRail,
 	projectWorkbenchRatio,
@@ -194,4 +195,21 @@ test("an empty bottom entry reveals only a process-free creation surface", () =>
 	expect(result.document.bottom.groups).toHaveLength(1);
 	expect(result.document.bottom.groups[0]?.tabs).toEqual([]);
 	expect(result.document.center).toBe(doc.center);
+});
+
+test("a tool shows only as the selected tab of an expanded pane", () => {
+	const doc = document();
+	const location = { area: "right", groupId: "tools" } as const;
+	const reviewSelected = reconcileAttention(
+		doc,
+		selectTab(reconcileAttention(doc), location, toolTab("review").id),
+	);
+	expect(isToolShowing(doc, reconcileAttention(doc), "review")).toBe(false);
+	expect(isToolShowing(doc, reviewSelected, "review")).toBe(true);
+	const folded = document();
+	folded.right.groups = folded.right.groups.map((group) =>
+		group.id === "tools" ? { ...group, folded: true } : group,
+	);
+	expect(isToolShowing(folded, reviewSelected, "review")).toBe(false);
+	expect(isToolShowing(doc, reviewSelected, "plan")).toBe(false);
 });
