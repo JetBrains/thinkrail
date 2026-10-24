@@ -970,9 +970,11 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
     while the scope picker is open — see the controlled `scopeMenuOpen` note above — so Radix's own
     Escape closes just that menu. A window capture-phase `pointerdown` listener,
     registered only while the overlay is open, closes it on outside presses, with two exclusions by
-    construction: presses on the history button (the button toggles the overlay itself, so counting
-    them as outside would fight the toggle) and presses inside portaled menu content such as the
-    scope picker (picking a scope must not dismiss the overlay).
+    construction: presses on the history button, marked with a dedicated `data-history-trigger`
+    attribute rather than its test id (the button toggles the overlay itself, so counting them as
+    outside would fight the toggle) and presses inside the scope picker's portaled content, exempted
+    via a ref on its `DropdownMenuContent` rather than a global menu selector so unrelated menus do
+    not escape dismissal (picking a scope must not dismiss the overlay).
   - **Dismissal returns focus to the prompt field** (`ChatView.onDismissHistory` → the composer's
     `refocus` handle): opening moved focus into the overlay's query input, and closing unmounts it, so
     without this every post-Escape keystroke would land on `<body>` and be lost. The caret goes back where
