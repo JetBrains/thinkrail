@@ -21,6 +21,7 @@ export {
 	anchorLabel,
 	canonicalWorkspacePath,
 	describeResource,
+	diffRendererSupportsLayout,
 	diffResourceMeta,
 	type HunkActions,
 	type HunkTriage,
