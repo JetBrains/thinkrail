@@ -56,6 +56,10 @@ function subagents(workspaceId: string, parentSessionId: string): SubagentResour
 			task: snapshot.task.slice(0, 2000),
 			status: snapshot.status,
 			createdAt: record.createdAt,
+			...(snapshot.details.model !== undefined ? { model: snapshot.details.model } : {}),
+			...(snapshot.details.thinkingLevel !== undefined
+				? { thinkingLevel: snapshot.details.thinkingLevel }
+				: {}),
 			...(snapshot.details.abortReason !== undefined
 				? { abortReason: snapshot.details.abortReason }
 				: {}),
