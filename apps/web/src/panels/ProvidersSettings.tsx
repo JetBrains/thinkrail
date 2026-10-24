@@ -14,7 +14,6 @@ import {
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
-import { cn } from "@thinkrail/ui/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LoginDialog } from "@/auth";
 import { AUTH_KIND_LABEL } from "@/chat/modelPicker";
@@ -141,13 +140,14 @@ export function ProvidersSettings() {
 				<p className="tr-text-metadata text-text-muted">{t("settings.providers.intro")}</p>
 				<Button
 					variant="ghost"
-					size="sm"
+					size="m"
+					iconLeft={RefreshCw}
+					loading={refreshing}
+					spinIcon
 					data-testid="providers-refresh"
 					aria-label={t("settings.providers.refreshLabel")}
-					disabled={refreshing}
 					onClick={() => void load()}
 				>
-					<RefreshCw className={cn("size-14", refreshing && "animate-spin")} />
 					{t("settings.providers.refresh")}
 				</Button>
 			</div>
@@ -216,7 +216,7 @@ export function ProvidersSettings() {
 								<div className="pt-8">
 									<Button
 										variant="outline"
-										size="sm"
+										size="m"
 										data-testid="providers-show-more"
 										onClick={() => setShowAllKeys(true)}
 									>
@@ -305,14 +305,14 @@ function ConnectedRow({
 			</span>
 			{provider.canLogout ? (
 				<Button
-					variant="soft"
-					size="sm"
+					variant="soft-primary"
+					size="m"
+					iconLeft={LogOut}
 					data-testid="provider-signout"
 					data-provider={provider.id}
 					disabled={busy}
 					onClick={onSignOut}
 				>
-					<LogOut className="size-14" />
 					{t("settings.providers.signOut")}
 				</Button>
 			) : (
@@ -351,27 +351,27 @@ function ProviderRow({
 			<div className="flex shrink-0 items-center gap-4">
 				{provider.canOAuth && (
 					<Button
-						variant="soft"
-						size="sm"
+						variant="soft-primary"
+						size="m"
+						iconLeft={LogIn}
 						data-testid="provider-signin"
 						data-provider={provider.id}
 						disabled={busy}
 						onClick={onSignIn}
 					>
-						<LogIn className="size-14" />
 						{t("settings.providers.signIn")}
 					</Button>
 				)}
 				{provider.canApiKey && (
 					<Button
 						variant="outline"
-						size="sm"
+						size="m"
+						iconLeft={KeyRound}
 						data-testid="provider-apikey"
 						data-provider={provider.id}
 						disabled={busy}
 						onClick={onApiKey}
 					>
-						<KeyRound className="size-14" />
 						{t("settings.providers.apiKey")}
 					</Button>
 				)}

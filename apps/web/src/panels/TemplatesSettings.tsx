@@ -7,7 +7,7 @@ import {
 } from "@remixicon/react";
 import type { TemplateInfo, TemplateScope } from "@thinkrail/contracts";
 import { T, t as translate, useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { PopoverTrigger } from "@thinkrail/ui/popover";
 import { SkeletonRows } from "@thinkrail/ui/skeleton";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
@@ -211,8 +211,13 @@ function ProjectTemplatesSection({
 					{t("settings.templates.projectTitle")}
 				</h4>
 				{hasProject ? (
-					<Button variant="soft" size="sm" data-testid="template-new-project" onClick={onNew}>
-						<Plus className="size-14" />
+					<Button
+						variant="soft-primary"
+						size="m"
+						iconLeft={Plus}
+						data-testid="template-new-project"
+						onClick={onNew}
+					>
 						{t("settings.templates.new")}
 					</Button>
 				) : null}
@@ -295,8 +300,13 @@ function GlobalTemplatesSection({
 				<h4 className="tr-text-label-pill text-text-subtle">
 					{t("settings.templates.globalTitle")}
 				</h4>
-				<Button variant="soft" size="sm" data-testid="template-new-global" onClick={onNew}>
-					<Plus className="size-14" />
+				<Button
+					variant="soft-primary"
+					size="m"
+					iconLeft={Plus}
+					data-testid="template-new-global"
+					onClick={onNew}
+				>
 					{t("settings.templates.new")}
 				</Button>
 			</div>
@@ -310,11 +320,11 @@ function GlobalTemplatesSection({
 						<Button
 							data-testid="template-starters"
 							variant="outline"
-							size="sm"
+							size="m"
+							iconLeft={MagicWand}
 							disabled={adding}
 							onClick={addStarters}
 						>
-							<MagicWand className="size-14" />
 							{t("settings.templates.addStarters")}
 						</Button>
 					}
@@ -402,29 +412,19 @@ function TemplateRow({
 				</div>
 				<div className="flex shrink-0 items-center gap-4">
 					{showOpenAsFile ? (
-						<IconTooltip label={t("settings.templates.openAsFile")}>
-							<button
-								type="button"
-								data-testid="template-open-file"
-								aria-label={t("settings.templates.openAsFile")}
-								onClick={openAsFile}
-								className="flex size-24 items-center justify-center rounded-sm text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default"
-							>
-								<FileText className="size-14" />
-							</button>
-						</IconTooltip>
+						<IconButton
+							icon={FileText}
+							label={t("settings.templates.openAsFile")}
+							data-testid="template-open-file"
+							onClick={openAsFile}
+						/>
 					) : null}
-					<IconTooltip label={t("common.edit")}>
-						<button
-							type="button"
-							data-testid="template-edit"
-							aria-label={t("common.edit")}
-							onClick={onEdit}
-							className="flex size-24 items-center justify-center rounded-sm text-text-muted transition hover:bg-control-bg-hovered hover:text-text-default"
-						>
-							<Pencil className="size-14" />
-						</button>
-					</IconTooltip>
+					<IconButton
+						icon={Pencil}
+						label={t("common.edit")}
+						data-testid="template-edit"
+						onClick={onEdit}
+					/>
 					<IconTooltip label={t("common.delete")} wrapTrigger>
 						<PopoverTrigger asChild>
 							<button

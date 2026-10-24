@@ -5,6 +5,7 @@ import {
 	RiExternalLinkLine as OpenAsTab,
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -46,12 +47,15 @@ export function ChangeRowActions({
 				}`}
 			>
 				{children({ onContextMenu })}
-				<DropdownMenuTrigger
-					data-testid="change-row-menu"
-					aria-label={t("panels.changeRowActions.menuLabel", { path })}
-					className={`${ROW_MENU_SLOT} flex items-center justify-center rounded-sm text-text-muted opacity-0 outline-none transition hover:bg-container-elevated-bg hover:text-text-default focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary group-hover:opacity-100 data-[state=open]:opacity-100`}
-				>
-					<ChevronDown className="size-16" />
+				<DropdownMenuTrigger asChild>
+					<IconButton
+						size="s"
+						icon={ChevronDown}
+						label={t("panels.changeRowActions.menuLabel", { path })}
+						data-testid="change-row-menu"
+						wrapTrigger
+						className="mr-4 shrink-0 opacity-0 focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+					/>
 				</DropdownMenuTrigger>
 			</div>
 			<DropdownMenuContent align="end" data-testid="change-row-actions">

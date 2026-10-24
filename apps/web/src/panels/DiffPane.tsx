@@ -10,7 +10,8 @@ import {
 	ResourcePreview,
 	rendererImplementationKey,
 } from "@thinkrail/resource-renderers";
-import { useMemo, useState } from "react";
+import { cn } from "@thinkrail/ui/utils";
+import { type ComponentProps, useMemo, useState } from "react";
 import { copyText, isPhoneViewport } from "@/lib";
 import type { DiffTab, FileComparisonTab, GitDiffTab } from "../store";
 import { isFileComparison, selectDiffTabTargetRef, useAppStore } from "../store";
@@ -21,6 +22,10 @@ import { HeaderIconButton } from "./HeaderIconButton";
 import { useResetViewStateOnImplementationChange } from "./resourcePane";
 import { SendReviewButton } from "./SendReviewButton";
 import { useLiveTabContent } from "./useLiveTabContent";
+
+function CopiedCheck({ className, ...props }: ComponentProps<typeof Check>) {
+	return <Check {...props} className={cn(className, "text-feedback-success")} />;
+}
 
 export function DiffPane({ tab }: { tab: DiffTab }) {
 	return isFileComparison(tab) ? <FileComparisonPane tab={tab} /> : <GitDiffPane tab={tab} />;
@@ -178,9 +183,8 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 						testid="diff-revert-file"
 						label={t("panels.diffPane.revertFile")}
 						onClick={() => void hunkActions.revertFile()}
-					>
-						<Revert className="size-14" />
-					</HeaderIconButton>
+						icon={Revert}
+					/>
 				) : null}
 				{renderer.capabilities.whitespace ? (
 					<HeaderIconButton
@@ -188,22 +192,16 @@ function GitDiffPane({ tab }: { tab: GitDiffTab }) {
 						label={t("panels.diffPane.hideWhitespace")}
 						active={ignoreWhitespace}
 						onClick={() => setDiffTabIgnoreWhitespace(tab.id, !ignoreWhitespace)}
-					>
-						<Pilcrow className="size-14" />
-					</HeaderIconButton>
+						icon={Pilcrow}
+					/>
 				) : null}
 				{renderer.capabilities.copy ? (
 					<HeaderIconButton
 						testid="diff-copy"
 						label={t("panels.diffPane.copyContents")}
 						onClick={() => void copy()}
-					>
-						{copied ? (
-							<Check className="size-14 text-feedback-success" />
-						) : (
-							<Copy className="size-14" />
-						)}
-					</HeaderIconButton>
+						icon={copied ? CopiedCheck : Copy}
+					/>
 				) : null}
 				<RendererToggles
 					candidates={candidates}

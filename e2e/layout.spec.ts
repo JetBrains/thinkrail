@@ -1132,7 +1132,10 @@ test("a narrow viewport compresses locally without rewriting recursive topology"
 	if (!bounds) throw new Error("workbench has no box");
 	expect(bounds.x).toBeGreaterThanOrEqual(0);
 	expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
-	await page.getByTestId("editor-tab").filter({ hasText: "README.md" }).click({ button: "right" });
+	await page
+		.getByTestId("editor-tab")
+		.filter({ hasText: "README.md" })
+		.click({ button: "right", position: { x: 24, y: 12 } });
 	await expect(page.getByRole("menuitem", { name: /Split right/ })).toBeDisabled();
 	await page.keyboard.press("Escape");
 

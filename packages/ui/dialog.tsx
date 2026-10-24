@@ -3,6 +3,7 @@ import { RiCloseLine as X } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
 import type * as React from "react";
 import { useSyncExternalStore } from "react";
+import { IconButton } from "./button";
 import { cn } from "./utils";
 
 const OPEN_MODAL_LAYER = '[data-modal-layer][data-state="open"]';
@@ -63,9 +64,8 @@ function DialogContent({
 			>
 				{children}
 				{hideClose ? null : (
-					<DialogPrimitive.Close className="absolute top-12 right-12 rounded-sm p-4 text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary">
-						<X className="size-16" />
-						<span className="sr-only">{t("common.close")}</span>
+					<DialogPrimitive.Close asChild>
+						<IconButton icon={X} label={t("common.close")} className="absolute top-12 right-12" />
 					</DialogPrimitive.Close>
 				)}
 			</DialogPrimitive.Content>

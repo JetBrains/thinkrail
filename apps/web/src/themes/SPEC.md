@@ -72,7 +72,10 @@ The primary control has an explicit opaque-fill contract: `accentSolid` is its r
 `accentHover` its hover fill, and `onAccent` the label on both. The separate `accent` remains the
 foreground/ring/border and tint source. This lets a palette vary opaque controls without silently
 changing every accent tint: the Minimal palettes align their resting fill with their accent, while the
-standard Light keeps its brighter independent solid fill.
+standard Light keeps its brighter independent solid fill. The destructive control has the same contract
+on the danger hue: `danger` is its resting fill (and the feedback colour), `dangerHover` its hover fill, and
+`onDanger` the label on both — `schema.test.ts` holds `onDanger` to AA on both fills and keeps the hover
+step distinguishable (≥ 1.15) from the resting fill.
 
 **The manifest→variable name is derived, not mapped.** A key writes to its kebab-cased name —
 `borderStrong` → `--border-strong`, `editorSelection` → `--editor-selection`. `runtime.ts` applies that

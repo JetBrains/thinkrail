@@ -395,7 +395,8 @@ host cancels every pending dialog when it accepts a user message, and the prompt
 hint — "Sending a chat message cancels this request."), confirm is Cancel/OK, input and editor a field
 plus Cancel/Submit. The title's first line is the question and names the region and its fields
 (`aria-labelledby`, the hint as `aria-describedby`); later lines are muted supporting text, so a host
-can add context without a contract field. Option buttons wrap long labels, and below a 28rem prompt
+can add context without a contract field. Option buttons (`Button outline m`, the button system's one documented wrapping exception) wrap long
+labels, and below a 28rem prompt
 (`@container` / `@max-md`) every row stacks into one column so no two choices sit side by side by
 accident (the MCP order keeps Deny furthest from Always allow). It never takes focus from the composer.
 **Arrival:** `ChatTranscript` keeps one always-mounted polite live region outside virtualization and
@@ -892,8 +893,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   keep their existing separate chrome. The slot-highlight backdrop must follow every dynamic textarea box
   change with the exact box-model and scroll-sync invariants under Template slots below.
 - **Composer trailing controls** (`Composer`) — the footer's right-hand cluster is **one solid object and
-  ghosts**, no borders: History is a ghost 28px circle (`Button variant="ghost" size="icon"` under an
-  `IconTooltip`), Stop a ghost pill (`■ Stop`, muted text lifting on a hover wash), and the send a single
+  ghosts**, no borders: History is `IconButton ghost m` (its `label` supplies the tooltip), Stop is
+  `Button ghost m` (`■ Stop`, muted text lifting on a hover wash), and the send a single
   `rounded-full` accent pill (`chat-send-pill`, `data-armed`) whose main segment (`chat-send`) carries the
   verb plus an `↩` keycap and whose chevron segment (`send-menu`, streaming only) is a second hit area
   with its own hover — spacing, not a divider, separates them. The earlier cluster was four equal bordered
@@ -902,7 +903,7 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   `control-disabled-text` rather than the 60% primary pair — a dark accent block pulls the eye to a control
   that cannot act, and the switch to the accent fill is the "ready" signal (the exception is recorded in
   `styles/COLOR.md`). **Compact mode**: below the chat column's `@md` container width (phones, narrow
-  splits) labels and keycap hide and the pills collapse to 28px icons, so the model pill keeps its room.
+  splits) labels and keycap hide and the send pill collapses to an icon, so the model pill keeps its room.
   Labels use `ui.action`.
 - **Queued messages: the pending strip** (`QueueStrip.tsx`, props-driven: `queue` + `onEdit`/`onRemove`)
   — the web mirror of pi's interactive-mode pending-messages area. A **streaming send never renders an

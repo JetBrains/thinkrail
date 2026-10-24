@@ -1,4 +1,5 @@
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
+import { buttonVariants } from "@thinkrail/ui/button";
 import * as monaco from "monaco-editor/esm/vs/editor/editor.api.js";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -6,7 +7,7 @@ import type { ReviewThread } from "../registry";
 
 const ICON_WIDGET_ID = "thinkrail.review.addIcon";
 const CARD_MAX_WIDTH = 832;
-const ICON_SVG = renderToStaticMarkup(createElement(MessageSquarePlus, { className: "size-14" }));
+const ICON_SVG = renderToStaticMarkup(createElement(MessageSquarePlus, { "aria-hidden": true }));
 
 export interface MonacoThreadZone {
 	commentId: string;
@@ -83,7 +84,10 @@ export function attachReviewCommenting(
 	const iconButton = document.createElement("button");
 	iconButton.type = "button";
 	iconButton.dataset.testid = "review-add-icon";
-	iconButton.className = "review-add-icon";
+	iconButton.className = buttonVariants({ variant: "outline", size: "s", shape: "icon" });
+	iconButton.dataset.slot = "button";
+	iconButton.dataset.variant = "outline";
+	iconButton.dataset.size = "s";
 	iconButton.innerHTML = ICON_SVG;
 	iconNode.appendChild(iconButton);
 

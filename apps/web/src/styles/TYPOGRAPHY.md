@@ -46,7 +46,7 @@ both markdown surfaces, the `<body>` base).
 | Group | Ids |
 |---|---|
 | `fontFamilies` | `interface` (Geist Variable, all proportional UI + reading text) · `code` (JetBrains Mono Variable, code only) · `brand` → **Orbitron Variable** (self-hosted `@fontsource-variable/orbitron`, a distinct display face for the brand role — `wordmark` + `hero`; it was formerly a `$ref` to `interface`). Orbitron is **latin-only** and `brand.hero` renders a project's own name, so the stack falls back to the *interface* face before any system font — a non-Latin name lands on Geist (cyrillic/latin-ext/vietnamese, already bundled) rather than on whatever the OS supplies |
-| `fontWeights` | `light` 370 · `regular` 400 · `medium` 500 · `semibold` 600 · `brand` 400 |
+| `fontWeights` | `light` 370 · `regular` 400 · `medium` 500 · `semibold` 600 · `brand` 400 · `button` 470 |
 | `fontSizes` | `s10` `s11` `s12` `s13` `s14` `s16` `s18` `s20` `s24` `s44` (px) |
 | `lineHeights` | `compact` 1.25 · `metadata` 1.25 (12px→15px) · `ui` 1.3 (14px→18.2px) · `code` 1.4 · `relaxed` 1.4 (13px→18.2px) · `default` 1.3 (14px→18.2px) · `reading` 1.45 (14px→20.3px) |
 | `letterSpacings` | `normal` · `loose` 0.02em · `wide` 0.05em · `widest` 0.1em · `brand` 0.5px |
@@ -86,11 +86,11 @@ artwork) · **heading** (`xl`, `lg`, `md`, `sm` — the shared document heading 
 (`dialog`, `card`→dialog, `section`, `compact`, `entity`→body.reading)
 · **ui** (`default`, `metadata`, `eyebrow`, `labelPill`→eyebrow, `caption` — the 10px/compact uppercase
 badge and tile-initial style (row status badges, the topbar project initial), where `eyebrow`'s 18px line would
-not fit, `action`→title.compact, `emphasis`→title.compact) · **body** (`reading`) · **code** (`text` — the base 13px code style, `document`, `otp`, `textSmall` — an 11px code style for
+not fit, `action`→title.compact, `button` — the shared button label, `ui.default` one weight step heavier, `emphasis`→title.compact) · **body** (`reading`) · **code** (`text` — the base 13px code style, `document`, `otp`, `textSmall` — an 11px code style for
 inline code in table cells). `proseSystems` holds one entry per markdown surface, almost entirely aliases
 into the above. Dead aliases are not retained: prose points directly to the semantic style it uses.
 
-**20 canonical definitions + 30 aliases = 50 styles.**
+**21 canonical definitions + 30 aliases = 51 styles.**
 
 One prose rule is deliberately *not* a semantic style: `<strong>` / `<b>` gets **weight only**
 (`--tr-font-weight-medium`), emitted by the generator into each prose system. A complete style there
@@ -126,7 +126,7 @@ The generator derives one class per semantic style, mechanically:
 | `heading.xl` · `heading.lg` · `heading.md` · `heading.sm` | `.tr-heading-xl` · `.tr-heading-lg` · `.tr-heading-md` · `.tr-heading-sm` |
 | `title.dialog` · `title.card` · `title.section` · `title.compact` · `title.entity` | `.tr-title-dialog` · `.tr-title-card` · `.tr-title-section` · `.tr-title-compact` · `.tr-title-entity` |
 | `ui.default` · `ui.metadata` | `.tr-text-ui` · `.tr-text-metadata` |
-| `ui.eyebrow` · `ui.labelPill` · `ui.caption` · `ui.action` · `ui.emphasis` | `.tr-text-eyebrow` · `.tr-text-label-pill` · `.tr-text-caption` · `.tr-text-action` · `.tr-text-emphasis` |
+| `ui.eyebrow` · `ui.labelPill` · `ui.caption` · `ui.action` · `ui.button` · `ui.emphasis` | `.tr-text-eyebrow` · `.tr-text-label-pill` · `.tr-text-caption` · `.tr-text-action` · `.tr-text-button` · `.tr-text-emphasis` |
 | `body.reading` | `.tr-text-reading` |
 | `code.text` · `code.document` · `code.otp` · `code.textSmall` | `.tr-code-text` · `.tr-code-document` · `.tr-code-otp` · `.tr-code-text-small` |
 | `proseSystems.<id>.*` | `.tr-prose-<id>` + one element selector each |
@@ -246,7 +246,10 @@ those are proportional. Validation enforces this: a monospace family on a non-co
 
 - **370** (`light`) — ordinary UI, body, entity, metadata and status text (interface family).
 - **400** (`regular` / `brand`) — monospace / code text (`code.*`) and brand display text (`brand.*`).
-- **500** — buttons (`ui.action`), in-page section titles, compact titles, inline emphasis
+- **470** (`button`) — the shared `Button` / `IconButton` label (`ui.button`, owned by `packages/ui`
+  `buttonVariants`): the 14px interface face one weight step (+100) above ordinary UI text so an action
+  label reads as an action, still lighter than titles. Call sites never set it; it travels with the button.
+- **500** — non-button action text (`ui.action`), in-page section titles, compact titles, inline emphasis
   (`ui.emphasis`), uppercase labels (`ui.eyebrow`/`labelPill`), chat prose h4–h6 and `strong`.
 - **600** — dialog titles, card titles, alert titles, every `heading.*`, chat prose h1–h3, document
   prose h1–h6 and table headers.

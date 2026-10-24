@@ -1,9 +1,18 @@
 import { RiErrorWarningLine, RiStackFill, RiStackLine } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, type ButtonIcon, IconButton } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import type { ComponentProps } from "react";
+
+function breathing(Icon: ButtonIcon): ButtonIcon {
+	return function BreathingIcon({ className, ...props }) {
+		return <Icon {...props} className={cn(className, "motion-safe:animate-working")} />;
+	};
+}
+
+const StackFillLive = breathing(RiStackFill);
+const StackLineLive = breathing(RiStackLine);
 
 export function ResourcesButton({
 	activeCount,
@@ -17,8 +26,8 @@ export function ResourcesButton({
 	working?: boolean;
 }) {
 	const t = useT();
-	const Icon = open ? RiStackFill : RiStackLine;
 	const live = working ?? (activeCount !== null && activeCount > 0);
+	const Icon = open ? (live ? StackFillLive : RiStackFill) : live ? StackLineLive : RiStackLine;
 	return (
 		<IconTooltip
 			label={
@@ -30,11 +39,10 @@ export function ResourcesButton({
 		>
 			<Button
 				variant="ghost"
-				size="sm"
-				className={cn(
-					"h-panel-header-control shrink-0 gap-4 tr-text-metadata aria-expanded:bg-control-bg-selected",
-					className,
-				)}
+				size="m"
+				iconLeft={Icon}
+				selected={open}
+				className={cn("shrink-0", className)}
 				data-testid="resources-trigger"
 				data-active-count={activeCount ?? "unknown"}
 				data-live={live || undefined}
@@ -46,7 +54,6 @@ export function ResourcesButton({
 				aria-expanded={open}
 				{...props}
 			>
-				<Icon className={cn("size-14", live && "motion-safe:animate-working")} />
 				<span className="hidden @[480px]:inline">{t("resources.button.label")}</span>
 				<span className="tabular-nums">{activeCount ?? "—"}</span>
 			</Button>
@@ -58,18 +65,15 @@ export function ResourcesAttention({ count, onOpen }: { count: number; onOpen: (
 	const t = useT();
 	const label = t("resources.attention.label", { count });
 	return (
-		<IconTooltip label={label}>
-			<Button
-				variant="ghost"
-				size="icon"
-				data-testid="resources-mcp-attention"
-				data-count={count}
-				aria-label={label}
-				onClick={onOpen}
-				className="shrink-0 text-feedback-warning hover:text-feedback-warning"
-			>
-				<RiErrorWarningLine className="size-14" />
-			</Button>
-		</IconTooltip>
+		<IconButton
+			variant="ghost"
+			size="m"
+			icon={RiErrorWarningLine}
+			label={label}
+			data-testid="resources-mcp-attention"
+			data-count={count}
+			onClick={onOpen}
+			className="shrink-0 text-feedback-warning hover:text-feedback-warning"
+		/>
 	);
 }

@@ -1,5 +1,6 @@
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import { buttonVariants } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
 import { Fragment, forwardRef, type ReactNode, useRef, useState } from "react";
@@ -25,13 +26,29 @@ const RAIL_TOOLBAR_LABELS = {
 
 export function railEntryFrameClass(region: LayoutAuxiliaryRegion | "center"): string {
 	return cn(
-		"relative flex w-32 shrink-0 items-center rounded-sm text-text-muted data-[active=true]:bg-control-bg-selected data-[active=true]:text-text-default",
+		"relative flex w-32 shrink-0 items-center justify-center",
 		region === "bottom" ? "h-panel-header-control" : "h-32",
 	);
 }
 
-export const RAIL_ENTRY_BUTTON_CLASS =
-	"relative flex h-full min-w-0 flex-1 items-center justify-center rounded-sm outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary";
+export function railEntryButtonClass(region: LayoutAuxiliaryRegion | "center"): string {
+	return cn(
+		buttonVariants({ variant: "ghost", size: "m", shape: "icon" }),
+		region === "bottom" && "focus-visible:outline-offset-0",
+	);
+}
+
+export function railEntryButtonProps(active: boolean) {
+	return {
+		"data-slot": "button",
+		"data-variant": "ghost",
+		"data-size": "m",
+		"data-icon-only": "",
+		"data-selected": active || undefined,
+	} as const;
+}
+
+export const RAIL_ICON = "size-16 shrink-0";
 
 export function railTooltipSide(
 	region: LayoutAuxiliaryRegion | "center",
@@ -55,7 +72,6 @@ export const AuxiliaryRailToolButton = forwardRef<
 	const name = layoutTabName(t, tab);
 	return (
 		<div data-active={active} className={railEntryFrameClass(region)}>
-			{active ? <AuxiliaryRailIndicator region={region} /> : null}
 			<IconTooltip label={name} side={railTooltipSide(region)}>
 				<button
 					ref={ref}
@@ -65,31 +81,17 @@ export const AuxiliaryRailToolButton = forwardRef<
 					aria-label={name}
 					aria-pressed={active}
 					aria-controls={controls}
+					{...railEntryButtonProps(active)}
 					{...control}
 					onClick={onActivate}
-					className={RAIL_ENTRY_BUTTON_CLASS}
+					className={railEntryButtonClass(region)}
 				>
-					{tabIcon(tab, active)}
+					{tabIcon(tab, active, RAIL_ICON)}
 				</button>
 			</IconTooltip>
 		</div>
 	);
 });
-
-export function AuxiliaryRailIndicator({ region }: { region: LayoutAuxiliaryRegion }) {
-	return (
-		<span
-			aria-hidden="true"
-			data-testid="rail-selection-indicator"
-			className={cn(
-				"pointer-events-none absolute rounded-full bg-primary",
-				region === "bottom" ? "bottom-0 left-8 h-2 w-16" : "top-8 h-16 w-2",
-				region === "left" && "-left-4",
-				region === "right" && "-right-4",
-			)}
-		/>
-	);
-}
 
 export function AuxiliaryRail({
 	region,

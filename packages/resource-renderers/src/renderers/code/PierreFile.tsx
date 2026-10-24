@@ -2,7 +2,7 @@ import type { LineAnnotation, SelectedLineRange } from "@pierre/diffs";
 import { File, VirtualizerContext } from "@pierre/diffs/react";
 import { RiChatNewLine as MessageSquarePlus } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
-import { IconTooltip } from "@thinkrail/ui/tooltip";
+import { IconButton } from "@thinkrail/ui/button";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AnchorDraft, ResourceViewProps } from "../../registry";
 import { ReviewComposer } from "../../support/ReviewComposer";
@@ -165,24 +165,20 @@ function PierreFileSurface({
 					selectedLines={selectedLines}
 					className="flex-1"
 					renderGutterUtility={(getHoveredLine) => (
-						<IconTooltip label={t("viewer.code.commentOnLine")}>
-							<button
-								type="button"
-								data-testid="review-add-icon"
-								aria-label={t("viewer.code.commentOnLine")}
-								onPointerDown={(event) => {
-									event.preventDefault();
-									event.stopPropagation();
-								}}
-								onClick={() => {
-									const line = getHoveredLine();
-									if (line) openSelection({ start: line.lineNumber, end: line.lineNumber });
-								}}
-								className="flex size-24 items-center justify-center rounded-sm bg-primary text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
-							>
-								<MessageSquarePlus className="size-14" />
-							</button>
-						</IconTooltip>
+						<IconButton
+							icon={MessageSquarePlus}
+							label={t("viewer.code.commentOnLine")}
+							variant="primary"
+							data-testid="review-add-icon"
+							onPointerDown={(event) => {
+								event.preventDefault();
+								event.stopPropagation();
+							}}
+							onClick={() => {
+								const line = getHoveredLine();
+								if (line) openSelection({ start: line.lineNumber, end: line.lineNumber });
+							}}
+						/>
 					)}
 					renderAnnotation={(annotation) => {
 						const metadata = annotation.metadata;

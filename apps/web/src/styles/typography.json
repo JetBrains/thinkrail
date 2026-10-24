@@ -54,7 +54,8 @@
 		"regular": 400,
 		"medium": 500,
 		"semibold": 600,
-		"brand": 400
+		"brand": 400,
+		"button": 470
 	},
 	"fontSizes": {
 		"s10": 10,
@@ -218,6 +219,15 @@
 			},
 			"action": {
 				"$ref": "title.compact"
+			},
+			"button": {
+				"fontFamily": "interface",
+				"fontSize": "s14",
+				"fontWeight": "button",
+				"lineHeight": "ui",
+				"letterSpacing": "normal",
+				"textTransform": "none",
+				"fontStyle": "normal"
 			},
 			"emphasis": {
 				"$ref": "title.compact"

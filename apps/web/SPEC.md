@@ -161,7 +161,7 @@ change. `dist/` therefore has no profiler timers (`actualStartTime` is absent fr
 - `notifications` → `store` (session-state reads, prompt + `activateWorkspaceFromRoute` / `openSessionSwitcher` actions), `ui` (the permission preface dialog), `contracts` (type-only — `SessionState`/`SessionCompletion`/`NativeNotificationBridge`), React, and Remix Icon; the master-toggle Settings panel lives in `panels`, and `shell` mounts the observer/preface. It emits through a capability-selected channel: the page Notifications API, or the native desktop channel when the optional `__THINKRAIL_NATIVE_NOTIFICATIONS__` bridge is present (capability detection only, no `desktop` branch). No Service Worker: a closed app has no live client to notify
 - `panels` → `@thinkrail/resource-renderers` (registry, review contract, `ReviewThreadCard`, draft context, `createAskAgentRequest`), `store`, `transport`, `ui`, `components` (`ErrorBoundary` for feature bodies + quiet scroll surfaces for panel-owned lists/xterm), `lib`, `contracts`, `constants` (`WelcomePanel`'s wordmark), `prompt` (`NewWorkspaceDialog` consumes the shared slash/template behavior), `chat` (`NewWorkspaceDialog` eagerly reuses `chat/ModelEffortPicker`+`useModelCatalog`+`useModelPreferences`, `ModelsSettings` the older `ModelSelector`+`ThinkingSelector`, `VisibleModelsSettings` `chat/modelPicker`'s `formatContext` + `chat/ProviderGlyph`, and `ProvidersSettings` the `chat/modelPicker` connection-kind vocabulary — all shiki-free, so the eager import stays split-safe; `TemplatesSettings` reuses `chat/TemplateEditorDialog` for its New/Edit flows — see `panels/SPEC.md`'s `TemplatesSettings` paragraph; `ProjectTrustNotice` and `NewWorkspaceDialog` share `chat/projectTrust` + `chat/useProjectTrustSummary` with the Skills dialog's trust banner), `auth` (`ProvidersSettings` and `McpSettings` mount `auth/LoginDialog`), `notifications` (`NotificationsSettings` requests browser permission on enable via the barrel), `themes` (`AppearanceSettings` consumes the live catalog; code surfaces consume generic theme variables/syntax mapping), `i18n` (`LanguageSettings` renders its language derivations and `useSystemLanguages`), and `react-virtuoso` (the lazily loaded Changes review list); the renderer engines are [[module-resource-renderers]]' own dependencies
 - `chat` → `contracts` (pi message types, **type-only**), `ui`, `extension-api/web`, `@thinkrail/resource-renderers` (`ChatTranscript` provides the chat's `ResourceScope` to its rows), `ext-visualize/web`, `extensions` (registration only), `components` (`useNow`, and the `RunningIcon` badge in the stream footer), `prompt` (shared slash/template behavior), `lib`, `clientPreferences`; `store` + `transport`  (**app-integration files only** — the renderers stay store-free; see `chat/SPEC.md` for the current set)
-- `prompt` → `contracts` (slash/template types only), `@thinkrail/ui/utils` (`cn`), and React; it has no lifecycle integration dependency
+- `prompt` → `contracts` (slash/template types only), `@thinkrail/ui/utils` (`cn`), `@thinkrail/ui/button` (the template slot hint is a shared `Button`), and React; it has no lifecycle integration dependency
 - `extensions` → `ext-*/web`, `extension-api/web`, `chat/toolRegistry` (registration only; no ChatView import)
 - `auth` → `ui`, `lib` (`copyText`; the dialog is store/transport-free — the panel integrates it; the state types need no imports)
 - `store` → `transport` (**type-only** — `ConnectionStatus`), `chat` (**type-only** — `ChatTurn`/`ToolResultState`), `auth` (**type-only** — `LoginState`; the `foldLoginFrame` reducer lives in `store`, like `reduceExtUi`), `contracts` (domain + custom-preset types, never current-layout DTOs), `lib` (shared path/array primitives — a leaf, so no cycle), and `shell/layout` (**type-only** for web-local frame/view state)
@@ -232,7 +232,7 @@ themselves.
   (`--radius-xs/sm/md/lg` — a small primitive geometry capped at 8px: `sm` (4px) is the default corner,
   `md` (6px) the outer corner for surfaces nesting 4px children, `lg` (8px) the exception for large
   standalone elevated surfaces (dialogs, user-message bubbles)). Spacing is **one canonical numeric
-  scale** — `0 / 2 / 4 / 8 / 12 / 16 / 24 / 32 / 40 / 64` — where the step name *is* its pixel value, so
+  scale** — `0 / 2 / 4 / 6 / 8 / 12 / 16 / 24 / 32 / 40 / 64` — where the step name *is* its pixel value, so
   `p-8` / `gap-12` / `py-4` resolve to exactly that many pixels; it is generated from a single JSON source
   (`src/styles/spacing.json` → `src/styles/generated/spacing.css`), so each canonical length is written
   once in the JSON rather than re-declared at call sites. A value several surfaces must move together is a
@@ -258,10 +258,10 @@ themselves.
   Three tiers: `size-12` (12px) for **chat-content** indicators (tool activity, plan/todo status,
   expand/collapse chat details — subordinate to chat text); `size-14` (14px) for **compact interface /
   navigation chrome** (left/right panels, panel & toolbar headers, tabs, the mobile switcher rail, menu
-  items, standalone chrome icon-buttons); `size-16` (16px) for a **prominent dedicated icon-button
-  surface** — the app-chrome Settings gear and the composer's bottom controls (Send + peers) — **and
-  for every disclosure/expand chevron** (`ChevronDown/Right/Left/Up`), which are `size-16` in all
-  contexts regardless of tier. The **icon↔text gap is `gap-4` (4px)** across all icon+label rows (nav
+  items); `size-16` (16px) for **every disclosure/expand chevron** (`ChevronDown/Right/Left/Up`), which
+  are `size-16` in all contexts regardless of tier. **Icons inside buttons are not tiered by context**:
+  `Button` / `IconButton` (`@thinkrail/ui/button`) size their icon from the button size (S 12, M 16, L 20)
+  and the call site passes the icon component, never a `size-*` class. The **icon↔text gap is `gap-4` (4px)** across all icon+label rows (nav
   rows, menu/command items, tabs). A **two-line** row (e.g. a
   workspace whose branch differs from its name) **top-aligns** the icon to the first line (`items-start`
   + `mt-2`) so the glyph hangs on its title, while a single-line row stays vertically centred
@@ -354,8 +354,11 @@ themselves.
   generator that turns it into CSS is [scripts/SPEC.md](scripts/SPEC.md).
 - **Icons: `@remixicon/react` (Line default, Fill when active/selected). Components: shadcn/ui** (Radix primitives), owned by [[module-ui]]
   and themed with our token utilities (`cn()` in `@thinkrail/ui/utils`) — never shadcn's default oklch
-  palette. Use these for accessible menus / dialogs / tooltips; icon-only controls label themselves with
-  `IconTooltip`, never native `title`.
+  palette. Use these for accessible menus / dialogs / tooltips. **Every ordinary action button is
+  `Button` or `IconButton`** — five variants × three sizes, states owned by the component (see
+  [[module-ui]] "Button system"); call sites add placement only, and `styles/buttonUsage.test.ts` rejects
+  legacy variant names, call-site skins and raw `<button>` skins. Icon-only controls get their name and the
+  shared `IconTooltip` from `IconButton`'s required `label`, never native `title`.
 
 ## Get right
 

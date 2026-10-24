@@ -3,6 +3,7 @@ import type { AskUserQuestionResult, GitDiffScope, TurnChangeSet } from "@thinkr
 import type { MessageKey } from "@thinkrail/locales";
 import { t as translate, useT } from "@thinkrail/locales/react";
 import { ResourceScopeProvider } from "@thinkrail/resource-renderers";
+import { Button } from "@thinkrail/ui/button";
 import { useModalLayerOpen } from "@thinkrail/ui/dialog";
 import { cn } from "@thinkrail/ui/utils";
 import {
@@ -704,21 +705,18 @@ const ChatTranscript = forwardRef<
 							/>
 						</div>
 						{showScrollButton ? (
-							<button
-								type="button"
+							<Button
+								variant="outline"
+								size="m"
+								iconLeft={chatMessageOrder === "newest-first" ? ArrowUp : ArrowDown}
 								data-testid={
 									chatMessageOrder === "newest-first" ? "scroll-to-top" : "scroll-to-bottom"
 								}
 								onClick={scrollToLatest}
-								className="-translate-x-1/2 absolute bottom-12 left-1/2 flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-8 py-4 text-text-muted tr-text-metadata shadow-[var(--shadow-md)] hover:bg-control-bg-hovered hover:text-text-default"
+								className="-translate-x-1/2 absolute bottom-12 left-1/2 shadow-[var(--shadow-md)]"
 							>
-								{chatMessageOrder === "newest-first" ? (
-									<ArrowUp className="size-12" />
-								) : (
-									<ArrowDown className="size-12" />
-								)}
 								{scrollButtonLabel ? t(SCROLL_BUTTON_LABELS[scrollButtonLabel]) : null}
-							</button>
+							</Button>
 						) : null}
 						<span
 							role="status"

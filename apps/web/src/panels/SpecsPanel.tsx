@@ -88,8 +88,13 @@ export function SpecsPanel({
 					<span className="min-w-0 flex-1">
 						{nodes === null ? t("panels.specs.loadFailed") : t("panels.specs.updateFailed")}
 					</span>
-					<Button variant="ghost" size="sm" data-testid="specs-retry" onClick={onRetry}>
-						<RefreshCw className="size-14" />
+					<Button
+						variant="ghost"
+						size="m"
+						iconLeft={RefreshCw}
+						data-testid="specs-retry"
+						onClick={onRetry}
+					>
 						{t("common.retry")}
 					</Button>
 				</div>

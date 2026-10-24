@@ -7,6 +7,7 @@ import {
 import type { HistoryScope, MessageHit, PromptHit } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
+import { IconButton } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -178,22 +179,18 @@ function PromptRow({
 					{SAVE_SHORTCUT_LABEL}
 				</span>
 			) : null}
-			<IconTooltip label={t("chat.history.saveTemplateTooltip", { shortcut: SAVE_SHORTCUT_LABEL })}>
-				<button
-					type="button"
-					data-testid="history-save-template"
-					aria-label={t("chat.history.saveTemplate")}
-					onClick={(e) => {
-						e.stopPropagation();
-						onSaveAsTemplate();
-					}}
-					className={`flex shrink-0 items-center justify-center rounded-sm p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 ${
-						isSelected ? "opacity-100" : ""
-					}`}
-				>
-					<Save className="size-14" />
-				</button>
-			</IconTooltip>
+			<IconButton
+				icon={Save}
+				size="s"
+				data-testid="history-save-template"
+				label={t("chat.history.saveTemplate")}
+				tooltip={t("chat.history.saveTemplateTooltip", { shortcut: SAVE_SHORTCUT_LABEL })}
+				onClick={(e) => {
+					e.stopPropagation();
+					onSaveAsTemplate();
+				}}
+				className={`shrink-0 opacity-0 group-hover:opacity-100 ${isSelected ? "opacity-100" : ""}`}
+			/>
 			{target ? (
 				<>
 					{isSelected ? (
@@ -204,22 +201,18 @@ function PromptRow({
 							⇧⏎
 						</span>
 					) : null}
-					<IconTooltip label={t("chat.history.jumpTooltip", { shortcut: "⇧⏎" })}>
-						<button
-							type="button"
-							data-testid="history-jump"
-							aria-label={t("chat.history.jump")}
-							onClick={(e) => {
-								e.stopPropagation();
-								onOpenMessage(target);
-							}}
-							className={`flex shrink-0 items-center justify-center rounded-sm p-4 text-text-muted opacity-0 transition hover:bg-container-elevated-bg hover:text-text-default group-hover:opacity-100 ${
-								isSelected ? "opacity-100" : ""
-							}`}
-						>
-							<CornerUpRight className="size-14" />
-						</button>
-					</IconTooltip>
+					<IconButton
+						icon={CornerUpRight}
+						size="s"
+						data-testid="history-jump"
+						label={t("chat.history.jump")}
+						tooltip={t("chat.history.jumpTooltip", { shortcut: "⇧⏎" })}
+						onClick={(e) => {
+							e.stopPropagation();
+							onOpenMessage(target);
+						}}
+						className={`shrink-0 opacity-0 group-hover:opacity-100 ${isSelected ? "opacity-100" : ""}`}
+					/>
 				</>
 			) : null}
 			<DeleteChatButton

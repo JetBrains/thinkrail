@@ -14,6 +14,7 @@ import type {
 } from "@thinkrail/contracts";
 import { resultText, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
+import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	Fragment,
@@ -665,34 +666,37 @@ export function AskUserQuestionCard({
 							<span role="status" aria-live="polite" className="sr-only">
 								{nudgeVisible && nudgeSpoken ? t("tools.ask.needsChoiceAnnouncement") : ""}
 							</span>
-							<button
-								type="button"
+							<Button
+								variant="ghost"
+								size="l"
 								data-testid="ask-skip"
 								onClick={() => reply({ answers: [], cancelled: true })}
 								disabled={!actions}
-								className="shrink-0 rounded-sm px-4 text-text-muted tr-text-ui outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text"
+								className="shrink-0"
 							>
 								{t("tools.ask.skip")}
-							</button>
+							</Button>
 							{showContinue ? (
-								<button
-									type="button"
+								<Button
+									variant="primary"
+									size="l"
 									data-testid="ask-continue"
 									onClick={() => setTab(Math.min(tab + 1, reviewTab))}
-									className="shrink-0 whitespace-nowrap rounded-sm bg-control-primary-bg px-12 py-8 tr-text-action text-control-primary-text outline-none hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
+									className="shrink-0"
 								>
 									{t("tools.ask.next")}
-								</button>
+								</Button>
 							) : (
-								<button
-									type="button"
+								<Button
+									variant="primary"
+									size="l"
 									data-testid="ask-submit"
 									onClick={() => reply({ answers, cancelled: false })}
 									disabled={!canSubmit}
-									className="shrink-0 whitespace-nowrap rounded-sm bg-control-primary-bg px-12 py-8 tr-text-action text-control-primary-text outline-none hover:bg-control-primary-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:bg-control-primary-disabled-bg disabled:text-control-primary-disabled-text"
+									className="shrink-0"
 								>
 									{t("tools.ask.submit")}
-								</button>
+								</Button>
 							)}
 						</div>
 					</div>
@@ -1011,8 +1015,10 @@ function QuestionBody({
 													className="w-full resize-none rounded-sm border border-control-border-default bg-control-bg px-8 py-4 text-text-default tr-text-metadata outline-none focus-visible:border-control-border-active"
 												/>
 											) : (
-												<button
-													type="button"
+												<Button
+													variant="ghost"
+													size="s"
+													iconLeft={Pencil}
 													data-testid="ask-note-toggle"
 													aria-label={
 														noteText
@@ -1020,11 +1026,9 @@ function QuestionBody({
 															: t("tools.ask.addNoteLabel", { option: optionText })
 													}
 													onClick={() => openNote(option.label, index)}
-													className="flex items-center gap-4 rounded-sm text-text-muted tr-text-metadata outline-none hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
 												>
-													<Pencil className="size-12" />
 													{noteText ? t("tools.ask.editNote") : t("tools.ask.addNote")}
-												</button>
+												</Button>
 											)}
 										</div>
 									) : null}

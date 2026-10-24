@@ -13,6 +13,7 @@ import {
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
 import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -159,44 +160,33 @@ function HunkToolbar({
 		>
 			{triage ? (
 				<IconTooltip label={kept ? t("viewer.hunk.keptTooltip") : t("viewer.hunk.keepTooltip")}>
-					<button
-						type="button"
+					<Button
+						variant="ghost"
+						size="m"
+						iconLeft={Check}
 						data-testid="hunk-keep"
 						aria-label={kept ? t("viewer.hunk.undoKeep") : t("viewer.hunk.keepLabel")}
 						aria-pressed={kept}
+						selected={kept}
 						onClick={() => triage.setKept(contentKey, !kept)}
-						className={`flex h-24 items-center gap-4 rounded-sm px-8 tr-text-metadata outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-							kept ? "text-feedback-success" : "hover:bg-control-bg-hovered hover:text-text-default"
-						}`}
 					>
-						<Check className="size-14" />
 						{kept ? t("viewer.hunk.kept") : t("viewer.hunk.keep")}
-					</button>
+					</Button>
 				</IconTooltip>
 			) : null}
-			<IconTooltip label={t("viewer.hunk.revert")}>
-				<button
-					type="button"
-					data-testid="hunk-revert"
-					aria-label={t("viewer.hunk.revert")}
-					disabled={reverting}
-					onClick={revert}
-					className="flex size-24 items-center justify-center rounded-sm outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:text-control-disabled-text"
-				>
-					<Revert className="size-14" />
-				</button>
-			</IconTooltip>
-			<IconTooltip label={t("viewer.hunk.askAgent")}>
-				<button
-					type="button"
-					data-testid="hunk-ask-agent"
-					aria-label={t("viewer.hunk.askAgent")}
-					onClick={() => onAskAgent(block)}
-					className="flex size-24 items-center justify-center rounded-sm outline-none hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary"
-				>
-					<AskAgent className="size-14" />
-				</button>
-			</IconTooltip>
+			<IconButton
+				icon={Revert}
+				label={t("viewer.hunk.revert")}
+				data-testid="hunk-revert"
+				disabled={reverting}
+				onClick={revert}
+			/>
+			<IconButton
+				icon={AskAgent}
+				label={t("viewer.hunk.askAgent")}
+				data-testid="hunk-ask-agent"
+				onClick={() => onAskAgent(block)}
+			/>
 			{actions.agentWorking ? (
 				<span className="tr-text-metadata text-text-subtle">{t("viewer.hunk.agentWorking")}</span>
 			) : null}
@@ -459,21 +449,17 @@ function PierreDiffSurface({
 					selectedLines={selectedLines}
 					className="flex-1"
 					renderGutterUtility={(getHoveredLine) => (
-						<IconTooltip label={t("viewer.code.commentOnLine")}>
-							<button
-								type="button"
-								data-testid="review-add-icon"
-								aria-label={t("viewer.code.commentOnLine")}
-								onPointerDown={(event) => {
-									event.preventDefault();
-									event.stopPropagation();
-								}}
-								onClick={() => openGutterComposer(getHoveredLine())}
-								className="flex size-24 items-center justify-center rounded-sm bg-primary text-text-on-primary outline-none focus-visible:ring-2 focus-visible:ring-primary"
-							>
-								<MessageSquarePlus className="size-14" />
-							</button>
-						</IconTooltip>
+						<IconButton
+							icon={MessageSquarePlus}
+							label={t("viewer.code.commentOnLine")}
+							variant="primary"
+							data-testid="review-add-icon"
+							onPointerDown={(event) => {
+								event.preventDefault();
+								event.stopPropagation();
+							}}
+							onClick={() => openGutterComposer(getHoveredLine())}
+						/>
 					)}
 					renderAnnotation={(annotation) => {
 						const metadata = annotation.metadata;

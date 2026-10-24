@@ -13,9 +13,7 @@ async function expectProjectsShown(page: Page): Promise<void> {
 		"false",
 	);
 	await expect(page.getByTestId("tool-rail-projects")).toHaveAttribute("aria-pressed", "true");
-	await expect(
-		page.getByTestId("left-layout-rail").getByTestId("rail-selection-indicator"),
-	).toHaveCount(1);
+	await expect(page.getByTestId("tool-rail-projects")).toHaveAttribute("data-selected", "true");
 	await expect(page.getByTestId("auxiliary-pane-header")).toHaveText("Projects");
 	await expect(page.getByTestId("left-nav")).toBeVisible();
 }
@@ -26,9 +24,7 @@ async function expectProjectsHidden(page: Page): Promise<void> {
 		"true",
 	);
 	await expect(page.getByTestId("tool-rail-projects")).toHaveAttribute("aria-pressed", "false");
-	await expect(
-		page.getByTestId("left-layout-rail").getByTestId("rail-selection-indicator"),
-	).toHaveCount(0);
+	await expect(page.getByTestId("tool-rail-projects")).not.toHaveAttribute("data-selected", /.*/);
 	await expect(page.getByTestId("left-nav")).toBeHidden();
 	await expect(page.getByTestId("left-layout-rail")).toBeVisible();
 }

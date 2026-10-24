@@ -93,16 +93,15 @@ export function UpdateReadyButton({
 
 	return (
 		<Button
-			variant="ghost"
-			size="sm"
+			variant="soft-primary"
+			size="m"
+			iconLeft={DownloadCloud}
 			data-testid="update-ready"
 			data-source={updates.source}
 			data-status={nativeState?.status ?? hostStatus ?? (hostUpdate ? "legacy" : undefined)}
 			aria-label={ariaLabel}
 			onClick={onOpen}
-			className="text-primary"
 		>
-			<DownloadCloud className="size-14" />
 			<span className="hidden md:inline">{label}</span>
 		</Button>
 	);

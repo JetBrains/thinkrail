@@ -16,9 +16,9 @@ export function FeedbackSettings() {
 				href={INTERVIEW_BOOKING_URL}
 				target="_blank"
 				rel="noopener noreferrer"
-				className={buttonVariants({ className: "self-start" })}
+				className={buttonVariants({ variant: "primary", size: "l", className: "self-start" })}
 			>
-				<ExternalLink className="size-14" />
+				<ExternalLink aria-hidden />
 				{t("settings.feedback.scheduleInterview")}
 			</a>
 		</section>

@@ -118,13 +118,13 @@ function ThemeDropdown({
 			<DropdownMenuTrigger asChild>
 				<Button
 					variant="outline"
+					size="l"
+					iconRight={ChevronDown}
 					disabled={disabled}
 					aria-label={label}
 					data-testid={`system-theme-${appearance}-trigger`}
-					className="h-32 justify-between"
 				>
 					<span className="truncate">{themeLabel(t, resolution.theme)}</span>
-					<ChevronDown className="size-16" />
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="min-w-[var(--radix-dropdown-menu-trigger-width)]">

@@ -62,9 +62,8 @@ export function FilesPanel({ workspaceId }: { workspaceId: string }) {
 							testid="files-collapse-all"
 							label={t("panels.files.collapseAll")}
 							onClick={collapseAll}
-						>
-							<RiCollapseVerticalLine className="size-14" />
-						</HeaderIconButton>
+							icon={RiCollapseVerticalLine}
+						/>
 					</div>
 				) : null}
 			</div>

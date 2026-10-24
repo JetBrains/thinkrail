@@ -11,7 +11,7 @@ import {
 import type { ComposerGrowthLimit, ThinkingLevel, WireModel } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
-import { Button } from "@thinkrail/ui/button";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@thinkrail/ui/popover";
 import { IconTooltip } from "@thinkrail/ui/tooltip";
 import { cn } from "@thinkrail/ui/utils";
@@ -71,11 +71,6 @@ const COMPACT_ONLY = "@md:hidden";
 
 const SEGMENT =
 	"flex items-center gap-4 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary disabled:pointer-events-none";
-
-const STOP_PILL = cn(
-	SEGMENT,
-	"h-28 shrink-0 rounded-full pr-12 pl-8 tr-text-action text-text-muted hover:bg-control-bg-hovered hover:text-text-default @max-md:w-28 @max-md:justify-center @max-md:px-0",
-);
 
 const SEND_PILL = "flex h-28 shrink-0 items-stretch rounded-full transition-colors";
 const SEND_PILL_ARMED = "bg-control-primary-bg text-control-primary-text";
@@ -664,29 +659,24 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 						/>
 					</div>
 					<div className="col-start-3 row-start-2 flex shrink-0 items-center gap-4 self-end">
-						<IconTooltip label={t("chat.composer.searchHistory")}>
+						<IconButton
+							icon={History}
+							data-testid="history-open"
+							label={t("chat.composer.searchHistory")}
+							onClick={openHistory}
+						/>
+						{isStreaming ? (
 							<Button
 								variant="ghost"
-								size="icon"
-								data-testid="history-open"
-								aria-label={t("chat.composer.searchHistory")}
-								onClick={openHistory}
-								className="rounded-full"
-							>
-								<History className="size-16" />
-							</Button>
-						</IconTooltip>
-						{isStreaming ? (
-							<button
-								type="button"
+								size="m"
+								iconLeft={StopFill}
 								data-testid="chat-abort"
 								aria-label={t("chat.composer.stop")}
 								onClick={onAbort}
-								className={STOP_PILL}
+								className="shrink-0"
 							>
-								<StopFill className="size-12" />
 								<span className={WIDE_ONLY}>{t("chat.composer.stop")}</span>
-							</button>
+							</Button>
 						) : null}
 						<div
 							data-testid="chat-send-pill"

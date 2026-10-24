@@ -25,6 +25,7 @@ import {
 	type WireModel,
 } from "@thinkrail/contracts";
 import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import {
 	Command,
 	CommandEmpty,
@@ -331,9 +332,6 @@ function RowMeta({ model, withProvider }: { model: WireModel; withProvider: bool
 	);
 }
 
-const FOOTER_LINK =
-	"flex items-center gap-4 rounded-sm px-4 py-2 tr-text-metadata text-text-muted outline-none transition-colors hover:bg-control-bg-hovered hover:text-text-default focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default disabled:text-text-subtle disabled:hover:bg-transparent";
-
 export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffortPickerProps>(
 	function ModelEffortPicker(
 		{
@@ -430,29 +428,28 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					</span>
 					{isCurrent ? <Check className="mt-2 size-14 shrink-0 text-primary" /> : null}
 					{preferences.supported ? (
-						<button
-							type="button"
+						<IconButton
+							icon={favorite ? StarFill : StarLine}
+							size="s"
 							data-testid="model-favorite-toggle"
 							data-favorite={favorite}
-							aria-label={
+							label={
 								favorite
 									? t("chat.modelPicker.unpin", { model: model.name })
 									: t("chat.modelPicker.pin", { model: model.name })
 							}
 							aria-pressed={favorite}
+							selected={favorite}
 							onClick={(event) => {
 								event.stopPropagation();
 								preferences.toggleFavorite(model);
 							}}
 							className={cn(
-								"mt-2 flex size-16 shrink-0 items-center justify-center rounded-sm outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary",
-								favorite
-									? "text-feedback-warning"
-									: "text-text-subtle opacity-0 group-hover/row:opacity-100 group-data-[selected=true]/row:opacity-100 focus-visible:opacity-100",
+								"mt-2 shrink-0",
+								!favorite &&
+									"opacity-0 focus-visible:opacity-100 group-hover/row:opacity-100 group-data-[selected=true]/row:opacity-100",
 							)}
-						>
-							{favorite ? <StarFill className="size-12" /> : <StarLine className="size-12" />}
-						</button>
+						/>
 					) : null}
 				</CommandItem>
 			);
@@ -643,45 +640,43 @@ export const ModelEffortPicker = forwardRef<ModelEffortPickerHandle, ModelEffort
 					) : null}
 					<div className="flex shrink-0 items-center gap-8 border-border-default border-t px-8 py-4">
 						{preferences.supported && current ? (
-							<button
-								type="button"
+							<Button
+								variant="ghost"
+								size="s"
+								iconLeft={isDefaultPair ? Check : Pin}
 								data-testid="model-set-default"
 								data-default={isDefaultPair}
 								disabled={isDefaultPair}
 								onClick={() => preferences.setDefault(current, level)}
-								className={FOOTER_LINK}
 							>
-								{isDefaultPair ? (
-									<Check className="size-12 shrink-0 text-primary" />
-								) : (
-									<Pin className="size-12 shrink-0" />
-								)}
 								{isDefaultPair ? t("chat.modelPicker.isDefault") : t("chat.modelPicker.setDefault")}
-							</button>
+							</Button>
 						) : null}
 						{resetLevel ? (
-							<button
-								type="button"
+							<Button
+								variant="ghost"
+								size="s"
+								iconLeft={RefreshCw}
 								data-testid="thinking-reset"
 								onClick={() => onSelectLevel(resetLevel)}
-								className={FOOTER_LINK}
 							>
-								<RefreshCw className="size-12 shrink-0" />
 								{t("chat.modelPicker.resetTo", { level: resetLevel })}
-							</button>
+							</Button>
 						) : null}
 						<span className="flex-1" />
-						<button
-							type="button"
+						<Button
+							variant="outline"
+							size="m"
+							iconLeft={RefreshCw}
+							loading={refreshing}
+							spinIcon
 							data-testid="model-refresh"
 							data-refreshing={refreshing}
 							disabled={refreshing}
 							onClick={() => onRefresh(true)}
-							className="inline-flex items-center gap-4 rounded-sm border border-control-border-default bg-control-bg px-8 py-4 tr-text-metadata text-text-default outline-none transition-colors hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-default disabled:border-control-disabled-border disabled:bg-control-disabled-bg disabled:text-control-disabled-text"
 						>
-							<RefreshCw className={cn("size-12 shrink-0", refreshing && "animate-spin")} />
 							{refreshing ? t("chat.modelPicker.updating") : t("chat.modelPicker.refresh")}
-						</button>
+						</Button>
 					</div>
 				</PopoverContent>
 			</Popover>

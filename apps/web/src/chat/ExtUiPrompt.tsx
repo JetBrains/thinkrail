@@ -11,8 +11,9 @@ import type { ExtUiDialogRequest } from "./types";
 export type ExtUiReply = (value: string | boolean | null) => void;
 
 const ACTIONS_ROW = "flex flex-wrap items-center gap-4 @max-md:flex-col @max-md:items-stretch";
-const OPTION_BUTTON =
-	"h-auto min-h-28 max-w-full justify-start whitespace-normal break-words py-4 text-left";
+const OPTION_BUTTON = "max-w-full";
+const WRAPPING_OPTION =
+	"h-auto min-h-24 max-w-full justify-start whitespace-normal break-words py-2 text-left";
 
 export function ExtUiPrompt({
 	request,
@@ -156,11 +157,11 @@ export function ExtUiPrompt({
 							{request.options.map((option) => (
 								<Button
 									key={option}
-									size="sm"
+									size="m"
 									variant="outline"
 									data-testid="ext-ui-option"
 									onClick={() => answer(option)}
-									className={OPTION_BUTTON}
+									className={WRAPPING_OPTION}
 								>
 									{option}
 								</Button>
@@ -172,7 +173,7 @@ export function ExtUiPrompt({
 				{request.kind === "select" ? null : (
 					<div data-testid="ext-ui-actions" className={cn(ACTIONS_ROW, "shrink-0")}>
 						<Button
-							size="sm"
+							size="m"
 							variant="outline"
 							data-testid="ext-ui-cancel"
 							onClick={cancel}
@@ -181,7 +182,7 @@ export function ExtUiPrompt({
 							{t("common.cancel")}
 						</Button>
 						<Button
-							size="sm"
+							size="m"
 							data-testid="ext-ui-submit"
 							onClick={() => answer(request.kind === "confirm" ? true : text)}
 							className={OPTION_BUTTON}

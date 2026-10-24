@@ -6,6 +6,7 @@ import {
 } from "@remixicon/react";
 import type { MessageKey } from "@thinkrail/locales";
 import { useT } from "@thinkrail/locales/react";
+import { Button, IconButton } from "@thinkrail/ui/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -64,14 +65,18 @@ export function BottomAlignmentMenu({
 	const t = useT();
 	return (
 		<DropdownMenu>
-			<DropdownMenuTrigger
-				aria-label={t("workbench.bottom.alignment")}
-				title={t("workbench.bottom.alignmentCurrent", {
-					alignment: t(BOTTOM_ALIGNMENT_LABELS[alignment]),
-				})}
-				className="flex w-panel-header-row shrink-0 items-center justify-center border-border-muted border-l text-text-muted hover:bg-control-bg-hovered hover:text-text-default"
-			>
-				<MoreHorizontal className="size-16" />
+			<DropdownMenuTrigger asChild>
+				<IconButton
+					variant="ghost"
+					size="m"
+					icon={MoreHorizontal}
+					label={t("workbench.bottom.alignment")}
+					tooltip={t("workbench.bottom.alignmentCurrent", {
+						alignment: t(BOTTOM_ALIGNMENT_LABELS[alignment]),
+					})}
+					wrapTrigger
+					className="shrink-0 self-center"
+				/>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="w-224">
 				<DropdownMenuRadioGroup
@@ -215,14 +220,15 @@ export const BottomGroupView = memo(function BottomGroupView({
 					/>
 				) : (
 					<div className="flex h-full items-center justify-center p-12">
-						<button
-							type="button"
+						<Button
+							variant="outline"
+							size="m"
+							iconLeft={SquareTerminal}
 							data-testid="bottom-new-terminal"
 							onClick={() => shared.onNewTerminal(group.id, "bottom")}
-							className="flex items-center gap-4 rounded-sm border border-border-default bg-container-elevated-bg px-12 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 						>
-							<SquareTerminal className="size-16" /> {t("workbench.group.newTerminal")}
-						</button>
+							{t("workbench.group.newTerminal")}
+						</Button>
 					</div>
 				)}
 				<BottomCreationTargets group={group} groupIndex={groupIndex} shared={shared} />

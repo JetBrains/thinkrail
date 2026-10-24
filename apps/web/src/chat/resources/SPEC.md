@@ -97,7 +97,7 @@ count when connected) · transport (stdio "runs on host"), attention rows first.
 its other servers — a helper line under the list says so; never offered on a `registered` row, a server an
 extension registered, which the host refuses to disable per chat), **Reconnect** for failed or
 disconnected, and Sign in / Review / Edit for needs-sign-in, pending approval or invalid config, which open
-Settings (`resource-mcp-settings`), like the section header's **Settings** link (`resources-mcp-settings`).
+Settings (`resource-mcp-settings`), like the section header's **Settings** button (`resources-mcp-settings`, `Button soft-primary s`).
 There is no PID and no immediate stop: pi offers neither. Controls are disabled without
 authority, one request per server is in flight, and errors stay on the row.
 

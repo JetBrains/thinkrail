@@ -116,7 +116,7 @@ export function ModelsSettings() {
 				{loadFailed ? (
 					<div className="flex items-center gap-8 border-border-muted border-b py-12">
 						<p className="text-text-muted tr-text-ui">{t("settings.models.loadFailed")}</p>
-						<Button variant="ghost" size="sm" onClick={() => void readDefault()}>
+						<Button variant="ghost" size="m" onClick={() => void readDefault()}>
 							{t("common.retry")}
 						</Button>
 					</div>

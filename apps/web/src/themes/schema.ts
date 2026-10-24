@@ -25,6 +25,8 @@ export const THEME_COLOR_KEYS = [
 	"info",
 	"success",
 	"danger",
+	"dangerHover",
+	"onDanger",
 	"warning",
 ] as const;
 

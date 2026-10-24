@@ -181,7 +181,7 @@ test("Monaco opens files and re-themes under every discovered manifest", async (
 	await expect(page.getByTestId("editor-pane")).toContainText("plain-text-fixture");
 });
 
-test("selected workspace tabs and rail entries keep their surface and edge marker under every manifest", async ({
+test("selected workspace tabs keep their surface and edge marker, and rail entries their surface, under every manifest", async ({
 	page,
 }) => {
 	await openFixtureProject(page);
@@ -241,11 +241,9 @@ test("selected workspace tabs and rail entries keep their surface and edge marke
 			expect(tab.markerHeight).toBe("2px");
 		}
 		const tool = page.getByTestId("tab-files");
-		await expect(page.getByTestId("tool-rail-files")).toHaveAttribute("aria-pressed", "true");
-		await expect(tool).toHaveCSS("background-color", state.expectedFill);
-		const marker = tool.getByTestId("rail-selection-indicator");
-		await expect(marker).toHaveCSS("background-color", state.expectedMarker);
-		await expect(marker).toHaveCSS("width", "2px");
-		await expect(marker).toHaveCSS("height", "16px");
+		const toolButton = page.getByTestId("tool-rail-files");
+		await expect(toolButton).toHaveAttribute("aria-pressed", "true");
+		await expect(toolButton).toHaveCSS("background-color", state.expectedFill);
+		await expect(tool.getByTestId("rail-selection-indicator")).toHaveCount(0);
 	}
 });
