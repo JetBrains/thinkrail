@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="_shared.css"></head>
+<body>
+	<div class="chrome-top">
+		<div class="logo">⊺R</div>
+		<div class="top-right"><span style="color:var(--text-muted); font-size:12px;">recipe-planner · setup-spec</span><span class="dot-green"></span><span>Connected</span><span class="gear">⚙</span></div>
+	</div>
+	<div class="left-rail"><div class="rail-btn">📁</div></div>
+	<div class="sidebar" style="width: 240px;">
+		<div class="sidebar-header"><span>Projects</span><span style="color:var(--text-dim)">×</span></div>
+		<div class="sidebar-section">PROJECTS <span class="plus">+</span></div>
+		<div class="sidebar-item"><span class="caret">▸</span>📁 recipe-planner <span style="margin-left:auto; width:6px;height:6px;background:var(--brand);border-radius:50%;"></span></div>
+	</div>
+	<!-- center chat column (no avatars, no invented card chrome) -->
+	<div style="position:absolute; top:56px; left:296px; right:420px; bottom:0; padding: 40px 48px; overflow:hidden;">
+		<div style="color:var(--text-muted); font-size:12px; margin-bottom:28px;">starting-a-new-project</div>
+
+		<div style="color:var(--text); font-size:14px; line-height:1.65; margin-bottom:24px;">
+			Here's the information plan I'll walk with you — 10 steps, ~5 minutes.
+			Edit, reorder, or drop items in the panel on the right, then confirm.
+		</div>
+
+		<div style="background:var(--bg-card); border:1px solid var(--border-strong); border-radius:4px; padding:14px 16px; margin-bottom:28px;">
+			<div style="color:var(--text-muted); font-size:11px; letter-spacing:0.08em; text-transform:uppercase; font-weight:600; margin-bottom:10px;">Plan preview — ready to run?</div>
+			<div style="color:var(--text); font-size:13px; line-height:1.6; margin-bottom:12px;">
+				I'll ask one thing at a time, write what we settle into
+				<code style="color:var(--brand); background:var(--brand-bg-subtle); padding:1px 6px; border-radius:3px;">goal-and-requirements.md</code>,
+				and keep the panel in sync. You can pause, edit, or jump ahead at any step.
+			</div>
+			<div style="display:flex; gap:8px;">
+				<button class="btn-primary">▸ Run the plan</button>
+				<button class="btn-ghost">Edit plan first</button>
+			</div>
+		</div>
+
+		<div style="color:var(--text-dim); font-size:12px; line-height:1.6;">
+			The plan is written by the <code style="color:var(--text-muted);">starting-a-new-project</code> skill at startup.
+			Drop, reorder, or add steps any time — the agent walks whatever is next <em>pending</em>.
+			
+		</div>
+	</div>
+	<!-- right rail: live Todo panel -->
+	<div style="position:absolute; top:56px; right:0; bottom:0; width:400px; background:var(--bg-elev); border-left:1px solid var(--border); padding:20px 20px;">
+		<div style="color:var(--text); font-weight:500; font-size:13px; display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+			<span>Plan</span>
+			<span style="color:var(--text-muted); font-weight:400; font-size:11px;">0 of 10 done · editable</span>
+		</div>
+		<div style="color:var(--text-muted); font-size:11px; letter-spacing:0.08em; font-weight:600; margin-top:16px; margin-bottom:8px;">DRAFT GOAL-AND-REQUIREMENTS.MD</div>
+		<div style="display:flex; flex-direction:column; gap:1px;">
+			<div class="todo-item prefilled"><span class="todo-check">✓</span> Confirm Overview <span class="todo-note">prefilled</span></div>
+			<div class="todo-item"><span class="todo-check"></span> Confirm Problem Statement</div>
+			<div class="todo-item"><span class="todo-check"></span> Confirm Target Users</div>
+			<div class="todo-item"><span class="todo-check"></span> Confirm Jobs-to-be-Done + User Story</div>
+			<div class="todo-item"><span class="todo-check"></span> List Goals and Non-Goals</div>
+			<div class="todo-item"><span class="todo-check"></span> List v1 Capabilities</div>
+			<div class="todo-item" style="opacity:0.6;"><span class="todo-check"></span> Research alternatives <span class="todo-note">optional · user-gated</span></div>
+			<div class="todo-item"><span class="todo-check"></span> Confirm Technology table</div>
+			<div class="todo-item"><span class="todo-check"></span> Review full draft</div>
+			<div class="todo-item"><span class="todo-check"></span> Mark spec active + choose next step</div>
+		</div>
+		<div style="margin-top:20px; display:flex; gap:6px;">
+			<button style="background:transparent; border:1px solid var(--border-strong); color:var(--text-muted); padding:6px 10px; border-radius:3px; font-family:inherit; font-size:12px; cursor:pointer;">+ step</button>
+			<button style="background:transparent; border:1px solid var(--border-strong); color:var(--text-muted); padding:6px 10px; border-radius:3px; font-family:inherit; font-size:12px; cursor:pointer;">reorder</button>
+			<button style="background:transparent; border:1px solid var(--border-strong); color:var(--text-muted); padding:6px 10px; border-radius:3px; font-family:inherit; font-size:12px; cursor:pointer;">reset</button>
+		</div>
+		<div style="margin-top:28px; padding-top:16px; border-top:1px solid var(--border); color:var(--text-dim); font-size:11px; line-height:1.6;">
+			Lives in the standard Todo panel. The user owns the list —
+			edit, reorder, or drop; the agent picks the next <em>pending</em> item.
+		</div>
+	</div>
+</body></html>
