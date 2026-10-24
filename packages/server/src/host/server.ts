@@ -305,7 +305,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			return new Response("not found", { status: 404 });
 		},
 		websocket: {
-			open(ws) {
+			async open(ws) {
 				const replaced = sockets.get(ws.data.clientKey);
 				sockets.set(ws.data.clientKey, ws);
 				if (replaced && replaced !== ws) replaced.close();
@@ -344,7 +344,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 					protocolVersion: PROTOCOL_VERSION,
 					hostPlatform,
 					projects: listProjects(),
-					recentProjects: listRecentProjects(),
+					recentProjects: await listRecentProjects(),
 					config: getConfig(),
 					...(appVersion ? { appVersion } : {}),
 					...(hostUpdateNotice ? { hostUpdate: hostUpdateNotice } : {}),
