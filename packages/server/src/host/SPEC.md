@@ -502,7 +502,12 @@ channel fan-out, and the process-boot wrapper both launchers share.
 - **Project lifecycle fan-out:** `createServer` installs the `projects` module's publisher and maps every
   authoritative open/reopen/close snapshot to **`project.updated`**. The WS `open` handler subscribes to
   that channel and hydrates two views in `server.welcome`: `projects` (open records only) and
-  `recentProjects` (all known records). The one full-snapshot channel is idempotent and avoids separate
+  `recentProjects` (all known records, with closed records whose folder is definitively
+  gone omitted; the existence checks run asynchronously so a stale mount does not block the event loop,
+  but the welcome still waits for them and an unresponsive mount may delay the connection). The
+  checks finish before both views are read and sent, so a `project.updated` processed while checks are
+  pending is reflected in the snapshot rather than overwritten by it. The one full-snapshot channel is
+  idempotent and avoids separate
   opened/closed streams replaying out of order. Every client converges its rail + Recents from it; only
   the initiating open flow selects Project Home, while a close fallback remains per-client view state.
 - **Workspace lifecycle fan-out:** `createServer` installs the `workspaces` module's publisher

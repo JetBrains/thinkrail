@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { rmSync, statSync } from "node:fs";
+import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import type {
@@ -130,8 +131,29 @@ export function listProjects(): Project[] {
 	return newestFirst(getProjects().filter((project) => project.closed !== true));
 }
 
-export function listRecentProjects(): Project[] {
-	return newestFirst(getProjects());
+function projectFolderGone(path: string): Promise<boolean> {
+	return stat(path).then(
+		(stats) => !stats.isDirectory(),
+		(error) => {
+			const code = (error as { code?: string }).code;
+			return code === "ENOENT" || code === "ENOTDIR";
+		},
+	);
+}
+
+export async function listRecentProjects(): Promise<Project[]> {
+	const candidates = newestFirst(getProjects());
+	const goneByPath = new Map<string, boolean>();
+	await Promise.all(
+		candidates.map((project) =>
+			project.closed === true
+				? projectFolderGone(project.path).then((gone) => void goneByPath.set(project.path, gone))
+				: undefined,
+		),
+	);
+	return newestFirst(getProjects()).filter((project) =>
+		project.closed === true ? goneByPath.get(project.path) !== true : true,
+	);
 }
 
 export function closeProject(id: string): Project {

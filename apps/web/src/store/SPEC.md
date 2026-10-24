@@ -78,7 +78,7 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   edge in one Zustand write; route validation and capability reads never observe a partial welcome.
   `installProjectSnapshot` remains the project-only primitive for focused
   callers. **`projects`** is the open rail, while **`recentProjects`** is the last-opened-ordered set of every
-  known open + closed project. **`applyProjectUpdated(project)`** is the one full-snapshot updater for
+  known open + closed project; the server omits closed records whose folder no longer exists. **`applyProjectUpdated(project)`** is the one full-snapshot updater for
   `project.updated` pushes and authoritative project-mutation responses: it upserts/sorts Recents and either
   upserts/sorts the rail or removes the row when `closed === true`. Both actions reconcile stale navigation
   too: only when this client's selected project or active workspace belongs to a record no longer open,
