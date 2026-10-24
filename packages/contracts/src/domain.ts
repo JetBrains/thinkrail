@@ -351,6 +351,20 @@ export interface TodoPlan {
 
 export type DelegationRunStatus = "queued" | "running" | "completed" | "error" | "aborted";
 
+const THINKING_LEVEL_SET = {
+	off: true,
+	minimal: true,
+	low: true,
+	medium: true,
+	high: true,
+	xhigh: true,
+	max: true,
+} satisfies Record<ThinkingLevel, true>;
+
+function isThinkingLevel(value: unknown): value is ThinkingLevel {
+	return typeof value === "string" && Object.hasOwn(THINKING_LEVEL_SET, value);
+}
+
 const DELEGATION_RUN_STATUSES: readonly string[] = [
 	"queued",
 	"running",
@@ -368,6 +382,7 @@ export function isDelegationRunDetails(value: unknown): value is DelegationRunDe
 	for (const field of [d.roleName, d.roleSource, d.model, d.activity, d.abortReason]) {
 		if (field !== undefined && typeof field !== "string") return false;
 	}
+	if (d.thinkingLevel !== undefined && !isThinkingLevel(d.thinkingLevel)) return false;
 	const u = d.usage as Partial<DelegationRunDetails["usage"]> | undefined;
 	return (
 		!!u &&
@@ -389,6 +404,7 @@ export interface DelegationRunDetails {
 	task: string;
 	status: DelegationRunStatus;
 	model?: string;
+	thinkingLevel?: ThinkingLevel;
 	usage: {
 		input: number;
 		output: number;
@@ -431,6 +447,10 @@ export interface SubagentResourceSummary {
 	task: string;
 	status: DelegationRunStatus;
 	createdAt: string;
+	/** `provider/id` the child session runs on; absent from an older host. */
+	model?: string;
+	/** The child's effective (model-clamped) effort; absent from an older host or run. */
+	thinkingLevel?: ThinkingLevel;
 	abortReason?: string;
 	durationMs?: number;
 }
