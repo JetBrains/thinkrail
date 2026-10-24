@@ -482,6 +482,25 @@ test("recent projects omit closed records whose folders no longer exist", async 
 	expect((await listRecentProjects()).map((project) => project.id)).toEqual(["kept"]);
 });
 
+test("recent projects reflect records that close while folder checks are pending", async () => {
+	const repo = join(dataDir, "repo");
+	makeRepo(repo);
+	const heldDir = join(dataDir, "held");
+	mkdirSync(heldDir, { recursive: true });
+	const record = (closed?: true) => [
+		{ id: "held", name: "held", path: heldDir, slug: "held", lastOpened: 2, closed: true },
+		{ id: "racing", name: "repo", path: repo, slug: "repo", lastOpened: 1, ...(closed ? { closed } : {}) },
+	];
+	writeFileSync(join(dataDir, "projects.json"), JSON.stringify(record()));
+
+	const pending = listRecentProjects();
+	writeFileSync(join(dataDir, "projects.json"), JSON.stringify(record(true)));
+	const result = await pending;
+
+	expect(result.map((project) => project.id).sort()).toEqual(["held", "racing"]);
+	expect(result.find((project) => project.id === "racing")?.closed).toBe(true);
+});
+
 test("recent projects keep open records whose folders are gone", async () => {
 	writeFileSync(
 		join(dataDir, "projects.json"),
