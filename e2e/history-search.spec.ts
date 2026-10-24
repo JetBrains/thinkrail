@@ -600,7 +600,7 @@ test("Ctrl+R and Escape are owned app-wide: both work with focus outside the com
 
 	await page.keyboard.press("Control+r");
 	await expect(scopeBadge).toHaveAttribute("data-scope", "workspace");
-	await clickOutside();
+	await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
 	await page.keyboard.press("Control+r");
 	await expect(scopeBadge).toHaveAttribute("data-scope", "project");
 
@@ -691,4 +691,33 @@ test("the Ctrl+R and Ctrl+S chords fire on a non-Latin keyboard layout", async (
 	await expect(page.getByTestId("template-body-input")).toHaveValue("fix the flaky watcher test");
 
 	await page.getByTestId("template-cancel").click();
+});
+
+test("the history button toggles the overlay, outside clicks dismiss it, and picking a scope does not", async ({
+	page,
+}) => {
+	await openWorkspaceChat(page);
+	seedExternalCwdSessions();
+
+	const historyButton = page.getByTestId("history-open");
+	const overlay = page.getByTestId("history-overlay");
+	const input = page.getByTestId("chat-input");
+
+	await historyButton.click();
+	await expect(overlay).toBeVisible();
+
+	await historyButton.click();
+	await expect(overlay).toBeHidden();
+
+	await historyButton.click();
+	await expect(overlay).toBeVisible();
+
+	await input.click();
+	await expect(overlay).toBeHidden();
+
+	await historyButton.click();
+	await expect(overlay).toBeVisible();
+	await page.getByTestId("history-scope").click();
+	await page.getByTestId("history-scope-option").first().click();
+	await expect(overlay).toBeVisible();
 });
