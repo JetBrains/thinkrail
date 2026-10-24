@@ -1,5 +1,6 @@
 import { RiCheckLine as Check, RiHome2Line as House, RiAddLine as Plus } from "@remixicon/react";
 import type { Project } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -20,18 +21,19 @@ function goToProjectHome(projectId: string): void {
 }
 
 export function ProjectSegment({ project, atHome }: { project: Project; atHome: boolean }) {
+	const t = useT();
 	const projects = useAppStore((s) => s.projects);
 	const { pickAndOpen, dialogs } = useOpenProject((opened) => goToProjectHome(opened.id));
 	return (
 		<Segment
-			caption="Project"
+			caption={t("shell.location.project.caption")}
 			testid="scope-project-segment"
 			className="hidden max-w-[220px] shrink-[3] pl-0 sm:flex"
 		>
 			<DropdownMenu>
 				<DropdownMenuTrigger
 					data-testid="scope-project"
-					aria-label={`Project ${project.name}`}
+					aria-label={t("shell.location.project.label", { name: project.name })}
 					className={pillClass}
 				>
 					<span
@@ -46,7 +48,7 @@ export function ProjectSegment({ project, atHome }: { project: Project; atHome: 
 					<PillChevron />
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="start" data-testid="scope-project-menu">
-					<DropdownMenuLabel>Projects</DropdownMenuLabel>
+					<DropdownMenuLabel>{t("shell.location.project.menuTitle")}</DropdownMenuLabel>
 					{projects.map((candidate) => (
 						<DropdownMenuItem
 							key={candidate.id}
@@ -67,11 +69,11 @@ export function ProjectSegment({ project, atHome }: { project: Project; atHome: 
 						onSelect={() => goToProjectHome(project.id)}
 					>
 						<House />
-						Project home
+						{t("shell.location.project.home")}
 					</DropdownMenuItem>
 					<DropdownMenuItem data-testid="scope-project-add" onSelect={() => void pickAndOpen()}>
 						<Plus />
-						Add project…
+						{t("shell.location.project.add")}
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>

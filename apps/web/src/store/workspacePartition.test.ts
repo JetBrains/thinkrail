@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { SessionStateRecord, Workspace } from "@thinkrail/contracts";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { useAppStore } from "./appStore";
 import {
 	selectAutoSettledCounts,
@@ -110,9 +111,9 @@ describe("selectWorkspaceSettledReason", () => {
 				NOW,
 			),
 		).toEqual({ kind: "override", since: NOW - 2 * DAY });
-		expect(settledReasonTitle({ kind: "override", since: NOW - 2 * DAY }, NOW)).toBe(
-			"Settled by you 2d ago",
-		);
+		expect(
+			settledReasonTitle(currentTranslator(), { kind: "override", since: NOW - 2 * DAY }, NOW),
+		).toBe("Settled by you 2d ago");
 		expect(
 			selectWorkspaceSettledReason(
 				base,

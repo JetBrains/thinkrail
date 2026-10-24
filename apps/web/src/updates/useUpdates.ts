@@ -4,6 +4,7 @@ import type {
 	NativeUpdateFailedPhase,
 	NativeUpdateState,
 } from "@thinkrail/contracts";
+import { t } from "@thinkrail/locales/react";
 import { useEffect, useState } from "react";
 import { useAppStore } from "../store";
 
@@ -24,6 +25,7 @@ export type UpdatesController =
 			checkForUpdates(): void;
 			downloadUpdate(): void;
 			restartToUpdate(): void;
+			dismissInstallResult(): void;
 	  }
 	| {
 			source: "host";
@@ -40,6 +42,7 @@ export function getNativeUpdateBridge(value: unknown): NativeUpdateBridge | null
 			typeof Reflect.get(value, "checkForUpdates") === "function" &&
 			typeof Reflect.get(value, "downloadUpdate") === "function" &&
 			typeof Reflect.get(value, "restartToUpdate") === "function" &&
+			typeof Reflect.get(value, "dismissInstallResult") === "function" &&
 			typeof Reflect.get(value, "subscribe") === "function"
 			? (value as NativeUpdateBridge)
 			: null;
@@ -51,7 +54,7 @@ export function getNativeUpdateBridge(value: unknown): NativeUpdateBridge | null
 function nativeUpdateErrorText(error: unknown): string {
 	if (error instanceof Error && error.message.trim()) return error.message;
 	if (typeof error === "string" && error.trim()) return error;
-	return "The native update request failed";
+	return t("updates.nativeRequestFailed");
 }
 
 export function runNativeUpdateRequest(
@@ -162,6 +165,9 @@ export function useUpdates(hostUpdateRunner: HostUpdateRunner | null): UpdatesCo
 			checkForUpdates: () => request("check", () => bridge.checkForUpdates()),
 			downloadUpdate: () => request("download", () => bridge.downloadUpdate()),
 			restartToUpdate: () => request("install", () => bridge.restartToUpdate()),
+			dismissInstallResult: () => {
+				void bridge.dismissInstallResult().catch(() => {});
+			},
 		};
 	}
 	if (source === "host" && hostUpdate) {

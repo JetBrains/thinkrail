@@ -121,11 +121,25 @@ starts servers.
 
 Native wheel probes target the actual transcript viewport again after clicking a floating Latest
 button; a pointer left at a removed overlay is not evidence of a gesture delivered to the scroller.
+A probe that interrupts a Latest return clicks and interrupts in one task, moving from the current
+position: resetting `scrollTop` without a scroll event can make the hook's observed delta zero when the
+return's first frame happened to cover exactly the probe's step, so no detach is seen.
 Disclosure-anchor probes place the complete header below the real sticky breadcrumb before asserting
 fixed-position behavior. Intersection with the scroller alone does not prove that a header is unobscured.
+Programmatic disclosure-anchor probes activate inside the sampling evaluate, so the first post-change frame
+is always measured, and a disconnected anchor fails as a remount instead of reporting a detached node's zero
+rect.
 Pierre surfaces paint plain text first and replace their rows when the worker's highlight lands, which
 is late on slower hosts such as the compiled-binary and packaged-desktop artifacts; pointer probes wait
 for highlighted tokens (`pierreHighlightedTokens`) before measuring or dragging rows.
+A following probe that lets actionability scroll an off-screen transcript control into view first
+waits for `data-scroll-moving="false"`: that scroll is not reader input, so an active placement motion
+restores the latest edge, which on slow runners lands between mousedown and mouseup and drops the click.
+Monaco wheel probes reach the editor through an actionability-checked `hover()`, never a measured box:
+a box read before the editor's layout settles can be a stale one whose centre lies under the left panel's
+resize separator. Each CDP wheel event scrolls Monaco 50 px whatever its delta (one synthetic tick), so a
+probe that must scroll an element out wheels until it observes the element gone rather than sending one
+large delta.
 
 ## Render profiling harness
 
@@ -300,7 +314,7 @@ pane order, boundary drops create panes while entry-half drops join one, a tool 
 terminal strip, the pane-header title drags its tool, an unplaced tool sits dimmed in a trailing cluster),
 a terminal pane's selected session surviving fold and reload, linked collapsed regions, keyboard focus without implicit activation, a browser
 history workspace switch during a singleton drag, and DOM continuity across shape changes: it stamps the
-center tabs, chat input, terminal, Projects tree, and Changes toolbar before each fold/hide/show and asserts
+center tabs, chat input, terminal, Projects tree, and Review panel before each fold/hide/show and asserts
 the same nodes survive, which fails if any panel group is remounted. The compressed-resize matrix uses independent cases
 with explicit compression assertions, avoiding accidental collapse caused by the rails' occupied width.
 `rail-layout-regressions.spec.ts` covers node replacement before bottom measurement, explicit drops into
@@ -315,8 +329,10 @@ focus endpoints, and rail/header geometry that matches the workbench across a wo
 
 The no-agent setup seeds a test-owned empty `models.json` and never reads or copies developer
 `auth.json` or `models.json`; provider scenarios use synthetic fixtures, and the separately authorized
-real-Central mode keeps its opaque-artifact-only credential contract above. Model-context coverage
-exercises the Default / 1M / Custom selector through the real host: shared and per-provider saves,
+real-Central mode keeps its opaque-artifact-only credential contract above. Ambient credential environment
+variables still reach the no-agent host, so a check that depends on whether any provider is connected reads
+the host's `provider.status` over the wire first, never a one-shot snapshot of UI still loading it. Model-context
+coverage exercises the Default / 1M / Custom selector through the real host: shared and per-provider saves,
 retained live-chat limits versus new-chat metadata, Custom validation and Apply focus, cross-client
 convergence with draft invalidation, sanitized read/write failures with Retry, mobile keyboard use,
 and pre-v76 hiding.
@@ -330,6 +346,23 @@ and settles an unfinished provider turn first, so a test ending mid-turn cannot 
 behind the next scenario. Consent tests reset the choice over the real settings wire and cover on-by-default preference priming,
 Done/ordinary-close acceptance, immediate off refusal, persistence failures and retries, confirmed reloads,
 cross-client convergence, prompt priority, and pre-v65 fallback.
+
+Each scenario's app reset also removes the lane fixture repository's `origin` remote: the topbar's Remote /
+Pull request segments read the shared repo config, so an origin a push scenario added must never reshape a
+later scenario's topbar.
+
+**GitHub review states** (`topbar-review.spec.ts`) need a real-looking PR without a network. Origin is
+`git@github.com:<repo>.git` — what both the host's configured-URL read and `git remote get-url` see — with
+`core.sshCommand` pointing at the fake-bin `github-ssh` (`ssh.variant simple`), which serves upload-pack /
+receive-pack from a local bare repo, so pushes, fetches, and remote-branch deletion run for real. An
+`insteadOf` rewrite cannot stand in: `get-url` expands it, and the host's review lookup would then see a
+local path and never find a PR. The lane's fake **`gh`** (`fixtures/fakeGh.ts`, launched by a generated
+fake-bin shim under the runner's bun, since the host PATH has none) answers `pr list|view` and `repo view`
+from a test-written scenario file, applies `pr ready|merge|reopen` to it, and logs every argv so a spec
+asserts the exact mutations. Without a scenario it fails like an unauthenticated gh, so every other spec
+keeps the gh-less behaviour; `THINKRAIL_GH_OFFLINE` still keeps `pr.open` on the compare hand-off. The reset
+deletes the scenario and log and unsets the ssh config. The host caches repository merge settings per origin
+URL for the whole run, so a spec that sets its own repository settings names its own repository.
 
 Every concurrent lane derives a distinct data dir, HOME, pi-agent dir, fixture repository, binary cache,
 desktop cache/state plus ready/control files, Playwright transform cache, restart artifacts,
@@ -389,7 +422,12 @@ Windows lane into the real profile (see `module-shared`).
 
 During iteration, run the affected specs and use Playwright's last-failed mode. Flake repairs replace
 irrelevant expensive setup with equivalent fixture state and wait for observable readiness; blanket retries,
-arbitrary sleeps, and assertion weakening are not synchronization policy. Live-provider completion waits on
+arbitrary sleeps, and assertion weakening are not synchronization policy. A race guard forces the hazardous
+interleaving (held animation frames, a held reply) rather than sampling it in a CPU-throttled loop, whose cost
+scales with runner speed and outgrows the test budget on CI. An assertion that something happens without a
+settle wait freezes the page clock (`page.clock.pauseAt`) before the gesture, so a regressed timer can never
+fire, instead of racing a wall-clock `timeout`; `page.clock.runFor` then plays a settle window out
+deterministically. Live-provider completion waits on
 the session's streaming state after response evidence appears; the optional rendered `Done` row is not a
 terminal-state contract. Scenarios whose subject is a client-side send transformation assert the exact
 outgoing `session.prompt` frame rather than treating a
@@ -407,13 +445,21 @@ fullscreen SVG growth, pan/reset/Escape and claimed WebKit pinch gestures, exact
 and recommendation, and assistant mermaid fences alongside tool diagrams re-rendering to the host's
 `--container-elevated-bg` after selecting a discovered opposite appearance in real settings. Malformed
 source is seeded as a successful historical tool result (`isError: false`) so both tool and chat exercise
-the renderer's plain-source fallback, not the tool-error branch. These regressions need no provider,
+the renderer's plain-source fallback, not the tool-error branch. File previews write mockups into the shared
+fixture repository (removed in `finally`) and pin the HTML renderer in the card, the before/after 2-up diff,
+a region comment's Send carrying the card's chat `sessionId` over the wire, HTML design-width scaling and the
+width switch, full screen, Open in tab, and a before/after opened as a comparison diff tab that survives a
+reload. A huge comparison opts in through Show diff anyway while an unrelated file changes every 400 ms (each
+write its own watcher frame, past the 300 ms quiet flush), so updates keep landing inside the expensive first
+mount. These regressions need no provider,
 prompt submission, route mock, or screenshot. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
 real Settings → Extensions switch through `settings.update`, proves it survives a reload, and seeds a
 historical `visualize` call that must still render its diagram while the extension is off; each test restores
 the switch in `afterEach` because the shard shares one host. The provider-backed counterpart in
 `visualize.live.spec.ts` runs first: with the extension off the agent is never offered `visualize`, and the
-existing diagram/comparison tests that follow re-prove the restored tool in the same chat. MCP tool-card coverage
+existing diagram/comparison tests that follow re-prove the restored tool in the same chat; a last test
+asks for a before/after UI proposal without naming the tool and expects mockup files under
+`.thinkrail/context/mockups/` shown as a rendered diff, which pins the tool's prompt guideline. MCP tool-card coverage
 (`mcp-tool-cards.spec.ts`) seeds historical `mcp__*`, resource and `tool_search` results the same way and pins
 the single shared image strip, the collapsed JSON tree, Full output through the real `mcp.readOutput`
 (a recorded file and an expired one), Sign in deep links into Settings › MCP servers or Providers according

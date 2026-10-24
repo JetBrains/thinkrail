@@ -29,8 +29,8 @@ subagent reads the same in the chat as in Finished.
   *header*; the detail *body* is a slot the parent fills, and so is the result row's expanded body.
 - **Public surface:** `ResourcesButton`, `ResourcesAttention`, `ResourcesDock`, `ResourcesInspector`,
   `CommandLogView`, `ResultRow`, `ResultSource`.
-- **Allowed external deps:** contracts, React, Remix icons, shared UI primitives and theme utilities, and
-  `lib` (the shared MCP state vocabulary). Time arrives as a `now` prop so formatting stays pure.
+- **Allowed external deps:** contracts, React, Remix icons, shared UI primitives and theme utilities,
+  `@thinkrail/locales` (UI strings), and `lib` (the shared MCP state vocabulary). Time arrives as a `now` prop so formatting stays pure.
 - **Forbidden:** store/transport, server/portable extension packages, Pi value imports, process
   execution, log persistence, subagent transcript fetching, and workbench placement. Parent-chat
   integration (what fills the detail slot, where the surfaces mount) and sibling dependency edges
@@ -78,8 +78,11 @@ It reserves its rows rather than animating height on every change, so the compos
 **Inspector.** A non-modal in-place dialog over the transcript region with the chat header and
 composer still visible and usable: a roster column (**Active**, then **Finished**, each with counts) and
 a detail column for the selected row. The detail header repeats the row's name and state and offers
-Stop for live rows; the detail body is the parent's slot — bounded plain-text command output for a
-command (this module's `CommandLogView`), the read-only subagent transcript pane for a subagent. The
+Stop for live rows, plus — for a subagent whose snapshot carries `model` — a **Model** item rendered by the
+parent's `renderSubagentModel(summary)` (nothing when the host sent no model). Roster and dock rows
+deliberately omit the model: it would
+crowd out the task, which is what tells two runs apart. The detail body is the parent's slot — bounded
+plain-text command output for a command (this module's `CommandLogView`), the read-only subagent transcript pane for a subagent. The
 roster is a listbox: clicking selects, `↑`/`↓` move the selection, `Esc` or the close control dismisses,
 and clicking the composer or header does **not** dismiss. Each option keeps its activity on a second
 line and in its accessible name (`name: activity, state`), so two same-role subagents stay
@@ -107,7 +110,8 @@ it opens the inspector and is the only chat-body roster hint — there is no inl
 **Result row.** `ResultRow` renders one historical completion notice (the details of a
 `background-command-completion` or `subagent-completion` message) for the transcript: chevron · kind
 glyph with status dot · `Background` / `Subagent` · name · state · run time (the same coarse
-`formatElapsed` the Finished row shows) · exit badge (commands) · optional parent-supplied `meta` ·
+`formatElapsed` the Finished row shows) · exit badge (commands) · optional parent-supplied `metaLead`
+node (the subagent's model label) and `meta` text ·
 a one-line teaser · an optional open action ("Open log" / "Transcript"). The command teaser is the
 excerpt's last non-empty line with ANSI CSI sequences removed; a subagent teaser comes from the parent,
 which owns the report text. The teaser hides while expanded, gives way first at narrow widths, and keeps
@@ -144,7 +148,7 @@ headless), or arbitrary shell-process discovery. Ordinary workspace terminal tab
 Cover empty/active/finished/stale/unavailable states, exact live counts, the dock's collapse and
 hidden-while-inspecting rule, the trigger's breathing-only-while-working and unknown-count marks, the MCP
 section's per-state actions, absence for older hosts and the attention marker, keyboard navigation and
-focus return, safe plain-text logs, row-specific stop failures and stop-all confirmation, and the
-result row's state mapping, teaser derivation, controlled expansion and optional open action.
+focus return, safe plain-text logs, row-specific stop failures and stop-all confirmation, the subagent
+detail's model item (absent without a model), and the result row's state mapping, teaser derivation, controlled expansion and optional open action.
 Browser coverage must prove current-chat isolation, reload/reconnect rehydration, late completion while
 the inspector is closed, and no cancellation from view closure.

@@ -3,6 +3,7 @@ import type {
 	BackgroundCommandCompletionDetails,
 	DelegationRunDetails,
 } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { cn } from "@thinkrail/ui/utils";
 import type { MouseEvent, ReactNode } from "react";
 import {
@@ -25,6 +26,7 @@ export interface ResultRowProps {
 	onToggle?: ((event: MouseEvent<HTMLButtonElement>) => void) | undefined;
 	toggleRef?: ((element: HTMLElement | null) => void) | undefined;
 	onOpen?: (() => void) | undefined;
+	metaLead?: ReactNode;
 	meta?: string | undefined;
 	teaser?: string | undefined;
 	children?: ReactNode;
@@ -89,10 +91,12 @@ export function ResultRow({
 	onToggle,
 	toggleRef,
 	onOpen,
+	metaLead,
 	meta,
 	teaser,
 	children,
 }: ResultRowProps) {
+	const t = useT();
 	const { name, state, durationMs, exitCode } = resultFacts(source);
 	const command = source.kind === "command";
 	const line = teaser ?? (command ? outputTeaser(source.details.output.text) : "");
@@ -108,15 +112,18 @@ export function ResultRow({
 				<span className="size-16 shrink-0" />
 			)}
 			<KindGlyph kind={source.kind} state={state} dotRingClassName="ring-container-workspace-bg" />
-			<span className="shrink-0 text-text-subtle">{command ? "Background" : "Subagent"}</span>
+			<span className="shrink-0 text-text-subtle">
+				{command ? t("resources.result.background") : t("resources.result.subagent")}
+			</span>
 			<span className="min-w-0 shrink truncate text-text-default" title={name}>
 				{name}
 			</span>
 			<StateText state={state} kind={source.kind} />
 			{durationMs !== null && Number.isFinite(durationMs) ? (
-				<span className="shrink-0 tabular-nums">{formatElapsed(durationMs)}</span>
+				<span className="shrink-0 tabular-nums">{formatElapsed(t, durationMs)}</span>
 			) : null}
 			{exitCode !== undefined && exitCode !== null ? <ExitBadge exitCode={exitCode} /> : null}
+			{metaLead ? <span className="flex min-w-0 shrink">{metaLead}</span> : null}
 			{meta ? (
 				<span className="min-w-0 shrink truncate" title={meta}>
 					{meta}
@@ -166,7 +173,7 @@ export function ResultRow({
 						className="flex shrink-0 items-center gap-4 rounded-sm px-4 py-2 text-primary outline-none hover:bg-control-bg-hovered focus-visible:ring-2 focus-visible:ring-primary"
 					>
 						<RiFileList3Line className="size-12 shrink-0" />
-						{command ? "Open log" : "Transcript"}
+						{command ? t("resources.result.openLog") : t("resources.result.transcript")}
 					</button>
 				) : null}
 			</div>

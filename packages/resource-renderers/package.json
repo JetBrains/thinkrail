@@ -1,0 +1,40 @@
+{
+	"name": "@thinkrail/resource-renderers",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": "./src/index.ts"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@pierre/diffs": "1.5.1",
+		"@remixicon/react": "catalog:",
+		"@shikijs/monaco": "4.2.0",
+		"@thinkrail/contracts": "workspace:*",
+		"@thinkrail/locales": "workspace:*",
+		"@thinkrail/ui": "workspace:*",
+		"diff": "catalog:",
+		"jsondiffpatch": "0.7.3",
+		"monaco-editor": "0.55.1",
+		"node-htmldiff": "0.9.4",
+		"pdfjs-dist": "5.4.449",
+		"react": "catalog:",
+		"react-dom": "catalog:",
+		"react-markdown": "catalog:",
+		"react-virtuoso": "catalog:",
+		"rehype-raw": "7.0.0",
+		"rehype-sanitize": "6.0.0",
+		"shiki": "catalog:"
+	},
+	"devDependencies": {
+		"@types/bun": "catalog:",
+		"@types/react": "catalog:",
+		"@types/react-dom": "catalog:",
+		"remark-gfm": "catalog:",
+		"typescript": "catalog:"
+	}
+}

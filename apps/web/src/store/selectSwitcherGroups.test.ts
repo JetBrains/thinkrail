@@ -119,7 +119,7 @@ describe("selectSwitcherGroups", () => {
 		};
 		const sessions = selectSwitcherGroups(state)[0]?.sessions ?? [];
 		expect(sessions.find((s) => s.sessionId === "s1")?.chatTitle).toBe("Fix login");
-		expect(sessions.find((s) => s.sessionId === "s2")?.chatTitle).toBe("");
+		expect(sessions.find((s) => s.sessionId === "s2")?.chatTitle).toBeNull();
 	});
 
 	test("resolves workspace name from store, else empty", () => {

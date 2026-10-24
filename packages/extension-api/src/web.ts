@@ -1,3 +1,4 @@
+import type { Translator } from "@thinkrail/locales/react";
 import type { ReactNode } from "react";
 
 export { languageFromPath, numArg, resultText, strArg } from "./toolHelpers";
@@ -26,7 +27,7 @@ export type ToolProminence = "routine" | "primary";
 
 export type ToolRenderer = (props: ToolRenderProps) => ReactNode;
 
-export type ToolSummary = (props: ToolRenderProps) => string;
+export type ToolSummary = (props: ToolRenderProps, t: Translator) => string;
 
 export interface ToolRegistrationOptions {
 	summary?: ToolSummary;

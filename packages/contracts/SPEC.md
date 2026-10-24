@@ -41,10 +41,15 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
 - **Public surface (`index.ts`):** `export type *` of `piProtocol` + `domain` + `nativeClient`
   (`NativeUpdateState` / `NativeUpdateBridge`, `NativeWindowState` / `NativeWindowControlsBridge`,
   `NativeQuitHint` / `NativeCommand` / `NativeShortcutsBridge`, and
-  `NativeNotificationInput` / `NativeNotificationBridge`, the optional shell-local desktop capabilities);
+  `NativeNotificationInput` / `NativeNotificationBridge`, and `NativeMenuBridge` (translated native menu
+  labels), the optional shell-local desktop capabilities);
   `QUIT_CONFIRMATION` + **`createQuitConfirmation`** + `QuitConfirmationDependencies` from `quitConfirmation`; the value
   re-exports
-  `DEFAULT_CONFIG`, `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
+  `DEFAULT_CONFIG`, `DEFAULT_WORKSPACE_NAME` (the host's name for a project's default workspace; clients
+  word it in their language until it is renamed), `SYSTEM_LOCALE_PREFERENCE` + **`isLocalePreference(value)`** (`"system"` or a canonical
+  BCP-47 tag — the `AppConfig.locale` contract; local language file shapes are `LocalLocalesSnapshot` /
+  `LocalLocaleFile` with closed error codes, served by `locales.list` from `LOCALES_PROTOCOL_VERSION`, v89),
+  `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
   `SESSION_RENAME_PROTOCOL_VERSION`, `SESSION_TITLE_MAX_LENGTH`, `normalizeSessionTitle`,
   `LINE_WIDTH_COLUMNS` + **`isLineWidth(value)`** (the shared 40–240 integer contract for synchronized
@@ -166,8 +171,9 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
     the server's transcript filter and history index, whose alignment keeps a history hit's `messageIndex`
     valid against the client's `turnIdByMessageIndex` — a role added to one side but not the other would
     silently shift every later jump anchor.
-  - **Chat titles** — `SessionSummary.title` remains the non-empty read
-    projection (`Chat` while pi has no durable name). The additive `session.rename` mutation takes
+  - **Chat titles** — `SessionSummary.title` is the read projection of pi's durable name, `""` while
+    the session has none; clients word that default in their own language (no English placeholder crosses
+    the wire). The additive `session.rename` mutation takes
     `{ workspaceId, sessionId, title }`, rejects a title whose trimmed single-line form is blank or exceeds
     `SESSION_TITLE_MAX_LENGTH` (80), and returns an ack; `SESSION_RENAME_PROTOCOL_VERSION` pins the
     mutation and controls to v66 so a newer client hides them against older hosts. The existing Pi event
@@ -248,10 +254,23 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   never touches disk; `workspace.remove` stays the only teardown, one row at a time),
   **`OpenBranchReview`** (the review reference for the active branch: PR vs MR + number, plus an optional
   **`state`** — `"open" | "merged" | "closed"`, absent on a pre-v78 host and read as open — and
-  **`changedAt`**, the ms time the provider merged or closed it; no actions),
+  **`changedAt`**, the ms time the provider merged or closed it; v88 adds lookup-only **`details`** for an
+  open GitHub PR — `draft`, `base` (the branch it merges into now, which GitHub may have retargeted),
+  `checks` (passing / pending / failing counts plus bounded failing names),
+  `reviewDecision`, the approving / change-requesting `reviewers`, `mergeState` (GitHub's
+  `mergeStateStatus`, lower-cased), the repository's `mergeMethods` and `deleteBranchOnMerge`; details ride
+  `workspace.branchStatus` only (the `workspace.openReview` answer strips them) and never enter the host-kept `Workspace.review` snapshot, whose state the
+  client overlays them onto only for the same review),
+  **`BranchStatus`** (`workspace.branchStatus`'s answer, v87 `BRANCH_STATUS_PROTOCOL_VERSION`: `hasOrigin`,
+  `provider` (`"github" | "gitlab" | null`), `published` (the push repository has the branch; `null` when a split origin's push repository
+  couldn't be read), `pushesElsewhere` (origin's
+  push URL differs from its fetch URL, so `ahead` / `behind` describe the push repository), `ahead` / `behind` vs
+  `origin/<branch>` when published, `aheadOfBase`, `onBase` (the branch is its own base —
+  Default on the default branch) and `review: OpenBranchReview | null` — the facts the topbar's Remote and
+  Pull request segments derive their next action from, independent of whether a review exists),
   **`ExistingWorktreeCandidate`** (a `workspace.listExisting` row: absolute `path` + `branch`, or a
   `detached` row the chooser disables),
-  `FileNode` (file-tree node),
+  `FileNode` (file-tree node; worktree-relative `/` path, `gitignored` set by the host when git ignores it),
   **`ResourceMeta`** (what a resource's bytes *are*, host-decided and pinned by
   `RESOURCE_META_PROTOCOL_VERSION` = v75: sha-256 `hash` + `byteLength`, both `null` when the resource is
   absent; `text` = valid UTF-8, BOM-aware, and not claimed by a recognized binary magic number (an ASCII
@@ -445,8 +464,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   never imported — the DTO posture again), **`SubagentCompletionMessage`** (the compile-held tag↔details
   shape) and the shared **`isSubagentCompletionMessage`** guard — wire data is untrusted, so the
   details validate through **`isDelegationRunDetails`** (domain): the **closed status union**, every
-  required **numeric usage field**, `durationMs`, and every present optional display field as a string,
-  never just "an object is present" (PR #303 review finding). That validator is the one home for the
+  required **numeric usage field**, `durationMs`, every present optional display field as a string, and a
+  present `thinkingLevel` as one of pi's closed levels, never just "an object is present" (PR #303 review finding). That validator is the one home for the
   shape check — the web's Agent-card reader
   narrows through it too — plus **`customMessageText`** — the one text extraction over
   `WireCustomMessage.content` (string | blocks), shared by the web's event reducer and hydration so the
@@ -500,7 +519,10 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
 - **nativeClient.ts** — type-only optional native-client capabilities outside the host wire. The desktop
   update bridge exposes a monotonic state snapshot, prompt check/download/install actions, failed-operation
   identity, and state subscription without exposing feed selection. Available, byte-transfer, preparation,
-  ready, and installing are distinct states. The window-controls bridge exposes the same
+  ready, and installing are distinct states. While installing, the snapshot carries a coarse install step
+  and a bounded log of structured events (`diagnostic` alone carries raw SDK text). After a relaunch it carries the durable last-install result as data, never as display
+  text: outcome, from/to version, native failed step, raw cause, and saved log. Only
+  `dismissInstallResult()` clears it. The window-controls bridge exposes the same
   snapshot/action/subscription shape for window state. The shortcuts bridge pushes quit-hint changes
   (`hidden` / `armed` / `release` / `quitting`) and `NativeCommand` ids (today `close-item`, close the
   focused in-app item, and `open-settings`, open Settings unless a modal is open), and its one action `quit()` asks the host for an ordinary coordinated quit. The
@@ -587,7 +609,24 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   this action omits it against an older host) / **`workspace.openReview`** (the active
   branch's optional `OpenBranchReview` metadata; optional `allowCached: true` permits a settled host
   cache hit while omission preserves the original force-fresh behavior for older independently shipped
-  clients; either form still joins a lookup already in flight) /
+  clients; either form still joins a lookup already in flight) / **`workspace.branchStatus`** (v87, same
+  params and freshness rules → `BranchStatus`; supersedes `openReview` for v87 clients, which stays for
+  older ones; v88 adds `skipFetch: true` — a CI poll: a fresh review lookup without fetching origin) /
+  **`workspace.push`** (v87, `{ workspaceId, branch, confirmBase? }` → `{ dirtyFiles }`: publish or
+  push the branch to `origin` without touching any PR; a branch that is its own base is refused unless
+  `confirmBase: true`, and `branch` — the one the user saw and confirmed — must still be the live branch; `PUSH_AUTH_FAILED` as for `pr.open`) / **`pr.preview`** (v87 adds optional
+  `source: "plan" | "commits" | "template" | "empty"` and `template`, makes `sessionId` optional, and
+  returns the discovered `templates` and `planAvailable`; an older client's `{ sessionId }` call keeps the
+  plan body — `host` sends it `source: "plan"` explicitly, since a v87 source-less default may be `commits`) / **`pr.generate`** (v87, `{ workspaceId, sessionId?, template? }` → `{ body: string | null }`,
+  a best-effort one-shot draft; `null` when no model answered; `pr.open` v87 accepts no `sessionId` when
+  the caller supplies the `body`, and an optional `branch` — the branch the draft was composed for — that
+  must still be the live branch, as for `workspace.push`) / the v88 **review actions** (`REVIEW_ACTIONS_PROTOCOL_VERSION`), each
+  naming the `branch` the user saw and, for a PR, the `number` it showed: **`pr.ready`** / **`pr.reopen`**
+  (`{ workspaceId, branch, number }` → `Ack`), **`pr.merge`** (`… , method: "squash" | "merge" | "rebase",
+  deleteBranch` → `MergePrResult { merged, branchDeleted, deleteError? }` — `merged: false` when GitHub only
+  queued it (merge queue / auto-merge), in which case the branch is never deleted; a merge that landed while
+  the branch deletion failed is a success with the reason), and **`workspace.deleteRemoteBranch`** (`{ workspaceId,
+  branch }` → `Ack`; `PUSH_AUTH_FAILED` as for a push) /
   **`project.setTrust`** (persist a project's trust grant → the updated `Project`; gates its committed
   cross-agent skill aliases; `resources: true` also grants pi-level resource trust, see Project trust) /
   **`skill.list`** (a pre-session, skill-only `SlashCommandInfo[]` preview for a `projectId`, resolved from
@@ -652,7 +691,11 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   **`feedback.respond`** (`{ action: InterviewResponse }` → ack; persists the automatic invitation's book,
   postpone, or permanent-dismiss result; the Settings link never calls it;
   `FEEDBACK_INTERVIEW_PROTOCOL_VERSION` pins the addressed channel's v56 introduction so the host does not
-  claim an independently shipped older client that omits the current `?protocol=` socket capability) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
+  claim an independently shipped older client that omits the current `?protocol=` socket capability) /
+  **`client.reportError`** (`ClientErrorReport { kind: render | window | rejection, type, stack?,
+  boundary?, chunkIds? }` → ack; `chunkIds` maps stack URLs to PostHog source-map chunk ids; a fire-and-forget UI error for host error tracking — the payload is raw and untrusted,
+  the host is the only sanitizer; `CLIENT_ERROR_REPORT_PROTOCOL_VERSION` pins its v90 introduction so a
+  newer client never sends it to an older host) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
   recency-ordered; the messages section is assistant-only — a user-role hit surfaces as a jumpable
   `PromptHit` instead, never a separate `MessageHit`) / the **`review.*` set** — **`get`** (the open
   review + comments, lazily created; re-anchored on read) / **`commentAdd`**/**`commentUpdate`**/
@@ -746,8 +789,9 @@ without importing that package. Subagents retain their Pi child session ids and 
 - `session.resources({workspaceId, sessionId})` returns separate command and subagent summaries:
   all currently active records plus bounded recent terminal records. The snapshot echoes workspace
   and session identity. Commands mirror the owner's bounded snapshot; subagent summaries carry only
-  child/parent ids, role, task, status, creation time, optional abort reason and — once terminal — the
-  run duration [[module-pi-delegation]] measured (`durationMs`), not usage or reports.
+  child/parent ids, role, task, status, creation time, the child's actual `model` (`provider/id`) and
+  effective `thinkingLevel` (both optional — absent from an older host), optional abort reason and — once
+  terminal — the run duration [[module-pi-delegation]] measured (`durationMs`), not usage or reports.
   Subagent role/task summaries are capped at 200/2,000 characters, with the latest twenty terminal
   children by creation order retained in the projection. These are runtime catalogs; neither historical
   tool acknowledgements nor persisted PIDs supply live authority after restart.
@@ -951,6 +995,11 @@ so an already-loaded old client clears retired markers after reconnect. No activ
 - **Type-only, from the package roots, always** (type-only imports are erased by
   `verbatimModuleSyntax`, so the web bundle stays provider-free; the pi-ai provider/API subpaths
   statically import the Node SDKs — never touch them). The `/base` entries existed only in 0.79.8–0.79.9.
+- **Path fields carry a spelling contract** (architecture Decision 22). `Project.path` and
+  `Workspace.worktreePath` are the host's resolved absolute spelling. Every workspace-relative `path`
+  (`FileNode`, `GitFileChange`, `ReviewAnchor`, `ReviewReadingStep`, `WorkspaceFsChangedPayload.paths`) is
+  POSIX `/` and inside the worktree. Absolute paths pi reports (tool arguments, a transcript `cwd`) may use
+  either separator; consumers compare them only after normalizing.
 - `Model` is generic — expose as `Model<any>`.
 - `AssistantMessageEvent` (the streaming deltas) is nested under `message_update.assistantMessageEvent`,
   never a top-level event `type`.

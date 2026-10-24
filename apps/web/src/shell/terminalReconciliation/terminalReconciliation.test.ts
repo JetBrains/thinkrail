@@ -16,7 +16,7 @@ function document(): WorkspaceLayoutDocument {
 			alignment: "center",
 			groups: [
 				{ id: "bottom-one", weight: 0.5, folded: false, tabs: [] },
-				{ id: "bottom-two", weight: 0.5, folded: false, tabs: [toolTab("changes")] },
+				{ id: "bottom-two", weight: 0.5, folded: false, tabs: [toolTab("plan")] },
 			],
 		},
 		toolRestoreTargets: {},

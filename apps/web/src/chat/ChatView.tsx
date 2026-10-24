@@ -2,10 +2,12 @@ import {
 	type PromptHit,
 	type QueueLane,
 	type SessionQueueContent,
+	type SubagentResourceSummary,
 	sameModel,
 	type TemplateInfo,
 	type ThinkingLevel,
 } from "@thinkrail/contracts";
+import { t as translate, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import {
 	Dialog,
@@ -31,6 +33,7 @@ import {
 	selectWorkspaceById,
 	toast,
 	useAppStore,
+	workspaceName,
 } from "@/store";
 import { errorText, getTransport, watchMcpWorkspace } from "@/transport";
 import type { ResultTarget } from "./ChatActions";
@@ -43,7 +46,9 @@ import {
 	type MentionCandidate,
 	type SubmitBehavior,
 } from "./Composer";
+import { mentionLookup } from "./fileTargets";
 import { HistoryOverlay } from "./HistoryOverlay";
+import { parseModelRef, RunModelLabel } from "./ModelEffortLabel";
 import type { ModelSelection } from "./ModelEffortPicker";
 import {
 	compactSubmissionError,
@@ -75,6 +80,10 @@ registerWebExtensions();
 
 const TRY_AGAIN_PROMPT = "Try again.";
 
+function renderSubagentModel({ model, thinkingLevel }: SubagentResourceSummary) {
+	return <RunModelLabel model={model} thinkingLevel={thinkingLevel} />;
+}
+
 export default function ChatView({
 	sessionId,
 	workspaceId,
@@ -84,6 +93,7 @@ export default function ChatView({
 	workspaceId: string;
 	onOpenFile?: ((path: string) => void) | undefined;
 }) {
+	const t = useT();
 	const sessionExists = useAppStore((s) => s.sessions[sessionId] !== undefined);
 	const isStreaming = useAppStore((s) => s.sessions[sessionId]?.isStreaming ?? false);
 	const draft = useAppStore((s) => s.sessions[sessionId]?.draft ?? "");
@@ -146,10 +156,10 @@ export default function ChatView({
 	const workspaceNames = useMemo(() => {
 		const map: Record<string, string> = {};
 		for (const list of Object.values(workspaces)) {
-			for (const w of list) map[w.id] = w.name;
+			for (const w of list) map[w.id] = workspaceName(t, w);
 		}
 		return map;
-	}, [workspaces]);
+	}, [t, workspaces]);
 
 	const currentModel = selectCatalogModel(models, sessionModel) ?? sessionModel;
 	const refreshStats = useSessionStats({
@@ -269,6 +279,10 @@ export default function ChatView({
 		() => useAppStore.getState().openSettings(SettingsSection.Providers),
 		[],
 	);
+	const findModel = useCallback(
+		(ref: string) => selectCatalogModel(allModels, parseModelRef(ref)),
+		[allModels],
+	);
 	const readMcpOutput = useCallback(
 		(toolCallId: string) =>
 			getTransport().request("mcp.readOutput", { workspaceId, sessionId, toolCallId }),
@@ -357,13 +371,14 @@ export default function ChatView({
 	const mergedCommands = useMemo(
 		() =>
 			mergeNativeChatCommands(
+				t,
 				[
 					...commands.filter((command) => command.source !== "prompt"),
 					...templates.map(templateToSlashCommand),
 				],
 				canRenameChat,
 			),
-		[canRenameChat, commands, templates],
+		[canRenameChat, commands, t, templates],
 	);
 
 	useEffect(() => {
@@ -371,9 +386,7 @@ export default function ChatView({
 			setMentionCandidates([]);
 			return;
 		}
-		const slash = mentionQuery.lastIndexOf("/");
-		const dir = slash >= 0 ? mentionQuery.slice(0, slash) : "";
-		const prefix = (slash >= 0 ? mentionQuery.slice(slash + 1) : mentionQuery).toLowerCase();
+		const { dir, prefix } = mentionLookup(mentionQuery);
 		let cancelled = false;
 		const timer = setTimeout(() => {
 			getTransport()
@@ -410,7 +423,7 @@ export default function ChatView({
 					if (useAppStore.getState().sessions[sessionId]?.thinkingLevel === level) {
 						useAppStore.getState().setThinkingLevel(sessionId, previous);
 					}
-					toast.error(errorText(error), "Couldn't change the effort level");
+					toast.error(errorText(error), translate("chat.view.effortChangeFailed"));
 				}),
 		[sessionId],
 	);
@@ -464,7 +477,10 @@ export default function ChatView({
 							useAppStore.getState().setThinkingLevel(sessionId, previous.level);
 						}
 					}
-					toast.error(errorText(error), `Couldn't switch to ${model.name}`);
+					toast.error(
+						errorText(error),
+						translate("chat.view.modelSwitchFailed", { model: model.name }),
+					);
 				},
 			)
 			.then(() => refreshStats());
@@ -641,7 +657,7 @@ export default function ChatView({
 			closeHistory();
 			useAppStore.getState().deleteChat(targetWorkspaceId, targetSessionId);
 		} catch (err) {
-			toast.error(errorText(err), "Couldn't delete the chat");
+			toast.error(errorText(err), translate("chat.view.deleteFailed"));
 		}
 	};
 
@@ -735,6 +751,7 @@ export default function ChatView({
 				readMcpOutput={supportsMcp ? readMcpOutput : undefined}
 				openMcpSettings={supportsMcp ? openMcpSettings : undefined}
 				openProviderSettings={supportsMcp ? openProviderSettings : undefined}
+				findModel={findModel}
 				resourcesOverlay={
 					resources.visible ? (
 						<ResourcesInspector
@@ -757,6 +774,7 @@ export default function ChatView({
 							onMcpSetEnabled={resources.setMcpEnabled}
 							onMcpReconnect={resources.reconnectMcp}
 							onOpenMcpSettings={openMcpSettings}
+							renderSubagentModel={renderSubagentModel}
 							detail={
 								selectedCommandId ? (
 									<CommandLogView {...commandLog} onRetry={commandLog.retry} />
@@ -846,14 +864,13 @@ export default function ChatView({
 			/>
 			<Dialog open={stopAllOpen} onOpenChange={setStopAllOpen}>
 				<DialogContent onCloseAutoFocus={returnToResources}>
-					<DialogTitle>Stop all subagents?</DialogTitle>
+					<DialogTitle>{t("chat.view.stopAllTitle")}</DialogTitle>
 					<DialogDescription>
-						Stop {resources.groups.subagents.length} active subagents in this chat? The main chat
-						and future delegation are unaffected.
+						{t("chat.view.stopAllDescription", { count: resources.groups.subagents.length })}
 					</DialogDescription>
 					<DialogFooter>
 						<Button variant="ghost" onClick={() => setStopAllOpen(false)}>
-							Cancel
+							{t("common.cancel")}
 						</Button>
 						<Button
 							data-testid="resources-stop-all-confirm"
@@ -867,7 +884,7 @@ export default function ChatView({
 								setStopAllOpen(false);
 							}}
 						>
-							Stop {resources.groups.subagents.length} subagents
+							{t("chat.view.stopAllConfirm", { count: resources.groups.subagents.length })}
 						</Button>
 					</DialogFooter>
 				</DialogContent>

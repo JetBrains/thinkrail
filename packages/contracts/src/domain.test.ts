@@ -7,6 +7,7 @@ import {
 	isDelegationRunDetails,
 	isJbcentralConnected,
 	isJbcentralQuotaRefreshSeconds,
+	isLocalePreference,
 	isPlanReviewResult,
 	isRetriedAttempt,
 	JBCENTRAL_QUOTA_REFRESH_SECONDS,
@@ -207,9 +208,15 @@ describe("isDelegationRunDetails", () => {
 				roleName: "researcher",
 				roleSource: "builtin",
 				model: "provider/model",
+				thinkingLevel: "high",
 				activity: "reading",
 			}),
 		).toBe(true);
+	});
+
+	test("rejects a thinking level outside pi's closed set", () => {
+		expect(isDelegationRunDetails({ ...valid, thinkingLevel: "turbo" })).toBe(false);
+		expect(isDelegationRunDetails({ ...valid, thinkingLevel: "toString" })).toBe(false);
 	});
 
 	test("accepts historical outcomes and optional user cancellation metadata", () => {
@@ -236,4 +243,14 @@ describe("isDelegationRunDetails", () => {
 			expect(isDelegationRunDetails({ ...valid, [field]: { malformed: true } })).toBe(false);
 		}
 	});
+});
+
+test("isLocalePreference accepts system and canonical BCP-47 tags only", () => {
+	expect(isLocalePreference("system")).toBe(true);
+	expect(isLocalePreference("de")).toBe(true);
+	expect(isLocalePreference("pt-BR")).toBe(true);
+	expect(isLocalePreference("pt-br")).toBe(false);
+	expect(isLocalePreference("")).toBe(false);
+	expect(isLocalePreference("not a tag")).toBe(false);
+	expect(isLocalePreference(7)).toBe(false);
 });

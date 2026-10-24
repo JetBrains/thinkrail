@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { DelegationRunDetails } from "@thinkrail/contracts";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
+import { currentTranslator } from "@thinkrail/locales/react";
 import {
 	agentSummary,
 	completionReport,
@@ -66,8 +67,13 @@ test("readRunDetails narrows a result's details and rejects malformed shapes", (
 });
 
 test("runCounters formats turns/tokens/cost/duration, skipping zeros", () => {
-	expect(runCounters(details())).toEqual(["12 turns", "30k tok", "$0.040", "45s"]);
-	expect(runCounters(details(), "split")).toEqual([
+	expect(runCounters(currentTranslator(), details())).toEqual([
+		"12 turns",
+		"30k tok",
+		"$0.040",
+		"45s",
+	]);
+	expect(runCounters(currentTranslator(), details(), "split")).toEqual([
 		"12 turns",
 		"in 25k / out 5.3k",
 		"$0.040",
@@ -85,24 +91,33 @@ test("runCounters formats turns/tokens/cost/duration, skipping zeros", () => {
 		},
 		durationMs: 0,
 	});
-	expect(runCounters(fresh)).toEqual([]);
+	expect(runCounters(currentTranslator(), fresh)).toEqual([]);
 });
 
 test("agentSummary is the live collapsed-header line, per status", () => {
-	expect(agentSummary(props({ result: undefined }))).toBe("scout: map the repo");
-	expect(agentSummary(props())).toBe(
+	expect(agentSummary(props({ result: undefined }), currentTranslator())).toBe(
+		"scout: map the repo",
+	);
+	expect(agentSummary(props(), currentTranslator())).toBe(
 		'scout · 12 turns · 30k tok · $0.040 · 45s · bash: rg -n "createServer"',
 	);
 	expect(
 		agentSummary(
 			props({ result: { details: details({ status: "queued", usage: details().usage }) } }),
+			currentTranslator(),
 		),
 	).toContain("scout · queued");
-	expect(agentSummary(props({ result: { details: details({ status: "completed" }) } }))).toBe(
-		"scout · 12 turns · 30k tok · $0.040 · 45s",
-	);
 	expect(
-		agentSummary(props({ args: { subagent_type: "scout", task: "t", run_in_background: true } })),
+		agentSummary(
+			props({ result: { details: details({ status: "completed" }) } }),
+			currentTranslator(),
+		),
+	).toBe("scout · 12 turns · 30k tok · $0.040 · 45s");
+	expect(
+		agentSummary(
+			props({ args: { subagent_type: "scout", task: "t", run_in_background: true } }),
+			currentTranslator(),
+		),
 	).toContain("background");
 	expect(
 		agentSummary(
@@ -111,13 +126,15 @@ test("agentSummary is the live collapsed-header line, per status", () => {
 				args: { session_id: "child-1" },
 				result: undefined,
 			}),
+			currentTranslator(),
 		),
 	).toBe("child-1");
 });
 
 test("usage counters leave run time to the caller; run counters append it", () => {
-	expect(usageCounters(details())).toEqual(["12 turns", "30k tok", "$0.040"]);
-	expect(runCounters(details())).toEqual([...usageCounters(details()), "45s"]);
+	const t = currentTranslator();
+	expect(usageCounters(t, details())).toEqual(["12 turns", "30k tok", "$0.040"]);
+	expect(runCounters(t, details())).toEqual([...usageCounters(t, details()), "45s"]);
 });
 
 test("the completion report drops pi-subagents' header and teases its first readable line", () => {

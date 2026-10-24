@@ -79,7 +79,7 @@ mapped into Tailwind by `index.css`'s `@theme inline` — the same shape as `--p
 | `--panel-header-row-height` | `28px` | `h-` / `w-panel-header-row` | the height of every header strip (tab strips, pane headers, chat toolbar, bottom tool rail) and the width of its full-height square actions |
 | `--panel-header-control-height` | `calc(var(--panel-header-row-height) - var(--space-4))` | `h-panel-header-control` | every control floating inside a header strip, so it keeps clearing the strip’s 1px border whenever the header height changes |
 | `--panel-row-height` | `22px` | `h-` / `min-h-` / `size-panel-row` | every side-pane row (file, change, spec, project, workspace) and the row-height icon buttons inside them |
-| `--panel-inset` | `var(--space-8)` | `p-panel-inset` | the content inset of every tool pane (Projects, Specs, Files, Changes, Review) |
+| `--panel-inset` | `var(--space-8)` | `p-panel-inset` | the content inset of every tool pane (Projects, Specs, Files, Review) |
 | `--tree-indent` | `var(--space-8)` | `pl-tree-indent` | per-depth indentation of the Files, Changes and Specs trees |
 | `--chat-gutter` | `var(--space-8)` | `px-` / `p-chat-gutter` | chat row gutters, the stream-status and activity-breadcrumb strips, the composer inset, and the gutter terms of the transcript-width and unbounded user-bubble calcs |
 

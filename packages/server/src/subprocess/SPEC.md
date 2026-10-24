@@ -57,7 +57,7 @@ never what a particular child's output means.
 
   The census above is about *unbounded waits*, not about every spawn in the repo — the rest are already
   bounded or cannot wait on anything: `git`'s sync `git()` and `terminal/shellBusy` go through
-  `@thinkrail/shared/spawn`'s `spawnSyncCaptured` (`shared/shellEnv` keeps its own `Bun.spawnSync` — a
+  `@thinkrail/shared/spawn`'s `spawnSyncCaptured` (`shared/shellEnv` keeps its own timed `Bun.spawn` — a
   win32 no-op), and `editors`, `cli/bootstrap` and `cli/powershell` are fire-and-forget
   `@thinkrail/shared/spawn` `spawnDetached`s whose output nobody reads. `trash`'s helper `execFile` is the
   one true straggler: unbounded, but a local trash helper with no network and no prompt, so it fails the

@@ -17,9 +17,9 @@ const ComparisonOptionSchema = Type.Object({
 });
 
 export const VisualizeSchema = Type.Object({
-	type: StringEnum(["diagram", "comparison"], {
+	type: StringEnum(["diagram", "comparison", "file"], {
 		description:
-			"Which visualization to render. 'diagram' needs `mermaid`; 'comparison' needs `options`.",
+			"Which visualization to render. 'diagram' needs `mermaid`; 'comparison' needs `options`; 'file' needs `path`.",
 	}),
 	title: Type.Optional(
 		Type.String({ description: "Optional heading shown above the visualization." }),
@@ -33,6 +33,18 @@ export const VisualizeSchema = Type.Object({
 	options: Type.Optional(
 		Type.Array(ComparisonOptionSchema, {
 			description: "Required when type='comparison'. The alternatives being compared.",
+		}),
+	),
+	path: Type.Optional(
+		Type.String({
+			description:
+				"Required when type='file'. Workspace-relative path of an existing file to show rendered by its type (HTML, Markdown, SVG, CSV, JSON, notebook, image, PDF, or code).",
+		}),
+	),
+	before: Type.Optional(
+		Type.String({
+			description:
+				"Optional with type='file'. Workspace-relative path of the previous version; the file is then shown as a before/after diff.",
 		}),
 	),
 });

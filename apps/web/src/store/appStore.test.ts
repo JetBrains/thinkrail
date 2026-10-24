@@ -36,10 +36,12 @@ import {
 	useAppStore,
 } from "./appStore";
 import {
+	selectActiveFilePath,
 	selectChatAttended,
 	selectCompactionTurnIds,
 	selectCurrentRouteChatTarget,
 	selectDiffScope,
+	selectFilesTreeView,
 	selectLastOpenChatSession,
 	selectReadyCompletionAck,
 	selectSkillsStale,
@@ -274,10 +276,10 @@ test("pi events route to the right session runtime; chats stay independent", () 
 
 	store.handlePiEvent(agentEnd, "a");
 	expect(rt("a").isStreaming).toBe(true);
-	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(false);
+	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === undefined)).toBe(false);
 	store.handlePiEvent(agentSettled(), "a");
 	expect(rt("a").isStreaming).toBe(false);
-	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
+	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === undefined)).toBe(true);
 	expect(rt("b").isStreaming).toBe(true);
 	expect(rt("b").turns).toHaveLength(0);
 });
@@ -558,7 +560,7 @@ test("an assistant turn is built (and replaced, not duplicated) from message_upd
 	const after = rt("a");
 	expect(after.isStreaming).toBe(false);
 	expect(after.currentAssistantId).toBeNull();
-	expect(after.turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
+	expect(after.turns.some((t) => t.kind === "system" && t.text === undefined)).toBe(true);
 });
 
 test("a multi-message turn leaves no assistant turn flagged streaming (no stray live indicator)", () => {
@@ -848,7 +850,7 @@ test("a lingering retry countdown is swept up only when the run settles", () => 
 	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(true);
 	store.handlePiEvent(agentSettled(), "a");
 	expect(rt("a").turns.some((t) => t.kind === "retry")).toBe(false);
-	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
+	expect(rt("a").turns.some((t) => t.kind === "system" && t.text === undefined)).toBe(true);
 });
 
 test("auto-retry drops the failed attempt's turn — the retried message must not render twice", () => {
@@ -902,7 +904,7 @@ test("auto-retry drops the failed attempt's turn — the retried message must no
 			assistants[0].message.content.some((c) => c.type === "text" && c.text === "The answer is 4"),
 	).toBe(true);
 	expect(after.turns.some((t) => t.kind === "retry")).toBe(false);
-	expect(after.turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(true);
+	expect(after.turns.some((t) => t.kind === "system" && t.text === undefined)).toBe(true);
 });
 
 test("auto-retry with no assistant message yet (error before message_start) drops nothing", () => {
@@ -937,7 +939,7 @@ test("a turn that ends in a provider error surfaces the error (not a false ✓ D
 	const err = after.turns.find((t) => t.kind === "error");
 	expect(err?.kind === "error" && err.text).toContain("gpt-5.5");
 	expect(failureRecovery("a")).toBe("try-again");
-	expect(after.turns.some((t) => t.kind === "system" && t.text === "✓ Done")).toBe(false);
+	expect(after.turns.some((t) => t.kind === "system" && t.text === undefined)).toBe(false);
 });
 
 test("a run's closer lands before a mid-run result that woke nobody, as hydration orders it", () => {
@@ -990,9 +992,9 @@ test("a terminal length stop is a visible failure, never a false ✓ Done", () =
 
 	const after = rt("a");
 	const error = after.turns.find((turn) => turn.kind === "error");
-	expect(error?.kind === "error" && error.text.toLowerCase()).toContain("truncated");
+	expect(error?.kind === "error" && error.failure).toBe("truncated");
 	expect(failureRecovery("a")).toBe("try-again");
-	expect(after.turns.some((turn) => turn.kind === "system" && turn.text === "✓ Done")).toBe(false);
+	expect(after.turns.some((turn) => turn.kind === "system" && turn.text === undefined)).toBe(false);
 	expect(after.isStreaming).toBe(false);
 });
 
@@ -1114,7 +1116,9 @@ test("compaction lifecycle: a running notice settles in place (same id) with the
 	const running = compactionTurns("a");
 	expect(running).toMatchObject([{ status: "running" }]);
 	expect(rt("a").isStreaming).toBe(true);
-	expect(rt("a").turns.filter((turn) => turn.kind === "system")).toHaveLength(0);
+	expect(
+		rt("a").turns.filter((turn) => turn.kind === "system" && turn.text === undefined),
+	).toHaveLength(0);
 
 	store.handlePiEvent(compactionEnd(), "a");
 	expect(compactionTurns("a")).toMatchObject([
@@ -1123,7 +1127,7 @@ test("compaction lifecycle: a running notice settles in place (same id) with the
 
 	store.handlePiEvent(agentSettled(), "a");
 	const turns = rt("a").turns;
-	expect(turns.at(-1)).toMatchObject({ kind: "system", text: "✓ Done" });
+	expect(turns.at(-1)).toMatchObject({ kind: "system" });
 	expect(turns.at(-2)).toMatchObject({ kind: "compaction", status: "done" });
 });
 
@@ -1154,14 +1158,16 @@ test("the incident sequence: truncated response → compacting → compacted-res
 	]);
 	expect(rt("a").turns.filter((turn) => turn.kind === "assistant")).toHaveLength(0);
 	expect(rt("a").isStreaming).toBe(true);
-	expect(rt("a").turns.filter((turn) => turn.kind === "system")).toHaveLength(0);
+	expect(
+		rt("a").turns.filter((turn) => turn.kind === "system" && turn.text === undefined),
+	).toHaveLength(0);
 
 	store.handlePiEvent(agentStart, "a");
 	store.handlePiEvent(assistantStart, "a");
 	store.handlePiEvent(assistantText("finished the rebase"), "a");
 	store.handlePiEvent(agentEnd, "a");
 	store.handlePiEvent(agentSettled(), "a");
-	expect(rt("a").turns.at(-1)).toMatchObject({ kind: "system", text: "✓ Done" });
+	expect(rt("a").turns.at(-1)).toMatchObject({ kind: "system" });
 	expect(rt("a").isStreaming).toBe(false);
 	expect(compactionTurns("a")[0]?.resuming).toBeUndefined();
 });
@@ -1225,11 +1231,13 @@ test("compact-and-retry produces one completion marker at final settlement", () 
 	store.handlePiEvent(recoveredOverflow, "a");
 	store.handlePiEvent(agentStart, "a");
 	store.handlePiEvent(agentEnd, "a");
-	expect(rt("a").turns.filter((turn) => turn.kind === "system")).toHaveLength(0);
+	expect(
+		rt("a").turns.filter((turn) => turn.kind === "system" && turn.text === undefined),
+	).toHaveLength(0);
 
 	store.handlePiEvent(agentSettled(), "a");
 	expect(
-		rt("a").turns.filter((turn) => turn.kind === "system" && turn.text === "✓ Done"),
+		rt("a").turns.filter((turn) => turn.kind === "system" && turn.text === undefined),
 	).toHaveLength(1);
 });
 
@@ -1292,7 +1300,7 @@ test("a durable session title event renames an open chat without moving attentio
 	expect(rt("named").eventRevision).toBe(1);
 });
 
-test("a durable session title event renames closed history and restores the Chat fallback", () => {
+test("a durable session title event renames closed history and clears it back to untitled", () => {
 	const store = useAppStore.getState();
 	store.openChatSession("ws1", "closed-title", null, "medium");
 	store.closeChatToHistory("closed-title", true, "ws1");
@@ -1300,7 +1308,7 @@ test("a durable session title event renames closed history and restores the Chat
 	store.handlePiEvent(sessionTitleChanged("Closed work"), "closed-title");
 	expect(useAppStore.getState().closedChatsByWorkspace.ws1?.[0]?.title).toBe("Closed work");
 	store.handlePiEvent(sessionTitleChanged(), "closed-title");
-	expect(useAppStore.getState().closedChatsByWorkspace.ws1?.[0]?.title).toBe("Chat");
+	expect(useAppStore.getState().closedChatsByWorkspace.ws1?.[0]?.title).toBe("");
 });
 
 test("a durable title updates a known tab without conjuring a runtime or title-event buffer", () => {
@@ -3022,7 +3030,11 @@ test("applyWorkspaceRemoved drops the row, clears its tabs, and returns the acti
 			anchorText: "removed",
 		},
 		historyOpenRequest: { id: "history", sessionId: "removed-chat" },
-		reviewFocusRequest: { workspaceId: "w1", commentId: "comment" },
+		reviewFocusRequest: {
+			workspaceId: "w1",
+			commentId: "comment",
+			surface: { kind: "diff", scope: { kind: "branch" } },
+		},
 		closedChatsByWorkspace: {
 			w1: [{ sessionId: "removed-chat", title: "Removed", closedAt: 1 }],
 		},
@@ -3136,6 +3148,80 @@ test("applyWorkspaceRemoved drops the removed workspace's cached spec graph", ()
 	expect(s.specsByWorkspace.other).toEqual([]);
 });
 
+test("files tree state keeps per-workspace folders and scroll, and drops a removed workspace", () => {
+	useAppStore.setState({
+		filesTreeByWorkspace: {},
+		removedWorkspaceIds: Object.create(null),
+		workspaces: { p1: [pushedWorkspace()] },
+	});
+	const view = () => selectFilesTreeView(useAppStore.getState(), "w1");
+	const store = useAppStore.getState();
+
+	store.setFilesTreeExpanded("w1", ["src", "src/auth"], true);
+	const expanded = view().expanded;
+	store.setFilesTreeExpanded("w1", ["src"], true);
+	expect(view().expanded).toBe(expanded);
+	store.setFilesTreeExpanded("w1", ["src/auth"], false);
+	expect(view().expanded).toEqual(["src"]);
+	store.collapseAllFiles("w1");
+	expect(view().expanded).toEqual([]);
+
+	store.setChangedTreeCollapsed("w1", ["apps/web"], true);
+	store.setFilesTreeScroll("w1", "changedTree", 120, "branch");
+	expect(view()).toMatchObject({
+		changedCollapsed: ["apps/web"],
+		scroll: { changedTree: { top: 120, scope: "branch" } },
+	});
+	expect(selectFilesTreeView(useAppStore.getState(), "w2").expanded).toEqual([]);
+
+	useAppStore.getState().applyWorkspaceRemoved("p1", "w1");
+	expect(useAppStore.getState().filesTreeByWorkspace.w1).toBeUndefined();
+	useAppStore.getState().setFilesTreeExpanded("w1", ["src"], true);
+	expect(useAppStore.getState().filesTreeByWorkspace.w1).toBeUndefined();
+});
+
+test("revealInFiles expands every ancestor folder and records the revealed file", () => {
+	useAppStore.setState({ filesTreeByWorkspace: {}, removedWorkspaceIds: Object.create(null) });
+	useAppStore.getState().setFilesTreeExpanded("w1", ["docs"], true);
+	useAppStore.getState().revealInFiles("w1", "src/auth/login.ts");
+	const view = selectFilesTreeView(useAppStore.getState(), "w1");
+	expect(view.expanded).toEqual(["docs", "src", "src/auth"]);
+	expect(view.seenActivePath).toBe("src/auth/login.ts");
+	useAppStore.getState().revealInFiles("w1", "src/auth/login.ts");
+	expect(selectFilesTreeView(useAppStore.getState(), "w1")).toBe(view);
+});
+
+test("selectActiveFilePath follows the active file tab and ignores other tabs", () => {
+	const file: FileTab = {
+		kind: "file",
+		id: "f",
+		workspaceId: "w1",
+		name: "a",
+		path: "./src/a.ts",
+		content: "",
+	};
+	const tabsByWorkspace = { w1: [file] };
+	expect(selectActiveFilePath({ tabsByWorkspace, activeTabByWorkspace: { w1: "f" } }, "w1")).toBe(
+		"src/a.ts",
+	);
+	expect(
+		selectActiveFilePath({ tabsByWorkspace, activeTabByWorkspace: { w1: "chat" } }, "w1"),
+	).toBeNull();
+});
+
+test("revealChanges and requestChangesView reveal Files in Changed mode", () => {
+	useAppStore.setState({ filesMode: "all", layoutIntents: [] });
+	useAppStore.getState().revealChanges("w1");
+	expect(useAppStore.getState().filesMode).toBe("changed");
+	expect(useAppStore.getState().layoutIntents).toMatchObject([
+		{ kind: "reveal-tool", workspaceId: "w1", tool: "files" },
+	]);
+
+	useAppStore.setState({ filesMode: "all", layoutIntents: [] });
+	useAppStore.getState().requestChangesView("w1", null);
+	expect(useAppStore.getState().filesMode).toBe("changed");
+});
+
 test("requestChangesView / requestSpecView pair independent path requests with reveal intents", () => {
 	useAppStore.setState({ changesRequest: null, specRequest: null, layoutIntents: [] });
 
@@ -3157,7 +3243,7 @@ test("requestChangesView / requestSpecView pair independent path requests with r
 	expect(
 		s.layoutIntents.map(({ kind, workspaceId, ...intent }) => ({ kind, workspaceId, ...intent })),
 	).toMatchObject([
-		{ kind: "reveal-tool", workspaceId: "w1", tool: "changes" },
+		{ kind: "reveal-tool", workspaceId: "w1", tool: "files" },
 		{ kind: "reveal-tool", workspaceId: "w1", tool: "specs" },
 	]);
 
@@ -3914,7 +4000,11 @@ test("consuming a changes-tab reveal lands active path, expansion and focus in o
 		collapsed: { "src/a.ts": false },
 		reveal: null,
 	});
-	expect(s().reviewFocusRequest).toEqual({ workspaceId: "ws1", commentId: "c1" });
+	expect(s().reviewFocusRequest).toEqual({
+		workspaceId: "ws1",
+		commentId: "c1",
+		surface: { kind: "diff", scope: { kind: "branch" } },
+	});
 
 	s().setChangesTabSectionViewState("ws1", tab.id, "src/a.ts", { scrollTop: 3 });
 	const saved = s().tabsByWorkspace;

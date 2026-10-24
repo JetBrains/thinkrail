@@ -32,7 +32,9 @@ const message: TranscriptMessage = {
 
 test("live and hydrated command completion messages produce the same historical row and never resource authority", () => {
 	const live = reduceSessionEvent(EMPTY_RUNTIME, { type: "message_end", message });
-	const hydrated = messagesToRuntime([message], undefined, { idScope: "chat" });
+	const hydrated = messagesToRuntime([message], undefined, {
+		idScope: "chat",
+	});
 	for (const runtime of [live, hydrated]) {
 		expect(runtime.turns).toHaveLength(1);
 		expect(runtime.turns[0]).toMatchObject({ kind: "backgroundCommandCompletion", details });
@@ -115,6 +117,8 @@ test("a subagent result teases its report, offers the transcript and never rende
 						contextTokens: 0,
 					},
 					durationMs: 4 * 60_000,
+					model: "anthropic/claude-test",
+					thinkingLevel: "high",
 				}}
 				text={'Subagent "reviewer" (child-1) completed:\n\n**Verdict: approve.**\n\n- nit'}
 			/>
@@ -125,6 +129,10 @@ test("a subagent result teases its report, offers the transcript and never rende
 	expect(html).toContain("Done");
 	expect(html).toContain("4 min");
 	expect(html).toContain("12 turns · 48k tok · $0.310");
+	expect(html).toMatch(
+		/data-testid="model-effort-label"[\s\S]*anthropic\/claude-test[\s\S]*12 turns/,
+	);
+	expect(html).toContain(">high<");
 	expect(html).toContain("Verdict: approve.");
 	expect(html).toContain('data-testid="background-result-open"');
 	expect(html).not.toContain("completed:");

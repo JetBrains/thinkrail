@@ -1,3 +1,4 @@
+import { useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { cn } from "@thinkrail/ui/utils";
 import { createContext, useContext, useEffect, useId, useRef, useState } from "react";
@@ -8,8 +9,6 @@ import { ToolArgList, toolArgEntries } from "./ToolArgList";
 import type { ExtUiDialogRequest } from "./types";
 
 export type ExtUiReply = (value: string | boolean | null) => void;
-
-export const EXT_UI_CANCEL_HINT = "Sending a chat message cancels this request.";
 
 const ACTIONS_ROW = "flex flex-wrap items-center gap-4 @max-md:flex-col @max-md:items-stretch";
 const OPTION_BUTTON =
@@ -30,6 +29,7 @@ export function ExtUiPrompt({
 	claimReveal?: (() => boolean) | undefined;
 	className?: string;
 }) {
+	const t = useT();
 	const [text, setTextState] = useState(
 		draft ?? (request.kind === "editor" ? (request.prefill ?? "") : ""),
 	);
@@ -116,7 +116,7 @@ export function ExtUiPrompt({
 					{toolArgs.length > 0 ? (
 						<ToolArgList
 							data-testid="ext-ui-tool-input"
-							aria-label="Arguments"
+							aria-label={t("chat.extUi.arguments")}
 							tabIndex={0}
 							entries={toolArgs}
 							className="max-h-[40vh] shrink-0 overflow-y-auto rounded-sm bg-container-header-bg px-8 py-4 outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -178,7 +178,7 @@ export function ExtUiPrompt({
 							onClick={cancel}
 							className={OPTION_BUTTON}
 						>
-							Cancel
+							{t("common.cancel")}
 						</Button>
 						<Button
 							size="sm"
@@ -186,7 +186,7 @@ export function ExtUiPrompt({
 							onClick={() => answer(request.kind === "confirm" ? true : text)}
 							className={OPTION_BUTTON}
 						>
-							{request.kind === "confirm" ? "OK" : "Submit"}
+							{request.kind === "confirm" ? t("chat.extUi.ok") : t("chat.extUi.submit")}
 						</Button>
 					</div>
 				)}
@@ -195,7 +195,7 @@ export function ExtUiPrompt({
 					data-testid="ext-ui-hint"
 					className="shrink-0 border-border-muted border-t pt-4 text-text-muted tr-text-metadata"
 				>
-					{EXT_UI_CANCEL_HINT}
+					{t("chat.extUi.cancelHint")}
 				</p>
 			</section>
 		</div>

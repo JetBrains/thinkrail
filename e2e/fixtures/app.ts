@@ -17,6 +17,8 @@ import {
 	E2E_CENTRAL_STATE,
 	E2E_DATA_DIR,
 	E2E_FIXTURE_REPO,
+	E2E_GH_LOG,
+	E2E_GH_SCENARIO,
 	E2E_PI_AGENT_DIR,
 	E2E_PI_MODELS_SEED,
 	E2E_PICK_DIR_POINTER,
@@ -73,6 +75,17 @@ function resetState(): void {
 			gitQuiet(E2E_FIXTURE_REPO, "checkout", "-f", "main");
 		}
 	} catch {}
+
+	try {
+		gitQuiet(E2E_FIXTURE_REPO, "remote", "remove", "origin");
+	} catch {}
+	for (const key of ["core.sshCommand", "ssh.variant"]) {
+		try {
+			gitQuiet(E2E_FIXTURE_REPO, "config", "--unset-all", key);
+		} catch {}
+	}
+	rmSync(E2E_GH_SCENARIO, { force: true });
+	rmSync(E2E_GH_LOG, { force: true });
 
 	git(E2E_FIXTURE_REPO, "worktree", "prune");
 	for (let sweep = 0; sweep < 2; sweep += 1) {
@@ -179,15 +192,20 @@ export async function enterDefaultWorkspace(page: Page): Promise<void> {
 	await expect(page.getByTestId("center-tabs")).toBeVisible();
 }
 
-// Use this helper when a pane must be visible; rail controls toggle on each click.
+// Use this helper when a pane must be visible; rail controls toggle on each click. "files" means Files in All mode, "changes" Files in Changed mode.
 export async function revealWorkbenchTool(
 	page: Page,
 	tool: "projects" | "specs" | "files" | "changes" | "review" | "plan",
 ): Promise<void> {
-	const control = page.getByTestId(`tool-rail-${tool}`);
+	const railTool = tool === "changes" ? "files" : tool;
+	const control = page.getByTestId(`tool-rail-${railTool}`);
 	await expect(control).toBeVisible();
 	if ((await control.getAttribute("aria-pressed")) !== "true") await control.click();
 	await expect(control).toHaveAttribute("aria-pressed", "true");
+	if (railTool !== "files") return;
+	const mode = page.getByTestId(tool === "changes" ? "files-mode-changed" : "files-mode-all");
+	if ((await mode.getAttribute("aria-pressed")) !== "true") await mode.click();
+	await expect(mode).toHaveAttribute("aria-pressed", "true");
 }
 
 export async function openPersistedChat(page: Page, title: string): Promise<void> {

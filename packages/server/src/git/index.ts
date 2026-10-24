@@ -7,7 +7,9 @@ export {
 } from "./diffScope";
 export {
 	canonicalPath,
+	commitsAheadOf,
 	countPushDivergence,
+	countPushTargetDivergence,
 	currentBranch,
 	gitCommitPaths,
 	gitDiffFile,
@@ -18,6 +20,8 @@ export {
 	listCommits,
 	listCommitsSince,
 	listRemotes,
+	originUrls,
+	type PushTargetStatus,
 	prefetchBranch,
 	readBlobAt,
 	readBlobBytesAt,
@@ -32,5 +36,6 @@ export {
 	tryCurrentBranch,
 } from "./git";
 export { git, gitAsync, gitAsyncBytes, gitAsyncStream, nonInteractiveGitEnv } from "./gitExec";
+export { ignoredPaths } from "./ignored";
 export { assertSafeRef, isSafeRef, remoteNameOf, remoteTrackingRef } from "./refs";
 export { snapshotWorktree } from "./snapshot";

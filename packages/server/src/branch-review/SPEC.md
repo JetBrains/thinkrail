@@ -19,7 +19,7 @@ all` / `--all`, five rows, the most recently merged or closed one wins). Two bou
 one combined page because a combined page is ordered by creation: a branch with an older still-open
 review and several newer settled ones would present only the settled ones, and a host trusting that
 answer would shelve a workspace whose PR is still open. The answer carries `state` and `changedAt`
-(merge or close time) on the `OpenBranchReview`: one lookup serves the topbar chip (open = success,
+(merge or close time) on the `OpenBranchReview`: one lookup serves `workspace.branchStatus` / `openReview`, the topbar chip (open = success,
 merged = info, closed = neutral) and the Settled shelf's "PR merged/closed" rule, instead of two polls
 disagreeing. A merged/closed row is reliable only with its matching merge/close timestamp; without that
 ordering fact the host cannot prove whether later work should stay live, so it rejects the answer rather
@@ -40,11 +40,27 @@ contracts spec pins `state` to `WORKSPACE_SETTLE_PROTOCOL_VERSION` and the host 
   `PR #N` chip is a link only when a url is known, and before this the url existed ONLY in the session that
   had just run `pr.open` — every reload, second window, and reconnect rendered the number as dead text. A
   row whose url is absent or not `https:` yields a review with no url rather than a bad link.
+- **An open GitHub PR's review facts ride the same open-row call** (`isDraft, reviewDecision,
+  mergeStateStatus, statusCheckRollup, latestReviews` join the `--json` list — no second call per read) and
+  become `OpenBranchReview.details` — only when the PR's head repository (`headRepositoryOwner` /
+  `headRepository`, also requested) is origin's own: `--head` matches by branch name alone, so a fork's PR
+  from a same-named branch is found too, and it must never look like something this workspace can act on.
+  The settled page asks for the head repository too and drops a known foreign row before picking, so a
+  fork's merged or closed same-named PR never shelves this workspace or offers Reopen.
+  Checks count each check once by its newest attempt (a re-run appears
+  per attempt in the rollup): SUCCESS / NEUTRAL / SKIPPED pass; FAILURE / TIMED_OUT / CANCELLED /
+  ACTION_REQUIRED / STARTUP_FAILURE fail; anything not completed (and PENDING / EXPECTED status contexts)
+  is pending; STALE counts as nothing, since a never-finishing check would keep the client's CI poll alive
+  forever. Only a row that carries the detail fields gets details, so GitLab and settled rows keep their
+  shape. The repository's merge methods and `deleteBranchOnMerge` come from `gh repo view`, asked only
+  when such a PR exists and cached per origin URL for 10 minutes (successes only); a failed read leaves
+  them out without failing the lookup.
 - **Public surface:** `findBranchReviewOutcome(cwd, branch, { fresh? })` → `{ value, reliable }` — `reliable`
   is the cacheable bit surfaced, so a host that *persists* the answer can tell "the provider says there is
   no review" from "the provider did not answer" and keep its last-known snapshot through a `gh` outage;
   `forgetOpenBranchReview(cwd)`; plus the read primitives the `pr` action module reuses —
-  `providerFromRemoteUrl`, `reviewNumber`, and `runProviderCommand` (the bounded prompt-disabled CLI runner).
+  `providerFromRemoteUrl`, `githubSlug` (owner/repo of a GitHub remote URL, shared with `pr`), `reviewNumber`, and `runProviderCommand` (the bounded prompt-disabled CLI runner;
+  it returns stderr as `err` so a refused mutation can say why).
 - **Successful answers are cached per `(worktree, branch)` for 60 seconds from settlement and lookups are
   single-flighted.** A syntactically valid empty provider response is a successful `null` and is cached —
   "no PR" is the common case and the expensive one to re-derive. A provider-CLI failure, failed mandatory

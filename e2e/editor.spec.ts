@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { createWorkspaceViaDialog, openFixtureProject, revealWorkbenchTool } from "./fixtures/app";
 import { asciiPdf, lfsPointer } from "./fixtures/repo";
 
@@ -212,4 +212,93 @@ test("renders a PNG and opens its changed version in the 2-up image diff", async
 	await page.getByTestId("change-item").filter({ hasText: "RENDERERS.png" }).dblclick();
 	await expect(page.getByTestId("image-diff-mode")).toBeVisible();
 	await expect(page.getByTestId("image-diff-2-up")).toHaveAttribute("data-active", "true");
+});
+
+const longSource = (label: string) =>
+	`${Array.from({ length: 400 }, (_, index) => `export const ${label}${index} = ${index};`).join("\n")}\n`;
+
+function visibleEditor(page: Page) {
+	return page.locator('[data-testid="editor-pane"]:visible .monaco-editor');
+}
+
+async function firstVisibleLine(page: Page) {
+	return visibleEditor(page)
+		.locator(".margin-view-overlays .line-numbers")
+		.evaluateAll((nodes) => {
+			const rows = nodes.map((node) => ({
+				line: Number(node.textContent),
+				top: node.parentElement?.getBoundingClientRect().top ?? 0,
+			}));
+			rows.sort((a, b) => a.top - b.top);
+			return rows[0]?.line ?? 0;
+		});
+}
+
+test("Monaco restores scroll across a tab switch", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	writeFileSync(join(workspace.worktreePath, "long.ts"), longSource("row"));
+	await revealWorkbenchTool(page, "files");
+
+	await page.getByTestId("file-node").filter({ hasText: "long.ts" }).dblclick();
+	await expect(visibleEditor(page)).toContainText("row0");
+	await visibleEditor(page).getByText("export const row2 = 2;", { exact: true }).click();
+	for (let step = 0; step < 4; step += 1) await page.keyboard.press("PageDown");
+	let scrolledTo = 0;
+	await expect
+		.poll(async () => {
+			const before = scrolledTo;
+			scrolledTo = await firstVisibleLine(page);
+			return scrolledTo > 50 && scrolledTo === before;
+		})
+		.toBe(true);
+
+	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).dblclick();
+	await expect(visibleEditor(page)).toContainText("plain-text-fixture");
+	await page.getByTestId("editor-tab").filter({ hasText: "long.ts" }).click();
+	await expect(visibleEditor(page)).toContainText(`row${scrolledTo - 1} `);
+	expect(await firstVisibleLine(page)).toBe(scrolledTo);
+});
+
+test("closing and reopening a file tab mounts exactly one Monaco editor without page errors", async ({
+	page,
+}) => {
+	const pageErrors: string[] = [];
+	page.on("pageerror", (error) => pageErrors.push(error.message));
+	await openFixtureProject(page);
+	await createWorkspaceViaDialog(page);
+	await revealWorkbenchTool(page, "files");
+	const notes = page.getByTestId("file-node").filter({ hasText: "notes.txt" });
+
+	await notes.dblclick();
+	await expect(visibleEditor(page)).toContainText("plain-text-fixture");
+	const tab = page.getByTestId("editor-tab").filter({ hasText: "notes.txt" });
+	await tab.hover();
+	await tab.getByTestId("editor-tab-close").click();
+	await expect(tab).toHaveCount(0);
+	await expect(page.locator(".monaco-editor")).toHaveCount(0);
+
+	await notes.dblclick();
+	await expect(visibleEditor(page)).toContainText("plain-text-fixture");
+	await expect(page.locator(".monaco-editor")).toHaveCount(1);
+	expect(pageErrors).toEqual([]);
+});
+
+test("an on-disk change updates the open Monaco editor in place", async ({ page }) => {
+	await openFixtureProject(page);
+	const workspace = await createWorkspaceViaDialog(page);
+	const path = join(workspace.worktreePath, "live.ts");
+	writeFileSync(path, "export const before = 1;\n");
+	await revealWorkbenchTool(page, "files");
+
+	await page.getByTestId("file-node").filter({ hasText: "live.ts" }).dblclick();
+	await expect(visibleEditor(page)).toContainText("before");
+	await visibleEditor(page).evaluate((node) => {
+		node.setAttribute("data-e2e-mount", "first");
+	});
+
+	writeFileSync(path, "export const after = 2;\n");
+	await expect(visibleEditor(page)).toContainText("after", { timeout: 10_000 });
+	await expect(visibleEditor(page)).not.toContainText("before");
+	await expect(visibleEditor(page)).toHaveAttribute("data-e2e-mount", "first");
 });

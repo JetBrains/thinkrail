@@ -2,9 +2,11 @@ import type {
 	BackgroundCommandCompletionDetails,
 	DelegationRunDetails,
 } from "@thinkrail/contracts";
+import { useT } from "@thinkrail/locales/react";
 import { useChatActions } from "./ChatActions";
 import { useFold } from "./foldState";
 import { Markdown } from "./Markdown";
+import { RunModelLabel } from "./ModelEffortLabel";
 import { ResultRow } from "./resources";
 import { completionReport, reportTeaser, usageCounters } from "./tools/subagent/runDetails";
 
@@ -15,6 +17,7 @@ export function BackgroundCommandResult({
 	id: string;
 	details: BackgroundCommandCompletionDetails;
 }) {
+	const t = useT();
 	const actions = useChatActions();
 	const [expanded, toggle, toggleRef] = useFold(`${id}:result`, false);
 	return (
@@ -41,15 +44,17 @@ export function BackgroundCommandResult({
 					<div className="overflow-hidden rounded-sm border border-border-default bg-container-header-bg">
 						<div className="border-border-default border-b px-8 py-4 text-text-muted tr-text-metadata">
 							{details.output.truncated
-								? "Output truncated — retained tail at completion."
-								: "Output at completion"}
+								? t("chat.backgroundCommand.truncated")
+								: t("chat.backgroundCommand.outputAtCompletion")}
 						</div>
 						{details.output.text ? (
 							<pre className="whitespace-pre-wrap break-words px-8 py-4 tr-code-text text-text-default">
 								{details.output.text}
 							</pre>
 						) : (
-							<p className="px-8 py-4 text-text-muted tr-text-metadata">No output.</p>
+							<p className="px-8 py-4 text-text-muted tr-text-metadata">
+								{t("chat.backgroundCommand.noOutput")}
+							</p>
 						)}
 					</div>
 				</div>
@@ -67,6 +72,7 @@ export function SubagentResult({
 	details: DelegationRunDetails;
 	text: string;
 }) {
+	const t = useT();
 	const actions = useChatActions();
 	const [expanded, toggle, toggleRef] = useFold(`${id}:result`, false);
 	const report = completionReport(text);
@@ -83,7 +89,8 @@ export function SubagentResult({
 				expanded={expanded}
 				onToggle={report ? toggle : undefined}
 				toggleRef={toggleRef}
-				meta={usageCounters(details).join(" · ")}
+				metaLead={<RunModelLabel model={details.model} thinkingLevel={details.thinkingLevel} />}
+				meta={usageCounters(t, details).join(" · ")}
 				teaser={reportTeaser(report)}
 				onOpen={actions?.resultOpener({ kind: "subagent", childSessionId: details.childSessionId })}
 			>

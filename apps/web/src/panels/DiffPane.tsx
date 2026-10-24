@@ -4,24 +4,62 @@ import {
 	RiParagraph as Pilcrow,
 	RiArrowGoBackLine as Revert,
 } from "@remixicon/react";
+import { useT } from "@thinkrail/locales/react";
+import {
+	RendererToggles,
+	ResourcePreview,
+	rendererImplementationKey,
+} from "@thinkrail/resource-renderers";
 import { useMemo, useState } from "react";
 import { copyText, isPhoneViewport } from "@/lib";
-import type { DiffTab } from "../store";
-import { selectDiffTabTargetRef, useAppStore } from "../store";
+import type { DiffTab, FileComparisonTab, GitDiffTab } from "../store";
+import { isFileComparison, selectDiffTabTargetRef, useAppStore } from "../store";
 import { getTransport } from "../transport";
 import { splitPath } from "./changesModel";
 import { DiffSurfaceBody, useDiffSurface } from "./DiffSurface";
 import { HeaderIconButton } from "./HeaderIconButton";
-import {
-	rendererImplementationKey,
-	rendererTestId,
-	useResetViewStateOnImplementationChange,
-} from "./resourcePane";
+import { useResetViewStateOnImplementationChange } from "./resourcePane";
 import { SendReviewButton } from "./SendReviewButton";
-import { ToggleSegment } from "./ToggleSegment";
 import { useLiveTabContent } from "./useLiveTabContent";
 
 export function DiffPane({ tab }: { tab: DiffTab }) {
+	return isFileComparison(tab) ? <FileComparisonPane tab={tab} /> : <GitDiffPane tab={tab} />;
+}
+
+function FileComparisonPane({ tab }: { tab: FileComparisonTab }) {
+	const { before } = tab;
+	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
+	const setDiffTabView = useAppStore((state) => state.setDiffTabView);
+	const setTabViewState = useAppStore((state) => state.setTabViewState);
+	return (
+		<div data-testid="diff-pane" data-compare className="flex h-full min-h-0 flex-col">
+			<ResourcePreview
+				workspaceId={tab.workspaceId}
+				path={tab.path}
+				before={before}
+				rendererId={tab.rendererId}
+				onRendererId={(rendererId) => setTabRenderer(tab.workspaceId, tab.id, rendererId)}
+				layout={tab.view === "inline" ? "unified" : "split"}
+				onLayout={(layout) => setDiffTabView(tab.id, layout === "unified" ? "inline" : "split")}
+				viewState={tab.viewState}
+				onViewState={(viewState) => setTabViewState(tab.workspaceId, tab.id, viewState)}
+				leading={
+					<span
+						data-testid="diff-path"
+						title={`${before} → ${tab.path}`}
+						className="truncate tr-code-text text-text-muted"
+					>
+						{before} → {tab.path}
+					</span>
+				}
+				className="h-full"
+			/>
+		</div>
+	);
+}
+
+function GitDiffPane({ tab }: { tab: GitDiffTab }) {
+	const t = useT();
 	const setTabRenderer = useAppStore((state) => state.setTabRenderer);
 	const setDiffTabView = useAppStore((state) => state.setDiffTabView);
 	const setDiffTabIgnoreWhitespace = useAppStore((state) => state.setDiffTabIgnoreWhitespace);
@@ -114,7 +152,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 			<div
 				data-testid="diff-view-toggle"
 				role="toolbar"
-				aria-label="Diff view mode"
+				aria-label={t("panels.diffPane.viewMode")}
 				className="flex h-32 shrink-0 items-center gap-4 border-border-default border-b bg-container-header-bg px-12"
 			>
 				<span
@@ -138,7 +176,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 				{hunkActions ? (
 					<HeaderIconButton
 						testid="diff-revert-file"
-						label="Revert file"
+						label={t("panels.diffPane.revertFile")}
 						onClick={() => void hunkActions.revertFile()}
 					>
 						<Revert className="size-14" />
@@ -147,7 +185,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 				{renderer.capabilities.whitespace ? (
 					<HeaderIconButton
 						testid="diff-toggle-whitespace"
-						label="Hide whitespace changes"
+						label={t("panels.diffPane.hideWhitespace")}
 						active={ignoreWhitespace}
 						onClick={() => setDiffTabIgnoreWhitespace(tab.id, !ignoreWhitespace)}
 					>
@@ -157,7 +195,7 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 				{renderer.capabilities.copy ? (
 					<HeaderIconButton
 						testid="diff-copy"
-						label="Copy file contents"
+						label={t("panels.diffPane.copyContents")}
 						onClick={() => void copy()}
 					>
 						{copied ? (
@@ -167,33 +205,15 @@ export function DiffPane({ tab }: { tab: DiffTab }) {
 						)}
 					</HeaderIconButton>
 				) : null}
-				{candidates.length >= 2
-					? candidates.map((candidate) => (
-							<ToggleSegment
-								key={candidate.id}
-								testid={rendererTestId(candidate.id)}
-								label={candidate.label}
-								active={candidate.id === renderer.id}
-								onClick={() => setTabRenderer(tab.workspaceId, tab.id, candidate.id)}
-							/>
-						))
-					: null}
-				{renderer.capabilities.layout && !mobile ? (
-					<>
-						<ToggleSegment
-							testid="diff-toggle-split"
-							label="Split"
-							active={view === "split"}
-							onClick={() => setDiffTabView(tab.id, "split")}
-						/>
-						<ToggleSegment
-							testid="diff-toggle-inline"
-							label="Inline"
-							active={view === "inline"}
-							onClick={() => setDiffTabView(tab.id, "inline")}
-						/>
-					</>
-				) : null}
+				<RendererToggles
+					candidates={candidates}
+					renderer={renderer}
+					onRendererId={(rendererId) => setTabRenderer(tab.workspaceId, tab.id, rendererId)}
+					layout={{
+						value: view === "inline" ? "unified" : "split",
+						onChange: (layout) => setDiffTabView(tab.id, layout === "unified" ? "inline" : "split"),
+					}}
+				/>
 			</div>
 			<DiffSurfaceBody
 				surface={surface}

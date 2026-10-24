@@ -1,7 +1,9 @@
+import { t } from "@thinkrail/locales/react";
 import { useEffect } from "react";
 import type { LayoutAttention } from "../../lib";
 import {
 	type EditorTab,
+	isFileComparison,
 	layoutOpenOptionsForNavigation,
 	shouldAdvanceAcceptedNavigation,
 	toast,
@@ -154,7 +156,9 @@ export function toLayoutTab(tab: EditorTab): LayoutCenterTab | null {
 		case "file":
 			return { kind: "file", id: tab.id, name: tab.name, path: tab.path };
 		case "diff":
-			return { kind: "diff", id: tab.id, name: tab.name, path: tab.path, scope: tab.scope };
+			return isFileComparison(tab)
+				? { kind: "diff", id: tab.id, name: tab.name, path: tab.path, before: tab.before }
+				: { kind: "diff", id: tab.id, name: tab.name, path: tab.path, scope: tab.scope };
 		case "changes":
 			return { kind: "changes", id: tab.id, name: tab.name, scope: tab.scope };
 		case "chat":
@@ -242,7 +246,12 @@ export function useLayoutIntentProcessing(
 				)
 			: null;
 		let result:
-			| { document: WorkspaceLayoutDocument; focusGroupId?: string; focusTabId?: string }
+			| {
+					document: WorkspaceLayoutDocument;
+					focusGroupId?: string;
+					focusTabId?: string;
+					focusOnlyIfLost?: true;
+			  }
 			| undefined;
 		switch (layoutIntent.kind) {
 			case "open": {
@@ -350,7 +359,10 @@ export function useLayoutIntentProcessing(
 									!latest.removedWorkspaceIds[workspaceId] &&
 									!latest.deletedSessionsByWorkspace[workspaceId]?.[placed.sessionId]
 								) {
-									toast.error("The chat could not be restored.", "Couldn't open chat history");
+									toast.error(
+										t("workbench.chat.restoreFailed"),
+										t("workbench.chat.openHistoryFailed"),
+									);
 								}
 								latest.clearHistoryOpen();
 							})
@@ -370,7 +382,7 @@ export function useLayoutIntentProcessing(
 									!latest.removedWorkspaceIds[workspaceId] &&
 									!latest.deletedSessionsByWorkspace[workspaceId]?.[placed.sessionId]
 								) {
-									toast.error(errorText(error), "Couldn't open chat history");
+									toast.error(errorText(error), t("workbench.chat.openHistoryFailed"));
 								}
 								latest.clearHistoryOpen();
 							});
@@ -503,6 +515,7 @@ export function useLayoutIntentProcessing(
 					key: layoutIntent.id,
 					location,
 					...(result.focusTabId ? { tabId: result.focusTabId } : {}),
+					...(result.focusOnlyIfLost ? { onlyIfFocusLost: true } : {}),
 				});
 			}
 		}

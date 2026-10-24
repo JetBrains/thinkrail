@@ -1,5 +1,11 @@
+import { currentTranslator } from "@thinkrail/locales/react";
 import { useEffect } from "react";
-import { selectCompletionMarkedUnread, selectWorkspaceById, useAppStore } from "@/store";
+import {
+	selectCompletionMarkedUnread,
+	selectWorkspaceById,
+	useAppStore,
+	workspaceName,
+} from "@/store";
 import { createAttentionNotificationEngine, type TimerHandle } from "./attentionNotificationEngine";
 import { createAttentionObserver } from "./attentionObserver";
 import { selectNotificationChannel } from "./channel";
@@ -14,12 +20,14 @@ type AppState = ReturnType<typeof useAppStore.getState>;
 
 function collectCandidates(state: AppState): AttentionCandidate[] {
 	const candidates: AttentionCandidate[] = [];
+	const t = currentTranslator();
 	for (const records of Object.values(state.sessionStateByWorkspace)) {
 		for (const record of Object.values(records)) {
+			const workspace = selectWorkspaceById(state, record.workspaceId);
 			candidates.push({
 				sessionId: record.sessionId,
 				workspaceId: record.workspaceId,
-				worktreeName: selectWorkspaceById(state, record.workspaceId)?.name ?? "",
+				worktreeName: workspace ? workspaceName(t, workspace) : "",
 				state: record.state,
 			});
 		}

@@ -10,7 +10,9 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebFontsAddon } from "@xterm/addon-web-fonts";
 import { type ITheme, Terminal as XTerm } from "@xterm/xterm";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import "@xterm/xterm/css/xterm.css";
+import { i18n, useT } from "@thinkrail/locales/react";
 import { Button } from "@thinkrail/ui/button";
 import { onThemeSwap } from "@thinkrail/ui/theme";
 import { type QuietScrollEdges, QuietScrollFrame } from "@/components/QuietScrollArea";
@@ -107,6 +109,7 @@ interface Props {
 }
 
 export default function TerminalInstance({ tabKey, workspaceId, initialCommand }: Props) {
+	const t = useT();
 	const rootRef = useRef<HTMLDivElement>(null);
 	const hostRef = useRef<HTMLDivElement>(null);
 	const termRef = useRef<XTerm | null>(null);
@@ -206,7 +209,8 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		let prebind = createTerminalPrebindBuffer();
 		const writeOutput = (data: string, cb?: () => void): void =>
 			term.write(isHighContrast() ? stripAnsiDim(data) : data, cb);
-		const writeTruncation = (): void => term.write("\r\n[output truncated]\r\n");
+		const writeTruncation = (): void =>
+			term.write(`\r\n${i18n.t("panels.terminalInstance.outputTruncated")}\r\n`);
 		const writeFrame = (ev: TerminalDataPush): void => {
 			if (ev.truncated) writeTruncation();
 			writeOutput(ev.data);
@@ -226,7 +230,11 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 		const handleExit = (ev: TerminalExitPush): void => {
 			if (ev.id !== serverIdRef.current) return;
 			serverIdRef.current = null;
-			term.write(`\r\n[process exited${ev.exitCode === 0 ? "" : ` with code ${ev.exitCode}`}]\r\n`);
+			const exitLine =
+				ev.exitCode === 0
+					? i18n.t("panels.terminalInstance.processExited")
+					: i18n.t("panels.terminalInstance.processExitedWithCode", { code: ev.exitCode });
+			term.write(`\r\n${exitLine}\r\n`);
 			setExited(true);
 		};
 		const unsubscribeExit = getTransport().subscribe(WS_CHANNELS.terminalExit, (payload) => {
@@ -280,28 +288,19 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 						const restoreTerminalFocus = restoreFocus
 							? focusIsInTerminal()
 							: initialFocusRequestsTerminal && document.activeElement === initialFocusTarget;
-						setExited(false);
-						setReady(true);
 						if (restoreTerminalFocus) {
-							requestAnimationFrame(() => {
-								if (disposed || attachGeneration !== startedAt || prebind !== attemptPrebind) {
-									return;
-								}
-								if (
-									(restoreFocus && focusIsInTerminal()) ||
-									(!restoreFocus && document.activeElement === initialFocusTarget)
-								) {
-									term.focus();
-								}
-								setDetached(false);
-								setFailureMessage(null);
-								setRetrying(false);
+							flushSync(() => {
+								setExited(false);
+								setReady(true);
 							});
+							term.focus();
 						} else {
-							setDetached(false);
-							setFailureMessage(null);
-							setRetrying(false);
+							setExited(false);
+							setReady(true);
 						}
+						setDetached(false);
+						setFailureMessage(null);
+						setRetrying(false);
 						if (buffered.exit) handleExit(buffered.exit);
 						applyFit();
 						if (created && serverIdRef.current === id && initialCommandRef.current) {
@@ -326,7 +325,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 					attemptPrebind.stop();
 					setDetached(false);
 					setRetrying(false);
-					setFailureMessage(errorText(error, "Couldn’t start or attach the shell."));
+					setFailureMessage(errorText(error, i18n.t("panels.terminalInstance.startFailedDetail")));
 				});
 		};
 		reattachRef.current = () => attach(true);
@@ -411,7 +410,9 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 					data-testid="terminal-detached-overlay"
 					className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-8 bg-overlay"
 				>
-					<p className="tr-text-metadata text-text-muted">This terminal is open somewhere else.</p>
+					<p className="tr-text-metadata text-text-muted">
+						{t("panels.terminalInstance.detached")}
+					</p>
 					<button
 						type="button"
 						data-testid="terminal-take-back"
@@ -419,7 +420,9 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 						onClick={retrying ? undefined : retry}
 						className="rounded-sm bg-control-bg px-8 py-4 tr-text-ui text-text-default hover:bg-control-bg-hovered"
 					>
-						{retrying ? "Taking it back…" : "Take it back"}
+						{retrying
+							? t("panels.terminalInstance.takingBack")
+							: t("panels.terminalInstance.takeBack")}
 					</button>
 				</div>
 			) : null}
@@ -430,7 +433,9 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 				>
 					<div className="flex flex-col items-center gap-8 rounded-md border border-border-default bg-container-elevated-bg p-16 shadow-sm">
 						<div role="alert" className="flex flex-col items-center gap-4">
-							<p className="tr-title-compact text-text-default">Terminal couldn’t start</p>
+							<p className="tr-title-compact text-text-default">
+								{t("panels.terminalInstance.startFailed")}
+							</p>
 							<p className="tr-text-metadata text-text-muted">{failureMessage}</p>
 						</div>
 						<div className="flex items-center gap-8">
@@ -441,7 +446,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 								disabled={retrying}
 								onClick={openTerminalSettings}
 							>
-								Terminal settings
+								{t("panels.terminalInstance.settings")}
 							</Button>
 							<Button
 								size="sm"
@@ -449,7 +454,7 @@ export default function TerminalInstance({ tabKey, workspaceId, initialCommand }
 								aria-disabled={retrying}
 								onClick={retrying ? undefined : retry}
 							>
-								{retrying ? "Retrying…" : "Retry"}
+								{retrying ? t("panels.terminalInstance.retrying") : t("common.retry")}
 							</Button>
 						</div>
 					</div>

@@ -1,4 +1,5 @@
-import { realpathSync } from "node:fs";
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import {
 	enterDefaultWorkspace,
@@ -7,6 +8,7 @@ import {
 	openPersistedChat,
 } from "./fixtures/app";
 import { E2E_FIXTURE_REPO } from "./fixtures/paths";
+import { pierreLines } from "./fixtures/pierre";
 import { seedWorkspaceSession } from "./fixtures/sessions";
 
 const BASE_TS = 1_700_920_000_000;
@@ -18,6 +20,15 @@ async function openVisualization(
 	args: Record<string, unknown>,
 	assistantText?: string,
 ): Promise<Locator> {
+	return (await openVisualizationSession(page, name, args, assistantText)).card;
+}
+
+async function openVisualizationSession(
+	page: Page,
+	name: string,
+	args: Record<string, unknown>,
+	assistantText?: string,
+): Promise<{ card: Locator; sessionId: string }> {
 	await openFixtureProject(page);
 	const messages: Parameters<typeof seedWorkspaceSession>[1]["messages"] = [
 		{ role: "user", text: "Show the visualization.", timestamp: BASE_TS },
@@ -45,7 +56,10 @@ async function openVisualization(
 			timestamp: BASE_TS + 3_000,
 		});
 	}
-	seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), { name, messages });
+	const { id: sessionId } = seedWorkspaceSession(realpathSync(E2E_FIXTURE_REPO), {
+		name,
+		messages,
+	});
 	await enterDefaultWorkspace(page);
 	await openPersistedChat(page, name);
 	const card = page.locator('[data-testid="tool-card"][data-tool="visualize"]');
@@ -54,8 +68,23 @@ async function openVisualization(
 	await expect(card).toHaveAttribute("data-status", "done");
 	await expect(card).toHaveAttribute("data-expanded", "true");
 	await expect(card.getByTestId("tool-visualize")).toHaveAttribute("data-status", "done");
-	return card;
+	return { card, sessionId };
 }
+
+const MOCKUP_DIR = ".thinkrail/context/mockups";
+
+function writeMockups(files: Record<string, string>): () => void {
+	const dir = join(E2E_FIXTURE_REPO, MOCKUP_DIR);
+	mkdirSync(dir, { recursive: true });
+	for (const [name, content] of Object.entries(files)) {
+		mkdirSync(dirname(join(dir, name)), { recursive: true });
+		writeFileSync(join(dir, name), content);
+	}
+	return () => rmSync(join(E2E_FIXTURE_REPO, ".thinkrail"), { recursive: true, force: true });
+}
+
+const mockupHtml = (label: string) =>
+	`<!doctype html><html><body><main><h1>Settings</h1><span class="cta">${label}</span></main></body></html>`;
 
 async function openAppearance(page: Page): Promise<Locator> {
 	await page.getByTestId("open-settings").click();
@@ -277,5 +306,371 @@ test("malformed historical tool diagrams and chat fences fall back to plain sour
 		await expect(fallback.locator("pre.shiki")).toHaveCount(0);
 		await expect(surface.getByTestId("mermaid-svg")).toHaveCount(0);
 		await expect(surface.getByTestId("mermaid-fullscreen")).toHaveCount(0);
+	}
+});
+
+test("a file visualization renders the workspace file with the diff-review renderer", async ({
+	page,
+}) => {
+	const cleanup = writeMockups({ "settings.html": mockupHtml("Save settings") });
+	try {
+		const card = await openVisualization(page, "file preview", {
+			type: "file",
+			title: "Settings mockup",
+			path: `${MOCKUP_DIR}/settings.html`,
+		});
+		const file = card.getByTestId("tool-visualize-file");
+		await expect(file).toContainText("Settings mockup");
+		await expect(file.getByTestId("tool-visualize-file-link")).toHaveText(
+			`${MOCKUP_DIR}/settings.html`,
+		);
+		const preview = file.getByTestId("resource-preview");
+		await expect(preview).toBeVisible();
+		await expect(preview.getByTestId("view-toggle-html")).toHaveAttribute("data-active", "true");
+		await expect(preview.getByTestId("html-disabled-notice")).toContainText(
+			"Scripts and external resources are disabled",
+		);
+		await expect(preview.frameLocator("iframe").getByText("Save settings")).toBeVisible();
+
+		await preview.getByTestId("view-toggle-code").click();
+		await expect(preview.getByTestId("view-toggle-code")).toHaveAttribute("data-active", "true");
+		await expect(preview).toContainText("Save settings");
+	} finally {
+		cleanup();
+	}
+});
+
+test("a file visualization with a before path shows the renderer's before/after diff", async ({
+	page,
+}) => {
+	const cleanup = writeMockups({
+		"before.html": mockupHtml("Save"),
+		"after.html": mockupHtml("Save settings"),
+	});
+	try {
+		const card = await openVisualization(page, "file diff", {
+			type: "file",
+			path: `${MOCKUP_DIR}/after.html`,
+			before: `${MOCKUP_DIR}/before.html`,
+		});
+		await expect(card.getByTestId("tool-card-toggle")).toContainText(
+			`${MOCKUP_DIR}/before.html → ${MOCKUP_DIR}/after.html`,
+		);
+		const diff = card.getByTestId("resource-preview-diff");
+		await expect(diff).toBeVisible();
+		const frames = diff.locator("iframe");
+		await expect(frames).toHaveCount(2);
+		await expect(frames.nth(0)).toHaveAttribute("srcdoc", /<span class="cta">Save<\/span>/);
+		await expect(frames.nth(1)).toHaveAttribute(
+			"srcdoc",
+			/<span class="cta">Save settings<\/span>/,
+		);
+	} finally {
+		cleanup();
+	}
+});
+
+test("review comments on a visualized file are sent into the chat that shows it", async ({
+	page,
+}) => {
+	const sends: { method: string; sessionId?: string }[] = [];
+	page.on("websocket", (socket) =>
+		socket.on("framesent", ({ payload }) => {
+			const frame = JSON.parse(String(payload)) as {
+				method?: string;
+				params?: { sessionId?: string };
+			};
+			if (frame.method === "review.sendBatch" || frame.method === "review.sendComment") {
+				sends.push({
+					method: frame.method,
+					...(frame.params?.sessionId ? { sessionId: frame.params.sessionId } : {}),
+				});
+			}
+		}),
+	);
+	const cleanup = writeMockups({
+		"shape.svg":
+			'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="10" y="10" width="80" height="80" fill="#3b82f6"/></svg>',
+	});
+	try {
+		const { card, sessionId } = await openVisualizationSession(page, "file comments", {
+			type: "file",
+			path: `${MOCKUP_DIR}/shape.svg`,
+		});
+		const surface = card.getByTestId("svg-region-surface");
+		await expect(surface).toBeVisible();
+		await surface.scrollIntoViewIfNeeded();
+		const box = await surface.boundingBox();
+		const view = await card.getByTestId("resource-preview").boundingBox();
+		const transcript = await page.getByTestId("chat-transcript-scroll").boundingBox();
+		if (!box || !view || !transcript) throw new Error("No SVG surface geometry");
+		const top = Math.max(box.y, view.y, transcript.y) + 40;
+		await page.mouse.move(box.x + box.width * 0.25, top);
+		await page.mouse.down();
+		await page.mouse.move(box.x + box.width * 0.75, top + 80, { steps: 6 });
+		await page.mouse.up();
+		await page.locator('[data-testid="review-add-icon"]:visible').click();
+		await page.getByTestId("review-composer-input").fill("Make this square smaller.");
+		await page.getByTestId("review-composer-save").click();
+		await expect(card.getByTestId("review-thread-card")).toHaveCount(1);
+
+		const send = card.getByTestId("send-review-button");
+		await expect(send).toHaveText(/Send review \(1\)/);
+		await send.click();
+		await expect.poll(() => sends).toEqual([{ method: "review.sendBatch", sessionId }]);
+	} finally {
+		cleanup();
+	}
+});
+
+test("a file preview fits HTML to a design width and opens full screen and in a tab", async ({
+	page,
+}) => {
+	const cleanup = writeMockups({ "wide.html": mockupHtml("Save settings") });
+	try {
+		const card = await openVisualization(page, "file actions", {
+			type: "file",
+			path: `${MOCKUP_DIR}/wide.html`,
+		});
+		const preview = card.getByTestId("resource-preview");
+		const frame = preview.getByTestId("html-frame-box");
+		await expect(frame).toHaveAttribute("data-viewport", "desktop");
+		expect(Number(await frame.getAttribute("data-scale"))).toBeLessThan(1);
+		await preview.getByTestId("html-viewport-phone").click();
+		await expect(frame).toHaveAttribute("data-viewport", "phone");
+		await expect(frame).toHaveAttribute("data-scale", "1.000");
+		await page.screenshot({ path: test.info().outputPath("card.png") });
+
+		await preview.getByTestId("tool-visualize-fullscreen").click();
+		const dialog = page.getByTestId("tool-visualize-fullscreen-dialog");
+		await expect(dialog).toBeVisible();
+		await expect(dialog.getByTestId("resource-preview")).toBeVisible();
+		await expect(dialog.frameLocator("iframe").getByText("Save settings")).toBeVisible();
+		await page.screenshot({ path: test.info().outputPath("fullscreen.png") });
+		await page.keyboard.press("Escape");
+		await expect(dialog).toBeHidden();
+
+		await preview.getByTestId("tool-visualize-open-tab").click();
+		await expect(
+			page.locator('[data-testid="editor-tab"][data-kind="file"]').filter({ hasText: "wide.html" }),
+		).toBeVisible();
+		await expect(page.getByTestId("html-view").last()).toBeVisible();
+	} finally {
+		cleanup();
+	}
+});
+
+test("closing a full-screen code preview keeps the card's editor showing the file", async ({
+	page,
+}) => {
+	const cleanup = writeMockups({ "sample.ts": "export const cardGreeting = 1;\n" });
+	try {
+		const card = await openVisualization(page, "code preview", {
+			type: "file",
+			path: `${MOCKUP_DIR}/sample.ts`,
+		});
+		const lines = card.getByTestId("resource-preview").locator(".monaco-editor .view-lines");
+		await expect(lines).toContainText("cardGreeting");
+
+		await card.getByTestId("tool-visualize-fullscreen").click();
+		const dialog = page.getByTestId("tool-visualize-fullscreen-dialog");
+		await expect(dialog.locator(".monaco-editor .view-lines")).toContainText("cardGreeting");
+		await page.keyboard.press("Escape");
+		await expect(dialog).toBeHidden();
+
+		await expect(lines).toContainText("cardGreeting");
+	} finally {
+		cleanup();
+	}
+});
+
+test("a before/after preview opens as a diff tab over the two files that survives a reload", async ({
+	page,
+}) => {
+	const cleanup = writeMockups({
+		"before.html": mockupHtml("Save"),
+		"after.html": mockupHtml("Save settings"),
+	});
+	try {
+		const card = await openVisualization(page, "file compare tab", {
+			type: "file",
+			path: `${MOCKUP_DIR}/after.html`,
+			before: `${MOCKUP_DIR}/before.html`,
+		});
+		const diff = card.getByTestId("resource-preview-diff");
+		await diff.getByTestId("tool-visualize-fullscreen").click();
+		const dialog = page.getByTestId("tool-visualize-fullscreen-dialog");
+		await expect(dialog.getByTestId("resource-preview-diff").locator("iframe")).toHaveCount(2);
+		await page.screenshot({ path: test.info().outputPath("diff-fullscreen.png") });
+		await page.keyboard.press("Escape");
+
+		await diff.getByTestId("tool-visualize-open-tab").click();
+		const tab = page
+			.locator('[data-testid="editor-tab"][data-kind="diff"]')
+			.filter({ hasText: "before.html → after.html" });
+		await expect(tab).toBeVisible();
+		const pane = page.locator('[data-testid="diff-pane"][data-compare]');
+		await expect(pane.getByTestId("diff-path")).toHaveText(
+			`${MOCKUP_DIR}/before.html → ${MOCKUP_DIR}/after.html`,
+		);
+		await expect(pane.locator("iframe")).toHaveCount(2);
+		await page.screenshot({ path: test.info().outputPath("diff-tab.png") });
+
+		await page.reload();
+		await expect(tab).toBeVisible();
+		await tab.click();
+		await expect(
+			page.locator('[data-testid="diff-pane"][data-compare]').locator("iframe"),
+		).toHaveCount(2);
+	} finally {
+		cleanup();
+	}
+});
+
+test("an HTML preview width is shared by the card and its full screen and survives a comparison tab switch", async ({
+	page,
+}) => {
+	const cleanup = writeMockups({
+		"before.html": mockupHtml("Save"),
+		"after.html": mockupHtml("Save settings"),
+	});
+	try {
+		const card = await openVisualization(page, "file widths", {
+			type: "file",
+			path: `${MOCKUP_DIR}/after.html`,
+			before: `${MOCKUP_DIR}/before.html`,
+		});
+		const diff = card.getByTestId("resource-preview-diff");
+		await diff.getByTestId("html-viewport-phone").click();
+		await diff.getByTestId("tool-visualize-fullscreen").click();
+		const dialog = page.getByTestId("tool-visualize-fullscreen-dialog");
+		await expect(dialog.getByTestId("html-frame-box").first()).toHaveAttribute(
+			"data-viewport",
+			"phone",
+		);
+		await dialog.getByTestId("html-viewport-tablet").click();
+		await page.keyboard.press("Escape");
+		await expect(dialog).toBeHidden();
+		await expect(diff.getByTestId("html-frame-box").first()).toHaveAttribute(
+			"data-viewport",
+			"tablet",
+		);
+
+		await diff.getByTestId("tool-visualize-open-tab").click();
+		const pane = page.locator('[data-testid="diff-pane"][data-compare]');
+		await pane.getByTestId("html-viewport-tablet").click();
+		await expect(pane.getByTestId("html-frame-box").first()).toHaveAttribute(
+			"data-viewport",
+			"tablet",
+		);
+		await page.locator('[data-testid="editor-tab"][data-kind="chat"]').first().click();
+		await expect(pane).toHaveCount(0);
+		await page
+			.locator('[data-testid="editor-tab"][data-kind="diff"]')
+			.filter({ hasText: "before.html → after.html" })
+			.click();
+		await expect(pane.getByTestId("html-frame-box").first()).toHaveAttribute(
+			"data-viewport",
+			"tablet",
+		);
+	} finally {
+		cleanup();
+	}
+});
+
+test("a huge before/after comparison waits behind the expensive-diff notice and lands while the workspace keeps changing", async ({
+	page,
+}) => {
+	const lines = (mark: string) =>
+		`${Array.from({ length: 3_000 }, (_, index) => `${mark} line ${index + 1}`).join("\n")}\n`;
+	const cleanup = writeMockups({
+		"huge-before.txt": lines("before"),
+		"huge-after.txt": lines("after"),
+	});
+	try {
+		const card = await openVisualization(page, "huge comparison", {
+			type: "file",
+			path: `${MOCKUP_DIR}/huge-after.txt`,
+			before: `${MOCKUP_DIR}/huge-before.txt`,
+		});
+		const diff = card.getByTestId("resource-preview-diff");
+		await expect(diff.getByTestId("diff-too-large")).toBeVisible();
+		const unrelated = join(E2E_FIXTURE_REPO, "unrelated.txt");
+		const editUnrelated = () => writeFileSync(unrelated, String(Date.now()));
+		editUnrelated();
+		const unrelatedEdits = setInterval(editUnrelated, 400);
+		try {
+			await diff.getByTestId("diff-show-anyway").click();
+			await expect(diff.getByTestId("diff-too-large")).toHaveCount(0);
+		} finally {
+			clearInterval(unrelatedEdits);
+			rmSync(unrelated, { force: true });
+		}
+		const diffView = diff.getByTestId("diff-view");
+		await expect(pierreLines(diffView, "before line 1").first()).toBeVisible({ timeout: 20_000 });
+		expect(await pierreLines(diffView).count()).toBeLessThan(1_000);
+	} finally {
+		cleanup();
+	}
+});
+
+test("a dot-relative mockup path still refreshes live when the file changes", async ({ page }) => {
+	const cleanup = writeMockups({ "live.html": mockupHtml("First draft") });
+	try {
+		const card = await openVisualization(page, "dot path", {
+			type: "file",
+			path: `./${MOCKUP_DIR}/live.html`,
+		});
+		const frame = card.getByTestId("resource-preview").frameLocator("iframe");
+		await expect(frame.getByText("First draft")).toBeVisible();
+		writeFileSync(join(E2E_FIXTURE_REPO, MOCKUP_DIR, "live.html"), mockupHtml("Second draft"));
+		await expect(frame.getByText("Second draft")).toBeVisible({ timeout: 15_000 });
+	} finally {
+		cleanup();
+	}
+});
+
+test("a mockup deleted under its card keeps the last version, marked as stale", async ({
+	page,
+}) => {
+	const cleanup = writeMockups({ "gone.html": mockupHtml("Last proposal") });
+	try {
+		const card = await openVisualization(page, "deleted mockup", {
+			type: "file",
+			path: `${MOCKUP_DIR}/gone.html`,
+		});
+		const preview = card.getByTestId("resource-preview");
+		await expect(preview.frameLocator("iframe").getByText("Last proposal")).toBeVisible();
+		rmSync(join(E2E_FIXTURE_REPO, MOCKUP_DIR, "gone.html"));
+		await expect(preview.getByTestId("resource-preview-stale")).toContainText(
+			`Couldn't refresh ${MOCKUP_DIR}/gone.html`,
+			{ timeout: 15_000 },
+		);
+		await expect(preview.frameLocator("iframe").getByText("Last proposal")).toBeVisible();
+	} finally {
+		cleanup();
+	}
+});
+
+test("a markdown comparison resolves each side's images against its own file", async ({ page }) => {
+	const cleanup = writeMockups({
+		"before/doc.md": "# Flow\n\n![diagram](picture.svg)\n\nOld text.\n",
+		"after/doc.md": "# Flow\n\n![diagram](picture.svg)\n\nNew text.\n",
+	});
+	try {
+		const card = await openVisualization(page, "markdown comparison", {
+			type: "file",
+			path: `${MOCKUP_DIR}/after/doc.md`,
+			before: `${MOCKUP_DIR}/before/doc.md`,
+		});
+		const rendered = card.getByTestId("rendered-diff");
+		await expect(rendered.locator("ins").filter({ hasText: "New" }).first()).toBeVisible();
+		const sources = await rendered
+			.locator("img")
+			.evaluateAll((images) => images.map((image) => image.getAttribute("src") ?? ""));
+		expect(sources.some((src) => src.includes("/before/picture.svg"))).toBe(true);
+		expect(sources.some((src) => src.includes("/after/picture.svg"))).toBe(true);
+	} finally {
+		cleanup();
 	}
 });

@@ -140,3 +140,74 @@ function hasTitleContent(value: string): boolean {
 function clip(text: string, max: number): string {
 	return text.length <= max ? text : `${text.slice(0, max)}…`;
 }
+
+const PR_DESCRIPTION_SYSTEM =
+	"Write the description of a pull request from its branch facts: the commit subjects, a diff stat, " +
+	"and, when present, the author's work plan. Output GitHub Markdown only, no preamble and no code " +
+	"fence around the whole body. Explain what changed and why for a reviewer; never invent tests, " +
+	"issues, or behavior the facts do not show. When a TEMPLATE is given, reproduce its headings, " +
+	"checklists, and order exactly and fill each section's body; leave a section's placeholder text " +
+	"when the facts do not answer it. Without a template use '## Summary', '## Changes', '## Testing'. " +
+	"Keep it under ~300 words.";
+
+const PR_DESCRIPTION_TIMEOUT_MS = 30_000;
+const PR_DESCRIPTION_MAX_TOKENS = 900;
+const PR_DESCRIPTION_MAX_LENGTH = 6000;
+
+export interface PrDescriptionInput {
+	branch: string;
+	base: string;
+	commits: string[];
+	diffStat: string;
+	plan?: string | undefined;
+	template?: string | undefined;
+}
+
+/**
+ * Draft a PR/MR description from bounded branch facts — best-effort, cheap-model, time-boxed. Returns
+ * Markdown or `null` (never throws) when nothing is authenticated, it times out, there is nothing to
+ * describe, or the output is unusable. The caller gathers and bounds the input.
+ */
+export async function suggestPrDescription(input: PrDescriptionInput): Promise<string | null> {
+	const prompt = buildPrDescriptionPrompt(input);
+	if (!prompt) return null;
+	try {
+		const { text } = await runOneShot({
+			system: PR_DESCRIPTION_SYSTEM,
+			prompt,
+			tier: "cheap",
+			maxTokens: PR_DESCRIPTION_MAX_TOKENS,
+			signal: AbortSignal.timeout(PR_DESCRIPTION_TIMEOUT_MS),
+		});
+		return toPrDescription(text);
+	} catch {
+		return null;
+	}
+}
+
+function buildPrDescriptionPrompt(input: PrDescriptionInput): string | null {
+	const commits = input.commits.map((c) => c.trim()).filter(Boolean);
+	const stat = input.diffStat.trim();
+	if (commits.length === 0 && !stat) return null;
+	const parts = [`Branch: ${clip(input.branch, 200)} → ${clip(input.base, 200)}`];
+	if (commits.length > 0) {
+		parts.push(`Commits (oldest first):\n${commits.map((c) => `- ${clip(c, 200)}`).join("\n")}`);
+	}
+	if (stat) parts.push(`Diff stat:\n${clip(stat, 6000)}`);
+	const plan = input.plan?.trim();
+	if (plan) parts.push(`Work plan:\n${clip(plan, 4000)}`);
+	const template = input.template?.trim();
+	if (template) parts.push(`TEMPLATE:\n${clip(template, 6000)}`);
+	return parts.join("\n\n");
+}
+
+export function toPrDescription(raw: string): string | null {
+	const text = raw
+		.trim()
+		.replace(/^```(?:markdown|md)?\n/i, "")
+		.replace(/\n```$/, "")
+		.trim()
+		.slice(0, PR_DESCRIPTION_MAX_LENGTH)
+		.trim();
+	return hasTitleContent(text) ? text : null;
+}

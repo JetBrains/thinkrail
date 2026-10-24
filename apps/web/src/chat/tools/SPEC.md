@@ -231,8 +231,9 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
 
 - **Render defensively:** a tool's `details` result shape is not a stable API — read best-effort and
   fall back to its text content (`resultText`). Missing structured references remove links, never prose.
-- File actions come only from explicit args/details and only through `ToolRenderProps.onOpenFile`; never
-  infer them from arbitrary result text or import app integration into a renderer.
+- File actions come only from explicit args/details and only through `ToolRenderProps.onOpenFile` (open) or
+  the chat's resource scope and host (render a `ResourcePreview`, open in tab); never infer them from arbitrary result
+  text or import app integration into a renderer.
 - Tool names must match the capability exactly — the name is the join key. The one sanctioned exception
   is the `mcp__` prefix: pi names MCP tools `mcp__<server>__<tool>`, so the registry resolves an exact
   name first and the longest registered prefix second, through **one** resolver shared by renderer,

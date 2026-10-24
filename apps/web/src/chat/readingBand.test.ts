@@ -481,6 +481,61 @@ describe("reading-band reader intent", () => {
 		expect(harness.controller.getSnapshot()).toMatchObject({ following: false, moving: false });
 	});
 
+	it("applies a pending fold-anchor correction before native input or a newer change supersedes it", () => {
+		for (const supersede of ["native-input", "newer-change"] as const) {
+			const harness = createHarness();
+			harness.controller.readerLeft();
+			let target = 100;
+			harness.controller.stabilizeAnchor(() => target);
+			target = 260;
+			if (supersede === "native-input") harness.controller.interruptForNativeInput("pending");
+			else harness.controller.cancelReveal();
+			expect(harness.writes).toEqual([260]);
+			expect(harness.pendingFrames()).toBe(0);
+		}
+
+		const settled = createHarness();
+		settled.controller.readerLeft();
+		settled.controller.stabilizeAnchor(() => 100);
+		settled.controller.interruptForNativeInput("pending");
+		expect(settled.writes).toEqual([]);
+	});
+
+	it("never re-applies a landed fold-anchor correction over unhandled reader movement", () => {
+		for (const landed of ["frame", "resize", "input"] as const) {
+			for (const next of ["native-input", "newer-change"] as const) {
+				const harness = createHarness();
+				harness.controller.readerLeft();
+				harness.controller.stabilizeAnchor(() => 100);
+				if (landed === "frame") harness.advance(16);
+				else if (landed === "resize") harness.controller.refreshAnchor();
+				const resume = harness.controller.interruptForNativeInput("pending");
+				harness.setGeometry({ scrollTop: 220 });
+				const writesBeforeResume = harness.writes.length;
+				resume();
+				if (next === "native-input") harness.controller.interruptForNativeInput("pending");
+				else harness.controller.cancelReveal();
+				expect(harness.writes).toHaveLength(writesBeforeResume);
+				expect(harness.readGeometry().scrollTop).toBe(220);
+			}
+		}
+	});
+
+	it("counts a fold-anchor correction as landed once its first frame or the resize backstop wrote it", () => {
+		for (const landed of ["frame", "resize"] as const) {
+			const harness = createHarness();
+			harness.controller.readerLeft();
+			harness.controller.stabilizeAnchor(() => 100);
+			if (landed === "frame") harness.advance(16);
+			else harness.controller.refreshAnchor();
+			harness.setGeometry({ scrollTop: 220 });
+			const writesBeforeInput = harness.writes.length;
+			harness.controller.interruptForNativeInput("pending");
+			expect(harness.writes).toHaveLength(writesBeforeInput);
+			expect(harness.readGeometry().scrollTop).toBe(220);
+		}
+	});
+
 	it("lets a reveal supersede fold-anchor stabilization through the shared owner", () => {
 		const harness = createHarness();
 		harness.controller.readerLeft();

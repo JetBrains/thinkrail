@@ -1,5 +1,33 @@
 export type NativeUpdateFailedPhase = "check" | "download" | "install" | null;
 
+export type NativeUpdateInstallStep = "stopping" | "handoff" | "restarting";
+
+export type NativeUpdateLogEvent =
+	| { kind: "installStarted"; version: string }
+	| { kind: "hostStopping" }
+	| { kind: "hostStopped"; seconds: number }
+	| { kind: "handoffStarted" }
+	| { kind: "restarting" }
+	| { kind: "installed"; version: string }
+	| { kind: "installFailed"; version: string; step: string; detail: string }
+	| { kind: "diagnostic"; text: string };
+
+export interface NativeUpdateLogEntry {
+	at: number;
+	source: "update" | "host" | "installer";
+	level: "info" | "error";
+	event: NativeUpdateLogEvent;
+}
+
+export interface NativeUpdateInstallResult {
+	outcome: "installed" | "failed" | "unreported";
+	fromVersion: string | null;
+	toVersion: string;
+	failedStep: string | null;
+	detail: string | null;
+	log: readonly NativeUpdateLogEntry[];
+}
+
 export interface NativeUpdateState {
 	revision: number;
 	status:
@@ -18,6 +46,9 @@ export interface NativeUpdateState {
 	progress: number | null;
 	error: string | null;
 	failedPhase: NativeUpdateFailedPhase;
+	installStep: NativeUpdateInstallStep | null;
+	log: readonly NativeUpdateLogEntry[];
+	lastInstall: NativeUpdateInstallResult | null;
 }
 
 export interface NativeUpdateBridge {
@@ -25,6 +56,7 @@ export interface NativeUpdateBridge {
 	checkForUpdates(): Promise<void>;
 	downloadUpdate(): Promise<void>;
 	restartToUpdate(): Promise<void>;
+	dismissInstallResult(): Promise<void>;
 	subscribe(listener: (state: NativeUpdateState) => void): () => void;
 }
 
@@ -62,4 +94,9 @@ export interface NativeShortcutsBridge {
 	subscribeQuitHint(listener: (hint: NativeQuitHint) => void): () => void;
 	subscribeCommand(listener: (command: NativeCommand) => void): () => void;
 	quit(): Promise<void>;
+}
+
+/** Translated labels for the desktop's custom native menu items, keyed by catalog key. */
+export interface NativeMenuBridge {
+	setLabels(labels: Readonly<Record<string, string>>): void;
 }

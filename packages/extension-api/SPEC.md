@@ -4,7 +4,7 @@ type: module-design
 status: draft
 title: Host extension contracts and pure renderer helpers
 parent: architecture
-depends-on: [module-contracts]
+depends-on: [module-contracts, module-locales]
 references: [module-thinkrail-extensions]
 ---
 
@@ -28,8 +28,13 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
   `childExtensions` and optional `skillPackages` specifiers. Its identity helper preserves factories, order and optional-field absence; loading and
   skill resolution remain host responsibilities.
 - The root is browser-safe and exposes only the web contract; it never re-exports the server half.
-- The only workspace dependency is `contracts`. React and pi are type-only contract dependencies;
-  there are no React components, registry, DOM access, host imports, or pi runtime values.
+- Workspace dependencies are `contracts` and, type-only, `@thinkrail/locales/react`'s `Translator`.
+  React and pi are type-only contract dependencies; there are no React components, registry, DOM access,
+  host imports, or pi runtime values.
+- `ToolSummary` is `(props, t) => string`: the host passes the render-time `Translator` from `useT()`
+  (`getToolSummary(t, name, props)`), so a collapsed card or routine row recomputes its summary on a
+  language change; a summary translates only through that `t`, never the global translator
+  (`check:i18n` flags a `summary` that reads it — [[module-locales]]).
 
 Canonical tool-result parsing remains shared by renderer text extraction and the host's common image
 layer: accept only well-formed supported image blocks, preserve text-block order, and fall back to

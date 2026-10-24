@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { applyLocale } from "@thinkrail/locales/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ChatRow } from "./rows";
 import { ChatTurnView } from "./turns";
@@ -32,5 +33,28 @@ describe("message copy layout", () => {
 		expect(html).toContain("pr-24");
 		expect(html).toContain("right-0 bottom-8");
 		expect(html).not.toContain("pb-24");
+	});
+});
+
+describe("system and failure notices", () => {
+	test("an extension notice keeps its text; the round closer and failure notices follow the language", () => {
+		expect(renderRow({ kind: "system", id: "n", text: "Just so you know" }, false)).toContain(
+			"Just so you know",
+		);
+		expect(renderRow({ kind: "system", id: "done" }, false)).toContain("✓ Done");
+		applyLocale("de", {
+			de: { "chat.turn.done": "✓ Fertig", "chat.failure.truncated": "Antwort abgeschnitten." },
+		});
+		try {
+			expect(renderRow({ kind: "system", id: "done" }, false)).toContain("✓ Fertig");
+			expect(
+				renderRow({ kind: "error", id: "e", text: "", failure: "truncated" }, false),
+			).toContain("Antwort abgeschnitten.");
+			expect(
+				renderRow({ kind: "error", id: "e", text: "429 rate limited", failure: "error" }, false),
+			).toContain("429 rate limited");
+		} finally {
+			applyLocale("en", {});
+		}
 	});
 });

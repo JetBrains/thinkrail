@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import type { ToolRenderProps } from "@thinkrail/extension-api/web";
+import { currentTranslator } from "@thinkrail/locales/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { registerWebExtensions } from "@/extensions";
@@ -204,12 +205,14 @@ describe("intentional bundled tool renderers", () => {
 	it("summarizes the first query, URL, or selected stored-content target", () => {
 		expect(
 			getToolSummary(
+				currentTranslator(),
 				"web_search",
 				props("web_search", { queries: ["first query", "second query"] }, null),
 			),
 		).toBe("first query");
 		expect(
 			getToolSummary(
+				currentTranslator(),
 				"fetch_content",
 				props(
 					"fetch_content",
@@ -220,6 +223,7 @@ describe("intentional bundled tool renderers", () => {
 		).toBe("https://example.com/one");
 		expect(
 			getToolSummary(
+				currentTranslator(),
 				"get_search_content",
 				props(
 					"get_search_content",

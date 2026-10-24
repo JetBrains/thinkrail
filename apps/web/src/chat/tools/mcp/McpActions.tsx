@@ -1,5 +1,6 @@
 import { RiFileTextLine, RiLoginBoxLine, RiSettings3Line } from "@remixicon/react";
 import type { McpReadOutputResult } from "@thinkrail/contracts";
+import { t as translate, useT } from "@thinkrail/locales/react";
 import {
 	Dialog,
 	DialogContent,
@@ -29,6 +30,7 @@ function actionHandler(actions: ChatActions | null, action: McpCliAction | null)
 }
 
 function CliActionButton({ action, onOpen }: { action: McpCliAction; onOpen: () => void }) {
+	const t = useT();
 	return (
 		<button
 			type="button"
@@ -43,10 +45,10 @@ function CliActionButton({ action, onOpen }: { action: McpCliAction; onOpen: () 
 				<RiSettings3Line className="size-12 shrink-0" />
 			)}
 			{action === "provider-sign-in"
-				? "Sign in to provider"
+				? t("mcp.card.signInProvider")
 				: action === "sign-in"
-					? "Sign in"
-					: "Open MCP settings"}
+					? t("mcp.card.signIn")
+					: t("mcp.card.openSettings")}
 		</button>
 	);
 }
@@ -76,8 +78,9 @@ export function McpFullOutputBody({
 	state: McpFullOutputState;
 	onRetry: () => void;
 }) {
+	const t = useT();
 	if (state.kind === "loading") {
-		return <p className="text-text-muted tr-text-metadata">Loading the full output…</p>;
+		return <p className="text-text-muted tr-text-metadata">{t("mcp.fullOutput.loading")}</p>;
 	}
 	if (state.kind === "failed") {
 		return (
@@ -89,7 +92,7 @@ export function McpFullOutputBody({
 					onClick={onRetry}
 					className={ACTION_CLASS}
 				>
-					Try again
+					{t("mcp.fullOutput.retry")}
 				</button>
 			</p>
 		);
@@ -103,14 +106,10 @@ export function McpFullOutputBody({
 				className="flex flex-col gap-4"
 			>
 				<p className="text-text-default tr-text-ui">
-					{result.reason === "expired"
-						? "The full output has expired."
-						: "This result has no full output to show."}
+					{result.reason === "expired" ? t("mcp.fullOutput.expired") : t("mcp.fullOutput.none")}
 				</p>
 				{result.reason === "expired" ? (
-					<p className="text-text-muted tr-text-metadata">
-						pi kept it in a temporary file that no longer exists.
-					</p>
+					<p className="text-text-muted tr-text-metadata">{t("mcp.fullOutput.expiredDetail")}</p>
 				) : null}
 			</div>
 		);
@@ -119,7 +118,7 @@ export function McpFullOutputBody({
 		<>
 			{result.truncated ? (
 				<p data-testid="mcp-full-output-truncated" className="text-text-muted tr-text-metadata">
-					Truncated — showing the beginning of the full output.
+					{t("mcp.fullOutput.truncated")}
 				</p>
 			) : null}
 			<pre
@@ -133,7 +132,9 @@ export function McpFullOutputBody({
 }
 
 function failureMessage(error: unknown): string {
-	return error instanceof Error && error.message ? error.message : "Couldn't read the full output.";
+	return error instanceof Error && error.message
+		? error.message
+		: translate("mcp.fullOutput.readFailed");
 }
 
 function McpFullOutput({
@@ -145,6 +146,7 @@ function McpFullOutput({
 	title: string;
 	readOutput: (toolCallId: string) => Promise<McpReadOutputResult>;
 }) {
+	const t = useT();
 	const [state, setState] = useState<McpFullOutputState | null>(null);
 	const load = () => {
 		setState({ kind: "loading" });
@@ -162,12 +164,12 @@ function McpFullOutput({
 			<DialogTrigger asChild>
 				<button type="button" data-testid="mcp-full-output" className={ACTION_CLASS}>
 					<RiFileTextLine className="size-12 shrink-0" />
-					Full output
+					{t("mcp.fullOutput.title")}
 				</button>
 			</DialogTrigger>
 			<DialogContent data-testid="mcp-full-output-dialog" className="max-h-[85vh] max-w-3xl">
 				<DialogHeader className="pr-24">
-					<DialogTitle>Full output</DialogTitle>
+					<DialogTitle>{t("mcp.fullOutput.title")}</DialogTitle>
 					<DialogDescription className="truncate">{title}</DialogDescription>
 				</DialogHeader>
 				<McpFullOutputBody state={state ?? { kind: "loading" }} onRetry={load} />

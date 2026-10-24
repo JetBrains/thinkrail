@@ -93,11 +93,19 @@ test("a diff tab is stamped with the target and tick captured BEFORE its read, n
 	expect(tab.loadedTick).toBe(0);
 });
 
-test("a fast leading click upgraded by dblclick publishes only the final keep intent", async () => {
+test("a single click on an uncached file opens its preview as soon as the read resolves", async () => {
 	const preview = openDiffInTab("w1", { kind: "branch" }, "README.md", "preview");
 	pending?.resolve(diffResult("old", "new"));
-	await Promise.resolve();
+	await preview;
+
+	const tab = openedDiffTab();
+	expect(useAppStore.getState().previewTabByWorkspace.w1).toBe(tab.id);
+});
+
+test("a dblclick arriving while the read is in flight publishes only the final keep intent", async () => {
+	const preview = openDiffInTab("w1", { kind: "branch" }, "README.md", "preview");
 	const keep = openDiffInTab("w1", { kind: "branch" }, "README.md", "keep");
+	pending?.resolve(diffResult("old", "new"));
 	await Promise.all([preview, keep]);
 
 	expect(requests).toHaveLength(1);
@@ -108,7 +116,7 @@ test("a fast leading click upgraded by dblclick publishes only the final keep in
 	expect(opens[0]).toMatchObject({ kind: "open", intent: "keep", claimPreview: true });
 });
 
-test("a cached double click also publishes only one final keep intent", async () => {
+const cacheKeptDiffTab = () => {
 	useAppStore.getState().openTab(
 		{
 			kind: "diff",
@@ -125,9 +133,25 @@ test("a cached double click also publishes only one final keep intent", async ()
 		false,
 	);
 	useAppStore.setState({ layoutIntents: [] });
+	return openedDiffTab();
+};
 
+const openIntents = () =>
+	useAppStore
+		.getState()
+		.layoutIntents.filter((intent) => intent.kind === "open" && intent.workspaceId === "w1");
+
+test("a cached preview opens synchronously, before any await", () => {
+	const cached = cacheKeptDiffTab();
+	void openDiffInTab("w1", { kind: "branch" }, "README.md", "preview");
+
+	expect(requests).toHaveLength(0);
+	expect(openIntents()).toEqual([expect.objectContaining({ intent: "preview", tab: cached })]);
+});
+
+test("a cached double click previews, then keeps the same tab with its latest content", async () => {
+	const cached = cacheKeptDiffTab();
 	const preview = openDiffInTab("w1", { kind: "branch" }, "README.md", "preview");
-	const cached = openedDiffTab();
 	useAppStore
 		.getState()
 		.updateDiffTabContent(
@@ -144,16 +168,27 @@ test("a cached double click also publishes only one final keep intent", async ()
 	await Promise.all([preview, keep]);
 
 	expect(requests).toHaveLength(0);
-	const opens = useAppStore
-		.getState()
-		.layoutIntents.filter((intent) => intent.kind === "open" && intent.workspaceId === "w1");
-	expect(opens).toHaveLength(1);
-	expect(opens[0]).toMatchObject({
-		kind: "open",
+	const opens = openIntents();
+	expect(opens).toHaveLength(2);
+	expect(opens[0]).toMatchObject({ intent: "preview", tab: { id: cached.id } });
+	expect(opens[1]).toMatchObject({
 		intent: "keep",
-		claimPreview: true,
-		tab: { kind: "diff", original: "fresh old", modified: "fresh new", loadedTick: 1 },
+		tab: { id: cached.id, original: "fresh old", modified: "fresh new", loadedTick: 1 },
 	});
+	expect(useAppStore.getState().tabsByWorkspace.w1).toHaveLength(1);
+});
+
+test("a keep after a landed preview promotes the same tab in place", async () => {
+	const preview = openDiffInTab("w1", { kind: "branch" }, "README.md", "preview");
+	pending?.resolve(diffResult("old", "new"));
+	await preview;
+	const previewed = openedDiffTab();
+	await openDiffInTab("w1", { kind: "branch" }, "README.md", "keep");
+
+	const state = useAppStore.getState();
+	expect(requests).toHaveLength(1);
+	expect(state.tabsByWorkspace.w1?.map((tab) => tab.id)).toEqual([previewed.id]);
+	expect(state.previewTabByWorkspace.w1).toBeUndefined();
 });
 
 test("an overtaken double click keeps its tab without claiming a newer preview slot", async () => {
@@ -360,7 +395,7 @@ test("a review tab opens without a host read and carries the clicked file as a o
 	const tab = openedChangesTab();
 	expect(tab).toMatchObject({
 		id: changesTabId("w1", { kind: "branch" }),
-		name: "Changes",
+		name: "",
 		scope: { kind: "branch" },
 		reveal: { path: "src/a.ts", tick: 1 },
 		viewed: [],
@@ -440,7 +475,7 @@ test("an explicit Open as tab retains the existing preview", async () => {
 test("a lone review-tab preview lands after the settle window and claims the preview slot", async () => {
 	await openChangesTab("w1", { kind: "uncommitted" }, { revealPath: "README.md" }, "preview");
 	const tab = openedChangesTab();
-	expect(tab.name).toBe("Changes · uncommitted");
+	expect(tab.scope).toEqual({ kind: "uncommitted" });
 	expect(useAppStore.getState().previewTabByWorkspace.w1).toBe(tab.id);
 });
 
