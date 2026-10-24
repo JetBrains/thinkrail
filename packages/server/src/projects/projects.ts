@@ -139,13 +139,18 @@ function projectFolderGone(path: string): Promise<boolean> {
 }
 
 export async function listRecentProjects(): Promise<Project[]> {
-	const projects = newestFirst(getProjects());
-	const keep = await Promise.all(
-		projects.map((project) =>
-			project.closed === true ? projectFolderGone(project.path).then((gone) => !gone) : true,
+	const candidates = newestFirst(getProjects());
+	const goneByPath = new Map<string, boolean>();
+	await Promise.all(
+		candidates.map((project) =>
+			project.closed === true
+				? projectFolderGone(project.path).then((gone) => void goneByPath.set(project.path, gone))
+				: undefined,
 		),
 	);
-	return projects.filter((_, index) => keep[index]);
+	return newestFirst(getProjects()).filter((project) =>
+		project.closed === true ? goneByPath.get(project.path) !== true : true,
+	);
 }
 
 export function closeProject(id: string): Project {
