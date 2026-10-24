@@ -22,7 +22,7 @@ onto separate instances.
 - **Root `@thinkrail/locales`** (pure, browser- and server-safe, no React):
   - `EN` — the English catalog; `MessageKey` — its key union (plural suffixes `_one`/`_other`/… fold
     into the base key).
-  - `BUNDLED_LOCALES` — the tags shipped with this build (`["en"]` today) and `bundledCatalog(tag)`.
+  - `BUNDLED_LOCALES` — the tags shipped with this build (`["en", "zh-Hans"]` today) and `bundledCatalog(tag)`.
   - `SYSTEM_LOCALE` (`"system"`), `canonicalLocale(tag)`, `languageName(tag)` (own-language name via
     `Intl.DisplayNames`, first letter upper-cased), `DESKTOP_MENU_KEYS` and `DESKTOP_DIALOG_KEYS` — the keys the
     desktop's native menu, error dialogs, and startup splash render, one list each for the desktop and the web that pushes
@@ -108,7 +108,7 @@ wording fix must not orphan translations. `en.json` stays sorted.
 
 ## Deferred
 
-Bundled non-English catalogs (the `BUNDLED` map is the seam), locale-aware number formats (token
+Locale-aware number formats (token
 counts, cost and context percentages still use English separators), composite phrases that embed a
 translated count fragment (`chat.trust.untrustedNotice` interpolates a "1 skill" list), RTL layout (`dir`), a first-paint locale
 hint (until the host answers `locales.list`, a local language renders English for a moment), and

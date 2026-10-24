@@ -35,7 +35,7 @@ apps/website    public landing + blog + /vibecoding (Cloudflare Pages) ── de
 packages/website-analytics  dependency-free browser analytics policy for the public website
 packages/server createServer(): Bun.serve(HTTP+WS) + AgentSessionManager (in-process pi) ── depends on ─▶ packages/contracts, packages/locales, packages/shared, packages/pi-background-commands, packages/pi-delegation, packages/pi-subagents, packages/extension-api/server, thinkrail-extensions/*/server
 packages/contracts  the wire (types plus tiny pure runtime)
-packages/locales    UI string catalogs (bundled en.json) + pure catalog rules; ./react holds the one i18next
+packages/locales    UI string catalogs (bundled en.json, zh-Hans.json) + pure catalog rules; ./react holds the one i18next
                     instance ── depends on ─▶ nothing in the workspace (i18next, react-i18next)
 packages/shared     shellEnv (server-side only)
 packages/spec-graph portable pi extension: spec_* tools + skill (bundled into every session by packages/server;
@@ -401,7 +401,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     rendered through one shared i18next instance (`@thinkrail/locales/react`). **A lint gate fails on
     hardcoded user-facing text** (JSX text and text-bearing attributes such as `aria-label`, `title`,
     `placeholder`, `alt`, `label`) in those trees, so a new string cannot ship without a key. ThinkRail
-    ships bundled catalogs (English only today); a user adds or overrides a language by dropping a flat
+    ships bundled catalogs (`en.json`, `zh-Hans.json`); a user adds or overrides a language by dropping a flat
     i18next-JSON file into the **global** data dir (`~/.thinkrail/locales/<tag>.json`) — never a
     workspace, so a cloned repo cannot rewrite the UI. The host validates and watches those files
     ([[submodule-server-locales]]) and serves them over the wire; the web merges them over the bundled
@@ -416,7 +416,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     Rejected: English-text keys (a wording fix orphans every translation); a host-served bundled catalog
     (bundled strings belong to the web build that renders them); an in-house runtime (i18next chosen for
     its standard format and tooling); catalogs in `contracts` (data and translation logic are not wire
-    types). Deferred: bundled non-English languages, RTL layout, an agent translation skill.
+    types). Deferred: RTL layout, an agent translation skill.
 
 ## Invariants
 

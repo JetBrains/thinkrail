@@ -49,6 +49,8 @@ test("a local language file is listed, selectable, live-reloaded, and survives d
 	await expect(german).toContainText("Deutsch");
 	await expect(german).toContainText("Local file");
 	await expect(section.getByTestId("language-en")).toContainText("Built-in");
+	await expect(section.getByTestId("language-zh-Hans")).toContainText("简体中文");
+	await expect(section.getByTestId("language-zh-Hans")).toContainText("Built-in");
 
 	await german.click();
 	await expect(german).toHaveAttribute("data-active", "true");
