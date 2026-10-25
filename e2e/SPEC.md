@@ -471,9 +471,10 @@ reload. A huge comparison opts in through Show diff anyway while an unrelated fi
 write its own watcher frame, past the 300 ms quiet flush), so updates keep landing inside the expensive first
 mount. These regressions need no provider,
 prompt submission, route mock, or screenshot. Extension on/off coverage (`extensions-settings.spec.ts`) drives the
-real Settings → Extensions switch through `settings.update`, proves it survives a reload, and seeds a
-historical `visualize` call that must still render its diagram while the extension is off; each test restores
-the switch in `afterEach` because the shard shares one host. `environment-settings.spec.ts` drives Settings →
+real Settings → Extensions switch of every shipped extension (`visualize`, `ask-user-question`) through
+`settings.update`, proves it survives a reload, and seeds a historical `visualize` call that must still render
+its diagram and an answered `ask_user_question` call that must still render its record while the extension is
+off; each test restores every switch in `afterEach` because the shard shares one host. `environment-settings.spec.ts` drives Settings →
 Environment through rejected and accepted saves and a reload; the host was launched with
 `PI_CODING_AGENT_DIR`, so it also proves the launch value stays in use and is reported as set at launch. It
 clears the stored record in `afterEach` so no later restart-based spec boots with it. The provider-backed counterpart in

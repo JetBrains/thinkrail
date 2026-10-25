@@ -1826,8 +1826,7 @@ test("emergency session disposal rejects an accepted answer that cannot persist"
 	}
 });
 
-test("our ask_user_question wins over a same-name extension tool before and after reload", async () => {
-	const cwd = tmpCwd("trpi-question-collision-");
+function installExternalQuestionnaire(cwd: string): void {
 	const extensionDir = join(cwd, ".pi", "extensions");
 	mkdirSync(extensionDir, { recursive: true });
 	writeFileSync(
@@ -1848,6 +1847,31 @@ test("our ask_user_question wins over a same-name extension tool before and afte
 			"}",
 		].join("\n"),
 	);
+}
+
+function askToolState(context: TranscriptContext): string {
+	const toolActive = getCurrentTools(context.messages).some(
+		(tool) => tool.name === "ask_user_question",
+	);
+	const guidanceInPrompt = getCurrentSystemPrompt(context.messages).includes(
+		"Call ask_user_question whenever",
+	);
+	if (toolActive && guidanceInPrompt) return "ASK_ON";
+	if (!toolActive && !guidanceInPrompt) return "ASK_OFF";
+	return "ASK_INCONSISTENT";
+}
+
+async function waitForQuestion(sessionId: string): Promise<void> {
+	for (let attempt = 0; attempt < 200; attempt++) {
+		if (getSessionState(sessionId).needsInput?.kind === "question") return;
+		await Bun.sleep(5);
+	}
+	throw new Error("Timed out waiting for the question to need input");
+}
+
+test("our ask_user_question wins over a same-name extension tool before and after reload", async () => {
+	const cwd = tmpCwd("trpi-question-collision-");
+	installExternalQuestionnaire(cwd);
 	const dialogs: ExtUiRequest[] = [];
 	setExtUiPublisher((request) => dialogs.push(request));
 	const session = await createSession({
@@ -1899,6 +1923,134 @@ test("our ask_user_question wins over a same-name extension tool before and afte
 	} finally {
 		removeSession(session.sessionId);
 		setExtUiPublisher(() => {});
+	}
+});
+
+test("the ask-user-question switch drops the tool and guidance live, and the same mailbox answers once it is back", async () => {
+	let disabled = new Set<string>();
+	setDisabledExtensionsResolver(() => disabled);
+	const cwd = tmpCwd("trpi-ask-idle-toggle-");
+	let sessionId: string | undefined;
+	try {
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-ask-idle-toggle",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		fauxA.setResponses([(context) => fauxAssistantMessage(askToolState(context))]);
+		await promptSession(sessionId, "Check the ask tool.");
+		expect(seen(sessionId)).toContain("ASK_ON");
+
+		disabled = new Set(["ask-user-question"]);
+		refreshExtensionTools();
+		fauxA.setResponses([(context) => fauxAssistantMessage(`OFF_${askToolState(context)}`)]);
+		await promptSession(sessionId, "Check the switched-off ask tool.");
+		expect(seen(sessionId)).toContain("OFF_ASK_OFF");
+
+		disabled = new Set();
+		refreshExtensionTools();
+		const toolCallId = "ask-after-toggle";
+		let stateWhenAsking = "";
+		fauxA.setResponses([
+			(context) => {
+				stateWhenAsking = askToolState(context);
+				return gatedQuestionMessage(toolCallId);
+			},
+			fauxAssistantMessage("ASK_BACK_CONTINUED"),
+		]);
+		const prompting = promptSession(sessionId, "Choose a runtime.");
+		await waitForQuestion(sessionId);
+		expect(stateWhenAsking).toBe("ASK_ON");
+		await answerQuestion(sessionId, toolCallId, gatedQuestionAnswer());
+		await prompting;
+		expect(seen(sessionId)).toContain("ASK_BACK_CONTINUED");
+		const { messages } = await getSessionMessages(sessionId, "ws-ask-idle-toggle", cwd);
+		expect(messages).toContainEqual(
+			expect.objectContaining({ role: "toolResult", toolCallId, details: gatedQuestionAnswer() }),
+		);
+	} finally {
+		setDisabledExtensionsResolver(() => new Set());
+		if (sessionId) await removeSession(sessionId);
+	}
+});
+
+test("a chat created with ask-user-question off leaves a same-name package in charge until re-enabling reloads ours ahead of it", async () => {
+	let disabled = new Set(["ask-user-question"]);
+	setDisabledExtensionsResolver(() => disabled);
+	const cwd = tmpCwd("trpi-ask-new-off-collision-");
+	installExternalQuestionnaire(cwd);
+	const dialogs: ExtUiRequest[] = [];
+	setExtUiPublisher((request) => dialogs.push(request));
+	let sessionId: string | undefined;
+	try {
+		const session = await createSession({
+			cwd,
+			workspaceId: "ws-ask-new-off-collision",
+			model: toWireModel(fauxA.getModel()),
+		});
+		sessionId = session.sessionId;
+		let guidanceWhileOff = "";
+		fauxA.setResponses([
+			(context) => {
+				guidanceWhileOff = getCurrentSystemPrompt(context.messages);
+				return gatedQuestionMessage("ask-external");
+			},
+			fauxAssistantMessage("EXTERNAL_CONTINUED"),
+		]);
+		const externalPrompting = promptSession(sessionId, "Choose a runtime.");
+		for (let attempt = 0; attempt < 200; attempt++) {
+			if (dialogs.some((request) => request.kind === "input")) break;
+			await Bun.sleep(5);
+		}
+		const dialog = dialogs.find((request) => request.kind === "input");
+		if (!dialog) throw new Error("the external questionnaire never asked");
+		expect(guidanceWhileOff).not.toContain("Call ask_user_question whenever");
+		expect(getSessionState(sessionId).needsInput?.kind).not.toBe("question");
+		resolveExtUi({ id: dialog.id, value: "1" });
+		await externalPrompting;
+		expect(seen(sessionId)).toContain("EXTERNAL_QUESTIONNAIRE");
+
+		const originalReload = AgentSession.prototype.reload;
+		let reloads = 0;
+		AgentSession.prototype.reload = async function (this: AgentSession, ...args) {
+			await originalReload.apply(this, args);
+			reloads++;
+		};
+		try {
+			disabled = new Set();
+			refreshExtensionTools();
+			for (let waited = 0; reloads === 0 && waited < 200; waited++) await Bun.sleep(10);
+		} finally {
+			AgentSession.prototype.reload = originalReload;
+		}
+		expect(reloads).toBe(1);
+
+		const toolCallId = "ask-ours-again";
+		let stateWhenAsking = "";
+		fauxA.setResponses([
+			(context) => {
+				stateWhenAsking = askToolState(context);
+				return gatedQuestionMessage(toolCallId);
+			},
+			fauxAssistantMessage("OURS_CONTINUED"),
+		]);
+		const prompting = promptSession(sessionId, "Choose a runtime again.");
+		await waitForQuestion(sessionId);
+		expect(stateWhenAsking).toBe("ASK_ON");
+		expect(dialogs.filter((request) => request.kind === "input")).toHaveLength(1);
+		await answerQuestion(sessionId, toolCallId, gatedQuestionAnswer());
+		await prompting;
+		expect(seen(sessionId)).toContain("OURS_CONTINUED");
+		const { messages } = await getSessionMessages(sessionId, "ws-ask-new-off-collision", cwd);
+		expect(messages).toContainEqual(
+			expect.objectContaining({ role: "toolResult", toolCallId, details: gatedQuestionAnswer() }),
+		);
+	} finally {
+		for (const request of dialogs) resolveExtUi({ id: request.id, value: null });
+		setDisabledExtensionsResolver(() => new Set());
+		setExtUiPublisher(() => {});
+		if (sessionId) await removeSession(sessionId);
 	}
 });
 

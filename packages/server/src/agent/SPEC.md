@@ -504,7 +504,10 @@ re-opened transcripts provider-valid.
     - Its registry entry registers the tool through `sessionExtensions`.
     - New and reopened parent sessions create one mailbox in `createParentSession`, and
       `askUserQuestionSessionServices(waiters)` hands it to that seam as
-      `awaitToolResponse(toolCallId, signal)`.
+      `awaitToolResponse(toolCallId, signal)`. The mailbox outlives resource reloads and the extension
+      switch: a question asked after re-enabling answers through the same mailbox, and a chat created
+      with the extension off adopts it through the one reload the toggle requests, ahead of any same-name
+      package.
     - Answer → `response`, supersede → `deferred` (the package returns the canonical ack and ends the
       turn; pi still drains the queued composer message), dispose → `abandoned`. Stop rejections pass
       through as the stopped error.
