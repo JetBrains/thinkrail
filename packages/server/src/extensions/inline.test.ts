@@ -5,6 +5,7 @@ import type {
 	InlineExtension,
 	LoadExtensionsResult,
 } from "@earendil-works/pi-coding-agent";
+import type { ExtensionSessionServices } from "@thinkrail/extension-api/server";
 import {
 	omitDisabledRegistryExtensions,
 	registryExtensionName,
@@ -65,6 +66,84 @@ describe("registryInlineExtensions", () => {
 	});
 });
 
+describe("registryInlineExtensions with per-session factories", () => {
+	const labels = new WeakMap<ExtensionSessionServices, string>();
+	const session = (label: string): ExtensionSessionServices => {
+		const services: ExtensionSessionServices = {
+			awaitToolResponse: async () => ({ kind: "deferred" }),
+		};
+		labels.set(services, label);
+		return services;
+	};
+	const sessionEntry = (name: string, parents: number, seen: string[]): ServerExtensionEntry => ({
+		specifier: `@acme/${name}/server`,
+		extension: {
+			name,
+			extensions: entry(name, parents).extension.extensions,
+			sessionExtensions: (services) => {
+				const label = labels.get(services) ?? "unknown";
+				seen.push(label);
+				return [
+					(pi: ExtensionAPI) => {
+						pi.registerTool({ name: `${name}-session-${label}` } as Parameters<
+							ExtensionAPI["registerTool"]
+						>[0]);
+					},
+				];
+			},
+		},
+	});
+
+	it("appends the session's factories to the parent set under one naming scheme", async () => {
+		const seen: string[] = [];
+		const entries = [sessionEntry("asker", 0, seen), sessionEntry("mixed", 1, seen)];
+		const inline = registryInlineExtensions("extensions", undefined, entries, session("a"));
+		expect(inline.map(nameOf)).toEqual(["asker", "mixed#1", "mixed#2"]);
+		expect(await Promise.all(inline.map(registered))).toEqual([
+			["asker-session-a"],
+			["mixed-p0"],
+			["mixed-session-a"],
+		]);
+		expect(seen).toEqual(["a", "a"]);
+	});
+
+	it("builds each parent session's factories from its own services", async () => {
+		const seen: string[] = [];
+		const entries = [sessionEntry("asker", 0, seen)];
+		const [first] = registryInlineExtensions("extensions", undefined, entries, session("one"));
+		const [second] = registryInlineExtensions("extensions", undefined, entries, session("two"));
+		if (!first || !second) throw new Error("missing session factories");
+		expect(await registered(first)).toEqual(["asker-session-one"]);
+		expect(await registered(second)).toEqual(["asker-session-two"]);
+		expect(await registered(first)).toEqual(["asker-session-one"]);
+		expect(seen).toEqual(["one", "two"]);
+	});
+
+	it("leaves session factories out without a session and out of the child set", () => {
+		const seen: string[] = [];
+		const entries = [sessionEntry("asker", 0, seen)];
+		expect(registryInlineExtensions("extensions", undefined, entries)).toEqual([]);
+		expect(
+			registryInlineExtensions("childExtensions", undefined, entries, session("child")),
+		).toEqual([]);
+		expect(seen).toEqual([]);
+	});
+
+	it("gates session factories on the extension switch at load time", async () => {
+		const disabled = new Set(["asker"]);
+		const [asker] = registryInlineExtensions(
+			"extensions",
+			(name) => disabled.has(name),
+			[sessionEntry("asker", 0, [])],
+			session("a"),
+		);
+		if (!asker) throw new Error("missing asker");
+		expect(await registered(asker)).toEqual([]);
+		disabled.clear();
+		expect(await registered(asker)).toEqual(["asker-session-a"]);
+	});
+});
+
 describe("omitDisabledRegistryExtensions", () => {
 	const entries = [entry("solo", 1), entry("multi", 2, 1)];
 	const loaded = (path: string) => ({ path }) as Extension;
@@ -102,6 +181,8 @@ describe("registryExtensionName", () => {
 		expect(registryExtensionName("<inline:solo>", entries)).toBe("solo");
 		expect(registryExtensionName("<inline:multi#2>", entries)).toBe("multi");
 		expect(registryExtensionName("<inline:multi>", entries)).toBe("multi");
+		expect(registryExtensionName("<inline:multi#7>", entries)).toBe("multi");
+		expect(registryExtensionName("<inline:multi#x>", entries)).toBeUndefined();
 		expect(registryExtensionName("<inline:headless>", entries)).toBeUndefined();
 		expect(registryExtensionName("<inline:3>", entries)).toBeUndefined();
 		expect(registryExtensionName("/disk/solo.ts", entries)).toBeUndefined();

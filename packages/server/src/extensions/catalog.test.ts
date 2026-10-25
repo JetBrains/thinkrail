@@ -59,4 +59,32 @@ describe("listExtensionCatalog", () => {
 		]);
 		expect(child).not.toHaveBeenCalled();
 	});
+
+	it("lists per-session tools through an inert session that never answers", async () => {
+		let response: Promise<unknown> | undefined;
+		const entries: ServerExtensionEntry[] = [
+			{
+				specifier: "@acme/asker/server",
+				extension: {
+					name: "asker",
+					extensions: [tool("static")],
+					sessionExtensions: (session) => {
+						response = session.awaitToolResponse("call", undefined);
+						response.catch(() => undefined);
+						return [tool("asked")];
+					},
+				},
+			},
+		];
+		expect(await listExtensionCatalog(new Set(), entries)).toEqual([
+			{
+				name: "asker",
+				title: "asker",
+				enabled: true,
+				tools: ["static", "asked"],
+				hasChildExtensions: false,
+			},
+		]);
+		await expect(response).rejects.toThrow("no session");
+	});
 });

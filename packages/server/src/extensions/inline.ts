@@ -1,4 +1,9 @@
-import type { InlineExtension, LoadExtensionsResult } from "@earendil-works/pi-coding-agent";
+import type {
+	ExtensionFactory,
+	InlineExtension,
+	LoadExtensionsResult,
+} from "@earendil-works/pi-coding-agent";
+import type { ExtensionSessionServices } from "@thinkrail/extension-api/server";
 import { type ServerExtensionEntry, serverExtensions } from "./registry";
 
 export type RegistryExtensionKind = "extensions" | "childExtensions";
@@ -6,25 +11,31 @@ export type ExtensionDisabled = (name: string) => boolean;
 
 const never: ExtensionDisabled = () => false;
 
-function inlineNames(entry: ServerExtensionEntry, kind: RegistryExtensionKind): string[] {
-	const factories = entry.extension[kind] ?? [];
-	return factories.map((_, index) =>
-		factories.length === 1 ? entry.extension.name : `${entry.extension.name}#${index + 1}`,
-	);
+function factoriesOf(
+	entry: ServerExtensionEntry,
+	kind: RegistryExtensionKind,
+	session: ExtensionSessionServices | undefined,
+): ExtensionFactory[] {
+	const { extension } = entry;
+	if (kind === "childExtensions") return extension.childExtensions ?? [];
+	const perSession =
+		session && extension.sessionExtensions ? extension.sessionExtensions(session) : [];
+	return [...extension.extensions, ...perSession];
 }
 
 export function registryInlineExtensions(
 	kind: RegistryExtensionKind,
 	isDisabled: ExtensionDisabled = never,
 	entries: readonly ServerExtensionEntry[] = serverExtensions,
+	session?: ExtensionSessionServices,
 ): InlineExtension[] {
 	return entries.flatMap((entry) => {
-		const factories = entry.extension[kind] ?? [];
-		const names = inlineNames(entry, kind);
+		const { name } = entry.extension;
+		const factories = factoriesOf(entry, kind, session);
 		return factories.map((factory, index) => ({
-			name: names[index] ?? entry.extension.name,
+			name: factories.length === 1 ? name : `${name}#${index + 1}`,
 			factory: async (pi) => {
-				if (isDisabled(entry.extension.name)) return;
+				if (isDisabled(name)) return;
 				await factory(pi);
 			},
 		}));
@@ -35,13 +46,9 @@ export function registryExtensionName(
 	path: string,
 	entries: readonly ServerExtensionEntry[] = serverExtensions,
 ): string | undefined {
-	const match = /^<inline:(.+)>$/.exec(path);
+	const match = /^<inline:([^#>]+)(?:#\d+)?>$/.exec(path);
 	if (!match) return undefined;
-	return entries.find((entry) =>
-		(["extensions", "childExtensions"] as const).some((kind) =>
-			inlineNames(entry, kind).includes(match[1] ?? ""),
-		),
-	)?.extension.name;
+	return entries.find((entry) => entry.extension.name === match[1])?.extension.name;
 }
 
 export function omitDisabledRegistryExtensions(
