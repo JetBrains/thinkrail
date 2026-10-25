@@ -227,10 +227,14 @@ treatment.
   in one store write. `FilesPanel` owns the single `git.status` read (`useGitStatus`, scope-keyed, including
   the unknown-commit scope fallback) and feeds `ChangesPanel` and the **All** marks from it, so count, marks
   and the Changed list cannot disagree. Both `git.status` readers — `useGitStatus` and `ChangesReviewPane` —
-  record their latest result in `gitStatusCache`, keyed by *(workspace, scope, target ref)*, and the review
-  tab starts from that entry, then refreshes it with its own read. That way, opening a scope the panel has
-  already read renders its sections on first paint, not after a skeleton round-trip. An `UNKNOWN_COMMIT`
-  rejection forgets the entry, so a vanished scope is never seeded. **All** follows VS Code's Explorer: the plain tree plus marks derived
+  read through `gitStatusCache.readGitStatus`, which records each result keyed by *(workspace, scope, target
+  ref)*; the review tab starts from that entry, then refreshes it with its own read. That way, opening a scope
+  the panel has already read renders its sections on first paint, not after a skeleton round-trip. The cache
+  is a bounded LRU (32 entries), a reply never overwrites one from a later request, a removed workspace's
+  entries are dropped, and an `UNKNOWN_COMMIT` rejection forgets the entry, so a vanished scope is never
+  seeded. A seeded status is provisional until the tab's own read settles: a reveal, the stored active file
+  and the Stacked restore whose path the seed lacks wait for that read instead of being dropped or
+  overwritten. **All** follows VS Code's Explorer: the plain tree plus marks derived
   once by the pure `changesModel.buildChangeMarks` — a changed file shows its name and a trailing
   `M`/`A`/`U`/`R` letter in the status colour (modified amber, added/untracked green, renamed blue; the one
   `chat/planView.statusLetter`, shared with the Changes review tab and plan rows, so untracked reads `U`

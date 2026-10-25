@@ -7,6 +7,7 @@ import { useResourceHost } from "../host";
 import type { ResourceDiffProps } from "../registry";
 import { MarkdownDocument } from "./MarkdownPreview";
 import { focusSegments } from "./renderedDiffFocus";
+import { type DoneMerge, mergeKey, peekMerge, rememberMerge } from "./renderedDiffMerges";
 import { useScrollViewState } from "./useScrollViewState";
 
 const DIFF_MARKS = [
@@ -20,28 +21,21 @@ const HEADING_TAGS = new Set(["h1", "h2", "h3", "h4", "h5", "h6"]);
 const BOOLEAN_ATTRIBUTES = new Set(["open", "checked", "disabled"]);
 const HTML_INTEGER = /^[\t\n\f\r ]*([+-]?\d+)/;
 
-type DoneMerge = { state: "done"; html: string; before: string };
 type MergeState = { state: "pending" } | { state: "failed" } | DoneMerge;
 const PENDING: MergeState = { state: "pending" };
 const FAILED: MergeState = { state: "failed" };
-const MERGE_CACHE_SIZE = 16;
-const merges = new Map<string, DoneMerge>();
-
-function rememberMerge(key: string, merge: DoneMerge): void {
-	merges.set(key, merge);
-	const oldest = merges.keys().next().value;
-	if (merges.size > MERGE_CACHE_SIZE && oldest !== undefined) merges.delete(oldest);
-}
 
 function useHtmldiffMerge(before: string, after: string): { merge: MergeState; cached: boolean } {
-	const key = `${before}\u0000${after}`;
-	const [merge, setMerge] = useState<MergeState>(() => merges.get(key) ?? PENDING);
-	const [cachedAtMount] = useState(() => merges.has(key));
+	const key = useMemo(() => mergeKey(before, after), [before, after]);
+	const [merge, setMerge] = useState<MergeState>(() => peekMerge(key) ?? PENDING);
+	const [cachedAtMount] = useState(() => merge.state === "done");
+	const hit = peekMerge(key);
+	if (hit && hit !== merge) setMerge(hit);
 
 	useEffect(() => {
-		const cached = merges.get(key);
+		const cached = peekMerge(key);
 		if (cached) {
-			setMerge(cached);
+			rememberMerge(key, cached);
 			return;
 		}
 		const worker = new Worker(new URL("./htmldiff.worker.ts", import.meta.url), {
@@ -58,7 +52,7 @@ function useHtmldiffMerge(before: string, after: string): { merge: MergeState; c
 		return () => worker.terminate();
 	}, [key, before, after]);
 
-	return { merge: merges.get(key) ?? merge, cached: cachedAtMount };
+	return { merge: hit ?? merge, cached: cachedAtMount };
 }
 
 type Changed = (element: Element) => boolean;

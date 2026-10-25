@@ -280,8 +280,10 @@ away, and the renderer places no anchors, so a pointer's threads live in the unp
 `RenderedDiff` keeps its worker-isolated htmldiff merge,
 loading/error states, and token styling (a text change keeps the previous merge on screen until the next one
 arrives, so a live refresh neither flashes the loading placeholder nor remounts the document; finished
-merges live in a small module-level LRU keyed by both sides, so a remount of an unchanged diff renders
-synchronously without the placeholder or a replayed reveal fade), but advertises no diff anchors: both sides' threads stay in the
+merges live in a module-level LRU (`renderedDiffMerges`) keyed by a hash and the lengths of both rendered
+sides and bounded like `diffCache` — 16 entries and 4 Mi retained characters — so a remount of an unchanged
+diff renders synchronously without the placeholder or a replayed reveal fade, and a cache hit becomes the
+mounted document that the next text change keeps on screen), but advertises no diff anchors: both sides' threads stay in the
 pane's unplaced strip, **Show in Source** selects the code renderer, and diff authoring is available only
 in Source. It is selected by registry match rather than a path branch in the pane. Scopes whose modified
 side is historical receive no review surface or mutation actions.

@@ -21,12 +21,12 @@ import {
 	toast,
 	useAppStore,
 } from "../store";
-import { errorText, getTransport, wsErrorCode } from "../transport";
+import { errorText, wsErrorCode } from "../transport";
 import { ChangesFileSection } from "./ChangesFileSection";
 import { ChangesReviewGuide, guideSteps } from "./ChangesReviewGuide";
 import { LARGE_SCOPE_FILES, scopeKey, scopeLabel, sectionCollapsedByDefault } from "./changesModel";
 import { DiffStatBadge } from "./DiffStatBadge";
-import { forgetGitStatus, peekGitStatus, rememberGitStatus } from "./gitStatusCache";
+import { peekGitStatus, readGitStatus } from "./gitStatusCache";
 import { HeaderIconButton } from "./HeaderIconButton";
 import { ownsReviewShortcut } from "./reviewShortcuts";
 import { SendAllReviewsButton } from "./SendReviewButton";
@@ -74,6 +74,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	const [status, setStatus] = useState<GitStatus | null>(() =>
 		peekGitStatus(workspaceId, scope, targetRef),
 	);
+	const [statusSettled, setStatusSettled] = useState(false);
 	const layout = useAppStore((state) => state.changesLayout);
 	const setStoreLayout = useAppStore((state) => state.setChangesLayout);
 	const [handoffPath, setHandoffPath] = useState<string | null>(null);
@@ -99,18 +100,18 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 
 	const { reload } = useWorkspaceRead(
 		workspaceId,
-		(id) => getTransport().request("git.status", { workspaceId: id, scope }),
+		(id) => readGitStatus(id, scope, targetRef),
 		{
 			onResult: (result) => {
-				rememberGitStatus(workspaceId, scope, targetRef, result);
 				setStatus(result);
+				setStatusSettled(true);
 				setError(null);
 				setScopeGone(false);
 				warnedRef.current = false;
 			},
 			onFailure: (_id, failure) => {
+				setStatusSettled(true);
 				if (wsErrorCode(failure) === "UNKNOWN_COMMIT") {
-					forgetGitStatus(workspaceId, scope, targetRef);
 					setStatus(null);
 					setScopeGone(true);
 					setError(
@@ -126,6 +127,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 			},
 			onSwitch: () => {
 				setStatus(peekGitStatus(workspaceId, scope, targetRef));
+				setStatusSettled(false);
 				setError(null);
 				setScopeGone(false);
 				warnedRef.current = false;
@@ -262,7 +264,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		if (!reveal || !status) return;
 		const index = files.findIndex((change) => change.path === reveal.path);
 		if (index < 0) {
-			consumeReveal(workspaceId, tab.id, null);
+			if (statusSettled) consumeReveal(workspaceId, tab.id, null);
 			return;
 		}
 		const target = {
@@ -282,6 +284,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 		releaseSettling,
 		scrollToSection,
 		status,
+		statusSettled,
 		tab.id,
 		tab.reveal,
 		workspaceId,
@@ -290,8 +293,19 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 	useEffect(() => {
 		if (!status || tab.reveal) return;
 		if (tab.activePath !== null && files.some((change) => change.path === tab.activePath)) return;
+		if (tab.activePath !== null && !statusSettled) return;
 		setActivePath(workspaceId, tab.id, current?.path ?? null);
-	}, [current, files, setActivePath, status, tab.activePath, tab.id, tab.reveal, workspaceId]);
+	}, [
+		current,
+		files,
+		setActivePath,
+		status,
+		statusSettled,
+		tab.activePath,
+		tab.id,
+		tab.reveal,
+		workspaceId,
+	]);
 
 	const pendingReveal = tab.reveal !== null;
 	useEffect(() => {
@@ -301,9 +315,10 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 			return;
 		}
 		if (pendingReveal || !status || restoredStacked.current) return;
-		restoredStacked.current = true;
 		const index = files.findIndex((change) => change.path === activePathRef.current);
 		const change = files[index];
+		if (!change && activePathRef.current !== null && !statusSettled) return;
+		restoredStacked.current = true;
 		if (!change) return;
 		let scrolled = false;
 		const frame = requestAnimationFrame(() => {
@@ -314,7 +329,7 @@ export function ChangesReviewPane({ tab }: { tab: ChangesTab }) {
 			cancelAnimationFrame(frame);
 			if (!scrolled) restoredStacked.current = false;
 		};
-	}, [files, layout, pendingReveal, scrollToSection, status]);
+	}, [files, layout, pendingReveal, scrollToSection, status, statusSettled]);
 
 	useEffect(() => {
 		if (handoffPath === null || layout !== "stacked") return;
