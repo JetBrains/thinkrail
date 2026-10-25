@@ -23,9 +23,7 @@ halves) renders through, so they cannot drift onto separate instances.
   - `EN` — the English catalog; `MessageKey` — its key union (plural suffixes `_one`/`_other`/… fold
     into the base key).
   - `BUNDLED_LOCALES` — the tags shipped with this build (`["en", "zh-CN"]` today) and
-    `bundledCatalog(tag)`. A bundled non-English catalog is incomplete by design: every string it lacks
-    falls back to English through the chain, so a translator can ship a partial catalog and keep filling it
-    in. `en.json` stays the source of truth — a new key must exist there first, and `zh-CN.json` follows it.
+    `bundledCatalog(tag)`.
   - `SYSTEM_LOCALE` (`"system"`), `canonicalLocale(tag)`, `languageName(tag)` (own-language name via
     `Intl.DisplayNames`, first letter upper-cased), `DESKTOP_MENU_KEYS` and `DESKTOP_DIALOG_KEYS` — the keys the
     desktop's native menu, error dialogs, and startup splash render, one list each for the desktop and the web that pushes
@@ -73,8 +71,8 @@ indexed markup only for `<T>` strings. No metadata block. The instance runs with
 no setup — renders English.
 
 Keys are named by surface (`settings.language.title`, `chat.composer.placeholder`), never English text: a
-wording fix must not orphan translations. `en.json` stays sorted; every other bundled catalog follows the
-same key set and stays sorted too, so the two files diff cleanly.
+wording fix must not orphan translations. `en.json` stays sorted; a bundled translation holds a sorted
+subset of its keys, so the files diff cleanly.
 
 ## Boundary
 
@@ -89,11 +87,14 @@ same key set and stays sorted too, so the two files diff cleanly.
 
 - English output is the contract tests pin: a catalog edit that changes English wording is a product
   change, reviewed like one. Plural pairs carry real English singulars (`"1 group"`, never `"1 groups"`).
-- A bundled non-English catalog is partial on purpose: `validateCatalog` drops any string whose
-  placeholders or markup disagree with `en.json`, `completePlurals` fills a missing CLDR category from
-  `_other`, and the `tag → base → en` chain renders English for everything still absent. So a translator
-  can land a partial catalog and keep filling it in without a second PR, and `en.json` — not the other
-  catalogs — is the file a new key has to exist in first.
+- **A bundled translation is partial by design and guarded by a test, not at runtime.** A string it lacks
+  renders English through the chain, so it can ship incomplete and fill in later; a new key lands in
+  `en.json` first. `applyLocale` loads bundled catalogs as-is (`validateCatalog` and `completePlurals` run
+  only on local files), so a catalog test requires every bundled translation to pass `validateCatalog`
+  with nothing dropped, to hold only sorted `en.json` keys, and to carry every plural form its language
+  needs. Changing an English string's placeholders or markup, or removing a key, therefore fails in the
+  same change, and that change updates or deletes the translation (deleting falls back to English). A
+  rewording that changes the meaning deletes the translation too, rather than leaving it stale.
 - **Render reads the translator as a value, never the global.** The React Compiler caches each render
   expression by its own inputs, so a helper that reads the global `t` / `currentLocale()` (or a getter
   that does) keeps the old language after a switch. Every function evaluated at render — component and
@@ -117,9 +118,8 @@ same key set and stays sorted too, so the two files diff cleanly.
 
 ## Deferred
 
-Bundled non-English catalogs: `zh-CN.json` ships first and covers 1816 of the 2472 keys; a bundled catalog is
-incomplete by design (missing strings fall back to English), so the remaining keys are follow-up work on
-the same file rather than a blocked feature. Also still open: locale-aware number formats (token
+Loading bundled translations on demand (each is imported into every consumer's bundle), locale-aware
+number formats (token
 counts, cost and context percentages still use English separators), composite phrases that embed a
 translated count fragment (`chat.trust.untrustedNotice` interpolates a "1 skill" list), RTL layout (`dir`), a first-paint locale
 hint (until the host answers `locales.list`, a local language renders English for a moment), and
