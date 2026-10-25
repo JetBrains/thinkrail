@@ -90,7 +90,8 @@ publish first: `bun run release:pack <dir>` packs it and prints the `npm publish
 command for an npm-org owner (the manifest's `publishConfig.provenance` would otherwise make a local
 publish fail; only CI can attest).
 
-Order: visualize → delegation + subagents → background-commands → spec-graph → todos. Not published:
+Order: visualize → ask-user-question → delegation + subagents → background-commands → spec-graph →
+todos. Not published:
 `pi-thinkrail-workflow` (workspace-internal), `pi-dag` (until it has a consumer).
 
 ## Boundary
@@ -105,3 +106,4 @@ Order: visualize → delegation + subagents → background-commands → spec-gra
 | package | shape | notes |
 | --- | --- | --- |
 | `visualize` | extension | `visualize` tool; `lovely-mermaid` for TUI box-drawing and the best-effort vanilla validation; exports `createVisualizeExtension({ validateMermaid })` so an embedder can inject a strict validator — ThinkRail does, from [[module-ext-visualize]]. Detail: [[module-pi-visualize]]. |
+| `ask-user-question` | extension | `ask_user_question` tool: a terminal questionnaire in pi's interactive mode, one dialog per question in RPC hosts; exports `createAskUserQuestionExtension({ ask, guidance })` so an embedder can answer through its own UI, and a runtime-import-free `./core`. ThinkRail still runs its host-owned predecessor until the wiring lands. Detail: [[module-pi-ask-user-question]]. |
