@@ -32,10 +32,14 @@ The app's Tailwind sources and adoption guards include this package and extensio
 The per-file surface is `button`, `switch`, `dialog`, `dropdown-menu`, `context-menu`, `menu-styles`,
 `popover`, `command` (cmdk combobox body), `textarea`, `tooltip`, `resizable`, `toast`, `toggle-segment`
 (the slim header toggle: active segment on `control-bg-selected` + `text-default`, `data-active` /
-`aria-pressed`), and `skeleton` (`SkeletonRows` / `LoadingRegion`, the one loading placeholder; its usage rules
-live in the web components spec), alongside `utils` and `theme`. `menu-styles` is shared by the menu
-primitives and custom app menu rows. `toggle-segment` and `skeleton` moved here from the app when the
-resource renderers became a package, because both the app and [[module-resource-renderers]] use them.
+`aria-pressed`), `skeleton` (`SkeletonRows` / `LoadingRegion`, the one loading placeholder; its usage rules
+live in the web components spec), and `attention-line` (`AttentionLine`, the "Your input is needed · Agent is
+waiting" line; `announced` hides the visible line from assistive tech once the always-mounted polite
+region carries the announcement, `live={false}` drops the region), alongside `utils` and `theme`.
+`menu-styles` is shared by the menu primitives and custom app menu rows. `toggle-segment` and `skeleton`
+moved here from the app when the resource renderers became a package, because both the app and
+[[module-resource-renderers]] use them; `attention-line` moved for the same reason when the
+`ask_user_question` card became an extension web half, because the app's extension prompts use it too.
 
 - Button variants are `default`/`destructive`/`outline`/`ghost`/`soft`; destructive confirms irreversible
   actions, and `soft` (primary-tinted surface + primary text) marks a prominent secondary action such as

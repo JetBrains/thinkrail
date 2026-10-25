@@ -403,7 +403,8 @@ render from their `toolCall` args and reply through **`ChatActions`** (see below
 
 **Extension dialogs ask inside the chat, never in a modal** (`ExtUiPrompt.tsx`). Every pi
 `select`/`confirm`/`input`/`editor` request renders as an inline prompt under the shared
-`AttentionLine` ("Your input is needed · Agent is waiting", also used by `ask_user_question`): a select is
+`AttentionLine` (`@thinkrail/ui/attention-line`: "Your input is needed · Agent is waiting", also used by
+`ask_user_question`): a select is
 one button per option in the extension's order with no extra Cancel (a chat message is the escape: the
 host cancels every pending dialog when it accepts a user message, and the prompt says so in a footer
 hint — "Sending a chat message cancels this request."), confirm is Cancel/OK, input and editor a field

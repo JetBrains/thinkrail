@@ -4,6 +4,7 @@
 	"private": true,
 	"type": "module",
 	"exports": {
+		"./attention-line": "./attention-line.tsx",
 		"./button": "./button.tsx",
 		"./command": "./command.tsx",
 		"./context-menu": "./context-menu.tsx",

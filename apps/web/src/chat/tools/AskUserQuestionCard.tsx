@@ -14,6 +14,7 @@ import type {
 } from "@thinkrail/contracts";
 import { resultText, type ToolRenderProps } from "@thinkrail/extension-api/web";
 import { useT } from "@thinkrail/locales/react";
+import { AttentionLine } from "@thinkrail/ui/attention-line";
 import { cn } from "@thinkrail/ui/utils";
 import {
 	Fragment,
@@ -25,7 +26,6 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { AttentionLine } from "../AttentionLine";
 import { readAskResult, useAskFocusScope, useAskState } from "../askState";
 import { useChatActions } from "../ChatActions";
 import { useFoldGeometry } from "../foldState";
