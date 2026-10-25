@@ -40,8 +40,13 @@ The host retains registration, lifecycle and ordering; `define*` helpers preserv
 - `./server` exposes `ServerExtension` and `defineServerExtension`, with pi `ExtensionFactory` types
   only. Descriptors carry `name` (the identity — the Settings on/off switch and `disabledExtensions` key
   on it), optional display copy `title` / `description` for the Settings catalog, `extensions`, optional
-  `childExtensions` and optional `skillPackages` specifiers. Its identity helper preserves factories, order and optional-field absence; loading and
-  skill resolution remain host responsibilities.
+  `sessionExtensions`, optional `childExtensions` and optional `skillPackages` specifiers. Its identity
+  helper preserves factories, order and optional-field absence; loading and skill resolution remain host
+  responsibilities.
+- `sessionExtensions(session: ExtensionSessionServices) => ExtensionFactory[]` is how an extension uses
+  per-session state the host owns: the host calls it once per parent session with that session's
+  services. Today the services are `awaitToolResponse(toolCallId, signal)`, which resolves a
+  `ToolResponse`: `{kind: "response", value}`, `{kind: "deferred"}` or `{kind: "abandoned"}`.
 - The root is browser-safe and exposes only the web contract; it never re-exports the server half.
 - Workspace dependencies are `contracts` and, type-only, `@thinkrail/locales/react`'s `Translator`.
   React and pi are type-only contract dependencies; there are no React components, registry, DOM access,

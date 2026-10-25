@@ -26,10 +26,12 @@ extension's `skillPackages` — they keep staging and loading until an extension
 
 ## Shape — two entrypoints, no root barrel
 
-- `./server` — default export `defineServerExtension({ name, title?, description?, extensions, childExtensions?, skillPackages? })`
+- `./server` — default export `defineServerExtension({ name, title?, description?, extensions, sessionExtensions?, childExtensions?, skillPackages? })`
   (`title` / `description` are Settings display copy).
   `extensions` / `childExtensions` are pi `ExtensionFactory`s the host composes into every parent session /
   the curated child set, registered as named `InlineExtension`s so pi diagnostics keep an identity.
+  `sessionExtensions(session)` returns further parent factories built from one session's host services
+  ([[module-extension-api]]).
   `skillPackages` are **package specifiers** whose `pi.skills` directories the host stages — explicit module
   identity for the build step, never inferred from a function. Server-only; may value-import pi.
 - `./web` — default export `defineWebExtension({ name, toolRenderers })` keyed by tool name, **plus named
@@ -43,7 +45,8 @@ panels, settings) are added to these objects when a real consumer needs them.
 separate server and browser entrypoints; no imports of host internals; host-owned scoped state
 (per-session owners such as subagents and background commands, per-workspace services) is supplied through
 explicit seams and never created by an extension. Per-session owners therefore stay in the host's
-session manager, outside the static registry.
+session manager. An extension reaches their services only through `sessionExtensions(session)`, the
+explicit per-session seam. The descriptor itself stays static.
 
 ## Host UI SDK
 

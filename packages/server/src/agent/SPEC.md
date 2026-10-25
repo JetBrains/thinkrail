@@ -672,7 +672,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     open session until its next resource reload — pi cannot unload an extension, and reloading on every
     disable would bust the prompt cache. The reverse is the one reload: an enabled extension the session
     never loaded (created while it was off) and that did not fail to load triggers a gated
-    `requestSessionReload`. Registration applies the same reconciliation, and a completed reload reapplies
+    `requestSessionReload`. An extension counts as loadable when it has static or per-session parent
+    factories. Registration applies the same reconciliation, and a completed reload reapplies
     it without requesting another reload, so a toggle that lands mid-reload converges. Settings are the
     source of truth across restarts: Pi ≥ 1.3 restores a resumed chat's recorded tool loadout, keeping
     recorded removals inactive, so attach first re-activates every tool of an enabled registry extension
