@@ -96,9 +96,11 @@ get no further environment retries.
 
 A platform's native behavior is proven only on that platform. Windows remains a PR gate because its
 executable, environment, path, and trash behavior differs materially from POSIX hosts. Its subprocess unit
-gate also exercises native descendant-console behavior, which the Linux unit run cannot prove, and its
-desktop window-chrome unit gate binds the `user32.dll` frame symbols the frameless title bar relies on
-([[module-desktop]]); neither needs the Electrobun devkit. Its path gate (`bun run test:windows-paths`) runs
+gate also exercises native descendant-console behavior, which the Linux unit run cannot prove. Its
+desktop window-chrome unit gate binds the `user32.dll` frame symbols the frameless title bar relies on,
+and round-trips the window icon through a real window ([[module-desktop]]). Neither gate needs the
+Electrobun devkit. Its binary smoke also checks the compiled exe's icon and file properties
+([[module-artifact-tests]]). Its path gate (`bun run test:windows-paths`) runs
 the suites that pin architecture Decision 22 on the one host where git prints `C:/…`, node prints `C:\…`,
 and `\` is not a file-name character: stored directories, chat lifecycle in Default and external workspaces,
 POSIX wire paths, git object names, picker roots, and `install.ps1`'s PATH check. A suite joins the gate only

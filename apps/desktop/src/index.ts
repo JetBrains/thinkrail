@@ -69,6 +69,11 @@ import {
 	windowChromePreloadSeed,
 } from "./windowChrome";
 import { loadWindowsFrameApi, restoreWindowsFrameControls } from "./windowsFrame";
+import {
+	applyWindowsWindowIcon,
+	loadWindowsIconApi,
+	type WindowsHandle,
+} from "./windowsWindowIcon";
 
 type BeforeQuitEvent = ReturnType<typeof Electrobun.events.events.app.beforeQuit>;
 
@@ -120,6 +125,19 @@ function windowControlsProbeScript(target: { testId: string; label: string }): s
 }
 let startupQuitCoordinator: ReturnType<typeof createElectrobunQuitCoordinator> | undefined;
 let startupSplash: StartupSplash | undefined;
+
+function setWindowsWindowIcon(window: { readonly ptr: WindowsHandle | null }): void {
+	if (process.platform !== "win32" || !window.ptr) return;
+	try {
+		applyWindowsWindowIcon(
+			window.ptr,
+			join(PATHS.RESOURCES_FOLDER, "app.ico"),
+			loadWindowsIconApi(),
+		);
+	} catch (error) {
+		desktopError("windows_icon", "could not set the Windows window icon", error);
+	}
+}
 
 function desktopUserData(): string {
 	return process.env.THINKRAIL_DESKTOP_USER_DATA ?? Utils.paths.userData;
@@ -196,7 +214,11 @@ async function start(): Promise<void> {
 	const shellEnv = resolveShellEnv();
 	if (!neutral && process.env.THINKRAIL_DESKTOP_HIDDEN !== "1") {
 		startupSplash = await openStartupSplash(
-			(options) => new BrowserWindow(options),
+			(options) => {
+				const splash = new BrowserWindow(options);
+				setWindowsWindowIcon(splash);
+				return splash;
+			},
 			splashMessage(dialogLabels, pendingInstallVersion),
 		);
 	}
@@ -380,6 +402,7 @@ async function start(): Promise<void> {
 						: {}),
 				}),
 	});
+	setWindowsWindowIcon(mainWindow);
 	if (!neutral) {
 		handleTitleBarDoubleClick = createTitleBarDoubleClickHandler({
 			enabled: windowChrome.titleBarDoubleClick,
