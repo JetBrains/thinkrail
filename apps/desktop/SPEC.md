@@ -6,7 +6,7 @@ title: Desktop launcher/client (Electrobun)
 parent: architecture
 depends-on: [module-server, module-contracts, module-shared]
 tags: [desktop, launcher, packaging]
-references: [submodule-web-navigation, module-artifact-tests, module-ci-release, submodule-web-shell]
+references: [submodule-web-navigation, module-artifact-tests, module-ci-release, submodule-web-shell, module-cli]
 ---
 
 ## Responsibility
@@ -405,27 +405,51 @@ the pi graph — Cottontail's module runtime cannot evaluate that graph; `typebo
 first casualty) and to bundle the separately staged `.ts` server runtime rather than changing PI's
 bundler. Its transient factory entry is removed even on failure. Staged resources include the workflow SPEC consumed by the bundled skills. A documented
 `postBuild` hook removes staging after the framework has copied it; a failed build's staging is replaced
-at the next pre-build. On Windows that hook also brands the bundled uninstaller after its resource exists
-but before release compression, wrapping, and signing. Builds in one worktree remain sequential.
+at the next pre-build. On Windows that hook also brands the bundled executables (below) after Hutch's
+icon embed and before release compression, wrapping, and signing. Builds in one worktree remain
+sequential.
 
 Electrobun's platform icon configuration points at one ThinkRail mark in the native formats each target
 requires: the macOS iconset, Windows multi-resolution ICO, and Linux PNG. The native mark preserves its
 rounded-square silhouette with the ThinkRail glyph in the dark-family brand green (`#8dff4f`) on a solid
 black tile; translucent glass, highlights, and decorative edging are excluded so small taskbar frames stay
-crisp. The browser favicon and in-app shell mark are separate web-owned surfaces. The same Windows ICO is the
-Hutch-owned source for the installed app, setup/extractor executable, shortcuts, and taskbar identity; no
-release action substitutes a second installer icon. Electrobun 2.0.1 does not apply that icon to its
-bundled Windows uninstaller, so the project `postBuild` hook adds the same icon group to
-`Resources/uninstall`.
+crisp. The browser favicon and in-app shell mark are separate web-owned surfaces. The same Windows ICO
+also brands the CLI's Windows binary ([[module-cli]]).
+
+On Windows, Hutch embeds the ICO in the setup/extractor executable and `bin/launcher.exe`, and the
+shortcuts and the Installed-apps entry point at the launcher. No release action substitutes a second
+installer icon. The running app, however, is `bin/bun.exe`, and there Electrobun 2.0.1 / Hutch leave
+three gaps, closed by the project:
+
+- **Icon group.** Hutch adds group 1 to `bun.exe`, but Bun's own named `IDI_MYICON` stays and is what
+  the shell picks first. The uninstaller gets no icon at all.
+- **File properties.** Hutch writes no VERSIONINFO. `bun.exe` keeps Bun's ("Bun"/"Oven"), so Task
+  Manager lists the app as Bun; the launcher and uninstaller have none.
+
+  `postBuild` closes both gaps. It rewrites the resources of `bin/bun.exe`, `bin/launcher.exe` and
+  `Resources/uninstall`: every icon entry is replaced by one group 1 with all frames, and VERSIONINFO
+  comes from [[module-shared]]'s `windowsFileIdentity`. Rewriting drops `bun.exe`'s now-invalid Oven
+  certificate entry; release signing covers every PE afterwards ([[module-ci-release]]).
+- **Window icon.** Electrobun registers its window class without an icon, never sends `WM_SETICON`, and
+  its Windows `setWindowIcon` is a stub. Startup therefore loads `Resources/app.ico` (Hutch's copy of the
+  ICO) through `user32` and sends it to the splash and the main window, sized for the window's DPI. A
+  failure is reported and non-fatal.
+
+Removal gates: Hutch writing the executable identity and replacing the main process's icon groups;
+Electrobun setting a window icon on Windows. Taskbar grouping is still open:
+- the pinned shortcut targets the launcher while the window belongs to `bun.exe`;
+- nothing sets an AppUserModelID, so the two show as separate taskbar buttons
+  (blackboardsh/electrobun#514; see Deferred).
 
 `assets/icon.svg` is the one hand-authored source; every raster below it (the iconset, the ICO, the
 Linux PNG) is generated, never hand-edited, by `scripts/generate-icons.ts` (`bun run generate-icons`)
 using `@resvg/resvg-js` to rasterize straight from the vector. The Windows ICO carries PNG-compressed
-frames at 16/24/32/48/64/128/256 — Microsoft's documented icon-construction minimum (16/24/32/48/256)
+frames at 256/128/64/48/32/24/16 — Microsoft's documented icon-construction minimum (16/24/32/48/256)
 plus two extra sizes so in-between DPI scales interpolate from a close neighbor — packed through the
-same `resedit` dependency already used for the uninstaller. A prior 4-frame raw-BMP ICO (16/32/48/256,
-pre-dating the generator) had no frame matching the Windows 11 taskbar's 24×24 100%-scale target,
-reading as blurry there; the generated set closes that gap.
+same `resedit` dependency the executable branding uses. Frames are ordered largest first because Bun's
+compiler keeps a named icon group that maps only icon #1 (oven-sh/bun#32428, [[module-cli]]). A prior
+4-frame raw-BMP ICO (16/32/48/256, pre-dating the generator) had no frame matching the Windows 11
+taskbar's 24×24 100%-scale target, reading as blurry there; the generated set closes that gap.
 
 Electrobun's `build.views` owns the browser preload bundle; `build.copy` owns physical resource inclusion.
 There is no custom SDK resolver, SDK metadata validator, or Electrobun command runner. App-local Hutch
@@ -533,5 +557,7 @@ release checks described in [[module-ci-release]].
 ## Deferred
 
 Shared/remote backend profiles, profile selection, multi-window/deep-link routing, CEF, and removing the
-`user32` style-bit shim once blackboardsh/electrobun#558 ships. The update feed publication described above
+`user32` style-bit shim once blackboardsh/electrobun#558 ships. The Windows taskbar identity is deferred
+too: one AppUserModelID shared by the process and its shortcuts, so a pinned ThinkRail and the running
+window are one button (blackboardsh/electrobun#514). The update feed publication described above
 remains release-owned.
