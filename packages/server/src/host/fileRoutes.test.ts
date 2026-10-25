@@ -155,13 +155,21 @@ test.skipIf(process.platform !== "win32")(
 		expect((await serveWorktreeFile("/files/w1/GIT~1%2Fconfig")).status).toBe(404);
 		expect((await serveWorktreeFile("/files/w1/.git.%2Fconfig")).status).toBe(404);
 		expect(
-			(await serveWorktreeFile("/files/w1/.git%3A%3A%24INDEX_ALLOCATION%2Fconfig")).status,
-		).toBe(404);
+			(await serveWorktreeFile("/files/w1/.git%3A%3A%24INDEX_ALLOCATION%2Fconfig")),
+		).status.toBe(404);
 		expect((await serveBlob(`/blob/w1/${head}/.GIT%2Fconfig`)).status).toBe(404);
 		expect((await serveBlob(`/blob/w1/${head}/GIT~1%2Fconfig`)).status).toBe(404);
 		expect(
-			(await serveBlob(`/blob/w1/${head}/.git%3A%3A%24INDEX_ALLOCATION%2Fconfig`)).status,
-		).toBe(404);
+			(await serveBlob(`/blob/w1/${head}/.git%3A%3A%24INDEX_ALLOCATION%2Fconfig`)),
+		).status.toBe(404);
+	},
+);
+
+test.skipIf(process.platform !== "win32")(
+	"file routes serve legitimate files named git~2 on Windows",
+	async () => {
+		writeFileSync(join(repo, "git~2"), "legit\n");
+		expect((await serveWorktreeFile("/files/w1/git~2")).status).toBe(200);
 	},
 );
 

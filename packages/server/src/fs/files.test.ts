@@ -70,8 +70,20 @@ test("readDir refuses .git and filters it from listings", () => {
 });
 
 test.skipIf(process.platform !== "win32")(
+	"candidate path inspection runs deterministically with long runs of dots and spaces",
+	() => {
+		const bigRun = ".".repeat(50_000) + "x";
+		const start = performance.now();
+		expect(() => readFile("w1", bigRun)).toThrow();
+		expect(performance.now() - start).toBeLessThan(1000);
+	},
+);
+
+test.skipIf(process.platform !== "win32")(
 	"readFile and resolveWorktreeFile refuse NTFS .git aliases on Windows",
 	() => {
+		mkdirSync(join(root, ".git"), { recursive: true });
+		mkdirSync(join(root, "src", "nested", ".git"), { recursive: true });
 		const aliases = [
 			".GIT",
 			".GIT/config",
@@ -79,7 +91,6 @@ test.skipIf(process.platform !== "win32")(
 			"GIT~1",
 			"GIT~1/config",
 			"git~1/HEAD",
-			"GIT~2/config",
 			".git.",
 			".git./config",
 			".git ",
@@ -97,6 +108,31 @@ test.skipIf(process.platform !== "win32")(
 				"The .git directory is not readable",
 			);
 		}
+	},
+);
+
+test.skipIf(process.platform !== "win32")(
+	"Windows permits legitimate worktree entries matching git~N that do not alias .git",
+	() => {
+		mkdirSync(join(root, ".git"), { recursive: true });
+		mkdirSync(join(root, "git~2"), { recursive: true });
+		writeFileSync(join(root, "git~2", "hello.txt"), "hello from git~2\n");
+		writeFileSync(join(root, "git~123.txt"), "hello from git~123\n");
+
+		expect(readFile("w1", "git~2/hello.txt").content).toBe("hello from git~2\n");
+		expect(readFile("w1", "git~123.txt").content).toBe("hello from git~123\n");
+		expect(resolveWorktreeFile("w1", "git~2/hello.txt")).toBe(
+			join(root, "git~2", "hello.txt"),
+		);
+		expect(resolveWorktreeFile("w1", "git~123.txt")).toBe(join(root, "git~123.txt"));
+
+		const top = readDir("w1", ".").map((node) => node.name);
+		expect(top).toContain("git~2");
+		expect(top).toContain("git~123.txt");
+		expect(top).not.toContain(".git");
+
+		const sub = readDir("w1", "git~2").map((node) => node.name);
+		expect(sub).toEqual(["hello.txt"]);
 	},
 );
 
