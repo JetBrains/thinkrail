@@ -19,8 +19,16 @@ export function workspaceRelativePath(root: string, path: string): string | null
 	return isContained(base, abs) ? posixRelative(base, abs) : null;
 }
 
+function isGitSegment(segment: string): boolean {
+	if (process.platform === "win32") {
+		const base = segment.replace(/[. ]+$/, "").split(":")[0]?.toLowerCase() ?? "";
+		return base === ".git" || /^git~\d+$/i.test(base);
+	}
+	return segment === ".git";
+}
+
 function isGitMetadataPath(root: string, candidate: string): boolean {
-	return relative(root, candidate).split(sep).includes(".git");
+	return relative(root, candidate).split(sep).some(isGitSegment);
 }
 
 function assertExistingAncestorContained(root: string, abs: string): void {
@@ -65,7 +73,7 @@ export function readDir(workspaceId: string, path: string): FileNode[] {
 	const { root, abs } = resolveInWorktree(workspaceId, path, true);
 
 	return readdirSync(abs, { withFileTypes: true })
-		.filter((entry) => entry.name !== ".git")
+		.filter((entry) => !isGitSegment(entry.name))
 		.map(
 			(entry): FileNode => ({
 				path: posixRelative(root, join(abs, entry.name)),
