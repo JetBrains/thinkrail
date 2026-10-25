@@ -1,5 +1,3 @@
-import { userInfo } from "node:os";
-
 const INHERITED_NAMES: ReadonlySet<string> = new Set([
 	"PWD",
 	"OLDPWD",
@@ -44,10 +42,24 @@ function isInherited(name: string): boolean {
 	return INHERITED_NAMES.has(name) || INHERITED_PREFIXES.some((prefix) => name.startsWith(prefix));
 }
 
+let cachedAccountName: string | null | undefined;
+
+export function uidAccountName(): string | null {
+	if (cachedAccountName === undefined) {
+		try {
+			const id = Bun.spawnSync(["id", "-un"], { stdin: "ignore", stderr: "ignore" });
+			cachedAccountName = (id.success && id.stdout.toString().trim()) || null;
+		} catch {
+			cachedAccountName = null;
+		}
+	}
+	return cachedAccountName;
+}
+
 export function terminalPtyEnv(
 	platform: string,
 	env: Record<string, string | undefined>,
-	username: string = userInfo().username,
+	accountName: () => string | null = uidAccountName,
 ): Record<string, string> {
 	const result: Record<string, string> = {};
 	for (const [name, value] of Object.entries(env)) {
@@ -56,9 +68,10 @@ export function terminalPtyEnv(
 	result.TERM = "xterm-256color";
 	result.COLORTERM = "truecolor";
 	result.TERM_PROGRAM = "ThinkRail";
-	if (platform !== "win32") {
-		result.USER = username;
-		result.LOGNAME = username;
+	const account = platform === "win32" ? null : accountName();
+	if (account) {
+		result.USER = account;
+		result.LOGNAME = account;
 	}
 	return result;
 }

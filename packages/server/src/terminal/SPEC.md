@@ -28,7 +28,7 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   caller returns `null`), so the host counts only input that actually reached a PTY as workspace activity;
   the `TerminalDeliveryResult` type shared with the host publisher adapter.
 - **Allowed deps:** `persistence`, `contracts` (`WS_CHANNELS`, `TerminalWindowsShell`), `bun-pty`,
-  `Bun.which`, `process.env`, `node:os` (`userInfo`).
+  `Bun.which`, `Bun.spawnSync` (`id -un`), `process.env`.
 - **Forbidden:** `host`; sibling features. No WebSocket type crosses this boundary — clients are opaque keys.
 
 ## Decisions
@@ -86,10 +86,14 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   `ELECTROBUN_*`, `JITI_*`, `BUN_PTY_LIB`) and per-shell bookkeeping (`PWD`, `OLDPWD`, `SHLVL`, `_`) are
   dropped; the terminal identifies itself as `TERM=xterm-256color`, `COLORTERM=truecolor`,
   `TERM_PROGRAM=ThinkRail`. `NO_COLOR` is kept: it is the user's standing preference, not a runner's
-  override. Dropping is safe on Unix because the shell re-sources the user's own startup files. On Unix,
-  `USER` and `LOGNAME` are stamped from `userInfo()` (uid-derived): the PTY registers no utmpx session, so a
-  shell without them asks `getlogin()`, which reads a reused pty device's stale record and can report
-  another user (#427).
+  override. Dropping is safe on Unix because the shell re-sources the user's own startup files. The
+  filtered map is the child's *whole* environment: bun-pty >= 0.5 does not merge it over the host's native
+  environment (0.4 did, so a variable the host started with reached the shell whatever the filter said).
+  On Unix, `USER` and `LOGNAME` are stamped from `id -un`, resolved once per process: the PTY registers no
+  utmpx session, so a shell without them asks `getlogin()`, which reads a reused pty device's stale record
+  and can report another user (#427). Bun's `os.userInfo().username` is not a substitute — it reads `$USER`
+  and falls back to `unknown` instead of resolving the uid. When `id` fails, the inherited values are kept
+  rather than replaced by a guess.
 - **A shell is keyed by `(workspaceId, tabKey)`**, never by a socket, a client, or a component. `tabKey` is
   durable and client-supplied; PTY ids are per-run and **never persisted** (attaching to an id that outlived
   its process is Theia's `Couldn't attach - can't find terminal with id`).
@@ -196,11 +200,14 @@ identities. A tab's shell outlives every client that looks at it; each frontend 
   arguments; `auto`'s pwsh-then-powershell resolution via an injected `WhichFn`; every explicit preference
   is a literal pin regardless of what `which` reports; `ComSpec`/`COMSPEC` no longer influence the result.
 - `ptyEnv.test.ts` — launcher identity, colour forcing and host-internal variables are dropped while the
-  user's own variables (incl. `NO_COLOR`) survive; `USER`/`LOGNAME` come from the account on Unix only.
+  user's own variables (incl. `NO_COLOR`) survive; `USER`/`LOGNAME` come from the account on Unix only and
+  are kept when no account resolves; the resolved name maps back to the host uid; a real PTY spawned by a
+  host *started* with leaked variables and no `USER` sees only the filtered environment, its account
+  checked through `id -u` rather than the implementation's own lookup.
 - `terminalManager.test.ts` — transactional durable reservation without spawn, catalog bounds, rejection
   of malformed write data and out-of-range or non-integer grid sizes on resize and attach, attach
   idempotency (incl. concurrent), takeover, displaced-client rejection, tab-list broadcast, close/busy,
-  revive, and a real shell reporting the account's `LOGNAME` with a leaked `LOGNAME=root` in the host.
+  revive, and a real shell whose `USER`/`LOGNAME` map back to the host uid despite a leaked `LOGNAME=root`.
   Replay-persistence and natural-exit cases use bounded publisher-observed data/exit conditions as
   readiness edges, never elapsed time; their expected output marker never appears contiguously in the command
   input, so terminal echo cannot impersonate command execution. "Any output" is not a replay readiness edge:
