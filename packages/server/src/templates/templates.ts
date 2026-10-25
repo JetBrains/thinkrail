@@ -23,12 +23,7 @@ export interface TemplateDirs {
 export function isValidTemplateName(name: string): boolean {
 	if (name.length === 0) return false;
 	if (name.startsWith(".")) return false;
-	return (
-		!name.includes("/") &&
-		!name.includes("\\") &&
-		!name.includes("\0") &&
-		!name.includes(":")
-	);
+	return !name.includes("/") && !name.includes("\\") && !name.includes("\0") && !name.includes(":");
 }
 
 export function templateDirs(cwd?: string, agentDir: string = getAgentDir()): TemplateDirs {
