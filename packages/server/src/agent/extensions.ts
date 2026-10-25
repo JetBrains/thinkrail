@@ -19,6 +19,7 @@ import {
 import type { SkillCatalogEntry, SlashCommandInfo } from "@thinkrail/contracts";
 import specGraphExtension from "pi-spec-graph";
 import {
+	type ExtensionSessionServices,
 	omitDisabledRegistryExtensions,
 	registryInlineExtensions,
 	resolveExtensionSkillRoots,
@@ -228,11 +229,12 @@ export async function buildResourceLoader(
 	getAdmission: () => SkillAdmissionContext,
 	excludedExtensionPaths: readonly string[] = [],
 	extraFactories: InlineExtension[] = [],
+	session?: ExtensionSessionServices,
 ): Promise<ResourceLoader> {
 	let disabledAtReload = disabledExtensions();
 	const isDisabledAtReload = (name: string): boolean => disabledAtReload.has(name);
 	const sharedFactories: InlineExtension[] = [
-		...registryInlineExtensions("extensions", isDisabledAtReload),
+		...registryInlineExtensions("extensions", isDisabledAtReload, serverExtensions, session),
 		headlessSearchPolicy,
 		askUserQuestionExtension(),
 		reviewToolExtension,

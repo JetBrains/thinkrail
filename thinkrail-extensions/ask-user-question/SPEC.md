@@ -10,13 +10,27 @@ references: [module-pi-ask-user-question, submodule-web-chat, submodule-server-a
 
 ## Responsibility
 
-The ThinkRail halves of the `ask_user_question` capability. `./web` is the inline questionnaire card. The
-server half is not shipped yet: until it is, the host-owned tool ([[submodule-server-agent]]) runs the
-questions and this card renders them by tool name. [[module-pi-ask-user-question]] is the portable tool the
-server half will compose.
+The ThinkRail halves of the `ask_user_question` capability.
+- `./server` composes the portable tool ([[module-pi-ask-user-question]]) for every parent session, with
+  ThinkRail's own wording and an asker that waits on the host's answer mailbox.
+- `./web` is the inline questionnaire card.
+
+The host keeps the question lifecycle: the mailbox phases, restart repair, late answers, composer
+supersede, Stop/Submit ordering and needs-input ([[submodule-server-agent]]).
 
 ## Boundary
 
+- `@thinkrail/ext-ask-user-question/server` default-exports a session-only descriptor:
+  - `extensions: []`;
+  - `sessionExtensions: (session) => [createAskUserQuestionExtension({ ask, guidance })]`.
+
+  The asker awaits `session.awaitToolResponse(toolCallId, signal)`. A `response` must be a questionnaire
+  result (checked with the package's `isAskUserQuestionResult`, else the call fails); `deferred` and
+  `abandoned` pass through as outcomes, so the package returns the canonical ack or the stop and ends the
+  turn. `guidance` is ThinkRail's description and prompt guidelines: the inline card, and a composer reply
+  that supersedes it. Named pure exports re-export the package core for the host: tool name, ack and stop
+  texts, `buildQuestionnaireResponse`, `isAckDetails`. The server half imports only `extension-api/server`
+  and its pi package.
 - `@thinkrail/ext-ask-user-question/web` default-exports a `defineWebExtension` descriptor that registers
   `AskUserQuestionCard` for `ask_user_question` with `chrome: "bare"`. It also exports the card by name for
   the plan page.

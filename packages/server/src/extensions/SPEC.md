@@ -45,7 +45,9 @@ list for registry extensions.
 - **Public surface (barrel):** `serverExtensions`, `ServerExtensionEntry`, `registryInlineExtensions`,
   `RegistryExtensionKind`, `ExtensionDisabled`, `omitDisabledRegistryExtensions`, `registryExtensionName`,
   `listExtensionCatalog`,
-  `resolveExtensionSkillRoots`.
+  `resolveExtensionSkillRoots`, `ExtensionSessionServices`, `ToolResponse`.
+- **Session-seam types:** `ExtensionSessionServices` and `ToolResponse` are re-exported from
+  `extension-api/server` so that `agent` can type the services it builds through this barrel.
 - **Allowed deps:** `@thinkrail/extension-api/server` (types), every `@thinkrail/ext-*/server`,
   `@earendil-works/pi-coding-agent` (types only), `@thinkrail/contracts` (the `ExtensionCatalogEntry` type),
   Node `module`/`fs`/`path`.

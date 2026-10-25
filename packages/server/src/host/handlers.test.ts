@@ -458,6 +458,14 @@ test("extension.list reflects disabledExtensions written through settings.update
 			tools: ["visualize"],
 			hasChildExtensions: false,
 		},
+		{
+			name: "ask-user-question",
+			title: "Ask user question",
+			description: expect.any(String),
+			enabled: true,
+			tools: ["ask_user_question"],
+			hasChildExtensions: false,
+		},
 	]);
 	await handleRequest(
 		"settings.update",
@@ -466,10 +474,12 @@ test("extension.list reflects disabledExtensions written through settings.update
 	);
 	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
 		{ name: "visualize", enabled: false },
+		{ name: "ask-user-question", enabled: true },
 	]);
 	await handleRequest("settings.update", { config: { disabledExtensions: [] } }, CTX);
 	expect(await handleRequest("extension.list", {}, CTX)).toMatchObject([
 		{ name: "visualize", enabled: true },
+		{ name: "ask-user-question", enabled: true },
 	]);
 });
 

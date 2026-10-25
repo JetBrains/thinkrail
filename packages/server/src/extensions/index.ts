@@ -1,3 +1,4 @@
+export type { ExtensionSessionServices, ToolResponse } from "@thinkrail/extension-api/server";
 export { listExtensionCatalog } from "./catalog";
 export {
 	type ExtensionDisabled,

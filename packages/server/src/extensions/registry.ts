@@ -1,3 +1,4 @@
+import askUserQuestion from "@thinkrail/ext-ask-user-question/server";
 import visualize from "@thinkrail/ext-visualize/server";
 import type { ServerExtension } from "@thinkrail/extension-api/server";
 
@@ -8,4 +9,5 @@ export interface ServerExtensionEntry {
 
 export const serverExtensions: readonly ServerExtensionEntry[] = [
 	{ specifier: "@thinkrail/ext-visualize/server", extension: visualize },
+	{ specifier: "@thinkrail/ext-ask-user-question/server", extension: askUserQuestion },
 ];

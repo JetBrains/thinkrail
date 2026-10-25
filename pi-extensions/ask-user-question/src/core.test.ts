@@ -9,6 +9,7 @@ import {
 	buildQuestionnaireResponse,
 	DECLINE_MESSAGE,
 	isAckDetails,
+	isAskUserQuestionResult,
 	isolateAskUserQuestionBatch,
 	MAX_HEADER_LENGTH,
 	MAX_LABEL_LENGTH,
@@ -262,5 +263,15 @@ describe("isolateAskUserQuestionBatch", () => {
 			}),
 		).toBeUndefined();
 		expect(isolateAskUserQuestionBatch({ role: "user", content: "hi" })).toBeUndefined();
+	});
+});
+
+describe("isAskUserQuestionResult", () => {
+	test("accepts answers with a cancelled flag and rejects anything else", () => {
+		expect(isAskUserQuestionResult({ answers: [], cancelled: false })).toBe(true);
+		expect(isAskUserQuestionResult({ kind: "ack" })).toBe(false);
+		expect(isAskUserQuestionResult({ answers: "x", cancelled: false })).toBe(false);
+		expect(isAskUserQuestionResult({ answers: [] })).toBe(false);
+		expect(isAskUserQuestionResult(null)).toBe(false);
 	});
 });

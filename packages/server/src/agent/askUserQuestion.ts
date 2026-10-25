@@ -18,6 +18,7 @@ import {
 	isAskUserAnswersMessage,
 } from "@thinkrail/contracts";
 import { type Static, Type } from "typebox";
+import type { ExtensionSessionServices } from "../extensions";
 
 export const MIN_OPTIONS = 2;
 export const MAX_OPTIONS = 4;
@@ -527,6 +528,21 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 				if (waiter.phase === "answer-accepted-uncommitted") waiter.rejectPersisted(error);
 			}
 			waiting.clear();
+		},
+	};
+}
+
+export function askUserQuestionSessionServices(
+	waiters: AskUserQuestionWaiters,
+): ExtensionSessionServices {
+	return {
+		awaitToolResponse: async (toolCallId, signal) => {
+			const outcome = await waiters.wait(toolCallId, signal);
+			return outcome.kind === "answer"
+				? { kind: "response", value: outcome.result }
+				: outcome.kind === "superseded"
+					? { kind: "deferred" }
+					: { kind: "abandoned" };
 		},
 	};
 }

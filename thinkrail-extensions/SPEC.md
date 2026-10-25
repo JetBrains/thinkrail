@@ -38,8 +38,14 @@ extension's `skillPackages` — they keep staging and loading until an extension
   exports** for components the host uses directly (visualize exports `MermaidView` for fenced mermaid in
   chat markdown). Browser-only; never value-imports pi; heavy renderers stay lazy.
 
-The `define*` objects and the named web exports are the whole contract. Future capabilities (wire methods,
-panels, settings) are added to these objects when a real consumer needs them.
+The `define*` objects and the named exports are the whole contract:
+- named `./web` exports are components the host renders directly;
+- named `./server` exports are **pure helpers** the host needs for the capability's host-owned lifecycle
+  (ask-user-question re-exports its tool name, acknowledgement and stop texts, and envelope builder for
+  restart repair and late answers). The host reaches them only through `packages/server/src/extensions`.
+
+Future capabilities (wire methods, panels, settings) are added to these objects when a real consumer needs
+them.
 
 **The property fixed now so later extensions never force a rewrite — runtime/lifecycle ownership:**
 separate server and browser entrypoints; no imports of host internals; host-owned scoped state

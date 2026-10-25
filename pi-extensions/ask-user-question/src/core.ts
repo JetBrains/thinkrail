@@ -179,6 +179,15 @@ export function outcomeResult(
 	}
 }
 
+export function isAskUserQuestionResult(value: unknown): value is AskUserQuestionResult {
+	return (
+		!!value &&
+		typeof value === "object" &&
+		Array.isArray((value as AskUserQuestionResult).answers) &&
+		typeof (value as AskUserQuestionResult).cancelled === "boolean"
+	);
+}
+
 export function isAckDetails(details: unknown): details is AskUserQuestionAckDetails {
 	return !!details && (details as AskUserQuestionAckDetails).kind === "ack";
 }

@@ -24,6 +24,7 @@ export {
 	CHAT_LABEL,
 	DECLINE_MESSAGE,
 	isAckDetails,
+	isAskUserQuestionResult,
 	isolateAskUserQuestionBatch,
 	MAX_HEADER_LENGTH,
 	MAX_LABEL_LENGTH,

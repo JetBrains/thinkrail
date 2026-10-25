@@ -80,6 +80,7 @@ import {
 	ANSWERABILITY_ERRORS,
 	ASK_USER_QUESTION_TOOL_NAME,
 	type AskUserQuestionWaiters,
+	askUserQuestionSessionServices,
 	assessAnswerability,
 	buildAnswersMessage,
 	createAskUserQuestionTool,
@@ -1437,6 +1438,7 @@ async function createParentSessionInternal(
 					createBackgroundCommandsExtension({ service: commands }),
 					...mcpHost.extensions,
 				],
+				askUserQuestionSessionServices(askUserQuestionWaiters),
 			),
 		});
 		session = result.session;
