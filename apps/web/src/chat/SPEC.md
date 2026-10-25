@@ -314,7 +314,7 @@ rows, `ToolCard`, the divider's multi-artifact chips) records manual toggles in 
 (`foldState.ts`, keyed by row/step id. Two hooks over that module: **`useFold`** for independent booleans,
 and **`useSelection`** for a single-choice group — the divider's chips, which store the *selected key* under
 `${rowId}:artifacts` rather than a boolean per side, so "only one list open" cannot be violated;
-the `AskUserQuestionCard` pattern, see tools/SPEC.md; deliberately
+the `AskUserQuestionCard` pattern, see [[module-ext-ask-user-question]]; deliberately
 never evicted — growth is bounded by manual toggles). A manual toggle always wins — over auto-expand
 defaults *and* over a virtualization remount. `FoldGeometryProvider` is the transcript's explicit pre/post
 change seam: every fold header registers a stable row-derived id through `useFold`, including `Collapsible`
