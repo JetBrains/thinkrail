@@ -1392,7 +1392,7 @@
 	"shell.workbench.newTerminal": "在此分组中新建终端",
 	"shell.workbench.panel.chat": "会话",
 	"shell.workbench.panel.editor": "编辑器",
-	"shell.workbench.panel.plan": "套餐",
+	"shell.workbench.panel.plan": "计划",
 	"shell.workbench.panel.planRail": "计划栏",
 	"shell.workbench.panel.terminal": "终端",
 	"shell.workbench.panel.tool": "{{tool}} 工具",
