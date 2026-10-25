@@ -24,6 +24,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   and interactive-output gate used by every launcher;
   `@thinkrail/shared/version` → the baked `{ version, channel, commit }` release identity shared by CLI,
   desktop, and host provenance (with a committed `0.0.0-dev` source default);
+  `@thinkrail/shared/windowsIdentity` → `windowsFileIdentity()`, the Windows file properties both
+  launchers stamp on their executables;
   `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
   `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;
@@ -97,6 +99,14 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `--version`, desktop package metadata, analytics, and `server.welcome.appVersion` cannot drift. It
   contains identity data plus the release-only public `posthogProjectKey` (empty in source, so
   unstamped builds never report) and has no launcher dependency.
+- **/windowsIdentity** — `windowsFileIdentity({ version, channel })`: what Windows shows for a ThinkRail
+  executable. The product name, which also serves as the file description Task Manager displays, is
+  `ThinkRail` on stable, `ThinkRail Nightly` on nightly and `ThinkRail Dev` on unstamped builds. The
+  publisher and copyright are JetBrains s.r.o., as in `LICENSE` and the signing certificate. The version
+  takes the four numeric parts Windows requires: `X.Y.Z` plus the prerelease's trailing number
+  (`0.3.0-nightly.6` → `0.3.0.6`), else `.0`. An unknown channel or a part above 65535 throws, so a
+  release build fails rather than ship wrong properties. The CLI compile, desktop `postBuild` and the
+  CLI smoke all derive from it, so they cannot disagree.
 - **/codedError** — `CodedError(code, message)` + `errorCodeOf(err)`: an error carrying a wire
   `WsErrorCode`, so a failure a client must react to *specifically* travels as a name rather than a string
   to pattern-match. It lives here because both ends of the seam need it and neither may import the other:
