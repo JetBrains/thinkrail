@@ -1,7 +1,11 @@
 import { describe, expect, it, mock } from "bun:test";
 import { isAbsolute } from "node:path";
 import type { ExtensionFactory } from "@earendil-works/pi-coding-agent";
-import { defineServerExtension, type ServerExtension } from "@thinkrail/extension-api/server";
+import {
+	defineServerExtension,
+	type ExtensionSessionServices,
+	type ServerExtension,
+} from "@thinkrail/extension-api/server";
 
 describe("defineServerExtension", () => {
 	it("preserves ordered factories and skill specifiers without loading them", () => {
@@ -32,9 +36,24 @@ describe("defineServerExtension", () => {
 
 		expect(extension).toBe(descriptor);
 		expect(extension).not.toHaveProperty("childExtensions");
+		expect(extension).not.toHaveProperty("sessionExtensions");
 		expect(extension).not.toHaveProperty("skillPackages");
 		expect(extension).not.toHaveProperty("title");
 		expect(extension).not.toHaveProperty("description");
+	});
+
+	it("keeps per-session factories as an uncalled function of the session's services", () => {
+		const sessionFactory = mock<ExtensionFactory>(() => {});
+		const sessionExtensions = mock((_session: ExtensionSessionServices) => [sessionFactory]);
+		const extension = defineServerExtension({ name: "session", extensions: [], sessionExtensions });
+
+		expect(extension.sessionExtensions).toBe(sessionExtensions);
+		expect(sessionExtensions).not.toHaveBeenCalled();
+		const session: ExtensionSessionServices = {
+			awaitToolResponse: async () => ({ kind: "deferred" }),
+		};
+		expect(extension.sessionExtensions?.(session)).toEqual([sessionFactory]);
+		expect(sessionFactory).not.toHaveBeenCalled();
 	});
 
 	it("keeps display copy beside the identity", () => {
