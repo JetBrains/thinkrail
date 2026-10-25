@@ -215,8 +215,10 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
     **`AskUserQuestionAckDetails`** (the tool result's `details` used only when restart repair closes a
     dangling live-blocking call before attach) and **`AskUserAnswersDetails`** + the
     **`ASK_USER_ANSWERS_CUSTOM_TYPE`** constant, **`AskUserAnswersMessage`** (the correctly-paired
-    tag↔details shape the host's builder is compile-held to) and the shared **`isAskUserAnswersMessage`**
-    guard (all in `wsProtocol`, the value-bearing half): an eligible live reply becomes the native tool
+    tag↔details shape the host's builder is compile-held to), the shared **`isAskUserAnswersMessage`**
+    guard and **`readAskUserQuestionResult`** (a result from a tool-result envelope's `details` or a bare
+    result, else `null`; shared by the web `askState`, the host's interaction adapter and the card) (all
+    in `wsProtocol`, the value-bearing half): an eligible live reply becomes the native tool
     result; a `length`/`error`/`aborted` assistant call is terminal and never answerable; after restart, the
     reply travels as an `ask-user-answers` custom message paired by `details.toolCallId`.
     `WireCustomMessage.customType` itself stays

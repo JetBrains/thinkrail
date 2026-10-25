@@ -1,15 +1,9 @@
 import type { AskUserQuestionResult, McpReadOutputResult, WireModel } from "@thinkrail/contracts";
+import type { ToolRevealOptions } from "@thinkrail/extension-api/web";
 import { createContext, useContext } from "react";
 import type { ResourceTarget } from "./resources";
-import type { RevealBlock } from "./scrollGeometry";
 
-export interface ChatRevealOptions {
-	block: RevealBlock;
-	provenance: "automatic-attention" | "user-navigation";
-	runway: "preserve" | "release";
-	stability: "none" | "bounded";
-	topInset?: number;
-}
+export type ChatRevealOptions = ToolRevealOptions;
 
 export type ResultTarget = ResourceTarget;
 

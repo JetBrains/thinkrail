@@ -45,6 +45,7 @@ import {
 	itemOpenFindings,
 	itemRevisions,
 	lastAgentText,
+	type PendingAsk,
 	type PlanGlance,
 	pendingAsk,
 	planCompletionSummary,
@@ -57,6 +58,7 @@ import {
 	sessionGlance,
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
+import { useToolInteraction } from "../chat/toolInteraction";
 import { AskUserQuestionCard } from "../chat/tools/AskUserQuestionCard";
 import { hydrateSessionRuntime, useChatTodos } from "../chat/useChatTodos";
 import {
@@ -656,6 +658,21 @@ function PlanCardSection({
 	);
 }
 
+function PlanAskCard({ ask }: { ask: PendingAsk }) {
+	const interaction = useToolInteraction(ask.toolCallId, "ask_user_question");
+	return (
+		<AskUserQuestionCard
+			toolCallId={ask.toolCallId}
+			toolName="ask_user_question"
+			args={ask.args}
+			result={ask.result}
+			status={ask.status}
+			streaming={ask.streaming}
+			interaction={interaction}
+		/>
+	);
+}
+
 // Keep the session's live slot isolated from the heavy PlanPane.
 function PlanSessionLive({ sessionId }: { workspaceId: string; sessionId: string }) {
 	const t = useT();
@@ -685,14 +702,7 @@ function PlanSessionLive({ sessionId }: { workspaceId: string; sessionId: string
 			<ChatActionsContext.Provider value={actions}>
 				<AskStatesContext.Provider value={{ states: askStates, focusScope }}>
 					<div data-testid="plan-ask" className="mb-8">
-						<AskUserQuestionCard
-							toolCallId={ask.toolCallId}
-							toolName="ask_user_question"
-							args={ask.args}
-							result={ask.result}
-							status={ask.status}
-							streaming={ask.streaming}
-						/>
+						<PlanAskCard ask={ask} />
 					</div>
 				</AskStatesContext.Provider>
 			</ChatActionsContext.Provider>

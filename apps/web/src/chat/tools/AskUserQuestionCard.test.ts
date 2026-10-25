@@ -13,7 +13,6 @@ import {
 	nudgeShowsOnPage,
 	parseQuestions,
 	questionPageForKey,
-	readAskResult,
 	readRecommendation,
 	selectOptionPatch,
 	shouldClaimQuestionFocus,
@@ -548,22 +547,5 @@ describe("answerSupportsNote", () => {
 	});
 	it("a custom answer has no option to hang a note on", () => {
 		expect(answerSupportsNote({ ...base, kind: "custom", answer: "mine" })).toBe(false);
-	});
-});
-
-describe("readAskResult", () => {
-	const result = { answers: [], cancelled: true };
-	it("reads from the live tool-result envelope ({ content, details })", () => {
-		expect(readAskResult({ content: [{ type: "text", text: "x" }], details: result })).toEqual(
-			result,
-		);
-	});
-	it("reads a bare result object (hydrated details)", () => {
-		expect(readAskResult(result)).toEqual(result);
-	});
-	it("returns null for shapes without a questionnaire result", () => {
-		expect(readAskResult({ content: [{ type: "text", text: "x" }] })).toBeNull();
-		expect(readAskResult("nope")).toBeNull();
-		expect(readAskResult(null)).toBeNull();
 	});
 });

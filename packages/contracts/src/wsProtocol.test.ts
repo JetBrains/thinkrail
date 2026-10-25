@@ -11,6 +11,7 @@ import {
 import {
 	AGENT_REVIEW_SETTING_PROTOCOL_VERSION,
 	ANALYTICS_CONSENT_PROTOCOL_VERSION,
+	ASK_USER_ANSWERS_CUSTOM_TYPE,
 	BRANCH_STATUS_PROTOCOL_VERSION,
 	CHANGE_MUTATIONS_PROTOCOL_VERSION,
 	CHAT_RESOURCES_PROTOCOL_VERSION,
@@ -22,6 +23,7 @@ import {
 	EXTENSION_CATALOG_PROTOCOL_VERSION,
 	HOST_ENVIRONMENT_PROTOCOL_VERSION,
 	HOST_UPDATE_RUN_PROTOCOL_VERSION,
+	isAskUserAnswersMessage,
 	isBackgroundCommandCompletionMessage,
 	isTodoReviewFixMessage,
 	JBCENTRAL_QUOTA_PROTOCOL_VERSION,
@@ -39,6 +41,7 @@ import {
 	RESOURCE_META_PROTOCOL_VERSION,
 	REVIEW_ACTIONS_PROTOCOL_VERSION,
 	REVIEW_RICH_ANCHORS_PROTOCOL_VERSION,
+	readAskUserQuestionResult,
 	SESSION_RENAME_PROTOCOL_VERSION,
 	SESSION_STATE_PROTOCOL_VERSION,
 	SESSION_TITLE_MAX_LENGTH,
@@ -425,5 +428,36 @@ describe("completionDelivery", () => {
 		expect(completionDelivery({ delivery: "appended" })).toBe("appended");
 		expect(completionDelivery({})).toBeUndefined();
 		expect(completionDelivery({ delivery: "later" })).toBeUndefined();
+	});
+});
+
+describe("ask_user_question result guards", () => {
+	const result = { answers: [], cancelled: true };
+
+	test("readAskUserQuestionResult reads a tool-result envelope or a bare result", () => {
+		expect(
+			readAskUserQuestionResult({ content: [{ type: "text", text: "x" }], details: result }),
+		).toBe(result);
+		expect(readAskUserQuestionResult(result)).toBe(result);
+	});
+
+	test("readAskUserQuestionResult rejects shapes without a questionnaire result", () => {
+		expect(readAskUserQuestionResult({ content: [{ type: "text", text: "x" }] })).toBeNull();
+		expect(readAskUserQuestionResult({ details: { kind: "ack" } })).toBeNull();
+		expect(readAskUserQuestionResult({ answers: "nope", cancelled: true })).toBeNull();
+		expect(readAskUserQuestionResult("nope")).toBeNull();
+		expect(readAskUserQuestionResult(null)).toBeNull();
+	});
+
+	test("isAskUserAnswersMessage needs the custom type, a call id and a result", () => {
+		const message = {
+			role: "custom",
+			customType: ASK_USER_ANSWERS_CUSTOM_TYPE,
+			details: { toolCallId: "tc", result },
+		};
+		expect(isAskUserAnswersMessage(message)).toBe(true);
+		expect(isAskUserAnswersMessage({ ...message, customType: "other" })).toBe(false);
+		expect(isAskUserAnswersMessage({ ...message, details: { toolCallId: "tc" } })).toBe(false);
+		expect(isAskUserAnswersMessage({ ...message, details: { result } })).toBe(false);
 	});
 });

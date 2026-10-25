@@ -404,17 +404,28 @@ export interface AskUserAnswersMessage extends WireCustomMessage<AskUserAnswersD
 	details: AskUserAnswersDetails;
 }
 
+function isAskUserQuestionResult(value: unknown): value is AskUserQuestionResult {
+	return (
+		!!value &&
+		typeof value === "object" &&
+		Array.isArray((value as AskUserQuestionResult).answers) &&
+		typeof (value as AskUserQuestionResult).cancelled === "boolean"
+	);
+}
+
+export function readAskUserQuestionResult(raw: unknown): AskUserQuestionResult | null {
+	const details =
+		raw && typeof raw === "object" ? (raw as { details?: unknown }).details : undefined;
+	if (isAskUserQuestionResult(details)) return details;
+	return isAskUserQuestionResult(raw) ? raw : null;
+}
+
 export function isAskUserAnswersMessage(message: unknown): message is AskUserAnswersMessage {
 	if (!message || typeof message !== "object") return false;
 	const m = message as { role?: unknown; customType?: unknown; details?: unknown };
 	if (m.role !== "custom" || m.customType !== ASK_USER_ANSWERS_CUSTOM_TYPE) return false;
 	const details = m.details as Partial<AskUserAnswersDetails> | undefined;
-	return (
-		typeof details?.toolCallId === "string" &&
-		!!details.result &&
-		Array.isArray(details.result.answers) &&
-		typeof details.result.cancelled === "boolean"
-	);
+	return typeof details?.toolCallId === "string" && isAskUserQuestionResult(details.result);
 }
 
 export const SUBAGENT_COMPLETION_CUSTOM_TYPE = "subagent-completion";

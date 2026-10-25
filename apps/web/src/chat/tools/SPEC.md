@@ -40,12 +40,14 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
   `data-testid="request-review-card"` are the test hooks.
 - **`AskUserQuestionCard`** — the inline questionnaire for the host-owned `ask_user_question` tool
   (capability + rationale: the server's `agent/askUserQuestion` SPEC). Registered `"bare"`: it owns its
-  full-width frame, never folds, and answers through the `ChatActions` context (correlated by
-  `toolCallId`). Behaviors worth their invariants:
+  full-width frame and never folds. It talks to the host only through `ToolRenderProps.interaction`
+  (`respond`, focus scope, layout and reveal callbacks, composer hand-off). Without it the card is
+  read-only. Previews render through the resource host's injected Markdown, so no chat import is left
+  and the card can live in an extension web half. Behaviors worth their invariants:
   - **The lifecycle derives from the transcript across two host paths:** a live blocking call resolves with
     the real tool result; a restarted dangling call is repaired to ack and later paired with an
-    `ask-user-answers` custom message. `useAskState(toolCallId)` supplies the restart reply / superseded
-    verdict, and the card resolves in order — **answered/declined** (either real result form),
+    `ask-user-answers` custom message. `interaction.state` (from `askState`) supplies the restart reply /
+    superseded / ended verdict, and the card resolves in order — **answered/declined** (either real result form),
     **superseded** (a later free-form user message replaced a repaired idle question),
     **stopped/error/length** (explicit Stop or a non-executable assistant result finalized the tool), else
     **awaiting** — interactive while Pi is blocked, after reconnect, or after any number of host restarts.
@@ -223,7 +225,8 @@ renderers are registered by the host's `extensions/registry.ts`. Unregistered to
   `fileTargets`, `foldState`);
   `contracts` (type-only + the `ASK_USER_ANSWERS_CUSTOM_TYPE` constant); `@thinkrail/ui/*` (including
   `attention-line`, the "Your input is needed" line shared with extension prompts);
-  `@thinkrail/extension-api/web`; `lib`; `@remixicon/react`.
+  `@thinkrail/extension-api/web`; `@thinkrail/resource-renderers` (`useOptionalResourceHost`, for the
+  host's injected Markdown); `lib`; `@remixicon/react`.
 - **Forbidden:** value-importing any `pi` package; `store`/`transport` (renderers stay presentational —
   extraction-ready into a future `packages/chat-ui`).
 

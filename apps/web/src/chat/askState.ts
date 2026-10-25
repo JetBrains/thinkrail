@@ -1,4 +1,8 @@
-import { type AskUserQuestionResult, assistantToolCallsAreExecutable } from "@thinkrail/contracts";
+import {
+	type AskUserQuestionResult,
+	assistantToolCallsAreExecutable,
+	readAskUserQuestionResult,
+} from "@thinkrail/contracts";
 import { createContext, useContext } from "react";
 import type { ChatTurn, ToolResultState } from "./types";
 
@@ -6,18 +10,6 @@ export interface AskState {
 	answer?: AskUserQuestionResult;
 	superseded: boolean;
 	terminal: boolean;
-}
-
-export function readAskResult(raw: unknown): AskUserQuestionResult | null {
-	const isResult = (value: unknown): value is AskUserQuestionResult =>
-		!!value &&
-		typeof value === "object" &&
-		Array.isArray((value as AskUserQuestionResult).answers) &&
-		typeof (value as AskUserQuestionResult).cancelled === "boolean";
-	if (raw && typeof raw === "object" && isResult((raw as { details?: unknown }).details)) {
-		return (raw as { details: AskUserQuestionResult }).details;
-	}
-	return isResult(raw) ? raw : null;
 }
 
 function isAckResult(raw: unknown): boolean {
@@ -54,7 +46,7 @@ export function deriveAskStates(
 	const states: Record<string, AskState> = {};
 	for (const [toolCallId, call] of Object.entries(calls)) {
 		const tool = toolResults[toolCallId];
-		const answer = askAnswers[toolCallId] ?? readAskResult(tool?.raw) ?? undefined;
+		const answer = askAnswers[toolCallId] ?? readAskUserQuestionResult(tool?.raw) ?? undefined;
 		const terminal =
 			call.dead ||
 			tool?.status === "error" ||

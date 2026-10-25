@@ -396,10 +396,16 @@ name, else the longest app-local prefix registration (`registerToolRendererPrefi
 because pi names MCP tools per server), else the default. Exact names always win, an empty prefix never
 matches, and extension descriptors stay exact-name only.
 
-Unregistered tools fall back to `DefaultToolRenderer`. Tools needing user input mid-run either route
-through the extension-UI bridge (`pi.extensionUi` → `ExtUiPrompt`, below) or — for a rich inline card —
-render from their `toolCall` args and reply through **`ChatActions`** (see below). Worked example: the
-`ask_user_question` flow in [tools/SPEC.md](tools/SPEC.md).
+Unregistered tools fall back to `DefaultToolRenderer`. A tool that needs user input mid-run takes one of
+two routes:
+- the extension-UI bridge (`pi.extensionUi` → `ExtUiPrompt`, below);
+- for a rich inline card, rendering from its `toolCall` args and replying through the props-only
+  **`ToolRenderProps.interaction`**. `ToolRendererBody` fills it through `useToolInteraction`
+  (`toolInteraction.ts`), and the plan page does the same for its card. The adapter reads `ChatActions`,
+  `askState` and the fold-geometry context, and today answers only `ask_user_question` calls. The
+  renderer never reads those contexts itself.
+
+Worked example: the `ask_user_question` flow in [tools/SPEC.md](tools/SPEC.md).
 
 **Extension dialogs ask inside the chat, never in a modal** (`ExtUiPrompt.tsx`). Every pi
 `select`/`confirm`/`input`/`editor` request renders as an inline prompt under the shared
@@ -519,7 +525,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   session was live or restored; a stopped/error/length result is
   terminal because Pi never executes tools from a length-truncated assistant response. "Answered /
   superseded / stopped / awaiting" is therefore derived once from all three transcript
-  projections and consumed by the card and plan glance, keeping both props-driven everywhere else.
+  projections and consumed by the card (as `interaction.state`) and plan glance, keeping both
+  props-driven everywhere else.
   The same seam supplies an opaque **per-mounted-ChatView focus scope**: an awaiting card claims attention
   once within that scope (so Virtuoso remounts cannot steal focus), while a fresh mount creates a new scope
   and may focus the still-pending question again. "Fresh mount" is broader than closing/reopening the chat:
