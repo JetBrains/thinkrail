@@ -43,7 +43,9 @@ mirrors `pi-spec-graph`'s `SPEC_RULE` — including its mechanism: the handler m
 that one section instead of forcing a whole prompt ([[module-spec-graph]] owns the rationale). Short and
 byte-stable so it rides every run without churning provider prompt-caching, and a pointer, not a
 restatement — it applies only at the start of new work, while an already-routed continuation resumes its
-active workflow. Routing rules live once in the router skill; each workflow's steps live once in its own
+active workflow, re-reading that workflow's skill when its text is no longer in context (compaction drops
+loaded skill bodies; the host's `skillCarryover` re-attaches them within a budget, so this is the backstop
+for a truncated or dropped body). Routing rules live once in the router skill; each workflow's steps live once in its own
 skill. The setting-up-a-project family carries no rule of its own — the root router routes onboarding to
 the dispatcher (whose `description` also self-triggers), and in-app the Welcome screen's "Set up project"
 card seeds the `/skill:setting-up-a-project` command — pi's skill-command syntax that **forces** the
