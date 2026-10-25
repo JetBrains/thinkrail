@@ -21,6 +21,7 @@ import specGraphExtension from "pi-spec-graph";
 import {
 	type ExtensionSessionServices,
 	omitDisabledRegistryExtensions,
+	preferRegistryTools,
 	registryInlineExtensions,
 	resolveExtensionSkillRoots,
 	serverExtensions,
@@ -253,7 +254,7 @@ export async function buildResourceLoader(
 		...skillInputs,
 		extensionFactories,
 		extensionsOverride: (result: LoadExtensionsResult) =>
-			omitDisabledRegistryExtensions(result, isDisabledAtReload),
+			preferRegistryTools(omitDisabledRegistryExtensions(result, isDisabledAtReload)),
 	};
 	const devExtensionPaths = bundled ? [] : resolveDevPaths().extensionPaths;
 	const applyCurrentPolicy = (): void => {

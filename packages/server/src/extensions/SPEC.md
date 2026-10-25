@@ -29,6 +29,12 @@ list for registry extensions.
   child set, session factories are absent), `omitDisabledRegistryExtensions(result, isDisabled)` (drops a disabled
   extension's `<inline:…>` entries from a pi `LoadExtensionsResult`, for the parent loader's
   `extensionsOverride`, so a disabled extension is absent rather than present-and-empty),
+  `preferRegistryTools(result)` (also composed into that override, after the disabled filter). It moves a
+  registry extension directly ahead of the first non-registry extension that registers one of its tool
+  names, so a user-installed same-name package never takes over a tool whose host UI and lifecycle key on
+  the name — `ask_user_question` is the reason. The other package's other tools, commands and hooks stay
+  loaded. pi's own conflict diagnostic stays in the loader result, unreported, as before. The pi facts it
+  relies on are registered in [[pi-compatibility]]),
   `registryExtensionName(path)` (maps an `<inline:name>` / `<inline:name#n>` path — an extension's or its
   tools' `sourceInfo.path` — back to the registry extension that owns it by name, `undefined` otherwise;
   matching by name rather than by recomputed names keeps it independent of how many per-session factories
@@ -43,7 +49,8 @@ list for registry extensions.
   returning its `pi.skills` directories; a named package with no skills fails loudly). The specifier is kept
   as a string precisely because a descriptor holds functions, which yield no module identity.
 - **Public surface (barrel):** `serverExtensions`, `ServerExtensionEntry`, `registryInlineExtensions`,
-  `RegistryExtensionKind`, `ExtensionDisabled`, `omitDisabledRegistryExtensions`, `registryExtensionName`,
+  `RegistryExtensionKind`, `ExtensionDisabled`, `omitDisabledRegistryExtensions`, `preferRegistryTools`,
+  `registryExtensionName`,
   `listExtensionCatalog`,
   `resolveExtensionSkillRoots`, `ExtensionSessionServices`, `ToolResponse`.
 - **Session-seam types:** `ExtensionSessionServices` and `ToolResponse` are re-exported from

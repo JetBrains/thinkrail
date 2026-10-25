@@ -3,6 +3,7 @@ export { listExtensionCatalog } from "./catalog";
 export {
 	type ExtensionDisabled,
 	omitDisabledRegistryExtensions,
+	preferRegistryTools,
 	type RegistryExtensionKind,
 	registryExtensionName,
 	registryInlineExtensions,

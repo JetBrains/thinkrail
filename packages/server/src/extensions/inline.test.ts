@@ -8,6 +8,7 @@ import type {
 import type { ExtensionSessionServices } from "@thinkrail/extension-api/server";
 import {
 	omitDisabledRegistryExtensions,
+	preferRegistryTools,
 	registryExtensionName,
 	registryInlineExtensions,
 } from "./inline";
@@ -186,5 +187,51 @@ describe("registryExtensionName", () => {
 		expect(registryExtensionName("<inline:headless>", entries)).toBeUndefined();
 		expect(registryExtensionName("<inline:3>", entries)).toBeUndefined();
 		expect(registryExtensionName("/disk/solo.ts", entries)).toBeUndefined();
+	});
+});
+
+describe("preferRegistryTools", () => {
+	const entries = [entry("solo", 1), entry("multi", 2, 1)];
+	const loaded = (path: string, tools: string[]) =>
+		({ path, tools: new Map(tools.map((name) => [name, {}])) }) as unknown as Extension;
+	const result = (...extensions: Extension[]): LoadExtensionsResult => ({
+		extensions,
+		errors: [],
+		runtime: {} as LoadExtensionsResult["runtime"],
+	});
+	const paths = (next: LoadExtensionsResult) => next.extensions.map((extension) => extension.path);
+
+	it("moves a registry extension directly ahead of the first other extension with one of its tools", () => {
+		const next = preferRegistryTools(
+			result(
+				loaded("/user/first.ts", ["read-later"]),
+				loaded("/user/rival.ts", ["ask"]),
+				loaded("/user/rival-two.ts", ["ask"]),
+				loaded("<inline:3>", ["host"]),
+				loaded("<inline:solo>", ["ask", "solo-only"]),
+			),
+			entries,
+		);
+		expect(paths(next)).toEqual([
+			"/user/first.ts",
+			"<inline:solo>",
+			"/user/rival.ts",
+			"/user/rival-two.ts",
+			"<inline:3>",
+		]);
+	});
+
+	it("never reorders against another registry extension or a later rival", () => {
+		const untouched = result(
+			loaded("<inline:solo>", ["shared"]),
+			loaded("<inline:multi#1>", ["shared"]),
+			loaded("/user/later.ts", ["shared"]),
+		);
+		expect(preferRegistryTools(untouched, entries)).toBe(untouched);
+	});
+
+	it("returns the result untouched when no tool names collide", () => {
+		const calm = result(loaded("/user/other.ts", ["x"]), loaded("<inline:solo>", ["y"]));
+		expect(preferRegistryTools(calm, entries)).toBe(calm);
 	});
 });

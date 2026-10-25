@@ -134,6 +134,18 @@ registry-extension tools by mirroring Pi's private `_isActivatedOnRegistration` 
 re-runs the restore, reconcile after it too. **Removal gate:** a public Pi way to keep host-withheld tools
 apart from the recorded selection. Run the manager's restart regressions on upgrades.
 
+- **Registry tool precedence** — [[submodule-server-extensions]], `preferRegistryTools` in the session
+  loader's `extensionsOverride`. It relies on three pi facts:
+  - pi keeps every extension and gives a tool name to its first registration
+    (`ExtensionRunner.getAllRegisteredTools`);
+  - path extensions (user packages) load before inline factories;
+  - tool conflicts are reported only between extensions, before the override runs.
+
+  The override moves a ThinkRail registry extension ahead of the first user package registering one of
+  its tool names, so a same-name package such as rpiv's `ask_user_question` cannot take over the card,
+  mailbox and repair that key on the name. Remove it when pi offers an inline-extension precedence or
+  replace option. Re-verify the three facts in the installed dist, and run the collision test in
+  `agentSessionManager.test.ts` (same-name questionnaire before and after reload) on every upgrade.
 - **Image-only queued input** — [[submodule-server-agent]], queue projection. The host compensates for
   pi's text-only delivered-message removal ([upstream #8612](https://github.com/earendil-works/pi/issues/8612))
   and retains image content lost by the destructive queue API. Remove the corresponding workaround
