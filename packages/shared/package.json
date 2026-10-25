@@ -8,6 +8,7 @@
 		"./freePort": "./src/freePort.ts",
 		"./startupMark": "./src/startupMark.ts",
 		"./version": "./src/version.ts",
+		"./windowsIdentity": "./src/windowsIdentity.ts",
 		"./jbcentral": "./src/jbcentral.ts",
 		"./paths": "./src/paths.ts",
 		"./codedError": "./src/codedError.ts",
