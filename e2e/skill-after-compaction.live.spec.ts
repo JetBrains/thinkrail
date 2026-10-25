@@ -151,11 +151,13 @@ test("the agent keeps following a long body-only skill across repeated compactio
 		const scores = Object.fromEntries(
 			PHASES.map((phase) => [phase.key, score(workspace.worktreePath, entries, phase.words)]),
 		);
+		const skillLoads = entries.flatMap((e, i) => (isSkillLoad(e, SKILL) ? [i] : []));
+		const firstCompaction = entries.findIndex((e) => e.type === "compaction");
 		await test.info().attach("skill-compliance.json", {
 			body: JSON.stringify(
 				{
 					scores,
-					skillLoads: entries.flatMap((e, i) => (isSkillLoad(e, SKILL) ? [i] : [])),
+					skillLoads,
 					compactionIndexes: entries.flatMap((e, i) => (e.type === "compaction" ? [i] : [])),
 					summaries: compactions.map((c) => c.summary),
 				},
@@ -169,6 +171,10 @@ test("the agent keeps following a long body-only skill across repeated compactio
 		expect(scores.A?.followed, "phase A followed the loaded skill").toBe(6);
 		expect(scores.B, "phase B, after one compaction").toEqual(scores.A);
 		expect(scores.C, "phase C, after two compactions").toEqual(scores.A);
+		expect(
+			skillLoads.filter((i) => i > firstCompaction),
+			"the restored skill needed no re-read",
+		).toEqual([]);
 	} finally {
 		rmSync(SKILL_DIR, { recursive: true, force: true });
 	}

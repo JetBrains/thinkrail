@@ -647,7 +647,10 @@ re-opened transcripts provider-valid.
     the next summarizer as user text and pi's "Already compacted" guard still holds. Rejected for now:
     a custom `session_before_compact` summary that records the active workflow step (it would replace
     pi's summarizer call and own its credentials). `skillCarryover.test.ts` drives a faux pi session
-    through manual, mid-run threshold and overflow-retry compaction.
+    through manual, mid-run threshold and overflow-retry compaction. The live `skill-after-compaction` spec pins that phases after a
+    compaction keep every rule with no re-read of `SKILL.md`: without the carry-over the agent recovered
+    by re-reading after each compaction (pi's summary told it to), so compliance alone did not tell the
+    two apart.
   - `delegation` — ThinkRail's embedding of the portable **`pi-delegation`** core +
     **`pi-subagents`** layer ([[module-pi-delegation]], [[module-pi-subagents]]): binds what only
     the host knows — the delegation root under the data dir (`<dataDir>/delegation`),
