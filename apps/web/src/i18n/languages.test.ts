@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { LocalLocalesSnapshot } from "@thinkrail/contracts";
+import { languageName } from "@thinkrail/locales";
 import { availableLocales, effectiveLocale, languageOptions, localOverlays } from "./languages";
 
 const snapshot: LocalLocalesSnapshot = {
@@ -27,10 +28,11 @@ test("available languages are the bundled ones plus valid local files", () => {
 });
 
 test("options mark built-in, local, and customized languages, then broken files", () => {
+	const chinese = languageName("zh-CN");
 	expect(languageOptions("system", snapshot)).toEqual([
 		{ kind: "language", tag: "de", name: "Deutsch", source: "local" },
 		{ kind: "language", tag: "en", name: "English", source: "builtin+local" },
-		{ kind: "language", tag: "zh-CN", name: "中文（中国大陆）", source: "builtin" },
+		{ kind: "language", tag: "zh-CN", name: chinese, source: "builtin" },
 		{
 			kind: "broken",
 			fileName: "fr.json",
@@ -41,7 +43,7 @@ test("options mark built-in, local, and customized languages, then broken files"
 	]);
 	expect(languageOptions("system", null)).toEqual([
 		{ kind: "language", tag: "en", name: "English", source: "builtin" },
-		{ kind: "language", tag: "zh-CN", name: "中文（中国大陆）", source: "builtin" },
+		{ kind: "language", tag: "zh-CN", name: chinese, source: "builtin" },
 	]);
 });
 
