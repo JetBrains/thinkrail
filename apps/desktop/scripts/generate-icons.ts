@@ -39,7 +39,7 @@ for (const [name, size] of MACOS_ICONSET_FILES) {
 	writeFileSync(join(assetsDir, "icon.iconset", name), pngAt(size));
 }
 
-const WINDOWS_ICO_SIZES = [16, 24, 32, 48, 64, 128, 256];
+const WINDOWS_ICO_SIZES = [256, 128, 64, 48, 32, 24, 16];
 const iconFile = new ResEdit.Data.IconFile();
 for (const size of WINDOWS_ICO_SIZES) {
 	iconFile.icons.push({ data: ResEdit.Data.RawIconItem.from(pngAt(size), size, size, 32) });
