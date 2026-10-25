@@ -18,6 +18,7 @@ import {
 	RiAddLine as Plus,
 } from "@remixicon/react";
 import type { ReviewComment, TodoGroupItem, TodoItem } from "@thinkrail/contracts";
+import { AskUserQuestionCard } from "@thinkrail/ext-ask-user-question/web";
 import { useT } from "@thinkrail/locales/react";
 import {
 	DropdownMenu,
@@ -59,7 +60,6 @@ import {
 } from "../chat/planView";
 import { StatusIcon } from "../chat/TodoList";
 import { useToolInteraction } from "../chat/toolInteraction";
-import { AskUserQuestionCard } from "../chat/tools/AskUserQuestionCard";
 import { hydrateSessionRuntime, useChatTodos } from "../chat/useChatTodos";
 import {
 	selectAgentReviewCommentCount,

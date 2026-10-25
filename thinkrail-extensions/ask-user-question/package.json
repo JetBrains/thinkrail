@@ -1,0 +1,27 @@
+{
+	"name": "@thinkrail/ext-ask-user-question",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./web": "./web/index.ts"
+	},
+	"scripts": {
+		"test": "bun test",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@remixicon/react": "catalog:",
+		"@thinkrail/contracts": "workspace:*",
+		"@thinkrail/extension-api": "workspace:*",
+		"@thinkrail/locales": "workspace:*",
+		"@thinkrail/resource-renderers": "workspace:*",
+		"@thinkrail/ui": "workspace:*",
+		"react": "catalog:"
+	},
+	"devDependencies": {
+		"@types/bun": "catalog:",
+		"@types/react": "catalog:",
+		"typescript": "catalog:"
+	}
+}
