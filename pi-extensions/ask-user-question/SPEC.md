@@ -13,8 +13,8 @@ The published, portable half of the structured-question capability: one tool, `a
 pauses the run until a person answers multiple-choice questions and returns a model-facing envelope. It
 knows nothing about ThinkRail. It asks in one of three ways: a terminal questionnaire (pi's interactive
 mode), one dialog per question (RPC hosts such as VS Code or Zed), or an embedder's injected asker.
-ThinkRail still runs its host-owned predecessor (`packages/server/src/agent/askUserQuestion.ts`,
-[[submodule-server-agent]]) until its wiring lands.
+ThinkRail composes it through [[module-ext-ask-user-question]], injecting an asker backed by the host's
+answer mailbox.
 
 ## Public surface
 

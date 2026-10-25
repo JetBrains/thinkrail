@@ -83,7 +83,6 @@ import {
 	askUserQuestionSessionServices,
 	assessAnswerability,
 	buildAnswersMessage,
-	createAskUserQuestionTool,
 	createAskUserQuestionWaiters,
 	hasQuestionAck,
 } from "./askUserQuestion";
@@ -1133,7 +1132,7 @@ async function prepareSessionEntry(
 			}
 		}
 		if (event.type === "turn_end") {
-			entry.askUserQuestionWaiters.persistTurn(event.toolResults);
+			entry.askUserQuestionWaiters.persistTurn(event.toolResults, event.message);
 			entry.commands.flushCompletions({ atTurnEnd: true });
 			entry.subagents.flushCompletions({ atTurnEnd: true });
 		}
@@ -1427,7 +1426,6 @@ async function createParentSessionInternal(
 		const result = await createAgentSession({
 			...options,
 			modelRuntime: generation.runtime,
-			customTools: [createAskUserQuestionTool(askUserQuestionWaiters)],
 			resourceLoader: await buildResourceLoader(
 				cwd,
 				settingsManager,

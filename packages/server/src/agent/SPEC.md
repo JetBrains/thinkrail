@@ -15,8 +15,9 @@ The in-process `pi` engine: a current shared model/auth runtime generation for p
 chats, the lifecycle of `AgentSession`s (one per chat tab, rooted in a workspace's worktree and retaining the
 runtime generation they were created with), Pi resource/skill loading (including portable
 cross-agent skill discovery + a pre-session skill catalog), the **extension-UI bridge** that turns pi's
-in-process `uiContext` dialog calls into WS frames, the host-owned **`ask_user_question`** tool + its
-answer-injection path, and the **restart repair** that keeps re-opened transcripts provider-valid.
+in-process `uiContext` dialog calls into WS frames, the **`ask_user_question`** answer mailbox and
+answer-injection path behind the ask-user-question extension, and the **restart repair** that keeps
+re-opened transcripts provider-valid.
 
 ## Boundary
 
@@ -495,24 +496,30 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     is a `Proxy` that throws `Theme not initialized` until `initTheme()` runs, and `initTheme` is called
     only from pi's own CLI entrypoints, never when pi is embedded via `createAgentSession`. Every
     embedder of pi-as-a-library hits this; an upstream fix would not reach us until a deliberate pi bump.
-  - `askUserQuestion` — the host-owned **`ask_user_question`** pi custom tool, registered per session with
-    a session-bound phase registry. New and reopened parent sessions create one `AskUserQuestionWaiters`
-    in `createParentSession`, shared by the SDK `customTools` definition and the registered entry.
-    SDK custom tools take precedence over same-name extension tools, including after resource reload.
-    This keeps the host's structured questionnaire and answer channel paired: an installed terminal
-    questionnaire must not replace execution with `ui.input` while the web client still renders the host
-    card. Other tools, commands, and hooks from that extension remain available. An eligible
-    live call is **sequential and blocking**: after validation its `execute` waits for
+  - `askUserQuestion` — the host half of **`ask_user_question`**: the per-session answer mailbox
+    (`AskUserQuestionWaiters`), answerability, restart repair support and late answers. The tool itself is
+    the portable [[module-pi-ask-user-question]] package, composed by [[module-ext-ask-user-question]]:
+    - The package owns the schema, validation, the `message_end` normalizer that keeps the first ask as
+      the response's sole tool call, the sequential `execute` and the result envelope.
+    - Its registry entry registers the tool through `sessionExtensions`.
+    - New and reopened parent sessions create one mailbox in `createParentSession`, and
+      `askUserQuestionSessionServices(waiters)` hands it to that seam as
+      `awaitToolResponse(toolCallId, signal)`.
+    - Answer → `response`, supersede → `deferred` (the package returns the canonical ack and ends the
+      turn; pi still drains the queued composer message), dispose → `abandoned`. Stop rejections pass
+      through as the stopped error.
+    - `agent` reaches the package's tool name, texts and envelope builder only through the `extensions`
+      barrel.
+    - A same-name tool from a user package loses to ours through the loader's `preferRegistryTools` order
+      ([[submodule-server-extensions]], registered in [[pi-compatibility]]). That keeps the structured
+      card and its answer channel paired: an installed terminal questionnaire must not replace execution
+      with `ui.input` while the web client renders our card. Its other tools, commands and hooks stay
+      available.
+
+    An eligible live call is **sequential and blocking**: after validation its `execute` waits for
     `session.answerQuestion`, then returns the person's real
-    `AskUserQuestionResult`/`buildQuestionnaireResponse` as the native tool result. Eligibility is shared:
-    an assistant stopped by `error`, `aborted`, or `length` cannot execute an ask. A `message_end` normalizer
-    makes the first ask the response's sole tool call (non-tool content stays; sibling calls are dropped for
-    the model to re-issue after the answer), avoiding Pi's sequential-abort hole where unexecuted siblings
-    receive no result. The question array has **no tool-level maximum**: one round carries every question
-    answerable now, while each question retains the 2–4 option bound. Header/label/`recommendedReason`
-    lengths are **advisory** (stated in the field descriptions, not schema `maxLength`): pi's schema
-    validation rejects the whole call and echoes every argument back, so a few extra characters would
-    cost a failed card plus a full retry, while the card already wraps/scrolls long text. Questions that
+    `AskUserQuestionResult`/`buildQuestionnaireResponse` as the native tool result. Eligibility is
+    shared: an assistant stopped by `error`, `aborted`, or `length` cannot execute an ask. Questions that
     depend on an open answer wait for a later round; the multi-round interview norm itself lives in the
     workflow family's `asking-user-questions` concept skill ([[submodule-workflow-skills]]).
 
@@ -523,7 +530,11 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     its continuation. Stop-first synchronously marks an expected/waiting call stopped, so a later answer cannot
     reverse the winner. Semantic validation still gates execution: an answer accepted in the pre-execute
     window is acknowledged only if the real ask returned and `turn_end` contains its result; validation error
-    or a missing result rejects the answer RPC rather than hanging or claiming success. Every expected call Pi
+    or a missing result rejects the answer RPC rather than hanging or claiming success. The proof needs no
+    receipt from `execute`, which lives in the package. `persistTurn(toolResults, assistant)` reads the
+    call's arguments from the turn's assistant message and accepts only a non-error result whose `content`
+    and `details` deep-equal `buildQuestionnaireResponse(accepted, args)`. A post-tool hook that rewrites
+    the content therefore still rejects the RPC. Every expected call Pi
     does not execute is cleared at `turn_end`. The answer RPC resolves the phase and acknowledges only after
     the matching result reaches the persisted `turn_end` boundary. Explicit Stop drains the queue and aborts
     an unanswered phase with a stable stopped error; after Submit wins, Stop defers Pi abort until the answer
@@ -533,7 +544,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     a streaming-time `promptSession` queue the text in Pi's steering lane first and, only when `steer()`
     reports the `queued` disposition (an extension `input` handler that returns `handled` queues nothing, so
     no user turn would follow the ack), `supersede()` every expected/waiting call: the tool returns the same canonical ack (`ASK_ACK_TEXT`, `details {kind:"ack"}`)
-    the restart repair writes, Pi drains the steering message as the next user turn, and the card derives
+    the restart repair writes, with `terminate: true` so Pi skips the tool batch's own model request.
+    Pi drains the steering message as the next user turn, and the card derives
     `superseded` from the transcript through the one shape it already understands (ack + later user
     message). A later answer RPC fails with the `superseded` answerability error; a call already in
     `answer-accepted-uncommitted` is never superseded (the answer wins and the steering delivers after it).
@@ -860,7 +872,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     Jiti seam; it is never bundled, staged, or copied into ThinkRail. Both modes append
     `extensionFactories`: a **headless-search policy** (a `tool_call` hook defaulting
     `web_search`'s `workflow` to `"none"`, since pi-web-access would otherwise open a browser curator our
-    `rpc` host can't render), `askUserQuestionExtension` (normalizes ask-only assistant batches),
+    `rpc` host can't render),
     `oversizedImageGuard` (the context-level image-size guard, see the `imageGuard` bullet), **and the
     caller's `extraFactories`** — per-session host bindings (the workspace-bound subagents extension),
     value-imported so dev and the compiled binary take the same path. pi's own built-in extensions
@@ -883,8 +895,8 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   `provider.changed` seam); `piLoginOptions` (pi login options
   carrying the lazily created installation device id, for `auth`);
   `completeOnce`/`pickModel` +
-  `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` pure
-  helpers (`validateQuestionnaire`/`buildQuestionnaireResponse`/`assessAnswerability`/
+  `OneShotRequest`/`OneShotResult`/`ModelTier`; the `webUiContext` seams; the `askUserQuestion` mailbox
+  and pure helpers (`createAskUserQuestionWaiters`/`askUserQuestionSessionServices`/`assessAnswerability`/
   `buildAnswersMessage`/`awaitingQuestionToolCallId`); normalized-state operations
   (`listSessionStates`/`acknowledgeCompletion`/`markWorkspaceUnread`/`markWorkspaceRead`/`nudgeSession` +
   publisher/project seams);
@@ -943,7 +955,7 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
   the named `pi-web-access` factory through the bundled runtime seam; the source-mode equivalent loads it
   lazily through `jiti` — the loader pi uses for extension paths — so a parent never pays for it and the
   barrel stays Node-loadable for the workflow harness ([[module-workflow-tests]])); the sibling `extensions` registry module (the ThinkRail extensions' inline factories and
-  skill roots — `agent` never imports an `@thinkrail/ext-*` package or its pi package directly); `jiti` (the source-mode child `pi-web-access` load above); `typebox` (the `ask_user_question` parameter schema); `jsonc-parser` (targeted
+  skill roots — `agent` never imports an `@thinkrail/ext-*` package or its pi package directly); `jiti` (the source-mode child `pi-web-access` load above); `typebox` (the host tools' parameter schemas); `jsonc-parser` (targeted
   `models.json` edits in `modelContext`); `trash` (reached only through the
   sibling **`trash` module** — see [[submodule-server-trash]]: one path, globbing disabled, allowed to
   throw, never degraded to `unlink`; the launcher's staged-helper and procfs-parser seams live there too,

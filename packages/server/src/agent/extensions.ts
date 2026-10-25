@@ -27,7 +27,6 @@ import {
 	serverExtensions,
 } from "../extensions";
 import { type BundledTrashHelpers, setBundledTrashHelpers } from "../trash";
-import { askUserQuestionExtension } from "./askUserQuestion";
 import { oversizedImageGuard } from "./imageGuard";
 import { requestReviewExtension } from "./requestReviewTool";
 import { reviewToolExtension } from "./reviewTool";
@@ -237,7 +236,6 @@ export async function buildResourceLoader(
 	const sharedFactories: InlineExtension[] = [
 		...registryInlineExtensions("extensions", isDisabledAtReload, serverExtensions, session),
 		headlessSearchPolicy,
-		askUserQuestionExtension(),
 		reviewToolExtension,
 		requestReviewExtension,
 		setTitleExtension,

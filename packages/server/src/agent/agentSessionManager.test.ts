@@ -1826,7 +1826,7 @@ test("emergency session disposal rejects an accepted answer that cannot persist"
 	}
 });
 
-test("the host questionnaire wins over a same-name extension tool before and after reload", async () => {
+test("our ask_user_question wins over a same-name extension tool before and after reload", async () => {
 	const cwd = tmpCwd("trpi-question-collision-");
 	const extensionDir = join(cwd, ".pi", "extensions");
 	mkdirSync(extensionDir, { recursive: true });

@@ -1,14 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 import type {
-	ExtensionAPI,
-	ExtensionContext,
-	ToolDefinition,
-} from "@earendil-works/pi-coding-agent";
-import type {
 	AgentMessage,
 	AskUserAnswersMessage,
-	AskUserQuestionAckDetails,
-	AskUserQuestionAnswer,
 	AskUserQuestionArgs,
 	AskUserQuestionResult,
 } from "@thinkrail/contracts";
@@ -17,180 +10,15 @@ import {
 	assistantToolCallsAreExecutable,
 	isAskUserAnswersMessage,
 } from "@thinkrail/contracts";
-import { type Static, Type } from "typebox";
-import type { ExtensionSessionServices } from "../extensions";
+import {
+	ASK_STOPPED_ERROR,
+	ASK_USER_QUESTION_TOOL_NAME,
+	buildQuestionnaireResponse,
+	type ExtensionSessionServices,
+	isAckDetails,
+} from "../extensions";
 
-export const MIN_OPTIONS = 2;
-export const MAX_OPTIONS = 4;
-export const MAX_HEADER_LENGTH = 16;
-export const MAX_LABEL_LENGTH = 60;
-export const MAX_RECOMMENDED_REASON_LENGTH = 160;
-
-export const RESERVED_LABELS = ["Other", "Type something.", "Chat about this", "Next →"] as const;
-
-const OptionSchema = Type.Object({
-	label: Type.String({
-		description: `MAX ${MAX_LABEL_LENGTH} CHARACTERS. The concise (1-5 word) text the user sees and selects.`,
-	}),
-	description: Type.String({
-		description: "What this option means or what happens if chosen — the trade-off/implication.",
-	}),
-	preview: Type.Optional(
-		Type.String({
-			description:
-				"Optional markdown preview shown beside this option (mockups, code snippets, diagrams, configs). Single-select only.",
-		}),
-	),
-	recommendedReason: Type.Optional(
-		Type.String({
-			description: `MAX ${MAX_RECOMMENDED_REASON_LENGTH} CHARACTERS. Why you recommend this option — one short sentence, rendered inline as a 'Why:' line under the option. Set only on the option whose label carries '(Recommended)'.`,
-		}),
-	),
-});
-
-const QuestionSchema = Type.Object({
-	question: Type.String({
-		description:
-			'The complete question, ending with a question mark. E.g. "Which library should we use for date formatting?"',
-	}),
-	header: Type.String({
-		description: `MAX ${MAX_HEADER_LENGTH} CHARACTERS. Very short chip/tag next to the question, e.g. "Auth method".`,
-	}),
-	options: Type.Array(OptionSchema, {
-		minItems: MIN_OPTIONS,
-		maxItems: MAX_OPTIONS,
-		description:
-			"2-4 distinct choices. An 'Other' free-text option and a Skip escape are added automatically — do NOT author 'Other'-style options.",
-	}),
-	multiSelect: Type.Optional(
-		Type.Boolean({
-			default: false,
-			description:
-				'Allow multiple selections. The "Other" free-text option stays available; its text arrives as an additional answer alongside the checked options.',
-		}),
-	),
-});
-
-export const AskUserQuestionSchema = Type.Object({
-	questions: Type.Array(QuestionSchema, {
-		minItems: 1,
-		description: "One or more questions to ask.",
-	}),
-});
-
-export type AskUserQuestionParams = Static<typeof AskUserQuestionSchema>;
-
-const DESCRIPTION = `Ask the user one or more structured, multiple-choice questions during execution, instead of guessing. Use when:
-1. The request is underspecified and you cannot proceed without a concrete decision.
-2. You need a user preference, requirement, or a direction/implementation choice.
-
-Calling this tool PAUSES EXECUTION until the user answers: the questions render inline in the chat as an interactive card (tabs when there are several), and the user's answers arrive as this tool's result. Do not continue working on the blocked task or assume an answer while the tool is pending. The user answers or skips through the card, or replies in chat instead — then the card is superseded and their free-form reply arrives as the next user message. Notes:
-- Every question also gets an "Other" option with a free-text field, and the user can always Skip the whole questionnaire (you are told they declined) — do NOT author "Other"-style, free-text, or escape options yourself (reserved labels are rejected).
-- Set multiSelect: true when several answers are valid; the user may combine checked options with their own typed answer.
-- If you recommend one option, make it FIRST, append "(Recommended)" to its label, and set its recommendedReason to one short sentence on why you recommend it over the alternatives (shown inline under the option).
-- Use options[].preview (markdown) for concrete artifacts to compare side-by-side (code, ASCII mockups, configs). Single-select only.
-- One call = one round: ask every question you can ask now in a single call — never split independent questions across back-to-back calls. A question that depends on another question's answer waits for a later round; ask follow-up rounds until no decision is left assumed.
-- Call ask_user_question as the only tool in the assistant response; other tool calls in that response are discarded and can be re-issued after the answer.
-- The user may answer only some questions; unanswered ones are reported as declined.`;
-
-const PROMPT_GUIDELINES = [
-	`Call ask_user_question whenever the request is ambiguous and a concrete decision is needed — one call is one round holding every question answerable now (dependent questions wait for the next round), with ${MIN_OPTIONS}-${MAX_OPTIONS} options each. The call blocks until its result contains the user's answers.`,
-	"Every option needs a concise label (1-5 words) and a description of what it means / its trade-off.",
-	'Recommend by putting the option first with "(Recommended)" appended and setting its recommendedReason to one short sentence (shown inline under the option) on why you recommend it over the alternatives; the user can always type a custom answer or skip the questionnaire.',
-	"Call ask_user_question as the only tool in the assistant response; continue with other tools after the answer.",
-];
-
-const ERROR_NO_UI = "Error: UI not available (running in non-interactive mode)";
-
-export const ASK_ACK_TEXT =
-	"The questions are now shown to the user. This turn ends here; the user's answers (or their own free-form reply) will arrive as the next user message. Do not assume an answer until it arrives.";
-
-export interface ValidationResult {
-	ok: boolean;
-	message: string;
-}
-
-export function validateQuestionnaire(args: AskUserQuestionArgs): ValidationResult {
-	const questions = args.questions ?? [];
-	if (questions.length === 0)
-		return { ok: false, message: "Error: At least one question is required" };
-
-	const seenQuestions = new Set<string>();
-	const reserved = new Set<string>(RESERVED_LABELS);
-	for (const q of questions) {
-		if (seenQuestions.has(q.question))
-			return { ok: false, message: "Error: Question text must be unique within a call" };
-		seenQuestions.add(q.question);
-
-		if (!q.options || q.options.length < MIN_OPTIONS)
-			return {
-				ok: false,
-				message: `Error: Each question requires at least ${MIN_OPTIONS} options`,
-			};
-
-		const seenLabels = new Set<string>();
-		for (const o of q.options) {
-			if (reserved.has(o.label))
-				return {
-					ok: false,
-					message: `Error: Option label is reserved (${RESERVED_LABELS.join(", ")})`,
-				};
-			if (seenLabels.has(o.label))
-				return { ok: false, message: "Error: Option labels must be unique within a question" };
-			seenLabels.add(o.label);
-		}
-	}
-	return { ok: true, message: "" };
-}
-
-export const DECLINE_MESSAGE = "User declined to answer questions";
-const ENVELOPE_PREFIX = "User has answered your questions:";
-const ENVELOPE_SUFFIX = "You can now continue with the user's answers in mind.";
-
-interface ToolResult<D> {
-	content: { type: "text"; text: string }[];
-	details: D;
-	terminate?: boolean;
-}
-
-function toolResult(
-	text: string,
-	details: AskUserQuestionResult,
-): ToolResult<AskUserQuestionResult> {
-	return { content: [{ type: "text", text }], details };
-}
-
-function answerSegment(a: AskUserQuestionAnswer): string {
-	const scalar = a.kind === "multi" ? (a.selected ?? []).join(", ") : (a.answer ?? "(no answer)");
-	const parts = [`"${a.question}"="${scalar}"`];
-	if (a.kind === "multi" && a.answer) parts.push(`user's own answer: "${a.answer}"`);
-	if (a.preview) parts.push(`selected preview: ${a.preview}`);
-	if (a.notes) parts.push(`user notes: ${a.notes}`);
-	return `${parts.join(". ")}.`;
-}
-
-export function buildQuestionnaireResponse(
-	result: AskUserQuestionResult,
-	args: AskUserQuestionArgs,
-): ToolResult<AskUserQuestionResult> {
-	if (result.cancelled)
-		return toolResult(DECLINE_MESSAGE, { answers: result.answers, cancelled: true });
-	const segments: string[] = [];
-	const declined: string[] = [];
-	for (let i = 0; i < args.questions.length; i++) {
-		const a = result.answers.find((x) => x.questionIndex === i);
-		if (a) segments.push(answerSegment(a));
-		else declined.push(`"${args.questions[i]?.question}"`);
-	}
-	if (segments.length === 0)
-		return toolResult(DECLINE_MESSAGE, { answers: result.answers, cancelled: true });
-	const declinedNote =
-		declined.length > 0 ? ` The user declined to answer: ${declined.join(", ")}.` : "";
-	return toolResult(
-		`${ENVELOPE_PREFIX} ${segments.join(" ")}${declinedNote} ${ENVELOPE_SUFFIX}`,
-		result,
-	);
-}
+export { ASK_ACK_TEXT, ASK_STOPPED_ERROR, ASK_USER_QUESTION_TOOL_NAME } from "../extensions";
 
 interface ToolCallView {
 	type: string;
@@ -209,10 +37,6 @@ interface MessageView {
 function toolCallsOf(message: MessageView): ToolCallView[] {
 	if (message.role !== "assistant" || !Array.isArray(message.content)) return [];
 	return (message.content as ToolCallView[]).filter((b) => b?.type === "toolCall");
-}
-
-export function isAckDetails(details: unknown): details is AskUserQuestionAckDetails {
-	return !!details && (details as AskUserQuestionAckDetails).kind === "ack";
 }
 
 export type Answerability =
@@ -299,9 +123,12 @@ export function buildAnswersMessage(
 	};
 }
 
-export const ASK_USER_QUESTION_TOOL_NAME = "ask_user_question";
-
-export const ASK_STOPPED_ERROR = "Question cancelled because the run was stopped";
+function askArgsOf(assistant: unknown, toolCallId: string): AskUserQuestionArgs | undefined {
+	const call = toolCallsOf((assistant ?? {}) as MessageView).find(
+		(block) => block.id === toolCallId && block.name === ASK_USER_QUESTION_TOOL_NAME,
+	);
+	return call ? ((call.arguments ?? { questions: [] }) as AskUserQuestionArgs) : undefined;
+}
 
 export type AskUserQuestionWaitOutcome =
 	| { kind: "answer"; result: AskUserQuestionResult }
@@ -318,7 +145,7 @@ type LiveQuestionPhase =
 interface LiveQuestionWaiter {
 	phase: LiveQuestionPhase;
 	executeStarted: boolean;
-	executedResult: ToolResult<AskUserQuestionResult> | undefined;
+	acceptedResult: AskUserQuestionResult | undefined;
 	answerPromise: Promise<AskUserQuestionWaitOutcome>;
 	resolveAnswer: (outcome: AskUserQuestionWaitOutcome) => void;
 	rejectAnswer: (error: Error) => void;
@@ -344,7 +171,7 @@ function createLiveQuestionWaiter(): LiveQuestionWaiter {
 	return {
 		phase: "expected",
 		executeStarted: false,
-		executedResult: undefined,
+		acceptedResult: undefined,
 		answerPromise,
 		resolveAnswer,
 		rejectAnswer,
@@ -362,7 +189,6 @@ export interface AskUserQuestionWaiters {
 		toolCallId: string,
 		result: AskUserQuestionResult,
 	): { handled: false } | { handled: true; persisted: Promise<void> };
-	recordExecutedResult(toolCallId: string, result: ToolResult<AskUserQuestionResult>): void;
 	persistTurn(
 		toolResults: readonly {
 			toolCallId: string;
@@ -371,6 +197,7 @@ export interface AskUserQuestionWaiters {
 			details?: unknown;
 			isError?: boolean;
 		}[],
+		assistant?: unknown,
 	): void;
 	supersede(): boolean;
 	currentQuestion(): { interactionId: string; needsInput: boolean } | null;
@@ -441,15 +268,11 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 				throw new Error(`${ANSWERABILITY_ERRORS.already_answered}: ${toolCallId}`);
 			}
 			waiter.phase = "answer-accepted-uncommitted";
+			waiter.acceptedResult = structuredClone(result);
 			waiter.resolveAnswer({ kind: "answer", result });
 			return { handled: true, persisted: waiter.persisted };
 		},
-		recordExecutedResult(toolCallId, result) {
-			const waiter = waiting.get(toolCallId);
-			if (waiter?.phase !== "answer-accepted-uncommitted") return;
-			waiter.executedResult = structuredClone(result);
-		},
-		persistTurn(toolResults) {
+		persistTurn(toolResults, assistant) {
 			for (const result of toolResults) {
 				if (result.toolName !== ASK_USER_QUESTION_TOOL_NAME) continue;
 				const waiter = waiting.get(result.toolCallId);
@@ -457,12 +280,17 @@ export function createAskUserQuestionWaiters(): AskUserQuestionWaiters {
 				waiting.delete(result.toolCallId);
 				waiter.cleanupAbort();
 				if (waiter.phase !== "answer-accepted-uncommitted") continue;
+				const args = askArgsOf(assistant, result.toolCallId);
+				const expected =
+					waiter.acceptedResult && args
+						? buildQuestionnaireResponse(waiter.acceptedResult, args)
+						: undefined;
 				if (
 					waiter.executeStarted &&
-					waiter.executedResult !== undefined &&
+					expected !== undefined &&
 					result.isError !== true &&
-					isDeepStrictEqual(result.content, waiter.executedResult.content) &&
-					isDeepStrictEqual(result.details, waiter.executedResult.details)
+					isDeepStrictEqual(result.content, expected.content) &&
+					isDeepStrictEqual(result.details, expected.details)
 				) {
 					waiter.resolvePersisted();
 				} else {
@@ -544,61 +372,5 @@ export function askUserQuestionSessionServices(
 					? { kind: "deferred" }
 					: { kind: "abandoned" };
 		},
-	};
-}
-
-export function isolateAskUserQuestionBatch(message: AgentMessage): AgentMessage | undefined {
-	if (message.role !== "assistant") return undefined;
-	const askIndex = message.content.findIndex(
-		(block) => block.type === "toolCall" && block.name === ASK_USER_QUESTION_TOOL_NAME,
-	);
-	if (askIndex < 0) return undefined;
-	const content = message.content.filter(
-		(block, index) => block.type !== "toolCall" || index === askIndex,
-	);
-	return content.length === message.content.length ? undefined : { ...message, content };
-}
-
-export function createAskUserQuestionTool(waiters: AskUserQuestionWaiters) {
-	return {
-		name: ASK_USER_QUESTION_TOOL_NAME,
-		label: "Ask User Question",
-		description: DESCRIPTION,
-		promptGuidelines: PROMPT_GUIDELINES,
-		parameters: AskUserQuestionSchema,
-		executionMode: "sequential",
-		async execute(toolCallId, params, signal, _onUpdate, ctx: ExtensionContext) {
-			const args: AskUserQuestionArgs = params;
-			if (!ctx.hasUI) return toolResult(ERROR_NO_UI, { answers: [], cancelled: true });
-
-			const validation = validateQuestionnaire(args);
-			if (!validation.ok) return toolResult(validation.message, { answers: [], cancelled: true });
-
-			const outcome = await waiters.wait(toolCallId, signal);
-			if (outcome.kind === "superseded") {
-				return { content: [{ type: "text", text: ASK_ACK_TEXT }], details: { kind: "ack" } };
-			}
-			if (outcome.kind === "abandoned") {
-				return {
-					...toolResult(ASK_STOPPED_ERROR, { answers: [], cancelled: true }),
-					terminate: true,
-				};
-			}
-			const result = buildQuestionnaireResponse(outcome.result, args);
-			waiters.recordExecutedResult(toolCallId, result);
-			return result;
-		},
-	} satisfies ToolDefinition<
-		typeof AskUserQuestionSchema,
-		AskUserQuestionResult | AskUserQuestionAckDetails
-	>;
-}
-
-export function askUserQuestionExtension(): (pi: ExtensionAPI) => void {
-	return (pi) => {
-		pi.on("message_end", (event) => {
-			const message = isolateAskUserQuestionBatch(event.message);
-			return message ? { message } : undefined;
-		});
 	};
 }
