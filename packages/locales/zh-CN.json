@@ -747,7 +747,7 @@
 	"panels.projectTree.collapseProject": "折叠项目",
 	"panels.projectTree.copyPath": "复制路径",
 	"panels.projectTree.createWorkspace": "创建工作区",
-	"panels.projectTree.createWorkspaceShortcut": "u521bu5efau5de5u4f5cu533auff08{{shortcut}} u6216 {{altShortcut}}uff09",
+	"panels.projectTree.createWorkspaceShortcut": "创建工作区（{{shortcut}} 或 {{altShortcut}}）",
 	"panels.projectTree.creatingWorktree": "正在创建工作树…",
 	"panels.projectTree.expandProject": "展开项目",
 	"panels.projectTree.keepActive": "保持活跃",
