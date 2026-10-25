@@ -50,7 +50,6 @@
         "@resvg/resvg-js": "2.6.2",
         "@types/bun": "catalog:",
         "electrobun": "2.0.1",
-        "pe-library": "2.0.1",
         "resedit": "catalog:",
         "typescript": "catalog:",
       },

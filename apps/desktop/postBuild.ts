@@ -1,6 +1,8 @@
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { embedWindowsExecutableIcon } from "./src/windowsExecutableIcon";
+import { channel, version } from "@thinkrail/shared/version";
+import { windowsFileIdentity } from "@thinkrail/shared/windowsIdentity";
+import { brandWindowsExecutable } from "./src/windowsExecutableIdentity";
 
 const desktopDir = import.meta.dir;
 
@@ -13,11 +15,20 @@ if (process.env.ELECTROBUN_OS === "win") {
 	}
 
 	const bundleName = buildEnvironment === "stable" ? appName : `${appName}-${buildEnvironment}`;
-	const uninstallerPath = join(buildDir, bundleName, "Resources", "uninstall");
-	const iconPath = join(desktopDir, "assets", "icon.ico");
-	const branded = embedWindowsExecutableIcon(readFileSync(uninstallerPath), readFileSync(iconPath));
-	writeFileSync(uninstallerPath, branded);
-	console.log("embedded Windows icon in uninstaller");
+	const bundleDir = join(buildDir, bundleName);
+	const icon = readFileSync(join(desktopDir, "assets", "icon.ico"));
+	const identity = windowsFileIdentity({ version, channel });
+	for (const [path, originalFilename] of [
+		[join(bundleDir, "bin", "bun.exe"), "bun.exe"],
+		[join(bundleDir, "bin", "launcher.exe"), "launcher.exe"],
+		[join(bundleDir, "Resources", "uninstall"), "uninstall.exe"],
+	] as const) {
+		writeFileSync(
+			path,
+			brandWindowsExecutable(readFileSync(path), icon, identity, originalFilename),
+		);
+	}
+	console.log(`branded Windows executables as ${identity.productName} ${identity.fileVersion}`);
 }
 
 rmSync(join(desktopDir, ".stage"), { recursive: true, force: true });

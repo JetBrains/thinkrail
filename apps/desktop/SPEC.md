@@ -27,11 +27,11 @@ engine architecture.
 - **Public surface:** the packaged desktop application and its installers. No test-helper library is
   exported by the application package.
 - **Allowed deps:** `server` for the embedded host and build-support manifest; `shared`
-  for release identity and the early `resolveShellEnv()` start; `contracts` for
-  compatibility/native-bridge types and the shared `createQuitConfirmation` rule; the completed built web
-  artifact; Electrobun `2.0.1` and its generated SDK; build-only `pe-library`/`resedit` for the
-  Electrobun 2.0.1 Windows-uninstaller icon gap; build-only `@resvg/resvg-js` to rasterize the icon
-  source (below); Bun/Node.
+  for release identity, its Windows file identity and the early `resolveShellEnv()` start; `contracts`
+  for compatibility/native-bridge types and the shared `createQuitConfirmation` rule; the completed built
+  web artifact; Electrobun `2.0.1` and its generated SDK; build-only `resedit` to pack the ICO and to
+  close the Electrobun 2.0.1 Windows executable-identity gap (below); build-only `@resvg/resvg-js` to
+  rasterize the icon source; Bun/Node.
 - **Forbidden:** spawning the CLI or a second engine process; implementing ordinary product feature or
   agent/domain logic; importing web source at runtime; introducing a desktop-only wire or UI state model;
   storing one active location on the backend; or bundling CEF without a new acceptance failure that
