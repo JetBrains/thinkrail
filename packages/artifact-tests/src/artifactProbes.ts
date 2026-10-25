@@ -25,6 +25,24 @@ export interface ArtifactHostAdapter {
 }
 
 const MALFORMED_MERMAID = "flowchart LR\n A -->";
+const ASK_PROMPT = "Ask the runtime question.";
+const ASK_TOOL_CALL_ID = "artifact-ask";
+const ASK_QUESTION = {
+	questions: [
+		{
+			question: "Which runtime?",
+			header: "Runtime",
+			options: [
+				{ label: "Bun", description: "fast" },
+				{ label: "Node", description: "compatible" },
+			],
+		},
+	],
+};
+const ASK_ANSWER = {
+	cancelled: false,
+	answers: [{ questionIndex: 0, question: "Which runtime?", kind: "option", answer: "Bun" }],
+};
 
 const MCP_STDIO_FIXTURE = `import { createInterface } from "node:readline";
 const reply = (id, result) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id, result }) + "\\n");
@@ -227,6 +245,69 @@ async function assertStrictVisualizeValidation(
 	);
 }
 
+async function sessionState(
+	socket: WebSocket,
+	sessionId: string,
+): Promise<{ execution: string; completion: unknown; needsInput: { kind: string } | null }> {
+	const states = (await within(
+		rpc(socket, "session.stateList", {}),
+		10_000,
+		"session.stateList",
+	)) as {
+		sessionId: string;
+		state: { execution: string; completion: unknown; needsInput: { kind: string } | null };
+	}[];
+	const state = states.find((entry) => entry.sessionId === sessionId)?.state;
+	assert(state, `session ${sessionId} is missing from session.stateList`);
+	return state;
+}
+
+async function assertAskUserQuestionRoundTrip(
+	socket: WebSocket,
+	workspaceId: string,
+	sessionId: string,
+): Promise<void> {
+	const prompting = rpc(socket, "session.prompt", { sessionId, text: ASK_PROMPT });
+	prompting.catch(() => {});
+	let asked = false;
+	for (let attempt = 0; attempt < 240 && !asked; attempt += 1) {
+		asked = (await sessionState(socket, sessionId)).needsInput?.kind === "question";
+		if (!asked) await Bun.sleep(250);
+	}
+	assert(asked, "the scripted ask_user_question call never blocked the artifact session");
+	await within(
+		rpc(socket, "session.answerQuestion", {
+			sessionId,
+			toolCallId: ASK_TOOL_CALL_ID,
+			result: ASK_ANSWER,
+		}),
+		10_000,
+		"session.answerQuestion",
+	);
+	await within(prompting, 30_000, "session.prompt acknowledgement");
+	for (let attempt = 0; attempt < 240; attempt += 1) {
+		const state = await sessionState(socket, sessionId);
+		if (state.execution === "idle" && state.completion !== null) break;
+		await Bun.sleep(250);
+	}
+	const transcript = (await within(
+		rpc(socket, "session.getMessages", { sessionId, workspaceId }),
+		10_000,
+		"session.getMessages",
+	)) as {
+		messages: { role: string; toolCallId?: string; isError?: boolean; details?: unknown }[];
+	};
+	const result = transcript.messages.find(
+		(message) => message.role === "toolResult" && message.toolCallId === ASK_TOOL_CALL_ID,
+	);
+	assert(result, "the answered ask_user_question call left no tool result in the transcript");
+	assert(result.isError !== true, "the answered ask_user_question call persisted as an error");
+	assert(
+		JSON.stringify(result.details) === JSON.stringify(ASK_ANSWER),
+		`the persisted answer differs from the one sent: ${JSON.stringify(result.details)}`,
+	);
+}
+
 async function assertOAuthLoginReachesAuthUrl(socket: WebSocket): Promise<void> {
 	let loginId: string | undefined;
 	const authUrl = new Promise<string>((resolve, reject) => {
@@ -356,7 +437,12 @@ const faux = createFauxCore({ api, provider: "compiled-external", models: [model
 const respond = (context) => {
   faux.appendResponses([respond]);
   const last = context.messages[context.messages.length - 1];
-  if (last && last.role === "toolResult") return fauxAssistantMessage("Visualization attempted.");
+  if (last && last.role === "toolResult") return fauxAssistantMessage("Tool call attempted.");
+  if (last && last.role === "user" && JSON.stringify(last.content).includes(${JSON.stringify(ASK_PROMPT)}))
+    return fauxAssistantMessage(
+      [fauxToolCall("ask_user_question", ${JSON.stringify(ASK_QUESTION)}, { id: ${JSON.stringify(ASK_TOOL_CALL_ID)} })],
+      { stopReason: "toolUse" },
+    );
   return fauxAssistantMessage(
     [fauxToolCall("visualize", { type: "diagram", mermaid: ${JSON.stringify(MALFORMED_MERMAID)} })],
     { stopReason: "toolUse" },
@@ -538,6 +624,7 @@ export default function syntheticExternalExtension(pi) {
 			"session resource loader omitted bundled skills",
 		);
 		await assertStrictVisualizeValidation(socket, workspace.id, created.sessionId);
+		await assertAskUserQuestionRoundTrip(socket, workspace.id, created.sessionId);
 		await within(
 			rpc(socket, "session.dispose", { sessionId: created.sessionId }),
 			10_000,
