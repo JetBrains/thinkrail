@@ -4,6 +4,8 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
 import { removeTree } from "@thinkrail/shared/removeTree";
+import { channel, version } from "@thinkrail/shared/version";
+import { windowsFileIdentity } from "@thinkrail/shared/windowsIdentity";
 import { runDesktopAnalyticsProbe } from "./src/analyticsProbe";
 import { locateDesktopLauncher, repoRoot } from "./src/artifact";
 import {
@@ -13,6 +15,7 @@ import {
 	runArtifactHostProbes,
 } from "./src/artifactProbes";
 import { pollUntil, terminateProcess, within } from "./src/lifecycle";
+import { windowsIdentityMismatches } from "./src/windowsIdentity";
 
 const root = mkdtempSync(join(tmpdir(), "thinkrail-desktop-smoke-"));
 let sequence = 0;
@@ -342,7 +345,28 @@ const adapter: ArtifactHostAdapter = {
 	launch: (env, label) => launchDesktop(env, label, "host"),
 };
 
+function verifyWindowsExecutables(): void {
+	const bundleRoot = dirname(dirname(launcher));
+	const icon = new Uint8Array(readFileSync(join(bundleRoot, "Resources", "app.ico")));
+	const expected = windowsFileIdentity({ version, channel });
+	for (const path of [
+		join(bundleRoot, "bin", "bun.exe"),
+		join(bundleRoot, "bin", "launcher.exe"),
+		join(bundleRoot, "Resources", "uninstall"),
+	]) {
+		const mismatches = windowsIdentityMismatches(
+			new Uint8Array(readFileSync(path)),
+			expected,
+			icon,
+		);
+		if (mismatches.length) {
+			throw new Error(`${basename(path)} Windows identity: ${mismatches.join("; ")}`);
+		}
+	}
+}
+
 async function runMutedSmoke(): Promise<void> {
+	if (process.platform === "win32") verifyWindowsExecutables();
 	const isolated = join(root, "ui");
 	mkdirSync(join(isolated, "home"), { recursive: true });
 	let ui: Awaited<ReturnType<typeof launchDesktop>> | undefined;
