@@ -19,6 +19,7 @@ import { Button } from "@thinkrail/ui/button";
 import { LoadingRegion } from "@thinkrail/ui/skeleton";
 import { cn } from "@thinkrail/ui/utils";
 import { useEffect, useMemo, useState } from "react";
+import { firstClickOnly } from "../lib";
 import { selectActiveEditorTab, useAppStore } from "../store";
 import { openFileInTab } from "./openTabs";
 import {
@@ -180,7 +181,7 @@ function SpecNodeRow({
 						role: isMainSpec ? t("panels.specs.mainSpec") : role,
 					})}
 					title={`${node.title}\n${node.id} · ${node.type}`}
-					onClick={() => void openFileInTab(workspaceId, node.path, "preview")}
+					onClick={firstClickOnly(() => void openFileInTab(workspaceId, node.path, "preview"))}
 					onDoubleClick={() => void openFileInTab(workspaceId, node.path, "keep")}
 					className="flex min-w-0 flex-1 items-center gap-4 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
 				>

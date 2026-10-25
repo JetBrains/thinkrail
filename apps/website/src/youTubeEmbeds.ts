@@ -39,5 +39,6 @@ export const youTubeEmbeds: HastPlugin = {
 		if (typeof node.value === "string" && node.value.includes("<iframe")) {
 			return { type: "raw", value: fixRawHtml(node.value) };
 		}
+		return undefined;
 	},
 };

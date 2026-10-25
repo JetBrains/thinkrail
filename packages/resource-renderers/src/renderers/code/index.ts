@@ -14,6 +14,7 @@ export const codeRenderer: ResourceRenderer = {
 		layout: true,
 		whitespace: true,
 		boundedDiff: "large",
+		preload: true,
 	},
 	loadView: ({ mobile }) =>
 		mobile ? import("./PierreFile") : import("../../support/MonacoEditor"),

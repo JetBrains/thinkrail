@@ -30,7 +30,8 @@ Adopted:
 
 - **`Agent` is a primary, stock `ToolCard` — collapsed by default, but its header summary IS the live
   line**: `role · N turns · X tok · $c · elapsed · current-step`, re-derived from each
-  `partialResult.details` REPLACE snapshot. Expanded: task, live activity line, model/usage detail,
+  `partialResult.details` REPLACE snapshot. Expanded: task, live activity line, the run's model label
+  (`RunModelLabel`: catalog name + effort, raw `provider/id` tooltip) beside the usage counters,
   Open-transcript action, and the final report behind a fold once terminal. Errors auto-expand
   (existing chrome). **Failed runs keep the transcript action**: an error outcome's thrown tool
   result still carries the run's final details — `pi-subagents` re-injects them via its
@@ -52,7 +53,8 @@ Adopted:
   side-effect imported by the parent `tools/register`).
 - **Public surface:** the side-effect `register`; `runDetails`'s pure helpers (the parent chat's
   `BackgroundResult` reads the usage and report helpers).
-- **Allowed deps:** parent chat primitives (`toolRegistry`, `ChatActions`, `Markdown`, `foldState`);
+- **Allowed deps:** parent chat primitives (`toolRegistry`, `ChatActions`, `Markdown`, `foldState`,
+  `ModelEffortLabel`);
   sibling `Collapsible`; `@thinkrail/extension-api/web` (render contracts + pure helpers);
   `contracts` (type-only + the `SUBAGENT_COMPLETION_CUSTOM_TYPE` guard family); `@remixicon/react`; `lib`.
 - **Forbidden:** value-importing any `pi` package, `pi-subagents`, or `pi-delegation`; `store`/

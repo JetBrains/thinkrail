@@ -10,6 +10,7 @@ import { useT } from "@thinkrail/locales/react";
 import { useChatActions } from "../../ChatActions";
 import { useFold } from "../../foldState";
 import { Markdown } from "../../Markdown";
+import { RunModelLabel } from "../../ModelEffortLabel";
 import { Collapsible, countLines } from "../Collapsible";
 import { isTerminalRunStatus, readRunDetails, runCounters } from "./runDetails";
 
@@ -21,7 +22,7 @@ export function AgentCard({ toolCallId, args, result, status }: ToolRenderProps)
 	const task = details?.task || strArg(args, "task");
 	const terminal = details !== undefined && isTerminalRunStatus(details.status);
 	const backgroundAck = args.run_in_background === true && details !== undefined && !terminal;
-	const meta = details ? [details.model, ...runCounters(t, details, "split")].filter(Boolean) : [];
+	const counters = details ? runCounters(t, details, "split") : [];
 	const output = resultText(result);
 	const [reportOpen, toggleReport, reportToggleRef] = useFold(`${toolCallId}:report`, false);
 
@@ -58,8 +59,14 @@ export function AgentCard({ toolCallId, args, result, status }: ToolRenderProps)
 					</span>
 				)
 			) : null}
-			{meta.length > 0 ? (
-				<span className="text-text-muted tr-text-metadata">{meta.join(" · ")}</span>
+			{details?.model || counters.length > 0 ? (
+				<span className="flex min-w-0 items-center gap-4 text-text-muted tr-text-metadata">
+					<RunModelLabel model={details?.model} thinkingLevel={details?.thinkingLevel} />
+					{details?.model && counters.length > 0 ? <span aria-hidden>·</span> : null}
+					{counters.length > 0 ? (
+						<span className="min-w-0 truncate">{counters.join(" · ")}</span>
+					) : null}
+				</span>
 			) : null}
 			{status === "error" ? (
 				<pre className="overflow-auto whitespace-pre-wrap px-8 py-4 text-feedback-error tr-code-text">

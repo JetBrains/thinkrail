@@ -118,7 +118,9 @@ before references; sync/replace the snapshot before ACK. There is one controllin
 with exclusive ownership checked before mutations; dead-owner recovery is not lease-expiry stealing.
 Reads do not claim ownership. They distinguish local, other/indeterminate and inactive ownership;
 inactive execution is projected paused/uncertain without writing a snapshot. Unknown/corrupt state
-fails closed. Dispatch follows committed intent,
+fails closed, so the snapshot schema is closed: a stored outcome keeps only the run-detail fields it
+names, and a field newly added to `DelegationRunDetails` (e.g. `thinkingLevel`) is stripped at
+settlement until the schema deliberately adopts it. Dispatch follows committed intent,
 then commits observation. Unobserved effects remain uncertain after process loss; no exactly-once
 external-side-effect claim. A failed commit cannot publish speculative in-memory state.
 

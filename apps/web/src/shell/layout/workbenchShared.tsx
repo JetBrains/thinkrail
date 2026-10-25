@@ -145,6 +145,19 @@ export function isResizeArrowKey(key: string): boolean {
 	return ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(key);
 }
 
+function setLayoutFlagged(
+	group: ImperativePanelGroupHandle,
+	sizes: number[],
+	flag: { current: boolean },
+) {
+	flag.current = true;
+	try {
+		group.setLayout(sizes);
+	} finally {
+		flag.current = false;
+	}
+}
+
 export function useCommittedSizes(
 	current: readonly number[],
 	projectionEpoch: string,
@@ -174,12 +187,7 @@ export function useCommittedSizes(
 	const restore = useCallback(() => {
 		const group = groupRef.current;
 		if (!group || group.getLayout().length !== currentRef.current.length) return;
-		restoring.current = true;
-		try {
-			group.setLayout([...currentRef.current]);
-		} finally {
-			restoring.current = false;
-		}
+		setLayoutFlagged(group, [...currentRef.current], restoring);
 	}, [groupRef]);
 	const cancelStaleGesture = useCallback(() => {
 		const active = dragging.current || keyboard.current;
