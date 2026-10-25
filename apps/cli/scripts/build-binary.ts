@@ -12,8 +12,10 @@ import {
 } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { resolveBuildRuntimeSources } from "@thinkrail/server/build-support";
+import { channel, version } from "@thinkrail/shared/version";
+import { windowsFileIdentity } from "@thinkrail/shared/windowsIdentity";
 import { BINARY_SOURCE_MAP_BASE } from "../src/binarySourceMap";
-import { binaryArtifactName } from "./artifactName";
+import { binaryArtifactName, binaryWindowsIconPath, targetsWindows } from "./artifactName";
 
 const cliDir = resolve(import.meta.dir, "..");
 const repoRoot = resolve(cliDir, "..", "..");
@@ -99,10 +101,30 @@ function generateRuntimeManifest(): void {
 	);
 }
 
+function windowsMetadataFlags(target: string | undefined): string[] {
+	if (!targetsWindows(target)) return [];
+	if (process.platform !== "win32") {
+		console.warn(
+			"Windows icon and file properties need a Windows host; this cross-compiled binary keeps Bun's.",
+		);
+		return [];
+	}
+	const identity = windowsFileIdentity({ version, channel });
+	return [
+		`--windows-icon=${binaryWindowsIconPath}`,
+		`--windows-title=${identity.productName}`,
+		`--windows-description=${identity.productName}`,
+		`--windows-publisher=${identity.companyName}`,
+		`--windows-copyright=${identity.copyright}`,
+		`--windows-version=${identity.fileVersion}`,
+	];
+}
+
 const target = process.argv.find((a) => a.startsWith("--target="))?.slice("--target=".length);
 const outFile = join(outDir, binaryArtifactName(target));
 
 mkdirSync(outDir, { recursive: true });
+rmSync(outFile, { force: true });
 generateWebManifest();
 generateBundledExtensions();
 generateRuntimeManifest();
@@ -117,6 +139,7 @@ try {
 			"--format=esm",
 			"--sourcemap",
 			`--target=${target ?? "bun"}`,
+			...windowsMetadataFlags(target),
 			entryPath,
 			"--outfile",
 			outFile,
