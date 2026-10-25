@@ -106,9 +106,10 @@ What ThinkRail does, at product level; the linked spec owns the detail.
 - **Pi configuration** — the user's own pi config folder, or another one (a personal vs a work setup), plus
   extra environment variables, chosen in Settings and applied to the whole host at the next start; one setup
   per host, not per project ([[submodule-server-environment]]).
-- **Agent tools** — web research, and inline diagrams, comparisons and file previews in chat; a proposed
-  UI change is shown as a rendered before/after mockup through the same renderers and review comments
-  as diff review ([[submodule-web-chat-tools-web]], [[module-ext-visualize]]).
+- **Agent tools** — web research, structured multiple-choice questions the agent asks in chat instead of
+  guessing, and inline diagrams, comparisons and file previews in chat; a proposed UI change is shown as
+  a rendered before/after mockup through the same renderers and review comments as diff review
+  ([[submodule-web-chat-tools-web]], [[module-ext-ask-user-question]], [[module-ext-visualize]]).
 - **MCP servers** — pi's built-in MCP, read from the user's `mcp.json`, managed from Settings and visible
   per chat next to background commands and subagents; a confirm in the chat, on the call, before calls
   that may change data, with a per-project "Always allow" for tools the user trusts

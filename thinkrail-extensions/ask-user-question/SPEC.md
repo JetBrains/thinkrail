@@ -1,7 +1,7 @@
 ---
 id: module-ext-ask-user-question
 type: module-design
-status: draft
+status: active
 title: Ask user question extension
 parent: module-thinkrail-extensions
 depends-on: [module-ui, module-extension-api, module-resource-renderers, module-locales, module-contracts]

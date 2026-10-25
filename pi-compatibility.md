@@ -144,8 +144,9 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   The override moves a ThinkRail registry extension ahead of the first user package registering one of
   its tool names, so a same-name package such as rpiv's `ask_user_question` cannot take over the card,
   mailbox and repair that key on the name. Remove it when pi offers an inline-extension precedence or
-  replace option. Re-verify the three facts in the installed dist, and run the collision test in
-  `agentSessionManager.test.ts` (same-name questionnaire before and after reload) on every upgrade.
+  replace option. Re-verify the three facts in the installed dist, and run the collision tests in
+  `agentSessionManager.test.ts` (same-name questionnaire before and after reload, and a chat created with
+  ours off that re-enables it over the package) on every upgrade.
 - **Image-only queued input** — [[submodule-server-agent]], queue projection. The host compensates for
   pi's text-only delivered-message removal ([upstream #8612](https://github.com/earendil-works/pi/issues/8612))
   and retains image content lost by the destructive queue API. Remove the corresponding workaround

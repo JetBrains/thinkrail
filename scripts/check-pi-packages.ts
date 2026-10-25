@@ -16,9 +16,7 @@ import { packPiPackage, publishablePiPackages, repoRoot } from "./pi-packages.ts
 
 interface ScriptedUi {
 	mode: "tui" | "rpc";
-	/** Answers to `select` (a number picks that choice) and `input`, in order; `null` dismisses. */
 	replies?: (string | number | null)[];
-	/** Raw terminal input fed to the component a `ui.custom` factory returns. */
 	keys?: string[];
 }
 

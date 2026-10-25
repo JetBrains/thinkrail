@@ -62,7 +62,11 @@ Required before a package's first publish, and the definition of "works in vanil
   resolves from the fixture (Node ignores `import.meta.resolve`'s parent URL — resolving from the script's
   own location silently tested the repo's pi). The runner loads through `DefaultResourceLoader.reload()`,
   asserts zero errors and the expected tools/skills, and executes a per-package case table (tool calls,
-  expected text/error, and a `renderResult(...).render(width)` check). *Session-bound* tools (registered
+  expected text/error, a `renderResult(...).render(width)` check, and an expected `terminate` flag). A
+  case may script the UI the tool sees: `ui.mode` (`tui` or `rpc`), `ui.replies` answering `select`
+  (a number picks that choice) and `input` in order with `null` dismissing, and `ui.keys` as raw terminal
+  input fed to the component a `ui.custom` factory returns; cases without `ui` get an empty context.
+  *Session-bound* tools (registered
   in `session_start`, e.g. subagents, background-commands) will need a mode that binds an isolated
   `AgentSession` on pi's faux provider — added with the first wave that ships one. Token-backed smokes
   stay on-demand.
