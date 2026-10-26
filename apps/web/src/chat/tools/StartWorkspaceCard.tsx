@@ -1,5 +1,6 @@
 import { RiGitBranchLine as GitBranch, RiLoader4Line as Loader2 } from "@remixicon/react";
 import { resultText, strArg, type ToolRenderProps } from "@thinkrail/extension-api/web";
+import { useT } from "@thinkrail/locales/react";
 import type { ReactNode } from "react";
 import { useChatActions } from "../ChatActions";
 import { Collapsible, countLines } from "./Collapsible";
@@ -47,13 +48,14 @@ export function StartWorkspaceCard({
 	result,
 	status,
 }: ToolRenderProps): ReactNode {
+	const t = useT();
 	const actions = useChatActions();
 	const started = status === "done" ? readStartedWorkspace(result) : null;
 	const prompt = strArg(args, "prompt");
 	const WorkspaceName = actions?.WorkspaceName;
 	const meta = started
 		? [
-				`${started.branch} from ${started.baseBranch}`,
+				t("tools.startWorkspace.branchFrom", { branch: started.branch, base: started.baseBranch }),
 				started.model ? `${started.model} · ${started.effort}` : null,
 			].filter(Boolean)
 		: [];
@@ -71,7 +73,7 @@ export function StartWorkspaceCard({
 						)}
 					</span>
 				) : (
-					<span className="text-text-muted">New workspace</span>
+					<span className="text-text-muted">{t("tools.startWorkspace.new")}</span>
 				)}
 			</div>
 			{prompt ? (
@@ -84,7 +86,7 @@ export function StartWorkspaceCard({
 			{status === "running" ? (
 				<span className="flex items-center gap-4 text-text-muted tr-text-metadata">
 					<Loader2 className="size-12 shrink-0 animate-spin motion-reduce:animate-none" />
-					Starting workspace…
+					{t("tools.startWorkspace.starting")}
 				</span>
 			) : null}
 			{meta.length > 0 ? (
@@ -108,7 +110,7 @@ export function StartWorkspaceCard({
 					}
 					className="flex items-center gap-4 self-start text-primary tr-text-metadata hover:underline"
 				>
-					Open workspace
+					{t("tools.startWorkspace.open")}
 				</button>
 			) : null}
 		</div>
