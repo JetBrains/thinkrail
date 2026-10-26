@@ -126,6 +126,7 @@ test("project names drag whole groups without navigation and keep their order af
 	const second = page
 		.getByTestId("project-group")
 		.filter({ has: names.filter({ hasText: "second-project" }) });
+	await expect(second.getByTestId("workspace-item").first()).toBeVisible();
 	const source = sample.getByTestId("project-name");
 	const activeWorkspace = sample.getByTestId("workspace-item").first();
 	await activeWorkspace.click();
@@ -150,7 +151,9 @@ test("project names drag whole groups without navigation and keep their order af
 	expect(page.url()).toBe(location);
 });
 
-test("cancelled and external project drops leave the rail unchanged", async ({ page }) => {
+test("cancelled and external project drops leave the rail unchanged", async ({
+	page,
+}, testInfo) => {
 	await openFixtureProject(page);
 	seedSecondRepo();
 	await page.getByTestId("add-project-menu").click();
@@ -165,6 +168,19 @@ test("cancelled and external project drops leave the rail unchanged", async ({ p
 	await page.mouse.move(box.x + 40, box.y + 2, { steps: 8 });
 	await page.mouse.move(box.x + 42, box.y + 3);
 	await expect(target).toHaveAttribute("data-drop-placement", "before");
+	const indicator = await target.evaluate((element) => {
+		const style = getComputedStyle(element, "::before");
+		return { content: style.content, height: style.height, background: style.backgroundColor };
+	});
+	expect(indicator.content).not.toBe("none");
+	expect(indicator.height).toBe("2px");
+	expect(indicator.background).not.toBe("rgba(0, 0, 0, 0)");
+	const screenshot = testInfo.outputPath("project-reorder-insertion.png");
+	await page.screenshot({ path: screenshot });
+	await testInfo.attach("project-reorder-insertion", {
+		path: screenshot,
+		contentType: "image/png",
+	});
 	await page.keyboard.press("Escape");
 	await page.mouse.up();
 	await expect(target).not.toHaveAttribute("data-drop-placement");
