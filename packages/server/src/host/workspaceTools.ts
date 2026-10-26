@@ -5,15 +5,17 @@ import type {
 	Project,
 	SessionState,
 	SessionSummary,
+	ThinkingLevel,
 	WireModel,
 	Workspace,
 } from "@thinkrail/contracts";
 import {
+	type CreateSessionResult,
 	getSessionWorkspaceId,
 	listSessions,
 	listSettledModels,
 	promptSession,
-	readFinalAssistantText,
+	readFinalAssistantTexts,
 	type StartedWorkspace,
 	type StartWorkspaceParams,
 	type WorkspaceStatusParams,
@@ -152,36 +154,65 @@ function errorText(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-async function startWorkspace(
+export interface StartWorkspaceDeps {
+	callerWorkspace: (sessionId: string) => Workspace;
+	openProjects: () => Project[];
+	settledModels: () => Promise<WireModel[]>;
+	defaultBaseBranch: (projectId: string) => Promise<string>;
+	createWorkspace: (projectId: string, baseRef: string) => Promise<Workspace>;
+	startChat: (
+		workspace: Workspace,
+		requested: { model?: WireModel; thinkingLevel?: ThinkingLevel },
+	) => Promise<CreateSessionResult>;
+	sendPrompt: (sessionId: string, text: string, images?: ImageContent[]) => Promise<void>;
+}
+
+const liveStartDeps: StartWorkspaceDeps = {
+	callerWorkspace,
+	openProjects: listProjects,
+	settledModels: listSettledModels,
+	defaultBaseBranch,
+	createWorkspace: async (projectId, baseRef) =>
+		provisionInitialTerminal(
+			await observeSetupAction("worktree_create", () =>
+				createWorkspace(projectId, undefined, baseRef),
+			),
+		),
+	startChat: async (workspace, requested) => {
+		await ensureWatch(workspace.id);
+		return startChatSession(workspace, requested);
+	},
+	sendPrompt: (sessionId, text, images) =>
+		ackSend(
+			runObservation.send(sessionId, "internal", () => promptSession(sessionId, text, images)),
+		),
+};
+
+export async function startWorkspace(
 	callerSessionId: string,
 	params: StartWorkspaceParams,
+	deps: StartWorkspaceDeps = liveStartDeps,
 ): Promise<StartedWorkspace> {
-	const caller = callerWorkspace(callerSessionId);
+	const caller = deps.callerWorkspace(callerSessionId);
 	const prompt = params.prompt.trim();
 	if (!prompt) throw new Error("Pass a non-empty prompt.");
-	const project = resolveProject(params.project, caller.projectId);
+	const project = resolveProject(params.project, caller.projectId, deps.openProjects());
 	const model = params.model?.trim()
-		? resolveModel(params.model, await listSettledModels())
+		? resolveModel(params.model, await deps.settledModels())
 		: undefined;
 	const { images, files } = prepareAttachments(params.attachments ?? [], caller.worktreePath);
-	const baseRef = params.base_branch?.trim() || (await defaultBaseBranch(project.id));
+	const baseRef = params.base_branch?.trim() || (await deps.defaultBaseBranch(project.id));
 
-	const workspace = provisionInitialTerminal(
-		await observeSetupAction("worktree_create", () =>
-			createWorkspace(project.id, undefined, baseRef),
-		),
-	);
+	const workspace = await deps.createWorkspace(project.id, baseRef);
 	try {
-		await ensureWatch(workspace.id);
-		const created = await startChatSession(workspace, {
+		const created = await deps.startChat(workspace, {
 			...(model ? { model } : {}),
 			...(params.effort ? { thinkingLevel: params.effort } : {}),
 		});
-		const text = composePrompt(prompt, files);
-		await ackSend(
-			runObservation.send(created.sessionId, "internal", () =>
-				promptSession(created.sessionId, text, images.length > 0 ? images : undefined),
-			),
+		await deps.sendPrompt(
+			created.sessionId,
+			composePrompt(prompt, files),
+			images.length > 0 ? images : undefined,
 		);
 		return {
 			workspaceId: workspace.id,
@@ -248,16 +279,15 @@ interface ChatReport {
 async function chatReports(workspace: Workspace, withFinal: boolean): Promise<ChatReport[]> {
 	const summaries = await listSessions(workspace.id, workspace.worktreePath);
 	if (!withFinal) return summaries.map((summary) => ({ summary }));
-	return Promise.all(
-		summaries.map(async (summary) => ({
-			summary,
-			finalMessage: await readFinalAssistantText(
-				summary.sessionId,
-				workspace.id,
-				workspace.worktreePath,
-			).catch(() => null),
-		})),
-	);
+	const finals = await readFinalAssistantTexts(
+		workspace.id,
+		workspace.worktreePath,
+		summaries.map((summary) => summary.sessionId),
+	).catch(() => new Map<string, string | null>());
+	return summaries.map((summary) => ({
+		summary,
+		finalMessage: finals.get(summary.sessionId) ?? null,
+	}));
 }
 
 function renderWorkspace(

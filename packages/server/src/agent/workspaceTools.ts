@@ -102,7 +102,7 @@ const START_GUIDELINES = [
 	"Use start_workspace whenever the user asks for work to happen in another, side, separate, new, or parallel workspace — or to run several tasks in parallel. Start one workspace per independent task; call it several times in one response to start them in parallel.",
 	"When you notice that a request splits into independent tasks the user did not ask to parallelize, suggest starting them in separate workspaces instead of starting them unasked.",
 	"The new workspace is an ordinary git worktree cut from a committed branch: commit (or attach) anything it needs from this workspace first. Its agent sees nothing of this conversation, so write a self-contained prompt with the goal, context, and what done looks like (e.g. whether to open a PR).",
-	"start_workspace returns as soon as the new chat has started; use workspace_status to see how started workspaces are doing.",
+	"start_workspace returns once the new chat has accepted its prompt, without waiting for its work; use workspace_status to see how started workspaces are doing.",
 ];
 
 const STATUS_GUIDELINES = [

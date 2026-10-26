@@ -2139,21 +2139,35 @@ export function getSessionMessages(
 	return getSessionMessagesInternal(sessionId, workspaceId, cwd);
 }
 
-export async function readFinalAssistantText(
-	sessionId: string,
+export async function readFinalAssistantTexts(
 	workspaceId: string,
 	cwd: string,
-): Promise<string | null> {
-	if (isSessionDeleted(sessionId, workspaceId)) return null;
-	const entry = sessions.get(sessionId);
-	if (entry) {
-		return entry.workspaceId === workspaceId ? finalAssistantText(entry.session.messages) : null;
+	sessionIds: readonly string[],
+): Promise<Map<string, string | null>> {
+	const texts = new Map<string, string | null>();
+	const onDisk: string[] = [];
+	for (const sessionId of sessionIds) {
+		const entry = sessions.get(sessionId);
+		if (isSessionDeleted(sessionId, workspaceId)) texts.set(sessionId, null);
+		else if (!entry) onDisk.push(sessionId);
+		else {
+			texts.set(
+				sessionId,
+				entry.workspaceId === workspaceId ? finalAssistantText(entry.session.messages) : null,
+			);
+		}
 	}
-	const info = (await SessionManager.list(cwd)).find(
-		(candidate) => candidate.id === sessionId && candidate.cwd === cwd,
-	);
-	if (!info) return null;
-	return finalAssistantText(SessionManager.open(info.path).buildSessionContext().messages);
+	if (onDisk.length === 0) return texts;
+	const wanted = new Set(onDisk);
+	for (const info of await SessionManager.list(cwd)) {
+		if (info.cwd !== cwd || !wanted.has(info.id) || texts.has(info.id)) continue;
+		texts.set(
+			info.id,
+			finalAssistantText(SessionManager.open(info.path).buildSessionContext().messages),
+		);
+	}
+	for (const sessionId of onDisk) if (!texts.has(sessionId)) texts.set(sessionId, null);
+	return texts;
 }
 
 function finalAssistantText(messages: readonly AgentSession["messages"][number][]): string | null {
