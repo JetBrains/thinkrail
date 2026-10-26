@@ -230,7 +230,25 @@ available; otherwise explain the gap and ask before switching modes.
 
 ![Illustrative review of a shared security rule and personal incident-fix workflow, with explicit scope and execution mode.](assets/spec-driven-development/saving-practices.png)
 
-## 6. Framework support
+## 6. Ecosystem support
+
+### Knowledge formats, skills, and runtimes
+
+These related projects exercise different parts of the design:
+
+- **Open Knowledge Format (OKF v0.2):** a portable knowledge format with document types, links,
+  provenance, and trust/lifecycle metadata. ThinkRail could preserve these when browsing and using
+  project knowledge. OKF document status does not define a software-development workflow.
+- **obra/superpowers:** a development methodology expressed through composable skills, from
+  brainstorming and planning through implementation and review. It is a concrete source of workflow
+  instructions to follow, not a process ThinkRail must reconstruct from the resulting specs.
+- **Hermes Agent:** an agent that creates and revises reusable skills as procedural memory.
+  It is a useful reference for saving and improving procedures; this does not imply embedding its
+  runtime or adopting autonomous skill updates in ThinkRail.
+
+These are reference cases, not additional integration commitments.
+
+### What full framework support means
 
 An unfamiliar framework remains usable through its documents. A maintained integration adds tested
 knowledge and native operations. **Full support** means its spec/workflow lifecycle works for declared
@@ -312,6 +330,9 @@ Framework behavior varies by version; these sources informed the proposal, not a
 
 - **OpenSpec:** [custom schemas](https://openspec.dev/docs/customize-schemas) and
   [default schema](https://openspec.dev/docs/schemas/spec-driven).
+- **OKF:** [v0.2 specification](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md).
+- **Superpowers:** [methodology and skill workflow](https://github.com/obra/superpowers#the-basic-workflow).
+- **Hermes Agent:** [skills and agent-managed authoring](https://hermes-agent.nousresearch.com/docs/user-guide/features/skills).
 - **Kiro:** [specs](https://kiro.dev/docs/specs/) and [steering](https://kiro.dev/docs/steering/).
 - **BMAD:** [overview](https://docs.bmad-method.org/) and
   [project context](https://docs.bmad-method.org/existing-codebases/theory-of-project-context/).
