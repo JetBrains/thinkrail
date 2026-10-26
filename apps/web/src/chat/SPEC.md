@@ -402,7 +402,10 @@ two routes:
 - for a rich inline card, rendering from its `toolCall` args and replying through the props-only
   **`ToolRenderProps.interaction`**. `ToolRendererBody` fills it through `useToolInteraction`
   (`toolInteraction.ts`), and the plan page does the same for its card. The adapter reads `ChatActions`,
-  `askState` and the fold-geometry context, and today answers only `ask_user_question` calls. The
+  `askState` and the fold-geometry context, and today answers only `ask_user_question` calls. Its
+  `state.accepting` is true only while the host's `needsInput` names this call (`awaitingQuestionIdOf`,
+  carried in the ask context) or no host state has arrived yet, so a call the host is not waiting on
+  (another package's same-name tool, a call to the switched-off tool) cannot submit an answer. The
   renderer never reads those contexts itself.
 
 Worked example: the `ask_user_question` flow in [tools/SPEC.md](tools/SPEC.md).
