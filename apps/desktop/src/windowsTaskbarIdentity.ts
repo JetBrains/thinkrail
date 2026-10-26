@@ -1,7 +1,8 @@
 import { CFunction, dlopen, FFIType, type Pointer, read, toArrayBuffer } from "bun:ffi";
-import { type Dirent, existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
-import { dirname, join, win32 } from "node:path";
+import { type Dirent, existsSync, readdirSync, realpathSync } from "node:fs";
+import { join, win32 } from "node:path";
 import { windowsProductName } from "@thinkrail/shared/windowsIdentity";
+import type { ElectrobunInstall } from "./electrobunInstall";
 
 export function desktopAppUserModelId(channel: string): string {
 	return `JetBrains.${windowsProductName(channel).replaceAll(" ", ".")}`;
@@ -21,8 +22,6 @@ export interface WindowsShellApi {
 	openShortcut(path: string, writable?: boolean): WindowsShortcut;
 }
 
-const ELECTROBUN_UNINSTALL_MANIFEST = ".electrobun-uninstall.json";
-
 function hasCode(error: unknown, code: string): boolean {
 	return error instanceof Error && "code" in error && error.code === code;
 }
@@ -37,29 +36,11 @@ function listDirectory(path: string, failures: unknown[]): Dirent[] {
 }
 
 export function taskbarShortcutCandidates(
-	appDir: string,
+	install: ElectrobunInstall | null,
 	appData: string | undefined,
 ): { paths: string[]; failures: unknown[] } {
-	const paths: string[] = [];
+	const paths = install?.startMenuShortcut ? [install.startMenuShortcut] : [];
 	const failures: unknown[] = [];
-	try {
-		const manifest: unknown = JSON.parse(
-			readFileSync(join(dirname(appDir), ELECTROBUN_UNINSTALL_MANIFEST), "utf8"),
-		);
-		if (
-			manifest &&
-			typeof manifest === "object" &&
-			"schema_version" in manifest &&
-			manifest.schema_version === 1 &&
-			"start_menu_shortcut" in manifest &&
-			typeof manifest.start_menu_shortcut === "string" &&
-			manifest.start_menu_shortcut
-		) {
-			paths.push(manifest.start_menu_shortcut);
-		}
-	} catch (error) {
-		if (!hasCode(error, "ENOENT")) failures.push(error);
-	}
 	if (appData) {
 		const pinned = join(appData, "Microsoft", "Internet Explorer", "Quick Launch", "User Pinned");
 		const implicit = join(pinned, "ImplicitAppShortcuts");

@@ -2,6 +2,8 @@ import { resolve } from "node:path";
 
 export const windowsIconPath = resolve(import.meta.dir, "..", "assets", "icon.ico");
 
+export const windowsCompanyName = "JetBrains s.r.o.";
+
 export interface WindowsFileIdentity {
 	productName: string;
 	companyName: string;
@@ -32,8 +34,8 @@ export function windowsFileIdentity(release: {
 	const fileVersionParts = windowsVersionParts(release.version);
 	return {
 		productName,
-		companyName: "JetBrains s.r.o.",
-		copyright: "Copyright © 2026 JetBrains s.r.o.",
+		companyName: windowsCompanyName,
+		copyright: `Copyright © 2026 ${windowsCompanyName}`,
 		fileVersion: fileVersionParts.join("."),
 		fileVersionParts,
 	};

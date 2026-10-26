@@ -11,6 +11,7 @@ import type {
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { spawnDetached } from "@thinkrail/shared/spawn";
 import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
+import { windowsCompanyName } from "@thinkrail/shared/windowsIdentity";
 import Electrobun, {
 	ApplicationMenu,
 	BrowserView,
@@ -26,6 +27,7 @@ import {
 	readMenuLabels,
 } from "./applicationMenu";
 import { attributionClaimOnFirstReadiness } from "./attributionReadiness";
+import { type ElectrobunInstall, readElectrobunInstall } from "./electrobunInstall";
 import { desktopError, setDesktopErrorReporter } from "./errorReporting";
 import { installExternalNavigation } from "./externalNavigation";
 import { preferNativeHostBridge, usesNativeHostBridge } from "./hostTransport";
@@ -77,6 +79,11 @@ import {
 	windowChromePreloadSeed,
 } from "./windowChrome";
 import { loadWindowsFrameApi, restoreWindowsFrameControls } from "./windowsFrame";
+import {
+	installedAppKey,
+	loadWindowsRegistryApi,
+	stampInstalledAppPublisher,
+} from "./windowsInstalledApp";
 import {
 	desktopAppUserModelId,
 	loadWindowsShellApi,
@@ -149,12 +156,18 @@ function setWindowsAppUserModelId(): void {
 	}
 }
 
-function stampWindowsTaskbarShortcuts(): void {
+function refreshWindowsInstallIdentity(): void {
 	if (process.platform !== "win32") return;
+	const appDir = dirname(PATHS.RESOURCES_FOLDER);
+	let install: ElectrobunInstall | null = null;
 	try {
-		const appDir = dirname(PATHS.RESOURCES_FOLDER);
+		install = readElectrobunInstall(appDir);
+	} catch (error) {
+		desktopError("windows_install", "could not read Electrobun's install record", error);
+	}
+	try {
 		const shell = loadWindowsShellApi();
-		const candidates = taskbarShortcutCandidates(appDir, process.env.APPDATA);
+		const candidates = taskbarShortcutCandidates(install, process.env.APPDATA);
 		const { failures } = shell.withComApartment(() =>
 			stampTaskbarShortcuts(
 				candidates.paths,
@@ -173,6 +186,16 @@ function stampWindowsTaskbarShortcuts(): void {
 		}
 	} catch (error) {
 		desktopError("windows_app_id", "could not stamp the Windows shortcuts' AppUserModelID", error);
+	}
+	if (!install) return;
+	try {
+		stampInstalledAppPublisher(
+			installedAppKey(install),
+			windowsCompanyName,
+			loadWindowsRegistryApi(),
+		);
+	} catch (error) {
+		desktopError("windows_install", "could not set the Installed-apps publisher", error);
 	}
 }
 
@@ -580,7 +603,7 @@ async function start(): Promise<void> {
 				mode: neutral ? "host" : "ui",
 			});
 		}
-		setTimeout(stampWindowsTaskbarShortcuts, 0);
+		setTimeout(refreshWindowsInstallIdentity, 0);
 	});
 
 	const controlPath = process.env.THINKRAIL_DESKTOP_CONTROL_FILE;

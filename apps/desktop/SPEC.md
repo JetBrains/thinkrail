@@ -126,7 +126,8 @@ existing chunk id with different content. `preBuild` also refuses to stage web `
 
 Handled native-shell failures that carry an error (keyboard state, title-bar double-click, update
 listener/lifecycle/journal, native-label writes, leaving the bundle working directory, Windows frame restore,
-Windows window icon, Windows taskbar identity, startup) go through `errorReporting.ts`'s
+Windows window icon, Windows taskbar identity, Windows install record and publisher, Linux window icon
+and notifications, startup) go through `errorReporting.ts`'s
 `desktopError(scope, message, error)`:
 the `[desktop] …` console line stays, and once the host has booted the error is forwarded to
 `DesktopHost.reportError` as a sanitized `desktop` error report ([[submodule-server-analytics]]); before
@@ -438,8 +439,18 @@ three gaps, closed by the project:
   ICO) through `user32` and sends it to the splash and the main window, sized for the window's DPI. A
   failure is reported and non-fatal.
 
+  `WM_SETICON` stores the handle rather than copying the icon, so each icon must outlive its window.
+  They are set once per window and never destroyed: four handles for the life of the process, which
+  the OS reclaims at exit; nothing grows, so a `DestroyIcon` pass would only matter if icons were
+  re-applied. They are not re-applied on `WM_DPICHANGED` either: after a move to a monitor with another
+  scale, Windows rescales the loaded frames, so the Alt+Tab and Task Manager icon can read slightly soft
+  until a restart. The native caption icon is never shown (`hiddenInset` with the app's own controls),
+  and a pinned taskbar button takes its icon from the launcher. Re-applying would mean subclassing the
+  window procedure from Bun FFI with a callback on the native message thread, which is out of proportion
+  to that effect; the decision is deliberate.
+
 Removal gates: Hutch writing the executable identity and replacing the main process's icon groups;
-Electrobun setting a window icon on Windows.
+Electrobun setting and refreshing a window icon on Windows.
 
 **Taskbar identity.** A pinned shortcut targets the launcher while the window belongs to `bun.exe`, and
 Electrobun sets no AppUserModelID. Without one, Windows derives each side's identity from its own exe
@@ -475,6 +486,16 @@ itself:
   non-fatal. An unreadable manifest is reported too, and the pins are still stamped.
 
 Removal gate: Electrobun giving its process and shortcuts a shared AppUserModelID.
+
+**Installed apps.** Electrobun registers `HKCU\…\Uninstall\<identifier>.<channel>` without a
+`Publisher`, so Windows' Installed-apps list shows none. Right after the shortcut stamp, the desktop
+writes [[module-shared]]'s publisher into that key. It does so only when the key already holds a
+`DisplayName`, so it never creates a key for an unmanaged build, and only when the value differs.
+Electrobun refreshes its values one by one and deletes the key on uninstall, so the extra value survives
+updates and leaves with the app. The key, like the Start-menu shortcut, comes from
+`.electrobun-uninstall.json`, read once by `electrobunInstall.ts`. That file's schema 1 is the coupling
+to Electrobun 2.0.1: an unknown schema reads as "no record", and a corrupt one is reported. Removal
+gate: Electrobun writing `Publisher`.
 
 Electrobun's `build.views` owns the browser preload bundle; `build.copy` owns physical resource inclusion.
 There is no custom SDK resolver, SDK metadata validator, or Electrobun command runner. App-local Hutch
@@ -601,4 +622,6 @@ release checks described in [[module-ci-release]].
 
 Shared/remote backend profiles, profile selection, multi-window/deep-link routing, CEF, and removing the
 `user32` style-bit shim once blackboardsh/electrobun#558 ships. The update feed publication described above
-remains release-owned.
+remains release-owned. The Windows setup stub still carries no VERSIONINFO. Hutch creates it and zips
+it after the last project hook, so its properties belong to the private signing pipeline, which already
+re-signs it.
