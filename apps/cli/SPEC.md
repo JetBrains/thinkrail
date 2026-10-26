@@ -263,14 +263,15 @@ and `trash`'s **native helper sidecars** (which macOS/Windows must execute from 
   pi writes one, so a stored directory spelled unlike pi's header, #766, fails the probe instead of matching
   itself), creates an offline session so every bundled
   factory is evaluated, verifies both macOS/Windows helpers were staged from the artifact, and SIGTERM
-  exits 0. CI builds + smokes the binary on every PR on **ubuntu and windows** (each its host target), with
-  `e2e:binary` on ubuntu; macOS binary coverage stays release-matrix-only. The Windows leg is not optional
+  exits 0. CI builds + smokes the binary on **ubuntu and windows** (each its host target): windows on every PR that
+  touches the app, ubuntu with `e2e:binary` on every merge group and on PRs whose change can affect artifacts (see
+  `module-ci-release`); macOS binary coverage stays release-matrix-only. The Windows leg is not optional
   polish: the host reaches that extension only when its Central inspection says *installed and supported*,
   so the whole assertion is Windows-executable-shaped, and an ubuntu-only smoke let #255 ship a release
   matrix that failed for two days while publishing nothing (see `module-ci-release`). It does not prompt a
   provider; real turn behavior stays in `e2e:agent`. The smoke's **broad-net sibling** is `bun run e2e:binary` (root
-  `playwright.binary.config.ts`): the whole no-agent e2e suite executed against this binary — also in CI
-  on every PR. And `bun run check:seams` (root `scripts/check-binary-seams.ts`) is the build-time canary
+  `playwright.binary.config.ts`): the whole no-agent e2e suite executed against this binary — in CI on
+  those same runs. And `bun run check:seams` (root `scripts/check-binary-seams.ts`) is the build-time canary
   for the seam class: it fails when a pi bump introduces a new bundler-opaque dynamic import the server's
   `registerBundledRuntime` doesn't statically register. The scan **excludes `pi-coding-agent/dist/bundle/`**
   (recorded as a skipped dir in the script, stale-checked like the allowlist): pi ≥ 0.84.3 ships a bundled

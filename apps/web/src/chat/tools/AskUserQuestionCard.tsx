@@ -426,9 +426,6 @@ export function AskUserQuestionCard({
 			userTookOver = true;
 			actions?.cancelAutomaticReveal();
 		};
-		window.addEventListener("pointerdown", yieldToUser, { capture: true, once: true });
-		window.addEventListener("keydown", yieldToUser, { capture: true, once: true });
-		window.addEventListener("wheel", yieldToUser, { capture: true, once: true, passive: true });
 		const settleAttention = () => {
 			const card = cardRef.current;
 			if (!card || userTookOver) return;
@@ -453,6 +450,9 @@ export function AskUserQuestionCard({
 			if (!claimQuestionAttention(focusScope, toolCallId)) return;
 			setAnnounced(true);
 			settleAttention();
+			window.addEventListener("pointerdown", yieldToUser, { capture: true, once: true });
+			window.addEventListener("keydown", yieldToUser, { capture: true, once: true });
+			window.addEventListener("wheel", yieldToUser, { capture: true, once: true, passive: true });
 		});
 		return () => {
 			if (frame != null) cancelAnimationFrame(frame);

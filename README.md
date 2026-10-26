@@ -15,6 +15,12 @@ create the tools it needs based on how you actually work.
 
 ⭐ If you find ThinkRail useful, give it a star — it helps others discover it.
 
+<p align="center">
+ <a href="https://www.star-history.com/jetbrains/thinkrail">
+  <picture><source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/badge?repo=JetBrains/thinkrail&type=rank&theme=dark" /><source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/badge?repo=JetBrains/thinkrail&type=rank" /><img alt="Star History Rank" src="https://api.star-history.com/badge?repo=JetBrains/thinkrail&type=rank" /></picture> <picture><source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/badge?repo=JetBrains/thinkrail&type=trending&theme=dark" /><source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/badge?repo=JetBrains/thinkrail&type=trending" /><img alt="GitHub Trending Repository of the Day" src="https://api.star-history.com/badge?repo=JetBrains/thinkrail&type=trending" /></picture>
+ </a>
+</p>
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/readme-assets/workbench-dark.png">
   <img src=".github/readme-assets/workbench-light.png" alt="ThinkRail workbench: the Projects pane beside the left tool rail listing worktree workspaces and their Settled shelf, a finished pi conversation with its tool steps in the center, the resulting diff beside it, and the Specs tree above the Changes list on the right with their tools on the edge rail" width="900">
@@ -61,9 +67,10 @@ create the tools it needs based on how you actually work.
   connect any provider through `pi`'s own auth. ThinkRail has no accounts of its own.
 - **Desktop app or browser.** A native desktop app, or the `thinkrail` CLI that opens the same app in your
   browser. Both embed the same engine host; app state lives under `~/.thinkrail`.
-- **Your language.** Settings → Language follows your system language or a language you pick. Add a
-  language ThinkRail doesn't ship yet by dropping a translated `en.json` into `~/.thinkrail/locales` — it
-  applies as you save. Agent replies and tool output stay as the agent wrote them.
+- **Your language.** Settings → Language follows your system language or a language you pick; English and
+  Simplified Chinese are built in. Add a language ThinkRail doesn't ship yet by dropping a translated
+  `en.json` into `~/.thinkrail/locales` — it applies as you save. Agent replies and tool output stay as
+  the agent wrote them.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/readme-assets/specs-dark.png">
@@ -166,10 +173,11 @@ manually or reinstalled with the script.
 | --- | --- | --- |
 | macOS Apple Silicon | DMG | signed binary |
 | macOS Intel | no Electrobun build | not prebuilt — [build from source](#developing-thinkrail) |
-| Windows x64 | signed setup executable | signed `.exe` |
+| Windows x64 | signed setup executable and app binaries | signed `.exe` |
 | Linux x64 / ARM64 | setup tarball, unsigned | unsigned |
 
-JetBrains signs the Windows CLI and desktop setup executable. The macOS CLI is signed but not yet notarized.
+JetBrains signs the Windows CLI, the desktop setup executable, and every executable and DLL the desktop app
+installs. The macOS CLI is signed but not yet notarized.
 Signed and notarized desktop DMGs require the coordinated JetBrains service pipeline; older published DMGs
 and locally built packages may still be unsigned and blocked by Gatekeeper. Linux artifacts are unsigned.
 
@@ -205,7 +213,7 @@ module, and a change that moves a boundary, contract, or decision updates the sp
 
 ## Developing ThinkRail
 
-You need **Bun** 1.4.3 (the pinned package manager and runtime), **Node.js** ≥ 22.19 (required by the
+You need **Bun** 1.4.4 (the pinned package manager and runtime), **Node.js** ≥ 22.19 (required by the
 in-process `pi` engine), and an authenticated `pi` provider for agent work.
 
 ```bash

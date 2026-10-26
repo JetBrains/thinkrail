@@ -99,6 +99,7 @@ export interface DelegationRunDetails {
 	task: string;
 	status: RunLifecycleStatus;
 	model?: string;
+	thinkingLevel?: ThinkingLevel;
 	usage: {
 		input: number;
 		output: number;

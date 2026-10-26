@@ -6,6 +6,12 @@ import {
 	revealWorkbenchTool,
 } from "./fixtures/app";
 
+const PAST_SETTLE_WINDOW_MS = 300;
+
+async function freezePageTimers(page: import("@playwright/test").Page): Promise<void> {
+	await page.clock.pauseAt(Date.now() + 1_000);
+}
+
 async function openWorkspaceFiles(page: import("@playwright/test").Page): Promise<void> {
 	await openFixtureProject(page);
 	await createWorkspaceViaDialog(page);
@@ -56,6 +62,24 @@ test("a single click previews into one reusable slot, a double click keeps the t
 	await expect(tabs.first()).toHaveAttribute("data-active", "true");
 });
 
+test("Enter and Space on a file row open its preview", async ({ page }) => {
+	await openWorkspaceFiles(page);
+	const tabs = page.getByTestId("editor-tab");
+
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).focus();
+	await page.keyboard.press("Enter");
+	await expect(tabs).toHaveCount(1);
+	await expect(tabs.first()).toContainText("README.md");
+	await expect(tabs.first()).toHaveAttribute("data-preview", "true");
+	await expect(tabs.first()).toHaveAttribute("data-active", "true");
+
+	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).focus();
+	await page.keyboard.press("Space");
+	await expect(tabs).toHaveCount(1);
+	await expect(tabs.first()).toContainText("notes.txt");
+	await expect(tabs.first()).toHaveAttribute("data-preview", "true");
+});
+
 test("a double click claims the slot on its way to keeping the tab, at any latency", async ({
 	page,
 }) => {
@@ -91,9 +115,56 @@ test("a double click on an unopened file sends exactly one fs.readFile", async (
 	expect(reads.filter((frame) => frame.includes("README.md"))).toHaveLength(1);
 });
 
+function frameId(raw: string): unknown {
+	try {
+		return (JSON.parse(raw) as { id?: unknown }).id;
+	} catch {
+		return undefined;
+	}
+}
+
+async function holdFileReads(page: import("@playwright/test").Page, path: string) {
+	const held: { id: unknown; send: () => void }[] = [];
+	const released = new Set<unknown>();
+	let answered = 0;
+	await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
+		const server = ws.connectToServer();
+		ws.onMessage((message) => {
+			const raw = typeof message === "string" ? message : message.toString();
+			if (raw.includes('"method":"fs.readFile"') && raw.includes(path)) {
+				held.push({ id: frameId(raw), send: () => server.send(message) });
+				return;
+			}
+			server.send(message);
+		});
+		server.onMessage((message) => {
+			ws.send(message);
+			const raw = typeof message === "string" ? message : message.toString();
+			if (released.has(frameId(raw))) answered += 1;
+		});
+	});
+	return {
+		heldCount: () => held.length,
+		answeredCount: () => answered,
+		release: () => {
+			for (const read of held.splice(0)) {
+				released.add(read.id);
+				read.send();
+			}
+		},
+	};
+}
+
+async function nextFrames(page: import("@playwright/test").Page): Promise<void> {
+	await page.evaluate(
+		() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+	);
+}
+
 test("a browse the user has navigated away from is dropped, not activated on arrival", async ({
 	page,
 }) => {
+	const reads = await holdFileReads(page, "notes.txt");
 	await openWorkspaceFiles(page);
 	const tabs = page.getByTestId("editor-tab");
 
@@ -101,17 +172,12 @@ test("a browse the user has navigated away from is dropped, not activated on arr
 	await expect(tabs).toHaveCount(1);
 	await expect(tabs.first()).toHaveAttribute("data-preview", "false");
 
-	await page.evaluate(() => {
-		const byText = <T extends Element>(sel: string, text: string): T => {
-			const hit = [...document.querySelectorAll(sel)].find((el) => el.textContent?.includes(text));
-			if (!hit) throw new Error(`no ${sel} containing ${text}`);
-			return hit as unknown as T;
-		};
-		byText<HTMLElement>('[data-testid="file-node"]', "notes.txt").click();
-		byText<HTMLElement>('[data-testid="editor-tab"]', "README.md")
-			.querySelector<HTMLElement>("button")
-			?.click();
-	});
+	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).click();
+	await expect.poll(reads.heldCount).toBe(1);
+	await tabs.first().getByText("README.md").click();
+	reads.release();
+	await expect.poll(reads.answeredCount).toBe(1);
+	await nextFrames(page);
 
 	await expect(tabs).toHaveCount(1);
 	await expect(tabs.first()).toContainText("README.md");
@@ -168,7 +234,57 @@ test("a keep that lands first does not invalidate a browse requested after it", 
 	await expect(tabs.nth(1)).toHaveAttribute("data-preview", "true");
 });
 
+test("a single click on an open file selects it without a settle wait", async ({ page }) => {
+	await page.clock.install();
+	await openWorkspaceFiles(page);
+	const tabs = page.getByTestId("editor-tab");
+	const readme = page.getByTestId("file-node").filter({ hasText: "README.md" });
+	const notes = page.getByTestId("file-node").filter({ hasText: "notes.txt" });
+
+	await readme.dblclick();
+	await notes.click();
+	await expect(tabs.filter({ hasText: "notes.txt" })).toHaveAttribute("data-active", "true");
+	await freezePageTimers(page);
+	await readme.click();
+	await expect(tabs.filter({ hasText: "README.md" })).toHaveAttribute("data-active", "true");
+});
+
+test("a double click after a landed preview keeps that same tab", async ({ page }) => {
+	await openWorkspaceFiles(page);
+	const tabs = page.getByTestId("editor-tab");
+	const notes = page.getByTestId("file-node").filter({ hasText: "notes.txt" });
+
+	await notes.click();
+	await expect(tabs.first().getByText("notes.txt")).toHaveCSS("font-style", "italic");
+	const tabButton = tabs.first().locator("[data-layout-tab-id]");
+	const previewId = await tabButton.getAttribute("data-layout-tab-id");
+	await notes.dblclick();
+	await expect(tabs).toHaveCount(1);
+	await expect(tabs.first()).toHaveAttribute("data-preview", "false");
+	await expect(tabButton).toHaveAttribute("data-layout-tab-id", previewId ?? "");
+});
+
+test("clicking an inactive preview tab selects it at once without keeping it", async ({ page }) => {
+	await page.clock.install();
+	await openWorkspaceFiles(page);
+	const tabs = page.getByTestId("editor-tab");
+	await page.getByTestId("file-node").filter({ hasText: "notes.txt" }).dblclick();
+	await page.getByTestId("file-node").filter({ hasText: "README.md" }).click();
+	const notesTab = tabs.filter({ hasText: "notes.txt" });
+	const readmeTab = tabs.filter({ hasText: "README.md" });
+	await expect(readmeTab).toHaveAttribute("data-preview", "true");
+
+	await notesTab.click();
+	await expect(notesTab).toHaveAttribute("data-active", "true");
+	await freezePageTimers(page);
+	await readmeTab.click();
+	await expect(readmeTab).toHaveAttribute("data-active", "true");
+	await page.clock.runFor(PAST_SETTLE_WINDOW_MS);
+	await expect(readmeTab).toHaveAttribute("data-preview", "true");
+});
+
 test("a newer tab click cancels an older preview-tab settle timer", async ({ page }) => {
+	await page.clock.install();
 	await openFixtureProject(page);
 	await enterDefaultWorkspace(page);
 	await revealWorkbenchTool(page, "files");
@@ -178,9 +294,10 @@ test("a newer tab click cancels an older preview-tab settle timer", async ({ pag
 	const notes = page.getByTestId("editor-tab").filter({ hasText: "notes.txt" });
 	const readme = page.getByTestId("editor-tab").filter({ hasText: "README.md" });
 	await expect(readme).toHaveAttribute("data-preview", "true");
+	await freezePageTimers(page);
 	await readme.click();
 	await notes.click();
-	await page.waitForTimeout(300);
+	await page.clock.runFor(PAST_SETTLE_WINDOW_MS);
 
 	await expect(notes).toHaveAttribute("data-active", "true");
 	await expect(readme).toHaveAttribute("data-preview", "true");

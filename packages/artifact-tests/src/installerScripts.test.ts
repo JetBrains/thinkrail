@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
 	chmodSync,
@@ -20,6 +20,8 @@ const roots: string[] = [];
 const binaryBody = "controlled thinkrail artifact\n";
 const binaryHash = createHash("sha256").update(binaryBody).digest("hex");
 const powershell = Bun.which("powershell.exe") ?? Bun.which("pwsh");
+const POWERSHELL_TEST_TIMEOUT_MS = 30_000;
+const POWERSHELL_WARM_UP_TIMEOUT_MS = 120_000;
 
 interface Fixture {
 	root: string;
@@ -285,86 +287,120 @@ describe("install.sh validation", () => {
 });
 
 describe.skipIf(process.platform !== "win32" || !powershell)("install.ps1 validation", () => {
-	test("recognizes its bin dir on PATH whichever separator an entry is spelled with", () => {
+	beforeAll(() => {
 		if (!powershell) throw new Error("PowerShell is unavailable");
-		const fixture = makeFixture();
-		const definition = /^function Test-ThinkRailOnPath \{[\s\S]*?^\}/m.exec(
-			readFileSync(powershellInstaller, "utf8"),
-		)?.[0];
-		if (!definition) throw new Error("install.ps1 defines no Test-ThinkRailOnPath");
-		const script = join(fixture.root, "on-path.ps1");
-		writeFileSync(
-			script,
-			[
-				definition,
-				"$dir = 'C:\\Users\\me\\.thinkrail\\bin'",
-				"Write-Output (Test-ThinkRailOnPath -Dir $dir -PathEntries @('C:/Users/me/.thinkrail/bin'))",
-				"Write-Output (Test-ThinkRailOnPath -Dir $dir -PathEntries @('c:/users/ME/.thinkrail/bin/'))",
-				"Write-Output (Test-ThinkRailOnPath -Dir $dir -PathEntries @('C:\\Users\\me\\.thinkrail\\bin\\'))",
-				"Write-Output (Test-ThinkRailOnPath -Dir 'C:/Users/me/.thinkrail/bin' -PathEntries @('C:\\Users\\me\\.thinkrail\\bin'))",
-				"Write-Output (Test-ThinkRailOnPath -Dir $dir -PathEntries @('C:/Other/bin'))",
-			].join("\n"),
-		);
-		const child = Bun.spawnSync(
-			[powershell, "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script],
+		const warmUp = Bun.spawnSync(
+			[powershell, "-NoProfile", "-NonInteractive", "-Command", "exit 0"],
 			{ stdout: "pipe", stderr: "pipe" },
 		);
-		expect(child.stderr.toString()).toBe("");
-		expect(child.stdout.toString().trim().split(/\r?\n/)).toEqual([
-			"True",
-			"True",
-			"True",
-			"True",
-			"False",
-		]);
-	});
+		expect(warmUp.exitCode).toBe(0);
+	}, POWERSHELL_WARM_UP_TIMEOUT_MS);
+
+	test(
+		"recognizes its bin dir on PATH whichever separator an entry is spelled with",
+		() => {
+			if (!powershell) throw new Error("PowerShell is unavailable");
+			const fixture = makeFixture();
+			const definition = /^function Test-ThinkRailOnPath \{[\s\S]*?^\}/m.exec(
+				readFileSync(powershellInstaller, "utf8"),
+			)?.[0];
+			if (!definition) throw new Error("install.ps1 defines no Test-ThinkRailOnPath");
+			const script = join(fixture.root, "on-path.ps1");
+			writeFileSync(
+				script,
+				[
+					definition,
+					"$dir = 'C:\\Users\\me\\.thinkrail\\bin'",
+					"Write-Output (Test-ThinkRailOnPath -Dir $dir -PathEntries @('C:/Users/me/.thinkrail/bin'))",
+					"Write-Output (Test-ThinkRailOnPath -Dir $dir -PathEntries @('c:/users/ME/.thinkrail/bin/'))",
+					"Write-Output (Test-ThinkRailOnPath -Dir $dir -PathEntries @('C:\\Users\\me\\.thinkrail\\bin\\'))",
+					"Write-Output (Test-ThinkRailOnPath -Dir 'C:/Users/me/.thinkrail/bin' -PathEntries @('C:\\Users\\me\\.thinkrail\\bin'))",
+					"Write-Output (Test-ThinkRailOnPath -Dir $dir -PathEntries @('C:/Other/bin'))",
+				].join("\n"),
+			);
+			const child = Bun.spawnSync(
+				[
+					powershell,
+					"-NoProfile",
+					"-NonInteractive",
+					"-ExecutionPolicy",
+					"Bypass",
+					"-File",
+					script,
+				],
+				{ stdout: "pipe", stderr: "pipe" },
+			);
+			expect(child.stderr.toString()).toBe("");
+			expect(child.stdout.toString().trim().split(/\r?\n/)).toEqual([
+				"True",
+				"True",
+				"True",
+				"True",
+				"False",
+			]);
+		},
+		POWERSHELL_TEST_TIMEOUT_MS,
+	);
 
 	test.each([
 		["stable", "v1.2.3", "Invalid version"],
 		["stable", "1.2.3-nightly.4", "does not belong to the stable channel"],
 		["nightly", "1.2.3", "does not belong to the nightly channel"],
-	])("rejects %s/%s before network access", (channel, requested, message) => {
-		const fixture = makeFixture();
-		const result = runPowerShellInstaller(fixture, channel, requested);
-		expect(result.exitCode).not.toBe(0);
-		expect(`${result.stdout}\n${result.stderr}`).toContain(message);
-		expect(existsSync(join(fixture.root, "powershell-network.log"))).toBe(false);
-	});
+	])(
+		"rejects %s/%s before network access",
+		(channel, requested, message) => {
+			const fixture = makeFixture();
+			const result = runPowerShellInstaller(fixture, channel, requested);
+			expect(result.exitCode).not.toBe(0);
+			expect(`${result.stdout}\n${result.stderr}`).toContain(message);
+			expect(existsSync(join(fixture.root, "powershell-network.log"))).toBe(false);
+		},
+		POWERSHELL_TEST_TIMEOUT_MS,
+	);
 
-	test.each([
-		"C:/isolated/100%",
-		"C:/isolated/unsafe!prefix",
-	])("rejects the cmd-unsafe prefix %s before network access", (prefix) => {
-		const fixture = makeFixture();
-		const result = runPowerShellInstaller(fixture, "stable", "1.2.3", "v1.2.3", prefix);
-		expect(result.exitCode).not.toBe(0);
-		expect(`${result.stdout}\n${result.stderr}`).toContain("Invalid prefix");
-		expect(existsSync(join(fixture.root, "powershell-network.log"))).toBe(false);
-	});
+	test.each(["C:/isolated/100%", "C:/isolated/unsafe!prefix"])(
+		"rejects the cmd-unsafe prefix %s before network access",
+		(prefix) => {
+			const fixture = makeFixture();
+			const result = runPowerShellInstaller(fixture, "stable", "1.2.3", "v1.2.3", prefix);
+			expect(result.exitCode).not.toBe(0);
+			expect(`${result.stdout}\n${result.stderr}`).toContain("Invalid prefix");
+			expect(existsSync(join(fixture.root, "powershell-network.log"))).toBe(false);
+		},
+		POWERSHELL_TEST_TIMEOUT_MS,
+	);
 
-	test("rejects a resolved stable tag before constructing an artifact URL", () => {
-		const fixture = makeFixture();
-		const result = runPowerShellInstaller(fixture, "stable", "latest", "v1.2.3-nightly.4");
-		expect(result.exitCode).not.toBe(0);
-		expect(`${result.stdout}\n${result.stderr}`).toContain(
-			"Invalid resolved tag for the stable channel",
-		);
-		expect(readFileSync(join(fixture.root, "powershell-network.log"), "utf8").trim()).toBe("api");
-	});
+	test(
+		"rejects a resolved stable tag before constructing an artifact URL",
+		() => {
+			const fixture = makeFixture();
+			const result = runPowerShellInstaller(fixture, "stable", "latest", "v1.2.3-nightly.4");
+			expect(result.exitCode).not.toBe(0);
+			expect(`${result.stdout}\n${result.stderr}`).toContain(
+				"Invalid resolved tag for the stable channel",
+			);
+			expect(readFileSync(join(fixture.root, "powershell-network.log"), "utf8").trim()).toBe("api");
+		},
+		POWERSHELL_TEST_TIMEOUT_MS,
+	);
 
 	test.each([
 		["stable", "1.2.3", "v1.2.3"],
 		["nightly", "1.2.3-nightly.7", "v1.2.3-nightly.7"],
-	])("constructs the exact %s artifact target", (channel, requested, tag) => {
-		const fixture = makeFixture();
-		const result = runPowerShellInstaller(fixture, channel, requested);
-		expect(result.exitCode).not.toBe(0);
-		const requests = readFileSync(join(fixture.root, "powershell-network.log"), "utf8")
-			.trim()
-			.split(/\r?\n/);
-		expect(requests).toHaveLength(1);
-		expect(requests[0]).toContain(`/releases/download/${tag}/thinkrail-windows-x64.exe`);
-	});
+	])(
+		"constructs the exact %s artifact target",
+		(channel, requested, tag) => {
+			const fixture = makeFixture();
+			const result = runPowerShellInstaller(fixture, channel, requested);
+			expect(result.exitCode).not.toBe(0);
+			const requests = readFileSync(join(fixture.root, "powershell-network.log"), "utf8")
+				.trim()
+				.split(/\r?\n/);
+			expect(requests).toHaveLength(1);
+			expect(requests[0]).toContain(`/releases/download/${tag}/thinkrail-windows-x64.exe`);
+		},
+		POWERSHELL_TEST_TIMEOUT_MS,
+	);
 });
 
 describe("install.sh controlled installation", () => {

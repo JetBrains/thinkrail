@@ -167,8 +167,8 @@ channel fan-out, and the process-boot wrapper both launchers share.
   faults. It renders the throw via the `log` module's `describeError`, so crash reports and log lines
   agree, but keeps its own sync append — the death path must not depend on the logger's state);
   `boot.ts` (`bootHost` → await `initLogging` — debug level when the launcher passed `verbose` — then
-  install the crash report, resolve the login-shell environment when the launcher passed
-  `resolveShellEnv: true`, pre-warm the same Central watcher/runtime
+  install the crash report, await the login-shell environment when the launcher passed
+  `resolveShellEnv: true` (started before `initLogging`), pre-warm the same Central watcher/runtime
   initialization before choosing the serving port, await `createServer` (which idempotently enforces
   runtime bootstrap for low-level embedders), and write the `listening on` info line (see
   `submodule-server-log`); `reportDesktopError(error, scope)` is the desktop launcher's handled-error door
@@ -502,8 +502,13 @@ channel fan-out, and the process-boot wrapper both launchers share.
 - **Project lifecycle fan-out:** `createServer` installs the `projects` module's publisher and maps every
   authoritative open/reopen/close snapshot to **`project.updated`**. The WS `open` handler subscribes to
   that channel and hydrates two views in `server.welcome`: `projects` (open records only) and
-  `recentProjects` (all known records). The one full-snapshot channel is idempotent and avoids separate
-  opened/closed streams replaying out of order. Every client converges its rail + Recents from it; only
+  `recentProjects` (all known records, with closed records whose folder is definitively
+  gone omitted). The `/ws` upgrade first awaits `refreshRecentProjectFolders` for at most
+  250 ms, so an unresponsive mount delays a connect by that budget at most and an unfinished check leaves
+  its record at its last completed result; `open` itself never yields, so `server.welcome` stays the socket's first frame and
+  both views are read from the current registry in the same tick they are sent. The one full-snapshot
+  channel is idempotent and avoids separate opened/closed streams replaying out of order. Every client
+  converges its rail + Recents from it; only
   the initiating open flow selects Project Home, while a close fallback remains per-client view state.
 - **Workspace lifecycle fan-out:** `createServer` installs the `workspaces` module's publisher
   (`setWorkspacePublisher`), mapping each domain event `kind` → its `WS_CHANNELS.workspace*` channel

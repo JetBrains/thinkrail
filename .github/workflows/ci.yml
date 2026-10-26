@@ -1,7 +1,7 @@
 name: CI
 
-# Fast gates for every PR targeting main: lint + typecheck, unit tests, and the
-# no-agent e2e suite (the @agent specs need a real provider + auth, so they stay out of CI).
+# Gates for every PR targeting main and every merge group; the ruleset requires only "CI passed".
+# The @agent specs need a real provider + auth, so they stay out of CI. See .github/SPEC.md → CI.
 on:
   pull_request:
     branches: [main]
@@ -14,8 +14,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Classify changes
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.classify.outputs.app }}
+      artifacts: ${{ steps.classify.outputs.artifacts }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: classify
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_ref }}
+          OUTSIDE_APP: ^(apps/website/|packages/website-analytics/|\.github/workflows/site(-preview|-preview-cleanup)?\.yml$|\.github/readme-assets/)
+          ARTIFACT_PATHS: ^(apps/cli/|apps/desktop/|packages/artifact-tests/|packages/server/src/(buildSupport|agent/extensions)\.ts$|e2e/(run-binary|run-desktop|artifactPlaywright)\.ts$|playwright\.(binary|desktop)\.config\.ts$|\.github/|patches/|(package\.json|bun\.lock|turbo\.json)$)
+        run: |
+          if git fetch --no-tags --depth=1 origin "$BASE" && files=$(git diff --name-only --no-renames FETCH_HEAD HEAD); then
+            if grep -qvE "$OUTSIDE_APP" <<< "$files"; then app=true; else app=false; fi
+            if [ "$app" = true ] && { [ "$GITHUB_EVENT_NAME" = merge_group ] || grep -qE "$ARTIFACT_PATHS" <<< "$files"; }; then
+              artifacts=true
+            else
+              artifacts=false
+            fi
+          else
+            echo "::warning::Could not diff against $BASE; running every job"
+            app=true
+            artifacts=true
+          fi
+          { echo "app=$app"; echo "artifacts=$artifacts"; } | tee -a "$GITHUB_OUTPUT"
+
   lint:
     name: Lint & Typecheck
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -42,6 +72,7 @@ jobs:
 
   test:
     name: Unit Tests
+    timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -59,6 +90,9 @@ jobs:
 
   pi-packages:
     name: Pi package parity (vanilla pi under Node)
+    timeout-minutes: 10
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -80,6 +114,9 @@ jobs:
 
   e2e-shard:
     name: E2E (no-agent) shard ${{ matrix.shard }}/2
+    timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -100,7 +137,7 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - name: Install Playwright Chromium
-        run: bunx playwright install --with-deps chromium
+        run: .github/scripts/install-playwright.sh
       # `bun run e2e` is self-contained: it builds the web app, boots the host on an isolated
       # port + state dir, runs this job's slice of the @agent-free suite headless, then tears it all down.
       - run: bun run e2e
@@ -112,17 +149,11 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
-  # Required-check name in the main ruleset: aggregates the shard matrix.
-  e2e:
-    name: E2E (no-agent)
-    needs: e2e-shard
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
-    steps:
-      - run: test "${{ needs.e2e-shard.result }}" = success
-
   binary-shard:
     name: Binary smoke & e2e shard ${{ matrix.shard }}/4
+    timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.artifacts == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -148,7 +179,7 @@ jobs:
       - run: bun run smoke:binary
         if: ${{ matrix.shard == 1 }}
       - name: Install Playwright Chromium
-        run: bunx playwright install --with-deps chromium
+        run: .github/scripts/install-playwright.sh
       # This shard of the no-agent e2e suite against the artifact (grep-inverts @dev-seam too — the fake
       # login providers only exist in the dev boot): the broad net for works-from-source/broken-in-the-binary.
       - run: bun run e2e:binary --shard=${{ matrix.shard }}/4
@@ -160,29 +191,18 @@ jobs:
           path: playwright-report-binary/
           retention-days: 7
 
-  # Required-check name in the main ruleset: aggregates the shard matrix.
-  binary:
-    name: Binary smoke & e2e
-    needs: binary-shard
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
-    steps:
-      - run: test "${{ needs.binary-shard.result }}" = success
-
   binary-windows:
     name: Binary smoke (windows)
+    timeout-minutes: 20
+    needs: changes
+    if: needs.changes.outputs.app == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
-      - name: Cache bun install
-        uses: actions/cache@v5
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
+          no-cache: true
       - run: bun install --frozen-lockfile
       - run: bun test packages/spec-graph
       - run: bun test packages/pi-background-commands
@@ -194,6 +214,9 @@ jobs:
 
   desktop-shard:
     name: Desktop smoke & e2e shard ${{ matrix.shard }}/4
+    timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.artifacts == 'true'
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -211,12 +234,11 @@ jobs:
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
-      - name: Install desktop and browser runtimes
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            dbus-x11 x11-utils xvfb libgtk-3-0 libwebkit2gtk-4.1-0 libayatana-appindicator3-1 librsvg2-2
-          bunx playwright install --with-deps chromium
+      - name: Install desktop runtime packages
+        uses: ./.github/actions/desktop-apt
+        timeout-minutes: 10
+      - name: Install Playwright Chromium
+        run: .github/scripts/install-playwright.sh
       - name: Start virtual display
         run: |
           for attempt in 1 2 3; do
@@ -250,11 +272,23 @@ jobs:
           path: playwright-report-desktop/
           retention-days: 7
 
-  # Required-check name in the main ruleset: aggregates the shard matrix.
-  desktop:
-    name: Desktop smoke & e2e
-    needs: desktop-shard
+  # The one required check in the main ruleset.
+  ci-passed:
+    name: CI passed
+    timeout-minutes: 5
+    needs: [changes, lint, test, pi-packages, e2e-shard, binary-shard, binary-windows, desktop-shard]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
-      - run: test "${{ needs.desktop-shard.result }}" = success
+      - env:
+          NEEDS: ${{ toJSON(needs) }}
+          APP: ${{ needs.changes.outputs.app }}
+          ARTIFACTS: ${{ needs.changes.outputs.artifacts }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<< "$NEEDS"
+          jq -e --arg app "$APP" --arg artifacts "$ARTIFACTS" '
+            {"pi-packages": $app, "e2e-shard": $app, "binary-windows": $app,
+             "binary-shard": $artifacts, "desktop-shard": $artifacts} as $runs
+            | to_entries | all(
+                .value.result == "success"
+                or (.value.result == "skipped" and ($runs[.key] // "true") == "false"))' <<< "$NEEDS"

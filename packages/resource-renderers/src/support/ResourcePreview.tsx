@@ -15,12 +15,13 @@ import { surfaceLineCount } from "./largeDiff";
 import { type RendererLayout, RendererToggles } from "./RendererToggles";
 import { RendererView, useRendererSelection } from "./rendererMount";
 import { UnplacedReviewStrip } from "./UnplacedReviewStrip";
-import { type LoadedFile, type ReadyFile, startWorkspaceFileReads } from "./workspaceFileReads";
-
-interface FileState {
-	file: string;
-	loaded: LoadedFile;
-}
+import {
+	type FileState,
+	type LoadedFile,
+	type ReadyFile,
+	startWorkspaceFileReads,
+	updateFileState,
+} from "./workspaceFileReads";
 
 export type ResourcePreviewLayout = "split" | "unified";
 
@@ -81,11 +82,7 @@ function useWorkspaceFile(workspaceId: string, path: string | undefined): Loaded
 					if (paths === null || paths.includes(path)) onChange();
 				}),
 			bytesUrl: () => bytesUrl(workspaceId, path),
-			update: (next) =>
-				setState((current) => ({
-					file: fileKey,
-					loaded: next(current?.file === fileKey ? current.loaded : null),
-				})),
+			update: (next) => setState((current) => updateFileState(current, fileKey, next)),
 		});
 	}, [readFile, subscribeFileChanges, bytesUrl, workspaceId, path, fileKey]);
 
@@ -275,7 +272,6 @@ function ReviewedPreviewView(props: ResolvedProps & { file: ReadyFile; review: S
 			<RendererView
 				key={implementationKey}
 				renderer={renderer}
-				implementationKey={implementationKey}
 				mobile={mobile}
 				resource={resource}
 				content={file.content}

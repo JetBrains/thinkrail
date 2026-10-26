@@ -184,7 +184,7 @@ export function JetBrainsAiCard({
 		async (action: JbcentralAction) => {
 			setBusyAction(action);
 			setNotice(null);
-			try {
+			const run = async () => {
 				const result: JbcentralActionResult =
 					action === "connect"
 						? await getTransport().request("provider.jbcentralConnect", {})
@@ -197,11 +197,10 @@ export function JetBrainsAiCard({
 					setNotice({ kind: "failed", action, reason: result.reason });
 				}
 				await onChanged();
-			} catch {
-				setNotice({ kind: "transport-failed", action });
-			} finally {
-				setBusyAction(null);
-			}
+			};
+			await run()
+				.catch(() => setNotice({ kind: "transport-failed", action }))
+				.finally(() => setBusyAction(null));
 		},
 		[onChanged],
 	);
@@ -209,17 +208,16 @@ export function JetBrainsAiCard({
 	const signIn = useCallback(async () => {
 		if (signingIn) return;
 		setSigningIn(true);
-		try {
+		const login = async () => {
 			const result = await getTransport().request("provider.jbcentralLogin", {});
 			setNotice(
 				result.outcome === "launched" ? { kind: "login-launched" } : { kind: "login-failed" },
 			);
 			if (result.outcome === "launched") await onChanged();
-		} catch {
-			setNotice({ kind: "login-failed" });
-		} finally {
-			setSigningIn(false);
-		}
+		};
+		await login()
+			.catch(() => setNotice({ kind: "login-failed" }))
+			.finally(() => setSigningIn(false));
 	}, [signingIn, onChanged]);
 
 	const visibleState = busyAction ? "configuring" : status.state;

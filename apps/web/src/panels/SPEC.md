@@ -269,7 +269,16 @@ treatment.
   it shows the panel's `container-sidebar-bg`, so the two chrome rows read as one continuous surface. The **file-style tree row** (chevron/spacer
   lead, folder/file icon, truncated label, trailing slot; `min-w-0` so a row can shrink when it shares a
   flex line with a trailing control) is the shared **`TreeRow`**, used by both
-  `FileTree` and `ChangesTree` so the two trees stay identical. Both trees **compact a single-directory
+  `FileTree` and `ChangesTree` so the two trees stay identical. `TreeRow`'s optional `onWarm` reports
+  `hover` (pointer enter) or `focus`. `FileTree` file rows warm at once on focus and through
+  `warmOnHover` on hover, which keeps one pending row and fires after the pointer rests 150 ms, so a
+  sweep across the tree loads nothing. A warm preloads the code view and the row's grammar
+  through **`useEditorWarm`** (`editorWarm.ts`, also used by the shell's idle preload): it returns
+  `usePreloadResourceView`'s callback, or `undefined` on phone-class viewports and `saveData` connections.
+  `editorWarm` also owns the boot gate: a `FileTree` holds `holdEditorWarm()` until its first listing
+  lands, and **`whenFilesTreeIdle`** runs the shell's preload at idle only while no tree is loading. A
+  parked task waits for the release and then a fresh idle, so the Monaco chunk never evaluates in the
+  tree's first paint. Both trees **compact a single-directory
   run into one slash-joined row** (`apps/web/src`): the run continues only while a directory has exactly
   one child and that child is another directory, and the compact row expands/collapses the deepest
   directory as one unit. `ChangesTree` evaluates this against the changed-file tree; `FileTree` resolves
@@ -322,7 +331,8 @@ only possible action; once a project is shown, opening another is the projects-r
 dropdown), so Welcome stays the *work-in-this-project* surface. That card hangs the shared
 **`AddProjectMenu`** dropdown off it (same menu as the projects-rail "+": Open project / Enter host
 path… / Open GitHub (soon) / Recents). Recents is the store's `recentProjects`: one last-opened path list
-containing open + closed records with no status badge; selecting either runs the shared open flow and lands at Project Home, with a
+containing open + closed records with no status badge (the server omits closed records
+whose folders are gone); selecting either runs the shared open flow and lands at Project Home, with a
 closed record retaining its id and workspace state. `Card` is a `forwardRef` usable as a Radix `asChild`
 trigger. **"Work in project folder"**
 (`House` icon, matching the rail's Default row) **direct-enters** the Default workspace — no dialog: the
@@ -355,8 +365,9 @@ Above the cards, `WelcomePanel` composes **`ProviderWarningBanner`** — a slim 
 no provider is connected** ("No model provider connected — the agent can't run") with a **Connect a provider**
 CTA that opens Settings → Providers (`store.openSettings("providers")`). It reads `provider.status` (a
 provider is "connected" iff any `configured`) on mount and re-checks whenever the settings dialog toggles, so
-it disappears the moment the user connects one; a transport error degrades to *not* nagging (offline ≠ "no
-provider"). All provider **management** lives in Settings, not here (the always-on strip is gone).
+it disappears the moment the user connects one; it stays hidden until the first answer lands, and a transport
+error degrades to *not* nagging (unknown or offline ≠ "no provider"). All provider **management** lives in
+Settings, not here (the always-on strip is gone).
 
 Beneath it, **`ProjectTrustNotice`** is the pre-workspace trust surface (so trust is reachable with no
 workspace yet): **presence-gated** — renders nothing unless the selected project ships something a trust
@@ -1441,11 +1452,13 @@ own section. The kebab menu (`plan-menu`, a
   (`comment.sessionId`) opens **the discussion** (its chat tab); one without — every draft, since a
   draft is never sent — opens the file **focused on the comment**. The file stays one hover-action
   away (the `FileText` glyph runs the file+focus navigation; the chat glyph is gone from open rows).
-  The file focus works through (the store's
-  `reviewFocusRequest`, consumed exactly once by the pane: Monaco reveals the anchor line — including
-  on a fresh mount, via `onMount` — the preview scrolls the in-flow card into view). **No editing
-  here** — the in-file card is the editor; the row's action icons (their own layer, never triggering
-  navigation) are per-row **Send** (→ `review.sendComment`, opens the created chat tab via the same
+  The file focus works through the store's `reviewFocusRequest`, which names the surface the row opens
+  (`inline` file, or `diff` with its scope) so an already-mounted pane of the other kind or another base
+  cannot consume it. The pane consumes it exactly once: Monaco reveals the anchor line, including on a
+  fresh mount (immediate scroll from the mount's layout effect; see the resource-renderers SPEC mount
+  rule), and the preview scrolls the in-flow card into view. **No editing here** — the in-file card is the editor;
+  the row's action icons (their own layer, never triggering navigation) are per-row **Send** (→
+  `review.sendComment`, opens the created chat tab via the same
   `openChatSession` tail as New Workspace), **Delete for DRAFT rows** (ConfirmPopover →
   `review.commentDelete` — an unsent remark is the user's own scratch), **Open chat** for sent rows
   (reuses the history-reopen flow), and the manual Resolve override (`review.commentUpdate`). **Once
@@ -1961,16 +1974,22 @@ own section. The kebab menu (`plan-menu`, a
   context/command surfaces also expose a keyboard-operable Keep Preview command.
 
   A preview replaces only that group's slot at the same index, so browsing never reshuffles the strip. A
-  double click composes preview then promote; `openTabs.ts` single-flights the underlying read and carries
-  the leading click's slot claim into one final kept local transition, so no intermediate preview state is
-  persisted and network latency cannot reverse the intents. Freshness stamps (`loadedTick`, plus a diff's `loadedTarget`) are
-  captured before the read leaves, never from newer state at response time. The local per-group navigation
-  clock is captured at request time: a stale preview completion loses to later attention; deliberate keep
-  still commits. If the destination group disappeared, the shell reroutes to current last focus, and if a
-  a newer local transition already placed the canonical resource, completion selects that placement instead
-  of duplicating it. Preview placement and attention commit locally. Unit and E2E tests pin double-click
-  coalescing, stale-read rejection, per-group isolation, local identity convergence, and
-  promote-by-keyboard/touch.
+  single click opens its preview at once, from the open-tab cache or the read, with no settle wait. A
+  double click composes preview then promote: the row's second click (`event.detail > 1`) sends no
+  preview (every browse row wraps its preview open in `lib`'s `firstClickOnly`), so only the leading
+  preview and the `dblclick` keep go out. If the read already landed, that is two local transitions: the
+  preview, then an in-place keep of the same placement. If the read is still in flight, `openTabs.ts`
+  single-flights it and carries the leading click's slot claim into one final kept transition. Either way
+  network latency cannot reverse the intents. The Changes review-tab preview is the one row open that
+  still waits the settle window: its double click opens a different resource (the kept per-file diff), so
+  an instant review tab would flash and then be replaced. Freshness stamps (`loadedTick`, plus a diff's
+  `loadedTarget`) are captured before the read leaves, never from newer state at response time. The local
+  per-group navigation clock is captured at request time: a stale preview completion loses to later
+  attention; deliberate keep still commits. If the destination group disappeared, the shell reroutes to
+  current last focus, and if a newer local transition already placed the canonical resource, completion
+  selects that placement instead of duplicating it. Preview placement and attention commit locally. Unit
+  and E2E tests pin double-click coalescing, stale-read rejection, per-group isolation, local identity
+  convergence, and promote-by-keyboard/touch.
 - **Row actions: one menu, two triggers.** Every **file** row (both views) is wrapped in
   **`ChangeRowActions`**: a hover/focus-revealed `⌄` button *and* right-click on the row open the same
   dropdown. The `⌄` is not garnish — it is the **touch path**, where right-click does not exist (mobile-first).
@@ -2018,7 +2037,8 @@ own section. The kebab menu (`plan-menu`, a
 - **File tabs use the same renderer dispatch as diffs.** `FilePane` describes the first `fs.readFile`
   metadata (provisionally text before it lands — and permanently text against a host that predates
   `RESOURCE_META_PROTOCOL_VERSION` and never sends `meta`, which is that host's own legacy surface, so no
-  protocol gate is needed for byte-only rendering), resolves `view`, and mounts the selected lazy candidate.
+  protocol gate is needed for byte-only rendering), resolves `view`, and mounts the selected lazy candidate. Its Suspense fallback is `file-pane-loading`; a
+  preloaded implementation never shows it.
   `thinkrail/markdown` remains the higher-ranked match for `.md`/`.mdx`, so documents open in
   `MarkdownPreview`; `thinkrail/code` is the text fallback and uses Monaco on desktop plus Pierre `File`
   on phone-class viewports; `thinkrail/binary` shows identity and a host-backed
@@ -2053,8 +2073,10 @@ own section. The kebab menu (`plan-menu`, a
   preserving focus without stealing unrelated workbench focus. Initial xterm focus is deferred until a
   successful attach and applies only while the terminal tab that requested it still owns focus; Retry keeps
   its overlay mounted through the successful handoff and restores xterm focus only while focus remains in that
-  terminal region. A competing detach invalidates that handoff and clears its retry state before exposing Take
-  Back again.
+  terminal region. A focusing handoff commits the attached state synchronously before `focus()`: the failed
+  frame stays inert until that commit and an inert subtree silently refuses focus, so frame timing (a next
+  animation frame can precede React's commit on a loaded machine) must never be what lifts it. A competing
+  detach invalidates that handoff and clears its retry state before exposing Take Back again.
   **Historical replay is input-inert:** the PTY id
   remains unadopted until xterm's replay callback, which rechecks attach freshness before binding and draining
   genuinely live frames; replies xterm synthesizes for recorded terminal queries can therefore never enter the

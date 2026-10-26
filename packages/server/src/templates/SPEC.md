@@ -103,13 +103,19 @@ assumption; re-verify on a pi bump.
   this module never memoizes; the cost is a couple of small `readdir`s per call, which is cheap enough.
 - `isValidTemplateName` is the **traversal gate**: applied to every caller-supplied `name` before it's
   `join()`-ed into a path, in `getTemplate`, `saveTemplate`, and `deleteTemplate` alike. Its job is
-  path-traversal *safety*, not naming style, so it rejects only the shapes that are unsafe as a single
-  filename segment — empty, a leading `.` (covers `.`, `..`, and `.hidden`-style dotfiles with one rule),
-  a path separator anywhere in the name (`/` or `\`), or an embedded NUL byte — and accepts everything
-  else, including interior dots (`foo.bar`), uppercase, spaces, and unicode. This matters because pi's
-  own loader performs **no sanitization at all** when deriving a name from a filename (see "pi facts"
-  above), so a narrower rule breaks **list/get parity**: a name `listTemplates` can show but
-  `getTemplate`/`saveTemplate`/`deleteTemplate` refuse is a user-visible bug, not a safety improvement.
+  path-traversal *safety*, not naming style, so it rejects only the shapes that are unsafe as a
+  single filename segment — empty, a leading `.` (covers `.`, `..`, and `.hidden`-style dotfiles with
+  one rule), a path separator anywhere in the name (`/` or `\`), an embedded NUL byte, or a colon
+  (rejected on every OS, specifically the NTFS alternate-data-stream case: NTFS reads `a:b.md`
+  as an alternate data stream of a file named `a`, so a colon-named template could not survive a
+  Windows checkout) — and accepts everything else, including interior dots (`foo.bar`),
+  uppercase, spaces, and unicode. A hand-placed colon-named file on Linux/macOS therefore disappears
+  from `template.list` and is refused by get/save/delete; deliberate, since the name cannot survive a
+  Windows checkout, and list/get parity holds because `listTemplates` filters through the same gate.
+  This matters because pi's own loader performs **no sanitization at all** when deriving a name from a
+  filename (see "pi facts" above), so a narrower rule breaks **list/get parity**: a name `listTemplates`
+  can show but `getTemplate`/`saveTemplate`/`deleteTemplate` refuse is a user-visible bug, not a safety
+  improvement.
   (This gate originally used an `/^[a-z0-9][a-z0-9-_]*$/i` allowlist regex — safe, but over-restrictive:
   it rejected any name with an interior dot, so a perfectly ordinary, pi-legal template named `foo.bar`
   would list but 404 on get/save/delete. Fixed once caught — the allowlist shape was solving the wrong
@@ -211,10 +217,11 @@ assumption; re-verify on a pi bump.
   deliberate, not an oversight; don't add one without re-reading the freshness rationale it exists to
   satisfy.
 - **List/get parity, both directions — structural, not a convention.** `isValidTemplateName` excludes
-  only the shapes that are unsafe as a filename segment (empty, leading `.`, a separator, NUL), never an
-  ordinary pi-legal name like `foo.bar` — so don't tighten it without checking it still admits everything
-  pi's own loader would list (a narrower "clean slug" regex looks safe in review but silently breaks
-  this; it did, once — see "Design" above). The reverse direction holds too, by construction: `listDir`
+  only the shapes that are unsafe as a filename segment (empty, leading `.`, a separator, NUL)
+  plus `:` (the NTFS alternate-data-stream case above), never an ordinary pi-legal name like
+  `foo.bar` — so don't tighten it without checking it still admits everything pi's own loader would
+  list (a narrower "clean slug" regex looks safe in review but silently breaks this; it did, once — see
+  "Design" above). The reverse direction holds too, by construction: `listDir`
   filters every directory entry through this *exact same* gate function, not a partial or hand-rolled
   re-check, so a dot-leading file like a hand-placed `.hidden.md` is ignored by the scan entirely and
   never surfaces in `listTemplates` in the first place. The gate and the scan can't drift apart because

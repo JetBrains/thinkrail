@@ -272,6 +272,7 @@ test("a foreground run completes: outcome, registry, lineage storage, lifecycle 
 	expect(outcome.finalText).toBe("CHILD_DONE");
 	expect(outcome.details.childSessionId).toBe(child.sessionId);
 	expect(outcome.details.model).toBe("faux/faux");
+	expect(outcome.details.thinkingLevel).toBe(parent.thinkingLevel);
 	expect(outcome.details.usage.turns).toBe(1);
 	expect(outcome.details.roleName).toBe("scout");
 

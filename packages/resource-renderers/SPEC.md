@@ -49,6 +49,9 @@ One barrel, `@thinkrail/resource-renderers` (`src/index.ts`):
   `ResourcePreview` run one sequence:
   - `useRendererSelection(resource, intent, rendererId)` — candidates for the environment's phone class, the
     selected renderer, its implementation key (renderer id + phone class) and the placed-thread state;
+  - **`usePreloadResourceView()`** — a stable `(resource) => void` that resolves the view renderer for the
+    environment's phone class, loads its implementation and runs the module's optional `warm`; it needs both
+    providers;
   - the lazy `RendererView` mount and **`GuardedRendererDiff`**, the one diff mount: the expensive-diff notice
     (`diff-too-large` / **Show diff anyway**, per mount, with a caller action slot) until opted in, then the
     lazy diff renderer, virtualized above `VIRTUALIZED_DIFF_LINES` of the caller's `lineCount`
@@ -76,9 +79,11 @@ A host wraps renderers in `ResourceHostProvider` with one static `ResourceHost` 
 - `markdown` — the component that renders markdown (`ResourceMarkdownProps`); the document preview, rendered
   diff and notebook cells pass their plugins and components through it.
 - `code` — the code-highlighting host (`languages` with grammar loaders, `languageId` canonicalization, and
-  the code `theme` resolved from CSS variables). Monaco is page-global: the first `MonacoEditor` initializes it
-  from its host's `code` once (`ensureMonaco`), and every later editor reuses that setup; it re-themes on every
-  completed theme swap.
+  the code `theme` resolved from CSS variables). Monaco is page-global: the first preload `warm` or
+  `MonacoEditor` initializes it from its host's `code` once (`ensureMonaco`, synchronous after the Monaco
+  chunk loads), and every later editor reuses that setup. `ensureMonaco` owns the one page-lifetime theme
+  watch, so a swap between a preload and the first editor still re-themes, and N open editors cost one
+  refresh per swap. A grammar loads on its language's first model or on a warm for its path.
 - `bytesUrl(workspaceId, path, oid?)` — the host byte route for images, PDFs and relative markdown assets.
 - `openFile(workspaceId, path, { keep? })` and `openComparison(workspaceId, before, path)` — navigation for
   relative document links (preview) and explicit Open-in-tab actions (keep).
@@ -104,17 +109,41 @@ routes review sends to its session. The scope is its own context rather than a h
 spread per chat made every preview's reads and subscriptions restart whenever the chat's actions changed.
 `ResourcePreview` depends only on the host's stable `readFile` / `subscribeFileChanges` / `bytesUrl`; it
 applies reads in the order it issued them (a newer change event never discards the read in flight, so a
-burst of events cannot starve the first load), keeps the loaded file when a re-read returns the same hash,
-and keeps the last good content when a re-read fails, like a file tab, but marked stale: the failure is named
-above it (`resource-preview-stale`: `Couldn't refresh <path>: <reason>`), so a moved or deleted file never
-silently passes for current. The rendered markdown diff renders both
+burst of events cannot starve the first load), keeps the loaded file when a re-read returns the same hash —
+as the same state object, like a re-read that fails the same way, so React bails out instead of scheduling
+a render that would interrupt an unfinished mount below it, such as a large diff's — and keeps the last
+good content when a re-read fails, like a file tab, but marked stale: the failure is named above it
+(`resource-preview-stale`: `Couldn't refresh <path>: <reason>`), so a moved or deleted file never silently
+passes for current. The rendered markdown diff renders both
 sides with `renderToStaticMarkup`, outside the React tree, so it reads the markdown component and links in its
 own render and passes them to `MarkdownDocument` explicitly — a context read inside a static render would throw
 (found by the Changes/rendered-diff e2e during extraction).
 
 `ResourceRenderer.loadView(environment)` receives the same `ResourceEnvironment` (`{ mobile }`) used for
 resolution, so the code renderer picks Pierre `File` on phone-class viewports and Monaco otherwise without
-reading a viewport global.
+reading a viewport global. The loaded module (`ResourceViewModule`, exported from the root) may export
+`warm(host, resource)`; a preload calls it after every request, one task after the module resolves, so
+the chunk's evaluation and the warm are separate long tasks. It must be cheap and idempotent. Monaco's
+`warm` runs `ensureMonaco` and, one task later, starts the highlighter (engine and theme) and the grammar
+for the resource's path (an empty path loads no grammar). `usePreloadResourceView` preloads only a
+renderer whose `capabilities.preload` is set, which only the code view sets: a host warming every row it
+hovers would otherwise load the PDF, notebook or CSV chunk of the row's top candidate.
+Once the chunk has loaded, a Monaco mount is
+synchronous: no library loader or boot promise stands between the view's commit and the editor.
+
+**One loaded implementation per key, chosen once.** `rendererMount` keeps one component map and the
+in-flight load per implementation key (renderer id + phone class), shared by preloads and mounts.
+`RendererView` derives that key itself from its `renderer` and `mobile` props, so a mount and a preload
+cannot disagree on it. React
+`lazy` suspends on its first render even when its promise already resolved, and a shown fallback holds for
+at least 300 ms. So a finished load stores the module's component under its key, unless a mount already
+stored a `lazy` there, and the first `RendererView` without a stored component stores a `lazy` that reuses
+the in-flight load. That choice is stored once and never switched: a lazy and a direct component are
+different types, and swapping them would remount a live editor. A lazy made while a load was in flight is
+resolved for every later mount, so it does not suspend again. A failed preload, in the load or in `warm`,
+logs a warning instead of rejecting. A failed load is forgotten, together with a `lazy` a mount stored for
+it while it was in flight, so the next mount retries and a real failure reaches the pane's error
+boundary.
 
 **Review-draft scratch is read per slot.** A pane that keeps transient authoring across remounts provides
 `ReviewDraftContext` with a `ReviewDraftPersistence` (`rendererId`, `read(key)`, `subscribe`, `update(key,
@@ -150,7 +179,7 @@ keeps it.
 
 - **Allowed deps:** `@thinkrail/contracts` (types), `@thinkrail/locales` (the `MessageKey` type and
   `./react` for its UI strings — `useT`, `<T>`, `localeOf`), `@thinkrail/ui` primitives, React, and the renderer
-  engines (`@monaco-editor/react`, `monaco-editor`, `@shikijs/monaco`, `shiki`, `@pierre/diffs`, `pdfjs-dist`,
+  engines (`monaco-editor`, `@shikijs/monaco`, `shiki`, `@pierre/diffs`, `pdfjs-dist`,
   `react-markdown`, `rehype-raw`, `rehype-sanitize`, `diff`, `jsondiffpatch`, `react-virtuoso`,
   `node-htmldiff`).
 - **Forbidden:** the web app (store, transport, panels, chat, shell, lib, themes), extensions, the server, and
@@ -170,7 +199,8 @@ ranked, and followed by the required text or byte fallback. MIME matching uses t
 fallback as resource description when host MIME metadata is absent. The resulting ordered list is both
 dispatch policy and the pane's view-toggle grammar. Renderer capabilities also state whether the selected
 surface supports copying its modified source, split/unified layout, and ignore-whitespace recomputation; the
-pane exposes only those applicable controls. `boundedDiff: "always"` marks a diff renderer that manages its
+pane exposes only those applicable controls. `preload` marks a view worth loading before its first mount
+(only the code view sets it). `boundedDiff: "always"` marks a diff renderer that manages its
 own viewport (virtualized table, paged PDF, sandboxed HTML frame) and therefore needs a bounded height;
 `"large"` marks one that lays out naturally but virtualizes once bounded, so a host bounds it when the diff
 is large; a host passes `virtualize` only for a diff large enough to need it. Every other diff lays out at its natural height, which is what lets the continuous Changes review stack sections
@@ -219,6 +249,19 @@ never guarded: it costs no diffing. The bounded check closes the multiset estima
 lines. The notice says "This diff is too expensive to show automatically" without a line count; the guard
 answers only whether automatic rendering should wait. Every diff surface mounts through it, so the app's diff
 tabs and Changes sections, comparison tabs and chat cards cannot disagree.
+The first diff of a page mounts through a Suspense retry (the lazy renderer), which React renders
+interruptibly and never expires: any unrelated update during it (a watcher nudge, a file re-read) discards the
+unfinished mount with its `useMemo` results, and recomputing per restart kept a Show-anyway diff on a skeleton
+for as long as the workspace kept changing. `PierreDiff` therefore takes its parse and change blocks from a
+content-keyed module cache (`diffCache`) that a restarted render reuses, and computes change blocks only for a
+surface with hunk actions, so a read-only preview diffs once. Each of its two tables (parses, change blocks;
+they hold the same texts) is bounded by the text its entries retain — 4 Mi characters across both sides,
+about twenty full rewrites at the notice threshold (2000 changed lines of ~100 characters) — and by 64
+entries, more than one render of a Changes viewport mounts, so releasing every section at once cannot cycle
+it; the newest entry always stays however large, so an opted-in giant diff survives its own restarts. The
+trade-off: being module-level, it keeps up to that text (or the one larger newest diff) plus Pierre's parse
+of it alive after its surfaces unmount, and surfaces that together exceed the budget within one render
+recompute on every restart.
 
 
 ## Bundled renderers
@@ -527,35 +570,110 @@ content's own height.
   the selected column with horizontal scrolling in a narrower pane. Broadcast changes update a mounted
   desktop file editor. Pierre diffs and phone files own horizontal overflow and do not consume this Monaco
   preference. Rendered Markdown and rendered Markdown diffs retain their separate ~78ch reading measure.
-  `MonacoEditor` is a React Compiler bail-out, so it memoizes its options by hand on width, bounded and path;
-  the typography and spacing tokens the options read are static generated CSS (themes set only colours), and
-  a fresh options object would make `@monaco-editor/react` call `updateOptions` on every render.
+  The React Compiler memoizes `MonacoEditor`'s options on width, bounded and path, and the editor calls
+  `updateOptions` only when that object changes; the typography and spacing tokens the options read are
+  static generated CSS (themes set only colours).
 - **The desktop Monaco surface is a reader, not a language workstation.** Its file-only options keep the
   configured wrapping, generated code typography, minimap/overview-ruler removal and 6px shadowless scrollbar,
   and add read-only messaging, the path as its accessible label, an 8px top inset, three-character line-number
   gutter, full active-line paint, smooth scrolling, active bracket-pair + indentation guides, single-file
   occurrence highlighting, and ambiguous-Unicode suppression. Opaque `viewState` is restored only after its
   editor-state shape is validated and is saved on unmount, so tab switches round-trip scroll and folding.
+  A review focus that arrives with the mount jumps to its line (`revealLineNow`, an immediate scroll): a
+  smooth scroll started before the editor's first layout can stop short, and the handled focus is not
+  retried, so the card stayed off screen. A focus on a mounted editor still scrolls smoothly.
   Monaco is imported from `editor.api` with only the reading contributions (find, folding, bracket matching,
   context menu/copy, links, hover, word highlighting, sticky scroll, go-to-line/command palette, read-only
   messaging and Unicode highlighting); keeping word highlighting preserves F7. The TS/JS/JSON/CSS/HTML
   language-service contributions and their workers are absent, so this viewer emits no language-service
   diagnostics by construction. Each editor mount owns its model: the model id is a per-mount `useId` scope
-  ahead of the path, because `@monaco-editor/react` shares one model per `path` and disposes it with
-  whichever editor unmounts first, which blanked the surviving view once the same file could be on screen
-  twice (a chat card and its full screen, a card and the file's tab).
-- **Code surfaces re-theme from generic tokens, resiliently.** `MonacoEditor` has the sole `EDITOR_THEME`.
+  ahead of the path, so the same file on screen twice (a chat card and its full screen, a card and the
+  file's tab) never shares a model that one unmount disposes under the other.
+- **`MonacoEditor` mounts Monaco itself.** A layout effect creates the editor and its model in the commit
+  that mounts the view, with no loading state, then restores the view state and attaches review commenting
+  (review attaches only at mount). Its layout cleanup saves the view state before it disposes the editor
+  and the model, in that order. A path change on a live editor swaps the model in place, and the language
+  follows the path, because `RendererView` is keyed by implementation, not path. New text calls `setValue`
+  only when it differs from the text last applied: the editor is read-only, so the last applied text is
+  the model's text and reading it back (`getValue()`) would only cost a full copy. The model and options
+  effects skip their first run, because the mount just created the editor with exactly those inputs. The
+  editor lives in a layout effect, so a re-suspend inside the view's Suspense boundary disposes it (and any
+  open review composer); nothing re-suspends there today, because each `RendererView` has its own boundary
+  and its loaded component is cached.
+  A review focus in the mount commit reveals its line with `ScrollType.Immediate`: a smooth reveal issued
+  before the editor's first frame never lands (found by the far-off worktree comment e2e). A later focus on
+  a live editor scrolls smoothly.
+- **Code surfaces re-theme from generic tokens, resiliently.** `monacoSetup` owns the sole `EDITOR_THEME`:
+  `createFileEditor` applies it and the theme refresh defines it.
   Themes own one TextMate scope definition: chat uses its live CSS-variable form, while Monaco resolves that
-  same definition plus its complete editor/widget/menu/input colour map to hex, loads it into a dedicated
-  JS-regex Shiki highlighter, and installs `@shikijs/monaco` once per page. Its curated language catalog is
-  shared with the chat highlighter and extended for the desktop file formats; missing Monaco language ids are
-  registered with their file associations before Shiki installs providers. A theme swap replaces the
-  highlighter theme under the same name, redefines Monaco, and selects `EDITOR_THEME`. The normal/high-contrast
-  base comes from manifest appearance/contrast metadata—never a known id—and remains inherited for specialist
-  colours outside the explicit map. Reads pass through `lib.cssColorToHex`; an absent or unparseable token is
+  same definition plus its complete editor/widget/menu/input colour map to hex and defines the Monaco theme from
+  it directly. Token colours come from `shikiTokens.ts`, a Monaco-free owner of one Shiki highlighter, its
+  per-language grammar loads and the colour→scope map. Its curated language catalog is shared with the chat
+  highlighter and extended for the desktop file formats; missing Monaco language ids are registered with their
+  file associations, then each catalog id gets a `registerTokensProviderFactory` entry. A swap loads the
+  highlighter theme under the other of two names and rebuilds the scope map from the same converted Monaco rules it
+  defines, redefines Monaco, and selects `EDITOR_THEME`. The normal/high-contrast base comes from manifest
+  appearance/contrast metadata—never a known id—and remains inherited for specialist colours outside the
+  explicit map. Reads pass through `lib.cssColorToHex`; an absent or unparseable token is
   omitted so the selected base palette wins rather than crashing the panel. Pierre's one registered
   `thinkrail` CSS-variable Shiki theme emits variable references instead of catalog colours; inherited
   `--diffs-*` properties map foreground/syntax to `--code-*`, canvases to the workspace/content roles, and
   addition/deletion paint to feedback roles, so a theme swap needs no re-highlight. `TerminalInstance`
   similarly rebuilds from the complete 16-slot ANSI variable set. Monaco and xterm consume the nullable
   editor selection-foreground override when provided.
+- **Monaco loads one grammar per language and tokenizes on Oniguruma WASM.** Compiling all 35 catalog
+  grammars up front was a 210-250 ms main-thread task (about 870 ms at 4x CPU) before the first coloured
+  line, and the JS regex engine tokenized about 4.5x slower than Oniguruma (a 2,861-line TS file: about
+  1,715 ms against 380 ms). The factory's `create()` loads the grammar when Monaco first meets a model of
+  that language; the `languageForPath` probe model starts it before the editor mounts. Concurrent
+  requests share one load, and an unknown id stays plain. Monaco asks a language's factory for a provider
+  only once, so a failed load answers plain text and marks the language missing; a failed highlighter or
+  engine start is not cached, so a later request retries it. The next model of that language whose load
+  succeeds installs the provider directly with `setTokensProvider`. `create()` never throws. Each provider binds the grammar object current when it is made, because loading an embed
+  rebuilds every grammar that lists it, and Monaco's saved line states only fit the old one. Embeds load
+  per model: a regex scan of fence info strings (including fences inside blockquotes and list items) and
+  `lang=` attributes (spaces around `=` allowed) picks the in-catalog `embeddedLangsLazy` the text names
+  (markdown 26, vue 8, svelte 2 otherwise) and follows an embed's own lazy embeds transitively
+  (vue -> markdown -> shellscript); they load after the first colour, then the provider is re-registered
+  so Monaco re-tokenizes. Each scan reports the embeds it loaded that the installed provider lacks, so two
+  models scanning at once each re-register for what they finished, not only the first.
+  A leading `---` adds `yaml`. A tag at a line start, a closing tag, a comment, or a common inline element
+  such as `<img …>`, `<br>` or `<kbd>` adds `html` (front matter and inline HTML embed them with no fence).
+  A generic such as `Array<T>` or `Map<K, V>` inside a fence does not count. Fence names the markdown grammar embeds under another language (`jsx` and `es6` as
+  `javascript`, `golang` as `go`, `h` as `c`) map through `FENCE_EMBEDS` before the host's `languageId`.
+  The `html` catalog entry loads `html-derivative`, the grammar markdown includes for inline HTML.
+  The scan reruns on content and language changes. Nothing suspends on the engine or a grammar: a Suspense
+  fallback is held for at least 300 ms. The JS regex engine runs only where `WebAssembly` does not exist
+  (WebKit Lockdown Mode). A failed `.wasm` fetch or compile fails that highlighter start instead: files stay
+  plain and the next file retries, so one transient failure (a dev-server restart, an SPA fallback serving
+  HTML) neither pins the 4.5x slower engine for the page nor hides a broken asset behind it. The asset is
+  fetched and compiled here and Shiki only instantiates the compiled module, because Shiki's `loadWasm`
+  keeps a rejected start for the whole page. A theme that fails to load costs only the colours: the
+  highlighter is kept and the next theme swap retries. Shiki's `setTheme` is a no-op for the name it last
+  selected, so each swap loads the theme under the other of two names to get the new colour map. The raw
+  `shiki/onig.wasm` asset is used because `shiki/wasm` inlines it as base64 and decodes it byte by byte on
+  the main thread (about 22 ms at 1x CPU) before the first coloured line. Every shipped host serves `.wasm` as
+  `application/wasm`: Vite in dev, `Bun.file` in `serveStatic` for the desktop app and the staged CLI binary.
+  Cost: the first open of a new language waits for its grammar chunk (about one frame at 1x CPU), and the
+  engine fetches a 466 kB `.wasm` asset; Pierre's newer Shiki ships its own copy.
+- **The code view preloads before the first open.** Loading the Monaco chunk, initializing Monaco and
+  building the engine only after the tab mounted, behind a fallback held for at least 300 ms, made the
+  first open about 420 ms at 1x CPU (840 ms at 4x) against 65 ms for a warm one. With the app's idle
+  preload and row-hover warm (`usePreloadResourceView`), the first open is about 120 ms at 1x (430 ms at
+  4x, where the rest is Oniguruma compiling the grammar's scanners on the first tokenize). The package
+  only offers the mechanism; the host decides when to call it. Cost: every desktop session loads the
+  Monaco chunk and the engine (about 3.9 MB decoded, about 7 MB more heap) and a 70 ms evaluation task at
+  4x CPU after boot. A click while the preload is still loading suspends as before. A preload that fails
+  while the network is down costs the rest of the session: Chromium caches the failed module fetch, so
+  every later import of that chunk rejects without a request, and a statically split chunk has no URL to
+  cache-bust. The first open then shows the error boundary's **Reload page**, which recovers; on main the
+  same outage fails only if it lasts until the first open. The host therefore holds the preload until the
+  page is online. `e2e/error-boundary.spec.ts` pins the Chromium behaviour: if a browser update re-fetches a
+  failed module, that test turns red and this cost is gone.
+- **Monaco mounts without `@monaco-editor/react`.** The wrapper awaited `loader.init()` (a promise even
+  with a bundled Monaco) and took two more React commits before `editor.create`. The owned mount creates
+  the editor in the view's own commit. Click to visible text, median of 5 interleaved rounds (Chromium,
+  Mac Studio): a file open 65 to 34 ms and a tab switch 49 to 30 ms at 1x CPU, 145 to 77 ms and 88 to
+  70 ms at 4x. Click to highlighted is no later. Cost: create and first render now run in one task, so the
+  longest task after the click grows at 4x CPU (cold open 120 to 145 ms, warm large open 0 to 55 ms). The
+  `MonacoEditor` chunk shrinks by 12.1 kB (3.10 MB to 3.09 MB; 3.5 kB gzip).

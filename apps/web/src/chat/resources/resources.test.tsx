@@ -280,6 +280,32 @@ test("the inspector keeps the selected finished row, disables controls when stal
 	expect(html).toContain("Done");
 });
 
+test("the detail header shows a subagent's model through the parent's label and omits it when the host sent none", () => {
+	const withModel = { ...child, model: "openai/gpt-6", thinkingLevel: "max" as const };
+	const labelled = renderToStaticMarkup(
+		<resources.ResourcesInspector
+			{...inspectorProps}
+			subagents={[withModel]}
+			renderSubagentModel={(summary) => (
+				<span data-testid="label">{`${summary.model} @ ${summary.thinkingLevel}`}</span>
+			)}
+		/>,
+	);
+	expect(labelled).toContain('data-testid="resource-detail-model"');
+	expect(labelled).toContain(">Model<");
+	expect(labelled).toContain("openai/gpt-6 @ max");
+
+	const older = renderToStaticMarkup(
+		<resources.ResourcesInspector
+			{...inspectorProps}
+			subagents={[child]}
+			renderSubagentModel={() => <span>never</span>}
+		/>,
+	);
+	expect(older).not.toContain('data-testid="resource-detail-model"');
+	expect(older).not.toContain("never");
+});
+
 test("command logs distinguish loading, empty, retry, permanent unavailability, stale and truncated plain text", () => {
 	const log = (overrides: Partial<ComponentProps<typeof resources.CommandLogView>>) =>
 		renderToStaticMarkup(
@@ -382,6 +408,7 @@ test("the result row maps a completion to the shared states, teases the last out
 				},
 			}}
 			expanded={false}
+			metaLead={<span data-testid="meta-lead">gpt-6 · max</span>}
 			meta="12 turns"
 			teaser="Verdict: approve"
 			onOpen={() => {}}
@@ -390,7 +417,7 @@ test("the result row maps a completion to the shared states, teases the last out
 	expect(subagent).toContain("Subagent");
 	expect(subagent).toContain("reviewer");
 	expect(subagent).toContain("Stopped");
-	expect(subagent).toContain("12 turns");
+	expect(subagent).toMatch(/data-testid="meta-lead"[\s\S]*12 turns/);
 	expect(subagent).toContain("Verdict: approve");
 	expect(subagent).toContain("Transcript");
 	expect(subagent).not.toContain("min<");

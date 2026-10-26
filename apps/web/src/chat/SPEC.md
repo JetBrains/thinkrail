@@ -306,6 +306,14 @@ defaults *and* over a virtualization remount. `FoldGeometryProvider` is the tran
 change seam: every fold header registers a stable row-derived id through `useFold`, including `Collapsible`
 and fallback-driven auto expansion/collapse. It routes detached anchor stabilization through
 `ReadingBandController`'s single motion channel and refreshes from the changing row's measured geometry.
+The correction lands in the change's first frame (the motion's frame, the row's resize observation as
+backstop), never in the React commit: a commit-time `scrollTop` write reaches Virtuoso's synchronous scroll
+handler before its ResizeObserver measures the changed row, so it windowed stale sizes — an above-viewport
+expansion emptied the list and remounted every row, including the reader's anchor, within one frame. The
+correction is still pending only until that first frame or backstop write: native input or a newer fold change
+arriving before it applies it exactly once (a newer change thereby accepts a synchronous, pre-measurement write
+for the overlap). Afterwards nothing is pending, so a resumed stabilization interrupted again never re-applies
+it over reader movement whose scroll event is not yet handled.
 A wholly offscreen disclosure preserves the visible transcript by its own row-height delta. If a sticky
 breadcrumb collapses the disclosure body that contains the reader's viewport, that content no longer has a
 surviving anchor, so the collapsed original header takes its place at the viewport boundary. Reader input or
@@ -459,7 +467,15 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   provider-backed authentication) — are supplied by `ChatView` (through `ChatTranscript`'s provider)
   only on an MCP-capable host;
   without them (older host, the plan page's provider, or `null`) the MCP cards hide Full output and Sign in
-  ([tools/mcp/SPEC.md](tools/mcp/SPEC.md)).
+  ([tools/mcp/SPEC.md](tools/mcp/SPEC.md)). Optional `findModel(ref)` resolves a run's `provider/id`
+  against the full model catalog (`ChatView` over `useModelCatalog`, hidden models included — a run may use
+  one); without it a run label shows the raw reference.
+- **Run model label** (`ModelEffortLabel.tsx`): `ModelEffortPill` is the model picker trigger's content
+  (glyph · name · effort bars and level word), extracted so `RunModelLabel` renders a delegation run's
+  model exactly like the composer pill: catalog name via `ChatActions.findModel`, else the raw
+  `provider/id` with the level word but no bars (there is no model scale to place it on); the raw
+  reference is also its tooltip. The picker's `thinking-selector` test id stays its own. A run
+  without `thinkingLevel` shows the model alone; one without `model`, nothing.
 - **Subagent transcript view** (`SubagentTranscriptDialog.tsx` — an integration file, like
   `SkillsDialog`): `SubagentTranscriptPane` renders a hidden child's **read-only** transcript with the
   same primitives (`messagesToRuntime` → `deriveRows` → `ChatTurnView`), fetched via
@@ -593,16 +609,23 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   native movement that interrupts an active alignment also detaches even when directed toward latest, unless
   that movement itself reaches the exact edge.
   Explicit text selection and user-invoked message/history, breadcrumb, or tool-page navigation also detach.
-  Pointer provenance survives release long enough for native scrollbar-track animation, keyboard
-  provenance covers focus-induced scrolling from interactive transcript controls, and both expire on
-  scroll-end or a bounded timeout so later geometry cannot inherit them. A return gesture rearms once only
-  when it reaches the physical latest edge within the shared 1px geometry tolerance; directions invert with
-  order, and touch/trackpad intent survives through momentum. No 50px near-edge threshold and no geometry
-  change alone may rearm. Expanding or collapsing an Activity, Thinking, tool, or message disclosure is a
-  geometry change rather than navigation: it preserves alignment, retargets the current latest/response
-  destination while following, and leaves a detached reader's visible anchor fixed. An own Send deliberately
-  reattaches and places its user row at 10% of transcript height clamped to 48–80px; a queued/background
-  continuation preserves a detached reader when it starts.
+  Pointer provenance survives release long enough for native scrollbar-track animation, keyboard provenance
+  covers focus-induced scrolling from interactive transcript controls, and both expire on scroll-end or a
+  bounded timeout so later geometry cannot inherit them. Movement that script makes through the scroller's
+  `scrollBy`/`scrollTo` (Virtuoso's estimate-to-measurement corrections, `scrollToIndex`) is subtracted from
+  observed movement and never carries reader direction, and a scroll-end that closes only such movement ends
+  no intent: a 1px correction for rows mounting above an oldest-first reader once read as touch momentum
+  toward latest, and its scroll-end ended the momentum before it reached the edge. The hook shadows the
+  scroller's own `scrollBy`/`scrollTo` for its lifetime and restores them on cleanup; this relies on
+  Virtuoso moving its scroller only through those two methods (verified for react-virtuoso 4.18.7, re-verify
+  on upgrade), and only displacement those calls apply synchronously is attributed. A return gesture rearms
+  once only when it reaches the physical latest edge within the shared 1px geometry tolerance; directions
+  invert with order, and touch/trackpad intent survives through momentum. No 50px near-edge threshold and no
+  geometry change alone may rearm. Expanding or collapsing an Activity, Thinking, tool, or message
+  disclosure is a geometry change rather than navigation: it preserves alignment, retargets the current
+  latest/response destination while following, and leaves a detached reader's visible anchor fixed. An own
+  Send deliberately reattaches and places its user row at 10% of transcript height clamped to 48–80px; a
+  queued/background continuation preserves a detached reader when it starts.
 - **Streaming response movement exists only during work, and it moves in window steps** — while following, the
   view stands still while the active response fills the window below its prompt. Each time the response edge
   passes Trigger (default 100%), the sole motion owner makes one eased ~220 ms step that places the edge at
@@ -959,8 +982,8 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   state. Radix's default on close is to return focus to the trigger; `onCloseAutoFocus` is overridden
   (`preventDefault` + focus the query input) so a mouse pick hands focus back to the query input
   instead — typing resumes immediately, no extra click needed. The menu is a **controlled** Radix menu
-  (`scopeMenuOpen`) for one reason: the overlay's window-level `Escape` stands down while it is open, so
-  Escape dismisses the innermost layer. The menu never
+  (`scopeMenuOpen`) for one reason: the overlay's window-level `Escape` and outside-press listeners stand
+  down while it is open, so Escape or a press dismisses the innermost layer. The menu never
   fights the overlay's own `ArrowUp`/`ArrowDown`/`Enter` handling: that handler is bound to the query
   `<input>` element itself, and Radix's portaled dropdown content is a **sibling** subtree — never a
   descendant of the input — so a keydown while the menu holds focus cannot reach the input's handler by
@@ -982,13 +1005,28 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
     it is open. Capture + `stopPropagation` encodes "the topmost floating panel closes first" (a composer
     slot session survives the dismissal rather than being cleared by the same keystroke). It stands down
     while the scope picker is open — see the controlled `scopeMenuOpen` note above — so Radix's own
-    Escape closes just that menu. There is deliberately **no** click-outside dismissal.
+    Escape closes just that menu.
+  - **The overlay is an fzf-style modal picker** (the shell's `Ctrl+R` / fzf history widget): while open
+    it owns input, and it is left only by *accepting* (insert, insert-and-send, jump, save as template)
+    or *aborting* (Escape, the history button, a press outside), which leaves the draft as it was. A
+    press into the composer aborts too — the picker and the prompt are never edited at once. Every open
+    is a fresh picker: `HistoryOverlay` mounts its `HistoryPicker` only while open, so local state such
+    as `scopeMenuOpen` cannot carry into the next open. Outside presses are a window capture-phase
+    `pointerdown` listener that, like Escape, stands down while the scope picker is open, so the first
+    press closes just that menu (Radix's modal menu retargets every press outside it — the overlay's own
+    query included — to `<html>`). Presses on the history button, marked with a dedicated
+    `data-history-trigger` attribute rather than its test id, are not outside: the button toggles the
+    overlay itself.
   - **Dismissal returns focus to the prompt field** (`ChatView.onDismissHistory` → the composer's
     `refocus` handle): opening moved focus into the overlay's query input, and closing unmounts it, so
     without this every post-Escape keystroke would land on `<body>` and be lost. The caret goes back where
     it was (`Composer` tracks it on click/keyup/change), or onto the current slot's marker when a slot
-    session is live. Dismissal is the *only* close that routes through `onClose` — insert, jump, and
-    save-as-template each own where focus goes next (the composer, another chat, a dialog).
+    session is live. An outside press (`onOutsidePress` → `ChatView.onHistoryOutsidePress`) closes at
+    once but restores focus only after the browser's own pointer focus handling (a zero-delay timeout),
+    and only when focus landed on `<body>`: a press on empty space hands the caret back to the prompt,
+    while a press on a control that takes focus (a button, a field, the terminal) keeps it. Aborts are
+    the *only* closes that restore focus — insert, jump, and save-as-template each own where focus goes
+    next (the composer, another chat, a dialog).
 - **History overlay: assistant-only messages + jumpable prompts** (`HistoryOverlay.tsx`,
   `useHistorySearch.ts` — R3) — `MESSAGES` now only ever contains assistant-role hits (the server
   filters; see `packages/server/src/history/SPEC.md`): a user-role hit is always a textual duplicate of
@@ -1404,8 +1442,8 @@ the `useChatResources` integration hook: it mounts the trigger in the header, th
 strip and the composer (only while the inspector is closed), and the inspector inside the transcript
 region so the header and composer stay usable; it owns the open/selected state and fills the inspector's
 detail slot — `CommandLogView` fed by `useCommandLog` for a command, `SubagentTranscriptPane` for a
-subagent. No new shell pane, workbench resource kind or terminal attachment is involved. Tool/command
-completion rendering remains in the conversation primitives, joined through tool/custom-message
+subagent — and the subagent detail header's `renderSubagentModel` with `RunModelLabel`. No new shell pane, workbench resource
+kind or terminal attachment is involved. Tool/command completion rendering remains in the conversation primitives, joined through tool/custom-message
 names rather than imports of the capability packages; the latest turn divider carries the "still
 running" chip as a parent-supplied deep link into the inspector. The resources view has a third list,
 the session's MCP servers (`SessionResources.mcpServers`): `useChatResources` passes it only on an
@@ -1422,9 +1460,9 @@ The divider's "still running" chip and the dock keep counting work only. No PID 
 none — and there is no immediate per-server stop.
 
 The dependency edges are `ChatView`/`useChatResources` → `resources`, `store`, `transport`,
-`BackgroundResult` → `resources` (`ResultRow`) and `tools/subagent` (`runDetails` helpers), and
-`ChatView` → the transcript pane. The `resources` child stays props-only and imports no sibling tool
-implementation; it receives the shared 30 s clock as a `now` prop. Command logs are fetched by the
+`BackgroundResult` → `resources` (`ResultRow`, the run label as its `metaLead`), `tools/subagent`
+(`runDetails` helpers) and `ModelEffortLabel`, and `ChatView` → the transcript pane. The `resources`
+child stays props-only and imports no sibling tool implementation; it receives the shared 30 s clock as a `now` prop. Command logs are fetched by the
 integration hook and passed into its read-only view; the module never loads xterm.
 
 The hook hydrates on mount/current welcome, subscribes to `session.resourcesChanged`, and coalesces
@@ -1460,8 +1498,8 @@ Unknown custom messages retain their existing behavior.
   also **extend** the render with an optional `urlTransform`, extra `remarkPlugins`, and `components`, e.g.
   the file view's GitHub alert callouts), the view types
   (`types.ts`,
-  incl. `ToolResultState` + `ExtUiDialogRequest`), and `ChatView` (lazy-mounted by the shell workbench
-  resource renderer;
+  incl. `ToolResultState` + `ExtUiDialogRequest`), and `ChatView` (a split chunk the shell workbench
+  preloads on mount through `components/preloadedLazy` and mounts as the chat resource body;
   it wires `SkillsDialog` + the header Skills trigger, resolving the owning `projectId` from the store and
   reading the reload badge from the store selector `selectSkillsStale(state, workspaceId, sessionId)` —
   per-session and store-derived, so it survives the tab-switch remount; a successful reload calls

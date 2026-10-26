@@ -68,6 +68,12 @@ const calls = [];
 const cwd = {};
 let splashText = null;
 const listeners = [];
+mock.module("@thinkrail/shared/shellEnv", () => ({
+  resolveShellEnv: async () => {
+    calls.push("shell-env");
+    cwd.shellEnv = process.cwd();
+  },
+}));
 mock.module(${JSON.stringify(runtimePath)}, () => {
   cwd.runtime = process.cwd();
   return {
@@ -175,7 +181,7 @@ console.log(JSON.stringify({ calls, cwd, splashText }));
 			}
 			expect(run.calls).toEqual([
 				"updates",
-				...(failure === "updates" ? [] : ["splash", "host"]),
+				...(failure === "updates" ? [] : ["shell-env", "splash", "host"]),
 				...(failure === "listener" ? ["listener"] : []),
 				...(failure === "updates" ? [] : ["splash-hidden"]),
 				"dialog",
@@ -187,7 +193,9 @@ console.log(JSON.stringify({ calls, cwd, splashText }));
 			expect(normalizeCwds(run.cwd)).toEqual({
 				...(userData === "getter" ? { userData: launchDir } : {}),
 				updates: launchDir,
-				...(failure === "updates" ? {} : { runtime: childDir, host: childDir, child: childDir }),
+				...(failure === "updates"
+					? {}
+					: { shellEnv: childDir, runtime: childDir, host: childDir, child: childDir }),
 			});
 			expect(result.stderr.toString().includes("could not leave the app bundle")).toBe(
 				home === "missing",

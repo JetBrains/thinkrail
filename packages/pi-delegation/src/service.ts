@@ -452,6 +452,7 @@ export function createDelegationService(bindings: DelegationBindings): Delegatio
 			task,
 			status,
 			...(session.model ? { model: `${session.model.provider}/${session.model.id}` } : {}),
+			thinkingLevel: session.thinkingLevel,
 			usage: {
 				input: stats.tokens.input - baseline.input,
 				output: stats.tokens.output - baseline.output,

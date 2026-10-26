@@ -211,7 +211,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     hyphens, without admitting a range.
 
     The root `packageManager` field also pins Bun for development, CI, and CLI compilation; Bun types
-    live in the catalog. Bun `1.4.3` aligns these paths with the desktop runtime, which the desktop
+    live in the catalog. Bun `1.4.4` aligns these paths with the desktop runtime, which the desktop
     config selects through Electrobun's `build.bun.version` (see [[module-desktop]]); a desktop test keeps
     the two pins equal. CI reads the root pin rather than maintaining a second version in workflow YAML.
 
@@ -260,7 +260,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     proxy to a second site.
 
 15. **Desktop packaging preserves the host/runtime boundary.** Electrobun `2.0.1` explicitly selects
-    the pinned Bun `1.4.3` runtime and embeds the host in that process, not the default Cottontail
+    the pinned Bun `1.4.4` runtime and embeds the host in that process, not the default Cottontail
     runtime; it never wraps or spawns the CLI. Its exact npm bootstrap pin selects the Hutch build
     toolchain and generated SDK; Bun remains the workspace package manager. The native window loads the
     packaged web build from the host's actual loopback port so UI, wire, files, and SPA fallback keep one
@@ -401,10 +401,11 @@ dependency. This keeps test process drivers outside both launchers and the serve
     rendered through one shared i18next instance (`@thinkrail/locales/react`). **A lint gate fails on
     hardcoded user-facing text** (JSX text and text-bearing attributes such as `aria-label`, `title`,
     `placeholder`, `alt`, `label`) in those trees, so a new string cannot ship without a key. ThinkRail
-    ships bundled catalogs (English only today); a user adds or overrides a language by dropping a flat
-    i18next-JSON file into the **global** data dir (`~/.thinkrail/locales/<tag>.json`) — never a
-    workspace, so a cloned repo cannot rewrite the UI. The host validates and watches those files
-    ([[submodule-server-locales]]) and serves them over the wire; the web merges them over the bundled
+    ships bundled catalogs (English and a partial Simplified Chinese held to `en.json` by a test); a user
+    adds or overrides a language by dropping a flat i18next-JSON file into the **global** data dir
+    (`~/.thinkrail/locales/<tag>.json`) — never a workspace, so a cloned repo cannot rewrite the UI.
+    The host validates and watches those files ([[submodule-server-locales]]) and serves them over the
+    wire; the web merges them over the bundled
     catalogs ([[submodule-web-i18n]]) with per-string fallback *local exact → bundled exact → bundled
     base → English*. The choice (`AppConfig.locale`, default `"system"`) follows the user like the
     theme. Agent, tool, skill, prompt output and server error text are never translated. Stored and wire
@@ -416,7 +417,7 @@ dependency. This keeps test process drivers outside both launchers and the serve
     Rejected: English-text keys (a wording fix orphans every translation); a host-served bundled catalog
     (bundled strings belong to the web build that renders them); an in-house runtime (i18next chosen for
     its standard format and tooling); catalogs in `contracts` (data and translation logic are not wire
-    types). Deferred: bundled non-English languages, RTL layout, an agent translation skill.
+    types). Deferred: RTL layout, an agent translation skill.
 
 ## Invariants
 

@@ -176,13 +176,17 @@ test.describe("templates management", () => {
 		const editor = page.getByTestId("template-editor-dialog");
 		await expect(editor).toBeVisible();
 
-		await page.getByTestId("template-name-input").fill(".hidden");
 		await page.getByTestId("template-body-input").fill("anything");
-		await page.getByTestId("template-save").click();
+		for (const name of [".hidden", "a:b"]) {
+			await page.getByTestId("template-name-input").fill(name);
+			await page.getByTestId("template-save").click();
 
-		await expect(page.getByTestId("template-error")).toBeVisible();
-		await expect(editor).toBeVisible();
-		await expect(page.locator('[data-testid="template-row"][data-name=".hidden"]')).toHaveCount(0);
+			await expect(page.getByTestId("template-error")).toContainText('":"');
+			await expect(editor).toBeVisible();
+			await expect(page.locator(`[data-testid="template-row"][data-name="${name}"]`)).toHaveCount(
+				0,
+			);
+		}
 	});
 
 	test("a project-scoped template is written into the worktree and shows up in the Files tree", async ({
