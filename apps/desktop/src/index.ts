@@ -69,7 +69,12 @@ import {
 	windowChromePreloadSeed,
 } from "./windowChrome";
 import { loadWindowsFrameApi, restoreWindowsFrameControls } from "./windowsFrame";
-import { desktopAppUserModelId, loadWindowsShellApi } from "./windowsTaskbarIdentity";
+import {
+	desktopAppUserModelId,
+	loadWindowsShellApi,
+	stampTaskbarShortcuts,
+	taskbarShortcutCandidates,
+} from "./windowsTaskbarIdentity";
 import {
 	applyWindowsWindowIcon,
 	loadWindowsIconApi,
@@ -133,6 +138,29 @@ function setWindowsAppUserModelId(): void {
 		loadWindowsShellApi().setProcessAppUserModelId(desktopAppUserModelId(channel));
 	} catch (error) {
 		desktopError("windows_app_id", "could not set the Windows AppUserModelID", error);
+	}
+}
+
+function stampWindowsTaskbarShortcuts(): void {
+	if (process.platform !== "win32") return;
+	try {
+		const appDir = dirname(PATHS.RESOURCES_FOLDER);
+		const { failures } = stampTaskbarShortcuts(
+			taskbarShortcutCandidates(appDir, process.env.APPDATA),
+			join(appDir, "bin", "launcher.exe"),
+			desktopAppUserModelId(channel),
+			loadWindowsShellApi().openShortcut,
+		);
+		const [failure] = failures;
+		if (failure) {
+			desktopError(
+				"windows_app_id",
+				"could not stamp a Windows shortcut's AppUserModelID",
+				failure,
+			);
+		}
+	} catch (error) {
+		desktopError("windows_app_id", "could not stamp the Windows shortcuts' AppUserModelID", error);
 	}
 }
 
@@ -414,6 +442,7 @@ async function start(): Promise<void> {
 				}),
 	});
 	setWindowsWindowIcon(mainWindow);
+	stampWindowsTaskbarShortcuts();
 	if (!neutral) {
 		handleTitleBarDoubleClick = createTitleBarDoubleClickHandler({
 			enabled: windowChrome.titleBarDoubleClick,
