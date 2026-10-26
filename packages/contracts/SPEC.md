@@ -50,7 +50,7 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   BCP-47 tag — the `AppConfig.locale` contract; local language file shapes are `LocalLocalesSnapshot` /
   `LocalLocaleFile` with closed error codes, served by `locales.list` from `LOCALES_PROTOCOL_VERSION`, v89;
   user theme files are `UserThemesSnapshot` / `UserThemeFile`, served by `themes.list` from
-  `USER_THEMES_PROTOCOL_VERSION`, v91, with each ok file's `manifest` deliberately `unknown` because the
+  `USER_THEMES_PROTOCOL_VERSION`, v92, with each ok file's `manifest` deliberately `unknown` because the
   theme schema is owned by [[submodule-web-themes]]),
   `THEME_MODES`, `isThemeMode`, `isSystemThemePair`, `normalizeThemePreference`,
   `JBCENTRAL_QUOTA_REFRESH_SECONDS`, `isJbcentralQuotaRefreshSeconds`, `isJbcentralConnected`,
