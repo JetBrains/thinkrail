@@ -221,6 +221,12 @@ export function clampFinalMessage(text: string, limit = FINAL_MESSAGE_LIMIT): st
 	return text.length <= limit ? text : `…${text.slice(text.length - limit)}`;
 }
 
+export function chatName(summary: Pick<SessionSummary, "title" | "firstPrompt">): string {
+	const title = summary.title.trim();
+	if (title) return `"${title}"`;
+	return summary.firstPrompt ? `unnamed, first prompt "${summary.firstPrompt}"` : "unnamed";
+}
+
 function prLine(workspace: Workspace): string {
 	const review = workspace.review;
 	if (!review) return "no PR";
@@ -273,7 +279,7 @@ function renderWorkspace(
 	for (const { summary, finalMessage } of chats) {
 		const self = summary.sessionId === callerSessionId ? ", this chat" : "";
 		lines.push(
-			`- chat "${summary.title}" (${summary.sessionId}${self}): ${chatStateLabel(summary.state)}`,
+			`- chat ${chatName(summary)} (${summary.sessionId}${self}): ${chatStateLabel(summary.state)}`,
 		);
 		if (finalMessage === undefined) continue;
 		lines.push(
