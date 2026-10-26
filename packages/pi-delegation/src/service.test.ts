@@ -600,31 +600,31 @@ test("one run at a time per child: a second runQueued rejects already-running", 
 	}
 });
 
-test.each([
-	true,
-	false,
-])("a signal-aborted queued start wins over a later user reason (pre-aborted: %s)", async (preAborted) => {
-	const child = await service.createChild(subagentSpec());
-	const callsBefore = faux.state.callCount;
-	try {
-		const controller = new AbortController();
-		if (preAborted) controller.abort();
-		else {
-			child.onEvent((event) => {
-				if (event.type === "run-queued") controller.abort();
-			});
+test.each([true, false])(
+	"a signal-aborted queued start wins over a later user reason (pre-aborted: %s)",
+	async (preAborted) => {
+		const child = await service.createChild(subagentSpec());
+		const callsBefore = faux.state.callCount;
+		try {
+			const controller = new AbortController();
+			if (preAborted) controller.abort();
+			else {
+				child.onEvent((event) => {
+					if (event.type === "run-queued") controller.abort();
+				});
+			}
+			const run = child.runQueued("Never runs.", { signal: controller.signal });
+			await child.abort("user");
+			const outcome = await run;
+			expect(outcome.status).toBe("aborted");
+			expect(outcome.details.abortReason).toBeUndefined();
+			expect(child.snapshot?.details).toEqual(outcome.details);
+			expect(faux.state.callCount).toBe(callsBefore);
+		} finally {
+			await child.dispose();
 		}
-		const run = child.runQueued("Never runs.", { signal: controller.signal });
-		await child.abort("user");
-		const outcome = await run;
-		expect(outcome.status).toBe("aborted");
-		expect(outcome.details.abortReason).toBeUndefined();
-		expect(child.snapshot?.details).toEqual(outcome.details);
-		expect(faux.state.callCount).toBe(callsBefore);
-	} finally {
-		await child.dispose();
-	}
-});
+	},
+);
 
 test("a run that completes naturally AT the cap keeps its real answer (no spurious wrap-up)", async () => {
 	faux.setResponses([
@@ -898,168 +898,163 @@ test("a stale preparation cannot register into a replacement parent lifetime", a
 	}
 });
 
-test.each([
-	undefined,
-	"user",
-	"engine",
-	"",
-])("queued handle cancellation keeps its first reason (%s), settles immediately and skips provider work", async (reason) => {
-	const paced = createDelegationService({
-		resolveParent: (id) =>
-			id === parent.sessionId
-				? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
-				: undefined,
-		delegationRoot,
-		scope: "ws-handle-queued-abort",
-		modelRuntime: runtime,
-		maxConcurrentPerParent: 1,
-	});
-	const started = gate();
-	const finish = gate();
-	const callsBefore = faux.state.callCount;
-	faux.setResponses([
-		async () => {
-			started.open();
-			await finish.opened;
-			return fauxAssistantMessage("A_DONE");
-		},
-		fauxAssistantMessage("C_DONE"),
-	]);
-	const childA = await paced.createChild(subagentSpec());
-	const childB = await paced.createChild(subagentSpec());
-	const childC = await paced.createChild(subagentSpec());
-	const events: LifecycleEvent[] = [];
-	childB.onEvent((event) => events.push(event));
-	try {
-		const runA = childA.runQueued("Slow.");
-		await started.opened;
-		const runB = childB.runQueued("Queued, then handle-aborted.");
-		const runC = childC.runQueued("Next surviving sibling.");
-		expect(childB.snapshot?.status).toBe("queued");
+test.each([undefined, "user", "engine", ""])(
+	"queued handle cancellation keeps its first reason (%s), settles immediately and skips provider work",
+	async (reason) => {
+		const paced = createDelegationService({
+			resolveParent: (id) =>
+				id === parent.sessionId
+					? { cwd: parentCwd, model: parent.model, thinkingLevel: parent.thinkingLevel }
+					: undefined,
+			delegationRoot,
+			scope: "ws-handle-queued-abort",
+			modelRuntime: runtime,
+			maxConcurrentPerParent: 1,
+		});
+		const started = gate();
+		const finish = gate();
+		const callsBefore = faux.state.callCount;
+		faux.setResponses([
+			async () => {
+				started.open();
+				await finish.opened;
+				return fauxAssistantMessage("A_DONE");
+			},
+			fauxAssistantMessage("C_DONE"),
+		]);
+		const childA = await paced.createChild(subagentSpec());
+		const childB = await paced.createChild(subagentSpec());
+		const childC = await paced.createChild(subagentSpec());
+		const events: LifecycleEvent[] = [];
+		childB.onEvent((event) => events.push(event));
+		try {
+			const runA = childA.runQueued("Slow.");
+			await started.opened;
+			const runB = childB.runQueued("Queued, then handle-aborted.");
+			const runC = childC.runQueued("Next surviving sibling.");
+			expect(childB.snapshot?.status).toBe("queued");
 
-		await Promise.all([childB.abort(reason), childB.abort("later")]);
-		const outcomeB = await runB;
-		expect(outcomeB.status).toBe("aborted");
-		expect(outcomeB.details.abortReason).toBe(reason);
-		expect(childB.collectResult()?.details).toEqual(outcomeB.details);
-		expect(events.map((event) => event.type)).toEqual(["run-queued", "run-terminal"]);
-		expect(events.at(-1)).toMatchObject({ outcome: outcomeB });
-		expect(childA.snapshot?.status).toBe("running");
-		expect(childC.snapshot?.status).toBe("queued");
-		expect(faux.state.callCount).toBe(callsBefore + 1);
+			await Promise.all([childB.abort(reason), childB.abort("later")]);
+			const outcomeB = await runB;
+			expect(outcomeB.status).toBe("aborted");
+			expect(outcomeB.details.abortReason).toBe(reason);
+			expect(childB.collectResult()?.details).toEqual(outcomeB.details);
+			expect(events.map((event) => event.type)).toEqual(["run-queued", "run-terminal"]);
+			expect(events.at(-1)).toMatchObject({ outcome: outcomeB });
+			expect(childA.snapshot?.status).toBe("running");
+			expect(childC.snapshot?.status).toBe("queued");
+			expect(faux.state.callCount).toBe(callsBefore + 1);
 
-		finish.open();
-		expect((await runA).finalText).toBe("A_DONE");
-		expect((await runC).finalText).toBe("C_DONE");
-		expect(faux.state.callCount).toBe(callsBefore + 2);
-	} finally {
-		finish.open();
-		await paced.disposeChildrenOf(parent.sessionId);
-	}
-});
+			finish.open();
+			expect((await runA).finalText).toBe("A_DONE");
+			expect((await runC).finalText).toBe("C_DONE");
+			expect(faux.state.callCount).toBe(callsBefore + 2);
+		} finally {
+			finish.open();
+			await paced.disposeChildrenOf(parent.sessionId);
+		}
+	},
+);
 
-test.each([
-	undefined,
-	"user",
-	"engine",
-	"",
-])("running handle cancellation keeps its first reason (%s) and resets it on reuse", async (reason) => {
-	const started = gate();
-	const finish = gate();
-	faux.setResponses([
-		async () => {
-			started.open();
-			await finish.opened;
-			return fauxAssistantMessage("INTERRUPTED");
-		},
-		fauxAssistantMessage("NEXT_RUN"),
-	]);
-	const child = await service.createChild(subagentSpec());
-	try {
-		const run = child.runQueued("Reusable task.");
-		await started.opened;
-		expect(child.snapshot?.status).toBe("running");
-		const aborting = Promise.all([child.abort(reason), child.abort("later")]);
-		finish.open();
-		await aborting;
-		const outcome = await run;
-		expect(outcome.status).toBe("aborted");
-		expect(outcome.details.abortReason).toBe(reason);
-		expect(child.collectResult()?.details).toEqual(outcome.details);
+test.each([undefined, "user", "engine", ""])(
+	"running handle cancellation keeps its first reason (%s) and resets it on reuse",
+	async (reason) => {
+		const started = gate();
+		const finish = gate();
+		faux.setResponses([
+			async () => {
+				started.open();
+				await finish.opened;
+				return fauxAssistantMessage("INTERRUPTED");
+			},
+			fauxAssistantMessage("NEXT_RUN"),
+		]);
+		const child = await service.createChild(subagentSpec());
+		try {
+			const run = child.runQueued("Reusable task.");
+			await started.opened;
+			expect(child.snapshot?.status).toBe("running");
+			const aborting = Promise.all([child.abort(reason), child.abort("later")]);
+			finish.open();
+			await aborting;
+			const outcome = await run;
+			expect(outcome.status).toBe("aborted");
+			expect(outcome.details.abortReason).toBe(reason);
+			expect(child.collectResult()?.details).toEqual(outcome.details);
 
-		const terminal = structuredClone(child.snapshot);
-		await child.abort("user");
-		expect(child.snapshot).toEqual(terminal);
-		const nextRun = child.runQueued("Reusable task.");
-		expect(child.snapshot?.details.abortReason).toBeUndefined();
-		const next = await nextRun;
-		expect(next.status).toBe("completed");
-		expect(next.finalText).toBe("NEXT_RUN");
-		expect(next.details.abortReason).toBeUndefined();
-	} finally {
-		finish.open();
-		await child.dispose();
-	}
-});
+			const terminal = structuredClone(child.snapshot);
+			await child.abort("user");
+			expect(child.snapshot).toEqual(terminal);
+			const nextRun = child.runQueued("Reusable task.");
+			expect(child.snapshot?.details.abortReason).toBeUndefined();
+			const next = await nextRun;
+			expect(next.status).toBe("completed");
+			expect(next.finalText).toBe("NEXT_RUN");
+			expect(next.details.abortReason).toBeUndefined();
+		} finally {
+			finish.open();
+			await child.dispose();
+		}
+	},
+);
 
-test.each([
-	true,
-	false,
-])("running caller cancellation and handle cancellation keep the first cause (caller first: %s)", async (callerFirst) => {
-	const started = gate();
-	const finish = gate();
-	faux.setResponses([
-		async () => {
-			started.open();
-			await finish.opened;
-			return fauxAssistantMessage("INTERRUPTED");
-		},
-	]);
-	const child = await service.createChild(subagentSpec());
-	const controller = new AbortController();
-	try {
-		const run = child.runQueued("Cancellable task.", { signal: controller.signal });
-		await started.opened;
-		if (callerFirst) controller.abort();
-		const aborting = child.abort("user");
-		controller.abort();
-		finish.open();
-		await aborting;
-		const outcome = await run;
-		expect(outcome.status).toBe("aborted");
-		expect(outcome.details.abortReason).toBe(callerFirst ? undefined : "user");
-		expect(child.snapshot?.details).toEqual(outcome.details);
-	} finally {
-		finish.open();
-		await child.dispose();
-	}
-});
+test.each([true, false])(
+	"running caller cancellation and handle cancellation keep the first cause (caller first: %s)",
+	async (callerFirst) => {
+		const started = gate();
+		const finish = gate();
+		faux.setResponses([
+			async () => {
+				started.open();
+				await finish.opened;
+				return fauxAssistantMessage("INTERRUPTED");
+			},
+		]);
+		const child = await service.createChild(subagentSpec());
+		const controller = new AbortController();
+		try {
+			const run = child.runQueued("Cancellable task.", { signal: controller.signal });
+			await started.opened;
+			if (callerFirst) controller.abort();
+			const aborting = child.abort("user");
+			controller.abort();
+			finish.open();
+			await aborting;
+			const outcome = await run;
+			expect(outcome.status).toBe("aborted");
+			expect(outcome.details.abortReason).toBe(callerFirst ? undefined : "user");
+			expect(child.snapshot?.details).toEqual(outcome.details);
+		} finally {
+			finish.open();
+			await child.dispose();
+		}
+	},
+);
 
-test.each([
-	"stop",
-	"error",
-	"aborted",
-] as const)("a terminal %s outcome is unchanged by user cancellation, including in its lifecycle callback", async (stopReason) => {
-	faux.setResponses([fauxAssistantMessage("FINAL", { stopReason })]);
-	const child = await service.createChild(subagentSpec());
-	let terminalAbort: Promise<void> | undefined;
-	child.onEvent((event) => {
-		if (event.type === "run-terminal") terminalAbort = child.abort("user");
-	});
-	try {
-		await child.abort("user");
-		const outcome = await child.runQueued("Finish naturally.");
-		await terminalAbort;
-		expect(outcome.status).toBe(stopReason === "stop" ? "completed" : stopReason);
-		expect(outcome.details.abortReason).toBeUndefined();
-		const terminal = structuredClone(child.snapshot);
-		await child.abort("user");
-		expect(child.snapshot).toEqual(terminal);
-		expect(child.snapshot?.details).toEqual(outcome.details);
-	} finally {
-		await child.dispose();
-	}
-});
+test.each(["stop", "error", "aborted"] as const)(
+	"a terminal %s outcome is unchanged by user cancellation, including in its lifecycle callback",
+	async (stopReason) => {
+		faux.setResponses([fauxAssistantMessage("FINAL", { stopReason })]);
+		const child = await service.createChild(subagentSpec());
+		let terminalAbort: Promise<void> | undefined;
+		child.onEvent((event) => {
+			if (event.type === "run-terminal") terminalAbort = child.abort("user");
+		});
+		try {
+			await child.abort("user");
+			const outcome = await child.runQueued("Finish naturally.");
+			await terminalAbort;
+			expect(outcome.status).toBe(stopReason === "stop" ? "completed" : stopReason);
+			expect(outcome.details.abortReason).toBeUndefined();
+			const terminal = structuredClone(child.snapshot);
+			await child.abort("user");
+			expect(child.snapshot).toEqual(terminal);
+			expect(child.snapshot?.details).toEqual(outcome.details);
+		} finally {
+			await child.dispose();
+		}
+	},
+);
 
 test("ChildHandle.dispose settles a queued run before removing the child", async () => {
 	const paced = createDelegationService({

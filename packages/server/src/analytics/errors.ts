@@ -193,7 +193,7 @@ function sanitizeException(
 	const mechanism = exception.mechanism;
 	if (isRecord(mechanism)) {
 		out.mechanism = {
-			handled: mechanism.handled === true,
+			handled: mechanism.handled !== false,
 			synthetic: mechanism.synthetic === true,
 			type:
 				typeof mechanism.type === "string" && MECHANISM_TYPES.has(mechanism.type)

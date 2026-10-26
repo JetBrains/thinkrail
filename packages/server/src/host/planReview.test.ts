@@ -269,64 +269,69 @@ test("a verdict's summary and reading order land on the workspace review as its 
 	).toBe(false);
 });
 
-test.each([
-	"button",
-	"tool",
-	"auto-fix-off",
-] as const)("%s verdict keeps its guide and findings together across queued Clears", async (path) => {
-	if (path === "auto-fix-off") updateConfig({ reviewAutoFix: false });
-	const sessionId = await workerSession();
-	const id = committedItem(sessionId);
-	const gate = Promise.withResolvers<void>();
-	const queued = Promise.withResolvers<void>();
-	const realLock = withReviewLock;
-	const held = realLock(WS, () => gate.promise);
-	const firstClear = realLock(WS, () => reviews.clearReview(WS));
-	const lockSpy = spyOn(reviewLock, "withReviewLock").mockImplementation(
-		<T>(key: string, operation: () => Promise<T>): Promise<T> => {
-			const result = realLock(key, operation);
-			queued.resolve();
-			return result;
-		},
-	);
-	let reviewed: Promise<unknown> = Promise.resolve();
-	try {
-		if (path === "tool") {
-			installRequestReviewSeam(verdictRunner(requestChanges));
-			const ctx = {
-				sessionManager: { getSessionId: () => sessionId },
-			} as unknown as ExtensionToolContext;
-			reviewed = createRequestReviewTool().execute("tc", { itemId: id }, undefined, undefined, ctx);
-		} else {
-			startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
-		}
-		await queued.promise;
-		const lastClear = realLock(WS, async () => {
-			const snapshot = await getReviewSnapshot(WS);
-			await reviews.clearReview(WS);
-			return snapshot;
-		});
-		gate.resolve();
-		await Promise.all([held, firstClear, reviewed]);
-		const cleared = await lastClear;
-		await settle(sessionId, id);
+test.each(["button", "tool", "auto-fix-off"] as const)(
+	"%s verdict keeps its guide and findings together across queued Clears",
+	async (path) => {
+		if (path === "auto-fix-off") updateConfig({ reviewAutoFix: false });
+		const sessionId = await workerSession();
+		const id = committedItem(sessionId);
+		const gate = Promise.withResolvers<void>();
+		const queued = Promise.withResolvers<void>();
+		const realLock = withReviewLock;
+		const held = realLock(WS, () => gate.promise);
+		const firstClear = realLock(WS, () => reviews.clearReview(WS));
+		const lockSpy = spyOn(reviewLock, "withReviewLock").mockImplementation(
+			<T>(key: string, operation: () => Promise<T>): Promise<T> => {
+				const result = realLock(key, operation);
+				queued.resolve();
+				return result;
+			},
+		);
+		let reviewed: Promise<unknown> = Promise.resolve();
+		try {
+			if (path === "tool") {
+				installRequestReviewSeam(verdictRunner(requestChanges));
+				const ctx = {
+					sessionManager: { getSessionId: () => sessionId },
+				} as unknown as ExtensionToolContext;
+				reviewed = createRequestReviewTool().execute(
+					"tc",
+					{ itemId: id },
+					undefined,
+					undefined,
+					ctx,
+				);
+			} else {
+				startPlanReview(WS, sessionId, id, verdictRunner(requestChanges));
+			}
+			await queued.promise;
+			const lastClear = realLock(WS, async () => {
+				const snapshot = await getReviewSnapshot(WS);
+				await reviews.clearReview(WS);
+				return snapshot;
+			});
+			gate.resolve();
+			await Promise.all([held, firstClear, reviewed]);
+			const cleared = await lastClear;
+			await settle(sessionId, id);
 
-		expect(cleared.comments).toHaveLength(1);
-		expect(cleared.review.guide).toMatchObject({
-			verdict: "request_changes",
-			summary: "off-by-one",
-			todoId: id,
-		});
-		const current = await getReviewSnapshot(WS);
-		expect(current.comments).toEqual([]);
-		expect(current.review.guide).toBeUndefined();
-	} finally {
-		gate.resolve();
-		lockSpy.mockRestore();
-		await Promise.all([held, firstClear, reviewed]);
-		await settle(sessionId, id);
-	}
-});
+			expect(cleared.comments).toHaveLength(1);
+			expect(cleared.review.guide).toMatchObject({
+				verdict: "request_changes",
+				summary: "off-by-one",
+				todoId: id,
+			});
+			const current = await getReviewSnapshot(WS);
+			expect(current.comments).toEqual([]);
+			expect(current.review.guide).toBeUndefined();
+		} finally {
+			gate.resolve();
+			lockSpy.mockRestore();
+			await Promise.all([held, firstClear, reviewed]);
+			await settle(sessionId, id);
+		}
+	},
+);
 
 test("an approve whose record fails does not publish a successful guide", async () => {
 	const sessionId = await workerSession();

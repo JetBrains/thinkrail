@@ -18,29 +18,29 @@ function assertBrowserSource(path: string, repoRoot = REPO_ROOT): void {
 }
 
 describe("browser-safe public surface", () => {
-	it.each([
-		"apps",
-		"server",
-	])("checks repository paths independently of a %s ancestor", (ancestor) => {
-		const repoRoot = resolve("fixtures", ancestor, "checkout");
-		for (const source of [
-			"packages/extension-api/src/web.ts",
-			"packages/extension-api/src/toolHelpers.ts",
-			"packages/contracts/src/index.ts",
-		]) {
-			expect(() => assertBrowserSource(resolve(repoRoot, source), repoRoot)).not.toThrow();
-		}
-		for (const source of [
-			"apps/web/src/main.tsx",
-			"packages/server/src/index.ts",
-			"packages/extension-api/src/server.ts",
-			"packages/extension-api/src/server/helpers.ts",
-		]) {
-			expect(() => assertBrowserSource(resolve(repoRoot, source), repoRoot)).toThrow(
-				"Browser entry reached host/server code",
-			);
-		}
-	});
+	it.each(["apps", "server"])(
+		"checks repository paths independently of a %s ancestor",
+		(ancestor) => {
+			const repoRoot = resolve("fixtures", ancestor, "checkout");
+			for (const source of [
+				"packages/extension-api/src/web.ts",
+				"packages/extension-api/src/toolHelpers.ts",
+				"packages/contracts/src/index.ts",
+			]) {
+				expect(() => assertBrowserSource(resolve(repoRoot, source), repoRoot)).not.toThrow();
+			}
+			for (const source of [
+				"apps/web/src/main.tsx",
+				"packages/server/src/index.ts",
+				"packages/extension-api/src/server.ts",
+				"packages/extension-api/src/server/helpers.ts",
+			]) {
+				expect(() => assertBrowserSource(resolve(repoRoot, source), repoRoot)).toThrow(
+					"Browser entry reached host/server code",
+				);
+			}
+		},
+	);
 
 	it("exports only the web contract at the root", () => {
 		expect(Object.keys(root).sort()).toEqual(Object.keys(web).sort());
@@ -49,38 +49,38 @@ describe("browser-safe public surface", () => {
 		expect(root.parseToolResultContent).toBe(web.parseToolResultContent);
 	});
 
-	it.each([
-		"@thinkrail/extension-api",
-		"@thinkrail/extension-api/web",
-	])("bundles %s without React, pi, host or server runtime imports", async (entry) => {
-		const imports: string[] = [];
-		const build = await Bun.build({
-			entrypoints: [Bun.resolveSync(entry, import.meta.dir)],
-			target: "browser",
-			plugins: [
-				{
-					name: "enforce-browser-runtime-boundary",
-					setup(builder) {
-						builder.onResolve({ filter: /^[^./]/ }, ({ path }) => {
-							if (isAbsolute(path)) return undefined;
-							imports.push(path);
-							if (path !== "@thinkrail/contracts") {
-								throw new Error(`Unexpected runtime dependency: ${path}`);
-							}
-							return undefined;
-						});
-						builder.onLoad({ filter: /.*/ }, ({ path }) => {
-							assertBrowserSource(path);
-							return undefined;
-						});
+	it.each(["@thinkrail/extension-api", "@thinkrail/extension-api/web"])(
+		"bundles %s without React, pi, host or server runtime imports",
+		async (entry) => {
+			const imports: string[] = [];
+			const build = await Bun.build({
+				entrypoints: [Bun.resolveSync(entry, import.meta.dir)],
+				target: "browser",
+				plugins: [
+					{
+						name: "enforce-browser-runtime-boundary",
+						setup(builder) {
+							builder.onResolve({ filter: /^[^./]/ }, ({ path }) => {
+								if (isAbsolute(path)) return undefined;
+								imports.push(path);
+								if (path !== "@thinkrail/contracts") {
+									throw new Error(`Unexpected runtime dependency: ${path}`);
+								}
+								return undefined;
+							});
+							builder.onLoad({ filter: /.*/ }, ({ path }) => {
+								assertBrowserSource(path);
+								return undefined;
+							});
+						},
 					},
-				},
-			],
-		});
+				],
+			});
 
-		expect(build.logs).toEqual([]);
-		expect(build.success).toBe(true);
-		expect(imports).toEqual(["@thinkrail/contracts"]);
-		expect(await build.outputs[0]?.text()).not.toContain("defineServerExtension");
-	});
+			expect(build.logs).toEqual([]);
+			expect(build.success).toBe(true);
+			expect(imports).toEqual(["@thinkrail/contracts"]);
+			expect(await build.outputs[0]?.text()).not.toContain("defineServerExtension");
+		},
+	);
 });

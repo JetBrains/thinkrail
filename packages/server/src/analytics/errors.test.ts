@@ -70,11 +70,14 @@ test.each([
 	["native", "native", false],
 	["<anonymous>", EXTERNAL_FRAME, false],
 	["/Users/jdoe/.pi/agent/extensions/payroll.ts", EXTERNAL_FRAME, false],
-])("source-mapped binary frame %j resolves only through the remap base", (input, filename, inApp) => {
-	const result = normalizeFrameFilename(input, { ...ROOTS, remapBase: "apps/cli" });
-	expect(result.filename).toBe(filename);
-	expect(result.inApp).toBe(inApp);
-});
+])(
+	"source-mapped binary frame %j resolves only through the remap base",
+	(input, filename, inApp) => {
+		const result = normalizeFrameFilename(input, { ...ROOTS, remapBase: "apps/cli" });
+		expect(result.filename).toBe(filename);
+		expect(result.inApp).toBe(inApp);
+	},
+);
 
 test("chunk ids pass only as UUIDs, from the SDK frame or the browser's url map", () => {
 	const id = "ab8fcdab-5c22-55ed-bec8-0f9acb6a407e";

@@ -43,6 +43,9 @@ test("Open PR: no origin errors, with origin pushes, re-press follows the same b
 	await expect(page.getByText(/no 'origin' remote/i).first()).toBeVisible();
 	await expect(compose).toBeVisible();
 	await page.keyboard.press("Escape");
+	await expect(page.getByText("Open PR failed")).toHaveCount(0);
+	await expect(compose).toBeVisible();
+	await page.keyboard.press("Escape");
 	await expect(compose).not.toBeVisible();
 
 	const bare = mkdtempSync(join(tmpdir(), "thinkrail-pr-origin-"));

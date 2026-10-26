@@ -180,27 +180,27 @@ test("pre-prompt recovery omits a restored truncated call together with its resu
 	expect(result.events.at(-1)?.type).toBe("agent_settled");
 });
 
-test.each(RECOVERY_STOPS)("Pi stops after one compact-and-retry attempt when $name recurs", async ({
-	response,
-	errorPrefix,
-}) => {
-	const result = await runRecoveryScenario([
-		fauxAssistantMessage("first incomplete", response),
-		() =>
-			fauxAssistantMessage("second incomplete", {
-				...response,
-				timestamp: Date.now() + 60_000,
-			}),
-	]);
+test.each(RECOVERY_STOPS)(
+	"Pi stops after one compact-and-retry attempt when $name recurs",
+	async ({ response, errorPrefix }) => {
+		const result = await runRecoveryScenario([
+			fauxAssistantMessage("first incomplete", response),
+			() =>
+				fauxAssistantMessage("second incomplete", {
+					...response,
+					timestamp: Date.now() + 60_000,
+				}),
+		]);
 
-	expect(result.callCount).toBe(2);
-	const compactionEnds = result.events.filter((event) => event.type === "compaction_end");
-	expect(compactionEnds).toHaveLength(2);
-	expect(compactionEnds[0]?.willRetry).toBe(true);
-	expect(compactionEnds[1]?.willRetry).toBe(false);
-	expect(compactionEnds[1]?.errorMessage).toContain(
-		`${errorPrefix} recovery failed after one compact-and-retry attempt`,
-	);
-	expect(result.events.filter((event) => event.type === "agent_settled")).toHaveLength(1);
-	expect(result.events.at(-1)?.type).toBe("agent_settled");
-});
+		expect(result.callCount).toBe(2);
+		const compactionEnds = result.events.filter((event) => event.type === "compaction_end");
+		expect(compactionEnds).toHaveLength(2);
+		expect(compactionEnds[0]?.willRetry).toBe(true);
+		expect(compactionEnds[1]?.willRetry).toBe(false);
+		expect(compactionEnds[1]?.errorMessage).toContain(
+			`${errorPrefix} recovery failed after one compact-and-retry attempt`,
+		);
+		expect(result.events.filter((event) => event.type === "agent_settled")).toHaveLength(1);
+		expect(result.events.at(-1)?.type).toBe("agent_settled");
+	},
+);

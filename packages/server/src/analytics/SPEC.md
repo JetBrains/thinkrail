@@ -129,7 +129,8 @@ default ones read ±7 source lines per frame from disk, make paths relative to `
 imported only for that builder. The sink's typed (doc-less) `before_send` then **rebuilds** every
 `$exception` from scratch: ≤ 5 exceptions of identifier-only `type`, a classifier `value`,
 `mechanism.{handled,synthetic,type}` (the root's `handled` comes from the report, because the SDK's capture
-APIs take no hint and always default it to true; causes stay handled), and frames carrying only `platform`, identifier-only `function`,
+APIs take no hint and always default it to true; causes stay handled, and a mechanism without `handled`, as
+the SDK writes for chained causes, counts as handled), and frames carrying only `platform`, identifier-only `function`,
 normalized `filename`, `lineno`, `colno`, `in_app` and a UUID-shaped `chunk_id`. Context lines, `vars`,
 `abs_path`, `module` or any field a later SDK adds can never pass. Absolute filenames inside the app
 root (repo root from source, the bundle dir when packaged, `Resources/app` for desktop via `appRoot`)

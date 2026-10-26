@@ -11,7 +11,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@pierre/diffs": "1.5.1",
+		"@pierre/diffs": "1.6.1",
 		"@remixicon/react": "catalog:",
 		"@shikijs/monaco": "4.5.0",
 		"@thinkrail/contracts": "workspace:*",

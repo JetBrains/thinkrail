@@ -133,6 +133,24 @@ test("a load that fails after a mount stored its lazy is retried by the next mou
 	expect(render(renderer, resource)).toBe("<span>recovered</span>");
 });
 
+test("re-rendering a mounted load that failed does not reload it until a later load replaces it", async () => {
+	let attempt = 0;
+	const { renderer, calls, resource } = testRenderer(async () => {
+		attempt += 1;
+		if (attempt === 1) throw new Error("chunk failed");
+		return viewModule("recovered");
+	});
+	expect(render(renderer, resource)).toContain("loading");
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	render(renderer, resource);
+	render(renderer, resource);
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(calls).toEqual([false]);
+	await preloadRendererView(renderer, false, host, resource);
+	expect(calls).toEqual([false, false]);
+	expect(render(renderer, resource)).toBe("<span>recovered</span>");
+});
+
 test("a warm that throws does not reject and the view still renders", async () => {
 	const { renderer, resource } = testRenderer(async () =>
 		viewModule("warm failed", () => {

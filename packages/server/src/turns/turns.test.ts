@@ -184,34 +184,34 @@ test("the head is captured the moment the run settles, not after a slow base sna
 	expect(turn?.changes.map((change) => change.path)).toEqual(["run-one.ts"]);
 });
 
-test.each([
-	"before",
-	"after",
-] as const)("session membership removed %s settlement does not discard its workspace's receipt", async (when) => {
-	const published: TurnChangeSet[] = [];
-	setTurnPublisher((turn) => published.push(turn));
-	let attached = true;
-	const head = deferred<string | null>();
-	let calls = 0;
-	const tracker = new TurnTracker(
-		() => (attached ? resolve() : null),
-		Date.now,
-		(cwd) => (++calls === 1 ? snapshotWorktree(cwd) : head.promise),
-	);
+test.each(["before", "after"] as const)(
+	"session membership removed %s settlement does not discard its workspace's receipt",
+	async (when) => {
+		const published: TurnChangeSet[] = [];
+		setTurnPublisher((turn) => published.push(turn));
+		let attached = true;
+		const head = deferred<string | null>();
+		let calls = 0;
+		const tracker = new TurnTracker(
+			() => (attached ? resolve() : null),
+			Date.now,
+			(cwd) => (++calls === 1 ? snapshotWorktree(cwd) : head.promise),
+		);
 
-	await tracker.observe("s1", start);
-	writeFileSync(join(repo, "feature.ts"), "export const feature = true;\n");
-	if (when === "before") attached = false;
-	const settled = tracker.observe("s1", settle);
-	attached = false;
-	head.resolve(await snapshotWorktree(repo));
-	await settled;
+		await tracker.observe("s1", start);
+		writeFileSync(join(repo, "feature.ts"), "export const feature = true;\n");
+		if (when === "before") attached = false;
+		const settled = tracker.observe("s1", settle);
+		attached = false;
+		head.resolve(await snapshotWorktree(repo));
+		await settled;
 
-	const turns = listTurns("w1");
-	expect(turns).toHaveLength(1);
-	expect(turns[0]?.changes.map((change) => change.path)).toEqual(["feature.ts"]);
-	expect(published).toEqual(turns);
-});
+		const turns = listTurns("w1");
+		expect(turns).toHaveLength(1);
+		expect(turns[0]?.changes.map((change) => change.path)).toEqual(["feature.ts"]);
+		expect(published).toEqual(turns);
+	},
+);
 
 test("a workspace removed while its run is settling records and publishes nothing", async () => {
 	const published: TurnChangeSet[] = [];

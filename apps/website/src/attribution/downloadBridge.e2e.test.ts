@@ -326,59 +326,62 @@ async function claimBridge(storage: AttributionStorage): Promise<string | undefi
 }
 
 describe("desktop download bridge after later actions", () => {
-	describe.each([
-		...acquisitionNavigations,
-		...browsingNavigations,
-	])("on a page reached from %s", (_navigationName, navigation) => {
-		test.each(
-			sameDocumentActions,
-		)("keeps the download's bridge when the visitor %s", async (_actionName, act) => {
+	describe.each([...acquisitionNavigations, ...browsingNavigations])(
+		"on a page reached from %s",
+		(_navigationName, navigation) => {
+			test.each(sameDocumentActions)(
+				"keeps the download's bridge when the visitor %s",
+				async (_actionName, act) => {
+					const storage = memoryStorage();
+					const page = openPage(storage, navigation, bridgeSequence());
+					page.click(heroDownload);
+					act(page);
+					act(page);
+
+					const [downloadBridge] = page.downloadBridges;
+					expect(downloadBridge).toBeDefined();
+					expect(await claimBridge(storage)).toBe(downloadBridge);
+				},
+			);
+
+			test("hands the claim the latest of two downloads", async () => {
+				const storage = memoryStorage();
+				const page = openPage(storage, navigation, bridgeSequence());
+				page.click(heroDownload);
+				page.click(element({ href: linuxUrl, within: ["#install"] }));
+
+				const [first, latest] = page.downloadBridges;
+				expect(latest).toBeDefined();
+				expect(latest).not.toBe(first);
+				expect(await claimBridge(storage)).toBe(latest);
+			});
+		},
+	);
+
+	test.each(acquisitionNavigations)(
+		"a later page reached from %s starts a new acquisition without the bridge",
+		async (_navigationName, navigation) => {
 			const storage = memoryStorage();
-			const page = openPage(storage, navigation, bridgeSequence());
-			page.click(heroDownload);
-			act(page);
-			act(page);
+			const bridges = bridgeSequence();
+			openPage(storage, direct, bridges).click(heroDownload);
+			openPage(storage, navigation, bridges);
 
-			const [downloadBridge] = page.downloadBridges;
-			expect(downloadBridge).toBeDefined();
-			expect(await claimBridge(storage)).toBe(downloadBridge);
-		});
+			expect(await claimBridge(storage)).toBe(fallbackBridgeId);
+		},
+	);
 
-		test("hands the claim the latest of two downloads", async () => {
+	test.each(browsingNavigations)(
+		"a later page reached by %s keeps the bridge",
+		async (_navigationName, navigation) => {
 			const storage = memoryStorage();
-			const page = openPage(storage, navigation, bridgeSequence());
-			page.click(heroDownload);
-			page.click(element({ href: linuxUrl, within: ["#install"] }));
+			const bridges = bridgeSequence();
+			const downloadPage = openPage(storage, campaign, bridges);
+			downloadPage.click(heroDownload);
+			openPage(storage, navigation, bridges);
 
-			const [first, latest] = page.downloadBridges;
-			expect(latest).toBeDefined();
-			expect(latest).not.toBe(first);
-			expect(await claimBridge(storage)).toBe(latest);
-		});
-	});
-
-	test.each(
-		acquisitionNavigations,
-	)("a later page reached from %s starts a new acquisition without the bridge", async (_navigationName, navigation) => {
-		const storage = memoryStorage();
-		const bridges = bridgeSequence();
-		openPage(storage, direct, bridges).click(heroDownload);
-		openPage(storage, navigation, bridges);
-
-		expect(await claimBridge(storage)).toBe(fallbackBridgeId);
-	});
-
-	test.each(
-		browsingNavigations,
-	)("a later page reached by %s keeps the bridge", async (_navigationName, navigation) => {
-		const storage = memoryStorage();
-		const bridges = bridgeSequence();
-		const downloadPage = openPage(storage, campaign, bridges);
-		downloadPage.click(heroDownload);
-		openPage(storage, navigation, bridges);
-
-		expect(await claimBridge(storage)).toBe(downloadPage.downloadBridges[0]);
-	});
+			expect(await claimBridge(storage)).toBe(downloadPage.downloadBridges[0]);
+		},
+	);
 
 	test("an older tab's download keeps a newer tab's acquisition as the last touch", async () => {
 		const storage = memoryStorage();
