@@ -2,7 +2,13 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Project, SessionState, WireModel, Workspace } from "@thinkrail/contracts";
+import type {
+	ImageContent,
+	Project,
+	SessionState,
+	WireModel,
+	Workspace,
+} from "@thinkrail/contracts";
 import {
 	chatName,
 	chatStateLabel,
@@ -12,6 +18,8 @@ import {
 	prepareAttachments,
 	resolveModel,
 	resolveProject,
+	type StartWorkspaceDeps,
+	startWorkspace,
 } from "./workspaceTools";
 
 let dir: string;
@@ -137,4 +145,102 @@ test("chatName prefers the chat's title, then its first prompt", () => {
 		'unnamed, first prompt "Add a test"',
 	);
 	expect(chatName({ title: "" })).toBe("unnamed");
+});
+
+function startDeps(overrides: Partial<StartWorkspaceDeps> = {}) {
+	const calls: string[] = [];
+	const prompts: Array<{ sessionId: string; text: string; images?: ImageContent[] }> = [];
+	const caller = { id: "w1", projectId: "p1", worktreePath: dir } as Workspace;
+	const child = {
+		id: "w9",
+		projectId: "p2",
+		name: "workspace-9",
+		branch: "workspace-9",
+		baseBranch: "origin/main",
+		worktreePath: "/wt/9",
+	} as Workspace;
+	const deps: StartWorkspaceDeps = {
+		callerWorkspace: () => caller,
+		openProjects: () => [project("p1", "ThinkRail"), project("p2", "Backend")],
+		settledModels: async () => [{ provider: "anthropic", id: "claude" } as WireModel],
+		defaultBaseBranch: async () => {
+			calls.push("defaultBase");
+			return "origin/main";
+		},
+		createWorkspace: async (projectId, baseRef) => {
+			calls.push(`create ${projectId} ${baseRef}`);
+			return child;
+		},
+		startChat: async (_workspace, requested) => {
+			calls.push(
+				`chat ${requested.model?.id ?? "default"} ${requested.thinkingLevel ?? "default"}`,
+			);
+			return {
+				sessionId: "s9",
+				model: { provider: "anthropic", id: "claude" } as WireModel,
+				thinkingLevel: "high",
+			};
+		},
+		sendPrompt: async (sessionId, text, images) => {
+			calls.push("prompt");
+			prompts.push({ sessionId, text, ...(images ? { images } : {}) });
+		},
+		...overrides,
+	};
+	return { deps, calls, prompts };
+}
+
+test("startWorkspace creates in the named project from its default base and prompts the new chat", async () => {
+	writeFileSync(join(dir, "spec.md"), "# spec");
+	const { deps, calls, prompts } = startDeps();
+	const started = await startWorkspace(
+		"s1",
+		{
+			prompt: " Do X ",
+			project: "backend",
+			model: "claude",
+			effort: "high",
+			attachments: ["spec.md"],
+		},
+		deps,
+	);
+	expect(calls).toEqual(["defaultBase", "create p2 origin/main", "chat claude high", "prompt"]);
+	expect(prompts).toEqual([
+		{ sessionId: "s9", text: `Do X\n\nAttached files:\n- ${join(dir, "spec.md")}` },
+	]);
+	expect(started).toEqual({
+		workspaceId: "w9",
+		projectId: "p2",
+		sessionId: "s9",
+		name: "workspace-9",
+		branch: "workspace-9",
+		baseBranch: "origin/main",
+		model: "anthropic/claude",
+		effort: "high",
+	});
+});
+
+test("startWorkspace validates project, model, and attachments before any worktree exists", async () => {
+	for (const params of [
+		{ prompt: "x", project: "nope" },
+		{ prompt: "x", model: "llama" },
+		{ prompt: "x", attachments: ["missing.png"] },
+		{ prompt: "   " },
+	]) {
+		const { deps, calls } = startDeps();
+		await expect(startWorkspace("s1", params, deps)).rejects.toThrow();
+		expect(calls.filter((call) => call.startsWith("create"))).toEqual([]);
+	}
+});
+
+test("startWorkspace keeps a created workspace and names it when its chat cannot start", async () => {
+	const { deps, calls } = startDeps({
+		sendPrompt: async () => {
+			throw new Error("provider refused");
+		},
+	});
+	await expect(startWorkspace("s1", { prompt: "x", base_branch: "dev" }, deps)).rejects.toThrow(
+		'Workspace "workspace-9" (id w9) was created, but its chat could not start: provider refused',
+	);
+	expect(calls).toEqual(["create p1 dev", "chat default default"]);
 });
