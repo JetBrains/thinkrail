@@ -28,6 +28,14 @@ function renderPreview(target: FindInFilesTarget) {
 			rendererId={SOURCE_RENDERER_ID}
 			onRendererId={keepSourceRenderer}
 			reveal={{ line: target.line, column: target.column, length: target.length, tick: 1 }}
+			leading={
+				<span
+					data-testid="find-in-files-preview-path"
+					className="truncate tr-code-text-small text-text-muted"
+				>
+					{target.path}:{target.line}
+				</span>
+			}
 			className="h-full min-h-0"
 		/>
 	);
