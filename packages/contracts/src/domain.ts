@@ -150,6 +150,14 @@ export interface Workspace {
 	review?: OpenBranchReview;
 	/** A chat whose deletion started but did not finish; the UI offers Retry and nothing else. */
 	deletionPending?: true;
+	/** Where a chat without a project was continued: the workspaces (and their first chats) its summary went to. */
+	continuedTo?: ChatContinuationLink[];
+}
+
+export interface ChatContinuationLink {
+	projectId: string;
+	workspaceId: string;
+	sessionId: string;
 }
 
 export type BranchReviewState = "open" | "merged" | "closed";

@@ -9,6 +9,12 @@ export {
 	stopSubagent,
 } from "./chatResources";
 export {
+	CONTINUE_IN_WORKSPACE_TOOL_NAME,
+	type ContinueToolHost,
+	clampHandoffSummary,
+	setContinueToolHost,
+} from "./continueTool";
+export {
 	type ReviewSubagentRun,
 	readChildTranscript,
 	refreshSubagentConcurrency,

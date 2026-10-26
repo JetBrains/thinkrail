@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, statSync } from "node:fs";
 import { join } from "node:path";
-import type { Project, Workspace } from "@thinkrail/contracts";
+import type { ChatContinuationLink, Project, Workspace } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import {
 	type ChatsStoreProblem,
@@ -169,6 +169,22 @@ export function markChatDeletionPending(id: string): Workspace {
 	}
 	if (workspace.deletionPending) return workspace;
 	workspace.deletionPending = true;
+	saveWorkspaces(all);
+	publishers?.workspace({ kind: "updated", workspace });
+	return workspace;
+}
+
+/** The durable link from a chat to the workspace its summary went to — survives compaction of the transcript card. */
+export function recordChatContinuation(id: string, link: ChatContinuationLink): Workspace {
+	assertChatsWritable();
+	const all = loadWorkspaces();
+	const workspace = all.find((candidate) => candidate.id === id);
+	if (!workspace || !isChatWorkspace(workspace)) {
+		throw new CodedError("NOT_A_CHAT", `Not a chat without a project: ${id}`);
+	}
+	const links = workspace.continuedTo ?? [];
+	if (links.some((candidate) => candidate.workspaceId === link.workspaceId)) return workspace;
+	workspace.continuedTo = [...links, link];
 	saveWorkspaces(all);
 	publishers?.workspace({ kind: "updated", workspace });
 	return workspace;
