@@ -48,6 +48,9 @@ was checked against the installed catalog version. **No removal gate is satisfie
   their default and restored-chat model before continuing. Unavailable defaults/resumed models follow
   the existing, different host/Pi selection rules in [[submodule-server-agent]]; the host still does not
   surface Pi's `modelFallbackMessage`. This upgrade adds no fallback or warning UI.
+- Since Pi 1.3, `kimi-coding` uses OpenAI Chat Completions at
+  `https://api.kimi.com/coding/v1`. Users with custom `models.json` base URL overrides must include
+  `/v1`; the host does not rewrite those overrides. Include this migration notice in release notes.
 
 ## Upgrade contract
 
