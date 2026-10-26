@@ -569,6 +569,30 @@ channel fan-out, and the process-boot wrapper both launchers share.
   writes converge every client through the existing `pi.event`/`session_info_changed` channel and
   `session.list` repair; no new push channel exists.
 
+- **Chats without a project (`chats.ts`, `gitCeiling.ts`):** `chat.create` makes the folder and record
+  ([[submodule-server-workspaces]]), reserves the initial terminal and starts the one session the chat
+  owns (host default model, or the dialog's explicit pick) in one call — a chat with no session yet (a
+  crash between folder and session) gets it through `session.create`, which otherwise refuses a second
+  top-level chat (`CHAT_WORKSPACE`: a new chat is a new folder). `chat.delete` is the **only teardown
+  door** (`session.delete` on a chat is refused): it claims the id (concurrent calls join), marks the
+  record `deletionPending` before anything destructive, deletes every session through the agent's
+  trash-based transaction (transcripts file by file, never the encoded directory), closes terminals,
+  stops the watcher, evicts the spec, review, change and turn sidecars, trashes the folder, drops the
+  record and publishes the removal; a failure leaves the pending record visible with Retry. The host
+  never sweeps unknown folders under the chats root. `chat.inspect` counts the folder's files (bounded,
+  symlinks not followed) for the confirmation. Every repository door refuses a chat or the container at
+  the handler (`REPOSITORY_ONLY_METHODS` — git, changes, reviews, pull requests, turns, diff stats and
+  base — plus project close/rename/trust/skills, `workspace.create`/`listExisting`, `git.listBranches`/
+  `prefetch`); the settled lifecycle, turn snapshots, plan artifacts and head recording skip chats; and
+  `applyGitCeiling()` merges `<dataDir>/chats` into `GIT_CEILING_DIRECTORIES` before the server exists
+  (the root created first), so git, `gh`, PTYs and pi's bash inherit a ceiling that stops any walk up
+  out of a chat folder into a repository that happens to enclose the data dir. The container is ensured
+  at boot. **Older clients:** sockets below `CHATS_PROTOCOL_VERSION` get a welcome, `project.list` and
+  `session.stateList` without the container, its chats and their records, and every id-carrying push
+  (`project.updated`, `workspace.*`, `session.*`, `terminal.tabs`, `workspace.fsChanged`,
+  `turn.changed`, `mcp.status`, `session.resourcesChanged`, `pi.event`) goes through one
+  `publishScoped` sender that iterates the sockets for a chat or container id and broadcasts otherwise;
+  `recentProjects` never carries the container. Run analytics classify `workspace_kind: "chat"`.
 - **Search composition (`search.ts`):** `search.query` / `search.preview` go to one lazily created
   `SearchService` ([[submodule-server-search]]) fed with `listProjects`, `listAllWorkspaceRecords`, the
   history index's `sessions()`, `specSnapshot` and `listStoredPlans`; the handler passes the socket's

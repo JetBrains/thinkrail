@@ -28,6 +28,26 @@ treatment.
 
 ## Boundary
 
+- **Owns:** `ChatsSection` + `chatActions.ts` — the **Chats without a project** home. The section tops the
+  Projects panel whenever the host speaks `CHATS_PROTOCOL_VERSION` (the container record itself appears
+  with the first chat, so an empty section reads "Chats without a project appear here" and `+` works
+  before any container exists): one row per `kind: "chat"` workspace, newest activity first, titled by the
+  host's `SessionStateRecord.title` (else "Chat"), with the shared attention dot / running icon, the
+  active highlight, and a menu of Open in / Copy path / Reveal / Mark read / **Delete chat…** — the
+  confirmation names the folder's file count from `chat.inspect` ("…with 3 files move to the Trash"),
+  a chat whose deletion did not finish shows "Deletion incomplete" and offers only Retry. `chatActions`
+  owns the three host calls: `startProjectlessChat({ text?, images?, model? })` (`chat.create` → put the
+  workspace under its container in the store, activate it, open the host-created session, prewarm the
+  watcher, send the first prompt), `deleteProjectlessChat`, `inspectProjectlessChat`;
+  `canStartProjectlessChat` is the protocol gate every start surface shares. Start surfaces: the Chats
+  `+`, the Welcome's "Chat without a project" card (next to Open project when no repository is open),
+  the Create dialog's **Chat without a project** target (`ws-target-chat` — the only target when no
+  repository is open; it hides the project and branch pickers, scopes skills/templates to the container
+  and honours the dialog's explicit model), the palette's `chat.newProjectless` command and start row, and
+  New chat inside a chat (`openChat` turns the host's `CHAT_WORKSPACE` refusal into a sibling chat — one
+  chat = one folder). `FilesPanel` asks no git status in a chat and hides its Changed mode. Repository
+  listings and fallbacks (`ProjectTree`, `WelcomePanel`, the dialog's project picker) read
+  `selectRepoProjects`, never `s.projects`, so the container is never offered as a project.
 - **Owns:** `ProjectTree`. Each top-level project row is a compact IDE-tree row at the shared `--panel-row-height` (`web-spacing`):
   **always-visible chevron** + folder/name + a collapsed-only plain workspace count + an **always-visible Create
   workspace `+` in a fixed right-edge column**. That `+` is the **same control as the Projects-header Add

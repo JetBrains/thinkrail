@@ -1097,7 +1097,12 @@ length limit, resolves the session strictly inside the supplied workspace/cwd, a
 normalized title is already current. A live session writes through `AgentSession.setSessionName`; a disk-only
 session opens its exact transcript with `SessionManager.open(...).appendSessionInfo(...)` without attaching an
 agent or resolving a model. Both paths publish the same `session_info_changed` Pi event, while
-`SessionSummary.title` remains the hydration projection.
+`SessionSummary.title` remains the hydration projection. The title is also **exposed, not copied, on the
+state record**: `SessionStateRecord.title` carries pi's current session name (live entries from
+`sessionName`, disk records from the transcript header), the publication fingerprint includes it so a
+title-only change republishes `session.state`, and the disk-only rename path publishes a fresh record
+itself — the Chats rows, the topbar and the palette read titles from there, with no per-workspace
+`session.list` backfill needed for a host of this protocol.
 
 The guarded write remains authoritative across the async race. `onlyIfUnnamed` performs the check immediately
 beside the append and is the compare-and-set the `set_title` handler uses (its `false` return is how the

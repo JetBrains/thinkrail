@@ -112,7 +112,7 @@ the host from env via `bootHost` for dev/e2e.
 
 `host` is the **only composition root** — it wires each feature's handlers into the WS registry.
 
-- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `history`, `search`, `templates`, `analytics`, `feedback`, `log`, `persistence` (`dataDir`, for the crash report)
+- `host` → `projects`, `workspaces`, `git`, `github`, `branch-review`, `pr`, `fs`, `spec`, `todos`, `reviews`, `changes`, `turns`, `watch`, `terminal`, `dialog`, `editors`, `agent`, `auth`, `assist`, `settings`, `environment`, `locales`, `themes`, `history`, `search`, `templates`, `analytics`, `feedback`, `trash` (a chat's folder), `log`, `persistence` (`dataDir`, for the crash report)
 - `search` → `history` (`HistoryIndex.sessions()`), `spec` (`specSnapshot`), `todos` (`listStoredPlans`), `git` (`gitAsyncStream` for `ls-files`); projects, workspace records and the file check (`fs.readableFileSize`) are injected by `host/search.ts`, never imported; it reads no file content (files and specs preview client-side over `fs.readFile`)
 - `workspaces` → `projects`, `git`, `persistence`
 - `branch-review` → `git`, `subprocess`

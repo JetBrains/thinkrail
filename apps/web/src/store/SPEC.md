@@ -780,7 +780,13 @@ branch's review — a commit sha means nothing in another worktree — and dropp
   identities from its supplied document + local attention, while host attachment remains exclusive per terminal),
   `selectActiveWorkspaceProjectId`, `selectHistoryTarget` + `HistoryTarget` (the shell's `Ctrl+R` routing
   target: the locally selected chat resource, or the workspace's newest chat otherwise),
-  `selectContextProject`, the layout placement selectors (recursive center plus left/right/bottom auxiliary
+  `selectContextProject`, **`selectContextRepoProject`** (the repository new work is created in — the
+  context project unless it is the Chats container, else the selected or first repository; the dialog,
+  `Mod+N` and the palette read this one), the **chats without a project** selectors — `isChatWorkspace`,
+  `isChatsContainer`, `selectRepoProjects` (every repository listing and fallback, incl.
+  `reconcileProjectNavigation`'s project loss), `selectChatsContainer`, `selectChatWorkspaces` (newest
+  activity first), `selectChatWorkspaceTitle` (the host's `SessionStateRecord.title`, also the first
+  answer of `selectKnownChatTitle`), `supportsProjectlessChats` — the layout placement selectors (recursive center plus left/right/bottom auxiliary
   groups), `selectAttentionCenterTab` (the selected resource in local last center focus),
   `selectCurrentRouteChatTarget` (exact-chat intent only while its workspace and stamped navigation remain
   current), `selectSkillsStale`, **`selectDiffScope` + `BRANCH_SCOPE`** (what a workspace's
