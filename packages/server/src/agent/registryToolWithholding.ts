@@ -104,7 +104,12 @@ export class RegistryToolWithholding {
 	private leafId: string | null = null;
 	private failure: CodedError | undefined;
 
-	constructor(private readonly onWriteFailure: (error: CodedError) => void = () => {}) {}
+	constructor(
+		private readonly onWriteFailure: (
+			error: CodedError,
+			durableLeafId: string | null,
+		) => void = () => {},
+	) {}
 
 	reset(): void {
 		if (this.failure) throw this.failure;
@@ -114,6 +119,7 @@ export class RegistryToolWithholding {
 	private append(session: AgentSession, type: string, data: unknown): void {
 		if (this.failure) throw this.failure;
 		const manager = session.sessionManager;
+		const durableLeafId = manager.getLeafId();
 		try {
 			manager.appendCustomEntry(type, data);
 		} catch (cause) {
@@ -146,7 +152,7 @@ export class RegistryToolWithholding {
 					throw failure;
 				};
 			}
-			this.onWriteFailure(failure);
+			this.onWriteFailure(failure, durableLeafId);
 			throw failure;
 		}
 	}

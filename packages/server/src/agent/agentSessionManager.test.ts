@@ -1075,13 +1075,19 @@ test.each([
 });
 
 test.each([
-	"refresh",
-	"settlement",
-	"acknowledgement",
-])("registry write failure at %s detaches the poisoned manager without extending undurable ancestry", async (boundary) => {
+	["refresh", "idle"],
+	["settlement", "settlement-first"],
+	["acknowledgement", "settlement-first"],
+	["acknowledgement", "shutdown-first"],
+	["acknowledgement-user", "settlement-first"],
+	["acknowledgement-user", "shutdown-first"],
+])("registry write failure at %s preserves durable history and terminal lifecycle (%s)", async (boundary, order) => {
+	const shutdownFirst = order === "shutdown-first";
 	const cwd = tmpCwd("trpi-registry-write-failure-");
 	const workspaceId = "ws-registry-write-failure";
 	let healthySessionId: string | undefined;
+	const states: SessionStateRecord[] = [];
+	setSessionStatePublisher((record) => states.push(record));
 	const manager = SessionManager.create(cwd);
 	setSessionManagerFactory(() => manager);
 	let disabled = new Set<string>();
@@ -1097,6 +1103,16 @@ test.each([
 	) {
 		live = this;
 		return bind.apply(this, args);
+	});
+	let writeFailed = false;
+	let actualSettlements = 0;
+	let reachSettlement = () => {};
+	const settlementReached = new Promise<void>((resolve) => {
+		reachSettlement = resolve;
+	});
+	let finishSettlement = () => {};
+	const settlementGate = new Promise<void>((resolve) => {
+		finishSettlement = resolve;
 	});
 	let finishShutdown = () => {};
 	const shutdownGate = new Promise<void>((resolve) => {
@@ -1119,9 +1135,15 @@ test.each([
 				expect(context.getSystemPrompt()).toBeString();
 				expect(() => manager.appendCustomEntry("late-shutdown-write", {})).toThrow();
 			}
-			return emit(event);
+			if (event.type === "agent_settled" && writeFailed && shutdownFirst) {
+				reachSettlement();
+				await settlementGate;
+			}
+			const result = await emit(event);
+			if (event.type === "agent_settled") actualSettlements++;
+			return result;
 		});
-		if (boundary === "acknowledgement") {
+		if (boundary.startsWith("acknowledgement")) {
 			disabled = new Set(["visualize"]);
 			refreshExtensionTools();
 			fauxA.setResponses([fauxAssistantMessage("Disabled")]);
@@ -1129,14 +1151,29 @@ test.each([
 			disabled = new Set();
 			refreshExtensionTools();
 		}
+		if (boundary === "acknowledgement-user") {
+			live.setActiveToolsByName(live.getActiveToolNames().filter((name) => name !== "visualize"));
+			await initializeSessionStates([]);
+			const completion = getSessionState(sessionId).completion;
+			if (!completion) throw new Error("expected a completed preceding run");
+			expect(acknowledgeCompletion(sessionId, completion.completionId).acknowledged).toBe(true);
+		}
+		const beforeState = getSessionState(sessionId);
+		states.length = 0;
+		events.set(sessionId, []);
+		actualSettlements = 0;
 		const before = manager.getBranch().map((entry) => entry.id);
 		const originalAppend = manager.appendCustomEntry.bind(manager);
 		append = jest.spyOn(manager, "appendCustomEntry").mockImplementation((type, data) => {
-			const failingType =
-				boundary === "acknowledgement"
-					? "thinkrail.registry-tool-withholding-ack.v1"
-					: "thinkrail.registry-tool-withholding.v1";
+			const failingType = boundary.startsWith("acknowledgement")
+				? "thinkrail.registry-tool-withholding-ack.v1"
+				: "thinkrail.registry-tool-withholding.v1";
 			if (type !== failingType) return originalAppend(type, data);
+			if (boundary.startsWith("acknowledgement")) {
+				expect(data).toMatchObject({
+					role: boundary === "acknowledgement-user" ? "user" : "system",
+				});
+			}
 			renameSync(file, `${file}.backup`);
 			mkdirSync(file);
 			try {
@@ -1144,6 +1181,7 @@ test.each([
 			} finally {
 				rmSync(file, { recursive: true });
 				renameSync(`${file}.backup`, file);
+				writeFailed = true;
 			}
 		});
 		if (boundary === "refresh") {
@@ -1156,14 +1194,19 @@ test.each([
 				})
 			).sessionId;
 		}
-		let failure: unknown;
-		try {
+		let requests = 0;
+		const trigger = async () => {
 			if (boundary === "refresh") {
 				disabled = new Set(["visualize"]);
 				refreshExtensionTools();
-			} else if (boundary === "acknowledgement") {
-				fauxA.setResponses([fauxAssistantMessage("Must not reach the provider")]);
-				await promptSession(sessionId, "Persist the restored declaration");
+			} else if (boundary.startsWith("acknowledgement")) {
+				fauxA.setResponses([
+					() => {
+						requests++;
+						return fauxAssistantMessage("Must not reach the provider");
+					},
+				]);
+				await promptSession(created.sessionId, "Persist the restored declaration");
 			} else {
 				fauxA.setResponses([
 					(context) => {
@@ -1173,11 +1216,28 @@ test.each([
 						return fauxAssistantMessage("Failure at settlement");
 					},
 				]);
-				await promptSession(sessionId, "Settle with disabled tools");
+				await promptSession(created.sessionId, "Settle with disabled tools");
 			}
-		} catch (error) {
-			failure = error;
+		};
+		const triggered = trigger().then(
+			() => undefined,
+			(error: unknown) => error,
+		);
+		if (shutdownFirst && boundary.startsWith("acknowledgement")) {
+			await settlementReached;
+			expect(hasSession(sessionId)).toBe(false);
+			finishShutdown();
+			await new Promise((resolve) => setImmediate(resolve));
+			expect(context.getSystemPrompt()).toBeString();
+			expect(await ensureSessionAttached(sessionId, workspaceId, cwd)).toBe(false);
+			expect(seen(sessionId)).not.toContain('"agent_settled"');
+			expect(
+				states.filter((record) => record.sessionId === sessionId).at(-1)?.state.execution,
+			).toBe("running");
+			await expect(promptSession(sessionId, "No admission before settlement")).rejects.toThrow();
+			finishSettlement();
 		}
+		const failure = await triggered;
 		expect(failure).toMatchObject({ code: "RESOURCE_UNAVAILABLE" });
 		if (healthySessionId) {
 			fauxA.setResponses([(context) => fauxAssistantMessage(visualizeToolState(context))]);
@@ -1185,10 +1245,46 @@ test.each([
 			expect(seen(healthySessionId)).toContain("VISUALIZE_OFF");
 		}
 		expect(hasSession(sessionId)).toBe(false);
-		expect(await ensureSessionAttached(sessionId, workspaceId, cwd)).toBe(false);
+		if (!shutdownFirst || !boundary.startsWith("acknowledgement")) {
+			expect(await ensureSessionAttached(sessionId, workspaceId, cwd)).toBe(false);
+		}
+		const finalState = states.filter((record) => record.sessionId === sessionId).at(-1)?.state;
+		if (!finalState) throw new Error("expected a published final state");
+		expect(finalState).toMatchObject({ execution: "idle", queuedCount: 0, backgroundWork: false });
+		const settlements = (events.get(sessionId) ?? []).filter(
+			(event) => (event as { type: string }).type === "agent_settled",
+		);
+		expect(settlements).toHaveLength(boundary === "refresh" ? 0 : 1);
+		expect(actualSettlements).toBe(settlements.length);
+		if (boundary === "settlement") {
+			expect(settlements[0]).toEqual({ type: "agent_settled", terminal: { stopReason: "stop" } });
+			expect(finalState.runId).not.toBe(beforeState.runId);
+			expect(finalState.completion?.outcome).toBe("succeeded");
+		} else {
+			expect(finalState).toEqual(beforeState);
+			if (boundary.startsWith("acknowledgement")) {
+				expect(requests).toBe(0);
+				expect(settlements[0]).toEqual({ type: "agent_settled", terminal: null });
+				expect(manager.getBranch().at(-1)?.type).toBe("custom");
+				expect(
+					SessionManager.open(file)
+						.getBranch()
+						.map((entry) => entry.id),
+				).toEqual(before);
+			}
+		}
+		const lifecycle = JSON.parse(
+			readFileSync(join(process.env.THINKRAIL_DATA_DIR ?? "", "session-lifecycle.json"), "utf8"),
+		);
+		expect(lifecycle.completionBySession[sessionId]).toEqual({
+			runId: finalState.runId,
+			completion: finalState.completion,
+		});
 		const afterFailure = readFileSync(file, "utf8");
 		await expect(promptSession(sessionId, "Must not write")).rejects.toThrow();
-		expect(context.getSystemPrompt()).toBeString();
+		if (!shutdownFirst || !boundary.startsWith("acknowledgement")) {
+			expect(context.getSystemPrompt()).toBeString();
+		}
 		const mutations = Object.getOwnPropertyNames(SessionManager.prototype).filter(
 			(name) =>
 				name !== "constructor" &&
@@ -1213,6 +1309,7 @@ test.each([
 		).toHaveLength(before.length);
 		disabled = new Set();
 		await getSessionMessages(sessionId, workspaceId, cwd);
+		expect(getSessionState(sessionId)).toEqual(finalState);
 		fauxA.setResponses([fauxAssistantMessage("Fresh manager")]);
 		await promptSession(sessionId, "Continue from disk");
 		expect(
@@ -1222,6 +1319,8 @@ test.each([
 		).toHaveLength(before.length);
 	} finally {
 		finishShutdown();
+		finishSettlement();
+		setSessionStatePublisher(() => {});
 		append?.mockRestore();
 		shutdown?.mockRestore();
 		binding.mockRestore();

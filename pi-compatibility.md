@@ -134,9 +134,13 @@ check live removal before filtering disabled tools. Reconcile latest policy at `
 `appendCustomEntry` mutates ancestry before its disk write: failure synchronously blocks every public
 mutation on that manager, reports `RESOURCE_UNAVAILABLE`, and detaches/aborts via the host teardown
 cascade. Throwing from the observer alone or waiting for asynchronous disposal cannot guard later Pi
-writes. Context invalidation still waits for shutdown; recovery reopens a fresh manager. Re-check public
-mutators and callback ordering on upgrades. Missing tools retain provenance; unrelated inactive/deferred tools
-and ambiguous older selections without provenance remain untouched. Explicit chat resource reload is
+writes. Keep terminal-only forwarding after detachment through the actual SDK `agent_settled`, even
+when its reconciliation throws; exception-path disposal joins that delivery with bounded shutdown
+before invalidating contexts or clearing subscribers. Final state/host receipts read the pre-append
+branch, preserving the prior completion when the next user message never persisted. Idle failure
+publishes non-running state without synthetic settlement; recovery reopens a fresh manager. Re-check
+public mutators and callback ordering on upgrades. Missing tools retain provenance; unrelated
+inactive/deferred tools and ambiguous older selections without provenance remain untouched. Explicit chat resource reload is
 the manual escape to Pi's registration defaults, never an automatic legacy reset. **Removal gate:** a
 public Pi policy-overlay API that distinguishes host withholding from selected loadouts and preserves
 that distinction through restart, reload, branch navigation and compaction. Default-active metadata

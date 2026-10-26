@@ -170,6 +170,7 @@ interface Entry {
 	reviewToolRefreshPending: boolean;
 	extensionToolsRefreshPending: boolean;
 	registryToolWithholding: RegistryToolWithholding;
+	writeFailure?: { durableLeafId: string | null; settled: Promise<void>; resolve: () => void };
 	nudgePromptPending: boolean;
 	lastPublishedState: string | null;
 	firstPrompt: string | null;
@@ -379,14 +380,15 @@ function backgroundWorkActive(entry: Entry): boolean {
 
 function stateFromEntry(entry: Entry): SessionState {
 	const sessionId = entry.session.sessionId;
+	const lastSettlement = entry.writeFailure ? undefined : entry.lastSettlement;
+	const leafId = entry.writeFailure?.durableLeafId;
 	return deriveSessionState({
-		entries: entry.session.sessionManager.getBranch(),
+		entries: leafId === null ? [] : entry.session.sessionManager.getBranch(leafId),
 		isStreaming: entry.session.isStreaming,
-		pendingMessageCount: effectivePendingCount(entry),
-		backgroundWorkActive: backgroundWorkActive(entry),
-		lastSettlement: entry.lastSettlement,
-		lifecycleCompletion:
-			entry.lastSettlement === undefined ? persistedCompletion(sessionId) : undefined,
+		pendingMessageCount: entry.writeFailure ? 0 : effectivePendingCount(entry),
+		backgroundWorkActive: !entry.writeFailure && backgroundWorkActive(entry),
+		lastSettlement,
+		lifecycleCompletion: lastSettlement === undefined ? persistedCompletion(sessionId) : undefined,
 		liveQuestion: entry.askUserQuestionWaiters.currentQuestion(),
 		pendingDialog: pendingExtUiDialog(sessionId),
 		handledCompletionId: receipts()?.handledCompletionBySession[sessionId],
@@ -428,7 +430,11 @@ function entryFirstPrompt(entry: Entry): { firstPrompt?: string } {
 }
 
 function publishEntryState(entry: Entry): void {
-	if (sessions.get(entry.session.sessionId) !== entry) return;
+	if (entry.disposed || sessions.get(entry.session.sessionId) !== entry) return;
+	publishStateFromEntry(entry);
+}
+
+function publishStateFromEntry(entry: Entry): void {
 	const projectId = resolveProjectId(entry.workspaceId);
 	if (!projectId) return;
 	const state = stateFromEntry(entry);
@@ -550,20 +556,9 @@ export function nudgeSession(
 	};
 }
 
-function recordSettlement(entry: Entry, terminal: AgentSettlement | null): void {
+function recordSettlement(entry: Entry): void {
 	const sessionId = entry.session.sessionId;
-	const observed = deriveSessionState({
-		entries: entry.session.sessionManager.getBranch(),
-		isStreaming: false,
-		pendingMessageCount: effectivePendingCount(entry),
-		backgroundWorkActive: false,
-		lastSettlement: terminal,
-		lifecycleCompletion: undefined,
-		liveQuestion: entry.askUserQuestionWaiters.currentQuestion(),
-		pendingDialog: pendingExtUiDialog(sessionId),
-		handledCompletionId: receipts()?.handledCompletionBySession[sessionId],
-		cancelledRunId: lifecycle().cancelledRunBySession[sessionId],
-	});
+	const observed = stateFromEntry(entry);
 	if (!observed.runId || !observed.completion) return;
 	const current = lifecycle();
 	const next: SessionLifecycle = {
@@ -1050,6 +1045,7 @@ async function prepareSessionEntry(
 ): Promise<PreparedSessionEntry> {
 	const { sessionId } = session;
 	let terminal: AgentSettlement | null = null;
+	let awaitingSettlement = false;
 	const entry: Entry = {
 		commands,
 		subagents,
@@ -1074,10 +1070,15 @@ async function prepareSessionEntry(
 		subagentToolsRefreshPending: false,
 		reviewToolRefreshPending: false,
 		extensionToolsRefreshPending: false,
-		registryToolWithholding: new RegistryToolWithholding((error) => {
+		registryToolWithholding: new RegistryToolWithholding((error, durableLeafId) => {
+			const { promise: settled, resolve } = Promise.withResolvers<void>();
+			entry.writeFailure = { durableLeafId, settled, resolve };
+			entry.lastPublishedState = null;
+			if (!awaitingSettlement) resolve();
 			if (sessions.get(sessionId) === entry) void disposeSession(sessionId);
 			else abandonPreparedEntry(entry);
 			session.agent.abort();
+			if (!awaitingSettlement) publishStateFromEntry(entry);
 			log.warn(`registry tool selection was not persisted for ${sessionId}`, error);
 			notifyExtUi(sessionId, error.message, "error");
 		}),
@@ -1094,8 +1095,12 @@ async function prepareSessionEntry(
 		scheduleEntryStatePublish(entry);
 	});
 	entry.unsubscribe = session.subscribe((event) => {
-		if (entry.disposed) return;
-		entry.registryToolWithholding.observeMessage(session, event);
+		if (
+			entry.disposed &&
+			(!entry.writeFailure || (event.type !== "agent_end" && event.type !== "agent_settled"))
+		)
+			return;
+		if (!entry.writeFailure) entry.registryToolWithholding.observeMessage(session, event);
 		if (
 			event.type === "message_end" &&
 			event.message.role === "assistant" &&
@@ -1132,6 +1137,7 @@ async function prepareSessionEntry(
 			reconsiderPendingReload(entry);
 		}
 		if (event.type === "agent_start") {
+			awaitingSettlement = true;
 			entry.lastSettlement = null;
 			releasePreflights(entry);
 		}
@@ -1158,25 +1164,38 @@ async function prepareSessionEntry(
 						...(hasQueuedImages(entry) ? { hasImages: true as const } : {}),
 					}
 				: baseEvent;
-		if (event.type === "agent_settled") {
-			entry.lastSettlement = terminal;
-			try {
-				recordSettlement(entry, terminal);
-			} catch (error) {
-				log.warn(`session state settlement was not persisted for ${sessionId}`, error as Error);
+		try {
+			if (event.type === "agent_settled") {
+				entry.lastSettlement = terminal;
+				try {
+					recordSettlement(entry);
+				} catch (error) {
+					log.warn(`session state settlement was not persisted for ${sessionId}`, error as Error);
+				}
+				if (!entry.writeFailure) {
+					if (entry.subagentToolsRefreshPending) applySubagentTools(entry);
+					if (entry.reviewToolRefreshPending) applyReviewTool(entry);
+					applyExtensionTools(entry, { allowReload: entry.extensionToolsRefreshPending });
+					reconsiderPendingReload(entry);
+					scheduleMcpStatusRefresh(sessionId);
+					void reconcileMcpSessions([sessionId]);
+				}
 			}
-			if (entry.subagentToolsRefreshPending) applySubagentTools(entry);
-			if (entry.reviewToolRefreshPending) applyReviewTool(entry);
-			applyExtensionTools(entry, { allowReload: entry.extensionToolsRefreshPending });
-			reconsiderPendingReload(entry);
-			scheduleMcpStatusRefresh(sessionId);
-			void reconcileMcpSessions([sessionId]);
+		} finally {
+			if (
+				sessions.get(sessionId) === entry ||
+				(entry.writeFailure && (event.type === "agent_end" || event.type === "agent_settled"))
+			) {
+				publish({ sessionId, event: projected });
+				if (entry.writeFailure && event.type === "agent_settled") publishStateFromEntry(entry);
+				else publishEntryState(entry);
+			}
+			if (event.type === "agent_settled") {
+				awaitingSettlement = false;
+				terminal = null;
+				entry.writeFailure?.resolve();
+			}
 		}
-		if (sessions.get(sessionId) === entry) {
-			publish({ sessionId, event: projected });
-			publishEntryState(entry);
-		}
-		if (event.type === "agent_settled") terminal = null;
 	});
 
 	const reportExtensionError = (failure: ExtensionError): void => {
@@ -1233,7 +1252,7 @@ function abandonPreparedEntry(entry: Entry): void {
 	cancelExtUiForSession(sessionId);
 	forgetMcpStatus(sessionId);
 	entry.askUserQuestionWaiters.abandon();
-	entry.unsubscribe();
+	if (!entry.writeFailure) entry.unsubscribe();
 	entry.unsubscribeCommands();
 	entry.disposed = true;
 	void closeSessionResources(entry);
@@ -2675,7 +2694,10 @@ function closeSessionResources(entry: Entry, timeoutMs?: number): Promise<void> 
 function disposePiSessionAfterShutdown(entry: Entry): void {
 	const shutdown = entry.shutdown;
 	if (!shutdown) return;
-	void shutdown.settled.then(() => {
+	const settled = entry.writeFailure
+		? Promise.all([shutdown.settled, entry.writeFailure.settled])
+		: shutdown.settled;
+	void settled.then(() => {
 		if (entry.session.extensionRunner === shutdown.runner) entry.session.dispose();
 	});
 }
@@ -2697,11 +2719,17 @@ function disposeSession(sessionId: string): Promise<void> {
 	const entry = sessions.get(sessionId);
 	if (!entry) return Promise.resolve();
 	entry.disposed = true;
-	const cascade = trackSessionTeardown(sessionId, closeSessionResources(entry));
+	const resources = closeSessionResources(entry);
+	const cascade = trackSessionTeardown(
+		sessionId,
+		entry.writeFailure
+			? Promise.all([resources, entry.writeFailure.settled]).then(() => {})
+			: resources,
+	);
 	cancelExtUiForSession(sessionId);
 	forgetMcpStatus(sessionId);
 	entry.askUserQuestionWaiters.abandon();
-	entry.unsubscribe();
+	if (!entry.writeFailure) entry.unsubscribe();
 	entry.unsubscribeCommands();
 	clearEntryQueue(entry);
 	sessions.delete(sessionId);

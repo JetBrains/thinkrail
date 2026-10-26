@@ -621,9 +621,15 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     chats on an obsolete extension policy. No retry, prompt, callback,
     completion or shutdown handler may write through that poisoned manager, including the Pi callback
     currently emitting `message_end`. Abort the run without prematurely invalidating extension contexts;
-    Pi disposal still follows bounded shutdown. Reopening uses a fresh manager from disk, never the
-    poisoned history. This guard does not repair a partially written filesystem record; it prevents
-    subsequent writes from extending an undurable parent. Older selections without provenance are
+    Pi disposal still follows bounded shutdown, and on this exception path also waits for the
+    actual SDK settlement. Detachment retains only terminal-event forwarding (including a settlement
+    whose reconciliation throws); it never invents early settlement or re-enters policy writes. The
+    final authoritative state and host completion receipt use the branch ending at the pre-append
+    leaf, not poisoned ancestry or a message whose callback prevented persistence. A failure before
+    the next user message is durable preserves the preceding run's completion. An idle refresh failure
+    publishes non-running state without an invented `agent_settled`. Reopening uses a fresh manager
+    from disk, never the poisoned history. This guard does not repair a partially written filesystem
+    record; it prevents subsequent writes from extending an undurable parent. Older selections without provenance are
     ambiguous and are preserved, **never automatically reset**. A user can explicitly reload the chat's
     resources to adopt Pi's registration defaults; disabled-at-create and no-system-message legacy
     sessions likewise use Pi's defaults.
