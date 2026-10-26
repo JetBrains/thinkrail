@@ -180,8 +180,10 @@ tooltip. The tab strip receives the prompts as the Workbench's `chatFirstPrompts
 callback — the layout document itself is never relabelled, because every Workbench mutation commits a
 derivative of the document it was given and a relabelled copy would persist the fallback as the tab's
 name; `openPlan` likewise stores the real chat name and the plan tab is worded at render. Recently closed
-reads `ClosedChat.firstPrompt`; the session switcher carries `firstPrompt` beside `chatTitle` so the host
-title backfill still applies to a chat shown by its prompt. Nothing writes the label: the agent's
+rows and the session switcher read the same `selectChatFirstPrompt` (the host's state record first, so a
+row a peer's `session.created` added without a prompt picks it up from the next state push); the switcher
+carries `firstPrompt` beside `chatTitle` so the host title backfill still applies to a chat shown by its
+prompt. Nothing writes the label: the agent's
 `set_title` or a manual rename replaces it everywhere through the same `session_info_changed` fold.
 
 The shell injects the chat-only mutation callback into the otherwise domain-neutral Workbench tab menu rather

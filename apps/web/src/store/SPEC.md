@@ -352,7 +352,8 @@ re-read while a server starts. The state vocabulary and the attention/active pre
   there too—idempotently, skipping live/open sessions while refreshing an existing history row from a newer
   summary—so a chat that survived a host restart or was created in another frontend is reopenable without
   gaining local placement. A `ClosedChat` keeps the summary's `firstPrompt` beside its `title`, and the
-  close transition copies the open chat's (`selectChatFirstPrompt`) so history can label an unnamed chat. **`deleteChat(workspaceId, sessionId)`** is the idempotent
+  close transition copies the open chat's (`selectChatFirstPrompt`); history rows still read through
+  `selectChatFirstPrompt`, whose host record outranks that copy. **`deleteChat(workspaceId, sessionId)`** is the idempotent
   fold for both a confirmed local `session.delete` and the `session.deleted` broadcast: it atomically drops
   every tab the chat owns — its transcript, live plan page, and any dependent legacy document cache — plus
   its history row/runtime + skill baseline, records a page-lifetime tombstone, removes queued opens for the

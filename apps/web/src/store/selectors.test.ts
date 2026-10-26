@@ -856,9 +856,18 @@ describe("the first prompt of an unnamed chat", () => {
 					],
 				},
 			},
-			sessionStateByWorkspace: { w1: { s1: record("s1", "From the record"), s2: record("s2") } },
+			sessionStateByWorkspace: {
+				w1: {
+					s1: record("s1", "From the record"),
+					s2: record("s2"),
+					s6: record("s6", "Pushed after a peer created it"),
+				},
+			},
 			closedChatsByWorkspace: {
-				w1: [{ sessionId: "s3", title: "", firstPrompt: "From the closed summary", closedAt: 1 }],
+				w1: [
+					{ sessionId: "s3", title: "", firstPrompt: "From the closed summary", closedAt: 1 },
+					{ sessionId: "s6", title: "", closedAt: 2 },
+				],
 			},
 		};
 		expect(selectChatFirstPrompt(state, "w1", "s1")).toBe("From the record");
@@ -866,6 +875,7 @@ describe("the first prompt of an unnamed chat", () => {
 		expect(selectChatFirstPrompt(state, "w1", "s3")).toBe("From the closed summary");
 		expect(selectChatFirstPrompt(state, "w1", "s4")).toBeUndefined();
 		expect(selectChatFirstPrompt(state, "w1", "s5")).toBe("A later real prompt");
+		expect(selectChatFirstPrompt(state, "w1", "s6")).toBe("Pushed after a peer created it");
 		expect(selectChatFirstPrompt(state, "w1", "unknown")).toBeUndefined();
 	});
 

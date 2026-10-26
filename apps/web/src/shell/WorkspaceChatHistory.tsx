@@ -14,7 +14,7 @@ import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { useNow } from "../components/useNow";
 import { chatLabel, relativeTime } from "../lib";
 import { openChatInTab } from "../panels/openChat";
-import { type ClosedChat, toast, useAppStore } from "../store";
+import { type ClosedChat, selectChatFirstPrompt, toast, useAppStore } from "../store";
 import { errorText, getTransport } from "../transport";
 
 export function WorkspaceChatHistory({
@@ -94,7 +94,10 @@ function ClosedChatRow({
 }) {
 	const t = useT();
 	const now = useNow();
-	const label = chatLabel(t, chat.title, chat.firstPrompt);
+	const firstPrompt = useAppStore((state) =>
+		selectChatFirstPrompt(state, workspaceId, chat.sessionId),
+	);
+	const label = chatLabel(t, chat.title, firstPrompt);
 	const inputRef = useRef<HTMLInputElement>(null);
 	const reopenButtonRef = useRef<HTMLButtonElement>(null);
 	const editStartTitleRef = useRef(chat.title);
