@@ -1,6 +1,5 @@
 import type { ExtensionUIContext, ExtensionUIDialogOptions } from "@earendil-works/pi-coding-agent";
 import {
-	ASK_STOPPED_ERROR,
 	type AskOutcome,
 	type AskRequest,
 	type AskUserQuestionAnswer,
@@ -22,14 +21,11 @@ type DialogUi = Pick<ExtensionUIContext, "select" | "input">;
 type Step =
 	| { kind: "answer"; answer: AskUserQuestionAnswer | null }
 	| { kind: "declined" }
-	| { kind: "chat" };
+	| { kind: "chat" }
+	| { kind: "stopped" };
 
 function dialogOptions(signal: AbortSignal | undefined): ExtensionUIDialogOptions | undefined {
 	return signal ? { signal } : undefined;
-}
-
-function stopped(): Error {
-	return new Error(ASK_STOPPED_ERROR);
 }
 
 function truncate(text: string, max: number): string {
@@ -54,8 +50,7 @@ function dialogTitle(question: AskUserQuestionItem, index: number, total: number
 }
 
 function dismissed(signal: AbortSignal | undefined): Step {
-	if (signal?.aborted) throw stopped();
-	return { kind: "declined" };
+	return signal?.aborted ? { kind: "stopped" } : { kind: "declined" };
 }
 
 async function askSingleSelect(
@@ -74,7 +69,7 @@ async function askSingleSelect(
 		if (choice === CHAT_LABEL) return { kind: "chat" };
 		if (choice === OTHER_CHOICE) {
 			const text = await ui.input(question.question, OTHER_PLACEHOLDER, dialogOptions(signal));
-			if (text === undefined && signal?.aborted) throw stopped();
+			if (text === undefined && signal?.aborted) return { kind: "stopped" };
 			const own = text?.trim();
 			if (!own) continue;
 			return {
@@ -145,13 +140,14 @@ export async function askWithDialogs({ args, signal, ctx }: AskRequest): Promise
 	const total = args.questions.length;
 	const answers: AskUserQuestionAnswer[] = [];
 	for (const [index, question] of args.questions.entries()) {
-		if (signal?.aborted) throw stopped();
+		if (signal?.aborted) return { kind: "abandoned" };
 		const step = question.multiSelect
 			? await askMultiSelect(ctx.ui, question, index, total, signal)
 			: await askSingleSelect(ctx.ui, question, index, total, signal);
 		if (step.kind === "declined")
 			return { kind: "answered", result: { answers: [], cancelled: true } };
 		if (step.kind === "chat") return { kind: "deferred", reason: "chat" };
+		if (step.kind === "stopped") return { kind: "abandoned" };
 		if (step.answer) answers.push(step.answer);
 	}
 	return { kind: "answered", result: { answers, cancelled: false } };

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { ASK_STOPPED_ERROR, type AskUserQuestionArgs, CHAT_LABEL } from "./core.ts";
+import { type AskUserQuestionArgs, CHAT_LABEL } from "./core.ts";
 import { askWithDialogs, optionLine, parseMultiAnswer } from "./dialogs.ts";
 
 type Reply = string | undefined | ((signal: AbortSignal | undefined) => string | undefined);
@@ -147,7 +147,7 @@ describe("askWithDialogs", () => {
 		expect(prompts[1]?.title).toStartWith("Targets (2/2): Which targets?");
 	});
 
-	test("a stop that dismisses the open dialog reports the stopped error", async () => {
+	test("a stop that dismisses the open dialog abandons the question", async () => {
 		const controller = new AbortController();
 		const { outcome, prompts } = ask(
 			[library],
@@ -160,7 +160,7 @@ describe("askWithDialogs", () => {
 			],
 			controller.signal,
 		);
-		await expect(outcome).rejects.toThrow(ASK_STOPPED_ERROR);
+		expect(await outcome).toEqual({ kind: "abandoned" });
 		expect(prompts[0]?.signal).toBe(controller.signal);
 	});
 
@@ -189,7 +189,7 @@ describe("askWithDialogs", () => {
 			],
 			pending.signal,
 		);
-		await expect(earlier.outcome).rejects.toThrow(ASK_STOPPED_ERROR);
+		expect(await earlier.outcome).toEqual({ kind: "abandoned" });
 		expect(earlier.prompts).toHaveLength(1);
 	});
 });

@@ -51,7 +51,9 @@ answer mailbox.
 ## Decisions
 
 - **The asker owns the Stop/Submit race.** `execute()` never inspects the signal. The built-in askers keep
-  an answer given before Stop and throw `ASK_STOPPED_ERROR` otherwise. An embedder applies its own
+  an answer given before Stop and resolve `abandoned` otherwise: the stopped text with `terminate`, so pi
+  makes no further model request into the aborted run (a thrown error would leave pi to issue one that
+  fails as aborted). An embedder applies its own
   ordering; ThinkRail's mailbox lets an accepted Submit beat a later Stop.
 - **Deferred ends the run.** With `terminate: true`, pi skips the model request the tool batch would
   trigger but still drains queued steering. A host that queued the user's own message, such as
