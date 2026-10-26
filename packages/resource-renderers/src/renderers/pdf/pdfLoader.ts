@@ -26,7 +26,7 @@ export async function loadPdfDocument(
 	if (signal.aborted) return null;
 	const pdfjs = await loadPdfModule();
 	if (signal.aborted) return null;
-	return pdfjs.getDocument({ data, isEvalSupported: false }).promise;
+	return pdfjs.getDocument({ data }).promise;
 }
 
 interface PendingPdfRender {

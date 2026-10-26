@@ -39,7 +39,7 @@ export function usePdfDocument(content: ResourceContent): PdfDocumentState {
 		void loadPdfDocument(contentRef.current, controller.signal).then(
 			(document) => {
 				if (controller.signal.aborted) {
-					void document?.destroy();
+					void document?.loadingTask.destroy();
 					return;
 				}
 				loaded = document;
@@ -53,7 +53,7 @@ export function usePdfDocument(content: ResourceContent): PdfDocumentState {
 		);
 		return () => {
 			controller.abort();
-			void loaded?.destroy();
+			void loaded?.loadingTask.destroy();
 		};
 	}, [identity]);
 

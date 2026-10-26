@@ -18,7 +18,7 @@
 		"@thinkrail/pi-visualize": "workspace:*",
 		"@thinkrail/resource-renderers": "workspace:*",
 		"@thinkrail/ui": "workspace:*",
-		"linkedom": "0.16.11",
+		"linkedom": "0.18.14",
 		"mermaid": "catalog:",
 		"react": "catalog:"
 	},

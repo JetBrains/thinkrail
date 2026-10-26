@@ -23,7 +23,7 @@
 	"devDependencies": {
 		"@astrojs/check": "catalog:",
 		"@astrojs/markdown-satteri": "0.3.7",
-		"@astrojs/react": "6.0.4",
+		"@astrojs/react": "7.1.1",
 		"@astrojs/rss": "4.0.19",
 		"@astrojs/sitemap": "3.7.3",
 		"@fontsource-variable/geist": "catalog:",
