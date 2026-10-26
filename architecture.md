@@ -415,9 +415,11 @@ dependency. This keeps test process drivers outside both launchers and the serve
     theme. Agent, tool, skill, prompt output and server error text are never translated. Stored and wire
     data never carry translated text: defaults ThinkRail writes (untitled chats, default terminals, the
     host-named default workspace, chat round notices) are worded at render, so a switch re-words all of
-    them, while names set by the user or the agent show verbatim. This is the
-    one runtime-loaded user resource; code extensions and themes stay compiled in (Decision 21 and the
-    themes non-goal) because a string map renders as escaped text and carries no executable surface.
+    them, while names set by the user or the agent show verbatim. Theme manifests are the one other
+    runtime-loaded user resource, on the same model (`~/.thinkrail/themes/*.theme.json`, read by
+    [[submodule-server-themes]], validated by [[submodule-web-themes]]): a manifest is colour data only
+    and is written as CSS custom-property values, never CSS or code. Code extensions stay compiled in
+    (Decision 21) because a string map or a palette carries no executable surface and an extension does.
     Rejected: English-text keys (a wording fix orphans every translation); a host-served bundled catalog
     (bundled strings belong to the web build that renders them); an in-house runtime (i18next chosen for
     its standard format and tooling); catalogs in `contracts` (data and translation logic are not wire

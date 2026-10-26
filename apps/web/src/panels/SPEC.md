@@ -737,7 +737,12 @@ a project picker, the prompt hero, and the reused
   disclosed by a warning notice under the mode control — outside the disclosure, so it is always visible —
   naming the effective same-appearance fallback, and is never silently written back. The panel never owns
   a theme list, media-query logic, pair derivation, or fallback — all come from `themes`; it derives only
-  the family/contrast counterpart the two controls move to. An **Editor** group hosts the file
+  the family/contrast counterpart the two controls move to. A **Custom themes** group
+  (`CustomThemesSettings.tsx`, props-driven like `LanguagePage`, hidden below
+  `USER_THEMES_PROTOCOL_VERSION`) gives the copy-a-bundled-file steps with a version-pinned link to
+  `dark.theme.json`, the `<dataDir>/themes` folder with **Copy path** / **Open folder** (`themes.reveal`),
+  and one warning notice per unusable file (`themes`' issue list). The page reads the catalog and issues
+  through `onThemesChange`, so a dropped file appears in the lists without reopening. An **Editor** group hosts the file
   `LineWidthControl`); **`LineWidthControl({kind})`** (`LineWidthSettings.tsx`, no page of its own — the
   `chat` control sits in Chat, the `file` one in Appearance → Editor — a 40–240 integer **Line width** field
   on the auto-save input pattern plus an independent host-synchronized **Fit to pane** switch

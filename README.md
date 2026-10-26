@@ -77,6 +77,8 @@ create the tools it needs based on how you actually work.
   Simplified Chinese and Spanish are built in. Add a language ThinkRail doesn't ship yet by dropping a
   translated `en.json` into `~/.thinkrail/locales` — it applies as you save. Agent replies and tool
   output stay as the agent wrote them.
+- **Your themes.** Settings → Appearance ships dark, light, minimal and high-contrast themes. Make your own
+  by copying a bundled `*.theme.json`, changing its id and colors, and saving it to `~/.thinkrail/themes`.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/readme-assets/specs-dark.png">

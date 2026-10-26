@@ -23,7 +23,7 @@ file container, not the theme: the manifest schema, id rules, and catalog belong
   folder poller.
 - **Public surface (barrel):** `themesDir()`, `readUserThemes(dir?)` (read on every request — a handful
   of small files, so no cache), `watchUserThemes({ dir?, onChange, intervalMs? })` → stop function,
-  and the caps `MAX_THEME_FILE_BYTES` / `MAX_THEME_FILES`.
+  and the caps `MAX_THEME_FILE_BYTES` / `MAX_THEME_FILES` / `MAX_THEME_NESTING`.
 - **Wire** (gated by `USER_THEMES_PROTOCOL_VERSION`): `themes.list` → `{ dir, files }`, each file
   `{ fileName, ok: true, manifest } | { fileName, ok: false, error, detail? }` with `error` one of
   `too-large`, `too-many`, `unreadable`, `invalid-json` and `manifest` the parsed, unvalidated JSON;
@@ -35,7 +35,9 @@ file container, not the theme: the manifest schema, id rules, and catalog belong
 
 ## Get right
 
-- A broken file never blocks the others.
+- A broken file never blocks the others — including a pathologically nested one: JSON nested deeper
+  than `MAX_THEME_NESTING` (32; a manifest needs 2) reports `invalid-json` before parsing, because such a
+  value can parse yet overflow the stack when the host serializes the whole `themes.list` response.
 - Change detection is the same once-a-second folder-signature poll as [[submodule-server-locales]]
   (see its spec for why it does not use `fs.watch`), and the folder is created once at start, never
   re-created.
