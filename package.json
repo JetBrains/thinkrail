@@ -125,5 +125,8 @@
 	],
 	"patchedDependencies": {
 		"@pierre/diffs@1.5.1": "patches/@pierre%2Fdiffs@1.5.1.patch"
+	},
+	"dependencies": {
+		"dompurify": "3.4.17"
 	}
 }
