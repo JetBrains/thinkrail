@@ -26,8 +26,8 @@ bundled into `apps/web`. Exposed through explicit subpath exports, not a barrel.
   `@thinkrail/shared/version` → the baked `{ version, channel, commit }` release identity shared by CLI,
   desktop, and host provenance (with a committed `0.0.0-dev` source default);
   `@thinkrail/shared/windowsIdentity` → `windowsFileIdentity()`, the Windows file properties both
-  launchers stamp on their executables, `windowsProductName()`, the per-channel product name alone, and
-  `windowsIconPath`, the ICO they embed;
+  launchers stamp on their executables, `windowsProductName()`, the per-channel product name alone,
+  `windowsCompanyName`, the publisher alone, and `windowsIconPath`, the ICO they embed;
   `@thinkrail/shared/paths` → the worktree-relative path conventions (`WORKSPACE_INTERNAL_DIR`,
   `WORKSPACE_CONTEXT_DIR`, `WORKSPACE_TODOS_DIR`);
   `@thinkrail/shared/codedError` → `CodedError` + `errorCodeOf()`;

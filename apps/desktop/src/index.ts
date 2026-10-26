@@ -11,7 +11,7 @@ import type {
 import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { spawnDetached } from "@thinkrail/shared/spawn";
 import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
-import { windowsFileIdentity } from "@thinkrail/shared/windowsIdentity";
+import { windowsCompanyName } from "@thinkrail/shared/windowsIdentity";
 import Electrobun, {
 	ApplicationMenu,
 	BrowserView,
@@ -191,7 +191,7 @@ function refreshWindowsInstallIdentity(): void {
 	try {
 		stampInstalledAppPublisher(
 			installedAppKey(install),
-			windowsFileIdentity({ version, channel }).companyName,
+			windowsCompanyName,
 			loadWindowsRegistryApi(),
 		);
 	} catch (error) {

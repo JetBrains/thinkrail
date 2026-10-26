@@ -43,7 +43,7 @@ function reg(...args: string[]): string {
 }
 
 test.skipIf(process.platform !== "win32")("stamps the publisher on a real registry key", () => {
-	const subKey = `Software\\ThinkRailTest\\Uninstall-${process.pid}-${Date.now()}`;
+	const subKey = `Software\\ThinkRailTest-${process.pid}-${Date.now()}`;
 	reg("add", `HKCU\\${subKey}`, "/v", "DisplayName", "/t", "REG_SZ", "/d", "ThinkRail", "/f");
 	try {
 		const registry = loadWindowsRegistryApi();
@@ -56,6 +56,6 @@ test.skipIf(process.platform !== "win32")("stamps the publisher on a real regist
 			false,
 		);
 	} finally {
-		reg("delete", `HKCU\\Software\\ThinkRailTest`, "/f");
+		reg("delete", `HKCU\\${subKey}`, "/f");
 	}
 });

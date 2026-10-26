@@ -478,7 +478,7 @@ itself:
 Removal gate: Electrobun giving its process and shortcuts a shared AppUserModelID.
 
 **Installed apps.** Electrobun registers `HKCU\…\Uninstall\<identifier>.<channel>` without a
-`Publisher`, so Windows' Installed-apps list shows none. After the same first `dom-ready`, the desktop
+`Publisher`, so Windows' Installed-apps list shows none. Right after the shortcut stamp, the desktop
 writes [[module-shared]]'s publisher into that key. It does so only when the key already holds a
 `DisplayName`, so it never creates a key for an unmanaged build, and only when the value differs.
 Electrobun refreshes its values one by one and deletes the key on uninstall, so the extra value survives
