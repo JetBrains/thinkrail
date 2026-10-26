@@ -293,7 +293,7 @@ test("re-indexing reuses unchanged files and re-tokenizes only the changed one",
 	expect(searchSpecs(removed, "zebra").total).toBe(0);
 });
 
-test("indexing about two megabytes of specs stays inside a two-second tripwire (~160 ms locally)", () => {
+test("indexing about two megabytes of specs stays linear: a twenty-second blowup guard, not a speed gate", () => {
 	const body = CORPUS.map((entry) => parseFile(entry.content).body).join("\n");
 	const entries: SpecContentEntry[] = [];
 	let bytes = 0;
@@ -310,5 +310,5 @@ test("indexing about two megabytes of specs stays inside a two-second tripwire (
 	const index = indexSections(entries);
 	const elapsed = performance.now() - started;
 	expect(index.files.size).toBe(entries.length);
-	expect(elapsed).toBeLessThan(2_000);
-});
+	expect(elapsed).toBeLessThan(20_000);
+}, 30_000);

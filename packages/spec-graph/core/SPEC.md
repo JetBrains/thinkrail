@@ -83,8 +83,9 @@ does on retrieval benchmarks.
   only files whose content differs from `previous` and returns `previous` itself when nothing changed,
   so a caller re-syncs it on every read for the price of one string compare per file. Terms are ids in
   an append-only vocabulary the chain of indexes shares (a vanished term keeps its id); a section stores
-  sorted id/count arrays. About 2 MB of specs index in ~160 ms into ~9 MB of heap — callers bound how
-  many roots they keep.
+  sorted id/count arrays. About 2 MB of specs index in ~160 ms into ~9 MB of heap on a developer machine
+  (~3 s on a loaded CI runner, which is why the test's bound is a 20 s blowup guard rather than a speed
+  gate) — callers bound how many roots they keep.
 - **Benchmark.** `core/bench/` holds a frozen copy of 15 real specs (`*.md.txt`, so no indexer sees a
   duplicate id) and 20 questions written without the engine in view; the test gates on ≥ 16 with the
   expected section in the top 3. Five paraphrase misses are recorded but not gated. `bun
