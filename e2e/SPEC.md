@@ -88,8 +88,8 @@ therefore proven through every composition root.
 The focused `compaction.live` probe exercises manual compaction, continuation and restored context
 through a real provider. It lowers only the disposable lane's `keepRecentTokens` and disables automatic
 compaction to keep the request small and deterministic, restoring the settings bytes in `finally`.
-It neither changes the provider/effort selection nor proves removal of a fixed output cap; direct SDK
-summary-request unit tests own that assertion.
+It neither changes the provider/effort selection nor proves removal of a fixed output cap; the focused
+SDK reserve-independence canary owns that assertion.
 
 ## Chat resource controls
 

@@ -35,11 +35,19 @@ was checked against the installed catalog version. **No removal gate is satisfie
 - Public trust detection does not replace resource-kind discovery/exclusion reloads; session discovery
   and prompt-template APIs still do not cover the host's read/edit surfaces. Keep their parity tests.
 - Pi now sizes history, turn-prefix and branch summaries without reserve-derived output caps. Reasoning
-  inheritance and rejection of incomplete `length` summaries remain. Direct faux-provider tests exercise
-  the real summary calls, not replacement summaries; lifecycle tests cover cancellation and failure.
+  inheritance and rejection of incomplete `length` summaries remain. One public-compaction canary checks
+  turn-prefix answer room across different reserves without pinning provider option policy; lifecycle
+  tests retain cancellation and incomplete-summary rejection coverage.
   Restored truncated-call recovery now omits the paired tool result too, but does not replace
   `sessionRepair`'s host-restart and questionnaire repair. No host summarizer, effort-default change,
   reserve tuning, wire migration or session migration is introduced.
+- The bundled chat catalogue changes from 1,554 to 1,599 provider/model pairs: 71 removed and 116 added.
+  Removed pairs include `openai-codex/gpt-5.5` and `openai-codex/gpt-5.3-codex-spark`;
+  `openai/gpt-5.5` remains. This is a bundled-catalogue change, not a claim that providers retired those
+  APIs; stored, refreshed and custom catalogues can differ. Release notes must advise users to check
+  their default and restored-chat model before continuing. Unavailable defaults/resumed models follow
+  the existing, different host/Pi selection rules in [[submodule-server-agent]]; the host still does not
+  surface Pi's `modelFallbackMessage`. This upgrade adds no fallback or warning UI.
 
 ## Upgrade contract
 
@@ -113,6 +121,27 @@ full-output paths; run `mcp/results.test.ts`, `mcpEngine.test.ts`, web MCP card 
 `e2e/mcp-tool-cards.spec.ts`. Never persist the full raw result merely to delete the adapter.
 
 ## Other pi-sensitive host seams
+
+**Registry-tool withholding** — [[submodule-server-agent]], `registryToolWithholding.ts` and
+`agentSessionManager.ts`. Pi 1.4.0 restores its declared tool selection from branch system messages;
+`setActiveToolsByName` persists a change only before the next model request. Keep branch-scoped Pi
+custom entries containing only owner-qualified host-withheld tools, retaining pending restoration
+across restarts until Pi declares it. Public `message_end` subscribers run after extension handlers
+but before persistence: record owner-qualified acknowledgement of only the withheld delta, bound to
+that exact next durable message. Replay never infers ownership from a name-only declaration or an
+unqualified request. Intentional removal before any restored declaration must survive missed settlement;
+check live removal before filtering disabled tools. Reconcile latest policy at `agent_settled`.
+`appendCustomEntry` mutates ancestry before its disk write: failure synchronously blocks every public
+mutation on that manager, reports `RESOURCE_UNAVAILABLE`, and detaches/aborts via the host teardown
+cascade. Throwing from the observer alone or waiting for asynchronous disposal cannot guard later Pi
+writes. Context invalidation still waits for shutdown; recovery reopens a fresh manager. Re-check public
+mutators and callback ordering on upgrades. Missing tools retain provenance; unrelated inactive/deferred tools
+and ambiguous older selections without provenance remain untouched. Explicit chat resource reload is
+the manual escape to Pi's registration defaults, never an automatic legacy reset. **Removal gate:** a
+public Pi policy-overlay API that distinguishes host withholding from selected loadouts and preserves
+that distinction through restart, reload, branch navigation and compaction. Default-active metadata
+or bypassing restored selections with explicit SDK `tools` is not equivalent. Run the manager's
+persistent restart regression and `registryToolWithholding.test.ts` on upgrades.
 
 - **Image-only queued input** — [[submodule-server-agent]], queue projection. The host compensates for
   pi's text-only delivered-message removal ([upstream #8612](https://github.com/earendil-works/pi/issues/8612))

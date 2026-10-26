@@ -88,10 +88,14 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     reads. Activation changes the current pointer for pre-session reads and future session creation; it never
     mutates, drains, or recreates existing sessions. A live session keeps its original runtime generation. A disk session
     attached after activation keeps its saved model when that model is available in the current runtime.
-    If it is unavailable, PI chooses the current default without changing the saved model on open.
-    PI records the replacement when the user sends a message, so later restarts restore that model.
-    Merely opening a chat preserves its original model for when that provider returns. With no available
-    model, the transcript remains readable and no placeholder model is persisted as a replacement.
+    If it is unavailable, Pi chooses its settings default, then its ordered provider defaults, then the
+    first available model; this need not match ThinkRail's AppConfig default or the saved provider.
+    Opening does not change the saved model. An ordinary physical-model fallback becomes durable when
+    Pi appends an assistant response, not at send acceptance; explicit model selection persists at once.
+    Merely opening a chat preserves its original model for when that provider returns. The host exposes
+    the replacement in normal session state but discards the SDK's `modelFallbackMessage`, so there is
+    no separate fallback warning. With no available model, the transcript remains readable and no
+    placeholder model is persisted as a replacement.
 
     Every models **read** goes through **`settledAvailableModels(runtime)`** — pi's
     `getAvailableSnapshot()`, **never `getAvailable()`**: that one awaits `refreshAvailability()`, which
@@ -257,8 +261,10 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     `listAvailableModels` / `listSettledModels` (the same snapshot without starting a refresh) / **`clampThinkingForModel`** (pi's `clampThinkingLevel` for a `{model, level}`
     pair — `model.clampThinking`; the host uses it so defaults and live-session effort changes follow Pi).
     Earlier, #394 showed ThinkRail's `available[0]` differed from Pi's pick and hit a proxy 400. ThinkRail
-    now resolves defaults host-side from `AppConfig`, falling back to the first available model; it always
-    passes the chosen model explicitly so the UI and session agree. Accepted risk: the first available model
+    now resolves new-chat defaults host-side from `AppConfig`, falling back to the first available model
+    when the saved default is unavailable, without rewriting that setting. An explicitly requested
+    unavailable model is rejected rather than silently substituted. The host passes the chosen model
+    explicitly so the UI and session agree. Accepted risk: the first available model
     may not be the provider default; users can set one in Settings → Models. Plan review uses this same
     `resolveNewChatModel({})` for unset reviewer overrides: AppConfig `defaultModel`/`defaultEffort`, with
     the first available model and `medium` effort as fallbacks.
@@ -593,8 +599,34 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     extension and `extensionsOverride` omits its `<inline:…>` entry — new parents never load it — and by
     `childExtensionFactories()` when a hidden child's loader runs. `refreshExtensionTools()` updates live
     sessions: tools whose `sourceInfo.path` belongs to a disabled registry extension leave the active set
-    (remembered per entry so re-enabling restores exactly the withheld tools, never ones that were inactive
-    by default) idle-sync / streaming-deferred to `agent_settled`, latest policy wins, and
+    idle-sync / streaming-deferred to `agent_settled`, latest policy wins. Branch-scoped Pi custom entries
+    persist only the host-withheld delta, identified by registry owner **and** tool name, never a second
+    tool loadout. Re-enabling restores only that delta; intentionally inactive/default-deferred tools
+    remain Pi-owned. Missing owners/tools retain their provenance across reloads and restarts without
+    transferring it to another owner. Restoration remains pending until an owner-qualified acknowledgement
+    and its corresponding Pi message are both durable. The public `message_end` observer runs after
+    extension handlers but before Pi appends the message: it records only matching withheld identities,
+    the upcoming message's role/timestamp and the immediate parent boundary, never a loadout. Replay
+    consumes that evidence only with the matching next message; tool names in declarations or arbitrary
+    requests alone cannot establish ownership. A restored tool deliberately removed before any restored
+    declaration is acknowledged by a subsequent request/response with that same owner, even when no
+    system delta or host settlement follows. An active restoration requires a durable declaration.
+    Reopening before the next prompt keeps restoration pending. Live intentional removal checks use
+    the unfiltered previous active set and matching owner, **before** host disabling can mask the removal.
+    `agent_settled` reconciles against the latest policy. Compaction retains branch custom entries.
+    If a custom append fails, Pi has already mutated its in-memory ancestry: synchronously quarantine
+    that manager's public mutation methods, throw `CodedError(RESOURCE_UNAVAILABLE)`, and detach the
+    live entry through the existing resource teardown lifecycle. A global refresh still reconciles the
+    remaining chats before reporting its first failure; one unwritable transcript cannot leave healthy
+    chats on an obsolete extension policy. No retry, prompt, callback,
+    completion or shutdown handler may write through that poisoned manager, including the Pi callback
+    currently emitting `message_end`. Abort the run without prematurely invalidating extension contexts;
+    Pi disposal still follows bounded shutdown. Reopening uses a fresh manager from disk, never the
+    poisoned history. This guard does not repair a partially written filesystem record; it prevents
+    subsequent writes from extending an undurable parent. Older selections without provenance are
+    ambiguous and are preserved, **never automatically reset**. A user can explicitly reload the chat's
+    resources to adopt Pi's registration defaults; disabled-at-create and no-system-message legacy
+    sessions likewise use Pi's defaults.
     `setActiveToolsByName` drops their guidance with them. Hooks of a disabled extension keep running in an
     open session until its next resource reload — pi cannot unload an extension, and reloading on every
     disable would bust the prompt cache. The reverse is the one reload: an enabled extension the session

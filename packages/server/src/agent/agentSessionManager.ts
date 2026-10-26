@@ -119,6 +119,7 @@ import {
 	settledAvailableModels,
 } from "./piRuntime";
 import { catalogProviderAuth } from "./providerAuth";
+import { RegistryToolWithholding } from "./registryToolWithholding";
 import { REQUEST_REVIEW_TOOL_NAME } from "./requestReviewTool";
 import { projectSessionEvent } from "./sessionEventProjection";
 import { repairDanglingToolCalls } from "./sessionRepair";
@@ -168,7 +169,7 @@ interface Entry {
 	subagentToolsRefreshPending: boolean;
 	reviewToolRefreshPending: boolean;
 	extensionToolsRefreshPending: boolean;
-	withheldExtensionTools: Set<string>;
+	registryToolWithholding: RegistryToolWithholding;
 	nudgePromptPending: boolean;
 	lastPublishedState: string | null;
 	firstPrompt: string | null;
@@ -716,24 +717,7 @@ function applyExtensionTools(entry: Entry, { allowReload = true } = {}): void {
 	entry.extensionToolsRefreshPending = false;
 	const { session } = entry;
 	const disabled = disabledExtensions();
-	const owners = new Map<string, string>();
-	for (const tool of session.getAllTools()) {
-		const owner = registryExtensionName(tool.sourceInfo.path);
-		if (owner !== undefined) owners.set(tool.name, owner);
-	}
-	const isOff = (tool: string): boolean => disabled.has(owners.get(tool) ?? "");
-	const active = session.getActiveToolNames();
-	for (const tool of active.filter(isOff)) entry.withheldExtensionTools.add(tool);
-	const restored: string[] = [];
-	for (const tool of entry.withheldExtensionTools) {
-		if (owners.has(tool) && isOff(tool)) continue;
-		entry.withheldExtensionTools.delete(tool);
-		if (owners.has(tool) && !active.includes(tool)) restored.push(tool);
-	}
-	const kept = active.filter((tool) => !isOff(tool));
-	if (kept.length !== active.length || restored.length > 0) {
-		session.setActiveToolsByName([...kept, ...restored]);
-	}
+	entry.registryToolWithholding.apply(session, disabled);
 	if (allowReload && enabledExtensionMissing(session, disabled)) {
 		void requestSessionReload(session.sessionId).catch((error) => {
 			if (!entry.disposed && !entry.resourcesClosing && !hasFailedMcpReload(session.sessionId)) {
@@ -759,10 +743,16 @@ function enabledExtensionMissing(session: AgentSession, disabled: ReadonlySet<st
 }
 
 export function refreshExtensionTools(): void {
+	const failures: unknown[] = [];
 	for (const entry of sessions.values()) {
-		if (entry.session.isStreaming) entry.extensionToolsRefreshPending = true;
-		else applyExtensionTools(entry);
+		try {
+			if (entry.session.isStreaming) entry.extensionToolsRefreshPending = true;
+			else applyExtensionTools(entry);
+		} catch (error) {
+			failures.push(error);
+		}
 	}
+	if (failures.length > 0) throw failures[0];
 }
 
 function hasDeletionTombstone(sessionId: string): boolean {
@@ -894,6 +884,7 @@ function runGatedReload(entry: Entry): Promise<void> {
 				entry.reloadRunning = null;
 				applySubagentTools(entry);
 				applyReviewTool(entry);
+				entry.registryToolWithholding.reset();
 				applyExtensionTools(entry, { allowReload: false });
 				entry.commands.flushCompletions();
 				entry.subagents.flushCompletions();
@@ -1083,7 +1074,13 @@ async function prepareSessionEntry(
 		subagentToolsRefreshPending: false,
 		reviewToolRefreshPending: false,
 		extensionToolsRefreshPending: false,
-		withheldExtensionTools: new Set(),
+		registryToolWithholding: new RegistryToolWithholding((error) => {
+			if (sessions.get(sessionId) === entry) void disposeSession(sessionId);
+			else abandonPreparedEntry(entry);
+			session.agent.abort();
+			log.warn(`registry tool selection was not persisted for ${sessionId}`, error);
+			notifyExtUi(sessionId, error.message, "error");
+		}),
 		nudgePromptPending: false,
 		lastPublishedState: null,
 		firstPrompt: null,
@@ -1097,6 +1094,8 @@ async function prepareSessionEntry(
 		scheduleEntryStatePublish(entry);
 	});
 	entry.unsubscribe = session.subscribe((event) => {
+		if (entry.disposed) return;
+		entry.registryToolWithholding.observeMessage(session, event);
 		if (
 			event.type === "message_end" &&
 			event.message.role === "assistant" &&
@@ -1168,7 +1167,7 @@ async function prepareSessionEntry(
 			}
 			if (entry.subagentToolsRefreshPending) applySubagentTools(entry);
 			if (entry.reviewToolRefreshPending) applyReviewTool(entry);
-			if (entry.extensionToolsRefreshPending) applyExtensionTools(entry);
+			applyExtensionTools(entry, { allowReload: entry.extensionToolsRefreshPending });
 			reconsiderPendingReload(entry);
 			scheduleMcpStatusRefresh(sessionId);
 			void reconcileMcpSessions([sessionId]);
