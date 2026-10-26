@@ -23,13 +23,16 @@ opens its Settings section), and every verb runs through the command it was list
 
 - **Public surface:** `SearchPalette`, `SearchPaletteProps`, `PaletteHost`, `SearchSettings`,
   `initSearchPreferences`, `createDoubleShiftDetector`, `buildWorkItems`, `waitingItems`,
-  `WorkItemsState`, `commandItems`, `SearchScope`, `PaletteItem`, `PaletteItemKind`, `PalettePreview`.
-- **Allowed deps:** `contracts` (the shared matcher and domain types), `commands`, `store`, `transport`
-  (the backend endpoint for browser preference keys), `clientPreferences`, `constants`, `components`,
-  `lib`, `@thinkrail/locales` (UI strings), `@thinkrail/ui/*`, `@remixicon/react`.
-- **Forbidden:** importing `panels`, `chat` or `shell` (shell injects the commands and their handlers);
-  owning a chord another module binds; sending host mutations itself outside the injected handlers and
-  the store's navigation actions.
+  `WorkItemsState`, `commandItems`, `SearchScope`, `PaletteItem`, `PaletteItemKind`, `PalettePreview`,
+  `PaletteFile`.
+- **Allowed deps:** `contracts` (the shared matcher and the search DTOs), `commands`, `store`,
+  `transport` (`search.query` / `search.preview` behind `supportsHostSearch`, and the backend endpoint
+  for browser preference keys), `clientPreferences`, `constants`, `components`, `lib`,
+  `@thinkrail/locales` (UI strings), `@thinkrail/ui/*`, `@remixicon/react`.
+- **Forbidden:** importing `panels`, `chat`, `shell` or `@thinkrail/resource-renderers` (shell injects
+  the commands and their handlers, how a host hit opens, and the file renderer as the
+  `PaletteHost.renderFilePreview` render prop); owning a chord another module binds; sending host
+  mutations itself outside the injected handlers and the store's navigation actions.
 
 ## Query grammar
 
@@ -77,9 +80,19 @@ for an empty query. `hostItems` turns the host's groups into rows — files, spe
 chats and workspaces the client does not already list — carrying the host's matcher result as
 `PaletteItem.match`, so `rankItems` ranks them with the local rows by the same tiers instead of
 re-matching the title. Host hits that arrive after the user moved the selection are flagged `late` and
-sort after their group's earlier rows, so the rows above the selection never reorder. A host row's
-preview is loaded through `search.preview` (memoized per target) and renders a transcript window, a text
-head, or the unavailable notice; a host row opens through the injected `PaletteHost.openHit`.
+sort after their group's earlier rows, so the rows above the selection never reorder. A file or spec
+hit without a workspace is dropped (nothing could read or open it). A host row opens through the
+injected `PaletteHost.openHit`.
+
+## Preview pane
+
+`Mod+I` opens a pane with one of three renderings, chosen by the selected row: a **transcript window**
+around a chat or transcript hit (`search.preview`, memoized per target for the open palette, with the
+focused message marked); a **file or spec** rendered by the shell-injected `renderFilePreview` over
+`PaletteItem.file` (`{ workspaceId, path }`) — the shared resource renderers, so code highlights, images
+and sandboxed HTML display, and a `SPEC.md` renders as markdown, the same path as a preview tab; or the
+local **metadata card** (`PaletteItem.preview`) for a project, workspace or chat without a transcript
+hit. A plan row and a command have no preview. The pane never fetches a text head from the host.
 
 ## Interaction
 

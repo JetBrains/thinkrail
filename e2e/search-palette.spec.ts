@@ -383,7 +383,9 @@ test("host search: an image and an HTML file render in the preview pane, and fro
 		page.locator('[data-testid="search-row"][data-kind="file"]', { hasText: "sample.html" }),
 	).toBeVisible({ timeout: 15_000 });
 	await expect(preview.getByTestId("html-view")).toBeVisible();
-	await expect(preview.frameLocator("iframe").locator("body")).toHaveText("script-ran");
+	const frame = preview.frameLocator("iframe");
+	await expect(frame.getByRole("heading", { name: "HTML fixture" })).toBeVisible();
+	await expect(frame.locator("body")).not.toContainText("script-ran");
 	await pressPlatformShortcut(page, "i");
 
 	await page.getByTestId("search-input").fill("/notes");

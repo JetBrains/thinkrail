@@ -4,14 +4,13 @@ import type { HistorySession } from "../history";
 import { makeSnippet, matchesTerms } from "../history";
 import type { SpecSnapshotEntry } from "../spec";
 import type { StoredPlanFile } from "../todos";
-import type { FileListCache, IndexedFileList } from "./files";
+import type { FileListCache } from "./files";
 import { buildGroup, compactWhitespace, type Deadline, lineSnippet, termRanges } from "./hits";
 
 export interface SearchRoot {
 	readonly root: string;
 	readonly projectId: string;
-	readonly workspaceId?: string;
-	readonly current: boolean;
+	readonly workspaceId: string;
 }
 
 export interface ProviderInput {
@@ -43,32 +42,31 @@ function rangesOf(match: {
 }
 
 export function searchFiles(
-	roots: readonly SearchRoot[],
+	root: SearchRoot,
 	lists: FileListCache,
 	input: ProviderInput,
 ): SearchGroup {
+	const list = lists.peek(root.root);
+	if (!list) {
+		void lists.load(root.root);
+		return buildGroup("file", [], input.limit, "indexing");
+	}
 	const hits: SearchHit[] = [];
 	const lowerTerms = input.terms.map((term) => term.toLowerCase());
-	let indexing = false;
-	let sourceTruncated = false;
 	let truncated = false;
 	let scanned = 0;
-	const pushHit = (
-		root: SearchRoot,
-		path: string,
-		match: NonNullable<ReturnType<typeof matchFields>>,
-	) => {
+	const pushHit = (path: string, match: NonNullable<ReturnType<typeof matchFields>>) => {
 		const slash = path.lastIndexOf("/");
 		hits.push({
-			id: `file:${root.projectId}:${root.workspaceId ?? ""}:${path}`,
+			id: `file:${root.workspaceId}:${path}`,
 			kind: "file",
 			title: slash === -1 ? path : path.slice(slash + 1),
 			...(slash === -1 ? {} : { subtitle: path.slice(0, slash) }),
 			tier: match.tier,
-			score: match.score + (root.current ? 0.05 : 0),
+			score: match.score,
 			ranges: rangesOf(match),
 			projectId: root.projectId,
-			...(root.workspaceId ? { workspaceId: root.workspaceId } : {}),
+			workspaceId: root.workspaceId,
 			path,
 		});
 	};
@@ -78,98 +76,68 @@ export function searchFiles(
 		truncated = true;
 		return true;
 	};
-	lists.retain(roots.length);
-	const ready: { root: SearchRoot; list: IndexedFileList }[] = [];
-	for (const root of roots) {
-		const list = lists.peek(root.root);
-		if (!list) {
-			void lists.load(root.root);
-			indexing = true;
+	const rest: number[] = [];
+	for (let index = 0; index < list.paths.length && !truncated; index += 1) {
+		if (expired()) break;
+		const lower = list.lower[index] ?? "";
+		if (!lowerTerms.every((term) => lower.includes(term))) {
+			if (lowerTerms.every((term) => isSubsequence(lower, term))) rest.push(index);
 			continue;
 		}
-		if (list.truncated) sourceTruncated = true;
-		ready.push({ root, list });
+		const path = list.paths[index] ?? "";
+		const match = matchFields(input.terms, [{ key: "path", text: path, path: true }]);
+		if (match) pushHit(path, match);
 	}
-	const rest: { root: SearchRoot; list: IndexedFileList; index: number }[] = [];
-	for (const { root, list } of ready) {
-		for (let index = 0; index < list.paths.length && !truncated; index += 1) {
-			if (expired()) break;
-			const lower = list.lower[index] ?? "";
-			if (!lowerTerms.every((term) => lower.includes(term))) {
-				if (lowerTerms.every((term) => isSubsequence(lower, term)))
-					rest.push({ root, list, index });
-				continue;
-			}
-			const path = list.paths[index] ?? "";
-			const match = matchFields(input.terms, [{ key: "path", text: path, path: true }]);
-			if (match) pushHit(root, path, match);
-		}
-	}
-	for (const { root, list, index } of rest) {
+	for (const index of rest) {
 		if (truncated || expired()) break;
 		const path = list.paths[index] ?? "";
 		const match = matchFields(input.terms, [{ key: "path", text: path, path: true }]);
-		if (match) pushHit(root, path, match);
+		if (match) pushHit(path, match);
 	}
-	return buildGroup(
-		"file",
-		hits,
-		input.limit,
-		indexing ? "indexing" : truncated || sourceTruncated ? "truncated" : "ready",
-	);
+	return buildGroup("file", hits, input.limit, truncated || list.truncated ? "truncated" : "ready");
 }
 
 export function searchSpecs(
-	roots: readonly SearchRoot[],
+	root: SearchRoot,
 	snapshot: (root: string) => readonly SpecSnapshotEntry[],
 	input: ProviderInput,
 ): SearchGroup {
 	const hits: SearchHit[] = [];
 	const bodyTerms = input.terms.some((term) => term.length >= MIN_BODY_TERM_LENGTH);
-	for (const root of roots) {
-		for (const entry of snapshot(root.root)) {
-			if (input.deadline.expired()) {
-				return buildGroup("spec", hits, input.limit, "truncated");
-			}
-			const fields: MatchField[] = [
-				{ key: "title", text: entry.title },
-				{ key: "id", text: entry.id, secondary: true },
-				{ key: "path", text: entry.path, path: true, secondary: true },
-			];
-			const match = matchFields(input.terms, fields);
-			const base = {
-				kind: "spec" as const,
-				projectId: root.projectId,
-				...(root.workspaceId ? { workspaceId: root.workspaceId } : {}),
-				path: entry.path,
-				specId: entry.id,
-			};
-			if (match) {
-				hits.push({
-					...base,
-					id: `spec:${root.projectId}:${root.workspaceId ?? ""}:${entry.path}`,
-					title: entry.title,
-					subtitle: entry.path,
-					tier: match.tier,
-					score: match.score,
-					ranges: rangesOf(match),
-				});
-				continue;
-			}
-			if (!bodyTerms || !matchesTerms(entry.content, [...input.terms])) continue;
-			const snippet = lineSnippet(entry.content, input.terms);
-			if (snippet === null) continue;
-			hits.push({
-				...base,
-				id: `spec:${root.projectId}:${root.workspaceId ?? ""}:${entry.path}`,
-				title: entry.title,
-				subtitle: entry.path,
-				snippet,
-				tier: MATCH_TIER.content,
-				score: 0,
-				ranges: { snippet: termRanges(snippet, input.terms) },
-			});
+	for (const entry of snapshot(root.root)) {
+		if (input.deadline.expired()) {
+			return buildGroup("spec", hits, input.limit, "truncated");
 		}
+		const fields: MatchField[] = [
+			{ key: "title", text: entry.title },
+			{ key: "id", text: entry.id, secondary: true },
+			{ key: "path", text: entry.path, path: true, secondary: true },
+		];
+		const match = matchFields(input.terms, fields);
+		const base = {
+			id: `spec:${root.workspaceId}:${entry.path}`,
+			kind: "spec" as const,
+			title: entry.title,
+			subtitle: entry.path,
+			projectId: root.projectId,
+			workspaceId: root.workspaceId,
+			path: entry.path,
+			specId: entry.id,
+		};
+		if (match) {
+			hits.push({ ...base, tier: match.tier, score: match.score, ranges: rangesOf(match) });
+			continue;
+		}
+		if (!bodyTerms || !matchesTerms(entry.content, [...input.terms])) continue;
+		const snippet = lineSnippet(entry.content, input.terms);
+		if (snippet === null) continue;
+		hits.push({
+			...base,
+			snippet,
+			tier: MATCH_TIER.content,
+			score: 0,
+			ranges: { snippet: termRanges(snippet, input.terms) },
+		});
 	}
 	return buildGroup("spec", hits, input.limit);
 }

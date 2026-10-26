@@ -518,14 +518,15 @@ both rings rank with. The one package
   **`HistorySearchResult`** (the prompts + full-text messages sections, with totals and indexing status);
   the **search palette DTOs** (`SEARCH_PROTOCOL_VERSION`, v99): **`SearchKind`** (`chat` / `transcript` /
   `workspace` / `file` / `spec` / `plan`), **`SearchContext`** (the active workspace + context project the
-  host turns into roots), **`SearchHit`** (a stable `kind:id[:locator]` id, title / subtitle / `snippet`,
+  host turns into its one file/spec root), **`SearchHit`** (a stable `kind:id[:locator]` id, title / subtitle / `snippet`,
   the shared matcher's `tier` + `score` and highlight `ranges` so the browser merges host hits with its
   local ones by the same rule, and the navigation target — `projectId` / `workspaceId` / `sessionId` /
   `messageIndex` + `anchorText` / root-relative `path` / `specId`), **`SearchGroup`** (one per kind:
   capped `hits`, the true `total`, and a `state` of `ready` / `truncated` / `indexing` / `failed` — a
   client re-asks only on `indexing`), **`SearchQueryResult`** (`seq` echoed; `superseded` when a newer
-  `seq` from the same client overtook it), **`SearchPreviewTarget`** / **`SearchPreviewResult`** (a
-  bounded transcript window, a text head, or `unavailable`), and the limits `MAX_SEARCH_QUERY_LENGTH`,
+  `seq` from the same client overtook it), **`SearchPreviewTarget`** / **`SearchPreviewResult`** (the
+  `chat` target only: a bounded transcript window or `unavailable` — files and specs render client-side
+  over `fs.readFile`), and the limits `MAX_SEARCH_QUERY_LENGTH`,
   `MAX_SEARCH_GROUP_LIMIT`, `DEFAULT_SEARCH_GROUP_LIMIT`; the matcher gains the `content` tier for
   body/transcript matches, always below every field tier;
   the **review DTOs** — **`Review`** (one open review per workspace; `baseSha` — the reviewed diff's
@@ -780,7 +781,7 @@ both rings rank with. The one package
   newer client never sends it to an older host) / **`search.query`** + **`search.preview`** (the palette's host
   providers from `SEARCH_PROTOCOL_VERSION`, v99: `{ seq, query, kinds?, context, limit? }` → per-kind
   groups with the shared matcher's tiers, or `superseded` for an overtaken `seq`; a preview is a bounded
-  read that never attaches a session) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
+  transcript read that never attaches a session) / **`history.search`** (the prompt-recall + conversation-search read; results capped,
   recency-ordered; the messages section is assistant-only — a user-role hit surfaces as a jumpable
   `PromptHit` instead, never a separate `MessageHit`) / the **`review.*` set** — **`get`** (the open
   review + comments, lazily created; re-anchored on read) / **`commentAdd`**/**`commentUpdate`**/

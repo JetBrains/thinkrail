@@ -1,4 +1,3 @@
-import { open } from "node:fs/promises";
 import type {
 	Project,
 	SearchGroup,
@@ -17,7 +16,6 @@ import {
 	parseMatchTerms,
 	SEARCH_KINDS,
 } from "@thinkrail/contracts";
-import { resolveContainedFile, resourceMeta } from "../fs";
 import type { HistorySession } from "../history";
 import type { SpecSnapshotEntry } from "../spec";
 import type { StoredPlanFile } from "../todos";
@@ -55,7 +53,6 @@ export interface SearchService {
 export const SEARCH_BUDGET = {
 	queryMs: 300,
 	providerMs: 120,
-	previewBytes: 64 * 1024,
 	previewMessages: 7,
 	previewMessageChars: 600,
 } as const;
@@ -69,43 +66,26 @@ function isDefaultRecord(workspace: Workspace, project: Project): boolean {
 	return workspace.kind === "default" || workspace.worktreePath === project.path;
 }
 
-export function resolveSearchRoots(
+/** The one root files and specs are searched in: the active workspace, else the context project's folder through its default record. */
+export function resolveSearchRoot(
 	projects: readonly Project[],
 	workspaces: readonly Workspace[],
 	context: { projectId?: string; workspaceId?: string },
-): SearchRoot[] {
+): SearchRoot | null {
 	const openIds = new Set(projects.map((project) => project.id));
 	const current = context.workspaceId
 		? workspaces.find((workspace) => workspace.id === context.workspaceId)
 		: undefined;
-	const roots: SearchRoot[] = [];
-	const seen = new Set<string>();
 	if (current && openIds.has(current.projectId)) {
-		roots.push({
-			root: current.worktreePath,
-			projectId: current.projectId,
-			workspaceId: current.id,
-			current: true,
-		});
-		seen.add(current.worktreePath);
+		return { root: current.worktreePath, projectId: current.projectId, workspaceId: current.id };
 	}
-	const ordered = [...projects].sort((a, b) =>
-		a.id === context.projectId ? -1 : b.id === context.projectId ? 1 : 0,
+	const project = projects.find((candidate) => candidate.id === context.projectId);
+	if (!project) return null;
+	const defaultRecord = workspaces.find(
+		(workspace) => workspace.projectId === project.id && isDefaultRecord(workspace, project),
 	);
-	for (const project of ordered) {
-		if (seen.has(project.path)) continue;
-		const defaultRecord = workspaces.find(
-			(workspace) => workspace.projectId === project.id && isDefaultRecord(workspace, project),
-		);
-		roots.push({
-			root: project.path,
-			projectId: project.id,
-			...(defaultRecord ? { workspaceId: defaultRecord.id } : {}),
-			current: !current && project.id === context.projectId,
-		});
-		seen.add(project.path);
-	}
-	return roots;
+	if (!defaultRecord) return null;
+	return { root: project.path, projectId: project.id, workspaceId: defaultRecord.id };
 }
 
 export function createSearchService(readers: SearchReaders): SearchService {
@@ -153,8 +133,7 @@ export function createSearchService(readers: SearchReaders): SearchService {
 			});
 			const projects = readers.projects();
 			const workspaces = openWorkspaces(projects);
-			const roots = resolveSearchRoots(projects, workspaces, params.context);
-			const specRoots = roots.filter((root) => root.current);
+			const root = resolveSearchRoot(projects, workspaces, params.context);
 
 			const groups: SearchGroup[] = [];
 			const push = (kind: SearchKind, run: () => SearchGroup) => {
@@ -166,8 +145,8 @@ export function createSearchService(readers: SearchReaders): SearchService {
 				}
 			};
 			push("workspace", () => searchWorkspaces(workspaces, input()));
-			push("file", () => searchFiles(roots, files, input()));
-			push("spec", () => searchSpecs(specRoots, readers.specs, input()));
+			push("file", () => (root ? searchFiles(root, files, input()) : emptyGroup("file")));
+			push("spec", () => (root ? searchSpecs(root, readers.specs, input()) : emptyGroup("spec")));
 
 			let sessions: { sessions: readonly HistorySession[]; indexing: boolean } | null = null;
 			if (kinds.has("chat") || kinds.has("transcript") || kinds.has("plan")) {
@@ -206,51 +185,13 @@ export function createSearchService(readers: SearchReaders): SearchService {
 		},
 
 		async preview(target) {
-			const projects = readers.projects();
-			const workspaces = openWorkspaces(projects);
-			const rootFor = (projectId: string, workspaceId?: string): string | null => {
-				if (workspaceId) {
-					return workspaces.find((workspace) => workspace.id === workspaceId)?.worktreePath ?? null;
-				}
-				return projects.find((project) => project.id === projectId)?.path ?? null;
-			};
-			switch (target.kind) {
-				case "chat": {
-					const { sessions } = await readers.sessions();
-					const session = sessions.find((candidate) => candidate.sessionId === target.sessionId);
-					if (!session || !chatLabeler(workspaces)(session.cwd)) {
-						return { kind: "unavailable", reason: "missing" };
-					}
-					return transcriptPreview(session, target.messageIndex);
-				}
-				case "file": {
-					const root = rootFor(target.projectId, target.workspaceId);
-					if (!root) return { kind: "unavailable", reason: "missing" };
-					return fileHeadPreview(root, target.path);
-				}
-				case "spec": {
-					const root = rootFor(target.projectId, target.workspaceId);
-					if (!root) return { kind: "unavailable", reason: "missing" };
-					const entry = readers.specs(root).find((candidate) => candidate.path === target.path);
-					if (!entry) return { kind: "unavailable", reason: "missing" };
-					const truncated = entry.content.length > SEARCH_BUDGET.previewBytes;
-					return {
-						kind: "text",
-						title: entry.title,
-						body: truncated ? entry.content.slice(0, SEARCH_BUDGET.previewBytes) : entry.content,
-						truncated,
-					};
-				}
-				case "plan": {
-					const workspace = workspaces.find((candidate) => candidate.id === target.workspaceId);
-					if (!workspace) return { kind: "unavailable", reason: "missing" };
-					const file = readers
-						.plans(workspace.worktreePath)
-						.find((candidate) => candidate.sessionId === target.sessionId);
-					if (!file) return { kind: "unavailable", reason: "missing" };
-					return { kind: "text", title: "", body: renderPlan(file), truncated: false };
-				}
+			const workspaces = openWorkspaces(readers.projects());
+			const { sessions } = await readers.sessions();
+			const session = sessions.find((candidate) => candidate.sessionId === target.sessionId);
+			if (!session || !chatLabeler(workspaces)(session.cwd)) {
+				return { kind: "unavailable", reason: "missing" };
 			}
+			return transcriptPreview(session, target.messageIndex);
 		},
 
 		invalidateRoot(root) {
@@ -288,61 +229,4 @@ function transcriptPreview(session: HistorySession, messageIndex?: number): Sear
 		messages,
 		truncated: window.length < entries.length,
 	};
-}
-
-async function fileHeadPreview(root: string, path: string): Promise<SearchPreviewResult> {
-	let abs: string;
-	try {
-		abs = resolveContainedFile(root, path);
-	} catch {
-		return { kind: "unavailable", reason: "missing" };
-	}
-	let handle: Awaited<ReturnType<typeof open>>;
-	try {
-		handle = await open(abs, "r");
-	} catch {
-		return { kind: "unavailable", reason: "missing" };
-	}
-	try {
-		const stat = await handle.stat();
-		if (!stat.isFile()) return { kind: "unavailable", reason: "unsupported" };
-		const length = Math.min(stat.size, SEARCH_BUDGET.previewBytes);
-		const buffer = new Uint8Array(length);
-		const { bytesRead } = await handle.read(buffer, 0, length, 0);
-		const truncated = stat.size > length;
-		const bytes = truncated
-			? trimIncompleteUtf8(buffer.subarray(0, bytesRead))
-			: buffer.subarray(0, bytesRead);
-		const meta = resourceMeta(bytes, path);
-		if (!meta.text) return { kind: "unavailable", reason: "binary" };
-		return { kind: "text", title: path, body: new TextDecoder().decode(bytes), truncated };
-	} finally {
-		await handle.close();
-	}
-}
-
-/** A head cut at a byte boundary may end inside a multi-byte sequence; drop that tail so the text test stays honest. */
-export function trimIncompleteUtf8(bytes: Uint8Array): Uint8Array {
-	for (let back = 1; back <= 3 && back <= bytes.length; back += 1) {
-		const byte = bytes[bytes.length - back] ?? 0;
-		if ((byte & 0xc0) === 0x80) continue;
-		const needed = byte >= 0xf0 ? 4 : byte >= 0xe0 ? 3 : byte >= 0xc0 ? 2 : 1;
-		return needed > back ? bytes.subarray(0, bytes.length - back) : bytes;
-	}
-	return bytes;
-}
-
-function renderPlan(file: StoredPlanFile): string {
-	const plan = file.read();
-	const mark = (status: string) => (status === "done" ? "x" : status === "in_progress" ? "~" : " ");
-	const lines: string[] = [];
-	for (const group of plan.groups) {
-		lines.push(`## ${group.title}`);
-		for (const todo of group.todos) lines.push(`- [${mark(todo.status)}] ${todo.title}`);
-		lines.push("");
-	}
-	if (plan.todos.length > 0) {
-		for (const todo of plan.todos) lines.push(`- [${mark(todo.status)}] ${todo.title}`);
-	}
-	return lines.join("\n").trim();
 }

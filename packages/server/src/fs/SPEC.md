@@ -30,10 +30,7 @@ bytes are** — the one byte-level classification every content read in the host
   target leaves the worktree are refused; missing leaf paths are allowed so a deleted file can be
   restored. `changes` passes `{ followLeaf: false }` so containment validates through the parent and its
   own `lstat` can reject even an escaping leaf symlink without following it. This module owns the path
-  safety; its callers own the streaming and the writing. **`resolveContainedFile(root, path)`** is the
-  root-based twin for a repo folder that has no workspace record yet (the search palette's preview of a
-  file in another open project): the same lexical, `.git` and resolved-symlink containment against an
-  explicit root. **`workspaceRelativePath(root, path)`** is the one
+  safety; its callers own the streaming and the writing. **`workspaceRelativePath(root, path)`** is the one
   conversion from a native or absolute path to the wire's worktree-relative POSIX form (architecture
   Decision 22): resolved against the root, `null` when outside (a name such as `..env` is inside), `""` for
   the root itself. `reviews` normalizes anchors through it. It keeps host
@@ -57,7 +54,7 @@ bytes are** — the one byte-level classification every content read in the host
   fallback and treating
   `null` bytes as absence (`hash`/`byteLength` null, `text: true` — nothing to decode, and the empty
   string it pairs with is valid text).
-- **Public surface (barrel):** `readDir`, `readFile`, `resolveWorktreeFile`, `resolveContainedFile`, `workspaceRelativePath`, `classifyBytes`,
+- **Public surface (barrel):** `readDir`, `readFile`, `resolveWorktreeFile`, `workspaceRelativePath`, `classifyBytes`,
   `CONTENT_SNIFF_BYTES`, `mimeFromPath`, `hashBytes`, `decodeText`, `resourceMeta`.
 - **Allowed deps:** `persistence` (workspace lookup); `contracts` (`FileNode`, `ResourceMeta`); Node
   `fs`/`path`/`crypto`.

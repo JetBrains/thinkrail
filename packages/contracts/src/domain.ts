@@ -1491,7 +1491,7 @@ export const MAX_SEARCH_GROUP_LIMIT = 50;
 
 export const DEFAULT_SEARCH_GROUP_LIMIT = 20;
 
-/** Where the palette is: the active workspace and the context project rank first and define the roots. */
+/** Where the palette is: the active workspace, else the context project's folder, is the one root files and specs are searched in. */
 export interface SearchContext {
 	projectId?: string;
 	workspaceId?: string;
@@ -1535,11 +1535,12 @@ export interface SearchQueryResult {
 	superseded?: true;
 }
 
-export type SearchPreviewTarget =
-	| { kind: "chat"; sessionId: string; messageIndex?: number }
-	| { kind: "file"; projectId: string; workspaceId?: string; path: string }
-	| { kind: "spec"; projectId: string; workspaceId?: string; path: string }
-	| { kind: "plan"; workspaceId: string; sessionId: string };
+/** The transcript window around a chat hit; files and specs render client-side through `fs.readFile`. */
+export interface SearchPreviewTarget {
+	kind: "chat";
+	sessionId: string;
+	messageIndex?: number;
+}
 
 export interface SearchPreviewMessage {
 	role: "user" | "assistant";
@@ -1549,9 +1550,8 @@ export interface SearchPreviewMessage {
 }
 
 export type SearchPreviewResult =
-	| { kind: "text"; title: string; body: string; truncated: boolean }
 	| { kind: "transcript"; title: string; messages: SearchPreviewMessage[]; truncated: boolean }
-	| { kind: "unavailable"; reason: "missing" | "binary" | "unsupported" };
+	| { kind: "unavailable"; reason: "missing" };
 
 export type TemplateScope = "global" | "project";
 

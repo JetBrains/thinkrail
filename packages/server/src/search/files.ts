@@ -150,7 +150,6 @@ export async function listRootFiles(root: string): Promise<FileList> {
 export class FileListCache {
 	private readonly lists = new Map<string, { at: number; list: IndexedFileList }>();
 	private readonly loading = new Map<string, Promise<IndexedFileList>>();
-	private minRoots = 0;
 
 	constructor(
 		private readonly loader: (root: string) => Promise<FileList> = listRootFiles,
@@ -176,7 +175,7 @@ export class FileListCache {
 			.then((list) => {
 				this.lists.delete(root);
 				this.lists.set(root, { at: this.now(), list });
-				while (this.lists.size > Math.max(FILE_LIST_LIMITS.maxRoots, this.minRoots)) {
+				while (this.lists.size > FILE_LIST_LIMITS.maxRoots) {
 					const oldest = this.lists.keys().next().value;
 					if (oldest === undefined) break;
 					this.lists.delete(oldest);
@@ -186,11 +185,6 @@ export class FileListCache {
 			});
 		this.loading.set(root, promise);
 		return promise;
-	}
-
-	/** A query over `count` roots must be able to hold all of them, however small the cap. */
-	retain(count: number): void {
-		this.minRoots = count;
 	}
 
 	/** Marks a root stale: the old list keeps answering until the reload lands. */

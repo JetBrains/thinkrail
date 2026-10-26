@@ -8,12 +8,7 @@ import type { HistorySession } from "../history";
 import type { SpecSnapshotEntry } from "../spec";
 import type { StoredPlanFile } from "../todos";
 import { type FileList, FileListCache, listRootFiles, parseNulList } from "./files";
-import {
-	createSearchService,
-	resolveSearchRoots,
-	type SearchReaders,
-	trimIncompleteUtf8,
-} from "./service";
+import { createSearchService, resolveSearchRoot, type SearchReaders } from "./service";
 
 const encoder = new TextEncoder();
 
@@ -113,27 +108,27 @@ const closedProjectWorkspace: Workspace = {
 	baseBranch: "main",
 };
 
-describe("resolveSearchRoots", () => {
-	test("the active worktree comes first, then every open project's folder with its Default record", () => {
-		const roots = resolveSearchRoots([project, other], [defaultOne, feature], {
+describe("resolveSearchRoot", () => {
+	test("the active worktree is the root; Project Home falls back to the context project's folder through its Default record", () => {
+		expect(
+			resolveSearchRoot([project, other], [defaultOne, feature], {
+				projectId: "p1",
+				workspaceId: "w-feature",
+			}),
+		).toEqual({ root: "/repos/one-auth", projectId: "p1", workspaceId: "w-feature" });
+		expect(resolveSearchRoot([other, project], [defaultOne], { projectId: "p1" })).toEqual({
+			root: "/repos/one",
 			projectId: "p1",
-			workspaceId: "w-feature",
+			workspaceId: "w-default",
 		});
-		expect(roots).toEqual([
-			{ root: "/repos/one-auth", projectId: "p1", workspaceId: "w-feature", current: true },
-			{ root: "/repos/one", projectId: "p1", workspaceId: "w-default", current: false },
-			{ root: "/repos/two", projectId: "p2", current: false },
-		]);
 	});
 
-	test("working in the project folder lists it once, and Project Home makes the context project current", () => {
+	test("no root without a context project, a closed project, or a project whose Default record is not known yet", () => {
+		expect(resolveSearchRoot([project], [defaultOne], {})).toBeNull();
 		expect(
-			resolveSearchRoots([project], [defaultOne], { projectId: "p1", workspaceId: "w-default" }),
-		).toEqual([{ root: "/repos/one", projectId: "p1", workspaceId: "w-default", current: true }]);
-		expect(resolveSearchRoots([other, project], [defaultOne], { projectId: "p1" })).toEqual([
-			{ root: "/repos/one", projectId: "p1", workspaceId: "w-default", current: true },
-			{ root: "/repos/two", projectId: "p2", current: false },
-		]);
+			resolveSearchRoot([project], [closedProjectWorkspace], { workspaceId: "w-closed" }),
+		).toBeNull();
+		expect(resolveSearchRoot([other], [], { projectId: "p2" })).toBeNull();
 	});
 });
 
@@ -248,7 +243,7 @@ const lists: Record<string, FileList> = {
 const context = { projectId: "p1", workspaceId: "w-feature" };
 
 describe("search.query", () => {
-	test("answers every kind for a typed query from the open projects only", async () => {
+	test("answers every kind for a typed query: files and specs from the one root, chats from the open projects", async () => {
 		const files = new FileListCache(async (root) => lists[root] ?? { paths: [], truncated: false });
 		await Promise.all(Object.keys(lists).map((root) => files.load(root)));
 		const service = createSearchService(readers({ files }));
@@ -257,14 +252,11 @@ describe("search.query", () => {
 		const byKind = Object.fromEntries(result.groups.map((group) => [group.kind, group]));
 
 		expect(byKind.workspace?.hits.map((hit) => hit.id)).toEqual(["workspace:w-feature"]);
-		expect(byKind.file?.hits.map((hit) => hit.id)).toEqual([
-			"file:p1:w-feature:src/auth/refresh.ts",
-			"file:p1:w-default:src/auth/refresh.ts",
-			"file:p1:w-default:docs/refresh-notes.md",
-		]);
+		expect(byKind.file?.hits.map((hit) => hit.id)).toEqual(["file:w-feature:src/auth/refresh.ts"]);
+		expect(byKind.file?.hits[0]).toMatchObject({ projectId: "p1", workspaceId: "w-feature" });
 		expect(byKind.spec?.hits).toEqual([
 			expect.objectContaining({
-				id: "spec:p1:w-feature:SPEC.md",
+				id: "spec:w-feature:SPEC.md",
 				tier: MATCH_TIER.content,
 				snippet: "The auth refresh lives in the token module.",
 			}),
@@ -314,11 +306,11 @@ describe("search.query", () => {
 		await Bun.sleep(0);
 		const warm = await service.query("c1", { seq: 2, query: "refresh", kinds: ["file"], context });
 		expect(warm.groups[0]?.state).toBe("ready");
-		expect(warm.groups[0]?.hits).toHaveLength(3);
-		expect(loads).toBe(3);
+		expect(warm.groups[0]?.hits).toHaveLength(1);
+		expect(loads).toBe(1);
 	});
 
-	test("a root invalidated after a change keeps answering while it reloads, and a cold root marks the group indexing even with hits", async () => {
+	test("a root invalidated after a change keeps answering while it reloads, and the other roots stay cold", async () => {
 		let loads = 0;
 		const files = new FileListCache(async (root) => {
 			loads += 1;
@@ -326,62 +318,39 @@ describe("search.query", () => {
 		});
 		await files.load("/repos/one-auth");
 		const service = createSearchService(readers({ files }));
-		const partial = await service.query("c1", {
-			seq: 1,
-			query: "refresh",
-			kinds: ["file"],
-			context,
-		});
-		expect(partial.groups[0]).toMatchObject({ kind: "file", state: "indexing" });
-		expect(partial.groups[0]?.hits.map((hit) => hit.id)).toEqual([
-			"file:p1:w-feature:src/auth/refresh.ts",
+		const warm = await service.query("c1", { seq: 1, query: "refresh", kinds: ["file"], context });
+		expect(warm.groups[0]).toMatchObject({ kind: "file", state: "ready" });
+		expect(warm.groups[0]?.hits.map((hit) => hit.id)).toEqual([
+			"file:w-feature:src/auth/refresh.ts",
 		]);
-		await Bun.sleep(0);
-		expect(loads).toBe(3);
+		expect(loads).toBe(1);
 
 		service.invalidateRoot("/repos/one-auth");
 		const stale = await service.query("c1", { seq: 2, query: "refresh", kinds: ["file"], context });
 		expect(stale.groups[0]?.state).toBe("ready");
-		expect(stale.groups[0]?.hits).toHaveLength(3);
+		expect(stale.groups[0]?.hits).toHaveLength(1);
 		await Bun.sleep(0);
-		expect(loads).toBe(4);
+		expect(loads).toBe(2);
+		expect(files.peek("/repos/one")).toBeNull();
 	});
 
-	test("the file-list cache keeps a bounded number of roots, never fewer than one query needs", async () => {
+	test("the file-list cache keeps a bounded number of roots, and no root answers empty file and spec groups", async () => {
 		const files = new FileListCache(async () => ({ paths: ["a.ts"], truncated: false }));
 		for (let index = 0; index < 10; index += 1) await files.load(`/root-${index}`);
 		expect(files.peek("/root-0")).toBeNull();
 		expect(files.peek("/root-9")).not.toBeNull();
 
-		const many = Array.from({ length: 9 }, (_, index) => ({
-			...other,
-			id: `p${index}`,
-			path: `/many/${index}`,
-		}));
-		const wide = new FileListCache(async (root) => ({
-			paths: [`${root.slice(1)}/refresh.ts`],
-			truncated: false,
-		}));
-		const service = createSearchService(
-			readers({ files: wide, projects: () => many, workspaces: () => [] }),
-		);
-		let result = await service.query("c1", {
+		const service = createSearchService(readers({ files }));
+		const homeless = await service.query("c1", {
 			seq: 1,
 			query: "refresh",
-			kinds: ["file"],
+			kinds: ["file", "spec"],
 			context: {},
 		});
-		for (let poll = 2; result.groups[0]?.state === "indexing" && poll < 6; poll += 1) {
-			await Bun.sleep(0);
-			result = await service.query("c1", {
-				seq: poll,
-				query: "refresh",
-				kinds: ["file"],
-				context: {},
-			});
-		}
-		expect(result.groups[0]?.state).toBe("ready");
-		expect(result.groups[0]?.total).toBe(9);
+		expect(homeless.groups).toEqual([
+			{ kind: "file", hits: [], total: 0, state: "ready" },
+			{ kind: "spec", hits: [], total: 0, state: "ready" },
+		]);
 	});
 
 	test("a source list cut at its cap is still searched and reported truncated, and acronyms reach the matcher", async () => {
@@ -492,17 +461,6 @@ describe("search.query", () => {
 	});
 });
 
-describe("trimIncompleteUtf8", () => {
-	test("drops a multi-byte sequence cut by the byte limit and keeps complete text", () => {
-		const whole = new TextEncoder().encode("abcé");
-		expect(trimIncompleteUtf8(whole)).toEqual(whole);
-		expect(new TextDecoder().decode(trimIncompleteUtf8(whole.subarray(0, 4)))).toBe("abc");
-		const emoji = new TextEncoder().encode("a😀");
-		expect(new TextDecoder().decode(trimIncompleteUtf8(emoji.subarray(0, 3)))).toBe("a");
-		expect(trimIncompleteUtf8(new Uint8Array([0, 1, 2]))).toEqual(new Uint8Array([0, 1, 2]));
-	});
-});
-
 describe("search.preview", () => {
 	test("a chat preview is a bounded transcript window around the focused message", async () => {
 		const service = createSearchService(readers());
@@ -523,49 +481,11 @@ describe("search.preview", () => {
 		});
 	});
 
-	test("a file preview reads a contained head only, and a spec preview comes from the snapshot", async () => {
-		const dir = mkdtempSync(join(tmpdir(), "thinkrail-search-preview-"));
-		try {
-			mkdirSync(join(dir, "src"));
-			writeFileSync(join(dir, "src", "a.ts"), "export const a = 1;\n");
-			writeFileSync(join(dir, "blob.bin"), new Uint8Array([0, 1, 2, 255, 0, 3]));
-			const local: Project = { ...project, path: dir };
-			const service = createSearchService(
-				readers({ projects: () => [local], workspaces: () => [] }),
-			);
-			expect(await service.preview({ kind: "file", projectId: "p1", path: "src/a.ts" })).toEqual({
-				kind: "text",
-				title: "src/a.ts",
-				body: "export const a = 1;\n",
-				truncated: false,
-			});
-			expect(await service.preview({ kind: "file", projectId: "p1", path: "../escape" })).toEqual({
-				kind: "unavailable",
-				reason: "missing",
-			});
-			expect(await service.preview({ kind: "file", projectId: "p1", path: "blob.bin" })).toEqual({
-				kind: "unavailable",
-				reason: "binary",
-			});
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
-		const service = createSearchService(readers());
-		expect(
-			await service.preview({
-				kind: "spec",
-				projectId: "p1",
-				workspaceId: "w-feature",
-				path: "SPEC.md",
-			}),
-		).toMatchObject({ kind: "text", title: "Root", truncated: false });
-		expect(
-			await service.preview({ kind: "plan", workspaceId: "w-feature", sessionId: "s1" }),
-		).toEqual({
-			kind: "text",
-			title: "",
-			body: "## Auth refresh plan\n- [x] Refresh the token",
-			truncated: false,
+	test("a chat whose folder is no open project's workspace has no preview", async () => {
+		const service = createSearchService(readers({ workspaces: () => [defaultOne] }));
+		expect(await service.preview({ kind: "chat", sessionId: "s1" })).toEqual({
+			kind: "unavailable",
+			reason: "missing",
 		});
 	});
 });

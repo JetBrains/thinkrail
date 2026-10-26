@@ -93,12 +93,3 @@ export function resolveWorktreeFile(
 ): string {
 	return resolveInWorktree(workspaceId, path, options.followLeaf !== false).abs;
 }
-
-export function resolveContainedFile(root: string, path: string): string {
-	const base = resolve(root);
-	const abs = resolve(base, path);
-	if (!isContained(base, abs)) throw new Error("Path escapes the root");
-	if (isGitMetadataPath(base, abs)) throw new Error("The .git directory is not readable");
-	assertExistingAncestorContained(root, abs);
-	return abs;
-}

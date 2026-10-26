@@ -2,7 +2,7 @@
 id: submodule-server-search
 type: submodule-design
 status: active
-title: search — the palette's host-side providers and previews
+title: search — the palette's host-side providers and the transcript preview
 parent: module-server
 depends-on: [module-contracts, submodule-server-history, submodule-server-spec, submodule-server-todos, submodule-server-git, submodule-server-fs]
 references: [submodule-web-search]
@@ -25,21 +25,22 @@ history index, spec snapshots, stored plans), the same shape as `host/historySco
   reached by tests per file, never through the barrel.
 - **Allowed deps:** `contracts` (DTOs + the matcher), `history` (`HistoryIndex.sessions()` — the
   narrow read of titles and entries), `spec` (`specSnapshot` / `invalidateSpecSnapshot`), `todos`
-  (`listStoredPlans`), `git` (`gitAsyncStream` for `ls-files`), `fs` (`resolveContainedFile` +
-  `resourceMeta` for preview heads), Node `fs/promises`.
+  (`listStoredPlans`), `git` (`gitAsyncStream` for `ls-files`), Node `fs/promises`.
 - **Forbidden:** `host`, `workspaces`, `projects`, `persistence`, `agent` (projects and records are
   injected; a preview never attaches a pi session); writing anything; a second matcher.
 
-## Roots and eligibility
+## Root and eligibility
 
-`resolveSearchRoots` turns the client's context into ordered roots: the active workspace's worktree
-first (`current`), then every **open** project's folder (`Project.path`, with the Default record's
-`workspaceId` when one exists so the client can open a hit without provisioning), the context project
-first. Sibling worktrees are never roots (duplicates); closed projects are never searched. Files come
-from every root; spec titles and bodies only from the `current` root; chats and transcripts only from
-sessions whose `cwd` is a persisted worktree of an open project (pi-CLI sessions and closed projects
-are dropped, like `history.search`'s labels); plans from every open project's workspace records,
-skipping plan files whose session has no transcript on disk (orphans).
+`resolveSearchRoot` turns the client's context into **one** root: the active workspace's worktree, else
+on Project Home the context project's folder through its Default record (the record's `workspaceId`
+names the root, so every file and spec hit carries a workspace the client reads and opens through
+`fs.readFile` / the preview tab without provisioning). No root — no context project, a closed project,
+a project whose Default record is not persisted yet — answers empty `file` and `spec` groups. Other
+open projects' folders and sibling worktrees are never searched (the field walked back global
+multi-root file search: one root is faster and predictable). Chats and transcripts come from sessions
+whose `cwd` is a persisted worktree of an open project (pi-CLI sessions and closed projects are
+dropped, like `history.search`'s labels); plans from every open project's workspace records, skipping
+plan files whose session has no transcript on disk (orphans).
 
 ## Query
 
@@ -53,14 +54,14 @@ skipping plan files whose session has no transcript on disk (orphans).
   its client reap).
 - **Budgets:** each provider gets `SEARCH_BUDGET.providerMs`, all within `queryMs`; a provider that
   runs out of time returns what it has as `truncated`. A throwing provider reports `failed` (the
-  client never polls a failed group). A file list that has never loaded reports the whole group
-  `indexing` — with whatever the warm roots found — and starts loading (single-flight per root); the
-  client paints the hits and re-asks.
+  client never polls a failed group). A file list that has never loaded reports the group `indexing`
+  and starts loading (single-flight per root); the client re-asks.
 - **Files:** `git ls-files -co --exclude-standard -z` streamed through `gitAsyncStream` and a capped
   NUL parser (`FILE_LIST_LIMITS`: 100k names / 16 MB, then `truncated`), a bounded `readdir` walk for a
   non-git root; `node_modules` and VCS directories are always hidden. Lists are cached per root with a
-  lower-cased twin (at most `maxRoots` roots — or as many as one query spans — least recently asked
-  first out; a list cut at its cap is still searched and its group reported `truncated`) and revalidated
+  lower-cased twin (at most `maxRoots` roots, least recently asked first out, so switching workspaces
+  keeps the recent ones warm; a list cut at its cap is still searched and its group reported
+  `truncated`) and revalidated
   stale-while-reloading after a TTL or on `workspace.fsChanged` (`invalidateRoot`) — the old list keeps
   answering until the reload lands, so a change never blanks the active workspace's files. Matching is
   two-pass: a substring prefilter over every term runs the matcher on the plain hits first, then every
@@ -80,12 +81,11 @@ skipping plan files whose session has no transcript on disk (orphans).
 
 ## Preview
 
-`search.preview` reads bounded content without side effects: a chat preview is a window of
-`previewMessages` entries around the focused message from the history index (never a pi session); a
-file preview is the first `previewBytes` of a root-contained file (`resolveContainedFile`), trimmed of a
-multi-byte sequence the cut split so the text test stays honest, refused as `binary` when `resourceMeta`
-says so; a spec preview is the cached body; a plan preview renders the
-stored plan as a checklist. Anything unresolvable answers `unavailable`.
+`search.preview` has one target, `chat`: a window of `previewMessages` entries around the focused
+message from the history index (never a pi session), each entry cut at `previewMessageChars`; a session
+that is not an open project's workspace chat answers `unavailable`. Files and specs are not previewed
+by the host — the client renders them through the shared resource renderers over `fs.readFile` (code,
+images, HTML, markdown), the same path as a preview tab; a plan has no preview.
 
 ## Get right
 
