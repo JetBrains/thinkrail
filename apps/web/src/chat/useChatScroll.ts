@@ -241,6 +241,8 @@ export function useChatScroll(
 	const touchMomentum = useRef(false);
 	const touchMovingTowardLatest = useRef<boolean | null>(null);
 	const previousTouchScrollTop = useRef(0);
+	const scrollApiShift = useRef(0);
+	const scrollSinceEnd = useRef(false);
 	const programmaticScrollTop = useRef<number | null>(null);
 	const touchSettleTimer = useRef<number | null>(null);
 	const nativeResume = useRef<(() => void) | null>(null);
@@ -394,6 +396,7 @@ export function useChatScroll(
 		const actual = boundedScrollTop(scroller);
 		programmaticScrollTop.current = actual;
 		previousTouchScrollTop.current = actual;
+		scrollApiShift.current = 0;
 		headerAnchorScrollTop.current = actual;
 		rebaseGuard();
 	}, [rebaseGuard]);
@@ -486,7 +489,6 @@ export function useChatScroll(
 			const complete = () => {
 				afterChange = true;
 				if (provenance === "user") controller.rebaseFollowCap();
-				controller.refreshAnchor();
 				rebaseGuard();
 			};
 			const scroller = scrollerRef.current;
@@ -752,7 +754,27 @@ export function useChatScroll(
 
 	useEffect(() => {
 		if (!scrollerElement) return;
+		const methods = ["scrollBy", "scrollTo"] as const;
+		for (const method of methods) {
+			const native = scrollerElement[method];
+			Object.defineProperty(scrollerElement, method, {
+				configurable: true,
+				value: (...args: unknown[]) => {
+					const before = scrollerElement.scrollTop;
+					Reflect.apply(native, scrollerElement, args);
+					scrollApiShift.current += scrollerElement.scrollTop - before;
+				},
+			});
+		}
+		return () => {
+			for (const method of methods) Reflect.deleteProperty(scrollerElement, method);
+		};
+	}, [scrollerElement]);
+
+	useEffect(() => {
+		if (!scrollerElement) return;
 		previousTouchScrollTop.current = boundedScrollTop(scrollerElement);
+		scrollApiShift.current = 0;
 		const onScroll = () => {
 			const nextScrollTop = boundedScrollTop(scrollerElement);
 			const headerHeight = headerElementRef.current?.getBoundingClientRect().height ?? 0;
@@ -760,7 +782,12 @@ export function useChatScroll(
 				headerAnchorScrollTop.current = nextScrollTop;
 			}
 			const delta = nextScrollTop - previousTouchScrollTop.current;
+			const scrollApiDelta = scrollApiShift.current;
+			const readerDelta = delta - scrollApiDelta;
+			const scrollApiOnly = scrollApiDelta !== 0 && Math.abs(readerDelta) < 0.5;
 			previousTouchScrollTop.current = nextScrollTop;
+			scrollApiShift.current = 0;
+			if (!scrollApiOnly) scrollSinceEnd.current = true;
 			const expectedProgrammaticScrollTop = programmaticScrollTop.current;
 			if (
 				expectedProgrammaticScrollTop !== null &&
@@ -784,16 +811,17 @@ export function useChatScroll(
 			const wheelMoving = wheelIntentUntil.current > now;
 			const wheelReturning = returnIntentUntil.current > now;
 			if (
-				!touchMomentum.current &&
-				!pointerMoving &&
-				!keyboardMoving &&
-				!wheelMoving &&
-				!wheelReturning
+				scrollApiOnly ||
+				(!touchMomentum.current &&
+					!pointerMoving &&
+					!keyboardMoving &&
+					!wheelMoving &&
+					!wheelReturning)
 			) {
 				if (!reachedLatestEdge(scrollerElement, "bottom")) checkGuard();
 				return;
 			}
-			const movedTowardLatest = edge === "bottom" ? delta > 0 : delta < 0;
+			const movedTowardLatest = edge === "bottom" ? readerDelta > 0 : readerDelta < 0;
 			touchMovingTowardLatest.current = movedTowardLatest;
 			nativeResume.current = null;
 			cancelRowReveal();
@@ -814,6 +842,8 @@ export function useChatScroll(
 			guardAnchor.current = null;
 		};
 		const onScrollEnd = () => {
+			if (!scrollSinceEnd.current) return;
+			scrollSinceEnd.current = false;
 			if (activePointerId.current !== null) return;
 			const now = performance.now();
 			if (
@@ -1103,6 +1133,7 @@ export function useChatScroll(
 			const scrollTop = scroller ? boundedScrollTop(scroller) : 0;
 			interactionStartScrollTop.current = scrollTop;
 			previousTouchScrollTop.current = scrollTop;
+			scrollApiShift.current = 0;
 			activePointerId.current = event.pointerId;
 			activePointerType.current = event.pointerType;
 			pointerMayContinueScroll.current = event.pointerType !== "touch" && event.target === scroller;

@@ -1,6 +1,7 @@
 import {
 	type AnnotationSide,
 	type DiffLineAnnotation,
+	type FileDiffMetadata,
 	parseDiffFromFile,
 	type SelectedLineRange,
 } from "@pierre/diffs";
@@ -33,6 +34,7 @@ import {
 	changeBlockId,
 	computeActionBlocks,
 } from "./changeBlocks";
+import { createDiffCache } from "./diffCache";
 import PierreProvider from "./PierreProvider";
 import { PierreScroller } from "./PierreScroller";
 import {
@@ -53,6 +55,9 @@ type DiffAnnotationMetadata =
 	| { kind: "hunk"; id: string };
 
 const NO_PLACED_THREADS: ReadonlySet<string> = new Set();
+const NO_BLOCKS: ChangeBlock[] = [];
+const parsedDiffs = createDiffCache<FileDiffMetadata>();
+const actionBlocks = createDiffCache<ChangeBlock[]>();
 
 function textSide(content: ResourceContent): string | null {
 	return content.kind === "text" ? content.text : null;
@@ -219,28 +224,38 @@ function PierreDiffSurface({
 	const modifiedHash = contentHash(modified);
 	const fileDiff = useMemo(
 		() =>
-			parseDiffFromFile(
-				originalText === null
-					? null
-					: {
-							name: resource.path,
-							contents: originalText,
-							...(resource.language ? { lang: resource.language } : {}),
-							...(originalHash
-								? { cacheKey: `${resource.language ?? resource.path}:${originalHash}` }
-								: {}),
-						},
-				modifiedText === null
-					? null
-					: {
-							name: resource.path,
-							contents: modifiedText,
-							...(resource.language ? { lang: resource.language } : {}),
-							...(modifiedHash
-								? { cacheKey: `${resource.language ?? resource.path}:${modifiedHash}` }
-								: {}),
-						},
-				{ ignoreWhitespace },
+			parsedDiffs(
+				[
+					originalText,
+					modifiedText,
+					resource.path,
+					resource.language,
+					originalHash,
+					modifiedHash,
+					ignoreWhitespace,
+				],
+				() => {
+					const sideKey = (hash: string | undefined) =>
+						hash ? `${resource.language ?? resource.path}:${hash}` : undefined;
+					const originalKey = sideKey(originalHash);
+					const modifiedKey = sideKey(modifiedHash);
+					const side = (contents: string, cacheKey: string | undefined) => ({
+						name: resource.path,
+						contents,
+						...(resource.language ? { lang: resource.language } : {}),
+						...(cacheKey ? { cacheKey } : {}),
+					});
+					const parsed = parseDiffFromFile(
+						originalText === null ? null : side(originalText, originalKey),
+						modifiedText === null ? null : side(modifiedText, modifiedKey),
+						{ ignoreWhitespace },
+					);
+					const oneSidedKey =
+						originalText === null ? modifiedKey : modifiedText === null ? originalKey : undefined;
+					return parsed.cacheKey === undefined && oneSidedKey
+						? { ...parsed, cacheKey: `${parsed.type}:${oneSidedKey}` }
+						: parsed;
+				},
 			),
 		[
 			ignoreWhitespace,
@@ -252,9 +267,15 @@ function PierreDiffSurface({
 			resource.path,
 		],
 	);
+	const hasHunkActions = hunkActions !== undefined;
 	const blocks = useMemo(
-		() => computeActionBlocks(originalText, modifiedText, ignoreWhitespace),
-		[ignoreWhitespace, modifiedText, originalText],
+		() =>
+			hasHunkActions
+				? actionBlocks([originalText, modifiedText, ignoreWhitespace], () =>
+						computeActionBlocks(originalText, modifiedText, ignoreWhitespace),
+					)
+				: NO_BLOCKS,
+		[hasHunkActions, ignoreWhitespace, modifiedText, originalText],
 	);
 	const blockById = useMemo(
 		() => new Map(blocks.map((block) => [changeBlockId(block), block])),

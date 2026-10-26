@@ -15,9 +15,9 @@ Repository-wide development orchestration and conformance gates that do not belo
 
 ## Boundary
 
-- **Owns:** the multi-process development launcher; exact-version/catalog validation; the PI binary-seam canary; module dependency/import boundary validation; the UI-text gate (`check:i18n`); declared-spec-surface to TypeScript-barrel conformance; and focused root contract tests that compose otherwise independent product implementations.
+- **Owns:** the multi-process development launcher; exact-version/catalog validation; the PI binary-seam canary; module dependency/import boundary validation; the UI-text gate (`check:i18n`); declared-spec-surface to TypeScript-barrel conformance; the on-demand CI flake report (`ci:flakes`); and focused root contract tests that compose otherwise independent product implementations.
 - **Public surface:** the root `package.json` commands consumed by developers, Husky, and CI.
-- **Allowed deps:** Bun/Node, the TypeScript compiler API, `pi-spec-graph/core` for the canonical spec/frontmatter model, and `mdast-util-from-markdown` for CommonMark block structure; read-only inspection of workspace manifests and source trees; the public package metadata and bundle outputs each check validates; and test-only imports of real product internals when a root harness must prove a cross-package contract without creating a product dependency.
+- **Allowed deps:** Bun/Node, the developer's authenticated `gh` CLI (read-only, `ci:flakes` only), the TypeScript compiler API, `pi-spec-graph/core` for the canonical spec/frontmatter model, and `mdast-util-from-markdown` for CommonMark block structure; read-only inspection of workspace manifests and source trees; the public package metadata and bundle outputs each check validates; and test-only imports of real product internals when a root harness must prove a cross-package contract without creating a product dependency.
 - **Forbidden:** product runtime logic, a second source of package or feature behavior, editing source as part of a check, or application-internal imports outside focused root contract tests. A root contract test may compose implementations but must not become the protocol source or a product dependency.
 
 `check:boundaries` runs the checker's focused tests before scanning the real workspace. It enforces both manifest edges and static source imports, including type-only, dynamic, re-export, CommonJS, import-type, package-subpath, and relative cross-module forms. Generated/build directories, including Hutch's projected `.hutch` SDK trees and transient `.cottontail-tmp` loaders, are excluded. The current product rings and launcher edges are exhaustive: contracts, `pi-delegation`, and `pi-background-commands` → none; `pi-subagents` and `pi-dag` → `pi-delegation`; shared → contracts; server → contracts/shared plus its existing bundled extension and delegation packages; web → contracts, locales, and the browser SDK/extension entries below; CLI → server/shared; desktop → server/shared/contracts/locales; server, UI, and extension web halves may also use locales, which itself has no workspace edges; artifact-tests → CLI/server/shared. Product packages may not import artifact-tests. A future composition root must add an explicit rule rather than silently inheriting access to every workspace package.
@@ -31,6 +31,19 @@ The extension boundary follows [[module-thinkrail-extensions]] and is registered
 - Browser sources (web app, UI, extension-api's browser half, and extension web halves) must never import extension-api's server half. All of extension-api remains runtime-browser-safe: pi types may describe the server contract, but neither entry may value-import pi. Browser sources and contracts likewise reject pi value imports, including external pi packages not registered as workspace roots. Explicit type imports/re-exports remain subject to the existing workspace-edge rules; a type-only import cannot bypass a forbidden module or source-half edge.
 
 These are static literal-import checks, not a runtime module resolver. Negative filesystem fixtures cover the same discovery and scan entrypoint as the real workspace gate.
+
+`ci:flakes` (`bun run ci:flakes [--days 14] [--repo …] [--workflow ci.yml]`) prints a Markdown report of the
+CI workflow's test failures over a window, read through `gh api`: runs, per-attempt jobs, and the logs of failed
+test jobs only. Pure parsers read bun `(fail)` lines keyed by their `##[group]<file>:` context (the closing
+`N tests failed:` summary only repeats them) and Playwright `failed`/`flaky` summary blocks. A change is a PR —
+its PR runs and merge-queue entries count once — or, without a PR, a branch. Per test it counts failures,
+Playwright flaky passes, distinct changes, merge-queue failures, and failures whose SHA later passed the same
+job or a whole run. A test is flake-classified on a passing rerun, a flaky mark, failures for 3+ changes, or
+merge-queue failures for 2+ changes; the rest are listed apart as probably genuine. Failed steps no parsed test
+explains (build, install, download, or a step failing beside a test failure) are listed by step, and an
+attempt counts as flake-only only when every failure in it is a flake-classified test. It automates the hand
+analysis behind the 2026-10 CI-flake series; it is a diagnostic, never a gate, and has no scheduled run. Flaky
+passes in otherwise green jobs are not seen, because only failed jobs' logs are read.
 
 `check:spec-surface` enrolls only valid specs tagged `public-surface-checked`. Enrollment is explicit so adding prose cannot silently turn enforcement off: an enrolled spec must retain a bare backticked identifier list and a discoverable TypeScript barrel, or the check fails. Unenrolled prose surfaces remain descriptive and are reported only by `--list-skipped`.
 

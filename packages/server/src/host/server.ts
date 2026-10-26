@@ -83,6 +83,7 @@ import {
 	listProjects,
 	listRecentProjects,
 	openProject,
+	refreshRecentProjectFolders,
 	setPiTrustSeed,
 	setProjectPublisher,
 } from "../projects";
@@ -193,6 +194,7 @@ interface SocketData {
 }
 
 const CLIENT_REPLAY_RETENTION_MS = 60_000;
+const RECENT_FOLDER_CHECK_BUDGET_MS = 250;
 
 const log = logger("host");
 
@@ -291,6 +293,7 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			if (url.pathname === "/ws") {
 				const clientKey = url.searchParams.get("client") ?? `anon-${randomUUID()}`;
 				const protocolVersion = clientProtocolVersion(url.searchParams.get("protocol"));
+				await refreshRecentProjectFolders(RECENT_FOLDER_CHECK_BUDGET_MS);
 				return srv.upgrade(req, { data: { clientKey, protocolVersion } })
 					? undefined
 					: new Response("ws upgrade failed", { status: 400 });

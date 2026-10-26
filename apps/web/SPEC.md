@@ -46,7 +46,7 @@ convention; their boundary is held by convention + spec. Sibling edges live here
 | `shell` | responsive composition + frontend-local workbench ownership (bounded `layout/` and `layoutState/` children) | no | [shell/SPEC.md](src/shell/SPEC.md) |
 | `updates` | optional native/host update shell hook and props-driven controls | yes | [updates/SPEC.md](src/updates/SPEC.md) |
 | `notifications` | out-of-app attention notifications: green-dot observer, queue/window engine, browser Notifications wrapper, permission preface | yes | [notifications/SPEC.md](src/notifications/SPEC.md) |
-| `components` | dependency-light app primitives: error isolation, status icons, custom icons, quiet scroll frames | no | [components/SPEC.md](src/components/SPEC.md) |
+| `components` | dependency-light app primitives: error isolation, status icons, custom icons, quiet scroll frames, preloaded split chunks | no | [components/SPEC.md](src/components/SPEC.md) |
 | `extensions` | ordered composition of web extension descriptors into the chat registry | yes | [extensions/SPEC.md](src/extensions/SPEC.md) |
 | `themes` | validated single-file manifests, bundled catalog + atomic token application | yes | [themes/SPEC.md](src/themes/SPEC.md) |
 | `i18n` | active language: synced preference + browser languages + bundled/local catalogs → the shared i18next instance, `<html lang>`, desktop menu labels | yes | [i18n/SPEC.md](src/i18n/SPEC.md) |
@@ -113,10 +113,14 @@ these conventions:
   as a ref read.
 - A ref that travels as a prop is named `*Ref` (`selectionEpochRef`) so handlers may mutate it.
 - A closure that reads refs reaches a `useState` initialiser only through a hook
-  (`useReadingBandController`), and a ref is never handed to a plain helper; the helper becomes a hook that
-  owns it (`useSideResizeBinder`).
+  (`useReadingBandController`), and render never hands a ref to a plain helper; the helper becomes a hook
+  that owns it (`useSideResizeBinder`).
 - A default parameter never reads a member expression (`caret = text.length`); resolve it in the body.
 - A closure never applies `++`/`--` to a variable it captures; write `attempts += 1`.
+- A component or hook never uses `try/finally` or `throw` inside `try`. Move the body into a local async
+  closure chained as `run().catch(onError).finally(cleanup)`; a synchronous guard moves to a module-level
+  helper (`setLayoutFlagged`). A conditional, logical or optional-chaining value (`a ? b : c`, `a ?? b`,
+  `a?.b`) inside `try/catch` moves above the `try`, or into the closure when its branches await.
 - A `useMemo`/`useCallback` lists every dependency it reads, or the compiler cannot preserve it.
 - A `useMemo` dependency the callback does not read is dropped, so a memo cannot reset on a key it ignores
   (`useMemo(() => new Map(), [key])` builds one map per mount). Reset through state keyed on the value instead
@@ -125,22 +129,18 @@ these conventions:
   singleton. It arrives through `useSyncExternalStore` or state: `AppearanceSettings` subscribes with
   `onSystemAppearanceChange`, and relative-time labels take `now` from `components/useNow`.
 
-Known bailouts include two hot paths: `useVirtualRows` runs on every `ChatView` render (each streamed delta)
-and `PlanComposer` on every plan-pane keystroke. Shared hooks and resource surfaces also have bailouts;
-compilation of the chat/shell hot paths does not imply coverage of every file/diff renderer.
+Known bailouts include one hot path: `useVirtualRows` runs on every `ChatView` render (each streamed delta).
+Shared hooks and resource surfaces also have bailouts; compilation of the chat/shell hot paths does not imply
+coverage of every file/diff renderer.
 
 - Ref access in render: `useVirtualRows` (reads the visible-anchor ref while adjusting state during render;
   state would cost a render per scroll), `useWorkspaceRead`, `useBranchStatus`,
   `useBranchList`, `useTemplateCommandPicker`, `usePendingSelection`, `MonacoEditor`, `AskUserQuestionCard`,
   `useScrollViewState`, Pierre diff/file's `useThreadAnnotations`, `PierreDiffSurface`, `PierreFileSurface`,
   image diff's `ImageContent`, `ImageView`, `PdfView`, `usePdfDocument`.
-- try/finally: `PlanPane` (also a throw inside try), `PlanComposer`, `ReviewPanel`, `SendButtonBase`,
-  `NewWorkspaceDialog`, `SkillsDialog`, `TemplateEditorDialog`, `JetBrainsAiCard`, `ProvidersSettings`,
-  `ModelsSettings`, `GithubSettings`, `ProjectTrustNotice`.
-- try without catch: `usePromptImages`.
 - Manual memo dependencies cannot be preserved: `CsvDiff`, `JsonDiff`, `NotebookDiffSurface`, `PdfDiff`.
-- Other: `useLiveTabContent` (`??=`), `useAnalyticsConsent` (a callback that calls itself), `TemplateRow`
-  (a conditional inside try/catch), `HistoryOverlay`'s `Highlight` (mutates a closure counter).
+- Other: `useLiveTabContent` (`??=`), `useAnalyticsConsent` (a callback that calls itself),
+  `HistoryOverlay`'s `Highlight` (mutates a closure counter).
 
 A new bailout is a regression unless it joins this list.
 
@@ -155,7 +155,7 @@ change. `dist/` therefore has no profiler timers (`actualStartTime` is absent fr
 ### Dependency graph
 
 - `navigation` → `store`, `transport`, `contracts` (type-only); neither dependency imports it, and `main.tsx` initializes the integration
-- `shell` → children `shell/layout` + `shell/layoutState`, `@thinkrail/resource-renderers` (`AppResourceHost` registers the bundled renderers and provides one module-level `ResourceHost` — `chat/Markdown`, a code host over `lib/highlighter` + `themes`, `panels/resourcePane` byte URLs, `panels/openTabs` navigation (`openFileInTab` / `openFileComparisonInTab`), `fs.readFile` + the fs-change subscription, and the session-aware `useFileReview` (as the `FileReview` render-prop) + `SendReviewButton` — plus the line-width preferences through `ResourcePreferencesProvider` and the phone class through `ResourceEnvironmentProvider`; `main.tsx` wraps `Shell` in it), `updates` (one optional-capability hook + props-driven Settings content and durable status affordance), `notifications` (mounts the attention observer + permission preface once), `panels`, `chat` (app-integration render/hydration only), `store`, `transport` (domain hydration + endpoint identity), `contracts` (types + the shared `createQuitConfirmation` rule), `ui`, `components` (`ErrorBoundary` around each mounted region + `QuietScrollArea` around shell-owned tool bodies), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of catalog/media resolution and atomic theme application, driven by the hydrated store preference or pre-hydration hint)
+- `shell` → children `shell/layout` + `shell/layoutState`, `@thinkrail/resource-renderers` (`AppResourceHost` registers the bundled renderers and provides one module-level `ResourceHost` — `chat/Markdown`, a code host over `lib/highlighter` + `themes`, `panels/resourcePane` byte URLs, `panels/openTabs` navigation (`openFileInTab` / `openFileComparisonInTab`), `fs.readFile` + the fs-change subscription, and the session-aware `useFileReview` (as the `FileReview` render-prop) + `SendReviewButton` — plus the line-width preferences through `ResourcePreferencesProvider` and the phone class through `ResourceEnvironmentProvider`; `main.tsx` wraps `Shell` in it), `updates` (one optional-capability hook + props-driven Settings content and durable status affordance), `notifications` (mounts the attention observer + permission preface once), `panels`, `chat` (app-integration render/hydration only), `store`, `transport` (domain hydration + endpoint identity), `contracts` (types + the shared `createQuitConfirmation` rule), `ui`, `components` (`ErrorBoundary` around each mounted region + `QuietScrollArea` around shell-owned tool bodies + `preloadedLazy` for the `ChatView` chunk), `constants`, `lib` (platform shortcut semantics), `themes` (the single owner of catalog/media resolution and atomic theme application, driven by the hydrated store preference or pre-hydration hint)
 - `shell/layout` → `contracts` (`LayoutPreset` + `GitDiffScope` types only), `lib` (attention/id primitives), `ui` (including `@thinkrail/ui/resizable`), and React / `@dnd-kit/core`; `shell/layoutState` → `shell/layout`, `store`, `transport` (browser endpoint identity + error normalization), `clientPreferences` (native-stable persistence), `contracts` (`LayoutPreset` type only), `lib`, and React. The parent injects store state and feature renderers, so the pure layout child has no feature-module runtime edge
 - `updates` → `contracts` (native bridge + host notice types), `store` (host notice, toasts), `ui`, React, and Remix Icon; native snapshots remain shell-local
 - `notifications` → `store` (session-state reads, prompt + `activateWorkspaceFromRoute` / `openSessionSwitcher` actions), `ui` (the permission preface dialog), `contracts` (type-only — `SessionState`/`SessionCompletion`/`NativeNotificationBridge`), React, and Remix Icon; the master-toggle Settings panel lives in `panels`, and `shell` mounts the observer/preface. It emits through a capability-selected channel: the page Notifications API, or the native desktop channel when the optional `__THINKRAIL_NATIVE_NOTIFICATIONS__` bridge is present (capability detection only, no `desktop` branch). No Service Worker: a closed app has no live client to notify
@@ -185,7 +185,11 @@ resource-loader dynamic imports. Only lazy Pierre renderer modules mount the pro
 surface acquires Pierre's module-singleton worker pool; an ordinary workspace therefore neither loads Pierre
 nor initializes its pool. Renderer metadata and loaders are the only eager edge. A production build must
 retain distinct Pierre diff, Pierre file, worker-pool, and Monaco chunks, with none of their implementation
-code in the entry chunk.
+code in the entry chunk. Monaco stays out of the entry graph but is not loaded only on demand: on desktop,
+`shell` preloads the code view once per page at idle after the workbench mounts, once the page is visible
+and online, and Files rows warm it on focus and after a 150 ms hover. Only renderers that opt in with
+`capabilities.preload` (the code view) load early, so hovering a PDF or notebook row loads nothing.
+Phone-class viewports and `saveData` connections never preload.
 Vite emits every worker as an ES module (`worker.format: "es"`), so worker `import()` calls split into
 on-demand chunks instead of inlining; every target webview (Chromium, WebKit/Safari 17+, WebView2) runs
 module workers. Safari/WebKit 17 is the browser floor: the shipped webviews (macOS 12+ system WebKit,

@@ -45,10 +45,15 @@ translator as their first argument, so a language change recomputes them. `layou
 default name at render from the tab's kind (tool, untitled chat, default terminal, Changes / diff scope,
 plan document) through `lib`'s default-name helpers, and shows a name set by the user or agent verbatim.
 
-A click that may become a browser `dblclick` waits the shared 250 ms settle window. The upgraded gesture emits
-only its final keep while retaining the leading preview-slot claim, whether content was cached or required a
-host read. It never persists an intermediate preview. Pointer/resize drafts and viewport compression remain
-runtime-only.
+A file, spec, or diff browse click opens its preview at once, with no settle wait. A double click then
+promotes that same placement in place. A keep that arrives while the read is still in flight coalesces
+into one final keep that carries the leading preview-slot claim. Only two open paths wait the shared
+250 ms settle window: a single click (or keyboard activation) on the active preview tab, so a double click
+is not read as two keeps, and the Changes review-tab preview, which waits even when code rather than a
+click opens it. Outside the open paths, the legacy-selection Review reveal waits out what is left of a
+browse row's window. `isToolShowing` and `showingAuxiliaryKey` read which auxiliary tools are selected in
+an expanded pane, so the shell can tell whether Review shows and whether the user changed tools since.
+Pointer/resize drafts and viewport compression remain runtime-only.
 
 Frame groups may remain empty in any workspace. Closing a final resource therefore leaves topology untouched. Explicit remove/merge is the only way to delete a group, and its result rehomes every resource that references it across all locally retained workspace views. At least one center leaf always remains.
 
@@ -186,7 +191,7 @@ directional edge hints at drag start and fill the true resulting half on hover. 
 clears on pointer leave; all hints clear on drop or cancel; decorative layers never alter hit-testing or the
 committed result.
 
-Creating or deleting a group is visibly a frame command and therefore affects every workspace in this window. Moving a resource among existing groups affects only its workspace view. Moving a singleton tool changes frame placement globally within this window. Uncommitted drag/resize drafts stay runtime-local and commit once on drop/pointer-up; no host revision can cancel them. A local projection epoch and required workspace identity fence gestures and delayed focus/preview-settle work without remounting the workbench. A workspace switch cancels an active gesture even when a singleton placement or deterministic terminal id also exists in the new view; stale focus requests are not replayed on return. Tab removal also cancels its drag. Invalidating a resize restores the live panel group's committed
+Creating or deleting a group is visibly a frame command and therefore affects every workspace in this window. Moving a resource among existing groups affects only its workspace view. Moving a singleton tool changes frame placement globally within this window. Uncommitted drag/resize drafts stay runtime-local and commit once on drop/pointer-up; no host revision can cancel them. A local projection epoch and required workspace identity fence gestures and delayed focus/preview-settle work without remounting the workbench. A workspace switch cancels an active gesture even when a singleton placement or deterministic terminal id also exists in the new view; stale focus requests are not replayed on return. A focus request marked `onlyIfFocusLost` runs only when DOM focus is absent, on `body`, disconnected, or no longer rendered; the check happens when the request executes, after the arrangement commits. `hideSide`/`hideBottom` mark their center focus target `focusOnlyIfLost`, and every path that applies them honors it: the global chords, header and menu hide, and collapsing a region by dragging its separator to zero. Tab removal also cancels its drag. Invalidating a resize restores the live panel group's committed
 projection before paint and rejects the remainder of that gesture until release, not merely its pending
 persistence. The same recovery applies to outer/aligned sides, bottom height, auxiliary stacks, and
 recursive center splits without keying the workbench by workspace. The canceled-drag announcement is reserved for a pointer/keyboard gesture in progress when its base or workspace is replaced, or a tab drag whose tab left the document: `@thinkrail/ui/resizable` reports layout on every group mount and ordinary resize, so a group that merely lived through earlier local transitions announces nothing.

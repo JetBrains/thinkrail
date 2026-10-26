@@ -44,16 +44,19 @@ export function ModelsSettings() {
 	const readDefault = useCallback(async () => {
 		const seq = ++readSeq.current;
 		setReading(true);
-		try {
+		const read = async () => {
 			const next = await getTransport().request("model.default", {});
 			if (seq !== readSeq.current) return;
 			setResolvedDefault(next);
 			setLoadFailed(false);
-		} catch {
-			if (seq === readSeq.current) setLoadFailed(true);
-		} finally {
-			if (seq === readSeq.current) setReading(false);
-		}
+		};
+		await read()
+			.catch(() => {
+				if (seq === readSeq.current) setLoadFailed(true);
+			})
+			.finally(() => {
+				if (seq === readSeq.current) setReading(false);
+			});
 	}, []);
 
 	useEffect(() => {
@@ -66,14 +69,13 @@ export function ModelsSettings() {
 	) => {
 		if (saving || reading) return;
 		setSaving(true);
-		try {
+		const save = async () => {
 			await getTransport().request("settings.update", { config });
 			await readDefault();
-		} catch {
-			toast.error(message);
-		} finally {
-			setSaving(false);
-		}
+		};
+		await save()
+			.catch(() => toast.error(message))
+			.finally(() => setSaving(false));
 	};
 
 	const configuredModel = selectCatalogModel(allModels, defaultModel ?? null);

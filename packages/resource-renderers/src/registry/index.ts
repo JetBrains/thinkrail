@@ -19,6 +19,7 @@ export type {
 	ResourceEnvironment,
 	ResourceIntent,
 	ResourceRenderer,
+	ResourceViewModule,
 	ResourceViewProps,
 	ReviewThread,
 	ReviewThreadActions,

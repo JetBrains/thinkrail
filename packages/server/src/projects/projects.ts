@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { rmSync, statSync } from "node:fs";
+import { stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import type {
@@ -130,8 +131,45 @@ export function listProjects(): Project[] {
 	return newestFirst(getProjects().filter((project) => project.closed !== true));
 }
 
+const goneFolders = new Set<string>();
+const folderChecks = new Map<string, Promise<void>>();
+
+function checkFolder(path: string): Promise<void> {
+	const pending = folderChecks.get(path);
+	if (pending) return pending;
+	const check = stat(path)
+		.then(
+			(stats) => !stats.isDirectory(),
+			(error) => {
+				const code = (error as { code?: string }).code;
+				return code === "ENOENT" || code === "ENOTDIR";
+			},
+		)
+		.then((gone) => {
+			if (gone) goneFolders.add(path);
+			else goneFolders.delete(path);
+			folderChecks.delete(path);
+		});
+	folderChecks.set(path, check);
+	return check;
+}
+
+export async function refreshRecentProjectFolders(budgetMs: number): Promise<void> {
+	const checks = getProjects()
+		.filter((project) => project.closed === true)
+		.map((project) => checkFolder(project.path));
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const budget = new Promise<void>((resolve) => {
+		timer = setTimeout(resolve, budgetMs);
+	});
+	await Promise.race([Promise.all(checks), budget]);
+	clearTimeout(timer);
+}
+
 export function listRecentProjects(): Project[] {
-	return newestFirst(getProjects());
+	return newestFirst(
+		getProjects().filter((project) => project.closed !== true || !goneFolders.has(project.path)),
+	);
 }
 
 export function closeProject(id: string): Project {

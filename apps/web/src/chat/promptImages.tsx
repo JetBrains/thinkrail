@@ -78,41 +78,38 @@ export function usePromptImages(): PromptImagesController {
 			if (picked.length === 0) return;
 			const startedGeneration = generation.current;
 			setPending((n) => n + picked.length);
-			void (async () => {
-				try {
-					const settled = await Promise.allSettled(picked.map(fileToAttachedImage));
-					if (startedGeneration !== generation.current) return;
-					let used = imagesRef.current.reduce((sum, p) => sum + p.content.data.length, 0);
-					const additions: PromptImage[] = [];
-					const nextErrors: PromptImageError[] = [];
-					settled.forEach((result, i) => {
-						const name = picked[i]?.name || translate("chat.promptImages.fallbackName");
-						if (result.status !== "fulfilled" || result.value === null) {
-							nextErrors.push({
-								id: crypto.randomUUID(),
-								name,
-								reason: translate("chat.promptImages.unsupported"),
-							});
-							return;
-						}
-						const size = result.value.content.data.length;
-						if (used + size > REQUEST_IMAGE_BASE64_BUDGET) {
-							nextErrors.push({
-								id: crypto.randomUUID(),
-								name,
-								reason: translate("chat.promptImages.limitReached"),
-							});
-							return;
-						}
-						used += size;
-						additions.push({ id: crypto.randomUUID(), name, ...result.value });
-					});
-					if (additions.length > 0) commit([...imagesRef.current, ...additions]);
-					if (nextErrors.length > 0) setErrors((prev) => [...prev, ...nextErrors]);
-				} finally {
-					setPending((n) => n - picked.length);
-				}
-			})();
+			const decode = async () => {
+				const settled = await Promise.allSettled(picked.map(fileToAttachedImage));
+				if (startedGeneration !== generation.current) return;
+				let used = imagesRef.current.reduce((sum, p) => sum + p.content.data.length, 0);
+				const additions: PromptImage[] = [];
+				const nextErrors: PromptImageError[] = [];
+				settled.forEach((result, i) => {
+					const name = picked[i]?.name || translate("chat.promptImages.fallbackName");
+					if (result.status !== "fulfilled" || result.value === null) {
+						nextErrors.push({
+							id: crypto.randomUUID(),
+							name,
+							reason: translate("chat.promptImages.unsupported"),
+						});
+						return;
+					}
+					const size = result.value.content.data.length;
+					if (used + size > REQUEST_IMAGE_BASE64_BUDGET) {
+						nextErrors.push({
+							id: crypto.randomUUID(),
+							name,
+							reason: translate("chat.promptImages.limitReached"),
+						});
+						return;
+					}
+					used += size;
+					additions.push({ id: crypto.randomUUID(), name, ...result.value });
+				});
+				if (additions.length > 0) commit([...imagesRef.current, ...additions]);
+				if (nextErrors.length > 0) setErrors((prev) => [...prev, ...nextErrors]);
+			};
+			void decode().finally(() => setPending((n) => n - picked.length));
 		},
 		[commit],
 	);

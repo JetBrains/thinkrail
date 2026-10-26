@@ -27,7 +27,7 @@ engine architecture.
 - **Public surface:** the packaged desktop application and its installers. No test-helper library is
   exported by the application package.
 - **Allowed deps:** `server` for the embedded host and build-support manifest; `shared`
-  for release identity; `contracts` for
+  for release identity and the early `resolveShellEnv()` start; `contracts` for
   compatibility/native-bridge types and the shared `createQuitConfirmation` rule; the completed built web
   artifact; Electrobun `2.0.1` and its generated SDK; build-only `pe-library`/`resedit` for the
   Electrobun 2.0.1 Windows-uninstaller icon gap; build-only `@resvg/resvg-js` to rasterize the icon
@@ -80,11 +80,16 @@ another.
    - The main window, RPC, navigation rules and first-`dom-ready` readiness are unchanged. Creating the
      main window early on a splash page was rejected: it would move origin-dependent navigation, readiness
      and host-bound RPC ahead of host boot.
-3. Dynamically import the separately built, unpacked `server-runtime.ts` resource. That bundle is built with
-   pi's `PI_BUNDLED_NODE=true` define, which makes PI use its embedded-modules extension loader (static jiti
-   with Babel bundled, plus virtual modules) for external extensions such as Central. Without the define a
-   single-file bundle is treated as a plain Node runtime and PI's lazy Babel `require` cannot resolve inside
-   it ([[submodule-server-agent]] owns the seam). Flattening PI into Electrobun's normal entry is still
+3. Start `resolveShellEnv()` right after the `chdir`, so the login shell it spawns also starts outside the
+   bundle, then dynamically import the separately built, unpacked `server-runtime.ts` resource, and await the
+   shell env before `startDesktopHost()`. A Dock/Finder launch pays for the login-shell probe (~100 ms on a
+   typical profile, seconds on a slow one); overlapping it with the splash and the bundle import hides up to
+   that time. The bundle's own `shellEnv` copy is a separate module instance, so the run is cached on a
+   `Symbol.for` global key: its `bootHost()` call awaits the same run instead of probing again. That bundle is
+   built with pi's `PI_BUNDLED_NODE=true` define, which makes PI use its embedded-modules extension loader
+   (static jiti with Babel bundled, plus virtual modules) for external extensions such as Central. Without the
+   define a single-file bundle is treated as a plain Node runtime and PI's lazy Babel `require` cannot resolve
+   inside it ([[submodule-server-agent]] owns the seam). Flattening PI into Electrobun's normal entry is still
    forbidden: it would load `bun-pty` before `BUN_PTY_LIB` is set.
 4. The runtime value-imports the four bundled pi-package factories (`pi-web-access`, `pi-spec-graph`,
    `pi-thinkrail-workflow`, `pi-todos`) and calls `registerBundledRuntime()` with those factories, the
@@ -384,7 +389,7 @@ drivers and assertions live in the test package, which product code never import
 The package pins the Electrobun `2.0.1` npm bootstrap as a build-only dependency. That exact pin selects
 its paired Hutch toolchain and SDK; direct global Hutch invocation and floating version overrides are not
 part of the build path. The application explicitly selects the real Bun main process, not the default
-Cottontail runtime. The packaged Bun is `1.4.3`, selected by `build.bun.version` rather than
+Cottontail runtime. The packaged Bun is `1.4.4`, selected by `build.bun.version` rather than
 Electrobun's default `1.4.0`. Hutch resolves that field like the other toolchain versions
 (`configuredToolchainVersion`), but `ElectrobunConfig` does not type it, so the config passes the Bun
 block as a named value. `buildConfig.test.ts` asserts that it equals the root `packageManager` pin, which
@@ -436,12 +441,17 @@ builds, and unit tests do not prepare the native SDK.
 Desktop typechecking consumes the official SDK's `.ts` sources through the same baseUrl-free paths used
 by editor tooling; no handwritten API declarations or shadow typecheck config exist. As explicitly
 approved, desktop alone sets `exactOptionalPropertyTypes: false` to match Electrobun's source contract,
-while retaining `strict: true` and `noUncheckedIndexedAccess: true`. This setting applies to the desktop
-compilation, including imported workspace source; every other package retains its separate unchanged
-strict check. The upstream source incompatibility is tracked in Electrobun issue #516; `skipLibCheck`
-cannot exclude imported implementation `.ts`. The direct-source approach follows the v2 migration guide
-and avoids a second declaration-generation pipeline. Canonical main imports use `electrobun/main`; the
-preload retains `electrobun/view`, and the RPC schema retains its `bun`/`webview` keys.
+while retaining `strict: true` and `noUncheckedIndexedAccess: true`. Also explicitly approved, and
+temporary, desktop sets `noImplicitReturns: false` because Electrobun's browser and native SDK sources
+fail it; the other base lint-style flags stay on. The flag cannot be scoped to the SDK files, so it also
+stops checking desktop's own source, which passes it today. Remove the override once an Electrobun
+release ships [blackboardsh/electrobun#590](https://github.com/blackboardsh/electrobun/pull/590). These
+settings apply to the desktop compilation, including imported workspace source; every other package
+retains its separate unchanged strict check. The optional-property incompatibility is tracked in
+Electrobun issue #516; `skipLibCheck` cannot exclude imported implementation `.ts`. The direct-source
+approach follows the v2 migration guide and avoids a second declaration-generation pipeline. Canonical
+main imports use `electrobun/main`; the preload retains `electrobun/view`, and the RPC schema retains its
+`bun`/`webview` keys.
 
 References: [official v2 migration](https://framework.blackboard.sh/electrobun/guides/migrating-to-v2/),
 [upstream optional-property issue](https://github.com/blackboardsh/electrobun/issues/516).
@@ -457,8 +467,10 @@ updating is integrated below; feed publication remains release-owned and gated b
 ### Signing
 
 Signing and notarization use JetBrains-provided services through the private release coordinator;
-public builds contain neither service credentials nor a new Apple-login/keychain flow. Current Windows
-coverage signs the setup stub without rewriting its hash-keyed adjacent payload.
+public builds contain neither service credentials nor a new Apple-login/keychain flow. Windows coverage
+signs the setup stub and every PE file in its adjacent payload, so the launcher, `bun.exe`, the framework
+DLLs and the bundled `uninstall` helper that installs and applies updates all carry a JetBrains signature.
+The private pipeline repacks the payload around the signed bytes ([[module-ci-release]]).
 
 The native macOS build also exposes Electrobun's standard expanded `.app.tar.zst` as a private signing
 input. The approved JetBrains SRE flow signs the expanded app and finalizes a conventional DMG around it,

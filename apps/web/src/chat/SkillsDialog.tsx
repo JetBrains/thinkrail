@@ -94,15 +94,13 @@ export function SkillsDialog({
 	const trustSummary = useProjectTrustSummary(projectId, open);
 
 	const refresh = useCallback(async () => {
-		try {
+		const load = async () =>
 			setEntries(
 				workspaceId
 					? await getTransport().request("skills.state", { workspaceId })
 					: await getTransport().request("project.skills", { projectId }),
 			);
-		} catch {
-			setEntries([]);
-		}
+		await load().catch(() => setEntries([]));
 	}, [workspaceId, projectId]);
 
 	useEffect(() => {
@@ -114,31 +112,29 @@ export function SkillsDialog({
 	const mutate = async (request: () => Promise<Project | Workspace>, failure: string) => {
 		if (busy) return;
 		setBusy(true);
-		try {
+		const run = async () => {
 			const result = await request();
 			if (!isWorkspace(result)) useAppStore.getState().applyProjectUpdated(result);
 			await refresh();
-		} catch (err) {
-			toast.error(errorText(err), failure);
-		} finally {
-			setBusy(false);
-		}
+		};
+		await run()
+			.catch((err: unknown) => toast.error(errorText(err), failure))
+			.finally(() => setBusy(false));
 	};
 
 	const reload = async () => {
 		if (busy || !workspace) return;
 		setBusy(true);
-		try {
+		const run = async () => {
 			const { syncedTick } = await reloadSessionResourcesWithSkillBaseline(workspace.workspaceId, {
 				sessionId: workspace.sessionId,
 			});
 			workspace.onReloaded?.(syncedTick);
 			toast.success(translate("chat.skills.reloadedBody"), translate("chat.skills.reloadedTitle"));
-		} catch (err) {
-			toast.error(errorText(err), translate("chat.skills.reloadFailed"));
-		} finally {
-			setBusy(false);
-		}
+		};
+		await run()
+			.catch((err: unknown) => toast.error(errorText(err), translate("chat.skills.reloadFailed")))
+			.finally(() => setBusy(false));
 	};
 
 	const setGroupEnabled = (group: string, enabled: boolean) =>

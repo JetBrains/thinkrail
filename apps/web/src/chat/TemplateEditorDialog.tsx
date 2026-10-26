@@ -22,7 +22,7 @@ const INPUT_CLASS =
 function isValidTemplateName(name: string): boolean {
 	if (name.length === 0) return false;
 	if (name.startsWith(".")) return false;
-	return !name.includes("/") && !name.includes("\\") && !name.includes("\0");
+	return !name.includes("/") && !name.includes("\\") && !name.includes("\0") && !name.includes(":");
 }
 
 export function TemplateEditorDialog({
@@ -91,6 +91,7 @@ export function TemplateEditorDialog({
 		setArgumentHint("");
 		setBody(initialBody);
 		setLoading(false);
+		return undefined;
 	}, [open, template, initialScope, initialBody, workspaceId]);
 
 	const save = async () => {
@@ -106,7 +107,7 @@ export function TemplateEditorDialog({
 		}
 		setSaving(true);
 		setError(null);
-		try {
+		const persist = async () => {
 			await getTransport().request("template.save", {
 				...(workspaceId ? { workspaceId } : {}),
 				scope,
@@ -115,11 +116,10 @@ export function TemplateEditorDialog({
 			});
 			useAppStore.getState().bumpTemplatesVersion();
 			onOpenChange(false);
-		} catch (err) {
-			setError(errorText(err));
-		} finally {
-			setSaving(false);
-		}
+		};
+		await persist()
+			.catch((err: unknown) => setError(errorText(err)))
+			.finally(() => setSaving(false));
 	};
 
 	return (

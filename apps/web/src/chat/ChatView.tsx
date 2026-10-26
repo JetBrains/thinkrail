@@ -2,6 +2,7 @@ import {
 	type PromptHit,
 	type QueueLane,
 	type SessionQueueContent,
+	type SubagentResourceSummary,
 	sameModel,
 	type TemplateInfo,
 	type ThinkingLevel,
@@ -47,6 +48,7 @@ import {
 } from "./Composer";
 import { mentionLookup } from "./fileTargets";
 import { HistoryOverlay } from "./HistoryOverlay";
+import { parseModelRef, RunModelLabel } from "./ModelEffortLabel";
 import type { ModelSelection } from "./ModelEffortPicker";
 import {
 	compactSubmissionError,
@@ -77,6 +79,10 @@ import { useHistorySearch } from "./useHistorySearch";
 registerWebExtensions();
 
 const TRY_AGAIN_PROMPT = "Try again.";
+
+function renderSubagentModel({ model, thinkingLevel }: SubagentResourceSummary) {
+	return <RunModelLabel model={model} thinkingLevel={thinkingLevel} />;
+}
 
 export default function ChatView({
 	sessionId,
@@ -272,6 +278,10 @@ export default function ChatView({
 	const openProviderSettings = useCallback(
 		() => useAppStore.getState().openSettings(SettingsSection.Providers),
 		[],
+	);
+	const findModel = useCallback(
+		(ref: string) => selectCatalogModel(allModels, parseModelRef(ref)),
+		[allModels],
 	);
 	const readMcpOutput = useCallback(
 		(toolCallId: string) =>
@@ -614,14 +624,21 @@ export default function ChatView({
 			.catch(() => {});
 	};
 
-	const onHistoryOpen = () => openOverlay(draft);
-
-	const onManageTemplates = () => useAppStore.getState().openSettings(SettingsSection.Templates);
-
 	const onDismissHistory = () => {
 		closeHistory();
 		composerRef.current?.refocus();
 	};
+
+	const onHistoryOutsidePress = () => {
+		closeHistory();
+		setTimeout(() => {
+			if (document.activeElement === document.body) composerRef.current?.refocus();
+		});
+	};
+
+	const onHistoryOpen = () => (historyState.open ? onDismissHistory() : openOverlay(draft));
+
+	const onManageTemplates = () => useAppStore.getState().openSettings(SettingsSection.Templates);
 
 	const onInsertHit = (hit: PromptHit) => {
 		composerRef.current?.insertText(hit.text);
@@ -741,6 +758,7 @@ export default function ChatView({
 				readMcpOutput={supportsMcp ? readMcpOutput : undefined}
 				openMcpSettings={supportsMcp ? openMcpSettings : undefined}
 				openProviderSettings={supportsMcp ? openProviderSettings : undefined}
+				findModel={findModel}
 				resourcesOverlay={
 					resources.visible ? (
 						<ResourcesInspector
@@ -763,6 +781,7 @@ export default function ChatView({
 							onMcpSetEnabled={resources.setMcpEnabled}
 							onMcpReconnect={resources.reconnectMcp}
 							onOpenMcpSettings={openMcpSettings}
+							renderSubagentModel={renderSubagentModel}
 							detail={
 								selectedCommandId ? (
 									<CommandLogView {...commandLog} onRetry={commandLog.retry} />
@@ -808,6 +827,7 @@ export default function ChatView({
 					onToggleStage={toggleStage}
 					onMoveSelection={moveSelection}
 					onClose={onDismissHistory}
+					onOutsidePress={onHistoryOutsidePress}
 					onInsert={onInsertHit}
 					onInsertAndSend={onInsertAndSendHit}
 					onOpenMessage={openMessage}

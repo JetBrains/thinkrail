@@ -299,27 +299,32 @@ test("plain ArrowUp/ArrowDown recall steps through this chat's own prior prompts
 	await expect(page.getByTestId("history-overlay")).toBeVisible();
 });
 
-test("a recall step immediately followed by a full-value replace never doubles the value, even under CPU contention", async ({
+test("a recall step immediately followed by a full-value replace never doubles the value, even when the step's next frame lands mid-replace", async ({
 	page,
 }) => {
-	test.setTimeout(60_000);
+	type HeldFrames = Window & { releaseHeldFrames?: () => Promise<void> };
 	const input = await openSeededClosedChat(page, [
 		{ role: "user", text: "write a test for the jitter", timestamp: 1_700_500_000_000 },
 		{ role: "assistant", text: "Added a test.", timestamp: 1_700_500_001_000 },
 	]);
 	await expect(input).toHaveValue("");
 
-	const client = await page.context().newCDPSession(page);
-	await client.send("Emulation.setCPUThrottlingRate", { rate: 4 });
-
-	for (let i = 0; i < 200; i++) {
-		await input.press("ArrowUp");
-		await expect(input).toHaveValue("write a test for the jitter");
-		const replacement = `edit ${i}`;
-		await input.fill(replacement);
-		expect(await input.inputValue()).toBe(replacement);
-		await input.fill("");
-	}
+	await page.evaluate(() => {
+		const held: FrameRequestCallback[] = [];
+		const request = window.requestAnimationFrame.bind(window);
+		window.requestAnimationFrame = (callback) => held.push(callback);
+		(window as HeldFrames).releaseHeldFrames = () => {
+			window.requestAnimationFrame = request;
+			for (const callback of held.splice(0)) request(callback);
+			return new Promise((resolve) => request(() => resolve()));
+		};
+	});
+	await input.press("ArrowUp");
+	await expect(input).toHaveValue("write a test for the jitter");
+	await input.selectText();
+	await page.evaluate(() => (window as HeldFrames).releaseHeldFrames?.());
+	await page.keyboard.insertText("edit");
+	expect(await input.inputValue()).toBe("edit");
 });
 
 test("a prompt repeated earlier in the chat recalls at its most recent position, deduped to one entry", async ({
@@ -581,7 +586,7 @@ test("Ctrl+R and Escape are owned app-wide: both work with focus outside the com
 
 	await page.keyboard.press("Control+r");
 	await expect(overlay).toBeVisible();
-	await clickOutside();
+	await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
 	await page.keyboard.press("Escape");
 	await expect(overlay).toBeHidden();
 	await expect(input).toBeFocused();
@@ -600,7 +605,7 @@ test("Ctrl+R and Escape are owned app-wide: both work with focus outside the com
 
 	await page.keyboard.press("Control+r");
 	await expect(scopeBadge).toHaveAttribute("data-scope", "workspace");
-	await clickOutside();
+	await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
 	await page.keyboard.press("Control+r");
 	await expect(scopeBadge).toHaveAttribute("data-scope", "project");
 
@@ -691,4 +696,86 @@ test("the Ctrl+R and Ctrl+S chords fire on a non-Latin keyboard layout", async (
 	await expect(page.getByTestId("template-body-input")).toHaveValue("fix the flaky watcher test");
 
 	await page.getByTestId("template-cancel").click();
+});
+
+test("the history button toggles the overlay, outside clicks dismiss it, and picking a scope does not", async ({
+	page,
+}) => {
+	await openWorkspaceChat(page);
+	seedExternalCwdSessions();
+
+	const historyButton = page.getByTestId("history-open");
+	const overlay = page.getByTestId("history-overlay");
+	const input = page.getByTestId("chat-input");
+
+	await historyButton.click();
+	await expect(overlay).toBeVisible();
+
+	await historyButton.click();
+	await expect(overlay).toBeHidden();
+
+	await historyButton.click();
+	await expect(overlay).toBeVisible();
+
+	await input.click();
+	await expect(overlay).toBeHidden();
+	await expect(input).toBeFocused();
+	await page.keyboard.type("draft");
+	await expect(input).toHaveValue("draft");
+	await input.fill("");
+
+	await historyButton.click();
+	await expect(overlay).toBeVisible();
+	await page.getByTestId("history-scope").click();
+	await page.getByTestId("history-scope-option").first().click();
+	await expect(overlay).toBeVisible();
+
+	await page.getByTestId("open-settings").click();
+	await expect(overlay).toBeHidden();
+	await expect(page.getByTestId("settings-dialog")).toBeVisible();
+});
+
+test("with the scope picker open a press closes only the picker, and a press on empty space hands the caret back to the prompt", async ({
+	page,
+}) => {
+	await openWorkspaceChat(page);
+	seedExternalCwdSessions();
+
+	const historyButton = page.getByTestId("history-open");
+	const overlay = page.getByTestId("history-overlay");
+	const query = page.getByTestId("history-query");
+	const scopeBadge = page.getByTestId("history-scope");
+	const options = page.getByTestId("history-scope-option");
+	const input = page.getByTestId("chat-input");
+	const emptyTopbar = () =>
+		page.getByTestId("topbar").click({ position: { x: 4, y: 20 }, force: true });
+
+	await input.fill("draft");
+	await historyButton.click();
+	await expect(overlay).toBeVisible();
+
+	await scopeBadge.click();
+	await expect(options).toHaveCount(4);
+	await query.click({ force: true });
+	await expect(options).toHaveCount(0);
+	await expect(overlay).toBeVisible();
+	await expect(query).toBeFocused();
+
+	await scopeBadge.click();
+	await expect(options).toHaveCount(4);
+	await emptyTopbar();
+	await expect(options).toHaveCount(0);
+	await expect(overlay).toBeVisible();
+
+	await emptyTopbar();
+	await expect(overlay).toBeHidden();
+	await expect(input).toBeFocused();
+	await page.keyboard.type("!");
+	await expect(input).toHaveValue("draft!");
+
+	await historyButton.click();
+	await expect(overlay).toBeVisible();
+	await expect(options).toHaveCount(0);
+	await page.keyboard.press("Escape");
+	await expect(overlay).toBeHidden();
 });

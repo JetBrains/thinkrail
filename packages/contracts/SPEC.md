@@ -464,8 +464,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   never imported — the DTO posture again), **`SubagentCompletionMessage`** (the compile-held tag↔details
   shape) and the shared **`isSubagentCompletionMessage`** guard — wire data is untrusted, so the
   details validate through **`isDelegationRunDetails`** (domain): the **closed status union**, every
-  required **numeric usage field**, `durationMs`, and every present optional display field as a string,
-  never just "an object is present" (PR #303 review finding). That validator is the one home for the
+  required **numeric usage field**, `durationMs`, every present optional display field as a string, and a
+  present `thinkingLevel` as one of pi's closed levels, never just "an object is present" (PR #303 review finding). That validator is the one home for the
   shape check — the web's Agent-card reader
   narrows through it too — plus **`customMessageText`** — the one text extraction over
   `WireCustomMessage.content` (string | blocks), shared by the web's event reducer and hydration so the
@@ -721,7 +721,8 @@ default, narrow cross-ring guards, and the quit-confirmation rule both clients d
   global; **`template.save`**, **`template.delete`**) — all
   read/write pi's prompt dirs (global + project), so templates stay CLI-portable,
   `WS_CHANNELS` (`server.welcome` — which carries the initial `config: AppConfig` alongside **`projects`**
-  (open records) and **`recentProjects`** (all known records, open + closed), plus optional
+  (open records) and **`recentProjects`** (all known records, open + closed, minus closed records whose
+  folder is definitively gone), plus optional
   **`hostUpdate: HostUpdateNotice`** and **`hostPlatform`**
   (`darwin | linux | win32`, optional for older hosts) — the OS the *host* runs on, so a client that
   offers host-executed commands (the PR setup dialog) picks the right ones instead of guessing from
@@ -789,8 +790,9 @@ without importing that package. Subagents retain their Pi child session ids and 
 - `session.resources({workspaceId, sessionId})` returns separate command and subagent summaries:
   all currently active records plus bounded recent terminal records. The snapshot echoes workspace
   and session identity. Commands mirror the owner's bounded snapshot; subagent summaries carry only
-  child/parent ids, role, task, status, creation time, optional abort reason and — once terminal — the
-  run duration [[module-pi-delegation]] measured (`durationMs`), not usage or reports.
+  child/parent ids, role, task, status, creation time, the child's actual `model` (`provider/id`) and
+  effective `thinkingLevel` (both optional — absent from an older host), optional abort reason and — once
+  terminal — the run duration [[module-pi-delegation]] measured (`durationMs`), not usage or reports.
   Subagent role/task summaries are capped at 200/2,000 characters, with the latest twenty terminal
   children by creation order retained in the projection. These are runtime catalogs; neither historical
   tool acknowledgements nor persisted PIDs supply live authority after restart.

@@ -4,7 +4,10 @@ import {
 	ancestorPaths,
 	compactAge,
 	cssColorToHex,
+	DOUBLE_CLICK_SETTLE_MS,
+	doubleClickPendingMs,
 	fileName,
+	firstClickOnly,
 	firstNonBlankLine,
 	hasPlatformModifier,
 	isAbsolutePath,
@@ -249,4 +252,44 @@ test("firstNonBlankLine skips blank lines and trims", () => {
 	expect(firstNonBlankLine("\n  \n  hello  \nworld")).toBe("hello");
 	expect(firstNonBlankLine(" \n\t\n")).toBeUndefined();
 	expect(firstNonBlankLine("")).toBeUndefined();
+});
+
+const LONG_AGO = -1_000_000;
+
+test("firstClickOnly runs on a first click or keyboard activation, not a double click's second", () => {
+	let runs = 0;
+	const onClick = firstClickOnly(
+		() => {
+			runs += 1;
+		},
+		() => LONG_AGO,
+	);
+	onClick({ detail: 0 });
+	onClick({ detail: 1 });
+	onClick({ detail: 2 });
+	onClick({ detail: 3 });
+	expect(runs).toBe(2);
+});
+
+test("doubleClickPendingMs counts down the double-click window from a first click", () => {
+	firstClickOnly(
+		() => {},
+		() => LONG_AGO,
+	)({ detail: 1 });
+	expect(doubleClickPendingMs(LONG_AGO)).toBe(DOUBLE_CLICK_SETTLE_MS);
+	expect(doubleClickPendingMs(LONG_AGO + 100)).toBe(DOUBLE_CLICK_SETTLE_MS - 100);
+	expect(doubleClickPendingMs(LONG_AGO + DOUBLE_CLICK_SETTLE_MS)).toBe(0);
+	expect(doubleClickPendingMs()).toBe(0);
+});
+
+test("doubleClickPendingMs ignores a keyboard activation", () => {
+	firstClickOnly(
+		() => {},
+		() => LONG_AGO,
+	)({ detail: 1 });
+	firstClickOnly(
+		() => {},
+		() => LONG_AGO + 1_000,
+	)({ detail: 0 });
+	expect(doubleClickPendingMs(LONG_AGO + 1_000)).toBe(0);
 });

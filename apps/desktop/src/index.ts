@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { NativeCommand, NativeQuitHint, NativeWindowState } from "@thinkrail/contracts";
+import { resolveShellEnv } from "@thinkrail/shared/shellEnv";
 import { channel, posthogProjectKey, version } from "@thinkrail/shared/version";
 import Electrobun, {
 	ApplicationMenu,
@@ -192,6 +193,7 @@ async function start(): Promise<void> {
 	} catch (error) {
 		desktopError("cwd", "could not leave the app bundle working directory", error);
 	}
+	const shellEnv = resolveShellEnv();
 	if (!neutral && process.env.THINKRAIL_DESKTOP_HIDDEN !== "1") {
 		startupSplash = await openStartupSplash(
 			(options) => new BrowserWindow(options),
@@ -201,6 +203,7 @@ async function start(): Promise<void> {
 	const serverRuntime = (await import(
 		pathToFileURL(join(runtimeDir, "server-runtime.ts")).href
 	)) as DesktopServerRuntime;
+	await shellEnv;
 	const host = await serverRuntime.startDesktopHost({
 		runtimeDir,
 		staticDir: join(PATHS.VIEWS_FOLDER, "web"),

@@ -35,6 +35,7 @@ export {
 	type ResourceEnvironment,
 	type ResourceIntent,
 	type ResourceRenderer,
+	type ResourceViewModule,
 	type ResourceViewProps,
 	type ReviewThread,
 	type ReviewThreadActions,
@@ -57,6 +58,10 @@ export {
 	type ResourcePreviewProps,
 } from "./support/ResourcePreview";
 export { ReviewThreadCard } from "./support/ReviewThreadCard";
-export { RendererView, useRendererSelection } from "./support/rendererMount";
+export {
+	RendererView,
+	usePreloadResourceView,
+	useRendererSelection,
+} from "./support/rendererMount";
 export { UnplacedReviewStrip } from "./support/UnplacedReviewStrip";
 export { useScrollViewState, viewStateScrollTop } from "./support/useScrollViewState";

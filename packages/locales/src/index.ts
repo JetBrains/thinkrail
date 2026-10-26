@@ -1,4 +1,5 @@
 import en from "../en.json";
+import zhCN from "../zh-CN.json";
 
 export type Catalog = Readonly<Record<string, string>>;
 export type EnglishCatalog = typeof en;
@@ -34,7 +35,7 @@ export const DESKTOP_DIALOG_KEYS = [
 	"desktop.splash.starting",
 ] as const satisfies readonly (keyof EnglishCatalog)[];
 
-const BUNDLED: Readonly<Record<string, Catalog>> = { en: EN };
+const BUNDLED: Readonly<Record<string, Catalog>> = { en: EN, "zh-CN": zhCN };
 
 export const BUNDLED_LOCALES: readonly string[] = Object.keys(BUNDLED);
 
@@ -162,12 +163,25 @@ export function validateCatalog(raw: unknown): CatalogValidation {
 	return { ok: true, strings: Object.fromEntries(entries) };
 }
 
+function scriptKey(tag: string): string | null {
+	try {
+		const locale = new Intl.Locale(tag).maximize();
+		return locale.script ? `${locale.language}-${locale.script}` : locale.language;
+	} catch {
+		return null;
+	}
+}
+
 function matchAvailable(tag: string, available: readonly string[]): string | undefined {
 	const lower = tag.toLowerCase();
 	const exact = available.find((candidate) => candidate.toLowerCase() === lower);
 	if (exact) return exact;
 	const base = baseLanguage(tag);
-	return available.find((candidate) => candidate.toLowerCase() === base);
+	const byBase = available.find((candidate) => candidate.toLowerCase() === base);
+	if (byBase) return byBase;
+	const key = scriptKey(tag);
+	if (key === null) return undefined;
+	return available.find((candidate) => scriptKey(candidate) === key);
 }
 
 export function resolveLocale(

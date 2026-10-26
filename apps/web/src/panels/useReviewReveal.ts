@@ -12,6 +12,7 @@ import { type ChangesLayout, type ChangesTabReveal, useAppStore } from "../store
 
 const SECTION_HEADER_HEIGHT = 32;
 const END_NOTE_HEIGHT = 48;
+const HANDOFF_MAX_FRAMES = 30;
 const USER_SCROLL_EVENTS = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
 
 type SettleTarget = { path: string; commentId?: string };
@@ -21,6 +22,8 @@ interface ReviewRevealInput {
 	tabId: string;
 	files: readonly GitFileChange[];
 	status: GitStatus | null;
+	statusSettled: boolean;
+	readKey: string;
 	layout: ChangesLayout;
 	reveal: ChangesTabReveal | null;
 	activePath: string | null;
@@ -32,14 +35,17 @@ interface ReviewReveal {
 	tailHeight: number;
 	spyActiveSection: () => void;
 	onTotalListHeightChanged: () => void;
+	handoffPath: string | null;
+	startHandoff: (path: string | null) => void;
 }
 
-// Owns the continuous-review scroll choreography (active-section spy, settle-to-section, tail spacer).
 export function useReviewReveal({
 	workspaceId,
 	tabId,
 	files,
 	status,
+	statusSettled,
+	readKey,
 	layout,
 	reveal,
 	activePath,
@@ -51,9 +57,8 @@ export function useReviewReveal({
 	const scrollerRef = useRef<HTMLElement | null>(null);
 	const [tailHeight, setTailHeight] = useState(0);
 	const tailObserver = useRef<ResizeObserver | null>(null);
-	// Gates the one-time scroll to the active section when the stacked list first has content; reset when
-	// the scope empties (a workspace/scope switch) so the next load re-runs it.
 	const restoredStacked = useRef(false);
+	const [handoffPath, setHandoffPath] = useState<string | null>(null);
 	const settling = useRef<SettleTarget | null>(null);
 	const releaseSettling = useCallback(() => {
 		const commentId = settling.current?.commentId;
@@ -145,7 +150,7 @@ export function useReviewReveal({
 		if (!reveal || !status) return;
 		const index = files.findIndex((change) => change.path === reveal.path);
 		if (index < 0) {
-			consumeReveal(workspaceId, tabId, null);
+			if (statusSettled) consumeReveal(workspaceId, tabId, null);
 			return;
 		}
 		const target = {
@@ -165,10 +170,15 @@ export function useReviewReveal({
 		releaseSettling,
 		scrollToSection,
 		status,
+		statusSettled,
 		tabId,
 		reveal,
 		workspaceId,
 	]);
+
+	useEffect(() => {
+		restoredStacked.current = false;
+	}, [readKey]);
 
 	const pendingReveal = reveal !== null;
 	useEffect(() => {
@@ -177,18 +187,50 @@ export function useReviewReveal({
 			settling.current = null;
 			return;
 		}
-		if (!status) {
-			restoredStacked.current = false;
-			return;
-		}
-		if (pendingReveal || restoredStacked.current) return;
-		restoredStacked.current = true;
+		if (pendingReveal || !status || restoredStacked.current) return;
 		const index = files.findIndex((change) => change.path === activePathRef.current);
 		const change = files[index];
+		if (!change && activePathRef.current !== null && !statusSettled) return;
+		restoredStacked.current = true;
 		if (!change) return;
-		const frame = requestAnimationFrame(() => scrollToSection(index, { path: change.path }));
+		let scrolled = false;
+		const frame = requestAnimationFrame(() => {
+			scrolled = true;
+			scrollToSection(index, { path: change.path });
+		});
+		return () => {
+			cancelAnimationFrame(frame);
+			if (!scrolled) restoredStacked.current = false;
+		};
+	}, [files, layout, pendingReveal, scrollToSection, status, statusSettled]);
+
+	useEffect(() => {
+		if (handoffPath === null || layout !== "stacked") return;
+		let frame = 0;
+		let frames = 0;
+		let last = Number.NaN;
+		const check = () => {
+			frames += 1;
+			const scroller = scrollerRef.current;
+			const section = scroller
+				? [...scroller.querySelectorAll<HTMLElement>('[data-testid="changes-section"]')].find(
+						(element) => element.dataset.path === handoffPath,
+					)
+				: undefined;
+			const offset =
+				section && scroller
+					? section.getBoundingClientRect().top - scroller.getBoundingClientRect().top
+					: Number.NaN;
+			if ((Math.abs(offset) < 1 && Math.abs(offset - last) < 1) || frames > HANDOFF_MAX_FRAMES) {
+				setHandoffPath(null);
+				return;
+			}
+			last = offset;
+			frame = requestAnimationFrame(check);
+		};
+		frame = requestAnimationFrame(check);
 		return () => cancelAnimationFrame(frame);
-	}, [files, layout, pendingReveal, scrollToSection, status]);
+	}, [handoffPath, layout]);
 
 	const onTotalListHeightChanged = useCallback(() => {
 		if (revealComment()) return;
@@ -201,5 +243,13 @@ export function useReviewReveal({
 		spyActiveSection();
 	}, [files, releaseSettling, revealComment, spyActiveSection]);
 
-	return { virtuoso, attachScroller, tailHeight, spyActiveSection, onTotalListHeightChanged };
+	return {
+		virtuoso,
+		attachScroller,
+		tailHeight,
+		spyActiveSection,
+		onTotalListHeightChanged,
+		handoffPath,
+		startHandoff: setHandoffPath,
+	};
 }

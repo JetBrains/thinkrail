@@ -12,17 +12,18 @@ tags: [i18n]
 
 The single owner of ThinkRail's UI strings and of the rules every locale source obeys
 ([[architecture]] Decision 23). It ships the bundled catalogs — `en.json` is the English source of truth
-and the file translators start from — and the pure functions that validate a catalog, name a file's
-language, and pick the language to render. Its `./react` entry holds the **one** i18next instance every
-browser surface (`apps/web`, `packages/ui`, extension web halves) renders through, so they cannot drift
-onto separate instances.
+and the file translators start from, `zh-CN.json` is the Simplified Chinese translation — and the pure
+functions that validate a catalog, name a file's language, and pick the language to render. Its `./react`
+entry holds the **one** i18next instance every browser surface (`apps/web`, `packages/ui`, extension web
+halves) renders through, so they cannot drift onto separate instances.
 
 ## Public surface
 
 - **Root `@thinkrail/locales`** (pure, browser- and server-safe, no React):
   - `EN` — the English catalog; `MessageKey` — its key union (plural suffixes `_one`/`_other`/… fold
     into the base key).
-  - `BUNDLED_LOCALES` — the tags shipped with this build (`["en"]` today) and `bundledCatalog(tag)`.
+  - `BUNDLED_LOCALES` — the tags shipped with this build (`["en", "zh-CN"]` today) and
+    `bundledCatalog(tag)`.
   - `SYSTEM_LOCALE` (`"system"`), `canonicalLocale(tag)`, `languageName(tag)` (own-language name via
     `Intl.DisplayNames`, first letter upper-cased), `DESKTOP_MENU_KEYS` and `DESKTOP_DIALOG_KEYS` — the keys the
     desktop's native menu, error dialogs, and startup splash render, one list each for the desktop and the web that pushes
@@ -45,8 +46,12 @@ onto separate instances.
     present form), so a partly translated counter stays in its language instead of falling back to
     English. `applyLocale` runs it on every overlay.
   - `resolveLocale(preference, available, systemLanguages)` — `"system"` walks `systemLanguages` and
-    takes the first exact available tag, else its base language; an explicit tag is used only when
-    available; otherwise `"en"`.
+    takes the first exact available tag, else its base language, else a tag written in the same script;
+    an explicit tag is used only when available; otherwise `"en"`. The script level exists because a
+    system locale usually carries a region the catalog does not name: `zh-Hans-CN` reaches `zh-CN`
+    (both maximize to `zh-Hans`) where a base-language comparison alone stops at `zh` and misses it.
+    Scripts never cross: `zh-TW` and `zh-HK` maximize to `zh-Hant` and fall through to `en` rather than
+    borrowing the Simplified catalog.
   - `baseLanguage(tag)` and `fallbackChain(tag)` (`[tag, base, "en"]`, deduped).
 - **`@thinkrail/locales/react`** (browser): the initialized i18next instance (`i18n`), `useT()` — the
   `Translator` for render, a value that is **replaced whenever the language or its strings change** (a
@@ -70,7 +75,8 @@ indexed markup only for `<T>` strings. No metadata block. The instance runs with
 no setup — renders English.
 
 Keys are named by surface (`settings.language.title`, `chat.composer.placeholder`), never English text: a
-wording fix must not orphan translations. `en.json` stays sorted.
+wording fix must not orphan translations. `en.json` stays sorted; a bundled translation holds a sorted
+subset of its keys, so the files diff cleanly.
 
 ## Boundary
 
@@ -85,6 +91,14 @@ wording fix must not orphan translations. `en.json` stays sorted.
 
 - English output is the contract tests pin: a catalog edit that changes English wording is a product
   change, reviewed like one. Plural pairs carry real English singulars (`"1 group"`, never `"1 groups"`).
+- **A bundled translation is partial by design and guarded by a test, not at runtime.** A string it lacks
+  renders English through the chain, so it can ship incomplete and fill in later; a new key lands in
+  `en.json` first. `applyLocale` loads bundled catalogs as-is (`validateCatalog` and `completePlurals` run
+  only on local files), so a catalog test requires every bundled translation to pass `validateCatalog`
+  with nothing dropped, to hold only sorted `en.json` keys, and to carry every plural form its language
+  needs. Changing an English string's placeholders or markup, or removing a key, therefore fails in the
+  same change, and that change updates or deletes the translation (deleting falls back to English). A
+  rewording that changes the meaning deletes the translation too, rather than leaving it stale.
 - **Render reads the translator as a value, never the global.** The React Compiler caches each render
   expression by its own inputs, so a helper that reads the global `t` / `currentLocale()` (or a getter
   that does) keeps the old language after a switch. Every function evaluated at render — component and
@@ -108,7 +122,8 @@ wording fix must not orphan translations. `en.json` stays sorted.
 
 ## Deferred
 
-Bundled non-English catalogs (the `BUNDLED` map is the seam), locale-aware number formats (token
+Loading bundled translations on demand (each is imported into every consumer's bundle), locale-aware
+number formats (token
 counts, cost and context percentages still use English separators), composite phrases that embed a
 translated count fragment (`chat.trust.untrustedNotice` interpolates a "1 skill" list), RTL layout (`dir`), a first-paint locale
 hint (until the host answers `locales.list`, a local language renders English for a moment), and

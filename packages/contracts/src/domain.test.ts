@@ -208,9 +208,15 @@ describe("isDelegationRunDetails", () => {
 				roleName: "researcher",
 				roleSource: "builtin",
 				model: "provider/model",
+				thinkingLevel: "high",
 				activity: "reading",
 			}),
 		).toBe(true);
+	});
+
+	test("rejects a thinking level outside pi's closed set", () => {
+		expect(isDelegationRunDetails({ ...valid, thinkingLevel: "turbo" })).toBe(false);
+		expect(isDelegationRunDetails({ ...valid, thinkingLevel: "toString" })).toBe(false);
 	});
 
 	test("accepts historical outcomes and optional user cancellation metadata", () => {

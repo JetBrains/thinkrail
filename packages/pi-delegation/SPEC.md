@@ -176,7 +176,9 @@ shutdown release barriers; and finalized outcomes after a shrinking compaction.
   `@earendil-works/pi-tui` (headless by design — rendering is the embedder's);
   importing another workspace package's internals.
 - `DelegationRunDetails` is **authored here and mirrored into `@thinkrail/contracts`** (never
-  imported from it, never re-exported by it) — the `pi-todos` DTO posture.
+  imported from it, never re-exported by it) — the `pi-todos` DTO posture. Its `model`
+  (`provider/id`) and `thinkingLevel` are read off the child session on every snapshot, so they report
+  what the run actually uses (pi-clamped), never the requested value.
 - Consumers import **through the barrel only**; `src/` is internal.
 - The raw child `AgentSession` never crosses the barrel — `ChildHandle` is the sole control path.
 

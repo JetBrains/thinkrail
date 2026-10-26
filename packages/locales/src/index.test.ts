@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
+	BUNDLED_LOCALES,
+	bundledCatalog,
 	completePlurals,
 	EN,
 	fallbackChain,
@@ -56,6 +58,25 @@ describe("resolveLocale", () => {
 		expect(resolveLocale("system", available, ["fr-FR", "pt-BR"])).toBe("pt-BR");
 		expect(resolveLocale("system", available, ["de-AT"])).toBe("de");
 		expect(resolveLocale("system", available, ["ja"])).toBe("en");
+	});
+
+	test("a regional variant matches the script it is written in", () => {
+		const chinese = ["en", "zh-CN"];
+		expect(resolveLocale("system", chinese, ["zh-Hans-CN"])).toBe("zh-CN");
+		expect(resolveLocale("system", chinese, ["zh-Hans"])).toBe("zh-CN");
+		expect(resolveLocale("system", chinese, ["zh"])).toBe("zh-CN");
+	});
+
+	test("a different script never borrows the catalog", () => {
+		const chinese = ["en", "zh-CN"];
+		expect(resolveLocale("system", chinese, ["zh-TW"])).toBe("en");
+		expect(resolveLocale("system", chinese, ["zh-Hant-TW"])).toBe("en");
+		expect(resolveLocale("system", chinese, ["zh-HK"])).toBe("en");
+	});
+
+	test("a region-only difference still matches", () => {
+		expect(resolveLocale("system", ["en", "pt-BR"], ["pt"])).toBe("pt-BR");
+		expect(resolveLocale("system", ["en", "pt-BR"], ["pt-PT"])).toBe("pt-BR");
 	});
 
 	test("an explicit tag is used only when available", () => {
@@ -137,6 +158,29 @@ describe("validateCatalog hardening", () => {
 test("the bundled English catalog passes its own validation", () => {
 	const result = validateCatalog(EN);
 	expect(result.ok && Object.keys(result.strings).length).toBe(Object.keys(EN).length);
+});
+
+describe("bundled non-English catalogs follow en.json", () => {
+	for (const tag of BUNDLED_LOCALES.filter((tag) => tag !== "en")) {
+		const catalog = bundledCatalog(tag) ?? {};
+		const keys = Object.keys(catalog);
+
+		test(`${tag}: every string passes validation against English`, () => {
+			const result = validateCatalog(catalog);
+			const kept = result.ok ? result.strings : {};
+			expect(keys.filter((key) => !Object.hasOwn(kept, key))).toEqual([]);
+		});
+
+		test(`${tag}: every key exists in en.json and the keys stay sorted`, () => {
+			expect(keys.filter((key) => !Object.hasOwn(EN, key))).toEqual([]);
+			expect(keys).toEqual([...keys].sort());
+		});
+
+		test(`${tag}: every translated plural family has each form the language needs`, () => {
+			const completed = completePlurals(tag, catalog);
+			expect(Object.keys(completed).filter((key) => !Object.hasOwn(catalog, key))).toEqual([]);
+		});
+	}
 });
 
 describe("plural forms", () => {

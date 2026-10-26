@@ -18,7 +18,7 @@ bug reports, include:
 
 ## Development setup
 
-**Prerequisites:** [Bun](https://bun.sh) 1.4.3 (the repository's pinned package manager and runtime),
+**Prerequisites:** [Bun](https://bun.sh) 1.4.4 (the repository's pinned package manager and runtime),
 Node.js ≥ 22.19 (required by the in-process `pi` engine), and an authenticated `pi` provider for agent work.
 
 ```bash
@@ -131,7 +131,8 @@ ThinkRail's interface strings live in one file,
    and the page shows a problem with the file if it can't be read.
 
 To ship a translation built-in for everyone, open a pull request that adds it as
-`packages/locales/<code>.json` and registers it in `BUNDLED` in `packages/locales/src/index.ts`. Agent
+`packages/locales/<code>.json` and registers it in `BUNDLED` in `packages/locales/src/index.ts`. It may
+be partial; `bun run test` checks it against `en.json` (keys, placeholders, markup, plural forms). Agent
 replies, tool output, skills, and prompts are not part of the interface and are not translated.
 
 ## Submitting changes
