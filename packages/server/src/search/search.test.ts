@@ -224,7 +224,7 @@ function readers(overrides: Partial<SearchReaders> = {}): SearchReaders {
 		projects: () => [project, other],
 		workspaces: () => [defaultOne, feature, closedProjectWorkspace],
 		sessions: async () => ({ sessions, indexing: false }),
-		specs: (root) => specs[root] ?? [],
+		specs: (root) => ({ entries: specs[root] ?? [], rebuilding: false }),
 		plans: (root) => plans[root] ?? [],
 		invalidateSpecs: () => {},
 		...overrides,
@@ -264,10 +264,10 @@ describe("search.query", () => {
 		expect(byKind.chat?.hits.map((hit) => hit.id)).toEqual(["chat:s1"]);
 		expect(byKind.chat?.hits[0]).toMatchObject({ workspaceId: "w-feature", projectId: "p1" });
 		expect(byKind.transcript?.hits.map((hit) => hit.id)).toEqual([
-			"transcript:s1:0",
 			"transcript:s1:1",
+			"transcript:s1:0",
 		]);
-		expect(byKind.transcript?.hits[0]).toMatchObject({
+		expect(byKind.transcript?.hits[1]).toMatchObject({
 			messageIndex: 0,
 			anchorText: "please refresh the token flow",
 			tier: MATCH_TIER.content,
@@ -327,11 +327,43 @@ describe("search.query", () => {
 
 		service.invalidateRoot("/repos/one-auth");
 		const stale = await service.query("c1", { seq: 2, query: "refresh", kinds: ["file"], context });
-		expect(stale.groups[0]?.state).toBe("ready");
+		expect(stale.groups[0]?.state).toBe("indexing");
 		expect(stale.groups[0]?.hits).toHaveLength(1);
 		await Bun.sleep(0);
 		expect(loads).toBe(2);
+		const fresh = await service.query("c1", { seq: 3, query: "refresh", kinds: ["file"], context });
+		expect(fresh.groups[0]?.state).toBe("ready");
 		expect(files.peek("/repos/one")).toBeNull();
+	});
+
+	test("a failed reload keeps the stale list answering, and a spec snapshot being rebuilt reports indexing", async () => {
+		let fail = false;
+		const files = new FileListCache(async (root) => {
+			if (fail) throw new Error("EMFILE");
+			return lists[root] ?? { paths: [], truncated: false };
+		});
+		await files.load("/repos/one-auth");
+		fail = true;
+		files.invalidate("/repos/one-auth");
+		expect(files.peek("/repos/one-auth")?.paths).toHaveLength(3);
+		await Bun.sleep(0);
+		expect(files.peek("/repos/one-auth")?.paths).toHaveLength(3);
+		expect(files.reloading("/repos/one-auth")).toBe(true);
+
+		const service = createSearchService(
+			readers({
+				files,
+				specs: (root) => ({ entries: specs[root] ?? [], rebuilding: true }),
+			}),
+		);
+		const result = await service.query("c1", {
+			seq: 1,
+			query: "refresh",
+			kinds: ["spec"],
+			context,
+		});
+		expect(result.groups[0]).toMatchObject({ kind: "spec", state: "indexing" });
+		expect(result.groups[0]?.hits).toHaveLength(1);
 	});
 
 	test("the file-list cache keeps a bounded number of roots, and no root answers empty file and spec groups", async () => {

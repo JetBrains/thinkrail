@@ -2,7 +2,7 @@ import type { SearchGroup, SearchHit, Workspace } from "@thinkrail/contracts";
 import { MATCH_TIER, type MatchField, matchFields } from "@thinkrail/contracts";
 import type { HistorySession } from "../history";
 import { makeSnippet, matchesTerms } from "../history";
-import type { SpecSnapshotEntry } from "../spec";
+import type { SpecSnapshot } from "../spec";
 import type { StoredPlanFile } from "../todos";
 import type { FileListCache } from "./files";
 import { buildGroup, compactWhitespace, type Deadline, lineSnippet, termRanges } from "./hits";
@@ -94,17 +94,23 @@ export function searchFiles(
 		const match = matchFields(input.terms, [{ key: "path", text: path, path: true }]);
 		if (match) pushHit(path, match);
 	}
-	return buildGroup("file", hits, input.limit, truncated || list.truncated ? "truncated" : "ready");
+	return buildGroup(
+		"file",
+		hits,
+		input.limit,
+		lists.reloading(root.root) ? "indexing" : truncated || list.truncated ? "truncated" : "ready",
+	);
 }
 
 export function searchSpecs(
 	root: SearchRoot,
-	snapshot: (root: string) => readonly SpecSnapshotEntry[],
+	snapshot: (root: string) => SpecSnapshot,
 	input: ProviderInput,
 ): SearchGroup {
 	const hits: SearchHit[] = [];
 	const bodyTerms = input.terms.some((term) => term.length >= MIN_BODY_TERM_LENGTH);
-	for (const entry of snapshot(root.root)) {
+	const { entries, rebuilding } = snapshot(root.root);
+	for (const entry of entries) {
 		if (input.deadline.expired()) {
 			return buildGroup("spec", hits, input.limit, "truncated");
 		}
@@ -139,7 +145,7 @@ export function searchSpecs(
 			ranges: { snippet: termRanges(snippet, input.terms) },
 		});
 	}
-	return buildGroup("spec", hits, input.limit);
+	return buildGroup("spec", hits, input.limit, rebuilding ? "indexing" : "ready");
 }
 
 export interface ChatLabel {
@@ -196,7 +202,7 @@ export function searchChats(
 				...(session.title ? { subtitle: session.title } : {}),
 				snippet,
 				tier: MATCH_TIER.content,
-				score: entry.role === "user" ? 0.1 : 0,
+				score: 0,
 				ranges: { title: termRanges(snippet.slice(0, TRANSCRIPT_TEXT_PREVIEW), terms) },
 				projectId: where.projectId,
 				workspaceId: where.workspaceId,

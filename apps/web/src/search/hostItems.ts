@@ -6,9 +6,28 @@ import {
 	RiListCheck3,
 	RiNodeTree,
 } from "@remixicon/react";
-import type { MatchRange, SearchGroup, SearchHit } from "@thinkrail/contracts";
+import type { MatchRange, SearchGroup, SearchHit, SearchKind } from "@thinkrail/contracts";
 import type { Translator } from "@thinkrail/locales/react";
 import type { PaletteItem, PaletteMatch } from "./model";
+
+export const HOST_GROUP_OF_KIND: Readonly<Record<SearchKind, string>> = {
+	chat: "chats",
+	transcript: "transcripts",
+	workspace: "workspaces",
+	file: "files",
+	spec: "specs",
+	plan: "plans",
+};
+
+/** Per palette group, how many hits the host counted beyond the page it returned. */
+export function hostOverflow(groups: readonly SearchGroup[]): Record<string, number> {
+	const overflow: Record<string, number> = {};
+	for (const group of groups) {
+		const extra = group.total - group.hits.length;
+		if (extra > 0) overflow[HOST_GROUP_OF_KIND[group.kind]] = extra;
+	}
+	return overflow;
+}
 
 export interface HostItemContext {
 	readonly t: Translator;

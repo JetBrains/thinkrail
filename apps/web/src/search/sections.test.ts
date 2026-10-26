@@ -148,4 +148,20 @@ describe("buildSections", () => {
 		const expanded = sections("@", { rootItems: many, expanded: new Set(["chats"]) });
 		expect(expanded.find((section) => section.id === "chats")?.items).toHaveLength(35);
 	});
+
+	test("host hits beyond the returned page count into the more row in All and into the meta of a scope", () => {
+		const two = [chat("h1", "Auth one"), chat("h2", "Auth two")];
+		const all = sections("auth", { rootItems: two, hostOverflow: { chats: 18 } });
+		const chats = all.find((section) => section.id === "chats");
+		expect(chats?.meta).toBe("20");
+		expect(chats?.items.at(-1)?.item).toMatchObject({
+			kind: "more",
+			title: "18 more in Chats",
+			more: { kind: "scope", scope: "work" },
+		});
+		const scoped = sections("@auth", { rootItems: two, hostOverflow: { chats: 18 } });
+		const scopedChats = scoped.find((section) => section.id === "chats");
+		expect(scopedChats?.meta).toBe("20 matches · showing 2, refine the query for the rest");
+		expect(scopedChats?.items.every((row) => row.item.kind !== "more")).toBe(true);
+	});
 });

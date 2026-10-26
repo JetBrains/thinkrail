@@ -102,15 +102,28 @@ describe("host search controller", () => {
 		h.requests[1]?.resolve({ seq: h.requests[1].params.seq, groups: [group()] });
 		await h.settle();
 		expect(h.emitted.at(-1)).toEqual({ groups: [group()], pending: false });
+
+		h.controller.update(input("refre"));
+		expect(h.emitted.at(-1)).toEqual({ groups: [group()], pending: true });
+		h.fire();
+		h.requests[2]?.resolve({
+			seq: h.requests[2].params.seq,
+			groups: [group("ready", ["file:p1::b.ts"])],
+		});
+		await h.settle();
+		expect(h.emitted.at(-1)).toEqual({
+			groups: [group("ready", ["file:p1::b.ts"])],
+			pending: false,
+		});
 	});
 
-	test("a superseded or stale reply never paints, a failed request paints nothing and stops", async () => {
+	test("a superseded latest reply ends empty instead of pending forever, a stale reply never paints, a failed request paints nothing and stops", async () => {
 		const h = harness();
 		h.controller.update(input("auth"));
 		h.fire();
 		h.requests[0]?.resolve({ seq: h.requests[0].params.seq, groups: [], superseded: true });
 		await h.settle();
-		expect(h.emitted.at(-1)).toEqual({ groups: null, pending: true });
+		expect(h.emitted.at(-1)).toEqual({ groups: [], pending: false });
 
 		h.controller.update(input("auth"));
 		expect(h.requests).toHaveLength(1);

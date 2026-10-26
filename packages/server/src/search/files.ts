@@ -166,13 +166,22 @@ export class FileListCache {
 		return cached.list;
 	}
 
+	/** A reload is in flight: `peek` still answers, but the answer is about to change. */
+	reloading(root: string): boolean {
+		return this.loading.has(root);
+	}
+
 	load(root: string): Promise<IndexedFileList> {
 		const inFlight = this.loading.get(root);
 		if (inFlight) return inFlight;
 		const promise = this.loader(root)
 			.then((list) => indexFileList(list))
-			.catch(() => indexFileList({ paths: [], truncated: false }))
-			.then((list) => {
+			.catch((): IndexedFileList | null => null)
+			.then((loaded) => {
+				this.loading.delete(root);
+				const kept = this.lists.get(root);
+				if (loaded === null && kept) return kept.list;
+				const list = loaded ?? indexFileList({ paths: [], truncated: false });
 				this.lists.delete(root);
 				this.lists.set(root, { at: this.now(), list });
 				while (this.lists.size > FILE_LIST_LIMITS.maxRoots) {
@@ -180,7 +189,6 @@ export class FileListCache {
 					if (oldest === undefined) break;
 					this.lists.delete(oldest);
 				}
-				this.loading.delete(root);
 				return list;
 			});
 		this.loading.set(root, promise);

@@ -38,15 +38,16 @@ core/SPEC.md), not an async wrapper — that would still block the loop in one p
   task-spec, e.g. under `.thinkrail/context/`, must never signal "set up"), through a per-root reused `SpecIndex`; the
   project-level signal behind the Welcome screen's "Set up project" suggestion. Degrades to `false` on a
   glob/parse failure so it can never break `project.open` / `project.list`.
-  **`specSnapshot(root) → SpecSnapshotEntry[]`** — the search palette's read: every spec of a repo
+  **`specSnapshot(root) → SpecSnapshot`** — the search palette's read: every spec of a repo
   **root** (path, id, title, type, full content) through the same per-root reused `SpecIndex`,
   memoized for a 5 s TTL so a keystroke never re-walks the tree; a lapsed TTL or
   `invalidateSpecSnapshot(root)` (the host calls it on `workspace.fsChanged`) keeps the old snapshot
   answering and rebuilds it on `setImmediate`, so only a root's very first read walks on the request
-  path. The walk stays synchronous and bounded by the parse cache; a glob/parse failure degrades to an
+  path; the snapshot says `rebuilding` while that is pending, so a caller can report "indexing" and be
+  asked again instead of serving the stale build as final. The walk stays synchronous and bounded by the parse cache; a glob/parse failure degrades to an
   empty snapshot.
 - **Public surface (barrel):** `specGraph`, `evictSpecIndex`, `projectHasSpecs`, `specSnapshot`,
-  `invalidateSpecSnapshot`, `SpecSnapshotEntry`.
+  `invalidateSpecSnapshot`, `SpecSnapshot`, `SpecSnapshotEntry`.
 - **Allowed deps:** `persistence` (workspace lookup); `contracts` (DTOs); **`pi-spec-graph/core`** (the
   pi-free read model — the one host-side value-import of the extension package, sanctioned in
   `module-spec-graph`).

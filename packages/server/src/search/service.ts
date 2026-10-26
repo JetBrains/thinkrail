@@ -17,7 +17,7 @@ import {
 	SEARCH_KINDS,
 } from "@thinkrail/contracts";
 import type { HistorySession } from "../history";
-import type { SpecSnapshotEntry } from "../spec";
+import type { SpecSnapshot } from "../spec";
 import type { StoredPlanFile } from "../todos";
 import { FileListCache } from "./files";
 import { deadlineAt, emptyGroup } from "./hits";
@@ -36,7 +36,7 @@ export interface SearchReaders {
 	readonly projects: () => Project[];
 	readonly workspaces: () => Workspace[];
 	readonly sessions: () => Promise<{ sessions: readonly HistorySession[]; indexing: boolean }>;
-	readonly specs: (root: string) => readonly SpecSnapshotEntry[];
+	readonly specs: (root: string) => SpecSnapshot;
 	readonly plans: (root: string) => StoredPlanFile[];
 	readonly invalidateSpecs: (root: string) => void;
 	readonly files?: FileListCache;

@@ -1541,6 +1541,7 @@
 	"search.group.chats": "Chats",
 	"search.group.commands": "Commands",
 	"search.group.files": "Files",
+	"search.group.hostCapped": "{{count}} matches · showing {{shown}}, refine the query for the rest",
 	"search.group.plans": "Plans",
 	"search.group.projects": "Projects",
 	"search.group.recent": "Recent",

@@ -59,16 +59,22 @@ function buildSnapshot(root: string): SpecSnapshotEntry[] {
 	}
 }
 
+export interface SpecSnapshot {
+	readonly entries: readonly SpecSnapshotEntry[];
+	/** The entries are the previous build; a rebuild is scheduled, so a caller may ask again shortly. */
+	readonly rebuilding: boolean;
+}
+
 /** The root's specs, memoized for a short TTL; the first read of a root builds synchronously, later rebuilds happen off the request. */
-export function specSnapshot(root: string, now = Date.now()): readonly SpecSnapshotEntry[] {
+export function specSnapshot(root: string, now = Date.now()): SpecSnapshot {
 	const cached = snapshots.get(root);
 	if (!cached) {
 		const entries = buildSnapshot(root);
 		snapshots.set(root, { at: now, entries });
-		return entries;
+		return { entries, rebuilding: false };
 	}
 	if (now - cached.at >= SNAPSHOT_TTL_MS) scheduleSnapshotRebuild(root);
-	return cached.entries;
+	return { entries: cached.entries, rebuilding: rebuilding.has(root) };
 }
 
 function scheduleSnapshotRebuild(root: string): void {

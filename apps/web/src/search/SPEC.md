@@ -56,10 +56,12 @@ the query's text without its scope prefix and computed once per query, each quer
 recent picks), the current workspace/project boost, and the attention boost reorder. A top hit shows only when the best row
 is prefix-or-better and clearly ahead, or the typed query has latched to it. Groups are ordered by their
 best row and capped at four in All (thirty in a scope) with an "N more" row: in All it switches to the
-group's scope, in a scope it expands the group in place. The empty query lists **Waiting for you** (the
-former session switcher's attention set without running chats — a chat that needs input, failed or
-finished unread — across every open project, eight rows before an in-place "Show N more"), **Recent** (by
-frecency), and **Actions**.
+group's scope, in a scope it expands the group in place. `N` counts the host's overflow too (the host's
+`total` beyond the page it returned), a scoped query asks the host for its maximum page, and a scoped group
+the host still capped says so in its meta instead of pretending the page is everything. The empty query
+lists **Waiting for you** (the former session switcher's attention set without running chats — a chat that
+needs input, failed or finished unread — across every open project, eight rows before an in-place "Show N
+more"), **Recent** (by frecency), and **Actions**.
 
 A chat row is worded by `lib`'s `chatLabel` over the known title (a named layout tab, else a history row
 — the title backfill installs listed chats into the history projection, so a rename broadcast updates them
@@ -71,16 +73,20 @@ neither a prompt nor attention is not listed.
 ## Host search
 
 `useHostSearch` wraps the pure `createHostSearchController`: a 100 ms debounce, at most one request in
-flight plus the latest queued input, a monotonic `seq` for the host's per-client superseding, and
-fencing — a reply paints only when it answers the current input, its `seq` is the latest issued, the
-welcome generation is unchanged and the host did not mark it `superseded`; a failed request paints
-nothing and never retries; an `indexing` group polls every 300 ms up to twenty times, `truncated` and
-`failed` never poll. The host is asked only for the scope's kinds (`scopeKinds`) and never on a page or
+flight plus the latest queued input, a monotonic `seq` seeded from the clock (a reloaded page never
+reissues a number the host has seen) for the host's per-client superseding, and fencing — a reply
+paints only when it answers the current input, its `seq` is the latest issued and the welcome
+generation is unchanged; a failed request, or a latest reply the host still marked `superseded`, paints
+an empty result and stops (never a spinner that cannot end); an `indexing` group polls every 300 ms up
+to twenty times, `truncated` and `failed` never poll. While a new request is pending the previous host
+rows stay on screen — they are replaced, never blanked, when the reply lands, so the selection does not
+jump between keystrokes. The host is asked only for the scope's kinds (`scopeKinds`) and never on a page or
 for an empty query. `hostItems` turns the host's groups into rows — files, specs, plans, transcripts, plus
 chats and workspaces the client does not already list — carrying the host's matcher result as
 `PaletteItem.match`, so `rankItems` ranks them with the local rows by the same tiers instead of
 re-matching the title. Host hits that arrive after the user moved the selection are flagged `late` and
-sort after their group's earlier rows, so the rows above the selection never reorder. A file or spec
+sort after every row that was already there — across tiers, never as the top hit — so the rows above
+the selection never reorder and the selected row never drops out of a capped group. A file or spec
 hit without a workspace is dropped (nothing could read or open it). A host row opens through the
 injected `PaletteHost.openHit`.
 

@@ -55,7 +55,9 @@ plan files whose session has no transcript on disk (orphans).
 - **Budgets:** each provider gets `SEARCH_BUDGET.providerMs`, all within `queryMs`; a provider that
   runs out of time returns what it has as `truncated`. A throwing provider reports `failed` (the
   client never polls a failed group). A file list that has never loaded reports the group `indexing`
-  and starts loading (single-flight per root); the client re-asks.
+  and starts loading (single-flight per root); a list or spec snapshot that is being reloaded behind a
+  stale answer reports `indexing` too, with the stale hits — so the client's bounded polling picks up
+  the refreshed corpus instead of taking the stale page as final.
 - **Files:** `git ls-files -co --exclude-standard -z` streamed through `gitAsyncStream` and a capped
   NUL parser (`FILE_LIST_LIMITS`: 100k names / 16 MB, then `truncated`), a bounded `readdir` walk for a
   non-git root; `node_modules` and VCS directories are always hidden. Lists are cached per root with a
@@ -63,7 +65,9 @@ plan files whose session has no transcript on disk (orphans).
   keeps the recent ones warm; a list cut at its cap is still searched and its group reported
   `truncated`) and revalidated
   stale-while-reloading after a TTL or on `workspace.fsChanged` (`invalidateRoot`) — the old list keeps
-  answering until the reload lands, so a change never blanks the active workspace's files. Matching is
+  answering until the reload lands, and a reload that throws (spawn failure, `EMFILE`) keeps it too,
+  left stale so the next ask retries; only a root with nothing cached falls back to an empty list.
+  A change therefore never blanks the active workspace's files. Matching is
   two-pass: a substring prefilter over every term runs the matcher on the plain hits first, then every
   remaining path that passes a cheap subsequence test goes through the matcher too (acronym, camel-hump
   and subsequence tiers), both passes bounded by the deadline. 100k paths answer in tens of milliseconds.
@@ -72,8 +76,9 @@ plan files whose session has no transcript on disk (orphans).
   the previous snapshot answering meanwhile (title / id / path through the matcher; a body match from
   three characters becomes a `content`-tier hit with the matching line as `snippet`).
 - **Chats and transcripts:** title hits through the matcher; transcript hits are substring-AND over
-  entries (the history index's rule), one per message, `content` tier, newest first, carrying
-  `messageIndex` / `anchorText` for the client's drift-tolerant jump.
+  entries (the history index's rule), one per message, `content` tier with an equal score so the
+  timestamp alone orders them newest first (a user message never outranks a newer assistant one),
+  carrying `messageIndex` / `anchorText` for the client's drift-tolerant jump.
 - **Plans:** group and item titles through the matcher; hits carry the plan's session so the client
   opens the chat and its plan.
 - **Workspaces:** name, branch and `#<pr>` through the matcher over persisted records — the client

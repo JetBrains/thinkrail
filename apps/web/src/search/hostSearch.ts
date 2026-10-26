@@ -17,13 +17,15 @@ export const HOST_SEARCH = {
 	maxIndexingPolls: 20,
 } as const;
 
-let nextSeq = 1;
+/** Seeded with the clock so a reloaded page never issues a `seq` the host has already seen from this client. */
+let nextSeq = Date.now();
 
 export interface HostSearchInput {
 	readonly enabled: boolean;
 	readonly text: string;
 	readonly kinds: readonly SearchKind[];
 	readonly context: SearchContext;
+	readonly limit?: number;
 }
 
 export interface HostSearchState {
@@ -39,7 +41,8 @@ export function sameHostInput(a: HostSearchInput, b: HostSearchInput): boolean {
 		a.text === b.text &&
 		a.kinds.join(",") === b.kinds.join(",") &&
 		a.context.projectId === b.context.projectId &&
-		a.context.workspaceId === b.context.workspaceId
+		a.context.workspaceId === b.context.workspaceId &&
+		a.limit === b.limit
 	);
 }
 
@@ -76,6 +79,12 @@ export function createHostSearchController(deps: HostSearchControllerDeps): Host
 	let cancelDebounce: (() => void) | null = null;
 	let cancelPoll: (() => void) | null = null;
 	let polls = 0;
+	let shown: readonly SearchGroup[] | null = null;
+
+	const emit = (state: HostSearchState) => {
+		shown = state.groups;
+		deps.emit(state);
+	};
 
 	const issue = async (request: HostSearchInput): Promise<void> => {
 		if (inFlight) {
@@ -92,6 +101,7 @@ export function createHostSearchController(deps: HostSearchControllerDeps): Host
 				query: request.text,
 				kinds: [...request.kinds],
 				context: request.context,
+				...(request.limit === undefined ? {} : { limit: request.limit }),
 			})
 			.catch(() => null);
 		inFlight = false;
@@ -103,14 +113,13 @@ export function createHostSearchController(deps: HostSearchControllerDeps): Host
 		}
 		if (!issued || issued.seq !== seq || deps.generation() !== generation) return;
 		if (current === null || !sameHostInput(current.input, request)) return;
-		if (result === null) {
-			deps.emit({ groups: [], pending: false });
+		if (result === null || result.superseded) {
+			emit({ groups: [], pending: false });
 			return;
 		}
-		if (result.superseded) return;
 		const indexing = result.groups.some((group) => group.state === "indexing");
 		const keepPolling = indexing && polls < HOST_SEARCH.maxIndexingPolls;
-		deps.emit({ groups: result.groups, pending: keepPolling });
+		emit({ groups: result.groups, pending: keepPolling });
 		if (keepPolling) {
 			polls += 1;
 			cancelPoll = schedule(() => {
@@ -139,12 +148,12 @@ export function createHostSearchController(deps: HostSearchControllerDeps): Host
 			current = null;
 			issued = null;
 			queued = null;
-			deps.emit(IDLE_HOST_SEARCH);
+			emit(IDLE_HOST_SEARCH);
 			return;
 		}
 		current = { input, generation };
 		polls = 0;
-		deps.emit({ groups: null, pending: true });
+		emit({ groups: shown, pending: true });
 		cancelDebounce = schedule(() => {
 			cancelDebounce = null;
 			void issue(input);

@@ -1,9 +1,10 @@
 import { RiCornerDownLeftLine, RiSearchLine, RiSideBarLine, RiWifiOffLine } from "@remixicon/react";
-import type {
-	SearchContext,
-	SearchHit,
-	SearchPreviewResult,
-	SearchPreviewTarget,
+import {
+	MAX_SEARCH_GROUP_LIMIT,
+	type SearchContext,
+	type SearchHit,
+	type SearchPreviewResult,
+	type SearchPreviewTarget,
 } from "@thinkrail/contracts";
 import type { MessageKey } from "@thinkrail/locales";
 import { type Translator, useT } from "@thinkrail/locales/react";
@@ -25,7 +26,7 @@ import { shortcutKeys } from "../commands";
 import { AttentionDot } from "../components/AttentionDot";
 import { RunningIcon } from "../components/RunningIcon";
 import { hasPlatformModifier } from "../lib";
-import { hostItems } from "./hostItems";
+import { hostItems, hostOverflow } from "./hostItems";
 import { createHostPreviewLoader, type HostPreviewLoader, useHostSearch } from "./hostSearch";
 import { isImeComposing } from "./ime";
 import { recordPick } from "./learning";
@@ -118,6 +119,7 @@ function PaletteContent({
 				...(hostProjectId ? { projectId: hostProjectId } : {}),
 				...(hostWorkspaceId ? { workspaceId: hostWorkspaceId } : {}),
 			},
+			...(parsed.scope === "all" ? {} : { limit: MAX_SEARCH_GROUP_LIMIT }),
 		}),
 		[hostEnabled, hostProjectId, hostWorkspaceId, parsed.text, parsed.scope],
 	);
@@ -150,11 +152,16 @@ function PaletteContent({
 		};
 		return [...rootItems, ...hostItems(context, hostState.groups)];
 	}, [host, hostState.groups, rootItems, t, lateIds]);
+	const overflow = useMemo(
+		() => (hostState.groups ? hostOverflow(hostState.groups) : {}),
+		[hostState.groups],
+	);
 	const sections = useMemo(
 		() =>
 			buildSections({
 				t,
 				parsed,
+				hostOverflow: overflow,
 				rootItems: allItems,
 				waiting,
 				actions: emptyActions,
@@ -162,7 +169,7 @@ function PaletteContent({
 				learning,
 				nowMs,
 			}),
-		[t, parsed, allItems, waiting, emptyActions, expanded, learning, nowMs],
+		[t, parsed, overflow, allItems, waiting, emptyActions, expanded, learning, nowMs],
 	);
 	const rows = useMemo(() => flattenRows(sections), [sections]);
 	const selectedIndex = Math.max(

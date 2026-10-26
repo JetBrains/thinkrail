@@ -128,7 +128,7 @@ describe("hostItems", () => {
 		});
 	});
 
-	test("ranking trusts the host's match and sorts late rows after the others within a tier", () => {
+	test("ranking trusts the host's match and sorts late rows after every row that was already there", () => {
 		const { result } = items(["chat:remote"]);
 		const extra = {
 			...(result.find((item) => item.id === "chat:remote") as object),
@@ -145,8 +145,8 @@ describe("hostItems", () => {
 		expect(ranked.map((entry) => entry.item.id)).toEqual([
 			"file:p1:w1:src/auth/refresh.ts",
 			"chat:other",
-			"chat:remote",
 			"transcript:remote:3",
+			"chat:remote",
 		]);
 		expect(ranked[0]?.match.fields).toEqual([
 			{ key: "title", ranges: [[0, 7]] },

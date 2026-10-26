@@ -45,8 +45,8 @@ export function itemBoost(
 
 export function compareRanked(a: RankedItem, b: RankedItem): number {
 	return (
-		a.match.tier - b.match.tier ||
 		Number(a.item.late === true) - Number(b.item.late === true) ||
+		a.match.tier - b.match.tier ||
 		b.total - a.total
 	);
 }
