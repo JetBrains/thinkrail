@@ -98,7 +98,8 @@ A platform's native behavior is proven only on that platform. Windows remains a 
 executable, environment, path, and trash behavior differs materially from POSIX hosts. Its subprocess unit
 gate also exercises native descendant-console behavior, which the Linux unit run cannot prove. Its
 desktop window-chrome unit gate binds the `user32.dll` frame symbols the frameless title bar relies on,
-and round-trips the window icon through a real window ([[module-desktop]]). Neither gate needs the
+round-trips the window icon through a real window, and stamps an AppUserModelID onto real shortcuts
+([[module-desktop]]). Neither gate needs the
 Electrobun devkit. Its binary smoke also checks the compiled exe's icon and file properties
 ([[module-artifact-tests]]). Its path gate (`bun run test:windows-paths`) runs
 the suites that pin architecture Decision 22 on the one host where git prints `C:/…`, node prints `C:\…`,

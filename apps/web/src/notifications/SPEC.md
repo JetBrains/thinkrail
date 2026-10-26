@@ -70,10 +70,12 @@ Worker on either channel: a fully-closed app has no live client and raises nothi
 **OS-dependent (desktop).** The native rendering is the pinned Electrobun 2.0.1 backend, which takes
 `title` + `body` + `subtitle` + `silent` and renders per platform: macOS `UNUserNotificationCenter`
 (native title/subtitle/body, OS-requested authorization on first show), Windows a `Shell_NotifyIconW` tray
-**balloon** (title + body; `subtitle` folds in as an extra line per the SDK — not a Windows Toast and no App
-User Model ID), Linux libnotify/D-Bus (DE-dependent, Wayland caveats, subtitle folded likewise). The macOS
-bundle id comes from `apps/desktop/electrobun.config.ts` (`identifier: ai.thinkrail.app`, name `ThinkRail`),
-and the OS supplies the app icon (the native call has no icon field). **Limitation:** the bridge exposes no
+**balloon** (title + body; `subtitle` folds in as an extra line per the SDK — not a Windows Toast), Linux
+libnotify/D-Bus (DE-dependent, Wayland caveats, subtitle folded likewise). The macOS bundle id comes from
+`apps/desktop/electrobun.config.ts` (`identifier: ai.thinkrail.app`, name `ThinkRail`), and macOS supplies
+the app icon (the native call has no icon field). The Windows balloon shows Electrobun's generic
+application icon. It carries no App User Model ID of its own, so the sender Windows shows follows the
+process's ID ([[module-desktop]]); that attribution is unverified. **Limitation:** the bridge exposes no
 way to read the OS permission state, so the desktop channel reports `granted` unconditionally; if the user
 has denied notifications at the OS level the call is accepted and silently not shown. Querying/handling OS
 permission (and click callbacks) is deferred.
