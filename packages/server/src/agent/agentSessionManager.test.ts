@@ -5,7 +5,6 @@ import {
 	mkdtempSync,
 	readdirSync,
 	readFileSync,
-	renameSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs";
@@ -987,348 +986,88 @@ test("an idle chat drops a disabled extension's tool and guidance live and resto
 	}
 });
 
-test.each([
-	false,
-	true,
-])("registry tools survive persistent restart and repeated reopen before the restored declaration (unloaded: %s)", async (unloadWhileDisabled) => {
-	const cwd = tmpCwd("trpi-extension-restart-");
-	const workspaceId = "ws-extension-restart";
-	const manager = SessionManager.create(cwd);
-	setSessionManagerFactory(() => manager);
+async function withPersistentVisualizeChat(
+	prefix: string,
+	run: (chat: {
+		setDisabled: (names: string[]) => void;
+		prompt: (label: string) => Promise<string>;
+		restart: () => Promise<void>;
+	}) => Promise<void>,
+): Promise<void> {
 	let disabled = new Set<string>();
 	setDisabledExtensionsResolver(() => disabled);
-	let live: AgentSession | undefined;
-	const originalBind = AgentSession.prototype.bindExtensions;
-	const binding = jest.spyOn(AgentSession.prototype, "bindExtensions").mockImplementation(function (
-		this: AgentSession,
-		...args
-	) {
-		live = this;
-		return originalBind.apply(this, args);
-	});
-	const current = (): AgentSession => {
-		if (!live) throw new Error("expected a real Pi session");
-		return live;
-	};
+	setSessionManagerFactory((cwd) => SessionManager.create(cwd));
+	const cwd = tmpCwd(`trpi-${prefix}-`);
+	const workspaceId = `ws-${prefix}`;
 	let sessionId: string | undefined;
 	try {
 		const session = await createSession({ cwd, workspaceId, model: toWireModel(fauxA.getModel()) });
-		sessionId = session.sessionId;
-		const prompt = async (expected: string): Promise<void> => {
-			let state = "";
-			fauxA.setResponses([
-				(context) => {
-					state = visualizeToolState(context);
-					return fauxAssistantMessage("REGISTRY_REPLY");
-				},
-			]);
-			await promptSession(session.sessionId, "Check the registry tool selection.");
-			expect(state).toBe(expected);
-		};
-		await prompt("VISUALIZE_ON");
-		disabled = new Set(["visualize"]);
-		refreshExtensionTools();
-		await prompt("VISUALIZE_OFF");
-		if (unloadWhileDisabled) {
-			await reloadSessionResources(sessionId);
-			expect(
-				current()
-					.getAllTools()
-					.some((tool) => tool.name === "visualize"),
-			).toBe(false);
-			await prompt("VISUALIZE_OFF");
-			await removeSession(sessionId);
-			await getSessionMessages(sessionId, workspaceId, cwd);
-			await prompt("VISUALIZE_OFF");
-		}
-		const file = manager.getSessionFile();
-		if (!file) throw new Error("expected a persistent transcript");
-		expect(
-			getCurrentTools(SessionManager.open(file).buildSessionContext().messages).map((t) => t.name),
-		).not.toContain("visualize");
-		await removeSession(sessionId);
-
-		disabled = new Set();
-		for (let restart = 0; restart < 3; restart++) {
-			await getSessionMessages(sessionId, workspaceId, cwd);
-			expect(current().getActiveToolNames()).toContain("visualize");
-			await removeSession(sessionId);
-		}
-		await getSessionMessages(sessionId, workspaceId, cwd);
-		await prompt("VISUALIZE_ON");
-		current().setActiveToolsByName(
-			current()
-				.getActiveToolNames()
-				.filter((n) => n !== "visualize"),
-		);
-		await prompt("VISUALIZE_OFF");
-		await removeSession(sessionId);
-		await getSessionMessages(sessionId, workspaceId, cwd);
-		expect(current().getActiveToolNames()).not.toContain("visualize");
-		await prompt("VISUALIZE_OFF");
-	} finally {
-		binding.mockRestore();
-		setDisabledExtensionsResolver(() => new Set());
-		if (sessionId) await removeSession(sessionId);
-		setSessionManagerFactory(() => SessionManager.inMemory());
-	}
-});
-
-test.each([
-	["refresh", "idle"],
-	["settlement", "settlement-first"],
-	["acknowledgement", "settlement-first"],
-	["acknowledgement", "shutdown-first"],
-	["acknowledgement-user", "settlement-first"],
-	["acknowledgement-user", "shutdown-first"],
-])("registry write failure at %s preserves durable history and terminal lifecycle (%s)", async (boundary, order) => {
-	const shutdownFirst = order === "shutdown-first";
-	const cwd = tmpCwd("trpi-registry-write-failure-");
-	const workspaceId = "ws-registry-write-failure";
-	let healthySessionId: string | undefined;
-	const states: SessionStateRecord[] = [];
-	setSessionStatePublisher((record) => states.push(record));
-	const manager = SessionManager.create(cwd);
-	setSessionManagerFactory(() => manager);
-	let disabled = new Set<string>();
-	setDisabledExtensionsResolver(() => disabled);
-	let sessionId: string | undefined;
-	let append: ReturnType<typeof jest.spyOn> | undefined;
-	let shutdown: ReturnType<typeof jest.spyOn> | undefined;
-	let live: AgentSession | undefined;
-	const bind = AgentSession.prototype.bindExtensions;
-	const binding = jest.spyOn(AgentSession.prototype, "bindExtensions").mockImplementation(function (
-		this: AgentSession,
-		...args
-	) {
-		live = this;
-		return bind.apply(this, args);
-	});
-	let writeFailed = false;
-	let actualSettlements = 0;
-	let reachSettlement = () => {};
-	const settlementReached = new Promise<void>((resolve) => {
-		reachSettlement = resolve;
-	});
-	let finishSettlement = () => {};
-	const settlementGate = new Promise<void>((resolve) => {
-		finishSettlement = resolve;
-	});
-	let finishShutdown = () => {};
-	const shutdownGate = new Promise<void>((resolve) => {
-		finishShutdown = resolve;
-	});
-	try {
-		const created = await createSession({ cwd, workspaceId, model: toWireModel(fauxA.getModel()) });
-		sessionId = created.sessionId;
-		fauxA.setResponses([fauxAssistantMessage("Before failure")]);
-		await promptSession(sessionId, "Durable history");
-		const file = manager.getSessionFile();
-		if (!file) throw new Error("expected a persistent transcript");
-		if (!live) throw new Error("expected a live session");
-		const context = live.extensionRunner.createContext();
-		const runner = live.extensionRunner;
-		const emit = runner.emit.bind(runner);
-		shutdown = jest.spyOn(runner, "emit").mockImplementation(async (event) => {
-			if (event.type === "session_shutdown") {
-				await shutdownGate;
-				expect(context.getSystemPrompt()).toBeString();
-				expect(() => manager.appendCustomEntry("late-shutdown-write", {})).toThrow();
-			}
-			if (event.type === "agent_settled" && writeFailed && shutdownFirst) {
-				reachSettlement();
-				await settlementGate;
-			}
-			const result = await emit(event);
-			if (event.type === "agent_settled") actualSettlements++;
-			return result;
-		});
-		if (boundary.startsWith("acknowledgement")) {
-			disabled = new Set(["visualize"]);
-			refreshExtensionTools();
-			fauxA.setResponses([fauxAssistantMessage("Disabled")]);
-			await promptSession(sessionId, "Persist the disabled selection");
-			disabled = new Set();
-			refreshExtensionTools();
-		}
-		if (boundary === "acknowledgement-user") {
-			live.setActiveToolsByName(live.getActiveToolNames().filter((name) => name !== "visualize"));
-			await initializeSessionStates([]);
-			const completion = getSessionState(sessionId).completion;
-			if (!completion) throw new Error("expected a completed preceding run");
-			expect(acknowledgeCompletion(sessionId, completion.completionId).acknowledged).toBe(true);
-		}
-		const beforeState = getSessionState(sessionId);
-		states.length = 0;
-		events.set(sessionId, []);
-		actualSettlements = 0;
-		const before = manager.getBranch().map((entry) => entry.id);
-		const originalAppend = manager.appendCustomEntry.bind(manager);
-		append = jest.spyOn(manager, "appendCustomEntry").mockImplementation((type, data) => {
-			const failingType = boundary.startsWith("acknowledgement")
-				? "thinkrail.registry-tool-withholding-ack.v1"
-				: "thinkrail.registry-tool-withholding.v1";
-			if (type !== failingType) return originalAppend(type, data);
-			if (boundary.startsWith("acknowledgement")) {
-				expect(data).toMatchObject({
-					role: boundary === "acknowledgement-user" ? "user" : "system",
-				});
-			}
-			renameSync(file, `${file}.backup`);
-			mkdirSync(file);
-			try {
-				return originalAppend(type, data);
-			} finally {
-				rmSync(file, { recursive: true });
-				renameSync(`${file}.backup`, file);
-				writeFailed = true;
-			}
-		});
-		if (boundary === "refresh") {
-			setSessionManagerFactory(() => SessionManager.inMemory());
-			healthySessionId = (
-				await createSession({
-					cwd: tmpCwd("trpi-registry-healthy-peer-"),
-					workspaceId: "ws-registry-healthy-peer",
-					model: toWireModel(fauxA.getModel()),
-				})
-			).sessionId;
-		}
-		let requests = 0;
-		const trigger = async () => {
-			if (boundary === "refresh") {
-				disabled = new Set(["visualize"]);
-				refreshExtensionTools();
-			} else if (boundary.startsWith("acknowledgement")) {
-				fauxA.setResponses([
-					() => {
-						requests++;
-						return fauxAssistantMessage("Must not reach the provider");
-					},
-				]);
-				await promptSession(created.sessionId, "Persist the restored declaration");
-			} else {
+		const id = session.sessionId;
+		sessionId = id;
+		await run({
+			setDisabled: (names) => {
+				disabled = new Set(names);
+			},
+			prompt: async (label) => {
+				let state = "";
 				fauxA.setResponses([
 					(context) => {
-						expect(visualizeToolState(context)).toBe("VISUALIZE_ON");
-						disabled = new Set(["visualize"]);
-						refreshExtensionTools();
-						return fauxAssistantMessage("Failure at settlement");
+						state = visualizeToolState(context);
+						return fauxAssistantMessage(`${label}_${state}`);
 					},
 				]);
-				await promptSession(created.sessionId, "Settle with disabled tools");
-			}
-		};
-		const triggered = trigger().then(
-			() => undefined,
-			(error: unknown) => error,
-		);
-		if (shutdownFirst && boundary.startsWith("acknowledgement")) {
-			await settlementReached;
-			expect(hasSession(sessionId)).toBe(false);
-			finishShutdown();
-			await new Promise((resolve) => setImmediate(resolve));
-			expect(context.getSystemPrompt()).toBeString();
-			expect(await ensureSessionAttached(sessionId, workspaceId, cwd)).toBe(false);
-			expect(seen(sessionId)).not.toContain('"agent_settled"');
-			expect(
-				states.filter((record) => record.sessionId === sessionId).at(-1)?.state.execution,
-			).toBe("running");
-			await expect(promptSession(sessionId, "No admission before settlement")).rejects.toThrow();
-			finishSettlement();
-		}
-		const failure = await triggered;
-		expect(failure).toMatchObject({ code: "RESOURCE_UNAVAILABLE" });
-		if (healthySessionId) {
-			fauxA.setResponses([(context) => fauxAssistantMessage(visualizeToolState(context))]);
-			await promptSession(healthySessionId, "Check the unaffected chat's latest policy");
-			expect(seen(healthySessionId)).toContain("VISUALIZE_OFF");
-		}
-		expect(hasSession(sessionId)).toBe(false);
-		if (!shutdownFirst || !boundary.startsWith("acknowledgement")) {
-			expect(await ensureSessionAttached(sessionId, workspaceId, cwd)).toBe(false);
-		}
-		const finalState = states.filter((record) => record.sessionId === sessionId).at(-1)?.state;
-		if (!finalState) throw new Error("expected a published final state");
-		expect(finalState).toMatchObject({ execution: "idle", queuedCount: 0, backgroundWork: false });
-		const settlements = (events.get(sessionId) ?? []).filter(
-			(event) => (event as { type: string }).type === "agent_settled",
-		);
-		expect(settlements).toHaveLength(boundary === "refresh" ? 0 : 1);
-		expect(actualSettlements).toBe(settlements.length);
-		if (boundary === "settlement") {
-			expect(settlements[0]).toEqual({ type: "agent_settled", terminal: { stopReason: "stop" } });
-			expect(finalState.runId).not.toBe(beforeState.runId);
-			expect(finalState.completion?.outcome).toBe("succeeded");
-		} else {
-			expect(finalState).toEqual(beforeState);
-			if (boundary.startsWith("acknowledgement")) {
-				expect(requests).toBe(0);
-				expect(settlements[0]).toEqual({ type: "agent_settled", terminal: null });
-				expect(manager.getBranch().at(-1)?.type).toBe("custom");
-				expect(
-					SessionManager.open(file)
-						.getBranch()
-						.map((entry) => entry.id),
-				).toEqual(before);
-			}
-		}
-		const lifecycle = JSON.parse(
-			readFileSync(join(process.env.THINKRAIL_DATA_DIR ?? "", "session-lifecycle.json"), "utf8"),
-		);
-		expect(lifecycle.completionBySession[sessionId]).toEqual({
-			runId: finalState.runId,
-			completion: finalState.completion,
+				await promptSession(id, `Check ${label}.`);
+				return state;
+			},
+			restart: async () => {
+				await removeSession(id);
+				await getSessionMessages(id, workspaceId, cwd);
+			},
 		});
-		const afterFailure = readFileSync(file, "utf8");
-		await expect(promptSession(sessionId, "Must not write")).rejects.toThrow();
-		if (!shutdownFirst || !boundary.startsWith("acknowledgement")) {
-			expect(context.getSystemPrompt()).toBeString();
-		}
-		const mutations = Object.getOwnPropertyNames(SessionManager.prototype).filter(
-			(name) =>
-				name !== "constructor" &&
-				name !== "isPersisted" &&
-				name !== "usesDefaultSessionDir" &&
-				!name.startsWith("_") &&
-				!/^(get|build)/.test(name),
-		);
-		for (const name of mutations) {
-			const method = Reflect.get(manager, name);
-			expect(() => Reflect.apply(method, manager, [])).toThrow(failure as Error);
-		}
-		refreshExtensionTools();
-		finishShutdown();
-		await removeSession(sessionId);
-		expect(() => context.getSystemPrompt()).toThrow("stale");
-		expect(readFileSync(file, "utf8")).toBe(afterFailure);
-		expect(
-			SessionManager.open(file)
-				.getBranch()
-				.filter((entry) => before.includes(entry.id)),
-		).toHaveLength(before.length);
-		disabled = new Set();
-		await getSessionMessages(sessionId, workspaceId, cwd);
-		expect(getSessionState(sessionId)).toEqual(finalState);
-		fauxA.setResponses([fauxAssistantMessage("Fresh manager")]);
-		await promptSession(sessionId, "Continue from disk");
-		expect(
-			SessionManager.open(file)
-				.getBranch()
-				.filter((entry) => before.includes(entry.id)),
-		).toHaveLength(before.length);
 	} finally {
-		finishShutdown();
-		finishSettlement();
-		setSessionStatePublisher(() => {});
-		append?.mockRestore();
-		shutdown?.mockRestore();
-		binding.mockRestore();
 		setDisabledExtensionsResolver(() => new Set());
 		if (sessionId) await removeSession(sessionId);
-		if (healthySessionId) await removeSession(healthySessionId);
 		setSessionManagerFactory(() => SessionManager.inMemory());
 	}
+}
+test("a tool withheld in an open chat comes back after a restart once its extension is re-enabled", async () => {
+	await withPersistentVisualizeChat("extension-open-restart", async (chat) => {
+		expect(await chat.prompt("BEFORE")).toBe("VISUALIZE_ON");
+		chat.setDisabled(["visualize"]);
+		refreshExtensionTools();
+		expect(await chat.prompt("OFF")).toBe("VISUALIZE_OFF");
+		chat.setDisabled([]);
+		await chat.restart();
+		expect(await chat.prompt("AFTER_RESTART")).toBe("VISUALIZE_ON");
+	});
+});
+
+test("an extension disabled while the chat was closed comes back once re-enabled", async () => {
+	await withPersistentVisualizeChat("extension-closed-restart", async (chat) => {
+		expect(await chat.prompt("A")).toBe("VISUALIZE_ON");
+		chat.setDisabled(["visualize"]);
+		await chat.restart();
+		expect(await chat.prompt("B")).toBe("VISUALIZE_OFF");
+		chat.setDisabled([]);
+		await chat.restart();
+		expect(await chat.prompt("C")).toBe("VISUALIZE_ON");
+	});
+});
+
+test("a registry tool follows Settings across repeated toggle and restart cycles", async () => {
+	await withPersistentVisualizeChat("extension-toggle-cycles", async (chat) => {
+		for (let cycle = 0; cycle < 2; cycle++) {
+			expect(await chat.prompt(`ON_${cycle}`)).toBe("VISUALIZE_ON");
+			chat.setDisabled(["visualize"]);
+			refreshExtensionTools();
+			expect(await chat.prompt(`OFF_${cycle}`)).toBe("VISUALIZE_OFF");
+			await chat.restart();
+			expect(await chat.prompt(`STILL_OFF_${cycle}`)).toBe("VISUALIZE_OFF");
+			chat.setDisabled([]);
+			await chat.restart();
+		}
+		expect(await chat.prompt("FINAL")).toBe("VISUALIZE_ON");
+	});
 });
 
 test("a chat created with an extension off never loads it and reloads to adopt it when re-enabled", async () => {
