@@ -48,6 +48,10 @@ ThinkRail terminal uses the same config folder.
   (case-insensitive) are `PATH` (shellEnv owns it), `HOME` / `USERPROFILE` (Bun caches `homedir()`),
   `PI_CODING_AGENT_DIR` (its own field) and `THINKRAIL_*` (data dir, port and host are read before or
   outside the record). Blank rows are dropped; a structurally malformed record is a thrown request error.
+- **Names follow the platform's case rule.** On Windows environment names are case-insensitive (Bun's
+  `process.env` too), so launch-key membership, duplicate detection and override reporting compare an
+  upper-cased key there and exact names elsewhere; display keeps the user's spelling. `applyHostEnvironment`
+  takes an injectable `platform` so both branches are pinned by tests on any OS.
 - **Boot tolerates drift.** An entry that is invalid on disk (a deleted folder, a hand-edited reserved
   name) is skipped with a `log.warn` naming only field and code; the rest applies. A skipped agent dir
   falls back to pi's default, which the status' `effectiveAgentDir` makes visible.

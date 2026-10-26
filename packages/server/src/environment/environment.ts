@@ -21,6 +21,11 @@ const log = logger("environment");
 
 let applied: HostEnvironment = { vars: [] };
 let launchKeys: ReadonlySet<string> = new Set();
+let platform: NodeJS.Platform = process.platform;
+
+function nameKey(name: string): string {
+	return platform === "win32" ? name.toUpperCase() : name;
+}
 
 function expandAgentDir(value: string): string {
 	if (value === "~") return homedir();
@@ -53,8 +58,8 @@ export function validateHostEnvironment(environment: HostEnvironment): HostEnvir
 	environment.vars.forEach(({ name }, index) => {
 		if (!ENV_NAME.test(name)) issues.push({ field: "var", index, code: "invalidName" });
 		else if (isReserved(name)) issues.push({ field: "var", index, code: "reserved" });
-		else if (seen.has(name)) issues.push({ field: "var", index, code: "duplicate" });
-		seen.add(name);
+		else if (seen.has(nameKey(name))) issues.push({ field: "var", index, code: "duplicate" });
+		seen.add(nameKey(name));
 	});
 	return issues;
 }
@@ -95,22 +100,27 @@ function launchOverridden(environment: HostEnvironment): string[] {
 		...(environment.agentDir !== undefined ? [AGENT_DIR_VAR] : []),
 		...environment.vars.filter((_, index) => !invalid.has(index)).map(({ name }) => name),
 	];
-	return names.filter((name) => launchKeys.has(name));
+	return names.filter((name) => launchKeys.has(nameKey(name)));
 }
 
-export function applyHostEnvironment(): void {
+export function applyHostEnvironment(options: { platform?: NodeJS.Platform } = {}): void {
+	platform = options.platform ?? process.platform;
 	const stored = loadHostEnvironment();
 	applied = stored;
-	launchKeys = new Set(launchEnvKeys());
+	launchKeys = new Set([...launchEnvKeys()].map(nameKey));
 	const issues = validateHostEnvironment(stored);
 	const skippedVars = new Set(
 		issues.flatMap((issue) => (issue.field === "var" ? [issue.index] : [])),
 	);
 	stored.vars.forEach(({ name, value }, index) => {
-		if (!skippedVars.has(index) && !launchKeys.has(name)) process.env[name] = value;
+		if (!skippedVars.has(index) && !launchKeys.has(nameKey(name))) process.env[name] = value;
 	});
 	const agentDirInvalid = issues.some((issue) => issue.field === "agentDir");
-	if (stored.agentDir !== undefined && !agentDirInvalid && !launchKeys.has(AGENT_DIR_VAR)) {
+	if (
+		stored.agentDir !== undefined &&
+		!agentDirInvalid &&
+		!launchKeys.has(nameKey(AGENT_DIR_VAR))
+	) {
 		process.env[AGENT_DIR_VAR] = expandAgentDir(stored.agentDir);
 	}
 	for (const issue of issues)

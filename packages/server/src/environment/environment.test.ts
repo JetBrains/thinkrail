@@ -6,7 +6,7 @@ import { applyHostEnvironment, hostEnvironmentStatus, updateHostEnvironment } fr
 
 const originalDataDir = process.env.THINKRAIL_DATA_DIR;
 const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
-const TEST_VARS = ["TR_ENV_A", "TR_ENV_B"];
+const TEST_VARS = ["TR_ENV_A", "TR_ENV_B", "tr_env_b"];
 let dataDir: string;
 let agentDir: string;
 
@@ -132,5 +132,33 @@ test("an entry that turned invalid on disk is skipped at boot, the rest applies"
 	expect(process.env.HOME).toBe(home);
 	expect(process.env.TR_ENV_A).toBe("kept");
 	expect(process.env.PI_CODING_AGENT_DIR).toBeUndefined();
+	expect(hostEnvironmentStatus().launchOverridden).toEqual([]);
+});
+
+test("on Windows names match case-insensitively for launch overrides and duplicates", () => {
+	applyHostEnvironment({ platform: "win32" });
+	expect(
+		updateHostEnvironment({
+			vars: [
+				{ name: "TR_ENV_A", value: "1" },
+				{ name: "tr_env_a", value: "2" },
+			],
+		}),
+	).toEqual({ ok: false, issues: [{ field: "var", index: 1, code: "duplicate" }] });
+
+	process.env.tr_env_b = "launch";
+	updateHostEnvironment({ vars: [{ name: "TR_ENV_B", value: "stored" }] });
+	applyHostEnvironment({ platform: "win32" });
+	expect(process.env.TR_ENV_B).toBeUndefined();
+	expect(process.env.tr_env_b).toBe("launch");
+	expect(hostEnvironmentStatus().launchOverridden).toEqual(["TR_ENV_B"]);
+});
+
+test("elsewhere names stay case-sensitive", () => {
+	applyHostEnvironment({ platform: "linux" });
+	process.env.tr_env_b = "launch";
+	updateHostEnvironment({ vars: [{ name: "TR_ENV_B", value: "stored" }] });
+	applyHostEnvironment({ platform: "linux" });
+	expect(process.env.TR_ENV_B).toBe("stored");
 	expect(hostEnvironmentStatus().launchOverridden).toEqual([]);
 });
