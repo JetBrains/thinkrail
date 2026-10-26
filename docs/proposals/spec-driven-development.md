@@ -100,6 +100,15 @@ native operations where needed. Durable execution, such as resuming a framework-
 additionally requires a compatible runner. A document's status, such as `draft` or `accepted`, is not
 itself a workflow or proof that its steps ran.
 
+```mermaid
+flowchart TD
+    P["Project guides or selected skills<br/>Example: RFC process or Superpowers"] -->|Define steps and approval gates| A["pi follows the selected process"]
+    F["ThinkRail default skills"] -->|Only after successful discovery finds no process| A
+    K["Product specs or reference knowledge<br/>Example: requirements or OKF references"] -->|Provide context| A
+    A --> D["Work in original documents and tasks"]
+    A -.->|Durable execution requested and compatible| R["Native or durable runner"]
+```
+
 ### Separate documents, instructions, and actions
 
 - **Artifacts:** documents or native records, their identity, type, status, and relationships.
@@ -110,19 +119,6 @@ itself a workflow or proof that its steps ran.
 
 The host discovers sources and available capabilities. The pi agent interprets applicable guidance;
 integrations handle framework-specific formats and operations. The UI shows their results.
-
-```mermaid
-flowchart TD
-    S["Project and personal sources<br/>Specs, instructions, skills, configuration"] --> U["Understanding with sources<br/>Scope and uncertainty"]
-    I["Tested integrations<br/>Native readers and operations"] --> U
-    U --> V["Specs navigator<br/>Show what applies and why"]
-    U --> R["Choose the process for this work"]
-    R --> A["Normal pi session<br/>Follow the recipe"]
-    R --> N["Native or durable run<br/>When requested and compatible"]
-    A --> T["Original documents and progress<br/>One owner per operation"]
-    N --> T
-    C["User-approved improvements"] --> S
-```
 
 ### Preserve native structure
 
@@ -213,9 +209,18 @@ its supported skill-customization mechanism; for a homegrown process, edit its g
 unsupported variations rather than maintain a hidden ThinkRail fork.
 
 Skills can be authored or revised during a conversation as reviewable changes to reusable instructions.
-That does not mean autonomous self-modification or hot-swapping a running workflow. When an approved
-revision takes effect—on the next use or through an explicit switch during the current task—remains an
-open decision.
+After approval, the user can apply the revision immediately in the current task, without starting a new
+chat. Make that switch explicit: saving a skill must not silently change an ongoing process. Immediate
+use changes the agent's instructions, not a native runner's authoritative state or supported operations.
+
+```mermaid
+flowchart TD
+    U["User requests a procedure change"] --> E["Agent proposes an edit<br/>to the guide, schema, or skill"]
+    E --> A["Review and approve"]
+    A --> S["Save reusable instructions<br/>with explicit scope"]
+    S -->|Apply now| C["Use immediately<br/>in the current task"]
+    S -->|Reuse later| F["Personal or project workflow"]
+```
 
 ### Save a procedure
 
@@ -238,7 +243,8 @@ These related projects exercise different parts of the design:
 
 - **Open Knowledge Format (OKF v0.2):** a portable knowledge format with document types, links,
   provenance, and trust/lifecycle metadata. ThinkRail could preserve these when browsing and using
-  project knowledge. OKF document status does not define a software-development workflow.
+  project knowledge. A bundle may contain process guides; OKF itself does not prescribe a development
+  workflow.
 - **obra/superpowers:** a development methodology expressed through composable skills, from
   brainstorming and planning through implementation and review. It is a concrete source of workflow
   instructions to follow, not a process ThinkRail must reconstruct from the resulting specs.
@@ -299,7 +305,8 @@ Validate with:
 - **Disposable repository fixtures:** absent, unknown, mixed, and customized practices; branch changes,
   stale guidance, scope isolation, and zero writes during discovery.
 - **Agent scenarios:** follow the selected process, ask only about gaps, preserve approval gates,
-  avoid duplicate plans, and save corrections without leaking their scope.
+  avoid duplicate plans, and save corrections without leaking their scope. Apply an approved skill
+  revision within the same chat without silently changing other ongoing work.
 - **Native conformance tests:** exercise actual supported versions through their lifecycle, including
   external state changes, cancellation/resume, and missing prerequisites. Parsing files cannot prove
   execution compatibility.
@@ -313,8 +320,7 @@ operation ownership, and versioned integration tests.
 1. **First release:** is custom-practice support enough, or must it include a full named integration?
 2. **Priorities:** should OpenSpec lead? Which versions and GSD operations should we validate first?
 3. **Saved guidance:** where do corrections and workflows live, and how can users inspect, edit,
-   remove, and share them separately from cached inferences? When do approved skill edits take effect
-   for work already underway?
+   remove, and share them separately from cached inferences?
 4. **Conflicts:** how do we present competing rules or changed guidance without repetitive questions
    or silent process switches?
 5. **Ownership:** what must change in Plan, commits, and workspaces before a native runner controls them?
