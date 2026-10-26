@@ -1304,6 +1304,14 @@ never rescans a transcript whose user turns are all packages or images. The valu
 read-only: no write path accepts it, `renameSession` and `onlyIfUnnamed` are untouched, and a named chat
 still carries it so a client can show the title and keep the prompt as a tooltip.
 
+## Sandbox (prototype)
+
+`sandbox` embeds [[module-pi-sandbox]] behind the process-wide `THINKRAIL_SANDBOX=1` flag: parent chats
+get the sandbox extension (with the session's effective shell path and command prefix) and their
+background-command service gets the sandboxed executor; hidden children get the extension through
+`childBaseExtensionFactories`. With the flag unset nothing is added. Making it a workspace property,
+and the UI around it, is planned in [[module-pi-sandbox]].
+
 ## Chat Resources integration
 
 The manager retains one [[module-pi-background-commands]] service per parent chat alongside its Pi
