@@ -69,6 +69,7 @@ import {
 	windowChromePreloadSeed,
 } from "./windowChrome";
 import { loadWindowsFrameApi, restoreWindowsFrameControls } from "./windowsFrame";
+import { desktopAppUserModelId, loadWindowsShellApi } from "./windowsTaskbarIdentity";
 import {
 	applyWindowsWindowIcon,
 	loadWindowsIconApi,
@@ -126,6 +127,15 @@ function windowControlsProbeScript(target: { testId: string; label: string }): s
 let startupQuitCoordinator: ReturnType<typeof createElectrobunQuitCoordinator> | undefined;
 let startupSplash: StartupSplash | undefined;
 
+function setWindowsAppUserModelId(): void {
+	if (process.platform !== "win32") return;
+	try {
+		loadWindowsShellApi().setProcessAppUserModelId(desktopAppUserModelId(channel));
+	} catch (error) {
+		desktopError("windows_app_id", "could not set the Windows AppUserModelID", error);
+	}
+}
+
 function setWindowsWindowIcon(window: { readonly ptr: WindowsHandle | null }): void {
 	if (process.platform !== "win32" || !window.ptr) return;
 	try {
@@ -153,6 +163,7 @@ function writeReady(path: string, payload: unknown): void {
 }
 
 async function start(): Promise<void> {
+	setWindowsAppUserModelId();
 	const savedLabels = readNativeLabels(nativeLabelsPath());
 	let dialogLabels: DesktopDialogLabels = readDialogLabels(savedLabels);
 	const applicationMenuInstalled = installDesktopApplicationMenu(
