@@ -87,6 +87,9 @@ What ThinkRail does, at product level; the linked spec owns the detail.
   [[submodule-server-host-plan-review]]).
 - **Subagents** — delegation to isolated child sessions, in the foreground, in parallel, or in the
   background ([[module-pi-subagents]]).
+- **Workspaces from chat** — on request ("in a side workspace"), the agent starts ordinary workspaces
+  with their own chats in any open project and checks their chats', PRs', and diffs' status; the agent,
+  not the host, decides what to do with them ([[submodule-server-agent]], [[submodule-server-host]]).
 - **Review** — anchored comments on files and diffs, collected without starting the agent and sent as
   structured context to chats that can resolve them; local review, not a forge integration
   ([[submodule-server-reviews]]).

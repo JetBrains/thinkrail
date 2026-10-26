@@ -462,6 +462,10 @@ both message orders. *Rejected:* keeping the modal for non-MCP extensions — ev
   stranding the history overlay's dismiss refocus avoids). Only the card's own reply path calls it, and
   only while the card still holds focus. Plus `openSubagentTranscript(childSessionId)` — the subagent
   cards' transcript link (no provider → the cards hide the action).
+  Plus `openWorkspace({ workspaceId, projectId, sessionId })` (route-style activation of another
+  workspace's chat) and `WorkspaceName` — an injected component that renders a workspace's **live** store
+  name, so a renderer can show an up-to-date name without importing the store. The `start_workspace`
+  card uses both and hides the open action when there is no provider.
   The optional MCP actions — `readMcpOutput(toolCallId)` (`mcp.readOutput` for this chat),
   `openMcpSettings()` (Settings › MCP servers) and `openProviderSettings()` (Settings › Providers for
   provider-backed authentication) — are supplied by `ChatView` (through `ChatTranscript`'s provider)

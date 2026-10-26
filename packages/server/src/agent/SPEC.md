@@ -631,6 +631,20 @@ answer-injection path, and the **restart repair** that keeps re-opened transcrip
     costs one prompt-cache miss per chat, early in it. The write policy and the workspace half of that state are
     not here: the host injects both through `setTitleToolHost({ apply, workspaceNeedsName })`, because naming
     composes `agent` + `workspaces`.
+    The **workspace tools** (`workspaceTools.ts`) let a chat operate other workspaces. There are exactly two,
+    always registered and active (no setting, like `set_title`), and top-level only:
+    - **`start_workspace { prompt, project?, base_branch?, model?, effort?, attachments? }`** starts an
+      ordinary new workspace with a first chat and returns its ids at once; it never waits for the child.
+    - **`workspace_status { project?, workspaces? }`** reports chat states, PR state, diff stats and
+      (for named workspaces) each chat's final message.
+    Both delegate to a host seam, `setWorkspaceToolsHost({ start, status })`, because they compose
+    `agent` + `projects` + `workspaces` + `git`. Their `promptGuidelines` make the agent **always** act on
+    side/separate/parallel-workspace cues, but only *suggest* splitting work the user did not ask to
+    parallelize. Nothing else is built in by design: no waiting primitive (the agent decides how and whether
+    to wait), no steering, stopping, archiving or merging of another workspace, and no cap or confirmation.
+    `readFinalAssistantText(sessionId, workspaceId, cwd)` serves the status final message. It reads a live
+    entry's messages, or opens the transcript file read-only — never `attachDiskSession` — so a status
+    check neither loads nor announces other workspaces' chats.
     Cascades: `removeSession`/`disposeAllSessions` fire
     `disposeSessionChildren` — `removeSession` returns that cascade, the **delete transaction
     awaits it before `publishDeleted`/resolving** (safe: the cascade carries its own swallow, so a
