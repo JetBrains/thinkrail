@@ -93,6 +93,14 @@ function watchGitDir(
 	}
 }
 
+function deliver(sink: string, workspaceId: string, send: () => void): void {
+	try {
+		send();
+	} catch (error) {
+		log.warn(`${sink} publisher failed for workspace ${workspaceId}`, error as Error);
+	}
+}
+
 function scheduleRepoMeta(workspaceId: string, watcher: FSWatcher): void {
 	const entry = entries.get(workspaceId);
 	if (entry && entry.watcher !== watcher) return;
@@ -101,7 +109,7 @@ function scheduleRepoMeta(workspaceId: string, watcher: FSWatcher): void {
 		const live = entries.get(workspaceId);
 		if (!live || live.watcher !== watcher) return;
 		live.metaTimer = null;
-		publishRepoMeta?.(workspaceId);
+		deliver("repo-meta", workspaceId, () => publishRepoMeta?.(workspaceId));
 	}, REPO_META_DEBOUNCE_MS);
 	if (entry) entry.metaTimer = timer;
 }
@@ -176,7 +184,9 @@ export function ensureWatch(
 		maxWaitMs: MAX_WAIT_MS,
 		maxPaths: MAX_PATHS,
 		onFlush: ({ paths, truncated, skillChange }) => {
-			publish?.({ workspaceId, paths, truncated, skillChange });
+			deliver("fsChanged", workspaceId, () =>
+				publish?.({ workspaceId, paths, truncated, skillChange }),
+			);
 		},
 	});
 
@@ -221,11 +231,10 @@ export function ensureWatch(
 		entry.nudgeTimer = setTimeout(() => {
 			if (entries.get(workspaceId) !== entry) return;
 			entry.nudgeTimer = null;
-			try {
-				publish?.({ workspaceId, paths: [], truncated: true, skillChange: "unknown" });
-			} finally {
-				settleReady(entry);
-			}
+			deliver("fsChanged", workspaceId, () =>
+				publish?.({ workspaceId, paths: [], truncated: true, skillChange: "unknown" }),
+			);
+			settleReady(entry);
 		}, STARTUP_NUDGE_MS);
 		const gitDir = resolveExternalGitDir(ws.worktreePath);
 		if (gitDir) entry.metaWatcher = watchGitDir(workspaceId, gitDir, watcher);

@@ -19,7 +19,7 @@ import {
 	currentBranch,
 	git,
 	gitAsync,
-	gitHeadSha,
+	headShaAt,
 	listRemotes,
 	remoteNameOf,
 	remoteRefOid,
@@ -547,8 +547,9 @@ export function backfillWorkspaceActivity(id: string, at: number): Workspace | n
 }
 
 export function recordWorkspaceHead(id: string): void {
-	if (!loadWorkspaces().some((workspace) => workspace.id === id)) return;
-	const sha = gitHeadSha(id);
+	const workspace = loadWorkspaces().find((candidate) => candidate.id === id);
+	if (!workspace) return;
+	const sha = headShaAt(workspace.worktreePath);
 	if (!sha) return;
 	const previous = observedHeadSha.get(id);
 	observedHeadSha.set(id, sha);

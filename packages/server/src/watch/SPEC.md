@@ -84,6 +84,11 @@ truth) and visible-panel polling (laggy, wasteful over Tailscale).
   `truncated: false`, `skillChange: "none"`) so the clients' git-derived reads re-read — `git.status` and an
   open `uncommitted`-scope diff tab are relative to `HEAD`, and would otherwise keep reporting a committed
   change as uncommitted until the next file edit.
+- **Timer-driven delivery is contained:** the coalescer flush, the startup nudge, and the repo-metadata nudge
+  run from this module's own timers, so a subscriber throw is warn-logged and swallowed rather than becoming
+  a fatal `uncaughtException` that takes down the host (an e2e reset deleting `workspaces.json` mid-nudge
+  once did exactly that). Later events keep flowing. The watch-started nudge is the exception: it runs in
+  the guarded registration region described below.
 - **Composition seams:** never imports `host` or `agent` — `host` injects both the publish callback and
   `agent`'s pure project-skill path classifier at wiring time (the publisher-tee pattern). A missing
   classifier degrades concrete events to `skillChange: "unknown"`, never false-clean.
