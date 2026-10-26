@@ -58,6 +58,30 @@ function resolveInWorktree(
 	if (!isContained(resolve(root), abs)) throw new Error("Path escapes the worktree");
 	if (isGitMetadataPath(resolve(root), abs)) throw new Error("The .git directory is not readable");
 	assertExistingAncestorContained(root, followLeaf ? abs : dirname(abs));
+
+	// Security: Re-resolve via realpathSync and re-check containment to close
+	// the TOCTOU race window between the symlink check above and the actual
+	// file operation below. Without this, a symlink could be swapped between
+	// the security check (T1) and the file read (T2) to escape the worktree.
+	// See security/SECURITY_REPORT.md (CVE-3) for details.
+	if (followLeaf) {
+		try {
+			const resolvedAbs = realpathSync(abs);
+			const resolvedRoot = realpathSync(root);
+			if (!isContained(resolvedRoot, resolvedAbs))
+				throw new Error("Path escapes the worktree");
+			if (isGitMetadataPath(resolvedRoot, resolvedAbs))
+				throw new Error("The .git directory is not readable");
+			return { root, abs: resolvedAbs };
+		} catch (error) {
+			const code =
+				typeof error === "object" && error !== null && "code" in error
+					? (error as { code: string }).code
+					: undefined;
+			if (code === "ENOENT" || code === "ENOTDIR") return { root, abs };
+			throw error;
+		}
+	}
 	return { root, abs };
 }
 

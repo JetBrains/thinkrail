@@ -1,4 +1,5 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, normalize } from "node:path";
 import type {
 	HostPlatform,
@@ -289,12 +290,59 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 		);
 	};
 
+	// Security: Generate a per-instance authentication token to prevent
+	// unauthenticated access to the WebSocket and HTTP file routes.
+	// This mitigates Cross-Site WebSocket Hijacking (CSWSH) where a malicious
+	// webpage could connect to localhost and execute arbitrary RPC commands.
+	// See security/SECURITY_REPORT.md (CVE-1) for details.
+	const authToken = randomBytes(32).toString("hex");
+	try {
+		const tokenDir = join(process.env.HOME ?? process.env.USERPROFILE ?? ".", ".thinkrail");
+		mkdirSync(tokenDir, { recursive: true });
+		const tokenFile = join(tokenDir, "auth-token");
+		writeFileSync(tokenFile, authToken, { mode: 0o600 });
+		logger.info({ tokenFile }, "Auth token written");
+	} catch (err) {
+		logger.warn({ err }, "Failed to persist auth token — token is ephemeral this session");
+	}
+
+	function isOriginAllowed(origin: string | null | undefined): boolean {
+		if (origin === null || origin === undefined) return true; // Desktop apps / curl
+		return (
+			origin === "http://localhost" ||
+			origin.startsWith("http://localhost:") ||
+			origin === "http://127.0.0.1" ||
+			origin.startsWith("http://127.0.0.1:") ||
+			origin === "https://localhost" ||
+			origin.startsWith("https://localhost:") ||
+			origin === "https://127.0.0.1" ||
+			origin.startsWith("https://127.0.0.1:") ||
+			origin.startsWith("file://")
+		);
+	}
+
+	function isAuthenticated(req: Request, url: URL): boolean {
+		const token = url.searchParams.get("token") ?? req.headers.get("x-thinkrail-token");
+		return token === authToken;
+	}
+
 	const server = Bun.serve<SocketData, never>({
 		port,
 		hostname: host,
 		async fetch(req, srv) {
 			const url = new URL(req.url);
 			if (url.pathname === "/ws") {
+				// Security: Validate Origin header to block cross-site connections
+				const origin = req.headers.get("origin");
+				if (!isOriginAllowed(origin)) {
+					logger.warn({ origin }, "Blocked cross-origin WebSocket upgrade");
+					return new Response("Forbidden: invalid origin", { status: 403 });
+				}
+				// Security: Require authentication token
+				if (!isAuthenticated(req, url)) {
+					logger.warn("Blocked unauthenticated WebSocket upgrade");
+					return new Response("Unauthorized: missing or invalid token", { status: 401 });
+				}
 				const clientKey = url.searchParams.get("client") ?? `anon-${randomUUID()}`;
 				const protocolVersion = clientProtocolVersion(url.searchParams.get("protocol"));
 				await refreshRecentProjectFolders(RECENT_FOLDER_CHECK_BUDGET_MS);
@@ -305,10 +353,17 @@ export async function createServer(options: CreateServerOptions = {}): Promise<R
 			if (url.pathname === "/health") {
 				return new Response("ok");
 			}
+			// Security: File and blob routes also require authentication
 			if (url.pathname.startsWith(FILES_PREFIX)) {
+				if (!isAuthenticated(req, url)) {
+					return new Response("Unauthorized", { status: 401 });
+				}
 				return serveWorktreeFile(url.pathname);
 			}
 			if (url.pathname.startsWith(BLOB_PREFIX)) {
+				if (!isAuthenticated(req, url)) {
+					return new Response("Unauthorized", { status: 401 });
+				}
 				return serveBlob(url.pathname, req.signal);
 			}
 			if (staticDir) {
