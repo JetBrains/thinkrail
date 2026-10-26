@@ -636,10 +636,17 @@ re-opened transcripts provider-valid.
     (`display: false`) right after the `compactionSummary` in every request while the branch has a
     compaction. It restores each skill pi loaded (`before_agent_start`'s `systemPromptOptions.skills`)
     whose latest load — a `parseSkillBlock` user block or a successful `read` resolving to that skill's
-    `filePath` (after pi's `@`/`~` handling and symlinks) — sits before the latest cut; reads of other `SKILL.md` files do not count. Bodies are
+    `filePath` (after pi's `@`/`~`/`file://` handling and symlinks) — sits before the latest cut; reads of other `SKILL.md` files do not count.
+    A complete load outranks a partial one (`offset`/`limit` or a truncated result): a partial read in
+    the kept tail proves invocation, not that the body survives, so it never hides an earlier complete
+    load, while a skill only paginated in before the cut still counts as loaded. Bodies are
     re-read from the admitted skill file (frontmatter stripped, wrapped like pi's `/skill:` block) and
-    budgeted at 5K tokens per skill and min(25K, 10% of the context window) in total, newest first,
-    truncated from the end with a pointer to the file. The text is memoized per compaction entry, so
+    budgeted at 5K tokens of body per skill and min(25K, 10% of the context window) for the whole
+    rendered message (preamble, wrappers, truncation notices), newest first, truncated from the end
+    with a pointer to the file. The window must be the dispatched model's: `ctx.model` is the
+    selection, and a virtual selection's limits (0 by default) say nothing about the physical model
+    it routes to — pi's routed-capacity check runs before this handler — so a virtual selection, or
+    any model without a known window, gets no carry-over. The text is memoized per compaction entry, so
     the injected prefix stays cache-stable. A per-request injection is the only placement that reaches
     the first request after **mid-run threshold** and **overflow-retry** compaction: a
     `session_compact`-time `sendMessage` is deferred to `turn_end` while a run is active, so those

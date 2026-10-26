@@ -223,6 +223,9 @@ apart from the recorded selection. Run the manager's restart regressions on upgr
   nothing re-supplies it, so a host `context` handler re-attaches compacted skill bodies to every
   request after a compaction. Remove it when pi's compaction preserves or re-attaches loaded skills
   natively; verify with `skillCarryover.test.ts` and `bun run e2e:full e2e/skill-after-compaction.live.spec.ts`.
+  It skips virtual selections by matching pi's unexported `"pi-virtual"` model API, since a `context`
+  handler sees only the selection, not the routed model; replace that check when pi exposes the
+  dispatched model (or `isVirtualModel`) to `context` handlers.
 
 ## Context-budget limitations
 
