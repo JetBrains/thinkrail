@@ -1,4 +1,5 @@
 import {
+	ASK_USER_QUESTION_TOOL_NAME,
 	type AskUserQuestionResult,
 	type GitFileChange,
 	isSessionWorking,
@@ -325,7 +326,7 @@ export function pendingAsk(rt: {
 	for (const turn of rt.turns) {
 		if (turn.kind !== "assistant") continue;
 		for (const block of turn.message.content) {
-			if (block.type !== "toolCall" || block.name !== "ask_user_question") continue;
+			if (block.type !== "toolCall" || block.name !== ASK_USER_QUESTION_TOOL_NAME) continue;
 			const state = states[block.id];
 			if (!state || state.answer || state.superseded || state.terminal) continue;
 			const tool = rt.toolResults[block.id];

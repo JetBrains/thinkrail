@@ -386,6 +386,8 @@ export const WS_CHANNELS = {
 type SameUnion<A extends B, B extends C, C = A> = A;
 export type WsChannel = (typeof WS_CHANNELS)[keyof typeof WS_CHANNELS];
 
+export const ASK_USER_QUESTION_TOOL_NAME = "ask_user_question";
+
 export const ASK_USER_ANSWERS_CUSTOM_TYPE = "ask-user-answers";
 
 export interface AskUserAnswersMessage extends WireCustomMessage<AskUserAnswersDetails> {

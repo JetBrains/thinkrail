@@ -1,4 +1,5 @@
 import {
+	ASK_USER_QUESTION_TOOL_NAME,
 	type AskUserQuestionResult,
 	assistantToolCallsAreExecutable,
 	readAskUserQuestionResult,
@@ -35,7 +36,7 @@ export function deriveAskStates(
 			lastUserIndex = i;
 		} else if (turn.kind === "assistant") {
 			for (const block of turn.message.content) {
-				if (block.type === "toolCall" && block.name === "ask_user_question") {
+				if (block.type === "toolCall" && block.name === ASK_USER_QUESTION_TOOL_NAME) {
 					calls[block.id] = {
 						turnIndex: i,
 						dead: !assistantToolCallsAreExecutable(turn.message.stopReason),

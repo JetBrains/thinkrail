@@ -24,10 +24,10 @@ import {
 	type AskUserQuestionArgs,
 	type AskUserQuestionItem,
 	type AskUserQuestionOption,
-	type AskUserQuestionResult,
 	CHAT_LABEL,
 	DECLINE_MESSAGE,
 	isAckDetails,
+	isAskUserQuestionResult,
 	OTHER_LABEL,
 } from "./core.ts";
 import { askWithDialogs } from "./dialogs.ts";
@@ -609,15 +609,6 @@ export function renderAskCall(args: unknown, theme: Theme): Component {
 	);
 }
 
-function isResult(details: unknown): details is AskUserQuestionResult {
-	return (
-		!!details &&
-		typeof details === "object" &&
-		Array.isArray((details as AskUserQuestionResult).answers) &&
-		typeof (details as AskUserQuestionResult).cancelled === "boolean"
-	);
-}
-
 function resultText(result: AgentToolResult<unknown>): string {
 	return result.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
 }
@@ -629,7 +620,7 @@ export function renderAskResult(
 	context: { args?: unknown; isError?: boolean },
 ): Component {
 	const { details } = result;
-	if (context.isError || (!isAckDetails(details) && !isResult(details)))
+	if (context.isError || (!isAckDetails(details) && !isAskUserQuestionResult(details)))
 		return new Text(theme.fg(context.isError ? "error" : "text", resultText(result)), 0, 0);
 	if (isAckDetails(details)) return new Text(theme.fg("muted", "Continuing in chat"), 0, 0);
 	if (details.cancelled && details.answers.length === 0) {

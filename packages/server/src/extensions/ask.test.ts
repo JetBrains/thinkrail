@@ -1,6 +1,10 @@
 import { expect, test } from "bun:test";
-import type { AskUserQuestionArgs, AskUserQuestionResult } from "@thinkrail/contracts";
-import { buildQuestionnaireResponse, isAckDetails } from "./ask";
+import {
+	type AskUserQuestionArgs,
+	type AskUserQuestionResult,
+	ASK_USER_QUESTION_TOOL_NAME as WIRE_TOOL_NAME,
+} from "@thinkrail/contracts";
+import { ASK_USER_QUESTION_TOOL_NAME, buildQuestionnaireResponse, isAckDetails } from "./ask";
 
 test("the package's questionnaire types and the wire types are interchangeable", () => {
 	const args: AskUserQuestionArgs = {
@@ -33,4 +37,8 @@ test("the package's questionnaire types and the wire types are interchangeable",
 	const details: AskUserQuestionResult = envelope.details;
 	expect(details).toBe(result);
 	expect(isAckDetails({ kind: "ack" })).toBe(true);
+});
+
+test("the wire tool name the web keys on is the package's tool name", () => {
+	expect(WIRE_TOOL_NAME).toBe(ASK_USER_QUESTION_TOOL_NAME);
 });
