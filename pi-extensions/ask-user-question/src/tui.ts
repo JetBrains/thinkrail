@@ -19,7 +19,6 @@ import {
 	wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import {
-	ASK_STOPPED_ERROR,
 	type AskOutcome,
 	type AskRequest,
 	type AskUserQuestionArgs,
@@ -567,7 +566,7 @@ export class QuestionnaireComponent implements Component, Focusable {
 
 export async function askInTerminal(request: AskRequest): Promise<AskOutcome> {
 	const { args, signal, ctx } = request;
-	if (signal?.aborted) throw new Error(ASK_STOPPED_ERROR);
+	if (signal?.aborted) return { kind: "abandoned" };
 	const outcome: AskOutcome | null | undefined = await ctx.ui.custom<AskOutcome | null>(
 		(tui, theme, _keybindings, done) => {
 			let settled = false;
@@ -582,7 +581,7 @@ export async function askInTerminal(request: AskRequest): Promise<AskOutcome> {
 			return new QuestionnaireComponent(args, tui, theme, settle);
 		},
 	);
-	if (outcome === null) throw new Error(ASK_STOPPED_ERROR);
+	if (outcome === null) return { kind: "abandoned" };
 	if (outcome === undefined) return askWithDialogs(request);
 	return outcome;
 }

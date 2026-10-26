@@ -348,7 +348,7 @@ describe("askInTerminal", () => {
 		});
 	});
 
-	test("a stop closes the questionnaire with the stopped error, and later keys are ignored", async () => {
+	test("a stop closes the questionnaire as abandoned, and later keys are ignored", async () => {
 		const controller = new AbortController();
 		let open: QuestionnaireComponent | undefined;
 		const ctx = terminalContext((component) => {
@@ -356,7 +356,7 @@ describe("askInTerminal", () => {
 		});
 		const pending = askInTerminal({ toolCallId: "tc", args, signal: controller.signal, ctx });
 		controller.abort();
-		await expect(pending).rejects.toThrow(ASK_STOPPED_ERROR);
+		expect(await pending).toEqual({ kind: "abandoned" });
 		open?.handleInput(KEY.enter);
 	});
 
@@ -377,9 +377,11 @@ describe("askInTerminal", () => {
 		const ctx = terminalContext(() => {
 			opened = true;
 		});
-		await expect(
-			askInTerminal({ toolCallId: "tc", args, signal: controller.signal, ctx }),
-		).rejects.toThrow(ASK_STOPPED_ERROR);
+		expect(await askInTerminal({ toolCallId: "tc", args, signal: controller.signal, ctx })).toEqual(
+			{
+				kind: "abandoned",
+			},
+		);
 		expect(opened).toBe(false);
 	});
 
