@@ -126,7 +126,7 @@ existing chunk id with different content. `preBuild` also refuses to stage web `
 
 Handled native-shell failures that carry an error (keyboard state, title-bar double-click, update
 listener/lifecycle/journal, native-label writes, leaving the bundle working directory, Windows frame restore,
-startup) go through `errorReporting.ts`'s `desktopError(scope, message, error)`:
+Windows window icon, startup) go through `errorReporting.ts`'s `desktopError(scope, message, error)`:
 the `[desktop] …` console line stays, and once the host has booted the error is forwarded to
 `DesktopHost.reportError` as a sanitized `desktop` error report ([[submodule-server-analytics]]); before
 that it is console-only. Uncaught main-process faults need no seam — they share the host's process
@@ -444,9 +444,11 @@ Electrobun setting a window icon on Windows. Taskbar grouping is still open:
 `assets/icon.svg` is the one hand-authored source; every raster below it (the iconset, the ICO, the
 Linux PNG) is generated, never hand-edited, by `scripts/generate-icons.ts` (`bun run generate-icons`)
 using `@resvg/resvg-js` to rasterize straight from the vector. The Windows ICO carries PNG-compressed
-frames at 256/128/64/48/32/24/16 — Microsoft's documented icon-construction minimum (16/24/32/48/256)
-plus two extra sizes so in-between DPI scales interpolate from a close neighbor — packed through the
-same `resedit` dependency the executable branding uses. Frames are ordered largest first because Bun's
+frames at 256/128/80/72/64/56/48/40/36/32/28/24/20/16. That is Microsoft's documented icon-construction
+minimum (16/24/32/48/256), plus 64/128 and every small- and big-icon size Windows asks for between 125% and
+250% scaling. `LoadImage` picks the closest frame that does not exceed the requested size, so a missing
+size would be upscaled from a smaller frame and look blurry. The ICO is packed through the same `resedit`
+dependency the executable branding uses. Frames are ordered largest first because Bun's
 compiler keeps a named icon group that maps only icon #1 (oven-sh/bun#32428, [[module-cli]]). A prior
 4-frame raw-BMP ICO (16/32/48/256, pre-dating the generator) had no frame matching the Windows 11
 taskbar's 24×24 100%-scale target, reading as blurry there; the generated set closes that gap.
