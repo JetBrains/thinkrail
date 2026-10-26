@@ -1,5 +1,5 @@
 import type { AskUserQuestionResult, McpReadOutputResult, WireModel } from "@thinkrail/contracts";
-import { createContext, useContext } from "react";
+import { type ComponentType, createContext, useContext } from "react";
 import type { RevealBlock } from "./scrollGeometry";
 
 export interface ChatRevealOptions {
@@ -14,6 +14,12 @@ export type ResultTarget =
 	| { kind: "command"; id: string }
 	| { kind: "subagent"; childSessionId: string };
 
+export interface WorkspaceChatTarget {
+	workspaceId: string;
+	projectId: string;
+	sessionId: string;
+}
+
 export interface ChatActions {
 	answerQuestion: (toolCallId: string, result: AskUserQuestionResult) => Promise<void>;
 	cancelAutomaticReveal: () => void;
@@ -25,6 +31,8 @@ export interface ChatActions {
 	openMcpSettings?: (() => void) | undefined;
 	openProviderSettings?: (() => void) | undefined;
 	findModel?: ((ref: string) => WireModel | null) | undefined;
+	openWorkspace?: ((target: WorkspaceChatTarget) => void) | undefined;
+	WorkspaceName?: ComponentType<{ workspaceId: string; fallback: string }> | undefined;
 }
 
 export const ChatActionsContext = createContext<ChatActions | null>(null);

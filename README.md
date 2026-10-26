@@ -40,8 +40,9 @@ create the tools it needs based on how you actually work.
 
 - **Isolated workspaces.** Open any git repo as a project and cut workspaces from it as `git worktree`s,
   each with its own branch and working directory. Agents work in parallel without touching your
-  checkout; merge the good branch, delete the rest. You can also attach existing worktrees or explicitly
-  work in the project folder itself. Finished and dormant workspaces settle onto a per-project shelf on
+  checkout; merge the good branch, delete the rest. Ask a chat to do something "in a side workspace" and
+  the agent starts that workspace and its chat itself, then checks how its chats and PRs are doing. You
+  can also attach existing worktrees or explicitly work in the project folder itself. Finished and dormant workspaces settle onto a per-project shelf on
   their own — when their pull request merges or closes, or after a quiet week — and come back the moment
   you work in them. The topbar shows where the active branch stands against `origin` and its pull request,
   with the next step one click away: publish, push, or open a PR described from the plan, the commits,

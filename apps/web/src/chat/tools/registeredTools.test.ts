@@ -29,6 +29,7 @@ const INTENTIONAL_TOOLS = [
 	"ask_user_question",
 	"resolve_comment",
 	"request_review",
+	"start_workspace",
 	"tool_search",
 	"list_mcp_resources",
 	"list_mcp_resource_templates",

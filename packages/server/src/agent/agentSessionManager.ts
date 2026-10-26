@@ -2046,6 +2046,50 @@ export function getSessionMessages(
 	return getSessionMessagesInternal(sessionId, workspaceId, cwd);
 }
 
+export async function readFinalAssistantTexts(
+	workspaceId: string,
+	cwd: string,
+	sessionIds: readonly string[],
+): Promise<Map<string, string | null>> {
+	const texts = new Map<string, string | null>();
+	const onDisk: string[] = [];
+	for (const sessionId of sessionIds) {
+		const entry = sessions.get(sessionId);
+		if (isSessionDeleted(sessionId, workspaceId)) texts.set(sessionId, null);
+		else if (!entry) onDisk.push(sessionId);
+		else {
+			texts.set(
+				sessionId,
+				entry.workspaceId === workspaceId ? finalAssistantText(entry.session.messages) : null,
+			);
+		}
+	}
+	if (onDisk.length === 0) return texts;
+	const wanted = new Set(onDisk);
+	for (const info of await SessionManager.list(cwd)) {
+		if (info.cwd !== cwd || !wanted.has(info.id) || texts.has(info.id)) continue;
+		texts.set(
+			info.id,
+			finalAssistantText(SessionManager.open(info.path).buildSessionContext().messages),
+		);
+	}
+	for (const sessionId of onDisk) if (!texts.has(sessionId)) texts.set(sessionId, null);
+	return texts;
+}
+
+function finalAssistantText(messages: readonly AgentSession["messages"][number][]): string | null {
+	for (let index = messages.length - 1; index >= 0; index--) {
+		const message = messages[index];
+		if (message?.role !== "assistant") continue;
+		const text = message.content
+			.flatMap((part) => (part.type === "text" ? [part.text] : []))
+			.join("\n")
+			.trim();
+		if (text) return text;
+	}
+	return null;
+}
+
 export async function answerQuestion(
 	sessionId: string,
 	toolCallId: string,
