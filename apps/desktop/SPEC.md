@@ -206,8 +206,9 @@ Linux the web shell owns Ctrl+W / Ctrl+F4 (close item) and Ctrl+, (Settings) thr
 The preload also exposes the frozen non-enumerable `__THINKRAIL_NATIVE_NOTIFICATIONS__`
 `NativeNotificationBridge` ([[module-contracts]]) on every desktop platform. It has two capabilities:
 `show({ title, subtitle?, body, silent? })` forwards a `showNotification` RPC request to the main
-process, which calls Electrobun `Utils.showNotification` (native OS notification center); delivery is
-best-effort, so a failed request is dropped rather than surfacing an unhandled rejection.
+process, which calls Electrobun `Utils.showNotification` (native OS notification center) on macOS and
+Windows and spawns `notify-send` itself on Linux (**Linux identity** below); delivery is best-effort, so a
+failed request is dropped rather than surfacing an unhandled rejection.
 `isWindowFocused()` returns whether the native window holds OS-level focus; the main process tracks this
 via `BrowserWindow` `focus`/`blur` events and pushes the state to the renderer through a
 `windowFocusChanged` RPC message, which the preload caches synchronously. This correctly reports `true`
@@ -408,9 +409,10 @@ bundler. Its transient factory entry is removed even on failure. Staged resource
 `postBuild` hook removes staging after the framework has copied it; a failed build's staging is replaced
 at the next pre-build. On Windows that hook also brands the bundled executables (below) after Hutch's
 icon embed and before release compression, wrapping, and signing. On Linux it files the bundle's
-`.desktop` template under `Categories=Development;IDE;` instead of Hutch's `Utility;`. Electrobun's
-installer copies that template, so its own user-edit detection is unaffected. Builds in one worktree
-remain sequential. The hook runs under Hutch's Cottontail, so nothing it imports may load `bun:ffi`.
+`.desktop` template under `Categories=Development;IDE;` instead of Hutch's `Utility;`. Hutch 0.24.3 writes
+that template for every build environment, dev included, before the hook runs, so a bundle without one is
+a build fault rather than a dev-mode case. Electrobun's installer copies that template, so its own
+user-edit detection is unaffected. Builds in one worktree remain sequential. The hook runs under Hutch's Cottontail, so nothing it imports may load `bun:ffi`.
 
 Electrobun's platform icon configuration points at the native icon set in `packages/shared/assets`:
 the macOS iconset, the Windows multi-resolution ICO, and the Linux PNG. [[module-shared]] owns their
