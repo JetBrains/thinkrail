@@ -6,7 +6,7 @@ title: Desktop launcher/client (Electrobun)
 parent: architecture
 depends-on: [module-server, module-contracts, module-shared]
 tags: [desktop, launcher, packaging]
-references: [submodule-web-navigation, module-artifact-tests, module-ci-release, submodule-web-shell]
+references: [submodule-web-navigation, module-artifact-tests, module-ci-release, submodule-web-shell, module-cli]
 ---
 
 ## Responsibility
@@ -27,11 +27,10 @@ engine architecture.
 - **Public surface:** the packaged desktop application and its installers. No test-helper library is
   exported by the application package.
 - **Allowed deps:** `server` for the embedded host and build-support manifest; `shared`
-  for release identity and the early `resolveShellEnv()` start; `contracts` for
-  compatibility/native-bridge types and the shared `createQuitConfirmation` rule; the completed built web
-  artifact; Electrobun `2.0.1` and its generated SDK; build-only `pe-library`/`resedit` for the
-  Electrobun 2.0.1 Windows-uninstaller icon gap; build-only `@resvg/resvg-js` to rasterize the icon
-  source (below); Bun/Node.
+  for release identity, its Windows file identity and the early `resolveShellEnv()` start; `contracts`
+  for compatibility/native-bridge types and the shared `createQuitConfirmation` rule; the completed built
+  web artifact; Electrobun `2.0.1` and its generated SDK; build-only `resedit` to close the Electrobun 2.0.1
+  Windows executable-identity gap (below); shared's native icon set as build input; Bun/Node.
 - **Forbidden:** spawning the CLI or a second engine process; implementing ordinary product feature or
   agent/domain logic; importing web source at runtime; introducing a desktop-only wire or UI state model;
   storing one active location on the backend; or bundling CEF without a new acceptance failure that
@@ -126,7 +125,8 @@ existing chunk id with different content. `preBuild` also refuses to stage web `
 
 Handled native-shell failures that carry an error (keyboard state, title-bar double-click, update
 listener/lifecycle/journal, native-label writes, leaving the bundle working directory, Windows frame restore,
-startup) go through `errorReporting.ts`'s `desktopError(scope, message, error)`:
+Windows window icon, Windows taskbar identity, startup) go through `errorReporting.ts`'s
+`desktopError(scope, message, error)`:
 the `[desktop] …` console line stays, and once the host has booted the error is forwarded to
 `DesktopHost.reportError` as a sanitized `desktop` error report ([[submodule-server-analytics]]); before
 that it is console-only. Uncaught main-process faults need no seam — they share the host's process
@@ -405,27 +405,71 @@ the pi graph — Cottontail's module runtime cannot evaluate that graph; `typebo
 first casualty) and to bundle the separately staged `.ts` server runtime rather than changing PI's
 bundler. Its transient factory entry is removed even on failure. Staged resources include the workflow SPEC consumed by the bundled skills. A documented
 `postBuild` hook removes staging after the framework has copied it; a failed build's staging is replaced
-at the next pre-build. On Windows that hook also brands the bundled uninstaller after its resource exists
-but before release compression, wrapping, and signing. Builds in one worktree remain sequential.
+at the next pre-build. On Windows that hook also brands the bundled executables (below) after Hutch's
+icon embed and before release compression, wrapping, and signing. Builds in one worktree remain
+sequential.
 
-Electrobun's platform icon configuration points at one ThinkRail mark in the native formats each target
-requires: the macOS iconset, Windows multi-resolution ICO, and Linux PNG. The native mark preserves its
-rounded-square silhouette with the ThinkRail glyph in the dark-family brand green (`#8dff4f`) on a solid
-black tile; translucent glass, highlights, and decorative edging are excluded so small taskbar frames stay
-crisp. The browser favicon and in-app shell mark are separate web-owned surfaces. The same Windows ICO is the
-Hutch-owned source for the installed app, setup/extractor executable, shortcuts, and taskbar identity; no
-release action substitutes a second installer icon. Electrobun 2.0.1 does not apply that icon to its
-bundled Windows uninstaller, so the project `postBuild` hook adds the same icon group to
-`Resources/uninstall`.
+Electrobun's platform icon configuration points at the native icon set in `packages/shared/assets`:
+the macOS iconset, the Windows multi-resolution ICO, and the Linux PNG. [[module-shared]] owns their
+artwork, generator and frame sizes, and the CLI's Windows binary embeds the same ICO ([[module-cli]]).
+The browser favicon and in-app shell mark are separate web-owned surfaces.
 
-`assets/icon.svg` is the one hand-authored source; every raster below it (the iconset, the ICO, the
-Linux PNG) is generated, never hand-edited, by `scripts/generate-icons.ts` (`bun run generate-icons`)
-using `@resvg/resvg-js` to rasterize straight from the vector. The Windows ICO carries PNG-compressed
-frames at 16/24/32/48/64/128/256 — Microsoft's documented icon-construction minimum (16/24/32/48/256)
-plus two extra sizes so in-between DPI scales interpolate from a close neighbor — packed through the
-same `resedit` dependency already used for the uninstaller. A prior 4-frame raw-BMP ICO (16/32/48/256,
-pre-dating the generator) had no frame matching the Windows 11 taskbar's 24×24 100%-scale target,
-reading as blurry there; the generated set closes that gap.
+On Windows, Hutch embeds the ICO in the setup/extractor executable and `bin/launcher.exe`, and the
+shortcuts and the Installed-apps entry point at the launcher. No release action substitutes a second
+installer icon. The running app, however, is `bin/bun.exe`, and there Electrobun 2.0.1 / Hutch leave
+three gaps, closed by the project:
+
+- **Icon group.** Hutch adds group 1 to `bun.exe`, but Bun's own named `IDI_MYICON` stays and is what
+  the shell picks first. The uninstaller gets no icon at all.
+- **File properties.** Hutch writes no VERSIONINFO. `bun.exe` keeps Bun's ("Bun"/"Oven"), so Task
+  Manager lists the app as Bun; the launcher and uninstaller have none.
+
+  `postBuild` closes both gaps. It rewrites the resources of `bin/bun.exe`, `bin/launcher.exe` and
+  `Resources/uninstall`: every icon entry is replaced by one group 1 with all frames, and VERSIONINFO
+  comes from [[module-shared]]'s `windowsFileIdentity`. Rewriting drops `bun.exe`'s now-invalid Oven
+  certificate entry; release signing covers every PE afterwards ([[module-ci-release]]).
+- **Window icon.** Electrobun registers its window class without an icon, never sends `WM_SETICON`, and
+  its Windows `setWindowIcon` is a stub. Startup therefore loads `Resources/app.ico` (Hutch's copy of the
+  ICO) through `user32` and sends it to the splash and the main window, sized for the window's DPI. A
+  failure is reported and non-fatal.
+
+Removal gates: Hutch writing the executable identity and replacing the main process's icon groups;
+Electrobun setting a window icon on Windows.
+
+**Taskbar identity.** A pinned shortcut targets the launcher while the window belongs to `bun.exe`, and
+Electrobun sets no AppUserModelID. Without one, Windows derives each side's identity from its own exe
+and shows them as two taskbar buttons (blackboardsh/electrobun#514). The desktop therefore names
+itself:
+
+- **Process ID.** The first thing startup does, before any window, is set an explicit per-channel ID
+  derived from the product name: `JetBrains.ThinkRail`, `JetBrains.ThinkRail.Nightly`,
+  `JetBrains.ThinkRail.Dev`. Stable and nightly stay separate apps.
+- **Shortcut IDs.** Once the main window first reaches `dom-ready` and readiness is reported, the desktop
+  writes the same ID onto every shortcut whose target is this install's `bin\launcher.exe`:
+  - the Start-menu shortcut Electrobun records in `<channel root>\.electrobun-uninstall.json`
+    (schema 1; any other schema is ignored);
+  - the taskbar pins in `User Pinned\TaskBar` and `User Pinned\ImplicitAppShortcuts`, so pins made before
+    this change group too.
+
+  The Desktop shortcut is left alone. Grouping does not need it, and rewriting desktop shortcuts has
+  moved their desktop icon before (Firefox bug 633728).
+
+  `WScript.Shell`, which Electrobun uses, cannot set the ID, and Electrobun rewrites its shortcuts on
+  install and update. The stamp is therefore idempotent and runs on every launch, after the UI has
+  loaded, inside a COM apartment that lasts only for the stamp. How it works:
+  - It uses `ShellLink` + `IPropertyStore` COM calls through Bun FFI, which the Windows PR job exercises
+    against real shortcuts. A PowerShell `Add-Type` helper was rejected: it compiles C# on every launch.
+  - A candidate's target is first compared by file name, so a foreign pin's target (possibly on a
+    network share) is never resolved on the host's thread.
+  - Every candidate is opened read-only; only a shortcut to this launcher that needs the ID is reopened
+    for writing, so a foreign read-only or ACL-restricted pin is never a failure.
+  - A write counts only on `S_OK`.
+  - Failing HRESULTs carry an `HRESULT_XXXXXXXX` code for error tracking.
+- **Limits.** Shortcuts to other targets are never touched. That includes pins made from the running
+  window before this change, which point at `bun.exe` and stay separate. Failures are reported and
+  non-fatal. An unreadable manifest is reported too, and the pins are still stamped.
+
+Removal gate: Electrobun giving its process and shortcuts a shared AppUserModelID.
 
 Electrobun's `build.views` owns the browser preload bundle; `build.copy` owns physical resource inclusion.
 There is no custom SDK resolver, SDK metadata validator, or Electrobun command runner. App-local Hutch

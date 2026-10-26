@@ -60,8 +60,8 @@ site PR queued behind an app PR must still run the full set. Conformance, lint/t
 always run; they are cheap and cover the website too. A second output, `artifacts`, gates the Linux binary
 and desktop suites, which replay the no-agent browser suite against built artifacts and cost over half of
 CI's runner time: on a PR they run only when a path feeds building or packaging — the CLI and desktop apps,
-artifact tests, the server's build support and bundled-runtime registration, the artifact Playwright
-runners, CI definitions, patches and the root manifests and lockfile — and in a merge group they always run,
+artifact tests, shared's native icon set, its generator, release identity and Windows file identity, the
+server's build support and bundled-runtime registration, the artifact Playwright runners, CI definitions, patches and the root manifests and lockfile — and in a merge group they always run,
 so main never lands an artifact they have not exercised. An artifact-only defect in an unrelated change
 therefore surfaces at enqueue time instead of on the PR; it was 1 in 56 failed runs before the split. That
 includes the shared no-agent specs and fixtures the artifact suites replay: only the artifact runners and
@@ -96,9 +96,12 @@ get no further environment retries.
 
 A platform's native behavior is proven only on that platform. Windows remains a PR gate because its
 executable, environment, path, and trash behavior differs materially from POSIX hosts. Its subprocess unit
-gate also exercises native descendant-console behavior, which the Linux unit run cannot prove, and its
-desktop window-chrome unit gate binds the `user32.dll` frame symbols the frameless title bar relies on
-([[module-desktop]]); neither needs the Electrobun devkit. Its path gate (`bun run test:windows-paths`) runs
+gate also exercises native descendant-console behavior, which the Linux unit run cannot prove. Its
+desktop window-chrome unit gate binds the `user32.dll` frame symbols the frameless title bar relies on,
+round-trips the window icon through a real window, and stamps an AppUserModelID onto real shortcuts
+([[module-desktop]]). Neither gate needs the
+Electrobun devkit. Its binary smoke also checks the compiled exe's icon and file properties
+([[module-artifact-tests]]). Its path gate (`bun run test:windows-paths`) runs
 the suites that pin architecture Decision 22 on the one host where git prints `C:/…`, node prints `C:\…`,
 and `\` is not a file-name character: stored directories, chat lifecycle in Default and external workspaces,
 POSIX wire paths, git object names, picker roots, and `install.ps1`'s PATH check. A suite joins the gate only

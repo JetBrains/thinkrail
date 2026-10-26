@@ -21,8 +21,10 @@ It consumes finished artifacts; it does not build the application or supply appl
   probes, their fixtures and helper unit tests, and the public build action's desktop packaging-invocation
   and artifact-collector contract tests.
 - **Public surface:** `locateDesktopLauncher`
-- **Allowed deps:** CLI's public artifact-name helper; server's sanctioned history-fixture export;
-  shared release identity and retrying teardown; read-only access to
+- **Allowed deps:** CLI's public artifact-name helper; server's sanctioned history-fixture export; shared
+  release identity, its Windows file identity and icon, and retrying teardown; `resedit` to read Windows
+  executable resources;
+  read-only access to
   `.github/actions/build-binary/action.yml` for executing its packaging invocation and collector in
   isolated fixture directories; Bun/Node and native installer tools.
 - **Forbidden:** application or SDK source internals, Electrobun imports/dependency, a fake host or agent,
@@ -50,6 +52,20 @@ stdio fixture must report *connected · 1 tool* and an in-probe HTTP server that
 protected-resource metadata *needs sign-in*, read back through `mcp.list`, which proves the lazily imported
 MCP runtime executes inside the artifact), reach an OAuth URL without a provider turn, verify health/UI
 and transcript trash, and shut down. CLI-specific probes also check its exit-only and embedded-cache behavior.
+On Windows both smokes first read executables' resources, without running them:
+- the CLI smoke reads the built exe;
+- the desktop smoke reads the bundle's `bin/bun.exe`, `bin/launcher.exe` and `Resources/uninstall`.
+
+Each executable must pass two checks, and each fails the release before publication:
+- **Icon.** The group the shell shows is the first in resource order; in a Bun exe, Bun's named
+  `IDI_MYICON` shadows any numbered group. That group must include the ICO's largest frame and hold
+  only frames of that ICO. The reference ICO is shared's `windowsIconPath` for the CLI, and the bundle's
+  own `Resources/app.ico` for the desktop.
+- **VERSIONINFO.** It must equal [[module-shared]]'s `windowsFileIdentity` for the checkout's release
+  identity, so a smoke runs in the same stamped checkout that built the artifact.
+
+The resource-directory walk is local because `pe-library` refuses Bun's `.bun` section after `.rsrc`;
+`resedit` parses the icon-group and version structures.
 Native desktop smoke loads the real UI and verifies route/preload messaging plus the production external
 navigation handler. On macOS it also drives the title-bar double-click path end to end: a no-drag
 double-click must not act, and the header double-click's recorded action and resulting window state must
