@@ -156,9 +156,11 @@ describe("hostItems", () => {
 			kind: "section",
 			title: "agent › Session titles",
 			subtitle: "renameSession validates one title",
+			titleLead: "agent › ".length,
+			badge: "2/3 words",
 			group: "sections",
 			scope: "specs",
-			file: { workspaceId: "w1", path: "agent/SPEC.md" },
+			file: { workspaceId: "w1", path: "agent/SPEC.md", line: 876 },
 		});
 		const titleRanges = section?.match?.ranges.title ?? [];
 		expect(titleRanges.map(([start, end]) => section?.title.slice(start, end))).toEqual(["titles"]);

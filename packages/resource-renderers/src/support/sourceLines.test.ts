@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { frontmatterOffset, indivisibleSpans, snapSplitLine } from "./sourceLines";
+import { frontmatterOffset, indivisibleSpans, snapSplitLine, sourceBlockAt } from "./sourceLines";
 
 const DOC = [
 	"# Title", // 1
@@ -70,4 +70,25 @@ test("frontmatterOffset reports the lines stripFrontmatter removed", () => {
 	const raw = ["---", "title: x", "---", "# Doc", "body"].join("\n");
 	expect(frontmatterOffset(raw, ["# Doc", "body"].join("\n"))).toBe(3);
 	expect(frontmatterOffset("# Doc\nbody", "# Doc\nbody")).toBe(0);
+});
+
+test("sourceBlockAt picks the outermost block that starts closest at or before the line", () => {
+	const block = (id: string, start: number) => ({ id, dataset: { mdLineStart: String(start) } });
+	const blocks = [
+		block("h1", 6),
+		block("p", 8),
+		block("h2", 12),
+		block("code-in-h2", 12),
+		block("p2", 14),
+	];
+	const container = {
+		querySelectorAll: () => blocks,
+	} as unknown as ParentNode;
+	const at = (line: number) =>
+		(sourceBlockAt(container, line) as unknown as { id: string } | null)?.id;
+	expect(at(12)).toBe("h2");
+	expect(at(13)).toBe("h2");
+	expect(at(9)).toBe("p");
+	expect(at(40)).toBe("p2");
+	expect(at(3)).toBeUndefined();
 });

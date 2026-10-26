@@ -32,7 +32,12 @@ function BoundedPreview({ file }: { file: PaletteFile }) {
 		[host],
 	);
 	const preview = (
-		<ResourcePreview workspaceId={file.workspaceId} path={file.path} className="h-full min-h-0" />
+		<ResourcePreview
+			workspaceId={file.workspaceId}
+			path={file.path}
+			{...(file.line === undefined ? {} : { reveal: { line: file.line, tick: file.line } })}
+			className="h-full min-h-0"
+		/>
 	);
 	return bounded ? <ResourceHostProvider value={bounded}>{preview}</ResourceHostProvider> : preview;
 }

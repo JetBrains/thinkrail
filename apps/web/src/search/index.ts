@@ -1,6 +1,7 @@
 export { commandItems } from "./commandItems";
 export { createDoubleShiftDetector } from "./doubleShift";
 export type {
+	PaletteAsk,
 	PaletteFile,
 	PaletteItem,
 	PaletteItemKind,

@@ -156,6 +156,8 @@ function lateOf(context: HostItemContext, id: string): { late?: number } {
 	return late === undefined ? {} : { late };
 }
 
+const SECTION_SEPARATOR = " › ";
+
 function shifted(ranges: readonly MatchRange[] | undefined, by: number): MatchRange[] {
 	return (ranges ?? []).map(([start, end]) => [start + by, end + by]);
 }
@@ -227,23 +229,26 @@ function hostItem(context: HostItemContext, hit: SearchHit): PaletteItem | null 
 			};
 		case "section": {
 			if (!hit.workspaceId || !hit.path || !hit.section) return null;
-			const heading = hit.section.heading;
+			const { heading, line, matched, terms } = hit.section;
+			const lead = heading ? hit.title.length + SECTION_SEPARATOR.length : 0;
 			return {
 				...base,
 				kind: "section",
-				title: heading ? `${hit.title} › ${heading}` : hit.title,
+				title: heading ? `${hit.title}${SECTION_SEPARATOR}${heading}` : hit.title,
+				...(lead > 0 ? { titleLead: lead } : {}),
 				subtitle: hit.snippet ?? hit.path,
+				badge: context.t("search.section.words", { matched, terms }),
 				group: "sections",
 				scope: "specs",
 				icon: RiHeading,
 				...matchOf(hit, {
 					title: [
 						...(hit.ranges?.title ?? []),
-						...(heading ? shifted(hit.ranges?.heading, hit.title.length + 3) : []),
+						...(heading ? shifted(hit.ranges?.heading, lead) : []),
 					],
 					subtitle: hit.snippet ? (hit.ranges?.snippet ?? []) : [],
 				}),
-				file: { workspaceId: hit.workspaceId, path: hit.path },
+				file: { workspaceId: hit.workspaceId, path: hit.path, line },
 			};
 		}
 		case "plan":

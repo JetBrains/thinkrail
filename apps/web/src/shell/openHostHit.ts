@@ -17,7 +17,7 @@ export interface HostHitTargets {
 	) => Promise<boolean>;
 	readonly loadWorkspaceRow: (workspace: WorkspaceTarget) => Promise<boolean>;
 	readonly openFile: (workspaceId: string, path: string) => Promise<void>;
-	readonly openSpec: (workspaceId: string, path: string) => void;
+	readonly openSpec: (workspaceId: string, path: string, line?: number) => void;
 	readonly openChatLocation: (location: ChatLocation) => void;
 	readonly openPlan: (workspaceId: string) => void;
 }
@@ -34,7 +34,7 @@ export async function openHostHit(hit: SearchHit, targets: HostHitTargets): Prom
 		case "spec":
 		case "section":
 			if ((await targets.navigateToWorkspace(workspace)) && hit.path) {
-				targets.openSpec(workspace.id, hit.path);
+				targets.openSpec(workspace.id, hit.path, hit.section?.line);
 			}
 			return;
 		case "transcript":

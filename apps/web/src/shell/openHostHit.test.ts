@@ -16,7 +16,8 @@ function targets(navigates: boolean) {
 		openFile: async (workspaceId, path) => {
 			calls.push(`file ${workspaceId} ${path}`);
 		},
-		openSpec: (workspaceId, path) => calls.push(`spec ${workspaceId} ${path}`),
+		openSpec: (workspaceId, path, line) =>
+			calls.push(`spec ${workspaceId} ${path}${line === undefined ? "" : `@${line}`}`),
 		openChatLocation: (location) =>
 			calls.push(`chat ${location.sessionId}@${location.messageIndex} ${location.anchorText}`),
 		openPlan: (workspaceId) => calls.push(`plan ${workspaceId}`),
@@ -53,6 +54,11 @@ describe("openHostHit", () => {
 		expect(await open(hit({ kind: "plan", sessionId: "s1" }))).toEqual([
 			"navigate w1 s1",
 			"plan w1",
+		]);
+		const section = { heading: "Goal", line: 12, matched: 1, terms: 1 };
+		expect(await open(hit({ kind: "section", path: "SPEC.md", section }))).toEqual([
+			"navigate w1",
+			"spec w1 SPEC.md@12",
 		]);
 		expect(await open(hit({ kind: "file", path: "src/a.ts" }), false)).toEqual(["navigate w1"]);
 		expect(await open(hit({ kind: "spec", path: "SPEC.md" }), false)).toEqual(["navigate w1"]);
