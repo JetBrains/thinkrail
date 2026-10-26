@@ -11,7 +11,7 @@ import type {
 } from "@thinkrail/contracts";
 import { CodedError } from "@thinkrail/shared/codedError";
 import { canonicalPath, git } from "../git";
-import { loadProjects, loadWorkspaces, saveProjects } from "../persistence";
+import { isUnderChatsRoot, loadProjects, loadWorkspaces, saveProjects } from "../persistence";
 
 type ProjectPublisher = (project: Project) => void;
 
@@ -86,8 +86,18 @@ export function getProjects(): Project[] {
 	return projects;
 }
 
+function assertOutsideChatsRoot(path: string): void {
+	if (isUnderChatsRoot(path)) {
+		throw new CodedError(
+			"CHATS_CONTAINER",
+			"Chats without a project live here; this folder cannot be opened as a project.",
+		);
+	}
+}
+
 export function openProject(inputPath: string, displayName?: string): Project {
 	const path = resolveProjectPath(inputPath);
+	assertOutsideChatsRoot(path);
 	const root = gitToplevel(path);
 	if (!root) throw new CodedError("NOT_GIT", `Not a git repository: ${path}`);
 
@@ -370,6 +380,7 @@ export function inspectProjectPath(inputPath: string): ProjectPathStatus {
 
 export function initProject(inputPath: string): Project {
 	const path = resolveProjectPath(inputPath);
+	assertOutsideChatsRoot(path);
 	const status = inspectResolvedProjectPath(path);
 	if (status.kind === "missing") throw new Error(`No such folder: ${path}`);
 	if (status.kind === "notDirectory") throw new Error(`Not a folder: ${path}`);
@@ -388,8 +399,9 @@ export function createProject(
 		throw new Error(`Invalid project folder name: ${requestedName}`);
 	}
 	const parent = resolveProjectPath(parentPath);
-	mkdirSync(parent, { recursive: true });
 	const path = join(parent, name);
+	assertOutsideChatsRoot(path);
+	mkdirSync(parent, { recursive: true });
 	let created = false;
 	try {
 		if (!statSync(path).isDirectory()) throw new Error(`Not a folder: ${path}`);

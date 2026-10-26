@@ -524,7 +524,10 @@ test("welcome omits closed projects whose folders are gone", async () => {
 	);
 
 	const welcome = frame.data as ServerWelcome;
-	expect(welcome.projects.map((project) => project.id)).toEqual(["open"]);
+	expect(welcome.projects.filter((project) => project.kind !== "chats").map((p) => p.id)).toEqual([
+		"open",
+	]);
+	expect(welcome.projects.filter((project) => project.kind === "chats")).toHaveLength(1);
 	expect(welcome.recentProjects?.map((project) => project.id)).toEqual(["open", "kept"]);
 });
 

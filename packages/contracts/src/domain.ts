@@ -6,6 +6,8 @@ export interface SessionStateRecord {
 	projectId: string;
 	state: SessionState;
 	firstPrompt?: string;
+	/** pi's session name, exposed not copied; absent until the agent names the chat (`CHATS_PROTOCOL_VERSION`). */
+	title?: string;
 }
 
 export const FIRST_PROMPT_MAX_LENGTH = 200;
@@ -62,6 +64,8 @@ export interface Project {
 	path: string;
 	slug: string;
 	lastOpened: number;
+	/** The one built-in container of chats without a project: not a repository, never git, never closed. */
+	kind?: "chats";
 	closed?: true;
 	trusted?: boolean;
 	acknowledgedSkills?: string[];
@@ -124,7 +128,8 @@ export const DEFAULT_WORKSPACE_NAME = "Default";
 export interface Workspace {
 	id: string;
 	projectId: string;
-	kind?: "default" | "external";
+	/** `chat`: a projectless chat's own folder in the Chats container — never a git checkout, `branch`/`baseBranch` are "". */
+	kind?: "default" | "external" | "chat";
 	name: string;
 	branch: string;
 	worktreePath: string;
@@ -143,6 +148,8 @@ export interface Workspace {
 	settledAt?: number;
 	/** The host's last-known review for the branch; refreshed host-side so every client sees one state. */
 	review?: OpenBranchReview;
+	/** A chat whose deletion started but did not finish; the UI offers Retry and nothing else. */
+	deletionPending?: true;
 }
 
 export type BranchReviewState = "open" | "merged" | "closed";

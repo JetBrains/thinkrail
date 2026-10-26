@@ -309,7 +309,7 @@ describe("FileListCache", () => {
 		}));
 		await files.load("/r");
 		const group = searchFiles(
-			{ root: "/r", projectId: "p1", workspaceId: "w1" },
+			{ root: "/r", projectId: "p1", workspaceId: "w1", git: true },
 			files,
 			{
 				terms: [{ text: "ts", literal: false }],
@@ -333,7 +333,7 @@ describe("FileListCache", () => {
 		await files.load("/r");
 		let checks = 0;
 		const group = searchFiles(
-			{ root: "/r", projectId: "p1", workspaceId: "w1" },
+			{ root: "/r", projectId: "p1", workspaceId: "w1", git: true },
 			files,
 			{
 				terms: [{ text: "gone", literal: false }],
@@ -356,7 +356,7 @@ describe("FileListCache", () => {
 		}));
 		await files.load("/r");
 		const group = searchFiles(
-			{ root: "/r", projectId: "p1", workspaceId: "w1" },
+			{ root: "/r", projectId: "p1", workspaceId: "w1", git: true },
 			files,
 			{ terms: [{ text: "keep", literal: false }], limit: 20, deadline: { expired: () => true } },
 			() => 1,
@@ -373,7 +373,7 @@ describe("FileListCache", () => {
 		await files.load("/r");
 		const asked: string[] = [];
 		const group = searchFiles(
-			{ root: "/r", projectId: "p1", workspaceId: "w1" },
+			{ root: "/r", projectId: "p1", workspaceId: "w1", git: true },
 			files,
 			{ terms: [{ text: "log", literal: false }], limit: 20, deadline: { expired: () => false } },
 			(root, path) => {
@@ -392,7 +392,7 @@ describe("FileListCache", () => {
 			if (fail) throw new Error("EMFILE");
 			return { paths: ["src/refresh.ts"], truncated: false };
 		});
-		const root = { root: "/r", projectId: "p1", workspaceId: "w1" };
+		const root = { root: "/r", projectId: "p1", workspaceId: "w1", git: true };
 		const input = (query: string) => ({
 			terms: [{ text: query, literal: false }],
 			limit: 20,
@@ -449,12 +449,28 @@ describe("resolveSearchRoot", () => {
 				projectId: "p1",
 				workspaceId: "w-feature",
 			}),
-		).toEqual({ root: "/repos/one-auth", projectId: "p1", workspaceId: "w-feature" });
+		).toEqual({ root: "/repos/one-auth", projectId: "p1", workspaceId: "w-feature", git: true });
 		expect(resolveSearchRoot([other, project], [defaultOne], { projectId: "p1" })).toEqual({
 			root: "/repos/one",
 			projectId: "p1",
 			workspaceId: "w-default",
+			git: true,
 		});
+		const chats: Project = { ...other, id: "c", path: "/data/chats", kind: "chats" };
+		const chat: Workspace = {
+			...feature,
+			id: "w-chat",
+			projectId: "c",
+			kind: "chat",
+			worktreePath: "/data/chats/2026-10-26-ab12cd",
+		};
+		expect(resolveSearchRoot([chats], [chat], { projectId: "c", workspaceId: "w-chat" })).toEqual({
+			root: "/data/chats/2026-10-26-ab12cd",
+			projectId: "c",
+			workspaceId: "w-chat",
+			git: false,
+		});
+		expect(resolveSearchRoot([chats], [chat], { projectId: "c" })).toBeNull();
 	});
 
 	test("no root without a context project, a closed project, or a project whose Default record is not known yet", () => {

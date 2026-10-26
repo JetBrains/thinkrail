@@ -82,15 +82,20 @@ export function resolveSearchRoot(
 		? workspaces.find((workspace) => workspace.id === context.workspaceId)
 		: undefined;
 	if (current && openIds.has(current.projectId)) {
-		return { root: current.worktreePath, projectId: current.projectId, workspaceId: current.id };
+		return {
+			root: current.worktreePath,
+			projectId: current.projectId,
+			workspaceId: current.id,
+			git: current.kind !== "chat",
+		};
 	}
 	const project = projects.find((candidate) => candidate.id === context.projectId);
-	if (!project) return null;
+	if (!project || project.kind === "chats") return null;
 	const defaultRecord = workspaces.find(
 		(workspace) => workspace.projectId === project.id && isDefaultRecord(workspace, project),
 	);
 	if (!defaultRecord) return null;
-	return { root: project.path, projectId: project.id, workspaceId: defaultRecord.id };
+	return { root: project.path, projectId: project.id, workspaceId: defaultRecord.id, git: true };
 }
 
 export function createSearchService(readers: SearchReaders): SearchService {

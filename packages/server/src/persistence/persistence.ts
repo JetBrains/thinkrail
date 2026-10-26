@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, resolve, sep } from "node:path";
 import {
 	type AppConfig,
 	DEFAULT_CONFIG,
@@ -46,6 +46,17 @@ export type { InstallationRecord } from "./installation";
 
 export function dataDir(): string {
 	return resolve(process.env.THINKRAIL_DATA_DIR ?? join(homedir(), ".thinkrail"));
+}
+
+/** Where chats without a project keep their folders; never a repository root for `project.open`. */
+export function chatsRoot(): string {
+	return join(dataDir(), "chats");
+}
+
+export function isUnderChatsRoot(path: string): boolean {
+	const root = chatsRoot();
+	const resolved = resolve(path);
+	return resolved === root || resolved.startsWith(root + sep);
 }
 
 function storedDirectory(path: string): string {
@@ -274,26 +285,110 @@ export function saveTurns(turns: PersistedTurns): void {
 	writeJsonAtomic("turns.json", turns);
 }
 
+export const CHATS_FILE_VERSION = 1;
+
+/** The Chats container and its chat workspaces live apart from the repository records, so an older host never sees them. */
+export interface PersistedChats {
+	version: typeof CHATS_FILE_VERSION;
+	container: Project | null;
+	chats: Workspace[];
+}
+
+const EMPTY_CHATS: PersistedChats = { version: CHATS_FILE_VERSION, container: null, chats: [] };
+
+function parseChats(raw: unknown): PersistedChats | null {
+	if (!isRecord(raw) || raw.version !== CHATS_FILE_VERSION || !Array.isArray(raw.chats))
+		return null;
+	const container = raw.container;
+	if (container !== null && (!isRecord(container) || container.kind !== "chats")) return null;
+	if (!raw.chats.every((chat) => isRecord(chat) && chat.kind === "chat")) return null;
+	return {
+		version: CHATS_FILE_VERSION,
+		container: container as Project | null,
+		chats: raw.chats as Workspace[],
+	};
+}
+
+/** `null` until the first load; `false` once a corrupt file was set aside — chat writes are refused until restart. */
+let chatsWritable: boolean | null = null;
+
+export function chatsStoreWritable(): boolean {
+	if (chatsWritable === null) loadChats();
+	return chatsWritable === true;
+}
+
+export function loadChats(): PersistedChats {
+	const loaded = loadSessionMetadata("chats.json", parseChats);
+	if (loaded.kind === "set-aside") {
+		chatsWritable = false;
+		return EMPTY_CHATS;
+	}
+	chatsWritable ??= true;
+	if (loaded.kind === "missing") return EMPTY_CHATS;
+	return {
+		...loaded.value,
+		container: loaded.value.container
+			? { ...loaded.value.container, path: storedDirectory(loaded.value.container.path) }
+			: null,
+		chats: loaded.value.chats.map((chat) => ({
+			...chat,
+			worktreePath: storedDirectory(chat.worktreePath),
+		})),
+	};
+}
+
+function saveChats(chats: PersistedChats): void {
+	if (!chatsStoreWritable()) return;
+	writeJsonAtomic("chats.json", chats);
+}
+
+export function isChatsContainer(project: Pick<Project, "kind">): boolean {
+	return project.kind === "chats";
+}
+
+export function isChatWorkspace(workspace: Pick<Workspace, "kind">): boolean {
+	return workspace.kind === "chat";
+}
+
 export function loadProjects(): Project[] {
-	return readJson<Project[]>("projects.json", []).map((project) => ({
+	const repositories = readJson<Project[]>("projects.json", []).map((project) => ({
 		...project,
 		path: storedDirectory(project.path),
 	}));
+	const { container } = loadChats();
+	return container ? [...repositories, container] : repositories;
 }
 
+/** Partitions on save: repository projects to `projects.json`, the Chats container to `chats.json`. */
 export function saveProjects(projects: Project[]): void {
-	writeJson("projects.json", projects);
+	writeJson(
+		"projects.json",
+		projects.filter((project) => !isChatsContainer(project)),
+	);
+	const container = projects.find(isChatsContainer) ?? null;
+	const stored = loadChats();
+	if ((stored.container?.id ?? null) === (container?.id ?? null) && !container) return;
+	saveChats({ ...stored, container });
 }
 
 export function loadWorkspaces(): Workspace[] {
-	return readJson<Workspace[]>("workspaces.json", []).map((workspace) => ({
+	const repositories = readJson<Workspace[]>("workspaces.json", []).map((workspace) => ({
 		...workspace,
 		worktreePath: storedDirectory(workspace.worktreePath),
 	}));
+	return [...repositories, ...loadChats().chats];
 }
 
+/** Partitions on save: repository workspaces to `workspaces.json`, chat workspaces to `chats.json`. */
 export function saveWorkspaces(workspaces: Workspace[]): void {
-	writeJson("workspaces.json", workspaces);
+	writeJson(
+		"workspaces.json",
+		workspaces.filter((workspace) => !isChatWorkspace(workspace)),
+	);
+	const chats = workspaces.filter(isChatWorkspace);
+	const stored = loadChats();
+	if (chats.length === 0 && stored.chats.length === 0) return;
+	saveChats({ ...stored, chats });
 }
 
 export interface PersistedTerminalTab {

@@ -8,6 +8,9 @@ import { listProjects } from "../projects";
 import { getConfig } from "../settings";
 import {
 	backfillWorkspaceActivity,
+	isChatsContainer,
+	isChatsContainerId,
+	isChatWorkspace,
 	listWorkspaceRecords,
 	recordWorkspaceActivity,
 	setWorkspaceReview,
@@ -43,7 +46,7 @@ export function reviewRefreshRows(
 ): Workspace[] {
 	const idleDays = getConfig().settleIdleDays;
 	return rows.filter((row) => {
-		if (row.kind === "default") return false;
+		if (row.kind === "default" || isChatWorkspace(row)) return false;
 		if (row.settledOverride === "settled") return false;
 		if (
 			(row.review?.state === "merged" || row.review?.state === "closed") &&
@@ -78,7 +81,7 @@ async function backfillActivity(row: Workspace): Promise<void> {
 	} catch {
 		at = undefined;
 	}
-	if (at === undefined && row.kind !== "default") {
+	if (at === undefined && row.kind !== "default" && !isChatWorkspace(row)) {
 		try {
 			at = statSync(join(row.worktreePath, ".git")).mtimeMs;
 		} catch {
@@ -124,6 +127,7 @@ export function scheduleLifecyclePass(
 ): Promise<void> {
 	const running = passesInFlight.get(projectId);
 	if (running) return running;
+	if (isChatsContainerId(projectId)) return Promise.resolve();
 	const pass = (async () => {
 		const rows = listWorkspaceRecords(projectId);
 		await forEachBounded(rows, REVIEW_REFRESH_CONCURRENCY, backfillActivity);
@@ -138,6 +142,7 @@ export function scheduleLifecyclePass(
 
 export async function refreshOpenProjectReviews(): Promise<void> {
 	for (const project of listProjects()) {
+		if (isChatsContainer(project)) continue;
 		try {
 			await scheduleLifecyclePass(project.id, { fresh: true });
 		} catch {

@@ -444,13 +444,19 @@ function entryFirstPrompt(entry: Entry): { firstPrompt?: string } {
 	return entry.firstPrompt === null ? {} : { firstPrompt: entry.firstPrompt };
 }
 
+function titleField(name: string | undefined): { title?: string } {
+	const title = normalizeSessionTitle(name);
+	return title ? { title } : {};
+}
+
 function publishEntryState(entry: Entry): void {
 	if (sessions.get(entry.session.sessionId) !== entry) return;
 	const projectId = resolveProjectId(entry.workspaceId);
 	if (!projectId) return;
 	const state = stateFromEntry(entry);
 	const firstPrompt = entryFirstPrompt(entry);
-	const serialized = JSON.stringify({ state, ...firstPrompt });
+	const title = titleField(entry.session.sessionName);
+	const serialized = JSON.stringify({ state, ...title, ...firstPrompt });
 	if (entry.lastPublishedState === serialized) return;
 	entry.lastPublishedState = serialized;
 	publishState({
@@ -458,6 +464,7 @@ function publishEntryState(entry: Entry): void {
 		workspaceId: entry.workspaceId,
 		projectId,
 		state,
+		...title,
 		...firstPrompt,
 	});
 }
@@ -507,6 +514,7 @@ function stateRecordForEntry(entry: Entry): SessionStateRecord {
 		workspaceId: entry.workspaceId,
 		projectId,
 		state: stateFromEntry(entry),
+		...titleField(entry.session.sessionName),
 		...entryFirstPrompt(entry),
 	};
 }
@@ -1749,6 +1757,7 @@ async function collectSessionStateSources(
 				workspaceId: entry.workspaceId,
 				projectId: workspace.projectId,
 				state: stateFromEntry(entry),
+				...titleField(entry.session.sessionName),
 				...entryFirstPrompt(entry),
 			},
 			branch: () => entry.session.sessionManager.getBranch(),
@@ -1773,13 +1782,18 @@ async function collectSessionStateSources(
 				workspaceId: workspace.id,
 				projectId: workspace.projectId,
 				state: stateFromDisk(info.id, manager, baseline),
+				...titleField(info.name ?? manager.getSessionName()),
 				...firstPromptOf(manager.getEntries()),
 			};
 			records.push({
 				record,
 				branch: () => manager.getBranch(),
 				publish: () => {
-					const current = { ...record, state: stateFromDisk(info.id, manager) };
+					const current = {
+						...record,
+						state: stateFromDisk(info.id, manager),
+						...titleField(manager.getSessionName()),
+					};
 					publishState(current);
 					return current;
 				},
@@ -1940,6 +1954,16 @@ export function renameSession(
 		if ((options.onlyIfUnnamed && current !== undefined) || current === normalized) return false;
 		manager.appendSessionInfo(normalized);
 		publish({ sessionId, event: { type: "session_info_changed", name: normalized } });
+		const projectId = resolveProjectId(workspaceId);
+		if (projectId) {
+			publishState({
+				sessionId,
+				workspaceId,
+				projectId,
+				state: stateFromDisk(sessionId, manager),
+				title: normalized,
+			});
+		}
 		return true;
 	});
 }
